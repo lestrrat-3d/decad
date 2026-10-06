@@ -55,7 +55,14 @@ func (m Revolute) PoseAt(at units.Value) (r3.Transform, error) {
 	if err := motionValueValid(at, units.Angle, "the pose angle"); err != nil {
 		return r3.Transform{}, err
 	}
-	pose, err := r3.RotationAround(m.Center, m.Axis, at)
+	return revolutePose(m.Center, m.Axis, at)
+}
+
+// revolutePose is the rotation by at about the axis through center along
+// axis, the one pose builder a Revolute and a revolute joint share. Its
+// inputs are validated; an r3 refusal maps through motionPoseError.
+func revolutePose(center, axis r3.Vec, at units.Value) (r3.Transform, error) {
+	pose, err := r3.RotationAround(center, axis, at)
 	if err != nil {
 		return r3.Transform{}, motionPoseError(err)
 	}
@@ -104,12 +111,20 @@ func (m Prismatic) PoseAt(at units.Value) (r3.Transform, error) {
 	if err := motionValueValid(at, units.Length, "the pose displacement"); err != nil {
 		return r3.Transform{}, err
 	}
-	dir, _ := m.Dir.Normalize()
+	return prismaticPose(m.Dir, at)
+}
+
+// prismaticPose is the translation by at along dir normalised by
+// r3.Vec.Normalize, the one pose builder a Prismatic and a prismatic joint
+// share. Its inputs are validated; an r3 refusal maps through
+// motionPoseError.
+func prismaticPose(dir r3.Vec, at units.Value) (r3.Transform, error) {
+	unit, _ := dir.Normalize()
 	dist, err := at.In(units.Millimeter)
 	if err != nil {
 		return r3.Transform{}, fmt.Errorf(`%w: the pose displacement is not representable: %w`, ErrNotFinite, err)
 	}
-	pose, err := r3.Translation(dir.Scale(dist))
+	pose, err := r3.Translation(unit.Scale(dist))
 	if err != nil {
 		return r3.Transform{}, motionPoseError(err)
 	}
@@ -299,7 +314,7 @@ func motionPoseError(err error) error {
 	return fmt.Errorf(`%w: the pose is not representable: %w`, ErrNotFinite, err)
 }
 
-// MotionOption configures VerifyMotion.
+// MotionOption configures VerifyMotion and VerifyLinkage.
 type MotionOption interface {
 	option.Interface
 	motionOption()
@@ -329,20 +344,21 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 // reads IntervalUndecided, and a path reading or margin the floor leaves
 // coarse is published coarse. It is a magnitude of the motion's own Kind —
 // an angle for a Revolute, a length for a Prismatic, a dimensionless fraction
-// of the path for a Between. A wrong Kind is ErrUnitKind, a negative or zero
-// value ErrNegativeMagnitude, a non-finite one ErrNotFinite. A resolution
-// wider than the whole path (wider than 1 for a Between) evaluates the
-// endpoints alone. The default is |To − From|/1024, units.Scalar(1.0/1024)
-// for a Between. If that step underflows in From's unit or its base unit,
-// the check uses and reports the smallest positive resolution in From's
-// unit accepted by WithResolution.
+// of the path for a Between and of the drive for VerifyLinkage. A wrong Kind
+// is ErrUnitKind, a negative or zero value ErrNegativeMagnitude, a non-finite
+// one ErrNotFinite. A resolution wider than the whole path (wider than 1 for
+// a Between or a drive) evaluates the endpoints alone. The default is
+// |To − From|/1024, units.Scalar(1.0/1024) for a Between or a drive. If that
+// step underflows in From's unit or its base unit, the check uses and reports
+// the smallest positive resolution in From's unit accepted by WithResolution.
 func WithResolution(step units.Value) MotionOption {
 	return motionOption{option.New(identResolution{}, step)}
 }
 
 // WithMinClearance states the spec that the moving set stays at least minimum
 // from every static body over the whole path (docs/motion-check-design.md §3),
-// deciding MotionReport.Assessment: met when every interval certifies the
+// and, for VerifyLinkage, that every evaluated pair stays that far apart,
+// deciding the report's Assessment: met when every interval certifies the
 // margin, violated when some pose proves a gap below it, undecided otherwise.
 // Its magnitude rules are WithMinWallThickness's: a Length, finite and
 // non-negative, and a zero minimum, which no gap can fall below, poses no
@@ -363,7 +379,8 @@ type motionConfig struct {
 }
 
 // resolveMotionOptions folds and validates the options against the resolved
-// motion; duplicates keep the last occurrence (verification §1.0).
+// parameter domain — a Motion's own, or a linkage drive's fraction — and
+// duplicates keep the last occurrence (verification §1.0).
 func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, error) {
 	cfg := motionConfig{rel: 1e-3}
 	var resolution *units.Value

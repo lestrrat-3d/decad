@@ -50,7 +50,7 @@ to the byte budget.
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
-| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, the chain travel bound, joint contacts, `LinkageReport`. |
+| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
@@ -173,7 +173,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `verify.go` | `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and folds the pair outcomes `verify_pairs.go` proves into the report in pair order. See `docs/verification-design.md` §1-§3 and the file's doc comment. |
-| `verify_pairs.go` | `Verify`'s pair walk: lists the pairs box separation does not finish and proves them on a bounded worker pool, one layer of workers deep, returning outcomes and the first error in pair order. Meshes each body once per call. See `docs/interference-design.md` §2, §5.3 and §7.2. |
+| `verify_pairs.go` | `Verify`'s pair walk: lists the pairs box separation does not finish and proves them on a bounded worker pool, returning outcomes and the first error in pair order. See `docs/interference-design.md` §2, §5.3 and §7.2. |
 | `report.go` | `Verify`'s report vocabulary: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Proves the reference diameter the tolerance gate is anchored on, per payload. With no provable diameter it withholds the gate rather than guess. See `docs/verification-design.md` §3. |
@@ -204,8 +204,10 @@ to the byte budget.
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
-| `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
+| `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the engine shared with `VerifyLinkage`. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
+| `linkage.go` / `linkage_verify.go` | `Document.VerifyLinkage`. See `docs/linkage-check-design.md`. |
+| `linkage_bound.go` | The chain travel bound. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_memo.go` | Sweep run and sweep radius memos. See `docs/contact-sweep-design.md` §7. |

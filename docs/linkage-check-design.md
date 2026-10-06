@@ -14,7 +14,7 @@ changes those contracts.
 ## 1. Scope: the layer above `VerifyMotion`, inside the root package
 
 Motion §1 lists "kinematic chains, joints, linkages, more than one independent motion" as out of scope for
-`VerifyMotion` and says a layer above owns joints. **`VerifyLinkage` is that layer.** It takes a tree of
+`VerifyMotion` and sends joints here. **`VerifyLinkage` is that layer.** It takes a tree of
 links joined by revolute and prismatic joints, a one-parameter drive that moves every joint through a
 stated range, and proves, pair by pair and interval by interval, that no link meets a static body or another
 link anywhere along the drive — or finds where one does.
@@ -426,10 +426,12 @@ several moving groups (§12 PR 1). The steps that differ:
    once, at `s = 0`, and every pose reuses that evaluation, with `τ = 0` on every pair it forms.
 3. **Read the bounds** (§5.2): per link, `R0`, area and `σ` per body as motion §6 step 2 reads them, and
    `ρ_{ik}` for every joint `i` on its path.
-4. **Swept-box exclusion.** Link `k`'s rest box, inflated by its own `Bound` plus its travel from the zero
-   pose to the farthest the drive takes it, `Σ_{i ≤ k} ρ_{ik}·m_i` (prismatic terms `m_i`), is compared
-   with each static body's inflated box as exact rational extremes (motion §6 step 3); a strictly positive
-   axis gap settles the pair for the whole drive. A link-link pair is settled the same way when the two
+4. **Swept-box exclusion.** Each body of link `k` has its rest box, inflated by its own `Bound` plus its
+   link's travel from the zero pose to the farthest the drive takes it, `Σ_{i ≤ k} ρ_{ik}·m_i` (prismatic
+   terms `m_i`), compared with each static body's inflated box as exact rational extremes (motion §6 step
+   3); a strictly positive axis gap settles the pair for the whole drive. The body's own box serves, not
+   the link's: `ρ_{ik}` is read over the link's whole rest box, so it bounds the travel of every one of its
+   bodies. A link-link pair is settled the same way when the two
    swept boxes separate. The travel is measured from the zero pose, not from `s = 0`, for the reason motion
    §6 step 3 gives: a joint whose `From` is `80°` has moved before the drive begins.
 5. **Evaluate, bisect and publish** as motion §6 steps 4–7, with `τ` per pair from §5.2 and the declared
@@ -537,13 +539,18 @@ circle of radius `48` about the origin, so its top face is the plane `y = 48·si
   point `86/256`, where the overlap is `480·(48·sin(30.234°) − 24) ≈ 81.5` mm³, asserted within `1e-3`
   mm³ with `Bound` below `Value`; every `IntervalClear` interval ends at or below `1/3`; the interval
   containing `1/3` is not `IntervalClear`; every `(A, wall)` collision has `At > 0.369`; every `(A, B)`
-  row is a `Clearance` within `1e-6` of `2` mm; fewer than `100` poses were evaluated.
-- The same linkage with the wall removed, at the default resolution: `Sound`, every interval
-  `IntervalClear`, `Clearance.Value` within `0.1` mm of `2` with `ToleranceSatisfied`.
+  row is a `Clearance` within `1e-6` of `2` mm; fewer than `32` poses were evaluated. The check evaluates
+  `21`: the `(A, B)` pair certifies at `Δs = 1/32` over `[0, 1/3]`, and past the first collision every
+  interval collides at both ends and is not split.
+- The same linkage with the wall removed, at the default resolution and `WithMotionTolerance(Scalar(0.05))`:
+  `Sound`, every interval `IntervalClear`, `Clearance.Value` within `0.1` mm of `2` with
+  `ToleranceSatisfied`. The `(A, B)` interval lower bound is `2 − 25·(π/2)·Δs`, so the whole-drive
+  reading's half-width is about `19.6·Δs` mm: the default `rel = 1e-3` admits `0.002` mm on a `2` mm gap,
+  which takes `Δs ≈ 1e-4`, while `0.05` admits `0.1` mm, which the default floor reaches at `257` poses.
 - The pose-count assertion is the leg that goes red when the common-ancestor joint is left in `τ_{AB}`:
-  the `(A, B)` certificate then needs `Δs ≤ 1/128` on the whole drive and the count exceeds `129`. The
+  the `(A, B)` certificate then needs `Δs ≤ 1/128` over `[0, 1/3]` and the count rises to `50`. The
   travel terms themselves are not detectable here — `B` translates on a circle at `75` mm per unit `s`,
-  under every partial sum of its bound — and are pinned by scene 4.
+  under every partial sum of its bound — and are pinned by the internal travel test below and by scene 4.
 - `examples/` gains `Example_decad_linkageCheck` on this scene, printing `Status`, the first collision's
   bodies and its fraction to three decimals — `0.336` on every platform, since the grid is dyadic.
 
@@ -609,10 +616,17 @@ pose is one `MotionFrame.At`, so the two paths read the same bounds.
 
 **Standing tests.** Errors, one subtest per row of §8 and per constructor refusal of §2; non-mutation and
 determinism as motion §9 test 7; cancellation; pose deviation charged (a joint centre at `(1e6, 0, 0)`
-widens a row's `Bound` as motion §9 test 8 shows); `PoseAt` composition pinned on three joints with
-closed-form world points (`(48, 0, 0)` on link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°,
-0) + (48, 0, 0)`). Internal tests in `linkage_internal_test.go` pin the ball propagation on a three-joint
-chain against hand-computed radii and show each ball step go red when its term is dropped.
+widens a row's `Bound` as motion §9 test 8 shows, carried through a child link's composition); swept-box
+exclusion of a far body, and a swept box grown by every ancestor joint's travel from the zero pose (scene
+1's shoulder swinging `80° → 90°` with the elbow held carries the forearm into a wall `46` mm beyond its
+zero-pose box); `PoseAt` composition pinned on three joints with closed-form world points (`(96, 0, 0)` on
+link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°, 0) + (48, 0, 0)`). Internal tests in
+`linkage_internal_test.go` pin the ball propagation on a four-joint chain — revolute, prismatic, revolute,
+prismatic, so every row of §5.2's table is walked — against hand-computed radii and show each ball step go
+red when its term is dropped; pin the telescoping `τ` against the hand sum for a static partner and below
+two common ancestors, each joint's term red when dropped; pin the ideal pose of scene 1's forearm against
+its closed-form images, red when the parent's pose or the composition order is dropped; and pin a link-link
+pair's gap as the kernel's widened by `η_A + η_B`, red when the partner's `η` is dropped.
 
 `.github/test-shards.txt` and `.github/test-shards-apitest.txt` are updated for every test and example,
 and `go test . ./apitest/ -run '^TestCI'` is run before the push.
@@ -622,7 +636,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | PR | lands | still `Suspect` after it |
 |---|---|---|
 | 1 (`linkage.go`, `linkage_verify.go`, `linkage_bound.go`; `motion_verify.go` generalised to several moving groups with per-group poses, ideal frames and group-group pairs, `VerifyMotion` bit-identical as the one-group case, every motion test unchanged) | §2's vocabulary, `PoseAt`, §5's bounds and certificate, `VerifyLinkage` with every option, both bisection steps, swept-box exclusion against statics, scene 1 and its example, the agreement tests, the errors, non-mutation and cancellation tests | every pair that touches at a joint: declarations are PR 2 |
-| 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits`; scenes 2, 3 and 4; the three-joint benchmark of §10 | — |
+| 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | — |
 | 3 | §6 step 2's held-link promotion to static and constant placement; link-link swept-box exclusion; the cylinder enclosure for parallel axes where measured cost justifies it | — |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,

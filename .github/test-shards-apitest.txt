@@ -1301,3 +1301,13 @@
 5	0.50	TestVerifyMitredSweepUnderPrismArmIsDisjoint
 2	0.65	TestVerifyMitredBranchUnionUnderPrismArmIsDisjoint
 1	0.50	TestVerifyMitredSweepMeetingPrismArmIsNotSound
+0	3.75	TestVerifyLinkageFoldingArm
+1	1.41	TestVerifyLinkageAgreesWithVerifyMotion
+1	0.02	TestVerifyLinkageErrors
+1	0.00	TestLinkageConstructorRefusals
+3	0.81	TestVerifyLinkageCancellation
+3	0.02	TestVerifyLinkagePoseDeviationIsCharged
+4	0.52	TestVerifyLinkageSweptBoxExclusion
+4	0.01	TestLinkagePoseAt
+5	0.42	TestVerifyLinkageNonMutationAndDeterminism
+5	0.08	TestVerifyLinkageSweptBoxCoversAncestorTravel

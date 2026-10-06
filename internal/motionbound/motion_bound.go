@@ -342,6 +342,24 @@ type IdealPose struct {
 	Shift IvVec
 }
 
+// Then is the ideal pose that applies p first and q after it, x ↦ q(p(x)),
+// in x ↦ rot·x + shift form with a zero pivot
+// (docs/linkage-check-design.md §5.1): p carries x to B_p·x + t_p, with
+// t_p = B_p·(−c_p) + c_p + s_p its image of the origin, so q(p(x)) is
+// B_q·B_p·x + B_q·(t_p − c_q) + c_q + s_q. Every term is an interval product
+// or sum, so the result encloses q'∘p' for every member p' of p's enclosure
+// and q' of q's.
+func (p IdealPose) Then(q IdealPose) IdealPose {
+	zero := proofbound.PointInterval(new(big.Rat))
+	origin := IvVec{zero, zero, zero}
+	tp := IvVecAdd(IvVecAdd(p.Rot.Apply(IvVecSub(origin, p.Pivot)), p.Pivot), p.Shift)
+	return IdealPose{
+		Rot:   q.Rot.Mul(p.Rot),
+		Pivot: origin,
+		Shift: IvVecAdd(IvVecAdd(q.Rot.Apply(IvVecSub(tp, q.Pivot)), q.Pivot), q.Shift),
+	}
+}
+
 // MotionFrame is the exact reading of a Motion's own fields every ideal pose
 // is built from. For a Between, axis and center are the read screw's Axis and
 // Point, theta and slide its Angle and Slide, each the exact rational of the
