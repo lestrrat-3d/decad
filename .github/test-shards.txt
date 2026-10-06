@@ -2192,3 +2192,6 @@
 3	4.29	TestDisplacedSupportSetBottle
 0	0.14	TestDisplacedSupportSetChamferedBlock
 5	0.09	TestDisplacedPenetrationWallMargin
+2	0.03	TestExactContactMapMatchesTransform
+4	0.30	TestPlacePlanarSnapshotMatchesFullAudit
+1	0.11	TestPointDeviationMatchesCommonDenomForm

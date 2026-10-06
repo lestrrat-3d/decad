@@ -51,12 +51,15 @@ type planarConvexityEntry struct {
 // held mesh whose every face is planar) is chordFree and serves every chord;
 // a curved held mesh's serves only the chord whose bits it records. Its
 // slices are shared by every reader and never written after it is stored.
+// topology is the triangle set's combinatorial audit and derived data, which
+// no pose changes (pair.PlanarTopology); a snapshot it refuses is a refusal.
 type planarSnapshotEntry struct {
 	chordBits uint64
 	chordFree bool
 	ok        bool
 	solid     pair.PlanarSolid
 	delta     proofarith.Dyadic
+	topology  *pair.PlanarTopology
 }
 
 // servesChord reports whether the entry stands for the snapshot at chord.
@@ -183,8 +186,9 @@ func planarConvexity(ctx context.Context, budget *workBudget, b *Body, chord flo
 // exact body.
 //
 // The snapshot at the identity pose is built once per body and chord and
-// cached on the body (planarSnapshotOf); each call maps its vertices through
-// the pose and audits the result, so the cache changes no outcome.
+// cached on the body with its triangles' combinatorial audit
+// (planarSnapshotOf); each call maps its vertices through the pose and audits
+// the coordinate half (placePlanarSnapshot), so the cache changes no outcome.
 func planarSolidAtPose(ctx context.Context, budget *workBudget, b *Body,
 	pose r3.Transform, chord float64) (pair.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
@@ -207,19 +211,23 @@ func planarSolidAtPose(ctx context.Context, budget *workBudget, b *Body,
 }
 
 // placePlanarSnapshot maps a cached snapshot's vertices through pose into a
-// fresh vertex slice and audits the result. The triangle and face slices are
-// shared with the cache, clipped so no append can reach its storage.
+// fresh vertex slice and audits the result: the snapshot's topology already
+// passed the combinatorial half of pair.CheckPlanarSolid, and
+// pair.CheckPlanarPose runs the coordinate half and attaches the pose's
+// derived data. The triangle and face slices are shared with the cache,
+// clipped so no append can reach its storage.
 func placePlanarSnapshot(budget *workBudget, snapshot *planarSnapshotEntry,
 	pose r3.Transform) (pair.PlanarSolid, bool, error) {
 	solid := pair.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.solid.Verts)),
 		Tris: slices.Clip(snapshot.solid.Tris), Faces: slices.Clip(snapshot.solid.Faces)}
+	place := newExactContactMap(pose)
 	for i, v := range snapshot.solid.Verts {
 		if err := budget.step(); err != nil {
 			return pair.PlanarSolid{}, false, err
 		}
-		solid.Verts[i] = exactContactTransform(pose, v)
+		solid.Verts[i] = place.apply(v)
 	}
-	audited, err := pair.CheckPlanarSolid(&solid, budget.step)
+	audited, err := pair.CheckPlanarPose(&solid, snapshot.topology, budget.step)
 	if err != nil || !audited {
 		return pair.PlanarSolid{}, false, err
 	}
@@ -249,6 +257,12 @@ func planarSnapshotOf(ctx context.Context, budget *workBudget, b *Body, chord fl
 	}
 	if err != nil {
 		return nil, err
+	}
+	if entry.ok {
+		entry.topology, entry.ok, err = pair.NewPlanarTopology(len(entry.solid.Verts), entry.solid.Tris, budget.step)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if !entry.ok {
 		entry.solid, entry.delta = pair.PlanarSolid{}, proofarith.DyZero()

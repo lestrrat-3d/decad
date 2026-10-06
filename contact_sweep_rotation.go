@@ -406,20 +406,37 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 	if !pose.IsValid() {
 		return nil, 0, false, nil
 	}
+	actual, squared, err := p.pointDeviationSquared(pose, ideal, poll)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	bound := ratSqrtUp(squared)
+	return actual, bound, finiteMeasurementValues(bound), nil
+}
+
+// pointDeviationSquared stages the source points through pose and returns
+// them with the exact largest squared distance bound, maxSquared/whole², the
+// value pointDeviationFrom rounds up.
+func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal sweepIdealPose,
+	poll func() error) ([]proofarith.DyV3, *big.Rat, error) {
 	actual := make([]proofarith.DyV3, len(p.sourcePoints))
+	place := newExactContactMap(pose)
 	for i, source := range p.sourcePoints {
 		if err := poll(); err != nil {
-			return nil, 0, false, err
+			return nil, nil, err
 		}
-		actual[i] = exactContactTransform(pose, source)
+		actual[i] = place.apply(source)
 	}
-	coordinates := make([]*big.Rat, 0, 6*len(p.sourcePoints))
+	// Every coordinate is dyadic, so the common denominator q of the source
+	// and staged points is 2^shift, shift their largest denominator exponent,
+	// and each coordinate's numerator over q is its mantissa shifted.
+	shift := 0
 	for i, source := range p.sourcePoints {
 		for axis := range 3 {
-			coordinates = append(coordinates, source[axis].Rat(), actual[i][axis].Rat())
+			shift = max(shift, dyDenominatorExp(source[axis]), dyDenominatorExp(actual[i][axis]))
 		}
 	}
-	q := proofarith.CommonDenom(coordinates...)
+	q := new(big.Int).Lsh(big.NewInt(1), uint(shift))
 	rot := ideal.rot
 	rotDen := new(big.Int).Mul(rot.den, q)
 	// Axis i's interval endpoints over den[i]; the squared sum over whole².
@@ -440,12 +457,12 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 	for i := range p.sourcePoints {
 		var point [3]*big.Int
 		for axis := range 3 {
-			point[axis] = proofarith.ScaledNum(coordinates[6*i+2*axis], q)
+			point[axis] = dyScaledNum(p.sourcePoints[i][axis], shift)
 		}
 		lo, hi := rot.applyScaled(point)
 		squared := new(big.Int)
 		for axis := range 3 {
-			observed := proofarith.ScaledNum(coordinates[6*i+2*axis+1], q)
+			observed := dyScaledNum(actual[i][axis], shift)
 			observed.Mul(observed, observedMultiplier[axis])
 			low := lo[axis].Mul(lo[axis], rotMultiplier[axis])
 			low.Add(low, shiftLo[axis])
@@ -465,8 +482,26 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 			maxSquared = squared
 		}
 	}
-	bound := ratSqrtUp(new(big.Rat).SetFrac(maxSquared, new(big.Int).Mul(whole, whole)))
-	return actual, bound, finiteMeasurementValues(bound), nil
+	return actual, new(big.Rat).SetFrac(maxSquared, new(big.Int).Mul(whole, whole)), nil
+}
+
+// dyDenominatorExp is the exponent k of d's reduced denominator 2^k, the
+// denominator d.Rat() carries: a nonzero Dyadic's mantissa is odd, so k is
+// −exp for a negative exponent and zero otherwise.
+func dyDenominatorExp(d proofarith.Dyadic) int {
+	if d.Sign() == 0 {
+		return 0
+	}
+	return max(0, -d.Exp())
+}
+
+// dyScaledNum is d·2^shift as an integer, proofarith.ScaledNum(d.Rat(), q)
+// for q = 2^shift, which shift at least dyDenominatorExp(d) makes whole.
+func dyScaledNum(d proofarith.Dyadic, shift int) *big.Int {
+	if d.Sign() == 0 {
+		return new(big.Int)
+	}
+	return new(big.Int).Lsh(d.Mant(), uint(d.Exp()+shift))
 }
 
 type rotationalPairSweep struct {
