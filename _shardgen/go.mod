@@ -4,4 +4,4 @@
 // the library's own module.
 module github.com/lestrrat-3d/decad/_shardgen
 
-go 1.26.1
+go 1.26.8
