@@ -344,17 +344,16 @@ func discreteFreeFall(drop float64) *big.Rat {
 // on the tray's floor and coming to rest face down inside the band (§10.8).
 // The _gallery module renders the same scene.
 //
-// The whole scene's 768 steps take about six minutes on an amd64
-// workstation, nearly all of it in the first 80 steps, where the rotating
-// sweeps' exact interval arithmetic dominates, and longer on the CI runners
-// than the dynamics package's ten-minute test budget allows. CI therefore
-// runs it in the _gallery module (TestTumbleTimeline there, and the
-// smoke render), and TestTumbleScene here runs it only when
+// The whole scene's 768 steps spend nearly all of their time in the first
+// 80 steps, where the rotating sweeps dominate, and take longer on the CI
+// runners than the dynamics package's ten-minute test budget allows. CI
+// therefore runs it in the _gallery module (TestTumbleTimeline there, and
+// the smoke render), and TestTumbleScene here runs it only when
 // DECAD_TUMBLE_FULL is set. TestTumbleSceneSubset runs four of its bodies,
 // one of each shape family, through the same assertions in 128 steps, about
-// forty seconds, on the legs without the race detector, which would take it
-// several times past the package budget the rest of the package already
-// fills.
+// fifteen seconds on an amd64 workstation, on the legs without the race
+// detector, which would take it several times past the package budget the
+// rest of the package already fills.
 
 // tumbleScene is a tumble world: the tray as its one fixed body, so no
 // other fixed body touches it, and the dynamic bodies in release order.
@@ -774,7 +773,7 @@ const tumbleSteps = 768
 // the top of this section.
 func TestTumbleScene(t *testing.T) {
 	if os.Getenv("DECAD_TUMBLE_FULL") == "" {
-		t.Skip("set DECAD_TUMBLE_FULL to run the whole tumble scene (about six minutes)")
+		t.Skip("set DECAD_TUMBLE_FULL to run the whole tumble scene")
 	}
 	names := make([]string, len(tumbleReleases))
 	for i, release := range tumbleReleases {
