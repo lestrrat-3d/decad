@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -294,7 +296,7 @@ func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAu
 	if contactAudited {
 		return nil
 	}
-	if err := loftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
+	if err := tessellation.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

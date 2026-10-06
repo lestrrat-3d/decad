@@ -1515,15 +1515,15 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 	reversed, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.01, 0, 12, true)
 	require.NoError(t, err)
 
-	require.Zero(t, new(big.Rat).Add(forward.twistVolumeCorrection, reversed.twistVolumeCorrection).Sign())
-	require.Equal(t, forward.twistVolumeUpper, reversed.twistVolumeUpper,
+	require.Zero(t, new(big.Rat).Add(forward.TwistVolumeCorrection, reversed.TwistVolumeCorrection).Sign())
+	require.Equal(t, forward.TwistVolumeUpper, reversed.TwistVolumeUpper,
 		"shell orientation must not change the unsigned occupied-volume measure")
-	for axis := range forward.twistMomentCorrection {
+	for axis := range forward.TwistMomentCorrection {
 		require.Zero(t,
-			new(big.Rat).Add(forward.twistMomentCorrection[axis], reversed.twistMomentCorrection[axis]).Sign(),
+			new(big.Rat).Add(forward.TwistMomentCorrection[axis], reversed.TwistMomentCorrection[axis]).Sign(),
 			"reversing the shell must reverse the signed first-moment correction on axis %d", axis)
 	}
-	require.Equal(t, forward.areaCorrection, reversed.areaCorrection,
+	require.Equal(t, forward.AreaCorrection, reversed.AreaCorrection,
 		"shell orientation must not change the unsigned area reading")
 }
 

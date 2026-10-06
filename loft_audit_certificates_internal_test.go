@@ -6,14 +6,16 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
-// This file tests loft_audit.go's ACCEPT-ONLY certificates — the shortcuts
-// loftAuditShortcuts.certificates gates — against the audit's own reference
+// This file tests internal/tessellation/loft_audit.go's ACCEPT-ONLY certificates — the shortcuts
+// tessellation.LoftAuditShortcuts.certificates gates — against the audit's own reference
 // path (loftAuditReference, defined with the rest of the shortcut vocabulary
 // in loft_audit_internal_test.go). Every assertion here is one of two kinds:
 //
@@ -31,7 +33,7 @@ import (
 // elsewhere — are ones no ordinary loft produces on demand.
 
 // FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can fail"
-// discipline). Each leg below was actually broken in loft_audit.go, this
+// discipline). Each leg below was actually broken in internal/tessellation/loft_audit.go, this
 // package re-run to confirm a RED failure, then reverted before this file was
 // committed. Every leg names the test that caught it.
 //
@@ -55,7 +57,7 @@ import (
 //
 // Certificate B:
 //
-//   - "admit every shared-vertex pair": isolatedSharedVertex was made to
+//   - "admit every shared-vertex pair": tessellation.IsolatedSharedVertex was made to
 //     return true unconditionally.
 //     TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair and the
 //     three vertex fixtures in
@@ -66,7 +68,7 @@ import (
 //     on sharedVertexOnPlaneFixture and on
 //     sharedVertexDuplicateCoordinateFixture, which are the two fixtures that
 //     leg exists for.
-//   - "read one orientation only": the second isolatedSharedVertex call was
+//   - "read one orientation only": the second tessellation.IsolatedSharedVertex call was
 //     deleted. TestLoftCrossingAuditVertexCertificateIsSymmetric went RED on
 //     its swapped-order cases, which is why isolatedSharedVertexFixture is
 //     built so that only one orientation proves it.
@@ -92,7 +94,7 @@ func foldedSharedEdgeTris() [][3]int {
 // coplanarSharedEdgeFixture is the pair certificate A must NOT decide: the two
 // triangles share the same edge (0,0,0)-(1,0,0) but both lie in z=0, so no
 // exact sign proves their planes distinct. Their apexes fall on opposite sides
-// of the edge's supporting line, so triTriCoplanarSharedEdge — the branch that
+// of the edge's supporting line, so tessellation.TriTriCoplanarSharedEdge — the branch that
 // predates the certificates — is what admits them.
 func coplanarSharedEdgeFixture() ([]r3.Vec, [][3]int) {
 	verts := []r3.Vec{
@@ -257,9 +259,9 @@ func transformVerts(verts []r3.Vec, scale float64, shift r3.Vec) []r3.Vec {
 // requireLoftAuditWork runs the audit under the given shortcuts and asserts
 // the whole per-outcome breakdown of its pair loop, so a test states which
 // path decided every pair rather than only how many pairs there were.
-func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts, want loftAuditWork) error {
+func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts tessellation.LoftAuditShortcuts, want tessellation.LoftAuditWork) error {
 	t.Helper()
-	work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, shortcuts)
+	work, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, shortcuts)
 	require.Equal(t, want, work)
 	return err
 }
@@ -272,10 +274,10 @@ func TestLoftCrossingAuditEdgeCertificateAdmitsAFoldedSharedEdge(t *testing.T) {
 	t.Parallel()
 	verts, tris := foldedSharedEdgeVerts(), foldedSharedEdgeTris()
 
-	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftAuditWork{classifications: 1})
+	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, tessellation.LoftAuditWork{Classifications: 1})
 	require.NoError(t, err, "the folded pair meets exactly along its shared edge, so the reference admits it")
 
-	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{edgeCerts: 1})
+	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{EdgeCerts: 1})
 	require.NoError(t, err, "certificate A must admit the identical pair")
 }
 
@@ -297,7 +299,7 @@ func TestLoftCrossingAuditEdgeCertificateIsSymmetric(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			verts := foldedSharedEdgeVerts()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tc.tris)
-			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, loftAuditWork{edgeCerts: 1})
+			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, tessellation.LoftAuditWork{EdgeCerts: 1})
 			require.NoError(t, err)
 		})
 	}
@@ -312,14 +314,14 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 	t.Run("apexes on opposite sides: admitted by the coplanar branch", func(t *testing.T) {
 		verts, tris := coplanarSharedEdgeFixture()
 		requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{classifications: 1})
+		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{Classifications: 1})
 		require.NoError(t, err)
 	})
 
 	t.Run("apexes on the same side: refused for overlapping in area", func(t *testing.T) {
 		verts, tris := coplanarSameSideEdgeFixture()
 		requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{classifications: 1})
+		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{Classifications: 1})
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 
@@ -328,17 +330,17 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 		// halves: coplanar, because an untwisted quad is planar, and sharing
 		// that cell's diagonal. The pair the certificate must leave alone.
 		verts, tris := boxLoftVerts(), boxLoftTris()
-		outcome, err := auditLoftPairData(newLoftAuditData(verts, tris), tris, 0, 1, loftAuditProduction)
+		outcome, err := tessellation.AuditLoftPairData(tessellation.NewLoftAuditData(verts, tris), tris, 0, 1, loftAuditProduction)
 		require.NoError(t, err)
-		require.Equal(t, loftPairClassified, outcome,
+		require.Equal(t, tessellation.LoftPairClassified, outcome,
 			"a coplanar shared-edge pair has no proven-distinct planes, so no certificate may decide it")
 
 		// The box's OTHER shared-edge pairs — the rungs between consecutive
 		// cells, which meet at a right angle — are the noncoplanar case, so
 		// the whole audit still fires the certificate four times.
-		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.NoError(t, err)
-		require.Equal(t, 4, work.edgeCerts,
+		require.Equal(t, 4, work.EdgeCerts,
 			"one certificate per rung shared by two consecutive wall cells")
 	})
 }
@@ -352,7 +354,7 @@ func TestLoftCrossingAuditEdgeCertificateAgreesOnAOneULPFold(t *testing.T) {
 	verts, tris := nearlyCoplanarSharedEdgeFixture()
 
 	requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-	err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{edgeCerts: 1})
+	err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{EdgeCerts: 1})
 	require.NoError(t, err, "a one-ULP fold is still a proven fold; the pair meets along its shared edge")
 }
 
@@ -398,10 +400,10 @@ func TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex(t *testi
 	t.Parallel()
 	verts, tris := isolatedSharedVertexFixture()
 
-	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftAuditWork{classifications: 1})
+	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, tessellation.LoftAuditWork{Classifications: 1})
 	require.NoError(t, err, "the pair meets only at its shared vertex, so the reference admits it")
 
-	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{vertexCerts: 1})
+	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{VertexCerts: 1})
 	require.NoError(t, err, "certificate B must admit the identical pair")
 }
 
@@ -424,7 +426,7 @@ func TestLoftCrossingAuditVertexCertificateIsSymmetric(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tc.tris)
-			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, loftAuditWork{vertexCerts: 1})
+			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, tessellation.LoftAuditWork{VertexCerts: 1})
 			require.NoError(t, err)
 		})
 	}
@@ -448,7 +450,7 @@ func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			verts, tris := tc.fixture()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{classifications: 1})
+			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{Classifications: 1})
 			require.ErrorIs(t, err, ErrDegenerate)
 		})
 	}
@@ -470,7 +472,7 @@ func TestLoftCrossingAuditCertificatesNeverDecideAnUnexpectedSharedCount(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			verts, tris := tc.fixture()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{classifications: 1})
+			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, tessellation.LoftAuditWork{Classifications: 1})
 			require.ErrorIs(t, err, ErrDegenerate)
 		})
 	}
@@ -488,13 +490,13 @@ func TestLoftCrossingAuditCertificatesPreserveCancellationPrecedence(t *testing.
 
 	for _, arm := range []struct {
 		name      string
-		shortcuts loftAuditShortcuts
+		shortcuts tessellation.LoftAuditShortcuts
 	}{
 		{name: "reference", shortcuts: loftAuditReference},
 		{name: "production", shortcuts: loftAuditProduction},
 	} {
 		t.Run(arm.name, func(t *testing.T) {
-			_, err := loftCrossingAuditWork(proofbound.NewWorkBudget(ctx), verts, tris, arm.shortcuts)
+			_, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(ctx), verts, tris, arm.shortcuts)
 			require.ErrorIs(t, err, context.Canceled,
 				"a cancelled context outranks the pair verdict on every shortcut setting")
 		})

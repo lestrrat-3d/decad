@@ -783,7 +783,7 @@ const (
 // auditSheetBoundary decides Table V's sheet validity audit
 // (docs/surface-design.md §9.1): three structural legs read off the recorded
 // topology, plus non-self-intersection admitted BY CONSTRUCTION alone. It is
-// deliberately NOT §6.4's closure audit (`loftCrossingAudit`) with closure
+// deliberately NOT §6.4's closure audit (`tessellation.LoftCrossingAudit`) with closure
 // dropped: that audit runs over a triangulated, all-planar face set sharing
 // one exact vertex table, which a surface-extruded wall's `Plane`,
 // `Cylinder` or `NURBSSurface` geometry — rimmed by `Arc3`, `Circle3` or

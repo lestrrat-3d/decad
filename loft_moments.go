@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -99,7 +101,7 @@ type loftMassAccumulator struct {
 	// field stays
 	// its zero value unless evalLoft calls computeLoftChordedAllow, which it
 	// does only when sectionDelta > 0 or sectionMatchedDelta > 0.
-	chorded loftChordedAllow
+	chorded tessellation.LoftChordedAllow
 
 	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
 	// six times the signed volume (docs/loft-design.md §8).
@@ -133,7 +135,7 @@ type loftMassAccumulator struct {
 	perturbAreaSum float64
 
 	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
-	// bounds wallTriangleArea returns; wallAreaAbs is an upper bound on
+	// bounds tessellation.WallTriangleArea returns; wallAreaAbs is an upper bound on
 	// Σ|term|, the scale proofbound.SumSlop's summation proof reads; wallAreaSlack is an
 	// upper bound on Σ (upper − lower), the enclosure width each triangle's
 	// own area contributes. The three are what make the published bound a
@@ -181,17 +183,10 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	m.addTriangle(a, b, c, wall, [3]int{}, nil)
 }
 
-// loftVertexDistance is local to one assembled Loft. A ready entry can hold
-// +Inf: that is the exact upper-distance result when float64 saturates.
-type loftVertexDistance struct {
-	upper float64
-	ready bool
-}
-
 // addTriangle keeps add's triangle fold unchanged. Only evalLoft supplies
 // indices and a cache, so repeated references to one assembled vertex reuse
 // its exact Euclidean upper distance.
-func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []loftVertexDistance) {
+func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []tessellation.LoftVertexDistance) {
 	sa := proofbound.Xsub(proofbound.XptOf(a), m.anchor)
 	sb := proofbound.Xsub(proofbound.XptOf(b), m.anchor)
 	sc := proofbound.Xsub(proofbound.XptOf(c), m.anchor)
@@ -231,33 +226,11 @@ func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]
 	}
 	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
 	// rationals, so the already-lifted vertices serve the area bracket too.
-	lo, hi := wallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
+	lo, hi := tessellation.WallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
 	m.wallAreaSum += lo
 	m.wallAreaAbs = proofbound.UpRound(m.wallAreaAbs + lo)
 	m.wallAreaSlack = proofbound.UpRound(m.wallAreaSlack + proofbound.UpRound(hi-lo))
 	m.wallTerms++
-}
-
-// wallTriangleArea brackets one wall triangle's own area between two floats,
-// both PROVEN. u and v are the triangle's exact rational edge vectors, so
-// |u×v|² is an exact rational and the area is the square root of |u×v|²/4;
-// proofbound.RatSqrtDown/proofbound.RatSqrtUp (internal/freeform/spline_length.go) bracket that rational root with
-// OUTWARD rounding decided by exact comparison, so lo ≤ area ≤ hi holds
-// whatever the platform's own sqrt does.
-//
-// The cross product is taken over rationals and NEVER in float64.
-// r3.Vec.Cross is the naive difference-of-products form, whose forward error
-// scales with the PRODUCTS rather than with the result, so a thin triangle's
-// float area carries an error larger than the held sum's own summation slop by
-// roughly one over the triangle's aspect ratio — and a bound read off that
-// held sum would not enclose it. The wall of a short loft over long recorded
-// LineSegs is exactly that shape (docs/loft-design.md Table B splits every
-// wall quad along a diagonal), so this is the ordinary case, not an edge one.
-func wallTriangleArea(u, v proofbound.Xpt) (float64, float64) {
-	w := meshbool.Xcross(u, v)
-	q := proofbound.XdotRat(w, w)
-	q.Quo(q, big.NewRat(4, 1))
-	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 }
 
 // foldBounds extends the componentwise extreme box over one held vertex.
@@ -312,17 +285,17 @@ func (m *loftMassAccumulator) foldCoordUpper(p r3.Vec) {
 // foldCoordUpperCached performs the same per-reference maxima as
 // foldCoordUpper. The distance is computed when this assembled vertex index
 // is first referenced, so unused vertices never affect the measurements.
-func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *loftVertexDistance) {
+func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *tessellation.LoftVertexDistance) {
 	d := p.Sub(m.anchorF)
 	m.coordUpper = max(m.coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
-	if !entry.ready {
-		entry.upper = math.Inf(1)
+	if !entry.Ready {
+		entry.Upper = math.Inf(1)
 		if d2 := ratSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
-			entry.upper = proofbound.RatSqrtUp(d2)
+			entry.Upper = proofbound.RatSqrtUp(d2)
 		}
-		entry.ready = true
+		entry.Ready = true
 	}
-	m.distUpper = max(m.distUpper, entry.upper)
+	m.distUpper = max(m.distUpper, entry.Upper)
 }
 
 // volume publishes Σvol6/6 plus the exact bilinear-patch correction, rounded
@@ -340,8 +313,8 @@ func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *loftVertexDi
 // sums.
 func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement {
 	vol := new(big.Rat).Quo(m.vol6, big.NewRat(6, 1))
-	if m.chorded.twistVolumeCorrection != nil {
-		vol.Add(vol, m.chorded.twistVolumeCorrection)
+	if m.chorded.TwistVolumeCorrection != nil {
+		vol.Add(vol, m.chorded.TwistVolumeCorrection)
 	}
 	value, _ := vol.Float64()
 	bound := proofarith.RationalFloatError(vol, value)
@@ -351,8 +324,8 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 	}
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
 		bound = proofbound.AbsSumUpper(bound, proofbound.ChordedBoundaryVolumeResidualAllow(
-			m.sectionMatchedDelta, m.chorded.wallAreaUpper,
-			m.chorded.capVolumeUpper, m.chorded.seamAllow,
+			m.sectionMatchedDelta, m.chorded.WallAreaUpper,
+			m.chorded.CapVolumeUpper, m.chorded.SeamAllow,
 		))
 	}
 	return Measurement{
@@ -379,7 +352,7 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 // sagitta is spent on Bounds instead. The two legs are mechanically distinct (a vertex displaced versus
 // a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
 // but each publishes a volume and a first-moment allowance over the SAME
-// anchored accumulator, so ONE clearance test and ONE placedCentroidAllow
+// anchored accumulator, so ONE clearance test and ONE tessellation.PlacedCentroidAllow
 // quotient composition — moments.go's proofbound.BoundedQuotient formula, specialized to
 // whichever allowances are active — cover both. A non-positive clearance (the
 // combined volume allowance is not smaller than the held volume) leaves the
@@ -396,11 +369,11 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 	momX := new(big.Rat).Set(m.momX)
 	momY := new(big.Rat).Set(m.momY)
 	momZ := new(big.Rat).Set(m.momZ)
-	if m.chorded.twistVolumeCorrection != nil {
-		vol6.Add(vol6, new(big.Rat).Mul(big.NewRat(6, 1), m.chorded.twistVolumeCorrection))
-		momX.Add(momX, m.chorded.twistMomentCorrection[0])
-		momY.Add(momY, m.chorded.twistMomentCorrection[1])
-		momZ.Add(momZ, m.chorded.twistMomentCorrection[2])
+	if m.chorded.TwistVolumeCorrection != nil {
+		vol6.Add(vol6, new(big.Rat).Mul(big.NewRat(6, 1), m.chorded.TwistVolumeCorrection))
+		momX.Add(momX, m.chorded.TwistMomentCorrection[0])
+		momY.Add(momY, m.chorded.TwistMomentCorrection[1])
+		momZ.Add(momZ, m.chorded.TwistMomentCorrection[2])
 	}
 	if vol6.Sign() == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)
@@ -430,12 +403,12 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		}
 		if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
 			epsV = proofbound.AbsSumUpper(epsV, proofbound.ChordedBoundaryVolumeResidualAllow(
-				m.sectionMatchedDelta, m.chorded.wallAreaUpper,
-				m.chorded.capVolumeUpper, m.chorded.seamAllow,
+				m.sectionMatchedDelta, m.chorded.WallAreaUpper,
+				m.chorded.CapVolumeUpper, m.chorded.SeamAllow,
 			))
 			epsM = proofbound.AbsSumUpper(epsM, proofbound.ChordedBoundaryMomentResidualAllow(
-				m.sectionMatchedDelta, m.chorded.wallAreaUpper,
-				m.chorded.capVolumeUpper, m.chorded.seamAllow, m.chorded.maxTwistOffsetUpper, m.coordUpper,
+				m.sectionMatchedDelta, m.chorded.WallAreaUpper,
+				m.chorded.CapVolumeUpper, m.chorded.SeamAllow, m.chorded.MaxTwistOffsetUpper, m.coordUpper,
 			))
 		}
 
@@ -443,9 +416,9 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		if clearance <= 0 {
 			return VecMeasurement{}, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
 		}
-		bx = proofbound.AbsSumUpper(bx, placedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
-		by = proofbound.AbsSumUpper(by, placedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
-		bz = proofbound.AbsSumUpper(bz, placedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
+		bx = proofbound.AbsSumUpper(bx, tessellation.PlacedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
+		by = proofbound.AbsSumUpper(by, tessellation.PlacedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
+		bz = proofbound.AbsSumUpper(bz, tessellation.PlacedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
 	}
 
 	bound := proofbound.Radius3D(math.Max(bx, math.Max(by, bz)))
@@ -455,20 +428,6 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
-}
-
-// placedCentroidAllow bounds how far one already-computed centroid
-// coordinate can move under a placement's proven volume and first-moment
-// allowances, mirroring moments.go's proofbound.BoundedQuotient formula (§12 PR 2a):
-// coordRel is the coordinate's own value relative to the accumulator's
-// anchor, epsM the proven first-moment allowance (proofbound.SweptMomentAllow), epsV
-// the proven volume allowance (proofbound.SweptVolumeAllow), and clearance the
-// caller's own proven positive gap between the held volume and epsV (S12's
-// own test, checked once by the caller since it does not depend on
-// coordRel).
-func placedCentroidAllow(coordRel, epsM, epsV, clearance float64) float64 {
-	numerator := proofbound.AbsSumUpper(epsM, proofbound.ProductUpper(math.Abs(coordRel), epsV))
-	return proofbound.UpRound(numerator / clearance)
 }
 
 // bounds publishes the componentwise min/max over every held vertex. Bound
@@ -541,12 +500,12 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	wallValue := m.wallAreaSum
 	wallBound := m.wallBound()
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-		corrected := wallValue + m.chorded.areaCorrection
+		corrected := wallValue + m.chorded.AreaCorrection
 		wallBound = proofbound.AbsSumUpper(
 			wallBound,
-			m.chorded.areaCorrectionBound,
-			m.chorded.bilinearAreaBound,
-			proofarith.AddRoundError(wallValue, m.chorded.areaCorrection, corrected),
+			m.chorded.AreaCorrectionBound,
+			m.chorded.BilinearAreaBound,
+			proofarith.AddRoundError(wallValue, m.chorded.AreaCorrection, corrected),
 		)
 		wallValue = corrected
 	}
@@ -583,7 +542,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	// excess charged; an unplaced LineSeg-only loft, where both are exactly
 	// 0, stays bit-identical to PR 1's.
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
-		bound = proofbound.AbsSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)
+		bound = proofbound.AbsSumUpper(bound, m.chorded.AreaExcess, m.chorded.CapAreaExcess)
 	}
 
 	return Measurement{
@@ -616,56 +575,7 @@ func (m *loftMassAccumulator) wallBound() float64 {
 	return proofbound.AbsSumUpper(m.wallAreaSlack, proofbound.SumSlop(m.wallTerms, m.wallAreaAbs))
 }
 
-// loftChordedAllow bundles the exact volume and first-moment corrections,
-// the unsigned twist measure retained for tessellation's occupied-volume
-// proof, the three residual volume terms, and the wall's two-leg area residual
-// (docs/loft-design.md §5/§8, a10-plan.md
-// Part 3 PR 6's integration task). Every field of the zero value is 0, the
-// correct standing for a LineSeg-only loft that never calls
-// computeLoftChordedAllow at all. It is also what a REFUSING call returns
-// beside its error, where the zero stands for nothing at all and no consumer
-// ever sees it: evalLoft propagates that error and publishes no measurement.
-type loftChordedAllow struct {
-	wallAreaUpper         float64
-	twistVolumeUpper      float64
-	twistVolumeCorrection *big.Rat
-	twistMomentCorrection proofbound.RatV3
-	maxTwistOffsetUpper   float64
-	capVolumeUpper        float64
-	seamAllow             float64
-	// areaCorrection moves Area.Value from the held chord facets to the
-	// bilinear wall patches. Its bound covers the correction's one rounding;
-	// bilinearAreaBound covers those patches' certified integration intervals.
-	areaCorrection      float64
-	areaCorrectionBound float64
-	bilinearAreaBound   float64
-	// areaExcess is the wall's ruled and station-shift residuals summed over
-	// chorded cells. The held-to-bilinear step is in Area.Value above.
-	areaExcess float64
-	// twistAreaAllow is that SAME held-to-bilinear step read as a BOUND
-	// rather than as a correction: proofbound.CellTwistAreaAllow summed over the same
-	// chorded cells the loop below walks
-	// (docs/tessellation-reach-design.md §4). area() never reads it, because
-	// areaCorrection has already MOVED Area.Value onto the bilinear patches
-	// and charging the gap again there would double-count it. The
-	// tessellation does read it: the mesh holds the UNCORRECTED held
-	// triangles, so the step areaCorrection performs is, for that triangle
-	// set, an outstanding area gap and the mesh's own areaSlack must carry it
-	// (docs/tessellation-design.md §2's loftPayload row). It stays exactly 0
-	// on a build with no chorded cell, the zero value's own standing.
-	twistAreaAllow float64
-	// capAreaExcess is capAreaAllow0 and capAreaAllow1 (each
-	// proofbound.SectionDisplacementArea over its own cap's boundary) composed by
-	// proofbound.AbsSumUpper: the SAME two per-cap area allowances capVolumeUpper folds
-	// into a volume via proofbound.CapAreaVolumeAllow's own |h|/3 identity, spent here
-	// UNFOLDED as an area instead — area()'s own AREA reading, unlike
-	// volume(), has no plane offset h to divide by, since a cap's own
-	// published area IS the built polygon's area and the true denoted area
-	// differs from it by exactly this much (docs/loft-design.md §5/§8).
-	capAreaExcess float64
-}
-
-// computeLoftChordedAllow derives loftChordedAllow's corrections and bounds by walking
+// computeLoftChordedAllow derives tessellation.LoftChordedAllow's corrections and bounds by walking
 // every wall cell of every loop pairs holds, over the SAME cell corner
 // convention assembleLoft's own Table B split uses (vLo, vHi = section-0's
 // two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are evalLoft's own
@@ -733,7 +643,7 @@ type loftChordedAllow struct {
 // own perpendicular offset from a point is never more than the distance to
 // any single point ON that plane, and every cap1 vertex lies on cap1's own
 // plane exactly. Where the assembly states no such distance this function
-// RETURNS errLoftCapOffsetUnderivable and publishes nothing, which is the one
+// RETURNS tessellation.ErrLoftCapOffsetUnderivable and publishes nothing, which is the one
 // error it raises and the reason it returns one at all; the site itself owns
 // why a zero would not do.
 //
@@ -785,7 +695,7 @@ type loftChordedAllow struct {
 //
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
 // two together are what area() charges beside the mixed wall reading.
-func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64, reversed bool) (loftChordedAllow, error) {
+func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64, reversed bool) (tessellation.LoftChordedAllow, error) {
 	// Derive cap1's offset before lifting any wall cell into exact rationals.
 	// Production has already refused non-finite vertices at S13, while direct
 	// internal callers still receive S14's existing derivation refusal instead
@@ -796,13 +706,13 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			v := verts[idx]
 			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
 			if d2 == nil {
-				return loftChordedAllow{}, errLoftCapOffsetUnderivable
+				return tessellation.LoftChordedAllow{}, tessellation.ErrLoftCapOffsetUnderivable
 			}
 			h1Upper = math.Min(h1Upper, proofbound.RatSqrtUp(d2))
 		}
 	}
 	if proofbound.IsNonFinite(h1Upper) {
-		return loftChordedAllow{}, errLoftCapOffsetUnderivable
+		return tessellation.LoftChordedAllow{}, tessellation.ErrLoftCapOffsetUnderivable
 	}
 
 	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
@@ -874,8 +784,8 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			bilinearValue, bilinearBound := proofbound.CellBilinearArea(vLo, vHi, wLo, wHi)
 			bilinearAreaBound = proofbound.AbsSumUpper(bilinearAreaBound, bilinearBound)
 			vLoX := proofbound.XptOf(vLo)
-			lowerLo, _ := wallTriangleArea(proofbound.Xsub(proofbound.XptOf(vHi), vLoX), proofbound.Xsub(proofbound.XptOf(wHi), vLoX))
-			upperLo, _ := wallTriangleArea(proofbound.Xsub(proofbound.XptOf(wHi), vLoX), proofbound.Xsub(proofbound.XptOf(wLo), vLoX))
+			lowerLo, _ := tessellation.WallTriangleArea(proofbound.Xsub(proofbound.XptOf(vHi), vLoX), proofbound.Xsub(proofbound.XptOf(wHi), vLoX))
+			upperLo, _ := tessellation.WallTriangleArea(proofbound.Xsub(proofbound.XptOf(wHi), vLoX), proofbound.Xsub(proofbound.XptOf(wLo), vLoX))
 			areaCorrection.Add(areaCorrection, freeform.MustRatOf(bilinearValue))
 			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(lowerLo))
 			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(upperLo))
@@ -930,32 +840,19 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 	seamAllow := proofbound.ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
 	areaCorrectionValue, _ := areaCorrection.Float64()
 
-	return loftChordedAllow{
-		wallAreaUpper:         wallAreaUpper,
-		twistVolumeUpper:      twistVolumeUpper,
-		twistVolumeCorrection: twistVolumeCorrection,
-		twistMomentCorrection: twistMomentCorrection,
-		maxTwistOffsetUpper:   maxTwistOffsetUpper,
-		capVolumeUpper:        capVolumeUpper,
-		seamAllow:             seamAllow,
-		areaCorrection:        areaCorrectionValue,
-		areaCorrectionBound:   proofarith.RationalFloatError(areaCorrection, areaCorrectionValue),
-		bilinearAreaBound:     bilinearAreaBound,
-		areaExcess:            areaExcess,
-		twistAreaAllow:        twistAreaAllow,
-		capAreaExcess:         proofbound.AbsSumUpper(capAreaAllow0, capAreaAllow1),
+	return tessellation.LoftChordedAllow{
+		WallAreaUpper:         wallAreaUpper,
+		TwistVolumeUpper:      twistVolumeUpper,
+		TwistVolumeCorrection: twistVolumeCorrection,
+		TwistMomentCorrection: twistMomentCorrection,
+		MaxTwistOffsetUpper:   maxTwistOffsetUpper,
+		CapVolumeUpper:        capVolumeUpper,
+		SeamAllow:             seamAllow,
+		AreaCorrection:        areaCorrectionValue,
+		AreaCorrectionBound:   proofarith.RationalFloatError(areaCorrection, areaCorrectionValue),
+		BilinearAreaBound:     bilinearAreaBound,
+		AreaExcess:            areaExcess,
+		TwistAreaAllow:        twistAreaAllow,
+		CapAreaExcess:         proofbound.AbsSumUpper(capAreaAllow0, capAreaAllow1),
 	}, nil
 }
-
-// errLoftCapOffsetUnderivable is the sentinel docs/loft-design.md Table S row
-// S14 carries for the cap planeOffsetUpper term (§5.2), raised in the
-// CONSTRUCTION arm §4's gate-order paragraph assigns that term — it reads the
-// held vertex table, which the record-only arm does not have. Like its
-// certified-sagitta and station-displacement twins the shape itself is fine and
-// the chord set is buildable; only one of the proven displacement terms the
-// published cap volume allowance is composed from cannot be stated, so the
-// sentinel is ErrUnsupported and no finite value — least of all a zero — is
-// published in its place.
-var errLoftCapOffsetUnderivable = fmt.Errorf(
-	`%w: a chorded loft cap's plane offset from the mass anchor has no derivation from this assembly`, ErrUnsupported,
-)

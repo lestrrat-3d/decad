@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -300,18 +302,18 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		}
 	}
 	for t, tri := range a.tris {
-		if triangleCollapsed(verts, tri) {
+		if tessellation.TriangleCollapsed(verts, tri) {
 			return nil, fmt.Errorf(`%w: rounding the mitred sweep's vertices collapsed its triangle %d (%s)`, ErrUnsupported, t, a.roles[a.triFace[t]])
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := loftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.tris); err != nil {
-		var contact *loftContactError
+	if err := tessellation.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.tris); err != nil {
+		var contact *tessellation.LoftContactError
 		if errors.As(err, &contact) {
 			return nil, fmt.Errorf(`%w: mitred sweep faces %s and %s %s`, ErrDegenerate,
-				a.roles[a.triFace[contact.i]], a.roles[a.triFace[contact.j]], contact.reason)
+				a.roles[a.triFace[contact.I]], a.roles[a.triFace[contact.J]], contact.Reason)
 		}
 		return nil, err
 	}

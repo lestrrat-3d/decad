@@ -4,6 +4,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -42,7 +44,7 @@ func (o *filterOracle) sides(t *testing.T, axes []revolveSepAxis, offs []revolve
 func (o *filterOracle) pair(t *testing.T, data []revolveAuditTri, tris [][3]int, i, j int, delta float64) {
 	t.Helper()
 	a, b := data[i], data[j]
-	shared, count := sharedVertexIndices(tris[i], tris[j])
+	shared, count := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if count == 0 {
 		o.readings++
 		if revolveSeparatedFloat(a, b, delta) {

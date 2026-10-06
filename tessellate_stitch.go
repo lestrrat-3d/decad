@@ -396,7 +396,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	//     triangles (docs/tessellation-design.md §2's loftPayload row), and it
 	//     introduces no coordinate the polygon's own vertices did not already
 	//     hold: no rounding, no interpolation. checkStitchClosure's
-	//     directed-edge parity leg and loftCrossingAudit's own crossing test
+	//     directed-edge parity leg and tessellation.LoftCrossingAudit's own crossing test
 	//     — both already run before this mesh is built, in
 	//     stitch.go's evalStitchContext — are what prove the several faces'
 	//     own triangle sets close into one watertight solid with no

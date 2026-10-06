@@ -1,8 +1,10 @@
-package decad
+package tessellation
 
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
@@ -18,7 +20,7 @@ import (
 // meshbool.TriTriClassify unchanged — the same machinery the mesh boolean already uses
 // to decide whether two triangles are disjoint, share a point, share a
 // segment, or overlap in a 2-D region — and adds no bracket engine of its
-// own. triTriCoplanarSharedEdge is the one new predicate §6 names, and it is
+// own. TriTriCoplanarSharedEdge is the one new predicate §6 names, and it is
 // audit-only: it never changes meshbool.TriTriClassify or mesh-boolean contact
 // classification (proven by the required test that the same coplanar pair
 // still reports meshbool.ContactRegion there).
@@ -33,112 +35,112 @@ import (
 // (ErrUnsupported), refused before a single pair test runs.
 //
 // Two kinds of shortcut let a pair reach that verdict without the exact
-// classification, and loftAuditShortcuts switches each one separately so the
+// classification, and LoftAuditShortcuts switches each one separately so the
 // audit keeps a reference path the tests compare every verdict against. The
-// broad-phase in loftCrossingAuditWork is reject-only and runs for a pair
-// expected NOT to touch; auditLoftPairData's certificates are accept-only and
+// broad-phase in LoftCrossingAuditWork is reject-only and runs for a pair
+// expected NOT to touch; AuditLoftPairData's certificates are accept-only and
 // run for a pair expected to touch at a known entity. Each carries its proof
 // on its own doc comment, and each proof rests on exact rational signs alone.
 
-// triangleCollapsed reports whether a triangle's three recorded vertices are
+// TriangleCollapsed reports whether a triangle's three recorded vertices are
 // exactly collinear (or coincident) — an exact zero cross product over the
 // rational lift, never a tolerance. This is S6 (docs/loft-design.md §4): the
 // triangle has no interior, so the shell it would contribute to does not
 // exist.
-func triangleCollapsed(verts []r3.Vec, tri [3]int) bool {
+func TriangleCollapsed(verts []r3.Vec, tri [3]int) bool {
 	a, b, c := proofbound.XptOf(verts[tri[0]]), proofbound.XptOf(verts[tri[1]]), proofbound.XptOf(verts[tri[2]])
 	n := meshbool.Xcross(proofbound.Xsub(b, a), proofbound.Xsub(c, a))
 	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
 }
 
-// loftTriCorners reads one triangle's three float corners off the shared
+// LoftTriCorners reads one triangle's three float corners off the shared
 // vertex table.
-func loftTriCorners(verts []r3.Vec, tri [3]int) [3]r3.Vec {
+func LoftTriCorners(verts []r3.Vec, tri [3]int) [3]r3.Vec {
 	return [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
 }
 
-// loftXTriCorners is loftTriCorners' exact lift.
-func loftXTriCorners(verts []r3.Vec, tri [3]int) [3]proofbound.Xpt {
-	c := loftTriCorners(verts, tri)
+// LoftXTriCorners is LoftTriCorners' exact lift.
+func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proofbound.Xpt {
+	c := LoftTriCorners(verts, tri)
 	return [3]proofbound.Xpt{proofbound.XptOf(c[0]), proofbound.XptOf(c[1]), proofbound.XptOf(c[2])}
 }
 
-// loftAuditData holds the immutable per-vertex and per-triangle values shared
+// LoftAuditData holds the immutable per-vertex and per-triangle values shared
 // by every pair in one crossing audit. The old pair path rebuilt the same
 // exact vertex lifts and triangle normals for every pair, even though both are
 // determined solely by the audit's input tables. Keeping them for the audit's
 // lifetime does not change a predicate or its inputs; it only avoids repeating
 // the same exact arithmetic.
-type loftAuditData struct {
-	corners     [][3]r3.Vec
-	xverts      []proofbound.Xpt
-	xtris       [][3]proofbound.Xpt
-	norms       []proofbound.Xpt
-	planes      []loftExactPlane
-	projections [][3]meshbool.Xp2
+type LoftAuditData struct {
+	Corners     [][3]r3.Vec
+	Xverts      []proofbound.Xpt
+	Xtris       [][3]proofbound.Xpt
+	Norms       []proofbound.Xpt
+	Planes      []LoftExactPlane
+	Projections [][3]meshbool.Xp2
 }
 
-// loftExactPlane is an owned integer numerator for the oriented plane through
+// LoftExactPlane is an owned integer numerator for the oriented plane through
 // anchor with normal n. For a point p, its sign is the sign of n dot
 // (p-anchor), since all three homogeneous weights are positive.
-type loftExactPlane struct{ a, b, c, d *big.Int }
+type LoftExactPlane struct{ A, B, C, D *big.Int }
 
-func newLoftExactPlane(anchor, n proofbound.Xpt) loftExactPlane {
+func NewLoftExactPlane(anchor, n proofbound.Xpt) LoftExactPlane {
 	d := proofbound.XdotNum(n, anchor)
-	return loftExactPlane{
-		a: new(big.Int).Mul(n.X, anchor.W),
-		b: new(big.Int).Mul(n.Y, anchor.W),
-		c: new(big.Int).Mul(n.Z, anchor.W),
-		d: d.Neg(d),
+	return LoftExactPlane{
+		A: new(big.Int).Mul(n.X, anchor.W),
+		B: new(big.Int).Mul(n.Y, anchor.W),
+		C: new(big.Int).Mul(n.Z, anchor.W),
+		D: d.Neg(d),
 	}
 }
 
-func (plane loftExactPlane) sign(p proofbound.Xpt, sum, term *big.Int) int {
-	sum.Mul(plane.a, p.X)
-	sum.Add(sum, term.Mul(plane.b, p.Y))
-	sum.Add(sum, term.Mul(plane.c, p.Z))
-	sum.Add(sum, term.Mul(plane.d, p.W))
+func (plane LoftExactPlane) Sign(p proofbound.Xpt, sum, term *big.Int) int {
+	sum.Mul(plane.A, p.X)
+	sum.Add(sum, term.Mul(plane.B, p.Y))
+	sum.Add(sum, term.Mul(plane.C, p.Z))
+	sum.Add(sum, term.Mul(plane.D, p.W))
 	return sum.Sign()
 }
 
-func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
-	d := &loftAuditData{
-		corners:     make([][3]r3.Vec, len(tris)),
-		xverts:      make([]proofbound.Xpt, len(verts)),
-		xtris:       make([][3]proofbound.Xpt, len(tris)),
-		norms:       make([]proofbound.Xpt, len(tris)),
-		planes:      make([]loftExactPlane, len(tris)),
-		projections: make([][3]meshbool.Xp2, len(tris)),
+func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
+	d := &LoftAuditData{
+		Corners:     make([][3]r3.Vec, len(tris)),
+		Xverts:      make([]proofbound.Xpt, len(verts)),
+		Xtris:       make([][3]proofbound.Xpt, len(tris)),
+		Norms:       make([]proofbound.Xpt, len(tris)),
+		Planes:      make([]LoftExactPlane, len(tris)),
+		Projections: make([][3]meshbool.Xp2, len(tris)),
 	}
 	for i, v := range verts {
-		d.xverts[i] = proofbound.XptOf(v)
+		d.Xverts[i] = proofbound.XptOf(v)
 	}
 	for i, tri := range tris {
-		d.corners[i] = loftTriCorners(verts, tri)
-		d.xtris[i] = [3]proofbound.Xpt{d.xverts[tri[0]], d.xverts[tri[1]], d.xverts[tri[2]]}
-		d.norms[i] = meshbool.Xcross(proofbound.Xsub(d.xtris[i][1], d.xtris[i][0]), proofbound.Xsub(d.xtris[i][2], d.xtris[i][0]))
-		d.planes[i] = newLoftExactPlane(d.xtris[i][0], d.norms[i])
-		projection := projectionPairIndex(meshbool.ProjAxes(d.norms[i]))
-		for j, p := range d.xtris[i] {
+		d.Corners[i] = LoftTriCorners(verts, tri)
+		d.Xtris[i] = [3]proofbound.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
+		d.Norms[i] = meshbool.Xcross(proofbound.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proofbound.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
+		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
+		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
+		for j, p := range d.Xtris[i] {
 			switch projection {
 			case 0:
-				d.projections[i][j] = meshbool.NewXP2FromXpt(p, 0, 1)
+				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 0, 1)
 			case 1:
-				d.projections[i][j] = meshbool.NewXP2FromXpt(p, 2, 0)
+				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 2, 0)
 			default:
-				d.projections[i][j] = meshbool.NewXP2FromXpt(p, 1, 2)
+				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 1, 2)
 			}
 		}
 	}
 	return d
 }
 
-// sharedVertexIndices returns the vertex indices two triangles hold in common
+// SharedVertexIndices returns the vertex indices two triangles hold in common
 // and their count — free and exact, since a shared vertex is a shared table
 // index. The loft build never emits a triangle with a repeated index (S6
 // refuses any that would collapse first), so the result holds at most 3 entries
 // and no duplicates without allocating a slice per pair.
-func sharedVertexIndices(a, b [3]int) ([3]int, int) {
+func SharedVertexIndices(a, b [3]int) ([3]int, int) {
 	var shared [3]int
 	count := 0
 	for _, va := range a {
@@ -153,31 +155,31 @@ func sharedVertexIndices(a, b [3]int) ([3]int, int) {
 	return shared, count
 }
 
-// errLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
+// ErrLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
 // is not the one its recorded adjacency expects, so the assembled shell
 // self-touches or self-crosses away from — or instead of — its recorded
 // vertex or edge. No such solid exists.
 //
-// The error is a *loftContactError so a builder that numbers its triangles by
+// The error is a *LoftContactError so a builder that numbers its triangles by
 // face (sweep_mitre_build.go) can name the two faces instead of the indices.
-func errLoftContact(i, j int, reason string) error {
-	return &loftContactError{i: i, j: j, reason: reason}
+func ErrLoftContact(i, j int, reason string) error {
+	return &LoftContactError{I: i, J: j, Reason: reason}
 }
 
-// loftContactError is errLoftContact's ErrDegenerate, carrying the two
+// LoftContactError is ErrLoftContact's ErrDegenerate, carrying the two
 // triangle indices the audit classified.
-type loftContactError struct {
-	i, j   int
-	reason string
+type LoftContactError struct {
+	I, J   int
+	Reason string
 }
 
-func (e *loftContactError) Error() string {
-	return fmt.Sprintf(`%s: loft triangles %d and %d %s`, ErrDegenerate, e.i, e.j, e.reason)
+func (e *LoftContactError) Error() string {
+	return fmt.Sprintf(`%s: loft triangles %d and %d %s`, decaderr.ErrDegenerate, e.I, e.J, e.Reason)
 }
 
-func (e *loftContactError) Unwrap() error { return ErrDegenerate }
+func (e *LoftContactError) Unwrap() error { return decaderr.ErrDegenerate }
 
-// triTriCoplanarSharedEdge is docs/loft-design.md §6's audit-only helper for
+// TriTriCoplanarSharedEdge is docs/loft-design.md §6's audit-only helper for
 // an edge-adjacent coplanar pair that meshbool.TriTriClassify reports as
 // meshbool.ContactRegion. It reads the two exact triangles' opposite vertices and
 // admits the pair only when the recorded edge (edgeA, edgeB) is an edge of
@@ -187,7 +189,7 @@ func (e *loftContactError) Unwrap() error { return ErrDegenerate }
 // segment, never a shared area. It never writes to meshbool.TriTriClassify or any
 // shared classification state, so it cannot change mesh-boolean contact
 // classification (docs/loft-design.md §6, required test).
-func triTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edgeA, edgeB proofbound.Xpt) bool {
+func TriTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edgeA, edgeB proofbound.Xpt) bool {
 	edgeAKey, edgeBKey := edgeA.Key(), edgeB.Key()
 	var apexA, apexB proofbound.Xpt
 	for _, p := range xta {
@@ -209,9 +211,9 @@ func triTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edge
 	return sA != 0 && sB != 0 && sA != sB
 }
 
-// segMatchesRecordedEdge reports whether a non-coplanar segment contact is
+// SegMatchesRecordedEdge reports whether a non-coplanar segment contact is
 // exactly the recorded shared edge (either endpoint order).
-func segMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proofbound.Xpt) bool {
+func SegMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proofbound.Xpt) bool {
 	if c.Kind != meshbool.ContactSegment {
 		return false
 	}
@@ -220,11 +222,11 @@ func segMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proofbound.Xpt) 
 	return (k0 == ka && k1 == kb) || (k0 == kb && k1 == ka)
 }
 
-// loftAuditShortcuts selects which of the S7 pair loop's shortcuts one audit
+// LoftAuditShortcuts selects which of the S7 pair loop's shortcuts one audit
 // call may use. Its ZERO VALUE is the audit's independent reference path:
-// every pair S8 admits reaches auditLoftPairData, and inside it every pair
+// every pair S8 admits reaches AuditLoftPairData, and inside it every pair
 // reaches meshbool.TriTriClassify's exact contact classification. Production runs with
-// every field true (loftCrossingAudit), and a shortcut may only ever change
+// every field true (LoftCrossingAudit), and a shortcut may only ever change
 // how SOON a pair's verdict is reached, never which verdict it is — which is
 // what the reference path exists to test against.
 //
@@ -232,33 +234,33 @@ func segMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proofbound.Xpt) 
 // switched separately so a test can isolate either one:
 //
 //   - broadPhase gates the two reject-only float tiers ahead of the exact
-//     classification (loftPlaneSeparated and the bounding-box test), which
+//     classification (LoftPlaneSeparated and the bounding-box test), which
 //     only ever prove a zero-shared-vertex pair APART.
-//   - certificates gates auditLoftPairData's own accept-only proofs, which
+//   - certificates gates AuditLoftPairData's own accept-only proofs, which
 //     only ever prove a shared-entity pair's contact IS the expected entity.
-type loftAuditShortcuts struct {
-	broadPhase   bool
-	certificates bool
+type LoftAuditShortcuts struct {
+	BroadPhase   bool
+	Certificates bool
 }
 
-// loftAuditWork records what ONE loftCrossingAudit call's S7 pair loop did,
+// LoftAuditWork records what ONE LoftCrossingAudit call's S7 pair loop did,
 // one field per way a pair can be decided:
 //
 //   - skips: a zero-shared-vertex pair a broad-phase tier proved apart.
 //   - edgeCerts: a pair the noncoplanar shared-edge certificate admitted
-//     (auditLoftPairData's own doc comment carries its proof).
+//     (AuditLoftPairData's own doc comment carries its proof).
 //   - vertexCerts: a pair the isolated shared-vertex certificate admitted.
-//   - classifications: every other pair, which reached auditLoftPairData
+//   - classifications: every other pair, which reached AuditLoftPairData
 //     without a certificate deciding it.
 //
 // The four always sum to the pair count S8 admitted, on a call that ran to
 // completion. classifications counts the pairs the certificates are there to
 // remove, so it is the quantity a shortcut is measured by; it also carries the
-// handful of coplanar shared-edge pairs triTriCoplanarSharedEdge decides
+// handful of coplanar shared-edge pairs TriTriCoplanarSharedEdge decides
 // without reaching meshbool.TriTriClassify, since that branch predates the certificates
 // and no shortcut switch changes it.
 //
-// It is per-call state, held in loftCrossingAuditWork's own frame and
+// It is per-call state, held in LoftCrossingAuditWork's own frame and
 // returned by value — never a package-level counter. The audit runs on the
 // production path of every exported entry point that builds or re-lifts a
 // loft (Document.Loft, and Body.Placed/Duplicate/
@@ -266,38 +268,38 @@ type loftAuditShortcuts struct {
 // independent Documents may each be inside it at once, so a counter shared
 // across calls would both race and mis-count. Nothing outside the call frame
 // is written anywhere on this path.
-type loftAuditWork struct {
-	skips           int
-	edgeCerts       int
-	vertexCerts     int
-	classifications int
+type LoftAuditWork struct {
+	Skips           int
+	EdgeCerts       int
+	VertexCerts     int
+	Classifications int
 }
 
-// loftPairOutcome names which of auditLoftPairData's own decision paths
-// settled one pair, so loftCrossingAuditWork can count it without repeating
+// LoftPairOutcome names which of AuditLoftPairData's own decision paths
+// settled one pair, so LoftCrossingAuditWork can count it without repeating
 // the classification. It says nothing about the verdict: a pair that returns
-// loftPairClassified may have been admitted or refused.
-type loftPairOutcome int
+// LoftPairClassified may have been admitted or refused.
+type LoftPairOutcome int
 
 const (
-	// loftPairClassified: the pair reached the exact contact classification
+	// LoftPairClassified: the pair reached the exact contact classification
 	// (or the pre-existing coplanar shared-edge branch).
-	loftPairClassified loftPairOutcome = iota
-	// loftPairEdgeCertificate: the noncoplanar shared-edge certificate
+	LoftPairClassified LoftPairOutcome = iota
+	// LoftPairEdgeCertificate: the noncoplanar shared-edge certificate
 	// admitted the pair.
-	loftPairEdgeCertificate
-	// loftPairVertexCertificate: an isolated shared-vertex certificate
+	LoftPairEdgeCertificate
+	// LoftPairVertexCertificate: an isolated shared-vertex certificate
 	// admitted the pair.
-	loftPairVertexCertificate
+	LoftPairVertexCertificate
 )
 
-// loftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
+// LoftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
 // for a zero-shared-vertex pair whose bounding boxes DO overlap: it
 // reproduces meshbool.TriTriClassify's OWN opening move (boolean_mesh.go) —
 // meshbool.AllOneSide(meshbool.OrientSign(...)) against each triangle's plane — over nothing
 // but the two triangles' float corners, so it can prove "one triangle sits
 // strictly on one side of the other's plane, and so the pair cannot touch at
-// all" without ever building the exact-rational lift auditLoftPair pays for
+// all" without ever building the exact-rational lift AuditLoftPair pays for
 // on every call. It calls the IDENTICAL meshbool.OrientSign and meshbool.AllOneSide functions
 // meshbool.TriTriClassify itself calls first, on the IDENTICAL float corners, so it
 // cannot disagree with meshbool.TriTriClassify's own verdict for the cases it
@@ -313,10 +315,10 @@ const (
 // correctly-rounded float64 conversion of the pair's EXACT rational
 // normal — with meshbool.FivRounded's extra ulp of margin calibrated for exactly
 // that rounding step, so using it here would still force building the exact
-// cross product it is supposed to help avoid. loftPlaneSeparated needs no
+// cross product it is supposed to help avoid. LoftPlaneSeparated needs no
 // normal at all, exact or float, so it pays nothing this pair does not
 // already have in hand.
-func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
+func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 	var sb [3]int
 	for i := range 3 {
 		sb[i] = meshbool.OrientSign(ta[0], ta[1], ta[2], tb[i])
@@ -331,21 +333,21 @@ func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 	return meshbool.AllOneSide(sa)
 }
 
-// auditLoftPair classifies one triangle pair against its recorded adjacency
+// AuditLoftPair classifies one triangle pair against its recorded adjacency
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects. It is the tests' reference
-// entry point: it runs auditLoftPairData's zero-shortcut path, so every pair
+// entry point: it runs AuditLoftPairData's zero-shortcut path, so every pair
 // it decides reaches the exact classification.
-func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unparam // test helper keeps both pair indices aligned with production auditLoftPairData
-	_, err := auditLoftPairData(newLoftAuditData(verts, tris), tris, i, j, loftAuditShortcuts{})
+func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
+	_, err := AuditLoftPairData(NewLoftAuditData(verts, tris), tris, i, j, LoftAuditShortcuts{})
 	return err
 }
 
-// auditLoftPairData classifies pair (i, j) and reports which decision path
+// AuditLoftPairData classifies pair (i, j) and reports which decision path
 // settled it. PRECONDITION: both triangles have three DISTINCT vertex indices
-// and are noncollapsed — S6 (triangleCollapsed, run over every triangle before
+// and are noncollapsed — S6 (TriangleCollapsed, run over every triangle before
 // the S7 pair loop starts) is what establishes that for the production caller,
-// and the test-only auditLoftPair above is called with noncollapsed fixtures.
+// and the test-only AuditLoftPair above is called with noncollapsed fixtures.
 //
 // # Certificate A — the noncoplanar shared edge
 //
@@ -377,14 +379,14 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unp
 // The sign is exact rational arithmetic (meshbool.XdotSign), never a float tolerance,
 // so step 3 is a proof and not an estimate. A ZERO sign proves nothing about
 // step 3 and takes no shortcut: the coplanar branch below keeps deciding that
-// case through triTriCoplanarSharedEdge, which is what still refuses two
+// case through TriTriCoplanarSharedEdge, which is what still refuses two
 // coplanar triangles that share an edge and overlap in area on one side of it.
 //
 // # Certificate B — the isolated shared vertex
 //
 // A pair sharing exactly one vertex index is admitted once one triangle's two
 // remaining vertices carry the SAME strict exact sign against the other
-// triangle's plane. isolatedSharedVertex owns that reading and its proof; both
+// triangle's plane. IsolatedSharedVertex owns that reading and its proof; both
 // orientations are tried, because either triangle may be the one whose plane
 // isolates the vertex. The signs are the very arrays this function hands
 // meshbool.TriTriClassifyWithProjections, so the certificate reads work the pair was
@@ -404,73 +406,73 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unp
 // second triangle. The second triangle meets the line only at the shared
 // vertex; the first stays entirely on its own side. Convexity confines their
 // intersection to that vertex. A zero sign falls through to classification.
-func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts loftAuditShortcuts) (loftPairOutcome, error) {
-	ta := data.corners[i]
-	tb := data.corners[j]
-	xta := data.xtris[i]
-	xtb := data.xtris[j]
-	na := data.norms[i]
-	nb := data.norms[j]
-	shared, sharedCount := sharedVertexIndices(tris[i], tris[j])
+func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
+	ta := data.Corners[i]
+	tb := data.Corners[j]
+	xta := data.Xtris[i]
+	xtb := data.Xtris[j]
+	na := data.Norms[i]
+	nb := data.Norms[j]
+	shared, sharedCount := SharedVertexIndices(tris[i], tris[j])
 	if sharedCount == 2 {
-		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
-		apex := data.xverts[triangleApexIndex(tris[j], shared[0], shared[1])]
+		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
+		apex := data.Xverts[TriangleApexIndex(tris[j], shared[0], shared[1])]
 		if meshbool.XdotSign(na, proofbound.Xsub(apex, edgeA)) == 0 {
-			if triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
-				return loftPairClassified, nil
+			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
+				return LoftPairClassified, nil
 			}
-			return loftPairClassified, errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+			return LoftPairClassified, ErrLoftContact(i, j, "do not meet exactly along their recorded shared edge")
 		}
-		if shortcuts.certificates {
-			return loftPairEdgeCertificate, nil
+		if shortcuts.Certificates {
+			return LoftPairEdgeCertificate, nil
 		}
 	}
 
-	signsB := trianglePlaneSigns(data.planes[i], xtb)
-	if shortcuts.certificates && sharedCount == 1 && meshbool.CountZero(signsB) == 3 &&
-		coplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
-		return loftPairVertexCertificate, nil
+	signsB := TrianglePlaneSigns(data.Planes[i], xtb)
+	if shortcuts.Certificates && sharedCount == 1 && meshbool.CountZero(signsB) == 3 &&
+		CoplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
+		return LoftPairVertexCertificate, nil
 	}
-	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
-		return loftPairVertexCertificate, nil
+	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[j], shared[0], signsB) {
+		return LoftPairVertexCertificate, nil
 	}
-	signsA := trianglePlaneSigns(data.planes[j], xta)
-	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[i], shared[0], signsA) {
-		return loftPairVertexCertificate, nil
+	signsA := TrianglePlaneSigns(data.Planes[j], xta)
+	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
+		return LoftPairVertexCertificate, nil
 	}
 	contact, err := meshbool.TriTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
-		&data.projections[i], &data.projections[j], &signsA, &signsB, true)
+		&data.Projections[i], &data.Projections[j], &signsA, &signsB, true)
 	if err != nil {
-		return loftPairClassified, err
+		return LoftPairClassified, err
 	}
 
 	switch sharedCount {
 	case 0:
 		if contact.Kind == meshbool.ContactNone {
-			return loftPairClassified, nil
+			return LoftPairClassified, nil
 		}
-		return loftPairClassified, errLoftContact(i, j, "share no recorded vertex, but make contact")
+		return LoftPairClassified, ErrLoftContact(i, j, "share no recorded vertex, but make contact")
 	case 1:
-		v := data.xverts[shared[0]]
+		v := data.Xverts[shared[0]]
 		if contact.Kind == meshbool.ContactPoint && contact.P0.Key() == v.Key() {
-			return loftPairClassified, nil
+			return LoftPairClassified, nil
 		}
-		return loftPairClassified, errLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
+		return LoftPairClassified, ErrLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
 	case 2:
-		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
-		if segMatchesRecordedEdge(contact, edgeA, edgeB) {
-			return loftPairClassified, nil
+		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
+		if SegMatchesRecordedEdge(contact, edgeA, edgeB) {
+			return LoftPairClassified, nil
 		}
-		if contact.Kind == meshbool.ContactRegion && triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
-			return loftPairClassified, nil
+		if contact.Kind == meshbool.ContactRegion && TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
+			return LoftPairClassified, nil
 		}
-		return loftPairClassified, errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+		return LoftPairClassified, ErrLoftContact(i, j, "do not meet exactly along their recorded shared edge")
 	default:
-		return loftPairClassified, errLoftContact(i, j, "share an unexpected vertex count")
+		return LoftPairClassified, ErrLoftContact(i, j, "share an unexpected vertex count")
 	}
 }
 
-// coplanarIsolatedSharedVertex proves that two coplanar triangles meet only
+// CoplanarIsolatedSharedVertex proves that two coplanar triangles meet only
 // at their one recorded common vertex. An edge line through that vertex
 // separates both remaining corners of the second triangle strictly from the
 // opposite corner of the first. The second triangle meets the line only at
@@ -478,21 +480,21 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 // triangles' exact normals are proportional, so meshbool.ProjAxes drops the same
 // dominant coordinate for both; that projection is invertible on their plane.
 // Its meshbool.Cross2xSign preserves the line-side signs and uses an exact fallback.
-func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, i, j, shared int) bool {
+func CoplanarIsolatedSharedVertex(data *LoftAuditData, a, b [3]int, i, j, shared int) bool {
 	var aOther, bOther [2]meshbool.Xp2
 	countA, countB := 0, 0
 	var v meshbool.Xp2
 	for corner, vertex := range a {
 		if vertex == shared {
-			v = data.projections[i][corner]
+			v = data.Projections[i][corner]
 			continue
 		}
-		aOther[countA] = data.projections[i][corner]
+		aOther[countA] = data.Projections[i][corner]
 		countA++
 	}
 	for corner, vertex := range b {
 		if vertex != shared {
-			bOther[countB] = data.projections[j][corner]
+			bOther[countB] = data.Projections[j][corner]
 			countB++
 		}
 	}
@@ -509,10 +511,10 @@ func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, i, j, shared
 	return false
 }
 
-// isolatedSharedVertex is certificate B's own reading (docs/loft-design.md
+// IsolatedSharedVertex is certificate B's own reading (docs/loft-design.md
 // §6): it reports whether the triangle tri meets a plane at sharedIndex's
 // vertex ALONE, given signs — the exact signs of tri's three vertices against
-// that plane, in tri's own index order, as trianglePlaneSigns returns them.
+// that plane, in tri's own index order, as TrianglePlaneSigns returns them.
 //
 // Write f for the plane's affine signed-distance function, v for the shared
 // vertex, and q1, q2 for tri's two other vertices. The certificate fires only
@@ -536,7 +538,7 @@ func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, i, j, shared
 // the reading is a proof and not an estimate. A collapsed triangle cannot
 // smuggle a verdict through either: its exact normal is the zero vector, every
 // sign against it is zero, and the certificate cannot fire.
-func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
+func IsolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 	positive, negative := 0, 0
 	for k, vertex := range tri {
 		if vertex == sharedIndex {
@@ -552,19 +554,19 @@ func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 	return positive == 2 || negative == 2
 }
 
-// trianglePlaneSigns returns the exact signs of other against the cached
+// TrianglePlaneSigns returns the exact signs of other against the cached
 // oriented plane. Its affine numerator avoids rebuilding a difference vector
 // for each point of each facet pair.
-func trianglePlaneSigns(plane loftExactPlane, other [3]proofbound.Xpt) [3]int {
+func TrianglePlaneSigns(plane LoftExactPlane, other [3]proofbound.Xpt) [3]int {
 	var signs [3]int
 	var sum, term big.Int
 	for i, p := range other {
-		signs[i] = plane.sign(p, &sum, &term)
+		signs[i] = plane.Sign(p, &sum, &term)
 	}
 	return signs
 }
 
-func projectionPairIndex(u, v int) int {
+func ProjectionPairIndex(u, v int) int {
 	switch {
 	case u == 0 && v == 1:
 		return 0
@@ -575,7 +577,7 @@ func projectionPairIndex(u, v int) int {
 	}
 }
 
-func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
+func TriangleApexIndex(tri [3]int, edgeA, edgeB int) int {
 	for _, vertex := range tri {
 		if vertex != edgeA && vertex != edgeB {
 			return vertex
@@ -584,7 +586,7 @@ func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
 	return -1
 }
 
-// loftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
+// LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
 // the assembled wall-and-cap triangle set: S6 (per-triangle existence) first,
 // then S8 (the fixed facet-pair ceiling, checked before any pair test or
 // allocation), then S7 (the pair-by-pair contact audit). budget is shared
@@ -595,22 +597,22 @@ func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
 //
 // This is the production entry point: every shortcut always runs. Tests that
 // need the same audit with a shortcut switched off, or need the pair loop's
-// own work counts, call loftCrossingAuditWork below directly.
-func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
-	_, err := loftCrossingAuditWork(budget, verts, tris, loftAuditShortcuts{broadPhase: true, certificates: true})
+// own work counts, call LoftCrossingAuditWork below directly.
+func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
+	_, err := LoftCrossingAuditWork(budget, verts, tris, LoftAuditShortcuts{BroadPhase: true, Certificates: true})
 	return err
 }
 
-// loftCrossingAuditWork is loftCrossingAudit's body, with each S7 shortcut
-// under its own explicit per-call switch (loftAuditShortcuts) and the pair
+// LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
+// under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. The zero shortcuts value
 // runs every admitted pair through meshbool.TriTriClassify's exact classification,
 // which is the verdict a shortcut may only ever reach sooner, never change.
 //
 // The returned counts are meaningful only when the audit completes: an early
 // return carries whatever the loop had reached when it stopped.
-func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts) (loftAuditWork, error) {
-	var work loftAuditWork
+func LoftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, shortcuts LoftAuditShortcuts) (LoftAuditWork, error) {
+	var work LoftAuditWork
 	if err := budget.Err(); err != nil {
 		return work, err
 	}
@@ -620,8 +622,8 @@ func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 		if err := budget.Step(); err != nil {
 			return work, err
 		}
-		if triangleCollapsed(verts, tri) {
-			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, ErrDegenerate, i)
+		if TriangleCollapsed(verts, tri) {
+			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, decaderr.ErrDegenerate, i)
 		}
 	}
 	if err := budget.Err(); err != nil {
@@ -633,7 +635,7 @@ func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 	f := len(tris)
 	pairs, ok := proofbound.WallChoose2(uint64(f))
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return work, fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, ErrUnsupported)
+		return work, fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, decaderr.ErrUnsupported)
 	}
 
 	// A broad-phase per-triangle bounding box (boolean_mesh.go's meshbool.TriBox, the
@@ -657,24 +659,24 @@ func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 	for i, tri := range tris {
 		boxes[i] = meshbool.TriBox(verts, tri)
 	}
-	auditData := newLoftAuditData(verts, tris)
+	auditData := NewLoftAuditData(verts, tris)
 
 	// S7: every pair, classified against its recorded adjacency. The
 	// broad-phase short-circuit runs ONLY for a pair sharing no recorded
-	// vertex (sharedCount == 0): that is the one case (auditLoftPair's
+	// vertex (sharedCount == 0): that is the one case (AuditLoftPair's
 	// switch) where the audit's own passing verdict is "no contact at all",
-	// so a proof of no contact reaches the identical verdict auditLoftPair
+	// so a proof of no contact reaches the identical verdict AuditLoftPair
 	// would reach. A pair sharing one or two vertices is REQUIRED to touch —
 	// at that vertex, or along that edge — so the guard below never lets the
-	// short-circuit run for it; auditLoftPair always decides those pairs.
+	// short-circuit run for it; AuditLoftPair always decides those pairs.
 	//
 	// Two tiers run, cheapest first, either one sufficient to skip: the
-	// bounding-box test above, then loftPlaneSeparated for a pair whose boxes
+	// bounding-box test above, then LoftPlaneSeparated for a pair whose boxes
 	// do overlap but whose planes still prove separation. Both are float-only
 	// and reject-only; neither ever answers "touching", so a pair either tier
-	// cannot decide always falls through to the full auditLoftPair.
+	// cannot decide always falls through to the full AuditLoftPair.
 	//
-	// A pair sharing one or two vertices reaches auditLoftPairData, which
+	// A pair sharing one or two vertices reaches AuditLoftPairData, which
 	// owns the complementary accept-only certificates for exactly those two
 	// cases. The outcome it reports is what this loop counts, so the four
 	// work fields say which path decided every pair.
@@ -683,25 +685,25 @@ func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 			if err := budget.Step(); err != nil {
 				return work, err
 			}
-			_, sharedCount := sharedVertexIndices(tris[i], tris[j])
-			if shortcuts.broadPhase && sharedCount == 0 {
+			_, sharedCount := SharedVertexIndices(tris[i], tris[j])
+			if shortcuts.BroadPhase && sharedCount == 0 {
 				if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
-					work.skips++
+					work.Skips++
 					continue
 				}
-				if loftPlaneSeparated(auditData.corners[i], auditData.corners[j]) {
-					work.skips++
+				if LoftPlaneSeparated(auditData.Corners[i], auditData.Corners[j]) {
+					work.Skips++
 					continue
 				}
 			}
-			outcome, err := auditLoftPairData(auditData, tris, i, j, shortcuts)
+			outcome, err := AuditLoftPairData(auditData, tris, i, j, shortcuts)
 			switch outcome {
-			case loftPairEdgeCertificate:
-				work.edgeCerts++
-			case loftPairVertexCertificate:
-				work.vertexCerts++
+			case LoftPairEdgeCertificate:
+				work.EdgeCerts++
+			case LoftPairVertexCertificate:
+				work.VertexCerts++
 			default:
-				work.classifications++
+				work.Classifications++
 			}
 			if err != nil {
 				return work, err
