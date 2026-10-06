@@ -82,6 +82,13 @@ The `parts-bin` scene drops a shelled cup, a chamfered block, a loft, a swept
 hexagon and a revolved bottle into the same tray, where each comes to rest,
 while a cylinder rolls across its floor; `-scene parts-bin` renders it.
 
+The `linkage` scene films a mechanism that `VerifyLinkage` has checked. A
+two-link arm folds into a wall, and the check finds the first collision at
+s = 86/256, the first point of its 1/256 grid past the exact contact at
+s = 1/3. The clip shows frame i at s = i/256 using the poses `Linkage.PoseAt`
+returns, and the forearm turns coral from frame 86. Render it with
+`cd _gallery && go run . linkage`; the frames go under `_gallery/out/`.
+
 ## Layering
 
 ```
