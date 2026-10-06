@@ -124,3 +124,43 @@ func IntervalFloatError(a RatInterval, held float64) float64 {
 		RationalFloatError(a.Hi, held),
 	)
 }
+
+// The common-denominator form writes several rationals as integer numerators
+// over one shared positive denominator. big.Rat reduces to lowest terms after
+// every operation, a Lehmer GCD over the full numerator and denominator; an
+// expression evaluated over numerators that share a denominator needs only
+// integer multiply-adds, and a result converted back (SetFrac) reduces to the
+// same lowest terms, so it is the exact rational, bit for bit, the big.Rat
+// evaluation of the same expression produces.
+
+// LcmInt is the least common multiple of two positive integers. It returns a
+// itself when b is 1 or equal to a, and otherwise a fresh integer, never b,
+// which may be a reference into a big.Rat that its owner later mutates.
+// Callers never mutate the result.
+func LcmInt(a, b *big.Int) *big.Int {
+	if a.Cmp(b) == 0 || b.IsInt64() && b.Int64() == 1 {
+		return a
+	}
+	if a.IsInt64() && a.Int64() == 1 {
+		return new(big.Int).Set(b)
+	}
+	g := new(big.Int).GCD(nil, nil, a, b)
+	out := new(big.Int).Quo(a, g)
+	return out.Mul(out, b)
+}
+
+// CommonDenom is the least common multiple of the values' denominators.
+func CommonDenom(values ...*big.Rat) *big.Int {
+	den := big.NewInt(1)
+	for _, value := range values {
+		den = LcmInt(den, value.Denom())
+	}
+	return den
+}
+
+// ScaledNum is r·den, an exact integer for a positive den that r's
+// denominator divides.
+func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
+	out := new(big.Int).Quo(den, r.Denom())
+	return out.Mul(out, r.Num())
+}

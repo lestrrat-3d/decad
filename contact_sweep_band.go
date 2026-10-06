@@ -376,10 +376,7 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	spans := s.pathM.cornerSpan(new(big.Rat), f)
 	var lo, hi [3]*big.Rat
 	for axis := range 3 {
-		lo[axis], hi[axis] = spans[0][axis].lo, spans[0][axis].hi
-		for _, span := range spans[1:] {
-			lo[axis], hi[axis] = ratMin(lo[axis], span[axis].lo), ratMax(hi[axis], span[axis].hi)
-		}
+		lo[axis], hi[axis] = spans.hull(axis)
 		shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
 		lo[axis] = new(big.Rat).Sub(lo[axis], ratMax(shift, new(big.Rat)))
 		hi[axis] = new(big.Rat).Sub(hi[axis], ratMin(shift, new(big.Rat)))
@@ -859,8 +856,9 @@ func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func(
 		for slot, axis := range [2]int{i, j} {
 			shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
 			shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
-			lo[slot] = ratAdd(spans[index][axis].lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
-			hi[slot] = ratAdd(spans[index][axis].hi, new(big.Rat).Neg(shiftLo), depth)
+			span := spans.span(index, axis)
+			lo[slot] = ratAdd(span.lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
+			hi[slot] = ratAdd(span.hi, new(big.Rat).Neg(shiftLo), depth)
 		}
 		inside := false
 		for _, tri := range face.tris {
