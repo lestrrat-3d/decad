@@ -86,6 +86,15 @@ For each pair:
 7. If neither volume path proves and bounds the overlap, mark the pair
    undecided for aggregation.
 
+Steps 2–7 run on a bounded worker pool, one pair per task, sized like the
+boolean's contact batches (`GOMAXPROCS`, at most 12). A pair's proof reads only
+its two operands and per-body caches that every caller fills with the same
+value, so its outcome does not depend on the other pairs. Each task writes its
+outcome to its own slot, and `Verify` appends the slots in pair order. When a
+pair fails, no pair after it starts, every pair before it still runs, and
+`Verify` returns the failure at the lowest pair index: the error a walk of the
+pairs one at a time would stop on.
+
 `Verify` MUST NOT call public `Intersect`. Public `Intersect` retires both
 operands, advances provenance, and registers a result. Verification is
 non-mutating and must leave all model state unchanged:

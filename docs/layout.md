@@ -171,7 +171,8 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `verify.go` | `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and partitions body pairs for interference. See `docs/verification-design.md` §1-§3 and the file's doc comment. |
+| `verify.go` | `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and folds the pair outcomes `verify_pairs.go` proves into the report in pair order. See `docs/verification-design.md` §1-§3 and the file's doc comment. |
+| `verify_pairs.go` | `Verify`'s pair walk: lists the pairs box separation does not finish, proves each one, and runs them on a bounded worker pool that returns outcomes and the first error in pair order. See `docs/interference-design.md` §2 and §7.2. |
 | `report.go` | `Verify`'s report vocabulary: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Proves the reference diameter the tolerance gate is anchored on, per payload. With no provable diameter it withholds the gate rather than guess. See `docs/verification-design.md` §3. |
@@ -233,6 +234,7 @@ to the byte budget.
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's doc comment. |
 | `tessellate_revolve_proof.go` | Revolve mesh proofs and audits. See the file's doc comment. |
+| `tessellate_revolve_filter.go` | Outward-rounded float intervals that settle the revolve facet-contact audit's exact sign and gap readings before the Dyadic arithmetic runs; a reading they cannot settle runs exactly. See `docs/tessellation-design.md` §9. |
 | `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's doc comment. |
 | `tessellate_revolve_volume.go` | Revolve mesh occupied-volume proof. See the file's doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |

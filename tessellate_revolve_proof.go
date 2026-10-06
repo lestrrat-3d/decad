@@ -566,12 +566,16 @@ func ivTwoTriangleArea(p0, p1, p2 survey2d.IvVec3) (proofbound.RatInterval, bool
 // three corners, the three edge vectors (u = p1−p0, v = p2−p0, w = p2−p1),
 // their cross product, and proven upper bounds on the three edge lengths.
 // Every predicate below reads these rather than rebuilding them per pair,
-// exactly as loft_audit.go's own audit data does.
+// exactly as loft_audit.go's own audit data does. fp holds the stored float
+// corners, and fu, fv, fw and fn enclose u, v, w and n in float intervals for
+// the pre-test (tessellate_revolve_filter.go).
 type revolveAuditTri struct {
-	p          [3]proofarith.DyV3
-	u, v, w, n proofarith.DyV3
-	lu, lv, lw float64
-	box        [2]r3.Vec
+	p              [3]proofarith.DyV3
+	u, v, w, n     proofarith.DyV3
+	lu, lv, lw     float64
+	box            [2]r3.Vec
+	fp             [3]r3.Vec
+	fu, fv, fw, fn revIvVec
 	// off[k] holds the two corner offsets measured from corner k, in
 	// increasing corner order, each with its proven length bound.
 	off [3][2]revolveOffset
@@ -584,18 +588,29 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 			return out, false
 		}
 		out.p[k] = proofarith.DyVec(verts[vi])
+		out.fp[k] = verts[vi]
 	}
 	out.u = proofarith.DvSub(out.p[1], out.p[0])
 	out.v = proofarith.DvSub(out.p[2], out.p[0])
 	out.w = proofarith.DvSub(out.p[2], out.p[1])
 	out.n = proofarith.DvCross(out.u, out.v)
+	out.fu = revIvPointDiff(out.fp[1], out.fp[0])
+	out.fv = revIvPointDiff(out.fp[2], out.fp[0])
+	out.fw = revIvPointDiff(out.fp[2], out.fp[1])
+	out.fn = revIvCross(out.fu, out.fv)
 	out.lu = proofbound.DvLenUpper(out.u)
 	out.lv = proofbound.DvLenUpper(out.v)
 	out.lw = proofbound.DvLenUpper(out.w)
 	out.box = meshbool.TriBox(verts, tri)
-	out.off[0] = [2]revolveOffset{{v: out.u, length: out.lu}, {v: out.v, length: out.lv}}
-	out.off[1] = [2]revolveOffset{revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[1])), {v: out.w, length: out.lw}}
-	out.off[2] = [2]revolveOffset{revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[2])), revolveOffsetOf(proofarith.DvSub(out.p[1], out.p[2]))}
+	out.off[0] = [2]revolveOffset{{v: out.u, f: out.fu, length: out.lu}, {v: out.v, f: out.fv, length: out.lv}}
+	out.off[1] = [2]revolveOffset{
+		revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[1]), revIvPointDiff(out.fp[0], out.fp[1])),
+		{v: out.w, f: out.fw, length: out.lw},
+	}
+	out.off[2] = [2]revolveOffset{
+		revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[2]), revIvPointDiff(out.fp[0], out.fp[2])),
+		revolveOffsetOf(proofarith.DvSub(out.p[1], out.p[2]), revIvPointDiff(out.fp[1], out.fp[2])),
+	}
 	return out, true
 }
 
@@ -613,8 +628,15 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 // all of them is a refusal, never an admission. The axes are built in the same
 // order as before, one at a time as the loop reaches them, and each one's
 // length bound is tried in its cheap form (|x × y| ≤ |x||y|) before its exact
-// form, so a pair that a low-index axis decides never pays for the rest.
+// form, so a pair that a low-index axis decides never pays for the rest. The
+// float pre-test runs the same walk first (revolveSeparatedFloat); an axis it
+// accepts is one the exact walk accepts too.
 func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
+	return revolveSeparatedFloat(a, b, delta) || revolveSeparatedExact(a, b, delta)
+}
+
+// revolveSeparatedExact is revolveSeparated's walk over the exact Dyadic axes.
+func revolveSeparatedExact(a, b revolveAuditTri, delta float64) bool {
 	margin := proofbound.ProductUpper(2, delta)
 	if proofbound.IsNonFinite(margin) {
 		return false
@@ -874,16 +896,32 @@ func auditRevolvePair(data []revolveAuditTri, tris [][3]int, shared [3]int, coun
 // carried as the plane's own (unnormalised) normal: the exact vector, a proven
 // upper bound on its length, and a proven bound on how far that vector itself
 // moves when every corner it was built from slides by up to the audit's margin.
+// f encloses g in float intervals for the pre-test.
 type revolveSepAxis struct {
 	g      proofarith.DyV3
+	f      revIvVec
 	length float64
 	drift  float64
 }
 
 // sideOf reads which side of the candidate plane an offset lies on, and whether
 // that reading survives the whole displaced family. The plane passes through the
-// shared feature, so the offset is measured from a shared corner.
-func (ax revolveSepAxis) sideOf(offset proofarith.DyV3, offsetLen, offsetDrift float64) (int, bool) {
+// shared feature, so the offset is measured from a shared corner. The float
+// pre-test reads the same dot product first (revIvSide) and answers for the
+// exact reading wherever its interval settles it.
+func (ax revolveSepAxis) sideOf(o revolveOffset, offsetDrift float64) (int, bool) {
+	allow := perturbBilinearAllow(ax.length, o.length, ax.drift, offsetDrift)
+	if proofbound.IsNonFinite(allow) {
+		return 0, false
+	}
+	if side, ok := revIvSide(revIvDot(ax.f, o.f), allow); ok {
+		return side, side != 0
+	}
+	return ax.sideOfExact(o.v, o.length, offsetDrift)
+}
+
+// sideOfExact is sideOf over the exact Dyadic dot product alone.
+func (ax revolveSepAxis) sideOfExact(offset proofarith.DyV3, offsetLen, offsetDrift float64) (int, bool) {
 	h := proofarith.DvDot(ax.g, offset)
 	if h.IsZero() {
 		return 0, false
@@ -912,6 +950,7 @@ func revolveNormalAxis(t revolveAuditTri, delta float64) revolveSepAxis {
 	e := proofbound.ProductUpper(2, delta)
 	return revolveSepAxis{
 		g:      t.n,
+		f:      t.fn,
 		length: proofbound.ProductUpper(t.lu, t.lv),
 		drift:  perturbBilinearAllow(t.lu, t.lv, e, e),
 	}
@@ -926,6 +965,7 @@ func revolveEdgeFanAxis(t revolveAuditTri, edge revolveOffset, delta float64) re
 	normal := revolveNormalAxis(t, delta)
 	return revolveSepAxis{
 		g:      proofarith.DvCross(normal.g, edge.v),
+		f:      revIvCross(normal.f, edge.f),
 		length: proofbound.ProductUpper(normal.length, edge.length),
 		drift:  perturbBilinearAllow(normal.length, edge.length, normal.drift, e),
 	}
@@ -938,13 +978,15 @@ func revolveEdgeFanAxis(t revolveAuditTri, edge revolveOffset, delta float64) re
 // |d|²|u|² − (d·u)², which Cauchy-Schwarz makes non-negative identically. So
 // that whole triangle sits in the closed half-space for the entire family with
 // nothing to charge, and only the other triangle's apex is read.
-func revolveRejectionAxis(d, u proofarith.DyV3, dLen, uLen, delta float64) revolveSepAxis {
+func revolveRejectionAxis(d, u revolveOffset, delta float64) revolveSepAxis {
 	e := proofbound.ProductUpper(2, delta)
-	cross := proofarith.DvCross(d, u)
+	dLen, uLen := d.length, u.length
+	cross := proofarith.DvCross(d.v, u.v)
 	crossLen := proofbound.ProductUpper(dLen, uLen)
 	crossDrift := perturbBilinearAllow(dLen, uLen, e, e)
 	return revolveSepAxis{
-		g:      proofarith.DvCross(cross, d),
+		g:      proofarith.DvCross(cross, d.v),
+		f:      revIvCross(revIvCross(d.f, u.f), d.f),
 		length: proofbound.ProductUpper(crossLen, dLen),
 		drift:  perturbBilinearAllow(crossLen, dLen, crossDrift, e),
 	}
@@ -995,7 +1037,7 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 	signed := func(ax revolveSepAxis, offs []revolveOffset) (int, bool) {
 		side := 0
 		for _, o := range offs {
-			s, ok := ax.sideOf(o.v, o.length, e)
+			s, ok := ax.sideOf(o, e)
 			if !ok {
 				return 0, false
 			}
@@ -1026,7 +1068,7 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 			return true
 		}
 	}
-	chord := revolveOffsetOf(proofarith.DvSub(aOff[0].v, aOff[1].v))
+	chord := revolveOffsetOf(proofarith.DvSub(aOff[0].v, aOff[1].v), revIvSubVec(aOff[0].f, aOff[1].f))
 	if try(revolveEdgeFanAxis(a, chord, delta), aOff[:]) {
 		return true
 	}
@@ -1057,11 +1099,12 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 			}
 			ax := revolveSepAxis{
 				g:      g,
+				f:      revIvCross(aOff[k].f, bOff[m].f),
 				length: proofbound.ProductUpper(aOff[k].length, bOff[m].length),
 				drift:  perturbBilinearAllow(aOff[k].length, bOff[m].length, e, e),
 			}
-			sa, okA := ax.sideOf(aOff[1-k].v, aOff[1-k].length, e)
-			sb, okB := ax.sideOf(bOff[1-m].v, bOff[1-m].length, e)
+			sa, okA := ax.sideOf(aOff[1-k], e)
+			sb, okB := ax.sideOf(bOff[1-m], e)
 			if okA && okB && sa != sb {
 				return true
 			}
@@ -1071,14 +1114,16 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 }
 
 // revolveOffset is one corner offset from the pair's shared corner, beside the
-// proven upper bound on its length every perturbation allowance reads.
+// proven upper bound on its length every perturbation allowance reads. f
+// encloses v in float intervals for the pre-test.
 type revolveOffset struct {
 	v      proofarith.DyV3
+	f      revIvVec
 	length float64
 }
 
-func revolveOffsetOf(v proofarith.DyV3) revolveOffset {
-	return revolveOffset{v: v, length: proofbound.DvLenUpper(v)}
+func revolveOffsetOf(v proofarith.DyV3, f revIvVec) revolveOffset {
+	return revolveOffset{v: v, f: f, length: proofbound.DvLenUpper(v)}
 }
 
 // revolveCornerOffsets is a triangle's two corners other than the one at slot
@@ -1106,15 +1151,14 @@ func revolveEdgeIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, triB
 	if bApex < 0 || aApex < 0 {
 		return false
 	}
-	offB := proofarith.DvSub(b.p[bApex], a.p[p0])
-	lenB := proofbound.DvLenUpper(offB)
-	if _, ok := revolveNormalAxis(a, delta).sideOf(offB, lenB, e); ok {
+	offB := revolveOffsetOf(proofarith.DvSub(b.p[bApex], a.p[p0]), revIvPointDiff(b.fp[bApex], a.fp[p0]))
+	if _, ok := revolveNormalAxis(a, delta).sideOf(offB, e); ok {
 		return true
 	}
-	d := proofarith.DvSub(a.p[p1], a.p[p0])
-	u := proofarith.DvSub(a.p[aApex], a.p[p0])
-	ax := revolveRejectionAxis(d, u, proofbound.DvLenUpper(d), proofbound.DvLenUpper(u), delta)
-	side, ok := ax.sideOf(offB, lenB, e)
+	d := revolveOffsetOf(proofarith.DvSub(a.p[p1], a.p[p0]), revIvPointDiff(a.fp[p1], a.fp[p0]))
+	u := revolveOffsetOf(proofarith.DvSub(a.p[aApex], a.p[p0]), revIvPointDiff(a.fp[aApex], a.fp[p0]))
+	ax := revolveRejectionAxis(d, u, delta)
+	side, ok := ax.sideOf(offB, e)
 	// a itself lies in the g ≥ 0 half-space identically (the Gram determinant),
 	// so the pair is isolated exactly when b's apex reads strictly negative.
 	return ok && side < 0

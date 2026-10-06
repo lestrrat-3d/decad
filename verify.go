@@ -262,7 +262,10 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // box separation, or, when the boxes meet, the sheet decision procedure of
 // docs/surface-design.md §9.3. One pair's
 // work can therefore grow with the two facet counts multiplied together, and
-// total work also grows with the number of unresolved body pairs. Large-model
+// total work also grows with the number of unresolved body pairs. Verify
+// proves those pairs on up to GOMAXPROCS goroutines (at most 12) and builds
+// the report in pair order, so the report and any returned error match a
+// one-pair-at-a-time walk (docs/interference-design.md §2). Large-model
 // callers should pass a context with a deadline chosen from representative
 // inputs. For a document with live bodies, after document and option
 // validation, cancellation returns ctx.Err() and a nil report; validation
@@ -330,191 +333,28 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// Interference row. Expected empty, contact, staging, or coarse outcomes
 	// stay Suspect and name themselves in the slice; invariant failures
 	// return from Verify. A pair holding a sheet operand takes none of this —
-	// see the first arm below and docs/surface-design.md §9.3.
+	// see proveVerifyPair (verify_pairs.go) and docs/surface-design.md §9.3.
+	// The pairs box separation does not finish are proven on a bounded
+	// worker pool and folded back in pair order.
+	jobs, err := verifyPairJobs(ctx, pairBodies, cfg)
+	if err != nil {
+		return nil, err
+	}
 	var geomCache *bodyGeomCache
 	if cfg.clearances {
 		geomCache = &bodyGeomCache{}
 	}
-	for i := range pairBodies {
-		for j := i + 1; j < len(pairBodies); j++ {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			a, b := pairBodies[i].Body, pairBodies[j].Body
-			boxProven := boxesDisjoint(pairBodies[i].Bounds.Box, pairBodies[j].Bounds.Box)
-
-			// A sheet operand encloses no region, so the interference
-			// relation §1 decides is not the question for this pair
-			// (docs/surface-design.md §9.3). A sheet-sheet pair offers no
-			// closed boundary to cast against, so it takes only box
-			// separation: separated boxes contribute nothing, and boxes that
-			// meet stay DiagUnsupportedPairSheet regardless of
-			// WithClearances(). A sheet-against-solid pair is decided by
-			// sheetSolidPair (clearance.go) into a proven crossing, a proven
-			// containment or separation with a measured gap, or the
-			// undecided code when the kernel cannot settle it — run
-			// whenever the boxes meet (crossing must always be checked,
-			// asked or not), and also when the boxes are separated but a
-			// gap was requested, exactly as the solid-solid path below runs
-			// clearancePair in that same second case.
-			if a.Kind() == BodySheet || b.Kind() == BodySheet {
-				if a.Kind() == BodySheet && b.Kind() == BodySheet {
-					if boxProven {
-						continue
-					}
-					report.Diagnostics = append(report.Diagnostics,
-						pairDiagNone(a, b, DiagUnsupportedPairSheet,
-							"both operands are sheet bodies, and neither offers a closed boundary to cast the other against"))
-					undecided = true
-					continue
-				}
-				if boxProven && !cfg.clearances {
-					continue
-				}
-				sheet, solid := a, b
-				if b.Kind() == BodySheet {
-					sheet, solid = b, a
-				}
-				sres, err := sheetSolidPair(ctx, sheet, solid, boxProven, geomCache)
-				if err != nil {
-					return nil, err
-				}
-				switch sres.verdict {
-				case sheetSolidCrossing:
-					report.Diagnostics = append(report.Diagnostics, Diagnostic{
-						Code:    DiagSheetSolidCrossing,
-						Status:  Interfering,
-						Pair:    &DiagnosticPair{A: a, B: b},
-						Reading: ReadingNone,
-						Message: "the sheet crosses the solid's boundary; no Interference row is emitted because a sheet encloses no region and there is no overlap volume to report",
-					})
-				case sheetSolidContained, sheetSolidOutside:
-					if cfg.clearances {
-						pr := pairResult{lo: sres.lo, hi: sres.hi, exact: sres.exact, diam: sres.diam}
-						if d := appendClearance(report, a, b, pr, cfg.rel); d != nil {
-							report.Diagnostics = append(report.Diagnostics, *d)
-							undecided = true
-						}
-					}
-				case sheetSolidUndecided:
-					if boxProven {
-						// Box separation already proves the sheet lies
-						// outside the solid; only the requested gap itself
-						// is unmeasured, the same shape of gap as an
-						// unmeasured solid-solid clearance below.
-						report.Diagnostics = append(report.Diagnostics,
-							pairDiagNone(a, b, DiagUndecidedClearance,
-								"the pair is proven disjoint but the requested clearance gap is unmeasured"))
-					} else {
-						report.Diagnostics = append(report.Diagnostics,
-							pairDiagNone(a, b, DiagUnsupportedPairSheet,
-								"the clearance kernel could not settle this sheet-against-solid pair"))
-					}
-					undecided = true
-				}
-				continue
-			}
-
-			if boxProven && !cfg.clearances {
-				continue
-			}
-			res, fast := clearanceAxisBoxes(a, b)
-			if !fast {
-				var pairErr error
-				res, pairErr = clearancePairCached(ctx, a, b, boxProven, geomCache)
-				if pairErr != nil {
-					return nil, pairErr
-				}
-			}
-			if res.verdict == pairUndecided {
-				// The exact planar relation (clearance_planar.go) answers
-				// what the analytic kernel left open — a pair an operand
-				// has no carrier model in, or one its enumeration could
-				// not settle — and only ever adds a verdict, never
-				// replaces one (interference design §3.2).
-				planar, ok, planarErr := planarPairVerdict(ctx, a, b)
-				if planarErr != nil {
-					return nil, planarErr
-				}
-				if ok {
-					res = planar
-				}
-			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-
-			// Box separation already proves the partition. The analytic kernel
-			// runs only to supply an asked gap; failure to measure that gap is
-			// Suspect (DiagUndecidedClearance) but never sends a proven-disjoint
-			// pair to intersection.
-			if boxProven {
-				if res.verdict == pairDisjoint || res.verdict == pairTouching {
-					if d := appendClearance(report, a, b, res, cfg.rel); d != nil {
-						report.Diagnostics = append(report.Diagnostics, *d)
-						undecided = true
-					}
-				} else {
-					report.Diagnostics = append(report.Diagnostics,
-						pairDiagNone(a, b, DiagUndecidedClearance,
-							"the pair is proven disjoint but the requested clearance gap is unmeasured"))
-					undecided = true
-				}
-				continue
-			}
-
-			if res.verdict == pairDisjoint || res.verdict == pairTouching {
-				if cfg.clearances {
-					if d := appendClearance(report, a, b, res, cfg.rel); d != nil {
-						report.Diagnostics = append(report.Diagnostics, *d)
-						undecided = true
-					}
-				}
-				continue
-			}
-
-			volume, outcome, err := measuredInterference(ctx, a, b, res)
-			if err != nil {
-				return nil, err
-			}
-			if outcome != interferenceMeasured {
-				diag := undecidedPairDiag(a, b, res.verdict, outcome)
-				report.Diagnostics = append(report.Diagnostics, diag)
-				undecided = true
-				continue
-			}
-			report.Interferences = append(report.Interferences, Interference{A: a, B: b, Volume: volume})
-			pairD, err := interferencePairDiameter(ctx, a, b)
-			if err != nil {
-				return nil, err
-			}
-			obs := volume
-			interfere := Diagnostic{
-				Code:     DiagInterference,
-				Status:   Interfering,
-				Pair:     &DiagnosticPair{A: a, B: b},
-				Reading:  ReadingOverlapVolume,
-				Observed: &obs,
-				Message:  "the pair is proven to overlap",
-			}
-			report.Diagnostics = append(report.Diagnostics, interfere)
-			pass, ref, haveRef := interferenceToleranceRef(volume, a, b, pairD, cfg.rel)
-			if !pass {
-				beyond := Diagnostic{
-					Code:     DiagMeasurementBeyondTolerance,
-					Status:   Suspect,
-					Pair:     &DiagnosticPair{A: a, B: b},
-					Reading:  ReadingOverlapVolume,
-					Observed: &obs,
-					Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
-				}
-				if haveRef {
-					beyond.Required = requiredThreshold(cfg.rel*ref, volume.Value)
-				}
-				report.Diagnostics = append(report.Diagnostics, beyond)
-				undecided = true
-			}
-		}
+	outcomes, err := runVerifyPairs(ctx, jobs, verifyWorkers(ctx), func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
+		return proveVerifyPair(ctx, job, cfg, geomCache)
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range outcomes {
+		report.Interferences = append(report.Interferences, o.interferences...)
+		report.Clearances = append(report.Clearances, o.clearances...)
+		report.Diagnostics = append(report.Diagnostics, o.diagnostics...)
+		undecided = undecided || o.undecided
 	}
 
 	report.Status = aggregateStatus(report, undecided)

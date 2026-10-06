@@ -854,6 +854,14 @@ vertices and shared edges are the only admitted contacts. Isolate every ideal
 endpoint predicate with certified coordinate enclosures from §8; the stored
 endpoint uses the boolean's exact predicates over its binary64 values.
 
+The revolve audit reads each exact sign and separating-axis gap through a
+float pre-test first (`tessellate_revolve_filter.go`). The pre-test encloses
+the same expression over the same stored floats in an interval rounded outward
+at every operation. When the interval lies wholly past the reading's threshold,
+or wholly inside it, the exact reading must give that same answer, so the
+audit takes it. Otherwise the exact arithmetic runs. The audit returns the same
+verdict and names the same refused pair with or without the pre-test.
+
 A mesh built at `VerifyNone` declines this audit and states no embedding: it
 sets `BoundaryVerified()` false, publishes no `areaSlack` and no `volSymDiff`,
 and no boolean composes it. It keeps every other row of §1 — the section

@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -74,8 +75,13 @@ type pairKernel struct {
 }
 
 // bodyGeomCache reuses completed carrier models within one Verify call.
-// A failed or canceled build is never cached.
+// A failed or canceled build is never cached. It is safe for concurrent use:
+// Verify proves several pairs at once. A body's model is built outside the
+// lock, so two pairs asking for the same body at once may both build it; the
+// build is deterministic, and the first stored model is the one every later
+// call reads.
 type bodyGeomCache struct {
+	mu      sync.Mutex
 	entries map[*Body]bodyGeomCacheEntry
 }
 
@@ -91,12 +97,20 @@ func (cache *bodyGeomCache) get(budget *proofbound.WorkBudget, body *Body) (*bod
 	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
-	if entry, found := cache.entries[body]; found {
+	cache.mu.Lock()
+	entry, found := cache.entries[body]
+	cache.mu.Unlock()
+	if found {
 		return entry.geom, entry.ok, nil
 	}
 	geom, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return nil, false, err
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if entry, found := cache.entries[body]; found {
+		return entry.geom, entry.ok, nil
 	}
 	if cache.entries == nil {
 		cache.entries = make(map[*Body]bodyGeomCacheEntry)

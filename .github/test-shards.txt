@@ -469,6 +469,7 @@
 0	0.00	TestRevolveArcCellSlackWidensWithTheModelSlack
 0	0.02	TestRevolveArcFanSlackBoundsAPoleCell
 0	0.00	TestRevolveArcStationEnclosesTheRecordedPoint
+0	1.50	TestRevolveAuditPreTestMatchesExact
 0	0.00	TestRevolveAxisBandAllowanceZeroForExactAxis
 0	0.00	TestRevolveAxisBandChargesTheOffsetSubtraction
 0	0.00	TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea
@@ -500,6 +501,8 @@
 0	0.00	TestRotatedPrismMassChargesDisplacement
 0	0.00	TestRotatedPrismMassMatchesCardinalPath
 0	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
+0	0.60	TestRunVerifyPairsKeepsJobOrder
+0	0.10	TestRunVerifyPairsReturnsLowestFailingError
 0	0.00	TestRvLenUpperEnclosesTheExactNorm
 0	0.00	TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths
 0	0.00	TestSagittaCostTermsMatchTheOperationsTheyName
@@ -613,6 +616,7 @@
 0	0.00	TestValidateLoftRecordsSegmentCountMismatch
 0	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
 0	1.33	TestVerifyMotionRevolveKeepsLiveDenotationIdentities
+0	6.00	TestVerifyPairWorkersMatchOneWorker
 0	0.00	TestVerifyPublishAbsentConcaveRadius
 0	0.00	TestVerifyPublishAbsentWall
 0	0.01	TestVerifyPublishDiagnosticFlattening
