@@ -33,7 +33,7 @@ import (
 //   - no shard command combines a `-run` filter with `./...`;
 //   - every Go package directory on disk outside the root is named by some
 //     runner's own `packages:` operand or by a `run_shard` call in the shard
-//     step, so adding a package fails this test until the workflow covers it;
+//     step; `./internal/...` covers new internal packages automatically;
 //   - the shard step runs the root package's binary against
 //     .github/test-shards.txt, each sharded package once, from its own
 //     directory;
@@ -137,8 +137,16 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		}
 		for _, m := range ciMatrixPackagesRe.FindAllStringSubmatch(workflow, -1) {
 			for operand := range strings.FieldsSeq(m[1]) {
+				if operand == "./internal/..." {
+					for _, dir := range dirs {
+						if dir == "internal" || strings.HasPrefix(dir, "internal/") {
+							covered[dir] = struct{}{}
+						}
+					}
+					continue
+				}
 				require.NotContainsf(t, operand, "...",
-					"a `packages:` operand must name packages explicitly; %q would re-run the root package unfiltered and undo the sharding", operand)
+					"only ./internal/... may use a recursive `packages:` operand; %q could re-run the root package unfiltered and undo the sharding", operand)
 				covered[strings.Trim(strings.TrimPrefix(operand, "./"), "/")] = struct{}{}
 			}
 		}
@@ -147,7 +155,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			t.Run(dir, func(t *testing.T) {
 				_, ok := covered[dir]
 				require.Truef(t, ok,
-					"%s runs in no race shard: add ./%s/ to a runner's `packages:` operand in %s", dir, dir, ciWorkflowPath)
+					"%s runs in no race shard: add ./%s/ or an approved recursive operand to a runner's `packages:` operand in %s", dir, dir, ciWorkflowPath)
 			})
 		}
 	})

@@ -224,7 +224,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/ ./internal/decaderr/ ./internal/survey2d/ ./internal/motionbound/ ./internal/freeform/ ./internal/meshbool/ ./internal/clearance/ ./internal/circularmoments/ ./internal/triangulation/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/..."
             timeout: "10m"
           - os: ubuntu-latest
             race: "-race"
@@ -276,8 +276,9 @@ jobs:
 
       # Every package outside the root, apart from apitest/, runs UNFILTERED on
       # one runner, so these runners and the race shards together cover what an
-      # unsharded `go test ./...` covers. ci_workflow_test.go fails when a
-      # package on disk is named by no runner.
+      # unsharded `go test ./...` covers. `./internal/...` includes new internal
+      # packages automatically. ci_workflow_test.go fails when a package on disk
+      # is named by no runner.
       # -v prints each test's duration, so a slow run shows which tests grew.
       # A runner with a `budget:` fails once the run takes longer than that
       # many seconds, far below its -timeout; see the comment above the matrix.
