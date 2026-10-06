@@ -20,8 +20,9 @@ import (
 // closure audit prove the result watertight by construction — an audit
 // failure is an error, never a wrong mesh.
 
-// prepBoolMesh lifts a tessellation into the exact domain. A non-finite
-// vertex has no exact form, so it is rejected outright.
+// prepBoolMesh lifts a tessellation into the exact domain and attaches its
+// per-vertex and per-facet bounds. A non-finite vertex has no exact form, so
+// it is rejected outright.
 //
 // A COLLAPSED operand facet — one whose exact normal is zero, which a rigid
 // placement's own rounding can produce on an already-faceted body — is refused
@@ -66,6 +67,18 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 		for k := range 3 {
 			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
+	}
+	// Per-vertex bounds and their facet maxima (docs/faceted-vertex-bounds-
+	// design.md §2, §4.5): the mesh's own record, or §2.1's reading derived
+	// from its face bounds.
+	beta, err := m.vertexBounds()
+	if err != nil {
+		return nil, err
+	}
+	bm.VertexBound = beta
+	bm.FacetBound = make([]float64, len(m.triangles))
+	for i, tri := range m.triangles {
+		bm.FacetBound[i] = max(beta[tri[0]], beta[tri[1]], beta[tri[2]])
 	}
 	// The operand is now proven liftable, so its parity queries may share one
 	// projection cache. This allocates the holder alone: no vertex is projected

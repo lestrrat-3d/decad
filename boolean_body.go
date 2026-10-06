@@ -43,10 +43,15 @@ type facetGroup struct {
 // measurements compose from. It is what Placed re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
-	verts  []r3.Vec
-	tris   [][3]int
-	src    []int // per-facet source-group id
-	groups []facetGroup
+	verts []r3.Vec
+	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// §2, §4.1), composed by the boolean that built the payload (§3) and
+	// carried through every placement. The boolean always writes it; a nil
+	// record is an invariant failure, never a fallback.
+	vertexBound []float64
+	tris        [][3]int
+	src         []int // per-facet source-group id
+	groups      []facetGroup
 
 	// faceOf maps each facet to its face's index in the built body's
 	// Faces() order; buildFacetedBody sets it, Tessellate reads it.
@@ -65,7 +70,8 @@ type facetedPayload struct {
 
 	// meshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
-	// corresponding piece. volSymDiff bounds the volume of the symmetric
+	// corresponding piece. It is the largest facet bound δ(t) over the held
+	// facets, each the largest of its corners' vertexBound. volSymDiff bounds the volume of the symmetric
 	// difference between the held solid and the true result. areaSlack
 	// bounds the area the held mesh cannot report: the chord-length deficit
 	// the operand tessellations carry, plus the area of any facet the final
@@ -155,7 +161,11 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		return nil, err
 	}
 	allow = math.Max(allow, moved)
-	next.meshBound = proofbound.AbsSumUpper(next.meshBound, allow)
+	next.vertexBound = make([]float64, len(fp.vertexBound))
+	for i, beta := range fp.vertexBound {
+		next.vertexBound[i] = proofbound.AbsSumUpper(beta, allow)
+	}
+	next.meshBound = facetBoundMax(next.tris, next.vertexBound)
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, next.verts, next.tris, allow)
 	if err != nil {
 		return nil, err
@@ -1273,33 +1283,23 @@ func collectFaces(facetFace []*Face) map[*Face]struct{} {
 	return out
 }
 
-// rimDelta is the trim-amplified displacement bound of a vertex the boolean
-// itself creates. A rim vertex is not a point of either operand's surface: it
-// is the exact crossing of operand A's chord PLANE with operand B's, and the
-// true intersection curve lies anywhere within deltaA of the one and deltaB
-// of the other. That region is a tube of half-width (deltaA + deltaB)/sin θ
-// about the crossing line — so the displacement grows without limit as the
-// two surfaces approach tangency, and δ itself is NOT a bound on it.
-//
-// sinMin is the smallest sine of a crossing angle any contact of this pair
-// takes, computed exactly from the facet normals. When the inflated bound
-// reaches the pair's own diameter it has stopped bounding anything, and the
-// operation is refused (ErrUnsupported) rather than reported with a bound
-// nobody can use — decad never understates a bound, and never fakes one.
-func rimDelta(deltaA, deltaB, sinMin, dPair float64) (float64, error) {
-	d := deltaA + deltaB
-	if d <= 0 {
-		// Both operands are held exactly (all-planar analytic faces, or a
-		// faceted body whose polygons ARE its boundary): there is no chord
-		// error to amplify, at any crossing angle.
-		return 0, nil
+// refuseRimPastPair refuses a boolean whose largest rim bound has stopped
+// bounding anything. A rim vertex is not a point of either operand's surface:
+// it is the exact crossing of an operand A facet's PLANE with an operand B
+// facet's, and the true intersection curve lies anywhere within δ(t_A) of the
+// one and δ(t_B) of the other — a tube of half-width (δ(t_A) + δ(t_B))/sin θ
+// about the crossing line (meshbool.RimBound), which grows without limit as
+// the two facets approach tangency. maxRim is the largest such bound any rim
+// vertex of the operation takes. Once it is not finite, or reaches the pair's
+// own diameter, the operation is refused (ErrUnsupported) rather than
+// reported with a bound nobody can use — decad never understates a bound, and
+// never fakes one (docs/faceted-vertex-bounds-design.md §3.2).
+func refuseRimPastPair(maxRim, dPair float64) error {
+	if proofbound.IsNonFinite(maxRim) {
+		return fmt.Errorf(`%w: the operands' facets meet at an angle this evaluator cannot bound`, ErrUnsupported)
 	}
-	if sinMin <= 0 || proofbound.IsNonFinite(sinMin) {
-		return 0, fmt.Errorf(`%w: the operands' facets meet at an angle this evaluator cannot bound`, ErrUnsupported)
+	if maxRim > 0 && maxRim >= dPair {
+		return fmt.Errorf(`%w: the operands cross too shallowly — the rim's proven displacement bound reaches the pair's own diameter, so no measurement of the result would be trustworthy`, ErrUnsupported)
 	}
-	rim := proofbound.UpRound(d / sinMin)
-	if proofbound.IsNonFinite(rim) || rim >= dPair {
-		return 0, fmt.Errorf(`%w: the operands cross too shallowly — the rim's proven displacement bound reaches the pair's own diameter, so no measurement of the result would be trustworthy`, ErrUnsupported)
-	}
-	return rim, nil
+	return nil
 }

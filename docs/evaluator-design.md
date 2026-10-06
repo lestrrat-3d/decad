@@ -778,19 +778,23 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   contributed lies on that operand's surface; a vertex the BOOLEAN creates does
   not lie on either. It is the crossing of two chord PLANES, and the true
   intersection curve is anywhere within δ_A of the one and δ_B of the other —
-  a tube of half-width **(δ_A + δ_B)/sin θ** about it, θ the crossing angle.
-  So the pre-weld boundary bound is that trim-amplified displacement, computed
-  from a proven lower bound on sin θ taken exactly from the facet normals. The
-  final face bound adds, with upward rounding, the maximum displacement from
-  each incident exact stitched vertex to its stored welded binary64 coordinate;
-  the global boundary certificate takes the upward-rounded maximum of those
-  complete face bounds. That complete value is what every boundary measurement
+  a tube of half-width **(δ_A + δ_B)/sin θ** about it, θ the crossing angle,
+  with δ_A and δ_B the bounds of the two facets whose contact segment ends at
+  the vertex and θ THAT pair's crossing angle
+  (`docs/faceted-vertex-bounds-design.md` §3.2). So a rim vertex's pre-weld
+  bound is that trim-amplified displacement, computed from a proven lower
+  bound on sin θ taken exactly from the two facet normals, and a surviving
+  operand vertex keeps its operand's own bound. Each vertex then adds, with
+  upward rounding, its own displacement from the exact stitched point to its
+  stored welded binary64 coordinate (§3.4 there); the global boundary
+  certificate takes the largest facet bound, each the largest of its corners'
+  complete vertex bounds. That global value is what every boundary measurement
   composes from (`Vertex.Position`,
   `Faceted.Bound`, `FacetedCurve.Bound`, `Box`, and the perimeter term of every
   area bound). It has no finite ceiling as the operands approach tangency: when
   the inflated bound reaches the pair's own diameter it has stopped bounding
   anything, and the operation is refused (`ErrUnsupported`) rather than
-  reported with a number nobody can use. Every bound has exactly one owner
+  reported with a number nobody can use — per rim vertex, at its own bound. Every bound has exactly one owner
   (`internal/proofbound/bounds.go`); no measurement site computes one inline.
 - Rejected alternatives: a third-party kernel (dependency rule; also the
   supply-chain surface); float-only BSP classification (the flipped-sign

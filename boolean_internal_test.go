@@ -137,7 +137,11 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 // facesNearMiss can be asked about.
 func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
-	bm, err := prepBoolMeshContext(t.Context(), &Mesh{vertices: tri[:], triangles: [][3]int{{0, 1, 2}}}, []int{0})
+	face := &Face{}
+	bm, err := prepBoolMeshContext(t.Context(), &Mesh{
+		vertices: tri[:], triangles: [][3]int{{0, 1, 2}},
+		source: []*Face{face}, faceBound: map[*Face]float64{face: 0},
+	}, []int{0})
 	require.NoError(t, err)
 	return bm
 }
@@ -749,7 +753,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		verts := []r3.Vec{{X: 1}, {X: 1 + width}, {X: 1, Y: 1}, {X: 1, Z: 1}}
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		payload := facetedPayload{
-			verts: verts, tris: tris, src: []int{0, 1, 2, 3},
+			verts: verts, vertexBound: make([]float64, len(verts)), tris: tris, src: []int{0, 1, 2, 3},
 			groups:     []facetGroup{{planar: true}, {planar: true}, {planar: true}, {planar: true}},
 			volSymDiff: tiny, dPair: 2, xform: r3.Identity(),
 		}
@@ -1120,8 +1124,9 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 			r3.NewVec(0, 4, 0),
 			r3.NewVec(0, 0, 5),
 		},
-		tris: [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
-		src:  []int{0, 1, 2, 3},
+		vertexBound: make([]float64, 4),
+		tris:        [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
+		src:         []int{0, 1, 2, 3},
 		groups: []facetGroup{
 			{planar: true}, {planar: true}, {planar: true}, {planar: true},
 		},
@@ -1151,12 +1156,11 @@ func TestBooleanProofBoundsEncloseExactTermSums(t *testing.T) {
 	// Each small term is a valid positive bound, even when adding it to one
 	// rounds back to one. The certificate must enclose the exact sum.
 	const tiny = math.SmallestNonzeroFloat64
-	boundary, volume, area := booleanProofBounds(1, tiny, 1, tiny, tiny, 1, tiny, tiny)
+	volume, area := booleanProofBounds(1, tiny, tiny, 1, tiny, tiny)
 	for _, tc := range []struct {
 		got       float64
 		tinyTerms int64
 	}{
-		{boundary, 1},
 		{volume, 2},
 		{area, 2},
 	} {

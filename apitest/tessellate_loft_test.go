@@ -157,7 +157,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, vol.Exactness)
 	require.Positive(t, vol.Bound.Base(),
-		"a positive-bound operand hands the result the displacement rimDelta composes")
+		"a positive-bound operand hands the result the displacement its rims compose")
 	value, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.Positive(t, value)

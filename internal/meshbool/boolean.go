@@ -25,7 +25,7 @@ const (
 	// BooleanExpectedUnsupported is an in-pipeline reach of the boolean geometry
 	// on operands that DID tessellate — a collapsed or welded-away facet
 	// (prepBoolMesh / stitchFacets) or a trim amplification that outgrew the pair
-	// diameter (rimDelta). Like a contact refusal the model is real and the limit
+	// diameter (RimBound, refused by the root). Like a contact refusal the model is real and the limit
 	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
 	BooleanExpectedUnsupported
 	// BooleanExpectedStaging is a capability/staging limit reached BEFORE any

@@ -133,30 +133,31 @@ A rim vertex `r` is an exact point of the contact segment of ONE facet pair
 
 with `sin θ(t_A, t_B)` the proven lower bound `SinLowerBound(c.Sin2)` of THAT
 pair's crossing angle, read from the contact's own exact `Sin2` rather than
-from the pair-wide minimum `MeshBoolean` returns today. The argument is
-`rimDelta`'s, applied per pair: the true piece of `t_A` lies within `δ(t_A)`
+from the pair-wide minimum the global composition of §1 divides by. The
+argument is that composition's, applied per pair: the true piece of `t_A` lies within `δ(t_A)`
 of `t_A`'s plane and `t_B`'s within `δ(t_B)` of `t_B`'s, the intersection of
 two slabs of those half-widths crossing at `θ` is a tube of half-width
 `(δ(t_A) + δ(t_B))/sin θ` about the exact crossing line, and the true rim
 point `r*` lies in that tube. A rim vertex two contact segments share (a
-chain vertex) takes the larger of the two values. `rimDelta`'s refusal
+chain vertex) takes the larger of the two values. The pair-diameter refusal
 stays per vertex: a `β_pre(r)` at or above the pair diameter `dPair`, or a
 non-finite one, refuses the operation with the same `ErrUnsupported`.
 
 Both operand facets of a contact are known exactly where the contact is
-classified, so the pair's `Sin2`, `δ(t_A)` and `δ(t_B)` are recorded on the
-`Xseg` the cutter receives and on the `CutVert` it creates for each chain
-endpoint; a kept facet corner carries that provenance out of `CutTriangle`
-(a `KeptFacet` corner names either an operand vertex index or a rim record).
+classified, so `MeshBoolean` computes the pair's `RimBound` from its `Sin2`,
+`δ(t_A)` and `δ(t_B)` there and records it against each segment endpoint's
+exact point. `KeepSide` then gives every kept facet corner its pre-weld bound
+(`KeptFacet.Beta`): an operand corner its own `β`, a recorded rim point its
+`RimBound`, a point that is both the larger, and any other point §3.3's.
 
 ### 3.3 A new vertex on an operand facet that is not a rim point
 
 The conforming pass and the artificial split line of `CutTriangle` create
 vertices on a facet's own edges that no contact segment ends at. Such a vertex
 lies on the held facet, so by §2's facet claim it takes that facet's bound:
-`β_pre(x) = δ(t)`. Where the point lies on an edge two facets share, both
-facets' bounds are the same corner maximum over that edge's endpoints, so the
-rule is unambiguous.
+`β_pre(x) = δ(t)`, with `t` the operand facet for a cutter point and the kept
+facet being split for a conforming insertion. A point two facets place takes
+the larger of the two.
 
 ### 3.4 The weld, per vertex
 
