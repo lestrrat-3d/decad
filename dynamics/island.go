@@ -110,8 +110,8 @@ func (w *World) manifoldWithin(manifold *decad.ContactManifold) bool {
 // below. Only a pair whose every point certainly separates by more than that
 // stays out of the solve.
 func (w *World) pairActive(pair islandPair, state State, drive map[int]driverMotion) (bool, bool) {
-	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a], drive)
-	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b], drive)
+	a, okA := w.certMotion(pair.a, state.entries[pair.a], drive)
+	b, okB := w.certMotion(pair.b, state.entries[pair.b], drive)
 	if !okA || !okB {
 		return false, false
 	}

@@ -218,16 +218,33 @@ func intervalDeviation(value, low, high *big.Rat) *big.Rat {
 	return a
 }
 
-// ratFloat is the exact rational value of a float64.
-func ratFloat(value float64) *big.Rat { return new(big.Rat).SetFloat64(value) }
+// ratFloat is the exact rational value of a float64, or nil when it is not
+// finite. A zero, of either sign, skips SetFloat64, whose pre-normalising
+// loop shifts a zero mantissa 1074 times before it gives up.
+func ratFloat(value float64) *big.Rat {
+	if value == 0 {
+		return new(big.Rat)
+	}
+	return new(big.Rat).SetFloat64(value)
+}
 
+// exactBase is the exact rational of a value's magnitude times its unit's
+// factor, or nil when either is not finite. A factor of one, the base unit
+// of every kind, leaves the magnitude's rational as the product.
 func exactBase(value units.Value) *big.Rat {
-	mag := new(big.Rat).SetFloat64(value.Mag())
-	factor := new(big.Rat).SetFloat64(value.Unit().Factor())
-	if mag == nil || factor == nil {
+	mag := ratFloat(value.Mag())
+	if mag == nil {
 		return nil
 	}
-	return new(big.Rat).Mul(mag, factor)
+	factor := value.Unit().Factor()
+	if factor == 1 {
+		return mag
+	}
+	exact := ratFloat(factor)
+	if exact == nil {
+		return nil
+	}
+	return mag.Mul(mag, exact)
 }
 
 func absRat(value *big.Rat) *big.Rat {

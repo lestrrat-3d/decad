@@ -40,7 +40,6 @@ type certBody struct {
 	center       ivec
 	centerL1     *big.Rat // upper bound on |center|_1
 	pose         r3.Transform
-	reading      decad.InertiaReading
 	v, w         [3]*big.Rat // pre-solve
 	vPost, wPost [3]*big.Rat // published
 }
@@ -276,51 +275,16 @@ func euclideanUpper(v ivec) *big.Rat {
 // unchanged by the event.
 func (w *World) newCertBody(index int, entry BodyState, post BodyState,
 	drive map[int]driverMotion) (certBody, bool) {
-	body := certBody{index: index, dynamic: w.bodies[index].definition.Role == Dynamic, pose: entry.Pose}
-	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
-	body.v, body.w, body.vPost, body.wPost = zero, zero, zero, zero
-	if motion, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
-		body.kinematic = true
-		body.v, body.vPost, body.w, body.wPost = motion.linear, motion.linear, motion.angular, motion.angular
-		body.center = zeroIVec()
+	body, ok := w.certMotion(index, entry, drive)
+	if !ok || !body.dynamic {
+		return body, ok
 	}
-	if !body.dynamic {
-		return body, true
-	}
-	mass := w.bodies[index].mass
-	m, bound := exactBase(mass.Mass.Value), exactBase(mass.Mass.Bound)
-	if m == nil || bound == nil || bound.Sign() < 0 {
-		return certBody{}, false
-	}
-	body.mass = proof.OwnedInterval(new(big.Rat).Sub(m, bound), new(big.Rat).Add(m, bound))
-	if body.mass.Lo.Sign() <= 0 {
-		return certBody{}, false
-	}
-	body.reading = mass.Inertia
-	largest := new(big.Rat)
-	components := [3][3]decad.Measurement{
-		{mass.Inertia.XX, mass.Inertia.XY, mass.Inertia.XZ},
-		{mass.Inertia.XY, mass.Inertia.YY, mass.Inertia.YZ},
-		{mass.Inertia.XZ, mass.Inertia.YZ, mass.Inertia.ZZ}}
-	for i, row := range components {
-		for j, component := range row {
-			value, componentBound := exactBase(component.Value), exactBase(component.Bound)
-			if value == nil || componentBound == nil || componentBound.Sign() < 0 {
-				return certBody{}, false
-			}
-			body.inertia[i][j] = proof.OwnedInterval(new(big.Rat).Sub(value, componentBound),
-				new(big.Rat).Add(value, componentBound))
-			if m := magnitude(body.inertia[i][j]); m.Cmp(largest) > 0 {
-				largest = m
-			}
-		}
-	}
-	basis := entry.Pose.Basis()
+	exact := w.bodies[index].exact
+	body.mass = exact.interval
+	body.inertia = exact.tensor
+	basis := body.pose.Basis()
 	for column, axis := range [3]r3.Vec{basis.EX, basis.EY, basis.EZ} {
-		values, ok := ratVec(axis)
-		if !ok {
-			return certBody{}, false
-		}
+		values, _ := ratVec(axis) // certMotion read the basis as finite
 		for row := range 3 {
 			body.rotation[row][column] = values[row]
 		}
@@ -340,28 +304,67 @@ func (w *World) newCertBody(index int, entry BodyState, post BodyState,
 	}
 	body.defect = new(big.Rat).Mul(big.NewRat(3, 1), d)
 	body.defect.Mul(body.defect, new(big.Rat).Add(big.NewRat(2, 1), d))
-	body.defect.Mul(body.defect, largest)
-	body.inertiaLower = certifiedInertiaFloor(mass)
-	body.rowCeiling = inertiaRowCeiling(mass.Inertia)
-	if body.inertiaLower == nil || body.inertiaLower.Sign() <= 0 || body.rowCeiling == nil {
-		return certBody{}, false
+	body.defect.Mul(body.defect, exact.largest)
+	body.inertiaLower = exact.floor
+	body.rowCeiling = exact.rowCeiling
+	body.centerL1 = new(big.Rat)
+	for axis := range 3 {
+		body.centerL1.Add(body.centerL1, magnitude(body.center[axis]))
 	}
-	center, centerError, ok := worldCenterReading(entry.Pose, mass.Center)
+	body.vPost, ok = quantityRats(post.LinearVelocity)
 	if !ok {
 		return certBody{}, false
 	}
-	body.centerL1 = new(big.Rat)
+	body.wPost, ok = quantityRats(post.AngularVelocity)
+	return body, ok
+}
+
+// certMotion reads the part of an island participant that its pre-solve
+// relative velocity needs: its role, its pre-solve velocities (the post
+// ones set equal to them), and the center its levers run from. It fails
+// exactly when newCertBody fails on the same entry and an unchanged post
+// velocity: a dynamic body needs an exact mass reading with a positive mass
+// interval, inertia intervals with a positive certified floor and a row
+// ceiling, a finite pose basis, a mass center reading and exact velocities.
+// Everything newCertBody adds to it derives from those.
+func (w *World) certMotion(index int, entry BodyState, drive map[int]driverMotion) (certBody, bool) {
+	body := certBody{index: index, dynamic: w.bodies[index].definition.Role == Dynamic, pose: entry.Pose}
+	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	body.v, body.w, body.vPost, body.wPost = zero, zero, zero, zero
+	if motion, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
+		body.kinematic = true
+		body.v, body.vPost, body.w, body.wPost = motion.linear, motion.linear, motion.angular, motion.angular
+		body.center = zeroIVec()
+	}
+	if !body.dynamic {
+		return body, true
+	}
+	exact := w.bodies[index].exact
+	if exact.mass == nil || exact.bound == nil || exact.bound.Sign() < 0 || exact.interval.Lo.Sign() <= 0 ||
+		!exact.tensorOK || exact.floor == nil || exact.floor.Sign() <= 0 || exact.rowCeiling == nil {
+		return certBody{}, false
+	}
+	basis := entry.Pose.Basis()
+	if !finite(basis.EX.X, basis.EX.Y, basis.EX.Z, basis.EY.X, basis.EY.Y, basis.EY.Z,
+		basis.EZ.X, basis.EZ.Y, basis.EZ.Z) {
+		return certBody{}, false
+	}
+	center, centerError, ok := worldCenterReading(entry.Pose, exact)
+	if !ok {
+		return certBody{}, false
+	}
 	for axis := range 3 {
 		body.center[axis] = proof.OwnedInterval(new(big.Rat).Sub(center[axis], centerError[axis]),
 			new(big.Rat).Add(center[axis], centerError[axis]))
-		body.centerL1.Add(body.centerL1, magnitude(body.center[axis]))
 	}
-	var valid [4]bool
+	var valid [2]bool
 	body.v, valid[0] = quantityRats(entry.LinearVelocity)
 	body.w, valid[1] = quantityRats(entry.AngularVelocity)
-	body.vPost, valid[2] = quantityRats(post.LinearVelocity)
-	body.wPost, valid[3] = quantityRats(post.AngularVelocity)
-	return body, valid[0] && valid[1] && valid[2] && valid[3]
+	if !valid[0] || !valid[1] {
+		return certBody{}, false
+	}
+	body.vPost, body.wPost = body.v, body.w
+	return body, true
 }
 
 // inertiaApply encloses I_world·x for an exact vector x: x is taken into
@@ -401,9 +404,10 @@ func (b certBody) inertiaApply(x [3]*big.Rat) ivec {
 
 // pointVelocity encloses v + ω×r for a dynamic body slot (r from its mass
 // center) and for a kinematic one (r from the world origin, its driver's
-// field); a Fixed body, whose v is zero, stands still.
+// field); a Fixed body, whose v is zero, stands still. With ω exactly zero
+// the cross product is exactly zero and the enclosure is v itself.
 func pointVelocity(body certBody, v, omega [3]*big.Rat, lever ivec) ivec {
-	if !body.dynamic && !body.kinematic {
+	if (!body.dynamic && !body.kinematic) || zeroRats(omega) {
 		return pointIVec(v)
 	}
 	return addIVec(pointIVec(v), proof.CrossInterval3(pointIVec(omega), lever))
@@ -566,7 +570,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		} else {
 			energyUpper.Add(energyUpper, new(big.Rat).Mul(body.mass.Lo, squaredChange))
 		}
-		spinUpper, ok := spinEnergyChange(body.reading, body.pose, ratQuantity(body.w), ratQuantity(body.wPost))
+		spinUpper, ok := spinEnergyChange(&w.bodies[body.index].exact.components, body.rotation, body.w, body.wPost)
 		if !ok {
 			cert.fail(gateEnergy, new(big.Rat), new(big.Rat))
 			continue
@@ -806,18 +810,6 @@ func euclideanLower(v ivec) *big.Rat {
 		sum.Add(sum, new(big.Rat).Mul(least, least))
 	}
 	return ratSqrtLower(sum)
-}
-
-// ratQuantity wraps exact angular velocity components for spinEnergyChange,
-// which reads them back through exactBase; the values are float64 values
-// already, so the round trip is exact.
-func ratQuantity(x [3]*big.Rat) QuantityVec {
-	var out QuantityVec
-	for axis, value := range x {
-		f, _ := value.Float64()
-		setVelocityComponent(&out, axis, units.RadiansPerSecond(f))
-	}
-	return out
 }
 
 // solverReport converts a passing certificate into the published residuals.

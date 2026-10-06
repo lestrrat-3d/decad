@@ -82,6 +82,7 @@ type WorldConfig struct {
 type worldBody struct {
 	definition RigidBody
 	mass       decad.MassProperties // valid only for Dynamic
+	exact      *exactMass           // mass read as exact rationals; non-nil only for Dynamic
 }
 
 // World holds immutable body definitions, the mass readings admitted at
@@ -176,6 +177,7 @@ func (w *World) admitBodies(ctx context.Context, entries []RigidBody) error {
 				return err
 			}
 			w.bodies[i].mass = mass
+			w.bodies[i].exact = newExactMass(mass)
 		default:
 			return fmt.Errorf("%w: unknown body role", ErrInvalidInput)
 		}
