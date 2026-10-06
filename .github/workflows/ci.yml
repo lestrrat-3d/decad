@@ -175,6 +175,7 @@ jobs:
             packages: "./dynamics/"
             timeout: "30m"
             budget: "600"
+            gogc: "400"
           - os: macos-latest
             race: ""
             shard: ""
@@ -210,9 +211,15 @@ jobs:
       # -v prints each test's duration, so a slow run shows which tests grew.
       # A runner with a `budget:` fails once the run takes longer than that
       # many seconds, far below its -timeout; see the comment above the matrix.
+      # A matrix entry with `gogc:` runs its tests with that GOGC. The dynamics
+      # scenes allocate heavily, so a larger GC target cuts wall time. It is
+      # set here and not in a test main so local runs keep the default heap
+      # growth and their memory use. An empty value leaves GOGC at its default.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != ''
         shell: bash
+        env:
+          GOGC: ${{ matrix.gogc }}
         run: |
           start=$SECONDS
           go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
@@ -280,7 +287,12 @@ jobs:
       # The tumble scene's 768 steps and the parts-bin scene's 1024 take
       # about six and four minutes on a fast machine, together past go test's
       # default ten-minute budget, and about twice that on a slow runner.
+      # GOGC=400 is for the test step only: about 43% of its CPU samples are
+      # garbage collection. It is set here and not in a test main so local
+      # runs keep the default heap growth and their memory use.
       - name: Vet and test
+        env:
+          GOGC: "400"
         run: |
           go vet ./...
           go test -timeout 45m ./...
