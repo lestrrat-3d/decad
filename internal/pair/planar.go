@@ -39,10 +39,14 @@ import (
 // counterclockwise seen from outside, so (b-a)×(c-a) is its outward normal.
 // Faces, when set, names per triangle the original face that owns it; the
 // relation never reads it, and a manifold (planar_manifold.go) needs it.
+// CheckPlanarPose may attach the solid's derived data (planar_topology.go),
+// which serves it only while Verts and Tris are the slices it was read off.
 type PlanarSolid struct {
 	Verts []proof.DyV3
 	Tris  [][3]int
 	Faces []int
+
+	pose *planarPose
 }
 
 // FeatureKind names the dimension of a boundary feature.
@@ -274,54 +278,13 @@ type planarPrep struct {
 	sidesSet                 []bool
 }
 
+// preparePlanar builds s's derived data, or reuses the pose data
+// CheckPlanarPose attached to it.
 func preparePlanar(s *PlanarSolid) *planarPrep {
-	p := &planarPrep{s: s, normal: make([]proof.DyV3, len(s.Tris)),
-		triLo: make([][3]proof.Dyadic, len(s.Tris)), triHi: make([][3]proof.Dyadic, len(s.Tris))}
-	parent := make([]int, len(s.Verts))
-	for i := range parent {
-		parent[i] = i
+	if d := s.pose; d != nil && d.serves(s) {
+		return d.prep(s)
 	}
-	find := func(v int) int {
-		for parent[v] != v {
-			parent[v] = parent[parent[v]]
-			v = parent[v]
-		}
-		return v
-	}
-	seen := make(map[[2]int]int, 3*len(s.Tris)/2)
-	for t, tri := range s.Tris {
-		a := s.Verts[tri[0]]
-		p.normal[t] = proof.DvCross(proof.DvSub(s.Verts[tri[1]], a), proof.DvSub(s.Verts[tri[2]], a))
-		p.triLo[t], p.triHi[t] = pointBox(s.Verts, tri[:])
-		for i := range 3 {
-			u, w := tri[i], tri[(i+1)%3]
-			parent[find(u)] = find(w)
-			key := [2]int{min(u, w), max(u, w)}
-			if e, ok := seen[key]; ok {
-				// An audited solid holds each edge in exactly two triangles.
-				p.edgeFacets[e][1] = t
-				continue
-			}
-			seen[key] = len(p.edges)
-			p.edges = append(p.edges, key)
-			p.edgeFacets = append(p.edgeFacets, [2]int{t, t})
-			lo, hi := pointBox(s.Verts, key[:])
-			p.edgeLo, p.edgeHi = append(p.edgeLo, lo), append(p.edgeHi, hi)
-		}
-	}
-	p.shellOf = make([]int, len(s.Verts))
-	ids := make(map[int]int)
-	for v := range s.Verts {
-		root := find(v)
-		id, ok := ids[root]
-		if !ok {
-			id = len(ids)
-			ids[root] = id
-		}
-		p.shellOf[v] = id
-	}
-	p.shells = len(ids)
-	return p
+	return newPlanarPose(s, planarTopologyOf(len(s.Verts), s.Tris), planarNormals(s)).prep(s)
 }
 
 func pointBox(verts []proof.DyV3, indices []int) ([3]proof.Dyadic, [3]proof.Dyadic) {

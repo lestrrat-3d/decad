@@ -118,6 +118,24 @@ func exactContactTransform(t r3.Transform, p proofarith.DyV3) proofarith.DyV3 {
 		proofarith.DvAdd(dyScaleVec(proofarith.DyVec(b.EY), p[1]), dyScaleVec(proofarith.DyVec(b.EZ), p[2]))))
 }
 
+// exactContactMap is exactContactTransform with the transform's translation
+// and basis lifted once, for a caller mapping many points through one pose.
+// apply returns exactly what exactContactTransform returns.
+type exactContactMap struct {
+	translation, ex, ey, ez proofarith.DyV3
+}
+
+func newExactContactMap(t r3.Transform) exactContactMap {
+	b := t.Basis()
+	return exactContactMap{translation: proofarith.DyVec(t.Translation()),
+		ex: proofarith.DyVec(b.EX), ey: proofarith.DyVec(b.EY), ez: proofarith.DyVec(b.EZ)}
+}
+
+func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
+	return proofarith.DvAdd(m.translation, proofarith.DvAdd(dyScaleVec(m.ex, p[0]),
+		proofarith.DvAdd(dyScaleVec(m.ey, p[1]), dyScaleVec(m.ez, p[2]))))
+}
+
 func signedAxisTransform(t r3.Transform) bool {
 	if !t.IsValid() || !finiteVec(t.Translation()) {
 		return false

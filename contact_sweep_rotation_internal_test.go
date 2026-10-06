@@ -1,7 +1,9 @@
 package decad
 
 import (
+	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -312,4 +314,138 @@ func TestScaledRotationMatchesRotation(t *testing.T) {
 			requireScaledMatrix(t, frame.rotation(sin, cos), frame.scaledRotation(sin, cos), angle.String())
 		}
 	}
+}
+
+// pointDeviationSquaredCommonDenom is pointDeviationSquared before it read
+// the common denominator off the coordinates' dyadic exponents: q is the LCM
+// of all 6V rational denominators, and each numerator is ScaledNum over q.
+func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
+	ideal sweepIdealPose) ([]proofarith.DyV3, *big.Rat) {
+	actual := make([]proofarith.DyV3, len(p.sourcePoints))
+	for i, source := range p.sourcePoints {
+		actual[i] = exactContactTransform(pose, source)
+	}
+	coordinates := make([]*big.Rat, 0, 6*len(p.sourcePoints))
+	for i, source := range p.sourcePoints {
+		for axis := range 3 {
+			coordinates = append(coordinates, source[axis].Rat(), actual[i][axis].Rat())
+		}
+	}
+	q := proofarith.CommonDenom(coordinates...)
+	rot := ideal.rot
+	rotDen := new(big.Int).Mul(rot.den, q)
+	var den, rotMultiplier, observedMultiplier, shiftLo, shiftHi, toWhole [3]*big.Int
+	whole := big.NewInt(1)
+	for axis := range 3 {
+		shift := ideal.shift[axis]
+		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.lo.Denom()), shift.hi.Denom())
+		rotMultiplier[axis] = new(big.Int).Quo(den[axis], rotDen)
+		observedMultiplier[axis] = new(big.Int).Quo(den[axis], q)
+		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift.lo, den[axis]), proofarith.ScaledNum(shift.hi, den[axis])
+		whole = proofarith.LcmInt(whole, den[axis])
+	}
+	for axis := range 3 {
+		toWhole[axis] = new(big.Int).Quo(whole, den[axis])
+	}
+	maxSquared := new(big.Int)
+	for i := range p.sourcePoints {
+		var point [3]*big.Int
+		for axis := range 3 {
+			point[axis] = proofarith.ScaledNum(coordinates[6*i+2*axis], q)
+		}
+		lo, hi := rot.applyScaled(point)
+		squared := new(big.Int)
+		for axis := range 3 {
+			observed := proofarith.ScaledNum(coordinates[6*i+2*axis+1], q)
+			observed.Mul(observed, observedMultiplier[axis])
+			low := lo[axis].Mul(lo[axis], rotMultiplier[axis])
+			low.Add(low, shiftLo[axis])
+			high := hi[axis].Mul(hi[axis], rotMultiplier[axis])
+			high.Add(high, shiftHi[axis])
+			below := high.Sub(observed, high)
+			above := low.Sub(observed, low)
+			maximum := below.Abs(below)
+			if above.Abs(above).Cmp(maximum) > 0 {
+				maximum = above
+			}
+			maximum.Mul(maximum, toWhole[axis])
+			squared.Add(squared, maximum.Mul(maximum, maximum))
+		}
+		if squared.Cmp(maxSquared) > 0 {
+			maxSquared = squared
+		}
+	}
+	return actual, new(big.Rat).SetFrac(maxSquared, new(big.Int).Mul(whole, whole))
+}
+
+// TestPointDeviationMatchesCommonDenomForm holds pointDeviationSquared, which
+// reads the points' common denominator 2^shift off their dyadic exponents, to
+// the CommonDenom form it replaces: the same staged points and the identical
+// rational maxSquared/whole², so ratSqrtUp rounds the same. Every path kind of
+// rotationFormPaths is read at the fraction's own pose, its start pose, and
+// that pose moved by random turns and shifts from 2⁻⁴⁰ to 2¹⁰, and a half-unit
+// shift that stages half-integer source points to integers, so either the
+// source or the staged points may set the shift.
+//
+// Legs shown to fail: the shift taken over the staged points alone, the
+// half-integer source points need a negative shift and the scaling panics;
+// dyScaledNum shifting by the shift alone, dropping the exponent, the first
+// box pose differs.
+func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(103, 107))
+	compared, sourceSet := 0, 0
+	// Half-integer source points under a half-unit shift stage to integers,
+	// so the source points alone set the shift.
+	halfShift, err := r3.Translation(r3.Vec{X: .5, Y: -.5, Z: .5})
+	require.NoError(t, err)
+	paths := rotationFormPaths(t)
+	for name, path := range rotationFormPaths(t) {
+		halves := path
+		halves.sourcePoints = make([]proofarith.DyV3, len(path.sourcePoints))
+		for i := range halves.sourcePoints {
+			halves.sourcePoints[i] = proofarith.DyVec(r3.Vec{X: float64(i) + .5, Y: -float64(i) - 1.5, Z: 2.5})
+		}
+		paths[name+" halves"] = halves
+	}
+	for name, path := range paths {
+		for _, span := range rotationFormFractions() {
+			f := span[1]
+			pose, err := path.poseAt(f)
+			require.NoError(t, err, name)
+			ideal, ok := path.idealAt(f)
+			require.True(t, ok, name)
+			poses := []r3.Transform{pose, path.path.from, halfShift}
+			for range 6 {
+				moved, err := pose.Then(randomContactPose(t, rng))
+				require.NoError(t, err, name)
+				poses = append(poses, moved)
+			}
+			for k, at := range poses {
+				wantPoints, wantSquared := pointDeviationSquaredCommonDenom(path, at, ideal)
+				gotPoints, gotSquared, err := path.pointDeviationSquared(at, ideal, noSweepPoll)
+				require.NoError(t, err, name)
+				require.Len(t, gotPoints, len(wantPoints), name)
+				sourceShift, stagedShift := 0, 0
+				for i := range wantPoints {
+					requireDyV3Equal(t, wantPoints[i], gotPoints[i], "%s %v pose %d point %d", name, f, k, i)
+					for axis := range 3 {
+						sourceShift = max(sourceShift, dyDenominatorExp(path.sourcePoints[i][axis]))
+						stagedShift = max(stagedShift, dyDenominatorExp(gotPoints[i][axis]))
+					}
+				}
+				require.Zero(t, wantSquared.Cmp(gotSquared), "%s %v pose %d", name, f, k)
+				_, bound, ok, err := path.pointDeviationFrom(at, ideal, noSweepPoll)
+				require.NoError(t, err, name)
+				require.True(t, ok, name)
+				require.Equal(t, math.Float64bits(ratSqrtUp(wantSquared)), math.Float64bits(bound), "%s %v pose %d", name, f, k)
+				compared++
+				if sourceShift > stagedShift {
+					sourceSet++
+				}
+			}
+		}
+	}
+	require.Positive(t, compared)
+	require.Positive(t, sourceSet, "premise: some source points set the common denominator")
 }
