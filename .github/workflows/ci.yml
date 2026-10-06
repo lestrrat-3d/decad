@@ -205,7 +205,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/"
             timeout: "10m"
           - os: ubuntu-latest
             race: "-race"

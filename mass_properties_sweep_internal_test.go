@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,24 +36,24 @@ func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
 
 	// The box [-1, 1] × [-2, 2] × [-3, 3] moved to (1, 2, 3), so every first
 	// and second moment is nonzero.
-	box := volumeMoments{volume: pointInterval(big.NewRat(48, 1))}
+	box := volumeMoments{volume: proofbound.PointInterval(big.NewRat(48, 1))}
 	for i := range box.first {
-		box.first[i] = pointInterval(new(big.Rat))
+		box.first[i] = proofbound.PointInterval(new(big.Rat))
 		for j := range box.second[i] {
-			box.second[i][j] = pointInterval(new(big.Rat))
+			box.second[i][j] = proofbound.PointInterval(new(big.Rat))
 		}
 	}
 	for i, half := range []int64{1, 2, 3} {
-		box.second[i][i] = pointInterval(big.NewRat(48*half*half, 3))
+		box.second[i][i] = proofbound.PointInterval(big.NewRat(48*half*half, 3))
 	}
 	local := shiftVolumeMoments(box, [3]*big.Rat{big.NewRat(1, 1), big.NewRat(2, 1), big.NewRat(3, 1)})
-	exact := func(iv ratInterval) *big.Rat {
-		require.Zero(t, iv.lo.Cmp(iv.hi))
-		return iv.lo
+	exact := func(iv proofbound.RatInterval) *big.Rat {
+		require.Zero(t, iv.Lo.Cmp(iv.Hi))
+		return iv.Lo
 	}
 
 	got := rotateVolumeMoments(local, f)
-	require.Zero(t, got.volume.lo.Cmp(exact(local.volume)))
+	require.Zero(t, got.volume.Lo.Cmp(exact(local.volume)))
 	for i := range 3 {
 		want := new(big.Rat)
 		for k := range 3 {
@@ -71,8 +73,8 @@ func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
 	}
 }
 
-func requireIntervalContains(t *testing.T, iv ratInterval, value *big.Rat) {
+func requireIntervalContains(t *testing.T, iv proofbound.RatInterval, value *big.Rat) {
 	t.Helper()
-	require.True(t, iv.lo.Cmp(value) <= 0 && value.Cmp(iv.hi) <= 0,
-		"[%s, %s] misses %s", iv.lo.FloatString(20), iv.hi.FloatString(20), value.FloatString(20))
+	require.True(t, iv.Lo.Cmp(value) <= 0 && value.Cmp(iv.Hi) <= 0,
+		"[%s, %s] misses %s", iv.Lo.FloatString(20), iv.Hi.FloatString(20), value.FloatString(20))
 }

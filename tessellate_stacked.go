@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/units"
 )
@@ -54,10 +56,10 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	var vertexStore []float64
 	faceTrim := map[*Face]float64{}
 	faceAxial := map[*Face]float64{}
-	addVertex := func(p Point2, z float64, source walkEndBound) int {
+	addVertex := func(p Point2, z float64, source proofbound.WalkEndBound) int {
 		v := base.point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, v)
-		vertexStore = append(vertexStore, absSumUpper(walkEndBoundAllow(source),
+		vertexStore = append(vertexStore, proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(source),
 			exactPrismPointRound(base, p.U, p.V, z, v)))
 		return len(mesh.vertices) - 1
 	}
@@ -80,7 +82,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		r.segmentArea, r.walks, r.perimeterUpper = cl.segmentArea, cl.walks, cl.perimeterUpper
 		r.bottom = make([]int, len(cl.samples))
 		r.top = make([]int, len(cl.samples))
-		mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
 		for j, p := range cl.samples {
 			r.bottom[j] = addVertex(p, first.z0, cl.boundOf[j])
 			r.top[j] = addVertex(p, last.z1, cl.boundOf[j])
@@ -214,20 +216,20 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	for ci, col := range columns {
 		r := rings[ci]
 		allWalks += r.walks
-		allPerimeter = absSumUpper(allPerimeter, r.perimeterUpper)
+		allPerimeter = proofbound.AbsSumUpper(allPerimeter, r.perimeterUpper)
 		if sp.sectionDelta > 0 {
 			height := sp.slabs[col.end].z1 - sp.slabs[col.start].z0
-			mesh.areaSlack = absSumUpper(mesh.areaSlack,
-				productUpper(sectionDisplacementLength(sp.sectionDelta, r.walks), height))
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+				proofbound.ProductUpper(proofbound.SectionDisplacementLength(sp.sectionDelta, r.walks), height))
 		}
 	}
 	for _, face := range b.Faces() {
 		if _, ok := face.surface.(Plane); ok && sp.sectionDelta > 0 {
-			mesh.areaSlack = absSumUpper(mesh.areaSlack,
-				sectionDisplacementArea(sp.sectionDelta, allWalks, allPerimeter))
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+				proofbound.SectionDisplacementArea(sp.sectionDelta, allWalks, allPerimeter))
 		}
 	}
-	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
 	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
 	terms := make([]float64, 0, len(columns)*len(sp.slabs)+len(faceAxial)+2)
 	for k, slab := range sp.slabs {
@@ -235,21 +237,21 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		walks := 0
 		for _, ci := range bySlab[k] {
 			r := rings[ci]
-			segments = absSumUpper(segments, r.segmentArea)
-			perimeter = absSumUpper(perimeter, r.perimeterUpper)
+			segments = proofbound.AbsSumUpper(segments, r.segmentArea)
+			perimeter = proofbound.AbsSumUpper(perimeter, r.perimeterUpper)
 			walks += r.walks
 		}
 		height := slab.z1 - slab.z0
-		terms = append(terms, productUpper(height, segments),
-			productUpper(height, sectionDisplacementArea(sp.sectionDelta, walks, perimeter)))
+		terms = append(terms, proofbound.ProductUpper(height, segments),
+			proofbound.ProductUpper(height, proofbound.SectionDisplacementArea(sp.sectionDelta, walks, perimeter)))
 	}
 	for face, axial := range faceAxial {
 		if _, ok := face.surface.(Plane); ok {
-			terms = append(terms, productUpper(axial, areaUpper[face]))
+			terms = append(terms, proofbound.ProductUpper(axial, areaUpper[face]))
 		}
 	}
-	terms = append(terms, sweptVolumeAllow(storeMax,
-		perturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))
+	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
+		proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
 	}

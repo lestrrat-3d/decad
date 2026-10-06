@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -27,7 +29,7 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	case 1:
 		lower := new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), radius.Rat())
 		upper := new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), radius.Rat())
-		lo, hi := ratFloatDown(lower), ratFloatUp(upper)
+		lo, hi := proofbound.RatFloatDown(lower), proofbound.RatFloatUp(upper)
 		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
 			report.Reason = ContactNoGapProof
 			return
@@ -38,7 +40,7 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 		if right.Cmp(left) > 0 {
 			left = right
 		}
-		bound := ratFloatUp(left)
+		bound := proofbound.RatFloatUp(left)
 		if !finiteMeasurementValues(value, bound) ||
 			new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(bound)).Sign() <= 0 {
 			report.Reason = ContactNoGapProof
@@ -134,9 +136,9 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 		point  *VecMeasurement
 		radius proofarith.Dyadic
 	}{{&onA, a.radius}, {&onB, b.radius}} {
-		radiusFloat := ratFloatUp(witness.radius.Rat())
-		bound := provenUpRound(witness.point.Bound.Base() +
-			provenUpRound(radiusFloat*normal.Bound.Base()))
+		radiusFloat := proofbound.RatFloatUp(witness.radius.Rat())
+		bound := proofbound.ProvenUpRound(witness.point.Bound.Base() +
+			proofbound.ProvenUpRound(radiusFloat*normal.Bound.Base()))
 		if !finiteMeasurementValues(bound) || bound > report.Request.PointResolution.Base() {
 			report.Reason = ContactPointTooCoarse
 			return
@@ -156,7 +158,7 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	boundExact := ratMax(left.Abs(left), right.Abs(right))
 	boundExact.Add(boundExact, proofarith.FloatRat(onA.Bound.Base()))
 	boundExact.Add(boundExact, proofarith.FloatRat(onB.Bound.Base()))
-	bound := ratFloatUp(boundExact)
+	bound := proofbound.RatFloatUp(boundExact)
 	if !finiteMeasurementValues(bound) {
 		report.Reason = ContactPointTooCoarse
 		return

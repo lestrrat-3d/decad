@@ -123,7 +123,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 
 // piRefLo and piRefHi bracket pi to 60 decimal digits: a REFERENCE these
 // tests compute their own expected answer from, never a bound production
-// code trusts (that proof lives in rat_interval.go's own piLower/piUpper,
+// code trusts (that proof lives in internal/proofbound/rat_interval.go's own piLower/piUpper,
 // unreachable from this external package). Checking both ends against the
 // published interval is what proves the tightened bound still sound, not
 // merely narrow.

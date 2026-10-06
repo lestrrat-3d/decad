@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -15,7 +17,7 @@ import (
 )
 
 // TestCapBandMomentCoordUpperCoversOffsetBoundary is the regression for the
-// unsound sweptMomentAllow input this fix corrects: bounds.go:407 documents
+// unsound proofbound.SweptMomentAllow input this fix corrects: internal/proofbound/bounds.go:407 documents
 // coordUpper as "a PROVEN upper bound on |u|, |v| and |z| over the band's own
 // material", but capBandMoment used to derive it from the ORIGINAL loop and
 // the two axial levels alone — never from the offset cap boundary the band's
@@ -32,7 +34,7 @@ import (
 //
 // delta is set far larger than the record's own tiny contour rounding
 // (loopContourDelta here is on the order of 1e-17, negligible against any
-// O(1)-scale arithmetic rounding) so the sweptMomentAllow term this
+// O(1)-scale arithmetic rounding) so the proofbound.SweptMomentAllow term this
 // mechanism composes DOMINATES the band's ordinary arithmetic rounding
 // rather than being masked by it — the same isolation
 // TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand uses to show a
@@ -79,22 +81,22 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	patchArea, patchAreaBound := patchAreaOf(g)
 	capArea, err := loopEnclosedAreaContext(t.Context(), capBoundary)
 	require.NoError(t, err)
-	areaUpper := absSumUpper(patchArea, patchAreaBound, capArea.value, capArea.bound)
+	areaUpper := proofbound.AbsSumUpper(patchArea, patchAreaBound, capArea.Value, capArea.Bound)
 
 	oldCoordUpper := half // the pre-fix formula: original loop envelope (~0) vs the axial level
 	trueCoordUpper := rho + d
 	require.Less(t, oldCoordUpper, trueCoordUpper,
 		"the premise: the pre-fix coordUpper never reaches the offset boundary's own radius")
 
-	oldAllow := sweptMomentAllow(delta, areaUpper, oldCoordUpper)
-	trueAllow := sweptMomentAllow(delta, areaUpper, trueCoordUpper)
+	oldAllow := proofbound.SweptMomentAllow(delta, areaUpper, oldCoordUpper)
+	trueAllow := proofbound.SweptMomentAllow(delta, areaUpper, trueCoordUpper)
 	require.Less(t, oldAllow, trueAllow)
 
 	required := (oldAllow + trueAllow) / 2
-	require.GreaterOrEqual(t, mu.bound, required,
-		"mu.bound %v must reach the offset boundary's own coordinate envelope, not just the pre-fix one", mu.bound)
-	require.GreaterOrEqual(t, mv.bound, required,
-		"mv.bound %v must reach the offset boundary's own coordinate envelope, not just the pre-fix one", mv.bound)
+	require.GreaterOrEqual(t, mu.Bound, required,
+		"mu.bound %v must reach the offset boundary's own coordinate envelope, not just the pre-fix one", mu.Bound)
+	require.GreaterOrEqual(t, mv.Bound, required,
+		"mv.bound %v must reach the offset boundary's own coordinate envelope, not just the pre-fix one", mv.Bound)
 }
 
 // TestLineCircleLocusSpeedUpperRefusesMomentaryFold pins fu144's own refusal
@@ -278,7 +280,7 @@ func TestFixPatchOrientation(t *testing.T) {
 // radius and its own offset, and nothing in it reads the far end of the sweep
 // — while the flux the band is computed FROM scales with that height, because
 // each of the two closing disks carries capZ times a whole section area.
-func capBandCircle(t *testing.T, r, d, capZ float64) boundedScalar {
+func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 	t.Helper()
 	loop := LoopRecord{Segments: []CurveSegment{
 		CircleSeg{Center: Point2{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
@@ -334,14 +336,14 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 			require.NoError(t, err)
 			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0)
 			require.NoError(t, err)
-			require.Greater(t, volumeWith.bound, volumeWithout.bound,
+			require.Greater(t, volumeWith.Bound, volumeWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band volume bound`)
 
 			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, newFreeformWork())
 			require.NoError(t, err)
 			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, newFreeformWork())
 			require.NoError(t, err)
-			require.Greater(t, momentWith.bound, momentWithout.bound,
+			require.Greater(t, momentWith.Bound, momentWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band first-moment bound`)
 		})
 	}
@@ -421,15 +423,15 @@ func TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand(t *testing.T) {
 	lo := capBandCircle(t, R, d, 10)
 	hi := capBandCircle(t, R, d, 1e5)
 
-	disagreement := math.Abs(hi.value - lo.value)
+	disagreement := math.Abs(hi.Value - lo.Value)
 	require.Greater(t, disagreement, 1.0,
 		`the premise: cancelling a 1e5 sweep down to a 1e-3 band really does cost whole units`)
-	require.GreaterOrEqual(t, lo.bound+hi.bound, disagreement,
+	require.GreaterOrEqual(t, lo.Bound+hi.Bound, disagreement,
 		`two readings of ONE band that disagree by more than their bounds allow cannot both enclose it`)
 
 	// The same fact stated the other way: a bound read off the cancelled band
 	// would be identical at both heights, because the band is.
-	require.Greater(t, hi.bound, 1e3*lo.bound,
+	require.Greater(t, hi.Bound, 1e3*lo.Bound,
 		`the bound has to grow with the flux the band was cancelled out of`)
 }
 
@@ -573,7 +575,7 @@ func TestPatchAreaOfEnclosesRoundedRadiusDifference(t *testing.T) {
 // always a float64 dth and a float64 dthAllow, and this is the honest
 // enclosure claim over the interval those two floats denote. This is the
 // property that must never regress — the tightening this fix makes over
-// conservativeValueError's old fallback is sound only where this still
+// proofbound.ConservativeValueError's old fallback is sound only where this still
 // holds.
 func TestConeFrustumAreaBracketEnclosesReference(t *testing.T) {
 	t.Parallel()
@@ -1029,20 +1031,20 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 			require.True(t, ok)
 			require.LessOrEqual(t, ext.minLo.Cmp(ext.minHi), 0)
 			require.LessOrEqual(t, ext.maxLo.Cmp(ext.maxHi), 0)
-			require.Less(t, ratFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)), tc.tightBelow)
-			require.Less(t, ratFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)), tc.tightBelow)
+			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)), tc.tightBelow)
+			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)), tc.tightBelow)
 
-			amp, okAmp := intervalSqrt(pointInterval(ratAdd(ratMul(tc.a, tc.a), ratMul(tc.b, tc.b))))
+			amp, okAmp := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
 			require.True(t, okAmp)
 			if tc.interior {
 				// The stationary points are reached, so both extremes are the
 				// form's own amplitude about c and the enclosure must bracket them.
-				trough := intervalSub(pointInterval(tc.c), amp)
-				peak := intervalAdd(pointInterval(tc.c), amp)
-				require.LessOrEqual(t, ext.minLo.Cmp(trough.hi), 0)
-				require.GreaterOrEqual(t, ext.minHi.Cmp(trough.lo), 0)
-				require.GreaterOrEqual(t, ext.maxHi.Cmp(peak.lo), 0)
-				require.LessOrEqual(t, ext.maxLo.Cmp(peak.hi), 0)
+				trough := proofbound.IntervalSub(proofbound.PointInterval(tc.c), amp)
+				peak := proofbound.IntervalAdd(proofbound.PointInterval(tc.c), amp)
+				require.LessOrEqual(t, ext.minLo.Cmp(trough.Hi), 0)
+				require.GreaterOrEqual(t, ext.minHi.Cmp(trough.Lo), 0)
+				require.GreaterOrEqual(t, ext.maxHi.Cmp(peak.Lo), 0)
+				require.LessOrEqual(t, ext.maxLo.Cmp(peak.Hi), 0)
 			}
 
 			// No azimuth of the window may take a value the reported enclosure
@@ -1050,21 +1052,21 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 			// where the float reading's own rounding used to escape.
 			width := tc.width
 			if tc.wholeTurn {
-				width = ratMul(big.NewRat(2, 1), piUpper)
+				width = proofbound.RatMul(big.NewRat(2, 1), proofbound.PiUpper)
 			}
-			stationary, okStat := ratOf(math.Atan2(ratFloat(tc.b), ratFloat(tc.a)))
+			stationary, okStat := proofbound.RatOf(math.Atan2(ratFloat(tc.b), ratFloat(tc.a)))
 			require.True(t, okStat)
 			for k := range 129 {
-				phi := ratMul(width, big.NewRat(int64(k), 128))
+				phi := proofbound.RatMul(width, big.NewRat(int64(k), 128))
 				for _, at := range []*big.Rat{phi, new(big.Rat).Add(stationary, phi), new(big.Rat).Sub(stationary, phi)} {
 					if at.Cmp(new(big.Rat)) < 0 || at.Cmp(width) > 0 {
 						continue
 					}
 					sin, cos, okT := radSinCosInterval(at)
 					require.True(t, okT)
-					v := intervalAdd(intervalAdd(intervalScale(cos, tc.a), intervalScale(sin, tc.b)), pointInterval(tc.c))
-					require.LessOrEqual(t, ext.minLo.Cmp(v.hi), 0, "a reachable value sits below the reported minimum")
-					require.GreaterOrEqual(t, ext.maxHi.Cmp(v.lo), 0, "a reachable value sits above the reported maximum")
+					v := proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalScale(cos, tc.a), proofbound.IntervalScale(sin, tc.b)), proofbound.PointInterval(tc.c))
+					require.LessOrEqual(t, ext.minLo.Cmp(v.Hi), 0, "a reachable value sits below the reported minimum")
+					require.GreaterOrEqual(t, ext.maxHi.Cmp(v.Lo), 0, "a reachable value sits above the reported maximum")
 				}
 			}
 		})

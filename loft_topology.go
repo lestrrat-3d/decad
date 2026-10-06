@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -55,7 +57,7 @@ type loftAssembly struct {
 	loopIdx0, loopIdx1 [][]int
 	// delta is the proven displacement every held vertex carries from the
 	// exact placed image of the recorded sections (docs/loft-design.md §5,
-	// §12 PR 2a) — absSumUpper(stationRound, placeAllow): zero exactly when
+	// §12 PR 2a) — proofbound.AbsSumUpper(stationRound, placeAllow): zero exactly when
 	// xform is r3.Identity() AND every station publishes a zero stationRound
 	// (a10-plan.md Part 3 PR 6), never zero merely because the body is
 	// unplaced, since a curved pair with interior COMPUTED stations commits
@@ -78,13 +80,13 @@ type loftAssembly struct {
 // stationRound is loftPairings' own accumulated Table S row S14 term
 // (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
 // station commits, composed into delta beside the placement's own
-// rigidRoundAllow term.
+// proofbound.RigidRoundAllow term.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	// S13, decided before the first coordinate is lifted into an exact
 	// dyadic: tessellation.OrientationSign lifts the orientation anchor first, so its
 	// finiteness is the gate's first question.
 	anchor := xform.Apply(plane0.Origin)
-	if !finiteVec(anchor) {
+	if !proofbound.FiniteVec(anchor) {
 		return loftAssembly{}, errLoftPointUnrepresentable("placed plane origin")
 	}
 
@@ -92,7 +94,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	wIdx := make([][]int, len(pairs))
 	var verts []r3.Vec
 	// maxInputAbs tracks the largest |coordinate| over the frame-lifted,
-	// PRE-transform points — the magnitude bounds.go's rigidRoundAllow reads
+	// PRE-transform points — the magnitude internal/proofbound/bounds.go's proofbound.RigidRoundAllow reads
 	// the rounding at, never the placed result's (docs/loft-design.md §5,
 	// §12 PR 2a).
 	maxInputAbs := 0.0
@@ -104,9 +106,9 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		for j, pt := range p.v {
 			vIdx[i][j] = len(verts)
 			lifted := f0.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := xform.Apply(lifted)
-			if !finiteVec(placed) {
+			if !proofbound.FiniteVec(placed) {
 				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the first profile", j, i))
 			}
 			verts = append(verts, placed)
@@ -115,9 +117,9 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		for j, pt := range p.w {
 			wIdx[i][j] = len(verts)
 			lifted := f1.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := xform.Apply(lifted)
-			if !finiteVec(placed) {
+			if !proofbound.FiniteVec(placed) {
 				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the second profile", j, i))
 			}
 			verts = append(verts, placed)
@@ -201,7 +203,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	// REQUIRED: without it, every directly-built (unplaced) LineSeg-only loft
 	// whose every station is PINNED would lose the Exact readings §8/§12 PR 1
 	// publishes (docs/loft-design.md §5, §12 PR 2a). delta =
-	// absSumUpper(stationRound, placeAllow) (a10-plan.md Part 3 PR 6) is NO
+	// proofbound.AbsSumUpper(stationRound, placeAllow) (a10-plan.md Part 3 PR 6) is NO
 	// LONGER zero exactly when xform is the identity: a curved pair with
 	// interior computed stations carries a positive stationRound whether or
 	// not the body is placed, so does a LineSeg pair holding a station at
@@ -209,15 +211,15 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	// ArcSeg pair whose recorded End sits off its own Start's radius
 	// (arcNaturalEndRadialUpper). So the fast path this
 	// comment used to state is now placeAllow's own, while stationRound is
-	// absSumUpper's other, independent leg — absSumUpper(0, 0) is exactly 0.0
-	// (upRound never nudges a non-positive value), which is what keeps the
+	// proofbound.AbsSumUpper's other, independent leg — proofbound.AbsSumUpper(0, 0) is exactly 0.0
+	// (proofbound.UpRound never nudges a non-positive value), which is what keeps the
 	// delta of an unplaced LineSeg-only loft whose every station is PINNED
 	// bit-identical to before.
 	placeAllow := 0.0
 	if xform != r3.Identity() {
-		placeAllow = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
 	}
-	delta := absSumUpper(stationRound, placeAllow)
+	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
 
 	return loftAssembly{
 		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
@@ -284,15 +286,15 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // (capblend_contour.go's straightEdgeBound/dySquaredDistance3), no
 // new mechanism for an edge whose build carries a zero delta. An edge at a
 // positive delta (§12 PR 2a — a placed build, or a COMPUTED station)
-// composes that with bounds.go's chainLengthBound(1, delta, held) — both
+// composes that with internal/proofbound/bounds.go's proofbound.ChainLengthBound(1, delta, held) — both
 // endpoints displaced by delta is exactly that helper's own one-chord case —
-// through absSumUpper.
+// through proofbound.AbsSumUpper.
 func loftEdgeLength(a, b r3.Vec, delta float64) (float64, float64) {
 	held := a.Sub(b).Len()
 	sq, sqOK := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
 	bound := straightEdgeBound(held, sq, sqOK)
 	if delta > 0 {
-		bound = absSumUpper(bound, chainLengthBound(1, delta, held))
+		bound = proofbound.AbsSumUpper(bound, proofbound.ChainLengthBound(1, delta, held))
 	}
 	return held, bound
 }
@@ -348,7 +350,7 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 // triangle row): its own Plane, its own proven area bracket
 // (loft_moments.go's wallTriangleArea, the identical bracket the mass
 // accumulator sums), and its side(i,j,k) role. A placed triangle (delta > 0,
-// §12 PR 2a) widens that bracket by bounds.go's perturbedTriangleAreaAllow,
+// §12 PR 2a) widens that bracket by internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow,
 // the same per-triangle correction the mass accumulator sums into Area's own
 // bound.
 func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i, j, side int, delta float64) (*Face, error) {
@@ -357,12 +359,12 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 		return nil, err
 	}
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-	u := xsub(xptOf(b), xptOf(a))
-	v := xsub(xptOf(c), xptOf(a))
+	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
+	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
 	lo, hi := wallTriangleArea(u, v)
-	areaBound := upRound(hi - lo)
+	areaBound := proofbound.UpRound(hi - lo)
 	if delta > 0 {
-		areaBound = absSumUpper(areaBound, perturbedTriangleAreaAllow(a, b, c, delta))
+		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return &Face{
 		surface:   surf,
@@ -509,8 +511,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	if a.delta > 0 {
 		capStartTris := a.tris[a.walls : a.walls+a.capStartCount]
 		capEndTris := a.tris[a.walls+a.capStartCount:]
-		capStartBound = absSumUpper(capStartBound, capTriangleAreaAllow(a.verts, capStartTris, a.delta))
-		capEndBound = absSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
+		capStartBound = proofbound.AbsSumUpper(capStartBound, capTriangleAreaAllow(a.verts, capStartTris, a.delta))
+		capEndBound = proofbound.AbsSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
 	}
 	capStart := &Face{
 		surface:       capStartSurf,
@@ -536,7 +538,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	return capStart, capEnd, walls, nil
 }
 
-// capTriangleAreaAllow sums bounds.go's perturbedTriangleAreaAllow over one
+// capTriangleAreaAllow sums internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow over one
 // cap's own triangulation triangles (docs/loft-design.md §12 PR 2a) — the
 // extra area a placement's delta can add to a cap's own exact rational area
 // (capPolygonAreaRat), summed the same way loft_moments.go's accumulator
@@ -544,7 +546,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 	total := 0.0
 	for _, t := range tris {
-		total = upRound(total + perturbedTriangleAreaAllow(verts[t[0]], verts[t[1]], verts[t[2]], delta))
+		total = proofbound.UpRound(total + proofbound.PerturbedTriangleAreaAllow(verts[t[0]], verts[t[1]], verts[t[2]], delta))
 	}
 	return total
 }
@@ -578,7 +580,7 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 // discipline) — no float arithmetic anywhere in this sum. mustRatOf's
 // finiteness precondition is already proven here: every pts entry is one
 // of the SAME (U, V) pairs assembleLoft already lifted through its plane
-// frame and checked with finiteVec before this function is ever reached
+// frame and checked with proofbound.FiniteVec before this function is ever reached
 // (errLoftPointUnrepresentable, S13), so a non-finite U or V would have
 // refused the build already.
 //

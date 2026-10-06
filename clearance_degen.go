@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -58,21 +60,13 @@ func degAnd(a, b degState) degState {
 	}
 }
 
-// finiteVec guards exact rational lifts and every float result used by a
-// certificate.
-func finiteVec(v r3.Vec) bool {
-	return !math.IsNaN(v.X) && !math.IsInf(v.X, 0) &&
-		!math.IsNaN(v.Y) && !math.IsInf(v.Y, 0) &&
-		!math.IsNaN(v.Z) && !math.IsInf(v.Z, 0)
-}
-
 // parallelExact decides a ∥ b from the vectors taken exactly (ra, rb) with their
 // float forms (fa, fb) supplying the disproof threshold: an exactly zero cross
 // product proves parallelism outright, a cross clearly above the kernel's
 // angular noise disproves it, and the band between is undecided.
 func (k *pairKernel) parallelExact(ra, rb proofarith.DyV3, fa, fb r3.Vec) degState {
 	la, lb := fa.Len(), fb.Len()
-	if !finiteVec(fa) || !finiteVec(fb) || la == 0 || lb == 0 {
+	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) || la == 0 || lb == 0 {
 		return degUnknown
 	}
 	if proofarith.DvIsZero(proofarith.DvCross(ra, rb)) {
@@ -86,7 +80,7 @@ func (k *pairKernel) parallelExact(ra, rb proofarith.DyV3, fa, fb r3.Vec) degSta
 
 // parallel decides a ∥ b.
 func (k *pairKernel) parallel(a, b r3.Vec) degState {
-	if !finiteVec(a) || !finiteVec(b) {
+	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) {
 		return degUnknown
 	}
 	return k.parallelExact(proofarith.DyVec(a), proofarith.DyVec(b), a, b)
@@ -96,7 +90,7 @@ func (k *pairKernel) parallel(a, b r3.Vec) degState {
 // subtraction of the endpoints would round away the very residual the proof
 // rests on).
 func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
-	if !finiteVec(a) || !finiteVec(b) || !finiteVec(d) {
+	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) || !proofbound.FiniteVec(d) {
 		return degUnknown
 	}
 	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a)), proofarith.DyVec(d), b.Sub(a), d)
@@ -104,7 +98,7 @@ func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
 
 // parallelSegs decides (b1 − a1) ∥ (b2 − a2).
 func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
-	if !finiteVec(a1) || !finiteVec(b1) || !finiteVec(a2) || !finiteVec(b2) {
+	if !proofbound.FiniteVec(a1) || !proofbound.FiniteVec(b1) || !proofbound.FiniteVec(a2) || !proofbound.FiniteVec(b2) {
 		return degUnknown
 	}
 	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b1), proofarith.DyVec(a1)), proofarith.DvSub(proofarith.DyVec(b2), proofarith.DyVec(a2)),
@@ -114,12 +108,12 @@ func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
 // perpendicularSeg decides (b − a) ⟂ n — the plane-plateau question of the
 // curve tiers, taken exactly.
 func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
-	if !finiteVec(a) || !finiteVec(b) || !finiteVec(n) {
+	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) || !proofbound.FiniteVec(n) {
 		return degUnknown
 	}
 	fRel := b.Sub(a)
 	lr, ln := fRel.Len(), n.Len()
-	if !finiteVec(fRel) || !finiteVec(n) || lr == 0 || ln == 0 {
+	if !proofbound.FiniteVec(fRel) || !proofbound.FiniteVec(n) || lr == 0 || ln == 0 {
 		return degUnknown
 	}
 	rel := proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a))
@@ -138,7 +132,7 @@ func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
 // offset in the undecided band normalizes to a garbage direction, and a garbage
 // direction decides a trim admission.
 func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) degState {
-	if !finiteVec(p) || !finiteVec(anchor) || !finiteVec(axis) {
+	if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(anchor) || !proofbound.FiniteVec(axis) {
 		return degUnknown
 	}
 	rel := proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(anchor))
@@ -154,7 +148,7 @@ func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) degState {
 
 // coincident decides whether two points are the same point.
 func (k *pairKernel) coincident(p, q r3.Vec) degState {
-	if !finiteVec(p) || !finiteVec(q) {
+	if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(q) {
 		return degUnknown
 	}
 	if proofarith.DvIsZero(proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(q))) {

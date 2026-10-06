@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -196,7 +198,7 @@ func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 		departure = capPatchDeparture
 	}
 	allow, ok := departure(f, b)
-	if !ok || isNonFinite(allow) || allow < 0 {
+	if !ok || proofbound.IsNonFinite(allow) || allow < 0 {
 		return ruledNormalAllowUnbounded
 	}
 	return math.Min(ruledNormalAllowUnbounded, allow)
@@ -243,8 +245,8 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	if !okB || !okU || !okV || !okL {
 		return 0, false
 	}
-	builtLo := new(big.Rat).Sub(baseLen.lo, ratAdd(uLen.hi, vLen.hi))
-	if builtLo.Sign() <= 0 || tagLen.lo.Sign() <= 0 {
+	builtLo := new(big.Rat).Sub(baseLen.Lo, proofbound.RatAdd(uLen.Hi, vLen.Hi))
+	if builtLo.Sign() <= 0 || tagLen.Lo.Sign() <= 0 {
 		return 0, false
 	}
 
@@ -254,25 +256,25 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	crossSq := new(big.Rat)
 	k0, ku, kv := ivVec3Cross(n, c0), ivVec3Cross(n, cu), ivVec3Cross(n, cv)
 	for i := range 3 {
-		comp := ratAdd(intervalAbsUpper(k0[i]), intervalAbsUpper(ku[i]), intervalAbsUpper(kv[i]))
+		comp := proofbound.RatAdd(intervalAbsUpper(k0[i]), intervalAbsUpper(ku[i]), intervalAbsUpper(kv[i]))
 		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
 	}
-	crossLen, okX := intervalSqrt(pointInterval(crossSq))
+	crossLen, okX := intervalSqrt(proofbound.PointInterval(crossSq))
 	if !okX {
 		return 0, false
 	}
 
-	sine := new(big.Rat).Quo(crossLen.hi, new(big.Rat).Mul(tagLen.lo, builtLo))
+	sine := new(big.Rat).Quo(crossLen.Hi, new(big.Rat).Mul(tagLen.Lo, builtLo))
 	if sine.Cmp(big.NewRat(1, 1)) >= 0 {
 		return 0, false
 	}
-	held := ratFloatUp(sine)
-	if isNonFinite(held) || held >= 1 {
+	held := proofbound.RatFloatUp(sine)
+	if proofbound.IsNonFinite(held) || held >= 1 {
 		return 0, false
 	}
 	// A chord never exceeds its own arc, so the angle bounds the distance
 	// between the two unit directions as well as their separation.
-	return upRound(math.Asin(held)), true
+	return proofbound.UpRound(math.Asin(held)), true
 }
 
 // capStraightEnds encloses one straight directrix's two held ruling endpoints,
@@ -326,17 +328,17 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	sigmaSq := new(big.Rat).Mul(sigma, sigma)
 	cosMax := intervalAbsUpper(cosH)
 	kappa := func(d capDirectrix) *big.Rat {
-		return intervalAbsUpper(intervalSub(
-			intervalMul(cosH, intervalSub(d.rho, pointInterval(tagRadius))),
-			intervalMul(sinH, d.z),
+		return intervalAbsUpper(proofbound.IntervalSub(
+			proofbound.IntervalMul(cosH, proofbound.IntervalSub(d.rho, proofbound.PointInterval(tagRadius))),
+			proofbound.IntervalMul(sinH, d.z),
 		))
 	}
 	// |n·r|: each end's own distance from the tag cone, plus the azimuth spread's
 	// second-order term (1 - cos σ <= σ²/2, exact for every real σ).
-	ruling := ratAdd(
+	ruling := proofbound.RatAdd(
 		kappa(side),
 		kappa(capped),
-		ratMul(cosMax, ratAdd(side.rho.hi, capped.rho.hi), sigmaSq, half),
+		proofbound.RatMul(cosMax, proofbound.RatAdd(side.rho.Hi, capped.rho.Hi), sigmaSq, half),
 	)
 
 	// |n·t̂|: the larger per-directrix ratio, widened by the cosine of half the
@@ -353,7 +355,7 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 		}
 		arms++
 		tangent = ratMax(tangent, new(big.Rat).Quo(
-			ratMul(cosMax, ratAdd(ratMul(d.rho.hi, sigma), d.offset)),
+			proofbound.RatMul(cosMax, proofbound.RatAdd(proofbound.RatMul(d.rho.Hi, sigma), d.offset)),
 			d.armLo,
 		))
 		spread.Add(spread, new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), d.offset), d.armLo))
@@ -367,41 +369,41 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 		if spread.Cmp(big.NewRat(1, 1)) >= 0 {
 			return 0, false
 		}
-		shrink := new(big.Rat).Sub(big.NewRat(1, 1), ratMul(spread, spread, big.NewRat(1, 8)))
+		shrink := new(big.Rat).Sub(big.NewRat(1, 1), proofbound.RatMul(spread, spread, big.NewRat(1, 8)))
 		tangent = new(big.Rat).Quo(tangent, shrink)
 	}
 
 	// |r| from above and |z_cap - z_side| from below: |r|² = Δz² + |Δq|² and
 	// |Δq|² = (ρ_cap - ρ_side)² + 2·ρ_side·ρ_cap·(1 - cos Δφ).
-	dz := intervalSub(capped.z, side.z)
+	dz := proofbound.IntervalSub(capped.z, side.z)
 	var dzLo *big.Rat
 	switch {
-	case dz.lo.Sign() > 0:
-		dzLo = dz.lo
-	case dz.hi.Sign() < 0:
-		dzLo = new(big.Rat).Neg(dz.hi)
+	case dz.Lo.Sign() > 0:
+		dzLo = dz.Lo
+	case dz.Hi.Sign() < 0:
+		dzLo = new(big.Rat).Neg(dz.Hi)
 	default:
 		return 0, false
 	}
-	rulingLen, okLen := intervalSqrt(pointInterval(ratAdd(
-		intervalSquare(dz).hi,
-		intervalSquare(intervalSub(capped.rho, side.rho)).hi,
-		ratMul(side.rho.hi, capped.rho.hi, sigmaSq),
+	rulingLen, okLen := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(
+		intervalSquare(dz).Hi,
+		intervalSquare(proofbound.IntervalSub(capped.rho, side.rho)).Hi,
+		proofbound.RatMul(side.rho.Hi, capped.rho.Hi, sigmaSq),
 	)))
 	if !okLen {
 		return 0, false
 	}
-	sine := new(big.Rat).Quo(ratAdd(ruling, ratMul(tangent, rulingLen.hi)), dzLo)
+	sine := new(big.Rat).Quo(proofbound.RatAdd(ruling, proofbound.RatMul(tangent, rulingLen.Hi)), dzLo)
 	if sine.Cmp(big.NewRat(1, 1)) >= 0 {
 		return 0, false
 	}
-	held := ratFloatUp(sine)
-	if isNonFinite(held) || held >= 1 {
+	held := proofbound.RatFloatUp(sine)
+	if proofbound.IsNonFinite(held) || held >= 1 {
 		return 0, false
 	}
 	// A chord never exceeds its own arc, so the angle bounds the distance
 	// between the two unit directions as well as their separation.
-	return upRound(math.Asin(held)), true
+	return proofbound.UpRound(math.Asin(held)), true
 }
 
 // capDirectrix is one built directrix reduced to the four readings the
@@ -410,8 +412,8 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 // smallest tangent arm |(X - C)_⊥| any of them gives, and the centre's own
 // distance off the tag's axis.
 type capDirectrix struct {
-	rho    ratInterval
-	z      ratInterval
+	rho    proofbound.RatInterval
+	z      proofbound.RatInterval
 	armLo  *big.Rat
 	offset *big.Rat
 	// point records a directrix that is a single point ON the tag's own axis,
@@ -453,7 +455,7 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 			}
 		}
 		zero := new(big.Rat)
-		return capDirectrix{rho: pointInterval(zero), z: pointInterval(zero), armLo: zero, offset: zero, point: true}, true
+		return capDirectrix{rho: proofbound.PointInterval(zero), z: proofbound.PointInterval(zero), armLo: zero, offset: zero, point: true}, true
 	}
 	if !capAxesParallel(ref.axis, tagAxis) {
 		return capDirectrix{}, false
@@ -466,10 +468,10 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 		return capDirectrix{}, false
 	}
 	out := capDirectrix{
-		rho:    interval(new(big.Rat).Sub(radius, offset.hi), new(big.Rat).Add(radius, offset.hi)),
+		rho:    proofbound.Interval(new(big.Rat).Sub(radius, offset.Hi), new(big.Rat).Add(radius, offset.Hi)),
 		z:      zc,
 		armLo:  new(big.Rat).Set(radius),
-		offset: offset.hi,
+		offset: offset.Hi,
 	}
 	for _, v := range ref.ends {
 		vIv, ok := ivVec3Of(v)
@@ -486,7 +488,7 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 		}
 		out.rho = intervalHull(out.rho, rho)
 		out.z = intervalHull(out.z, zv)
-		out.armLo = ratMin(out.armLo, arm.lo)
+		out.armLo = ratMin(out.armLo, arm.Lo)
 	}
 	return out, true
 }
@@ -520,11 +522,11 @@ func capRulingSkew(b capPatchBuilt, side, capped capDirectrix, ahat, origin ivVe
 			return nil, false
 		}
 		dot := ivVec3Dot(qs, qc)
-		if dot.lo.Sign() <= 0 {
+		if dot.Lo.Sign() <= 0 {
 			return nil, false
 		}
 		cross := ivVec3Dot(ahat, ivVec3Cross(qs, qc))
-		skew = ratMax(skew, new(big.Rat).Quo(intervalAbsUpper(cross), dot.lo))
+		skew = ratMax(skew, new(big.Rat).Quo(intervalAbsUpper(cross), dot.Lo))
 	}
 	return skew, true
 }
@@ -554,7 +556,7 @@ func capAxesParallel(a, b r3.Vec) bool {
 	}
 	cross := ivVec3Cross(av, bv)
 	for _, c := range cross {
-		if c.lo.Sign() != 0 || c.hi.Sign() != 0 {
+		if c.Lo.Sign() != 0 || c.Hi.Sign() != 0 {
 			return false
 		}
 	}

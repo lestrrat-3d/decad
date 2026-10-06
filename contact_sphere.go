@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -49,7 +51,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||
-		!finiteVec(rp.frame.Origin()) ||
+		!proofbound.FiniteVec(rp.frame.Origin()) ||
 		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		rp.ax.dU != 1 || rp.ax.dV != 0 ||
 		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
@@ -122,8 +124,8 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 	r2 := proofarith.DyMul(sphere.radius, sphere.radius)
 	switch proofarith.DyCmp(distance2, r2) {
 	case 1:
-		lo := ratFloatDown(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), sphere.radius.Rat()))
-		hi := ratFloatUp(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), sphere.radius.Rat()))
+		lo := proofbound.RatFloatDown(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), sphere.radius.Rat()))
+		hi := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), sphere.radius.Rat()))
 		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
 			report.Reason = ContactNoGapProof
 			return
@@ -134,7 +136,7 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		if right.Cmp(left) > 0 {
 			left = right
 		}
-		bound := ratFloatUp(left)
+		bound := proofbound.RatFloatUp(left)
 		if !finiteMeasurementValues(value, bound) ||
 			new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(bound)).Sign() <= 0 {
 			report.Reason = ContactNoGapProof

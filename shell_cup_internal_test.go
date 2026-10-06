@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -26,7 +28,7 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	floorDelta := func(from, sourceDelta, by float64) float64 {
 		to := from + by
-		return absSumUpper(sourceDelta, thicknessDelta, proofarith.AddRoundError(from, by, to))
+		return proofbound.AbsSumUpper(sourceDelta, thicknessDelta, proofarith.AddRoundError(from, by, to))
 	}
 	topFloorDelta := floorDelta(pp.z0, pp.z0Delta, thickness)
 	bottomInFloorDelta := floorDelta(pp.z1, pp.z1Delta, -thickness)
@@ -58,9 +60,9 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cp := cupPayloadFor(pp, ProfileRecord{}, tt.sense, thickness, thicknessDelta, 0, tt.removedEnd)
-			require.Equal(t, tt.openDelta, cp.openScalar().bound)
-			require.Equal(t, tt.outerDelta, cp.outerScalar().bound)
-			require.Equal(t, tt.cavDelta, cp.cavityScalar().bound)
+			require.Equal(t, tt.openDelta, cp.openScalar().Bound)
+			require.Equal(t, tt.outerDelta, cp.outerScalar().Bound)
+			require.Equal(t, tt.cavDelta, cp.cavityScalar().Bound)
 
 			requireCupPrismLevelBounds(t, cp.outerPrism(), cp.outerScalar(), cp.openScalar())
 			requireCupPrismLevelBounds(t, cp.cavityPrism(), cp.cavityScalar(), cp.openScalar())
@@ -68,15 +70,15 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 }
 
-func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b boundedScalar) {
+func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofbound.BoundedScalar) {
 	t.Helper()
-	if a.value <= b.value {
-		require.Equal(t, a.bound, prism.z0Delta)
-		require.Equal(t, b.bound, prism.z1Delta)
+	if a.Value <= b.Value {
+		require.Equal(t, a.Bound, prism.z0Delta)
+		require.Equal(t, b.Bound, prism.z1Delta)
 		return
 	}
-	require.Equal(t, b.bound, prism.z0Delta)
-	require.Equal(t, a.bound, prism.z1Delta)
+	require.Equal(t, b.Bound, prism.z0Delta)
+	require.Equal(t, a.Bound, prism.z1Delta)
 }
 
 // The displaced-cup fixtures give a recorded cup an offset displacement of
@@ -279,7 +281,7 @@ func TestDisplacedCupGateAndIdentity(t *testing.T) {
 	cp := displacedCup(t, Outward)
 	body, err := evalDisplacedCup(cp)
 	require.NoError(t, err)
-	gate, ok, err := fallbackGateDiameter(newWorkBudget(t.Context()), body)
+	gate, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), body)
 	require.NoError(t, err)
 	require.True(t, ok)
 	// The smallest denoted cup's farthest pair is its outer box's diagonal,
@@ -295,7 +297,7 @@ func TestDisplacedCupGateAndIdentity(t *testing.T) {
 
 	twin, err := evalDisplacedCup(cp)
 	require.NoError(t, err)
-	same, err := analyticBodiesEqual(newWorkBudget(t.Context()), body, twin)
+	same, err := analyticBodiesEqual(proofbound.NewWorkBudget(t.Context()), body, twin)
 	require.NoError(t, err)
 	require.False(t, same)
 }
@@ -305,7 +307,7 @@ func TestDisplacedCupGateAndIdentity(t *testing.T) {
 // within the offset displacement of that, so the reading must cover 1 − δ and
 // 1 + δ.
 func TestDisplacedCupMinRadius(t *testing.T) {
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	outer, err := offsetProfile(budget, rectangleRecord(-6, -2, 6, 2), -1, 2)
 	require.NoError(t, err)
 	cavity, err := offsetProfile(budget, rectangleRecord(-6, -2, 6, 2), -1, 1)

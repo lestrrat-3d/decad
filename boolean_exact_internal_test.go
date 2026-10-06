@@ -9,6 +9,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +21,7 @@ import (
 func requireFilterAgreesWithExact(t *testing.T, a, b, p r3.Vec, tau2 float64) bool {
 	t.Helper()
 	rejected := newSegFilter(a, b, tau2).tooFar(p)
-	accepted := onSegmentInterior3(xptOf(a), xptOf(b), xptOf(p))
+	accepted := onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p))
 	require.False(t, rejected && accepted,
 		`the filter is reject-only: it may never reject a candidate the exact predicate accepts`)
 	return rejected
@@ -32,7 +34,7 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 
 	t.Run(`a vertex exactly on the segment survives the filter`, func(t *testing.T) {
 		p := r3.NewVec(2.5, 1, -0.75) // exactly a quarter of the way along
-		require.True(t, onSegmentInterior3(xptOf(a), xptOf(b), xptOf(p)),
+		require.True(t, onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
 			`the case is only meaningful while the exact predicate accepts p`)
 		require.False(t, requireFilterAgreesWithExact(t, a, b, p, tau2),
 			`a vertex the exact predicate accepts must reach it`)
@@ -69,7 +71,7 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 
 	t.Run(`a vertex beyond the far endpoint is rejected`, func(t *testing.T) {
 		p := r3.NewVec(20, 8, -6) // on the carrier line, twice as far as b
-		require.False(t, onSegmentInterior3(xptOf(a), xptOf(b), xptOf(p)),
+		require.False(t, onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
 			`the case is only meaningful while the exact predicate rejects p`)
 		require.True(t, requireFilterAgreesWithExact(t, a, b, p, tau2),
 			`the clamped projection must see a point past the far endpoint`)
@@ -99,9 +101,9 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 		f := newSegFilter(lo, hi, segAdmissionRadius2(0, 1e154))
 		require.True(t, math.IsInf(f.vv, 1),
 			`the case is only meaningful once vv has saturated`)
-		require.False(t, isNonFinite(f.tau2),
+		require.False(t, proofbound.IsNonFinite(f.tau2),
 			`the case is only meaningful while the threshold is a real number`)
-		require.True(t, onSegmentInterior3(xptOf(lo), xptOf(hi), xptOf(mid)),
+		require.True(t, onSegmentInterior3(proofbound.XptOf(lo), proofbound.XptOf(hi), proofbound.XptOf(mid)),
 			`the exact predicate accepts the midpoint`)
 		require.False(t, requireFilterAgreesWithExact(t, lo, hi, mid, f.tau2),
 			`a saturated vv must abstain, never clamp to an endpoint`)
@@ -134,7 +136,7 @@ func TestSegFilterAbstainsOnEverySaturatedIntermediate(t *testing.T) {
 		far := r3.NewVec(1.3e154, 0, 0)
 		p := r3.NewVec(1.35e154, 0, 0)
 		f := newSegFilter(r3.Vec{}, far, segAdmissionRadius2(0, 1.35e154))
-		require.False(t, isNonFinite(f.vv), `the segment itself must stay finite`)
+		require.False(t, proofbound.IsNonFinite(f.vv), `the segment itself must stay finite`)
 		require.True(t, math.IsInf(p.Sub(f.a).Dot(p.Sub(f.a)), 1),
 			`the case is only meaningful once |P−A|² has saturated`)
 		require.False(t, f.tooFar(p),
@@ -174,11 +176,11 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 	for range 4000 {
 		a := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
 		b := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
-		xa, xb := xptOf(a), xptOf(b)
+		xa, xb := proofbound.XptOf(a), proofbound.XptOf(b)
 		// An exact interior point of the exact segment, at a rational parameter
 		// no float64 can represent, so its rounding is a genuine approximation.
 		xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
-		p := xp.vec()
+		p := xp.Vec()
 		require.True(t, onSegmentInterior3(xa, xb, xp),
 			`the constructed point must be exactly interior to the exact segment`)
 
@@ -232,9 +234,9 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 		for range 8 {
 			a := r3.NewVec(coord(s), coord(s), coord(s))
 			b := r3.NewVec(coord(s), coord(s), coord(s))
-			xa, xb := xptOf(a), xptOf(b)
+			xa, xb := proofbound.XptOf(a), proofbound.XptOf(b)
 			xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
-			p := xp.vec()
+			p := xp.Vec()
 			require.True(t, onSegmentInterior3(xa, xb, xp),
 				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
 
@@ -252,7 +254,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			// Record the OVERFLOW regime: an intermediate saturated while the
 			// threshold is still finite, so the filter could have rejected on
 			// it. Above that band τ² saturates too and no case proves anything.
-			if !isNonFinite(f.tau2) && (isNonFinite(f.vv) || isNonFinite(ww) || isNonFinite(c1)) {
+			if !proofbound.IsNonFinite(f.tau2) && (proofbound.IsNonFinite(f.vv) || proofbound.IsNonFinite(ww) || proofbound.IsNonFinite(c1)) {
 				saturated++
 			}
 
@@ -304,7 +306,7 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 	t.Run(`the radius dominates the coordinate rounding it is derived from`, func(t *testing.T) {
 		// Two roundings of a 100 mm coordinate, read as a 3D distance, is the
 		// worst (1) allows; the published radius must exceed it.
-		worst := 2 * radius3D(100*unitRoundoff)
+		worst := 2 * proofbound.Radius3D(100*proofbound.UnitRoundoff)
 		require.Greater(t, segAdmissionRadius2(0, 100), worst*worst,
 			`tau must cover two coordinate roundings at the mesh's own scale`)
 	})
@@ -363,10 +365,10 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 // xhpBenchTriangle is the fixed triangle every xhp differential test and
 // benchmark below sweeps against: a=(0.1,0.2,0.3), b=(1.7,0.35,-0.9),
 // c=(-0.55,2.25,0.125).
-func xhpBenchTriangle() (a, b, c xhp) {
-	return xhpOf(r3.NewVec(0.1, 0.2, 0.3)),
-		xhpOf(r3.NewVec(1.7, 0.35, -0.9)),
-		xhpOf(r3.NewVec(-0.55, 2.25, 0.125))
+func xhpBenchTriangle() (a, b, c proofbound.Xhp) {
+	return proofbound.XhpOf(r3.NewVec(0.1, 0.2, 0.3)),
+		proofbound.XhpOf(r3.NewVec(1.7, 0.35, -0.9)),
+		proofbound.XhpOf(r3.NewVec(-0.55, 2.25, 0.125))
 }
 
 // xhpGrid is the 8×8×8 probe grid every xhp differential test sweeps.
@@ -426,7 +428,7 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 	t.Parallel()
 	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
 	ra, rb, rc := refPointOf(a), refPointOf(b), refPointOf(c)
-	ha, hb, hc := xhpOf(a), xhpOf(b), xhpOf(c)
+	ha, hb, hc := proofbound.XhpOf(a), proofbound.XhpOf(b), proofbound.XhpOf(c)
 	tRat := big.NewRat(37, 91)
 	tn, td := big.NewInt(37), big.NewInt(91)
 
@@ -437,11 +439,11 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 				rp := refPointOf(p)
 
 				want := refOrientSign(ra, rb, rc, rp)
-				got := xhpOrientSign(ha, hb, hc, xhpOf(p))
+				got := xhpOrientSign(ha, hb, hc, proofbound.XhpOf(p))
 				require.Equalf(t, want, got, `direct probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 
 				wantLerp := refOrientSign(ra, rb, rc, refLerp(ra, rp, tRat))
-				gotLerp := xhpOrientSign(ha, hb, hc, xhpLerp(ha, xhpOf(p), tn, td))
+				gotLerp := xhpOrientSign(ha, hb, hc, xhpLerp(ha, proofbound.XhpOf(p), tn, td))
 				require.Equalf(t, wantLerp, gotLerp, `lerped probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 			}
 		}
@@ -455,7 +457,7 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 	t.Parallel()
 	a := r3.NewVec(0.1, 0.2, 0.3)
-	ra, ha := refPointOf(a), xhpOf(a)
+	ra, ha := refPointOf(a), proofbound.XhpOf(a)
 	tRat := big.NewRat(37, 91)
 	tn, td := big.NewInt(37), big.NewInt(91)
 
@@ -464,8 +466,8 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 			for _, pz := range xhpGrid {
 				p := r3.NewVec(px, py, pz)
 				want := refLerp(ra, refPointOf(p), tRat)
-				got := xhpLerp(ha, xhpOf(p), tn, td)
-				require.Positive(t, got.w.Sign(), `the homogeneous denominator must stay positive`)
+				got := xhpLerp(ha, proofbound.XhpOf(p), tn, td)
+				require.Positive(t, got.W.Sign(), `the homogeneous denominator must stay positive`)
 				gx, gy, gz := xhpRat(got)
 				require.Zerof(t, gx.Cmp(want.x), `x at probe (%v,%v,%v)`, px, py, pz)
 				require.Zerof(t, gy.Cmp(want.y), `y at probe (%v,%v,%v)`, px, py, pz)
@@ -473,7 +475,7 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 				wx, _ := want.x.Float64()
 				wy, _ := want.y.Float64()
 				wz, _ := want.z.Float64()
-				require.Equalf(t, r3.Vec{X: wx, Y: wy, Z: wz}, xhpVec(got), `float rounding at probe (%v,%v,%v)`, px, py, pz)
+				require.Equalf(t, r3.Vec{X: wx, Y: wy, Z: wz}, proofbound.XhpVec(got), `float rounding at probe (%v,%v,%v)`, px, py, pz)
 			}
 		}
 	}
@@ -489,42 +491,42 @@ func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
 		r3.NewVec(math.SmallestNonzeroFloat64, -math.MaxFloat64, 0),
 		r3.NewVec(-math.SmallestNonzeroFloat64, math.Ldexp(1, -1022), math.MaxFloat64),
 	} {
-		assertXHPRatEqual(t, xhpOf(v), refPointOf(v))
+		assertXHPRatEqual(t, proofbound.XhpOf(v), refPointOf(v))
 	}
-	a := xhpOf(r3.NewVec(0.1, -2.25, 3.5))
-	b := xhpOf(r3.NewVec(-1.75, 0.375, 4.125))
+	a := proofbound.XhpOf(r3.NewVec(0.1, -2.25, 3.5))
+	b := proofbound.XhpOf(r3.NewVec(-1.75, 0.375, 4.125))
 	aBefore, bBefore := xhpKeyOf(a), xhpKeyOf(b)
 	ra, rb := refPointOf(r3.NewVec(0.1, -2.25, 3.5)), refPointOf(r3.NewVec(-1.75, 0.375, 4.125))
 
-	gotSub := xhpSub(a, b)
+	gotSub := proofbound.XhpSub(a, b)
 	wantSub := refSub(ra, rb)
 	assertXHPRatEqual(t, gotSub, wantSub)
 	sharedA, sharedB := r3.NewVec(1.5, 2.25, 0), r3.NewVec(-0.5, 1.25, 0)
-	assertXHPRatEqual(t, xhpSub(xhpOf(sharedA), xhpOf(sharedB)),
+	assertXHPRatEqual(t, proofbound.XhpSub(proofbound.XhpOf(sharedA), proofbound.XhpOf(sharedB)),
 		refSub(refPointOf(sharedA), refPointOf(sharedB)))
 	gotCross := xhpCross(a, b)
 	wantCross := refCross(ra, rb)
 	assertXHPRatEqual(t, gotCross, wantCross)
-	gotDot := new(big.Rat).SetFrac(xhpDotNum(a, b), new(big.Int).Mul(a.w, b.w))
+	gotDot := new(big.Rat).SetFrac(proofbound.XhpDotNum(a, b), new(big.Int).Mul(a.W, b.W))
 	require.Zero(t, gotDot.Cmp(refDot(ra, rb)))
 
-	for _, got := range []xhp{gotSub, gotCross} {
-		for _, limb := range []*big.Int{got.x, got.y, got.z, got.w} {
-			require.NotSame(t, limb, a.x)
-			require.NotSame(t, limb, a.y)
-			require.NotSame(t, limb, a.z)
-			require.NotSame(t, limb, a.w)
-			require.NotSame(t, limb, b.x)
-			require.NotSame(t, limb, b.y)
-			require.NotSame(t, limb, b.z)
-			require.NotSame(t, limb, b.w)
+	for _, got := range []proofbound.Xhp{gotSub, gotCross} {
+		for _, limb := range []*big.Int{got.X, got.Y, got.Z, got.W} {
+			require.NotSame(t, limb, a.X)
+			require.NotSame(t, limb, a.Y)
+			require.NotSame(t, limb, a.Z)
+			require.NotSame(t, limb, a.W)
+			require.NotSame(t, limb, b.X)
+			require.NotSame(t, limb, b.Y)
+			require.NotSame(t, limb, b.Z)
+			require.NotSame(t, limb, b.W)
 		}
 	}
 	require.Equal(t, aBefore, xhpKeyOf(a))
 	require.Equal(t, bBefore, xhpKeyOf(b))
 }
 
-func assertXHPRatEqual(t *testing.T, got xhp, want refPoint) {
+func assertXHPRatEqual(t *testing.T, got proofbound.Xhp, want refPoint) {
 	t.Helper()
 	x, y, z := xhpRat(got)
 	require.Zero(t, x.Cmp(want.x))
@@ -539,11 +541,11 @@ func assertXHPRatEqual(t *testing.T, got xhp, want refPoint) {
 func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
 	t.Parallel()
 	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
-	xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
+	xa, xb, xc := proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c)
 	for _, px := range xhpGrid {
 		for _, py := range xhpGrid {
 			for _, pz := range xhpGrid {
-				p := xptOf(r3.NewVec(px, py, pz))
+				p := proofbound.XptOf(r3.NewVec(px, py, pz))
 				require.Equalf(t, orientSignExact(xa, xb, xc, p), orientRat(xa, xb, xc, p).Sign(),
 					`probe (%v,%v,%v): the sign and the materialised value must agree`, px, py, pz)
 			}
@@ -554,8 +556,8 @@ func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
 // xhpKeyOf is a decimal rendering of the four canonical integers. It stays
 // local so the differential tests compare canonical tuples independently of
 // production's packed key encoding.
-func xhpKeyOf(p xhp) string {
-	return p.x.String() + `|` + p.y.String() + `|` + p.z.String() + `|` + p.w.String()
+func xhpKeyOf(p proofbound.Xhp) string {
+	return p.X.String() + `|` + p.Y.String() + `|` + p.Z.String() + `|` + p.W.String()
 }
 
 // TestXHPCanonIsAUniqueIdentity is what stands between this change and a
@@ -573,22 +575,22 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 	depth2 := xhpLerp(depth1, c, tn, td)
 
 	six := big.NewInt(6)
-	scaled := xhp{
-		x: new(big.Int).Mul(depth2.x, six),
-		y: new(big.Int).Mul(depth2.y, six),
-		z: new(big.Int).Mul(depth2.z, six),
-		w: new(big.Int).Mul(depth2.w, six),
+	scaled := proofbound.Xhp{
+		X: new(big.Int).Mul(depth2.X, six),
+		Y: new(big.Int).Mul(depth2.Y, six),
+		Z: new(big.Int).Mul(depth2.Z, six),
+		W: new(big.Int).Mul(depth2.W, six),
 	}
 
-	canonA, canonB := xhpCanon(depth2), xhpCanon(scaled)
+	canonA, canonB := proofbound.XhpCanon(depth2), proofbound.XhpCanon(scaled)
 	require.Equal(t, xhpKeyOf(canonA), xhpKeyOf(canonB),
 		`two spellings of one point must canonicalise to the same key`)
-	require.Equal(t, xpt(depth2).key(), xpt(scaled).key(),
+	require.Equal(t, proofbound.Xpt(depth2).Key(), proofbound.Xpt(scaled).Key(),
 		`the packed production key must canonicalise both spellings identically`)
-	require.Equal(t, canonA.x.String(), canonB.x.String())
-	require.Equal(t, canonA.y.String(), canonB.y.String())
-	require.Equal(t, canonA.z.String(), canonB.z.String())
-	require.Equal(t, canonA.w.String(), canonB.w.String())
+	require.Equal(t, canonA.X.String(), canonB.X.String())
+	require.Equal(t, canonA.Y.String(), canonB.Y.String())
+	require.Equal(t, canonA.Z.String(), canonB.Z.String())
+	require.Equal(t, canonA.W.String(), canonB.W.String())
 
 	rx, ry, rz := xhpRat(depth2)
 	crx, cry, crz := xhpRat(canonA)
@@ -599,18 +601,18 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 
 func TestXPTKeyDistinguishesCoordinates(t *testing.T) {
 	t.Parallel()
-	points := []xpt{
-		xptOf(r3.NewVec(0, 0, 0)),
-		xptOf(r3.NewVec(1, 23, 4)),
-		xptOf(r3.NewVec(12, 3, 4)),
-		xptOf(r3.NewVec(-1, 23, 4)),
-		xptOf(r3.NewVec(1, -23, 4)),
-		xptOf(r3.NewVec(1, 23, -4)),
-		xptOf(r3.NewVec(0.5, 23, 4)),
+	points := []proofbound.Xpt{
+		proofbound.XptOf(r3.NewVec(0, 0, 0)),
+		proofbound.XptOf(r3.NewVec(1, 23, 4)),
+		proofbound.XptOf(r3.NewVec(12, 3, 4)),
+		proofbound.XptOf(r3.NewVec(-1, 23, 4)),
+		proofbound.XptOf(r3.NewVec(1, -23, 4)),
+		proofbound.XptOf(r3.NewVec(1, 23, -4)),
+		proofbound.XptOf(r3.NewVec(0.5, 23, 4)),
 	}
 	seen := make(map[string]struct{}, len(points))
 	for _, p := range points {
-		key := p.key()
+		key := p.Key()
 		require.NotContains(t, seen, key)
 		seen[key] = struct{}{}
 	}
@@ -622,10 +624,10 @@ func TestXPTKeyDistinguishesCoordinates(t *testing.T) {
 // depth 1, 823 at depth 2, 14113 at depth 6, against 59-92 bits for the
 // reduced big.Rat over the same chain). Stripping the common power of two
 // after every lerp is what keeps it bounded — measured 462 bits at depth 6 —
-// without paying xhpCanon's full GCD.
+// without paying proofbound.XhpCanon's full GCD.
 func TestXHPDenominatorStaysBounded(t *testing.T) {
 	t.Parallel()
-	p := xhpOf(r3.NewVec(0.1, 0.2, 0.3))
+	p := proofbound.XhpOf(r3.NewVec(0.1, 0.2, 0.3))
 	targets := []r3.Vec{
 		r3.NewVec(1.7, 0.35, -0.9),
 		r3.NewVec(-0.55, 2.25, 0.125),
@@ -636,9 +638,9 @@ func TestXHPDenominatorStaysBounded(t *testing.T) {
 	}
 	tn, td := big.NewInt(37), big.NewInt(91)
 	for _, target := range targets {
-		p = xhpStripTwosOwned(xhpLerp(p, xhpOf(target), tn, td))
+		p = proofbound.XhpStripTwosOwned(xhpLerp(p, proofbound.XhpOf(target), tn, td))
 	}
-	require.Less(t, p.w.BitLen(), 4096,
+	require.Less(t, p.W.BitLen(), 4096,
 		`the stripped denominator must stay far below the unreduced 14113-bit growth at the same depth`)
 }
 
@@ -673,7 +675,7 @@ func TestPolyArea2SignAgreesWithRationalArea(t *testing.T) {
 				b := points[(i+1)%len(points)]
 				want.Add(want, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(b.u, a.v)))
 			}
-			got, err := polyArea2Sign(newWorkBudget(t.Context()), points)
+			got, err := polyArea2Sign(proofbound.NewWorkBudget(t.Context()), points)
 			require.NoError(t, err)
 			require.Equal(t, want.Sign(), got)
 		}
@@ -686,7 +688,7 @@ func TestPolyArea2SignAgreesWithRationalArea(t *testing.T) {
 // allocs/op).
 func BenchmarkOrientSignExact(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
-	p := xhpOf(r3.NewVec(0.3, -1, 2.75))
+	p := proofbound.XhpOf(r3.NewVec(0.3, -1, 2.75))
 	b.ResetTimer()
 	for b.Loop() {
 		xhpOrientSign(ta, tb, tc, p)
@@ -714,8 +716,8 @@ func BenchmarkPlaneCrossingChain(b *testing.B) {
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p1 := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-		p2 := xhpStripTwosOwned(xhpLerp(tb, tc, tn, td))
+		p1 := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+		p2 := proofbound.XhpStripTwosOwned(xhpLerp(tb, tc, tn, td))
 		xhpOrientSign(ta, p1, p2, tc)
 	}
 }
@@ -723,16 +725,16 @@ func BenchmarkPlaneCrossingChain(b *testing.B) {
 // BenchmarkLerpDepth3Orient is the growth-control benchmark: three nested
 // lerps, each stripped of its common power of two before feeding the next,
 // then one orient sign (baseline: 31.4us/432 allocs/op; the arrangement to
-// avoid — a full xhpCanon on every construction instead of xhpStripTwos —
-// measured 23.4us, only 1.3x, per this file's xhpCanon doc comment).
+// avoid — a full proofbound.XhpCanon on every construction instead of xhpStripTwos —
+// measured 23.4us, only 1.3x, per this file's proofbound.XhpCanon doc comment).
 func BenchmarkLerpDepth3Orient(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-		p = xhpStripTwosOwned(xhpLerp(p, tc, tn, td))
-		p = xhpStripTwosOwned(xhpLerp(p, ta, tn, td))
+		p := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+		p = proofbound.XhpStripTwosOwned(xhpLerp(p, tc, tn, td))
+		p = proofbound.XhpStripTwosOwned(xhpLerp(p, ta, tn, td))
 		xhpOrientSign(ta, tb, tc, p)
 	}
 }
@@ -746,11 +748,11 @@ func BenchmarkLerpDepth3Orient(b *testing.B) {
 func BenchmarkExactVertexKey(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
-	p1 := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-	p2 := xhpStripTwosOwned(xhpLerp(p1, tc, tn, td))
+	p1 := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+	p2 := proofbound.XhpStripTwosOwned(xhpLerp(p1, tc, tn, td))
 	b.ResetTimer()
 	for b.Loop() {
-		_ = xpt(p2).key()
+		_ = proofbound.Xpt(p2).Key()
 	}
 }
 
@@ -890,10 +892,10 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 // as the existing rational projection path on every coordinate-plane choice.
 func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
 	t.Parallel()
-	points := [3]xpt{
-		xptOf(r3.NewVec(0.1, 2.0, -3.5)),
-		xptOf(r3.NewVec(4.25, -1.5, 0.75)),
-		xptOf(r3.NewVec(-2.0, 3.125, 5.5)),
+	points := [3]proofbound.Xpt{
+		proofbound.XptOf(r3.NewVec(0.1, 2.0, -3.5)),
+		proofbound.XptOf(r3.NewVec(4.25, -1.5, 0.75)),
+		proofbound.XptOf(r3.NewVec(-2.0, 3.125, 5.5)),
 	}
 	for _, axes := range [][2]int{{0, 1}, {2, 0}, {1, 2}} {
 		hom := [3]xp2{
@@ -923,7 +925,7 @@ func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
 // still states the behaviour production had before the change. If production
 // and this function disagree, production changed a classification and the
 // change is wrong, not this copy.
-func referenceMeshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
+func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
 	for _, ray := range axisRays {
 		crossings := 0
 		ambiguous := false
@@ -956,14 +958,14 @@ func referenceMeshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris
 			}
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
-			xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
-			n := xcross(xsub(xb, xa), xsub(xc, xa))
+			xa, xb, xc := proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c)
+			n := xcross(proofbound.Xsub(xb, xa), proofbound.Xsub(xc, xa))
 			nAxis := xIntCoordOf(n, ray.axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true
 				break
 			}
-			tNum := xdotNum(xsub(xa, p), n)
+			tNum := proofbound.XdotNum(proofbound.Xsub(xa, p), n)
 			switch s := tNum.Sign() * nAxis.Sign() * ray.dir; {
 			case s > 0:
 				crossings++
@@ -1097,7 +1099,7 @@ func parityRat(o float64, num, den int64) *big.Rat {
 // parityCase is one query point under a stable name.
 type parityCase struct {
 	name string
-	p    xpt
+	p    proofbound.Xpt
 }
 
 // parityCubeQueries builds the query points for the unit cube translated by o.
@@ -1106,14 +1108,14 @@ type parityCase struct {
 func parityCubeQueries(o r3.Vec) []parityCase {
 	v := parityCubeVerts(o)
 	return []parityCase{
-		{`interior`, xptOf(r3.NewVec(o.X+0.25, o.Y+0.375, o.Z+0.5625))},
-		{`exterior`, xptOf(r3.NewVec(o.X+2, o.Y+0.375, o.Z+0.5625))},
-		{`face interior`, xptOf(r3.NewVec(o.X, o.Y+0.25, o.Z+0.375))},
-		{`edge`, xptOf(r3.NewVec(o.X, o.Y, o.Z+0.375))},
-		{`vertex`, xptOf(v[0])},
-		{`one ulp inside the face`, xptOf(r3.NewVec(math.Nextafter(o.X, o.X+1), o.Y+0.25, o.Z+0.375))},
-		{`one ulp outside the face`, xptOf(r3.NewVec(math.Nextafter(o.X, o.X-1), o.Y+0.25, o.Z+0.375))},
-		{`facet centroid`, xCentroid(xptOf(v[0]), xptOf(v[2]), xptOf(v[1]))},
+		{`interior`, proofbound.XptOf(r3.NewVec(o.X+0.25, o.Y+0.375, o.Z+0.5625))},
+		{`exterior`, proofbound.XptOf(r3.NewVec(o.X+2, o.Y+0.375, o.Z+0.5625))},
+		{`face interior`, proofbound.XptOf(r3.NewVec(o.X, o.Y+0.25, o.Z+0.375))},
+		{`edge`, proofbound.XptOf(r3.NewVec(o.X, o.Y, o.Z+0.375))},
+		{`vertex`, proofbound.XptOf(v[0])},
+		{`one ulp inside the face`, proofbound.XptOf(r3.NewVec(math.Nextafter(o.X, o.X+1), o.Y+0.25, o.Z+0.375))},
+		{`one ulp outside the face`, proofbound.XptOf(r3.NewVec(math.Nextafter(o.X, o.X-1), o.Y+0.25, o.Z+0.375))},
+		{`facet centroid`, xCentroid(proofbound.XptOf(v[0]), proofbound.XptOf(v[2]), proofbound.XptOf(v[1]))},
 		{`rational interior`, xptFromRat(
 			parityRat(o.X, 1, 3), parityRat(o.Y, 1, 7), parityRat(o.Z, 5, 11))},
 	}
@@ -1154,11 +1156,11 @@ func requireParityOutcome(t *testing.T, arm string, want, got parityOutcome) {
 func parityTetraQueries() []parityCase {
 	v := parityTetraVerts()
 	return []parityCase{
-		{`interior`, xptOf(r3.NewVec(0.125, 0.1875, 0.25))},
-		{`exterior`, xptOf(r3.NewVec(2, 0.1875, 0.25))},
-		{`slanted face`, xptOf(r3.NewVec(0.25, 0.25, 0.5))},
-		{`vertex`, xptOf(r3.NewVec(0, 0, 0))},
-		{`facet centroid`, xCentroid(xptOf(v[1]), xptOf(v[2]), xptOf(v[3]))},
+		{`interior`, proofbound.XptOf(r3.NewVec(0.125, 0.1875, 0.25))},
+		{`exterior`, proofbound.XptOf(r3.NewVec(2, 0.1875, 0.25))},
+		{`slanted face`, proofbound.XptOf(r3.NewVec(0.25, 0.25, 0.5))},
+		{`vertex`, proofbound.XptOf(r3.NewVec(0, 0, 0))},
+		{`facet centroid`, xCentroid(proofbound.XptOf(v[1]), proofbound.XptOf(v[2]), proofbound.XptOf(v[3]))},
 		{`rational interior`, xptFromRat(big.NewRat(1, 7), big.NewRat(1, 11), big.NewRat(1, 13))},
 	}
 }
@@ -1169,7 +1171,7 @@ func parityTetraQueries() []parityCase {
 // needs already materialized — because a cached entry rebuilt wrong or used as
 // an arithmetic destination would only show on the warm pass. It returns the
 // reference's own answer so a caller can assert a known outcome on top.
-func requireParityMatches(ctx context.Context, t *testing.T, p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool) {
+func requireParityMatches(ctx context.Context, t *testing.T, p proofbound.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool) {
 	t.Helper()
 	wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, p, verts, tris, subset)
 	want := parityOutcome{inside: wantIn, onBoundary: wantBoundary, err: wantErr}
@@ -1213,17 +1215,17 @@ func TestParityQueryProjectionMatchesReference(t *testing.T) {
 
 		// The known outcomes, asserted independently of the reference.
 		inside, onBoundary := requireParityMatches(ctx, t,
-			xptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, subset)
+			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, subset)
 		require.True(t, inside, `(0.25, 0.375, 0.5625) is interior to the unit cube`)
 		require.False(t, onBoundary, `an interior point is not on the boundary`)
 
 		inside, onBoundary = requireParityMatches(ctx, t,
-			xptOf(r3.NewVec(2, 0.375, 0.5625)), verts, tris, subset)
+			proofbound.XptOf(r3.NewVec(2, 0.375, 0.5625)), verts, tris, subset)
 		require.False(t, inside, `(2, 0.375, 0.5625) is outside the unit cube`)
 		require.False(t, onBoundary, `an exterior point is not on the boundary`)
 
 		inside, onBoundary = requireParityMatches(ctx, t,
-			xptOf(r3.NewVec(0, 0.25, 0.375)), verts, tris, subset)
+			proofbound.XptOf(r3.NewVec(0, 0.25, 0.375)), verts, tris, subset)
 		require.False(t, inside, `a boundary point is not reported inside`)
 		require.True(t, onBoundary, `(0, 0.25, 0.375) lies on the cube's x = 0 face`)
 	})
@@ -1283,7 +1285,7 @@ func TestParityQueryProjectionMatchesReference(t *testing.T) {
 		})
 		t.Run(`first query against the second component`, func(t *testing.T) {
 			inside, onBoundary := requireParityMatches(ctx, t,
-				xptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, rest)
+				proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, rest)
 			require.False(t, inside, `a point in the first cube is outside the second`)
 			require.False(t, onBoundary, `it is not on the second cube's boundary either`)
 		})
@@ -1292,7 +1294,7 @@ func TestParityQueryProjectionMatchesReference(t *testing.T) {
 	t.Run(`empty subset`, func(t *testing.T) {
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
 		inside, onBoundary := requireParityMatches(ctx, t,
-			xptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, nil)
+			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), verts, tris, nil)
 		require.False(t, inside, `no facet can enclose the query`)
 		require.False(t, onBoundary, `no facet can carry the query`)
 	})
@@ -1302,7 +1304,7 @@ func TestParityQueryProjectionMatchesReference(t *testing.T) {
 		cancel()
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
 		subset := parityIdentitySubset(len(tris))
-		p := xptOf(r3.NewVec(0.25, 0.375, 0.5625))
+		p := proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625))
 
 		_, _, wantErr := referenceMeshParityContext(canceled, p, verts, tris, subset)
 		require.ErrorIs(t, wantErr, context.Canceled, `the reference reports the cancellation`)
@@ -1318,7 +1320,7 @@ func TestParityQueryProjectionMatchesReference(t *testing.T) {
 	t.Run(`every ray hits a facet vertex`, func(t *testing.T) {
 		verts, tris := paritySoupVerts(), paritySoupTris()
 		subset := parityIdentitySubset(len(tris))
-		p := xptOf(r3.NewVec(0, 0, 0))
+		p := proofbound.XptOf(r3.NewVec(0, 0, 0))
 
 		_, _, wantErr := referenceMeshParityContext(ctx, p, verts, tris, subset)
 		require.ErrorIs(t, wantErr, ErrBooleanFailed, `the reference refuses rather than guessing`)
@@ -1411,14 +1413,14 @@ func parityReuseFixtures() []parityReuseFixture {
 			verts:   paritySoupVerts(),
 			tris:    paritySoupTris(),
 			subsets: []parityNamedSubset{{`stored order`, parityIdentitySubset(len(paritySoupTris()))}},
-			queries: []parityCase{{`origin`, xptOf(r3.NewVec(0, 0, 0))}},
+			queries: []parityCase{{`origin`, proofbound.XptOf(r3.NewVec(0, 0, 0))}},
 		},
 	}
 }
 
 // requirePreparedMatchesReference requires one query against one prepared
 // object to reproduce the frozen reference on the same buffers.
-func requirePreparedMatchesReference(ctx context.Context, t *testing.T, arm string, prepared *parityMesh, p xpt, subset []int) {
+func requirePreparedMatchesReference(ctx context.Context, t *testing.T, arm string, prepared *parityMesh, p proofbound.Xpt, subset []int) {
 	t.Helper()
 	wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, p, prepared.verts, prepared.tris, subset)
 	gotIn, gotBoundary, gotErr := meshParityPreparedContext(ctx, p, prepared, subset)
@@ -1541,7 +1543,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 			rest[i] += 12
 		}
 		prepared := newParityMesh(verts, tris)
-		p := xptOf(r3.NewVec(0.25, 0.375, 0.5625))
+		p := proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625))
 
 		firstIn, firstBoundary, firstErr := meshParityPreparedContext(ctx, p, prepared, first)
 		require.NoError(t, firstErr)
@@ -1582,7 +1584,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				prepared := newParityMesh(verts, tris)
-				p := xptOf(tc.query)
+				p := proofbound.XptOf(tc.query)
 				requirePreparedMatchesReference(ctx, t, tc.name, prepared, p, subset)
 				require.Equal(t, tc.axes, parityAllocatedAxes(prepared),
 					`only the axes actually swept may hold a projection slice`)
@@ -1602,7 +1604,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 
 		// Sweep all three axes first, so the snapshot covers every slot.
 		requirePreparedMatchesReference(ctx, t, `seed`, prepared,
-			xptOf(r3.NewVec(0.25, 0.75, 0.25)), subset)
+			proofbound.XptOf(r3.NewVec(0.25, 0.75, 0.25)), subset)
 		snapshot := parityCacheSnapshot(prepared)
 		require.Equal(t, [3]bool{true, true, true}, parityAllocatedAxes(prepared))
 
@@ -1631,11 +1633,11 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		// Axis 0 projects onto (y, z), which the offset leaves alone, so the
 		// separation shows on an axis the offset does move.
 		firstIn, _, err := meshParityPreparedContext(ctx,
-			xptOf(r3.NewVec(3.25, 0.375, 0.5625)), firstMesh, subset)
+			proofbound.XptOf(r3.NewVec(3.25, 0.375, 0.5625)), firstMesh, subset)
 		require.NoError(t, err)
 		require.False(t, firstIn, `a point in the second cube is outside the first`)
 		secondIn, _, err := meshParityPreparedContext(ctx,
-			xptOf(r3.NewVec(3.25, 0.375, 0.5625)), secondMesh, subset)
+			proofbound.XptOf(r3.NewVec(3.25, 0.375, 0.5625)), secondMesh, subset)
 		require.NoError(t, err)
 		require.True(t, secondIn, `and interior to the second`)
 	})
@@ -1644,7 +1646,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
 		prepared := newParityMesh(verts, tris)
 		inside, onBoundary, err := meshParityPreparedContext(ctx,
-			xptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, nil)
+			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, nil)
 		require.NoError(t, err)
 		require.False(t, inside)
 		require.False(t, onBoundary)
@@ -1660,7 +1662,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		prepared := newParityMesh(verts, tris)
 
 		_, _, err := meshParityPreparedContext(canceled,
-			xptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, subset)
+			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, subset)
 		require.ErrorIs(t, err, context.Canceled, `a nonempty subset observes the cancellation`)
 		require.Equal(t, [3]bool{false, false, false}, parityAllocatedAxes(prepared),
 			`the context check runs before the first projection`)
@@ -1673,7 +1675,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		prepared := newParityMesh(verts, tris)
 
 		requirePreparedMatchesReference(ctx, t, `first component`, prepared,
-			xptOf(r3.NewVec(0.25, 0.375, 0.5625)), parityIdentitySubset(12))
+			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), parityIdentitySubset(12))
 
 		for axis := range prepared.projections {
 			if prepared.projections[axis] == nil {
@@ -1712,14 +1714,14 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 
 // parityBenchMesh builds one vertex/triangle buffer holding that many disjoint
 // closed unit cubes spaced along x, plus a query interior to the first.
-func parityBenchMesh(cubes int) ([]r3.Vec, [][3]int, []int, xpt) {
+func parityBenchMesh(cubes int) ([]r3.Vec, [][3]int, []int, proofbound.Xpt) {
 	verts := make([]r3.Vec, 0, cubes*8)
 	tris := make([][3]int, 0, cubes*12)
 	for k := range cubes {
 		verts = append(verts, parityCubeVerts(r3.NewVec(float64(3*k), 0, 0))...)
 		tris = append(tris, parityCubeTris(8*k)...)
 	}
-	return verts, tris, parityIdentitySubset(len(tris)), xptOf(r3.NewVec(0.25, 0.375, 0.5625))
+	return verts, tris, parityIdentitySubset(len(tris)), proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625))
 }
 
 // requireBenchInside checks one benchmark iteration's answer, so a faster wrong
@@ -1749,7 +1751,7 @@ func BenchmarkParityQueryProjection(b *testing.B) {
 
 	for _, arm := range []struct {
 		name string
-		fn   func(context.Context, xpt, []r3.Vec, [][3]int, []int) (bool, bool, error)
+		fn   func(context.Context, proofbound.Xpt, []r3.Vec, [][3]int, []int) (bool, bool, error)
 	}{
 		{`reference`, referenceMeshParityContext},
 		{`production`, meshParityContext},
@@ -1977,7 +1979,7 @@ func parityBoxQueries(fx parityFixture) []parityCase {
 				c[ray.v] = box.minV
 				out = append(out, parityCase{
 					fmt.Sprintf(`axis %d facet 0 u-bound %v`, ray.axis, at),
-					xptOf(r3.NewVec(c[0], c[1], c[2])),
+					proofbound.XptOf(r3.NewVec(c[0], c[1], c[2])),
 				})
 				// The same place reached as an exact rational a hair off the
 				// bound, which is what a midpoint or centroid witness is.
@@ -2075,7 +2077,7 @@ func TestParityBoxFilterMatchesTheUnfilteredKernel(t *testing.T) {
 	for range 8 {
 		queries = append(queries, parityCase{
 			fmt.Sprintf(`vertex %d`, len(queries)),
-			xptOf(verts[rng.IntN(len(verts))]),
+			proofbound.XptOf(verts[rng.IntN(len(verts))]),
 		})
 	}
 
@@ -2124,7 +2126,7 @@ func TestParityBoxFilterLeavesAnEmptySubsetAlone(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	verts, tris := parityScatterMesh(2)
-	p := xptOf(parityScatterInterior())
+	p := proofbound.XptOf(parityScatterInterior())
 
 	t.Run(`an empty subset builds no boxes`, func(t *testing.T) {
 		pm := newParityMesh(verts, tris)
@@ -2156,7 +2158,7 @@ func BenchmarkParityBoxFilter(b *testing.B) {
 	ctx := b.Context()
 	// Interior to the tetrahedron at the grid's origin, so the answer the
 	// benchmark checks is `inside` and both arms must agree on it.
-	p := xptOf(parityScatterInterior())
+	p := proofbound.XptOf(parityScatterInterior())
 
 	for _, arm := range []struct {
 		name       string

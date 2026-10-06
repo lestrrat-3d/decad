@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -155,16 +157,16 @@ func wallNormalDecision(w sideWalk, m placedFrameMap, pull r3.Vec) (pullVerdict,
 	if !okP {
 		return pullUndecided, false
 	}
-	pull2 := ivVec3NormSq(pv).lo
-	du := ivVec3Dot(m.du, pv).lo
-	dv := ivVec3Dot(m.dv, pv).lo
+	pull2 := ivVec3NormSq(pv).Lo
+	du := ivVec3Dot(m.du, pv).Lo
+	dv := ivVec3Dot(m.dv, pv).Lo
 
 	if !w.isCircular() {
 		tu, tv := proofarith.FloatRat(w.tanInU), proofarith.FloatRat(w.tanInV)
 		if tu == nil || tv == nil {
 			return pullUndecided, false
 		}
-		t2 := ratAdd(ratMul(tu, tu), ratMul(tv, tv))
+		t2 := proofbound.RatAdd(proofbound.RatMul(tu, tu), proofbound.RatMul(tv, tv))
 		num := new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
 		return decideRationalComponent(num, t2, pull2), true
 	}
@@ -197,9 +199,9 @@ func capNormalDecision(m placedFrameMap, pull r3.Vec, sign float64) (pullVerdict
 	if !okP || rSign == nil {
 		return pullUndecided, false
 	}
-	pull2 := ivVec3NormSq(pv).lo
-	scale2 := ivVec3NormSq(m.dn).lo
-	num := new(big.Rat).Mul(rSign, ivVec3Dot(m.dn, pv).lo)
+	pull2 := ivVec3NormSq(pv).Lo
+	scale2 := ivVec3NormSq(m.dn).Lo
+	num := new(big.Rat).Mul(rSign, ivVec3Dot(m.dn, pv).Lo)
 	return decideRationalComponent(num, scale2, pull2), true
 }
 
@@ -235,32 +237,32 @@ func circularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 	if width.Sign() < 0 {
 		return nil, nil, nil, nil, false
 	}
-	amp, okAmp := intervalSqrt(pointInterval(ratAdd(ratMul(a, a), ratMul(b, b))))
+	amp, okAmp := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return nil, nil, nil, nil, false
 	}
-	peakLo, peakHi := amp.lo, amp.hi
-	troughLo, troughHi := new(big.Rat).Neg(amp.hi), new(big.Rat).Neg(amp.lo)
+	peakLo, peakHi := amp.Lo, amp.Hi
+	troughLo, troughHi := new(big.Rat).Neg(amp.Hi), new(big.Rat).Neg(amp.Lo)
 	if wholeTurn {
 		return troughLo, troughHi, peakLo, peakHi, true
 	}
 
 	const arcs = 4
-	sins, coss := make([]ratInterval, arcs+1), make([]ratInterval, arcs+1)
+	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
 	for j := range arcs + 1 {
-		theta := new(big.Rat).Add(rlo, ratMul(width, big.NewRat(int64(j), arcs)))
+		theta := new(big.Rat).Add(rlo, proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
 		sin, cos, okT := radSinCosInterval(theta)
 		if !okT {
 			return nil, nil, nil, nil, false
 		}
 		sins[j], coss[j] = sin, cos
-		at := intervalAdd(intervalScale(cos, a), intervalScale(sin, b))
+		at := proofbound.IntervalAdd(proofbound.IntervalScale(cos, a), proofbound.IntervalScale(sin, b))
 		if j == 0 {
-			minLo, minHi, maxLo, maxHi = at.lo, at.hi, at.lo, at.hi
+			minLo, minHi, maxLo, maxHi = at.Lo, at.Hi, at.Lo, at.Hi
 			continue
 		}
-		minLo, minHi = ratMin(minLo, at.lo), ratMin(minHi, at.hi)
-		maxLo, maxHi = ratMax(maxLo, at.lo), ratMax(maxHi, at.hi)
+		minLo, minHi = ratMin(minLo, at.Lo), ratMin(minHi, at.Hi)
+		maxLo, maxHi = ratMax(maxLo, at.Lo), ratMax(maxHi, at.Hi)
 	}
 
 	sure, maybe := windowReachesDirection(coss, sins, a, b)

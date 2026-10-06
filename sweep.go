@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -250,7 +252,7 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	tangent := proofarith.DvSub(proofarith.DyVec(line.End), proofarith.DyVec(start))
 
 	delta := line.End.Sub(start)
-	if !finiteVec(delta) {
+	if !proofbound.FiniteVec(delta) {
 		return 0, 0, fmt.Errorf(`%w: the sweep line's derived displacement is outside the representable range`, ErrUnsupported)
 	}
 	height := delta.Len()
@@ -261,7 +263,7 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	// endpoints are finite (dyVec's precondition), so it always states one.
 	lengthBound := straightEdgeBound(height, proofarith.DvDot(tangent, tangent), true)
 	heldSweep := frame.N().Scale(height)
-	bound := absSumUpper(
+	bound := proofbound.AbsSumUpper(
 		lengthBound,
 		proofarith.DyadicFloatError(tangent[0], heldSweep.X),
 		proofarith.DyadicFloatError(tangent[1], heldSweep.Y),

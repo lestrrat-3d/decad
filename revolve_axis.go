@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -125,23 +127,23 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis plane-local direction is not finite`, ErrNotFinite)
 		}
 		// The anchor's plane-local coordinates take the ROUNDING their own
-		// projection committed (bounds.go's exactFrameLocalRound), measured
+		// projection committed (internal/proofbound/bounds.go's proofbound.ExactFrameLocalRound), measured
 		// exactly against the frame and the world origin as the exact leaves
 		// they are — zero for an exactly representable projection, and never
 		// the anchor's own distance from the frame origin, which bounds the
 		// coordinate's magnitude and not its error. The magnitude envelope
 		// survives only as the fallback for a component no rational holds.
-		anchorUpper := absSumUpper(
+		anchorUpper := proofbound.AbsSumUpper(
 			a.Origin.X, a.Origin.Y, a.Origin.Z,
 			frame.Origin().X, frame.Origin().Y, frame.Origin().Z,
 		)
 		aUBound := math.Min(
-			exactFrameLocalRound(frame, a.Origin, frame.U(), local.X),
-			conservativeValueError(local.X, anchorUpper),
+			proofbound.ExactFrameLocalRound(frame, a.Origin, frame.U(), local.X),
+			proofbound.ConservativeValueError(local.X, anchorUpper),
 		)
 		aVBound := math.Min(
-			exactFrameLocalRound(frame, a.Origin, frame.V(), local.Y),
-			conservativeValueError(local.Y, anchorUpper),
+			proofbound.ExactFrameLocalRound(frame, a.Origin, frame.V(), local.Y),
+			proofbound.ConservativeValueError(local.Y, anchorUpper),
 		)
 		// The bracket needs the axis direction's raw, PRE-normalize exact
 		// rational dot products against the frame's in-plane axes: rawDU,
@@ -160,7 +162,7 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		rawDU, rawDV := ratVecDot(a.Dir, frame.U()), ratVecDot(a.Dir, frame.V())
 		var dUBound, dVBound float64
 		if rawDU == nil || rawDV == nil {
-			dUBound, dVBound = conservativeValueError(dU, 1), conservativeValueError(dV, 1)
+			dUBound, dVBound = proofbound.ConservativeValueError(dU, 1), proofbound.ConservativeValueError(dV, 1)
 		} else {
 			dUBound, dVBound = axisDirectionSqrtBracket(rawDU, rawDV, dU, dV)
 		}
@@ -204,7 +206,7 @@ func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (
 	u0, v0 := proofarith.FloatRat(a.Start.U), proofarith.FloatRat(a.Start.V)
 	u1, v1 := proofarith.FloatRat(a.End.U), proofarith.FloatRat(a.End.V)
 	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
-		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+		return proofbound.ConservativeValueError(heldU, 1), proofbound.ConservativeValueError(heldV, 1)
 	}
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
@@ -240,32 +242,32 @@ func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (
 // from the axis's own exact direction, through the same sqrt bracket the
 // straight-prism campaign proved (segment_walk.go's lineWalkBounds /
 // dySqrtIntervalError): L² = du²+dv² is exact rational arithmetic, and
-// ratSqrtDown/ratSqrtUp (spline_length.go) bracket its root by exact
+// proofbound.RatSqrtDown/proofbound.RatSqrtUp (spline_length.go) bracket its root by exact
 // comparison, without assuming any libm accuracy from the division that
 // produced the held float. du and dv are the axis's own exact-rational
 // leaves — a SketchLine's endpoint coordinate differences, or a
 // ConstructionAxis's exact rational dot products of its held direction
 // against the frame's in-plane axes. A degenerate direction, or a component
 // the bracket cannot confirm sits as tightly as this proof can show, keeps
-// conservativeValueError's magnitude envelope: math.Min only ever shrinks
+// proofbound.ConservativeValueError's magnitude envelope: math.Min only ever shrinks
 // it, never replaces it with a wider answer.
 func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, float64) {
-	fallbackU, fallbackV := conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+	fallbackU, fallbackV := proofbound.ConservativeValueError(heldU, 1), proofbound.ConservativeValueError(heldV, 1)
 	lengthSquared := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 	if lengthSquared.Sign() == 0 {
 		return fallbackU, fallbackV
 	}
-	sqrtIv, ok := intervalSqrt(pointInterval(lengthSquared))
+	sqrtIv, ok := intervalSqrt(proofbound.PointInterval(lengthSquared))
 	if !ok {
 		return fallbackU, fallbackV
 	}
 	uBound := fallbackU
-	if enc, ok := intervalQuo(pointInterval(du), sqrtIv); ok {
-		uBound = math.Min(fallbackU, intervalFloatError(enc, heldU))
+	if enc, ok := intervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
+		uBound = math.Min(fallbackU, proofbound.IntervalFloatError(enc, heldU))
 	}
 	vBound := fallbackV
-	if enc, ok := intervalQuo(pointInterval(dv), sqrtIv); ok {
-		vBound = math.Min(fallbackV, intervalFloatError(enc, heldV))
+	if enc, ok := intervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
+		vBound = math.Min(fallbackV, proofbound.IntervalFloatError(enc, heldV))
 	}
 	return uBound, vBound
 }
@@ -336,12 +338,12 @@ func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 // re-expresses them); a caller whose (u, v) is itself only bounded folds that
 // in separately.
 func (ax axisFrame) toAxisRhoBound(u, v float64) float64 {
-	du := boundedSub(exactScalar(u), measuredScalar(ax.aU, ax.aUBound))
-	dv := boundedSub(exactScalar(v), measuredScalar(ax.aV, ax.aVBound))
-	dU := measuredScalar(ax.dU, ax.dUBound)
-	dV := measuredScalar(ax.dV, ax.dVBound)
-	rho := boundedSub(boundedMul(dv, dU), boundedMul(du, dV))
-	return rho.bound
+	du := proofbound.BoundedSub(proofbound.ExactScalar(u), proofbound.MeasuredScalar(ax.aU, ax.aUBound))
+	dv := proofbound.BoundedSub(proofbound.ExactScalar(v), proofbound.MeasuredScalar(ax.aV, ax.aVBound))
+	dU := proofbound.MeasuredScalar(ax.dU, ax.dUBound)
+	dV := proofbound.MeasuredScalar(ax.dV, ax.dVBound)
+	rho := proofbound.BoundedSub(proofbound.BoundedMul(dv, dU), proofbound.BoundedMul(du, dV))
+	return rho.Bound
 }
 
 // radialUpper is the single owner of the ρ envelope: a proven upper bound on
@@ -357,7 +359,7 @@ func (ax axisFrame) toAxisRhoBound(u, v float64) float64 {
 // caller that charges the frame-origin envelope instead understates the
 // reading without limit as the axis moves away from the frame origin.
 func (ax axisFrame) radialUpper(coordUpper float64) float64 {
-	return absSumUpper(
+	return proofbound.AbsSumUpper(
 		coordUpper,
 		ax.aU, ax.aUBound,
 		ax.aV, ax.aVBound,
@@ -392,8 +394,8 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // revolveMinRadius) takes it rather than treating startV/endV/cV as an exact
 // leaf the way contact classification does.
 //
-// The SNAP is charged into that same bound, through bounds.go's
-// snapToZeroAllow: assigning exactly 0 to an endpoint the arithmetic put a
+// The SNAP is charged into that same bound, through internal/proofbound/bounds.go's
+// proofbound.SnapToZeroAllow: assigning exactly 0 to an endpoint the arithmetic put a
 // positive distance from the axis displaces it by that whole discarded
 // magnitude, which is error the walk commits here and nowhere else. So a
 // snapped endpoint's startVBound/endVBound covers the assigned zero rather than
@@ -417,7 +419,7 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // — the sum of the two discarded magnitudes, and no approximation anywhere:
 // each step is an inequality in the widening direction, so the charge is an
 // upper bound rather than a first-order estimate of one. Both terms go in
-// through snapToZeroAllow, which adds under upRound, so the composed float is
+// through proofbound.SnapToZeroAllow, which adds under proofbound.UpRound, so the composed float is
 // at or above the exact sum; an endpoint the arithmetic already put exactly on
 // the axis discards nothing and leaves the length bound untouched, which is
 // what keeps every on-axis fixture's wall area exactly as proven.
@@ -430,7 +432,7 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // (a cone, where |L'−L| is a fraction of the discarded radius) toward radial (a
 // disk, where it is the whole of it).
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
-	return ax.walkCharged(w, walkEndBound{}, walkEndBound{})
+	return ax.walkCharged(w, proofbound.WalkEndBound{}, proofbound.WalkEndBound{})
 }
 
 // axisCharge is docs/surface-intersection-design.md §7.1's fold: how far a
@@ -441,20 +443,20 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 //
 //	δz ≤ |δu·dU| + |δv·dV|      δρ ≤ |δv·dU| + |δu·dV|
 //
-// Every step is a product and a sum of magnitudes through productUpper and
-// absSumUpper, so no square root and no transcendental appears and no step
+// Every step is a product and a sum of magnitudes through proofbound.ProductUpper and
+// proofbound.AbsSumUpper, so no square root and no transcendental appears and no step
 // needs an accuracy contract math does not give.
 //
 // An ABSENT charge answers two zeros and the caller folds nothing. That is not
-// a convenience: absSumUpper up-rounds every term it folds, so composing a
+// a convenience: proofbound.AbsSumUpper up-rounds every term it folds, so composing a
 // literal zero would still nudge a published bound by an ulp per term, and an
 // untrimmed revolve must read exactly as it reads today.
-func (ax axisFrame) axisCharge(c walkEndBound) (float64, float64) {
-	if c.u == 0 && c.v == 0 {
+func (ax axisFrame) axisCharge(c proofbound.WalkEndBound) (float64, float64) {
+	if c.U == 0 && c.V == 0 {
 		return 0, 0
 	}
-	dz := absSumUpper(productUpper(math.Abs(c.u), math.Abs(ax.dU)), productUpper(math.Abs(c.v), math.Abs(ax.dV)))
-	drho := absSumUpper(productUpper(math.Abs(c.v), math.Abs(ax.dU)), productUpper(math.Abs(c.u), math.Abs(ax.dV)))
+	dz := proofbound.AbsSumUpper(proofbound.ProductUpper(math.Abs(c.U), math.Abs(ax.dU)), proofbound.ProductUpper(math.Abs(c.V), math.Abs(ax.dV)))
+	drho := proofbound.AbsSumUpper(proofbound.ProductUpper(math.Abs(c.V), math.Abs(ax.dU)), proofbound.ProductUpper(math.Abs(c.U), math.Abs(ax.dV)))
 	return dz, drho
 }
 
@@ -477,9 +479,9 @@ func (ax axisFrame) axisCharge(c walkEndBound) (float64, float64) {
 //     radialUpper and axisMomentUpper enclose the TRUE meridian rather than
 //     only the recorded one. This is the step that makes the charge survive:
 //     walkAxisMoment clamps its composed bound with math.Min against
-//     conservativeValueError(value, axisMomentUpper), and an envelope covering
+//     proofbound.ConservativeValueError(value, axisMomentUpper), and an envelope covering
 //     only the recorded meridian would clamp the charge straight back off.
-func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge walkEndBound) segmentWalk {
+func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge proofbound.WalkEndBound) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
 	out.endU, out.endV = ax.toAxis(w.endU, w.endV)
@@ -488,23 +490,23 @@ func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge walkEndBou
 	startZ, startRho := ax.axisCharge(startCharge)
 	endZ, endRho := ax.axisCharge(endCharge)
 	if startRho > 0 {
-		out.startVBound = absSumUpper(out.startVBound, startRho)
+		out.startVBound = proofbound.AbsSumUpper(out.startVBound, startRho)
 	}
 	if endRho > 0 {
-		out.endVBound = absSumUpper(out.endVBound, endRho)
+		out.endVBound = proofbound.AbsSumUpper(out.endVBound, endRho)
 	}
 	out.tanInU = w.tanInU*ax.dU + w.tanInV*ax.dV
 	out.tanInV = w.tanInV*ax.dU - w.tanInU*ax.dV
 	out.tanOutU = w.tanOutU*ax.dU + w.tanOutV*ax.dV
 	out.tanOutV = w.tanOutV*ax.dU - w.tanOutU*ax.dV
 	if m := math.Abs(out.startV); m <= ax.snapTol {
-		out.startVBound = snapToZeroAllow(out.startVBound, m)
-		out.lengthBound = snapToZeroAllow(out.lengthBound, m)
+		out.startVBound = proofbound.SnapToZeroAllow(out.startVBound, m)
+		out.lengthBound = proofbound.SnapToZeroAllow(out.lengthBound, m)
 		out.startV = 0
 	}
 	if m := math.Abs(out.endV); m <= ax.snapTol {
-		out.endVBound = snapToZeroAllow(out.endVBound, m)
-		out.lengthBound = snapToZeroAllow(out.lengthBound, m)
+		out.endVBound = proofbound.SnapToZeroAllow(out.endVBound, m)
+		out.lengthBound = proofbound.SnapToZeroAllow(out.lengthBound, m)
 		out.endV = 0
 	}
 	if w.isCircular() {
@@ -517,16 +519,16 @@ func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge walkEndBou
 	// §7.1's remaining two folds. chord is the displacement the wall's own two
 	// ends can put between them; coord is the L1 magnitude the same two
 	// displacements can add to the envelope, which coordUpper is measured in.
-	if chord := absSumUpper(startZ, startRho, endZ, endRho); chord > 0 {
-		out.lengthBound = absSumUpper(out.lengthBound, chord)
-		out.lengthUpper = absSumUpper(out.lengthUpper, chord)
+	if chord := proofbound.AbsSumUpper(startZ, startRho, endZ, endRho); chord > 0 {
+		out.lengthBound = proofbound.AbsSumUpper(out.lengthBound, chord)
+		out.lengthUpper = proofbound.AbsSumUpper(out.lengthUpper, chord)
 	}
-	if coord := math.Max(absSumUpper(startCharge.u, startCharge.v), absSumUpper(endCharge.u, endCharge.v)); coord > 0 {
-		out.coordUpper = absSumUpper(out.coordUpper, coord)
+	if coord := math.Max(proofbound.AbsSumUpper(startCharge.U, startCharge.V), proofbound.AbsSumUpper(endCharge.U, endCharge.V)); coord > 0 {
+		out.coordUpper = proofbound.AbsSumUpper(out.coordUpper, coord)
 	}
 	rhoUpper := ax.radialUpper(out.coordUpper)
 	out.axisRadiusUpper = rhoUpper
-	out.axisMomentUpper = productUpper(out.lengthUpper, rhoUpper)
+	out.axisMomentUpper = proofbound.ProductUpper(out.lengthUpper, rhoUpper)
 	return out
 }
 
@@ -598,27 +600,27 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // already are — the identical gap verify.go's revolvePayloadProvesSimple
 // exists to close one level up, only here it feeds the gate that decides
 // which side the region is admitted on, not a review AFTER the fact. Reading
-// the offset through boundedMul/boundedAdd/boundedSub (the same vocabulary
+// the offset through proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub (the same vocabulary
 // axisFrame.toAxisRhoBound already uses for the identical ρ formula at one
 // point) charges every one of those roundings into rloB/rhiB, so the strict
 // admission gate below reads a number the accompanying bound provably covers.
 //
 // THE ADMISSION GATE ITSELF is the two-part repair CLAUDE.md's reject-only
-// rule requires: admitBelow(near, 0) reads whether the CHOSEN side's
+// rule requires: proofbound.AdmitBelow(near, 0) reads whether the CHOSEN side's
 // near-axis extreme is proven negative, proven non-negative, or neither, off
 // the extreme's own proven interval — never off a tolerance.
 //
-//   - Proven negative (survAdmit) refuses outright, however the interval got
+//   - Proven negative (proofbound.SurvAdmit) refuses outright, however the interval got
 //     that wide: a region that truly dips across the axis is a real defect,
 //     not an artifact of the bound charging it wide.
-//   - Proven non-negative (survReject) needs no allowance, and that holds
+//   - Proven non-negative (proofbound.SurvReject) needs no allowance, and that holds
 //     even where the bound is nonzero — an interval whose own lower end
 //     already clears zero commits nothing further. This is what keeps
 //     radialAdmitAllow at exactly zero for every axis-aligned fixture: their
-//     arithmetic is exact (a zero bound), so admitBelow can only answer
-//     survReject or survAdmit, never straddle, and a zero-bound interval that
+//     arithmetic is exact (a zero bound), so proofbound.AdmitBelow can only answer
+//     proofbound.SurvReject or proofbound.SurvAdmit, never straddle, and a zero-bound interval that
 //     is not proven negative IS proven non-negative.
-//   - Neither (survStraddle) is the genuine case a nonzero bound creates — a
+//   - Neither (proofbound.SurvStraddle) is the genuine case a nonzero bound creates — a
 //     tilted or offset axis whose own direction/anchor rounding leaves the
 //     true radial minimum undecided. Admitting it is sound only because the
 //     interval's own worst case is bounded (by the coarse ±tol classification
@@ -643,7 +645,7 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 	// multiply-and-sum arithmetic of evaluating gu·u + gv·v itself for a
 	// direction that is not exactly 0, 1 or −1 — the identical gap
 	// axisExtremeContext closes for its own, structurally identical scan
-	// through planeDotDecompositionRoundAllow (bounds.go). A profile vertex
+	// through proofbound.PlaneDotDecompositionRoundAllow (internal/proofbound/bounds.go). A profile vertex
 	// the record states verbatim therefore still commits real rounding
 	// forming its dot with a tilted axis's own (nU, nV)/(dU, dV), and that
 	// rounding is architecture-sensitive (FMA differs amd64/arm64):
@@ -653,7 +655,7 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 	// for THIS scan, never composed with axisExtremeContext's own copy of the
 	// identical charge on a different reading — is what makes the admission
 	// decision agree across platforms: the charge is zero for an axis-aligned
-	// direction (planeDotDecompositionRoundAllow's own trivial-coefficient
+	// direction (proofbound.PlaneDotDecompositionRoundAllow's own trivial-coefficient
 	// case), so it costs nothing for the tree's axis-aligned fixtures, and it
 	// dominates a tilted axis's few-ulp discrepancy by orders of magnitude,
 	// which turns a coin-flip sign into a proven straddle everywhere.
@@ -661,53 +663,53 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	rBound = absSumUpper(rBound, planeDotDecompositionRoundAllow(nU, nV, coordUpper))
-	zBound = absSumUpper(zBound, planeDotDecompositionRoundAllow(line.dU, line.dV, coordUpper))
+	rBound = proofbound.AbsSumUpper(rBound, proofbound.PlaneDotDecompositionRoundAllow(nU, nV, coordUpper))
+	zBound = proofbound.AbsSumUpper(zBound, proofbound.PlaneDotDecompositionRoundAllow(line.dU, line.dV, coordUpper))
 
-	roffB := boundedAdd(
-		boundedMul(measuredScalar(nU, line.dVBound), measuredScalar(line.aU, line.aUBound)),
-		boundedMul(measuredScalar(nV, line.dUBound), measuredScalar(line.aV, line.aVBound)),
+	roffB := proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nU, line.dVBound), proofbound.MeasuredScalar(line.aU, line.aUBound)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nV, line.dUBound), proofbound.MeasuredScalar(line.aV, line.aVBound)),
 	)
-	zoffB := boundedAdd(
-		boundedMul(measuredScalar(line.dU, line.dUBound), measuredScalar(line.aU, line.aUBound)),
-		boundedMul(measuredScalar(line.dV, line.dVBound), measuredScalar(line.aV, line.aVBound)),
+	zoffB := proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.MeasuredScalar(line.dU, line.dUBound), proofbound.MeasuredScalar(line.aU, line.aUBound)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(line.dV, line.dVBound), proofbound.MeasuredScalar(line.aV, line.aVBound)),
 	)
-	rloB := boundedSub(measuredScalar(rlo, rBound), roffB)
-	rhiB := boundedSub(measuredScalar(rhi, rBound), roffB)
-	zloB := boundedSub(measuredScalar(zlo, zBound), zoffB)
-	zhiB := boundedSub(measuredScalar(zhi, zBound), zoffB)
+	rloB := proofbound.BoundedSub(proofbound.MeasuredScalar(rlo, rBound), roffB)
+	rhiB := proofbound.BoundedSub(proofbound.MeasuredScalar(rhi, rBound), roffB)
+	zloB := proofbound.BoundedSub(proofbound.MeasuredScalar(zlo, zBound), zoffB)
+	zhiB := proofbound.BoundedSub(proofbound.MeasuredScalar(zhi, zBound), zoffB)
 
-	scale := math.Max(math.Max(math.Abs(rloB.value), math.Abs(rhiB.value)), math.Max(math.Abs(zloB.value), math.Abs(zhiB.value)))
+	scale := math.Max(math.Max(math.Abs(rloB.Value), math.Abs(rhiB.Value)), math.Max(math.Abs(zloB.Value), math.Abs(zhiB.Value)))
 	tol := 1e-9 * math.Max(1, scale)
 	// Each side test is decided on the extreme's own proven interval: above
 	// names "clear of the axis on the + side", below "clear on the − side",
 	// and an interval spanning the threshold decides neither.
-	hiAbove := admitAbove(rhiB, tol)
-	loBelow := admitBelow(rloB, -tol)
-	if hiAbove == survStraddle || loBelow == survStraddle {
-		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, math.Max(rloB.bound, rhiB.bound))
+	hiAbove := proofbound.AdmitAbove(rhiB, tol)
+	loBelow := proofbound.AdmitBelow(rloB, -tol)
+	if hiAbove == proofbound.SurvStraddle || loBelow == proofbound.SurvStraddle {
+		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, math.Max(rloB.Bound, rhiB.Bound))
 	}
 	switch {
-	case hiAbove == survAdmit && loBelow == survAdmit:
+	case hiAbove == proofbound.SurvAdmit && loBelow == proofbound.SurvAdmit:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the revolve axis passes through the region`, ErrDegenerate)
-	case hiAbove == survReject && loBelow == survReject:
+	case hiAbove == proofbound.SurvReject && loBelow == proofbound.SurvReject:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the region collapses onto the revolve axis`, ErrDegenerate)
 	}
 	side := 1.0
 	near := rloB
-	if hiAbove == survReject {
+	if hiAbove == proofbound.SurvReject {
 		side = -1
-		near = boundedNeg(rhiB)
+		near = proofbound.BoundedNeg(rhiB)
 	}
 
 	var radialAdmitAllow float64
 	var radialProof bool
-	switch admitBelow(near, 0) {
-	case survAdmit:
+	switch proofbound.AdmitBelow(near, 0) {
+	case proofbound.SurvAdmit:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial minimum about this axis is proven negative, so the axis cuts through material`, ErrDegenerate)
-	case survStraddle:
-		radialAdmitAllow = math.Max(0, near.bound-near.value)
-	case survReject:
+	case proofbound.SurvStraddle:
+		radialAdmitAllow = math.Max(0, near.Bound-near.Value)
+	case proofbound.SurvReject:
 		// The positive-side reading is the same extreme and offset that
 		// revolvePayloadProvesSimple would scan again. The build adds an
 		// extra dot-product charge, so this proof is at least as strict.
@@ -716,8 +718,8 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 		radialProof = side > 0
 	}
 
-	axialExtent := boundedSub(zhiB, zloB)
-	axialExtentUpper := absSumUpper(axialExtent.value, axialExtent.bound)
+	axialExtent := proofbound.BoundedSub(zhiB, zloB)
+	axialExtentUpper := proofbound.AbsSumUpper(axialExtent.Value, axialExtent.Bound)
 
 	ax := axisFrame{
 		aU: line.aU, aV: line.aV,
@@ -758,10 +760,10 @@ type regionSnapAllow struct {
 // displacement is at most its walks' displacements summed.
 func (a regionSnapAllow) add(b regionSnapAllow) regionSnapAllow {
 	return regionSnapAllow{
-		area:   absSumUpper(a.area, b.area),
-		first:  absSumUpper(a.first, b.first),
-		mixed:  absSumUpper(a.mixed, b.mixed),
-		second: absSumUpper(a.second, b.second),
+		area:   proofbound.AbsSumUpper(a.area, b.area),
+		first:  proofbound.AbsSumUpper(a.first, b.first),
+		mixed:  proofbound.AbsSumUpper(a.mixed, b.mixed),
+		second: proofbound.AbsSumUpper(a.second, b.second),
 	}
 }
 
@@ -778,7 +780,7 @@ func (a regionSnapAllow) add(b regionSnapAllow) regionSnapAllow {
 //	area(ribbon) ≤ δ · max(L, L') ≤ δ · (w.length + w.lengthBound)
 //
 // — w.lengthBound already carries both discarded magnitudes by the time this
-// reads it (axisFrame.walk's own doc comment), so absSumUpper over the pair
+// reads it (axisFrame.walk's own doc comment), so proofbound.AbsSumUpper over the pair
 // covers whichever of the two is longer.
 //
 // The symmetric difference between the recorded region and the snapped one is
@@ -788,7 +790,7 @@ func (a regionSnapAllow) add(b regionSnapAllow) regionSnapAllow {
 // envelope for ∫ρ dA, a radial and an axial one for ∫zρ dA, and two radial ones
 // for ∫ρ² dA.
 //
-// Every step widens. productUpper and absSumUpper each round outward, δ is the
+// Every step widens. proofbound.ProductUpper and proofbound.AbsSumUpper each round outward, δ is the
 // discarded magnitude itself rather than an estimate of what it costs, and
 // every sup|f| is replaced by an envelope that dominates it. A walk with
 // nothing discarded contributes exactly zero, which is what leaves an
@@ -803,20 +805,20 @@ func snapAllowOf(walked segmentWalk, discarded float64) regionSnapAllow {
 	if !(discarded > 0) {
 		return regionSnapAllow{}
 	}
-	ribbon := productUpper(absSumUpper(walked.length, walked.lengthBound), discarded)
+	ribbon := proofbound.ProductUpper(proofbound.AbsSumUpper(walked.length, walked.lengthBound), discarded)
 	rhoUp := walkRadialUpper(walked, discarded)
 	// |z| = |(p−a)·d| ≤ |p−a| ≤ |p| + |a|, which is exactly what
 	// axisFrame.radialUpper composes — it is the envelope of the whole axis-
 	// local position, so it bounds the axial coordinate as well as the radial
 	// one, and for a profile far down the axis it is the axial one that is
 	// large.
-	zUp := absSumUpper(walked.axisRadiusUpper, discarded)
-	first := productUpper(ribbon, rhoUp)
+	zUp := proofbound.AbsSumUpper(walked.axisRadiusUpper, discarded)
+	first := proofbound.ProductUpper(ribbon, rhoUp)
 	return regionSnapAllow{
 		area:   ribbon,
 		first:  first,
-		mixed:  productUpper(first, zUp),
-		second: productUpper(first, rhoUp),
+		mixed:  proofbound.ProductUpper(first, zUp),
+		second: proofbound.ProductUpper(first, rhoUp),
 	}
 }
 
@@ -829,15 +831,15 @@ func snapAllowOf(walked segmentWalk, discarded float64) regionSnapAllow {
 // answer is capped by the walk's own axis-radius envelope, which is proven
 // independently, so this can only ever tighten and never widen it.
 func walkRadialUpper(w segmentWalk, discarded float64) float64 {
-	held := absSumUpper(
+	held := proofbound.AbsSumUpper(
 		math.Max(math.Abs(w.startV), math.Abs(w.endV)),
 		math.Max(w.startVBound, w.endVBound),
 		discarded,
 	)
 	if w.isCircular() {
-		held = absSumUpper(math.Abs(w.cV), w.cVBound, w.radius, w.radiusBound, discarded)
+		held = proofbound.AbsSumUpper(math.Abs(w.cV), w.cVBound, w.radius, w.radiusBound, discarded)
 	}
-	return math.Min(held, absSumUpper(w.axisRadiusUpper, discarded))
+	return math.Min(held, proofbound.AbsSumUpper(w.axisRadiusUpper, discarded))
 }
 
 // snapDiscarded is the largest radial magnitude axisFrame.walk's snap discards

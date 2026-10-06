@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -37,13 +39,13 @@ func TestDyadicSqrtBracketsMatchTheRationalOnes(t *testing.T) {
 			continue
 		}
 		d, q := proofarith.MustDyOf(f), proofarith.FloatRat(f)
-		require.Equal(t, ratSqrtDown(q), proofarith.DySqrtDown(d), "sqrt down of %v", f)
-		require.Equal(t, ratSqrtUp(q), proofarith.DySqrtUp(d), "sqrt up of %v", f)
+		require.Equal(t, proofbound.RatSqrtDown(q), proofarith.DySqrtDown(d), "sqrt down of %v", f)
+		require.Equal(t, proofbound.RatSqrtUp(q), proofarith.DySqrtUp(d), "sqrt up of %v", f)
 
 		// The bracket is PROVEN, not merely close: the down leg squares to at
 		// most the value and the up leg to at least it, decided exactly.
 		require.True(t, proofarith.DySquareAtMost(proofarith.DySqrtDown(d), d), "the down leg must square to at most %v", f)
-		if up := proofarith.DySqrtUp(d); !isNonFinite(up) {
+		if up := proofarith.DySqrtUp(d); !proofbound.IsNonFinite(up) {
 			require.False(t, proofarith.DyCmp(proofarith.DyMul(proofarith.MustDyOf(up), proofarith.MustDyOf(up)), d) < 0,
 				"the up leg must square to at least %v", f)
 		}
@@ -53,7 +55,7 @@ func TestDyadicSqrtBracketsMatchTheRationalOnes(t *testing.T) {
 }
 
 // TestDyadicDirectedRoundingMatchesTheRationalOnes pins dyFloatDown/dyFloatUp
-// against ratFloatDown/ratFloatUp on values that are deliberately NOT floats:
+// against proofbound.RatFloatDown/proofbound.RatFloatUp on values that are deliberately NOT floats:
 // a mid-ulp third of a sum is where a directed rounding either steps or does
 // not, and where an off-by-one would show.
 func TestDyadicDirectedRoundingMatchesTheRationalOnes(t *testing.T) {
@@ -63,8 +65,8 @@ func TestDyadicDirectedRoundingMatchesTheRationalOnes(t *testing.T) {
 		// A value needing more than 53 significant bits: the float itself plus
 		// one ulp of its own smallest neighbour, which no float64 holds.
 		wide := proofarith.DyAdd(proofarith.DyMul(d, d), proofarith.DyShift(proofarith.MustDyOf(1), -1080))
-		require.Equal(t, ratFloatDown(wide.Rat()), proofarith.DyFloatDown(wide), "float down of the widened %v", f)
-		require.Equal(t, ratFloatUp(wide.Rat()), proofarith.DyFloatUp(wide), "float up of the widened %v", f)
+		require.Equal(t, proofbound.RatFloatDown(wide.Rat()), proofarith.DyFloatDown(wide), "float down of the widened %v", f)
+		require.Equal(t, proofbound.RatFloatUp(wide.Rat()), proofarith.DyFloatUp(wide), "float up of the widened %v", f)
 		require.Equal(t, f, proofarith.DyFloatDown(d), "a value that IS a float rounds to itself, for %v", f)
 		require.Equal(t, f, proofarith.DyFloatUp(d), "a value that IS a float rounds to itself, for %v", f)
 	}

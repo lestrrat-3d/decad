@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -16,7 +18,7 @@ import (
 //
 //   - the exact denotation of a motion parameter (motionParam) and of the
 //     ideal pose it names (idealPose), with the ideal rotation's sine and
-//     cosine enclosed by moments_trig.go's turnSinCosInterval; for a Between,
+//     cosine enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval; for a Between,
 //     the exact screw of the parameters r3 read, composed onto the exact
 //     From, and the stated To read exactly (motionFrame);
 //   - η, the proven distance between the float pose the kernel measured and
@@ -75,22 +77,22 @@ func (p motionParam) spanUpper(q motionParam) *big.Rat {
 	dTurn.Abs(dTurn)
 	dBase := new(big.Rat).Sub(q.base, p.base)
 	dBase.Abs(dBase)
-	out := new(big.Rat).Mul(dTurn, twoPiInterval().hi)
+	out := new(big.Rat).Mul(dTurn, proofbound.TwoPiInterval().Hi)
 	return out.Add(out, dBase)
 }
 
 // exactTurnSinCos encloses sin(2πt) and cos(2πt) for an exact rational turn.
 // A whole number of quarter turns answers exactly — that is what keeps an
 // identity pose (the parameter 0) and a right-angle pose free of any
-// enclosure width — and every other turn takes turnSinCosInterval.
-func exactTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
+// enclosure width — and every other turn takes proofbound.TurnSinCosInterval.
+func exactTurnSinCos(t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	q := new(big.Rat).Mul(t, big.NewRat(4, 1))
 	if q.IsInt() {
 		k := new(big.Int).Mod(q.Num(), big.NewInt(4)).Int64()
 		sinCos := [4][2]int64{{0, 1}, {1, 0}, {0, -1}, {-1, 0}}[k]
-		return pointInterval(big.NewRat(sinCos[0], 1)), pointInterval(big.NewRat(sinCos[1], 1))
+		return proofbound.PointInterval(big.NewRat(sinCos[0], 1)), proofbound.PointInterval(big.NewRat(sinCos[1], 1))
 	}
-	return turnSinCosInterval(t)
+	return proofbound.TurnSinCosInterval(t)
 }
 
 // radianSinCos encloses sin(r) and cos(r) for an exact rational angle r in
@@ -99,22 +101,22 @@ func exactTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
 // lower turn and widened by the turn interval's own angular width, since sine
 // and cosine are 1-Lipschitz in the angle: |sin(2πt) − sin(2πt_lo)| ≤
 // 2π·(t_hi − t_lo) ≤ 2·πhi·(t_hi − t_lo).
-func radianSinCos(r *big.Rat) (ratInterval, ratInterval) {
+func radianSinCos(r *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	if r.Sign() == 0 {
-		return pointInterval(new(big.Rat)), pointInterval(big.NewRat(1, 1))
+		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1))
 	}
-	twoPi := twoPiInterval()
-	tA := new(big.Rat).Quo(r, twoPi.hi)
-	tB := new(big.Rat).Quo(r, twoPi.lo)
+	twoPi := proofbound.TwoPiInterval()
+	tA := new(big.Rat).Quo(r, twoPi.Hi)
+	tB := new(big.Rat).Quo(r, twoPi.Lo)
 	tLo, tHi := tA, tB
 	if tLo.Cmp(tHi) > 0 {
 		tLo, tHi = tHi, tLo
 	}
-	sin, cos := turnSinCosInterval(tLo)
+	sin, cos := proofbound.TurnSinCosInterval(tLo)
 	width := new(big.Rat).Sub(tHi, tLo)
-	width.Mul(width, twoPi.hi)
-	widen := func(iv ratInterval) ratInterval {
-		return intervalOwned(new(big.Rat).Sub(iv.lo, width), new(big.Rat).Add(iv.hi, width))
+	width.Mul(width, twoPi.Hi)
+	widen := func(iv proofbound.RatInterval) proofbound.RatInterval {
+		return proofbound.IntervalOwned(new(big.Rat).Sub(iv.Lo, width), new(big.Rat).Add(iv.Hi, width))
 	}
 	return widen(sin), widen(cos)
 }
@@ -123,7 +125,7 @@ func radianSinCos(r *big.Rat) (ratInterval, ratInterval) {
 // sum formulas over the two parts' own enclosures. A part that is exactly zero
 // contributes the point pair (0, 1), so a pure-degree or pure-radian angle
 // passes its own enclosure through unwidened.
-func paramSinCos(p motionParam) (ratInterval, ratInterval) {
+func paramSinCos(p motionParam) (proofbound.RatInterval, proofbound.RatInterval) {
 	sT, cT := exactTurnSinCos(p.turn)
 	if p.base.Sign() == 0 {
 		return sT, cT
@@ -132,8 +134,8 @@ func paramSinCos(p motionParam) (ratInterval, ratInterval) {
 	if p.turn.Sign() == 0 {
 		return sR, cR
 	}
-	sin := intervalAdd(intervalMul(sT, cR), intervalMul(cT, sR))
-	cos := intervalSub(intervalMul(cT, cR), intervalMul(sT, sR))
+	sin := proofbound.IntervalAdd(proofbound.IntervalMul(sT, cR), proofbound.IntervalMul(cT, sR))
+	cos := proofbound.IntervalSub(proofbound.IntervalMul(cT, cR), proofbound.IntervalMul(sT, sR))
 	return sin, cos
 }
 
@@ -150,19 +152,19 @@ func ratVecOf(v r3.Vec) (ratVec, bool) {
 
 // ivVec and ivMat are interval vectors and 3×3 interval matrices, the
 // matrix stored by rows.
-type ivVec [3]ratInterval
-type ivMat [3][3]ratInterval
+type ivVec [3]proofbound.RatInterval
+type ivMat [3][3]proofbound.RatInterval
 
 func pointVec(v ratVec) ivVec {
-	return ivVec{pointInterval(v[0]), pointInterval(v[1]), pointInterval(v[2])}
+	return ivVec{proofbound.PointInterval(v[0]), proofbound.PointInterval(v[1]), proofbound.PointInterval(v[2])}
 }
 
 func (m ivMat) apply(v ivVec) ivVec {
 	var out ivVec
 	for i := range 3 {
-		sum := intervalMul(m[i][0], v[0])
-		sum = intervalAdd(sum, intervalMul(m[i][1], v[1]))
-		out[i] = intervalAdd(sum, intervalMul(m[i][2], v[2]))
+		sum := proofbound.IntervalMul(m[i][0], v[0])
+		sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(m[i][1], v[1]))
+		out[i] = proofbound.IntervalAdd(sum, proofbound.IntervalMul(m[i][2], v[2]))
 	}
 	return out
 }
@@ -185,21 +187,21 @@ type scaledIvMat struct {
 }
 
 // entry is entry (i, j) as its exact rational interval.
-func (s scaledIvMat) entry(i, j int) ratInterval {
-	return intervalOwned(new(big.Rat).SetFrac(s.lo[i][j], s.den), new(big.Rat).SetFrac(s.hi[i][j], s.den))
+func (s scaledIvMat) entry(i, j int) proofbound.RatInterval {
+	return proofbound.IntervalOwned(new(big.Rat).SetFrac(s.lo[i][j], s.den), new(big.Rat).SetFrac(s.hi[i][j], s.den))
 }
 
 func newScaledIvMat(m ivMat) scaledIvMat {
 	den := big.NewInt(1)
 	for i := range 3 {
 		for j := range 3 {
-			den = proofarith.LcmInt(proofarith.LcmInt(den, m[i][j].lo.Denom()), m[i][j].hi.Denom())
+			den = proofarith.LcmInt(proofarith.LcmInt(den, m[i][j].Lo.Denom()), m[i][j].Hi.Denom())
 		}
 	}
 	s := scaledIvMat{den: den}
 	for i := range 3 {
 		for j := range 3 {
-			s.lo[i][j], s.hi[i][j] = proofarith.ScaledNum(m[i][j].lo, den), proofarith.ScaledNum(m[i][j].hi, den)
+			s.lo[i][j], s.hi[i][j] = proofarith.ScaledNum(m[i][j].Lo, den), proofarith.ScaledNum(m[i][j].Hi, den)
 		}
 	}
 	return s
@@ -236,10 +238,10 @@ func (s scaledIvMat) mulPoints(o ivMat) (scaledIvMat, bool) {
 	values := make([]*big.Rat, 0, 9)
 	for k := range 3 {
 		for j := range 3 {
-			if o[k][j].lo.Cmp(o[k][j].hi) != 0 {
+			if o[k][j].Lo.Cmp(o[k][j].Hi) != 0 {
 				return scaledIvMat{}, false
 			}
-			values = append(values, o[k][j].lo)
+			values = append(values, o[k][j].Lo)
 		}
 	}
 	pointDen := proofarith.CommonDenom(values...)
@@ -269,21 +271,21 @@ func (s scaledIvMat) mulPoints(o ivMat) (scaledIvMat, bool) {
 }
 
 func ivVecAdd(a, b ivVec) ivVec {
-	return ivVec{intervalAdd(a[0], b[0]), intervalAdd(a[1], b[1]), intervalAdd(a[2], b[2])}
+	return ivVec{proofbound.IntervalAdd(a[0], b[0]), proofbound.IntervalAdd(a[1], b[1]), proofbound.IntervalAdd(a[2], b[2])}
 }
 
 func ivVecSub(a, b ivVec) ivVec {
-	return ivVec{intervalSub(a[0], b[0]), intervalSub(a[1], b[1]), intervalSub(a[2], b[2])}
+	return ivVec{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
 }
 
 // magnitudeSquaredUpper is Σ max(|lo|, |hi|)² over the entries: an exact
 // upper bound on the squared Euclidean (or, over a matrix's entries,
 // Frobenius) norm of every member of the enclosure.
-func magnitudeSquaredUpper(entries ...ratInterval) *big.Rat {
+func magnitudeSquaredUpper(entries ...proofbound.RatInterval) *big.Rat {
 	sum := new(big.Rat)
 	for _, e := range entries {
-		m := new(big.Rat).Abs(e.lo)
-		if hi := new(big.Rat).Abs(e.hi); hi.Cmp(m) > 0 {
+		m := new(big.Rat).Abs(e.Lo)
+		if hi := new(big.Rat).Abs(e.Hi); hi.Cmp(m) > 0 {
 			m = hi
 		}
 		sum.Add(sum, m.Mul(m, m))
@@ -292,27 +294,27 @@ func magnitudeSquaredUpper(entries ...ratInterval) *big.Rat {
 }
 
 // unitScaleInterval encloses 1/|a| for a nonzero exact vector a: the inverse
-// of ratSqrtUp/ratSqrtDown's directed roots of |a|², each proven by exact
+// of proofbound.RatSqrtUp/proofbound.RatSqrtDown's directed roots of |a|², each proven by exact
 // comparison. When |a|² is the exact square of a float both roots agree and
 // the enclosure is a point, which is what keeps an axis-aligned direction
 // exact.
-func unitScaleInterval(a ratVec) (ratInterval, bool) {
-	sq := ratAdd(ratMul(a[0], a[0]), ratMul(a[1], a[1]), ratMul(a[2], a[2]))
-	up, down := ratSqrtUp(sq), ratSqrtDown(sq)
-	if !(down > 0) || isNonFinite(up) {
-		return ratInterval{}, false
+func unitScaleInterval(a ratVec) (proofbound.RatInterval, bool) {
+	sq := proofbound.RatAdd(proofbound.RatMul(a[0], a[0]), proofbound.RatMul(a[1], a[1]), proofbound.RatMul(a[2], a[2]))
+	up, down := proofbound.RatSqrtUp(sq), proofbound.RatSqrtDown(sq)
+	if !(down > 0) || proofbound.IsNonFinite(up) {
+		return proofbound.RatInterval{}, false
 	}
 	lo, hi := proofarith.FloatRat(up), proofarith.FloatRat(down)
-	return intervalOwned(new(big.Rat).Inv(lo), new(big.Rat).Inv(hi)), true
+	return proofbound.IntervalOwned(new(big.Rat).Inv(lo), new(big.Rat).Inv(hi)), true
 }
 
 func (m ivMat) mul(o ivMat) ivMat {
 	var out ivMat
 	for i := range 3 {
 		for j := range 3 {
-			sum := intervalMul(m[i][0], o[0][j])
-			sum = intervalAdd(sum, intervalMul(m[i][1], o[1][j]))
-			out[i][j] = intervalAdd(sum, intervalMul(m[i][2], o[2][j]))
+			sum := proofbound.IntervalMul(m[i][0], o[0][j])
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(m[i][1], o[1][j]))
+			out[i][j] = proofbound.IntervalAdd(sum, proofbound.IntervalMul(m[i][2], o[2][j]))
 		}
 	}
 	return out
@@ -329,7 +331,7 @@ func exactTransform(t r3.Transform) (ivMat, ratVec, bool) {
 			return ivMat{}, ratVec{}, false
 		}
 		for i := range 3 {
-			rot[i][j] = pointInterval(c[i])
+			rot[i][j] = proofbound.PointInterval(c[i])
 		}
 	}
 	shift, ok := ratVecOf(t.Translation())
@@ -357,9 +359,9 @@ type idealPose struct {
 // float r3 returned, and from and to its two stated poses read exactly.
 type motionFrame struct {
 	kind   motionKind
-	axis   ratVec      // Axis (revolute, between) or Dir (prismatic), exact
-	unit   ratInterval // 1/|axis|
-	center ratVec      // the revolute's pivot or the screw's Point; zero for a prismatic
+	axis   ratVec                 // Axis (revolute, between) or Dir (prismatic), exact
+	unit   proofbound.RatInterval // 1/|axis|
+	center ratVec                 // the revolute's pivot or the screw's Point; zero for a prismatic
 
 	theta          motionParam // the screw's angle θ, radians
 	slide          *big.Rat    // the screw's slide d, millimetres
@@ -404,24 +406,24 @@ func newMotionFrame(spec motionSpec) (motionFrame, bool) {
 // rotation is the Rodrigues matrix R = cos·I + sin·[k]× + (1 − cos)·k kᵀ
 // about k = axis/|axis| for an enclosed sine and cosine: k kᵀ = a aᵀ/|a|² is
 // exact, and [k]× = [a]×·(1/|a|) carries unitScaleInterval's enclosure.
-func (mf motionFrame) rotation(sin, cos ratInterval) ivMat {
-	one := pointInterval(big.NewRat(1, 1))
+func (mf motionFrame) rotation(sin, cos proofbound.RatInterval) ivMat {
+	one := proofbound.PointInterval(big.NewRat(1, 1))
 	a := mf.axis
-	sq := ratAdd(ratMul(a[0], a[0]), ratMul(a[1], a[1]), ratMul(a[2], a[2]))
-	oneMinusCos := intervalSub(one, cos)
+	sq := proofbound.RatAdd(proofbound.RatMul(a[0], a[0]), proofbound.RatMul(a[1], a[1]), proofbound.RatMul(a[2], a[2]))
+	oneMinusCos := proofbound.IntervalSub(one, cos)
 	cross := [3][3]*big.Rat{
 		{new(big.Rat), new(big.Rat).Neg(a[2]), a[1]},
 		{a[2], new(big.Rat), new(big.Rat).Neg(a[0])},
 		{new(big.Rat).Neg(a[1]), a[0], new(big.Rat)},
 	}
-	sinUnit := intervalMul(sin, mf.unit)
+	sinUnit := proofbound.IntervalMul(sin, mf.unit)
 	var rot ivMat
 	for i := range 3 {
 		for j := range 3 {
-			outer := new(big.Rat).Quo(ratMul(a[i], a[j]), sq)
-			entry := intervalAdd(intervalScale(sinUnit, cross[i][j]), intervalScale(oneMinusCos, outer))
+			outer := new(big.Rat).Quo(proofbound.RatMul(a[i], a[j]), sq)
+			entry := proofbound.IntervalAdd(proofbound.IntervalScale(sinUnit, cross[i][j]), proofbound.IntervalScale(oneMinusCos, outer))
 			if i == j {
-				entry = intervalAdd(entry, cos)
+				entry = proofbound.IntervalAdd(entry, cos)
 			}
 			rot[i][j] = entry
 		}
@@ -433,9 +435,9 @@ func (mf motionFrame) rotation(sin, cos ratInterval) ivMat {
 // entry the same exact interval rotation builds. With a = A/d for integers A
 // over the axis's shared denominator d, k kᵀ = A Aᵀ/|A|² and [k]× =
 // [A]×·(1/(d·|a|)), so every entry is sinUnit·C + (1 − cos)·O (+ cos on the
-// diagonal) for integer C = [A]× and O = A Aᵀ, and intervalScale's endpoint
+// diagonal) for integer C = [A]× and O = A Aᵀ, and proofbound.IntervalScale's endpoint
 // order follows the sign of C or O as it follows the sign of the scale.
-func (mf motionFrame) scaledRotation(sin, cos ratInterval) scaledIvMat {
+func (mf motionFrame) scaledRotation(sin, cos proofbound.RatInterval) scaledIvMat {
 	a := mf.axis
 	axisDen := proofarith.CommonDenom(a[0], a[1], a[2])
 	var axis [3]*big.Int
@@ -446,9 +448,9 @@ func (mf motionFrame) scaledRotation(sin, cos ratInterval) scaledIvMat {
 	for k := range 3 {
 		squared.Add(squared, new(big.Int).Mul(axis[k], axis[k]))
 	}
-	sinUnit := intervalMul(sin, mf.unit)
-	sinDen := proofarith.LcmInt(new(big.Int).Set(sinUnit.lo.Denom()), sinUnit.hi.Denom())
-	cosDen := proofarith.LcmInt(new(big.Int).Set(cos.lo.Denom()), cos.hi.Denom())
+	sinUnit := proofbound.IntervalMul(sin, mf.unit)
+	sinDen := proofarith.LcmInt(new(big.Int).Set(sinUnit.Lo.Denom()), sinUnit.Hi.Denom())
+	cosDen := proofarith.LcmInt(new(big.Int).Set(cos.Lo.Denom()), cos.Hi.Denom())
 	sinScale := new(big.Int).Mul(sinDen, axisDen)
 	cosScale := new(big.Int).Mul(cosDen, squared)
 	den := proofarith.LcmInt(sinScale, cosScale)
@@ -456,11 +458,11 @@ func (mf motionFrame) scaledRotation(sin, cos ratInterval) scaledIvMat {
 	sinMultiplier := new(big.Int).Quo(den, sinScale)
 	cosMultiplier := new(big.Int).Quo(den, cosScale)
 	diagonalMultiplier := new(big.Int).Quo(den, cosDen)
-	sinLo := proofarith.ScaledNum(sinUnit.lo, sinDen)
+	sinLo := proofarith.ScaledNum(sinUnit.Lo, sinDen)
 	sinLo.Mul(sinLo, sinMultiplier)
-	sinHi := proofarith.ScaledNum(sinUnit.hi, sinDen)
+	sinHi := proofarith.ScaledNum(sinUnit.Hi, sinDen)
 	sinHi.Mul(sinHi, sinMultiplier)
-	cosLo, cosHi := proofarith.ScaledNum(cos.lo, cosDen), proofarith.ScaledNum(cos.hi, cosDen)
+	cosLo, cosHi := proofarith.ScaledNum(cos.Lo, cosDen), proofarith.ScaledNum(cos.Hi, cosDen)
 	// 1 − cos is [1 − hi, 1 − lo].
 	oneMinusLo := new(big.Int).Sub(cosDen, cosHi)
 	oneMinusLo.Mul(oneMinusLo, cosMultiplier)
@@ -511,8 +513,8 @@ func (mf motionFrame) scaledRotation(sin, cos ratInterval) scaledIvMat {
 // sine and cosine come from paramSinCos's π enclosures, and at s = 0 they are
 // the point pair (0, 1): T*(0) is From exactly.
 func (mf motionFrame) at(p motionParam) idealPose {
-	zero := pointInterval(new(big.Rat))
-	one := pointInterval(big.NewRat(1, 1))
+	zero := proofbound.PointInterval(new(big.Rat))
+	one := proofbound.PointInterval(big.NewRat(1, 1))
 	pose := idealPose{pivot: pointVec(mf.center), shift: ivVec{zero, zero, zero}}
 	switch mf.kind {
 	case motionPrismatic:
@@ -521,7 +523,7 @@ func (mf motionFrame) at(p motionParam) idealPose {
 				pose.rot[i][j] = zero
 			}
 			pose.rot[i][i] = one
-			pose.shift[i] = intervalMul(intervalScale(mf.unit, mf.axis[i]), pointInterval(p.base))
+			pose.shift[i] = proofbound.IntervalMul(proofbound.IntervalScale(mf.unit, mf.axis[i]), proofbound.PointInterval(p.base))
 		}
 		return pose
 	case motionRevolute:
@@ -535,7 +537,7 @@ func (mf motionFrame) at(p motionParam) idealPose {
 	slide := new(big.Rat).Mul(s, mf.slide)
 	var along ivVec
 	for i := range 3 {
-		along[i] = intervalScale(intervalScale(mf.unit, mf.axis[i]), slide)
+		along[i] = proofbound.IntervalScale(proofbound.IntervalScale(mf.unit, mf.axis[i]), slide)
 	}
 	return idealPose{
 		rot:   r.mul(mf.fromRot),
@@ -548,7 +550,7 @@ func (mf motionFrame) at(p motionParam) idealPose {
 // read exactly: what η_To of docs/motion-check-design.md §5.1 charges the
 // s = 1 pose against, beside the ideal end T*(1).
 func (mf motionFrame) statedEnd() idealPose {
-	zero := pointInterval(new(big.Rat))
+	zero := proofbound.PointInterval(new(big.Rat))
 	return idealPose{rot: mf.toRot, pivot: ivVec{zero, zero, zero}, shift: pointVec(mf.toT)}
 }
 
@@ -563,7 +565,7 @@ func (mf motionFrame) placeFrom(x ratVec) ratVec {
 	for i := range 3 {
 		sum := new(big.Rat).Set(mf.fromT[i])
 		for j := range 3 {
-			sum.Add(sum, ratMul(mf.fromRot[i][j].lo, x[j]))
+			sum.Add(sum, proofbound.RatMul(mf.fromRot[i][j].Lo, x[j]))
 		}
 		out[i] = sum
 	}
@@ -578,7 +580,7 @@ func (mf motionFrame) placeFrom(x ratVec) ratVec {
 // R·(B(P0)·p + t(P0) − c) + c + s, so they differ by at most
 // ‖B(C) − R·B(P0)‖_F·r0 + |t(C) − (R·(t(P0) − c) + c + s)|. Every float is
 // read exactly off Basis()/Translation(), and both norms are rational
-// enclosures rooted by ratSqrtUp, so η covers every rounding the pose
+// enclosures rooted by proofbound.RatSqrtUp, so η covers every rounding the pose
 // committed: math.Sincos, Rodrigues' formula, the pivot offset, Then, and
 // the rounded π/180 of a degree-stated angle.
 //
@@ -594,7 +596,7 @@ func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64
 	bc, bp := composed.Basis(), placement.Basis()
 	colsC := [3]r3.Vec{bc.EX, bc.EY, bc.EZ}
 	colsP := [3]r3.Vec{bp.EX, bp.EY, bp.EZ}
-	var linear []ratInterval
+	var linear []proofbound.RatInterval
 	for j := range 3 {
 		c, okC := ratVecOf(colsC[j])
 		p, okP := ratVecOf(colsP[j])
@@ -612,13 +614,13 @@ func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64
 	}
 	idealT := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(pointVec(tp), ideal.pivot)), ideal.pivot), ideal.shift)
 	dt := ivVecSub(pointVec(tc), idealT)
-	transUp := ratSqrtUp(magnitudeSquaredUpper(dt[:]...))
+	transUp := proofbound.RatSqrtUp(magnitudeSquaredUpper(dt[:]...))
 	linSq := magnitudeSquaredUpper(linear...)
 	if linSq.Sign() == 0 {
 		return transUp, 0
 	}
-	linUp := ratSqrtUp(linSq)
-	return absSumUpper(productUpper(linUp, r0), transUp), linUp
+	linUp := proofbound.RatSqrtUp(linSq)
+	return proofbound.AbsSumUpper(proofbound.ProductUpper(linUp, r0), transUp), linUp
 }
 
 // basisSigmaLower is a proven lower bound on the smallest singular value of a
@@ -637,7 +639,7 @@ func basisSigmaLower(t r3.Transform) float64 {
 	case e.Cmp(big.NewRat(1, 1)) >= 0:
 		return 0
 	}
-	return ratSqrtDown(new(big.Rat).Sub(big.NewRat(1, 1), e))
+	return proofbound.RatSqrtDown(new(big.Rat).Sub(big.NewRat(1, 1), e))
 }
 
 // basisSigmaUpper is basisSigmaLower's mirror: a proven upper bound on the
@@ -653,7 +655,7 @@ func basisSigmaUpper(t r3.Transform) float64 {
 	case e.Sign() == 0:
 		return 1
 	}
-	return ratSqrtUp(new(big.Rat).Add(big.NewRat(1, 1), e))
+	return proofbound.RatSqrtUp(new(big.Rat).Add(big.NewRat(1, 1), e))
 }
 
 // basisDefectUpper is a proven upper bound on ‖BᵀB − I‖_F for a transform's
@@ -670,27 +672,27 @@ func basisDefectUpper(t r3.Transform) (*big.Rat, bool) {
 		}
 		cols[j] = c
 	}
-	var defect []ratInterval
+	var defect []proofbound.RatInterval
 	for i := range 3 {
 		for j := range 3 {
-			e := ratAdd(ratMul(cols[i][0], cols[j][0]), ratMul(cols[i][1], cols[j][1]), ratMul(cols[i][2], cols[j][2]))
+			e := proofbound.RatAdd(proofbound.RatMul(cols[i][0], cols[j][0]), proofbound.RatMul(cols[i][1], cols[j][1]), proofbound.RatMul(cols[i][2], cols[j][2]))
 			if i == j {
 				e.Sub(e, big.NewRat(1, 1))
 			}
-			defect = append(defect, pointInterval(e))
+			defect = append(defect, proofbound.PointInterval(e))
 		}
 	}
 	sq := magnitudeSquaredUpper(defect...)
 	if sq.Sign() == 0 {
 		return new(big.Rat), true
 	}
-	e := proofarith.FloatRat(ratSqrtUp(sq))
+	e := proofarith.FloatRat(proofbound.RatSqrtUp(sq))
 	return e, e != nil
 }
 
 // pathAreaUpper bounds the mover's surface area at every point of the straight
 // path between the float pose's image and the ideal pose's — the area
-// sweptVolumeAllow's own contract asks for along the WHOLE path. Relative to
+// proofbound.SweptVolumeAllow's own contract asks for along the WHOLE path. Relative to
 // the mover at rest, a point of that path is M_t·x + c with
 // M_t = R + (1 − t)·(B(C) − R·B(P0))·B(P0)⁻¹, so
 // ‖M_t‖₂ ≤ ‖R‖₂ + linear/sigma, and an area scales by at most ‖M_t‖₂². area
@@ -709,10 +711,10 @@ func pathAreaUpper(area, linear, sigma, base float64) float64 {
 		if base == 1 {
 			return area
 		}
-		return productUpper(area, productUpper(base, base))
+		return proofbound.ProductUpper(area, proofbound.ProductUpper(base, base))
 	}
-	stretch := absSumUpper(base, divUpper(linear, sigma))
-	return productUpper(area, productUpper(stretch, stretch))
+	stretch := proofbound.AbsSumUpper(base, proofbound.DivUpper(linear, sigma))
+	return proofbound.ProductUpper(area, proofbound.ProductUpper(stretch, stretch))
 }
 
 // exceedsResolution reports whether the interval between two exact parameters
@@ -731,16 +733,16 @@ func exceedsResolution(p, q, res motionParam) bool {
 	case dTurn.Sign() == 0 && res.turn.Sign() == 0:
 		return new(big.Rat).Abs(dBase).Cmp(res.base) > 0
 	}
-	twoPi := twoPiInterval()
-	width := intervalAdd(intervalScale(twoPi, dTurn), pointInterval(dBase))
+	twoPi := proofbound.TwoPiInterval()
+	width := proofbound.IntervalAdd(proofbound.IntervalScale(twoPi, dTurn), proofbound.PointInterval(dBase))
 	lower := new(big.Rat)
 	switch {
-	case width.lo.Sign() > 0:
-		lower = width.lo
-	case width.hi.Sign() < 0:
-		lower = new(big.Rat).Neg(width.hi)
+	case width.Lo.Sign() > 0:
+		lower = width.Lo
+	case width.Hi.Sign() < 0:
+		lower = new(big.Rat).Neg(width.Hi)
 	}
-	upper := new(big.Rat).Mul(twoPi.hi, res.turn)
+	upper := new(big.Rat).Mul(twoPi.Hi, res.turn)
 	upper.Add(upper, res.base)
 	return lower.Cmp(upper) > 0
 }
@@ -765,32 +767,32 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 		if err != nil {
 			return math.Inf(1)
 		}
-		coordUpper = absSumUpper(coordUpper, pl.sectionDelta)
-		zUpper := absSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
-		return absSumUpper(
+		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
+		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
+		return proofbound.AbsSumUpper(
 			vecL1(pl.frame.Origin()),
-			productUpper(vecL1(pl.frame.U()), coordUpper),
-			productUpper(vecL1(pl.frame.V()), coordUpper),
-			productUpper(vecL1(pl.frame.N()), zUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
 		)
 	case revolvePayload:
 		coordUpper, err := profileCoordinateUpper(pl.profile, newFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)
 		}
-		coordUpper = absSumUpper(coordUpper, pl.sectionDelta)
+		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
 		originUpper := vecL1(pl.frame.Origin())
-		profileUpper := absSumUpper(
+		profileUpper := proofbound.AbsSumUpper(
 			originUpper,
-			productUpper(vecL1(pl.frame.U()), coordUpper),
-			productUpper(vecL1(pl.frame.V()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.U()), coordUpper),
+			proofbound.ProductUpper(vecL1(pl.frame.V()), coordUpper),
 		)
-		axisUpper := absSumUpper(
+		axisUpper := proofbound.AbsSumUpper(
 			originUpper,
-			productUpper(vecL1(pl.frame.U()), absSumUpper(pl.ax.aU, pl.ax.aUBound)),
-			productUpper(vecL1(pl.frame.V()), absSumUpper(pl.ax.aV, pl.ax.aVBound)),
+			proofbound.ProductUpper(vecL1(pl.frame.U()), proofbound.AbsSumUpper(pl.ax.aU, pl.ax.aUBound)),
+			proofbound.ProductUpper(vecL1(pl.frame.V()), proofbound.AbsSumUpper(pl.ax.aV, pl.ax.aVBound)),
 		)
-		return absSumUpper(productUpper(3, profileUpper), productUpper(4, axisUpper))
+		return proofbound.AbsSumUpper(proofbound.ProductUpper(3, profileUpper), proofbound.ProductUpper(4, axisUpper))
 	default:
 		return math.Inf(1)
 	}
@@ -847,7 +849,7 @@ func startCorners(box Box, mf motionFrame) ([8]ratVec, bool) {
 // nowhere near the rest box in general), and each image's squared distance
 // from the axis line, |(x − c) × a|²/|a|², is taken exactly over rationals;
 // distance from a line is convex, so its maximum over the hull of the images
-// sits at one of them. ratSqrtUp roots the largest. A rotation about the axis
+// sits at one of them. proofbound.RatSqrtUp roots the largest. A rotation about the axis
 // and a slide along it both preserve every point's distance from it, so this
 // one reading covers every pose.
 func moverAxisRadius(b *Body, mf motionFrame) float64 {
@@ -856,23 +858,23 @@ func moverAxisRadius(b *Body, mf motionFrame) float64 {
 		return math.Inf(1)
 	}
 	a := mf.axis
-	sq := ratAdd(ratMul(a[0], a[0]), ratMul(a[1], a[1]), ratMul(a[2], a[2]))
+	sq := proofbound.RatAdd(proofbound.RatMul(a[0], a[0]), proofbound.RatMul(a[1], a[1]), proofbound.RatMul(a[2], a[2]))
 	best := new(big.Rat)
 	for _, x := range corners {
 		var w ratVec
 		for i := range 3 {
 			w[i] = new(big.Rat).Sub(x[i], mf.center[i])
 		}
-		cx := new(big.Rat).Sub(ratMul(w[1], a[2]), ratMul(w[2], a[1]))
-		cy := new(big.Rat).Sub(ratMul(w[2], a[0]), ratMul(w[0], a[2]))
-		cz := new(big.Rat).Sub(ratMul(w[0], a[1]), ratMul(w[1], a[0]))
-		d := ratAdd(ratMul(cx, cx), ratMul(cy, cy), ratMul(cz, cz))
+		cx := new(big.Rat).Sub(proofbound.RatMul(w[1], a[2]), proofbound.RatMul(w[2], a[1]))
+		cy := new(big.Rat).Sub(proofbound.RatMul(w[2], a[0]), proofbound.RatMul(w[0], a[2]))
+		cz := new(big.Rat).Sub(proofbound.RatMul(w[0], a[1]), proofbound.RatMul(w[1], a[0]))
+		d := proofbound.RatAdd(proofbound.RatMul(cx, cx), proofbound.RatMul(cy, cy), proofbound.RatMul(cz, cz))
 		d.Quo(d, sq)
 		if d.Cmp(best) > 0 {
 			best = d
 		}
 	}
-	return ratSqrtUp(best)
+	return proofbound.RatSqrtUp(best)
 }
 
 // moverTravel is τ of docs/motion-check-design.md §5.2 as an exact rational:
@@ -962,6 +964,6 @@ func sweptBoxLower(mLo, mHi ratVec, static Box) (float64, bool) {
 	if best == nil {
 		return 0, false
 	}
-	lower := ratFloatDown(best)
+	lower := proofbound.RatFloatDown(best)
 	return lower, lower > 0
 }

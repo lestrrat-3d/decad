@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -213,7 +215,7 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 
 // newRegion2Budget is newRegion2 with cancellation charged to the caller's
 // shared coplanar-scan budget.
-func newRegion2Budget(budget *workBudget, elems []surveyElem) (region2, error) {
+func newRegion2Budget(budget *proofbound.WorkBudget, elems []surveyElem) (region2, error) {
 	scale := 1.0
 	grow := func(vs ...float64) {
 		for _, v := range vs {
@@ -223,7 +225,7 @@ func newRegion2Budget(budget *workBudget, elems []surveyElem) (region2, error) {
 		}
 	}
 	for _, e := range elems {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return region2{}, err
 		}
 		if e.kind == surveyLine {
@@ -235,16 +237,16 @@ func newRegion2Budget(budget *workBudget, elems []surveyElem) (region2, error) {
 	return region2{elems: elems, scale: scale}, nil
 }
 
-func regionContainsBudget(budget *workBudget, r region2, px, py float64) (bool, bool, error) {
+func regionContainsBudget(budget *proofbound.WorkBudget, r region2, px, py float64) (bool, bool, error) {
 	for i := range 16 {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, false, err
 		}
 		th := 0.5 + float64(i)*2.399963229728653
 		dx, dy := math.Cos(th), math.Sin(th)
 		crossings, ok := 0, true
 		for _, e := range r.elems {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, false, err
 			}
 			n, good := rayCrossings(e, px, py, dx, dy, r.tol())
@@ -261,10 +263,10 @@ func regionContainsBudget(budget *workBudget, r region2, px, py float64) (bool, 
 	return false, false, nil
 }
 
-func regionBoundaryDistBudget(budget *workBudget, r region2, px, py float64) (float64, error) {
+func regionBoundaryDistBudget(budget *proofbound.WorkBudget, r region2, px, py float64) (float64, error) {
 	best := math.Inf(1)
 	for _, e := range r.elems {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, err
 		}
 		d, _, _ := e.nearest(px, py, survTiny*r.scale)
@@ -275,7 +277,7 @@ func regionBoundaryDistBudget(budget *workBudget, r region2, px, py float64) (fl
 	return best, nil
 }
 
-func regionClassifyBudget(budget *workBudget, r region2, px, py, margin float64) (int, error) {
+func regionClassifyBudget(budget *proofbound.WorkBudget, r region2, px, py, margin float64) (int, error) {
 	distance, err := regionBoundaryDistBudget(budget, r, px, py)
 	if err != nil {
 		return 0, err
@@ -296,10 +298,10 @@ func regionClassifyBudget(budget *workBudget, r region2, px, py, margin float64)
 	return -1, nil
 }
 
-func regionSamplesBudget(budget *workBudget, r region2) ([][2]float64, error) {
+func regionSamplesBudget(budget *proofbound.WorkBudget, r region2) ([][2]float64, error) {
 	var out [][2]float64
 	for _, e := range r.elems {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if e.kind == surveyLine {
@@ -314,9 +316,9 @@ func regionSamplesBudget(budget *workBudget, r region2) ([][2]float64, error) {
 	return out, nil
 }
 
-func regionInteriorPointBudget(budget *workBudget, r region2) ([2]float64, bool, error) {
+func regionInteriorPointBudget(budget *proofbound.WorkBudget, r region2) ([2]float64, bool, error) {
 	for _, e := range r.elems {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return [2]float64{}, false, err
 		}
 		var px, py, nx, ny float64
@@ -331,7 +333,7 @@ func regionInteriorPointBudget(budget *workBudget, r region2) ([2]float64, bool,
 			nx, ny = -s*math.Cos(th), -s*math.Sin(th)
 		}
 		for _, f := range []float64{0.25, 0.03, 1e-4} {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return [2]float64{}, false, err
 			}
 			step := f * r.scale
@@ -831,7 +833,7 @@ func faceFootExtent(f *cFace) float64 {
 // plane through o with the TRUE normal n_true, the rounded plane's own
 // equation reads n·(p−o) = (n−n_true)·(p−o) + n_true·(p−o) = (n−n_true)·(p−o)
 // — the second term vanishes by definition of the true plane — which
-// Cauchy–Schwarz bounds by |n−n_true|·|p−o|. dirRoundAllow bounds the first
+// Cauchy–Schwarz bounds by |n−n_true|·|p−o|. proofbound.DirRoundAllow bounds the first
 // factor for the frame/placement composition every such normal is built
 // through (a unit-scale input, since every direction this file feeds it is a
 // unit or axis vector); the ×4 safety factor is prismPointBound's own rule
@@ -842,8 +844,8 @@ func planeTiltAllow(f *cFace, frame r3.Frame, xform r3.Transform) float64 {
 	if f.kind != ckPlane {
 		return 0
 	}
-	normalErr := productUpper(4, dirRoundAllow(frame, xform, 1))
-	return productUpper(normalErr, faceFootExtent(f))
+	normalErr := proofbound.ProductUpper(4, proofbound.DirRoundAllow(frame, xform, 1))
+	return proofbound.ProductUpper(normalErr, faceFootExtent(f))
 }
 
 // bodyFaceTiltDelta is the worst planeTiltAllow over every planar face a
@@ -886,7 +888,7 @@ func (e *cEdge) at(th float64) r3.Vec {
 // denotes (docs/clearance-design.md §2's payload-adapter displacement,
 // docs/payload-verification-design.md §2.3's delta(X)). addPrismFaces and
 // addRevolveFaces fold in the payload's own frame/placement point-rounding
-// (bounds.go's frameAndPlacementRoundAllow, the identical charge
+// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow, the identical charge
 // topology.go's Vertex.Position already takes), the payload's own proven
 // axial or angular displacement, and the per-face tilt a rounded carrier
 // normal commits across that face's own extent (bodyFaceTiltDelta, below).
@@ -921,7 +923,7 @@ func perpTo(a r3.Vec) r3.Vec {
 // payloads. Faceted and other multi-lump bodies bypass analytic containment
 // and proceed to read-only intersection; ok is false, never a partial model.
 func newBodyGeom(b *Body) (*bodyGeom, bool) {
-	g, ok, err := newBodyGeomBudget(newWorkBudget(context.Background()), b)
+	g, ok, err := newBodyGeomBudget(proofbound.NewWorkBudget(context.Background()), b)
 	if err != nil {
 		// A background budget never cancels, so this is unreachable.
 		return nil, false
@@ -934,8 +936,8 @@ func newBodyGeom(b *Body) (*bodyGeom, bool) {
 // §7.2 carries the context through the entire read-only path — so the whole
 // build steps the caller's budget rather than making cancellation wait for both
 // operands to finish.
-func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
-	if err := budget.err(); err != nil {
+func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool, error) {
+	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
 	if len(b.lumps) != 1 {
@@ -964,7 +966,7 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 	case stitchPayload:
 		// Refuse outright unless the recorded triangle set exists (an
 		// all-planar body, open or closed — tessellate_stitch.go's own gate).
-		// A bounded body — placed (stitch.go's rigidRoundAllow widens every
+		// A bounded body — placed (stitch.go's proofbound.RigidRoundAllow widens every
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — no longer refuses on that alone: bodyGeom.delta now
 		// exists for it to charge its own worst vertex bound against
@@ -994,7 +996,7 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 	}
 	g.supports = append([]r3.Vec{}, g.verts...)
 	for _, f := range g.faces {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
 		g.supports = append(g.supports, f.wit...)
@@ -1006,9 +1008,9 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 // for the §2 nesting casts. Every shell earns a witness, void shells included:
 // a void shell of one body can lie wholly inside the other body's material, so
 // its membership is not implied by any other shell's.
-func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
+func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, error) {
 	for _, e := range b.Edges() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		ce, ok := newCEdge(e)
@@ -1020,13 +1022,13 @@ func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
 		}
 	}
 	for _, v := range b.Vertices() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		g.verts = append(g.verts, v.position)
 	}
 	for _, sh := range b.Shells() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		w, ok := shellWitness(sh)
@@ -1123,7 +1125,7 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // every wall regardless — it is not cap-only construction, it is the shared
 // check that a wall's own segment kind is one this kernel can model at all —
 // only the cap-only region built from its result is skipped.
-func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
+func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload) (bool, error) {
 	if pp.sectionDelta != 0 {
 		// The kernel's certificates are exact statements about the carriers it
 		// reads, so a section the payload only holds within a displacement of
@@ -1149,7 +1151,7 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 	maxCoordUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			el, ok := walkElem(w.segmentWalk)
@@ -1247,8 +1249,8 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 	// tilt a rounded carrier normal commits (every u, v and n above came from
 	// pp.dir). It is exactly zero for an axis-aligned, unplaced, feature-built
 	// prism, which is what keeps an ordinary extrude's Clearance rows Exact.
-	pointTerm := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
-	g.delta = absSumUpper(pointTerm, pp.axialDelta(), bodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
+	pointTerm := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), bodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
 	g.carrierDelta = g.delta
 	return true, nil
 }
@@ -1293,7 +1295,7 @@ func capWitnesses(f *cFace) []r3.Vec {
 // bodyGeom.delta below, beside the payload's own frame/placement point
 // rounding and the per-face tilt term every plane carrier here can commit
 // (bodyGeom's own doc comment).
-func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
+func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayload) (bool, error) {
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -1323,7 +1325,7 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 	maxAxisRadiusUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			kind := rp.ax.classify(w.segmentWalk)
@@ -1470,15 +1472,15 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 	// an axis-aligned, unplaced, full-turn revolve, which is what keeps an
 	// ordinary revolve's Clearance rows Exact.
 	pointTerm := revolveVertexFrameLiftAllow(rp, maxAxisRadiusUpper)
-	angularTerm := productUpper(maxAxisRadiusUpper, rp.angularDelta())
+	angularTerm := proofbound.ProductUpper(maxAxisRadiusUpper, rp.angularDelta())
 	tiltTerm := bodyFaceTiltDelta(g.faces, rp.frame, rp.xform)
-	g.delta = absSumUpper(pointTerm, angularTerm, tiltTerm)
+	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)
 	g.carrierDelta = g.delta
 	if rp.full {
 		// A full turn builds no cap faces and gives every carrier the full
 		// angular window, so the end angles the angular term charges place
 		// only seams and witnesses on the complete surface of revolution.
-		g.carrierDelta = absSumUpper(pointTerm, tiltTerm)
+		g.carrierDelta = proofbound.AbsSumUpper(pointTerm, tiltTerm)
 	}
 	return true, nil
 }
@@ -1501,9 +1503,9 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 // call as a reject-only confirmation (CLAUDE.md's reject-only rule): ear
 // clipping tiles the polygon, so every centroid is interior by construction,
 // and this filter costs nothing more than a proof it never fires wrong.
-func (g *bodyGeom) addStitchFaces(budget *workBudget, b *Body, sp stitchPayload) (bool, error) {
+func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp stitchPayload) (bool, error) {
 	for _, f := range b.Faces() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		pl, ok := f.surface.(Plane)
@@ -1528,7 +1530,7 @@ func (g *bodyGeom) addStitchFaces(budget *workBudget, b *Body, sp stitchPayload)
 			}
 			local := make([]r3.Vec, cnt)
 			for i, ce := range l.coedges {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return false, err
 				}
 				v := ce.Start().position
@@ -1553,7 +1555,7 @@ func (g *bodyGeom) addStitchFaces(budget *workBudget, b *Body, sp stitchPayload)
 			if sp.triFaces[i] != f {
 				continue
 			}
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			a, b2, c := sp.verts[tri[0]], sp.verts[tri[1]], sp.verts[tri[2]]
@@ -1622,14 +1624,14 @@ func clrLadder() []r3.Vec {
 // ambiguous.
 
 func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool, bool, error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for _, dir := range clrLadder() {
 		if err := ctx.Err(); err != nil {
 			return false, false, err
 		}
 		total, ok := 0, true
 		for _, f := range g.faces {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, false, err
 			}
 			n, good, err := f.rayCrossings(ctx, p, dir, tol)
@@ -1808,7 +1810,7 @@ func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) 
 		return 0, false, nil
 	}
 	perp := rpSub(perpBase, rpMul(axial, axial))
-	four, ok := ratOf(4 * f.major * f.major)
+	four, ok := proofbound.RatOf(4 * f.major * f.major)
 	if !ok {
 		return 0, false, nil
 	}

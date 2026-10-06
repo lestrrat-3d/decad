@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -109,7 +111,7 @@ var errFreeformSection = fmt.Errorf(`%w: the wall survey does not support a free
 // recordLoops resolves the recorded profile into coalesced walk loops,
 // exactly as the prism evaluator builds its side faces — the surveys must
 // see the same face decomposition the topology carries.
-func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error) {
+func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]sideWalk, error) {
 	// One free-form counter for the whole record: the surveys read a built body's
 	// own section with no preflight counter in hand, so the ceiling starts here
 	// and spans every loop below.
@@ -148,7 +150,7 @@ func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error
 
 // recordLoopsBudget names the operation-budget form used by cancellation
 // probes and by callers that distinguish profile scanning from other surveys.
-func recordLoopsBudget(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error) {
+func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]sideWalk, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
 	}
@@ -157,7 +159,7 @@ func recordLoopsBudget(budget *workBudget, profile ProfileRecord) ([][]sideWalk,
 
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
-func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
+func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]sideWalk, error) {
 	// One free-form counter for the whole record, as recordLoops opens.
 	work := newFreeformWork()
 	var out [][]sideWalk
@@ -248,7 +250,7 @@ func junctionPinch(inU, inV, outU, outV, alpha float64) bool {
 // disks lift to balls when their diameter fits the height, the parallel caps
 // span whenever a disk of half the height fits the section, and a profile
 // corner within the allowance pinches to zero.
-func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome, error) {
+func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (wallOutcome, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
@@ -312,7 +314,7 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 		}
 	}
 	h := pp.z1 - pp.z0
-	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, exactScalar(0), false, h)
+	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, proofbound.ExactScalar(0), false, h)
 	if err != nil {
 		return wallOutcome{}, err
 	}
@@ -361,10 +363,10 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	// coordinates rather than by an angle-limit division. The boundary case
 	// the gate exists for is the cube, whose inradius equals h/2 exactly and
 	// clears by the whole of k.tol.
-	switch admitAbove(measuredScalar(out.inradius, out.inradiusBound), h/2-k.tol) {
-	case survAdmit:
+	switch proofbound.AdmitAbove(proofbound.MeasuredScalar(out.inradius, out.inradiusBound), h/2-k.tol) {
+	case proofbound.SurvAdmit:
 		agg.take(h, heightArmBound(pp))
-	case survStraddle:
+	case proofbound.SurvStraddle:
 		return wallOutcome{}, nil
 	}
 	if agg.empty() && !agg.unbounded {
@@ -395,7 +397,7 @@ func heightArmBound(pp prismPayload) float64 {
 	}
 	h := pp.z1 - pp.z0
 	subErr := ratAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
-	return absSumUpper(pp.z0Delta, pp.z1Delta, subErr)
+	return proofbound.AbsSumUpper(pp.z0Delta, pp.z1Delta, subErr)
 }
 
 // revolveWall is the spanning-ball reading of a revolved body, computed in
@@ -405,7 +407,7 @@ func heightArmBound(pp prismPayload) float64 {
 // sweep's are the plain section's disks constrained by the cap wedge —
 // whose own two contacts span exactly when the sweep is within the
 // allowance, the on-axis cap edge (dihedral = the sweep itself) included.
-func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutcome, error) {
+func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64) (wallOutcome, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
@@ -423,9 +425,9 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	// bound may never be floored at some coarse magnitude ceiling the way a
 	// mere size estimate can be: a bound wider than the value would refuse
 	// every wedge candidate below.
-	dphiBS := boundedSub(exactScalar(rp.phi1), exactScalar(rp.phi0))
-	dphiBS.bound = absSumUpper(dphiBS.bound, rp.angularDelta())
-	dphi := dphiBS.value
+	dphiBS := proofbound.BoundedSub(proofbound.ExactScalar(rp.phi1), proofbound.ExactScalar(rp.phi0))
+	dphiBS.Bound = proofbound.AbsSumUpper(dphiBS.Bound, rp.angularDelta())
+	dphi := dphiBS.Value
 	var elems, containOnly []surveyElem
 	var verts [][2]float64
 	pinch := false
@@ -494,7 +496,7 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 			}
 		}
 	}
-	wedgeS := exactScalar(0)
+	wedgeS := proofbound.ExactScalar(0)
 	wedgeSpans := false
 	if !rp.full {
 		// A mid-sweep ball at meridian radius ρ clears each cap HALF-plane
@@ -513,14 +515,14 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 		// 1-Lipschitz — halving is exact, so half the subtraction's bound is
 		// the whole displacement the half-angle can carry.
 		sinBS, _ := radianTrigBounds(math.Min(dphi/2, math.Pi/2))
-		wedgeS = measuredScalar(sinBS.value, absSumUpper(sinBS.bound, dphiBS.bound/2))
-		if isNonFinite(wedgeS.bound) {
+		wedgeS = proofbound.MeasuredScalar(sinBS.Value, proofbound.AbsSumUpper(sinBS.Bound, dphiBS.Bound/2))
+		if proofbound.IsNonFinite(wedgeS.Bound) {
 			// No proven enclosure of the cap half-angle's sine: every
 			// wedge-derived candidate would publish an unusable interval, so
 			// the survey is undecided rather than silently exact.
 			return wallOutcome{}, nil
 		}
-		if admitAbove(wedgeS, 0) != survAdmit {
+		if proofbound.AdmitAbove(wedgeS, 0) != proofbound.SurvAdmit {
 			// The kernel reads a positive wedge sine as "this body has caps",
 			// so the sine must be PROVEN positive before it is handed over: a
 			// sweep whose half-angle cannot be told from zero would otherwise
@@ -862,11 +864,11 @@ func (ra extremeAggregate) resolve() (float64, float64, bool) {
 	}
 	sum := new(big.Rat).Add(ra.lo, ra.hi)
 	mid, _ := new(big.Rat).Mul(sum, big.NewRat(1, 2)).Float64()
-	if isNonFinite(mid) {
+	if proofbound.IsNonFinite(mid) {
 		return 0, 0, false
 	}
 	bound := math.Max(ratAbsDiff(ra.lo, mid), ratAbsDiff(ra.hi, mid))
-	if isNonFinite(bound) {
+	if proofbound.IsNonFinite(bound) {
 		return 0, 0, false
 	}
 	return mid, bound, true
@@ -955,10 +957,10 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// exactly zero. Both are zero only where the walk's own
 				// arithmetic committed neither, which is what leaves an
 				// axis-aligned frame's untouched end reading Exact.
-				tanU := measuredScalar(w.tanInU, w.tanInBound)
-				tanV := measuredScalar(w.tanInV, w.tanInBound)
-				lBS := boundedNorm2(tanU, tanV)
-				nrBS := boundedQuotient(-w.tanInU, w.tanInBound, lBS.value, lBS.bound)
+				tanU := proofbound.MeasuredScalar(w.tanInU, w.tanInBound)
+				tanV := proofbound.MeasuredScalar(w.tanInV, w.tanInBound)
+				lBS := proofbound.BoundedNorm2(tanU, tanV)
+				nrBS := proofbound.BoundedQuotient(-w.tanInU, w.tanInBound, lBS.Value, lBS.Bound)
 				// survAngTol is the line this survey DECLARES, not a
 				// measurement: a wall within 1e-9 radians of parallel to the
 				// axis has a parallel-circle radius of at least 1e9·ρ, which is
@@ -969,18 +971,18 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// become the aggregate's minimum beside a candidate of ordinary
 				// size, and its denominator's clearance at the threshold keeps
 				// its bound finite rather than leaving the survey undecided.
-				if admitBelow(nrBS, -survAngTol) != survReject {
+				if proofbound.AdmitBelow(nrBS, -survAngTol) != proofbound.SurvReject {
 					// The nearer end of the wall is the INTERVAL minimum of the
-					// two ends' proven radial coordinates (boundedMin), never
+					// two ends' proven radial coordinates (proofbound.BoundedMin), never
 					// the interval of whichever held value compared smaller:
 					// the two ends carry their own independent bounds, so the
 					// end that holds larger can still be the truly nearer one.
-					minSV := boundedMin(
-						measuredScalar(w.startV, w.startVBound),
-						measuredScalar(w.endV, w.endVBound),
+					minSV := proofbound.BoundedMin(
+						proofbound.MeasuredScalar(w.startV, w.startVBound),
+						proofbound.MeasuredScalar(w.endV, w.endVBound),
 					)
-					vBS := boundedQuotient(minSV.value, minSV.bound, -nrBS.value, nrBS.bound)
-					agg.take(vBS.value, vBS.bound)
+					vBS := proofbound.BoundedQuotient(minSV.Value, minSV.Bound, -nrBS.Value, nrBS.Bound)
+					agg.take(vBS.Value, vBS.Bound)
 				}
 				continue
 			}
@@ -1008,21 +1010,21 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// math.Sin's undocumented accuracy — the same rational
 				// bracket a Cone's own normal reads (normal_bound.go).
 				sinBS, _ := radianTrigBounds(th)
-				nrBS := boundedMul(exactScalar(sigma), sinBS)
+				nrBS := proofbound.BoundedMul(proofbound.ExactScalar(sigma), sinBS)
 				// The same declared line, read the same way: a straddling
 				// meridian normal admits its candidate rather than dropping it,
 				// and that candidate's own size keeps it out of the minimum.
-				if admitBelow(nrBS, -survAngTol) == survReject {
+				if proofbound.AdmitBelow(nrBS, -survAngTol) == proofbound.SurvReject {
 					continue
 				}
 				// w.cV is the axis frame's own re-expression of the circular
 				// walk's recorded center, so it takes cVBound beside it rather
 				// than reading as an exact leaf — the same account startV/endV
 				// take above.
-				rhoBS := boundedAdd(measuredScalar(w.cV, w.cVBound), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
-				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
-				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
-				agg.take(resultBS.value, resultBS.bound)
+				rhoBS := proofbound.BoundedAdd(proofbound.MeasuredScalar(w.cV, w.cVBound), proofbound.BoundedMul(proofbound.MeasuredScalar(w.radius, w.radiusBound), sinBS))
+				negNrBS := proofbound.MeasuredScalar(-nrBS.Value, nrBS.Bound)
+				resultBS := proofbound.BoundedQuotient(rhoBS.Value, rhoBS.Bound, negNrBS.Value, negNrBS.Bound)
+				agg.take(resultBS.Value, resultBS.Bound)
 			}
 		}
 	}
@@ -1035,7 +1037,7 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 	return cupWalksBudget(nil, loop)
 }
 
-func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
+func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]sideWalk, error) {
 	loops, err := recordLoopsBudget(budget, ProfileRecord{Outer: loop})
 	if err != nil {
 		return nil, err
@@ -1052,7 +1054,7 @@ func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
 // displacement is zero; the pinch reading is always Exact zero. The theorem
 // consumes the payload's morphology, not caller input: it rebuilds and
 // audits the offset relation before trusting it.
-func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
+func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 	isCancellation := func(err error) bool {
 		return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
@@ -1334,7 +1336,7 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 	}
 	out, ok := prismMinRadius(prismPayload{profile: profile})
 	if ok && out.ok && out.reading != nil && cp.offsetDelta > 0 {
-		out.bound = absSumUpper(out.bound, cp.offsetDelta)
+		out.bound = proofbound.AbsSumUpper(out.bound, cp.offsetDelta)
 	}
 	return out, ok
 }
@@ -1382,7 +1384,7 @@ type surveyResults struct {
 // undecided. verify_publish.go's assembler maps the returned outcomes onto
 // the private result vocabulary; this function never builds that vocabulary
 // itself.
-func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
+func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return surveyResults{}, nil, err
 	}

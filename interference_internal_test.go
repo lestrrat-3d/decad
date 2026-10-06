@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -141,15 +143,15 @@ func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
 
 func TestFacetCutCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	tri := [3]xpt{
-		xptOf(r3.NewVec(0, 0, 0)),
-		xptOf(r3.NewVec(10, 0, 0)),
-		xptOf(r3.NewVec(0, 10, 0)),
+	tri := [3]proofbound.Xpt{
+		proofbound.XptOf(r3.NewVec(0, 0, 0)),
+		proofbound.XptOf(r3.NewVec(10, 0, 0)),
+		proofbound.XptOf(r3.NewVec(0, 10, 0)),
 	}
-	normal := xcross(xsub(tri[1], tri[0]), xsub(tri[2], tri[0]))
+	normal := xcross(proofbound.Xsub(tri[1], tri[0]), proofbound.Xsub(tri[2], tri[0]))
 	seg := xseg{
-		a: xptOf(r3.NewVec(1, 1, 0)),
-		b: xptOf(r3.NewVec(2, 1, 0)),
+		a: proofbound.XptOf(r3.NewVec(1, 1, 0)),
+		b: proofbound.XptOf(r3.NewVec(2, 1, 0)),
 	}
 	segs := make([]xseg, 300)
 	for i := range segs {
@@ -202,7 +204,7 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 
 	t.Run("nested boundary scan", func(t *testing.T) {
 		ctx := &internalCancelContext{Context: t.Context(), limit: 1}
-		_, err := coplanarBoundaryClearanceBudget(newWorkBudget(ctx), f.region, g.region)
+		_, err := coplanarBoundaryClearanceBudget(proofbound.NewWorkBudget(ctx), f.region, g.region)
 		require.ErrorIs(t, err, context.Canceled)
 	})
 }
@@ -388,7 +390,7 @@ func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
 
 // The cancellation tests below each drive one loop that the interference
 // design's §7.2 polling rule covers. The work in each is sized past
-// workPollInterval on purpose: any run of workPollInterval consecutive budget
+// proofbound.WorkPollInterval on purpose: any run of proofbound.WorkPollInterval consecutive budget
 // steps contains a poll, so a loop that steps that many times must observe a
 // cancellation delivered before it started. internalFrameCancelContext then
 // proves the poll happened INSIDE the loop under test rather than at an earlier
@@ -450,22 +452,22 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 
 func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	verts := []xpt{
-		xptOf(r3.NewVec(0, 0, 0)),
-		xptOf(r3.NewVec(1000, 0, 0)),
-		xptOf(r3.NewVec(0, 1, 0)),
+	verts := []proofbound.Xpt{
+		proofbound.XptOf(r3.NewVec(0, 0, 0)),
+		proofbound.XptOf(r3.NewVec(1000, 0, 0)),
+		proofbound.XptOf(r3.NewVec(0, 1, 0)),
 	}
 	// An edge spanning the mesh diagonal sweeps the cells of the whole grid and
 	// every vertex standing in them, which is well past the polling interval on
 	// either count.
-	for i := range 2 * workPollInterval {
-		verts = append(verts, xptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
+	for i := range 2 * proofbound.WorkPollInterval {
+		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
 	}
-	scan, err := newConformScan(newWorkBudget(t.Context()), verts)
+	scan, err := newConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "edgeInteriorHits"}
 
-	_, err = scan.edgeInteriorHits(newWorkBudget(ctx), 0, 1, [3]int{0, 1, 2})
+	_, err = scan.edgeInteriorHits(proofbound.NewWorkBudget(ctx), 0, 1, [3]int{0, 1, 2})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the grid-cell candidate scan must poll, not run to completion between facet polls`)
@@ -473,18 +475,18 @@ func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 
 func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 	t.Parallel()
-	verts := []xpt{
-		xptOf(r3.NewVec(0, 0, 0)),
-		xptOf(r3.NewVec(10, 0, 0)),
-		xptOf(r3.NewVec(0, 1, 0)),
-		xptOf(r3.NewVec(4, 0, 0)),  // exactly interior to edge (0, 1)
-		xptOf(r3.NewVec(4, 5, 0)),  // off the edge
-		xptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
+	verts := []proofbound.Xpt{
+		proofbound.XptOf(r3.NewVec(0, 0, 0)),
+		proofbound.XptOf(r3.NewVec(10, 0, 0)),
+		proofbound.XptOf(r3.NewVec(0, 1, 0)),
+		proofbound.XptOf(r3.NewVec(4, 0, 0)),  // exactly interior to edge (0, 1)
+		proofbound.XptOf(r3.NewVec(4, 5, 0)),  // off the edge
+		proofbound.XptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
 	}
-	scan, err := newConformScan(newWorkBudget(t.Context()), verts)
+	scan, err := newConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
 
-	hits, err := scan.edgeInteriorHits(newWorkBudget(t.Context()), 0, 1, [3]int{0, 1, 2})
+	hits, err := scan.edgeInteriorHits(proofbound.NewWorkBudget(t.Context()), 0, 1, [3]int{0, 1, 2})
 	require.NoError(t, err)
 	require.Equal(t, []int{3}, hits,
 		`only the vertex exactly in the edge's interior conforms the subdivision`)
@@ -492,15 +494,15 @@ func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 
 func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	verts := []xpt{xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(1000, 0, 0))}
+	verts := []proofbound.Xpt{proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(1000, 0, 0))}
 	var hits []int
 	for i := range 300 {
-		verts = append(verts, xptOf(r3.NewVec(float64(300-i), 0, 0)))
+		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(300-i), 0, 0)))
 		hits = append(hits, i+2)
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sortAlongEdge"}
 
-	err := sortAlongEdge(newWorkBudget(ctx), verts, 0, 1, hits)
+	err := sortAlongEdge(proofbound.NewWorkBudget(ctx), verts, 0, 1, hits)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the along-edge ordering must poll rather than run its whole quadratic pass`)
@@ -508,13 +510,13 @@ func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 
 func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
 	t.Parallel()
-	verts := []xpt{xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0))}
+	verts := []proofbound.Xpt{proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0))}
 	for _, x := range []float64{7, 1, 4} {
-		verts = append(verts, xptOf(r3.NewVec(x, 0, 0)))
+		verts = append(verts, proofbound.XptOf(r3.NewVec(x, 0, 0)))
 	}
 	hits := []int{2, 3, 4} // parameters 0.7, 0.1, 0.4
 
-	require.NoError(t, sortAlongEdge(newWorkBudget(t.Context()), verts, 0, 1, hits))
+	require.NoError(t, sortAlongEdge(proofbound.NewWorkBudget(t.Context()), verts, 0, 1, hits))
 	require.Equal(t, []int{3, 4, 2}, hits,
 		`inserted vertices must come back ordered along the edge, nearest end first`)
 }
@@ -530,7 +532,7 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 	b := &Body{payload: prismPayload{profile: profile, z1: 1}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "loopRecordsEqual"}
 
-	_, err := analyticBodiesEqual(newWorkBudget(ctx), a, b)
+	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the set-identity walk must poll inside the per-segment comparison`)
@@ -553,7 +555,7 @@ func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 		{name: "different section", x: a, y: wider},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := analyticBodiesEqual(newWorkBudget(t.Context()), tc.x, tc.y)
+			got, err := analyticBodiesEqual(proofbound.NewWorkBudget(t.Context()), tc.x, tc.y)
 			require.NoError(t, err)
 			require.Equal(t, reflect.DeepEqual(tc.x.payload, tc.y.payload), got,
 				`the budgeted walk must agree with set identity for plain prism records`)
@@ -581,7 +583,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	pp.profile = ProfileRecord{Outer: LoopRecord{Segments: segs}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
 
-	_, _, err := newBodyGeomBudget(newWorkBudget(ctx), &Body{
+	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), &Body{
 		lumps:   body.lumps,
 		payload: pp,
 	})
@@ -593,12 +595,12 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
 	t.Parallel()
 	calls := 0
-	budget := &workBudget{
-		stepFn: func() error {
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error {
 			calls++
 			return context.Canceled
 		},
-		errFn: func() error { return nil },
+		ErrFn: func() error { return nil },
 	}
 	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
 		profile: ProfileRecord{Outer: LoopRecord{}},
@@ -630,7 +632,7 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ok, err := (&bodyGeom{}).addRevolveFaces(newWorkBudget(t.Context()), revolvePayload{
+			ok, err := (&bodyGeom{}).addRevolveFaces(proofbound.NewWorkBudget(t.Context()), revolvePayload{
 				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
 				ax:      axisFrame{dU: 1},
 			})

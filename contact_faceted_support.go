@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -78,14 +80,14 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		pp.meshBound < 0 || pp.volSymDiff < 0 {
 		return boundedFacetedExtent{}, false, nil
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	var proof boundedFacetedExtent
 	proof.bound = proofarith.MustDyOf(pp.meshBound)
 	for i, v := range pp.verts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return boundedFacetedExtent{}, false, err
 		}
-		if !finiteVec(v) {
+		if !proofbound.FiniteVec(v) {
 			return boundedFacetedExtent{}, false, nil
 		}
 		placed := exactContactTransform(pose, proofarith.DyVec(v))
@@ -98,7 +100,7 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 			}
 		}
 	}
-	return proof, true, budget.err()
+	return proof, true, budget.Err()
 }
 
 func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxContactProof) bool {
@@ -122,7 +124,7 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 		return Measurement{}, false
 	}
 	boundaryBound, _ := extent.bound.Float64()
-	bound := absSumUpper(reading.Bound.Base(), boundaryBound)
+	bound := proofbound.AbsSumUpper(reading.Bound.Base(), boundaryBound)
 	if !finiteMeasurementValues(bound) || reading.Value.Base()-bound <= 0 {
 		return Measurement{}, false
 	}
@@ -186,23 +188,23 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 			sourceVerts, placedFromSource = pp.exactSourceVerts, true
 		}
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return facetedAxisSupport{}, false, err
 	}
 	placed := make([]proofarith.DyV3, len(pp.verts))
 	var proof facetedAxisSupport
 	proof.axis, proof.side = axis, side
 	for i, v := range sourceVerts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
-		if !finiteVec(v) {
+		if !proofbound.FiniteVec(v) {
 			return facetedAxisSupport{}, false, nil
 		}
 		source := proofarith.DyVec(v)
 		if placedFromSource {
-			if !finiteVec(pp.verts[i]) {
+			if !proofbound.FiniteVec(pp.verts[i]) {
 				return facetedAxisSupport{}, false, nil
 			}
 			source = exactContactTransform(pp.xform, source)
@@ -254,7 +256,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	var area2 proofarith.Dyadic
 	first := true
 	for i, tri := range pp.tris {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
 		for _, vertex := range tri {
@@ -319,7 +321,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	// The source Face must name this support patch in full, rather than also
 	// naming a different-level facet that the solver would falsely include.
 	for i, tri := range pp.tris {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
 		if faces[pp.faceOf[i]] != proof.face {
@@ -332,7 +334,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		}
 	}
 	for i := range placed {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
 		if proofarith.DyCmp(placed[i][axis], proof.plane) == 0 && !covered[i] {
@@ -361,7 +363,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	case 2:
 		proof.normal.Z = float64(sign)
 	}
-	return proof, true, budget.err()
+	return proof, true, budget.Err()
 }
 
 // classifyFacetedFloorBox admits a faceted body only when its complete lower

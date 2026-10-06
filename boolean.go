@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -559,7 +561,7 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	}
 
 	// Bound composition (§9, the verification-design shapes; the helpers own
-	// every mechanism — bounds.go). The volume error obeys the
+	// every mechanism — internal/proofbound/bounds.go). The volume error obeys the
 	// symmetric-difference identity |1_{A∘B} − 1_{A'∘B'}| ≤ |1_A − 1_A'| +
 	// |1_B − 1_B'| for all three ops, so it is the sum of the operands' own
 	// symmetric-difference bounds — each δ · (that operand's held area) — plus
@@ -584,12 +586,12 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	}
 	// The final rounding's own volume error is what its vertex displacement
 	// sweeps out over the surface it acted on — the stitched surface BEFORE the
-	// weld dropped any collapsed facet from it (bounds.go, sweptVolumeAllow).
+	// weld dropped any collapsed facet from it (internal/proofbound/bounds.go, proofbound.SweptVolumeAllow).
 	// The held mesh's area is the WRONG yardstick here: a dropped facet is
 	// missing from it, and its swept volume would go uncharged. The area the
 	// weld dropped is likewise missing from every area the result reports, so
 	// it joins the operands' own chord deficit in areaSlack.
-	roundVol := sweptVolumeAllow(stitched.round, stitched.preArea)
+	roundVol := proofbound.SweptVolumeAllow(stitched.round, stitched.preArea)
 	meshBound, volSymDiff, areaSlack := booleanProofBounds(
 		rim, stitched.round, symA, symB, roundVol,
 		ma.areaSlack, mb.areaSlack, stitched.dropArea,
@@ -627,9 +629,9 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 func booleanProofBounds(rim, weldDelta, symA, symB, roundVol, slackA, slackB, dropArea float64) (
 	meshBound, volSymDiff, areaSlack float64,
 ) {
-	return absSumUpper(rim, weldDelta),
-		absSumUpper(symA, symB, roundVol),
-		absSumUpper(slackA, slackB, dropArea)
+	return proofbound.AbsSumUpper(rim, weldDelta),
+		proofbound.AbsSumUpper(symA, symB, roundVol),
+		proofbound.AbsSumUpper(slackA, slackB, dropArea)
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global
@@ -708,7 +710,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	default:
 		switch pl := b.payload.(type) {
 		case capBlendPayload:
-			refusal, aErr := capBlendOccupiedVolumeAdmission(newWorkBudget(ctx), pl)
+			refusal, aErr := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {
 				return aErr
 			}
@@ -718,7 +720,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			err = refusal
 		case stitchPayload:
 			if pl.tris != nil {
-				zeroBound, zErr := stitchZeroVertexBound(newWorkBudget(ctx), b)
+				zeroBound, zErr := stitchZeroVertexBound(proofbound.NewWorkBudget(ctx), b)
 				if zErr != nil {
 					return zErr
 				}
@@ -789,7 +791,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	fa, err := facesOfMesh(budget, ma)
 	if err != nil {
 		return err
@@ -800,7 +802,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 	}
 	for _, ga := range fa {
 		for _, gb := range fb {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			slack := ga.delta + gb.delta
@@ -925,7 +927,7 @@ func gatherNearContacts(ctx context.Context, bmA *boolMesh, fis []int, bmB *bool
 // point of that segment lies on both closed facets (triTriClassify).
 type contactSpan struct {
 	i, j   int
-	p0, p1 xpt
+	p0, p1 proofbound.Xpt
 }
 
 // maxDepthWitnessFacets caps how many contacting facets deepWitnessInside
@@ -1047,14 +1049,14 @@ func spanWitness(ctx context.Context, bmA, bmB *boolMesh, spans []contactSpan, b
 // of m and on facet fj of other, it steps toward every corner of facet fi that
 // lies strictly on the inner side of facet fj's plane and asks deepWitnessAt
 // about each step.
-func walkFacetFromSpan(ctx context.Context, mid xpt, m *boolMesh, fi int, other *boolMesh, fj int, all []int, b float64) (bool, error) {
+func walkFacetFromSpan(ctx context.Context, mid proofbound.Xpt, m *boolMesh, fi int, other *boolMesh, fj int, all []int, b float64) (bool, error) {
 	ot := other.tris[fj]
 	origin, normal := other.xverts[ot[0]], other.norms[fj]
-	midF := mid.vec()
+	midF := mid.Vec()
 	one := big.NewInt(1)
 	for _, vi := range m.tris[fi] {
 		c := m.xverts[vi]
-		if xdotSign(normal, xsub(c, origin)) >= 0 {
+		if xdotSign(normal, proofbound.Xsub(c, origin)) >= 0 {
 			continue
 		}
 		// The float length only decides when to stop halving. Stopping early
@@ -1084,7 +1086,7 @@ func walkFacetFromSpan(ctx context.Context, mid xpt, m *boolMesh, fi int, other 
 // witness search goes through. The cheap float depth runs before the costly
 // exact parity: a point no deeper than b is no witness however it classifies,
 // so the order changes which points are tested, never which become witnesses.
-func deepWitnessAt(ctx context.Context, p xpt, other *boolMesh, all []int, b float64) (bool, error) {
+func deepWitnessAt(ctx context.Context, p proofbound.Xpt, other *boolMesh, all []int, b float64) (bool, error) {
 	if certifiedInteriorDepth(p, other) <= b {
 		return false, nil
 	}
@@ -1105,10 +1107,10 @@ func deepWitnessAt(ctx context.Context, p xpt, other *boolMesh, all []int, b flo
 // facet: its three corners, its three edge midpoints and its centroid. Every one
 // is an exact rational, so the parity test that reads it decides strict
 // containment without rounding.
-func facetSamplePoints(a, b, c xpt) []xpt {
+func facetSamplePoints(a, b, c proofbound.Xpt) []proofbound.Xpt {
 	one, two := big.NewInt(1), big.NewInt(2)
-	mid := func(p, q xpt) xpt { return xlerp(p, q, one, two) }
-	return []xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), xCentroid(a, b, c)}
+	mid := func(p, q proofbound.Xpt) proofbound.Xpt { return xlerp(p, q, one, two) }
+	return []proofbound.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), xCentroid(a, b, c)}
 }
 
 // certifiedInteriorDepth is a certified LOWER bound (mm) on the distance from the
@@ -1117,8 +1119,8 @@ func facetSamplePoints(a, b, c xpt) []xpt {
 // float error, then reduced by an upper bound on p's exact→float rounding. It is
 // only ever read as "> b", so under-reporting is safe (it over-refuses, never
 // over-admits).
-func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
-	pf := p.vec()
+func certifiedInteriorDepth(p proofbound.Xpt, other *boolMesh) float64 {
+	pf := p.Vec()
 	best := math.Inf(1)
 	for i := range other.tris {
 		// The facet lies inside its own containing box, so the point's distance
@@ -1133,7 +1135,7 @@ func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
 		}
 		best = math.Min(best, pointTriDistance(pf, triCorners(other, i)))
 	}
-	if best <= 0 || isNonFinite(best) {
+	if best <= 0 || proofbound.IsNonFinite(best) {
 		return 0
 	}
 	// best is the float distance from the ROUNDED point pf; the true distance
@@ -1144,9 +1146,9 @@ func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
 
 // pointRoundBound upper-bounds the 3D displacement between the exact point p and
 // its float rounding pf: the largest per-coordinate rational gap, up-rounded and
-// read as a 3D distance (bounds.go, radius3D).
-func pointRoundBound(p xpt, pf r3.Vec) float64 {
-	px, py, pz := xhpRat(xhp(p))
+// read as a 3D distance (internal/proofbound/bounds.go, proofbound.Radius3D).
+func pointRoundBound(p proofbound.Xpt, pf r3.Vec) float64 {
+	px, py, pz := xhpRat(proofbound.Xhp(p))
 	worst := new(big.Rat)
 	for _, pair := range [][2]*big.Rat{{px, mustRatOf(pf.X)}, {py, mustRatOf(pf.Y)}, {pz, mustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])
@@ -1159,7 +1161,7 @@ func pointRoundBound(p xpt, pf r3.Vec) float64 {
 		return 0
 	}
 	w, _ := worst.Float64()
-	return radius3D(provenUpRound(w))
+	return proofbound.Radius3D(proofbound.ProvenUpRound(w))
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord
@@ -1181,11 +1183,11 @@ type faceFacets struct {
 // A source face the mesh states no bound for is a broken evaluator, not a
 // staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
 // that Verify would hide as an undecided pair, and never a zero.
-func facesOfMesh(budget *workBudget, m *Mesh) ([]faceFacets, error) {
+func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
 	index := map[*Face]int{}
 	var out []faceFacets
 	for i, f := range m.source {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		k, ok := index[f]
@@ -1250,7 +1252,7 @@ func triTriDistance(ta, tb [3]r3.Vec) float64 {
 		best = math.Min(best, pointTriDistance(ta[i], tb))
 		best = math.Min(best, pointTriDistance(tb[i], ta))
 	}
-	if best <= 0 || isNonFinite(best) {
+	if best <= 0 || proofbound.IsNonFinite(best) {
 		return 0
 	}
 	return best * (1 - 1e-12)
@@ -1364,7 +1366,7 @@ func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, erro
 		Z: math.Max(boxA.Max.Z+infA, boxB.Max.Z+infB),
 	}
 	diag := hi.Sub(lo).Len()
-	if diag <= 0 || isNonFinite(diag) {
+	if diag <= 0 || proofbound.IsNonFinite(diag) {
 		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
 	}
 	// An operand holding its section within a displacement of the one it
@@ -1377,8 +1379,8 @@ func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, erro
 	// actually took, and the displacement already dominates the bound it
 	// publishes.
 	tol := diag * boolChordFactor
-	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(a)))
-	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(b)))
+	tol = math.Max(tol, proofbound.ProductUpper(2, sectionDisplacementOf(a)))
+	tol = math.Max(tol, proofbound.ProductUpper(2, sectionDisplacementOf(b)))
 	// A revolve reserves both of its coordinate stages out of the tolerance
 	// before it chords anything (docs/tessellation-design.md §8), so a
 	// diameter-derived tolerance under that reservation refuses a body whose
@@ -1387,8 +1389,8 @@ func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, erro
 	// a section displacement raises it: the mesh reports the chording it
 	// actually took, and the reserved figure already dominates the bound it
 	// publishes.
-	tol = math.Max(tol, productUpper(2, coordDisplacementOf(ctx, a)))
-	tol = math.Max(tol, productUpper(2, coordDisplacementOf(ctx, b)))
+	tol = math.Max(tol, proofbound.ProductUpper(2, coordDisplacementOf(ctx, a)))
+	tol = math.Max(tol, proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)))
 	return tol, diag, nil
 }
 
@@ -1411,5 +1413,5 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 	if err != nil {
 		return 0
 	}
-	return absSumUpper(res.deltaCPrior, res.deltaRPrior)
+	return proofbound.AbsSumUpper(res.deltaCPrior, res.deltaRPrior)
 }

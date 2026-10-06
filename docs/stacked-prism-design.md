@@ -145,8 +145,8 @@ operand `FeatureRef` is carried forward (prism-boolean §11).
 ## 4. Measurements
 
 Every quantity is a bounded sum of per-slab or per-column terms through
-`bounded.go`'s arithmetic, so every float operation between a proven term and
-the published value charges its own rounding. No new `bounds.go` helper is
+`internal/proofbound/bounded.go`'s arithmetic, so every float operation between a proven term and
+the published value charges its own rounding. No new `internal/proofbound/bounds.go` helper is
 needed.
 
 | Quantity | Composition |

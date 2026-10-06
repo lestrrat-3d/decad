@@ -2,6 +2,7 @@ package decad
 
 import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -26,7 +27,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
 		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
 		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) ||
-		!finiteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) ||
+		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) ||
 		pp.z0 >= pp.z1 {
 		return sourceCylinderContactProof{}, false
 	}
@@ -102,7 +103,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		rp.sectionDelta != 0 || !rectangularProfile(rp.profile) ||
 		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
-		!finiteVec(rp.frame.Origin()) ||
+		!proofbound.FiniteVec(rp.frame.Origin()) ||
 		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
 		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
 		return sourceCylinderContactProof{}, false

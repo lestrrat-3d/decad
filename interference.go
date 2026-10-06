@@ -5,6 +5,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -21,7 +23,7 @@ import (
 // set. They may deliberately ignore derived certificate metadata, such as
 // cupPayload.thickness and cupPayload.sense, because it does not change set
 // identity.
-func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
+func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error) {
 	switch pa := a.payload.(type) {
 	case prismPayload:
 		pb, ok := b.payload.(prismPayload)
@@ -68,7 +70,7 @@ func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 
 // profileRecordsEqual reports exact structural equality of two recorded
 // profiles, stepping the budget once per segment compared.
-func profileRecordsEqual(budget *workBudget, a, b ProfileRecord) (bool, error) {
+func profileRecordsEqual(budget *proofbound.WorkBudget, a, b ProfileRecord) (bool, error) {
 	if err := wallBudgetStep(budget); err != nil {
 		return false, err
 	}
@@ -91,7 +93,7 @@ func profileRecordsEqual(budget *workBudget, a, b ProfileRecord) (bool, error) {
 // loopRecordsEqual compares one loop segment by segment. The nil-versus-empty
 // slice check keeps this exactly as strict as a whole-record DeepEqual, which
 // holds a nil slice unequal to an empty one.
-func loopRecordsEqual(budget *workBudget, a, b LoopRecord) (bool, error) {
+func loopRecordsEqual(budget *proofbound.WorkBudget, a, b LoopRecord) (bool, error) {
 	if len(a.Segments) != len(b.Segments) || (a.Segments == nil) != (b.Segments == nil) {
 		return false, nil
 	}
@@ -162,7 +164,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 	if res.contained != nil {
 		return res.contained.volume, interferenceMeasured, nil
 	}
-	equal, err := analyticBodiesEqual(newWorkBudget(ctx), a, b)
+	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {
 		return Measurement{}, interferenceUndecided, err
 	}
@@ -252,7 +254,7 @@ func interferenceOutcomeForExpected(expected *booleanExpectedError) interference
 // incomplete set can only understate D and tighten the noise floor, never
 // admit a coarse answer.
 func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	var points []r3.Vec
 	for _, body := range []*Body{a, b} {
 		if payload, ok := body.payload.(facetedPayload); ok {
@@ -268,7 +270,7 @@ func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) 
 			continue
 		}
 		for _, vertex := range body.Vertices() {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, err
 			}
 			points = append(points, vertex.position)
@@ -277,7 +279,7 @@ func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) 
 	best := 0.0
 	for i := range points {
 		for j := i + 1; j < len(points); j++ {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, err
 			}
 			best = math.Max(best, points[i].Sub(points[j]).Len())

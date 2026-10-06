@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -22,8 +24,8 @@ import (
 // carry outward bounds instead. Every other free-form kind is unsupported.
 //
 // Three sibling files carry the machinery this engine integrates with, each
-// with its own doc comment: bounded.go the bounded-scalar arithmetic every
-// published reading is composed in, rat_interval.go the exact rational
+// with its own doc comment: internal/proofbound/bounded.go the bounded-scalar arithmetic every
+// published reading is composed in, internal/proofbound/rat_interval.go the exact rational
 // interval arithmetic the certified terms are proven in, and
 // moments_circular.go the circular segment's own enclosures.
 
@@ -102,16 +104,16 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	if math.Abs(ig.area) <= ig.areaBound {
 		return VecMeasurement{}, fmt.Errorf(`%w: the evaluator cannot prove this region's net area stays away from zero`, ErrUnsupported)
 	}
-	u := boundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
-	v := boundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
-	bound := radius2D(u.bound, v.bound)
-	geometryBound := radius2D(
-		upRound(math.Abs(u.value)+ig.coordUpper),
-		upRound(math.Abs(v.value)+ig.coordUpper),
+	u := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
+	v := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+	bound := proofbound.Radius2D(u.Bound, v.Bound)
+	geometryBound := proofbound.Radius2D(
+		proofbound.UpRound(math.Abs(u.Value)+ig.coordUpper),
+		proofbound.UpRound(math.Abs(v.Value)+ig.coordUpper),
 	)
 	bound = math.Min(bound, geometryBound)
 	return VecMeasurement{
-		Value:     r3.NewVec(u.value, v.value, 0),
+		Value:     r3.NewVec(u.Value, v.Value, 0),
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
@@ -137,12 +139,12 @@ func (ig regionIntegrals) exactCentroid() (VecMeasurement, bool) {
 	v := new(big.Rat).Quo(ig.exact.mv, ig.exact.area)
 	uHeld, _ := u.Float64()
 	vHeld, _ := v.Float64()
-	if isNonFinite(uHeld) || isNonFinite(vHeld) {
+	if proofbound.IsNonFinite(uHeld) || proofbound.IsNonFinite(vHeld) {
 		// No float64 holds this centroid, so there is no single rounding to
 		// publish; the bounded path answers, or refuses, on its own terms.
 		return VecMeasurement{}, false
 	}
-	bound := radius2D(proofarith.RationalFloatError(u, uHeld), proofarith.RationalFloatError(v, vHeld))
+	bound := proofbound.Radius2D(proofarith.RationalFloatError(u, uHeld), proofarith.RationalFloatError(v, vHeld))
 	return VecMeasurement{
 		Value:     r3.NewVec(uHeld, vHeld, 0),
 		Exactness: exactnessOf(bound),
@@ -228,43 +230,43 @@ type regionIntegrals struct {
 	// span contributes a point interval, a circular walk its enclosure.
 	// thirdDead records a contribution with no enclosure — a trimmed ArcSeg
 	// fragment — after which the region has no third-order moments at all.
-	third     [4]ratInterval
+	third     [4]proofbound.RatInterval
 	thirdDead bool
 }
 
 // addThird folds one segment's third-order contribution into the region's
 // sum, or retires the sum for good when the segment has none.
-func (ig *regionIntegrals) addThird(terms [4]ratInterval, ok bool) {
+func (ig *regionIntegrals) addThird(terms [4]proofbound.RatInterval, ok bool) {
 	if ig.thirdDead {
 		return
 	}
 	if !ok {
 		ig.thirdDead = true
-		ig.third = [4]ratInterval{}
+		ig.third = [4]proofbound.RatInterval{}
 		return
 	}
-	if ig.third[0].lo == nil {
+	if ig.third[0].Lo == nil {
 		ig.third = terms
 		return
 	}
 	for i := range ig.third {
-		ig.third[i] = intervalAdd(ig.third[i], terms[i])
+		ig.third[i] = proofbound.IntervalAdd(ig.third[i], terms[i])
 	}
 }
 
 // thirdMoments returns the region's third-order sum and whether every
 // boundary contribution had an enclosure. It is only populated by an
 // integration run at momentThirdOrder.
-func (ig regionIntegrals) thirdMoments() ([4]ratInterval, bool) {
-	if ig.thirdDead || ig.third[0].lo == nil {
-		return [4]ratInterval{}, false
+func (ig regionIntegrals) thirdMoments() ([4]proofbound.RatInterval, bool) {
+	if ig.thirdDead || ig.third[0].Lo == nil {
+		return [4]proofbound.RatInterval{}, false
 	}
 	return ig.third, true
 }
 
 func accumulateMoment(value, bound *float64, term, termBound float64) {
 	next := *value + term
-	*bound = absSumUpper(*bound, termBound, proofarith.AddRoundError(*value, term, next))
+	*bound = proofbound.AbsSumUpper(*bound, termBound, proofarith.AddRoundError(*value, term, next))
 	*value = next
 }
 
@@ -302,7 +304,7 @@ func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
 	}
 }
 
-func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, error) {
+func (r ProfileRecord) integralsBudget(budget *proofbound.WorkBudget) (regionIntegrals, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return regionIntegrals{}, err
 	}
@@ -357,11 +359,11 @@ func integrateMomentRecord(pre momentPreflight, order momentIntegralOrder) (regi
 	return integrateMomentRecordBudget(pre, order, nil)
 }
 
-func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
+func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder, budget *proofbound.WorkBudget) (regionIntegrals, error) {
 	return integrateMomentRecordMode(pre, order, true, budget)
 }
 
-func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
+func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *proofbound.WorkBudget) (regionIntegrals, error) {
 	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, pre, order, checkFinite)
 }
 
@@ -457,46 +459,46 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 	if order == momentAreaOrder {
 		return ig
 	}
-	area := measuredScalar(ig.area, ig.areaBound)
-	mu := measuredScalar(ig.mu, ig.muBound)
-	mv := measuredScalar(ig.mv, ig.mvBound)
+	area := proofbound.MeasuredScalar(ig.area, ig.areaBound)
+	mu := proofbound.MeasuredScalar(ig.mu, ig.muBound)
+	mv := proofbound.MeasuredScalar(ig.mv, ig.mvBound)
 	if order >= momentSecondOrder {
-		two := exactScalar(2)
-		anchorU := exactScalar(anchor.U)
-		anchorV := exactScalar(anchor.V)
-		muu := boundedAdd(
-			measuredScalar(ig.muu, ig.muuBound),
-			boundedAdd(
-				boundedMul(boundedMul(two, anchorU), mu),
-				boundedMul(boundedMul(anchorU, anchorU), area),
+		two := proofbound.ExactScalar(2)
+		anchorU := proofbound.ExactScalar(anchor.U)
+		anchorV := proofbound.ExactScalar(anchor.V)
+		muu := proofbound.BoundedAdd(
+			proofbound.MeasuredScalar(ig.muu, ig.muuBound),
+			proofbound.BoundedAdd(
+				proofbound.BoundedMul(proofbound.BoundedMul(two, anchorU), mu),
+				proofbound.BoundedMul(proofbound.BoundedMul(anchorU, anchorU), area),
 			),
 		)
-		muv := boundedAdd(
-			measuredScalar(ig.muv, ig.muvBound),
-			boundedAdd(
-				boundedMul(anchorV, mu),
-				boundedAdd(
-					boundedMul(anchorU, mv),
-					boundedMul(boundedMul(anchorU, anchorV), area),
+		muv := proofbound.BoundedAdd(
+			proofbound.MeasuredScalar(ig.muv, ig.muvBound),
+			proofbound.BoundedAdd(
+				proofbound.BoundedMul(anchorV, mu),
+				proofbound.BoundedAdd(
+					proofbound.BoundedMul(anchorU, mv),
+					proofbound.BoundedMul(proofbound.BoundedMul(anchorU, anchorV), area),
 				),
 			),
 		)
-		mvv := boundedAdd(
-			measuredScalar(ig.mvv, ig.mvvBound),
-			boundedAdd(
-				boundedMul(boundedMul(two, anchorV), mv),
-				boundedMul(boundedMul(anchorV, anchorV), area),
+		mvv := proofbound.BoundedAdd(
+			proofbound.MeasuredScalar(ig.mvv, ig.mvvBound),
+			proofbound.BoundedAdd(
+				proofbound.BoundedMul(proofbound.BoundedMul(two, anchorV), mv),
+				proofbound.BoundedMul(proofbound.BoundedMul(anchorV, anchorV), area),
 			),
 		)
-		ig.muu, ig.muuBound = muu.value, muu.bound
-		ig.muv, ig.muvBound = muv.value, muv.bound
-		ig.mvv, ig.mvvBound = mvv.value, mvv.bound
+		ig.muu, ig.muuBound = muu.Value, muu.Bound
+		ig.muv, ig.muvBound = muv.Value, muv.Bound
+		ig.mvv, ig.mvvBound = mvv.Value, mvv.Bound
 	}
-	mu = boundedAdd(mu, boundedMul(exactScalar(anchor.U), area))
-	mv = boundedAdd(mv, boundedMul(exactScalar(anchor.V), area))
-	ig.mu, ig.muBound = mu.value, mu.bound
-	ig.mv, ig.mvBound = mv.value, mv.bound
-	ig.coordUpper = math.Max(ig.coordUpper, absSumUpper(anchor.U, anchor.V))
+	mu = proofbound.BoundedAdd(mu, proofbound.BoundedMul(proofbound.ExactScalar(anchor.U), area))
+	mv = proofbound.BoundedAdd(mv, proofbound.BoundedMul(proofbound.ExactScalar(anchor.V), area))
+	ig.mu, ig.muBound = mu.Value, mu.Bound
+	ig.mv, ig.mvBound = mv.Value, mv.Bound
+	ig.coordUpper = math.Max(ig.coordUpper, proofbound.AbsSumUpper(anchor.U, anchor.V))
 	return ig
 }
 
@@ -544,7 +546,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		}
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		var muuProof, muvProof, mvvProof ratInterval
+		var muuProof, muvProof, mvvProof proofbound.RatInterval
 		var haveSecondMomentProof bool
 		if order >= momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
@@ -558,7 +560,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			2*math.Pi*segment.TStart,
 			2*math.Pi*segment.TEnd,
 			math.Abs(radius),
-			circularSweepUpper(segment.TStart, segment.TEnd),
+			proofbound.CircularSweepUpper(segment.TStart, segment.TEnd),
 			areaProof,
 			haveAreaProof,
 			muProof,
@@ -574,7 +576,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 	case ArcSeg:
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		var muuProof, muvProof, mvvProof ratInterval
+		var muuProof, muvProof, mvvProof proofbound.RatInterval
 		var haveSecondMomentProof bool
 		if order >= momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
@@ -596,7 +598,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			a0+segment.TStart*sweep,
 			a0+segment.TEnd*sweep,
 			arcRadiusUpper(segment),
-			circularSweepUpper(segment.TStart, segment.TEnd),
+			proofbound.CircularSweepUpper(segment.TStart, segment.TEnd),
 			areaProof,
 			haveAreaProof,
 			muProof,
@@ -630,7 +632,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 // exactly, from their recorded coordinates, and a circular walk through
 // circularThirdMomentInterval. Any other segment, and a circular walk that
 // enclosure does not admit, answers false.
-func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]ratInterval, bool) {
+func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound.RatInterval, bool) {
 	var exact [4]*big.Rat
 	switch segment := segment.(type) {
 	case LineSeg:
@@ -639,7 +641,7 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]ratInterva
 		u1 := ratLerp(segment.Start.U, segment.End.U, segment.TEnd)
 		v1 := ratLerp(segment.Start.V, segment.End.V, segment.TEnd)
 		if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
-			return [4]ratInterval{}, false
+			return [4]proofbound.RatInterval{}, false
 		}
 		exact = polyThirdMoments(
 			ratPoly{u0, new(big.Rat).Sub(u1, u0)},
@@ -649,13 +651,13 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]ratInterva
 		return circularThirdMomentInterval(segment)
 	default:
 		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
-			return [4]ratInterval{}, false
+			return [4]proofbound.RatInterval{}, false
 		}
 		exact = freeformThirdMoments(plan.spans, plan.reversed)
 	}
-	var out [4]ratInterval
+	var out [4]proofbound.RatInterval
 	for i, value := range exact {
-		out[i] = pointInterval(value)
+		out[i] = proofbound.PointInterval(value)
 	}
 	return out, true
 }
@@ -811,7 +813,7 @@ func (ig *regionIntegrals) publishExact() {
 	exact := ig.exact.fields()
 	for i, field := range ig.heldFields() {
 		held, _ := exact[i].Float64()
-		if isNonFinite(held) {
+		if proofbound.IsNonFinite(held) {
 			// No float64 holds this moment, so it has no single rounding to
 			// publish; its own float accumulation and proven bound stand, and a
 			// non-finite accumulation is refused by the order's finiteness check
@@ -838,42 +840,26 @@ func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegr
 	if order >= momentSecondOrder {
 		// Second-order terms read the PRE-shift first moments, so they are
 		// re-referenced before mu and mv are.
-		exact.muu = ratAdd(
+		exact.muu = proofbound.RatAdd(
 			exact.muu,
-			ratMul(big.NewRat(2, 1), anchorU, exact.mu),
-			ratMul(anchorU, anchorU, exact.area),
+			proofbound.RatMul(big.NewRat(2, 1), anchorU, exact.mu),
+			proofbound.RatMul(anchorU, anchorU, exact.area),
 		)
-		exact.muv = ratAdd(
+		exact.muv = proofbound.RatAdd(
 			exact.muv,
-			ratMul(anchorV, exact.mu),
-			ratMul(anchorU, exact.mv),
-			ratMul(anchorU, anchorV, exact.area),
+			proofbound.RatMul(anchorV, exact.mu),
+			proofbound.RatMul(anchorU, exact.mv),
+			proofbound.RatMul(anchorU, anchorV, exact.area),
 		)
-		exact.mvv = ratAdd(
+		exact.mvv = proofbound.RatAdd(
 			exact.mvv,
-			ratMul(big.NewRat(2, 1), anchorV, exact.mv),
-			ratMul(anchorV, anchorV, exact.area),
+			proofbound.RatMul(big.NewRat(2, 1), anchorV, exact.mv),
+			proofbound.RatMul(anchorV, anchorV, exact.area),
 		)
 	}
-	exact.mu = ratAdd(exact.mu, ratMul(anchorU, exact.area))
-	exact.mv = ratAdd(exact.mv, ratMul(anchorV, exact.area))
+	exact.mu = proofbound.RatAdd(exact.mu, proofbound.RatMul(anchorU, exact.area))
+	exact.mv = proofbound.RatAdd(exact.mv, proofbound.RatMul(anchorV, exact.area))
 	return exact
-}
-
-func ratAdd(values ...*big.Rat) *big.Rat {
-	out := new(big.Rat)
-	for _, value := range values {
-		out.Add(out, value)
-	}
-	return out
-}
-
-func ratMul(values ...*big.Rat) *big.Rat {
-	out := big.NewRat(1, 1)
-	for _, value := range values {
-		out.Mul(out, value)
-	}
-	return out
 }
 
 func ratScale(value *big.Rat, num, den int64) *big.Rat {
@@ -932,11 +918,11 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
 
-	u0sq, u1sq := ratMul(u0, u0), ratMul(u1, u1)
-	v0sq, v1sq := ratMul(v0, v0), ratMul(v1, v1)
-	area := ratScale(new(big.Rat).Sub(ratMul(u0, v1), ratMul(u1, v0)), 1, 2)
-	mu := ratScale(ratMul(dv, ratAdd(u0sq, ratMul(u0, u1), u1sq)), 1, 6)
-	mv := ratScale(ratMul(du, ratAdd(v0sq, ratMul(v0, v1), v1sq)), -1, 6)
+	u0sq, u1sq := proofbound.RatMul(u0, u0), proofbound.RatMul(u1, u1)
+	v0sq, v1sq := proofbound.RatMul(v0, v0), proofbound.RatMul(v1, v1)
+	area := ratScale(new(big.Rat).Sub(proofbound.RatMul(u0, v1), proofbound.RatMul(u1, v0)), 1, 2)
+	mu := ratScale(proofbound.RatMul(dv, proofbound.RatAdd(u0sq, proofbound.RatMul(u0, u1), u1sq)), 1, 6)
+	mv := ratScale(proofbound.RatMul(du, proofbound.RatAdd(v0sq, proofbound.RatMul(v0, v1), v1sq)), -1, 6)
 	if order < momentSecondOrder {
 		// The accumulator still requires six non-nil fields. These zero
 		// placeholders are never read by an area- or first-order caller; they
@@ -947,27 +933,27 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 		}
 	}
 
-	muu := ratScale(ratMul(dv, ratAdd(
-		ratMul(u0, u0, u0),
-		ratMul(u0, u0, u1),
-		ratMul(u0, u1, u1),
-		ratMul(u1, u1, u1),
+	muu := ratScale(proofbound.RatMul(dv, proofbound.RatAdd(
+		proofbound.RatMul(u0, u0, u0),
+		proofbound.RatMul(u0, u0, u1),
+		proofbound.RatMul(u0, u1, u1),
+		proofbound.RatMul(u1, u1, u1),
 	)), 1, 12)
-	mvv := ratScale(ratMul(du, ratAdd(
-		ratMul(v0, v0, v0),
-		ratMul(v0, v0, v1),
-		ratMul(v0, v1, v1),
-		ratMul(v1, v1, v1),
+	mvv := ratScale(proofbound.RatMul(du, proofbound.RatAdd(
+		proofbound.RatMul(v0, v0, v0),
+		proofbound.RatMul(v0, v0, v1),
+		proofbound.RatMul(v0, v1, v1),
+		proofbound.RatMul(v1, v1, v1),
 	)), -1, 12)
 
-	duSq := ratMul(du, du)
-	u2v0 := ratMul(v0, ratAdd(u0sq, ratMul(u0, du), ratScale(duSq, 1, 3)))
-	u2dv := ratMul(dv, ratAdd(
+	duSq := proofbound.RatMul(du, du)
+	u2v0 := proofbound.RatMul(v0, proofbound.RatAdd(u0sq, proofbound.RatMul(u0, du), ratScale(duSq, 1, 3)))
+	u2dv := proofbound.RatMul(dv, proofbound.RatAdd(
 		ratScale(u0sq, 1, 2),
-		ratScale(ratMul(u0, du), 2, 3),
+		ratScale(proofbound.RatMul(u0, du), 2, 3),
 		ratScale(duSq, 1, 4),
 	))
-	muv := ratScale(ratMul(dv, ratAdd(u2v0, u2dv)), 1, 2)
+	muv := ratScale(proofbound.RatMul(dv, proofbound.RatAdd(u2v0, u2dv)), 1, 2)
 	return exactMoments{area: area, mu: mu, mv: mv, muu: muu, muv: muv, mvv: mvv}
 }
 
@@ -978,11 +964,11 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 func (ig *regionIntegrals) addCircular(
 	c Point2,
 	r, th0, th1, radiusUpper, sweepUpper float64,
-	areaProof ratInterval,
+	areaProof proofbound.RatInterval,
 	haveAreaProof bool,
-	muProof, mvProof ratInterval,
+	muProof, mvProof proofbound.RatInterval,
 	haveMomentProof bool,
-	muuProof, muvProof, mvvProof ratInterval,
+	muuProof, muvProof, mvvProof proofbound.RatInterval,
 	haveSecondMomentProof bool,
 	order momentIntegralOrder,
 ) {
@@ -990,7 +976,7 @@ func (ig *regionIntegrals) addCircular(
 	sin1, cos1 := math.Sincos(th1)
 	dth := th1 - th0
 	absR, absU, absV, absDth := radiusUpper, math.Abs(c.U), math.Abs(c.V), sweepUpper
-	ig.coordUpper = math.Max(ig.coordUpper, absSumUpper(c.U, c.V, absR, absR))
+	ig.coordUpper = math.Max(ig.coordUpper, proofbound.AbsSumUpper(c.U, c.V, absR, absR))
 
 	// A = ½ ∫ (u v′ − v u′) dθ = ½ [r²·θ + c_u·r·sin θ + c_v·r·cos θ]
 	area := 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
@@ -1011,19 +997,19 @@ func (ig *regionIntegrals) addCircular(
 	muScale := 0.5 * absR * (2*absU*absU + 2*absU*absR*int2Scale + absR*absR*int3Scale)
 	mvScale := 0.5 * absR * (2*absV*absV + 2*absV*absR*int2Scale + absR*absR*int3Scale)
 
-	areaScale = productUpper(2, areaScale)
-	muScale = productUpper(2, muScale)
-	mvScale = productUpper(2, mvScale)
+	areaScale = proofbound.ProductUpper(2, areaScale)
+	muScale = proofbound.ProductUpper(2, muScale)
+	mvScale = proofbound.ProductUpper(2, mvScale)
 
-	areaBound := conservativeValueError(area, areaScale)
+	areaBound := proofbound.ConservativeValueError(area, areaScale)
 	if haveAreaProof {
-		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
+		areaBound = math.Min(areaBound, proofbound.IntervalFloatError(areaProof, area))
 	}
-	muBound := conservativeValueError(mu, muScale)
-	mvBound := conservativeValueError(mv, mvScale)
+	muBound := proofbound.ConservativeValueError(mu, muScale)
+	mvBound := proofbound.ConservativeValueError(mv, mvScale)
 	if haveMomentProof {
-		muBound = math.Min(muBound, intervalFloatError(muProof, mu))
-		mvBound = math.Min(mvBound, intervalFloatError(mvProof, mv))
+		muBound = math.Min(muBound, proofbound.IntervalFloatError(muProof, mu))
+		mvBound = math.Min(mvBound, proofbound.IntervalFloatError(mvProof, mv))
 	}
 	// A circular integral's exact value carries π and trig terms, so it has no
 	// exact rational and the region's rational sum ends here.
@@ -1056,16 +1042,16 @@ func (ig *regionIntegrals) addCircular(
 		r*(c.U*c.U*intSC+2*c.U*r*intSC2+r*r*intSC3))
 	muvScale := 0.5 * absR * (absV*(2*absU*absU+2*absU*absR*int2Scale+absR*absR*int3Scale) +
 		absR*(0.5*absU*absU+4*absU*absR/3+absR*absR/4))
-	muuScale = productUpper(2, muuScale)
-	muvScale = productUpper(2, muvScale)
-	mvvScale = productUpper(2, mvvScale)
-	muuBound := conservativeValueError(muu, muuScale)
-	muvBound := conservativeValueError(muv, muvScale)
-	mvvBound := conservativeValueError(mvv, mvvScale)
+	muuScale = proofbound.ProductUpper(2, muuScale)
+	muvScale = proofbound.ProductUpper(2, muvScale)
+	mvvScale = proofbound.ProductUpper(2, mvvScale)
+	muuBound := proofbound.ConservativeValueError(muu, muuScale)
+	muvBound := proofbound.ConservativeValueError(muv, muvScale)
+	mvvBound := proofbound.ConservativeValueError(mvv, mvvScale)
 	if haveSecondMomentProof {
-		muuBound = math.Min(muuBound, intervalFloatError(muuProof, muu))
-		muvBound = math.Min(muvBound, intervalFloatError(muvProof, muv))
-		mvvBound = math.Min(mvvBound, intervalFloatError(mvvProof, mvv))
+		muuBound = math.Min(muuBound, proofbound.IntervalFloatError(muuProof, muu))
+		muvBound = math.Min(muvBound, proofbound.IntervalFloatError(muvProof, muv))
+		mvvBound = math.Min(mvvBound, proofbound.IntervalFloatError(mvvProof, mvv))
 	}
 	accumulateMoment(&ig.muu, &ig.muuBound, muu, muuBound)
 	accumulateMoment(&ig.muv, &ig.muvBound, muv, muvBound)
@@ -1099,4 +1085,10 @@ func lerp2(start, end Point2, t float64) (float64, float64) {
 		return end.U, end.V
 	}
 	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+}
+
+func arcRadiusUpper(seg ArcSeg) float64 {
+	// The exact coordinate differences can each be no larger than the sum of
+	// their input magnitudes, and hypot is no larger than the L1 norm.
+	return proofbound.AbsSumUpper(seg.Start.U, seg.Center.U, seg.Start.V, seg.Center.V)
 }

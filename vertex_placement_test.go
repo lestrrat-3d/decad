@@ -195,7 +195,7 @@ func TestVertexPlacedPrismBoundEnclosesDisplacement(t *testing.T) {
 // plane-local coordinate through a non-axis-aligned frame rounds under the
 // identity transform too, so this body's rim vertices must ALSO report
 // Approximate with a positive, enclosing bound. Shown-to-fail: reverting
-// bounds.go's frameAndPlacementRoundAllow to gate on `xform != r3.Identity()`
+// internal/proofbound/bounds.go's frameAndPlacementRoundAllow to gate on `xform != r3.Identity()`
 // alone (the loft/stitch/patch/unstitch pattern, which never has to consider
 // its OWN frame lift) turns this case's Approximate/Positive assertions red
 // while T100 stays green — this is the row that catches it.

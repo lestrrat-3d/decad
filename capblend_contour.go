@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -32,7 +34,7 @@ import (
 // The proof is an ENCLOSURE, not an error model: the same closed forms the
 // float build evaluates are re-evaluated over math/big.Rat intervals, with the
 // recorded coordinates taken EXACTLY and the only widening at the square
-// roots, which round outward through ratSqrtDown/ratSqrtUp. Interval arithmetic
+// roots, which round outward through proofbound.RatSqrtDown/proofbound.RatSqrtUp. Interval arithmetic
 // is inclusion-monotonic, so the resulting box holds the exact point the same
 // closed form denotes, whatever the platform's sqrt and hypot did; the
 // displacement is then the box's own greatest reach from the float point the
@@ -58,7 +60,7 @@ import (
 var errCapContourUnbounded = fmt.Errorf(`%w: this evaluator cannot prove a bound on the cap-loop chamfer's own offset contour at a corner, so no cap-level coordinate it emits there can be published with a proven displacement`, ErrUnsupported)
 
 // ivPoint is a rational-interval enclosure of one plane-local (u, v) point.
-type ivPoint struct{ u, v ratInterval }
+type ivPoint struct{ u, v proofbound.RatInterval }
 
 // ivExactPoint lifts a pair of float64 coordinates, which are exact rationals.
 func ivExactPoint(u, v float64) (ivPoint, bool) {
@@ -66,7 +68,7 @@ func ivExactPoint(u, v float64) (ivPoint, bool) {
 	if ru == nil || rv == nil {
 		return ivPoint{}, false
 	}
-	return ivPoint{u: pointInterval(ru), v: pointInterval(rv)}, true
+	return ivPoint{u: proofbound.PointInterval(ru), v: proofbound.PointInterval(rv)}, true
 }
 
 // reach is an upper bound on |p − q| over every q the enclosure holds, so a
@@ -77,7 +79,7 @@ func (e ivPoint) reach(p Point2) float64 {
 	if !okU || !okV {
 		return math.Inf(1)
 	}
-	return ratSqrtUp(new(big.Rat).Add(
+	return proofbound.RatSqrtUp(new(big.Rat).Add(
 		new(big.Rat).Mul(du, du),
 		new(big.Rat).Mul(dv, dv),
 	))
@@ -85,13 +87,13 @@ func (e ivPoint) reach(p Point2) float64 {
 
 // ivAxisSpread is max(|lo − c|, |hi − c|), the furthest the interval reaches
 // from c along one axis.
-func ivAxisSpread(iv ratInterval, c float64) (*big.Rat, bool) {
+func ivAxisSpread(iv proofbound.RatInterval, c float64) (*big.Rat, bool) {
 	rc := proofarith.FloatRat(c)
-	if rc == nil || iv.lo == nil || iv.hi == nil {
+	if rc == nil || iv.Lo == nil || iv.Hi == nil {
 		return nil, false
 	}
-	lo := new(big.Rat).Abs(new(big.Rat).Sub(iv.lo, rc))
-	hi := new(big.Rat).Abs(new(big.Rat).Sub(iv.hi, rc))
+	lo := new(big.Rat).Abs(new(big.Rat).Sub(iv.Lo, rc))
+	hi := new(big.Rat).Abs(new(big.Rat).Sub(iv.Hi, rc))
 	if lo.Cmp(hi) >= 0 {
 		return lo, true
 	}
@@ -105,28 +107,28 @@ func ivUnion(a, b ivPoint) ivPoint {
 	return ivPoint{u: intervalHull(a.u, b.u), v: intervalHull(a.v, b.v)}
 }
 
-func intervalHull(a, b ratInterval) ratInterval {
-	lo, hi := a.lo, a.hi
-	if b.lo.Cmp(lo) < 0 {
-		lo = b.lo
+func intervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
+	lo, hi := a.Lo, a.Hi
+	if b.Lo.Cmp(lo) < 0 {
+		lo = b.Lo
 	}
-	if b.hi.Cmp(hi) > 0 {
-		hi = b.hi
+	if b.Hi.Cmp(hi) > 0 {
+		hi = b.Hi
 	}
-	return interval(lo, hi)
+	return proofbound.Interval(lo, hi)
 }
 
 // intervalQuo divides two intervals. ok is false where the divisor straddles
 // zero, since the quotient is then unbounded and no box encloses it.
-func intervalQuo(a, b ratInterval) (ratInterval, bool) {
-	if b.lo.Sign() <= 0 && b.hi.Sign() >= 0 {
-		return ratInterval{}, false
+func intervalQuo(a, b proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	if b.Lo.Sign() <= 0 && b.Hi.Sign() >= 0 {
+		return proofbound.RatInterval{}, false
 	}
 	corners := [4]*big.Rat{
-		new(big.Rat).Quo(a.lo, b.lo),
-		new(big.Rat).Quo(a.lo, b.hi),
-		new(big.Rat).Quo(a.hi, b.lo),
-		new(big.Rat).Quo(a.hi, b.hi),
+		new(big.Rat).Quo(a.Lo, b.Lo),
+		new(big.Rat).Quo(a.Lo, b.Hi),
+		new(big.Rat).Quo(a.Hi, b.Lo),
+		new(big.Rat).Quo(a.Hi, b.Hi),
 	}
 	lo, hi := corners[0], corners[0]
 	for _, c := range corners[1:] {
@@ -137,46 +139,46 @@ func intervalQuo(a, b ratInterval) (ratInterval, bool) {
 			hi = c
 		}
 	}
-	return interval(lo, hi), true
+	return proofbound.Interval(lo, hi), true
 }
 
-// intervalSquare is x² over an interval. It is not intervalMul(a, a): the
+// intervalSquare is x² over an interval. It is not proofbound.IntervalMul(a, a): the
 // corner products of an interval straddling zero put a NEGATIVE value at the
 // low end, and a square never takes one.
-func intervalSquare(a ratInterval) ratInterval {
-	lo2 := new(big.Rat).Mul(a.lo, a.lo)
-	hi2 := new(big.Rat).Mul(a.hi, a.hi)
-	if a.lo.Sign() >= 0 {
-		return interval(lo2, hi2)
+func intervalSquare(a proofbound.RatInterval) proofbound.RatInterval {
+	lo2 := new(big.Rat).Mul(a.Lo, a.Lo)
+	hi2 := new(big.Rat).Mul(a.Hi, a.Hi)
+	if a.Lo.Sign() >= 0 {
+		return proofbound.Interval(lo2, hi2)
 	}
-	if a.hi.Sign() <= 0 {
-		return interval(hi2, lo2)
+	if a.Hi.Sign() <= 0 {
+		return proofbound.Interval(hi2, lo2)
 	}
 	hi := lo2
 	if hi2.Cmp(hi) > 0 {
 		hi = hi2
 	}
-	return interval(new(big.Rat), hi)
+	return proofbound.Interval(new(big.Rat), hi)
 }
 
 // intervalSqrt encloses the square root over a non-negative interval, each end
 // rounded OUTWARD through spline_length.go's exact-comparison bracket, so no
 // platform's sqrt can narrow it. A lower end below zero is clamped to zero:
 // the enclosure then covers the tangency the float discriminant reached for.
-func intervalSqrt(a ratInterval) (ratInterval, bool) {
-	if a.hi.Sign() < 0 {
-		return ratInterval{}, false
+func intervalSqrt(a proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	if a.Hi.Sign() < 0 {
+		return proofbound.RatInterval{}, false
 	}
 	lo := 0.0
-	if a.lo.Sign() > 0 {
-		lo = ratSqrtDown(a.lo)
+	if a.Lo.Sign() > 0 {
+		lo = proofbound.RatSqrtDown(a.Lo)
 	}
-	hi := ratSqrtUp(a.hi)
+	hi := proofbound.RatSqrtUp(a.Hi)
 	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if rlo == nil || rhi == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return interval(rlo, rhi), true
+	return proofbound.Interval(rlo, rhi), true
 }
 
 // ivUnitVec encloses the EXACT unit vector of a float pair — the value
@@ -191,12 +193,12 @@ func ivUnitVec(x, y float64) (ivPoint, bool) {
 	if n2.Sign() == 0 {
 		return ivPoint{}, false
 	}
-	l, ok := intervalSqrt(pointInterval(n2))
-	if !ok || l.lo.Sign() <= 0 {
+	l, ok := intervalSqrt(proofbound.PointInterval(n2))
+	if !ok || l.Lo.Sign() <= 0 {
 		return ivPoint{}, false
 	}
-	u, okU := intervalQuo(pointInterval(rx), l)
-	v, okV := intervalQuo(pointInterval(ry), l)
+	u, okU := intervalQuo(proofbound.PointInterval(rx), l)
+	v, okV := intervalQuo(proofbound.PointInterval(ry), l)
 	if !okU || !okV {
 		return ivPoint{}, false
 	}
@@ -217,8 +219,8 @@ func ivOffsetFoot(vU, vV, tu, tv, d float64) (ivPoint, bool) {
 		return ivPoint{}, false
 	}
 	return ivPoint{
-		u: intervalAdd(v.u, intervalScale(intervalNeg(n.v), rd)),
-		v: intervalAdd(v.v, intervalScale(n.u, rd)),
+		u: proofbound.IntervalAdd(v.u, proofbound.IntervalScale(proofbound.IntervalNeg(n.v), rd)),
+		v: proofbound.IntervalAdd(v.v, proofbound.IntervalScale(n.u, rd)),
 	}, true
 }
 
@@ -231,7 +233,7 @@ type ivCarrier struct {
 	isLine bool
 	p, dir ivPoint
 	c      ivPoint
-	r      ratInterval
+	r      proofbound.RatInterval
 }
 
 func ivCarrierOf(w sideWalk, d float64) (ivCarrier, bool) {
@@ -251,7 +253,7 @@ func ivCarrierOf(w sideWalk, d float64) (ivCarrier, bool) {
 	if !okC {
 		return ivCarrier{}, false
 	}
-	return ivCarrier{c: c, r: pointInterval(r)}, true
+	return ivCarrier{c: c, r: proofbound.PointInterval(r)}, true
 }
 
 // ivExactOffsetRadius is offsetRadius's own R − insideSign·d taken EXACTLY:
@@ -289,28 +291,28 @@ func ivIntersect(a, b ivCarrier) ([]ivPoint, bool) {
 }
 
 func ivLineLine(a, b ivCarrier) ([]ivPoint, bool) {
-	den := intervalSub(intervalMul(a.dir.u, b.dir.v), intervalMul(a.dir.v, b.dir.u))
-	num := intervalSub(
-		intervalMul(intervalSub(b.p.u, a.p.u), b.dir.v),
-		intervalMul(intervalSub(b.p.v, a.p.v), b.dir.u),
+	den := proofbound.IntervalSub(proofbound.IntervalMul(a.dir.u, b.dir.v), proofbound.IntervalMul(a.dir.v, b.dir.u))
+	num := proofbound.IntervalSub(
+		proofbound.IntervalMul(proofbound.IntervalSub(b.p.u, a.p.u), b.dir.v),
+		proofbound.IntervalMul(proofbound.IntervalSub(b.p.v, a.p.v), b.dir.u),
 	)
 	s, ok := intervalQuo(num, den)
 	if !ok {
 		return nil, false
 	}
 	return []ivPoint{{
-		u: intervalAdd(a.p.u, intervalMul(s, a.dir.u)),
-		v: intervalAdd(a.p.v, intervalMul(s, a.dir.v)),
+		u: proofbound.IntervalAdd(a.p.u, proofbound.IntervalMul(s, a.dir.u)),
+		v: proofbound.IntervalAdd(a.p.v, proofbound.IntervalMul(s, a.dir.v)),
 	}}, true
 }
 
 func ivLineCircle(l, c ivCarrier) ([]ivPoint, bool) {
-	fx := intervalSub(l.p.u, c.c.u)
-	fy := intervalSub(l.p.v, c.c.v)
-	bb := intervalAdd(intervalMul(fx, l.dir.u), intervalMul(fy, l.dir.v))
-	cc := intervalSub(intervalAdd(intervalSquare(fx), intervalSquare(fy)), intervalSquare(c.r))
-	disc := intervalSub(intervalSquare(bb), cc)
-	if disc.hi.Sign() < 0 {
+	fx := proofbound.IntervalSub(l.p.u, c.c.u)
+	fy := proofbound.IntervalSub(l.p.v, c.c.v)
+	bb := proofbound.IntervalAdd(proofbound.IntervalMul(fx, l.dir.u), proofbound.IntervalMul(fy, l.dir.v))
+	cc := proofbound.IntervalSub(proofbound.IntervalAdd(intervalSquare(fx), intervalSquare(fy)), intervalSquare(c.r))
+	disc := proofbound.IntervalSub(intervalSquare(bb), cc)
+	if disc.Hi.Sign() < 0 {
 		// The exact carriers miss each other entirely: the float solve reached
 		// a root of a system that has none, so there is no denoted point to
 		// enclose.
@@ -320,34 +322,34 @@ func ivLineCircle(l, c ivCarrier) ([]ivPoint, bool) {
 	if !ok {
 		return nil, false
 	}
-	nb := intervalNeg(bb)
+	nb := proofbound.IntervalNeg(bb)
 	out := make([]ivPoint, 0, 2)
-	for _, s := range []ratInterval{intervalAdd(nb, sq), intervalSub(nb, sq)} {
+	for _, s := range []proofbound.RatInterval{proofbound.IntervalAdd(nb, sq), proofbound.IntervalSub(nb, sq)} {
 		out = append(out, ivPoint{
-			u: intervalAdd(l.p.u, intervalMul(s, l.dir.u)),
-			v: intervalAdd(l.p.v, intervalMul(s, l.dir.v)),
+			u: proofbound.IntervalAdd(l.p.u, proofbound.IntervalMul(s, l.dir.u)),
+			v: proofbound.IntervalAdd(l.p.v, proofbound.IntervalMul(s, l.dir.v)),
 		})
 	}
 	return out, true
 }
 
 func ivCircleCircle(a, b ivCarrier) ([]ivPoint, bool) {
-	dx := intervalSub(b.c.u, a.c.u)
-	dy := intervalSub(b.c.v, a.c.v)
-	dsq := intervalAdd(intervalSquare(dx), intervalSquare(dy))
+	dx := proofbound.IntervalSub(b.c.u, a.c.u)
+	dy := proofbound.IntervalSub(b.c.v, a.c.v)
+	dsq := proofbound.IntervalAdd(intervalSquare(dx), intervalSquare(dy))
 	dist, ok := intervalSqrt(dsq)
-	if !ok || dist.lo.Sign() <= 0 {
+	if !ok || dist.Lo.Sign() <= 0 {
 		return nil, false
 	}
 	mid, okMid := intervalQuo(
-		intervalSub(intervalAdd(dsq, intervalSquare(a.r)), intervalSquare(b.r)),
-		intervalScale(dist, big.NewRat(2, 1)),
+		proofbound.IntervalSub(proofbound.IntervalAdd(dsq, intervalSquare(a.r)), intervalSquare(b.r)),
+		proofbound.IntervalScale(dist, big.NewRat(2, 1)),
 	)
 	if !okMid {
 		return nil, false
 	}
-	h2 := intervalSub(intervalSquare(a.r), intervalSquare(mid))
-	if h2.hi.Sign() < 0 {
+	h2 := proofbound.IntervalSub(intervalSquare(a.r), intervalSquare(mid))
+	if h2.Hi.Sign() < 0 {
 		return nil, false
 	}
 	h, okH := intervalSqrt(h2)
@@ -359,13 +361,13 @@ func ivCircleCircle(a, b ivCarrier) ([]ivPoint, bool) {
 	if !okA || !okC {
 		return nil, false
 	}
-	baseU := intervalAdd(a.c.u, intervalMul(along, dx))
-	baseV := intervalAdd(a.c.v, intervalMul(along, dy))
-	offU := intervalMul(across, dy)
-	offV := intervalMul(across, dx)
+	baseU := proofbound.IntervalAdd(a.c.u, proofbound.IntervalMul(along, dx))
+	baseV := proofbound.IntervalAdd(a.c.v, proofbound.IntervalMul(along, dy))
+	offU := proofbound.IntervalMul(across, dy)
+	offV := proofbound.IntervalMul(across, dx)
 	return []ivPoint{
-		{u: intervalSub(baseU, offU), v: intervalAdd(baseV, offV)},
-		{u: intervalAdd(baseU, offU), v: intervalSub(baseV, offV)},
+		{u: proofbound.IntervalSub(baseU, offU), v: proofbound.IntervalAdd(baseV, offV)},
+		{u: proofbound.IntervalAdd(baseU, offU), v: proofbound.IntervalSub(baseV, offV)},
 	}, true
 }
 
@@ -389,23 +391,23 @@ func ivNearestTo(cands []ivPoint, corner ivPoint) (ivPoint, bool) {
 	if len(cands) == 0 {
 		return ivPoint{}, false
 	}
-	d2 := make([]ratInterval, len(cands))
+	d2 := make([]proofbound.RatInterval, len(cands))
 	for i, c := range cands {
-		d2[i] = intervalAdd(
-			intervalSquare(intervalSub(c.u, corner.u)),
-			intervalSquare(intervalSub(c.v, corner.v)),
+		d2[i] = proofbound.IntervalAdd(
+			intervalSquare(proofbound.IntervalSub(c.u, corner.u)),
+			intervalSquare(proofbound.IntervalSub(c.v, corner.v)),
 		)
 	}
-	best := d2[0].hi
+	best := d2[0].Hi
 	for _, iv := range d2[1:] {
-		if iv.hi.Cmp(best) < 0 {
-			best = iv.hi
+		if iv.Hi.Cmp(best) < 0 {
+			best = iv.Hi
 		}
 	}
 	var out ivPoint
 	found := false
 	for i, iv := range d2 {
-		if iv.lo.Cmp(best) > 0 {
+		if iv.Lo.Cmp(best) > 0 {
 			continue
 		}
 		if !found {
@@ -499,7 +501,7 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 		}
 		delta = math.Max(delta, enc.reach(j.m))
 	}
-	if isNonFinite(delta) {
+	if proofbound.IsNonFinite(delta) {
 		return 0, errCapContourUnbounded
 	}
 	return delta, nil
@@ -509,7 +511,7 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 // than one float: the enclosure of v + t·rot90(unit(t)) for every offset
 // amount t in tRange, the point family a line carrier's own anchor sweeps as
 // the offset amount varies. ivOffsetFoot is this at one degenerate point.
-func ivOffsetFootRange(vU, vV, tu, tv float64, tRange ratInterval) (ivPoint, bool) {
+func ivOffsetFootRange(vU, vV, tu, tv float64, tRange proofbound.RatInterval) (ivPoint, bool) {
 	n, ok := ivUnitVec(tu, tv)
 	if !ok {
 		return ivPoint{}, false
@@ -519,8 +521,8 @@ func ivOffsetFootRange(vU, vV, tu, tv float64, tRange ratInterval) (ivPoint, boo
 		return ivPoint{}, false
 	}
 	return ivPoint{
-		u: intervalAdd(v.u, intervalMul(intervalNeg(n.v), tRange)),
-		v: intervalAdd(v.v, intervalMul(n.u, tRange)),
+		u: proofbound.IntervalAdd(v.u, proofbound.IntervalMul(proofbound.IntervalNeg(n.v), tRange)),
+		v: proofbound.IntervalAdd(v.v, proofbound.IntervalMul(n.u, tRange)),
 	}, true
 }
 
@@ -539,7 +541,7 @@ func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
 	if rt0 == nil || rt1 == nil {
 		return ivCarrier{}, false
 	}
-	tRange := interval(rt0, rt1)
+	tRange := proofbound.Interval(rt0, rt1)
 	if !w.isCircular() {
 		p, okP := ivOffsetFootRange(w.startU, w.startV, w.tanInU, w.tanInV, tRange)
 		dir, okD := ivUnitVec(w.tanInU, w.tanInV)
@@ -556,8 +558,8 @@ func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
 	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
 		inside = big.NewRat(-1, 1)
 	}
-	r := intervalSub(pointInterval(rr), intervalMul(tRange, pointInterval(inside)))
-	if r.lo.Sign() <= 0 {
+	r := proofbound.IntervalSub(proofbound.PointInterval(rr), proofbound.IntervalMul(tRange, proofbound.PointInterval(inside)))
+	if r.Lo.Sign() <= 0 {
 		return ivCarrier{}, false
 	}
 	c, okC := ivExactPoint(w.cU, w.cV)
@@ -585,14 +587,14 @@ func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
 // point.
 func miterConstraintRow(w sideWalk, c ivCarrier, foot ivPoint) (ivPoint, *big.Rat, bool) {
 	if c.isLine {
-		n := ivPoint{u: intervalNeg(c.dir.v), v: c.dir.u}
+		n := ivPoint{u: proofbound.IntervalNeg(c.dir.v), v: c.dir.u}
 		return n, big.NewRat(1, 1), true
 	}
-	dx := intervalSub(foot.u, c.c.u)
-	dy := intervalSub(foot.v, c.c.v)
-	distSq := intervalAdd(intervalSquare(dx), intervalSquare(dy))
+	dx := proofbound.IntervalSub(foot.u, c.c.u)
+	dy := proofbound.IntervalSub(foot.v, c.c.v)
+	distSq := proofbound.IntervalAdd(intervalSquare(dx), intervalSquare(dy))
 	dist, ok := intervalSqrt(distSq)
-	if !ok || dist.lo.Sign() <= 0 {
+	if !ok || dist.Lo.Sign() <= 0 {
 		return ivPoint{}, nil, false
 	}
 	ux, okU := intervalQuo(dx, dist)
@@ -649,24 +651,24 @@ func circleCircleLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (fl
 	if !okRA || !okRB {
 		return 0, false
 	}
-	det := intervalSub(intervalMul(rowA.u, rowB.v), intervalMul(rowB.u, rowA.v))
-	if det.lo.Sign() <= 0 && det.hi.Sign() >= 0 {
+	det := proofbound.IntervalSub(proofbound.IntervalMul(rowA.u, rowB.v), proofbound.IntervalMul(rowB.u, rowA.v))
+	if det.Lo.Sign() <= 0 && det.Hi.Sign() >= 0 {
 		return 0, false
 	}
-	pu, okU := intervalQuo(intervalSub(intervalScale(rowB.v, rhsA), intervalScale(rowA.v, rhsB)), det)
-	pv, okV := intervalQuo(intervalSub(intervalScale(rowA.u, rhsB), intervalScale(rowB.u, rhsA)), det)
+	pu, okU := intervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.v, rhsA), proofbound.IntervalScale(rowA.v, rhsB)), det)
+	pv, okV := intervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.u, rhsB), proofbound.IntervalScale(rowB.u, rhsA)), det)
 	if !okU || !okV {
 		return 0, false
 	}
-	mag, ok := intervalSqrt(intervalAdd(intervalSquare(pu), intervalSquare(pv)))
+	mag, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(pu), intervalSquare(pv)))
 	if !ok {
 		return 0, false
 	}
-	upper, exact := mag.hi.Float64()
+	upper, exact := mag.Hi.Float64()
 	if !exact {
 		upper = math.Nextafter(upper, math.Inf(1))
 	}
-	if isNonFinite(upper) || upper < 0 {
+	if proofbound.IsNonFinite(upper) || upper < 0 {
 		return 0, false
 	}
 	return upper, true
@@ -699,7 +701,7 @@ func lineWallFrameOf(w sideWalk) (lineWallFrame, bool) {
 	if !ok {
 		return lineWallFrame{}, false
 	}
-	n := ivPoint{u: intervalNeg(e.v), v: e.u}
+	n := ivPoint{u: proofbound.IntervalNeg(e.v), v: e.u}
 	return lineWallFrame{anchorU: w.startU, anchorV: w.startV, n: n, e: e}, true
 }
 
@@ -773,12 +775,12 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	}
 	w0u := new(big.Rat).Sub(anchorU, cx)
 	w0v := new(big.Rat).Sub(anchorV, cy)
-	alpha := intervalAdd(intervalMul(pointInterval(w0u), frame.n.u), intervalMul(pointInterval(w0v), frame.n.v))
+	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(proofbound.PointInterval(w0u), frame.n.u), proofbound.IntervalMul(proofbound.PointInterval(w0v), frame.n.v))
 	inside := insideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
-	delta0 := intervalSub(intervalSquare(pointInterval(radius)), intervalSquare(alpha))
-	delta1 := intervalScale(intervalAdd(alpha, intervalScale(pointInterval(radius), inside)), big.NewRat(-2, 1))
+	delta0 := proofbound.IntervalSub(intervalSquare(proofbound.PointInterval(radius)), intervalSquare(alpha))
+	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
 
 	// Delta1 == 0 EXACTLY (both ends of its own enclosure) is the persistent-
 	// tangency closed form this function's own doc comment derives: s(t) is
@@ -786,12 +788,12 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	// own sign, which this branch never even reads — enters the answer. The
 	// bound is |n|'s own enclosed magnitude (n is unit by construction, so
 	// this is 1 up to ivUnitVec's own tiny sqrt rounding) rather than
-	// radius2D's √2-scaled one, since this specific case is common enough —
+	// proofbound.Radius2D's √2-scaled one, since this specific case is common enough —
 	// every tangent-filleted corner in this codebase's own test fixtures —
 	// to be worth the tighter bound.
-	if delta1.lo.Sign() == 0 && delta1.hi.Sign() == 0 {
-		nMagUpper := ratSqrtUp(intervalAbsUpper(intervalAdd(intervalSquare(frame.n.u), intervalSquare(frame.n.v))))
-		if isNonFinite(nMagUpper) {
+	if delta1.Lo.Sign() == 0 && delta1.Hi.Sign() == 0 {
+		nMagUpper := proofbound.RatSqrtUp(intervalAbsUpper(proofbound.IntervalAdd(intervalSquare(frame.n.u), intervalSquare(frame.n.v))))
+		if proofbound.IsNonFinite(nMagUpper) {
 			return 0, false
 		}
 		return nMagUpper, true
@@ -801,15 +803,15 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	if rt0 == nil || rt1 == nil {
 		return 0, false
 	}
-	deltaAt := func(t *big.Rat) ratInterval {
-		return intervalAdd(delta0, intervalMul(delta1, pointInterval(t)))
+	deltaAt := func(t *big.Rat) proofbound.RatInterval {
+		return proofbound.IntervalAdd(delta0, proofbound.IntervalMul(delta1, proofbound.PointInterval(t)))
 	}
 	d0, d1 := deltaAt(rt0), deltaAt(rt1)
 	// Delta is affine, so its minimum over [t0, t1] is at one of the two
 	// ends — no interior point needs checking.
-	deltaMinLo := d0.lo
-	if d1.lo.Cmp(deltaMinLo) < 0 {
-		deltaMinLo = d1.lo
+	deltaMinLo := d0.Lo
+	if d1.Lo.Cmp(deltaMinLo) < 0 {
+		deltaMinLo = d1.Lo
 	}
 	if deltaMinLo.Sign() <= 0 {
 		// The discriminant reaches or crosses zero somewhere this enclosure
@@ -817,8 +819,8 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 		// position solve's own branch can turn without bound.
 		return 0, false
 	}
-	sqrtLower := ratSqrtDown(deltaMinLo)
-	if sqrtLower <= 0 || isNonFinite(sqrtLower) {
+	sqrtLower := proofbound.RatSqrtDown(deltaMinLo)
+	if sqrtLower <= 0 || proofbound.IsNonFinite(sqrtLower) {
 		return 0, false
 	}
 	delta1Upper := intervalAbsUpper(delta1)
@@ -826,13 +828,13 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	if !exact {
 		delta1UpperF = math.Nextafter(delta1UpperF, math.Inf(1))
 	}
-	sPrimeUpper := upRound(delta1UpperF / (2 * sqrtLower))
-	if isNonFinite(sPrimeUpper) {
+	sPrimeUpper := proofbound.UpRound(delta1UpperF / (2 * sqrtLower))
+	if proofbound.IsNonFinite(sPrimeUpper) {
 		return 0, false
 	}
 	// |dP/dt| = sqrt(1 + s'(t)^2), since n and e are orthonormal.
-	upper := radius2D(1, sPrimeUpper)
-	if isNonFinite(upper) {
+	upper := proofbound.Radius2D(1, sPrimeUpper)
+	if proofbound.IsNonFinite(upper) {
 		return 0, false
 	}
 	return upper, true
@@ -879,7 +881,7 @@ func capWholeCircleDelta(w sideWalk, d float64) (float64, error) {
 // walks and joins the loop exactly as buildCapBand does, so the two can never
 // disagree about the same contour.
 func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64, error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	work := newFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
@@ -946,7 +948,7 @@ func straightEdgeBound(held float64, squared proofarith.Dyadic, ok bool, endpoin
 	if held < 0 || !proofarith.DySquareEquals(held, squared) {
 		sqrtErr = dySqrtIntervalError(squared, held)
 	}
-	return absSumUpper(append([]float64{sqrtErr}, endpointDeltas...)...)
+	return proofbound.AbsSumUpper(append([]float64{sqrtErr}, endpointDeltas...)...)
 }
 
 // capEdgeLengthBound is straightEdgeBound for a straight cap-level edge between
@@ -963,36 +965,36 @@ func capEdgeLengthBound(held float64, end, start Point2, delta float64) float64 
 // A displacement at or past the radius says nothing about the turn at all, and
 // the caller then owes the whole-circumference envelope instead.
 func arcSweepAllow(radius, delta float64) (float64, bool) {
-	if radius <= 0 || delta >= radius || isNonFinite(radius) || isNonFinite(delta) {
+	if radius <= 0 || delta >= radius || proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(delta) {
 		return 0, false
 	}
-	return productUpper(math.Nextafter(math.Pi, math.Inf(1)), delta), true
+	return proofbound.ProductUpper(math.Nextafter(math.Pi, math.Inf(1)), delta), true
 }
 
 // capApexArcBound bounds the reflex connector arc's held length d·(th0 − th1).
 // The arc's centre is the ORIGINAL corner and its radius is exactly the
 // setback, both recorded, so the only error is in the sweep: the exact turn
-// between the two feet the build actually holds (an atan2Interval bracket, so
+// between the two feet the build actually holds (an proofbound.Atan2Interval bracket, so
 // no libm accuracy is assumed) plus the turn those feet's own displacement can
 // account for.
 func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) float64 {
-	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(d)))
+	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), math.Abs(d)))
 	aU, aV := proofarith.FloatRat(j.pA.U-j.vU), proofarith.FloatRat(j.pA.V-j.vV)
 	bU, bV := proofarith.FloatRat(j.pB.U-j.vU), proofarith.FloatRat(j.pB.V-j.vV)
 	rd := proofarith.FloatRat(d)
 	if aU == nil || aV == nil || bU == nil || bV == nil || rd == nil {
 		return fallback
 	}
-	sweep := intervalSub(atan2Interval(aV, aU, false), atan2Interval(bV, bU, false))
+	sweep := proofbound.IntervalSub(proofbound.Atan2Interval(aV, aU, false), proofbound.Atan2Interval(bV, bU, false))
 	if wraps != 0 {
-		sweep = intervalAdd(sweep, intervalScale(
-			twoPiInterval(),
+		sweep = proofbound.IntervalAdd(sweep, proofbound.IntervalScale(
+			proofbound.TwoPiInterval(),
 			big.NewRat(int64(wraps), 1),
 		))
 	}
 	// The build's own float differences round, and that rounding displaces the
 	// direction the angle is read from just as the contour itself does.
-	shift := absSumUpper(
+	shift := proofbound.AbsSumUpper(
 		delta,
 		proofarith.AddRoundError(j.pA.U, -j.vU, j.pA.U-j.vU),
 		proofarith.AddRoundError(j.pA.V, -j.vV, j.pA.V-j.vV),
@@ -1003,7 +1005,7 @@ func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) fl
 	if !ok {
 		return fallback
 	}
-	bound := absSumUpper(intervalFloatError(intervalScale(sweep, rd), held), turn)
+	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalScale(sweep, rd), held), turn)
 	return math.Min(bound, fallback)
 }
 
@@ -1014,11 +1016,11 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 	if exactRadius == nil {
 		return math.Inf(1)
 	}
-	circumference := intervalScale(twoPiInterval(), exactRadius)
-	return intervalFloatError(circumference, held)
+	circumference := proofbound.IntervalScale(proofbound.TwoPiInterval(), exactRadius)
+	return proofbound.IntervalFloatError(circumference, held)
 }
 
-// capSweepBracket is the atan2Interval enclosure of a cap-level directrix's
+// capSweepBracket is the proofbound.Atan2Interval enclosure of a cap-level directrix's
 // swept angle — atan2(end−centre) − atan2(start−centre), unwrapped by
 // wraps·2π to the same branch capWallSweep's own float computation picked —
 // plus the coordinate shift (the contour's own displacement, folded in by
@@ -1028,22 +1030,22 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 // scaled by the wall's own radius) and capSweepAllow (an angle bound, read
 // directly) both build from, so the two readers of one wall's cap-level
 // sweep are never told two different enclosures of it.
-func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64) (ratInterval, float64, bool) {
+func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64) (proofbound.RatInterval, float64, bool) {
 	aU, aV := proofarith.FloatRat(start.U-cU), proofarith.FloatRat(start.V-cV)
 	bU, bV := proofarith.FloatRat(end.U-cU), proofarith.FloatRat(end.V-cV)
 	if aU == nil || aV == nil || bU == nil || bV == nil {
-		return ratInterval{}, 0, false
+		return proofbound.RatInterval{}, 0, false
 	}
-	sweep := intervalSub(atan2Interval(bV, bU, false), atan2Interval(aV, aU, false))
+	sweep := proofbound.IntervalSub(proofbound.Atan2Interval(bV, bU, false), proofbound.Atan2Interval(aV, aU, false))
 	if wraps != 0 {
-		sweep = intervalAdd(sweep, intervalScale(
-			twoPiInterval(),
+		sweep = proofbound.IntervalAdd(sweep, proofbound.IntervalScale(
+			proofbound.TwoPiInterval(),
 			big.NewRat(int64(wraps), 1),
 		))
 	}
 	// The build's own float differences round, and that rounding displaces the
 	// direction the angle is read from just as the contour itself does.
-	shift := absSumUpper(
+	shift := proofbound.AbsSumUpper(
 		delta,
 		proofarith.AddRoundError(start.U, -cU, start.U-cU),
 		proofarith.AddRoundError(start.V, -cV, start.V-cV),
@@ -1062,13 +1064,13 @@ func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64
 // th0/th1 wherever the corner is a genuine (non-tangent) miter
 // (docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
 // so the sweep is bracketed straight from those feet, exactly the way
-// capApexArcBound brackets a reflex corner's own connector: an atan2Interval
+// capApexArcBound brackets a reflex corner's own connector: an proofbound.Atan2Interval
 // enclosure of the two feet's own turn about the centre, so no libm accuracy
 // is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
 // to reproduce the same branch, plus the turn the two feet's own contour
 // displacement can account for.
 func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
-	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(capRadius)))
+	fallback := proofbound.ConservativeValueError(held, proofbound.ProductUpper(proofbound.TwoPiUpper(), math.Abs(capRadius)))
 	sweep, shift, ok := capSweepBracket(cU, cV, start, end, wraps, delta)
 	if !ok {
 		return fallback
@@ -1081,7 +1083,7 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 	if !ok {
 		return fallback
 	}
-	bound := absSumUpper(intervalFloatError(intervalScale(sweep, rd), held), turn)
+	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(proofbound.IntervalScale(sweep, rd), held), turn)
 	return math.Min(bound, fallback)
 }
 
@@ -1099,7 +1101,7 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 // divided by that same radius restates it in radians, rounded down before
 // dividing so the allowance can only widen, never tighten.
 func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {
-	fallback := conservativeValueError(held, twoPiUpper())
+	fallback := proofbound.ConservativeValueError(held, proofbound.TwoPiUpper())
 	sweep, shift, ok := capSweepBracket(cU, cV, start, end, wraps, delta)
 	if !ok {
 		return fallback
@@ -1109,7 +1111,7 @@ func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wrap
 	if !ok {
 		return fallback
 	}
-	angularTurn := upRound(lengthTurn / r)
-	bound := absSumUpper(intervalFloatError(sweep, held), angularTurn)
+	angularTurn := proofbound.UpRound(lengthTurn / r)
+	bound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(sweep, held), angularTurn)
 	return math.Min(bound, fallback)
 }

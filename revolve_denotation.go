@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -38,7 +40,7 @@ type angleDenotation struct {
 	// transcendental, such as ArcThrough's atan2-derived directed angle. It is
 	// disjoint from the rad+2π·turn form so stated Revolve angles retain their
 	// exact quarter-turn fast paths.
-	span *ratInterval
+	span *proofbound.RatInterval
 }
 
 // zeroAngleDenotation is the exact angle zero: what the end of an extent the
@@ -59,7 +61,7 @@ func (d angleDenotation) neg() angleDenotation {
 		return angleDenotation{}
 	}
 	if d.span != nil {
-		negated := intervalNeg(*d.span)
+		negated := proofbound.IntervalNeg(*d.span)
 		return angleDenotation{span: &negated}
 	}
 	return angleDenotation{rad: new(big.Rat).Neg(d.rad), turn: new(big.Rat).Neg(d.turn)}
@@ -72,7 +74,7 @@ func (d angleDenotation) scale(k *big.Rat) angleDenotation {
 		return angleDenotation{}
 	}
 	if d.span != nil {
-		scaled := intervalScale(*d.span, k)
+		scaled := proofbound.IntervalScale(*d.span, k)
 		return angleDenotation{span: &scaled}
 	}
 	return angleDenotation{rad: new(big.Rat).Mul(d.rad, k), turn: new(big.Rat).Mul(d.turn, k)}
@@ -82,14 +84,14 @@ func (d angleDenotation) scale(k *big.Rat) angleDenotation {
 // in. A radian-stated angle produces a point interval. A degree-stated angle
 // includes 2π's enclosure. A derived span is copied unchanged. ok is false
 // for an invalid denotation.
-func (d angleDenotation) enclosure() (ratInterval, bool) {
+func (d angleDenotation) enclosure() (proofbound.RatInterval, bool) {
 	if !d.valid() {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	if d.span != nil {
-		return interval(d.span.lo, d.span.hi), true
+		return proofbound.Interval(d.span.Lo, d.span.Hi), true
 	}
-	return intervalAdd(pointInterval(d.rad), intervalScale(twoPiInterval(), d.turn)), true
+	return proofbound.IntervalAdd(proofbound.PointInterval(d.rad), proofbound.IntervalScale(proofbound.TwoPiInterval(), d.turn)), true
 }
 
 // enclosureFor is enclosure with a fallback: an invalid denotation encloses
@@ -97,15 +99,15 @@ func (d angleDenotation) enclosure() (ratInterval, bool) {
 // value the record's own float64 subtraction already trusted — for a sweep
 // this file cannot yet denote exactly (ToFaceAngular, a payload literal with
 // no denotation, or an angle unit outside Radian/Degree).
-func (d angleDenotation) enclosureFor(held float64) (ratInterval, bool) {
+func (d angleDenotation) enclosureFor(held float64) (proofbound.RatInterval, bool) {
 	if enc, ok := d.enclosure(); ok {
 		return enc, true
 	}
 	r := proofarith.FloatRat(held)
 	if r == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return pointInterval(r), true
+	return proofbound.PointInterval(r), true
 }
 
 // sinCosFor encloses sin/cos of the angle d denotes, falling back to the HELD
@@ -114,7 +116,7 @@ func (d angleDenotation) enclosureFor(held float64) (ratInterval, bool) {
 // routes each form to its certified trigonometric enclosure. An invalid or
 // future mixed form falls back to the held float, matching readings that have
 // no denotation.
-func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool) {
+func (d angleDenotation) sinCosFor(held float64) (sin, cos proofbound.RatInterval, ok bool) {
 	switch {
 	case d.span != nil:
 		return radSinCosSpan(*d.span)
@@ -122,7 +124,7 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool)
 		// Pure radian, the exact angle zero included: radSinCosInterval
 		// already answers sin=0, cos=1 exactly at zero, with no series
 		// margin — the fast path a zero-turn end must take, since
-		// turnSinCosInterval's own series carries a fixed per-call margin
+		// proofbound.TurnSinCosInterval's own series carries a fixed per-call margin
 		// even at t=0 and would turn an exact zero into a straddling
 		// interval no tighter than any other angle.
 		sin, cos, ok = radSinCosInterval(d.rad)
@@ -130,15 +132,15 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool)
 	case d.valid() && d.rad.Sign() == 0:
 		// quarterTurnSinCos (moments_circular.go) is zero-width at every
 		// quarter-turn boundary (0/±1 exactly, no series at all) and falls
-		// back to turnSinCosInterval otherwise, so a quarter, half or
+		// back to proofbound.TurnSinCosInterval otherwise, so a quarter, half or
 		// three-quarter turn stays exact rather than carrying
-		// turnSinCosInterval's own fixed per-call series margin.
+		// proofbound.TurnSinCosInterval's own fixed per-call series margin.
 		sin, cos = quarterTurnSinCos(d.turn)
 		return sin, cos, true
 	default:
 		r := proofarith.FloatRat(held)
 		if r == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		sin, cos, ok = radSinCosInterval(r)
 		return sin, cos, ok
@@ -146,7 +148,7 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool)
 }
 
 // delta is the proven displacement between the held float and the angle d
-// denotes: intervalFloatError's outward-rounded distance from held to the
+// denotes: proofbound.IntervalFloatError's outward-rounded distance from held to the
 // far end of d's own enclosure. An invalid denotation answers +Inf, which
 // every consumer below turns into its existing envelope or refusal — the
 // same shape a nil denotation takes throughout this design.
@@ -155,7 +157,7 @@ func (d angleDenotation) delta(held float64) float64 {
 	if !ok {
 		return math.Inf(1)
 	}
-	return intervalFloatError(enc, held)
+	return proofbound.IntervalFloatError(enc, held)
 }
 
 // sweepDenotation is a revolve's denoted sweep interval [phi0, phi1], one
@@ -204,13 +206,13 @@ func (rp revolvePayload) angularDelta() float64 { return math.Max(rp.phi0Delta()
 // end's denotation cannot state one, which is the sound answer — a width
 // built from only one certified end would publish a claim the other end
 // never proved.
-func (sd sweepDenotation) widthInterval() (ratInterval, bool) {
+func (sd sweepDenotation) widthInterval() (proofbound.RatInterval, bool) {
 	enc0, ok0 := sd.phi0.enclosure()
 	enc1, ok1 := sd.phi1.enclosure()
 	if !ok0 || !ok1 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalSub(enc1, enc0), true
+	return proofbound.IntervalSub(enc1, enc0), true
 }
 
 // halfTurnExcessFor encloses the denoted sweep's width MINUS a half turn,
@@ -223,47 +225,47 @@ func (sd sweepDenotation) widthInterval() (ratInterval, bool) {
 // subtraction would straddle zero. An end the denotation cannot state falls
 // back to the HELD float exactly as enclosureFor does, against π's own
 // enclosure; ok is false only where a held float is not finite.
-func (sd sweepDenotation) halfTurnExcessFor(phi0, phi1 float64) (ratInterval, bool) {
+func (sd sweepDenotation) halfTurnExcessFor(phi0, phi1 float64) (proofbound.RatInterval, bool) {
 	if sd.phi0.valid() && sd.phi1.valid() && sd.phi0.span == nil && sd.phi1.span == nil {
 		rad := new(big.Rat).Sub(sd.phi1.rad, sd.phi0.rad)
 		turn := new(big.Rat).Sub(sd.phi1.turn, sd.phi0.turn)
 		turn.Sub(turn, big.NewRat(1, 2))
-		return intervalAdd(pointInterval(rad), intervalScale(twoPiInterval(), turn)), true
+		return proofbound.IntervalAdd(proofbound.PointInterval(rad), proofbound.IntervalScale(proofbound.TwoPiInterval(), turn)), true
 	}
 	enc0, ok0 := sd.phi0.enclosureFor(phi0)
 	enc1, ok1 := sd.phi1.enclosureFor(phi1)
 	if !ok0 || !ok1 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalSub(intervalSub(enc1, enc0), interval(piLower, piUpper)), true
+	return proofbound.IntervalSub(proofbound.IntervalSub(enc1, enc0), proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)), true
 }
 
 // sweep is the proven bound on the sweep width every mass and edge reading
 // multiplies into its own quantity: the held float64 subtraction stays the
 // published value exactly as it always has, and the bound is the smaller of
-// the magnitude envelope conservativeValueError has always published here
-// (bounded.go's own documented fallback, sound for any legal sweep since a
+// the magnitude envelope proofbound.ConservativeValueError has always published here
+// (internal/proofbound/bounded.go's own documented fallback, sound for any legal sweep since a
 // legal sweep never exceeds a full turn) and the proven displacement between
 // that held value and the sweep the record DENOTES (den.widthInterval,
 // above), wherever a denotation exists for both ends. math.Min follows
-// bounded.go's own convention for a reading a certified bracket admits — it
+// internal/proofbound/bounded.go's own convention for a reading a certified bracket admits — it
 // can only shrink the published bound, never widen it — so a ToFaceAngular
 // sweep or any other denotation this file cannot state keeps exactly the
 // envelope it always published.
-func (rp revolvePayload) sweep() boundedScalar {
-	held := boundedSub(exactScalar(rp.phi1), exactScalar(rp.phi0))
-	fallback := conservativeValueError(held.value, twoPiUpper())
+func (rp revolvePayload) sweep() proofbound.BoundedScalar {
+	held := proofbound.BoundedSub(proofbound.ExactScalar(rp.phi1), proofbound.ExactScalar(rp.phi0))
+	fallback := proofbound.ConservativeValueError(held.Value, proofbound.TwoPiUpper())
 	enc, ok := rp.den.widthInterval()
 	if !ok {
-		return measuredScalar(held.value, fallback)
+		return proofbound.MeasuredScalar(held.Value, fallback)
 	}
-	return measuredScalar(held.value, math.Min(fallback, intervalFloatError(enc, held.value)))
+	return proofbound.MeasuredScalar(held.Value, math.Min(fallback, proofbound.IntervalFloatError(enc, held.Value)))
 }
 
 // endSinCos encloses sin(held)/cos(held) for one sweep endpoint: the
 // published value is always math.Sincos(held), the twin the partial-sweep
-// centroid used to compose from boundedSin/boundedCos alone (boundedCos
-// survives in bounded.go for walkAxisMoment's circular arm, which this
+// centroid used to compose from boundedSin/proofbound.BoundedCos alone (proofbound.BoundedCos
+// survives in internal/proofbound/bounded.go for walkAxisMoment's circular arm, which this
 // change does not touch). The bound is the smaller of the existing ≥1
 // magnitude envelope and the denoted angle's own certified enclosure
 // (angleDenotation.sinCosFor), gated on d.valid() rather than sinCosFor's own
@@ -274,14 +276,14 @@ func (rp revolvePayload) sweep() boundedScalar {
 // ToFaceAngular endpoint's true angle carries no proven relation to the held
 // float here, so its trig keeps the envelope, per docs/evaluator-design.md
 // §6's "every reading it feeds keeps the magnitude envelope it always has".
-func endSinCos(d angleDenotation, held float64) (sin, cos boundedScalar) {
+func endSinCos(d angleDenotation, held float64) (sin, cos proofbound.BoundedScalar) {
 	sinValue, cosValue := math.Sincos(held)
-	sinBound, cosBound := conservativeValueError(sinValue, 1), conservativeValueError(cosValue, 1)
+	sinBound, cosBound := proofbound.ConservativeValueError(sinValue, 1), proofbound.ConservativeValueError(cosValue, 1)
 	if d.valid() {
 		if sinEnc, cosEnc, ok := d.sinCosFor(held); ok {
-			sinBound = math.Min(sinBound, intervalFloatError(sinEnc, sinValue))
-			cosBound = math.Min(cosBound, intervalFloatError(cosEnc, cosValue))
+			sinBound = math.Min(sinBound, proofbound.IntervalFloatError(sinEnc, sinValue))
+			cosBound = math.Min(cosBound, proofbound.IntervalFloatError(cosEnc, cosValue))
 		}
 	}
-	return measuredScalar(sinValue, sinBound), measuredScalar(cosValue, cosBound)
+	return proofbound.MeasuredScalar(sinValue, sinBound), proofbound.MeasuredScalar(cosValue, cosBound)
 }

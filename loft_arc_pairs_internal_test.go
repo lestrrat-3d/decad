@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -273,12 +275,12 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 			arcUpperW[k] = r1 * dth
 			matchedDelta[k] = sectionDelta
 			// Uniform-angle stations are constant speed on a circle, so
-			// uniformSpeedTangentEnergyUpper discharges the per-cell energy
+			// proofbound.UniformSpeedTangentEnergyUpper discharges the per-cell energy
 			// obligation here exactly as perCellTangentEnergy's own circular
 			// arm does in the real build; the half-chord is rounded DOWN
 			// twice so it stays the lower bound that helper requires.
-			energyV[k] = uniformSpeedTangentEnergyUpper(arcUpperV[k], downRound(downRound(2*r0*math.Sin(dth/2))))
-			energyW[k] = uniformSpeedTangentEnergyUpper(arcUpperW[k], downRound(downRound(2*r1*math.Sin(dth/2))))
+			energyV[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperV[k], downRound(downRound(2*r0*math.Sin(dth/2))))
+			energyW[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperW[k], downRound(downRound(2*r1*math.Sin(dth/2))))
 		}
 	}
 	pairs := []loftLoopPair{{
@@ -467,7 +469,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
@@ -678,7 +680,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
@@ -714,7 +716,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 // rationals; their difference is proven nonzero by big.Rat comparison rather
 // than by asserting a float is positive, which would be architecture-
 // dependent. The certified lower bound on the residual is
-// |r1^2 - r0^2| / (r1_up + r0_up) with each radius rounded UP (ratSqrtUp),
+// |r1^2 - r0^2| / (r1_up + r0_up) with each radius rounded UP (proofbound.RatSqrtUp),
 // which can only shrink the quotient, and delta is compared against it as a
 // rational.
 func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
@@ -735,7 +737,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 
 	// residual >= |r1^2 - r0^2| / (r1_up + r0_up), every step exact.
 	num := new(big.Rat).Abs(new(big.Rat).Sub(r1, r0))
-	den := new(big.Rat).Add(proofarith.FloatRat(ratSqrtUp(r0)), proofarith.FloatRat(ratSqrtUp(r1)))
+	den := new(big.Rat).Add(proofarith.FloatRat(proofbound.RatSqrtUp(r0)), proofarith.FloatRat(proofbound.RatSqrtUp(r1)))
 	require.Positive(t, den.Sign())
 	want := new(big.Rat).Quo(num, den)
 
@@ -751,7 +753,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 

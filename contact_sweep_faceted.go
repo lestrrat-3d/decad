@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -27,7 +29,7 @@ import (
 func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	chord := heldChordOf(req.ContactRequest)
 	solidA, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), chord)
 	if err != nil {
@@ -248,12 +250,12 @@ func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarS
 func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, at SweepInstant,
 	poseA, poseB r3.Transform, contact *ContactReport) (SweepEvent, error) {
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
-	budget := newWorkBudget(ctx)
-	vertsA, etaA, okA, err := r.a.pointDeviation(poseA, f, budget.step)
+	budget := proofbound.NewWorkBudget(ctx)
+	vertsA, etaA, okA, err := r.a.pointDeviation(poseA, f, budget.Step)
 	if err != nil {
 		return SweepEvent{}, err
 	}
-	vertsB, etaB, okB, err := r.b.pointDeviation(poseB, f, budget.step)
+	vertsB, etaB, okB, err := r.b.pointDeviation(poseB, f, budget.Step)
 	if err != nil {
 		return SweepEvent{}, err
 	}
@@ -280,7 +282,7 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarPoseScale(poseB)))
 		a := pair.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
 		b := pair.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
-		deep, err := pair.PlanarDeepVertex(&a, &b, margin, budget.step)
+		deep, err := pair.PlanarDeepVertex(&a, &b, margin, budget.Step)
 		if err != nil {
 			return SweepEvent{}, err
 		}
@@ -303,7 +305,7 @@ func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool
 	}
 	width := new(big.Rat).Add(proofarith.FloatRat(contact.Gap.Bound.Base()),
 		new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)))
-	published := ratFloatUp(width)
+	published := proofbound.RatFloatUp(width)
 	if !finiteMeasurementValues(published) {
 		return nil, false
 	}

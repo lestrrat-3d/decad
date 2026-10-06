@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -117,12 +119,12 @@ func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
 // capBandLevel preserves the selected end's axial displacement while a
 // chamfer band derives its cap and side levels. The start band has positive
 // material sense; the end band has negative material sense.
-func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) boundedScalar {
+func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) proofbound.BoundedScalar {
 	capDelta := cbp.z1Delta
 	if matSign > 0 {
 		capDelta = cbp.z0Delta
 	}
-	return measuredScalar(capZ, capDelta)
+	return proofbound.MeasuredScalar(capZ, capDelta)
 }
 
 // axialDelta is the larger sweep-level displacement a body-relative stop must
@@ -131,10 +133,10 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) boundedScalar {
 func (cbp capBlendPayload) axialDelta() float64 {
 	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
 	if len(cbp.startLoops) != 0 {
-		z0Delta = absSumUpper(z0Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
+		z0Delta = proofbound.AbsSumUpper(z0Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
 	}
 	if len(cbp.endLoops) != 0 {
-		z1Delta = absSumUpper(z1Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
+		z1Delta = proofbound.AbsSumUpper(z1Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
 	}
 	return math.Max(z0Delta, z1Delta)
 }
@@ -191,7 +193,7 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, err
 // — the frame and placement's own rounding of base/gu/gv/gz — and so composes
 // outward with the per-candidate maximum rather than folding into it. A fifth
 // does the same one step later: the reading's own summation of base with the
-// extremized candidate, charged exactly by exactSumRound (bounds.go), since a
+// extremized candidate, charged exactly by proofbound.ExactSumRound (internal/proofbound/bounds.go), since a
 // placement can leave every coefficient exactly right and still round when the
 // terms are added.
 func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
@@ -200,7 +202,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 	gu := pl.dir(1, 0, 0).Dot(g)
 	gv := pl.dir(0, 1, 0).Dot(g)
 	gz := pl.dir(0, 0, 1).Dot(g)
-	inPlane := upRound(math.Hypot(gu, gv))
+	inPlane := proofbound.UpRound(math.Hypot(gu, gv))
 	axial := math.Abs(gz)
 	lo, hi := math.Inf(1), math.Inf(-1)
 	loLower, loUpper := math.Inf(1), math.Inf(1)
@@ -214,7 +216,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 			return v
 		}
 		if up {
-			return upRound(v + allow)
+			return proofbound.UpRound(v + allow)
 		}
 		return downRound(v - allow)
 	}
@@ -233,15 +235,15 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		}
 		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
 		zLo, zHi := cbp.z0, cbp.z1
-		loAllow := productUpper(axial, cbp.z0Delta)
-		hiAllow := productUpper(axial, cbp.z1Delta)
+		loAllow := proofbound.ProductUpper(axial, cbp.z0Delta)
+		hiAllow := proofbound.ProductUpper(axial, cbp.z1Delta)
 		if onStart {
 			zLo = cbp.z0 + cbp.d
-			loAllow = absSumUpper(loAllow, productUpper(axial, absSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, zLo))))
+			loAllow = proofbound.AbsSumUpper(loAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, zLo))))
 		}
 		if onEnd {
 			zHi = cbp.z1 - cbp.d
-			hiAllow = absSumUpper(hiAllow, productUpper(axial, absSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, zHi))))
+			hiAllow = proofbound.AbsSumUpper(hiAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, zHi))))
 		}
 		// The boundary scan states its own displacement per candidate — nonzero
 		// wherever a circular candidate's apex is not exactly representable
@@ -255,8 +257,8 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The original loop bounds the straight slab at both its own levels;
 		// a chamfered end's level is also that band's side-level directrix, and
 		// that level is a float sum whose rounding moves the candidate.
-		take(l, h, zLo, absSumUpper(loAllow, planeAllow))
-		take(l, h, zHi, absSumUpper(hiAllow, planeAllow))
+		take(l, h, zLo, proofbound.AbsSumUpper(loAllow, planeAllow))
+		take(l, h, zHi, proofbound.AbsSumUpper(hiAllow, planeAllow))
 		if !onStart && !onEnd {
 			continue
 		}
@@ -278,18 +280,18 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The contour sits at its cap level, so its in-plane displacement and
 		// that level's inherited axial displacement compose independently. The
 		// scan's own candidate displacement is a third in-plane term.
-		contourAllow := absSumUpper(productUpper(inPlane, delta), contourPlaneAllow)
+		contourAllow := proofbound.AbsSumUpper(proofbound.ProductUpper(inPlane, delta), contourPlaneAllow)
 		if onStart {
-			take(cl, ch, cbp.z0, absSumUpper(contourAllow, productUpper(axial, cbp.z0Delta)))
+			take(cl, ch, cbp.z0, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.z0Delta)))
 		}
 		if onEnd {
-			take(cl, ch, cbp.z1, absSumUpper(contourAllow, productUpper(axial, cbp.z1Delta)))
+			take(cl, ch, cbp.z1, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.z1Delta)))
 		}
 	}
 	if math.IsInf(lo, 1) {
 		return 0, 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
 	}
-	bound := absSumUpper(math.Max(
+	bound := proofbound.AbsSumUpper(math.Max(
 		math.Max(loUpper-lo, lo-loLower),
 		math.Max(hiUpper-hi, hi-hiLower),
 	))
@@ -301,17 +303,17 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 	placeAllow := prismPlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
 	// A FIFTH mechanism displaces both ends and composes outward with the rest:
 	// the reading's own recombination base + lo (and base + hi), charged exactly
-	// against those two terms by exactSumRound (bounds.go). It is the one term
+	// against those two terms by proofbound.ExactSumRound (internal/proofbound/bounds.go). It is the one term
 	// prismPlacementCoeffAllow's coefficient check cannot reach — a pure
 	// translation leaves base/gu/gv/gz each exactly right and the addition that
 	// follows still rounds — and it is charged per END, since the two ends are
 	// summed from different terms.
 	loEnd, hiEnd := base+lo, base+hi
 	sumAllow := math.Max(
-		exactSumRound(loEnd, base, lo),
-		exactSumRound(hiEnd, base, hi),
+		proofbound.ExactSumRound(loEnd, base, lo),
+		proofbound.ExactSumRound(hiEnd, base, hi),
 	)
-	bound = absSumUpper(bound, placeAllow, sumAllow)
+	bound = proofbound.AbsSumUpper(bound, placeAllow, sumAllow)
 	return loEnd, hiEnd, bound, nil
 }
 
@@ -342,7 +344,7 @@ func (cbp capBlendPayload) loops() []LoopRecord {
 // selected edge is instead an ordinary lateral edge (the caller then runs the
 // base path).
 func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel EdgeSelector, edges []*Edge) (startLoops, endLoops map[int]bool, lateral bool, err error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	cornerLoops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, nil, false, err
@@ -455,7 +457,7 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	// offset grows from 0, so a crossing anywhere in the family occurs no
 	// later than it occurs at the full offset d — proving the family
 	// disjoint at s=1 certifies every s in [0, 1].
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	mixed, err := mixedOffsetProfile(budget, pp.profile, d, startLoops, endLoops)
 	if err != nil {
 		return nil, wrapCapBlendDropError(err)
@@ -562,7 +564,7 @@ func anyLoopSelected(loops map[int]bool) bool {
 // (their union — a loop chamfered on either or both caps takes the same
 // in-plane offset) by d into the material, leaving every other loop
 // unchanged. It reuses offsetLoopBudget's per-feature offset unmodified.
-func mixedOffsetProfile(budget *workBudget, profile ProfileRecord, d float64, startLoops, endLoops map[int]bool) (ProfileRecord, error) {
+func mixedOffsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, d float64, startLoops, endLoops map[int]bool) (ProfileRecord, error) {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
 		return ProfileRecord{}, err

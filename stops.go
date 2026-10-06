@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -88,14 +90,14 @@ func stopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held floa
 		if f == nil || p == nil || nn == nil {
 			return math.Inf(1)
 		}
-		terms = append(terms, ratMul(new(big.Rat).Sub(f, p), nn))
+		terms = append(terms, proofbound.RatMul(new(big.Rat).Sub(f, p), nn))
 	}
 	t, o := proofarith.FloatRat(travel), proofarith.FloatRat(offset)
 	if t == nil || o == nil {
 		return math.Inf(1)
 	}
-	terms = append(terms, ratMul(t, o))
-	return proofarith.RationalFloatError(ratAdd(terms...), held)
+	terms = append(terms, proofbound.RatMul(t, o))
+	return proofarith.RationalFloatError(proofbound.RatAdd(terms...), held)
 }
 
 // throughStopRound is stopLevelRound's through-all analogue: travel·(hi −
@@ -113,7 +115,7 @@ func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
 		if oi == nil || gi == nil {
 			return math.Inf(1)
 		}
-		base.Add(base, ratMul(oi, gi))
+		base.Add(base, proofbound.RatMul(oi, gi))
 	}
 	h, t := proofarith.FloatRat(hi), proofarith.FloatRat(travel)
 	if h == nil || t == nil {
@@ -280,7 +282,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	// the whole expression's own rounding (which covers the difference, the dot
 	// product and the offset step alike), the offset's conversion into
 	// millimetres, and the displacement the stop body proved for its own levels.
-	delta := absSumUpper(
+	delta := proofbound.AbsSumUpper(
 		stopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
 		offsetDelta,
 		selectedFaceAxialDelta(body, face),
@@ -341,7 +343,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		if axial := payloadAxialDelta(b); axial != 0 {
 			delta = axial
 			if bound != 0 {
-				delta = absSumUpper(bound, axial)
+				delta = proofbound.AbsSumUpper(bound, axial)
 			}
 		}
 		far := hi - base
@@ -349,7 +351,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		switch {
 		case downRound(far-delta) > tol:
 			// Material beyond the plane whatever the displacement hides.
-		case upRound(far+delta) <= tol:
+		case proofbound.UpRound(far+delta) <= tol:
 			// No material beyond the plane, whatever it hides.
 			continue
 		default:
@@ -378,22 +380,22 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 	last := stops[len(stops)-1]
 	farDelta := last.delta
 	for _, candidate := range stops {
-		if isNonFinite(candidate.far) || isNonFinite(candidate.delta) {
+		if proofbound.IsNonFinite(candidate.far) || proofbound.IsNonFinite(candidate.delta) {
 			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty is not finite`, ErrUnsupported)
 		}
 		upper := candidate.far
 		if candidate.delta != 0 {
-			upper = upRound(candidate.far + candidate.delta)
+			upper = proofbound.UpRound(candidate.far + candidate.delta)
 		}
-		if isNonFinite(upper) {
+		if proofbound.IsNonFinite(upper) {
 			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty cannot be represented`, ErrUnsupported)
 		}
 		if upper > last.far {
-			farDelta = math.Max(farDelta, upRound(upper-last.far))
+			farDelta = math.Max(farDelta, proofbound.UpRound(upper-last.far))
 		}
 	}
 	stop := travel * last.far
-	delta := absSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
+	delta := proofbound.AbsSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
 	return stop, delta, refs, nil
 }
 

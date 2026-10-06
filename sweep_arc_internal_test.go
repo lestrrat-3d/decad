@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,26 +34,26 @@ func TestSweepArcAngleDenotationCarriesArbitraryInterval(t *testing.T) {
 
 	neg, ok := den.neg().enclosure()
 	require.True(t, ok)
-	require.Zero(t, neg.lo.Cmp(new(big.Rat).Neg(enc.hi)))
-	require.Zero(t, neg.hi.Cmp(new(big.Rat).Neg(enc.lo)))
+	require.Zero(t, neg.Lo.Cmp(new(big.Rat).Neg(enc.Hi)))
+	require.Zero(t, neg.Hi.Cmp(new(big.Rat).Neg(enc.Lo)))
 	doubled, ok := den.scale(big.NewRat(2, 1)).enclosure()
 	require.True(t, ok)
-	require.Zero(t, doubled.lo.Cmp(new(big.Rat).Mul(enc.lo, big.NewRat(2, 1))))
-	require.Zero(t, doubled.hi.Cmp(new(big.Rat).Mul(enc.hi, big.NewRat(2, 1))))
+	require.Zero(t, doubled.Lo.Cmp(new(big.Rat).Mul(enc.Lo, big.NewRat(2, 1))))
+	require.Zero(t, doubled.Hi.Cmp(new(big.Rat).Mul(enc.Hi, big.NewRat(2, 1))))
 }
 
 func TestSweepArcAngleDenotationFeedsHalfTurnDecision(t *testing.T) {
 	t.Parallel()
 
-	span := interval(big.NewRat(4, 1), big.NewRat(4001, 1000))
+	span := proofbound.Interval(big.NewRat(4, 1), big.NewRat(4001, 1000))
 	den := angleDenotation{span: &span}
 	sweep := sweepDenotation{phi0: zeroAngleDenotation(), phi1: den}
 	excess, ok := sweep.halfTurnExcessFor(0, 4)
 	require.True(t, ok)
-	require.Positive(t, excess.lo.Sign())
-	require.Positive(t, excess.hi.Sign())
+	require.Positive(t, excess.Lo.Sign())
+	require.Positive(t, excess.Hi.Sign())
 }
 
-func intervalContainsRat(iv ratInterval, value *big.Rat) bool {
-	return iv.lo.Cmp(value) <= 0 && iv.hi.Cmp(value) >= 0
+func intervalContainsRat(iv proofbound.RatInterval, value *big.Rat) bool {
+	return iv.Lo.Cmp(value) <= 0 && iv.Hi.Cmp(value) >= 0
 }

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -420,7 +422,7 @@ func (r *motionRun) setup(moving []*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
-		mv.area = absSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
+		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
 		mv.sigma = basisSigmaLower(mv.body.payload.transform())
 		if r.spec.kind != motionPrismatic {
 			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
@@ -673,7 +675,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	// (§5.1): every boundary point moves at most η along the straight path
 	// between the two images, and the area that path carries is the mover's
 	// own, scaled by the path's largest linear stretch.
-	allowance := sweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma, stretch))
+	allowance := proofbound.SweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma, stretch))
 	for j := range r.statics {
 		if !r.pairs[i][j].evaluated() {
 			continue
@@ -773,14 +775,14 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta,
 // allowance in its Bound, so Value − Bound stays a proven lower bound on the
 // ideal overlap. An unmeasured overlap never transfers.
 func transferredOverlap(volume Measurement, measured bool, allowance float64) (Measurement, bool) {
-	if !measured || isNonFinite(allowance) {
+	if !measured || proofbound.IsNonFinite(allowance) {
 		return Measurement{}, false
 	}
 	value, bound := proofarith.FloatRat(volume.Value.Base()), proofarith.FloatRat(volume.Bound.Base())
 	if value == nil || bound == nil {
 		return Measurement{}, false
 	}
-	lower := ratFloatDown(new(big.Rat).Sub(value, bound))
+	lower := proofbound.RatFloatDown(new(big.Rat).Sub(value, bound))
 	if !(lower > allowance) {
 		return Measurement{}, false
 	}
@@ -790,7 +792,7 @@ func transferredOverlap(volume Measurement, measured bool, allowance float64) (M
 	return Measurement{
 		Value:     volume.Value,
 		Exactness: Approximate,
-		Bound:     units.CubicMillimeters(absSumUpper(volume.Bound.Base(), allowance)),
+		Bound:     units.CubicMillimeters(proofbound.AbsSumUpper(volume.Bound.Base(), allowance)),
 	}, true
 }
 
@@ -810,7 +812,7 @@ func (r *motionRun) poseDiag(mp *motionPose, diag Diagnostic) {
 func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta float64) {
 	mover, static := r.movers[i].body, r.statics[j].body
 	at := mp.result.At
-	if isNonFinite(eta) {
+	if proofbound.IsNonFinite(eta) {
 		r.poseDiag(mp, withAt(pairDiagNone(mover, static, DiagUndecidedClearance,
 			"the pair is proven disjoint at this pose, but the pose's departure from the ideal motion is unbounded for this payload, so its gap is unmeasured"), at))
 		return
@@ -902,7 +904,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 		return IntervalClear, nil
 	}
 	return IntervalClear, &Measurement{
-		Value:     units.Millimeters(ratFloatDown(lowest)),
+		Value:     units.Millimeters(proofbound.RatFloatDown(lowest)),
 		Exactness: Approximate,
 		Bound:     units.Millimeters(0),
 	}

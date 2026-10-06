@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -31,7 +33,7 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
 				if lo.Cmp(hi) > 0 {
 					lo, hi = hi, lo
 				}
-				output[index][axis] = interval(new(big.Rat).Add(start, lo), new(big.Rat).Add(start, hi))
+				output[index][axis] = proofbound.Interval(new(big.Rat).Add(start, lo), new(big.Rat).Add(start, hi))
 			}
 		}
 		return output
@@ -55,19 +57,19 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
 		spanRelative := rotationSpan.apply(relative)
 		point := ivVecAdd(rotationMid.apply(relative), pivot)
 		for axis := range 3 {
-			point[axis] = intervalAdd(point[axis],
-				pointInterval(new(big.Rat).Mul(p.velocity[axis], midTime)))
+			point[axis] = proofbound.IntervalAdd(point[axis],
+				proofbound.PointInterval(new(big.Rat).Mul(p.velocity[axis], midTime)))
 			following, preceding := (axis+1)%3, (axis+2)%3
-			derivative := intervalAdd(pointInterval(p.velocity[axis]), intervalSub(
-				intervalScale(spanRelative[preceding], p.frame.axis[following]),
-				intervalScale(spanRelative[following], p.frame.axis[preceding])))
-			maximum := new(big.Rat).Abs(derivative.lo)
-			if other := new(big.Rat).Abs(derivative.hi); other.Cmp(maximum) > 0 {
+			derivative := proofbound.IntervalAdd(proofbound.PointInterval(p.velocity[axis]), proofbound.IntervalSub(
+				proofbound.IntervalScale(spanRelative[preceding], p.frame.axis[following]),
+				proofbound.IntervalScale(spanRelative[following], p.frame.axis[preceding])))
+			maximum := new(big.Rat).Abs(derivative.Lo)
+			if other := new(big.Rat).Abs(derivative.Hi); other.Cmp(maximum) > 0 {
 				maximum = other
 			}
 			travel := new(big.Rat).Mul(maximum, halfDuration)
-			output[index][axis] = intervalOwned(new(big.Rat).Sub(point[axis].lo, travel),
-				new(big.Rat).Add(point[axis].hi, travel))
+			output[index][axis] = proofbound.IntervalOwned(new(big.Rat).Sub(point[axis].Lo, travel),
+				new(big.Rat).Add(point[axis].Hi, travel))
 		}
 	}
 	return output
@@ -76,12 +78,12 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
 // idealAtRational is idealAt's ideal pose evaluated one big.Rat operation at
 // a time.
 func idealAtRational(p rotationalSweepPath, f *big.Rat) idealPose {
-	zero := pointInterval(new(big.Rat))
+	zero := proofbound.PointInterval(new(big.Rat))
 	if p.path.drift == nil {
 		shift := pointVec(p.fromT)
 		for axis := range 3 {
-			shift[axis] = intervalAdd(shift[axis],
-				pointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
+			shift[axis] = proofbound.IntervalAdd(shift[axis],
+				proofbound.PointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
 		}
 		return idealPose{rot: p.fromRot, pivot: ivVec{zero, zero, zero}, shift: shift}
 	}
@@ -90,14 +92,14 @@ func idealAtRational(p rotationalSweepPath, f *big.Rat) idealPose {
 	angleHigh := new(big.Rat).Mul(p.omegaHigh, elapsed)
 	sin, cos := radianSinCos(angleLow)
 	width := new(big.Rat).Sub(angleHigh, angleLow)
-	sin = intervalOwned(new(big.Rat).Sub(sin.lo, width), new(big.Rat).Add(sin.hi, width))
-	cos = intervalOwned(new(big.Rat).Sub(cos.lo, width), new(big.Rat).Add(cos.hi, width))
+	sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
+	cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
 	rot := p.frame.rotation(sin, cos)
 	center := pointVec(p.frame.center)
 	shift := ivVecAdd(rot.apply(ivVecSub(pointVec(p.fromT), center)), center)
 	for axis := range 3 {
-		shift[axis] = intervalAdd(shift[axis],
-			pointInterval(new(big.Rat).Mul(p.velocity[axis], elapsed)))
+		shift[axis] = proofbound.IntervalAdd(shift[axis],
+			proofbound.PointInterval(new(big.Rat).Mul(p.velocity[axis], elapsed)))
 	}
 	return idealPose{rot: rot.mul(p.fromRot), pivot: ivVec{zero, zero, zero}, shift: shift}
 }
@@ -113,13 +115,13 @@ func transferChargeRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 	if !ok {
 		return nil, false
 	}
-	entries := make([]ratInterval, 0, 9)
+	entries := make([]proofbound.RatInterval, 0, 9)
 	for i := range 3 {
 		for k := range 3 {
-			entries = append(entries, intervalSub(rounded[i][k], ideal.rot[i][k]))
+			entries = append(entries, proofbound.IntervalSub(rounded[i][k], ideal.rot[i][k]))
 		}
 	}
-	norm := ratSqrtUp(magnitudeSquaredUpper(entries...))
+	norm := proofbound.RatSqrtUp(magnitudeSquaredUpper(entries...))
 	if !finiteMeasurementValues(norm) {
 		return nil, false
 	}
@@ -133,8 +135,8 @@ func requireScaledMatrix(t *testing.T, want ivMat, got scaledIvMat, msg string) 
 	for i := range 3 {
 		for j := range 3 {
 			lo, hi := new(big.Rat).SetFrac(got.lo[i][j], got.den), new(big.Rat).SetFrac(got.hi[i][j], got.den)
-			require.Zero(t, lo.Cmp(want[i][j].lo), "%s entry (%d, %d)", msg, i, j)
-			require.Zero(t, hi.Cmp(want[i][j].hi), "%s entry (%d, %d)", msg, i, j)
+			require.Zero(t, lo.Cmp(want[i][j].Lo), "%s entry (%d, %d)", msg, i, j)
+			require.Zero(t, hi.Cmp(want[i][j].Hi), "%s entry (%d, %d)", msg, i, j)
 		}
 	}
 }
@@ -155,7 +157,7 @@ func pointDeviationRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 			maxSquared = squared
 		}
 	}
-	return ratSqrtUp(maxSquared)
+	return proofbound.RatSqrtUp(maxSquared)
 }
 
 // rotationFormPaths are prepared sweep paths of every kind cornerSpan and
@@ -236,12 +238,12 @@ func TestCornerSpanMatchesRationalForm(t *testing.T) {
 			for axis := range 3 {
 				for index := range want {
 					endpoints := got.span(index, axis)
-					require.Zero(t, endpoints.lo.Cmp(want[index][axis].lo), "%s %v point %d axis %d", name, span, index, axis)
-					require.Zero(t, endpoints.hi.Cmp(want[index][axis].hi), "%s %v point %d axis %d", name, span, index, axis)
+					require.Zero(t, endpoints.Lo.Cmp(want[index][axis].Lo), "%s %v point %d axis %d", name, span, index, axis)
+					require.Zero(t, endpoints.Hi.Cmp(want[index][axis].Hi), "%s %v point %d axis %d", name, span, index, axis)
 				}
-				low, high := want[0][axis].lo, want[0][axis].hi
+				low, high := want[0][axis].Lo, want[0][axis].Hi
 				for _, point := range want[1:] {
-					low, high = ratMin(low, point[axis].lo), ratMax(high, point[axis].hi)
+					low, high = ratMin(low, point[axis].Lo), ratMax(high, point[axis].Hi)
 				}
 				gotLow, gotHigh := got.hull(axis)
 				require.Zero(t, gotLow.Cmp(low), "%s %v axis %d", name, span, axis)
@@ -284,8 +286,8 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 			want := idealAtRational(path, f)
 			requireScaledMatrix(t, want.rot, ideal.rot, name)
 			for axis := range 3 {
-				require.Zero(t, ideal.shift[axis].lo.Cmp(want.shift[axis].lo), "%s axis %d", name, axis)
-				require.Zero(t, ideal.shift[axis].hi.Cmp(want.shift[axis].hi), "%s axis %d", name, axis)
+				require.Zero(t, ideal.shift[axis].Lo.Cmp(want.shift[axis].Lo), "%s axis %d", name, axis)
+				require.Zero(t, ideal.shift[axis].Hi.Cmp(want.shift[axis].Hi), "%s axis %d", name, axis)
 			}
 		}
 	}
@@ -309,8 +311,8 @@ func TestScaledRotationMatchesRotation(t *testing.T) {
 		for _, angle := range angles {
 			sin, cos := radianSinCos(angle)
 			width := big.NewRat(1, 1<<20)
-			sin = intervalOwned(new(big.Rat).Sub(sin.lo, width), new(big.Rat).Add(sin.hi, width))
-			cos = intervalOwned(new(big.Rat).Sub(cos.lo, width), new(big.Rat).Add(cos.hi, width))
+			sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
+			cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
 			requireScaledMatrix(t, frame.rotation(sin, cos), frame.scaledRotation(sin, cos), angle.String())
 		}
 	}
@@ -338,10 +340,10 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 	whole := big.NewInt(1)
 	for axis := range 3 {
 		shift := ideal.shift[axis]
-		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.lo.Denom()), shift.hi.Denom())
+		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.Lo.Denom()), shift.Hi.Denom())
 		rotMultiplier[axis] = new(big.Int).Quo(den[axis], rotDen)
 		observedMultiplier[axis] = new(big.Int).Quo(den[axis], q)
-		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift.lo, den[axis]), proofarith.ScaledNum(shift.hi, den[axis])
+		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift.Lo, den[axis]), proofarith.ScaledNum(shift.Hi, den[axis])
 		whole = proofarith.LcmInt(whole, den[axis])
 	}
 	for axis := range 3 {
@@ -381,7 +383,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 // TestPointDeviationMatchesCommonDenomForm holds pointDeviationSquared, which
 // reads the points' common denominator 2^shift off their dyadic exponents, to
 // the CommonDenom form it replaces: the same staged points and the identical
-// rational maxSquared/whole², so ratSqrtUp rounds the same. Every path kind of
+// rational maxSquared/whole², so proofbound.RatSqrtUp rounds the same. Every path kind of
 // rotationFormPaths is read at the fraction's own pose, its start pose, and
 // that pose moved by random turns and shifts from 2⁻⁴⁰ to 2¹⁰, and a half-unit
 // shift that stages half-integer source points to integers, so either the
@@ -438,7 +440,7 @@ func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 				_, bound, ok, err := path.pointDeviationFrom(at, ideal, noSweepPoll)
 				require.NoError(t, err, name)
 				require.True(t, ok, name)
-				require.Equal(t, math.Float64bits(ratSqrtUp(wantSquared)), math.Float64bits(bound), "%s %v pose %d", name, f, k)
+				require.Equal(t, math.Float64bits(proofbound.RatSqrtUp(wantSquared)), math.Float64bits(bound), "%s %v pose %d", name, f, k)
 				compared++
 				if sourceShift > stagedShift {
 					sourceSet++

@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -135,7 +137,7 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	// the section's own coordinate magnitude — a proven ceiling, not a fitted
 	// number, so the assertion is a relation and never a pinned literal.
 	require.Greater(t, mesh.bound, unplaced.bound)
-	require.LessOrEqual(t, mesh.bound-unplaced.bound, rigidRoundAllow(100, 0),
+	require.LessOrEqual(t, mesh.bound-unplaced.bound, proofbound.RigidRoundAllow(100, 0),
 		`the placement adds no more than the rigid write's own allowance at this coordinate scale`)
 }
 

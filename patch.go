@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -274,13 +276,13 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 	// it is composed anyway, exactly as buildLoopSidesAs composes
 	// bottomBoundBase, so a later field this payload gains is charged the
 	// same way rather than silently skipped.
-	boundBase := absSumUpper(pp.sectionDelta, pp.z0Delta)
+	boundBase := proofbound.AbsSumUpper(pp.sectionDelta, pp.z0Delta)
 	var seam *Vertex
 	var verts []*Vertex
 	if singleClosed {
 		w := walks[0]
 		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
-		seam = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(boundBase, extra))}
+		seam = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
 	} else {
 		verts = make([]*Vertex, n)
 		for i, w := range walks {
@@ -289,7 +291,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 			}
 			prev := walks[(i+n-1)%n]
 			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
-			verts[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(boundBase, extra))}
+			verts[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
 		}
 	}
 

@@ -2,12 +2,12 @@ package decad
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -21,115 +21,52 @@ import (
 // math/big.Rat: every predicate is a homogeneous form of fixed degree in the
 // differences, so its sign is invariant under scaling by a positive
 // denominator, and the exactness guarantee is unchanged. A point is reduced
-// to its canonical form only at vertex emission (xpt.key), because welding is
+// to its canonical form only at vertex emission (proofbound.Xpt.key), because welding is
 // by exact identity (boolean_mesh.go's stitchFacetsContext) and a homogeneous
 // point has many spellings. A sign decided exactly is a topology decision
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
 
-// xpt is an exact 3D point carried in homogeneous integer form: the same
-// representation xhp documents below, and structurally identical to it — the
-// two convert for free — so xpt keeps its own name and every call site
-// survives, rather than xhp replacing it outright. The zero value is
-// unusable; construct through xptOf or the arithmetic helpers, every one of
-// which strips the common power of two before returning (the growth control;
-// see xhpStripTwos). Two spellings of one point exist (any positive common
-// factor of x, y, z and w denotes the same coordinate), so exact identity for
-// welding goes through the canonical form (key), never the raw fields.
-type xpt struct{ x, y, z, w *big.Int }
-
-// xptOf lifts a finite float vertex into exact homogeneous coordinates. A
-// float64 is an exact rational, so no information is lost.
-func xptOf(v r3.Vec) xpt { return xpt(xhpStripTwosOwned(xhpOf(v))) }
-
-// vec rounds the exact point to the nearest float64 coordinates.
-func (p xpt) vec() r3.Vec { return xhpVec(xhp(p)) }
-
-// key is the exact identity of the point: two points weld exactly when their
-// CANONICAL homogeneous coordinates are identical — stitching by shared exact
-// vertices, never by distance (docs/evaluator-design.md §9). A homogeneous
-// point has many spellings, so the raw fields are never compared directly;
-// xhpCanon collapses every spelling of one coordinate to one four-tuple
-// before the key is built.
-func (p xpt) key() string {
-	c := xhpCanon(xhp(p))
-	return exactIntsKey(c.x, c.y, c.z, c.w)
-}
-
-// exactIntsKey encodes signed integers without decimal conversion. Each value
-// carries its sign and byte length, so adjacent magnitudes cannot collide.
-func exactIntsKey(values ...*big.Int) string {
-	size := 9 * len(values)
-	for _, v := range values {
-		size += (v.BitLen() + 7) / 8
-	}
-	buf := make([]byte, 0, size)
-	for _, v := range values {
-		buf = append(buf, byte(v.Sign()+1))
-		n := (v.BitLen() + 7) / 8
-		buf = binary.LittleEndian.AppendUint64(buf, uint64(n))
-		start := len(buf)
-		buf = buf[:start+n]
-		v.FillBytes(buf[start:])
-	}
-	return string(buf)
-}
-
-// xsub is a − b, exact, with the common power of two stripped on return (the
-// growth control every construction pays — see xhpStripTwos).
-func xsub(a, b xpt) xpt { return xpt(xhpStripTwosOwned(xhpSub(xhp(a), xhp(b)))) }
-
 // xcross is a × b, exact, stripped the same way as xsub.
-func xcross(a, b xpt) xpt { return xpt(xhpStripTwosOwned(xhpCross(xhp(a), xhp(b)))) }
-
-// xdotNum is the raw numerator of a·b over the positive denominator a.w·b.w —
-// the value a sign-only consumer reads directly, and the value a
-// cross-multiplied comparison reads without ever dividing.
-func xdotNum(a, b xpt) *big.Int { return xhpDotNum(xhp(a), xhp(b)) }
+func xcross(a, b proofbound.Xpt) proofbound.Xpt {
+	return proofbound.Xpt(proofbound.XhpStripTwosOwned(xhpCross(proofbound.Xhp(a), proofbound.Xhp(b))))
+}
 
 // xdotSign is the sign of a·b, decided as a plain integer sign: the shared
 // denominator a.w·b.w is always positive, so the numerator's sign IS the
 // dot product's sign.
-func xdotSign(a, b xpt) int { return xdotNum(a, b).Sign() }
-
-// xdotRat materialises a·b as a big.Rat — the one place this dot product pays
-// a normalisation, and only when a caller genuinely needs the rational VALUE
-// rather than a sign.
-func xdotRat(a, b xpt) *big.Rat {
-	den := new(big.Int).Mul(a.w, b.w)
-	return new(big.Rat).SetFrac(xdotNum(a, b), den)
-}
+func xdotSign(a, b proofbound.Xpt) int { return proofbound.XdotNum(a, b).Sign() }
 
 // xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
 // stripped on return — the growth control that keeps a chain of lerps from
 // growing its denominator multiplicatively at every link (measured: 14113
 // bits unreduced at lerp depth 6, 462 bits stripped after every step).
-func xlerp(a, b xpt, tn, td *big.Int) xpt {
-	return xpt(xhpStripTwosOwned(xhpLerp(xhp(a), xhp(b), tn, td)))
+func xlerp(a, b proofbound.Xpt, tn, td *big.Int) proofbound.Xpt {
+	return proofbound.Xpt(proofbound.XhpStripTwosOwned(xhpLerp(proofbound.Xhp(a), proofbound.Xhp(b), tn, td)))
 }
 
 // orientNum is the exact value of det[b−a, c−a, d−a] as an integer numerator
 // over a positive denominator, formed without ever materialising a big.Rat:
 // positive when d lies on the side the counter-clockwise normal of (a, b, c)
 // points to.
-func orientNum(a, b, c, d xpt) (num, den *big.Int) {
-	ha, hb, hc, hd := xhp(a), xhp(b), xhp(c), xhp(d)
-	ba, ca, da := xhpSub(hb, ha), xhpSub(hc, ha), xhpSub(hd, ha)
+func orientNum(a, b, c, d proofbound.Xpt) (num, den *big.Int) {
+	ha, hb, hc, hd := proofbound.Xhp(a), proofbound.Xhp(b), proofbound.Xhp(c), proofbound.Xhp(d)
+	ba, ca, da := proofbound.XhpSub(hb, ha), proofbound.XhpSub(hc, ha), proofbound.XhpSub(hd, ha)
 	cr := xhpCross(ba, ca)
-	return xhpDotNum(cr, da), new(big.Int).Mul(cr.w, da.w)
+	return proofbound.XhpDotNum(cr, da), new(big.Int).Mul(cr.W, da.W)
 }
 
 // orientSignExact is the exact sign of det[b−a, c−a, d−a], decided as a plain
 // integer sign with no big.Rat and no normalisation anywhere in the chain —
 // xhpOrientSign's own guarantee, carried through xpt.
-func orientSignExact(a, b, c, d xpt) int {
-	return xhpOrientSign(xhp(a), xhp(b), xhp(c), xhp(d))
+func orientSignExact(a, b, c, d proofbound.Xpt) int {
+	return xhpOrientSign(proofbound.Xhp(a), proofbound.Xhp(b), proofbound.Xhp(c), proofbound.Xhp(d))
 }
 
 // orientRat materialises det[b−a, c−a, d−a] as a big.Rat — the one place this
 // value pays a normalisation, for the rare caller that needs the value rather
 // than the sign.
-func orientRat(a, b, c, d xpt) *big.Rat {
+func orientRat(a, b, c, d proofbound.Xpt) *big.Rat {
 	num, den := orientNum(a, b, c, d)
 	return new(big.Rat).SetFrac(num, den)
 }
@@ -142,17 +79,17 @@ func orientSign(a, b, c, d r3.Vec) int {
 	if sign, certain := orientSignFloat(a, b, c, d); certain {
 		return sign
 	}
-	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), xptOf(d))
+	return orientSignExact(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c), proofbound.XptOf(d))
 }
 
 // orientSignPrepared uses an already lifted triangle and its exact normal on
 // the uncertain path. xa and xd are the exact lifts of a and d, and n is the
 // exact oriented cross product of (b-a) and (c-a), with positive denominator.
-func orientSignPrepared(a, b, c, d r3.Vec, xa, xd, n xpt) int {
+func orientSignPrepared(a, b, c, d r3.Vec, xa, xd, n proofbound.Xpt) int {
 	if sign, certain := orientSignFloat(a, b, c, d); certain {
 		return sign
 	}
-	return xdotSign(n, xsub(xd, xa))
+	return xdotSign(n, proofbound.Xsub(xd, xa))
 }
 
 // orientSignFloat gives the same adaptive float decision to both plane-side
@@ -178,120 +115,31 @@ func orientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 
 // orientSignMixed is the exact plane-side sign of a homogeneous probe against
 // a float triangle: positive on the triangle's counter-clockwise-normal side.
-func orientSignMixed(a, b, c r3.Vec, d xpt) int {
-	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), d)
-}
-
-// xhp is an exact 3D point in homogeneous integer form: (x, y, z) is an
-// integer numerator triple over one shared positive denominator w — the point
-// it denotes is (x/w, y/w, z/w). big.Int carries no normalisation step of its
-// own, unlike big.Rat, which runs a full Lehmer GCD on every construction
-// whose denominator is not exactly 1 (rat.go's norm) — dyadic denominators
-// included, since norm skips the GCD only when the denominator is 1. Every
-// predicate built from these four integers is therefore a plain integer sign
-// test.
-//
-// The invariant w > 0 is load-bearing: every helper below reduces a
-// division's sign to the sign of a product of denominators, which only holds
-// when every denominator involved is positive. xhpSub and xhpCross each
-// combine two operands whose own w is positive into a result whose w is their
-// PRODUCT — again positive by construction, with no branch needed — so the
-// invariant propagates through every point/vector this file builds except
-// one: xhpLerp's lerp-parameter denominator can arrive negative, and it
-// renormalises explicitly before folding it in.
-//
-// A homogeneous point has many spellings — (x, y, z, w) and (2x, 2y, 2z, 2w)
-// denote the same coordinate — so exact identity (welding) never compares raw
-// fields; it goes through the canonical form (xhpCanon).
-type xhp struct{ x, y, z, w *big.Int }
-
-// xhpOf lifts a finite float vertex into homogeneous integer coordinates. A
-// float64 is an exact dyadic rational. Aligning its three binary exponents
-// directly gives one shared power-of-two denominator without constructing
-// three big.Rat values or multiplying their denominators.
-func xhpOf(v r3.Vec) xhp {
-	dx, dy, dz := proofarith.MustDyOf(v.X), proofarith.MustDyOf(v.Y), proofarith.MustDyOf(v.Z)
-	base := 0
-	lower := func(d proofarith.Dyadic) {
-		if !d.IsZero() && d.Exp() < base {
-			base = d.Exp()
-		}
-	}
-	lower(dx)
-	lower(dy)
-	lower(dz)
-	coord := func(d proofarith.Dyadic) *big.Int {
-		if d.IsZero() {
-			return new(big.Int)
-		}
-		mant := d.MantInto(new(big.Int))
-		return mant.Lsh(mant, uint(d.Exp()-base))
-	}
-	return xhp{
-		x: coord(dx),
-		y: coord(dy),
-		z: coord(dz),
-		w: new(big.Int).Lsh(big.NewInt(1), uint(-base)),
-	}
-}
-
-// xhpSub is p − q, exact: a homogeneous vector over the positive denominator
-// p.w·q.w, or over their shared denominator when the weights match.
-func xhpSub(p, q xhp) xhp {
-	if p.w.Cmp(q.w) == 0 {
-		return xhp{
-			x: new(big.Int).Sub(p.x, q.x),
-			y: new(big.Int).Sub(p.y, q.y),
-			z: new(big.Int).Sub(p.z, q.z),
-			w: new(big.Int).Set(p.w),
-		}
-	}
-	var term big.Int
-	axis := func(pn, qn *big.Int) *big.Int {
-		out := new(big.Int).Mul(pn, q.w)
-		return out.Sub(out, term.Mul(qn, p.w))
-	}
-	return xhp{
-		x: axis(p.x, q.x),
-		y: axis(p.y, q.y),
-		z: axis(p.z, q.z),
-		w: new(big.Int).Mul(p.w, q.w),
-	}
+func orientSignMixed(a, b, c r3.Vec, d proofbound.Xpt) int {
+	return orientSignExact(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c), d)
 }
 
 // xhpCross is a × b, exact: its numerators over the positive denominator
 // a.w·b.w.
-func xhpCross(a, b xhp) xhp {
+func xhpCross(a, b proofbound.Xhp) proofbound.Xhp {
 	var term big.Int
 	axis := func(a0, b0, a1, b1 *big.Int) *big.Int {
 		out := new(big.Int).Mul(a0, b0)
 		return out.Sub(out, term.Mul(a1, b1))
 	}
-	return xhp{
-		x: axis(a.y, b.z, a.z, b.y),
-		y: axis(a.z, b.x, a.x, b.z),
-		z: axis(a.x, b.y, a.y, b.x),
-		w: new(big.Int).Mul(a.w, b.w),
+	return proofbound.Xhp{
+		X: axis(a.Y, b.Z, a.Z, b.Y),
+		Y: axis(a.Z, b.X, a.X, b.Z),
+		Z: axis(a.X, b.Y, a.Y, b.X),
+		W: new(big.Int).Mul(a.W, b.W),
 	}
-}
-
-// xhpDotNum is the NUMERATOR of a·b over the positive denominator a.w·b.w.
-// The denominator is never formed: every consumer either reads only this
-// numerator's sign, or divides it back out at the one point a value is
-// actually published (xhpRat).
-func xhpDotNum(a, b xhp) *big.Int {
-	s := new(big.Int).Mul(a.x, b.x)
-	var term big.Int
-	s.Add(s, term.Mul(a.y, b.y))
-	s.Add(s, term.Mul(a.z, b.z))
-	return s
 }
 
 // xhpLerp is a + t·(b − a) for t = tn/td, exact. td may arrive negative; a.w
 // and b.w are already positive by invariant, so the result's own w — their
 // product with td — is renormalised by flipping td's (and tn's) sign first,
 // which leaves the value t = tn/td unchanged.
-func xhpLerp(a, b xhp, tn, td *big.Int) xhp {
+func xhpLerp(a, b proofbound.Xhp, tn, td *big.Int) proofbound.Xhp {
 	n, d := tn, td
 	if d.Sign() < 0 {
 		n = new(big.Int).Neg(n)
@@ -301,95 +149,36 @@ func xhpLerp(a, b xhp, tn, td *big.Int) xhp {
 	diff := new(big.Int).Sub(d, n)
 	axis := func(av, bv *big.Int) *big.Int {
 		term := new(big.Int).Mul(av, diff)
-		term.Mul(term, b.w)
+		term.Mul(term, b.W)
 		other := new(big.Int).Mul(bv, n)
-		other.Mul(other, a.w)
+		other.Mul(other, a.W)
 		return term.Add(term, other)
 	}
-	w := new(big.Int).Mul(a.w, b.w)
+	w := new(big.Int).Mul(a.W, b.W)
 	w.Mul(w, d)
-	return xhp{x: axis(a.x, b.x), y: axis(a.y, b.y), z: axis(a.z, b.z), w: w}
+	return proofbound.Xhp{X: axis(a.X, b.X), Y: axis(a.Y, b.Y), Z: axis(a.Z, b.Z), W: w}
 }
 
 // xhpOrientSign is the exact sign of det[b−a, c−a, d−a], decided as a plain
 // integer sign with no big.Rat and no normalisation anywhere in the chain:
 // every intermediate xhp carries a positive denominator by construction, so
 // the final numerator's sign IS the determinant's sign.
-func xhpOrientSign(a, b, c, d xhp) int {
-	ba, ca, da := xhpSub(b, a), xhpSub(c, a), xhpSub(d, a)
-	return xhpDotNum(xhpCross(ba, ca), da).Sign()
+func xhpOrientSign(a, b, c, d proofbound.Xhp) int {
+	ba, ca, da := proofbound.XhpSub(b, a), proofbound.XhpSub(c, a), proofbound.XhpSub(d, a)
+	return proofbound.XhpDotNum(xhpCross(ba, ca), da).Sign()
 }
 
 // xhpRat materialises p's three coordinates as big.Rat — the one place a
 // homogeneous point pays a normalisation, and only when a caller genuinely
 // needs a rational VALUE rather than a sign.
-func xhpRat(p xhp) (x, y, z *big.Rat) {
-	return new(big.Rat).SetFrac(p.x, p.w), new(big.Rat).SetFrac(p.y, p.w), new(big.Rat).SetFrac(p.z, p.w)
-}
-
-// xhpVec rounds p to the nearest float64 coordinates.
-func xhpVec(p xhp) r3.Vec {
-	var r big.Rat
-	fx, _ := r.SetFrac(p.x, p.w).Float64()
-	fy, _ := r.SetFrac(p.y, p.w).Float64()
-	fz, _ := r.SetFrac(p.z, p.w).Float64()
-	return r3.Vec{X: fx, Y: fy, Z: fz}
-}
-
-// xhpStripTwosOwned takes ownership of p and divides all four integers by
-// their largest common power of two — the growth control. It costs no GCD
-// (TrailingZeroBits and Rsh only), which is what makes it cheap enough to run
-// on every fresh construction; the full GCD xhpCanon runs is not (its own doc
-// comment). Callers must pass only a freshly constructed xhp whose limbs do
-// not belong to another point.
-func xhpStripTwosOwned(p xhp) xhp {
-	tz := p.w.TrailingZeroBits()
-	for _, v := range [3]*big.Int{p.x, p.y, p.z} {
-		if v.Sign() == 0 {
-			continue
-		}
-		if t := v.TrailingZeroBits(); t < tz {
-			tz = t
-		}
-	}
-	if tz == 0 {
-		return p
-	}
-	p.x.Rsh(p.x, tz)
-	p.y.Rsh(p.y, tz)
-	p.z.Rsh(p.z, tz)
-	p.w.Rsh(p.w, tz)
-	return p
-}
-
-// xhpCanon reduces p to its unique canonical spelling: every one of the four
-// integers divided by gcd(|x|, |y|, |z|, w). This is the FULL GCD the
-// representation otherwise exists to avoid, so it is reserved for the one
-// place a homogeneous point's many spellings must collapse to one —
-// vertex-emission identity (key, welding) — and must NEVER be called per
-// arithmetic operation: measured, a depth-3 xhpLerp chain drops from
-// big.Rat's 31.4us to 9.6us with xhpStripTwos alone, but only to 23.4us with
-// a full xhpCanon on every construction — nearly the whole win, given back.
-func xhpCanon(p xhp) xhp {
-	g := new(big.Int).Set(p.w)
-	for _, v := range [3]*big.Int{p.x, p.y, p.z} {
-		if v.Sign() == 0 {
-			continue
-		}
-		g.GCD(nil, nil, g, v)
-	}
-	return xhp{
-		x: new(big.Int).Quo(p.x, g),
-		y: new(big.Int).Quo(p.y, g),
-		z: new(big.Int).Quo(p.z, g),
-		w: new(big.Int).Quo(p.w, g),
-	}
+func xhpRat(p proofbound.Xhp) (x, y, z *big.Rat) {
+	return new(big.Rat).SetFrac(p.X, p.W), new(big.Rat).SetFrac(p.Y, p.W), new(big.Rat).SetFrac(p.Z, p.W)
 }
 
 const (
 	// segFilterErrCoef covers segFilter.tooFar's own float evaluation: 64·u,
 	// against the magnitude the branch taken carries. tooFar derives it.
-	segFilterErrCoef = 64 * unitRoundoff
+	segFilterErrCoef = 64 * proofbound.UnitRoundoff
 	// segFilterFloor is one absolute term covering every gradual-underflow
 	// crumb the same evaluation can commit. Each is at most 2⁻¹⁰⁷⁵ and there
 	// are a few dozen of them, so 2⁻¹⁰⁰⁰ dominates them all together. It is an
@@ -416,7 +205,7 @@ const (
 // every vertex of the stitched mesh, and slack is that pass's own grid slack.
 //
 // DERIVATION. Write a, b, p for the exact rational endpoints and candidate and
-// A, B, P for their float64 roundings (xpt.vec, round to nearest). Suppose the
+// A, B, P for their float64 roundings (proofbound.Xpt.vec, round to nearest). Suppose the
 // exact predicate WOULD accept p — that is, p = (1−t)·a + t·b for some
 // t ∈ (0, 1). Put Q = (1−t)·A + t·B, which is a point OF the float segment
 // [A, B]. Then
@@ -482,7 +271,7 @@ func segAdmissionRadius2(slack, maxAbs float64) float64 {
 		return math.Inf(1)
 	}
 	tau := slack + (maxAbs*0x1p-50 + segFilterFloor)
-	if tau2 := upRound(tau * tau); !isNonFinite(tau2) {
+	if tau2 := proofbound.UpRound(tau * tau); !proofbound.IsNonFinite(tau2) {
 		return tau2
 	}
 	return math.Inf(1)
@@ -619,7 +408,7 @@ func newSegFilter(a, b r3.Vec, tau2 float64) segFilter {
 //     non-finite left-hand side: segAdmissionRadius2 returns +Inf for every
 //     threshold it cannot state, and a finite value is never above +Inf.
 func (f segFilter) tooFar(p r3.Vec) bool {
-	if !(f.vv > 0) || isNonFinite(f.vv) {
+	if !(f.vv > 0) || proofbound.IsNonFinite(f.vv) {
 		// The float segment has nothing to project onto — both endpoints
 		// rounded to one float, or v underflowed — or it is long enough that a
 		// component of v, or vv itself, saturated. Abstaining is always sound.
@@ -628,7 +417,7 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 	w := p.Sub(f.a)
 	ww := w.Dot(w)
 	c1 := w.Dot(f.v)
-	if isNonFinite(ww) || isNonFinite(c1) {
+	if proofbound.IsNonFinite(ww) || proofbound.IsNonFinite(c1) {
 		// Both feed the branch decision below, so a saturated one does not
 		// widen the answer, it picks the wrong formula for it.
 		return false
@@ -649,7 +438,7 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 		} else {
 			e := p.Sub(f.b)
 			d2 = e.Dot(e)
-			if isNonFinite(d2) {
+			if proofbound.IsNonFinite(d2) {
 				return false
 			}
 			mag = d2
@@ -663,7 +452,7 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 // arm (triTriMissesFilter, below) is built entirely on this type, the same
 // "outward-rounded float arithmetic, exact fallback for anything it cannot
 // prove" shape segFilter uses for the conforming pass's own segment test. It
-// is float64's own enclosure, deliberately apart from ratInterval
+// is float64's own enclosure, deliberately apart from proofbound.RatInterval
 // (moments.go) and capblend_contour.go's ivPoint/ivCarrier, which enclose in
 // big.Rat and serve a different proof (a rational bound, not a float filter).
 //
@@ -740,7 +529,7 @@ func (a floatInterval) disjoint(b floatInterval) bool { return a.hi < b.lo || b.
 // an exact rational (boolean_exact.go's own opening comment) — so this is the
 // leaf constructor for every vertex coordinate the filter touches.
 func fivPoint(x float64) floatInterval {
-	if isNonFinite(x) {
+	if proofbound.IsNonFinite(x) {
 		return fivAbstain
 	}
 	return floatInterval{lo: x, hi: x}
@@ -751,9 +540,9 @@ func fivPoint(x float64) floatInterval {
 // big.Rat.Float64 makes — into an interval with one full ulp of margin on
 // each side, which covers that half-ulp with the same spare-half-ulp margin
 // every other widening in this type carries. triTriMissesFilter's na/nb
-// arguments are xpt.vec() results, so they are exactly this case.
+// arguments are proofbound.Xpt.vec() results, so they are exactly this case.
 func fivRounded(x float64) floatInterval {
-	if isNonFinite(x) {
+	if proofbound.IsNonFinite(x) {
 		return fivAbstain
 	}
 	return floatInterval{lo: fivNextDown(x), hi: fivNextUp(x)}
@@ -761,7 +550,7 @@ func fivRounded(x float64) floatInterval {
 
 func (a floatInterval) add(b floatInterval) floatInterval {
 	lo, hi := a.lo+b.lo, a.hi+b.hi
-	if isNonFinite(lo) || isNonFinite(hi) {
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return fivAbstain
 	}
 	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
@@ -769,7 +558,7 @@ func (a floatInterval) add(b floatInterval) floatInterval {
 
 func (a floatInterval) sub(b floatInterval) floatInterval {
 	lo, hi := a.lo-b.hi, a.hi-b.lo
-	if isNonFinite(lo) || isNonFinite(hi) {
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return fivAbstain
 	}
 	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
@@ -800,7 +589,7 @@ func (a floatInterval) mul(b floatInterval) floatInterval {
 		lo = math.Min(a.lo*b.hi, a.hi*b.lo)
 		hi = math.Max(a.lo*b.lo, a.hi*b.hi)
 	}
-	if isNonFinite(lo) || isNonFinite(hi) {
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return fivAbstain
 	}
 	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
@@ -812,14 +601,14 @@ func (a floatInterval) mul(b floatInterval) floatInterval {
 // forming a division that could saturate or, worse, land on a finite value
 // that means nothing.
 func (a floatInterval) div(b floatInterval) floatInterval {
-	if isNonFinite(a.lo) || isNonFinite(a.hi) || isNonFinite(b.lo) || isNonFinite(b.hi) {
+	if proofbound.IsNonFinite(a.lo) || proofbound.IsNonFinite(a.hi) || proofbound.IsNonFinite(b.lo) || proofbound.IsNonFinite(b.hi) {
 		return fivAbstain
 	}
 	if b.lo <= 0 && b.hi >= 0 {
 		return fivAbstain
 	}
 	q0, q1, q2, q3 := a.lo/b.lo, a.lo/b.hi, a.hi/b.lo, a.hi/b.hi
-	if isNonFinite(q0) || isNonFinite(q1) || isNonFinite(q2) || isNonFinite(q3) {
+	if proofbound.IsNonFinite(q0) || proofbound.IsNonFinite(q1) || proofbound.IsNonFinite(q2) || proofbound.IsNonFinite(q3) {
 		return fivAbstain
 	}
 	lo := math.Min(math.Min(q0, q1), math.Min(q2, q3))
@@ -940,7 +729,7 @@ func triSpanOnLine(t, o [3]fivVec, signs [3]int, dir fivVec) (floatInterval, boo
 //
 // ta, tb are the operands' own float corners, read as exact point intervals
 // (fivPoint — a float64 vertex coordinate is exact, never itself a
-// rounding). na, nb are xpt.vec() — the correctly-rounded float64 conversion
+// rounding). na, nb are proofbound.Xpt.vec() — the correctly-rounded float64 conversion
 // of the pair's exact rational normals — read with fivRounded's extra ulp of
 // margin for that rounding. sa, sb are the vertex-against-the-other-plane
 // sign triples orientSign already decided; see triSpanOnLine for how they
@@ -999,7 +788,7 @@ func newXP2(u, v *big.Rat) xp2 {
 // its rational coordinates. The rational values remain the public exact 2D
 // representation used by polygon construction, while cross2x can use the
 // homogeneous form to avoid normalising four intermediate differences.
-func newXP2FromXpt(p xpt, u, v int) xp2 {
+func newXP2FromXpt(p proofbound.Xpt, u, v int) xp2 {
 	ur, vr := ratCoordOf(p, u), ratCoordOf(p, v)
 	fu, _ := ur.Float64()
 	fv, _ := vr.Float64()
@@ -1010,7 +799,7 @@ func newXP2FromXpt(p xpt, u, v int) xp2 {
 		fv: fv,
 		hu: xIntCoordOf(p, u),
 		hv: xIntCoordOf(p, v),
-		hw: p.w,
+		hw: p.W,
 		floatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
 			!math.IsNaN(fv) && !math.IsInf(fv, 0),
 	}
@@ -1165,10 +954,10 @@ func onSegment2(a, b, p xp2) (bool, bool) {
 // pointInPoly2 reports whether p lies strictly inside the simple polygon —
 // exact parity along a +u ray with the half-open rule, so a crossing at a
 // shared vertex counts exactly once. A p on the boundary reports onBoundary.
-func pointInPoly2(budget *workBudget, poly []xp2, p xp2) (bool, bool, error) {
+func pointInPoly2(budget *proofbound.WorkBudget, poly []xp2, p xp2) (bool, bool, error) {
 	n := len(poly)
 	for i := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, false, err
 		}
 		on, _ := onSegment2(poly[i], poly[(i+1)%n], p)
@@ -1178,7 +967,7 @@ func pointInPoly2(budget *workBudget, poly []xp2, p xp2) (bool, bool, error) {
 	}
 	inside := false
 	for i := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, false, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
@@ -1198,13 +987,13 @@ func pointInPoly2(budget *workBudget, poly []xp2, p xp2) (bool, bool, error) {
 // polyArea2Sign is the exact sign of twice the polygon's signed area.
 // Reduce after every edge so the integer accumulator cannot grow with the
 // number of edges beyond the exact area's denominator.
-func polyArea2Sign(budget *workBudget, poly []xp2) (int, error) {
+func polyArea2Sign(budget *proofbound.WorkBudget, poly []xp2) (int, error) {
 	var num, den big.Int
 	den.SetInt64(1)
 	var leftDen, rightDen, termDen, left, right, next, part, gcd big.Int
 	n := len(poly)
 	for i := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
@@ -1235,23 +1024,23 @@ func polyArea2Sign(budget *workBudget, poly []xp2) (int, error) {
 // output, which is what keeps a conforming subdivision conforming — so only
 // strictly convex, unblocked ears are clipped. A stall means the polygon is
 // not weakly simple, which is an internal error, never a wrong mesh.
-func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
+func earClipX(budget *proofbound.WorkBudget, pts []xp2, poly []int) ([][3]int, error) {
 	idx := make([]int, len(poly))
 	for i, vi := range poly {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		idx[i] = vi
 	}
 	tris := make([][3]int, 0, len(idx))
 	for len(idx) > 3 {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		n := len(idx)
 		clipped := false
 		for i := range n {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			ia, ib, ic := idx[(i-1+n)%n], idx[i], idx[(i+1)%n]
@@ -1267,7 +1056,7 @@ func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
 			}
 			tris = append(tris, [3]int{ia, ib, ic})
 			for j := i; j+1 < len(idx); j++ {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				idx[j] = idx[j+1]
@@ -1292,7 +1081,7 @@ func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
 // candidate ear — the exact analog of earBlocked, except that every OTHER
 // vertex can block (collinear duplicates included), which is the conservative
 // direction.
-func earBlockedX(budget *workBudget, pts []xp2, idx []int, i int) (bool, error) {
+func earBlockedX(budget *proofbound.WorkBudget, pts []xp2, idx []int, i int) (bool, error) {
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
 	a, b, c := pts[idx[ip]], pts[idx[i]], pts[idx[in]]
@@ -1302,7 +1091,7 @@ func earBlockedX(budget *workBudget, pts []xp2, idx []int, i int) (bool, error) 
 	maxV := math.Max(a.fv, math.Max(b.fv, c.fv))
 	finiteBox := a.floatFinite && b.floatFinite && c.floatFinite
 	for j := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		if j == ip || j == i || j == in {
@@ -1357,14 +1146,14 @@ func coordOf(v r3.Vec, axis int) float64 {
 // index — the projection into xp2's own (untouched) rational domain. This is
 // the one place a homogeneous coordinate pays a normalisation to become a
 // value; a sign-only reader wants xIntCoordOf instead.
-func ratCoordOf(p xpt, axis int) *big.Rat {
+func ratCoordOf(p proofbound.Xpt, axis int) *big.Rat {
 	switch axis {
 	case 0:
-		return new(big.Rat).SetFrac(p.x, p.w)
+		return new(big.Rat).SetFrac(p.X, p.W)
 	case 1:
-		return new(big.Rat).SetFrac(p.y, p.w)
+		return new(big.Rat).SetFrac(p.Y, p.W)
 	default:
-		return new(big.Rat).SetFrac(p.z, p.w)
+		return new(big.Rat).SetFrac(p.Z, p.W)
 	}
 }
 
@@ -1372,14 +1161,14 @@ func ratCoordOf(p xpt, axis int) *big.Rat {
 // with no normalisation at all: since the denominator (p.w) is always
 // positive, this integer's sign already IS the coordinate's sign, which is
 // what every sign-only reader in this file actually wants.
-func xIntCoordOf(p xpt, axis int) *big.Int {
+func xIntCoordOf(p proofbound.Xpt, axis int) *big.Int {
 	switch axis {
 	case 0:
-		return p.x
+		return p.X
 	case 1:
-		return p.y
+		return p.Y
 	default:
-		return p.z
+		return p.Z
 	}
 }
 
@@ -1497,8 +1286,8 @@ func (pm *parityMesh) buildFacetBox(axis, u, v, ti int) parityFacetBox {
 		maxV:  math.Max(av, math.Max(bv, cv)),
 		built: true,
 	}
-	if isNonFinite(box.minU) || isNonFinite(box.maxU) ||
-		isNonFinite(box.minV) || isNonFinite(box.maxV) {
+	if proofbound.IsNonFinite(box.minU) || proofbound.IsNonFinite(box.maxU) ||
+		proofbound.IsNonFinite(box.minV) || proofbound.IsNonFinite(box.maxV) {
 		return box
 	}
 	left, right := (bu-au)*(cv-av), (bv-av)*(cu-au)
@@ -1558,7 +1347,7 @@ func (pm *parityMesh) vertexProjection(axis, u, v, vi int) xp2 {
 // This is the raw-buffer entry point: it prepares a single-use projection cache
 // and answers one query through it. A caller holding an operand across many
 // queries wants meshParityPreparedContext with that operand's own cache.
-func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
+func meshParityContext(ctx context.Context, p proofbound.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
 	return meshParityPreparedContext(ctx, p, newParityMesh(verts, tris), subset)
 }
 
@@ -1566,7 +1355,7 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 // vertex projections persist between queries. The classification is identical:
 // only where each projection's rationals come from changes, and the cache hands
 // back the same value the per-facet construction built.
-func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh, subset []int) (bool, bool, error) {
+func meshParityPreparedContext(ctx context.Context, p proofbound.Xpt, prepared *parityMesh, subset []int) (bool, bool, error) {
 	for _, ray := range axisRays {
 		crossings := 0
 		ambiguous := false
@@ -1634,8 +1423,8 @@ func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh,
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
 			a, b, c := prepared.verts[tri[0]], prepared.verts[tri[1]], prepared.verts[tri[2]]
-			xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
-			n := xcross(xsub(xb, xa), xsub(xc, xa))
+			xa, xb, xc := proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c)
+			n := xcross(proofbound.Xsub(xb, xa), proofbound.Xsub(xc, xa))
 			nAxis := xIntCoordOf(n, ray.axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true
@@ -1644,11 +1433,11 @@ func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh,
 			// t = tNum/nAxis decides the crossing; nAxis is already proven
 			// nonzero above, so its sign alone tells the division's sign
 			// without ever forming the quotient — only t's sign is read, and
-			// xdotNum's raw numerator carries that sign with no normalisation
+			// proofbound.XdotNum's raw numerator carries that sign with no normalisation
 			// anywhere in the chain (docs/evaluator-design.md §9's
 			// reject-only discipline extends to never paying for a value
 			// nothing but Sign() consumes).
-			tNum := xdotNum(xsub(xa, p), n)
+			tNum := proofbound.XdotNum(proofbound.Xsub(xa, p), n)
 			switch s := tNum.Sign() * nAxis.Sign() * ray.dir; {
 			case s > 0:
 				crossings++

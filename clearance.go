@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -80,11 +82,11 @@ type bodyGeomCacheEntry struct {
 	ok   bool
 }
 
-func (cache *bodyGeomCache) get(budget *workBudget, body *Body) (*bodyGeom, bool, error) {
+func (cache *bodyGeomCache) get(budget *proofbound.WorkBudget, body *Body) (*bodyGeom, bool, error) {
 	if cache == nil {
 		return newBodyGeomBudget(budget, body)
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
 	if entry, found := cache.entries[body]; found {
@@ -112,12 +114,12 @@ func (cache *bodyGeomCache) get(budget *workBudget, body *Body) (*bodyGeom, bool
 // feature-built, unplaced, axis-aligned case) returns its inputs unchanged,
 // so it costs no extra rounding there.
 func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (float64, float64, bool) {
-	widen := absSumUpper(deltaA, deltaB)
+	widen := proofbound.AbsSumUpper(deltaA, deltaB)
 	if widen == 0 {
 		return lo, hi, exact
 	}
 	lo = math.Max(0, downRound(lo-widen))
-	hi = absSumUpper(hi, widen)
+	hi = proofbound.AbsSumUpper(hi, widen)
 	return lo, hi, false
 }
 
@@ -148,7 +150,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	ga, oka, err := cache.get(budget, a)
 	if err != nil {
 		return pairResult{}, err
@@ -265,16 +267,16 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for _, fa := range k.a.faces {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		if fa.kind != ckPlane {
 			continue
 		}
 		for _, fb := range k.b.faces {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			if fb.kind != ckPlane {
@@ -352,11 +354,11 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 	type membership struct {
 		inside, outside, unknown int
 	}
-	budget := newWorkBudget(k.ctx)
+	budget := proofbound.NewWorkBudget(k.ctx)
 	classify := func(inner, outer *bodyGeom) (membership, error) {
 		var got membership
 		for _, w := range inner.shellWit {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return membership{}, err
 			}
 			inside, ok, err := outer.pointInBody(k.ctx, w, k.tol)
@@ -408,10 +410,10 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 func (k *pairKernel) pairDiameter() (float64, error) {
 	pts := append(append([]r3.Vec{}, k.a.supports...), k.b.supports...)
 	best := 0.0
-	budget := newWorkBudget(k.ctx)
+	budget := proofbound.NewWorkBudget(k.ctx)
 	for i := range pts {
 		for j := i + 1; j < len(pts); j++ {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, err
 			}
 			if d := pts[i].Sub(pts[j]).Len(); d > best {
@@ -498,7 +500,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	if err := ctx.Err(); err != nil {
 		return sheetSolidResult{}, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	gs, oks, err := cache.get(budget, sheet)
 	if err != nil {
 		return sheetSolidResult{}, err

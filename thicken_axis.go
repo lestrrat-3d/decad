@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -19,7 +21,7 @@ type thickenAxisJoin struct {
 }
 
 func thickenAxisSection(ctx context.Context, profile ProfileRecord, side ThickenSide,
-	amount float64, budget *workBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
 	for _, seg := range profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return thickenSection{}, err
@@ -78,7 +80,7 @@ func thickenAxisSection(ctx context.Context, profile ProfileRecord, side Thicken
 	return sec, nil
 }
 
-func thickenAxisDirections(loop cornerLoop, budget *workBudget) ([]thickenAxisDir, error) {
+func thickenAxisDirections(loop cornerLoop, budget *proofbound.WorkBudget) ([]thickenAxisDir, error) {
 	n := len(loop.walks)
 	if n < 4 {
 		return nil, fmt.Errorf(`%w: an axis-parallel prism loop needs at least four walks`, ErrUnsupported)
@@ -89,7 +91,7 @@ func thickenAxisDirections(loop cornerLoop, budget *workBudget) ([]thickenAxisDi
 			return nil, err
 		}
 		next := loop.walks[(i+1)%n]
-		if w.startBound.u != 0 || w.startBound.v != 0 || w.endBound.u != 0 || w.endBound.v != 0 {
+		if w.startBound.U != 0 || w.startBound.V != 0 || w.endBound.U != 0 || w.endBound.V != 0 {
 			return nil, fmt.Errorf(`%w: a source line endpoint has an unresolved coordinate bound`, ErrUnsupported)
 		}
 		if w.endU != next.startU || w.endV != next.startV {
@@ -121,7 +123,7 @@ func thickenAxisDirections(loop cornerLoop, budget *workBudget) ([]thickenAxisDi
 	return dirs, nil
 }
 
-func thickenAxisOffset(budget *workBudget, source ProfileRecord, loop cornerLoop,
+func thickenAxisOffset(budget *proofbound.WorkBudget, source ProfileRecord, loop cornerLoop,
 	dirs []thickenAxisDir, sense int, amount float64) (ProfileRecord, error) {
 	offset, err := offsetProfile(budget, source, float64(sense), amount)
 	if err != nil {
@@ -137,7 +139,7 @@ func thickenAxisOffset(budget *workBudget, source ProfileRecord, loop cornerLoop
 }
 
 func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated LoopRecord,
-	sense int, amount float64, budget *workBudget) error {
+	sense int, amount float64, budget *proofbound.WorkBudget) error {
 	n := len(dirs)
 	t := proofarith.FloatRat(amount)
 	joins := make([]thickenAxisJoin, n)
@@ -316,7 +318,7 @@ func thickenContactEvent(ctx context.Context, p ratPoly, limit *big.Rat) (bool, 
 // refusing it is conservative. If no such root lies in (0, amount], no actual
 // contact can begin there. The audited endpoint decides the final winding.
 func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thickenAxisDir,
-	sense int, amount float64, budget *workBudget, radial *thickenRadial) error {
+	sense int, amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) error {
 	n := len(dirs)
 	joins := make([]struct {
 		arc              bool
@@ -365,7 +367,7 @@ func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thick
 // construction prescribes and are excluded, and every other pair is isolated
 // exactly.
 func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece,
-	limit *big.Rat, budget *workBudget, radial *thickenRadial) error {
+	limit *big.Rat, budget *proofbound.WorkBudget, radial *thickenRadial) error {
 	boxes := make([]thickenExactBox, len(pieces))
 	for i, piece := range pieces {
 		if err := wallBudgetStep(budget); err != nil {
@@ -576,7 +578,7 @@ func thickenRibbonSides(side ThickenSide) (right, left thickenRibbonSide) {
 // one open walk's per-segment axis direction, refusing an inexact endpoint, a
 // junction the two walks do not share exactly, a segment that is not
 // axis-parallel, and an interior corner that is not a right angle.
-func thickenOpenDirections(walks []sideWalk, budget *workBudget) ([]thickenAxisDir, error) {
+func thickenOpenDirections(walks []sideWalk, budget *proofbound.WorkBudget) ([]thickenAxisDir, error) {
 	n := len(walks)
 	if n == 0 {
 		return nil, fmt.Errorf(`%w: an open walk holds no segment`, ErrUnsupported)
@@ -586,7 +588,7 @@ func thickenOpenDirections(walks []sideWalk, budget *workBudget) ([]thickenAxisD
 		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		if w.startBound.u != 0 || w.startBound.v != 0 || w.endBound.u != 0 || w.endBound.v != 0 {
+		if w.startBound.U != 0 || w.startBound.V != 0 || w.endBound.U != 0 || w.endBound.V != 0 {
 			return nil, fmt.Errorf(`%w: an open walk endpoint has an unresolved coordinate bound`, ErrUnsupported)
 		}
 		if i+1 < n {
@@ -772,7 +774,7 @@ func thickenArcIsCCW(start, end, center Point2) bool {
 // proven simple there and proven free of any nonadjacent contact over the
 // whole interval 0 < τ ≤ amount.
 func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amount float64,
-	budget *workBudget, work *freeformWork, radial *thickenRadial) (ProfileRecord, error) {
+	budget *proofbound.WorkBudget, work *freeformWork, radial *thickenRadial) (ProfileRecord, error) {
 	raw := make([]sideWalk, len(chain.Segments))
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {

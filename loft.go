@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-go/option/v3"
@@ -194,7 +196,7 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 		alignment:     alignment,
 		xform:         r3.Identity(),
 		surfaceResult: surfaceResult,
-	}, newWorkBudget(ctx), work0, work1)
+	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +251,7 @@ func (lp chainLoftPayload) transform() r3.Transform { return lp.xform }
 // scratch, exactly as docs/loft-design.md §4 states a loft placement does.
 func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	lp.xform = composed
-	return evalChainLoftContext(ctx, d, ref, lp, newWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	return evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
 }
 
 // LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
@@ -322,7 +324,7 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 		plane0: plane0, plane1: plane1,
 		frame0: frame0, frame1: frame1,
 		xform: r3.Identity(),
-	}, newWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	}, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +414,7 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 // it.
 //
 // Both signs are exact rationals over the two records' own U, V and Origin
-// floats — boolean_exact.go's xptOf/xcross/xdotSign, the package's
+// floats — boolean_exact.go's proofbound.XptOf/xcross/xdotSign, the package's
 // take-the-floats-exactly discipline — so the gate rests on no tolerance and
 // no residual. It is reject-only: it can refuse a pose, and it never admits
 // one on a small number. The rejected alternative is reading the sign of
@@ -424,15 +426,15 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 // coplanar pose (S5), so a parallel pair that survives that refusal has a
 // strictly nonzero offset and the sign below can only be positive or negative.
 func chainLoftPlaneSideGate(pl0, pl1 PlaneRecord) error {
-	n0 := xcross(xptOf(pl0.U), xptOf(pl0.V))
-	n1 := xcross(xptOf(pl1.U), xptOf(pl1.V))
+	n0 := xcross(proofbound.XptOf(pl0.U), proofbound.XptOf(pl0.V))
+	n1 := xcross(proofbound.XptOf(pl1.U), proofbound.XptOf(pl1.V))
 	cr := xcross(n0, n1)
-	if cr.x.Sign() != 0 || cr.y.Sign() != 0 || cr.z.Sign() != 0 {
+	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return fmt.Errorf(
 			`%w: the two chain planes are not exactly parallel, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
 			ErrUnsupported)
 	}
-	if xdotSign(n0, xsub(xptOf(pl1.Origin), xptOf(pl0.Origin))) <= 0 {
+	if xdotSign(n0, proofbound.Xsub(proofbound.XptOf(pl1.Origin), proofbound.XptOf(pl0.Origin))) <= 0 {
 		return fmt.Errorf(
 			`%w: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
 			ErrUnsupported)
@@ -472,7 +474,7 @@ func chainLoftStations(walks0, walks1 []segmentWalk) ([]Point2, []Point2, float6
 		round = math.Max(round, cellRound)
 	}
 	terminal := math.Max(walkEndPlaneDelta(walks0[n-1].endBound), walkEndPlaneDelta(walks1[n-1].endBound))
-	if isNonFinite(terminal) {
+	if proofbound.IsNonFinite(terminal) {
 		return nil, nil, 0, errLoftStationDisplacementUnderivable
 	}
 	v = append(v, Point2{U: walks0[n-1].endU, V: walks0[n-1].endV})
@@ -490,7 +492,7 @@ func chainLoftStations(walks0, walks1 []segmentWalk) ([]Point2, []Point2, float6
 // assemble; chainLoftPlaneSideGate is what states the side instead, and the
 // local winding below is emitted unflipped because that gate has already
 // proven it correct.
-func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp chainLoftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
+func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp chainLoftPayload, budget *proofbound.WorkBudget, work0, work1 *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -508,7 +510,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// but the mass accumulator and the audit both lift every vertex through
 	// dyVec, whose mustDyOf PANICS on a non-finite float.
 	anchor := lp.xform.Apply(lp.plane0.Origin)
-	if !finiteVec(anchor) {
+	if !proofbound.FiniteVec(anchor) {
 		return nil, errLoftPointUnrepresentable("placed plane origin")
 	}
 
@@ -524,9 +526,9 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 				return nil, err
 			}
 			lifted := side.frame.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = math.Max(maxInputAbs, vecMaxAbs(lifted))
+			maxInputAbs = math.Max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := lp.xform.Apply(lifted)
-			if !finiteVec(placed) {
+			if !proofbound.FiniteVec(placed) {
 				return nil, errLoftPointUnrepresentable(fmt.Sprintf("placed station %d on the %s walk", j, side.what))
 			}
 			verts = append(verts, placed)
@@ -538,9 +540,9 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// independent leg beside it, exactly as assembleLoft composes the two.
 	placeAllow := 0.0
 	if lp.xform != r3.Identity() {
-		placeAllow = rigidRoundAllow(maxInputAbs, vecMaxAbs(lp.xform.Translation()))
+		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(lp.xform.Translation()))
 	}
-	delta := absSumUpper(stationRound, placeAllow)
+	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
 
 	n := len(v) - 1
 	vIdx := make([]int, len(v))

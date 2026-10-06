@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -120,7 +122,7 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 	if !ok {
 		return SweptBox{}, false
 	}
-	up := ratFloatUp(travel)
+	up := proofbound.RatFloatUp(travel)
 	if !finiteMeasurementValues(up) {
 		return SweptBox{}, false
 	}
@@ -151,7 +153,7 @@ func driftTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
 		vSquared.Add(vSquared, new(big.Rat).Mul(v, v))
 		omegaSquared.Add(omegaSquared, new(big.Rat).Mul(w, w))
 	}
-	speed, spin := ratSqrtUp(vSquared), ratSqrtUp(omegaSquared)
+	speed, spin := proofbound.RatSqrtUp(vSquared), proofbound.RatSqrtUp(omegaSquared)
 	if !finiteMeasurementValues(speed, spin) {
 		return nil, false
 	}

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -46,7 +48,7 @@ import (
 // its own proven bound. The per-axis sibling of patchRawFlux
 // (capblend_moments.go), dispatching on g.circular exactly where that
 // function does.
-func patchFirstMomentFlux(g capPatchGeom) (mu, mv, mz boundedScalar) {
+func patchFirstMomentFlux(g capPatchGeom) (mu, mv, mz proofbound.BoundedScalar) {
 	if !g.circular {
 		return planePatchMoment(g)
 	}
@@ -58,7 +60,7 @@ func patchFirstMomentFlux(g capPatchGeom) (mu, mv, mz boundedScalar) {
 // rationally wherever every coordinate lifts (exactPlanePatchMoment), the
 // float fallback only for a patch whose coordinates do not (mirroring
 // patchRawFlux's own exactPlanePatchFlux/float split, capblend_moments.go).
-func planePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
+func planePatchMoment(g capPatchGeom) (mu, mv, mz proofbound.BoundedScalar) {
 	v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
 	v1 := r3.NewVec(g.sideB.U, g.sideB.V, g.sideZ)
 	v2 := r3.NewVec(g.capB.U, g.capB.V, g.capZ)
@@ -67,9 +69,9 @@ func planePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 		hx, _ := ex.Float64()
 		hy, _ := ey.Float64()
 		hz, _ := ez.Float64()
-		return measuredScalar(hx, proofarith.RationalFloatError(ex, hx)),
-			measuredScalar(hy, proofarith.RationalFloatError(ey, hy)),
-			measuredScalar(hz, proofarith.RationalFloatError(ez, hz))
+		return proofbound.MeasuredScalar(hx, proofarith.RationalFloatError(ex, hx)),
+			proofbound.MeasuredScalar(hy, proofarith.RationalFloatError(ey, hy)),
+			proofbound.MeasuredScalar(hz, proofarith.RationalFloatError(ez, hz))
 	}
 	return floatPlanePatchMoment(v0, v1, v2, v3)
 }
@@ -130,7 +132,7 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 	}
 	t1 := tri(r0, r1, r2)
 	t2 := tri(r0, r2, r3v)
-	return ratAdd(t1[0], t2[0]), ratAdd(t1[1], t2[1]), ratAdd(t1[2], t2[2]), true
+	return proofbound.RatAdd(t1[0], t2[0]), proofbound.RatAdd(t1[1], t2[1]), proofbound.RatAdd(t1[2], t2[2]), true
 }
 
 // floatPlanePatchMoment is exactPlanePatchMoment's float fallback for a patch
@@ -141,22 +143,22 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 // each axis's own six-term square sum is at most 6·coordMax², and the
 // unnormalized normal's own magnitude is bounded by crossProductUpper,
 // independent of what the computed value happens to be.
-func floatPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz boundedScalar) {
+func floatPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz proofbound.BoundedScalar) {
 	compute := func(a, b, c r3.Vec) r3.Vec {
 		n := b.Sub(a).Cross(c.Sub(a))
 		sq := func(ai, bi, ci float64) float64 { return ai*ai + bi*bi + ci*ci + ai*bi + bi*ci + ci*ai }
 		return r3.NewVec(n.X*sq(a.X, b.X, c.X)/24, n.Y*sq(a.Y, b.Y, c.Y)/24, n.Z*sq(a.Z, b.Z, c.Z)/24)
 	}
 	envelope := func(a, b, c r3.Vec) float64 {
-		coordMax := math.Max(vecMaxAbs(a), math.Max(vecMaxAbs(b), vecMaxAbs(c)))
+		coordMax := math.Max(proofbound.VecMaxAbs(a), math.Max(proofbound.VecMaxAbs(b), proofbound.VecMaxAbs(c)))
 		crossUpper := crossProductUpper(b.Sub(a), c.Sub(a))
-		return productUpper(crossUpper, productUpper(6, productUpper(coordMax, coordMax))) / 24
+		return proofbound.ProductUpper(crossUpper, proofbound.ProductUpper(6, proofbound.ProductUpper(coordMax, coordMax))) / 24
 	}
 	m1 := compute(v0, v1, v2)
 	m2 := compute(v0, v2, v3)
 	sum := m1.Add(m2)
-	bound := analyticRoundBound(absSumUpper(envelope(v0, v1, v2), envelope(v0, v2, v3)))
-	return measuredScalar(sum.X, bound), measuredScalar(sum.Y, bound), measuredScalar(sum.Z, bound)
+	bound := proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(envelope(v0, v1, v2), envelope(v0, v2, v3)))
+	return proofbound.MeasuredScalar(sum.X, bound), proofbound.MeasuredScalar(sum.Y, bound), proofbound.MeasuredScalar(sum.Z, bound)
 }
 
 // phaseTerm is one closed-form Fourier term of a ruled Cone patch's own
@@ -198,38 +200,38 @@ type phaseTerm struct {
 func coneMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []phaseTerm {
 	two, four, nine, twentyFour := big.NewRat(2, 1), big.NewRat(4, 1), big.NewRat(9, 1), big.NewRat(24, 1)
 	return []phaseTerm{
-		{0, 0, ratScale(ratMul(H, cU, ratAdd(ratMul(R0, R0, dS), ratMul(R1, R1, dC))), 1, 6), new(big.Rat)},
-		{0, 1, ratScale(ratMul(H, R1, ratAdd(ratMul(two, R0, R0, dC), ratMul(four, R0, R0, dS), ratMul(nine, R1, R1, dC), ratMul(twentyFour, cU, cU, dC))), 1, 96), new(big.Rat)},
-		{1, 0, ratScale(ratMul(H, R0, ratAdd(ratMul(nine, R0, R0, dS), ratMul(four, R1, R1, dC), ratMul(two, R1, R1, dS), ratMul(twentyFour, cU, cU, dS))), 1, 96), new(big.Rat)},
-		{0, 2, ratScale(ratMul(H, R1, R1, cU, dC), 1, 6), new(big.Rat)},
-		{1, -1, ratScale(ratMul(H, R0, R1, cU, ratAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{1, 1, ratScale(ratMul(H, R0, R1, cU, ratAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{2, 0, ratScale(ratMul(H, R0, R0, cU, dS), 1, 6), new(big.Rat)},
-		{0, 3, ratScale(ratMul(H, R1, R1, R1, dC), 1, 32), new(big.Rat)},
-		{1, -2, ratScale(ratMul(H, R0, R1, R1, ratAdd(ratMul(two, dC), dS)), 1, 96), new(big.Rat)},
-		{1, 2, ratScale(ratMul(H, R0, R1, R1, ratAdd(ratMul(two, dC), dS)), 1, 96), new(big.Rat)},
-		{2, -1, ratScale(ratMul(H, R0, R0, R1, ratAdd(dC, ratMul(two, dS))), 1, 96), new(big.Rat)},
-		{2, 1, ratScale(ratMul(H, R0, R0, R1, ratAdd(dC, ratMul(two, dS))), 1, 96), new(big.Rat)},
-		{3, 0, ratScale(ratMul(H, R0, R0, R0, dS), 1, 32), new(big.Rat)},
+		{0, 0, ratScale(proofbound.RatMul(H, cU, proofbound.RatAdd(proofbound.RatMul(R0, R0, dS), proofbound.RatMul(R1, R1, dC))), 1, 6), new(big.Rat)},
+		{0, 1, ratScale(proofbound.RatMul(H, R1, proofbound.RatAdd(proofbound.RatMul(two, R0, R0, dC), proofbound.RatMul(four, R0, R0, dS), proofbound.RatMul(nine, R1, R1, dC), proofbound.RatMul(twentyFour, cU, cU, dC))), 1, 96), new(big.Rat)},
+		{1, 0, ratScale(proofbound.RatMul(H, R0, proofbound.RatAdd(proofbound.RatMul(nine, R0, R0, dS), proofbound.RatMul(four, R1, R1, dC), proofbound.RatMul(two, R1, R1, dS), proofbound.RatMul(twentyFour, cU, cU, dS))), 1, 96), new(big.Rat)},
+		{0, 2, ratScale(proofbound.RatMul(H, R1, R1, cU, dC), 1, 6), new(big.Rat)},
+		{1, -1, ratScale(proofbound.RatMul(H, R0, R1, cU, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
+		{1, 1, ratScale(proofbound.RatMul(H, R0, R1, cU, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
+		{2, 0, ratScale(proofbound.RatMul(H, R0, R0, cU, dS), 1, 6), new(big.Rat)},
+		{0, 3, ratScale(proofbound.RatMul(H, R1, R1, R1, dC), 1, 32), new(big.Rat)},
+		{1, -2, ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), 1, 96), new(big.Rat)},
+		{1, 2, ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), 1, 96), new(big.Rat)},
+		{2, -1, ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96), new(big.Rat)},
+		{2, 1, ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96), new(big.Rat)},
+		{3, 0, ratScale(proofbound.RatMul(H, R0, R0, R0, dS), 1, 32), new(big.Rat)},
 	}
 }
 
 func coneMomentTermsY(R0, R1, H, cV, dS, dC *big.Rat) []phaseTerm {
 	two, four, nine, twentyFour := big.NewRat(2, 1), big.NewRat(4, 1), big.NewRat(9, 1), big.NewRat(24, 1)
 	return []phaseTerm{
-		{0, 0, ratScale(ratMul(H, cV, ratAdd(ratMul(R0, R0, dS), ratMul(R1, R1, dC))), 1, 6), new(big.Rat)},
-		{0, 1, new(big.Rat), ratScale(ratMul(H, R1, ratAdd(ratMul(two, R0, R0, dC), ratMul(four, R0, R0, dS), ratMul(nine, R1, R1, dC), ratMul(twentyFour, cV, cV, dC))), 1, 96)},
-		{1, 0, new(big.Rat), ratScale(ratMul(H, R0, ratAdd(ratMul(nine, R0, R0, dS), ratMul(four, R1, R1, dC), ratMul(two, R1, R1, dS), ratMul(twentyFour, cV, cV, dS))), 1, 96)},
-		{0, 2, ratScale(ratMul(H, R1, R1, cV, dC), -1, 6), new(big.Rat)},
-		{1, -1, ratScale(ratMul(H, R0, R1, cV, ratAdd(dC, dS)), 1, 12), new(big.Rat)},
-		{1, 1, ratScale(ratMul(H, R0, R1, cV, ratAdd(dC, dS)), -1, 12), new(big.Rat)},
-		{2, 0, ratScale(ratMul(H, R0, R0, cV, dS), -1, 6), new(big.Rat)},
-		{0, 3, new(big.Rat), ratScale(ratMul(H, R1, R1, R1, dC), -1, 32)},
-		{1, -2, new(big.Rat), ratScale(ratMul(H, R0, R1, R1, ratAdd(ratMul(two, dC), dS)), -1, 96)},
-		{1, 2, new(big.Rat), ratScale(ratMul(H, R0, R1, R1, ratAdd(ratMul(two, dC), dS)), -1, 96)},
-		{2, -1, new(big.Rat), ratScale(ratMul(H, R0, R0, R1, ratAdd(dC, ratMul(two, dS))), 1, 96)},
-		{2, 1, new(big.Rat), ratScale(ratMul(H, R0, R0, R1, ratAdd(dC, ratMul(two, dS))), -1, 96)},
-		{3, 0, new(big.Rat), ratScale(ratMul(H, R0, R0, R0, dS), -1, 32)},
+		{0, 0, ratScale(proofbound.RatMul(H, cV, proofbound.RatAdd(proofbound.RatMul(R0, R0, dS), proofbound.RatMul(R1, R1, dC))), 1, 6), new(big.Rat)},
+		{0, 1, new(big.Rat), ratScale(proofbound.RatMul(H, R1, proofbound.RatAdd(proofbound.RatMul(two, R0, R0, dC), proofbound.RatMul(four, R0, R0, dS), proofbound.RatMul(nine, R1, R1, dC), proofbound.RatMul(twentyFour, cV, cV, dC))), 1, 96)},
+		{1, 0, new(big.Rat), ratScale(proofbound.RatMul(H, R0, proofbound.RatAdd(proofbound.RatMul(nine, R0, R0, dS), proofbound.RatMul(four, R1, R1, dC), proofbound.RatMul(two, R1, R1, dS), proofbound.RatMul(twentyFour, cV, cV, dS))), 1, 96)},
+		{0, 2, ratScale(proofbound.RatMul(H, R1, R1, cV, dC), -1, 6), new(big.Rat)},
+		{1, -1, ratScale(proofbound.RatMul(H, R0, R1, cV, proofbound.RatAdd(dC, dS)), 1, 12), new(big.Rat)},
+		{1, 1, ratScale(proofbound.RatMul(H, R0, R1, cV, proofbound.RatAdd(dC, dS)), -1, 12), new(big.Rat)},
+		{2, 0, ratScale(proofbound.RatMul(H, R0, R0, cV, dS), -1, 6), new(big.Rat)},
+		{0, 3, new(big.Rat), ratScale(proofbound.RatMul(H, R1, R1, R1, dC), -1, 32)},
+		{1, -2, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), -1, 96)},
+		{1, 2, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R1, R1, proofbound.RatAdd(proofbound.RatMul(two, dC), dS)), -1, 96)},
+		{2, -1, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), 1, 96)},
+		{2, 1, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R1, proofbound.RatAdd(dC, proofbound.RatMul(two, dS))), -1, 96)},
+		{3, 0, new(big.Rat), ratScale(proofbound.RatMul(H, R0, R0, R0, dS), -1, 32)},
 	}
 }
 
@@ -237,21 +239,21 @@ func coneMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []phaseTerm {
 	three, four, six, eight := big.NewRat(3, 1), big.NewRat(4, 1), big.NewRat(6, 1), big.NewRat(8, 1)
 	neg := func(v *big.Rat) *big.Rat { return new(big.Rat).Neg(v) }
 	return []phaseTerm{
-		{0, 0, ratScale(ratAdd(
-			ratMul(H, H, R0, R0, dS),
-			neg(ratMul(three, H, H, R1, R1, dC)),
-			ratMul(four, H, R0, R0, dS, z0),
-			neg(ratMul(eight, H, R1, R1, dC, z0)),
-			ratMul(six, R0, R0, dS, z0, z0),
-			neg(ratMul(six, R1, R1, dC, z0, z0)),
+		{0, 0, ratScale(proofbound.RatAdd(
+			proofbound.RatMul(H, H, R0, R0, dS),
+			neg(proofbound.RatMul(three, H, H, R1, R1, dC)),
+			proofbound.RatMul(four, H, R0, R0, dS, z0),
+			neg(proofbound.RatMul(eight, H, R1, R1, dC, z0)),
+			proofbound.RatMul(six, R0, R0, dS, z0, z0),
+			neg(proofbound.RatMul(six, R1, R1, dC, z0, z0)),
 		), 1, 24), new(big.Rat)},
-		{1, -1, ratScale(ratMul(R0, R1, ratAdd(
-			ratMul(three, H, H, dC),
-			neg(ratMul(H, H, dS)),
-			ratMul(eight, H, dC, z0),
-			neg(ratMul(four, H, dS, z0)),
-			ratMul(six, dC, z0, z0),
-			neg(ratMul(six, dS, z0, z0)),
+		{1, -1, ratScale(proofbound.RatMul(R0, R1, proofbound.RatAdd(
+			proofbound.RatMul(three, H, H, dC),
+			neg(proofbound.RatMul(H, H, dS)),
+			proofbound.RatMul(eight, H, dC, z0),
+			neg(proofbound.RatMul(four, H, dS, z0)),
+			proofbound.RatMul(six, dC, z0, z0),
+			neg(proofbound.RatMul(six, dS, z0, z0)),
 		)), 1, 24), new(big.Rat)},
 	}
 }
@@ -270,25 +272,25 @@ func coneMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []phaseTerm {
 // patch, which share their phases; a nil map computes every phase afresh.
 // The cache is a speed measure only: a hit returns exactly what a miss
 // computes.
-func phaseSumInterval(terms []phaseTerm, thS0, thS1, thC0, thC1 *big.Rat, phases map[[2]int][2]ratInterval) (ratInterval, bool) {
-	total := pointInterval(new(big.Rat))
+func phaseSumInterval(terms []phaseTerm, thS0, thS1, thC0, thC1 *big.Rat, phases map[[2]int][2]proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	total := proofbound.PointInterval(new(big.Rat))
 	for _, t := range terms {
 		key := [2]int{t.k, t.m}
 		enclosure, hit := phases[key]
 		if !hit {
 			k, m := big.NewRat(int64(t.k), 1), big.NewRat(int64(t.m), 1)
-			a0 := ratAdd(ratMul(k, thS0), ratMul(m, thC0))
-			a1 := ratAdd(ratMul(k, thS1), ratMul(m, thC1))
+			a0 := proofbound.RatAdd(proofbound.RatMul(k, thS0), proofbound.RatMul(m, thC0))
+			a1 := proofbound.RatAdd(proofbound.RatMul(k, thS1), proofbound.RatMul(m, thC1))
 			cosIv, sinIv, ok := phaseIntegralInterval(a0, a1)
 			if !ok {
-				return ratInterval{}, false
+				return proofbound.RatInterval{}, false
 			}
-			enclosure = [2]ratInterval{cosIv, sinIv}
+			enclosure = [2]proofbound.RatInterval{cosIv, sinIv}
 			if phases != nil {
 				phases[key] = enclosure
 			}
 		}
-		total = intervalAdd(total, intervalAdd(intervalScale(enclosure[0], t.ac), intervalScale(enclosure[1], t.as)))
+		total = proofbound.IntervalAdd(total, proofbound.IntervalAdd(proofbound.IntervalScale(enclosure[0], t.ac), proofbound.IntervalScale(enclosure[1], t.as)))
 	}
 	return total, true
 }
@@ -323,7 +325,7 @@ func wholeTurnPhaseSum(terms []phaseTerm) *big.Rat {
 // into a float64 (rationalFloatError). Every other patch's sum is an interval
 // whose phase integrals are certified enclosures (phaseSumInterval); the
 // held value is the nearest float to its midpoint and the bound is the
-// interval's reach from it (intervalFloatError), so it grows with neither the
+// interval's reach from it (proofbound.IntervalFloatError), so it grows with neither the
 // arc centre's distance from the plane-local origin nor the coefficients'
 // magnitude. A parameter that does not lift (non-finite geometry, which
 // buildCapBand already refuses) answers 0 with an infinite bound rather than
@@ -331,7 +333,7 @@ func wholeTurnPhaseSum(terms []phaseTerm) *big.Rat {
 // the closed form is taken over the NORMALIZED (th0 < th1) window, which is
 // the patch's actual orientation only while its own walk runs
 // counter-clockwise.
-func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
+func conePatchMoment(g capPatchGeom) (mu, mv, mz proofbound.BoundedScalar) {
 	R0, R1 := proofarith.FloatRat(g.sideRadius), proofarith.FloatRat(g.capRadius)
 	z0, z1 := proofarith.FloatRat(g.sideZ), proofarith.FloatRat(g.capZ)
 	thS0, thS1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
@@ -339,7 +341,7 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 	cU, cV := proofarith.FloatRat(g.cU), proofarith.FloatRat(g.cV)
 	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
 		if r == nil {
-			unproven := measuredScalar(0, math.Inf(1))
+			unproven := proofbound.MeasuredScalar(0, math.Inf(1))
 			return unproven, unproven, unproven
 		}
 	}
@@ -347,19 +349,19 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 	dS := new(big.Rat).Sub(thS1, thS0)
 	dC := new(big.Rat).Sub(thC1, thC0)
 
-	phases := make(map[[2]int][2]ratInterval)
-	sum := func(terms []phaseTerm) boundedScalar {
+	phases := make(map[[2]int][2]proofbound.RatInterval)
+	sum := func(terms []phaseTerm) proofbound.BoundedScalar {
 		if g.wholeTurn {
 			exact := wholeTurnPhaseSum(terms)
 			held, _ := exact.Float64()
-			return measuredScalar(held, proofarith.RationalFloatError(exact, held))
+			return proofbound.MeasuredScalar(held, proofarith.RationalFloatError(exact, held))
 		}
 		iv, ok := phaseSumInterval(terms, thS0, thS1, thC0, thC1, phases)
 		if !ok {
-			return measuredScalar(0, math.Inf(1))
+			return proofbound.MeasuredScalar(0, math.Inf(1))
 		}
 		held, _ := intervalMid(iv).Float64()
-		return measuredScalar(held, intervalFloatError(iv, held))
+		return proofbound.MeasuredScalar(held, proofbound.IntervalFloatError(iv, held))
 	}
 
 	mxR := sum(coneMomentTermsX(R0, R1, H, cU, dS, dC))
@@ -367,14 +369,14 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 	mzR := sum(coneMomentTermsZ(R0, R1, H, z0, dS, dC))
 
 	if !g.sweepCCW {
-		mxR.value, myR.value, mzR.value = -mxR.value, -myR.value, -mzR.value
+		mxR.Value, myR.Value, mzR.Value = -mxR.Value, -myR.Value, -mzR.Value
 	}
 	return mxR, myR, mzR
 }
 
 // loopCoordinateUpper is one loop's own coordinate envelope
 // (profileCoordinateUpper, extrude.go, wrapped as a single-outer-loop
-// ProfileRecord) — sweptMomentAllow's coordUpper input, one dimension's worth
+// ProfileRecord) — proofbound.SweptMomentAllow's coordUpper input, one dimension's worth
 // of the SAME envelope prismCentroidGeometryBound already forms for a whole
 // profile.
 func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
@@ -398,10 +400,10 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // signed-area sign — the IN-PLANE half.
 //
 // The cap contour's own displacement (delta) is composed ONCE, after the
-// sum, via bounds.go's sweptMomentAllow — never inside a disk term or inside
+// sum, via internal/proofbound/bounds.go's proofbound.SweptMomentAllow — never inside a disk term or inside
 // patchFirstMomentFlux itself, both of which already read the SAME displaced
 // cap-level coordinates and would double the charge (capBandVolume's
-// identical rule for sweptVolumeAllow). areaUpper is the same surface the
+// identical rule for proofbound.SweptVolumeAllow). areaUpper is the same surface the
 // contour's displacement acted on (this band's patches plus the cap disk
 // they close on); coordUpper is the band's own coordinate envelope — the
 // ORIGINAL loop's (loopCoordinateUpper) AND the built cap boundary's
@@ -410,16 +412,16 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // The band's material lies between the two loops, so a bound taken from the
 // original loop alone can fall short wherever the offset moves a coordinate
 // OUTWARD — capArea's own boundary is exactly that displaced coordinate set,
-// and sweptMomentAllow's own contract (bounds.go) requires coordUpper to
+// and proofbound.SweptMomentAllow's own contract (internal/proofbound/bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
-func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz boundedScalar, err error) {
+func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := boundedAdd(capZB, measuredScalar(matSign*cbp.d, cbp.dDelta))
-	sideZ := sideZB.value
+	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZ := sideZB.Value
 
-	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)
+	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 	orient := 1.0
 	if signedArea < 0 {
@@ -428,52 +430,52 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 
 	sideArea, err := loopEnclosedAreaContext(ctx, loop)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 	capBoundary, err := capLoopBoundary(ctx, loop, cbp.d)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 	capArea, err := loopEnclosedAreaContext(ctx, capBoundary)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 
-	half := exactScalar(0.5)
-	capZTerm := boundedMul(boundedMul(boundedMul(capZB, capZB), half), boundedMul(exactScalar(-matSign), capArea))
-	sideZTerm := boundedMul(boundedMul(boundedMul(sideZB, sideZB), half), boundedMul(exactScalar(matSign), sideArea))
-	muTotal := boundedScalar{}
-	mvTotal := boundedScalar{}
-	mzTotal := boundedAdd(capZTerm, sideZTerm)
+	half := proofbound.ExactScalar(0.5)
+	capZTerm := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.BoundedMul(capZB, capZB), half), proofbound.BoundedMul(proofbound.ExactScalar(-matSign), capArea))
+	sideZTerm := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.BoundedMul(sideZB, sideZB), half), proofbound.BoundedMul(proofbound.ExactScalar(matSign), sideArea))
+	muTotal := proofbound.BoundedScalar{}
+	mvTotal := proofbound.BoundedScalar{}
+	mzTotal := proofbound.BoundedAdd(capZTerm, sideZTerm)
 
-	patchAreaTotal := boundedScalar{}
+	patchAreaTotal := proofbound.BoundedScalar{}
 	for _, g := range geom {
 		pmu, pmv, pmz := patchFirstMomentFlux(g)
 		sign := -matSign * orient
-		muTotal = boundedAdd(muTotal, measuredScalar(sign*pmu.value, pmu.bound))
-		mvTotal = boundedAdd(mvTotal, measuredScalar(sign*pmv.value, pmv.bound))
-		mzTotal = boundedAdd(mzTotal, measuredScalar(sign*pmz.value, pmz.bound))
+		muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*pmu.Value, pmu.Bound))
+		mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*pmv.Value, pmv.Bound))
+		mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*pmz.Value, pmz.Bound))
 		pa, pb := patchAreaOf(g)
-		patchAreaTotal = boundedAdd(patchAreaTotal, measuredScalar(pa, pb))
+		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
 	}
 
 	if delta > 0 {
-		areaUpper := absSumUpper(patchAreaTotal.value, patchAreaTotal.bound, capArea.value, capArea.bound)
+		areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
 		coordUpper, cerr := loopCoordinateUpper(loop, work)
 		if cerr != nil {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, cerr
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
 		}
 		capCoordUpper, cerr := loopCoordinateUpper(capBoundary, work)
 		if cerr != nil {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, cerr
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, cerr
 		}
-		coordUpper = math.Max(coordUpper, absSumUpper(capCoordUpper, delta))
-		coordUpper = math.Max(coordUpper, absSumUpper(math.Abs(sideZ), sideZB.bound))
-		coordUpper = math.Max(coordUpper, absSumUpper(math.Abs(capZ), capZB.bound))
-		allow := sweptMomentAllow(delta, areaUpper, coordUpper)
-		muTotal.bound = absSumUpper(muTotal.bound, allow)
-		mvTotal.bound = absSumUpper(mvTotal.bound, allow)
-		mzTotal.bound = absSumUpper(mzTotal.bound, allow)
+		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
+		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(sideZ), sideZB.Bound))
+		coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZ), capZB.Bound))
+		allow := proofbound.SweptMomentAllow(delta, areaUpper, coordUpper)
+		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, allow)
+		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, allow)
+		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, allow)
 	}
 	return muTotal, mvTotal, mzTotal, nil
 }
@@ -518,5 +520,5 @@ func capBlendCentroidGeometryBound(estimate r3.Vec, bounds Box) float64 {
 			}
 		}
 	}
-	return absSumUpper(reach, bounds.Bound.Mag())
+	return proofbound.AbsSumUpper(reach, bounds.Bound.Mag())
 }

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -63,7 +65,7 @@ func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
 	t.Helper()
 	seg, w := wedgeArcRecord(t)
 	stations, stationDelta := circularStationChain(w, seg, m)
-	require.False(t, isNonFinite(stationDelta), "the shipped generator must state its stations' own displacement at m=%d", m)
+	require.False(t, proofbound.IsNonFinite(stationDelta), "the shipped generator must state its stations' own displacement at m=%d", m)
 	pts := make([][2]float64, 0, m+1)
 	for _, p := range stations {
 		pts = append(pts, [2]float64{p.U, p.V})
@@ -71,7 +73,7 @@ func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
 	pts = append(pts, [2]float64{w.endU, w.endV})
 
 	sd := chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m), stationDelta)
-	require.False(t, isNonFinite(sd), "the shipped generator must state a chord bound at m=%d", m)
+	require.False(t, proofbound.IsNonFinite(sd), "the shipped generator must state a chord bound at m=%d", m)
 	return pts, sd
 }
 
@@ -629,11 +631,11 @@ func (m wedgeMeasurement) marginText() string {
 // measureWedgeReadings builds the chorded loft over pts, then widens each of the
 // four readings' Bound by the term Part 2 Q2 states for it and re-runs verify.go's
 // own tolerance gate on the widened value:
-//   - Volume:   + sectionDelta * areaUpper                  (chordedBoundaryVolumeAllow)
+//   - Volume:   + sectionDelta * areaUpper                  (proofbound.ChordedBoundaryVolumeAllow)
 //   - Area:     + excess.wall                               (ruled-vs-chord wall excess)
 //   - Bounds:   + sectionDelta
 //   - Centroid: + sectionDelta*(diameter/2+|centroid|)*areaUpper/volume (a calibration
-//     ESTIMATE of chordedBoundaryMomentAllow's quotient-rule composition, not the
+//     ESTIMATE of proofbound.ChordedBoundaryMomentAllow's quotient-rule composition, not the
 //     shipped bound — stated in the plan prompt as such)
 //
 // areaUpper is the area-along-the-path ceiling a10-plan.md Part 2 Q4 states the

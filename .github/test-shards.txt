@@ -1499,7 +1499,6 @@
 4	0.00	TestQueryStringRendering
 4	0.00	TestR3IdentityApplyIsBitIdentical
 4	0.00	TestRPFromBernsteinMatchesLiteralExpansion
-4	0.00	TestRatIntervalCachedPiCopiesRemainIndependent
 4	0.00	TestRatLenAtLeastDecidesExactly
 4	0.00	TestRatLerpEndpointReturnsAFreshRational
 4	0.00	TestRatPolyOfRejectsNonFiniteCoefficient

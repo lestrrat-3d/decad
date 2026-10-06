@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +27,7 @@ func TestContactBatchMergesOutOfOrderCompletionsInInputOrder(t *testing.T) {
 		for i := range slices.Backward(pairs) {
 			// Completion order is reverse input order. Results retain their
 			// indexed slots, as production workers do.
-			results[i] = contactBatchResult{contact: triContact{kind: contactPoint, p0: xpt{}}}
+			results[i] = contactBatchResult{contact: triContact{kind: contactPoint, p0: proofbound.Xpt{}}}
 		}
 		return nil
 	}

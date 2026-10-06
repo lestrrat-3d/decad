@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -178,7 +180,7 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	if !pp.surfaceResult || pp.sectionDelta != 0 || len(pp.profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this prism sheet has no admitted Offset section`, ErrUnsupported)
 	}
-	if admitAbove(boundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != survAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the prism sheet has no proven positive sweep height`, ErrUnsupported)
 	}
 	if dDelta != 0 {
@@ -191,8 +193,8 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	if side == OffsetNegative {
 		sense = +1
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	section, err := offsetPrismSection(ctx, pp, sense, dmm, budget)
@@ -215,7 +217,7 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 // generated values exactly, run the shared §5 audit, then prove the whole
 // offset interval 0 < τ ≤ d clear. It dispatches on the two admitted section
 // shapes exactly as thickenPrism does, and refuses every other one.
-func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *workBudget) (ProfileRecord, error) {
+func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
 	if len(pp.profile.Outer.Segments) == 1 {
 		if circle, ok := pp.profile.Outer.Segments[0].(CircleSeg); ok {
 			return offsetCircleSection(pp.profile, circle, sense, amount, budget)
@@ -236,7 +238,7 @@ func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount 
 // endpoint radius proves every intermediate radius positive too: growing
 // (sense −1) increases it from r, and eroding (sense +1) reaches its minimum at
 // the endpoint prismCircleOffset already refused a non-positive value for.
-func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amount float64, budget *workBudget) (ProfileRecord, error) {
+func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
 	if !circle.CCW {
 		return ProfileRecord{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
@@ -261,7 +263,7 @@ func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amou
 // The interval proof is NOT optional on this shape and is never inferred from
 // the endpoint: an endpoint that looks simple cannot prove an earlier offset did
 // not pinch and change which boundary the construction denotes (§17.2).
-func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *workBudget) (ProfileRecord, error) {
+func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (ProfileRecord, error) {
 	for _, seg := range pp.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return ProfileRecord{}, err

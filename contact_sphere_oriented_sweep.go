@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -140,12 +142,12 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 					ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 					break
 				}
-				witness.Bound = units.Millimeters(ratFloatUp(bound))
+				witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 				witness.Exactness = exactnessFromBound(witness.Bound.Base())
 			}
 			if ideal.Manifold != nil {
 				bound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
-				point.Separation.Bound = units.Millimeters(ratFloatUp(bound))
+				point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 				point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 				ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
 			}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -28,8 +30,8 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 	if len(spans) < 2 {
 		return fmt.Errorf(`%w: a composite sweep audit requires at least two spans`, ErrDegenerate)
 	}
-	pairs, ok := wallChoose2(uint64(len(spans)))
-	if !ok || pairs > maxFacetPairTestsPerCall {
+	pairs, ok := proofbound.WallChoose2(uint64(len(spans)))
+	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
 		return fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, ErrUnsupported)
 	}
 	for i, span := range spans {
@@ -41,11 +43,11 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 		}
 	}
 
-	operation := newWorkBudget(ctx)
+	operation := proofbound.NewWorkBudget(ctx)
 	geometry := newFreeformWork()
 	for i := range spans {
 		for j := i + 1; j < len(spans); j++ {
-			if err := operation.step(); err != nil {
+			if err := operation.Step(); err != nil {
 				return err
 			}
 			var err error
@@ -59,7 +61,7 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 			}
 		}
 	}
-	return operation.err()
+	return operation.Err()
 }
 
 func auditAdjacentSweepSpans(
@@ -82,12 +84,12 @@ func auditAdjacentSweepSpans(
 	startNormal := startPlane.Frame.N()
 	direction := startNormal.Scale(-1)
 	startOrigin := startPlane.Frame.Origin()
-	if !finiteVec(direction) || !finiteVec(startOrigin) {
+	if !proofbound.FiniteVec(direction) || !proofbound.FiniteVec(startOrigin) {
 		return fmt.Errorf(`%w: an adjacent sweep section has no finite separating plane`, ErrUnsupported)
 	}
 	planeValue := startOrigin.Dot(direction)
-	planeBound := exactIsometryDotRound(r3.Identity(), startOrigin, direction, false, planeValue)
-	planeLo, planeHi := boundedEnds(measuredScalar(planeValue, planeBound))
+	planeBound := proofbound.ExactIsometryDotRound(r3.Identity(), startOrigin, direction, false, planeValue)
+	planeLo, planeHi := proofbound.BoundedEnds(proofbound.MeasuredScalar(planeValue, planeBound))
 	_, beforeHi, beforeBound, err := sweepAuditExtent(ctx, before.body, direction, geometry)
 	if err != nil {
 		return err
@@ -96,8 +98,8 @@ func auditAdjacentSweepSpans(
 	if err != nil {
 		return err
 	}
-	_, beforeUpper := boundedEnds(measuredScalar(beforeHi, beforeBound))
-	afterLower, _ := boundedEnds(measuredScalar(afterLo, afterBound))
+	_, beforeUpper := proofbound.BoundedEnds(proofbound.MeasuredScalar(beforeHi, beforeBound))
+	afterLower, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(afterLo, afterBound))
 	beforeSupported := beforeUpper <= planeLo ||
 		(beforeHi == planeValue && sweepAuditEndpointSupports(before.body))
 	afterSupported := afterLower >= planeHi ||
@@ -162,10 +164,10 @@ func sweepAuditBoxesStrictlySeparated(a, b Box) bool {
 		{a.Min.Y, a.Max.Y, b.Min.Y, b.Max.Y},
 		{a.Min.Z, a.Max.Z, b.Min.Z, b.Max.Z},
 	} {
-		aMin, _ := boundedEnds(measuredScalar(axis[0], aBound))
-		_, aMax := boundedEnds(measuredScalar(axis[1], aBound))
-		bMin, _ := boundedEnds(measuredScalar(axis[2], bBound))
-		_, bMax := boundedEnds(measuredScalar(axis[3], bBound))
+		aMin, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[0], aBound))
+		_, aMax := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[1], aBound))
+		bMin, _ := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[2], bBound))
+		_, bMax := proofbound.BoundedEnds(proofbound.MeasuredScalar(axis[3], bBound))
 		if aMax < bMin || bMax < aMin {
 			return true
 		}

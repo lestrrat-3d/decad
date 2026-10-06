@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -23,7 +25,7 @@ import (
 // intersectOffsets and offsetRadius unchanged — but returns the joins
 // themselves rather than the flattened segment list, so the caller can pair
 // each patch with the ORIGINAL wall or corner it descends from.
-func capOffsetJoins(budget *workBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
+func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
 	walks := cl.walks
 	n := len(walks)
 	if n == 0 {
@@ -154,7 +156,7 @@ func capWallSweep(cU, cV float64, start, end Point2, refSweep float64) (capTh0, 
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk, the same decomposition prismCornerLoopsBudget applies to
 // every loop of a section.
-func oneLoopCornerLoop(budget *workBudget, loop LoopRecord, work *freeformWork) (cornerLoop, error) {
+func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *freeformWork) (cornerLoop, error) {
 	raw := make([]sideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := wallBudgetStep(budget); err != nil {
@@ -257,8 +259,8 @@ type capPatchGeom struct {
 
 	// contourAllow is this ONE patch's own proven allowance for how far its
 	// area can differ from the ruled quad the construction denotes, given the
-	// cap-level directrix's own displacement (bounds.go's
-	// bandPatchAreaAllow) — computed once, at build time, from this patch's
+	// cap-level directrix's own displacement (internal/proofbound/bounds.go's
+	// proofbound.BandPatchAreaAllow) — computed once, at build time, from this patch's
 	// own held chord length and slant distance, and added into patchAreaOf's
 	// returned bound. It is zero wherever the band's own contour displacement
 	// is zero (an axis-aligned section's exact miters), which is what leaves
@@ -272,15 +274,15 @@ type capPatchGeom struct {
 	// capSlantEdge charges into a slant edge's length and capBandVolume charges
 	// for the identical level.
 	// patchAreaOf reads it as the axial half of its own displacement
-	// allowance (bounds.go's bandLevelAreaAllow), beside contourAllow's
+	// allowance (internal/proofbound/bounds.go's proofbound.BandLevelAreaAllow), beside contourAllow's
 	// cap-level half; without it both of that function's arms would read the
 	// side level as an exact input and bound only the patch they BUILT.
 	levelDelta float64
 
 	// capThAllow is the proven bound on |held (capTh1−capTh0) − true window|,
-	// derived at build time from the same atan2Interval bracket capWallArcBound
+	// derived at build time from the same proofbound.Atan2Interval bracket capWallArcBound
 	// builds for this wall's own cap-level arc (capSweepAllow,
-	// capblend_contour.go), or from piLower/piUpper directly for the one
+	// capblend_contour.go), or from proofbound.PiLower/proofbound.PiUpper directly for the one
 	// whole-turn circle, whose cap-level sweep is a structural fact of that
 	// construction (wholeTurn) rather than an offset corner's own computed
 	// feet. patchAreaOf's Cone arm reads it to bracket the frustum-sector
@@ -298,7 +300,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return capBandResult{}, err
@@ -316,7 +318,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	// frameLiftAllow is the ONE proven bound this whole band's own cap-level
 	// vertices share for the payload's own frame lift and accumulated
-	// placement rounding (bounds.go's frameAndPlacementRoundAllow;
+	// placement rounding (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow;
 	// topology.go's Vertex.Position contract) — computed once here, over
 	// every plane-local coordinate this band's own corner walks and the two
 	// axial levels can put into pl.point, rather than per vertex. It is
@@ -329,7 +331,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	for _, w := range walks {
 		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
 	}
-	frameLiftAllow := frameAndPlacementRoundAllow(pl.frame, pl.xform, math.Max(maxCoordUpper, math.Max(math.Abs(capZ), math.Abs(sideZ))))
+	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pl.frame, pl.xform, math.Max(maxCoordUpper, math.Max(math.Abs(capZ), math.Abs(sideZ))))
 
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
 	// is a float sum, so the band's side directrix sits that far from the level
@@ -338,11 +340,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// the identical level, and it rides onto every patch's own capPatchGeom,
 	// where patchAreaOf charges it against the patch's area
 	// (capblend_moments.go).
-	levelDelta := absSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*d, sideZ))
+	levelDelta := proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*d, sideZ))
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.
-	capDelta := cbp.capBandLevel(capZ, matSign).bound
+	capDelta := cbp.capBandLevel(capZ, matSign).Bound
 
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].closed {
@@ -360,12 +362,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			return capBandResult{}, errCapContourUnbounded
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
-		capLevelDelta := absSumUpper(delta, capDelta)
+		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 		// wholeCircleEdge's own delta parameter feeds ONLY its seam vertex's
 		// bound — its returned Edge's own lengthBound comes from
 		// capCircleLengthBound instead — so widening it here by
 		// frameLiftAllow charges the vertex alone.
-		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, absSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
+		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
 		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
 		if w.th1 < w.th0 {
@@ -385,8 +387,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 		// chordUpper/slant are this whole-circle patch's own held chord (its
 		// full circumference) and slant distance (the radial change ruled
-		// against the axial one), the two factors bandPatchAreaAllow needs.
-		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
+		// against the axial one), the two factors proofbound.BandPatchAreaAllow needs.
+		chordUpper := proofbound.AbsSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Hypot(math.Abs(capRadius-w.radius), math.Abs(capZ-sideZ))
 		// capThAllow: the whole-turn patch's cap-level sweep is the WALL's own
 		// recorded th0/th1 (there is no offset corner to trim it — wholeTurn is
@@ -397,8 +399,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// bracket capCircleLengthBound already takes for this circle's
 		// circumference.
 		dthHeld := gth1 - gth0
-		capThAllow := intervalFloatError(twoPiInterval(), dthHeld)
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
+		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
@@ -423,13 +425,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	if err != nil {
 		return capBandResult{}, err
 	}
-	capLevelDelta := absSumUpper(delta, capDelta)
+	capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 	// vertexCapLevelDelta is capLevelDelta plus the band's own frameLiftAllow
 	// (above): every cap-level VERTEX this band places below charges it, but
 	// capLevelDelta itself stays unwidened wherever it feeds an EDGE's own
 	// bound (capSlantEdge) — the frame lift is a per-coordinate rounding, not
 	// a chord or locus term, so it has no business in an edge's length bound.
-	vertexCapLevelDelta := absSumUpper(capLevelDelta, frameLiftAllow)
+	vertexCapLevelDelta := proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow)
 
 	// sideVertexAt(i) is the ORIGINAL corner point before wall i, at sideZ —
 	// buildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
@@ -452,7 +454,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// length bound (capSlantEdge's second return) — the same value the edge's
 	// own lengthBound carries everywhere except a miter ruling adjacent to a
 	// circular wall, where lengthBound also carries the chord-versus-locus
-	// excess (docs/modify-reach-design.md §8.3) that bandPatchAreaAllow's
+	// excess (docs/modify-reach-design.md §8.3) that proofbound.BandPatchAreaAllow's
 	// slantUpper must NOT read (task-file rule: the area term stays on the
 	// held chord alone).
 	slantInHeld := make([]float64, n)
@@ -586,15 +588,15 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// triangle-like edges from an offset foot down to the shared
 		// side-level apex — the two are not necessarily equal, so the larger
 		// is the sound upper bound).
-		chordUpper := absSumUpper(arc.length, arc.lengthBound)
+		chordUpper := proofbound.AbsSumUpper(arc.length, arc.lengthBound)
 		slant := math.Max(
-			absSumUpper(slantOut[i].length, slantOutHeld[i]),
-			absSumUpper(slantIn[i].length, slantInHeld[i]),
+			proofbound.AbsSumUpper(slantOut[i].length, slantOutHeld[i]),
+			proofbound.AbsSumUpper(slantIn[i].length, slantInHeld[i]),
 		)
 		// capThAllow: this apex patch's own connector runs pA -> pB (the same
 		// capApexArcBound bracket capApexArcBound already builds for the
 		// connector's own arc LENGTH above), so capSweepAllow reads the
-		// identical atan2Interval enclosure and reports it against the raw
+		// identical proofbound.Atan2Interval enclosure and reports it against the raw
 		// sweep gth1-gth0 = arcTh0[i]-arcTh1[i] instead of against d*sweep.
 		// start/end are passed as (pB, pA) so the bracket's own end-minus-start
 		// convention reproduces atan2(pA)-atan2(pB), matching arcWraps[i]'s own
@@ -604,7 +606,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sideZ: sideZ, capZ: capZ,
-			contourAllow: bandPatchAreaAllow(delta, chordUpper, slant),
+			contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant),
 			levelDelta:   levelDelta,
 			capThAllow:   capThAllow,
 		}
@@ -767,12 +769,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// edge) and slant distance (either of its two bounding slant edges,
 		// which can differ at a mitered corner — the larger is the sound
 		// upper bound).
-		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
+		chordUpper := proofbound.AbsSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Max(
-			absSumUpper(leadSlant.length, slantOutHeld[i]),
-			absSumUpper(trailSlant.length, slantInHeld[nextI]),
+			proofbound.AbsSumUpper(leadSlant.length, slantOutHeld[i]),
+			proofbound.AbsSumUpper(trailSlant.length, slantInHeld[nextI]),
 		)
-		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
+		g.contourAllow = proofbound.BandPatchAreaAllow(delta, chordUpper, slant)
 		// The two rulings this wall patch is bounded by, paired end for end:
 		// leadSlant joins the side wall's own start vertex to capA, trailSlant
 		// its end vertex to capB. Both patch kinds read the pair: a Plane
@@ -837,7 +839,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // bullet). Where either wall is circular, dc's own offset range [0, dc] is
 // split into capMiterLocusSubdivisions sub-ranges, each enclosed through
 // miterLocusSpeedUpper and turned into that sub-range's own locus-length
-// upper bound via chordLocusLengthAllow (called with a zero chordUpper, which
+// upper bound via proofbound.ChordLocusLengthAllow (called with a zero chordUpper, which
 // reduces it to the raw product); the sub-range bounds sum to the whole
 // locus's own upper bound, and the excess over the held chord is charged
 // once, at the end. Splitting matters most for miterLocusSpeedUpper's own
@@ -855,7 +857,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // line-line miter gets.
 //
 // The second return is the edge's own ARITHMETIC-ONLY bound — heldBound,
-// before any locus excess is folded in — which bandPatchAreaAllow's
+// before any locus excess is folded in — which proofbound.BandPatchAreaAllow's
 // slantUpper must keep reading (docs/modify-reach-design.md §8.4): the area
 // term bounds the built quad against the ruled surface it denotes, a question
 // the locus excess (a boundary-only reading) does not answer, so widening
@@ -866,7 +868,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // band's build; each sub-range's own enclosure charges one step, so a band
 // with many mitered circular corners cannot spend unbounded work here any
 // more than it can building the contour displacement itself.
-func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, affine bool) (*Edge, float64, error) {
+func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, affine bool) (*Edge, float64, error) {
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := dySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := straightEdgeBound(held, squared, squaredOK, delta, levelDelta)
@@ -878,7 +880,7 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 	if affine || dc <= 0 || (!prev.isCircular() && !cur.isCircular()) {
 		return e, heldBound, nil
 	}
-	chordUpper := absSumUpper(held, heldBound)
+	chordUpper := proofbound.AbsSumUpper(held, heldBound)
 	total, ok, err := capMiterLocusUpper(budget, prev, cur, apexU, apexV, sideZ-capZ, dc)
 	if err != nil {
 		return nil, 0, err
@@ -889,7 +891,7 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 		return e, heldBound, nil
 	}
 	if excess := total - chordUpper; excess > 0 {
-		e.lengthBound = absSumUpper(heldBound, upRound(excess))
+		e.lengthBound = proofbound.AbsSumUpper(heldBound, proofbound.UpRound(excess))
 	}
 	return e, heldBound, nil
 }
@@ -902,13 +904,13 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 //
 // The offset range [0, dc] is split into capMiterLocusSubdivisions sub-ranges,
 // each enclosed through miterLocusSpeedUpper and turned into that sub-range's
-// own length upper bound by chordLocusLengthAllow (called with a zero
+// own length upper bound by proofbound.ChordLocusLengthAllow (called with a zero
 // chordUpper, which reduces it to the raw product); the sub-range bounds sum to
 // the whole locus's own. ok is false where any sub-range's enclosure cannot be
 // built, which every caller answers by withholding its reading rather than
 // publishing an understated one. Each sub-range charges one budget step, so a
 // band with many mitered circular corners cannot spend unbounded work here.
-func capMiterLocusUpper(budget *workBudget, prev, cur sideWalk, apexU, apexV, axialSpan, dc float64) (float64, bool, error) {
+func capMiterLocusUpper(budget *proofbound.WorkBudget, prev, cur sideWalk, apexU, apexV, axialSpan, dc float64) (float64, bool, error) {
 	if dc <= 0 {
 		return 0, false, nil
 	}
@@ -927,7 +929,7 @@ func capMiterLocusUpper(budget *workBudget, prev, cur sideWalk, apexU, apexV, ax
 		if !ok {
 			return 0, false, nil
 		}
-		total = absSumUpper(total, chordLocusLengthAllow(speed, t1-t0, axialSpan*(t1-t0)/dc, 0))
+		total = proofbound.AbsSumUpper(total, proofbound.ChordLocusLengthAllow(speed, t1-t0, axialSpan*(t1-t0)/dc, 0))
 	}
 	return total, true, nil
 }
@@ -950,7 +952,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	seamU := cu + r
 	seam := &Vertex{
 		position: pl.point(seamU, cv, z),
-		bound:    units.Millimeters(absSumUpper(delta, proofarith.AddRoundError(cu, r, seamU))),
+		bound:    units.Millimeters(proofbound.AbsSumUpper(delta, proofarith.AddRoundError(cu, r, seamU))),
 	}
 	axis := pl.dir(0, 0, 1)
 	if !ccw {
@@ -1064,7 +1066,7 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 	}
 	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
 	skew := math.Max(math.Abs(capTh0-g.th0), math.Abs(g.th1-capTh1))
-	if isNonFinite(skew) || skew <= 0 {
+	if proofbound.IsNonFinite(skew) || skew <= 0 {
 		return 0
 	}
 	return skew

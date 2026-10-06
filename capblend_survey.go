@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -272,12 +274,12 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	if !okExt || !okModel {
 		return 0, 0, 0, false
 	}
-	lo, hi := ratFloatDown(ext.minLo), ratFloatUp(ext.maxHi)
+	lo, hi := proofbound.RatFloatDown(ext.minLo), proofbound.RatFloatUp(ext.maxHi)
 	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if rlo == nil || rhi == nil {
 		return 0, 0, 0, false
 	}
-	allow := absSumUpper(
+	allow := proofbound.AbsSumUpper(
 		// The BUILT surface's departure from the published one, which no
 		// reading of the published surface reaches. The flat branch above
 		// takes this same term through Face.NormalAt's own published bound
@@ -286,19 +288,19 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		f.normalBound,
 		// How far the recovered form can sit from the patch's own exact one,
 		// everywhere on the window at once.
-		intervalFloatError(model.a, a),
-		intervalFloatError(model.b, b),
-		intervalFloatError(model.c, c),
-		ratFloatUp(model.slop),
+		proofbound.IntervalFloatError(model.a, a),
+		proofbound.IntervalFloatError(model.b, b),
+		proofbound.IntervalFloatError(model.c, c),
+		proofbound.RatFloatUp(model.slop),
 		// How far each reported end can sit from the extreme it stands for:
 		// the extreme's own enclosure width, and the float conversion's own
 		// outward step.
-		ratFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)),
-		ratFloatUp(new(big.Rat).Sub(ext.minLo, rlo)),
-		ratFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)),
-		ratFloatUp(new(big.Rat).Sub(rhi, ext.maxHi)),
+		proofbound.RatFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)),
+		proofbound.RatFloatUp(new(big.Rat).Sub(ext.minLo, rlo)),
+		proofbound.RatFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)),
+		proofbound.RatFloatUp(new(big.Rat).Sub(rhi, ext.maxHi)),
 	)
-	if isNonFinite(allow) || isNonFinite(lo) || isNonFinite(hi) {
+	if proofbound.IsNonFinite(allow) || proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return 0, 0, 0, false
 	}
 	return lo, hi, allow, true
@@ -318,7 +320,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, bool) {
 	v := n.Value.Dot(p)
 	bound, err := magnitudeIn(n.Bound, units.Dimensionless, units.One, "a normal's own bound")
-	if err != nil || isNonFinite(bound) || isNonFinite(v) {
+	if err != nil || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(v) {
 		return 0, 0, false
 	}
 	nv, okN := ivVec3Of(n.Value)
@@ -326,8 +328,8 @@ func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, 
 	if !okN || !okP {
 		return 0, 0, false
 	}
-	allow := absSumUpper(productUpper(bound, pLen), intervalFloatError(ivVec3Dot(nv, pv), v))
-	if isNonFinite(allow) {
+	allow := proofbound.AbsSumUpper(proofbound.ProductUpper(bound, pLen), proofbound.IntervalFloatError(ivVec3Dot(nv, pv), v))
+	if proofbound.IsNonFinite(allow) {
 		return 0, 0, false
 	}
 	return v, allow, true
@@ -345,8 +347,8 @@ func pullLengthUpper(p r3.Vec) (float64, bool) {
 	if !okSqrt {
 		return 0, false
 	}
-	up := ratFloatUp(length.hi)
-	if isNonFinite(up) || up <= 0 {
+	up := proofbound.RatFloatUp(length.Hi)
+	if proofbound.IsNonFinite(up) || up <= 0 {
 		return 0, false
 	}
 	return up, true

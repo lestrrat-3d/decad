@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -90,7 +92,7 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 			value := component.Rat()
 			travelSquared.Add(travelSquared, new(big.Rat).Mul(value, value))
 		}
-		bound := ratSqrtUp(travelSquared)
+		bound := proofbound.RatSqrtUp(travelSquared)
 		if !finiteMeasurementValues(bound) {
 			return rotationalSweepPath{}, false
 		}
@@ -112,8 +114,8 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	if omegaSquared.Sign() <= 0 {
 		return rotationalSweepPath{}, false
 	}
-	prepared.omegaLow = proofarith.FloatRat(ratSqrtDown(omegaSquared))
-	prepared.omegaHigh = proofarith.FloatRat(ratSqrtUp(omegaSquared))
+	prepared.omegaLow = proofarith.FloatRat(proofbound.RatSqrtDown(omegaSquared))
+	prepared.omegaHigh = proofarith.FloatRat(proofbound.RatSqrtUp(omegaSquared))
 	if prepared.omegaLow == nil || prepared.omegaHigh == nil || prepared.omegaHigh.Sign() <= 0 {
 		return rotationalSweepPath{}, false
 	}
@@ -130,7 +132,7 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	vUp := ratSqrtUp(vSquared)
+	vUp := proofbound.RatSqrtUp(vSquared)
 	if !finiteMeasurementValues(vUp) {
 		return rotationalSweepPath{}, false
 	}
@@ -185,7 +187,7 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 			best = squared
 		}
 	}
-	radius := ratSqrtUp(best)
+	radius := proofbound.RatSqrtUp(best)
 	if !finiteMeasurementValues(radius) {
 		return nil, false
 	}
@@ -248,8 +250,8 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 	if p.path.drift == nil {
 		shift := pointVec(p.fromT)
 		for axis := range 3 {
-			shift[axis] = intervalAdd(shift[axis],
-				pointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
+			shift[axis] = proofbound.IntervalAdd(shift[axis],
+				proofbound.PointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
 		}
 		return sweepIdealPose{rot: newScaledIvMat(p.fromRot), shift: shift}, true
 	}
@@ -258,8 +260,8 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 	angleHigh := new(big.Rat).Mul(p.omegaHigh, elapsed)
 	sin, cos := radianSinCos(angleLow)
 	width := new(big.Rat).Sub(angleHigh, angleLow)
-	sin = intervalOwned(new(big.Rat).Sub(sin.lo, width), new(big.Rat).Add(sin.hi, width))
-	cos = intervalOwned(new(big.Rat).Sub(cos.lo, width), new(big.Rat).Add(cos.hi, width))
+	sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
+	cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
 	rot := p.frame.scaledRotation(sin, cos)
 	offset := make([]*big.Rat, 3)
 	for axis := range 3 {
@@ -276,7 +278,7 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 		pivotN := proofarith.ScaledNum(pivot, den)
 		low := lo[axis].Mul(lo[axis], multiplier)
 		high := hi[axis].Mul(hi[axis], multiplier)
-		shift[axis] = intervalOwned(new(big.Rat).SetFrac(low.Add(low, pivotN), den),
+		shift[axis] = proofbound.IntervalOwned(new(big.Rat).SetFrac(low.Add(low, pivotN), den),
 			new(big.Rat).SetFrac(high.Add(high, pivotN), den))
 	}
 	linear, ok := rot.mulPoints(p.fromRot)
@@ -348,7 +350,7 @@ func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealP
 	values := make([]*big.Rat, 0, 9)
 	for i := range 3 {
 		for k := range 3 {
-			values = append(values, rounded[i][k].lo)
+			values = append(values, rounded[i][k].Lo)
 		}
 	}
 	den := proofarith.LcmInt(proofarith.CommonDenom(values...), ideal.rot.den)
@@ -368,7 +370,7 @@ func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealP
 			squared.Add(squared, farther.Mul(farther, farther))
 		}
 	}
-	norm := ratSqrtUp(new(big.Rat).SetFrac(squared, new(big.Int).Mul(den, den)))
+	norm := proofbound.RatSqrtUp(new(big.Rat).SetFrac(squared, new(big.Int).Mul(den, den)))
 	if !finiteMeasurementValues(norm) {
 		return nil, false
 	}
@@ -410,7 +412,7 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 	if err != nil {
 		return nil, 0, false, err
 	}
-	bound := ratSqrtUp(squared)
+	bound := proofbound.RatSqrtUp(squared)
 	return actual, bound, finiteMeasurementValues(bound), nil
 }
 
@@ -444,10 +446,10 @@ func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal swee
 	whole := big.NewInt(1)
 	for axis := range 3 {
 		shift := ideal.shift[axis]
-		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.lo.Denom()), shift.hi.Denom())
+		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.Lo.Denom()), shift.Hi.Denom())
 		rotMultiplier[axis] = new(big.Int).Quo(den[axis], rotDen)
 		observedMultiplier[axis] = new(big.Int).Quo(den[axis], q)
-		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift.lo, den[axis]), proofarith.ScaledNum(shift.hi, den[axis])
+		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift.Lo, den[axis]), proofarith.ScaledNum(shift.Hi, den[axis])
 		whole = proofarith.LcmInt(whole, den[axis])
 	}
 	for axis := range 3 {
@@ -612,7 +614,7 @@ func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement
 	if new(big.Rat).Sub(value, newBound).Sign() <= 0 {
 		return nil, false
 	}
-	published := ratFloatUp(newBound)
+	published := proofbound.RatFloatUp(newBound)
 	if !finiteMeasurementValues(published) || value.Cmp(proofarith.FloatRat(published)) <= 0 {
 		return nil, false
 	}
@@ -759,7 +761,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 			if bound.Cmp(proofarith.FloatRat(r.req.PointResolution.Base())) > 0 {
 				return SweepEvent{}, false
 			}
-			published := ratFloatUp(bound)
+			published := proofbound.RatFloatUp(bound)
 			if !finiteMeasurementValues(published) || published > r.req.PointResolution.Base() {
 				return SweepEvent{}, false
 			}
@@ -1094,7 +1096,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		for i := range 3 {
 			squared.Add(squared, new(big.Rat).Mul(vector[i], vector[i]))
 		}
-		root := ratSqrtUp(squared)
+		root := proofbound.RatSqrtUp(squared)
 		if !finiteMeasurementValues(root) {
 			return nil
 		}
@@ -1592,8 +1594,8 @@ func (c cornerSpans) hull(axis int) (*big.Rat, *big.Rat) {
 }
 
 // span is one point's coordinate interval on one axis.
-func (c cornerSpans) span(index, axis int) ratInterval {
-	return intervalOwned(new(big.Rat).SetFrac(c.lo[index][axis], c.den[axis]),
+func (c cornerSpans) span(index, axis int) proofbound.RatInterval {
+	return proofbound.IntervalOwned(new(big.Rat).SetFrac(c.lo[index][axis], c.den[axis]),
 		new(big.Rat).SetFrac(c.hi[index][axis], c.den[axis]))
 }
 
@@ -1668,7 +1670,7 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 		// The derivative v + rotationSpan·(p − c)[preceding]·ω[following] −
 		// rotationSpan·(p − c)[following]·ω[preceding] over derivativeDen; each
 		// scale carries its axis component's sign, which decides the endpoint
-		// order exactly as intervalScale's does.
+		// order exactly as proofbound.IntervalScale's does.
 		scaleF, scaleP := p.frame.axis[following], p.frame.axis[preceding]
 		scaleDen := proofarith.LcmInt(new(big.Int).Set(scaleF.Denom()), scaleP.Denom())
 		derivativeDen := proofarith.LcmInt(new(big.Int).Mul(spanDen, scaleDen), velocity.Denom())
@@ -1718,16 +1720,16 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 	return output
 }
 
-func rotationalSinCosSpan(low, high *big.Rat) (ratInterval, ratInterval) {
+func rotationalSinCosSpan(low, high *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	loSin, loCos := radianSinCos(low)
 	hiSin, hiCos := radianSinCos(high)
-	if low.Sign() >= 0 && high.Cmp(halfPiInterval().lo) <= 0 {
-		return interval(loSin.lo, hiSin.hi), interval(hiCos.lo, loCos.hi)
+	if low.Sign() >= 0 && high.Cmp(proofbound.HalfPiInterval().Lo) <= 0 {
+		return proofbound.Interval(loSin.Lo, hiSin.Hi), proofbound.Interval(hiCos.Lo, loCos.Hi)
 	}
 	width := new(big.Rat).Sub(high, low)
-	return intervalOwned(new(big.Rat).Sub(loSin.lo, width),
-			new(big.Rat).Add(loSin.hi, width)),
-		intervalOwned(new(big.Rat).Sub(loCos.lo, width), new(big.Rat).Add(loCos.hi, width))
+	return proofbound.IntervalOwned(new(big.Rat).Sub(loSin.Lo, width),
+			new(big.Rat).Add(loSin.Hi, width)),
+		proofbound.IntervalOwned(new(big.Rat).Sub(loCos.Lo, width), new(big.Rat).Add(loCos.Hi, width))
 }
 
 func (r *rotationalPairSweep) sortSamples() {

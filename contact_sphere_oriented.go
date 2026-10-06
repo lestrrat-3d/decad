@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -311,14 +313,14 @@ func orthogonalSourceBox(box orientedSourceBox) bool {
 }
 
 func orientedSphereSignedReading(distance2 *big.Rat, radius proofarith.Dyadic) (Measurement, bool) {
-	lower, upper := ratSqrtDown(distance2), ratSqrtUp(distance2)
+	lower, upper := proofbound.RatSqrtDown(distance2), proofbound.RatSqrtUp(distance2)
 	if !finiteMeasurementValues(lower, upper) {
 		return Measurement{}, false
 	}
 	low := new(big.Rat).Sub(proofarith.FloatRat(lower), radius.Rat())
 	high := new(big.Rat).Sub(proofarith.FloatRat(upper), radius.Rat())
 	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
-	bound := ratFloatUp(ratMax(new(big.Rat).Sub(proofarith.FloatRat(value), low),
+	bound := proofbound.RatFloatUp(ratMax(new(big.Rat).Sub(proofarith.FloatRat(value), low),
 		new(big.Rat).Sub(high, proofarith.FloatRat(value))))
 	if !finiteMeasurementValues(value, bound) || bound < 0 {
 		return Measurement{}, false
@@ -329,7 +331,7 @@ func orientedSphereSignedReading(distance2 *big.Rat, radius proofarith.Dyadic) (
 
 func orientedSpherePoint(sphere sourceSphereContactProof, outward proofarith.DyV3) (VecMeasurement, bool) {
 	squared := proofarith.DvDot(outward, outward).Rat()
-	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
+	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return VecMeasurement{}, false
 	}
@@ -352,7 +354,7 @@ func orientedSpherePoint(sphere sourceSphereContactProof, outward proofarith.DyV
 			}
 		}
 	}
-	bound := radius3D(ratFloatUp(maxError))
+	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
 	if !finiteMeasurementValues(bound) {
 		return VecMeasurement{}, false
 	}

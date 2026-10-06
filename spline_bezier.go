@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch/geom"
 )
@@ -351,8 +353,8 @@ func rationalLiftCost(controls, knots, weights int) uint64 {
 func ratPointsOf(points []Point2) ([]ratPoint, error) {
 	out := make([]ratPoint, len(points))
 	for i, point := range points {
-		u, okU := ratOf(point.U)
-		v, okV := ratOf(point.V)
+		u, okU := proofbound.RatOf(point.U)
+		v, okV := proofbound.RatOf(point.V)
 		if !okU || !okV {
 			return nil, fmt.Errorf(`%w: control point %d is not finite`, ErrNotFinite, i)
 		}
@@ -493,7 +495,7 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 	}
 	knots := make([]*big.Rat, len(seg.Knots))
 	for i, knot := range seg.Knots {
-		rat, ok := ratOf(knot)
+		rat, ok := proofbound.RatOf(knot)
 		if !ok {
 			return nil, fmt.Errorf(`%w: NURBS knot %d is not finite`, ErrNotFinite, i)
 		}
@@ -1088,8 +1090,8 @@ func chargeFreeformShift(spans []bezierSpan, work *freeformWork) error {
 // guard that only ever compares the record (segment_walk.go's spans field).
 // Hand it a copy, or a fresh conversion.
 func shiftFreeformSpans(spans []bezierSpan, anchor Point2) error {
-	u, okU := ratOf(anchor.U)
-	v, okV := ratOf(anchor.V)
+	u, okU := proofbound.RatOf(anchor.U)
+	v, okV := proofbound.RatOf(anchor.V)
 	if !okU || !okV {
 		return fmt.Errorf(`%w: a free-form walk's anchor is not finite`, ErrNotFinite)
 	}
@@ -1144,16 +1146,16 @@ func freeformEndControls(spans []bezierSpan, reversed bool) (ratPoint, ratPoint,
 // rational control point into float64, and that is measured here against the
 // rational itself. A chain with no span answers +Inf, the underivable bound
 // every consumer refuses on.
-func freeformEndpointBounds(spans []bezierSpan, reversed bool, start, end Point2) (walkEndBound, walkEndBound) {
+func freeformEndpointBounds(spans []bezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
 	first, last, ok := freeformEndControls(spans, reversed)
 	if !ok {
-		unbounded := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+		unbounded := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 		return unbounded, unbounded
 	}
-	bound := func(p ratPoint, held Point2) walkEndBound {
-		return walkEndBound{
-			u: proofarith.RationalFloatError(p.u, held.U),
-			v: proofarith.RationalFloatError(p.v, held.V),
+	bound := func(p ratPoint, held Point2) proofbound.WalkEndBound {
+		return proofbound.WalkEndBound{
+			U: proofarith.RationalFloatError(p.u, held.U),
+			V: proofarith.RationalFloatError(p.v, held.V),
 		}
 	}
 	return bound(first, start), bound(last, end)
@@ -1162,7 +1164,7 @@ func freeformEndpointBounds(spans []bezierSpan, reversed bool, start, end Point2
 func point2Of(p ratPoint) (Point2, bool) {
 	u, _ := p.u.Float64()
 	v, _ := p.v.Float64()
-	if isNonFinite(u) || isNonFinite(v) {
+	if proofbound.IsNonFinite(u) || proofbound.IsNonFinite(v) {
 		return Point2{}, false
 	}
 	return Point2{U: u, V: v}, true
@@ -1207,7 +1209,7 @@ func freeformEndTangents(spans []bezierSpan, reversed bool) (endTangents, error)
 		dv := new(big.Rat).Mul(scale, new(big.Rat).Sub(to.v, from.v))
 		u, _ := du.Float64()
 		v, _ := dv.Float64()
-		if isNonFinite(u) || isNonFinite(v) {
+		if proofbound.IsNonFinite(u) || proofbound.IsNonFinite(v) {
 			return 0, 0, 0, false
 		}
 		bound := math.Max(proofarith.RationalFloatError(du, u), proofarith.RationalFloatError(dv, v))
@@ -1239,7 +1241,7 @@ func freeformControlExtent(spans []bezierSpan) float64 {
 		for _, point := range span {
 			u, _ := new(big.Rat).Abs(point.u).Float64()
 			v, _ := new(big.Rat).Abs(point.v).Float64()
-			if sum := absSumUpper(u, v); sum > extent {
+			if sum := proofbound.AbsSumUpper(u, v); sum > extent {
 				extent = sum
 			}
 		}

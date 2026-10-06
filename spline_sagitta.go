@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is docs/spline-design.md §6.2.1: the bound a chord commits against
@@ -13,7 +15,7 @@ import (
 // target-driven loop rather than §6.1's own fixed-depth one).
 //
 // Both pieces work in EXACT rational arithmetic end to end; the one rounding
-// either of them commits is the final ratSqrtUp (spline_length.go) that turns
+// either of them commits is the final proofbound.RatSqrtUp (spline_length.go) that turns
 // a proven rational squared distance into a published float64 upper bound.
 // Neither piece takes a rational (non-unit-weight) span: Tier A is unit-weight
 // only (docs/spline-design.md Table F), so a rational span never reaches this
@@ -138,12 +140,12 @@ const hodographGapCost = 10
 const ratQuarterCost = 4
 
 // ratSqrtUpCost is chargedRatSqrtUp's own per-call operation count for the
-// single outward rounding each measurement commits (ratSqrtUp,
-// spline_length.go). It is bounded, not open-ended: ratSqrtSeed costs at most 4
+// single outward rounding each measurement commits (proofbound.RatSqrtUp,
+// spline_length.go). It is bounded, not open-ended: proofbound.RatSqrtSeed costs at most 4
 // (a big.Float SetRat, MantExp and Float64), and the directed walk runs at most
-// sqrtAdjustLimit iterations of two ratSquare probes (1 floatRat + 1 Mul + 1
+// proofbound.SqrtAdjustLimit iterations of two ratSquare probes (1 floatRat + 1 Mul + 1
 // Cmp each) plus one Nextafter. 4 + 8·7 = 60, charged as 64. It is a per-call
-// term because one ratSqrtUp rounds a whole span's selected maximum, never one
+// term because one proofbound.RatSqrtUp rounds a whole span's selected maximum, never one
 // per point.
 const ratSqrtUpCost = 64
 
@@ -314,15 +316,15 @@ func ratPointCopy(w *freeformWork, p ratPoint) (ratPoint, error) {
 	return ratPoint{u: new(big.Rat).Set(p.u), v: new(big.Rat).Set(p.v)}, nil
 }
 
-// chargedRatSqrtUp is this file's metered entry point for ratSqrtUp
+// chargedRatSqrtUp is this file's metered entry point for proofbound.RatSqrtUp
 // (spline_length.go), the one outward rounding a free-form bound commits. Every
-// reading in this file rounds through it and none calls ratSqrtUp directly, so
+// reading in this file rounds through it and none calls proofbound.RatSqrtUp directly, so
 // the number of roundings charged is the number performed.
 //
-// ratSqrtUp itself keeps its unmetered signature for the ANALYTIC readers that
+// proofbound.RatSqrtUp itself keeps its unmetered signature for the ANALYTIC readers that
 // share it — a prism's arc radius, a revolve's amplitude, a cap band's contour
 // (extrude.go, revolve.go, capblend_contour.go, moments.go, loft_moments.go,
-// bounds.go) — none of which walks a free-form record and none of which holds a
+// internal/proofbound/bounds.go) — none of which walks a free-form record and none of which holds a
 // freeformWork counter to charge.
 //
 // It charges ratSqrtUpCost at the radicand's own width, first.
@@ -330,11 +332,11 @@ func chargedRatSqrtUp(w *freeformWork, q *big.Rat) (float64, error) {
 	if err := w.step(costMul(ratSqrtUpCost, widthUnits(ratBitWidth(q)))); err != nil {
 		return 0, err
 	}
-	return ratSqrtUp(q), nil
+	return proofbound.RatSqrtUp(q), nil
 }
 
 // chargedRatSqrtDown is chargedRatSqrtUp's inward twin: the metered entry point
-// for ratSqrtDown (spline_length.go), for the one reading in this file that
+// for proofbound.RatSqrtDown (spline_length.go), for the one reading in this file that
 // owes a proven LOWER bound rather than an upper one — a chorded cell's own
 // chord length, which an arc-versus-chord deficit subtracts and so must never
 // read above the chord it stands for.
@@ -346,7 +348,7 @@ func chargedRatSqrtDown(w *freeformWork, q *big.Rat) (float64, error) {
 	if err := w.step(costMul(ratSqrtUpCost, widthUnits(ratBitWidth(q)))); err != nil {
 		return 0, err
 	}
-	return ratSqrtDown(q), nil
+	return proofbound.RatSqrtDown(q), nil
 }
 
 // ratPointAt reconstructs split value i's exact rational coordinate:
@@ -421,7 +423,7 @@ func (s dyadicSpan) bezierSpan(w *freeformWork) (bezierSpan, error) {
 // The single rounding is the final chargedRatSqrtUp: the exact rational maximum
 // squared distance is rounded OUTWARD once, so the published float64 is an
 // over-statement of the true bound, never an understatement. Where that exact
-// maximum's root itself runs past the representable float64 range, ratSqrtUp's
+// maximum's root itself runs past the representable float64 range, proofbound.RatSqrtUp's
 // own contract returns +Inf — a valid, if useless, upper bound; this function's
 // only error is the counter's own refusal, and a caller that needs a decision on
 // a bound that wide (pairStations, via its own station cap) makes it by
@@ -571,7 +573,7 @@ func spanSagittaUpper(w *freeformWork, span bezierSpan) (float64, error) {
 // cell and both sides — never a sum: a boundary point lies in exactly one
 // cell, so only the widest cell's own departure bounds the whole chain.
 //
-// matchedDelta is bounds.go's cellChordCurveAreaUpper's own matchedDeltaUpper
+// matchedDelta is internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper's own matchedDeltaUpper
 // obligation (its own doc comment, F1's rule), ONE ENTRY PER SURVIVING CELL,
 // in the same left-to-right order the two station lists carry: cell k's own
 // entry is max(spanMatchedDeltaUpper(side0's own dyadic sub-span),
@@ -871,8 +873,8 @@ type stationCellReader interface {
 	acceptCell(spans []bezierSpan, works []*freeformWork) error
 }
 
-// pairMatchedDeltaReader is pairStations' reading: bounds.go's
-// cellChordCurveAreaUpper matchedDeltaUpper obligation (F1's rule), one entry
+// pairMatchedDeltaReader is pairStations' reading: internal/proofbound/bounds.go's
+// proofbound.CellChordCurveAreaUpper matchedDeltaUpper obligation (F1's rule), one entry
 // per accepted cell, the larger of the two sides' own PARAMETER-MATCHED bounds
 // under the span-uniform native fraction — never the SET-distance sagitta the
 // walk measured to decide the cell.
@@ -947,7 +949,7 @@ func (r *chainArcChordReader) acceptCell(spans []bezierSpan, works []*freeformWo
 // most for the pair's matched-delta obligation, which is a PARAMETER-MATCHED
 // bound under the span-uniform native fraction and never the SET-distance
 // sagitta this walk decided the cell on: the two coincide only for a line or a
-// circular arc under its own uniform-angle parametrization (bounds.go's own
+// circular arc under its own uniform-angle parametrization (internal/proofbound/bounds.go's own
 // doc comment), neither of which this file ever reaches.
 //
 // Accepting moves this cell off the frontier and into the chord count, leaving
@@ -1011,7 +1013,7 @@ func (g *sagittaStationWalk) walkCell(cells []dyadicSpan) error {
 	return g.walkCell(rights)
 }
 
-// This section is bounds.go's cellChordCurveAreaUpper's matchedDeltaUpper
+// This section is internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper's matchedDeltaUpper
 // obligation (its own doc comment, F1's rule): a PARAMETER-MATCHED bound on
 // |curve(s) − chord(s)| at the SAME s, which is a STRONGER, DIFFERENT claim
 // than the SET-distance sagitta above. No caller may pass the sagitta where
@@ -1155,11 +1157,11 @@ func spanBitWidth(span bezierSpan) int {
 	return widest
 }
 
-// spanMatchedDeltaUpper is bounds.go's cellChordCurveAreaUpper
+// spanMatchedDeltaUpper is internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
 // matchedDeltaUpper obligation for a Tier A span, under the span's own
 // NATIVE parameter — the span-uniform fraction t in [0, 1] — and NEVER a
 // constant-arc-length one. A caller pairing on constant arc length
-// (cellChordCurveAreaUpper's own derivation) must convert, or must not use
+// (proofbound.CellChordCurveAreaUpper's own derivation) must convert, or must not use
 // this value directly; it bounds |C(t) − (P_0 + t·Δ)| at the SAME t, not the
 // arc-length-matched deviation.
 //
@@ -1173,8 +1175,8 @@ func spanBitWidth(span bezierSpan) int {
 // outward rounding, on the quantity it publishes. Halving an already-rounded
 // float d would be unsound at the bottom of the range — every positive d² at or
 // below 2⁻²¹⁴⁸ roots to the smallest subnormal, whose float half underflows to
-// +0, and a published 0 states that the deviation is exactly zero. bounds.go's
-// cellChordCurveAreaUpper gates its whole chord-to-curve leg on
+// +0, and a published 0 states that the deviation is exactly zero. internal/proofbound/bounds.go's
+// proofbound.CellChordCurveAreaUpper gates its whole chord-to-curve leg on
 // matchedDelta > 0, so that 0 would drop a real leg out of a proven allowance
 // rather than merely narrow it. big.Rat has no underflow, so d²/4 stays exactly
 // positive and the root reports the smallest subnormal, which does bound it.
@@ -1183,7 +1185,7 @@ func spanBitWidth(span bezierSpan) int {
 // SET-distance sagitta (every curve point sits within the sagitta of SOME
 // chord point). Never substitute one for the other: passing the sagitta
 // where this parameter-matched bound is owed silently upgrades a
-// SET-distance claim into one it was never proven to carry — bounds.go's
+// SET-distance claim into one it was never proven to carry — internal/proofbound/bounds.go's
 // own matchedDeltaUpper doc comment states the rule (F1), and
 // TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses pins the
 // counterexample: a span whose every control point sits exactly ON its own
@@ -1212,7 +1214,7 @@ func spanMatchedDeltaUpper(w *freeformWork, span bezierSpan) (float64, error) {
 // spanSpeedUpper bounds a Tier A span's own tangent speed ‖C'(t)‖ at every t:
 // ‖C'(t)‖ = ‖Δ + (C'(t) − Δ)‖ ≤ ‖Δ‖ + d (spanHodographGapUpper), rounded
 // outward. It is always at least the span's own chord length ‖Δ‖, since d is
-// never negative — which is what cellChordCurveAreaUpper's own tangent-
+// never negative — which is what proofbound.CellChordCurveAreaUpper's own tangent-
 // magnitude argument (its doc comment's eA bullet: "a chord never exceeds
 // the arc it subtends") requires of a caller's arc-length-speed claim: a
 // speed bound that could fall below the chord length would understate the
@@ -1237,5 +1239,5 @@ func spanSpeedUpper(w *freeformWork, span bezierSpan) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return absSumUpper(chord, gap), nil
+	return proofbound.AbsSumUpper(chord, gap), nil
 }

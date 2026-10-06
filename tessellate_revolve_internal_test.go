@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -88,10 +90,10 @@ func TestRevolveCellAreaSlackBracketsTheTrueJacobianGap(t *testing.T) {
 	jHeld := meridianLen * chord
 	want := math.Abs(jTrue - jHeld)
 
-	step := intervalScale(twoPiInterval(), big.NewRat(1, n))
-	length := pointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
-	twoArea := pointInterval(big.NewRat(0, 1).SetFloat64(jHeld))
-	got := revolveCellAreaSlack(rho, rho, length, step, [2]ratInterval{twoArea, twoArea})
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, n))
+	length := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
+	twoArea := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(jHeld))
+	got := revolveCellAreaSlack(rho, rho, length, step, [2]proofbound.RatInterval{twoArea, twoArea})
 	require.InDelta(t, want, got, 1e-9)
 	require.Greater(t, got, 0.0)
 }
@@ -104,9 +106,9 @@ func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
 	dPhi := 2 * math.Pi / n
 	twoArea := 7.0
 	c := meridianLen*dPhi*rho - twoArea
-	step := intervalScale(twoPiInterval(), big.NewRat(1, n))
-	length := pointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
-	area := pointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, n))
+	length := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
+	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
 	for _, poleFirst := range []bool{true, false} {
 		got := revolveFanAreaSlack(rho, poleFirst, length, step, area)
 		require.InDelta(t, math.Abs(c)/2, got, 1e-9, `poleFirst=%v`, poleFirst)
@@ -123,7 +125,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 		for l := range seq.cos {
 			// The stored pair lies inside the certified enclosure and on the
 			// unit circle to within that enclosure's own width.
-			require.LessOrEqual(t, intervalFloatError(seq.cosIv[l], seq.cos[l]), revolveTrigGapPrior)
+			require.LessOrEqual(t, proofbound.IntervalFloatError(seq.cosIv[l], seq.cos[l]), revolveTrigGapPrior)
 			require.InDelta(t, 1.0, seq.cos[l]*seq.cos[l]+seq.sin[l]*seq.sin[l], 1e-15)
 			require.InDelta(t, math.Cos(2*math.Pi*float64(l)/12), seq.cos[l], 1e-12)
 			require.InDelta(t, math.Sin(2*math.Pi*float64(l)/12), seq.sin[l], 1e-12)
@@ -187,8 +189,8 @@ func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
 	}
 	one := big.NewRat(1, 1)
 	zero := new(big.Rat)
-	ideal := revolveIdealPoint(b, pointInterval(zero), pointInterval(big.NewRat(8, 1)), pointInterval(one), pointInterval(zero))
-	require.Equal(t, 0.0, intervalFloatError(ideal[1], 8.0))
+	ideal := revolveIdealPoint(b, proofbound.PointInterval(zero), proofbound.PointInterval(big.NewRat(8, 1)), proofbound.PointInterval(one), proofbound.PointInterval(zero))
+	require.Equal(t, 0.0, proofbound.IntervalFloatError(ideal[1], 8.0))
 
 	// A basis whose own construction rounds cannot claim that: the enclosure
 	// separates from the stored float and the gap is charged.
@@ -196,9 +198,9 @@ func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
 	b2 := revolveBasis3Iv{a3: mustIvVec(r3.Vec{}), w: mustIvVec(r3.Vec{X: 1}), e0: tilted, e1: mustIvVec(r3.Vec{Z: 1})}
 	third, ok := new(big.Rat).SetString("1/3")
 	require.True(t, ok)
-	ideal2 := revolveIdealPoint(b2, pointInterval(zero), pointInterval(third), pointInterval(one), pointInterval(zero))
+	ideal2 := revolveIdealPoint(b2, proofbound.PointInterval(zero), proofbound.PointInterval(third), proofbound.PointInterval(one), proofbound.PointInterval(zero))
 	held, _ := intervalMid(ideal2[1]).Float64()
-	require.Positive(t, intervalFloatError(ideal2[1], math.Nextafter(held, math.Inf(1))))
+	require.Positive(t, proofbound.IntervalFloatError(ideal2[1], math.Nextafter(held, math.Inf(1))))
 }
 
 func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
@@ -230,7 +232,7 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 // the facet-contact audit VerifyBoundary adds on top of it.
 func auditRevolveFacets(t *testing.T, verts []r3.Vec, tris [][3]int, delta float64) error {
 	t.Helper()
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	data, err := requireRevolveFacetAreas(budget, verts, tris, delta)
 	if err != nil {
 		return err
@@ -266,10 +268,10 @@ func TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement(t *testing.T
 	t.Parallel()
 	verts := []r3.Vec{{X: 0}, {X: 1}, {X: 0.5, Y: 1e-12}}
 	tris := [][3]int{{0, 1, 2}}
-	data, err := requireRevolveFacetAreas(newWorkBudget(t.Context()), verts, tris, 0)
+	data, err := requireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 0)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	_, err = requireRevolveFacetAreas(newWorkBudget(t.Context()), verts, tris, 1e-6)
+	_, err = requireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 1e-6)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "positive area")
 }
@@ -382,7 +384,7 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 		samples: []revMeridian{{walk: 0}, {walk: 1}, {walk: 2}, {walk: 3}},
 	}
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
-	// maxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
+	// proofbound.MaxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
 	// at n = 666 exactly. One angular step more refuses.
 	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, false, true, &revolveWork{}))
 	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, false, true, &revolveWork{}), ErrUnsupported)

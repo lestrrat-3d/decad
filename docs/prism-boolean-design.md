@@ -566,7 +566,7 @@ displacement, and the pair's per-end axial displacement. Its volume is then
 `evalPrism`'s, unchanged — the same region integrals, the same
 `sectionDisplacementArea` charge over the cell's own perimeter, the same axial
 terms, the same `Exactness` rule. No bound mechanism is restated at a second
-site, which is what `bounds.go`'s one-helper-per-mechanism rule requires, and
+site, which is what `internal/proofbound/bounds.go`'s one-helper-per-mechanism rule requires, and
 no new helper is introduced.
 
 <!-- "a volume, never a body" is scoped to ASSEMBLY and DELIVERY, not to
@@ -581,7 +581,7 @@ no new helper is introduced.
      reading beside the existing analytic twin's. -->
 
 **The sum.** The reading publishes the charged sum of the cells' volumes: the
-value is their float sum, whose own accumulated rounding `bounds.go`'s
+value is their float sum, whose own accumulated rounding `internal/proofbound/bounds.go`'s
 `exactSumRound` charges against the exact rational sum, and the bound is
 `absSumUpper` over the cells' own bounds and that rounding. `exactnessOf` then
 reads the summed bound, so the reading is `Exact` only where every cell is —
@@ -730,7 +730,7 @@ send it to zero.
 
 Its size is the parameter allowance times how fast the carrier moves under it.
 The carrier is exact, so the endpoint can only slide ALONG it:
-`|P(t) − P(t*)| ≤ |t − t*| · sup|dP/dt|`. `bounds.go`'s `cutParamUlps` states
+`|P(t) − P(t*)| ≤ |t − t*| · sup|dP/dt|`. `internal/proofbound/bounds.go`'s `cutParamUlps` states
 the parameter allowance once — the quantitative reading decad gives `TExact`'s
 "to machine precision" claim (`docs/sketch-seam-design.md` §1) — and
 `cutDisplacementAllow` multiplies it by the carrier's own speed over its full
@@ -751,7 +751,7 @@ endpoint this boolean itself computed, whatever the two operands' own prior
 displacement was. It is the only kind that reaches this charge: a trimmed
 circular carrier would enter through two `cos`/`sin`-computed points, moving
 its rebuilt radius and sweep as well as its endpoints, and §4.1 refuses such a
-pair before the scene is built rather than charge it (below). `bounds.go`'s
+pair before the scene is built rather than charge it (below). `internal/proofbound/bounds.go`'s
 `walkEndpointAllow` states the allowance, at the magnitude of the operands
 that walk's OWN arithmetic touches and never at the endpoint it produced:
 `lerp2` computes
@@ -814,7 +814,7 @@ operand that does NOT win the `max` never silently drops out.
 `δ_cut` taken over that cell's OWN surviving fragments rather than over a
 merged loop's. Nothing else in the formula changes for it, and the reading's
 charged sum of the cells' volumes adds only that sum's own accumulated
-rounding (`bounds.go`'s `exactSumRound`).
+rounding (`internal/proofbound/bounds.go`'s `exactSumRound`).
 
 It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's composed map into A's frame is the identity in the
@@ -885,7 +885,7 @@ extension is two pieces, each in the existing machinery's own shape:
   interval, so the result takes the greater `z0Delta` and `z1Delta` from its
   operands independently. These terms remain separate from `δ`: one displaces
   the section in its plane and the other displaces its sweep level.
-- **`bounds.go` gains the helpers for the mechanism**, under that file's own
+- **`internal/proofbound/bounds.go` gains the helpers for the mechanism**, under that file's own
   rule that each error mechanism has exactly one helper and no measurement site
   computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
   mechanism above, turning `cutParamUlps` and a carrier's own speed into the
@@ -975,7 +975,7 @@ a differently-authored model of the same intent can clear it.
 
 ## 10. Work budget and cancellation
 
-Reuses `budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
+Reuses `internal/proofbound/budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
 shared counter Fillet/Chamfer/Shell already thread through their own audits
 (`docs/modify-design.md` §5). PR1 opens one counter per
 `tryPrismUnion` attempt and threads it through: the G4 segment scan, scene
@@ -1097,7 +1097,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   several loops cannot work at all — a `ProfileRecord` has one `Outer`.
   Restating the volume composition inside the reading, rather than building one
   `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
-  `bounds.go`'s section-displacement and axial mechanisms, which that file's
+  `internal/proofbound/bounds.go`'s section-displacement and axial mechanisms, which that file's
   own rule forbids.
   <!-- The asymmetry sentence above is well formed, not malformed: it joins two
        contact relative clauses with stranded prepositions — "a pair [that]
@@ -1124,7 +1124,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 1. **PR1 — gate + scene construction + `Union`'s select-all path.** G1–G6,
    §4.1's scene builder and re-expression, `Union`'s select-all/merge/chain,
    §6's audit reuse, §5's authentication, §7's exactness (the section
-   displacement bound on `prismPayload`, its one `bounds.go` helper, and
+   displacement bound on `prismPayload`, its one `internal/proofbound/bounds.go` helper, and
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
    `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
    on admission. A split boundary routes to the mesh path before recording
@@ -1264,7 +1264,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   explains (assert it scales with the placement's own magnitude, so a payload
   silently dropping the term fails);
   a merged section retaining a `CircleSeg`/`ArcSeg` reports `Approximate` with
-  a bound composed from `moments.go`'s and `bounds.go`'s machinery, asserted
+  a bound composed from `moments.go`'s and `internal/proofbound/bounds.go`'s machinery, asserted
   against the closed-form answer.
 - An arranged profile containing a `Partial` boundary edge falls back before a
   fragment is recorded when either source carries a nonzero section

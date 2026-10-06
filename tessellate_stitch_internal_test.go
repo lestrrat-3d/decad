@@ -283,7 +283,7 @@ func TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody(t *testing.T
 }
 
 // TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody is the ZERO-BOUND
-// gate's own leg: a placement widens every vertex bound (rigidRoundAllow),
+// gate's own leg: a placement widens every vertex bound (proofbound.RigidRoundAllow),
 // so stitchZeroVertexBound no longer holds even though the body stays
 // CLOSED and all-planar. Shown-to-fail: skipping the zeroBound check (always
 // publishing symDiffOK true for a BodySolid stitchPayload) turns this red.

@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -204,8 +206,8 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 // could not state either one, since the whole defect lives in the last two bits
 // of a float64.
 var (
-	cosEighthPi = mustRatDecimal("0.923879532511286756128183189396788286822416625863642486115097")
-	sinEighthPi = mustRatDecimal("0.382683432365089771728459984030398866761344562485627041433800")
+	cosEighthPi = proofbound.MustRatDecimal("0.923879532511286756128183189396788286822416625863642486115097")
+	sinEighthPi = proofbound.MustRatDecimal("0.382683432365089771728459984030398866761344562485627041433800")
 )
 
 // requireEnclosesTruth proves a published reading covers the value the record
@@ -262,9 +264,9 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := walkOf(tc.seg, nil)
 			require.NoError(t, err)
-			require.Positive(t, w.startBound.u, `a trimmed circular endpoint is not a recorded coordinate`)
-			require.Positive(t, w.endBound.u, `a trimmed circular endpoint is not a recorded coordinate`)
-			require.Less(t, w.startBound.u, 1e-15,
+			require.Positive(t, w.startBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
+			require.Positive(t, w.endBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
+			require.Less(t, w.startBound.U, 1e-15,
 				`the bound is this endpoint's own displacement, not the circle's extent`)
 
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
@@ -292,8 +294,8 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 
 		w, err := walkOf(seg, nil)
 		require.NoError(t, err)
-		require.Positive(t, w.startBound.u)
-		require.Equal(t, walkEndBound{}, w.endBound, `t = 1 names the recorded End`)
+		require.Positive(t, w.startBound.U)
+		require.Equal(t, proofbound.WalkEndBound{}, w.endBound, `t = 1 names the recorded End`)
 
 		lo, hi, bound, err := boundaryExtremesBoundedContext(
 			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
@@ -314,7 +316,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		}
 		w, err := walkOf(seg, nil)
 		require.NoError(t, err)
-		require.False(t, w.startBound.derivable())
+		require.False(t, w.startBound.Derivable())
 
 		_, _, _, err = boundaryExtremesBoundedContext(
 			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
@@ -374,12 +376,12 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	// the v error is still stated rather than dropped.
 	w, err := walkOf(wholeCircle, nil)
 	require.NoError(t, err)
-	require.Equal(t, walkEndBound{}, w.startBound)
-	require.Equal(t, 0.0, w.endBound.u)
-	require.Positive(t, w.endBound.v)
-	require.Less(t, w.endBound.v, 1e-15)
-	require.Equal(t, 0.0, pointPerturbationAllow(w.endBound, 1, 0))
-	require.Positive(t, pointPerturbationAllow(w.endBound, 0, 1))
+	require.Equal(t, proofbound.WalkEndBound{}, w.startBound)
+	require.Equal(t, 0.0, w.endBound.U)
+	require.Positive(t, w.endBound.V)
+	require.Less(t, w.endBound.V, 1e-15)
+	require.Equal(t, 0.0, proofbound.PointPerturbationAllow(w.endBound, 1, 0))
+	require.Positive(t, proofbound.PointPerturbationAllow(w.endBound, 0, 1))
 }
 
 // walkEndFromModel re-derives a circular walk's far endpoint from the walk's OWN

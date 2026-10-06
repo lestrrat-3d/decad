@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -102,12 +104,12 @@ func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 // work performed by a vertex tier.
 func (k *pairKernel) enumerate() (*cellSink, error) {
 	sink := &cellSink{}
-	budget := newWorkBudget(k.ctx)
+	budget := proofbound.NewWorkBudget(k.ctx)
 	check := func() error {
 		if k.err != nil {
 			return k.err
 		}
-		return budget.step()
+		return budget.Step()
 	}
 	for _, fa := range k.a.faces {
 		for _, fb := range k.b.faces {
@@ -169,7 +171,7 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 	if k.err != nil {
 		return nil, k.err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	if k.clearanceRefused {
@@ -610,7 +612,7 @@ func (k *pairKernel) planePlane(f, g *cFace, sink *cellSink) {
 	// path to certify falls to unsure there — never a wrong Exact.
 	if f.n.Cross(g.n).Len() == 0 {
 		h := g.o.Sub(f.o).Dot(f.n)
-		rel, wit, err := k.coplanarRelation(newWorkBudget(k.ctx), f, g)
+		rel, wit, err := k.coplanarRelation(proofbound.NewWorkBudget(k.ctx), f, g)
 		if err != nil {
 			k.err = err
 			return
@@ -707,13 +709,13 @@ func intervalsMeet(a, b []clrIv, tol float64) int {
 // frame), −1 provenly apart, 0 ambiguous. Sample-based in the sufficient
 // direction, boundary-clearance-based in the exclusion direction — never a
 // blessed ambiguity.
-func (k *pairKernel) coplanarRelation(budget *workBudget, f, g *cFace) (int, [2]float64, error) {
-	if err := budget.err(); err != nil {
+func (k *pairKernel) coplanarRelation(budget *proofbound.WorkBudget, f, g *cFace) (int, [2]float64, error) {
+	if err := budget.Err(); err != nil {
 		return 0, [2]float64{}, err
 	}
 	ge := make([]surveyElem, 0, len(g.region.elems))
 	for _, e := range g.region.elems {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, [2]float64{}, err
 		}
 		ge = append(ge, transformElem(e, g, f))
@@ -743,7 +745,7 @@ func (k *pairKernel) coplanarRelation(budget *workBudget, f, g *cFace) (int, [2]
 			return 0, [2]float64{}, err
 		}
 		for _, s := range samples {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, [2]float64{}, err
 			}
 			class, err := regionClassifyBudget(budget, dst, s[0], s[1], tol)
@@ -776,14 +778,14 @@ func (k *pairKernel) coplanarRelation(budget *workBudget, f, g *cFace) (int, [2]
 		return 0, [2]float64{}, err
 	}
 	if clearing <= tol {
-		return 0, [2]float64{}, budget.err()
+		return 0, [2]float64{}, budget.Err()
 	}
 	outsideFG, err := regionSampleOutsideBudget(budget, f.region, greg, tol)
 	if err != nil {
 		return 0, [2]float64{}, err
 	}
 	if !outsideFG {
-		return 0, [2]float64{}, budget.err()
+		return 0, [2]float64{}, budget.Err()
 	}
 	outsideGF, err := regionSampleOutsideBudget(budget, greg, f.region, tol)
 	if err != nil {
@@ -792,14 +794,14 @@ func (k *pairKernel) coplanarRelation(budget *workBudget, f, g *cFace) (int, [2]
 	if outsideGF {
 		return -1, [2]float64{}, nil
 	}
-	return 0, [2]float64{}, budget.err()
+	return 0, [2]float64{}, budget.Err()
 }
 
-func coplanarBoundaryClearanceBudget(budget *workBudget, a, b region2) (float64, error) {
+func coplanarBoundaryClearanceBudget(budget *proofbound.WorkBudget, a, b region2) (float64, error) {
 	clearing := math.Inf(1)
 	for _, ea := range a.elems {
 		for _, eb := range b.elems {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, err
 			}
 			if d := elemElemDistLB(ea, eb); d < clearing {
@@ -812,13 +814,13 @@ func coplanarBoundaryClearanceBudget(budget *workBudget, a, b region2) (float64,
 
 // regionSampleOutside reports whether a sample of src is cleanly outside dst
 // — with boundaries provably apart, one clean sample settles containment.
-func regionSampleOutsideBudget(budget *workBudget, src, dst region2, tol float64) (bool, error) {
+func regionSampleOutsideBudget(budget *proofbound.WorkBudget, src, dst region2, tol float64) (bool, error) {
 	samples, err := regionSamplesBudget(budget, src)
 	if err != nil {
 		return false, err
 	}
 	for _, s := range samples {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		class, err := regionClassifyBudget(budget, dst, s[0], s[1], tol)

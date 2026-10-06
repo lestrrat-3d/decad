@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -105,25 +107,25 @@ func (m *tetraMoments) moments() (*big.Rat, [3]*big.Rat, [3][3]*big.Rat) {
 // the centroidal tensor; a volume or tensor interval that does not prove
 // positive returns errMassIntervalUnproved.
 func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, verts []r3.Vec, tris [][3]int, volSymDiff float64, density units.Value) (MassProperties, error) {
-	if len(verts) == 0 || len(tris) == 0 || !finiteVec(anchor) || !nonNegativeFinite(volSymDiff) {
+	if len(verts) == 0 || len(tris) == 0 || !proofbound.FiniteVec(anchor) || !nonNegativeFinite(volSymDiff) {
 		return MassProperties{}, fmt.Errorf("%w: mesh mass has no finite occupied-volume certificate", ErrUnsupported)
 	}
 	// The binary64 vertex coordinates are exact rational inputs; only the
 	// final readings round.
-	anchorExact := xptOf(anchor)
+	anchorExact := proofbound.XptOf(anchor)
 	vertices := make([][3]*big.Rat, len(verts))
-	lifted := make([]xpt, len(verts))
+	lifted := make([]proofbound.Xpt, len(verts))
 	maxMesh := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for i, v := range verts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return MassProperties{}, err
 		}
-		if !finiteVec(v) {
+		if !proofbound.FiniteVec(v) {
 			return MassProperties{}, fmt.Errorf("%w: mesh mass vertex is nonfinite", ErrUnsupported)
 		}
-		lifted[i] = xsub(xptOf(v), anchorExact)
-		x, y, z := xhpRat(xhp(lifted[i]))
+		lifted[i] = proofbound.Xsub(proofbound.XptOf(v), anchorExact)
+		x, y, z := xhpRat(proofbound.Xhp(lifted[i]))
 		vertices[i] = [3]*big.Rat{x, y, z}
 		for axis, coord := range vertices[i] {
 			magnitude := new(big.Rat).Abs(coord)
@@ -134,13 +136,13 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	}
 	sums := newTetraMoments()
 	for _, tri := range tris {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return MassProperties{}, err
 		}
-		det := xdotRat(lifted[tri[0]], xcross(lifted[tri[1]], lifted[tri[2]]))
+		det := proofbound.XdotRat(lifted[tri[0]], xcross(lifted[tri[1]], lifted[tri[2]]))
 		sums.add(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]], det)
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return MassProperties{}, err
 	}
 	volume, first, second := sums.moments()
@@ -154,34 +156,34 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	// Over the symmetric difference D, |∫_D q_i| <= R_i·E and
 	// |∫_D q_i q_j| <= R_i·R_j·E, since |q_i| <= R_i on both regions.
 	volumeError := proofarith.FloatRat(volSymDiff)
-	volumeIV := intervalWiden(pointInterval(volume), volumeError)
-	if volumeIV.lo.Sign() <= 0 {
+	volumeIV := intervalWiden(proofbound.PointInterval(volume), volumeError)
+	if volumeIV.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mesh volume interval includes zero", errMassIntervalUnproved)
 	}
-	var firstIV [3]ratInterval
-	var secondIV [3][3]ratInterval
+	var firstIV [3]proofbound.RatInterval
+	var secondIV [3][3]proofbound.RatInterval
 	for i := range 3 {
-		firstIV[i] = intervalWiden(pointInterval(first[i]), new(big.Rat).Mul(extent[i], volumeError))
+		firstIV[i] = intervalWiden(proofbound.PointInterval(first[i]), new(big.Rat).Mul(extent[i], volumeError))
 		for j := i; j < 3; j++ {
 			secondError := new(big.Rat).Mul(new(big.Rat).Mul(extent[i], extent[j]), volumeError)
-			secondIV[i][j] = intervalWiden(pointInterval(second[i][j]), secondError)
+			secondIV[i][j] = intervalWiden(proofbound.PointInterval(second[i][j]), secondError)
 		}
 	}
 
-	var center [3]ratInterval
-	var central [3][3]ratInterval
+	var center [3]proofbound.RatInterval
+	var central [3][3]proofbound.RatInterval
 	for i, origin := range []*big.Rat{proofarith.FloatRat(anchor.X), proofarith.FloatRat(anchor.Y), proofarith.FloatRat(anchor.Z)} {
 		offset, _ := intervalQuo(firstIV[i], volumeIV)
-		center[i] = intervalAdd(pointInterval(origin), offset)
+		center[i] = proofbound.IntervalAdd(proofbound.PointInterval(origin), offset)
 		for j := i; j < 3; j++ {
-			shift, _ := intervalQuo(intervalMul(firstIV[i], firstIV[j]), volumeIV)
-			central[i][j] = intervalSub(secondIV[i][j], shift)
+			shift, _ := intervalQuo(proofbound.IntervalMul(firstIV[i], firstIV[j]), volumeIV)
+			central[i][j] = proofbound.IntervalSub(secondIV[i][j], shift)
 		}
 	}
-	trace := intervalAdd(intervalAdd(central[0][0], central[1][1]), central[2][2])
+	trace := proofbound.IntervalAdd(proofbound.IntervalAdd(central[0][0], central[1][1]), central[2][2])
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	result := MassProperties{}
-	result.Mass, err = massIntervalReading(intervalScale(volumeIV, rho), units.Kilogram)
+	result.Mass, err = massIntervalReading(proofbound.IntervalScale(volumeIV, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -189,13 +191,13 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	centerBound := 0.0
 	for i, enclosure := range center {
 		centerValue[i], _ = intervalMid(enclosure).Float64()
-		if isNonFinite(centerValue[i]) {
+		if proofbound.IsNonFinite(centerValue[i]) {
 			return MassProperties{}, fmt.Errorf("%w: mesh mass center is nonfinite", ErrNotFinite)
 		}
-		centerBound = math.Max(centerBound, intervalFloatError(enclosure, centerValue[i]))
+		centerBound = math.Max(centerBound, proofbound.IntervalFloatError(enclosure, centerValue[i]))
 	}
-	centerBound = radius3D(centerBound)
-	if isNonFinite(centerBound) {
+	centerBound = proofbound.Radius3D(centerBound)
+	if proofbound.IsNonFinite(centerBound) {
 		return MassProperties{}, fmt.Errorf("%w: mesh mass center bound is nonfinite", ErrNotFinite)
 	}
 	result.Center = VecMeasurement{
@@ -207,11 +209,11 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	indices := [6][2]int{{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}}
 	for k, pair := range indices {
 		i, j := pair[0], pair[1]
-		term := intervalNeg(central[i][j])
+		term := proofbound.IntervalNeg(central[i][j])
 		if i == j {
-			term = intervalSub(trace, central[i][j])
+			term = proofbound.IntervalSub(trace, central[i][j])
 		}
-		*components[k], err = massIntervalReading(intervalScale(term, rho), units.KilogramSquareMillimeter)
+		*components[k], err = massIntervalReading(proofbound.IntervalScale(term, rho), units.KilogramSquareMillimeter)
 		if err != nil {
 			return MassProperties{}, err
 		}
@@ -234,7 +236,7 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 // payload is refused, or carries no proof, the same way.
 func verifiedMeshMassProperties(ctx context.Context, b *Body, density units.Value) (MassProperties, error) {
 	diameter := b.bounds.Max.Sub(b.bounds.Min).Len()
-	if isNonFinite(diameter) || diameter <= 0 {
+	if proofbound.IsNonFinite(diameter) || diameter <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mesh mass has no finite positive diameter", ErrUnsupported)
 	}
 	for k := meshLadderFirst; k <= meshLadderLast; k++ {
@@ -288,7 +290,7 @@ func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAu
 	if contactAudited {
 		return nil
 	}
-	if err := loftCrossingAudit(newWorkBudget(ctx), verts, tris); err != nil {
+	if err := loftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -303,8 +305,8 @@ func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAu
 func meshMassExtent(box Box, anchor r3.Vec, maxMesh [3]*big.Rat) ([3]*big.Rat, error) {
 	var extent [3]*big.Rat
 	allow := box.Bound.Base()
-	if box.Bound.Kind() != units.Length || isNonFinite(allow) || allow < 0 ||
-		!finiteVec(box.Min) || !finiteVec(box.Max) {
+	if box.Bound.Kind() != units.Length || proofbound.IsNonFinite(allow) || allow < 0 ||
+		!proofbound.FiniteVec(box.Min) || !proofbound.FiniteVec(box.Max) {
 		return extent, fmt.Errorf("%w: mesh mass has no finite spatial bound", ErrUnsupported)
 	}
 	ends := [3][3]float64{

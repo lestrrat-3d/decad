@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -79,7 +81,7 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	elems := make([]surveyElem, workPollInterval+64)
+	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		elems[i] = arc
 	}
@@ -88,26 +90,26 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 	seen := 0
 
 	err := newWallKernel(elems, nil, math.Inf(1)).
-		generate(newWorkBudget(ctx), func(diskCand) error {
+		generate(proofbound.NewWorkBudget(ctx), func(diskCand) error {
 			seen++
 			return nil
 		})
 
 	require.ErrorIs(t, err, context.Canceled)
-	require.LessOrEqual(t, seen, workPollInterval-1)
+	require.LessOrEqual(t, seen, proofbound.WorkPollInterval-1)
 }
 
 func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	elems := make([]surveyElem, workPollInterval+64)
+	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		elems[i] = arc
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
 
-	_, err := newWallKernelBudget(newWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, exactScalar(0), false, math.Inf(1))
+	_, err := newWallKernelBudget(proofbound.NewWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `wall-kernel boundary sizing must poll inside its scan`)
@@ -115,7 +117,7 @@ func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 
 func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	elems := make([]surveyElem, workPollInterval+64)
+	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		e, ok := lineElem(100, float64(i+1), 101, float64(i+1))
 		require.True(t, ok)
@@ -124,7 +126,7 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validate"}
 	k := newWallKernel(elems, nil, math.Inf(1))
 
-	spanning, empty, valid, err := k.validate(diskCand{x: 0, y: 0, r: 1}, newWorkBudget(ctx))
+	spanning, empty, valid, err := k.validate(diskCand{x: 0, y: 0, r: 1}, proofbound.NewWorkBudget(ctx))
 	_ = spanning
 	_ = empty
 	_ = valid
@@ -135,7 +137,7 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 
 func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	elems := make([]surveyElem, workPollInterval+64)
+	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		e, ok := arcElem(1000+float64(i), 1000, 1, 0, 2*math.Pi, true)
 		require.True(t, ok)
@@ -144,7 +146,7 @@ func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "contains"}
 	k := newWallKernel(elems, nil, math.Inf(1))
 
-	_, _, err := k.contains(0, 0, newWorkBudget(ctx))
+	_, _, err := k.contains(0, 0, proofbound.NewWorkBudget(ctx))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -161,7 +163,7 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 	}
 	k := newWallKernel(elems, pts, math.Inf(1))
 
-	out, err := k.runBudget(newWorkBudget(t.Context()))
+	out, err := k.runBudget(proofbound.NewWorkBudget(t.Context()))
 
 	require.NoError(t, err)
 	require.True(t, out.ok)
@@ -229,14 +231,14 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 			sawBounded = true
 		}
 		// The doubling is the production one, so the assertion below is about
-		// the aggregate and not about a re-spelling of boundedMul's own
+		// the aggregate and not about a re-spelling of proofbound.BoundedMul's own
 		// outward rounding.
-		diam := boundedMul(exactScalar(2), measuredScalar(c.r, c.rBound))
-		require.Equal(t, 2*c.r, diam.value, `the answer is a diameter, not a radius`)
-		require.GreaterOrEqual(t, diam.bound, 2*c.rBound, `the bound doubles with the value`)
-		agg.take(diam.value, diam.bound)
-		if diam.value < winnerValue {
-			winnerValue, winnerBound = diam.value, diam.bound
+		diam := proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.MeasuredScalar(c.r, c.rBound))
+		require.Equal(t, 2*c.r, diam.Value, `the answer is a diameter, not a radius`)
+		require.GreaterOrEqual(t, diam.Bound, 2*c.rBound, `the bound doubles with the value`)
+		agg.take(diam.Value, diam.Bound)
+		if diam.Value < winnerValue {
+			winnerValue, winnerBound = diam.Value, diam.Bound
 		}
 		return nil
 	}))
@@ -354,9 +356,9 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 	sweep, err := units.Degrees(60).In(units.Radian)
 	require.NoError(t, err)
 	sinBS, _ := radianTrigBounds(sweep / 2)
-	require.NotEqual(t, 0.5, sinBS.value, `the held sine is not the true sin(30°)`)
-	require.Greater(t, sinBS.bound, 0.0)
-	require.LessOrEqual(t, math.Abs(sinBS.value-0.5), sinBS.bound,
+	require.NotEqual(t, 0.5, sinBS.Value, `the held sine is not the true sin(30°)`)
+	require.Greater(t, sinBS.Bound, 0.0)
+	require.LessOrEqual(t, math.Abs(sinBS.Value-0.5), sinBS.Bound,
 		`the certified trig interval must contain the true sine`)
 
 	el, ok := lineElem(0, 10, 1, 10)
@@ -380,7 +382,7 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 }
 
 // TestWallCandidateExactChainsStayExact pins the kernel's other two
-// boundedHypot readings — the arc-arc centre separation and the vertex-arc
+// proofbound.BoundedHypot readings — the arc-arc centre separation and the vertex-arc
 // one — at a separation a float64 holds exactly, where the whole chain into
 // the candidate's radius is exact and the candidate must publish a zero
 // bound. Neither can be pinned through a published READING: each family also
@@ -491,7 +493,7 @@ func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 // answer to the very system the kernel solved, never against another float64
 // evaluation of it.
 func exactCramerRadius(l []circEq) *big.Rat {
-	r := func(v boundedScalar) *big.Rat { return proofarith.FloatRat(v.value) }
+	r := func(v proofbound.BoundedScalar) *big.Rat { return proofarith.FloatRat(v.Value) }
 	minor := func(p, q, s, t *big.Rat) *big.Rat {
 		return new(big.Rat).Sub(new(big.Rat).Mul(p, t), new(big.Rat).Mul(s, q))
 	}
@@ -531,14 +533,14 @@ func exactCramerRadius(l []circEq) *big.Rat {
 // discriminates — never as an assertion about the shipped rule.
 func divisionOnlyRadiusBound(l []circEq) float64 {
 	minor := func(p, q, s, t float64) float64 { return p*t - s*q }
-	be := minor(l[1].b.value, l[1].e.value, l[2].b.value, l[2].e.value)
-	ae := minor(l[1].a.value, l[1].e.value, l[2].a.value, l[2].e.value)
-	ab := minor(l[1].a.value, l[1].b.value, l[2].a.value, l[2].b.value)
-	af := minor(l[1].a.value, l[1].f.value, l[2].a.value, l[2].f.value)
-	bf := minor(l[1].b.value, l[1].f.value, l[2].b.value, l[2].f.value)
-	det := l[0].a.value*be - l[0].b.value*ae + l[0].e.value*ab
-	dr := -l[0].a.value*bf + l[0].b.value*af - l[0].f.value*ab
-	return boundedQuotient(dr, 0, det, 0).bound
+	be := minor(l[1].b.Value, l[1].e.Value, l[2].b.Value, l[2].e.Value)
+	ae := minor(l[1].a.Value, l[1].e.Value, l[2].a.Value, l[2].e.Value)
+	ab := minor(l[1].a.Value, l[1].b.Value, l[2].a.Value, l[2].b.Value)
+	af := minor(l[1].a.Value, l[1].f.Value, l[2].a.Value, l[2].f.Value)
+	bf := minor(l[1].b.Value, l[1].f.Value, l[2].b.Value, l[2].f.Value)
+	det := l[0].a.Value*be - l[0].b.Value*ae + l[0].e.Value*ab
+	dr := -l[0].a.Value*bf + l[0].b.Value*af - l[0].f.Value*ab
+	return proofbound.BoundedQuotient(dr, 0, det, 0).Bound
 }
 
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
@@ -557,7 +559,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 		},
 		z0: 0, z1: 10,
 	}
-	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
 	require.NoError(t, err)
 	require.False(t, out.ok, `undecided, never a silent pass`)
 }
@@ -578,7 +580,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		line(100, 60, 0, 60),
 		line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfileBudget(newWorkBudget(t.Context()), outer, 1, 5)
+	cavity, err := offsetProfileBudget(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,
@@ -590,7 +592,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		sense:     Inward,
 	}
 
-	out, err := cupWall(newWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp, 15*math.Pi/180)
 	require.NoError(t, err)
 	require.True(t, out.ok)
 	require.NotNil(t, out.reading)
@@ -608,12 +610,12 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		bad.cavity.Outer.Segments[i] = moved
 	}
 
-	out, err = cupWall(newWorkBudget(t.Context()), bad, 15*math.Pi/180)
+	out, err = cupWall(proofbound.NewWorkBudget(t.Context()), bad, 15*math.Pi/180)
 	require.NoError(t, err)
 	require.False(t, out.ok, `a malformed offset relation must not return the requested thickness`)
 
 	body := &Body{payload: bad}
-	results, diags, err := runSurveys(newWorkBudget(t.Context()), body, verifyConfig{
+	results, diags, err := runSurveys(proofbound.NewWorkBudget(t.Context()), body, verifyConfig{
 		wall:     &wallSpec{tool: units.Millimeters(1)},
 		toolMM:   1,
 		allowRad: 15 * math.Pi / 180,
@@ -643,7 +645,7 @@ func manySegmentProfile(segmentCount int) ProfileRecord {
 	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
 }
 
-func newFrameWorkBudget(target string) (*workBudget, *bool) {
+func newFrameWorkBudget(target string) (*proofbound.WorkBudget, *bool) {
 	entered := false
 	cancelled := false
 	inTarget := func() bool {
@@ -670,13 +672,13 @@ func newFrameWorkBudget(target string) (*workBudget, *bool) {
 		cancelled = true
 		return context.Canceled
 	}
-	return &workBudget{stepFn: cancelInTarget, errFn: cancelInTarget}, &entered
+	return &proofbound.WorkBudget{StepFn: cancelInTarget, ErrFn: cancelInTarget}, &entered
 }
 
 func TestRecordLoopsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
-	_, err := recordLoops(newWorkBudget(ctx), manySegmentProfile(workPollInterval+64))
+	_, err := recordLoops(proofbound.NewWorkBudget(ctx), manySegmentProfile(proofbound.WorkPollInterval+64))
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `profile segment resolution must poll inside recordLoops`)
 }
@@ -684,8 +686,8 @@ func TestRecordLoopsCancellationIsBounded(t *testing.T) {
 func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "revolveLoops"}
-	_, err := revolveLoops(newWorkBudget(ctx), revolvePayload{
-		profile: manySegmentProfile(workPollInterval + 64),
+	_, err := revolveLoops(proofbound.NewWorkBudget(ctx), revolvePayload{
+		profile: manySegmentProfile(proofbound.WorkPollInterval + 64),
 		ax:      axisFrame{dU: 1},
 	})
 	require.ErrorIs(t, err, context.Canceled)
@@ -694,7 +696,7 @@ func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 
 func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	t.Parallel()
-	outer := manySegmentProfile(workPollInterval + 64)
+	outer := manySegmentProfile(proofbound.WorkPollInterval + 64)
 	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
@@ -706,7 +708,7 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 		thickness: 5,
 		sense:     Inward,
 	}
-	out, err := cupWall(newWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp, 15*math.Pi/180)
 	require.NoError(t, err)
 	require.True(t, out.ok)
 
@@ -736,7 +738,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 		line(100, 60, 0, 60),
 		line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfile(newWorkBudget(t.Context()), outer, 1, 5)
+	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,
@@ -749,7 +751,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "integralsBudget"}
 
-	_, err = cupWall(newWorkBudget(ctx), cp, 15*math.Pi/180)
+	_, err = cupWall(proofbound.NewWorkBudget(ctx), cp, 15*math.Pi/180)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -890,7 +892,7 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 
 	fitMax := 10 - 1e-3
 	k, err := newWallKernelBudget(nil, []surveyElem{outer, inner}, nil, nil,
-		15*math.Pi/180, exactScalar(0), false, fitMax)
+		15*math.Pi/180, proofbound.ExactScalar(0), false, fitMax)
 	require.NoError(t, err)
 	out, err := k.runBudget(nil)
 	require.NoError(t, err)
@@ -905,7 +907,7 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 
 // TestWallKernelStraddledLeadingCoefficientStaysDecided pins the one denominator
 // that can silence a whole survey: an Apollonius triple whose 2A the arithmetic
-// cannot separate from zero. boundedQuotient answers +Inf there, the aggregate
+// cannot separate from zero. proofbound.BoundedQuotient answers +Inf there, the aggregate
 // refuses an unbounded candidate, and the survey that would have published a
 // number reads undecided instead. quadRootsBounded answers such a triple with
 // the degenerate linear root −C/B, whose own denominator is well separated, so
@@ -937,7 +939,7 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 	}
 
 	k, err := newWallKernelBudget(nil, elems(), nil, nil,
-		15*math.Pi/180, exactScalar(0), false, math.Inf(1))
+		15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 	require.NoError(t, err)
 	out, err := k.runBudget(nil)
 	require.NoError(t, err)
@@ -956,7 +958,7 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 	// finite bound, which is what the aggregate refuses. Every candidate this
 	// boundary admits must now arrive with one.
 	k2, err := newWallKernelBudget(nil, elems(), nil, nil,
-		15*math.Pi/180, exactScalar(0), false, math.Inf(1))
+		15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 	require.NoError(t, err)
 	require.NoError(t, k2.generate(nil, func(c diskCand) error {
 		_, empty, ok, err := k2.validate(c, nil)
@@ -976,7 +978,7 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 // whose two linear equations the arithmetic cannot separate from parallel. The
 // straddle runs BOTH generators, which is the sound posture — the pair may
 // really be parallel, and it may really not be — but the independent branch
-// divides the affine centre by that same determinant, so boundedQuotient hands
+// divides the affine centre by that same determinant, so proofbound.BoundedQuotient hands
 // it +Inf and the candidate it builds would refuse the whole survey through
 // runBudget's aggregate. That one candidate is dropped, and only it.
 //
@@ -987,24 +989,24 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 // wall.
 func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
 	t.Parallel()
-	l1 := circEq{a: exactScalar(1), b: exactScalar(0), e: exactScalar(-1), f: exactScalar(0)}
+	l1 := circEq{a: proofbound.ExactScalar(1), b: proofbound.ExactScalar(0), e: proofbound.ExactScalar(-1), f: proofbound.ExactScalar(0)}
 	l2 := circEq{
-		a: exactScalar(-1),
-		b: measuredScalar(1e-13, 1e-9),
-		e: exactScalar(-1),
-		f: exactScalar(10),
+		a: proofbound.ExactScalar(-1),
+		b: proofbound.MeasuredScalar(1e-13, 1e-9),
+		e: proofbound.ExactScalar(-1),
+		f: proofbound.ExactScalar(10),
 	}
 	// A hole of radius 2 centred at (5, 5): cx² + cy² − r² − 10cx − 10cy − 4r + 46 = 0.
 	hole := circEq{
 		quad: true,
-		g:    exactScalar(-10),
-		h:    exactScalar(-10),
-		kk:   exactScalar(-4),
-		m:    exactScalar(46),
+		g:    proofbound.ExactScalar(-10),
+		h:    proofbound.ExactScalar(-10),
+		kk:   proofbound.ExactScalar(-4),
+		m:    proofbound.ExactScalar(46),
 	}
 
-	require.Equal(t, survStraddle,
-		admitMagnitudeAbove(boundedSub(boundedMul(l1.a, l2.b), boundedMul(l2.a, l1.b)), 1e-12),
+	require.Equal(t, proofbound.SurvStraddle,
+		proofbound.AdmitMagnitudeAbove(proofbound.BoundedSub(proofbound.BoundedMul(l1.a, l2.b), proofbound.BoundedMul(l2.a, l1.b)), 1e-12),
 		`the pair's determinant must straddle, or the fall-through is untested`)
 
 	var radii []float64
@@ -1127,18 +1129,18 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	require.Equal(t, -1, truth.Cmp(new(big.Rat).Sub(toRat(0.5), toRat(ax.aV))),
 		`the end the held comparison discards must be the truly nearer one`)
 
-	encloses := func(q boundedScalar) bool {
-		lo := new(big.Rat).Sub(toRat(q.value), toRat(q.bound))
-		hi := new(big.Rat).Add(toRat(q.value), toRat(q.bound))
+	encloses := func(q proofbound.BoundedScalar) bool {
+		lo := new(big.Rat).Sub(toRat(q.Value), toRat(q.Bound))
+		hi := new(big.Rat).Add(toRat(q.Value), toRat(q.Bound))
 		return lo.Cmp(truth) <= 0 && hi.Cmp(truth) >= 0
 	}
-	start := measuredScalar(aw.startV, aw.startVBound)
-	end := measuredScalar(aw.endV, aw.endVBound)
+	start := proofbound.MeasuredScalar(aw.startV, aw.startVBound)
+	end := proofbound.MeasuredScalar(aw.endV, aw.endVBound)
 	require.False(t, encloses(start),
 		`the assertion below is vacuous unless the held-selected end's own interval misses the truth`)
-	require.True(t, encloses(boundedMin(start, end)),
+	require.True(t, encloses(proofbound.BoundedMin(start, end)),
 		`the interval minimum must contain the nearer end's true radial coordinate %s (got %v +/- %v)`,
-		truth.FloatString(20), boundedMin(start, end).value, boundedMin(start, end).bound)
+		truth.FloatString(20), proofbound.BoundedMin(start, end).Value, proofbound.BoundedMin(start, end).Bound)
 }
 
 // freeformWallSection is a fit-spline arc closed by a chord — the same shape
@@ -1165,7 +1167,7 @@ func freeformWallSection() ProfileRecord {
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 	t.Parallel()
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
-	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
 	require.NoError(t, err, `a free-form section must not error out of Verify`)
 	require.False(t, out.ok, `undecided, never a silent pass`)
 	require.Equal(t, surveyUndecided, out.reason)
@@ -1180,7 +1182,7 @@ func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := prismWall(newWorkBudget(ctx), pp, 15*math.Pi/180)
+	_, err := prismWall(proofbound.NewWorkBudget(ctx), pp, 15*math.Pi/180)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -1245,7 +1247,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
 				z0:      0, z1: 10,
 			}
-			out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+			out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
 			require.Error(t, err, `a section the survey never read is a failure, never an undecided reading`)
 			if tc.is != nil {
 				require.ErrorIs(t, err, tc.is)
@@ -1264,7 +1266,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 // the same decomposition branches on.
 func TestPrismWallFreeformRefusalKeepsItsSentinels(t *testing.T) {
 	t.Parallel()
-	_, err := recordLoops(newWorkBudget(t.Context()), freeformWallSection())
+	_, err := recordLoops(proofbound.NewWorkBudget(t.Context()), freeformWallSection())
 	require.ErrorIs(t, err, errFreeformSection)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "the wall survey does not support a free-form boundary segment")
@@ -1287,7 +1289,7 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 		}}},
 		z0: 0, z1: 10,
 	}
-	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	out, err := prismWall(proofbound.NewWorkBudget(t.Context()), pp, 15*math.Pi/180)
 	require.NoError(t, err)
 	require.True(t, out.ok)
 	require.NotNil(t, out.reading)
@@ -1443,11 +1445,11 @@ func exactWallComponentSquared(w sideWalk, m placedFrameMap, pull r3.Vec) (num, 
 	if tu == nil || tv == nil {
 		return nil, nil, nil, false
 	}
-	du := ivVec3Dot(m.du, pv).lo
-	dv := ivVec3Dot(m.dv, pv).lo
+	du := ivVec3Dot(m.du, pv).Lo
+	dv := ivVec3Dot(m.dv, pv).Lo
 	num = new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
-	scale2 = ratAdd(ratMul(tu, tu), ratMul(tv, tv))
-	pull2 = ivVec3NormSq(pv).lo
+	scale2 = proofbound.RatAdd(proofbound.RatMul(tu, tu), proofbound.RatMul(tv, tv))
+	pull2 = ivVec3NormSq(pv).Lo
 	return num, scale2, pull2, true
 }
 

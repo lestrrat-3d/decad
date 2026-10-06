@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -32,7 +34,7 @@ import (
 //	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
 //
 // S8 (loft_audit.go) refuses unless F*(F−1)/2 is at or below
-// maxFacetPairTestsPerCall (8_000_000, budget.go), which admits F ≤ 4000:
+// proofbound.MaxFacetPairTestsPerCall (8_000_000, internal/proofbound/budget.go), which admits F ≤ 4000:
 // 4000·3999/2 = 7_998_000 passes and 4001·4000/2 = 8_002_000 does not.
 //
 // H is bounded by Σstations itself. Every loop holds at least one segment and
@@ -94,7 +96,7 @@ func (e *loftStationCapError) Unwrap() error { return errTooManyChords }
 // loop0's segment counts are read: S2 has already proved loop1 carries the same
 // count, which is what makes one loop's shape the pair count for both.
 //
-// The accumulation is checked (wallCheckedAdd, budget.go) and answers false on
+// The accumulation is checked (proofbound.WallCheckedAdd, internal/proofbound/budget.go) and answers false on
 // overflow rather than wrapping, the discipline §5.1 states for every sum the
 // mMax comparison reads.
 func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segmentWalk) (uint64, uint64, bool) {
@@ -104,12 +106,12 @@ func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segme
 		off := offsets[i]
 		for j := range n {
 			var ok bool
-			if p, ok = wallCheckedAdd(p, 1); !ok {
+			if p, ok = proofbound.WallCheckedAdd(p, 1); !ok {
 				return 0, 0, false
 			}
 			k := (j + off) % n
 			if walks0[i][j].kind == walkCircular && walks1[i][k].kind == walkCircular {
-				if c, ok = wallCheckedAdd(c, 1); !ok {
+				if c, ok = proofbound.WallCheckedAdd(c, 1); !ok {
 					return 0, 0, false
 				}
 			}
@@ -140,7 +142,7 @@ func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segme
 // computes. Refusing it here instead would refuse a mixed build while
 // admitting an all-LineSeg build of the identical triangle count.
 func loftStationShare(p, c uint64) int {
-	q := max(int64(0), (int64(loftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts wallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
+	q := max(int64(0), (int64(loftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts proofbound.WallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
 	return 1 + int(q)
 }
 
@@ -290,7 +292,7 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // sagittaUpper is the proven upper bound on max_s |curve(s) - chord(s)|
 // under the SAME parameter this cell's own uniform stations walk — a
 // PARAMETER-MATCHED bound, never a set distance from some chord point to the
-// curve (bounds.go's cellChordCurveAreaUpper doc comment states the
+// curve (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper doc comment states the
 // distinction this field's name exists to keep visible). The LineSeg arm's
 // chord IS the recorded segment, so its bound is exactly zero; the circular
 // arm composes the two terms docs/loft-design.md §5.2's table lists for a
@@ -327,7 +329,7 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 //
 // matchedDelta is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's
 // matchedDelta row — the half a consumer composes with the build's own delta
-// (chordCellDeltaUpper) to reach bounds.go's cellChordCurveAreaUpper own
+// (chordCellDeltaUpper) to reach internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper own
 // matchedDeltaUpper obligation (F1's rule) — ONE ENTRY PER CELL, never a single per-segment
 // scalar, since a bisected free-form arm can settle cells of that one paired
 // segment at different depths and so at different matched-delta readings.
@@ -402,7 +404,7 @@ func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float6
 // discipline §5.2's table states for every term in it.
 func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
 	round := math.Max(walkEndPlaneDelta(w0.startBound), walkEndPlaneDelta(w1.startBound))
-	if isNonFinite(round) {
+	if proofbound.IsNonFinite(round) {
 		return nil, nil, 0, nil, 0, errLoftStationDisplacementUnderivable
 	}
 	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, []float64{0}, round, nil
@@ -446,7 +448,7 @@ func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target 
 	for {
 		s0 := loftCertifiedSagittaUpper(seg0, m)
 		s1 := loftCertifiedSagittaUpper(seg1, m)
-		if isNonFinite(s0) || isNonFinite(s1) {
+		if proofbound.IsNonFinite(s0) || proofbound.IsNonFinite(s1) {
 			return 0, 0, 0, errLoftSagittaUnderivable
 		}
 		if s0 <= target && s1 <= target {
@@ -530,7 +532,7 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 	// publishing the certified sagitta alone — which would be a bound on a
 	// chord this build did not draw.
 	stationUpper := math.Max(d0, d1)
-	if isNonFinite(stationUpper) {
+	if proofbound.IsNonFinite(stationUpper) {
 		return nil, nil, 0, nil, 0, errLoftStationDisplacementUnderivable
 	}
 
@@ -576,11 +578,11 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 // For a circular segment (CircleSeg/ArcSeg) that whole-length bound is
 // moments.go's circularLengthInterval — an EXACT rational bracket on the
 // segment's true length — never segmentWalk.lengthUpper: that field's own
-// bound is deliberately loose (circularSweepUpper bounds any ArcSeg's sweep
+// bound is deliberately loose (proofbound.CircularSweepUpper bounds any ArcSeg's sweep
 // by the full 2*pi it could reach, never the sweep THIS record states, per
 // its own doc comment), so a quarter-turn arc's lengthUpper overstates its
 // true length by roughly 4x — a slack that would flow straight through this
-// division into cellChordCurveAreaUpper's own arcLenUpper argument and
+// division into proofbound.CellChordCurveAreaUpper's own arcLenUpper argument and
 // quadruple the wall/seam/cap terms it feeds (an earlier version of this
 // function did exactly that, measured Suspect on the calibrated reference
 // wedge before this fix). The tight bracket is what keeps the per-cell share
@@ -594,13 +596,13 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
 	if ns, err := normalizeSegment(seg); err == nil {
 		if iv, ok := circularLengthInterval(ns); ok {
-			return upRound(ratFloatUp(iv.hi) / float64(m))
+			return proofbound.UpRound(proofbound.RatFloatUp(iv.Hi) / float64(m))
 		}
 	}
-	if isNonFinite(w.lengthUpper) {
+	if proofbound.IsNonFinite(w.lengthUpper) {
 		return math.Inf(1)
 	}
-	return upRound(w.lengthUpper / float64(m))
+	return proofbound.UpRound(w.lengthUpper / float64(m))
 }
 
 // chordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
@@ -628,10 +630,10 @@ func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
 // Either term underivable answers +Inf, the answer §5.2's table assigns those
 // rows, and the caller refuses on it.
 func chordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
-	if isNonFinite(sagittaUpper) || isNonFinite(deltaUpper) {
+	if proofbound.IsNonFinite(sagittaUpper) || proofbound.IsNonFinite(deltaUpper) {
 		return math.Inf(1)
 	}
-	return absSumUpper(sagittaUpper, deltaUpper)
+	return proofbound.AbsSumUpper(sagittaUpper, deltaUpper)
 }
 
 // errLoftStationDisplacementUnderivable is the sentinel docs/loft-design.md
@@ -650,7 +652,7 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 	`%w: a loft pair's generated stations have no proven displacement from the recorded curve`, ErrUnsupported,
 )
 
-// perCellTangentEnergy is bounds.go's cellChordCurveAreaAllow own
+// perCellTangentEnergy is internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow own
 // tangentEnergyUpper obligation for ONE cell of this walk: a proven upper bound
 // on the integral of |curve'(s) - chord|^2 over the cell's own shared
 // parameter, or +Inf where this evaluator cannot prove one.
@@ -659,14 +661,14 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 // perCellArcUpper over circularLengthInterval, and loftCertifiedChordLower over
 // circularWalkEnclosures — never from the walk's own held math.Hypot radius and
 // math.Atan2 angles, neither of which the walk can enclose (extrude.go's
-// circularWalk). uniformSpeedTangentEnergyUpper's published energy DECREASES in
+// circularWalk). proofbound.UniformSpeedTangentEnergyUpper's published energy DECREASES in
 // its chord operand, so a chord read off those floats can overstate the true
 // chord and understate the energy every consumer downstream spends: a held
 // value wearing a proof's clothes, which circularWalkEnclosures' own doc
 // comment forbids.
 //
 // It is dispatched on the WALK KIND rather than shared across every arm,
-// because the obligation uniformSpeedTangentEnergyUpper discharges rests on the
+// because the obligation proofbound.UniformSpeedTangentEnergyUpper discharges rests on the
 // shared parametrization having CONSTANT SPEED — a property of the arm that
 // placed the stations, not of the cell's geometry. The circular arm's
 // uniform-ANGLE stations (loftCircularCellStations) are constant speed on a
@@ -674,14 +676,14 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 // its deviation is identically zero. Any FUTURE kind — the free-form arm's own
 // span-uniform native fraction above all, which is NOT constant speed — answers
 // +Inf here until it carries a proof of its own, so it degrades
-// cellChordCurveAreaAllow to that helper's premise-free arm rather than being
+// proofbound.CellChordCurveAreaAllow to that helper's premise-free arm rather than being
 // silently handed a bound whose premise it does not meet.
 func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 	switch w.kind {
 	case walkLine:
 		return 0
 	case walkCircular:
-		return uniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), loftCertifiedChordLower(seg, m))
+		return proofbound.UniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), loftCertifiedChordLower(seg, m))
 	default:
 		return math.Inf(1)
 	}
@@ -720,7 +722,7 @@ func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 // point can miss the recorded curve's own point by a rounding the certified
 // sagitta says nothing about. circularPointBound (extrude.go) encloses that
 // recorded point from the RECORD, at the station's own EXACT rational
-// parameter t_k = TStart + (k/m)·(TEnd − TStart), and radius2D turns the two
+// parameter t_k = TStart + (k/m)·(TEnd − TStart), and proofbound.Radius2D turns the two
 // componentwise gaps into the plane distance the caller's chord bound is
 // stated in.
 //
@@ -765,14 +767,14 @@ func circularStationChain(w segmentWalk, seg CurveSegment, m int) ([]Point2, flo
 
 // walkEndPlaneDelta reads a walk endpoint's two componentwise bounds as one
 // in-section-plane distance: the two components are along the section frame's
-// own orthogonal U and V, so radius2D's √2 factor over the wider of them is an
+// own orthogonal U and V, so proofbound.Radius2D's √2 factor over the wider of them is an
 // upper bound on the displacement's own length. An underivable component
 // answers +Inf, never a small number spent in its place.
-func walkEndPlaneDelta(bound walkEndBound) float64 {
-	if !bound.derivable() {
+func walkEndPlaneDelta(bound proofbound.WalkEndBound) float64 {
+	if !bound.Derivable() {
 		return math.Inf(1)
 	}
-	return radius2D(math.Abs(bound.u), math.Abs(bound.v))
+	return proofbound.Radius2D(math.Abs(bound.U), math.Abs(bound.V))
 }
 
 // arcNaturalEndRadialUpper charges docs/loft-design.md §5.2's ARC-END RADIAL
@@ -807,7 +809,7 @@ func walkEndPlaneDelta(bound walkEndBound) float64 {
 // square roots. |r1 − r0| is |r1² − r0²| / (r1 + r0); the numerator is the
 // exact rational difference of the two recorded squared distances, and the
 // denominator is replaced by a rounded-DOWN sum of the two radii
-// (ratSqrtDown), which can only enlarge the quotient. ratFloatUp rounds the
+// (proofbound.RatSqrtDown), which can only enlarge the quotient. proofbound.RatFloatUp rounds the
 // result out once. Equal squared radii answer exactly zero, so a record that
 // does state an exact circle keeps the zero delta §5.2 grants it.
 //
@@ -833,12 +835,12 @@ func arcNaturalEndRadialUpper(seg CurveSegment) float64 {
 	}
 	diff.Abs(diff)
 
-	den := new(big.Rat).Add(proofarith.FloatRat(ratSqrtDown(r0)), proofarith.FloatRat(ratSqrtDown(r1)))
+	den := new(big.Rat).Add(proofarith.FloatRat(proofbound.RatSqrtDown(r0)), proofarith.FloatRat(proofbound.RatSqrtDown(r1)))
 	if den.Sign() <= 0 {
 		return math.Inf(1)
 	}
-	up := ratFloatUp(new(big.Rat).Quo(diff, den))
-	if isNonFinite(up) {
+	up := proofbound.RatFloatUp(new(big.Rat).Quo(diff, den))
+	if proofbound.IsNonFinite(up) {
 		return math.Inf(1)
 	}
 	return up
@@ -879,12 +881,12 @@ func circularSegmentRange(seg CurveSegment) (*big.Rat, *big.Rat, bool) {
 //
 // The quantity is 2·r·sin²(Δθ/4m) with r the segment's radius and Δθ the angle
 // its walk sweeps. Both come from circularWalkEnclosures (moments.go), which
-// states them from the RECORD — an ArcSeg's ratSqrtDown/ratSqrtUp radius and
-// its atan2Interval swept angle, a CircleSeg's recorded radius and exact
+// states them from the RECORD — an ArcSeg's proofbound.RatSqrtDown/proofbound.RatSqrtUp radius and
+// its proofbound.Atan2Interval swept angle, a CircleSeg's recorded radius and exact
 // rational turn — never from the walk's held math.Hypot radius and math.Atan2
 // angles, neither of which the walk can enclose (extrude.go's circularWalk).
 // radSinCosSpan supplies the sine of the enclosed cell half-angle, and the
-// squaring goes through intervalMul, whose four-corner upper end dominates
+// squaring goes through proofbound.IntervalMul, whose four-corner upper end dominates
 // max x² over the span whatever the span's sign.
 //
 // The derivation of the form itself belongs to §5.2's table, on its per-cell
@@ -901,14 +903,14 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 	if !ok {
 		return math.Inf(1)
 	}
-	half := intervalScale(sweep, big.NewRat(1, 4*int64(m)))
+	half := proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m)))
 	sin, _, ok := radSinCosSpan(half)
 	if !ok {
 		return math.Inf(1)
 	}
-	s := intervalMul(intervalScale(radius, big.NewRat(2, 1)), intervalMul(sin, sin))
-	up := ratFloatUp(s.hi)
-	if isNonFinite(up) {
+	s := proofbound.IntervalMul(proofbound.IntervalScale(radius, big.NewRat(2, 1)), proofbound.IntervalMul(sin, sin))
+	up := proofbound.RatFloatUp(s.Hi)
+	if proofbound.IsNonFinite(up) {
 		return math.Inf(1)
 	}
 	return up
@@ -917,7 +919,7 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 // loftCertifiedChordLower is a PROVEN LOWER bound on ONE uniform-angle cell's
 // own true chord length at a station count m — the chord between the two points
 // the RECORD denotes at the cell's own two parameters, which is
-// uniformSpeedTangentEnergyUpper's own chordLower obligation and must never
+// proofbound.UniformSpeedTangentEnergyUpper's own chordLower obligation and must never
 // overstate that chord.
 //
 // The quantity is 2·r·sin(Δθ/2m), r the segment's radius and Δθ the angle its
@@ -930,11 +932,11 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 // this operand — so a float-derived "lower" bound that lands above the true
 // chord understates the energy and every area allowance composed from it.
 //
-// The product runs through intervalMul, whose four-corner LOWER end is a bound
+// The product runs through proofbound.IntervalMul, whose four-corner LOWER end is a bound
 // on 2·r·sin over the whole enclosure and so on the true chord wherever in it
 // the true radius and sweep lie. A record this bracket cannot state, or a
 // bracket whose own lower end is not positive, answers 0 — a valid, if empty,
-// lower bound on any chord, which costs uniformSpeedTangentEnergyUpper its
+// lower bound on any chord, which costs proofbound.UniformSpeedTangentEnergyUpper its
 // sharpness and never its soundness.
 func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
 	if m <= 0 {
@@ -944,14 +946,14 @@ func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
 	if !ok {
 		return 0
 	}
-	half := intervalScale(sweep, big.NewRat(1, 2*int64(m)))
+	half := proofbound.IntervalScale(sweep, big.NewRat(1, 2*int64(m)))
 	sin, _, ok := radSinCosSpan(half)
 	if !ok {
 		return 0
 	}
-	c := intervalMul(intervalScale(radius, big.NewRat(2, 1)), sin)
-	lo := ratFloatDown(c.lo)
-	if isNonFinite(lo) || lo <= 0 {
+	c := proofbound.IntervalMul(proofbound.IntervalScale(radius, big.NewRat(2, 1)), sin)
+	lo := proofbound.RatFloatDown(c.Lo)
+	if proofbound.IsNonFinite(lo) || lo <= 0 {
 		return 0
 	}
 	return lo

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -58,10 +60,10 @@ type loftPayload struct {
 
 	// delta is the proven displacement of every held vertex from the exact
 	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
-	// a10-plan.md Part 3 PR 6): absSumUpper(stationRound, placeAllow).
+	// a10-plan.md Part 3 PR 6): proofbound.AbsSumUpper(stationRound, placeAllow).
 	// placeAllow is zero for an unplaced body — pl.xform == r3.Identity(), an
 	// exact struct comparison, never a tolerance — and otherwise
-	// bounds.go's rigidRoundAllow, read at the pre-transform lifted point's
+	// internal/proofbound/bounds.go's proofbound.RigidRoundAllow, read at the pre-transform lifted point's
 	// own magnitude and the composed translation's magnitude. stationRound is
 	// each station's own displacement from the point the record denotes for
 	// it — an exact-rational trig enclosure rounded once into a Point2 for a
@@ -96,7 +98,7 @@ type loftPayload struct {
 	// plane, from the curve it chords. A reading that needs both sums them
 	// into its own bound; neither is ever substituted for the other.
 	//
-	// It is ALSO never bounds.go's cellChordCurveAreaUpper's own
+	// It is ALSO never internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper's own
 	// matchedDeltaUpper obligation, a STRONGER, DIFFERENT quantity that
 	// helper's own doc comment defines. §5.2's table owns both terms and the
 	// relation between them: its matchedDelta row states what that
@@ -110,9 +112,9 @@ type loftPayload struct {
 	// and evalLoft sums that MAX with the delta above through
 	// chordCellDeltaUpper before passing it — never this field — to
 	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
-	// which is where every chordedBoundaryVolumeAllow,
-	// chordedBoundaryMomentAllow, chordedBoundarySeamAllow and cap-area
-	// matched argument comes from; cellChordCurveAreaUpper reads the same
+	// which is where every proofbound.ChordedBoundaryVolumeAllow,
+	// proofbound.ChordedBoundaryMomentAllow, proofbound.ChordedBoundarySeamAllow and cap-area
+	// matched argument comes from; proofbound.CellChordCurveAreaUpper reads the same
 	// composition per cell, over the cell's own chord-to-curve half.
 	// The raw matched quantity itself is a PER-BUILD LOCAL of evalLoft and is
 	// never a field here. What the payload stores instead is the proof
@@ -158,8 +160,8 @@ type loftPayload struct {
 // already derive for the SAME triangle set, and no consumer recomposes it.
 //
 // It is deliberately not any of the payload's other published displacements.
-// facetDeparture is §5.2's facet-departure row — absSumUpper(matchedDelta,
-// maxTwistOffsetUpper) — and never Bounds.Bound's absSumUpper(delta,
+// facetDeparture is §5.2's facet-departure row — proofbound.AbsSumUpper(matchedDelta,
+// maxTwistOffsetUpper) — and never Bounds.Bound's proofbound.AbsSumUpper(delta,
 // sectionDelta), which answers the different, SET-distance question §5.2's own
 // Bounds.Bound row states. A zero in any field is a published proof of
 // exactness, so each is composed from the terms' own values and never assumed
@@ -215,7 +217,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	// is exactly the disagreement the payload's own doc comment forbids.
 	next.capStartCount, next.cell, next.side = 0, nil, nil
 	next.proof = loftMeshProof{}
-	return evalLoft(ctx, d, ref, next, newWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
 }
 
 // validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2).
@@ -261,7 +263,7 @@ func validateLoftBodyMeasurements(body *Body) error {
 // kind, so nothing here charges them yet — but the counters are still
 // threaded through so a future free-form correspondence does not silently
 // open a second ceiling per record.
-func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
+func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *proofbound.WorkBudget, work0, work1 *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -341,7 +343,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
 	// docs/loft-design.md §5.2's matchedDelta row, composed here and nowhere
-	// else: absSumUpper of the build's own MAX-over-cells chord-to-curve
+	// else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
 	// departure (loftPairings' sectionMatchedDelta) and the held vertex
 	// displacement a.delta. The two halves are accumulated apart — a chord's
 	// departure from the curve it chords, and a station's departure from the
@@ -414,9 +416,9 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// added in — but a SMALLER, uncomposed bound: the wall sum alone
 		// carries none of the two caps' own rounding, which §4.3 requires
 		// the sheet's bound to include.
-		areaScalar := boundedSub(
-			boundedSub(measurementScalar(body.area), measuredScalar(capStart.area, capStart.areaBound)),
-			measuredScalar(capEnd.area, capEnd.areaBound),
+		areaScalar := proofbound.BoundedSub(
+			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.area, capStart.areaBound)),
+			proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
 		// bound: the solid loft's own mass.area() always publishes
@@ -425,9 +427,9 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// triangles must never claim more exactness than the body it came
 		// from, whatever its own composed bound happens to round to.
 		body.area = Measurement{
-			Value:     units.SquareMillimeters(areaScalar.value),
+			Value:     units.SquareMillimeters(areaScalar.Value),
 			Exactness: Approximate,
-			Bound:     units.SquareMillimeters(areaScalar.bound),
+			Bound:     units.SquareMillimeters(areaScalar.Bound),
 		}
 	}
 
@@ -461,14 +463,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 //
 // The three terms and why each reads what it does:
 //
-//   - facetDeparture is §5.2's own facet-departure row, absSumUpper of the
+//   - facetDeparture is §5.2's own facet-departure row, proofbound.AbsSumUpper of the
 //     parameter-matched chord departure and the wall's facet twist. Its first
 //     leg is composed UNCONDITIONALLY rather than through evalLoft's gated
 //     matchedDelta, because a LineSeg-only build reaches that gate's zero while
 //     its facets still sit delta from the boundary they stand for: §5.2's row
 //     states matchedDelta reduces to delta there, and a published 0 would be
 //     the claim that the mesh IS the true boundary. It is NOT Bounds.Bound's
-//     absSumUpper(delta, sectionDelta), which answers a SET-distance question.
+//     proofbound.AbsSumUpper(delta, sectionDelta), which answers a SET-distance question.
 //   - areaSlack sums the per-triangle perturbation allowance the accumulator
 //     already holds with the wall's held-to-bilinear leg, its ruled and
 //     station-shift legs, and the two caps' own capAreaAllow. The
@@ -486,19 +488,19 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 // refuses on it instead of publishing it.
 func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta, matchedDelta float64) loftMeshProof {
 	return loftMeshProof{
-		facetDeparture: absSumUpper(
+		facetDeparture: proofbound.AbsSumUpper(
 			chordCellDeltaUpper(sectionMatchedDelta, a.delta),
 			m.chorded.maxTwistOffsetUpper,
 		),
-		areaSlack: absSumUpper(
+		areaSlack: proofbound.AbsSumUpper(
 			m.perturbAreaSum,
 			m.chorded.twistAreaAllow,
 			m.chorded.areaExcess,
 			m.chorded.capAreaExcess,
 		),
-		volSymDiff: absSumUpper(
-			sweptVolumeAllow(a.delta, perturbedAreaUpper(a.verts, a.tris, a.delta)),
-			chordedBoundaryVolumeAllow(
+		volSymDiff: proofbound.AbsSumUpper(
+			proofbound.SweptVolumeAllow(a.delta, proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta)),
+			proofbound.ChordedBoundaryVolumeAllow(
 				matchedDelta,
 				m.chorded.wallAreaUpper,
 				m.chorded.twistVolumeUpper,

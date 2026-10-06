@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -118,7 +120,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		return nil, err
 	}
 
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, err
@@ -314,7 +316,7 @@ func requireExactSection(pp prismPayload, op string) error {
 	)
 }
 
-func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, error) {
+func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]cornerLoop, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
 	}
@@ -355,7 +357,7 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 // the corner point lifted to the two caps. A cap edge matches nothing (its
 // endpoints share a cap plane), which is exactly S1's honest reading of the
 // class.
-func matchCornerBudget(budget *workBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
+func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
 	if _, ok := e.curve.(Line3); !ok {
 		return 0, 0, false, nil
 	}
@@ -657,7 +659,7 @@ func rewriteProfile(orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*c
 	return profile, blendSegs
 }
 
-func rewriteProfileBudget(budget *workBudget, orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}, error) {
+func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}, error) {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := make([]LoopRecord, len(origLoops))
 	blendSegs := make([]map[int]struct{}, len(origLoops))
@@ -687,7 +689,7 @@ func rewriteProfileBudget(budget *workBudget, orig ProfileRecord, loops []corner
 // is trimmed to the feet its two ends' blends pin, and each blend's connector —
 // a fillet's tangent arc or a chamfer's chord — is inserted between the walls it
 // joins.
-func rewriteLoop(budget *workBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}, error) {
+func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}, error) {
 	n := len(loop.walks)
 	var segs []CurveSegment
 	connectors := map[int]struct{}{}

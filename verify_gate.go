@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -113,7 +115,7 @@ import (
 // power-of-two scaling), so the difference is the one rounding here, and
 // round-to-nearest can land it ABOVE the exact d - 2*delta — a reference
 // larger than the one proven, which loosens the very gate this arm exists to
-// tighten. downRound (spline_length.go, upRound's mirror) steps it back
+// tighten. downRound (spline_length.go, proofbound.UpRound's mirror) steps it back
 // toward zero, so the published reference is at or below the exact shrunken
 // value for every input rather than only for the ones whose subtraction
 // happens to round down. A shrink that collapses to non-positive leaves the
@@ -158,7 +160,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		if err != nil || !ok {
 			return 0, false, err
 		}
-		return chainVertexGateDiameter(ctx, body, absSumUpper(payload.sectionDelta, endpointAllow))
+		return chainVertexGateDiameter(ctx, body, proofbound.AbsSumUpper(payload.sectionDelta, endpointAllow))
 	}
 	if _, ok := body.payload.(chainLoftPayload); ok {
 		return chainVertexGateDiameter(ctx, body, 0)
@@ -192,7 +194,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return 0, false, err
@@ -211,7 +213,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 				return 0, false, err
 			}
 			rhoUpper := payload.ax.radialUpper(coordUpper)
-			d, ok = lowerDiameterForDisplacement(d, productUpper(rhoUpper, payload.angularDelta()))
+			d, ok = lowerDiameterForDisplacement(d, proofbound.ProductUpper(rhoUpper, payload.angularDelta()))
 		}
 		return d, ok, nil
 	}
@@ -239,15 +241,15 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			if err != nil {
 				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
 			}
-			for _, bound := range [2]walkEndBound{walk.startBound, walk.endBound} {
-				endAllow := walkEndBoundAllow(bound)
+			for _, bound := range [2]proofbound.WalkEndBound{walk.startBound, walk.endBound} {
+				endAllow := proofbound.WalkEndBoundAllow(bound)
 				if !usableMagnitude(endAllow) {
 					return 0, false, nil
 				}
 				allow = math.Max(allow, endAllow)
 			}
 			// An ArcSeg's recorded natural end can sit off the radius its
-			// denoted circle reads from Start, even when walkEndBound is zero.
+			// denoted circle reads from Start, even when proofbound.WalkEndBound is zero.
 			residual := arcNaturalEndRadialUpper(segment)
 			if !usableMagnitude(residual) {
 				return 0, false, nil
@@ -276,7 +278,7 @@ func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64
 		}
 		position := vertex.Position()
 		bound := position.Bound.Base()
-		if !finiteVec(position.Value) || !usableMagnitude(bound) {
+		if !proofbound.FiniteVec(position.Value) || !usableMagnitude(bound) {
 			return 0, false, nil
 		}
 		points = append(points, position.Value)
@@ -286,7 +288,7 @@ func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64
 	if err != nil || !ok {
 		return d, ok, err
 	}
-	d, ok = lowerDiameterForDisplacement(d, absSumUpper(maxBound, extraAllow))
+	d, ok = lowerDiameterForDisplacement(d, proofbound.AbsSumUpper(maxBound, extraAllow))
 	return d, ok && d > 0, nil
 }
 
@@ -319,9 +321,9 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 			continue
 		}
 		lengthLow := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), new(big.Rat).SetFloat64(bound))
-		denominator := new(big.Rat).SetFloat64(twoPiUpper())
+		denominator := new(big.Rat).SetFloat64(proofbound.TwoPiUpper())
 		diameterLow := new(big.Rat).Quo(lengthLow.Mul(lengthLow, big.NewRat(2, 1)), denominator)
-		d, ok := lowerDiameterForDisplacement(ratFloatDown(diameterLow), sectionDelta)
+		d, ok := lowerDiameterForDisplacement(proofbound.RatFloatDown(diameterLow), sectionDelta)
 		if ok && d > 0 {
 			return d, true, nil
 		}
@@ -380,7 +382,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // free-form wall in practice, since the analytic prism-boolean reduction
 // never admits one — docs/prism-boolean-design.md's G4 — but read here rather
 // than assumed), the payload's own axialDelta, and the widest per-witness
-// endpoint bound walkEndBoundAllow reads off whichever walk produced it — an
+// endpoint bound proofbound.WalkEndBoundAllow reads off whichever walk produced it — an
 // analytic walk's recorded-coordinate bound (zero for a whole segment,
 // nonzero for a trimmed one) or a free-form span's own conversion rounding.
 // Composing the widest witness bound as one uniform displacement, rather than
@@ -401,7 +403,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 //     R-table sentinel), so the section never becomes a walk at all;
 //   - a free-form walk holds an empty Bézier span, or a span endpoint with no
 //     finite float form (point2Of), so no witness can be placed on that curve;
-//   - a witness's own endpoint bound cannot be derived (walkEndBoundAllow's
+//   - a witness's own endpoint bound cannot be derived (proofbound.WalkEndBoundAllow's
 //     +Inf), since an absent bound must never read as a small one — this covers
 //     an analytic walk's own two endpoints and a free-form span's alike;
 //   - the shared reader declines the witness maximum (pointSetDiameterWithBudget
@@ -433,9 +435,9 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 	ownBound := 0.0
 	var pts []r3.Vec
 
-	addWitness := func(u, v float64, bound walkEndBound) bool {
-		allow := walkEndBoundAllow(bound)
-		if isNonFinite(allow) {
+	addWitness := func(u, v float64, bound proofbound.WalkEndBound) bool {
+		allow := proofbound.WalkEndBoundAllow(bound)
+		if proofbound.IsNonFinite(allow) {
 			return false
 		}
 		ownBound = math.Max(ownBound, allow)
@@ -480,9 +482,9 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 					if !ok {
 						return 0, false, nil
 					}
-					bound := walkEndBound{
-						u: proofarith.RationalFloatError(cp.u, held.U),
-						v: proofarith.RationalFloatError(cp.v, held.V),
+					bound := proofbound.WalkEndBound{
+						U: proofarith.RationalFloatError(cp.u, held.U),
+						V: proofarith.RationalFloatError(cp.v, held.V),
 					}
 					if !addWitness(held.U, held.V, bound) {
 						return 0, false, nil
@@ -502,7 +504,7 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 	if !ok {
 		return 0, false, nil
 	}
-	displacement := absSumUpper(pp.sectionDelta, pp.axialDelta(), ownBound)
+	displacement := proofbound.AbsSumUpper(pp.sectionDelta, pp.axialDelta(), ownBound)
 	d, ok = lowerDiameterForDisplacement(d, displacement)
 	return d, ok, nil
 }
@@ -574,7 +576,7 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 // held witness maximum by that amount before it becomes a lower-bound
 // reference, which is why gateWitnessPrism hands back a displacement beside
 // the prism to read.
-func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
+func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, bool, error) {
 	witness, displacement, ok := gateWitnessPrism(body.payload)
 	if !ok {
 		return 0, false, nil
@@ -586,7 +588,7 @@ func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 	}
 	var pts []r3.Vec
 	for _, f := range g.faces {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, false, err
 		}
 		pts = append(pts, f.wit...)
@@ -668,25 +670,25 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 	case cupPayload:
 		witness := pl.outerPrism()
 		witness.profile = pl.outer
-		displacement := absSumUpper(witness.sectionDelta, witness.axialDelta())
+		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
 		witness.sectionDelta = 0
 		return witness, displacement, true
 	case stackedPrismPayload:
 		witness := pl.outerPrism()
-		displacement := absSumUpper(pl.sectionDelta, pl.axialDelta())
+		displacement := proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta())
 		witness.sectionDelta = 0
 		return witness, displacement, true
 	case prismPayload:
 		if pl.sectionDelta == 0 {
 			return prismPayload{}, 0, false
 		}
-		displacement := absSumUpper(pl.sectionDelta, pl.axialDelta())
+		displacement := proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta())
 		witness := pl
 		witness.sectionDelta = 0
 		return witness, displacement, true
 	case sweepPayload:
 		witness := pl.prism
-		displacement := absSumUpper(witness.sectionDelta, witness.axialDelta())
+		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
 		witness.sectionDelta = 0
 		return witness, displacement, true
 	default:
@@ -700,7 +702,7 @@ func pointSetDiameter(points []r3.Vec) (float64, bool) {
 }
 
 func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, bool, error) {
-	return pointSetDiameterWithBudget(newWorkBudget(ctx), points)
+	return pointSetDiameterWithBudget(proofbound.NewWorkBudget(ctx), points)
 }
 
 // pointSetDiameterWithBudget is the ONE witness-maximum reader every gate
@@ -733,7 +735,7 @@ func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, boo
 // ok is false for an empty set, for a pair distance that is not a usable
 // magnitude, and for a winning pair whose coordinates have no exact rational
 // form — an absent answer, never a substitute one.
-func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, bool, error) {
+func pointSetDiameterWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, bool, error) {
 	if len(points) == 0 {
 		return 0, false, nil
 	}
@@ -742,7 +744,7 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 	for i := range points {
 		for j := i + 1; j < len(points); j++ {
 			if budget != nil {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return 0, false, err
 				}
 			}
@@ -756,7 +758,7 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 		}
 	}
 	if budget != nil {
-		if err := budget.err(); err != nil {
+		if err := budget.Err(); err != nil {
 			return 0, false, err
 		}
 	}
@@ -775,7 +777,7 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 // exactPairDistanceDown returns the largest float64 at or below the EXACT
 // distance between two points. Both coordinates of each axis are float64s and
 // so are exact rationals; the difference and its square are exact in that
-// arithmetic, and ratSqrtDown (spline_length.go) decides the last step by
+// arithmetic, and proofbound.RatSqrtDown (spline_length.go) decides the last step by
 // comparing a candidate's exact square against the exact sum rather than by
 // trusting the platform's own square root. Nothing in the chain rounds outward,
 // so the answer is proven to be at or below the pair's true distance.
@@ -792,5 +794,5 @@ func exactPairDistanceDown(a, b r3.Vec) (float64, bool) {
 		d := ra.Sub(ra, rb)
 		total.Add(total, d.Mul(d, d))
 	}
-	return ratSqrtDown(total), true
+	return proofbound.RatSqrtDown(total), true
 }

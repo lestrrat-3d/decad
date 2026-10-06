@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -21,7 +23,7 @@ import (
 // payload whose every band capBlendOccupiedVolumeAdmission (capblend_admit.go)
 // admits — whole turns, line-line miters and exactly G1 joins: the chord
 // polygon's circular-segment integral over the trimmed and band ranges
-// (capBlendChordVolume) plus sweptVolumeAllow over each vertex's displacement
+// (capBlendChordVolume) plus proofbound.SweptVolumeAllow over each vertex's displacement
 // from the ideal polyhedron B1. Every other band — a circular wall at a genuine
 // miter, a reflex corner — leaves the mesh export-only with symDiffOK false,
 // and the mesh boolean refuses that operand (boolean.go's
@@ -58,7 +60,7 @@ type capBlendLoopMesh struct {
 	whole          bool
 	onStart, onEnd bool
 	chamfered      bool
-	zLo, zHi       boundedScalar
+	zLo, zHi       proofbound.BoundedScalar
 	count          []int     // the shared chord count of walk i
 	sideSag        []float64 // walk i's own side-directrix sagitta at that count
 	capSag         []float64 // walk i's cap-directrix sagitta at that count
@@ -69,10 +71,10 @@ type capBlendLoopMesh struct {
 	arcTh0, arcTh1 []float64
 	locusGap       []float64 // corner i's ruling-versus-locus gap, both caps alike
 	sidePts        []Point2
-	sideBound      []walkEndBound
+	sideBound      []proofbound.WalkEndBound
 	sideStart      []int // walk i's first side sample
 	capPts         []Point2
-	capBound       []walkEndBound
+	capBound       []proofbound.WalkEndBound
 	capWallStart   []int // walk i's first cap sample
 	// capMotion is each cap sample's plane-local displacement from the point
 	// docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there,
@@ -121,7 +123,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 
 	pl := cbp.prismLike(0, 0)
 	work := newFreeformWork()
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	loops := cbp.loops()
 	lms := make([]capBlendLoopMesh, len(loops))
 	for li, loop := range loops {
@@ -162,19 +164,19 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	// Trimmed side walls: the prism's own cells between the loop's two rings.
 	for li := range lms {
 		lm := &lms[li]
-		axial := math.Max(lm.zLo.bound, lm.zHi.bound)
-		height := math.Abs(lm.zHi.value - lm.zLo.value)
+		axial := math.Max(lm.zLo.Bound, lm.zHi.Bound)
+		height := math.Abs(lm.zHi.Value - lm.zLo.Value)
 		n := len(lm.walks)
 		for i, w := range lm.walks {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", lm.li, w.segs[0]))
 			if err != nil {
 				return nil, err
 			}
-			bump(face, absSumUpper(lm.sideSag[i], axial))
-			mesh.areaSlack = absSumUpper(mesh.areaSlack, walkWallSlack(w.segmentWalk, lm.count[i], height))
+			bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.segmentWalk, lm.count[i], height))
 			for k := range lm.count[i] {
 				g0 := lm.sideStart[i] + k
 				g1 := lm.sideStart[i] + k + 1
@@ -237,8 +239,8 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := composeCapBlendBounds(&mesh, faceExtra, store); err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
-	if isNonFinite(mesh.areaSlack) {
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, store))
+	if proofbound.IsNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: this cap-loop chamfer mesh states no finite area slack`, ErrUnsupported)
 	}
 	if !proveVolume {
@@ -268,7 +270,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 	terms := []float64{
 		capBlendChordVolume(cbp, lms),
-		sweptVolumeAllow(motionMax, perturbedAreaUpper(mesh.vertices, mesh.triangles, motionMax)),
+		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, motionMax)),
 	}
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
@@ -287,13 +289,13 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 // the rounding exactPrismPointRound measures, and the proven bound on the level
 // it stands at, summed outward. The rounding is measured once per vertex and
 // read by both arrays.
-func capBlendVertices(budget *workBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
+func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
 	var store, motion []float64
 	addVertex := func(p Point2, z, plane float64) (int, float64) {
 		held := pl.point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, held)
 		round := exactPrismPointRound(pl, p.U, p.V, z, held)
-		store = append(store, absSumUpper(plane, round))
+		store = append(store, proofbound.AbsSumUpper(plane, round))
 		return len(mesh.vertices) - 1, round
 	}
 	startLevel := cbp.capBandLevel(cbp.z0, 1)
@@ -303,18 +305,18 @@ func capBlendVertices(budget *workBudget, cbp capBlendPayload, pl prismPayload, 
 		lm.sideLo = make([]int, len(lm.sidePts))
 		lm.sideHi = make([]int, len(lm.sidePts))
 		for j, p := range lm.sidePts {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, nil, err
 			}
-			plane := walkEndBoundAllow(lm.sideBound[j])
+			plane := proofbound.WalkEndBoundAllow(lm.sideBound[j])
 			var round float64
-			lm.sideLo[j], round = addVertex(p, lm.zLo.value, plane)
+			lm.sideLo[j], round = addVertex(p, lm.zLo.Value, plane)
 			if proveVolume {
-				motion = append(motion, absSumUpper(plane, round, lm.zLo.bound))
+				motion = append(motion, proofbound.AbsSumUpper(plane, round, lm.zLo.Bound))
 			}
-			lm.sideHi[j], round = addVertex(p, lm.zHi.value, plane)
+			lm.sideHi[j], round = addVertex(p, lm.zHi.Value, plane)
 			if proveVolume {
-				motion = append(motion, absSumUpper(plane, round, lm.zHi.bound))
+				motion = append(motion, proofbound.AbsSumUpper(plane, round, lm.zHi.Bound))
 			}
 		}
 		if len(lm.capPts) == 0 {
@@ -323,21 +325,21 @@ func capBlendVertices(budget *workBudget, cbp capBlendPayload, pl prismPayload, 
 		lm.capLoV = make([]int, len(lm.capPts))
 		lm.capHiV = make([]int, len(lm.capPts))
 		for j, p := range lm.capPts {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, nil, err
 			}
-			plane := walkEndBoundAllow(lm.capBound[j])
+			plane := proofbound.WalkEndBoundAllow(lm.capBound[j])
 			var round float64
 			if lm.onStart {
 				lm.capLoV[j], round = addVertex(p, cbp.z0, plane)
 				if proveVolume {
-					motion = append(motion, absSumUpper(lm.capMotion[j], round, startLevel.bound))
+					motion = append(motion, proofbound.AbsSumUpper(lm.capMotion[j], round, startLevel.Bound))
 				}
 			}
 			if lm.onEnd {
 				lm.capHiV[j], round = addVertex(p, cbp.z1, plane)
 				if proveVolume {
-					motion = append(motion, absSumUpper(lm.capMotion[j], round, endLevel.bound))
+					motion = append(motion, proofbound.AbsSumUpper(lm.capMotion[j], round, endLevel.Bound))
 				}
 			}
 		}
@@ -354,7 +356,7 @@ func capBlendVertices(budget *workBudget, cbp capBlendPayload, pl prismPayload, 
 // A reflex connector station keeps +Inf: capBlendOccupiedVolumeAdmission
 // refuses that band before the motion is read, and the sentinel makes
 // requireDerivableStore fail loudly if it ever is.
-func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
+func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
 	lm.capMotion = make([]float64, len(lm.capPts))
 	for j := range lm.capMotion {
 		lm.capMotion[j] = math.Inf(1)
@@ -369,11 +371,11 @@ func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoop
 		seg := lm.loop.Segments[w.segs[0]]
 		off := offset(w)
 		for k := range lm.count[0] {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			p := lm.capPts[k]
-			lm.capMotion[k] = walkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[0], off, p.U, p.V))
+			lm.capMotion[k] = proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[0], off, p.U, p.V))
 		}
 		return nil
 	}
@@ -393,7 +395,7 @@ func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoop
 		miter = math.Max(miter, delta)
 	}
 	for i, w := range lm.walks {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		base := lm.capWallStart[i]
@@ -409,17 +411,17 @@ func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoop
 			prevIdx := (i + n - 1) % n
 			prevSeg := lm.loop.Segments[prev.segs[0]]
 			cnt := lm.count[prevIdx]
-			lm.capMotion[base] = walkEndBoundAllow(capOffsetStationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
+			lm.capMotion[base] = proofbound.WalkEndBoundAllow(capOffsetStationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
 			continue
 		}
 		seg := lm.loop.Segments[w.segs[0]]
 		off := offset(w)
 		for k := range lm.count[i] {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			p := lm.capPts[base+k]
-			lm.capMotion[base+k] = walkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[i], off, p.U, p.V))
+			lm.capMotion[base+k] = proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[i], off, p.U, p.V))
 		}
 	}
 	return nil
@@ -440,29 +442,29 @@ func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoop
 // (capTh0/capTh1) is never read here.
 func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 	total := 0.0
-	dUpper := absSumUpper(cbp.d, cbp.dDelta)
+	dUpper := proofbound.AbsSumUpper(cbp.d, cbp.dDelta)
 	for li := range lms {
 		lm := &lms[li]
-		trim := boundedSub(lm.zHi, lm.zLo)
-		hTrimUpper := absSumUpper(math.Abs(trim.value), trim.bound)
+		trim := proofbound.BoundedSub(lm.zHi, lm.zLo)
+		hTrimUpper := proofbound.AbsSumUpper(math.Abs(trim.Value), trim.Bound)
 		sideSegs, bandSegs := 0.0, 0.0
 		for i, w := range lm.walks {
 			if !w.isCircular() {
 				continue
 			}
-			sideSegs = absSumUpper(sideSegs, walkSegmentArea(w.segmentWalk, lm.count[i]))
+			sideSegs = proofbound.AbsSumUpper(sideSegs, walkSegmentArea(w.segmentWalk, lm.count[i]))
 			if !lm.chamfered {
 				continue
 			}
-			bandSegs = absSumUpper(bandSegs, walkSegmentArea(segmentWalk{
+			bandSegs = proofbound.AbsSumUpper(bandSegs, walkSegmentArea(segmentWalk{
 				kind: walkCircular, radius: math.Max(w.radius, lm.capRadius[i]),
 				th0: w.th0, th1: w.th1, closed: w.closed,
 			}, lm.count[i]))
 		}
-		total = absSumUpper(total, productUpper(hTrimUpper, sideSegs))
+		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(hTrimUpper, sideSegs))
 		for _, chamfered := range []bool{lm.onStart, lm.onEnd} {
 			if chamfered {
-				total = absSumUpper(total, productUpper(dUpper, bandSegs))
+				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(dUpper, bandSegs))
 			}
 		}
 	}
@@ -480,7 +482,7 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 // two independently sampled polylines. A straight wall needs one sample; a
 // reflex corner's connector arc is a directrix of its own and chords with its
 // own count.
-func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayload, li int, loop LoopRecord, chord float64, work *freeformWork) (capBlendLoopMesh, error) {
+func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp capBlendPayload, li int, loop LoopRecord, chord float64, work *freeformWork) (capBlendLoopMesh, error) {
 	if err := ctx.Err(); err != nil {
 		return capBlendLoopMesh{}, err
 	}
@@ -500,14 +502,14 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 	}
 	lm.chamfered = lm.onStart || lm.onEnd
 
-	lm.zLo = measuredScalar(cbp.z0, cbp.z0Delta)
-	lm.zHi = measuredScalar(cbp.z1, cbp.z1Delta)
-	setback := measuredScalar(cbp.d, cbp.dDelta)
+	lm.zLo = proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta)
+	lm.zHi = proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
+	setback := proofbound.MeasuredScalar(cbp.d, cbp.dDelta)
 	if lm.onStart {
-		lm.zLo = boundedAdd(lm.zLo, setback)
+		lm.zLo = proofbound.BoundedAdd(lm.zLo, setback)
 	}
 	if lm.onEnd {
-		lm.zHi = boundedSub(lm.zHi, setback)
+		lm.zHi = proofbound.BoundedSub(lm.zHi, setback)
 	}
 
 	if lm.chamfered && !lm.whole {
@@ -524,7 +526,7 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 	lm.capTh0 = make([]float64, n)
 	lm.capTh1 = make([]float64, n)
 	for i, w := range walks {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return capBlendLoopMesh{}, err
 		}
 		if !w.isCircular() {
@@ -582,7 +584,7 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 		if lm.joins == nil {
 			break
 		}
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return capBlendLoopMesh{}, err
 		}
 		j := lm.joins[i]
@@ -628,7 +630,7 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 // chordCapBlendLoop chose. A junction is emitted exactly once — every piece
 // contributes its own START and leaves its end to the piece that follows — so
 // the two rings close by construction rather than by comparison.
-func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
+func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
 	n := len(lm.walks)
 	lm.sideStart = make([]int, n)
 	for i, w := range lm.walks {
@@ -642,7 +644,7 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 		count := lm.count[i]
 		dth := (w.th1 - w.th0) / float64(count)
 		for k := range count {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			p := Point2{U: w.startU, V: w.startV}
@@ -665,7 +667,7 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 	for i := range n {
 		lm.capArcStart[i] = -1
 	}
-	addCap := func(p Point2, bound walkEndBound) {
+	addCap := func(p Point2, bound proofbound.WalkEndBound) {
 		lm.capPts = append(lm.capPts, p)
 		lm.capBound = append(lm.capBound, bound)
 	}
@@ -675,7 +677,7 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 		count := lm.count[0]
 		dth := (lm.capTh1[0] - lm.capTh0[0]) / float64(count)
 		for k := range count {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			th := lm.capTh0[0] + float64(k)*dth
@@ -693,12 +695,12 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 			// corner feet, so it holds one station and chords nothing. The foot
 			// itself is the point the offset denotes, within the band's own
 			// contour displacement, which is charged as its own term.
-			addCap(start, walkEndBound{})
+			addCap(start, proofbound.WalkEndBound{})
 		} else {
 			count := lm.count[i]
 			dth := (lm.capTh1[i] - lm.capTh0[i]) / float64(count)
 			for k := range count {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				th := lm.capTh0[i] + float64(k)*dth
@@ -721,7 +723,7 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 		count := lm.arcCount[ni]
 		dth := (lm.arcTh1[ni] - lm.arcTh0[ni]) / float64(count)
 		for k := range count {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			th := lm.arcTh0[ni] + float64(k)*dth
@@ -750,8 +752,8 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 // An angle, radius or centre this arithmetic cannot enclose answers +Inf on
 // both components — the underivable bound the tessellation refuses on
 // (docs/tessellation-design.md §12) — never a zero.
-func capStationBound(cU, cV, radius, theta, heldU, heldV float64) walkEndBound {
-	underivable := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.WalkEndBound {
+	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	rt, rr := proofarith.FloatRat(theta), proofarith.FloatRat(radius)
 	ru, rv := proofarith.FloatRat(cU), proofarith.FloatRat(cV)
 	if rt == nil || rr == nil || ru == nil || rv == nil {
@@ -761,9 +763,9 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) walkEndBound {
 	if !ok {
 		return underivable
 	}
-	uIv := intervalAdd(pointInterval(ru), intervalMul(pointInterval(rr), cos))
-	vIv := intervalAdd(pointInterval(rv), intervalMul(pointInterval(rr), sin))
-	return walkEndBound{u: intervalFloatError(uIv, heldU), v: intervalFloatError(vIv, heldV)}
+	uIv := proofbound.IntervalAdd(proofbound.PointInterval(ru), proofbound.IntervalMul(proofbound.PointInterval(rr), cos))
+	vIv := proofbound.IntervalAdd(proofbound.PointInterval(rv), proofbound.IntervalMul(proofbound.PointInterval(rr), sin))
+	return proofbound.WalkEndBound{U: proofbound.IntervalFloatError(uIv, heldU), V: proofbound.IntervalFloatError(vIv, heldV)}
 }
 
 // capBlendCornerLocusGap is how far a MITER corner's built ruling — an Edge
@@ -783,7 +785,7 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) walkEndBound {
 // every G1 join (modify §7), whose foot is v + s·d·n̂ — and it is the SAME number at either cap, since the two differ only in the
 // sign of an axial span both readings take the magnitude of. A sub-range whose
 // speed cannot be enclosed answers +Inf, which refuses.
-func capBlendCornerLocusGap(budget *workBudget, cbp capBlendPayload, walks []sideWalk, i int, j cornerJoin) (float64, error) {
+func capBlendCornerLocusGap(budget *proofbound.WorkBudget, cbp capBlendPayload, walks []sideWalk, i int, j cornerJoin) (float64, error) {
 	n := len(walks)
 	prev, cur := walks[(i+n-1)%n], walks[i]
 	if j.g1 || (!prev.isCircular() && !cur.isCircular()) {
@@ -793,7 +795,7 @@ func capBlendCornerLocusGap(budget *workBudget, cbp capBlendPayload, walks []sid
 	if err != nil {
 		return 0, err
 	}
-	if !ok || isNonFinite(locus) {
+	if !ok || proofbound.IsNonFinite(locus) {
 		return 0, fmt.Errorf(`%w: a cap-loop chamfer's miter ruling states no enclosure of the locus it stands for, so this mesh can publish no displacement bound for the patches that share it`, ErrUnsupported)
 	}
 	chordSq := ratSquaredDistance3(j.m.U, j.m.V, cbp.d, j.vU, j.vV, 0)
@@ -801,17 +803,17 @@ func capBlendCornerLocusGap(budget *workBudget, cbp capBlendPayload, walks []sid
 	if !exact {
 		chordSqDown = math.Nextafter(chordSqDown, math.Inf(-1))
 	}
-	diff := upRound(productUpper(locus, locus) - chordSqDown)
+	diff := proofbound.UpRound(proofbound.ProductUpper(locus, locus) - chordSqDown)
 	if diff <= 0 {
 		return 0, nil
 	}
-	return upRound(math.Sqrt(diff) / 2), nil
+	return proofbound.UpRound(math.Sqrt(diff) / 2), nil
 }
 
 // emitCapBand writes one band's facets — a quad strip per wall patch and a fan
 // per reflex corner's apex patch — and publishes each patch's own displacement
 // through docs/tessellation-reach-design.md §7's term table.
-func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendLoopMesh, start bool, faceOfRole func(string) (*Face, error), geomOfRole map[string]capPatchGeom, bump func(*Face, float64)) error {
+func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm *capBlendLoopMesh, start bool, faceOfRole func(string) (*Face, error), geomOfRole map[string]capPatchGeom, bump func(*Face, float64)) error {
 	matSign := 1.0
 	capZ := cbp.z0
 	sideV, capV := lm.sideLo, lm.capLoV
@@ -824,8 +826,8 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 	if !ok {
 		return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
 	}
-	levelDelta := absSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*cbp.d, sideZ))
-	axial := cbp.capBandLevel(capZ, matSign).bound
+	levelDelta := proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*cbp.d, sideZ))
+	axial := cbp.capBandLevel(capZ, matSign).Bound
 	n := len(lm.walks)
 
 	// Patch indices are buildCapBand's own: every reflex corner's apex patch in
@@ -863,7 +865,7 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 		if !isApex {
 			continue
 		}
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		face, g, err := patchFace(p)
@@ -892,14 +894,14 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 				m.addTriangle([3]int{apex, b, a}, face)
 			}
 		}
-		bump(face, absSumUpper(lm.arcSag[i], delta, levelDelta, axial))
-		m.areaSlack = absSumUpper(m.areaSlack, patchDisplacementAreaAllow(g),
+		bump(face, proofbound.AbsSumUpper(lm.arcSag[i], delta, levelDelta, axial))
+		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, patchDisplacementAreaAllow(g),
 			capBlendPatchFacetAllow(m, count, lm.arcSag[i]))
 	}
 
 	// Wall patches: one quad per shared station, split on the fixed diagonal.
 	for i, w := range lm.walks {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		face, g, err := patchFace(next + i)
@@ -928,19 +930,19 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 			m.addTriangle([3]int{lo0, lo1, hi1}, face)
 			m.addTriangle([3]int{lo0, hi1, hi0}, face)
 			// The held pair departs from the bilinear patch through its four
-			// corners by cellTwistOffsetUpper. It is zero where the denoted cell
+			// corners by proofbound.CellTwistOffsetUpper. It is zero where the denoted cell
 			// is PLANAR — a straight wall's trapezoid, and a circular wall whose
 			// two directrices sweep the same window — because the two triangles
 			// then tile that quad exactly and the corners' own displacement is
 			// already charged as deltaStore.
 			if g.circular && capPatchWindowSkew(g) > 0 {
-				twist = math.Max(twist, cellTwistOffsetUpper(
+				twist = math.Max(twist, proofbound.CellTwistOffsetUpper(
 					m.vertices[sideV[s0]], m.vertices[sideV[s1]],
 					m.vertices[capV[c0]], m.vertices[capV[c1]]))
 			}
 		}
 		skew := capPatchWindowSkew(g)
-		if isNonFinite(skew) {
+		if proofbound.IsNonFinite(skew) {
 			return fmt.Errorf(`%w: a chamfer band patch states no bound on how far its two directrix windows differ`, ErrUnsupported)
 		}
 		locus := 0.0
@@ -957,9 +959,9 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 			}
 			radiusRound = proofarith.AddRoundError(w.radius, -inside*cbp.d, lm.capRadius[i])
 		}
-		patchDelta := absSumUpper(twist, sagitta, productUpper(g.capRadius, skew), locus, radiusRound)
-		bump(face, absSumUpper(patchDelta, delta, levelDelta, axial))
-		m.areaSlack = absSumUpper(m.areaSlack, patchDisplacementAreaAllow(g),
+		patchDelta := proofbound.AbsSumUpper(twist, sagitta, proofbound.ProductUpper(g.capRadius, skew), locus, radiusRound)
+		bump(face, proofbound.AbsSumUpper(patchDelta, delta, levelDelta, axial))
+		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, patchDisplacementAreaAllow(g),
 			capBlendFacetAllow(m, first, patchDelta))
 	}
 	return nil
@@ -987,7 +989,7 @@ func capBlendFacetAllow(m *Mesh, first int, delta float64) float64 {
 	total := 0.0
 	for _, tri := range m.triangles[first:] {
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		total = absSumUpper(total, perturbedTriangleAreaAllow(a, b, c, delta))
+		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return total
 }
@@ -1058,7 +1060,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 		if !start {
 			chamfered = lm.onEnd
 		}
-		m.areaSlack = absSumUpper(m.areaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.d))
+		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.d))
 	}
 	tris, err := triangulate2DContext(ctx, pts, loopIdx)
 	if err != nil {
@@ -1075,7 +1077,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	if !start {
 		axial = cbp.z1Delta
 	}
-	bump(face, absSumUpper(trim, delta, axial))
+	bump(face, proofbound.AbsSumUpper(trim, delta, axial))
 	return nil
 }
 
@@ -1113,10 +1115,10 @@ func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) floa
 			continue
 		}
 		if !contour {
-			total = absSumUpper(total, walkSegmentArea(w.segmentWalk, lm.count[i]))
+			total = proofbound.AbsSumUpper(total, walkSegmentArea(w.segmentWalk, lm.count[i]))
 			continue
 		}
-		total = absSumUpper(total, walkSegmentArea(segmentWalk{
+		total = proofbound.AbsSumUpper(total, walkSegmentArea(segmentWalk{
 			kind: walkCircular, radius: lm.capRadius[i],
 			th0: lm.capTh0[i], th1: lm.capTh1[i], closed: w.closed,
 		}, lm.count[i]))
@@ -1128,7 +1130,7 @@ func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) floa
 		if count == 0 {
 			continue
 		}
-		total = absSumUpper(total, walkSegmentArea(segmentWalk{
+		total = proofbound.AbsSumUpper(total, walkSegmentArea(segmentWalk{
 			kind: walkCircular, radius: d, th0: lm.arcTh0[i], th1: lm.arcTh1[i],
 		}, count))
 	}
@@ -1149,8 +1151,8 @@ func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64) er
 		}
 	}
 	for f, s := range faceStore {
-		bound := upRound(extra[f] + s)
-		if isNonFinite(bound) {
+		bound := proofbound.UpRound(extra[f] + s)
+		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a cap-loop chamfer face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported)
 		}
 		m.setFaceBound(f, bound)

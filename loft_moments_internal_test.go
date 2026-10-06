@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -179,7 +181,7 @@ func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
 // (vol6_1*sum1 + vol6_2*sum2)/(4*(vol6_1+vol6_2)); by construction its X and
 // Y coordinates land on a denominator of 12 (an irreducible factor of 3),
 // which float64 cannot represent, while Z lands on 3/12 = 1/4, which it can.
-// Centroid must therefore be Approximate, bounded by radius3D of the worst
+// Centroid must therefore be Approximate, bounded by proofbound.Radius3D of the worst
 // per-coordinate rounding, and Exact only when every coordinate rounds
 // exactly (docs/loft-design.md §8).
 func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
@@ -213,7 +215,7 @@ func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
 	by := proofarith.RationalFloatError(wantCY, fy)
 	bz := proofarith.RationalFloatError(wantCZ, fz)
 	require.Equal(t, 0.0, bz)
-	require.Equal(t, radius3D(math.Max(bx, by)), c.Bound.Base())
+	require.Equal(t, proofbound.Radius3D(math.Max(bx, by)), c.Bound.Base())
 	require.Greater(t, c.Bound.Base(), 0.0)
 }
 
@@ -274,10 +276,10 @@ func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
 // rationals — a float64 IS a rational — so the only inexactness anywhere is
 // the closing square root, computed at far more precision than float64 holds.
 func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
-	u := xsub(xptOf(b), xptOf(a))
-	v := xsub(xptOf(c), xptOf(a))
+	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
+	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
 	w := xcross(u, v)
-	q := xdotRat(w, w)
+	q := proofbound.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))
 }
@@ -423,8 +425,8 @@ func addLoftWalls(m *loftMassAccumulator, bottom, top []r3.Vec) {
 // TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale is the regression for
 // the wall summation's own SCALE saturating while the summed value does not.
 //
-// wallAreaAbs diverges upward from wallAreaSum by one upRound per term, so it
-// can reach +Inf while wallAreaSum is still finite — and sumSlop reports 0 for
+// wallAreaAbs diverges upward from wallAreaSum by one proofbound.UpRound per term, so it
+// can reach +Inf while wallAreaSum is still finite — and proofbound.SumSlop reports 0 for
 // a non-finite absSum, which is the whole of the wall loop's summation cover.
 // With every triangle's own area exactly representable the enclosure slack is
 // 0 too, so an unguarded area() publishes a zero bound and Exact over a value
@@ -463,7 +465,7 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 		"the fixture must leave the summed value finite")
 	require.Equal(t, 0.0, m.wallAreaSlack,
 		"every triangle area here is exactly representable, so the enclosure slack must be 0")
-	require.Equal(t, 0.0, sumSlop(m.wallTerms, m.wallAreaAbs),
+	require.Equal(t, 0.0, proofbound.SumSlop(m.wallTerms, m.wallAreaAbs),
 		"sumSlop reports nothing for a saturated scale — the hole this test guards")
 
 	area := m.area()
@@ -593,9 +595,9 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 }
 
 // TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta pins
-// a10-plan.md Part 3 PR 9 Task 1's own soundness fix: bounds.go's
-// chordedBoundaryVolumeAllow (and chordedBoundaryMomentAllow /
-// chordedBoundarySeamAllow inside computeLoftChordedAllow) must be composed
+// a10-plan.md Part 3 PR 9 Task 1's own soundness fix: internal/proofbound/bounds.go's
+// proofbound.ChordedBoundaryVolumeAllow (and proofbound.ChordedBoundaryMomentAllow /
+// proofbound.ChordedBoundarySeamAllow inside computeLoftChordedAllow) must be composed
 // with the build's own PARAMETER-MATCHED sectionMatchedDelta — NEVER
 // sectionDelta, the build's own MAX SAGITTA (a SET-distance). The
 // chord-to-curve half of that matched term coincides with the sagitta on a
@@ -646,7 +648,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 		matchedDelta: []float64{sectionMatchedDelta, 0},
 		// No arm placed these stations, so neither side carries a
 		// constant-speed claim: +Inf is the absence of a tangent-deviation
-		// energy proof, which cellChordCurveAreaAllow spends as its
+		// energy proof, which proofbound.CellChordCurveAreaAllow spends as its
 		// premise-free arm (this fixture asserts on the VOLUME leg anyway).
 		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
 		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
@@ -671,14 +673,14 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
 	vol := m.volume(verts, tris)
 
-	// The reference this fixture must FALSIFY: chordedBoundaryVolumeAllow
+	// The reference this fixture must FALSIFY: proofbound.ChordedBoundaryVolumeAllow
 	// composed with sectionDelta (the sagitta) rather than
 	// sectionMatchedDelta — what a buggy caller reading the wrong field
 	// would publish.
-	wrongTerm := chordedBoundaryVolumeResidualAllow(
+	wrongTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
 		sectionDelta, chorded.wallAreaUpper, chorded.capVolumeUpper, chorded.seamAllow,
 	)
-	rightTerm := chordedBoundaryVolumeResidualAllow(
+	rightTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
 		sectionMatchedDelta, chorded.wallAreaUpper, chorded.capVolumeUpper, chorded.seamAllow,
 	)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
@@ -689,17 +691,17 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 		"Volume's own Bound must exceed what composing the sagitta-keyed term alone would publish")
 
 	// The moment leg's identical composition, checked at the scalar level
-	// (chordedBoundaryMomentAllow itself, the SAME helper centroid() calls
+	// (proofbound.ChordedBoundaryMomentAllow itself, the SAME helper centroid() calls
 	// with m.sectionMatchedDelta): this fixture's own volume/allowance ratio
 	// is too extreme for m.centroid() to publish a positive S12 clearance
 	// (an expected, unrelated refusal on a synthetic 2-triangle patch this
 	// small), so the moment leg is checked directly rather than through the
 	// full accumulator call.
-	wrongMoment := chordedBoundaryMomentResidualAllow(
+	wrongMoment := proofbound.ChordedBoundaryMomentResidualAllow(
 		sectionDelta, chorded.wallAreaUpper, chorded.capVolumeUpper,
 		chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper,
 	)
-	rightMoment := chordedBoundaryMomentResidualAllow(
+	rightMoment := proofbound.ChordedBoundaryMomentResidualAllow(
 		sectionMatchedDelta, chorded.wallAreaUpper, chorded.capVolumeUpper,
 		chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper,
 	)
@@ -708,7 +710,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 
 // TestComputeLoftChordedAllowChargesTheHeldStationDisplacement pins
 // docs/loft-design.md §5.2's matchedDelta row on every chorded leg: that row's
-// certified source is absSumUpper(sectionDelta, delta), and the section closes
+// certified source is proofbound.AbsSumUpper(sectionDelta, delta), and the section closes
 // with the exact failure this test falsifies — "Reading matchedDelta as
 // sectionDelta alone leaves the computed station's own displacement uncharged
 // on every chorded leg."
@@ -798,10 +800,10 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
 	vol := m.volume(verts, tris)
 
-	wrongTerm := chordedBoundaryVolumeResidualAllow(
+	wrongTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
 		chordToCurve, sagittaOnly.wallAreaUpper, sagittaOnly.capVolumeUpper, sagittaOnly.seamAllow,
 	)
-	rightTerm := chordedBoundaryVolumeResidualAllow(
+	rightTerm := proofbound.ChordedBoundaryVolumeResidualAllow(
 		matched, got.wallAreaUpper, got.capVolumeUpper, got.seamAllow,
 	)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
@@ -813,9 +815,9 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 
 // underivableCapOffsetPairs is the one-cell chorded pairing the two subtests
 // below share: a single positive-matchedDelta cell on each side, so the wall
-// loop runs and both caps carry a strictly positive sectionDisplacementArea,
+// loop runs and both caps carry a strictly positive proofbound.SectionDisplacementArea,
 // leaving the cap plane offset as the only term under test. The two tangent
-// energies are +Inf, which costs cellChordCurveAreaAllow its sharp arm and
+// energies are +Inf, which costs proofbound.CellChordCurveAreaAllow its sharp arm and
 // nothing else (loft_build.go's perCellTangentEnergy).
 func underivableCapOffsetPairs(matched float64) []loftLoopPair {
 	return []loftLoopPair{{
@@ -846,25 +848,25 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 
 	t.Run("a cap1 distance past the float64 range refuses instead of publishing zero", func(t *testing.T) {
 		// Both cap1 vertices sit a hair beyond MaxFloat64 from the anchor, so
-		// ratSqrtUp's outward step off MaxFloat64 lands on +Inf for each and
+		// proofbound.RatSqrtUp's outward step off MaxFloat64 lands on +Inf for each and
 		// the minimum over the cap never leaves +Inf.
 		for _, v := range []r3.Vec{r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1)} {
 			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
 			require.NotNil(t, d2, "the coordinates are finite, so the squared distance is an exact rational")
-			require.True(t, math.IsInf(ratSqrtUp(d2), 1), "no float64 upper bound on this distance exists")
+			require.True(t, math.IsInf(proofbound.RatSqrtUp(d2), 1), "no float64 upper bound on this distance exists")
 		}
 
 		// What a substituted zero would publish in its place, at this
-		// fixture's own cap-area allowance: capAreaVolumeAllow takes its
+		// fixture's own cap-area allowance: proofbound.CapAreaVolumeAllow takes its
 		// planeOffsetUpper <= 0 arm and answers exactly 0 for a strictly
 		// positive area gap, the SMALLEST possible number standing in for a
 		// quantity no derivation states. The proven-underivable reading
 		// answers +Inf for the same area gap, which is what a refusal must
 		// stand on.
-		capAreaAllow := sectionDisplacementArea(matched, 1, 1.1)
+		capAreaAllow := proofbound.SectionDisplacementArea(matched, 1, 1.1)
 		require.Positive(t, capAreaAllow, "the fixture's cap carries a real area gap to fold into a volume")
-		require.Zero(t, capAreaVolumeAllow(0, capAreaAllow), "a zero plane offset publishes a zero cap volume gap")
-		require.True(t, math.IsInf(capAreaVolumeAllow(math.Inf(1), capAreaAllow), 1),
+		require.Zero(t, proofbound.CapAreaVolumeAllow(0, capAreaAllow), "a zero plane offset publishes a zero cap volume gap")
+		require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.Inf(1), capAreaAllow), 1),
 			"the underivable plane offset's own answer is +Inf, never that zero")
 
 		verts := []r3.Vec{
@@ -879,7 +881,7 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 
 	t.Run("a NaN cap1 vertex refuses instead of panicking", func(t *testing.T) {
 		// A NaN coordinate has no exact rational, so ratSquaredDistance3
-		// answers nil — which ratSqrtUp dereferences. The same refusal arm
+		// answers nil — which proofbound.RatSqrtUp dereferences. The same refusal arm
 		// covers it, so the reading never reaches that dereference.
 		verts := []r3.Vec{
 			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
@@ -902,7 +904,7 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 // TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell pins
 // loftChordedAllow.twistAreaAllow (docs/tessellation-reach-design.md §4): the
 // wall's HELD-TO-BILINEAR area leg, summed over exactly the chorded cells the
-// other legs walk, through the same absSumUpper chain.
+// other legs walk, through the same proofbound.AbsSumUpper chain.
 //
 // Area's own bound never reads it — areaCorrection has already MOVED
 // Area.Value onto the bilinear patches, so charging the gap there would count
@@ -951,11 +953,11 @@ func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
 
 		// The loop walks cell 0 as (v0, v1, w0, w1) and cell 1 as the wrap
 		// back, (v1, v0, w1, w0) — the same quad with its two ends swapped.
-		cell0 := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
-		cell1 := cellTwistAreaAllow(vHi, vLo, wHi, wLo)
+		cell0 := proofbound.CellTwistAreaAllow(vLo, vHi, wLo, wHi)
+		cell1 := proofbound.CellTwistAreaAllow(vHi, vLo, wHi, wLo)
 		require.Positive(t, cell0, "the fixture's own twist must make each cell's leg positive")
 		require.Positive(t, cell1)
-		require.Equal(t, absSumUpper(absSumUpper(0, cell0), cell1), chorded.twistAreaAllow,
+		require.Equal(t, proofbound.AbsSumUpper(proofbound.AbsSumUpper(0, cell0), cell1), chorded.twistAreaAllow,
 			"twistAreaAllow is the per-cell sum through the same rounding chain, never a maximum")
 		require.Greater(t, chorded.twistAreaAllow, cell0,
 			"a two-cell build must publish more than either cell alone")

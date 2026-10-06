@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
@@ -325,7 +327,7 @@ func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req Contac
 		}
 	}
 	squared := proofarith.DvDot(n, n).Rat()
-	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
+	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return planarSupport{}, false, nil
 	}
@@ -350,7 +352,7 @@ func vertexSpins(p *rotationalSweepPath, motion planarMotion) ([]*big.Rat, bool)
 		if !ok {
 			return nil, false
 		}
-		out[i] = ratMul(motion.omegaUp, armUp)
+		out[i] = proofbound.RatMul(motion.omegaUp, armUp)
 	}
 	return out, true
 }
@@ -363,7 +365,7 @@ func restedVertices(s *planarSupport, rest *big.Rat) map[int]struct{} {
 	if rest.Sign() <= 0 || len(s.lifted) == 0 {
 		return nil
 	}
-	floor := new(big.Rat).Neg(ratMul(rest, s.nLow))
+	floor := new(big.Rat).Neg(proofbound.RatMul(rest, s.nLow))
 	out := make(map[int]struct{})
 	for _, index := range s.lifted {
 		if s.rates[index].Cmp(floor) >= 0 {
@@ -395,15 +397,15 @@ func (s *planarSupport) curvature(t *big.Rat) ([]*big.Rat, bool) {
 	if !okSpeed || !okDistance {
 		return nil, false
 	}
-	shared := ratMul(o.omegaSq, o.rho)
-	lever := ratAdd(speed, ratMul(m.omegaUp, m.rho), ratMul(o.omegaUp, o.rho))
-	shared.Add(shared, ratMul(big.NewRat(2, 1), o.omegaUp, lever))
-	reach := ratAdd(m.rho, o.rho, distance, ratMul(speed, t))
-	shared.Add(shared, ratMul(o.omegaSq, reach))
-	half := ratMul(s.nHigh, big.NewRat(1, 2))
+	shared := proofbound.RatMul(o.omegaSq, o.rho)
+	lever := proofbound.RatAdd(speed, proofbound.RatMul(m.omegaUp, m.rho), proofbound.RatMul(o.omegaUp, o.rho))
+	shared.Add(shared, proofbound.RatMul(big.NewRat(2, 1), o.omegaUp, lever))
+	reach := proofbound.RatAdd(m.rho, o.rho, distance, proofbound.RatMul(speed, t))
+	shared.Add(shared, proofbound.RatMul(o.omegaSq, reach))
+	half := proofbound.RatMul(s.nHigh, big.NewRat(1, 2))
 	out := make([]*big.Rat, len(s.spin))
 	for i, spin := range s.spin {
-		out[i] = ratMul(ratAdd(shared, spin), half)
+		out[i] = proofbound.RatMul(proofbound.RatAdd(shared, spin), half)
 	}
 	return out, true
 }
@@ -426,8 +428,8 @@ func (s *planarSupport) clearAt(t *big.Rat, k []*big.Rat, rest bool) bool {
 		if _, rested := s.rested[i]; rest && rested {
 			continue
 		}
-		value := ratAdd(height, ratMul(s.rates[i], t))
-		value.Sub(value, ratMul(k[i], t, t))
+		value := proofbound.RatAdd(height, proofbound.RatMul(s.rates[i], t))
+		value.Sub(value, proofbound.RatMul(k[i], t, t))
 		if value.Sign() <= 0 {
 			return false
 		}
@@ -470,16 +472,16 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 func (s *planarSupport) depthAt(t *big.Rat, k []*big.Rat, rate *big.Rat) *big.Rat {
 	depth := new(big.Rat)
 	for _, index := range s.contact {
-		contact := ratAdd(ratMul(rate, t), ratMul(k[index], t, t))
+		contact := proofbound.RatAdd(proofbound.RatMul(rate, t), proofbound.RatMul(k[index], t, t))
 		if contact.Cmp(depth) > 0 {
 			depth = contact
 		}
 	}
 	for _, index := range s.lifted {
-		lifted := ratAdd(s.heights[index], ratMul(k[index], t, t))
+		lifted := proofbound.RatAdd(s.heights[index], proofbound.RatMul(k[index], t, t))
 		_, rested := s.rested[index]
 		if rested || s.rates[index].Sign() > 0 {
-			lifted.Add(lifted, ratMul(new(big.Rat).Abs(s.rates[index]), t))
+			lifted.Add(lifted, proofbound.RatMul(new(big.Rat).Abs(s.rates[index]), t))
 		}
 		if lifted.Cmp(depth) > 0 {
 			depth = lifted
@@ -545,8 +547,8 @@ func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 	t := new(big.Rat).Mul(f, p.support.duration)
 	var least *big.Rat
 	for i, height := range p.support.heights {
-		value := ratAdd(height, ratMul(p.support.rates[i], t))
-		value.Sub(value, ratMul(p.curvature[i], t, t))
+		value := proofbound.RatAdd(height, proofbound.RatMul(p.support.rates[i], t))
+		value.Sub(value, proofbound.RatMul(p.curvature[i], t, t))
 		if least == nil || value.Cmp(least) < 0 {
 			least = value
 		}
@@ -569,8 +571,8 @@ func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 // whose every contact rate is positive and returns the largest grid fraction
 // it covers.
 func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big.Rat, bool, error) {
-	budget := newWorkBudget(ctx)
-	supports, err := r.planarSupports(budget.step)
+	budget := proofbound.NewWorkBudget(ctx)
+	supports, err := r.planarSupports(budget.Step)
 	if err != nil {
 		return nil, false, err
 	}
@@ -587,7 +589,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 			continue
 		}
 		holds := func(f *big.Rat) (bool, error) {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			t := new(big.Rat).Mul(f, support.duration)
@@ -596,14 +598,14 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 				return false, nil
 			}
 			for _, index := range support.contact {
-				if new(big.Rat).Sub(support.rates[index], ratMul(k[index], t)).Sign() <= 0 {
+				if new(big.Rat).Sub(support.rates[index], proofbound.RatMul(k[index], t)).Sign() <= 0 {
 					return false, nil
 				}
 			}
 			if !support.clearAt(t, k, false) {
 				return false, nil
 			}
-			_, open, err := support.column(f, budget.step)
+			_, open, err := support.column(f, budget.Step)
 			return open, err
 		}
 		until, ok, err := r.gridHorizon(holds)
@@ -673,8 +675,8 @@ func (p *planarTrackProof) depthThrough(f *big.Rat) (*big.Rat, bool) {
 // no displacement, because the track publishes S's held face normal as the
 // true one.
 func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrack, bool, error) {
-	budget := newWorkBudget(ctx)
-	supports, err := r.planarSupports(budget.step)
+	budget := proofbound.NewWorkBudget(ctx)
+	supports, err := r.planarSupports(budget.Step)
 	if err != nil {
 		return nil, false, err
 	}
@@ -698,7 +700,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			return depth.Quo(depth, support.nLow)
 		}
 		holds := func(f *big.Rat) (bool, error) {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			t := new(big.Rat).Mul(f, support.duration)
@@ -708,10 +710,10 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			}
 			// §10.6: material of S in front of the plane meets no part of M,
 			// so M ∩ S lies behind the plane and within the band's depth.
-			if _, open, err := support.column(f, budget.step); err != nil || !open {
+			if _, open, err := support.column(f, budget.Step); err != nil || !open {
 				return false, err
 			}
-			return face.contains(support, f, new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat()), budget.step)
+			return face.contains(support, f, new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat()), budget.Step)
 		}
 		end, ok, err := r.gridHorizon(holds)
 		if err != nil {
@@ -781,11 +783,11 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	if !ok || angle.Base() > r.req.NormalResolution.Base() {
 		return nil, false, nil
 	}
-	widening := ratMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
+	widening := proofbound.RatMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
 	depth := new(big.Rat).Add(heldDepth, widening)
 	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.m, s: support.s,
 		featureS: featureS, normal: support.normal, origin: r.solidTriVertex(support),
-		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: ratFloatUp(depth),
+		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: proofbound.RatFloatUp(depth),
 		deltaM: support.pathM.delta.Rat(), nHigh: support.nHigh, support: *support, rate: rate, widening: widening}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil
@@ -930,8 +932,8 @@ func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func(
 			shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
 			shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
 			span := spans.span(index, axis)
-			lo[slot] = ratAdd(span.lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
-			hi[slot] = ratAdd(span.hi, new(big.Rat).Neg(shiftLo), depth)
+			lo[slot] = proofbound.RatAdd(span.Lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
+			hi[slot] = proofbound.RatAdd(span.Hi, new(big.Rat).Neg(shiftLo), depth)
 		}
 		inside := false
 		for _, tri := range face.tris {
@@ -1025,7 +1027,7 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req ContactRequest) (*Co
 			foot[k] = new(big.Rat).Sub(vertex[k], new(big.Rat).Mul(height, n[k]))
 		}
 		onM, okM := planarTrackPoint([3]*big.Rat(vertex), new(big.Rat).Add(eta[p.m], p.deltaM), resolution)
-		onS, okS := planarTrackPoint(foot, ratAdd(eta[p.m], eta[p.s], p.deltaM), resolution)
+		onS, okS := planarTrackPoint(foot, proofbound.RatAdd(eta[p.m], eta[p.s], p.deltaM), resolution)
 		if !okM || !okS {
 			return nil, fmt.Errorf("%w: planar contact track point exceeds point resolution", ErrUnsupported)
 		}
@@ -1051,7 +1053,7 @@ func planarTrackPoint(point [3]*big.Rat, deviation, resolution *big.Rat) (VecMea
 		return VecMeasurement{}, false
 	}
 	bound := new(big.Rat).Add(proofarith.FloatRat(value.Bound.Base()), deviation)
-	published := ratFloatUp(bound)
+	published := proofbound.RatFloatUp(bound)
 	if !finiteMeasurementValues(published) || bound.Cmp(resolution) > 0 ||
 		proofarith.FloatRat(published).Cmp(resolution) > 0 {
 		return VecMeasurement{}, false
@@ -1095,7 +1097,7 @@ func (p *planarTrackProof) replayHeights(f *big.Rat) (*big.Rat, bool) {
 		return nil, false
 	}
 	deviation := new(big.Rat).Add(eta[0], eta[1])
-	floor := new(big.Rat).Neg(ratMul(new(big.Rat).Add(p.heldDepth, deviation), p.nHigh))
+	floor := new(big.Rat).Neg(proofbound.RatMul(new(big.Rat).Add(p.heldDepth, deviation), p.nHigh))
 	q := verts[p.s][p.origin]
 	for _, v := range verts[p.m] {
 		if proofarith.DvDot(p.normal, proofarith.DvSub(v, q)).Rat().Cmp(floor) < 0 {
@@ -1118,7 +1120,7 @@ func ratSub3(a, b ratVec) ratVec {
 }
 
 func ratDot3(a, b ratVec) *big.Rat {
-	return ratAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
+	return proofbound.RatAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
 }
 
 func ratCross3(a, b ratVec) ratVec {
@@ -1131,7 +1133,7 @@ func ratCross3(a, b ratVec) ratVec {
 
 // ratSqrtUpRat is an exact upper bound on the square root of q.
 func ratSqrtUpRat(q *big.Rat) (*big.Rat, bool) {
-	up := ratSqrtUp(q)
+	up := proofbound.RatSqrtUp(q)
 	if !finiteMeasurementValues(up) {
 		return nil, false
 	}

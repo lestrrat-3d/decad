@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -91,14 +93,16 @@ func (cp cupPayload) axialDelta() float64 {
 
 // openScalar, outerScalar and cavityScalar are the cup's three sweep levels as
 // bounded readings, each carrying its own axial displacement.
-func (cp cupPayload) openScalar() boundedScalar { return measuredScalar(cp.zOpen, cp.zOpenDelta) }
-
-func (cp cupPayload) outerScalar() boundedScalar {
-	return measuredScalar(cp.zOuter, cp.zOuterDelta)
+func (cp cupPayload) openScalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(cp.zOpen, cp.zOpenDelta)
 }
 
-func (cp cupPayload) cavityScalar() boundedScalar {
-	return measuredScalar(cp.zCav, cp.zCavDelta)
+func (cp cupPayload) outerScalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(cp.zOuter, cp.zOuterDelta)
+}
+
+func (cp cupPayload) cavityScalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(cp.zCav, cp.zCavDelta)
 }
 
 // placed re-evaluates the same cup under the composed motion (evaluator §8).
@@ -115,17 +119,17 @@ func (cp cupPayload) basePrism() prismPayload {
 
 // prismBetween builds an ordered prism from two cup levels, preserving each
 // level's own axial displacement at the matching prism end.
-func (cp cupPayload) prismBetween(a, b boundedScalar) prismPayload {
-	if a.value <= b.value {
+func (cp cupPayload) prismBetween(a, b proofbound.BoundedScalar) prismPayload {
+	if a.Value <= b.Value {
 		return prismPayload{
-			frame: cp.frame, z0: a.value, z1: b.value,
-			z0Delta: a.bound, z1Delta: b.bound,
+			frame: cp.frame, z0: a.Value, z1: b.Value,
+			z0Delta: a.Bound, z1Delta: b.Bound,
 			xform: cp.xform,
 		}
 	}
 	return prismPayload{
-		frame: cp.frame, z0: b.value, z1: a.value,
-		z0Delta: b.bound, z1Delta: a.bound,
+		frame: cp.frame, z0: b.Value, z1: a.Value,
+		z0Delta: b.Bound, z1Delta: a.Bound,
 		xform: cp.xform,
 	}
 }
@@ -168,7 +172,7 @@ func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if err != nil || displaced == 0 {
 		return lo, hi, delta, err
 	}
-	return lo, hi, absSumUpper(delta, productUpper(displaced, vecL1(g))), nil
+	return lo, hi, proofbound.AbsSumUpper(delta, proofbound.ProductUpper(displaced, vecL1(g))), nil
 }
 
 // cupPayloadFor assembles the cup record from the receiver prism, its offset
@@ -201,7 +205,7 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta, offsetDe
 	// displacement, the thickness conversion, and this float sum's rounding.
 	step := func(from, delta, by float64) (float64, float64) {
 		to := from + by
-		return to, absSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
+		return to, proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
 	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1
@@ -269,9 +273,9 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// Each height is read from BOUNDED levels, so a cup built on a computed
 	// sweep carries that computation into the volume, area and centroid below
 	// rather than publishing them as the levels they denote.
-	heightO := boundedAbs(boundedSub(cp.openScalar(), cp.outerScalar()))
-	heightC := boundedAbs(boundedSub(cp.openScalar(), cp.cavityScalar()))
-	hO, hC := heightO.value, heightC.value
+	heightO := proofbound.BoundedAbs(proofbound.BoundedSub(cp.openScalar(), cp.outerScalar()))
+	heightC := proofbound.BoundedAbs(proofbound.BoundedSub(cp.openScalar(), cp.cavityScalar()))
+	hO, hC := heightO.Value, heightC.Value
 	if hO <= 0 || hC <= 0 {
 		return nil, fmt.Errorf(`%w: a cup interval is empty`, ErrDegenerate)
 	}
@@ -293,8 +297,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// body — its wall runs the full outer interval.
 	ppO := cp.outerPrism()
 	var faces []*Face
-	perimO := boundedScalar{}
-	loopPerimO := make([]boundedScalar, len(oLoops))
+	perimO := proofbound.BoundedScalar{}
+	loopPerimO := make([]proofbound.BoundedScalar, len(oLoops))
 	oFloor := make([][]coedge, len(oLoops))
 	oOpen := make([][]coedge, len(oLoops))
 	for i, loop := range oLoops {
@@ -306,7 +310,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 			return nil, err
 		}
 		faces = append(faces, sf...)
-		perimO = boundedAdd(perimO, ll)
+		perimO = proofbound.BoundedAdd(perimO, ll)
 		loopPerimO[i] = ll
 		oFloor[i], oOpen[i] = floorOpen(bottom, top)
 	}
@@ -316,8 +320,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// hole counter-clockwise (a post) — holeLoop is (i == 0). Roles are
 	// shellSide(i,j) via renameCavityRoles.
 	ppC := cp.cavityPrism()
-	perimC := boundedScalar{}
-	loopPerimC := make([]boundedScalar, len(cLoops))
+	perimC := proofbound.BoundedScalar{}
+	loopPerimC := make([]proofbound.BoundedScalar, len(cLoops))
 	cFloor := make([][]coedge, len(cLoops))
 	cOpen := make([][]coedge, len(cLoops))
 	var cavFaces []*Face
@@ -334,7 +338,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 			return nil, err
 		}
 		cavFaces = append(cavFaces, sf...)
-		perimC = boundedAdd(perimC, ll)
+		perimC = proofbound.BoundedAdd(perimC, ll)
 		loopPerimC[i] = ll
 		cFloor[i], cOpen[i] = floorOpen(bottom, top)
 	}
@@ -348,7 +352,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 
 	// The offset region's recorded boundary sits within offsetDelta of the one
 	// the cup denotes, so its area and first moments move by the displacement
-	// area that boundary can sweep (bounds.go's sectionDisplacementArea), the
+	// area that boundary can sweep (internal/proofbound/bounds.go's proofbound.SectionDisplacementArea), the
 	// moments by that area times the largest coordinate it can reach. Its walls
 	// already took the displacement through their prism's sectionDelta.
 	if cp.offsetDelta > 0 {
@@ -436,17 +440,17 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		}
 		// The offset loop's own enclosed area moves with its boundary.
 		if cp.sense == Outward {
-			aO.bound = absSumUpper(aO.bound, loopDisplacementArea(cp.offsetDelta, oLoops[i], loopPerimO[i]))
+			aO.Bound = proofbound.AbsSumUpper(aO.Bound, loopDisplacementArea(cp.offsetDelta, oLoops[i], loopPerimO[i]))
 		} else {
-			aC.bound = absSumUpper(aC.bound, loopDisplacementArea(cp.offsetDelta, cLoops[i], loopPerimC[i]))
+			aC.Bound = proofbound.AbsSumUpper(aC.Bound, loopDisplacementArea(cp.offsetDelta, cLoops[i], loopPerimC[i]))
 		}
-		rimArea := boundedAbs(boundedSub(aO, aC))
+		rimArea := proofbound.BoundedAbs(proofbound.BoundedSub(aO, aC))
 		rims[i] = &Face{
 			surface:       Plane{Frame: rimFrame},
 			origins:       []FeatureRef{{producer: ref, Role: fmt.Sprintf("rim(%d)", i)}},
 			body:          body,
-			area:          rimArea.value,
-			areaBound:     rimArea.bound,
+			area:          rimArea.Value,
+			areaBound:     rimArea.Bound,
 			loops:         []*Loop{outerLoop, holeLoop},
 			axialDelta:    cp.zOpenDelta,
 			hasAxialDelta: true,
@@ -467,54 +471,54 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 
 	// Measurements carry the composed profile, length, and arithmetic bounds
 	// (docs/modify-design.md §10).
-	areaO := measuredScalar(igO.area, igO.areaBound)
-	areaC := measuredScalar(igC.area, igC.areaBound)
-	massO := boundedMul(areaO, heightO)
-	massC := boundedMul(areaC, heightC)
-	volume := boundedSub(massO, massC)
+	areaO := proofbound.MeasuredScalar(igO.area, igO.areaBound)
+	areaC := proofbound.MeasuredScalar(igC.area, igC.areaBound)
+	massO := proofbound.BoundedMul(areaO, heightO)
+	massC := proofbound.BoundedMul(areaC, heightC)
+	volume := proofbound.BoundedSub(massO, massC)
 	body.volume = Measurement{
-		Value:     units.CubicMillimeters(volume.value),
-		Exactness: exactnessOf(volume.bound),
-		Bound:     units.CubicMillimeters(volume.bound),
+		Value:     units.CubicMillimeters(volume.Value),
+		Exactness: exactnessOf(volume.Bound),
+		Bound:     units.CubicMillimeters(volume.Bound),
 	}
-	area := boundedAdd(
-		boundedAdd(boundedMul(exactScalar(2), areaO), boundedMul(perimO, heightO)),
-		boundedMul(perimC, heightC),
+	area := proofbound.BoundedAdd(
+		proofbound.BoundedAdd(proofbound.BoundedMul(proofbound.ExactScalar(2), areaO), proofbound.BoundedMul(perimO, heightO)),
+		proofbound.BoundedMul(perimC, heightC),
 	)
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(area.value),
-		Exactness: exactnessOf(area.bound),
-		Bound:     units.SquareMillimeters(area.bound),
+		Value:     units.SquareMillimeters(area.Value),
+		Exactness: exactnessOf(area.Bound),
+		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
 	// Centroid: each region's centroid lifted to its own interval midpoint, the
 	// two combined with the cavity's mass subtracted (§10).
-	zMidO := boundedDiv(boundedAdd(cp.outerScalar(), cp.openScalar()), exactScalar(2))
-	zMidC := boundedDiv(boundedAdd(cp.cavityScalar(), cp.openScalar()), exactScalar(2))
-	cuO := boundedQuotient(igO.mu, igO.muBound, igO.area, igO.areaBound)
-	cvO := boundedQuotient(igO.mv, igO.mvBound, igO.area, igO.areaBound)
-	cuC := boundedQuotient(igC.mu, igC.muBound, igC.area, igC.areaBound)
-	cvC := boundedQuotient(igC.mv, igC.mvBound, igC.area, igC.areaBound)
+	zMidO := proofbound.BoundedDiv(proofbound.BoundedAdd(cp.outerScalar(), cp.openScalar()), proofbound.ExactScalar(2))
+	zMidC := proofbound.BoundedDiv(proofbound.BoundedAdd(cp.cavityScalar(), cp.openScalar()), proofbound.ExactScalar(2))
+	cuO := proofbound.BoundedQuotient(igO.mu, igO.muBound, igO.area, igO.areaBound)
+	cvO := proofbound.BoundedQuotient(igO.mv, igO.mvBound, igO.area, igO.areaBound)
+	cuC := proofbound.BoundedQuotient(igC.mu, igC.muBound, igC.area, igC.areaBound)
+	cvC := proofbound.BoundedQuotient(igC.mv, igC.mvBound, igC.area, igC.areaBound)
 	pp := cp.basePrism()
-	cO := pp.point(cuO.value, cvO.value, zMidO.value)
-	cC := pp.point(cuC.value, cvC.value, zMidC.value)
+	cO := pp.point(cuO.Value, cvO.Value, zMidO.Value)
+	cC := pp.point(cuC.Value, cvC.Value, zMidC.Value)
 	cOBound := prismPointBound(pp, cuO, cvO, zMidO)
 	cCBound := prismPointBound(pp, cuC, cvC, zMidC)
-	denom := boundedSub(massO, massC)
-	if denom.value <= 0 {
+	denom := proofbound.BoundedSub(massO, massC)
+	if denom.Value <= 0 {
 		return nil, fmt.Errorf(`%w: the cup cavity is not smaller than its outer solid`, ErrDegenerate)
 	}
-	weightO := boundedDiv(massO, denom)
-	weightC := boundedDiv(massC, denom)
-	centroidValue := cO.Scale(weightO.value).Sub(cC.Scale(weightC.value))
-	centroidBound := absSumUpper(
-		productUpper(weightO.value, cOBound),
-		productUpper(vecL1(cO), weightO.bound),
-		productUpper(weightO.bound, cOBound),
-		productUpper(weightC.value, cCBound),
-		productUpper(vecL1(cC), weightC.bound),
-		productUpper(weightC.bound, cCBound),
-		exactWeightedPointRound(cO, weightO.value, cC, weightC.value, centroidValue),
+	weightO := proofbound.BoundedDiv(massO, denom)
+	weightC := proofbound.BoundedDiv(massC, denom)
+	centroidValue := cO.Scale(weightO.Value).Sub(cC.Scale(weightC.Value))
+	centroidBound := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(weightO.Value, cOBound),
+		proofbound.ProductUpper(vecL1(cO), weightO.Bound),
+		proofbound.ProductUpper(weightO.Bound, cOBound),
+		proofbound.ProductUpper(weightC.Value, cCBound),
+		proofbound.ProductUpper(vecL1(cC), weightC.Bound),
+		proofbound.ProductUpper(weightC.Bound, cCBound),
+		exactWeightedPointRound(cO, weightO.Value, cC, weightC.Value, centroidValue),
 	)
 	outerPrism := cp.outerPrism()
 	geometryBound, err := prismCentroidGeometryBound(outerPrism, cp.outer, centroidValue, work, nil)
@@ -526,9 +530,9 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// farther in the plane and each level's axial one along the normal, and
 	// the rigid map carries each through the same 3·L1 factor the envelope
 	// uses.
-	geometryBound = absSumUpper(geometryBound, productUpper(3, absSumUpper(
-		productUpper(absSumUpper(vecL1(outerPrism.frame.U()), vecL1(outerPrism.frame.V())), outerPrism.sectionDelta),
-		productUpper(vecL1(outerPrism.frame.N()), cp.axialDelta()),
+	geometryBound = proofbound.AbsSumUpper(geometryBound, proofbound.ProductUpper(3, proofbound.AbsSumUpper(
+		proofbound.ProductUpper(proofbound.AbsSumUpper(vecL1(outerPrism.frame.U()), vecL1(outerPrism.frame.V())), outerPrism.sectionDelta),
+		proofbound.ProductUpper(vecL1(outerPrism.frame.N()), cp.axialDelta()),
 	)))
 	centroidBound = math.Min(centroidBound, geometryBound)
 	body.centroid = VecMeasurement{
@@ -568,7 +572,7 @@ func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3
 		)
 		return proofarith.RationalFloatError(exact, hv)
 	}
-	return radius3D(max(
+	return proofbound.Radius3D(max(
 		coordinateError(a.X, b.X, held.X),
 		coordinateError(a.Y, b.Y, held.Y),
 		coordinateError(a.Z, b.Z, held.Z),
@@ -610,12 +614,12 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 // difference of the two loops it spans, and both are strictly nested (the audit
 // proved the cavity simple and inside the outer region), so the absolute
 // difference is the band's analytic area, with both source bounds carried.
-func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (boundedScalar, error) {
+func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (proofbound.BoundedScalar, error) {
 	ig, err := loopRegionIntegralsContext(ctx, l)
 	if err != nil {
-		return boundedScalar{}, err
+		return proofbound.BoundedScalar{}, err
 	}
-	return measuredScalar(math.Abs(ig.area), ig.areaBound), nil
+	return proofbound.MeasuredScalar(math.Abs(ig.area), ig.areaBound), nil
 }
 
 // loopRegionIntegralsContext runs the regionIntegrals accumulator over one
@@ -653,45 +657,45 @@ func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegr
 // The caller (evalCapBlendContext) applies its own per-loop sign
 // (outer/hole, by loop index) on top of this canonicalized triple, exactly as
 // it already does to loopEnclosedAreaContext's |area| for the slab volume.
-func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv boundedScalar, err error) {
+func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {
 	ig, err := loopRegionIntegralsContext(ctx, l)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 	orient := 1.0
 	if ig.area < 0 {
 		orient = -1
 	}
-	return measuredScalar(orient*ig.area, ig.areaBound),
-		measuredScalar(orient*ig.mu, ig.muBound),
-		measuredScalar(orient*ig.mv, ig.mvBound), nil
+	return proofbound.MeasuredScalar(orient*ig.area, ig.areaBound),
+		proofbound.MeasuredScalar(orient*ig.mu, ig.muBound),
+		proofbound.MeasuredScalar(orient*ig.mv, ig.mvBound), nil
 }
 
 // displacedRegionIntegrals widens a region's area and first-moment bounds by
 // what a boundary displaced by at most delta can move them: the displacement
-// area sectionDisplacementArea proves over the region's segments and proven
+// area proofbound.SectionDisplacementArea proves over the region's segments and proven
 // perimeter, and that area times the largest coordinate magnitude any point
 // of the symmetric difference can have — the region's own envelope plus
 // delta.
-func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim boundedScalar, delta float64, work *freeformWork) (regionIntegrals, error) {
+func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim proofbound.BoundedScalar, delta float64, work *freeformWork) (regionIntegrals, error) {
 	segments := len(profile.Outer.Segments)
 	for _, hole := range profile.Holes {
 		segments += len(hole.Segments)
 	}
-	area := sectionDisplacementArea(delta, segments, absSumUpper(perim.value, perim.bound))
+	area := proofbound.SectionDisplacementArea(delta, segments, proofbound.AbsSumUpper(perim.Value, perim.Bound))
 	coord, err := profileCoordinateEnvelope(profile, work, nil)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	moment := productUpper(area, absSumUpper(coord, delta))
-	ig.areaBound = absSumUpper(ig.areaBound, area)
-	ig.muBound = absSumUpper(ig.muBound, moment)
-	ig.mvBound = absSumUpper(ig.mvBound, moment)
+	moment := proofbound.ProductUpper(area, proofbound.AbsSumUpper(coord, delta))
+	ig.areaBound = proofbound.AbsSumUpper(ig.areaBound, area)
+	ig.muBound = proofbound.AbsSumUpper(ig.muBound, moment)
+	ig.mvBound = proofbound.AbsSumUpper(ig.mvBound, moment)
 	return ig, nil
 }
 
-// loopDisplacementArea is sectionDisplacementArea over one loop: how far the
+// loopDisplacementArea is proofbound.SectionDisplacementArea over one loop: how far the
 // area that loop encloses can move when its boundary moves by at most delta.
-func loopDisplacementArea(delta float64, loop LoopRecord, perim boundedScalar) float64 {
-	return sectionDisplacementArea(delta, len(loop.Segments), absSumUpper(perim.value, perim.bound))
+func loopDisplacementArea(delta float64, loop LoopRecord, perim proofbound.BoundedScalar) float64 {
+	return proofbound.SectionDisplacementArea(delta, len(loop.Segments), proofbound.AbsSumUpper(perim.Value, perim.Bound))
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -140,8 +142,8 @@ func (rp revolvePayload) basis() revolveBasis {
 
 // revolveVertexFrameLiftAllow bounds one junction's own share of the
 // payload's frame lift and accumulated placement rounding
-// (bounds.go's frameAndPlacementRoundAllow; topology.go's Vertex.Position
-// contract) — the revolve's own reading of rigidRoundAllow's "plane-local
+// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow; topology.go's Vertex.Position
+// contract) — the revolve's own reading of proofbound.RigidRoundAllow's "plane-local
 // coordinate" input. A swept vertex's plane-local (z, ρ) sits within
 // axisRadiusUpper of the axis anchor (axisFrame.walk's own
 // axisRadiusUpper field, ax.radialUpper(coordUpper) — the SAME enclosure
@@ -154,8 +156,8 @@ func (rp revolvePayload) basis() revolveBasis {
 // what keeps its junction and seam vertices Exact as before.
 func revolveVertexFrameLiftAllow(rp revolvePayload, axisRadiusUpper float64) float64 {
 	aUpper := math.Max(math.Abs(rp.ax.aU), math.Abs(rp.ax.aV))
-	maxInputAbs := absSumUpper(aUpper, axisRadiusUpper, axisRadiusUpper)
-	return frameAndPlacementRoundAllow(rp.frame, rp.xform, maxInputAbs)
+	maxInputAbs := proofbound.AbsSumUpper(aUpper, axisRadiusUpper, axisRadiusUpper)
+	return proofbound.FrameAndPlacementRoundAllow(rp.frame, rp.xform, maxInputAbs)
 }
 
 // revolveCentroidGeometryBound bounds the centroid independently of the
@@ -168,21 +170,21 @@ func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform
 		return 0, err
 	}
 	originUpper := vecL1(rp.frame.Origin())
-	profileUpper := absSumUpper(
+	profileUpper := proofbound.AbsSumUpper(
 		originUpper,
-		productUpper(vecL1(rp.frame.U()), coordUpper),
-		productUpper(vecL1(rp.frame.V()), coordUpper),
+		proofbound.ProductUpper(vecL1(rp.frame.U()), coordUpper),
+		proofbound.ProductUpper(vecL1(rp.frame.V()), coordUpper),
 	)
-	aUUpper := absSumUpper(rp.ax.aU, rp.ax.aUBound)
-	aVUpper := absSumUpper(rp.ax.aV, rp.ax.aVBound)
-	axisUpper := absSumUpper(
+	aUUpper := proofbound.AbsSumUpper(rp.ax.aU, rp.ax.aUBound)
+	aVUpper := proofbound.AbsSumUpper(rp.ax.aV, rp.ax.aVBound)
+	axisUpper := proofbound.AbsSumUpper(
 		originUpper,
-		productUpper(vecL1(rp.frame.U()), aUUpper),
-		productUpper(vecL1(rp.frame.V()), aVUpper),
+		proofbound.ProductUpper(vecL1(rp.frame.U()), aUUpper),
+		proofbound.ProductUpper(vecL1(rp.frame.V()), aVUpper),
 	)
-	rotatedUpper := absSumUpper(productUpper(3, profileUpper), productUpper(4, axisUpper))
-	placedUpper := absSumUpper(productUpper(3, rotatedUpper), vecL1(rp.xform.Translation()))
-	return absSumUpper(vecL1(held), placedUpper), nil
+	rotatedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, profileUpper), proofbound.ProductUpper(4, axisUpper))
+	placedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, rotatedUpper), vecL1(rp.xform.Translation()))
+	return proofbound.AbsSumUpper(vecL1(held), placedUpper), nil
 }
 
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
@@ -204,46 +206,46 @@ func (rp revolvePayload) reflected() bool { return rp.xform.IsReflection() }
 // partial sweep's in-plane centroid term) — the §4 first, second and mixed
 // moments with their source and arithmetic bounds (docs/evaluator-design.md
 // §6).
-func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar, boundedScalar) {
-	aU, aV := measuredScalar(ax.aU, ax.aUBound), measuredScalar(ax.aV, ax.aVBound)
-	dU, dV := measuredScalar(ax.dU, ax.dUBound), measuredScalar(ax.dV, ax.dVBound)
-	nU, nV := measuredScalar(-ax.dV, ax.dVBound), measuredScalar(ax.dU, ax.dUBound)
-	area := measuredScalar(ig.area, ig.areaBound)
-	mu := measuredScalar(ig.mu, ig.muBound)
-	mv := measuredScalar(ig.mv, ig.mvBound)
-	muu := measuredScalar(ig.muu, ig.muuBound)
-	muv := measuredScalar(ig.muv, ig.muvBound)
-	mvv := measuredScalar(ig.mvv, ig.mvvBound)
+func axisMoments(ig regionIntegrals, ax axisFrame) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar) {
+	aU, aV := proofbound.MeasuredScalar(ax.aU, ax.aUBound), proofbound.MeasuredScalar(ax.aV, ax.aVBound)
+	dU, dV := proofbound.MeasuredScalar(ax.dU, ax.dUBound), proofbound.MeasuredScalar(ax.dV, ax.dVBound)
+	nU, nV := proofbound.MeasuredScalar(-ax.dV, ax.dVBound), proofbound.MeasuredScalar(ax.dU, ax.dUBound)
+	area := proofbound.MeasuredScalar(ig.area, ig.areaBound)
+	mu := proofbound.MeasuredScalar(ig.mu, ig.muBound)
+	mv := proofbound.MeasuredScalar(ig.mv, ig.mvBound)
+	muu := proofbound.MeasuredScalar(ig.muu, ig.muuBound)
+	muv := proofbound.MeasuredScalar(ig.muv, ig.muvBound)
+	mvv := proofbound.MeasuredScalar(ig.mvv, ig.mvvBound)
 
-	iuu := boundedAdd(
-		boundedSub(muu, boundedMul(boundedMul(exactScalar(2), aU), mu)),
-		boundedMul(boundedMul(aU, aU), area),
+	iuu := proofbound.BoundedAdd(
+		proofbound.BoundedSub(muu, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), aU), mu)),
+		proofbound.BoundedMul(proofbound.BoundedMul(aU, aU), area),
 	)
-	iuv := boundedAdd(
-		boundedSub(boundedSub(muv, boundedMul(aU, mv)), boundedMul(aV, mu)),
-		boundedMul(boundedMul(aU, aV), area),
+	iuv := proofbound.BoundedAdd(
+		proofbound.BoundedSub(proofbound.BoundedSub(muv, proofbound.BoundedMul(aU, mv)), proofbound.BoundedMul(aV, mu)),
+		proofbound.BoundedMul(proofbound.BoundedMul(aU, aV), area),
 	)
-	ivv := boundedAdd(
-		boundedSub(mvv, boundedMul(boundedMul(exactScalar(2), aV), mv)),
-		boundedMul(boundedMul(aV, aV), area),
+	ivv := proofbound.BoundedAdd(
+		proofbound.BoundedSub(mvv, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), aV), mv)),
+		proofbound.BoundedMul(proofbound.BoundedMul(aV, aV), area),
 	)
-	q := boundedAdd(
-		boundedMul(nU, boundedSub(mu, boundedMul(aU, area))),
-		boundedMul(nV, boundedSub(mv, boundedMul(aV, area))),
+	q := proofbound.BoundedAdd(
+		proofbound.BoundedMul(nU, proofbound.BoundedSub(mu, proofbound.BoundedMul(aU, area))),
+		proofbound.BoundedMul(nV, proofbound.BoundedSub(mv, proofbound.BoundedMul(aV, area))),
 	)
-	mzr := boundedAdd(
-		boundedAdd(
-			boundedMul(boundedMul(dU, nU), iuu),
-			boundedMul(boundedAdd(boundedMul(dU, nV), boundedMul(dV, nU)), iuv),
+	mzr := proofbound.BoundedAdd(
+		proofbound.BoundedAdd(
+			proofbound.BoundedMul(proofbound.BoundedMul(dU, nU), iuu),
+			proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.BoundedMul(dU, nV), proofbound.BoundedMul(dV, nU)), iuv),
 		),
-		boundedMul(boundedMul(dV, nV), ivv),
+		proofbound.BoundedMul(proofbound.BoundedMul(dV, nV), ivv),
 	)
-	mrr := boundedAdd(
-		boundedAdd(
-			boundedMul(boundedMul(nU, nU), iuu),
-			boundedMul(boundedMul(exactScalar(2), boundedMul(nU, nV)), iuv),
+	mrr := proofbound.BoundedAdd(
+		proofbound.BoundedAdd(
+			proofbound.BoundedMul(proofbound.BoundedMul(nU, nU), iuu),
+			proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.BoundedMul(nU, nV)), iuv),
 		),
-		boundedMul(boundedMul(nV, nV), ivv),
+		proofbound.BoundedMul(proofbound.BoundedMul(nV, nV), ivv),
 	)
 	return q, mzr, mrr
 }
@@ -261,7 +263,7 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar
 // the recorded region, and the two disagree by at most the admitted band's
 // own width times the boundary's axial run.
 func revolveAxisAdmitBandCharge(ax axisFrame) float64 {
-	return productUpper(ax.radialAdmitAllow, ax.axialExtentUpper)
+	return proofbound.ProductUpper(ax.radialAdmitAllow, ax.axialExtentUpper)
 }
 
 // revolveAxisAdmitVolumeCharge is the volume's own share of the same
@@ -270,7 +272,7 @@ func revolveAxisAdmitBandCharge(ax axisFrame) float64 {
 // radius and width both order tol) rather than tol.
 func revolveAxisAdmitVolumeCharge(ax axisFrame) float64 {
 	tol := ax.radialAdmitAllow
-	return productUpper(twoPiUpper(), productUpper(productUpper(tol, tol), ax.axialExtentUpper))
+	return proofbound.ProductUpper(proofbound.TwoPiUpper(), proofbound.ProductUpper(proofbound.ProductUpper(tol, tol), ax.axialExtentUpper))
 }
 
 // evalRevolve builds the analytic revolved body from the payload: side
@@ -316,9 +318,9 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// since those are the coordinates their envelopes were proven in. Every one
 	// of the four is exactly zero for a profile whose on-axis endpoints already
 	// sit on the axis.
-	ig.areaBound = absSumUpper(ig.areaBound, rp.ax.snap.area)
+	ig.areaBound = proofbound.AbsSumUpper(ig.areaBound, rp.ax.snap.area)
 	sweep := rp.sweep()
-	dphi := sweep.value
+	dphi := sweep.Value
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
@@ -328,12 +330,12 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// from: ρ and z are what regionSnapAllow's envelopes were proven against,
 	// and a profile far down the axis has a large |z| beside a small ρ, so
 	// charging the volume's ∫ρ dA at a frame-origin envelope would inflate it by
-	// the whole axial offset. boundedMul and boundedDiv below then carry these
+	// the whole axial offset. proofbound.BoundedMul and proofbound.BoundedDiv below then carry these
 	// into the volume and the centroid through the arithmetic they already run.
-	q.bound = absSumUpper(q.bound, rp.ax.snap.first)
-	mzr.bound = absSumUpper(mzr.bound, rp.ax.snap.mixed)
-	mrr.bound = absSumUpper(mrr.bound, rp.ax.snap.second)
-	if q.value <= 0 {
+	q.Bound = proofbound.AbsSumUpper(q.Bound, rp.ax.snap.first)
+	mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, rp.ax.snap.mixed)
+	mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, rp.ax.snap.second)
+	if q.Value <= 0 {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}
 
@@ -377,7 +379,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:        body,
 			area:        ig.area,
-			areaBound:   absSumUpper(ig.areaBound, capAdmitAllow),
+			areaBound:   proofbound.AbsSumUpper(ig.areaBound, capAdmitAllow),
 			normalBound: rp.phi0Delta(),
 		}
 		capEnd = &Face{
@@ -385,12 +387,12 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:        body,
 			area:        ig.area,
-			areaBound:   absSumUpper(ig.areaBound, capAdmitAllow),
+			areaBound:   proofbound.AbsSumUpper(ig.areaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
 		}
 	}
 
-	sideArea := boundedScalar{}
+	sideArea := proofbound.BoundedScalar{}
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	perLoop := make([][]*Face, len(loops))
 	for li, loop := range loops {
@@ -402,7 +404,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			return nil, err
 		}
 		perLoop[li] = parts.faces
-		sideArea = boundedAdd(sideArea, parts.area)
+		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
 			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, outer: li == 0})
 			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, outer: li == 0})
@@ -469,8 +471,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// SAME admitted-band charge (capAdmitAllow, above) the individual cap
 		// Face fields already carry — never a narrower, uncharged bound the
 		// two would then disagree with.
-		area = boundedAdd(area, measuredScalar(capStart.area, capStart.areaBound))
-		area = boundedAdd(area, measuredScalar(capEnd.area, capEnd.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
 		if rp.surfaceResult {
 			// §4.3: a surface result's area is the solid's area minus the two
 			// omitted caps'. Each cap's area and bound are read back from the
@@ -482,50 +484,50 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// value already composed from them. Collapsing this to sideArea
 			// alone would hold the same value but a smaller, uncomposed
 			// bound than §4.3's composed sum requires.
-			area = boundedSub(area, measuredScalar(capStart.area, capStart.areaBound))
-			area = boundedSub(area, measuredScalar(capEnd.area, capEnd.areaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
 		}
 	}
-	volume := boundedMul(q, sweep)
-	volume.bound = absSumUpper(volume.bound, revolveAxisAdmitVolumeCharge(rp.ax))
+	volume := proofbound.BoundedMul(q, sweep)
+	volume.Bound = proofbound.AbsSumUpper(volume.Bound, revolveAxisAdmitVolumeCharge(rp.ax))
 	body.volume = Measurement{
-		Value:     units.CubicMillimeters(volume.value),
-		Exactness: exactnessOf(volume.bound),
-		Bound:     units.CubicMillimeters(volume.bound),
+		Value:     units.CubicMillimeters(volume.Value),
+		Exactness: exactnessOf(volume.Bound),
+		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(area.value),
-		Exactness: exactnessOf(area.bound),
-		Bound:     units.SquareMillimeters(area.bound),
+		Value:     units.SquareMillimeters(area.Value),
+		Exactness: exactnessOf(area.Bound),
+		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
-	axial := boundedDiv(mzr, q)
-	cen := b.a3.Add(b.w.Scale(axial.value))
-	centroidScale := absSumUpper(vecMaxAbs(b.a3), axial.value)
-	centroidBound := absSumUpper(axial.bound, radius3D(analyticRoundBound(centroidScale)))
+	axial := proofbound.BoundedDiv(mzr, q)
+	cen := b.a3.Add(b.w.Scale(axial.Value))
+	centroidScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(b.a3), axial.Value)
+	centroidBound := proofbound.AbsSumUpper(axial.Bound, proofbound.Radius3D(proofbound.AnalyticRoundBound(centroidScale)))
 	if !rp.full {
 		// The in-plane term is the swept radial direction integrated over
 		// the interval — closed form in the sweep angle; a full turn's is
 		// identically zero, which is what puts its centroid on the axis.
 		sin1, cos1 := endSinCos(rp.den.phi1, rp.phi1)
 		sin0, cos0 := endSinCos(rp.den.phi0, rp.phi0)
-		rx := boundedSub(sin1, sin0)
-		ry := boundedSub(cos0, cos1)
-		radial := b.e0.Scale(rx.value).Add(b.e1.Scale(ry.value))
-		radialBound := radius2D(rx.bound, ry.bound)
-		radialScale := boundedDiv(mrr, boundedMul(sweep, q))
-		cen = cen.Add(radial.Scale(radialScale.value))
+		rx := proofbound.BoundedSub(sin1, sin0)
+		ry := proofbound.BoundedSub(cos0, cos1)
+		radial := b.e0.Scale(rx.Value).Add(b.e1.Scale(ry.Value))
+		radialBound := proofbound.Radius2D(rx.Bound, ry.Bound)
+		radialScale := proofbound.BoundedDiv(mrr, proofbound.BoundedMul(sweep, q))
+		cen = cen.Add(radial.Scale(radialScale.Value))
 		radialUpper := vecL1(radial)
-		centroidBound = absSumUpper(
+		centroidBound = proofbound.AbsSumUpper(
 			centroidBound,
-			productUpper(radialScale.value, radialBound),
-			productUpper(radialUpper, radialScale.bound),
-			radius3D(analyticRoundBound(productUpper(radialScale.value, radialUpper))),
+			proofbound.ProductUpper(radialScale.Value, radialBound),
+			proofbound.ProductUpper(radialUpper, radialScale.Bound),
+			proofbound.Radius3D(proofbound.AnalyticRoundBound(proofbound.ProductUpper(radialScale.Value, radialUpper))),
 		)
 	}
-	centroidBound = absSumUpper(
+	centroidBound = proofbound.AbsSumUpper(
 		centroidBound,
-		rigidRoundAllow(vecMaxAbs(cen), vecMaxAbs(rp.xform.Translation())),
+		proofbound.RigidRoundAllow(proofbound.VecMaxAbs(cen), proofbound.VecMaxAbs(rp.xform.Translation())),
 	)
 	centroidValue := rp.xform.Apply(cen)
 	geometryBound, err := revolveCentroidGeometryBound(rp, centroidValue, work)
@@ -537,7 +539,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// bound's independent min: revolveCentroidGeometryBound knows nothing of
 	// resolveAxisSide's own uncertainty, so folding this charge in before the
 	// min would let a smaller geometry bound silently discard it.
-	centroidBound = absSumUpper(centroidBound, revolveAxisAdmitBandCharge(rp.ax))
+	centroidBound = proofbound.AbsSumUpper(centroidBound, revolveAxisAdmitBandCharge(rp.ax))
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
@@ -586,9 +588,9 @@ func (rp revolvePayload) capFrame(b revolveBasis, phi float64, start bool) (r3.F
 // revLoopParts is what one recorded loop contributes to the revolved body.
 type revLoopParts struct {
 	faces   []*Face
-	startCo []coedge      // the loop's start-cap coedges, walk order (partial only)
-	endCo   []coedge      // the loop's end-cap coedges, walk order (partial only)
-	area    boundedScalar // the loop's side-face area
+	startCo []coedge                 // the loop's start-cap coedges, walk order (partial only)
+	endCo   []coedge                 // the loop's end-cap coedges, walk order (partial only)
+	area    proofbound.BoundedScalar // the loop's side-face area
 }
 
 // junctionRadiusInterval encloses a junction's radial coordinate ρ as
@@ -599,12 +601,12 @@ type revLoopParts struct {
 // (unrounded) axis direction and anchor would give. ok is false wherever
 // either cannot be stated as an exact rational — a non-finite ρBound is the
 // refusal shape every consumer below already turns into its own envelope.
-func junctionRadiusInterval(rho, rhoBound float64) (ratInterval, bool) {
+func junctionRadiusInterval(rho, rhoBound float64) (proofbound.RatInterval, bool) {
 	r, b := proofarith.FloatRat(rho), proofarith.FloatRat(math.Abs(rhoBound))
 	if r == nil || b == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalWiden(pointInterval(r), b), true
+	return intervalWiden(proofbound.PointInterval(r), b), true
 }
 
 // revJunction is one junction between consecutive walks: the shared point in
@@ -696,7 +698,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	walks, kinds, singleClosed := resolved.walks, resolved.kinds, resolved.singleClosed
 	n := len(walks)
 	sweep := rp.sweep()
-	dphi := sweep.value
+	dphi := sweep.Value
 	sweepSign := 1.0
 	if rp.reflected() {
 		sweepSign = -1
@@ -723,12 +725,12 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			center := rp.point(b, j.z, 0, 0)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 				latitudeLength := 2 * math.Pi * j.rho
-				latitudeBound := conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper()))
+				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.axisRadiusUpper, proofbound.TwoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
-					enc := intervalMul(twoPiInterval(), rhoEnc)
-					latitudeBound = math.Min(latitudeBound, intervalFloatError(enc, latitudeLength))
+					enc := proofbound.IntervalMul(proofbound.TwoPiInterval(), rhoEnc)
+					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
 				j.lat = &Edge{
 					curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
@@ -745,17 +747,17 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 					arcLength := j.rho * dphi
-					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
-					arcBound := conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper))
+					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
+					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.axisRadiusUpper, dphiUpper))
 					if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
 						if widthEnc, ok := rp.den.widthInterval(); ok {
-							enc := intervalMul(rhoEnc, widthEnc)
-							arcBound = math.Min(arcBound, intervalFloatError(enc, arcLength))
+							enc := proofbound.IntervalMul(rhoEnc, widthEnc)
+							arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 						}
 					}
 					j.arc = &Edge{
@@ -844,13 +846,13 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		for j, si := range w.segs {
 			segs[j] = loop.Segments[si]
 		}
-		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
 			body:      body,
-			area:      faceArea.value,
-			areaBound: faceArea.bound,
+			area:      faceArea.Value,
+			areaBound: faceArea.Bound,
 			reversed:  reversed,
 		}
 		switch {
@@ -882,7 +884,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			return revLoopParts{}, err
 		}
 		parts.faces = append(parts.faces, face)
-		parts.area = boundedAdd(parts.area, faceArea)
+		parts.area = proofbound.BoundedAdd(parts.area, faceArea)
 		if !rp.full {
 			parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
 			parts.endCo = append(parts.endCo, coedge{edge: cap1[i], forward: true})
@@ -983,7 +985,7 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 	center := rp.point(b, w.cU, w.cV, phi)
 	radius := units.Millimeters(w.radius)
 	if closed {
-		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(absSumUpper(productUpper(w.startV, delta), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper)))}
+		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(w.startV, delta), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper)))}
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
 		e.start, e.end = seam, seam
 		return e
@@ -1073,7 +1075,7 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 // proven inputs — w.length with w.lengthBound (the sqrt bracket), w.startV/
 // w.endV with w.startVBound/w.endVBound (axisFrame.walk's re-expressed
 // radial coordinates) — so math.Min against the magnitude envelope can only
-// shrink the published bound, never widen it, following bounded.go's own
+// shrink the published bound, never widen it, following internal/proofbound/bounded.go's own
 // convention.
 //
 // The circular arm's held value is still the axis-frame closed form (w.th0/
@@ -1087,32 +1089,32 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 // axis whose direction carries a non-finite bound) withholds the whole sum,
 // leaving the envelope as the only proof standing, exactly as before this
 // change.
-func walkAxisMoment(w segmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) boundedScalar {
+func walkAxisMoment(w segmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) proofbound.BoundedScalar {
 	if kind == wallAxis {
-		return boundedScalar{}
+		return proofbound.BoundedScalar{}
 	}
 	if !w.isCircular() {
-		meanRadius := boundedDiv(
-			boundedAdd(measuredScalar(w.startV, w.startVBound), measuredScalar(w.endV, w.endVBound)),
-			exactScalar(2),
+		meanRadius := proofbound.BoundedDiv(
+			proofbound.BoundedAdd(proofbound.MeasuredScalar(w.startV, w.startVBound), proofbound.MeasuredScalar(w.endV, w.endVBound)),
+			proofbound.ExactScalar(2),
 		)
-		result := boundedMul(measuredScalar(w.length, w.lengthBound), meanRadius)
-		result.bound = math.Min(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
+		result := proofbound.BoundedMul(proofbound.MeasuredScalar(w.length, w.lengthBound), meanRadius)
+		result.Bound = math.Min(result.Bound, proofbound.ConservativeValueError(result.Value, w.axisMomentUpper))
 		return result
 	}
 	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-	dtheta := boundedSub(exactScalar(hi), exactScalar(lo))
-	cosDelta := boundedSub(boundedCos(exactScalar(lo)), boundedCos(exactScalar(hi)))
-	result := boundedMul(
-		exactScalar(w.radius),
-		boundedAdd(
-			boundedMul(exactScalar(w.cV), dtheta),
-			boundedMul(exactScalar(w.radius), cosDelta),
+	dtheta := proofbound.BoundedSub(proofbound.ExactScalar(hi), proofbound.ExactScalar(lo))
+	cosDelta := proofbound.BoundedSub(proofbound.BoundedCos(proofbound.ExactScalar(lo)), proofbound.BoundedCos(proofbound.ExactScalar(hi)))
+	result := proofbound.BoundedMul(
+		proofbound.ExactScalar(w.radius),
+		proofbound.BoundedAdd(
+			proofbound.BoundedMul(proofbound.ExactScalar(w.cV), dtheta),
+			proofbound.BoundedMul(proofbound.ExactScalar(w.radius), cosDelta),
 		),
 	)
-	result.bound = conservativeValueError(result.value, w.axisMomentUpper)
+	result.Bound = proofbound.ConservativeValueError(result.Value, w.axisMomentUpper)
 	if enc, ok := circularAxisMomentTotal(segs, ax); ok {
-		result.bound = math.Min(result.bound, intervalFloatError(enc, result.value))
+		result.Bound = math.Min(result.Bound, proofbound.IntervalFloatError(enc, result.Value))
 	}
 	return result
 }
@@ -1123,20 +1125,20 @@ func walkAxisMoment(w segmentWalk, kind wallKind, segs []CurveSegment, ax axisFr
 // enclosures' sum. ok is false wherever any one segment's own bracket refuses
 // — a partial sum standing in for a segment the record cannot bracket would
 // publish a claim that segment never proved.
-func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (ratInterval, bool) {
+func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
 	if len(segs) == 0 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	total, ok := circularAxisMomentInterval(segs[0], ax)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	for _, seg := range segs[1:] {
 		enc, ok := circularAxisMomentInterval(seg, ax)
 		if !ok {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
-		total = intervalAdd(total, enc)
+		total = proofbound.IntervalAdd(total, enc)
 	}
 	return total, true
 }
@@ -1162,14 +1164,14 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	}
 	rev := rp.revolve()
 	sweep := rev.sweep()
-	if sweep.value <= 0 {
+	if sweep.Value <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
 	b := rev.basis()
 	var allFaces []*Face
-	area := boundedScalar{}
+	area := proofbound.BoundedScalar{}
 	for ci := range rp.chains {
 		// Each walk builds from its OWN single-walk view, so
 		// sideOriginsContext's segment indices and walkAxisMoment's own
@@ -1192,13 +1194,13 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 			return nil, err
 		}
 		allFaces = append(allFaces, faces...)
-		area = boundedAdd(area, walkArea)
+		area = proofbound.BoundedAdd(area, walkArea)
 	}
 	body.lumps = sheetLumps(allFaces)
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(area.value),
-		Exactness: exactnessOf(area.bound),
-		Bound:     units.SquareMillimeters(area.bound),
+		Value:     units.SquareMillimeters(area.Value),
+		Exactness: exactnessOf(area.Bound),
+		Bound:     units.SquareMillimeters(area.Bound),
 	}
 	// volume and centroid stay at their zero value: a chain bounds no region
 	// (docs/surface-design.md §13.3), so neither is ever integrated here, and
@@ -1307,12 +1309,12 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 // closed loop. A wall's own copy of its walk at phi0/phi1 (capEdge) is never
 // attached to a cap face here — a chain mints none — so it stays free
 // regardless of position (docs/surface-design.md §13.4). It returns the
-// faces and the walk's own total wall area, folded through boundedAdd.
-func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolveBasis, resolved revolveWalks) ([]*Face, boundedScalar, error) {
+// faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
+func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolveBasis, resolved revolveWalks) ([]*Face, proofbound.BoundedScalar, error) {
 	walks, kinds := resolved.walks, resolved.kinds
 	n := len(walks)
 	sweep := rp.sweep()
-	dphi := sweep.value
+	dphi := sweep.Value
 	sweepSign := 1.0
 	if rp.reflected() {
 		sweepSign = -1
@@ -1334,7 +1336,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	js := make([]revJunction, n+1)
 	for i := 0; i <= n; i++ {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		z, rho, rhoBound, axisRadiusUpper := junctionSource(i)
 		j := revJunction{z: z, rho: rho, onAxis: rho == 0}
@@ -1348,14 +1350,14 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		case rp.full && !j.onAxis:
 			seam := &Vertex{
 				position: rp.point(b, j.z, j.rho, rp.phi0),
-				bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+				bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
 				denot:    body.doc.mintCurve(),
 			}
 			latitudeLength := 2 * math.Pi * j.rho
-			latitudeBound := conservativeValueError(latitudeLength, productUpper(axisRadiusUpper, twoPiUpper()))
+			latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(axisRadiusUpper, proofbound.TwoPiUpper()))
 			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
-				enc := intervalMul(twoPiInterval(), rhoEnc)
-				latitudeBound = math.Min(latitudeBound, intervalFloatError(enc, latitudeLength))
+				enc := proofbound.IntervalMul(proofbound.TwoPiInterval(), rhoEnc)
+				latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 			}
 			j.lat = &Edge{
 				curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
@@ -1369,23 +1371,23 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		case !rp.full:
 			j.v0 = &Vertex{
 				position: rp.point(b, j.z, j.rho, rp.phi0),
-				bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+				bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
 				denot:    body.doc.mintCurve(),
 			}
 			j.v1 = j.v0
 			if !j.onAxis {
 				j.v1 = &Vertex{
 					position: rp.point(b, j.z, j.rho, rp.phi1),
-					bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+					bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
 					denot:    body.doc.mintCurve(),
 				}
 				arcLength := j.rho * dphi
-				dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
-				arcBound := conservativeValueError(arcLength, productUpper(axisRadiusUpper, dphiUpper))
+				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
+				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
 					if widthEnc, ok := rp.den.widthInterval(); ok {
-						enc := intervalMul(rhoEnc, widthEnc)
-						arcBound = math.Min(arcBound, intervalFloatError(enc, arcLength))
+						enc := proofbound.IntervalMul(rhoEnc, widthEnc)
+						arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 					}
 				}
 				j.arc = &Edge{
@@ -1403,10 +1405,10 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	}
 
 	faces := make([]*Face, 0, n)
-	total := boundedScalar{}
+	total := proofbound.BoundedScalar{}
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		if kinds[i] == wallAxis {
 			// A LineSeg lying exactly on the axis sweeps no face — the same
@@ -1417,23 +1419,23 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		}
 		surf, reversed, err := rp.wallSurface(b, w.segmentWalk, kinds[i])
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		origins, err := sideOriginsContext(ctx, ref, loopIdx, w.segs)
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		segs := make([]CurveSegment, len(w.segs))
 		for oi, si := range w.segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
-		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
 			body:      body,
-			area:      faceArea.value,
-			areaBound: faceArea.bound,
+			area:      faceArea.Value,
+			areaBound: faceArea.Bound,
 			reversed:  reversed,
 		}
 		if rp.full {
@@ -1455,10 +1457,10 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			face.loops = []*Loop{{coedges: co, outer: true}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		faces = append(faces, face)
-		total = boundedAdd(total, faceArea)
+		total = proofbound.BoundedAdd(total, faceArea)
 	}
 	return faces, total, nil
 }

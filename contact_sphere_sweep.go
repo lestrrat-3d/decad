@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -216,11 +218,11 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 			ideal.Reason = ContactPointTooCoarse
 			return
 		}
-		witness.Bound = units.Millimeters(ratFloatUp(bound))
+		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 		witness.Exactness = exactnessFromBound(witness.Bound.Base())
 	}
 	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
-	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
+	actual.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason
@@ -321,9 +323,9 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 			}
 		}
 	}
-	maxFloat := ratFloatUp(maximum)
+	maxFloat := proofbound.RatFloatUp(maximum)
 	if !finiteMeasurementValues(maxFloat) ||
-		radius3D(math.Nextafter(maxFloat, math.Inf(1))-maxFloat) > r.req.PointResolution.Base() {
+		proofbound.Radius3D(math.Nextafter(maxFloat, math.Inf(1))-maxFloat) > r.req.PointResolution.Base() {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]

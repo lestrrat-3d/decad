@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -25,8 +27,8 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 		return prismPayload{}, false, nil
 	}
 
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
 	pa, pb, ok, err := admitPrismPairBudget(budget, a, b)
@@ -92,7 +94,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // claim 1 already covers claim 2 entirely). When the clean-nesting search
 // comes back unresolved, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
-func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
+func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
@@ -134,8 +136,8 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 		// operand's own walk charge), with the (already zero) cut term
 		// omitted rather than added back in.
 		sectionDelta: max(
-			absSumUpper(target.sectionDelta, sceneDelta.a),
-			absSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
+			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
 		),
 	}
 	return result, true, nil
@@ -147,7 +149,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 // There is no §6 audit on this path, for the same reason as Cut's. When
 // neither direction matches, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
-func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
+func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, nestedIsB, resolved, err := resolvePrismIntersect(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
@@ -178,9 +180,9 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, 
 	// charge) reaches the result — never the max of both, which would be
 	// conservative where the code already knows which operand's coordinates
 	// it took.
-	sectionDelta := absSumUpper(pa.sectionDelta, sceneDelta.a)
+	sectionDelta := proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a)
 	if nestedIsB {
-		sectionDelta = absSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta)
+		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta)
 	}
 
 	result := prismPayload{
@@ -244,7 +246,7 @@ func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pick
 		return aVal, aDelta
 	}
 	held, _ := bVal.Float64()
-	return held, absSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
+	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
 }
 
 // prismEntityOrigin is buildPrismScene's own tag map value (§4.1's "tagged, in
@@ -269,10 +271,10 @@ type prismEntityOrigin struct {
 // prismLoopEntitySet is the tag map's per-loop view: the set of entities
 // buildPrismScene created for one operand's one loop (Outer at hole = -1,
 // else Holes[hole]), read for the structural match (§4.2) alone.
-func prismLoopEntitySet(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, isB bool, hole int) (map[sketch.Entity]struct{}, error) {
+func prismLoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, isB bool, hole int) (map[sketch.Entity]struct{}, error) {
 	out := map[sketch.Entity]struct{}{}
 	for e, origin := range tags {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if origin.isB == isB && origin.hole == hole {
@@ -291,13 +293,13 @@ func prismLoopEntitySet(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 // check on edge order or starting index: a simple loop's own walk is
 // determined only up to rotation, and requiring an index would make the match
 // fragile without proving anything more.
-func prismLoopMatchesOrigin(budget *workBudget, edges []sketch.BoundaryEdge, want map[sketch.Entity]struct{}) (bool, error) {
+func prismLoopMatchesOrigin(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge, want map[sketch.Entity]struct{}) (bool, error) {
 	if len(edges) != len(want) {
 		return false, nil
 	}
 	seen := make(map[sketch.Entity]struct{}, len(edges))
 	for _, e := range edges {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		if e.Partial {
@@ -321,10 +323,10 @@ func prismLoopMatchesOrigin(budget *workBudget, edges []sketch.BoundaryEdge, wan
 // candidate hole. The bipartite match is small (a handful of holes at most,
 // bounded by the same arrangement cap as everything else here) and needs no
 // index correspondence — sketch's own Holes order is not decad's to assume.
-func prismHolesMatchOrigin(budget *workBudget, holes [][]sketch.BoundaryEdge, want []map[sketch.Entity]struct{}) (bool, error) {
+func prismHolesMatchOrigin(budget *proofbound.WorkBudget, holes [][]sketch.BoundaryEdge, want []map[sketch.Entity]struct{}) (bool, error) {
 	matched := make([]bool, len(want))
 	for _, h := range holes {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		found := -1
@@ -356,10 +358,10 @@ func prismHolesMatchOrigin(budget *workBudget, holes [][]sketch.BoundaryEdge, wa
 // resolved=false (err always nil in that case) means no such unique profile
 // exists: zero candidates or more than one (ambiguous) are both §4.4's
 // "unresolved," not a refusal.
-func prismFindLoopMatch(budget *workBudget, profiles []*sketch.Profile, wantOuter map[sketch.Entity]struct{}, wantHoles []map[sketch.Entity]struct{}) (*sketch.Profile, bool, error) {
+func prismFindLoopMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile, wantOuter map[sketch.Entity]struct{}, wantHoles []map[sketch.Entity]struct{}) (*sketch.Profile, bool, error) {
 	var found *sketch.Profile
 	for _, p := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
 		outerOK, err := prismLoopMatchesOrigin(budget, p.Outer, wantOuter)
@@ -413,7 +415,7 @@ func prismFindLoopMatch(budget *workBudget, profiles []*sketch.Profile, wantOute
 // *sketch.Sketch is the private scene the match was found in, needed to
 // authenticate it through RecordProfile, and sceneDelta is buildPrismScene's
 // own per-operand §7 walk charge.
-func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, prismSceneDelta, bool, error) {
+func resolvePrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, prismSceneDelta, bool, error) {
 	s, match, _, delta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
 	return s, match, delta, resolved, err
 }
@@ -421,19 +423,19 @@ func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prism
 // resolvePrismCutWithTags also returns the scene's entity-origin map. A
 // stacked result uses it to retain the target's already recorded whole loops
 // while taking only the new tool hole from RecordProfile's authenticated cell.
-func resolvePrismCutWithTags(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, bool, error) {
+func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if len(profiles) == 0 {
@@ -500,19 +502,19 @@ func resolvePrismCutWithTags(ctx context.Context, budget *workBudget, target, to
 // unresolved. nestedIsB reports which operand the result traces to, for
 // §7's displacement selection. The returned *sketch.Sketch is the private
 // scene the match was found in.
-func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (s *sketch.Sketch, match *sketch.Profile, sceneDelta prismSceneDelta, nestedIsB, resolved bool, err error) {
+func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (s *sketch.Sketch, match *sketch.Profile, sceneDelta prismSceneDelta, nestedIsB, resolved bool, err error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
 	if len(profiles) == 0 {

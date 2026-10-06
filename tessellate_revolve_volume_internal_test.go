@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -115,9 +117,9 @@ func TestRevolveAngularHomotopyFactorEnclosesTheAngularIntegral(t *testing.T) {
 	// The angular factor alone is the triple integral of a cell whose meridian
 	// chord has |z'| = 1 and ρ ≡ 1, since ∫ρ² dt is then 1.
 	for _, dphi := range []float64{2 * math.Pi / 3, 2 * math.Pi / 8, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		g, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(dphi)))
+		g, err := revolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
 		require.NoError(t, err)
-		got := ratFloatUp(g)
+		got := proofbound.RatFloatUp(g)
 		want := tripleIntegralReference(0, 1, 1, 1, dphi, 60)
 		require.Positive(t, want)
 		require.GreaterOrEqual(t, got, want, `dφ=%v: the published factor sits below the integral it must bound`, dphi)
@@ -130,23 +132,23 @@ func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
 	// A small angular step's factor is dφ³/12 to leading order — which is what
 	// makes Σ Icell reproduce a chorded cylinder's own volume deficit — so
 	// halving the step must divide the factor by very nearly eight.
-	coarse, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(2 * math.Pi / 40)))
+	coarse, err := revolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 40)))
 	require.NoError(t, err)
-	fine, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(2 * math.Pi / 80)))
+	fine, err := revolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 80)))
 	require.NoError(t, err)
-	ratio := ratFloatUp(coarse) / ratFloatUp(fine)
+	ratio := proofbound.RatFloatUp(coarse) / proofbound.RatFloatUp(fine)
 	require.InDelta(t, 8.0, ratio, 0.05)
 
 	step := 2 * math.Pi / 64
 	closed := step * step * step / 12
-	got := ratFloatUp(mustAngularFactor(t, step))
+	got := proofbound.RatFloatUp(mustAngularFactor(t, step))
 	require.GreaterOrEqual(t, got, closed)
 	require.LessOrEqual(t, got, closed*1.05)
 }
 
 func mustAngularFactor(t *testing.T, dphi float64) *big.Rat {
 	t.Helper()
-	g, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(dphi)))
+	g, err := revolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
 	require.NoError(t, err)
 	return g
 }
@@ -156,7 +158,7 @@ func TestRevolveAngularHomotopyFactorRefusesAnUnenclosableStep(t *testing.T) {
 	// A reversed enclosure states no angle at all, and §11's integral may not
 	// be answered from one: the mesh refuses rather than publishing a figure it
 	// cannot stand behind.
-	_, err := revolveAngularHomotopyFactor(interval(big.NewRat(1, 1), new(big.Rat)))
+	_, err := revolveAngularHomotopyFactor(proofbound.Interval(big.NewRat(1, 1), new(big.Rat)))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -177,9 +179,9 @@ func TestRevolveCellSweptVolumeBoundsTheCellIntegral(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := mustAngularFactor(t, tc.dphi)
-			lo := revMeridian{zIv: pointInterval(proofarith.FloatRat(tc.z0)), rhoIv: pointInterval(proofarith.FloatRat(tc.rho0))}
-			hi := revMeridian{zIv: pointInterval(proofarith.FloatRat(tc.z1)), rhoIv: pointInterval(proofarith.FloatRat(tc.rho1))}
-			got := ratFloatUp(revolveCellSweptVolume(lo, hi, g))
+			lo := revMeridian{zIv: proofbound.PointInterval(proofarith.FloatRat(tc.z0)), rhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho0))}
+			hi := revMeridian{zIv: proofbound.PointInterval(proofarith.FloatRat(tc.z1)), rhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho1))}
+			got := proofbound.RatFloatUp(revolveCellSweptVolume(lo, hi, g))
 			want := tripleIntegralReference(tc.z0, tc.rho0, tc.z1, tc.rho1, tc.dphi, 60)
 			require.Positive(t, want)
 			require.GreaterOrEqual(t, got, want, `Icell sits below the swept volume it must bound`)
@@ -194,8 +196,8 @@ func TestRevolveCellSweptVolumeIsZeroForAnAxisLevelCell(t *testing.T) {
 	// homotopy moves nothing along the axis and sweeps no volume at all: |z'|
 	// is the factor that vanishes.
 	g := mustAngularFactor(t, 2*math.Pi/32)
-	lo := revMeridian{zIv: pointInterval(proofarith.FloatRat(3)), rhoIv: pointInterval(new(big.Rat))}
-	hi := revMeridian{zIv: pointInterval(proofarith.FloatRat(3)), rhoIv: pointInterval(proofarith.FloatRat(8))}
+	lo := revMeridian{zIv: proofbound.PointInterval(proofarith.FloatRat(3)), rhoIv: proofbound.PointInterval(new(big.Rat))}
+	hi := revMeridian{zIv: proofbound.PointInterval(proofarith.FloatRat(3)), rhoIv: proofbound.PointInterval(proofarith.FloatRat(8))}
 	require.Zero(t, revolveCellSweptVolume(lo, hi, g).Sign())
 }
 
@@ -210,7 +212,7 @@ func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 	require.Positive(t, mesh.volSymDiff)
-	require.False(t, isNonFinite(mesh.volSymDiff))
+	require.False(t, proofbound.IsNonFinite(mesh.volSymDiff))
 
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -326,9 +328,9 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 	n := int64(revolveAngularIntegralSteps)
 	scale := float64(8 * n * n)
 	for _, d := range []float64{2 * math.Pi / 3, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		bp, bq := angularHomotopyBulges(pointInterval(proofarith.FloatRat(d)), n)
-		require.Positive(t, ratFloatUp(bp))
-		require.Positive(t, ratFloatUp(bq))
+		bp, bq := angularHomotopyBulges(proofbound.PointInterval(proofarith.FloatRat(d)), n)
+		require.Positive(t, proofbound.RatFloatUp(bp))
+		require.Positive(t, proofbound.RatFloatUp(bq))
 		const h = 1e-4
 		maxP, maxQ := 0.0, 0.0
 		for i := range 201 {
@@ -339,8 +341,8 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 			maxP = math.Max(maxP, math.Abs((p(u+h, d)-2*p(u, d)+p(u-h, d))/(h*h)))
 			maxQ = math.Max(maxQ, math.Abs((q(u+h, d)-2*q(u, d)+q(u-h, d))/(h*h)))
 		}
-		require.GreaterOrEqual(t, ratFloatUp(bp)*scale, maxP, `dφ=%v: the P allowance understates its own curvature`, d)
-		require.GreaterOrEqual(t, ratFloatUp(bq)*scale, maxQ, `dφ=%v: the Q allowance understates its own curvature`, d)
+		require.GreaterOrEqual(t, proofbound.RatFloatUp(bp)*scale, maxP, `dφ=%v: the P allowance understates its own curvature`, d)
+		require.GreaterOrEqual(t, proofbound.RatFloatUp(bq)*scale, maxQ, `dφ=%v: the Q allowance understates its own curvature`, d)
 	}
 }
 

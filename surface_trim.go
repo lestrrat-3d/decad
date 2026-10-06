@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -45,8 +47,8 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 	if err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	// S1 routes the pair by family before either arm's gate runs, exactly as
@@ -128,7 +130,7 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 
 // admitExtendPair applies S1-S4, S6 and S7. The selected segment enters the
 // scene at full domain; every other receiver segment stays outside it.
-func admitExtendPair(budget *workBudget, receiver, tool *Body) (chainPayload, prismPayload, error) {
+func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chainPayload, prismPayload, error) {
 	// A revolve pair never reaches here: Body.Extend routes it to its own arm
 	// before this gate runs, exactly as Trim routes one.
 	rf, tf := bodyTrimFamily(receiver), bodyTrimFamily(tool)
@@ -323,7 +325,7 @@ func extendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 // view is the receiver's own section view — a prism ribbon's prism() or a
 // revolve ribbon's meridian() — carrying the frame and placement the scene is
 // built in; its profile is replaced below by the one recreated carrier.
-func resolveExtend(ctx context.Context, budget *workBudget, view prismPayload, tool prismPayload,
+func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view prismPayload, tool prismPayload,
 	seg CurveSegment, atStart bool) (CurveSegment, float64, error) {
 	t0, t1, err := trimSegmentParamRange(seg)
 	if err != nil {
@@ -361,7 +363,7 @@ func resolveExtend(ctx context.Context, budget *workBudget, view prismPayload, t
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
 	// The receiver side of this scene holds exactly ONE entity: §3.1's
@@ -395,7 +397,7 @@ func resolveExtend(ctx context.Context, budget *workBudget, view prismPayload, t
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
 	for _, chain := range chains {
@@ -416,7 +418,7 @@ func resolveExtend(ctx context.Context, budget *workBudget, view prismPayload, t
 	nearest := 0.0
 	found := false
 	for _, edge := range fragments {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, 0, err
 		}
 		if edge.Entity != source || !edge.Partial {
@@ -529,8 +531,8 @@ func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, erro
 		return nil, fmt.Errorf(`%w: unknown trim side %d`, ErrDegenerate, int(side))
 	}
 
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 
@@ -639,7 +641,7 @@ func trimOperandSectionDelta(b *Body) float64 {
 // there is no mesh fallback for this family of operations (§2.1). The
 // revolve family is PR4's hook: S1 refuses it exactly as it refuses a mixed
 // pair, since this file builds no revolve-side admission.
-func admitTrimPair(budget *workBudget, receiver, tool *Body) (rcv, tl prismPayload, err error) {
+func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl prismPayload, err error) {
 	// S1: both operands the same sweep family, and this PR admits only the
 	// prism family.
 	rf, tf := bodyTrimFamily(receiver), bodyTrimFamily(tool)
@@ -766,10 +768,10 @@ func admitTrimPair(budget *workBudget, receiver, tool *Body) (rcv, tl prismPaylo
 // it this way is a record property, decidable before the arrangement runs,
 // which is what lets every miss here be one refusal at the call
 // (docs/surface-intersection-design.md §2.1 S7).
-func trimProfileFullyWhole(budget *workBudget, p ProfileRecord) (bool, error) {
+func trimProfileFullyWhole(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
 		for _, seg := range loop.Segments {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			whole, err := trimSegmentIsWhole(seg)
@@ -818,8 +820,8 @@ func trimSegmentParamRange(seg CurveSegment) (t0, t1 float64, err error) {
 
 // trimCutChargeUV is trimBoundsWalks's own per-component reading of §7's
 // δ_cut: how far a cut endpoint's u and v coordinates can EACH sit from the
-// crossing they denote, given cutDisplacementAllow's own parameter-to-
-// coordinate scaling (bounds.go). A CircleSeg/ArcSeg's position varies with
+// crossing they denote, given proofbound.CutDisplacementAllow's own parameter-to-
+// coordinate scaling (internal/proofbound/bounds.go). A CircleSeg/ArcSeg's position varies with
 // BOTH components under a cos/sin walk, so both take carrierSpeedUpper's
 // existing isotropic reading (prism_boolean.go) unchanged. A LineSeg's does
 // not: its walk is Start + t·(End−Start), so a coordinate whose OWN
@@ -840,13 +842,13 @@ func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 	if line, ok := seg.(LineSeg); ok {
 		du := ratL1Upper(exactCoordinateDelta(line.End.U, line.Start.U))
 		dv := ratL1Upper(exactCoordinateDelta(line.End.V, line.Start.V))
-		return cutDisplacementAllow(du), cutDisplacementAllow(dv), nil
+		return proofbound.CutDisplacementAllow(du), proofbound.CutDisplacementAllow(dv), nil
 	}
 	speed, err := carrierSpeedUpper(seg)
 	if err != nil {
 		return 0, 0, err
 	}
-	charge := cutDisplacementAllow(speed)
+	charge := proofbound.CutDisplacementAllow(speed)
 	return charge, charge, nil
 }
 
@@ -862,24 +864,24 @@ func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 // charge: a payload no construction displaced has every recorded parameter
 // natural anyway, so the two answers would be absent regardless, and gating
 // keeps an ordinary RevolveChain off this path entirely.
-func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (walkEndBound, walkEndBound, error) {
+func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.WalkEndBound, proofbound.WalkEndBound, error) {
 	if delta == 0 {
-		return walkEndBound{}, walkEndBound{}, nil
+		return proofbound.WalkEndBound{}, proofbound.WalkEndBound{}, nil
 	}
 	t0, t1, err := trimSegmentParamRange(seg)
 	if err != nil {
-		return walkEndBound{}, walkEndBound{}, err
+		return proofbound.WalkEndBound{}, proofbound.WalkEndBound{}, err
 	}
 	chargeU, chargeV, err := trimCutChargeUV(seg)
 	if err != nil {
-		return walkEndBound{}, walkEndBound{}, err
+		return proofbound.WalkEndBound{}, proofbound.WalkEndBound{}, err
 	}
-	var start, end walkEndBound
+	var start, end proofbound.WalkEndBound
 	if t0 != 0 && t0 != 1 {
-		start = walkEndBound{u: chargeU, v: chargeV}
+		start = proofbound.WalkEndBound{U: chargeU, V: chargeV}
 	}
 	if t1 != 0 && t1 != 1 {
-		end = walkEndBound{u: chargeU, v: chargeV}
+		end = proofbound.WalkEndBound{U: chargeU, V: chargeV}
 	}
 	return start, end, nil
 }
@@ -918,15 +920,15 @@ func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, 
 			return segmentWalk{}, err
 		}
 		if t0 != 0 && t0 != 1 {
-			w.startBound = walkEndBound{
-				u: absSumUpper(w.startBound.u, chargeU),
-				v: absSumUpper(w.startBound.v, chargeV),
+			w.startBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.startBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.startBound.V, chargeV),
 			}
 		}
 		if t1 != 0 && t1 != 1 {
-			w.endBound = walkEndBound{
-				u: absSumUpper(w.endBound.u, chargeU),
-				v: absSumUpper(w.endBound.v, chargeV),
+			w.endBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.endBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.endBound.V, chargeV),
 			}
 		}
 		return w, nil
@@ -968,7 +970,7 @@ func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, 
 // classifyPrismCells's side reading (§3.2), and §3.3's open-walk chaining.
 // keepInside selects classifyPrismCells's own tool-membership label a
 // surviving fragment must carry.
-func resolveTrim(ctx context.Context, budget *workBudget, rcv, tl prismPayload, keepInside bool) ([]ChainRecord, float64, error) {
+func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl prismPayload, keepInside bool) ([]ChainRecord, float64, error) {
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, rcv, tl)
 	if err != nil {
 		return nil, 0, err
@@ -990,7 +992,7 @@ func resolveTrim(ctx context.Context, budget *workBudget, rcv, tl prismPayload, 
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
 
@@ -998,7 +1000,7 @@ func resolveTrim(ctx context.Context, budget *workBudget, rcv, tl prismPayload, 
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
 	if len(profiles) == 0 {
@@ -1061,7 +1063,7 @@ func resolveTrim(ctx context.Context, budget *workBudget, rcv, tl prismPayload, 
 		segs := make([]CurveSegment, len(walk))
 		joins := make([]loopJoin, len(walk))
 		for i, e := range walk {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, 0, err
 			}
 			seg, err := recordEdge(e)
@@ -1100,7 +1102,7 @@ func resolveTrim(ctx context.Context, budget *workBudget, rcv, tl prismPayload, 
 // itself hole-free). resolved=false means none of the three applies, so the
 // tool's boundary genuinely crosses the receiver's and classifyPrismCells's
 // own propagation is what answers it.
-func trimNoCrossingSide(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile, rcv prismPayload) (insideTool, resolved bool, err error) {
+func trimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile, rcv prismPayload) (insideTool, resolved bool, err error) {
 	rcvOuter, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return false, false, err
@@ -1168,7 +1170,7 @@ func trimNoCrossingSide(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 // cell classifyPrismCells puts outside the tool's material, true keeps one
 // it puts inside. total is the count of distinct receiver fragments the
 // arrangement produced, for RS6's "keeps every fragment or none" check.
-func trimSurvivingFragments(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, matterRcv, matterTool []bool, profiles []*sketch.Profile, keepInside bool) (survivors []sketch.BoundaryEdge, total int, err error) {
+func trimSurvivingFragments(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, matterRcv, matterTool []bool, profiles []*sketch.Profile, keepInside bool) (survivors []sketch.BoundaryEdge, total int, err error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
@@ -1180,7 +1182,7 @@ func trimSurvivingFragments(budget *workBudget, tags map[sketch.Entity]prismEnti
 	byKey := map[edgeKey]settled{}
 	var order []edgeKey
 	for i, p := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, 0, err
 		}
 		if !p.Valid {
@@ -1191,7 +1193,7 @@ func trimSurvivingFragments(budget *workBudget, tags map[sketch.Entity]prismEnti
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, 0, err
 				}
 				origin, ok := tags[e.Entity]
@@ -1229,12 +1231,12 @@ func trimSurvivingFragments(budget *workBudget, tags map[sketch.Entity]prismEnti
 // resolved=false (err always nil in that case) means the survivors do not
 // partition cleanly into dangling-ended runs — a shape this evaluator does
 // not cover.
-func chainTrimSurvivorWalks(budget *workBudget, survivors []sketch.BoundaryEdge) ([][]sketch.BoundaryEdge, bool, error) {
+func chainTrimSurvivorWalks(budget *proofbound.WorkBudget, survivors []sketch.BoundaryEdge) ([][]sketch.BoundaryEdge, bool, error) {
 	type endpoints struct{ start, end Point2 }
 	pts := make([]endpoints, len(survivors))
 	byStart := make(map[Point2]int, len(survivors))
 	for i, e := range survivors {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
 		if len(e.Polyline) < 2 {
@@ -1262,7 +1264,7 @@ func chainTrimSurvivorWalks(budget *workBudget, survivors []sketch.BoundaryEdge)
 		var walk []sketch.BoundaryEdge
 		cur := i
 		for {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, false, err
 			}
 			used[cur] = true
@@ -1305,8 +1307,8 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 	if target == tool {
 		return nil, fmt.Errorf(`%w: a split needs two distinct bodies`, ErrDegenerate)
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	rcv, tl, err := admitSplitPair(budget, target, tool)
@@ -1320,7 +1322,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 	ref := d.nextProducerID()
 	bodies := make([]*Body, len(pieces))
 	for i, piece := range pieces {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), piece, newFreeformWork())
@@ -1338,7 +1340,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 // admitSplitPair applies S1-S4, S6 and S7 to a solid prism target and a
 // prism-family sheet. S5 belongs to Trim alone: Split reads no tool side.
 // The closed-sheet and chain-sheet views share buildPrismScene's input shape.
-func admitSplitPair(budget *workBudget, target, tool *Body) (prismPayload, prismPayload, error) {
+func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPayload, prismPayload, error) {
 	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
 	// RS13: a revolve pair clears S1 and is refused BY NAME, ahead of the
 	// mixed-pair message, so the refusal states the staging rather than
@@ -1435,7 +1437,7 @@ func admitSplitPair(budget *workBudget, target, tool *Body) (prismPayload, prism
 // resolveSplit asks sketch for the bounded cells of the private scene, keeps
 // precisely the cells on the target's material side, and records each selected
 // cell from that arrangement before rebuilding it as a prism.
-func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPayload) ([]prismPayload, error) {
+func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload) ([]prismPayload, error) {
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
 	if err != nil {
 		return nil, err
@@ -1452,14 +1454,14 @@ func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPay
 	if err != nil {
 		return nil, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	if len(profiles) == 0 {
@@ -1486,7 +1488,7 @@ func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPay
 	}
 	result := make([]prismPayload, len(selected))
 	for i, cell := range selected {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		record, err := prismRecordArrangedProfileContext(ctx, cell)
@@ -1496,7 +1498,7 @@ func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPay
 		cutDelta := 0.0
 		for _, loop := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
 			for _, edge := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				seg, err := recordEdge(edge)
@@ -1524,7 +1526,7 @@ func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPay
 // one sketch cell. An inside stub or an outside tool leaves this exact cell;
 // neither creates a piece boundary. The match reads only entity identity and
 // whole-edge flags from sketch's publication.
-func splitUnchangedTargetCell(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin,
+func splitUnchangedTargetCell(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin,
 	profiles []*sketch.Profile, target ProfileRecord) (bool, error) {
 	outer, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
@@ -1551,7 +1553,7 @@ func splitUnchangedTargetCell(budget *workBudget, tags map[sketch.Entity]prismEn
 // propagation rule for the target alone. A sheet tool has no material side;
 // its edges only divide cells. In particular a circular tool may leave a
 // holed target cell, so every published loop participates in the link map.
-func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) ([]bool, error) {
+func classifySplitTargetCells(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) ([]bool, error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
@@ -1563,7 +1565,7 @@ func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEn
 	member := make([]prismCellMembership, len(profiles))
 	occ := map[edgeKey][]occurrence{}
 	for i, p := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if !p.Valid {
@@ -1571,7 +1573,7 @@ func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEn
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, edge := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				origin, ok := tags[edge.Entity]
@@ -1592,7 +1594,7 @@ func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEn
 	}
 	var links []prismCellLink
 	for _, uses := range occ {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		switch len(uses) {
@@ -1638,7 +1640,7 @@ func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEn
 // cell of the receiver's own interior, and sketch prunes a ribbon's dangling
 // free-end fragments before publishing its regions, so an inside stub and an
 // outside stub arrive identically (§4's own row, RS3).
-func (b *Body) trimRevolve(ctx context.Context, budget *workBudget, tool *Body, keepInside bool) (*Body, error) {
+func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, tool *Body, keepInside bool) (*Body, error) {
 	d := b.doc
 	rcv, rcvView, tlView, err := admitTrimRevolvePair(ctx, budget, b, tool)
 	if err != nil {
@@ -1677,7 +1679,7 @@ func (b *Body) trimRevolve(ctx context.Context, budget *workBudget, tool *Body, 
 // already routed the pair here. It returns the receiver's own revolve record —
 // what the result is rebuilt on — beside the two MERIDIAN views §3's
 // resolution consumes.
-func admitTrimRevolvePair(ctx context.Context, budget *workBudget, receiver, tool *Body) (revolvePayload, prismPayload, prismPayload, error) {
+func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, receiver, tool *Body) (revolvePayload, prismPayload, prismPayload, error) {
 	fail := func(format string, args ...any) (revolvePayload, prismPayload, prismPayload, error) {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
 	}
@@ -1846,7 +1848,7 @@ func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool,
 // sketch's cut parameter off the recreated carrier in the two operands'
 // MERIDIAN views (§3.1), and the widened range goes back into the receiver's
 // own record. Only the gate and the free-edge reading differ.
-func (b *Body) extendRevolve(ctx context.Context, budget *workBudget, selected []*Edge, tool *Body) (*Body, error) {
+func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget, selected []*Edge, tool *Body) (*Body, error) {
 	d := b.doc
 	rcv, rcvView, tlView, err := admitExtendRevolvePair(ctx, budget, b, tool)
 	if err != nil {
@@ -1889,7 +1891,7 @@ func (b *Body) extendRevolve(ctx context.Context, budget *workBudget, selected [
 // which reads no side. It returns the receiver's own chain record — what the
 // result is rebuilt on — beside the two MERIDIAN views §3's resolution
 // consumes.
-func admitExtendRevolvePair(ctx context.Context, budget *workBudget, receiver, tool *Body) (chainRevolvePayload, prismPayload, prismPayload, error) {
+func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, receiver, tool *Body) (chainRevolvePayload, prismPayload, prismPayload, error) {
 	fail := func(format string, args ...any) (chainRevolvePayload, prismPayload, prismPayload, error) {
 		return chainRevolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
 	}

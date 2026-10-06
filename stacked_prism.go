@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -170,7 +172,7 @@ type stackedColumn struct {
 	loopIndex  int
 	bottom     []coedge
 	top        []coedge
-	perimeter  boundedScalar
+	perimeter  proofbound.BoundedScalar
 }
 
 func stackedLoops(region ProfileRecord) []LoopRecord {
@@ -243,7 +245,7 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		faces = append(faces, wallFaces...)
 	}
 
-	regionArea := make([]boundedScalar, len(sp.slabs))
+	regionArea := make([]proofbound.BoundedScalar, len(sp.slabs))
 	regionCentroid := make([]r3.Vec, len(sp.slabs))
 	regionCentroidBound := make([]float64, len(sp.slabs))
 	for k, slab := range sp.slabs {
@@ -254,31 +256,31 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		if ig.area <= 0 {
 			return nil, fmt.Errorf(`%w: slab %d has no material area`, ErrDegenerate, k)
 		}
-		perimeter := boundedScalar{}
+		perimeter := proofbound.BoundedScalar{}
 		walks := 0
 		for _, ci := range bySlab[k] {
-			perimeter = boundedAdd(perimeter, columns[ci].perimeter)
+			perimeter = proofbound.BoundedAdd(perimeter, columns[ci].perimeter)
 			walks += len(columns[ci].loop.Segments)
 		}
-		regionArea[k] = measuredScalar(ig.area, absSumUpper(ig.areaBound,
-			sectionDisplacementArea(sp.sectionDelta, walks, absSumUpper(perimeter.value, perimeter.bound))))
-		u := boundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
-		v := boundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
-		u.bound = absSumUpper(u.bound, sp.sectionDelta)
-		v.bound = absSumUpper(v.bound, sp.sectionDelta)
-		mid := boundedDiv(boundedAdd(measuredScalar(slab.z0, slab.z0Delta),
-			measuredScalar(slab.z1, slab.z1Delta)), exactScalar(2))
-		regionCentroid[k] = base.point(u.value, v.value, mid.value)
+		regionArea[k] = proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(ig.areaBound,
+			proofbound.SectionDisplacementArea(sp.sectionDelta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))))
+		u := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
+		v := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+		u.Bound = proofbound.AbsSumUpper(u.Bound, sp.sectionDelta)
+		v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
+		mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.z0, slab.z0Delta),
+			proofbound.MeasuredScalar(slab.z1, slab.z1Delta)), proofbound.ExactScalar(2))
+		regionCentroid[k] = base.point(u.Value, v.Value, mid.Value)
 		regionCentroidBound[k] = prismPointBound(base, u, v, mid)
 	}
 
-	newPlane := func(z, axial float64, flip bool, role string, area boundedScalar) (*Face, error) {
+	newPlane := func(z, axial float64, flip bool, role string, area proofbound.BoundedScalar) (*Face, error) {
 		frame, err := capFrame(base, z, flip)
 		if err != nil {
 			return nil, err
 		}
 		return &Face{surface: Plane{Frame: frame}, origins: []FeatureRef{{producer: ref, Role: role}},
-			body: body, area: area.value, areaBound: area.bound,
+			body: body, area: area.Value, areaBound: area.Bound,
 			axialDelta: axial, hasAxialDelta: true}, nil
 	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
@@ -316,8 +318,8 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 				return nil, err
 			}
 			perimeter := columns[ci].perimeter
-			area.bound = absSumUpper(area.bound, sectionDisplacementArea(sp.sectionDelta,
-				len(columns[ci].loop.Segments), absSumUpper(perimeter.value, perimeter.bound)))
+			area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sp.sectionDelta,
+				len(columns[ci].loop.Segments), proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)))
 			f, err := newPlane(z, axial, false, fmt.Sprintf("floor(%d,%d)", k, e), area)
 			if err != nil {
 				return nil, err
@@ -335,8 +337,8 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 				return nil, err
 			}
 			perimeter := columns[ci].perimeter
-			area.bound = absSumUpper(area.bound, sectionDisplacementArea(sp.sectionDelta,
-				len(columns[ci].loop.Segments), absSumUpper(perimeter.value, perimeter.bound)))
+			area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sp.sectionDelta,
+				len(columns[ci].loop.Segments), proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)))
 			f, err := newPlane(z, axial, true, fmt.Sprintf("ceiling(%d,%d)", k, e), area)
 			if err != nil {
 				return nil, err
@@ -351,46 +353,46 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	faces = append(faces, planar...)
 	body.lumps = sheetLumps(faces)
 
-	volume := boundedScalar{}
-	area := boundedAdd(regionArea[0], regionArea[len(regionArea)-1])
-	var moment [3]boundedScalar
+	volume := proofbound.BoundedScalar{}
+	area := proofbound.BoundedAdd(regionArea[0], regionArea[len(regionArea)-1])
+	var moment [3]proofbound.BoundedScalar
 	for k, slab := range sp.slabs {
-		height := boundedSub(measuredScalar(slab.z1, slab.z1Delta), measuredScalar(slab.z0, slab.z0Delta))
-		mass := boundedMul(regionArea[k], height)
-		volume = boundedAdd(volume, mass)
+		height := proofbound.BoundedSub(proofbound.MeasuredScalar(slab.z1, slab.z1Delta), proofbound.MeasuredScalar(slab.z0, slab.z0Delta))
+		mass := proofbound.BoundedMul(regionArea[k], height)
+		volume = proofbound.BoundedAdd(volume, mass)
 		point := regionCentroid[k]
 		pointBound := regionCentroidBound[k]
 		for i, value := range []float64{point.X, point.Y, point.Z} {
-			moment[i] = boundedAdd(moment[i], boundedMul(mass, measuredScalar(value, pointBound)))
+			moment[i] = proofbound.BoundedAdd(moment[i], proofbound.BoundedMul(mass, proofbound.MeasuredScalar(value, pointBound)))
 		}
 	}
 	for _, col := range columns {
 		a, b := sp.slabs[col.start], sp.slabs[col.end]
-		height := boundedSub(measuredScalar(b.z1, b.z1Delta), measuredScalar(a.z0, a.z0Delta))
-		area = boundedAdd(area, boundedMul(col.perimeter, height))
+		height := proofbound.BoundedSub(proofbound.MeasuredScalar(b.z1, b.z1Delta), proofbound.MeasuredScalar(a.z0, a.z0Delta))
+		area = proofbound.BoundedAdd(area, proofbound.BoundedMul(col.perimeter, height))
 	}
 	for _, face := range planar[2:] {
-		area = boundedAdd(area, measuredScalar(face.area, face.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.area, face.areaBound))
 	}
-	if volume.value <= 0 {
+	if volume.Value <= 0 {
 		return nil, fmt.Errorf(`%w: a stacked prism encloses no volume`, ErrDegenerate)
 	}
-	body.volume = Measurement{Value: units.CubicMillimeters(volume.value), Exactness: exactnessOf(volume.bound),
-		Bound: units.CubicMillimeters(volume.bound)}
-	body.area = Measurement{Value: units.SquareMillimeters(area.value), Exactness: exactnessOf(area.bound),
-		Bound: units.SquareMillimeters(area.bound)}
-	x, y, z := boundedDiv(moment[0], volume), boundedDiv(moment[1], volume), boundedDiv(moment[2], volume)
-	centroidBound := radius3D(max(x.bound, y.bound, z.bound))
+	body.volume = Measurement{Value: units.CubicMillimeters(volume.Value), Exactness: exactnessOf(volume.Bound),
+		Bound: units.CubicMillimeters(volume.Bound)}
+	body.area = Measurement{Value: units.SquareMillimeters(area.Value), Exactness: exactnessOf(area.Bound),
+		Bound: units.SquareMillimeters(area.Bound)}
+	x, y, z := proofbound.BoundedDiv(moment[0], volume), proofbound.BoundedDiv(moment[1], volume), proofbound.BoundedDiv(moment[2], volume)
+	centroidBound := proofbound.Radius3D(max(x.Bound, y.Bound, z.Bound))
 	if sp.sectionDelta > 0 {
 		geometryBound, err := prismCentroidGeometryBound(base, base.profile,
-			r3.Vec{X: x.value, Y: y.value, Z: z.value}, work, nil)
+			r3.Vec{X: x.Value, Y: y.Value, Z: z.Value}, work, nil)
 		if err != nil {
 			return nil, err
 		}
-		centroidBound = max(centroidBound, absSumUpper(geometryBound,
+		centroidBound = max(centroidBound, proofbound.AbsSumUpper(geometryBound,
 			sp.sectionDelta, sp.axialDelta()))
 	}
-	body.centroid = VecMeasurement{Value: r3.Vec{X: x.value, Y: y.value, Z: z.value},
+	body.centroid = VecMeasurement{Value: r3.Vec{X: x.Value, Y: y.Value, Z: z.Value},
 		Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
 	bounds, err := prismBoundsContext(ctx, base, work, nil)
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -117,13 +119,13 @@ func planarNormal(dir proofarith.DyV3) (VecMeasurement, units.Value, bool) {
 		scaled[k] = new(big.Rat).Quo(dir[k].Rat(), largest.Rat())
 		squared.Add(squared, new(big.Rat).Mul(scaled[k], scaled[k]))
 	}
-	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
+	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	raw := r3.Vec{X: ratFloatNearest(scaled[0]), Y: ratFloatNearest(scaled[1]), Z: ratFloatNearest(scaled[2])}
 	value, ok := raw.Normalize()
-	if !ok || !finiteVec(value) {
+	if !ok || !proofbound.FiniteVec(value) {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	components := [3]float64{value.X, value.Y, value.Z}
@@ -138,8 +140,8 @@ func planarNormal(dir proofarith.DyV3) (VecMeasurement, units.Value, bool) {
 			}
 		}
 	}
-	bound := radius3D(ratFloatUp(maxError))
-	angle := upRound(4 * bound)
+	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
+	angle := proofbound.UpRound(4 * bound)
 	if !finiteMeasurementValues(bound, angle) || angle >= math.Pi {
 		return VecMeasurement{}, units.Value{}, false
 	}

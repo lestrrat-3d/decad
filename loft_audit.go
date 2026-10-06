@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -42,9 +44,9 @@ import (
 // triangle has no interior, so the shell it would contribute to does not
 // exist.
 func triangleCollapsed(verts []r3.Vec, tri [3]int) bool {
-	a, b, c := xptOf(verts[tri[0]]), xptOf(verts[tri[1]]), xptOf(verts[tri[2]])
-	n := xcross(xsub(b, a), xsub(c, a))
-	return n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0
+	a, b, c := proofbound.XptOf(verts[tri[0]]), proofbound.XptOf(verts[tri[1]]), proofbound.XptOf(verts[tri[2]])
+	n := xcross(proofbound.Xsub(b, a), proofbound.Xsub(c, a))
+	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
 }
 
 // loftTriCorners reads one triangle's three float corners off the shared
@@ -54,9 +56,9 @@ func loftTriCorners(verts []r3.Vec, tri [3]int) [3]r3.Vec {
 }
 
 // loftXTriCorners is loftTriCorners' exact lift.
-func loftXTriCorners(verts []r3.Vec, tri [3]int) [3]xpt {
+func loftXTriCorners(verts []r3.Vec, tri [3]int) [3]proofbound.Xpt {
 	c := loftTriCorners(verts, tri)
-	return [3]xpt{xptOf(c[0]), xptOf(c[1]), xptOf(c[2])}
+	return [3]proofbound.Xpt{proofbound.XptOf(c[0]), proofbound.XptOf(c[1]), proofbound.XptOf(c[2])}
 }
 
 // loftAuditData holds the immutable per-vertex and per-triangle values shared
@@ -67,9 +69,9 @@ func loftXTriCorners(verts []r3.Vec, tri [3]int) [3]xpt {
 // the same exact arithmetic.
 type loftAuditData struct {
 	corners     [][3]r3.Vec
-	xverts      []xpt
-	xtris       [][3]xpt
-	norms       []xpt
+	xverts      []proofbound.Xpt
+	xtris       [][3]proofbound.Xpt
+	norms       []proofbound.Xpt
 	planes      []loftExactPlane
 	projections [][3]xp2
 }
@@ -79,40 +81,40 @@ type loftAuditData struct {
 // (p-anchor), since all three homogeneous weights are positive.
 type loftExactPlane struct{ a, b, c, d *big.Int }
 
-func newLoftExactPlane(anchor, n xpt) loftExactPlane {
-	d := xdotNum(n, anchor)
+func newLoftExactPlane(anchor, n proofbound.Xpt) loftExactPlane {
+	d := proofbound.XdotNum(n, anchor)
 	return loftExactPlane{
-		a: new(big.Int).Mul(n.x, anchor.w),
-		b: new(big.Int).Mul(n.y, anchor.w),
-		c: new(big.Int).Mul(n.z, anchor.w),
+		a: new(big.Int).Mul(n.X, anchor.W),
+		b: new(big.Int).Mul(n.Y, anchor.W),
+		c: new(big.Int).Mul(n.Z, anchor.W),
 		d: d.Neg(d),
 	}
 }
 
-func (plane loftExactPlane) sign(p xpt, sum, term *big.Int) int {
-	sum.Mul(plane.a, p.x)
-	sum.Add(sum, term.Mul(plane.b, p.y))
-	sum.Add(sum, term.Mul(plane.c, p.z))
-	sum.Add(sum, term.Mul(plane.d, p.w))
+func (plane loftExactPlane) sign(p proofbound.Xpt, sum, term *big.Int) int {
+	sum.Mul(plane.a, p.X)
+	sum.Add(sum, term.Mul(plane.b, p.Y))
+	sum.Add(sum, term.Mul(plane.c, p.Z))
+	sum.Add(sum, term.Mul(plane.d, p.W))
 	return sum.Sign()
 }
 
 func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
 	d := &loftAuditData{
 		corners:     make([][3]r3.Vec, len(tris)),
-		xverts:      make([]xpt, len(verts)),
-		xtris:       make([][3]xpt, len(tris)),
-		norms:       make([]xpt, len(tris)),
+		xverts:      make([]proofbound.Xpt, len(verts)),
+		xtris:       make([][3]proofbound.Xpt, len(tris)),
+		norms:       make([]proofbound.Xpt, len(tris)),
 		planes:      make([]loftExactPlane, len(tris)),
 		projections: make([][3]xp2, len(tris)),
 	}
 	for i, v := range verts {
-		d.xverts[i] = xptOf(v)
+		d.xverts[i] = proofbound.XptOf(v)
 	}
 	for i, tri := range tris {
 		d.corners[i] = loftTriCorners(verts, tri)
-		d.xtris[i] = [3]xpt{d.xverts[tri[0]], d.xverts[tri[1]], d.xverts[tri[2]]}
-		d.norms[i] = xcross(xsub(d.xtris[i][1], d.xtris[i][0]), xsub(d.xtris[i][2], d.xtris[i][0]))
+		d.xtris[i] = [3]proofbound.Xpt{d.xverts[tri[0]], d.xverts[tri[1]], d.xverts[tri[2]]}
+		d.norms[i] = xcross(proofbound.Xsub(d.xtris[i][1], d.xtris[i][0]), proofbound.Xsub(d.xtris[i][2], d.xtris[i][0]))
 		d.planes[i] = newLoftExactPlane(d.xtris[i][0], d.norms[i])
 		projection := projectionPairIndex(projAxes(d.norms[i]))
 		for j, p := range d.xtris[i] {
@@ -167,18 +169,18 @@ func errLoftContact(i, j int, reason string) error {
 // segment, never a shared area. It never writes to triTriClassify or any
 // shared classification state, so it cannot change mesh-boolean contact
 // classification (docs/loft-design.md §6, required test).
-func triTriCoplanarSharedEdge(xta, xtb [3]xpt, n xpt, edgeA, edgeB xpt) bool {
-	edgeAKey, edgeBKey := edgeA.key(), edgeB.key()
-	var apexA, apexB xpt
+func triTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edgeA, edgeB proofbound.Xpt) bool {
+	edgeAKey, edgeBKey := edgeA.Key(), edgeB.Key()
+	var apexA, apexB proofbound.Xpt
 	for _, p := range xta {
-		key := p.key()
+		key := p.Key()
 		if key != edgeAKey && key != edgeBKey {
 			apexA = p
 			break
 		}
 	}
 	for _, p := range xtb {
-		key := p.key()
+		key := p.Key()
 		if key != edgeAKey && key != edgeBKey {
 			apexB = p
 			break
@@ -191,12 +193,12 @@ func triTriCoplanarSharedEdge(xta, xtb [3]xpt, n xpt, edgeA, edgeB xpt) bool {
 
 // segMatchesRecordedEdge reports whether a non-coplanar segment contact is
 // exactly the recorded shared edge (either endpoint order).
-func segMatchesRecordedEdge(c triContact, edgeA, edgeB xpt) bool {
+func segMatchesRecordedEdge(c triContact, edgeA, edgeB proofbound.Xpt) bool {
 	if c.kind != contactSegment {
 		return false
 	}
-	k0, k1 := c.p0.key(), c.p1.key()
-	ka, kb := edgeA.key(), edgeB.key()
+	k0, k1 := c.p0.Key(), c.p1.Key()
+	ka, kb := edgeA.Key(), edgeB.Key()
 	return (k0 == ka && k1 == kb) || (k0 == kb && k1 == ka)
 }
 
@@ -289,7 +291,7 @@ const (
 // near-tangent to one another — never touches big.Rat at all.
 //
 // This is deliberately NOT triTriMissesFilter (boolean_exact.go): that
-// filter's own doc comment requires na/nb to be xpt.vec() — the
+// filter's own doc comment requires na/nb to be proofbound.Xpt.vec() — the
 // correctly-rounded float64 conversion of the pair's EXACT rational
 // normal — with fivRounded's extra ulp of margin calibrated for exactly
 // that rounding step, so using it here would still force building the exact
@@ -395,7 +397,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	if sharedCount == 2 {
 		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
 		apex := data.xverts[triangleApexIndex(tris[j], shared[0], shared[1])]
-		if xdotSign(na, xsub(apex, edgeA)) == 0 {
+		if xdotSign(na, proofbound.Xsub(apex, edgeA)) == 0 {
 			if triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
 				return loftPairClassified, nil
 			}
@@ -432,7 +434,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 		return loftPairClassified, errLoftContact(i, j, "share no recorded vertex, but make contact")
 	case 1:
 		v := data.xverts[shared[0]]
-		if contact.kind == contactPoint && contact.p0.key() == v.key() {
+		if contact.kind == contactPoint && contact.p0.Key() == v.Key() {
 			return loftPairClassified, nil
 		}
 		return loftPairClassified, errLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
@@ -535,7 +537,7 @@ func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 // trianglePlaneSigns returns the exact signs of other against the cached
 // oriented plane. Its affine numerator avoids rebuilding a difference vector
 // for each point of each facet pair.
-func trianglePlaneSigns(plane loftExactPlane, other [3]xpt) [3]int {
+func trianglePlaneSigns(plane loftExactPlane, other [3]proofbound.Xpt) [3]int {
 	var signs [3]int
 	var sum, term big.Int
 	for i, p := range other {
@@ -576,7 +578,7 @@ func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
 // This is the production entry point: every shortcut always runs. Tests that
 // need the same audit with a shortcut switched off, or need the pair loop's
 // own work counts, call loftCrossingAuditWork below directly.
-func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error {
+func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
 	_, err := loftCrossingAuditWork(budget, verts, tris, loftAuditShortcuts{broadPhase: true, certificates: true})
 	return err
 }
@@ -589,30 +591,30 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 //
 // The returned counts are meaningful only when the audit completes: an early
 // return carries whatever the loop had reached when it stopped.
-func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts) (loftAuditWork, error) {
+func loftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts) (loftAuditWork, error) {
 	var work loftAuditWork
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return work, err
 	}
 
 	// S6: per-triangle existence, before the pair audit runs at all.
 	for i, tri := range tris {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return work, err
 		}
 		if triangleCollapsed(verts, tri) {
 			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, ErrDegenerate, i)
 		}
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return work, err
 	}
 
 	// S8: the facet-pair ceiling, computed under checked arithmetic and
 	// refused before a single pair test — or any pair buffer — is built.
 	f := len(tris)
-	pairs, ok := wallChoose2(uint64(f))
-	if !ok || pairs > maxFacetPairTestsPerCall {
+	pairs, ok := proofbound.WallChoose2(uint64(f))
+	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
 		return work, fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, ErrUnsupported)
 	}
 
@@ -622,7 +624,7 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, sh
 	// pair PROVEN apart. triBox's own doc comment already establishes the
 	// box is exact — "float min/max are exact, so the box is a true
 	// bound" — built from float64 vertex coordinates that are themselves
-	// exact inputs to xptOf (no rounding occurs converting a float64 to its
+	// exact inputs to proofbound.XptOf (no rounding occurs converting a float64 to its
 	// rational value), so no epsilon widening is needed or added: every
 	// point of the closed triangle, in exact arithmetic, is a convex
 	// combination of its three vertices, and a convex combination of values
@@ -660,7 +662,7 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, sh
 	// work fields say which path decided every pair.
 	for i := range f {
 		for j := i + 1; j < f; j++ {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return work, err
 			}
 			_, sharedCount := sharedVertexIndices(tris[i], tris[j])
@@ -703,5 +705,5 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, sh
 	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
 	// before Document.commit. Loft's own commit-edge check belongs to
 	// Loft.
-	return work, budget.err()
+	return work, budget.Err()
 }

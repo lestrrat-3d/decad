@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -104,7 +106,7 @@ func extendSceneCarrier(t *testing.T, seg CurveSegment) sketch.Entity {
 	reexpress, err := newPrismReexpression(view, tool)
 	require.NoError(t, err)
 	require.True(t, reexpress.identity)
-	_, tags, _, err := buildPrismScene(newWorkBudget(t.Context()), view, tool, reexpress)
+	_, tags, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), view, tool, reexpress)
 	require.NoError(t, err)
 	var carrier sketch.Entity
 	found := 0

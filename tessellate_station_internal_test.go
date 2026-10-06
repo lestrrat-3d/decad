@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +14,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 	t.Parallel()
 	// A quarter turn of a radius-5 circle, chorded in two: the interior station
 	// sits at recorded parameter 1/8, whose turn is exactly rational, so the
-	// enclosure comes from turnSinCosInterval and the held pair sits a couple of
+	// enclosure comes from proofbound.TurnSinCosInterval and the held pair sits a couple of
 	// roundings from it.
 	const r = 5.0
 	seg := CircleSeg{
@@ -26,22 +28,22 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 	heldU, heldV := 2+r*math.Cos(th), -3+r*math.Sin(th)
 
 	got := chordStationBound(seg, 1, 2, heldU, heldV)
-	require.True(t, got.derivable())
-	limit := 4 * ulpOf(r)
-	require.LessOrEqual(t, math.Abs(got.u), limit, `the station's own u gap is a handful of ulps of the radius`)
-	require.LessOrEqual(t, math.Abs(got.v), limit, `and so is its v gap`)
+	require.True(t, got.Derivable())
+	limit := 4 * proofbound.UlpOf(r)
+	require.LessOrEqual(t, math.Abs(got.U), limit, `the station's own u gap is a handful of ulps of the radius`)
+	require.LessOrEqual(t, math.Abs(got.V), limit, `and so is its v gap`)
 
 	// Falsifier: a held pair displaced by a visible amount is caught, so the
 	// small answer above is a reading of this station and not a constant.
 	off := chordStationBound(seg, 1, 2, heldU+1e-6, heldV)
-	require.Greater(t, off.u, 9e-7)
-	require.LessOrEqual(t, math.Abs(off.v), limit)
+	require.Greater(t, off.U, 9e-7)
+	require.LessOrEqual(t, math.Abs(off.V), limit)
 }
 
 func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 	t.Parallel()
 	// An arc states three pinned points and no angle at all, so its station goes
-	// through atan2Interval and radSinCosSpan. The enclosure is wider than a
+	// through proofbound.Atan2Interval and radSinCosSpan. The enclosure is wider than a
 	// circle's, but it is finite and it is positive — never a silent zero.
 	seg := ArcSeg{
 		Center: Point2{U: 0, V: 0},
@@ -59,9 +61,9 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 		heldU := w.cU + w.radius*math.Cos(th)
 		heldV := w.cV + w.radius*math.Sin(th)
 		got := chordStationBound(seg, k, n, heldU, heldV)
-		require.True(t, got.derivable(), `k=%d`, k)
-		require.Positive(t, math.Max(got.u, got.v), `k=%d: an arc station is never held exactly`, k)
-		require.Less(t, math.Max(got.u, got.v), 1e-12, `k=%d: and its enclosure stays at coordinate-rounding scale`, k)
+		require.True(t, got.Derivable(), `k=%d`, k)
+		require.Positive(t, math.Max(got.U, got.V), `k=%d: an arc station is never held exactly`, k)
+		require.Less(t, math.Max(got.U, got.V), 1e-12, `k=%d: and its enclosure stays at coordinate-rounding scale`, k)
 	}
 }
 
@@ -85,9 +87,9 @@ func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			got := chordStationBound(row.seg, row.k, row.n, row.heldU, row.heldV)
-			require.False(t, got.derivable())
-			require.True(t, math.IsInf(got.u, 1))
-			require.True(t, math.IsInf(got.v, 1))
+			require.False(t, got.Derivable())
+			require.True(t, math.IsInf(got.U, 1))
+			require.True(t, math.IsInf(got.V, 1))
 		})
 	}
 }

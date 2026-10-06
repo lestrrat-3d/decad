@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -94,8 +96,8 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 		return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
 	}
 
-	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx) // §10: one counter for the whole attempt
+	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
 	pa, pb, ok, err := admitPrismPairBudget(budget, a, b) // G1-G4
@@ -109,7 +111,7 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 	// A trimmed circular carrier (ArcSeg/CircleSeg) enters the private scene
 	// through two cos/sin-COMPUTED points, so its rebuilt carrier's radius and
 	// sweep both move, not merely its endpoints — a displacement
-	// walkEndpointAllow's plain coordinate charge does not state. Rather than
+	// proofbound.WalkEndpointAllow's plain coordinate charge does not state. Rather than
 	// publish an under-charged bound for it, the pair is refused before the
 	// scene is even built, the same silent-fallback shape the entry gate
 	// above already uses (§3.4).
@@ -189,9 +191,9 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 // contract states. A non-nil err is RB7 (§9, the arrangement work cap — the
 // one preamble refusal that is a genuine error, not a silent miss) or ctx
 // cancellation.
-func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, ok bool, err error) {
-	budget = newWorkBudget(ctx) // §10: one counter for the whole attempt
-	if err := budget.err(); err != nil {
+func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, ok bool, err error) {
+	budget = proofbound.NewWorkBudget(ctx) // §10: one counter for the whole attempt
+	if err := budget.Err(); err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
 	pa, pb, ok, err = admitPrismPairBudget(budget, a, b) // G1-G4
@@ -243,7 +245,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *workBudge
 // resolution (§4.2) and, once it commits, §6's build-time audit and §7's
 // exactness. Split out of tryPrismBoolean only so each op's own resolve+build
 // sequence reads as one unit.
-func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
+func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	merged, sceneDelta, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
@@ -273,10 +275,10 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 		// union did not have before it ran, so cutDelta stands even where the
 		// two operands carried nothing at all. A chained union must not
 		// discard any of the four.
-		sectionDelta: absSumUpper(
+		sectionDelta: proofbound.AbsSumUpper(
 			max(
-				absSumUpper(pa.sectionDelta, sceneDelta.a),
-				absSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
+				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
+				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
 			),
 			cutDelta,
 		),
@@ -300,7 +302,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 // not admission" for what follows, but MISSING one is never a refusal). The
 // G4 scan shares the operation budget because a large rejected profile must
 // remain cancelable too.
-func admitPrismPairBudget(budget *workBudget, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
+func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
 	pa, aok := a.payload.(prismPayload) // G1
 	pb, bok := b.payload.(prismPayload)
 	if !aok || !bok {
@@ -336,7 +338,7 @@ func admitPrismPairBudget(budget *workBudget, a, b *Body) (pa, pb prismPayload, 
 }
 
 func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
-	pa, pb, ok, _ = admitPrismPairBudget(newWorkBudget(context.Background()), a, b)
+	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), a, b)
 	return pa, pb, ok
 }
 
@@ -344,10 +346,10 @@ func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
 // LineSeg, CircleSeg or ArcSeg. A single free-form segment blinds sketch's
 // whole-scene TExact gate (§3.1's own reasoning), so the class excludes the
 // kind entirely rather than admitting "the free-form parts don't touch."
-func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
+func prismProfileIsAnalytic(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
 		for _, seg := range loop.Segments {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			switch seg.(type) {
@@ -372,12 +374,12 @@ func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
 // peak memory at twice this many segments is under 16 MB.
 const prismMaxArrangementSegments = 4096
 
-func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (int, bool, error) {
+func prismSceneWithinWorkCap(budget *proofbound.WorkBudget, pa, pb prismPayload) (int, bool, error) {
 	segments := 0
 	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
 		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 			for _, seg := range loop.Segments {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return segments, false, err
 				}
 				switch seg.(type) {
@@ -420,7 +422,7 @@ func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
 		return prismSharedAxis{}
 	}
 	oa, ob, n := pa.frame.Origin(), pb.frame.Origin(), pa.frame.N()
-	if !finiteVec(oa) || !finiteVec(ob) || !finiteVec(n) {
+	if !proofbound.FiniteVec(oa) || !proofbound.FiniteVec(ob) || !proofbound.FiniteVec(n) {
 		return prismSharedAxis{}
 	}
 	d := proofarith.DvSub(proofarith.DyVec(ob), proofarith.DyVec(oa))
@@ -502,22 +504,22 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // re-expression (§3.4): the caller falls back to the mesh path with no
 // error. A non-nil error — including ctx cancellation surfacing through
 // budget — is always genuine and must propagate.
-func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
+func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
 	s, _, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	if err := budget.step(); err != nil {
+	if err := budget.Step(); err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if len(profiles) == 0 {
@@ -571,14 +573,14 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 // topology is unresolved (§4.4): a disjoint footprint, an internal void, an
 // edge count outside {1, 2}, or a chain that does not close into one simple
 // loop. opName names the op for RB1's message alone.
-func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName string) (ProfileRecord, float64, bool, error) {
+func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (ProfileRecord, float64, bool, error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
 	}
 	counts := map[edgeKey]int{}
 	for _, p := range selected {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return ProfileRecord{}, 0, false, err
 		}
 		if !p.Valid {
@@ -589,7 +591,7 @@ func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName stri
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return ProfileRecord{}, 0, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
@@ -602,7 +604,7 @@ func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName stri
 	for _, p := range selected {
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return ProfileRecord{}, 0, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
@@ -636,7 +638,7 @@ func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName stri
 	joins := make([]loopJoin, len(chain))
 	cutDelta := 0.0
 	for i, e := range chain {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return ProfileRecord{}, 0, false, err
 		}
 		seg, err := recordEdge(e)
@@ -672,7 +674,7 @@ func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName stri
 // its endpoints are the entity's own recorded endpoints and this union computed
 // no coordinate for it at all.
 //
-// A Partial fragment charges cutDisplacementAllow. Its carrier is the entity's
+// A Partial fragment charges proofbound.CutDisplacementAllow. Its carrier is the entity's
 // unchanged defining data, but its two ends are named by TStart/TEnd — the
 // parameters sketch's arrangement COMPUTED for this pair, which are freshly
 // rounded whatever the two operands carried, and which the operands' own zero
@@ -686,7 +688,7 @@ func prismUnionCutDelta(e sketch.BoundaryEdge, seg CurveSegment) (float64, error
 	if err != nil {
 		return 0, err
 	}
-	return cutDisplacementAllow(speed), nil
+	return proofbound.CutDisplacementAllow(speed), nil
 }
 
 // carrierSpeedUpper is a proven upper bound on |dP/dt| over the WHOLE of a
@@ -711,9 +713,9 @@ func carrierSpeedUpper(seg CurveSegment) (float64, error) {
 		if err != nil {
 			return 0, fmt.Errorf(`decad: a merged circle segment's radius is not a length: %w`, err)
 		}
-		return productUpper(twoPiUpper(), math.Abs(r)), nil
+		return proofbound.ProductUpper(proofbound.TwoPiUpper(), math.Abs(r)), nil
 	case ArcSeg:
-		return productUpper(twoPiUpper(), point2SeparationUpper(seg.Center, seg.Start)), nil
+		return proofbound.ProductUpper(proofbound.TwoPiUpper(), point2SeparationUpper(seg.Center, seg.Start)), nil
 	default:
 		return 0, fmt.Errorf(`%w: a %T segment has no carrier speed this evaluator states`, ErrUnsupported, seg)
 	}
@@ -737,14 +739,14 @@ func point2SeparationUpper(a, b Point2) float64 {
 // carries a walk charge, or B's re-expression is nonidentity — any one of the
 // three alone — because that uncertainty may be amplified by the crossing
 // angle (prism-boolean-design §3.4, §7).
-func prismProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
+func prismProfilesHaveSplitBoundary(budget *proofbound.WorkBudget, profiles []*sketch.Profile) (bool, error) {
 	for _, profile := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{profile.Outer}, profile.Holes...) {
 			for _, edge := range loop {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return false, err
 				}
 				if edge.Partial {
@@ -792,10 +794,10 @@ func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile
 // there, so no tolerance is introduced. This is bookkeeping on sketch's own
 // answer, not a re-derived geometric fact (CLAUDE.md's carve-out for this
 // design).
-func chainPrismUnionSurvivors(budget *workBudget, survivors []sketch.BoundaryEdge) (chain []sketch.BoundaryEdge, resolved bool, err error) {
+func chainPrismUnionSurvivors(budget *proofbound.WorkBudget, survivors []sketch.BoundaryEdge) (chain []sketch.BoundaryEdge, resolved bool, err error) {
 	byStart := make(map[Point2]int, len(survivors))
 	for i, e := range survivors {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
 		if len(e.Polyline) < 2 {
@@ -812,7 +814,7 @@ func chainPrismUnionSurvivors(budget *workBudget, survivors []sketch.BoundaryEdg
 	chain = make([]sketch.BoundaryEdge, 0, len(survivors))
 	cur := 0
 	for range survivors {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
 		if used[cur] {
@@ -847,7 +849,7 @@ func chainPrismUnionSurvivors(budget *workBudget, survivors []sketch.BoundaryEdg
 // Union's own select-all path and the crossing sub-case for Cut/Intersect
 // alike; see this file's header comment for why Cut/Intersect's clean-nesting
 // match needs none.
-func auditPrismMergeSection(budget *workBudget, pa prismPayload, merged ProfileRecord) error {
+func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: merged})
 	if err != nil {
 		return err
@@ -876,10 +878,10 @@ func auditPrismMergeSection(budget *workBudget, pa prismPayload, merged ProfileR
 // short of 1 by an ulp walks as closed while still being a trimmed segment
 // this refusal owes an answer for — and a decad-side tolerance that can
 // ACCEPT is the admission gate CLAUDE.md's reject-only rule forbids.
-func prismProfileHasTrimmedCircularSource(budget *workBudget, p ProfileRecord) (bool, error) {
+func prismProfileHasTrimmedCircularSource(budget *proofbound.WorkBudget, p ProfileRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
 		for _, seg := range loop.Segments {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			switch s := seg.(type) {
@@ -930,10 +932,10 @@ func wholeSegmentRange(tStart, tEnd float64) bool {
 // bounds walks the recorded centre and radius directly (circularWalk never
 // touches Center/Radius) — so a whole segment charges nothing. A narrowed range
 // evaluates the carrier at a COMPUTED parameter instead (lerp2's else arm, or
-// circularWalk's cos/sin at the walk's own angle), which walkEndpointAllow
+// circularWalk's cos/sin at the walk's own angle), which proofbound.WalkEndpointAllow
 // charges.
 //
-// walkEndpointAllow is charged at the SOURCE operands the walk's own
+// proofbound.WalkEndpointAllow is charged at the SOURCE operands the walk's own
 // arithmetic touches, never at the endpoint it produced, and the envelope each
 // kind passes is the kind's own: a line passes lineWalkOperandUpper, because
 // lerp2's b−a cancels and leaves the walked endpoint no witness at all to the
@@ -969,7 +971,7 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
 		}
-		return walkEndpointAllow(lineWalkOperandUpper(s, w)), nil
+		return proofbound.WalkEndpointAllow(lineWalkOperandUpper(s, w)), nil
 	case ArcSeg:
 		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
@@ -981,10 +983,10 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 	default:
 		return 0, fmt.Errorf(`%w: a %T segment has no walk charge this evaluator states`, ErrUnsupported, seg)
 	}
-	return walkEndpointAllow(w.coordUpper), nil
+	return proofbound.WalkEndpointAllow(w.coordUpper), nil
 }
 
-// lineWalkOperandUpper is the envelope walkEndpointAllow requires for a
+// lineWalkOperandUpper is the envelope proofbound.WalkEndpointAllow requires for a
 // trimmed LineSeg: an upper bound on every operand lerp2's general arm
 // touches when it computes fl(a + fl(t·fl(b−a))) for that segment.
 //
@@ -999,7 +1001,7 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 // helper never leans on a range check it does not perform.
 //
 // A NaN coordinate propagates through math.Max, and an infinite one arrives as
-// +Inf, so an absent envelope reaches walkEndpointAllow as the non-finite it
+// +Inf, so an absent envelope reaches proofbound.WalkEndpointAllow as the non-finite it
 // is rather than as a small number.
 func lineWalkOperandUpper(s LineSeg, w segmentWalk) float64 {
 	upper := w.coordUpper
@@ -1063,7 +1065,7 @@ type prismSceneDelta struct {
 // one the record states verbatim — and walkChargeOf's allowance for it is
 // accumulated into the returned prismSceneDelta, the largest such charge over
 // each operand's own consumed segments (§7's δ_walk).
-func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, error) {
+func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
@@ -1105,7 +1107,7 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 				tags[ent] = prismEntityOrigin{isB: isB, hole: hole, authoredReversed: authoredReversed}
 			}
 			for _, seg := range loop.Segments {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				w, err := walkOf(seg, nil) // G4 admits only Line/Circle/Arc: no free-form work counter needed
@@ -1254,7 +1256,7 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 	if m, err = m.Then(invFrameA); err != nil {
 		return fail(err)
 	}
-	return &prismReexpression{relative: m, transAbs: vecMaxAbs(m.Translation())}, nil
+	return &prismReexpression{relative: m, transAbs: proofbound.VecMaxAbs(m.Translation())}, nil
 }
 
 // point re-expresses one of operand B's plane-local points into operand A's
@@ -1262,18 +1264,18 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 // zero; the shared-axis arm never reaches this map — and charges the rounding
 // it commits.
 //
-// The charge is rigidRoundAllow's existing shape, at the INPUT coordinate and
+// The charge is proofbound.RigidRoundAllow's existing shape, at the INPUT coordinate and
 // the composed map's own translation, and it covers the composition as well as
 // the application: each r3.Transform.Then rounds a unit-magnitude basis entry
 // and a translation-magnitude component a handful of ulps, so three
 // compositions and one application together stay under ~48·u·|input| +
-// ~40·u·|translation|, where rigidRoundAllow's 16 ulps at 2·|input| +
+// ~40·u·|translation|, where proofbound.RigidRoundAllow's 16 ulps at 2·|input| +
 // |translation|, read as a 3D radius, allow ~110·u·|input| + ~55·u·|translation|.
 func (re *prismReexpression) point(p Point2) Point2 {
 	if re.identity {
 		return p
 	}
 	out := re.relative.Apply(r3.NewVec(p.U, p.V, 0))
-	re.delta = math.Max(re.delta, rigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.transAbs))
+	re.delta = math.Max(re.delta, proofbound.RigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.transAbs))
 	return Point2{U: out.X, V: out.Y}
 }
