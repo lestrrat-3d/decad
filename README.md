@@ -82,6 +82,9 @@ Render it with `cd _gallery && go run . dynamics -scene stack-and-drop`; the
 frames go under `_gallery/out/`. The `tumble` scene drops spinning boxes, a
 hexagonal prism, a wedge and a stitched tetrahedron into a tray, where each
 lands on a corner and comes to rest face down; `-scene tumble` renders it.
+The `parts-bin` scene drops a shelled cup, a chamfered block, a loft, a swept
+hexagon and a revolved bottle into the same tray, where each comes to rest,
+while a cylinder rolls across its floor; `-scene parts-bin` renders it.
 
 ## Layering
 
