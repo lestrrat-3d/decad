@@ -713,3 +713,137 @@ func TestPlanarManifoldWithholdsCornerThroughTwoFaces(t *testing.T) {
 	require.Nil(t, report.Manifold)
 	require.Equal(t, decad.ContactAmbiguousFeature, report.Reason)
 }
+
+// The fixtures of docs/multibody-dynamics-design.md §13 PR 20d: §10.5's
+// support set of a non-convex guest, the §2 cup, over the §2 tray. Neither
+// body carries the convexity certificate, so §9.3 never runs; every fixture
+// runs in both body orders. Every cup corner below is the exact image of a
+// dyadic corner under a pose whose entries are dyadic, so each point and
+// height is compared exactly.
+//
+// Legs shown to fail (each restored or deleted in turn, fixture red, then
+// put back):
+//   - the convexity gate on a touch (ContactNonConvex whenever neither body
+//     is convex), restored: the cup on the floor and the cup on the rim
+//     publish no manifold;
+//   - the convexity gate on the lifted set (a plane's guest must be convex),
+//     restored: the tilted cup reads Separated with no manifold;
+//   - the host-face test on every contact, deleted (every flat host face a
+//     candidate): the cup against the wall publishes the corners strictly
+//     inside the floor and the wall, under two normals;
+//   - the foot test (a contact vertex strictly inside the host face),
+//     deleted: the cup on the rim loses its manifold to
+//     ContactAmbiguousFeature, since the cup's bottom face then also hosts
+//     the rim's own corners outside it, and
+//     TestPlanarManifoldNonConvexGuestBehind publishes the step's corners;
+//   - the guest-in-front test, deleted: TestPlanarManifoldNonConvexGuestBehind
+//     publishes the arm's two corners.
+
+// cupCorners are the cup's four bottom corners in its own frame.
+var cupCorners = []r3.Vec{{X: -12, Y: -8}, {X: 12, Y: -8}, {X: 12, Y: 8}, {X: -12, Y: 8}}
+
+// requireCupCorner checks that a manifold point's cup feature is the live
+// corner vertex at body-frame position corner.
+func requireCupCorner(t *testing.T, cup *decad.Body, point decad.ContactPoint, corner r3.Vec) {
+	t.Helper()
+	require.Nil(t, point.FaceB, "a vertex has no single owning face")
+	require.NotNil(t, point.FeatureB.Vertex)
+	require.Contains(t, cup.Vertices(), point.FeatureB.Vertex)
+	require.Equal(t, corner, point.FeatureB.Vertex.Position().Value, "the live corner")
+}
+
+func TestPlanarManifoldNonConvexGuest(t *testing.T) {
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cup := partsBinCup(t, doc)
+
+	// On the floor at a translation pose, the cup's bottom face lies flat on
+	// the floor's: every contact is on the floor, and the floor publishes the
+	// four bottom corners at their exact coordinates.
+	t.Run("floor", func(t *testing.T) {
+		at := r3.Vec{X: 3, Y: -2}
+		floor := contactBothWays(t, doc, tray, cup, r3.Identity(), contactPose(t, at), contactRequest())
+		require.Equal(t, decad.ContactTouching, floor.Relation, "reason=%v", floor.Reason)
+		want := make([]ratPoint, 0, len(cupCorners))
+		for _, c := range cupCorners {
+			want = append(want, ratAt(c.X+at.X, c.Y+at.Y, 0))
+		}
+		requireManifoldAt(t, floor, want)
+		for _, point := range floor.Manifold.Points {
+			require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+			require.Zero(t, point.NormalAngle.Base())
+			require.Zero(t, point.OnA.Bound.Base())
+			require.Contains(t, tray.Faces(), point.FaceA)
+			requireCupCorner(t, cup, point, r3.Vec{X: point.OnB.Value.X - at.X, Y: point.OnB.Value.Y - at.Y})
+		}
+	})
+
+	// Turned about Y by sin θ = 2⁻²⁴ and lifted so its low corners stand
+	// 2⁻³⁰ mm up, the cup's far corners stand 24·sin θ higher, 1.5·2⁻²⁰ mm,
+	// inside a 2⁻¹⁹ mm band. The pair is a ContactBand whose manifold is the
+	// floor's lifted set: the four bottom corners at their exact heights.
+	t.Run("tilted", func(t *testing.T) {
+		const lift = 1.0 / (1 << 30)
+		tilted := basisPose(t, r3.Vec{X: supportCosine, Z: supportSine}, r3.Vec{Y: 1},
+			r3.Vec{X: -supportSine, Z: supportCosine}, r3.Vec{Z: 12*supportSine + lift})
+		band := contactBothWays(t, doc, tray, cup, r3.Identity(), tilted, supportBandRequest(1.0/(1<<19)))
+		require.Equal(t, decad.ContactBand, band.Relation, "reason=%v", band.Reason)
+		require.Equal(t, decad.ContactNoReason, band.Reason)
+		require.Zero(t, band.Gap.Value.Base())
+		require.Equal(t, lift, band.Gap.Bound.Base())
+		require.NotNil(t, band.Manifold)
+		require.Len(t, band.Manifold.Points, 4)
+		heights := map[float64]int{}
+		for _, point := range band.Manifold.Points {
+			require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+			require.Zero(t, point.Separation.Bound.Base())
+			height := point.Separation.Value.Base()
+			heights[height]++
+			require.Equal(t, height, point.OnB.Value.Z, "the corner stands at its Separation")
+			require.Equal(t, r3.Vec{X: point.OnB.Value.X, Y: point.OnB.Value.Y}, point.OnA.Value, "its foot")
+			require.NotNil(t, point.FeatureB.Vertex)
+			require.Contains(t, cup.Vertices(), point.FeatureB.Vertex)
+		}
+		require.Equal(t, map[float64]int{lift: 2, 24*supportSine + lift: 2}, heights)
+	})
+
+	// On the tray's rim, x ∈ [80, 90] at z = 40, with two corners past its
+	// outer edge x = 90: every contact lies on the rim's face, and only the two
+	// corners over it publish.
+	t.Run("rim", func(t *testing.T) {
+		rimAt := r3.Vec{X: 94, Y: 68, Z: 40}
+		rim := contactBothWays(t, doc, tray, cup, r3.Identity(), contactPose(t, rimAt), contactRequest())
+		require.Equal(t, decad.ContactTouching, rim.Relation, "reason=%v", rim.Reason)
+		requireManifoldAt(t, rim, []ratPoint{ratAt(82, 60, 40), ratAt(82, 76, 40)})
+		for _, point := range rim.Manifold.Points {
+			require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+			require.Contains(t, tray.Faces(), point.FaceA)
+			requireCupCorner(t, cup, point, r3.Vec{X: point.OnB.Value.X - rimAt.X, Y: point.OnB.Value.Y - rimAt.Y})
+		}
+	})
+
+	// Standing on the floor with its side flat against the wall x = -80, the
+	// cup touches two faces of the tray: no single face holds every contact.
+	t.Run("wall", func(t *testing.T) {
+		wall := contactBothWays(t, doc, tray, cup, r3.Identity(), contactPose(t, r3.Vec{X: -68}), contactRequest())
+		require.Equal(t, decad.ContactTouching, wall.Relation, "reason=%v", wall.Reason)
+		require.Nil(t, wall.Manifold)
+		require.Equal(t, decad.ContactNonConvex, wall.Reason)
+	})
+}
+
+// TestPlanarManifoldNonConvexGuestBehind is an inverted-L guest whose arm
+// lies flat on a face of an L-shaped step, its leg hanging past the step's
+// end and below that face's plane without meeting the step. Every contact
+// lies on the step's face, but the guest is not wholly in front of its
+// plane, so the face supports nothing, and no face of the guest holds a step
+// corner strictly inside it: no manifold.
+func TestPlanarManifoldNonConvexGuestBehind(t *testing.T) {
+	doc := decad.New()
+	step := prismBody(t, doc, [][2]float64{{0, 0}, {20, 0}, {20, 5}, {10, 5}, {10, 10}, {0, 10}}, 10)
+	guest := prismBody(t, doc, [][2]float64{{-5, 0}, {-2, 0}, {-2, 10}, {8, 10}, {8, 12}, {-5, 12}}, 6)
+	report := contactBothWays(t, doc, step, guest, r3.Identity(), contactPose(t, r3.Vec{Z: 2}), contactRequest())
+	require.Equal(t, decad.ContactTouching, report.Relation, "reason=%v", report.Reason)
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactNonConvex, report.Reason)
+}

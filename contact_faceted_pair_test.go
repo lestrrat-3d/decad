@@ -19,8 +19,8 @@ import (
 // internal/pair/planar_test.go. At this level, each of these was shown to
 // fail: removing the planar dispatch from ContactPair (every case reads
 // Undecided); skipping the convexity lookup, or certifying every body convex
-// (the hollow-on-tray case loses ContactNonConvex); certifying no body
-// convex (the hexagon's touch reads ContactNonConvex).
+// (the hollow shell in the tray's corner loses ContactNonConvex); certifying
+// no body convex (the hexagon's touch reads ContactNonConvex).
 
 // placedBox is a source box over [x0, x1]×[y0, y1]×[z0, z0+h]: extruded from
 // the XY plane and translated, which keeps its tessellation bound zero so
@@ -171,11 +171,21 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 	tray := trayBody(t, doc)
 	hollow := hollowBody(t, doc)
 
-	// The hollow shell resting on the tray floor: an opposed face patch with
-	// both sides non-convex, so no manifold may follow (§9.2).
+	// The hollow shell resting on the tray floor against the wall x = -35:
+	// opposed face patches on two faces with both sides non-convex, so no
+	// single face holds the contact set and no manifold may follow (§9.2,
+	// §10.5).
+	cornered := contactBothOrders(t, doc, tray, hollow, r3.Identity(), contactPose(t, r3.Vec{X: -15, Z: 20}))
+	require.Equal(t, decad.ContactTouching, cornered.Relation, "reason=%v", cornered.Reason)
+	require.Nil(t, cornered.Manifold)
+	require.Equal(t, decad.ContactNonConvex, cornered.Reason)
+
+	// Away from the walls the floor alone holds the contact set, and the
+	// shell's four bottom corners publish on it (§10.5).
 	resting := contactBothOrders(t, doc, tray, hollow, r3.Identity(), contactPose(t, r3.Vec{Z: 20}))
 	require.Equal(t, decad.ContactTouching, resting.Relation, "reason=%v", resting.Reason)
-	require.Equal(t, decad.ContactNonConvex, resting.Reason)
+	requireManifoldAt(t, resting, []ratPoint{ratAt(-20, -20, 0), ratAt(20, -20, 0), ratAt(20, 20, 0),
+		ratAt(-20, 20, 0)})
 
 	lifted := contactBothOrders(t, doc, tray, hollow, r3.Identity(), contactPose(t, r3.Vec{Z: 22}))
 	require.Equal(t, decad.ContactSeparated, lifted.Relation, "reason=%v", lifted.Reason)

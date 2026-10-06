@@ -2183,3 +2183,5 @@
 3	0.00	TestOrientedVertexFaceFootMatchesRationalForm
 2	0.70	TestHeldMeshAdmitsEveryPayload
 1	0.01	TestHeldChordValidation
+3	0.06	TestPlanarManifoldNonConvexGuest
+0	0.01	TestPlanarManifoldNonConvexGuestBehind

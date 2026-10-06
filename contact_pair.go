@@ -86,7 +86,9 @@ const (
 	ContactAmbiguousFeature
 	ContactPointTooCoarse
 	// ContactNonConvex withholds a manifold because neither body carries the
-	// convexity certificate of docs/multibody-dynamics-design.md §9.2.
+	// convexity certificate of docs/multibody-dynamics-design.md §9.2: an
+	// overlap, or a touch whose contacts no single face of one body holds
+	// with the other body's corners inside it (§10.5).
 	ContactNonConvex
 )
 
@@ -154,8 +156,11 @@ type ContactReport struct {
 // with a positive determinant. When one is convex, a touch publishes its
 // clipped face patches, edges and vertices inside a face, and edge
 // crossings, and two convex bodies that overlap slightly publish the patch
-// at depth. A touching or overlapping pair names ContactNonConvex when
-// neither body is convex. A positive-bound faceted Boolean, a displaced
+// at depth. When neither body is convex, a touch whose every contact lies
+// on one flat face of one body, the other body wholly on or in front of its
+// plane, publishes the other body's corners strictly inside that face with
+// its normal; any other touching or overlapping pair names
+// ContactNonConvex. A positive-bound faceted Boolean, a displaced
 // stitched solid, and every other solid without an exact contact family of
 // its own (a cap-loop chamfer, a cup, a loft, a sweep, a general revolve) are
 // admitted through their held meshes with the mesh's boundary displacement δ

@@ -120,8 +120,13 @@ recorded displacement, zero-bound faceted Booleans, directly or after a
 translation-only `Placed`, or closed all-planar `Stitch` solids welded in
 place with every vertex bound zero. `ContactPair` proves their relation under any
 rotation: an enclosed gap, a touch at a vertex, edge or face, or an overlap,
-including one body nested in the other's material. The report names
-`ContactNonConvex` when neither body is convex. A touch it cannot resolve
+including one body nested in the other's material. When neither body is
+convex, a touch whose every contact lies on one flat face of one body, with
+the other body wholly on or in front of that face's plane, publishes the
+other body's corners strictly inside the face with its normal: a shelled cup
+on a tray's floor publishes its four bottom corners. Any other touch or
+overlap of two non-convex bodies names `ContactNonConvex`, such as that cup
+against the tray's floor and wall at once. A touch it cannot resolve
 locally, such as two flush bodies meeting at a saddle point, stays
 `ContactUndecided`. [Planar pair tests](../contact_faceted_pair_test.go)
 check each relation.
@@ -198,9 +203,9 @@ each refusal.
 
 A positive `ContactRequest.SupportBand` adds the support set to two exact
 planar solids. A touch, or a shallow overlap through a face, also publishes
-every corner of the resting body that lies within the band above that face
-plane, with its foot strictly inside the face and its exact height as its
-`Separation`. A pair apart by at most the band is `ContactBand` with
+every corner of the resting body, convex or not, that lies within the band
+above that face plane, with its foot strictly inside the face and its exact
+height as its `Separation`. A pair apart by at most the band is `ContactBand` with
 `Gap = [0 ± g]`, g the gap's upper end, and those corners as its manifold.
 `SweepPair` carries such a start, or a touch, on a band track over the whole
 support set. The track ends before any corner of the set reaches the face,
