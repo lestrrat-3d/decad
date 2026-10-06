@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -238,7 +240,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 	for i := range audit.comp {
 		audit.comp[i] = -1
 	}
-	adj, err := facetAdjacencyContext(ctx, tris)
+	adj, err := meshbool.FacetAdjacencyContext(ctx, tris)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +285,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 				}
 			}
 			t := tris[fi]
-			v.Add(v, proofbound.XdotRat(audit.xverts[t[0]], xcross(audit.xverts[t[1]], audit.xverts[t[2]])))
+			v.Add(v, proofbound.XdotRat(audit.xverts[t[0]], meshbool.Xcross(audit.xverts[t[1]], audit.xverts[t[2]])))
 		}
 		audit.compVol[ci] = v.Mul(v, sixth)
 		if audit.compVol[ci].Sign() == 0 {
@@ -297,7 +299,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 	}
 	for inner := range audit.members {
 		t := tris[audit.members[inner][0]]
-		probe := xCentroid(audit.xverts[t[0]], audit.xverts[t[1]], audit.xverts[t[2]])
+		probe := meshbool.XCentroid(audit.xverts[t[0]], audit.xverts[t[1]], audit.xverts[t[2]])
 		for outer := range audit.members {
 			if outer == inner {
 				continue
@@ -309,7 +311,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 			// mesh's own vertices, freshly stitched, and no operand's prepared
 			// projection cache describes them. Reusing one here would project
 			// the wrong mesh.
-			inside, onBoundary, err := meshParityContext(ctx, probe, verts, tris, audit.members[outer])
+			inside, onBoundary, err := meshbool.MeshParityContext(ctx, probe, verts, tris, audit.members[outer])
 			if err != nil {
 				return nil, err
 			}
@@ -586,10 +588,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		det := proofbound.XdotRat(a, xcross(b, c))
-		ax, ay, az := xhpRat(proofbound.Xhp(a))
-		bx, by, bz := xhpRat(proofbound.Xhp(b))
-		cx, cy, cz := xhpRat(proofbound.Xhp(c))
+		det := proofbound.XdotRat(a, meshbool.Xcross(b, c))
+		ax, ay, az := meshbool.XhpRat(proofbound.Xhp(a))
+		bx, by, bz := meshbool.XhpRat(proofbound.Xhp(b))
+		cx, cy, cz := meshbool.XhpRat(proofbound.Xhp(c))
 		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ax, bx), cx)))
 		my.Add(my, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ay, by), cy)))
 		mz.Add(mz, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(az, bz), cz)))
@@ -714,7 +716,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []proofbound.Xpt, tris []
 			}
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		total.Add(total, proofbound.XdotRat(a, xcross(b, c)))
+		total.Add(total, proofbound.XdotRat(a, meshbool.Xcross(b, c)))
 	}
 	volRat := new(big.Rat).Mul(total, big.NewRat(1, 6))
 	if volRat.Sign() <= 0 {
@@ -837,7 +839,7 @@ func buildFacetedTopology(
 			// plane — below (negative) is material bending away: convex.
 			tw := tris[twin]
 			opp := tw[0] + tw[1] + tw[2] - u - v
-			s := orientSign(verts[t[0]], verts[t[1]], verts[t[2]], verts[opp])
+			s := meshbool.OrientSign(verts[t[0]], verts[t[1]], verts[t[2]], verts[opp])
 			hinges[[2]int{u, v}] = hingeInfo{fa: facetFace[mine], fb: facetFace[twin], sign: s}
 			boundaryEdges = append(boundaryEdges, [2]int{u, v})
 		}

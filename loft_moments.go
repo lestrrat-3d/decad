@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -194,12 +196,12 @@ func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]
 	sb := proofbound.Xsub(proofbound.XptOf(b), m.anchor)
 	sc := proofbound.Xsub(proofbound.XptOf(c), m.anchor)
 
-	triVol6 := proofbound.XdotRat(sa, xcross(sb, sc))
+	triVol6 := proofbound.XdotRat(sa, meshbool.Xcross(sb, sc))
 	m.vol6.Add(m.vol6, triVol6)
 
-	saX, saY, saZ := xhpRat(proofbound.Xhp(sa))
-	sbX, sbY, sbZ := xhpRat(proofbound.Xhp(sb))
-	scX, scY, scZ := xhpRat(proofbound.Xhp(sc))
+	saX, saY, saZ := meshbool.XhpRat(proofbound.Xhp(sa))
+	sbX, sbY, sbZ := meshbool.XhpRat(proofbound.Xhp(sb))
+	scX, scY, scZ := meshbool.XhpRat(proofbound.Xhp(sc))
 	sumX := proofbound.RatAdd(saX, sbX, scX)
 	sumY := proofbound.RatAdd(saY, sbY, scY)
 	sumZ := proofbound.RatAdd(saZ, sbZ, scZ)
@@ -252,7 +254,7 @@ func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]
 // LineSegs is exactly that shape (docs/loft-design.md Table B splits every
 // wall quad along a diagonal), so this is the ordinary case, not an edge one.
 func wallTriangleArea(u, v proofbound.Xpt) (float64, float64) {
-	w := xcross(u, v)
+	w := meshbool.Xcross(u, v)
 	q := proofbound.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
@@ -404,7 +406,7 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)
 	}
 	denom := new(big.Rat).Mul(big.NewRat(4, 1), vol6)
-	anchorX, anchorY, anchorZ := xhpRat(proofbound.Xhp(m.anchor))
+	anchorX, anchorY, anchorZ := meshbool.XhpRat(proofbound.Xhp(m.anchor))
 	cx := new(big.Rat).Add(anchorX, new(big.Rat).Quo(momX, denom))
 	cy := new(big.Rat).Add(anchorY, new(big.Rat).Quo(momY, denom))
 	cz := new(big.Rat).Add(anchorZ, new(big.Rat).Quo(momZ, denom))

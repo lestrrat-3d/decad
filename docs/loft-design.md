@@ -499,10 +499,10 @@ computed:
   shared edge, `C` and `D` the two apex vertices, `(A, B, C)` the first
   triangle's own outward-wound vertex order — the edge convex exactly when
   the sign is negative, putting `D` on the MATERIAL side of `ABC`'s plane
-  (`orientSign`'s own convention, `boolean_exact.go`, is positive on the
+  (`orientSign`'s own convention, `internal/meshbool/boolean_exact.go`, is positive on the
   outward-normal side, so the material side is negative). This is the
   identical adaptive exact-orientation predicate
-  `boolean_exact.go` already implements for the mesh boolean's contact
+  `internal/meshbool/boolean_exact.go` already implements for the mesh boolean's contact
   classification — reused here, not reinvented, because both faces are
   already exact `Plane`s, so the sign is always decidable without a
   tolerance. A prism reads its junction turn off the single recorded 2D
@@ -1162,7 +1162,7 @@ only in shared edges and shared vertices — each must produce the expected
 classification above. Every cap triangle is also tested against every wall
 triangle and every triangle of the opposite cap.
 
-Every pair is tested with `boolean_exact.go`'s existing adaptive
+Every pair is tested with `internal/meshbool/boolean_exact.go`'s existing adaptive
 triangle/triangle predicate and `boolean_mesh.go`'s `triTriClassify` — the
 identical exact machinery the mesh boolean already uses to decide whether two
 triangles are disjoint, share a point, share a segment, or overlap in a 2-D

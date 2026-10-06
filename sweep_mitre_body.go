@@ -140,7 +140,7 @@ func mitredEnclosure(lo, hi *big.Rat) (float64, float64) {
 }
 
 // mitredOrientSign is the exact sign of det[b−a, c−a, d−a] over rationals,
-// orientSign's convention.
+// meshbool.OrientSign's convention.
 func mitredOrientSign(a, b, c, d sweepRatVec) int {
 	return sweepRatDot(sweepRatCross(sweepRatSub(b, a), sweepRatSub(c, a)), sweepRatSub(d, a)).Sign()
 }

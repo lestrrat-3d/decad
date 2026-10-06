@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -355,7 +357,7 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 		frame:   offset, z0: 0, z1: 0.3, xform: r3.Identity(),
 	}}
 
-	result, ok, err := tryPrismBoolean(t.Context(), opIntersect, a, b)
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpIntersect, a, b)
 	require.NoError(t, err)
 	require.True(t, ok, "a nested pair on shared-axis offset planes takes the analytic path")
 
@@ -403,12 +405,12 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 
 	a := &Body{payload: holeFree}
 	b := &Body{payload: holed}
-	_, ok, err := tryPrismBoolean(t.Context(), opUnion, a, b)
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.NoError(t, err)
 	require.False(t, ok, "G6: a holed operand must never admit a Union")
 
 	c := &Body{payload: overlapping}
-	_, ok, err = tryPrismBoolean(t.Context(), opUnion, a, c)
+	_, ok, err = tryPrismBoolean(t.Context(), meshbool.OpUnion, a, c)
 	require.NoError(t, err)
 	require.True(t, ok, "a hole-free pair otherwise identical clears G6")
 }
@@ -461,7 +463,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	}
 	require.True(t, split, "the overlapping rectangles must produce a split boundary")
 
-	_, ok, err := tryPrismBoolean(t.Context(), opUnion, &Body{payload: pa}, &Body{payload: pb})
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.False(t, ok, "a re-expressed arrangement with a split boundary must fall back")
 }
@@ -485,7 +487,7 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 		profile: ProfileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: translation,
 	}
-	first, ok, err := tryPrismBoolean(t.Context(), opUnion, &Body{payload: inner}, &Body{payload: containing})
+	first, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
 	require.NoError(t, err)
 	require.True(t, ok, "the containing first union must resolve analytically")
 	require.Positive(t, first.sectionDelta, "the nonidentity first union must carry its re-expression displacement")
@@ -511,7 +513,7 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
-	_, ok, err = tryPrismBoolean(t.Context(), opUnion, &Body{payload: first}, &Body{payload: shallow})
+	_, ok, err = tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: first}, &Body{payload: shallow})
 	require.NoError(t, err)
 	require.False(t, ok, "a split boundary with an uncertain source must fall back before recordEdge")
 }
@@ -533,7 +535,7 @@ func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testi
 	a := &Body{payload: pp}
 	b := &Body{payload: pp}
 
-	for _, op := range []operationKind{opCut, opIntersect} {
+	for _, op := range []meshbool.OperationKind{meshbool.OpCut, meshbool.OpIntersect} {
 		_, ok, err := tryPrismBoolean(t.Context(), op, a, b)
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -550,7 +552,7 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	a := &Body{payload: pp}
 	b := &Body{payload: pp}
 
-	_, ok, err := tryPrismBoolean(t.Context(), opUnion, a, b)
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, ok)
 }
@@ -572,7 +574,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 	pb.z0Delta = 0.5
 	pb.z1Delta = 0.25
 
-	result, ok, err := tryPrismBoolean(t.Context(), opUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, 0.5, result.z0Delta)
@@ -687,7 +689,7 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 	a := &Body{payload: pa}
 	b := &Body{payload: pb}
 
-	_, ok, err := tryPrismBoolean(t.Context(), opUnion, a, b)
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.False(t, ok)
 	require.ErrorIs(t, err, ErrUnrecordableProfile)
 	require.Contains(t, err.Error(), "does not close")
@@ -698,7 +700,7 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 	// loop DOES join bit-exactly at every whole junction.
 	clean := pa
 	clean.profile = ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)}
-	res, ok, err := tryPrismBoolean(t.Context(), opUnion, &Body{payload: clean}, b)
+	res, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: clean}, b)
 	require.NoError(t, err)
 	require.True(t, ok)
 	requireMergedLoopSegmentsJoin(t, res.profile.Outer.Segments)
@@ -714,7 +716,7 @@ func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	b := internalBoxBody(t, doc, 5, 5, 15, 15, 5)
-	res, ok, err := tryPrismBoolean(t.Context(), opUnion, a, b)
+	res, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, res.profile.Outer.Segments, 8)
@@ -723,7 +725,7 @@ func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
 	doc2 := New()
 	c := internalBoxBody(t, doc2, 0, 0, 10, 10, 5)
 	d := internalBoxBody(t, doc2, 2, 2, 4, 4, 5)
-	res2, ok, err := tryPrismBoolean(t.Context(), opUnion, c, d)
+	res2, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, c, d)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, res2.profile.Outer.Segments, 4)
@@ -1517,7 +1519,7 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
-	for _, op := range []operationKind{opUnion, opCut, opIntersect} {
+	for _, op := range []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut, meshbool.OpIntersect} {
 		_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: trimmedArc}, &Body{payload: whole})
 		require.NoError(t, err)
 		require.False(t, ok, "%s over a trimmed circular source segment must fall back, never publish zero", op)
@@ -1609,7 +1611,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 
-	for _, op := range []operationKind{opUnion, opCut, opIntersect} {
+	for _, op := range []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut, meshbool.OpIntersect} {
 		t.Run(op.String(), func(t *testing.T) {
 			nearWhole := circleOperand(math.Nextafter(1, 0))
 			_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: box}, &Body{payload: nearWhole})
@@ -1619,7 +1621,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 	}
 
 	t.Run("the whole-circle control is admitted", func(t *testing.T) {
-		_, ok, err := tryPrismBoolean(t.Context(), opCut, &Body{payload: box}, &Body{payload: circleOperand(1)})
+		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, &Body{payload: box}, &Body{payload: circleOperand(1)})
 		require.NoError(t, err)
 		require.True(t, ok, "the same pair with an exactly whole circle must reach the analytic result")
 	})
@@ -1655,7 +1657,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
 
-	_, ok, err := tryPrismBoolean(t.Context(), opUnion, &Body{payload: pa}, &Body{payload: pb})
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.False(t, ok, "a split boundary with a nonzero walk charge must fall back")
 }
@@ -1735,7 +1737,7 @@ func randomCrossingDiscPairFixtures(n int) []crossingDiscPairFixture {
 func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
 	t.Parallel()
 	for i, fx := range randomCrossingDiscPairFixtures(8) {
-		for _, op := range []operationKind{opIntersect, opCut} {
+		for _, op := range []meshbool.OperationKind{meshbool.OpIntersect, meshbool.OpCut} {
 			doc := New()
 			target := crossingDiscBody(t, doc, 0, fx.r1, Distance{D: units.Millimeters(fx.targetH), Dir: Along})
 			tool := crossingDiscBody(t, doc, fx.offset, fx.r2, Symmetric{D: units.Millimeters(fx.toolHalf)})
@@ -1827,7 +1829,7 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 
 // TestPrismOverlapVolumeArrangementCapRefuses is §9's RB7: a combined scene
 // exceeding prismMaxArrangementSegments refuses with ErrUnsupported before
-// s.Profiles runs, wrapped as booleanExpectedUnsupported exactly as
+// s.Profiles runs, wrapped as meshbool.BooleanExpectedUnsupported exactly as
 // evaluateAnalyticIntersect's own RB7 is, so measuredInterference reads it as
 // interferenceUnsupportedPipeline and Verify reports Suspect rather than
 // erroring.
@@ -1848,7 +1850,7 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	expected, isExpected := asExpectedBoolean(err)
 	require.True(t, isExpected, "RB7 must wrap as a booleanExpectedError, matching evaluateAnalyticIntersect")
-	require.Equal(t, booleanExpectedUnsupported, expected.kind)
+	require.Equal(t, meshbool.BooleanExpectedUnsupported, expected.Kind)
 }
 
 // crossTeethPts and crossBarPts build the same two-disjoint-region U-and-bar

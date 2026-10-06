@@ -5,6 +5,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -144,7 +146,7 @@ const (
 // measuredInterference returns the pair's bounded overlap volume. Strict
 // containment and exact analytic equality prove the set identity directly.
 // An admitted coplanar, co-directional prism pair next resolves through the
-// same read-only analytic opIntersect dispatch performBoolean uses
+// same read-only analytic meshbool.OpIntersect dispatch performBoolean uses
 // (evaluateAnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2) — never consuming either operand. That
 // path publishes the resolved intersection payload's OWN volume measurement,
@@ -203,7 +205,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 		return overlap, interferenceMeasured, nil
 	}
 
-	eval, err := evaluateBoolean(ctx, opIntersect, a, b)
+	eval, err := evaluateBoolean(ctx, meshbool.OpIntersect, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return Measurement{}, interferenceOutcomeForExpected(expected), nil
@@ -219,7 +221,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 // positiveVolume is interference design §6's positive-volume gate: the true
 // overlap volume proves positive only when the measurement's own proven
 // interval [value-bound, value+bound] excludes zero. Both the analytic and
-// mesh opIntersect paths apply it to their own result before
+// mesh meshbool.OpIntersect paths apply it to their own result before
 // measuredInterference reports it as measured.
 func positiveVolume(v Measurement) bool {
 	value := math.Abs(v.Value.Base())
@@ -228,19 +230,19 @@ func positiveVolume(v Measurement) bool {
 
 // interferenceOutcomeForExpected preserves the read-only boolean's private
 // reason taxonomy for Verify's cause-specific diagnostics.
-func interferenceOutcomeForExpected(expected *booleanExpectedError) interferenceOutcome {
-	switch expected.kind {
-	case booleanExpectedContact:
+func interferenceOutcomeForExpected(expected *meshbool.BooleanExpectedError) interferenceOutcome {
+	switch expected.Kind {
+	case meshbool.BooleanExpectedContact:
 		return interferenceUnsupportedContact
-	case booleanExpectedUnsupported:
+	case meshbool.BooleanExpectedUnsupported:
 		return interferenceUnsupportedPipeline
-	case booleanExpectedStaging:
-		if expected.operand == 1 {
+	case meshbool.BooleanExpectedStaging:
+		if expected.Operand == 1 {
 			return interferenceUnsupportedPayloadSecond
 		}
 		return interferenceUnsupportedPayloadFirst
-	case booleanExpectedVolumeProof:
-		if expected.operand == 1 {
+	case meshbool.BooleanExpectedVolumeProof:
+		if expected.Operand == 1 {
 			return interferenceUnsupportedVolumeProofSecond
 		}
 		return interferenceUnsupportedVolumeProofFirst

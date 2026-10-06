@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -66,7 +68,7 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 			plane := newLoftExactPlane(tc.anchor, tc.normal)
 			var want [3]int
 			for i, p := range tc.other {
-				want[i] = xdotSign(tc.normal, proofbound.Xsub(p, tc.anchor))
+				want[i] = meshbool.XdotSign(tc.normal, proofbound.Xsub(p, tc.anchor))
 			}
 			require.Equal(t, want, trianglePlaneSigns(plane, tc.other))
 		})
@@ -118,7 +120,7 @@ func TestLoftCrossingAuditAdmitsUntwistedBox(t *testing.T) {
 // TestLoftCrossingAuditAdmitsCoplanarSharedEdge proves a wall cell's own
 // lower/upper diagonal pair — coplanar, sharing the diagonal V0->W1 — is
 // admitted through triTriCoplanarSharedEdge, AND that the identical pair
-// still reports contactRegion from triTriClassify directly: the audit-only
+// still reports meshbool.ContactRegion from meshbool.TriTriClassify directly: the audit-only
 // helper does not change mesh-boolean contact classification
 // (docs/loft-design.md §6, required test).
 func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
@@ -133,11 +135,11 @@ func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
 	tb := loftTriCorners(verts, upper0)
 	xta := loftXTriCorners(verts, lower0)
 	xtb := loftXTriCorners(verts, upper0)
-	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
-	contact, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	contact, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
-	require.Equal(t, contactRegion, contact.kind,
+	require.Equal(t, meshbool.ContactRegion, contact.Kind,
 		"the coplanar diagonal pair must still classify as contactRegion under triTriClassify itself")
 }
 
@@ -179,7 +181,7 @@ func TestLoftCrossingAuditRejectsSameSideApexes(t *testing.T) {
 }
 
 // genuineCrossingFixture builds two triangles with NO shared vertex index —
-// S7's zero-shared-vertex case, which therefore expects contactNone — that
+// S7's zero-shared-vertex case, which therefore expects meshbool.ContactNone — that
 // nonetheless cross transversally along a positive-length segment on the
 // line x=0, y=0: triangle A lies wholly in the y=0 plane, triangle B wholly
 // in the x=0 plane, and their own (x,z)/(y,z) footprints overlap on that
@@ -366,7 +368,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //
 // loftAuditReference is the audit's independent reference path: no
 // broad-phase tier and no certificate, so every pair S8 admits reaches
-// triTriClassify's exact contact classification. Every equivalence assertion
+// meshbool.TriTriClassify's exact contact classification. Every equivalence assertion
 // below is against THIS, never against production run through a second
 // wrapper. loftAuditProduction is exactly what loftCrossingAudit itself
 // passes, so an equivalence proven here is a statement about the shipped
@@ -383,15 +385,15 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //     TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit stayed GREEN —
 //     this leg could NOT be made to fail, and the reason is provable rather
 //     than a gap in the fixtures: a pair sharing a recorded vertex INDEX
-//     shares the identical coordinate there, so (a) boxesOverlap's own <=
+//     shares the identical coordinate there, so (a) meshbool.BoxesOverlap's own <=
 //     always reports the two boxes overlapping at that point (equality
-//     satisfies <=, on every axis), and (b) orientSign against the OTHER
+//     satisfies <=, on every axis), and (b) meshbool.OrientSign against the OTHER
 //     triangle's plane, evaluated at that shared vertex, is the signed
 //     volume of a tetrahedron with a repeated point — exactly zero, every
-//     time — so allOneSide (which demands all three signs strictly
+//     time — so meshbool.AllOneSide (which demands all three signs strictly
 //     same-sign) can never be true for it. Both of loftPlaneSeparated's own
 //     sign arrays therefore always contain at least one zero for a
-//     shared-vertex pair, and boxesOverlap can never separate it either.
+//     shared-vertex pair, and meshbool.BoxesOverlap can never separate it either.
 //     Both tiers of loftCrossingAudit's CURRENT broad-phase are structurally
 //     incapable of reporting "no contact" for a pair sharing a vertex INDEX,
 //     independent of the len(shared) guard — so this leg is genuinely
@@ -400,7 +402,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //     that does not share this structural property, and Table
 //     TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair still
 //     pins the call's own skip count at 0 for both required-contact fixtures.
-//   - Leg 2, "round the bounding box INWARD instead of outward": boxesOverlap
+//   - Leg 2, "round the bounding box INWARD instead of outward": meshbool.BoxesOverlap
 //     compares with <=; a local copy using < (strict) was substituted in the
 //     S7 loop, and boundaryTouchingFixture (below) — two triangles sharing NO
 //     recorded vertex INDEX but touching at a coordinate exactly on both
@@ -483,12 +485,12 @@ func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
 }
 
 // boundaryTouchingFixture builds two triangles that share NO recorded vertex
-// INDEX (so S7 expects contactNone, same as genuineCrossingFixture) but whose
+// INDEX (so S7 expects meshbool.ContactNone, same as genuineCrossingFixture) but whose
 // bounding boxes touch EXACTLY on a shared boundary plane (x=1) rather than
 // overlapping with slack: triangle A's vertex 1 and triangle B's vertex 3
 // hold the identical coordinate (1,0,0) at two DIFFERENT table indices, so
 // the two triangles genuinely touch at that point while sharing no index.
-// This is the fixture leg 2 above needs: boxesOverlap's own <= must treat
+// This is the fixture leg 2 above needs: meshbool.BoxesOverlap's own <= must treat
 // the shared boundary as overlap (not disjoint), or the pair is wrongly
 // skipped.
 func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {

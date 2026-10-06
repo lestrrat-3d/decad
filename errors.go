@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
@@ -207,7 +209,7 @@ const (
 // tolerance)
 // passes through plain — none of these three is a BooleanError.
 type BooleanError struct {
-	op   operationKind
+	op   meshbool.OperationKind
 	Code BooleanErrorCode
 	msg  string
 	err  error

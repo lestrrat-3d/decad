@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -141,7 +143,7 @@ func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
 	}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 2}
 
-	_, err := facetAdjacencyContext(ctx, tris)
+	_, err := meshbool.FacetAdjacencyContext(ctx, tris)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -152,18 +154,18 @@ func TestFacetCutCancellationIsBounded(t *testing.T) {
 		proofbound.XptOf(r3.NewVec(10, 0, 0)),
 		proofbound.XptOf(r3.NewVec(0, 10, 0)),
 	}
-	normal := xcross(proofbound.Xsub(tri[1], tri[0]), proofbound.Xsub(tri[2], tri[0]))
-	seg := xseg{
-		a: proofbound.XptOf(r3.NewVec(1, 1, 0)),
-		b: proofbound.XptOf(r3.NewVec(2, 1, 0)),
+	normal := meshbool.Xcross(proofbound.Xsub(tri[1], tri[0]), proofbound.Xsub(tri[2], tri[0]))
+	seg := meshbool.Xseg{
+		A: proofbound.XptOf(r3.NewVec(1, 1, 0)),
+		B: proofbound.XptOf(r3.NewVec(2, 1, 0)),
 	}
-	segs := make([]xseg, 300)
+	segs := make([]meshbool.Xseg, 300)
 	for i := range segs {
 		segs[i] = seg
 	}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 2}
 
-	_, err := cutTriangle(ctx, tri, normal, segs)
+	_, err := meshbool.CutTriangle(ctx, tri, normal, segs)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -233,49 +235,49 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 
 	for _, tc := range []struct {
 		name        string
-		expected    *booleanExpectedError
+		expected    *meshbool.BooleanExpectedError
 		wantOutcome interferenceOutcome
 		wantCode    DiagnosticCode
 		wantMessage []string
 	}{
 		{
 			name:        "first payload",
-			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 0},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 0},
 			wantOutcome: interferenceUnsupportedPayloadFirst,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"first operand", "tessellation refused at the chord tolerance"},
 		},
 		{
 			name:        "second payload",
-			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 1},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 1},
 			wantOutcome: interferenceUnsupportedPayloadSecond,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"second operand", "tessellation refused at the chord tolerance"},
 		},
 		{
 			name:        "first operand volume proof",
-			expected:    &booleanExpectedError{kind: booleanExpectedVolumeProof, operand: 0},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedVolumeProof, Operand: 0},
 			wantOutcome: interferenceUnsupportedVolumeProofFirst,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"first operand", "no proof of the volume"},
 		},
 		{
 			name:        "second operand volume proof",
-			expected:    &booleanExpectedError{kind: booleanExpectedVolumeProof, operand: 1},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedVolumeProof, Operand: 1},
 			wantOutcome: interferenceUnsupportedVolumeProofSecond,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"second operand", "no proof of the volume"},
 		},
 		{
 			name:        "contact policy",
-			expected:    &booleanExpectedError{kind: booleanExpectedContact, operand: -1},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedContact, Operand: -1},
 			wantOutcome: interferenceUnsupportedContact,
 			wantCode:    DiagUnsupportedPairContact,
 			wantMessage: []string{"contact", "clear separation"},
 		},
 		{
 			name:        "in-pipeline reach",
-			expected:    &booleanExpectedError{kind: booleanExpectedUnsupported, operand: -1},
+			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedUnsupported, Operand: -1},
 			wantOutcome: interferenceUnsupportedPipeline,
 			wantCode:    DiagUnsupportedPairPipeline,
 			wantMessage: []string{"both operands tessellate", "simplify the boolean geometry"},
@@ -328,7 +330,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 	require.NoError(t, err)
 	require.False(t, ok, `an out-of-plane pair must not be admitted by the analytic dispatch`)
 
-	want, err := evaluateBoolean(t.Context(), opIntersect, a, b)
+	want, err := evaluateBoolean(t.Context(), meshbool.OpIntersect, a, b)
 	require.NoError(t, err)
 
 	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{})
@@ -467,11 +469,11 @@ func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 	for i := range 2 * proofbound.WorkPollInterval {
 		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
 	}
-	scan, err := newConformScan(proofbound.NewWorkBudget(t.Context()), verts)
+	scan, err := meshbool.NewConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "edgeInteriorHits"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "EdgeInteriorHits"}
 
-	_, err = scan.edgeInteriorHits(proofbound.NewWorkBudget(ctx), 0, 1, [3]int{0, 1, 2})
+	_, err = scan.EdgeInteriorHits(proofbound.NewWorkBudget(ctx), 0, 1, [3]int{0, 1, 2})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the grid-cell candidate scan must poll, not run to completion between facet polls`)
@@ -487,10 +489,10 @@ func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 		proofbound.XptOf(r3.NewVec(4, 5, 0)),  // off the edge
 		proofbound.XptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
 	}
-	scan, err := newConformScan(proofbound.NewWorkBudget(t.Context()), verts)
+	scan, err := meshbool.NewConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
 
-	hits, err := scan.edgeInteriorHits(proofbound.NewWorkBudget(t.Context()), 0, 1, [3]int{0, 1, 2})
+	hits, err := scan.EdgeInteriorHits(proofbound.NewWorkBudget(t.Context()), 0, 1, [3]int{0, 1, 2})
 	require.NoError(t, err)
 	require.Equal(t, []int{3}, hits,
 		`only the vertex exactly in the edge's interior conforms the subdivision`)
@@ -504,9 +506,9 @@ func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(300-i), 0, 0)))
 		hits = append(hits, i+2)
 	}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sortAlongEdge"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SortAlongEdge"}
 
-	err := sortAlongEdge(proofbound.NewWorkBudget(ctx), verts, 0, 1, hits)
+	err := meshbool.SortAlongEdge(proofbound.NewWorkBudget(ctx), verts, 0, 1, hits)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the along-edge ordering must poll rather than run its whole quadratic pass`)
@@ -520,7 +522,7 @@ func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
 	}
 	hits := []int{2, 3, 4} // parameters 0.7, 0.1, 0.4
 
-	require.NoError(t, sortAlongEdge(proofbound.NewWorkBudget(t.Context()), verts, 0, 1, hits))
+	require.NoError(t, meshbool.SortAlongEdge(proofbound.NewWorkBudget(t.Context()), verts, 0, 1, hits))
 	require.Equal(t, []int{3, 4, 2}, hits,
 		`inserted vertices must come back ordered along the edge, nearest end first`)
 }

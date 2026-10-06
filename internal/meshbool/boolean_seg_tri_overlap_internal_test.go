@@ -1,4 +1,4 @@
-package decad
+package meshbool
 
 import (
 	"fmt"
@@ -16,9 +16,9 @@ import (
 )
 
 // referenceSegTriOverlap2 is the PRE-OPTIMIZATION reference copy of
-// segTriOverlap2, captured verbatim before the clip parameter stopped being a
+// SegTriOverlap2, captured verbatim before the clip parameter stopped being a
 // normalised big.Rat: same branch order, same sign handling, same returns, and
-// the same big.Rat.Quo per crossing edge that the unnormalised clipFrac
+// the same big.Rat.Quo per crossing edge that the unnormalised ClipFrac
 // removes.
 //
 // It is frozen on purpose. A later production edit must NEVER be mirrored into
@@ -26,16 +26,16 @@ import (
 // still states the behaviour production had before the change. If production
 // and this function disagree, production changed a verdict and the change is
 // wrong, not this copy.
-func referenceSegTriOverlap2(a, b, ta, tb, tc xp2) bool {
-	ccw := cross2xSign(ta, tb, tc)
+func referenceSegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
+	ccw := Cross2xSign(ta, tb, tc)
 	if ccw == 0 {
 		return false
 	}
-	edges := [3][2]xp2{{ta, tb}, {tb, tc}, {tc, ta}}
+	edges := [3][2]Xp2{{ta, tb}, {tb, tc}, {tc, ta}}
 	lo, hi := new(big.Rat), new(big.Rat).SetInt64(1)
 	for _, e := range edges {
-		sa := cross2xSign(e[0], e[1], a)
-		sb := cross2xSign(e[0], e[1], b)
+		sa := Cross2xSign(e[0], e[1], a)
+		sb := Cross2xSign(e[0], e[1], b)
 		if ccw < 0 {
 			sa = -sa
 			sb = -sb
@@ -46,8 +46,8 @@ func referenceSegTriOverlap2(a, b, ta, tb, tc xp2) bool {
 		case sa < 0 && sb < 0:
 			return false
 		default:
-			fa := cross2x(e[0], e[1], a)
-			fb := cross2x(e[0], e[1], b)
+			fa := Cross2x(e[0], e[1], a)
+			fb := Cross2x(e[0], e[1], b)
 			if ccw < 0 {
 				fa.Neg(fa)
 				fb.Neg(fb)
@@ -69,35 +69,35 @@ func referenceSegTriOverlap2(a, b, ta, tb, tc xp2) bool {
 }
 
 // pt2 is one differential-test point in plain float coordinates. Each case is
-// lifted into every xp2 flavour segTriOverlap2 can be handed, so a case tests
-// both the homogeneous route through edgeCross2Fracs and the rational
-// fallback through cross2x.
+// lifted into every Xp2 flavour SegTriOverlap2 can be handed, so a case tests
+// both the homogeneous route through EdgeCross2Fracs and the rational
+// fallback through Cross2x.
 type pt2 struct{ x, y float64 }
 
-// xp2Flavour lifts a float coordinate pair into one xp2 representation.
+// xp2Flavour lifts a float coordinate pair into one Xp2 representation.
 type xp2Flavour struct {
 	name string
-	lift func(pt2) xp2
+	lift func(pt2) Xp2
 }
 
-// xp2Flavours are the three shapes an xp2 reaches segTriOverlap2 in: the
+// xp2Flavours are the three shapes an Xp2 reaches SegTriOverlap2 in: the
 // rational-only form polygon construction builds, the homogeneous form the
 // projection caches build from a lifted float vertex (weight a stripped power
 // of two), and a homogeneous form carrying a deliberately awkward weight, so
-// the shared-factor cancellation in edgeCross2Fracs is exercised against
+// the shared-factor cancellation in EdgeCross2Fracs is exercised against
 // weights that differ from point to point.
 var xp2Flavours = []xp2Flavour{
 	{
 		name: "rational",
-		lift: func(p pt2) xp2 { return newXP2(freeform.MustRatOf(p.x), freeform.MustRatOf(p.y)) },
+		lift: func(p pt2) Xp2 { return NewXP2(freeform.MustRatOf(p.x), freeform.MustRatOf(p.y)) },
 	},
 	{
 		name: "homogeneous",
-		lift: func(p pt2) xp2 { return newXP2FromXpt(proofbound.XptOf(r3.Vec{X: p.x, Y: p.y}), 0, 1) },
+		lift: func(p pt2) Xp2 { return NewXP2FromXpt(proofbound.XptOf(r3.Vec{X: p.x, Y: p.y}), 0, 1) },
 	},
 	{
 		name: "homogeneous-weighted",
-		lift: func(p pt2) xp2 { return newXP2FromXpt(weightedXpt(p, 3), 0, 1) },
+		lift: func(p pt2) Xp2 { return NewXP2FromXpt(weightedXpt(p, 3), 0, 1) },
 	},
 }
 
@@ -126,9 +126,9 @@ type segTriCase struct {
 }
 
 // segTriLiftings pairs a flavour for the segment with a flavour for the
-// triangle. Production hands segTriOverlap2 six points from one source, so the
+// triangle. Production hands SegTriOverlap2 six points from one source, so the
 // matching pairs are the reachable ones; the mismatched pairs are here because
-// edgeCross2Fracs may only take its homogeneous route when all four points it
+// EdgeCross2Fracs may only take its homogeneous route when all four points it
 // reads carry homogeneous coordinates, and nothing else would exercise that
 // guard.
 func segTriLiftings() []struct {
@@ -160,7 +160,7 @@ func requireSegTriParity(t *testing.T, c segTriCase) {
 		a, b := lifting.seg.lift(c.a), lifting.seg.lift(c.b)
 		ta, tb, tc := lifting.tri.lift(c.ta), lifting.tri.lift(c.tb), lifting.tri.lift(c.tc)
 		want := referenceSegTriOverlap2(a, b, ta, tb, tc)
-		got := segTriOverlap2(a, b, ta, tb, tc)
+		got := SegTriOverlap2(a, b, ta, tb, tc)
 		require.Equal(t, want, got, "%s/%s: verdict must match the pre-optimization reference", c.name, lifting.name)
 		if c.assertExpected {
 			require.Equal(t, c.wantIfDecided, got, "%s/%s: geometric verdict", c.name, lifting.name)
@@ -290,7 +290,7 @@ func segTriOverlapCases() []segTriCase {
 		},
 	}
 	// Nearly coincident coordinates: the crossing sits one ulp away from a
-	// corner, so the float filter inside cross2xSign cannot decide it and the
+	// corner, so the float filter inside Cross2xSign cannot decide it and the
 	// exact path carries the answer.
 	near := math.Nextafter(4, math.Inf(1))
 	cases = append(cases,
@@ -387,7 +387,7 @@ func TestSegTriOverlap2MatchesReferenceRandomized(t *testing.T) {
 			ta: draw(), tb: draw(), tc: draw(),
 		}
 		requireSegTriParity(t, c)
-		if segTriOverlap2(
+		if SegTriOverlap2(
 			xp2Flavours[1].lift(c.a), xp2Flavours[1].lift(c.b),
 			xp2Flavours[1].lift(c.ta), xp2Flavours[1].lift(c.tb), xp2Flavours[1].lift(c.tc),
 		) {
@@ -399,16 +399,16 @@ func TestSegTriOverlap2MatchesReferenceRandomized(t *testing.T) {
 	require.Greater(t, decided, draws/20, "the random draw must produce overlaps, not only misses")
 }
 
-// TestClipFracComparesExactlyAcrossDenominators pins cmpClipFrac's contract
+// TestClipFracComparesExactlyAcrossDenominators pins CmpClipFrac's contract
 // directly: unnormalised fractions must order exactly as their reduced values
 // do, including when one side is far from lowest terms.
 func TestClipFracComparesExactlyAcrossDenominators(t *testing.T) {
-	fracOf := func(num, den int64) clipFrac {
-		return clipFrac{num: big.NewInt(num), den: big.NewInt(den)}
+	fracOf := func(num, den int64) ClipFrac {
+		return ClipFrac{Num: big.NewInt(num), Den: big.NewInt(den)}
 	}
 	for _, c := range []struct {
 		name string
-		x, y clipFrac
+		x, y ClipFrac
 		want int
 	}{
 		{name: "equal in lowest terms", x: fracOf(1, 3), y: fracOf(1, 3), want: 0},
@@ -421,17 +421,17 @@ func TestClipFracComparesExactlyAcrossDenominators(t *testing.T) {
 		{name: "two negatives", x: fracOf(-2, 3), y: fracOf(-1, 3), want: -1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			require.Equal(t, c.want, cmpClipFrac(c.x, c.y))
-			require.Equal(t, -c.want, cmpClipFrac(c.y, c.x), "comparison must be antisymmetric")
-			ratOf := func(f clipFrac) *big.Rat { return new(big.Rat).SetFrac(f.num, f.den) }
-			require.Equal(t, ratOf(c.x).Cmp(ratOf(c.y)), cmpClipFrac(c.x, c.y),
+			require.Equal(t, c.want, CmpClipFrac(c.x, c.y))
+			require.Equal(t, -c.want, CmpClipFrac(c.y, c.x), "comparison must be antisymmetric")
+			ratOf := func(f ClipFrac) *big.Rat { return new(big.Rat).SetFrac(f.Num, f.Den) }
+			require.Equal(t, ratOf(c.x).Cmp(ratOf(c.y)), CmpClipFrac(c.x, c.y),
 				"unnormalised comparison must match the reduced one")
 		})
 	}
 }
 
 // TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor proves the contract
-// segTriOverlap2 relies on: the two returned fractions are cross2x's exact
+// SegTriOverlap2 relies on: the two returned fractions are Cross2x's exact
 // values scaled by ONE common factor, so a ratio between them is unchanged.
 // It is the property that lets the homogeneous denominator be dropped.
 func TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor(t *testing.T) {
@@ -446,15 +446,15 @@ func TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor(t *testing.T) {
 					}
 					a, b := lifting.seg.lift(pts[(i+2)%len(pts)]), lifting.seg.lift(pts[(j+3)%len(pts)])
 					le0, le1 := lifting.tri.lift(e0), lifting.tri.lift(e1)
-					fa, fb := edgeCross2Fracs(le0, le1, a, b)
-					require.Positive(t, fa.den.Sign(), "denominators must stay positive")
-					require.Positive(t, fb.den.Sign(), "denominators must stay positive")
-					wantA := cross2x(le0, le1, a)
-					wantB := cross2x(le0, le1, b)
-					gotA := new(big.Rat).SetFrac(fa.num, fa.den)
-					gotB := new(big.Rat).SetFrac(fb.num, fb.den)
+					fa, fb := EdgeCross2Fracs(le0, le1, a, b)
+					require.Positive(t, fa.Den.Sign(), "denominators must stay positive")
+					require.Positive(t, fb.Den.Sign(), "denominators must stay positive")
+					wantA := Cross2x(le0, le1, a)
+					wantB := Cross2x(le0, le1, b)
+					gotA := new(big.Rat).SetFrac(fa.Num, fa.Den)
+					gotB := new(big.Rat).SetFrac(fb.Num, fb.Den)
 					// Both fractions carry the same factor, so each matches
-					// cross2x once divided by it. Recovering the factor from
+					// Cross2x once divided by it. Recovering the factor from
 					// one side and checking the other proves it is shared.
 					if wantA.Sign() == 0 {
 						require.Zero(t, gotA.Sign(), "a zero cross product must stay zero")
@@ -478,12 +478,12 @@ func TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor(t *testing.T) {
 // vertex contact — because the unnormalised path only changes the cost of the
 // crossing branch, and a benchmark of crossings alone would overstate what a
 // real audit sees.
-func benchSegTriPairs() [][5]xp2 {
+func benchSegTriPairs() [][5]Xp2 {
 	cases := segTriOverlapCases()
 	lift := xp2Flavours[1].lift
-	out := make([][5]xp2, 0, len(cases))
+	out := make([][5]Xp2, 0, len(cases))
 	for _, c := range cases {
-		out = append(out, [5]xp2{lift(c.a), lift(c.b), lift(c.ta), lift(c.tb), lift(c.tc)})
+		out = append(out, [5]Xp2{lift(c.a), lift(c.b), lift(c.ta), lift(c.tb), lift(c.tc)})
 	}
 	return out
 }
@@ -495,10 +495,10 @@ func BenchmarkSegTriOverlap2(b *testing.B) {
 	pairs := benchSegTriPairs()
 	for _, arm := range []struct {
 		name string
-		fn   func(a, b, ta, tb, tc xp2) bool
+		fn   func(a, b, ta, tb, tc Xp2) bool
 	}{
 		{name: "reference-rat", fn: referenceSegTriOverlap2},
-		{name: "clipfrac", fn: segTriOverlap2},
+		{name: "clipfrac", fn: SegTriOverlap2},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
 			b.ReportAllocs()

@@ -9,6 +9,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -19,11 +21,11 @@ import (
 
 // segFilterCase drives the filter against the exact predicate it guards. Every
 // case asserts the ONE property the filter owes: it never rejects a candidate
-// onSegmentInterior3 would accept.
+// meshbool.OnSegmentInterior3 would accept.
 func requireFilterAgreesWithExact(t *testing.T, a, b, p r3.Vec, tau2 float64) bool {
 	t.Helper()
-	rejected := newSegFilter(a, b, tau2).tooFar(p)
-	accepted := onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p))
+	rejected := meshbool.NewSegFilter(a, b, tau2).TooFar(p)
+	accepted := meshbool.OnSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p))
 	require.False(t, rejected && accepted,
 		`the filter is reject-only: it may never reject a candidate the exact predicate accepts`)
 	return rejected
@@ -32,11 +34,11 @@ func requireFilterAgreesWithExact(t *testing.T, a, b, p r3.Vec, tau2 float64) bo
 func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 	t.Parallel()
 	a, b := r3.NewVec(0, 0, 0), r3.NewVec(10, 4, -3)
-	tau2 := segAdmissionRadius2(0, 10)
+	tau2 := meshbool.SegAdmissionRadius2(0, 10)
 
 	t.Run(`a vertex exactly on the segment survives the filter`, func(t *testing.T) {
 		p := r3.NewVec(2.5, 1, -0.75) // exactly a quarter of the way along
-		require.True(t, onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
+		require.True(t, meshbool.OnSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
 			`the case is only meaningful while the exact predicate accepts p`)
 		require.False(t, requireFilterAgreesWithExact(t, a, b, p, tau2),
 			`a vertex the exact predicate accepts must reach it`)
@@ -73,7 +75,7 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 
 	t.Run(`a vertex beyond the far endpoint is rejected`, func(t *testing.T) {
 		p := r3.NewVec(20, 8, -6) // on the carrier line, twice as far as b
-		require.False(t, onSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
+		require.False(t, meshbool.OnSegmentInterior3(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(p)),
 			`the case is only meaningful while the exact predicate rejects p`)
 		require.True(t, requireFilterAgreesWithExact(t, a, b, p, tau2),
 			`the clamped projection must see a point past the far endpoint`)
@@ -86,10 +88,10 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 
 	t.Run(`a non-finite candidate abstains`, func(t *testing.T) {
 		inf := r3.NewVec(math.Inf(1), 0, 0)
-		require.False(t, newSegFilter(a, b, tau2).tooFar(inf),
+		require.False(t, meshbool.NewSegFilter(a, b, tau2).TooFar(inf),
 			`an overflowing candidate must fail closed, not reject`)
 		nan := r3.NewVec(math.NaN(), 0, 0)
-		require.False(t, newSegFilter(a, b, tau2).tooFar(nan),
+		require.False(t, meshbool.NewSegFilter(a, b, tau2).TooFar(nan),
 			`a NaN candidate must fail closed, not reject`)
 	})
 
@@ -100,14 +102,14 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 		// exact middle of the segment.
 		lo, hi := r3.NewVec(-1e154, 0, 0), r3.NewVec(1e154, 0, 0)
 		mid := r3.NewVec(0, 0, 0)
-		f := newSegFilter(lo, hi, segAdmissionRadius2(0, 1e154))
-		require.True(t, math.IsInf(f.vv, 1),
+		f := meshbool.NewSegFilter(lo, hi, meshbool.SegAdmissionRadius2(0, 1e154))
+		require.True(t, math.IsInf(f.Vv, 1),
 			`the case is only meaningful once vv has saturated`)
-		require.False(t, proofbound.IsNonFinite(f.tau2),
+		require.False(t, proofbound.IsNonFinite(f.Tau2),
 			`the case is only meaningful while the threshold is a real number`)
-		require.True(t, onSegmentInterior3(proofbound.XptOf(lo), proofbound.XptOf(hi), proofbound.XptOf(mid)),
+		require.True(t, meshbool.OnSegmentInterior3(proofbound.XptOf(lo), proofbound.XptOf(hi), proofbound.XptOf(mid)),
 			`the exact predicate accepts the midpoint`)
-		require.False(t, requireFilterAgreesWithExact(t, lo, hi, mid, f.tau2),
+		require.False(t, requireFilterAgreesWithExact(t, lo, hi, mid, f.Tau2),
 			`a saturated vv must abstain, never clamp to an endpoint`)
 	})
 }
@@ -122,49 +124,49 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 // clamp — so no candidate the exact predicate accepts can saturate any of them
 // by more than the last ulp of a value already at MaxFloat64. They are tested
 // rather than argued away, because arguing them away is what failed here twice.
-// ww is reachable through newSegFilter by a candidate PAST the far endpoint,
+// ww is reachable through meshbool.NewSegFilter by a candidate PAST the far endpoint,
 // which the exact predicate would reject anyway; c₁ and |P−B|² need a
 // hand-built filter whose vv disagrees with its v, the only way to reach the
 // state at all.
 func TestSegFilterAbstainsOnEverySaturatedIntermediate(t *testing.T) {
 	t.Parallel()
 	a, b := r3.NewVec(0, 0, 0), r3.NewVec(100, 0, 0)
-	tau2 := segAdmissionRadius2(0, 100)
+	tau2 := meshbool.SegAdmissionRadius2(0, 100)
 
 	t.Run(`a saturated ww abstains`, func(t *testing.T) {
-		// Reached through newSegFilter: a candidate one part in thirty past the
+		// Reached through meshbool.NewSegFilter: a candidate one part in thirty past the
 		// far endpoint of a 1.3e154 segment squares its distance from A past
 		// MaxFloat64 while its distance from B stays finite.
 		far := r3.NewVec(1.3e154, 0, 0)
 		p := r3.NewVec(1.35e154, 0, 0)
-		f := newSegFilter(r3.Vec{}, far, segAdmissionRadius2(0, 1.35e154))
-		require.False(t, proofbound.IsNonFinite(f.vv), `the segment itself must stay finite`)
-		require.True(t, math.IsInf(p.Sub(f.a).Dot(p.Sub(f.a)), 1),
+		f := meshbool.NewSegFilter(r3.Vec{}, far, meshbool.SegAdmissionRadius2(0, 1.35e154))
+		require.False(t, proofbound.IsNonFinite(f.Vv), `the segment itself must stay finite`)
+		require.True(t, math.IsInf(p.Sub(f.A).Dot(p.Sub(f.A)), 1),
 			`the case is only meaningful once |P−A|² has saturated`)
-		require.False(t, f.tooFar(p),
+		require.False(t, f.TooFar(p),
 			`a saturated |P−A|² must abstain, whatever the branch would have computed`)
 	})
 
 	t.Run(`a saturated c1 abstains`, func(t *testing.T) {
-		f := segFilter{a: a, b: b, v: r3.NewVec(math.MaxFloat64, 0, 0), vv: 1, tau2: tau2}
+		f := meshbool.SegFilter{A: a, B: b, V: r3.NewVec(math.MaxFloat64, 0, 0), Vv: 1, Tau2: tau2}
 		p := r3.NewVec(1e154, 0, 0)
-		require.True(t, math.IsInf(p.Sub(f.a).Dot(f.v), 1),
+		require.True(t, math.IsInf(p.Sub(f.A).Dot(f.V), 1),
 			`the case is only meaningful once w·v has saturated`)
-		require.False(t, f.tooFar(p),
+		require.False(t, f.TooFar(p),
 			`a saturated w·v decides no branch and must abstain`)
 	})
 
 	t.Run(`a saturated distance to the far endpoint abstains`, func(t *testing.T) {
-		f := segFilter{a: a, b: r3.NewVec(-1.3e154, 0, 0), v: r3.NewVec(1, 0, 0), vv: 1, tau2: tau2}
+		f := meshbool.SegFilter{A: a, B: r3.NewVec(-1.3e154, 0, 0), V: r3.NewVec(1, 0, 0), Vv: 1, Tau2: tau2}
 		p := r3.NewVec(1.3e154, 0, 0)
-		require.True(t, math.IsInf(p.Sub(f.b).Dot(p.Sub(f.b)), 1),
+		require.True(t, math.IsInf(p.Sub(f.B).Dot(p.Sub(f.B)), 1),
 			`the case is only meaningful once |P−B|² has saturated`)
-		require.False(t, f.tooFar(p),
+		require.False(t, f.TooFar(p),
 			`a saturated |P−B|² must abstain rather than lean on a NaN comparison`)
 	})
 
 	t.Run(`a threshold the radius cannot state abstains`, func(t *testing.T) {
-		require.False(t, newSegFilter(a, b, math.Inf(1)).tooFar(r3.NewVec(50, 1e6, 0)),
+		require.False(t, meshbool.NewSegFilter(a, b, math.Inf(1)).TooFar(r3.NewVec(50, 1e6, 0)),
 			`a +Inf threshold rejects nothing, however far the candidate sits`)
 	})
 }
@@ -181,16 +183,16 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 		xa, xb := proofbound.XptOf(a), proofbound.XptOf(b)
 		// An exact interior point of the exact segment, at a rational parameter
 		// no float64 can represent, so its rounding is a genuine approximation.
-		xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
+		xp := meshbool.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 		p := xp.Vec()
-		require.True(t, onSegmentInterior3(xa, xb, xp),
+		require.True(t, meshbool.OnSegmentInterior3(xa, xb, xp),
 			`the constructed point must be exactly interior to the exact segment`)
 
 		maxAbs := 0.0
 		for _, v := range []r3.Vec{a, b, p} {
 			maxAbs = math.Max(maxAbs, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
 		}
-		require.False(t, newSegFilter(a, b, segAdmissionRadius2(0, maxAbs)).tooFar(p),
+		require.False(t, meshbool.NewSegFilter(a, b, meshbool.SegAdmissionRadius2(0, maxAbs)).TooFar(p),
 			`the filter must never reject the float rounding of a point exactly on the segment`)
 	}
 }
@@ -237,17 +239,17 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			a := r3.NewVec(coord(s), coord(s), coord(s))
 			b := r3.NewVec(coord(s), coord(s), coord(s))
 			xa, xb := proofbound.XptOf(a), proofbound.XptOf(b)
-			xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
+			xp := meshbool.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 			p := xp.Vec()
-			require.True(t, onSegmentInterior3(xa, xb, xp),
+			require.True(t, meshbool.OnSegmentInterior3(xa, xb, xp),
 				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
 
 			maxAbs := 0.0
 			for _, v := range []r3.Vec{a, b, p} {
 				maxAbs = math.Max(maxAbs, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
 			}
-			f := newSegFilter(a, b, segAdmissionRadius2(0, maxAbs))
-			require.False(t, f.tooFar(p),
+			f := meshbool.NewSegFilter(a, b, meshbool.SegAdmissionRadius2(0, maxAbs))
+			require.False(t, f.TooFar(p),
 				`the filter must never reject the float rounding of a point exactly on the segment, at 2^%d`, e)
 
 			w, v := p.Sub(a), b.Sub(a)
@@ -256,7 +258,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			// Record the OVERFLOW regime: an intermediate saturated while the
 			// threshold is still finite, so the filter could have rejected on
 			// it. Above that band τ² saturates too and no case proves anything.
-			if !proofbound.IsNonFinite(f.tau2) && (proofbound.IsNonFinite(f.vv) || proofbound.IsNonFinite(ww) || proofbound.IsNonFinite(c1)) {
+			if !proofbound.IsNonFinite(f.Tau2) && (proofbound.IsNonFinite(f.Vv) || proofbound.IsNonFinite(ww) || proofbound.IsNonFinite(c1)) {
 				saturated++
 			}
 
@@ -264,13 +266,13 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			// in, counting only cases whose distance term clears the absolute
 			// floor — below that the filter could not reject at any accuracy,
 			// so such a case would prove nothing.
-			if c1 <= 0 || c1 >= f.vv || !(ww > segFilterFloor) {
+			if c1 <= 0 || c1 >= f.Vv || !(ww > meshbool.SegFilterFloor) {
 				continue
 			}
 			switch sq := c1 * c1; {
 			case sq == 0:
 				flushed++
-			case sq < segFilterMinNormal:
+			case sq < meshbool.SegFilterMinNormal:
 				gradual++
 			}
 		}
@@ -290,12 +292,12 @@ func TestSegFilterRejectsTheOverwhelmingMajority(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(3, 5))
 	a, b := r3.NewVec(-50, -50, -50), r3.NewVec(50, 50, 50)
-	f := newSegFilter(a, b, segAdmissionRadius2(0, 50))
+	f := meshbool.NewSegFilter(a, b, meshbool.SegAdmissionRadius2(0, 50))
 	rejected := 0
 	const n = 10000
 	for range n {
 		p := r3.NewVec(rng.Float64()*100-50, rng.Float64()*100-50, rng.Float64()*100-50)
-		if f.tooFar(p) {
+		if f.TooFar(p) {
 			rejected++
 		}
 	}
@@ -309,12 +311,12 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 		// Two roundings of a 100 mm coordinate, read as a 3D distance, is the
 		// worst (1) allows; the published radius must exceed it.
 		worst := 2 * proofbound.Radius3D(100*proofbound.UnitRoundoff)
-		require.Greater(t, segAdmissionRadius2(0, 100), worst*worst,
+		require.Greater(t, meshbool.SegAdmissionRadius2(0, 100), worst*worst,
 			`tau must cover two coordinate roundings at the mesh's own scale`)
 	})
 
 	t.Run(`the pass slack is carried on top`, func(t *testing.T) {
-		require.Greater(t, segAdmissionRadius2(1e-6, 100), segAdmissionRadius2(0, 100),
+		require.Greater(t, meshbool.SegAdmissionRadius2(1e-6, 100), meshbool.SegAdmissionRadius2(0, 100),
 			`the grid slack widens the threshold, never narrows it`)
 	})
 
@@ -322,20 +324,20 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 		// Below 2⁻⁵³⁷ the squared threshold underflows to zero. The filter's own
 		// error floor carries the guarantee from there: it rejects nothing until
 		// the distance passes 2⁻⁵⁰⁰, far above any tau that small.
-		tau2 := segAdmissionRadius2(0, 0x1p-500)
+		tau2 := meshbool.SegAdmissionRadius2(0, 0x1p-500)
 		require.Zero(t, tau2, `the case is only meaningful once the threshold has underflowed`)
-		f := newSegFilter(r3.Vec{}, r3.NewVec(0x1p-500, 0, 0), tau2)
-		require.Positive(t, f.vv, `the case is only meaningful on a segment the filter will project onto`)
-		require.False(t, f.tooFar(r3.NewVec(0, 0x1p-600, 0)),
+		f := meshbool.NewSegFilter(r3.Vec{}, r3.NewVec(0x1p-500, 0, 0), tau2)
+		require.Positive(t, f.Vv, `the case is only meaningful on a segment the filter will project onto`)
+		require.False(t, f.TooFar(r3.NewVec(0, 0x1p-600, 0)),
 			`the error floor must keep a rounding-scale candidate out of reach of a rejection`)
 	})
 
 	t.Run(`a threshold that overflows abstains instead of saturating`, func(t *testing.T) {
 		// Above τ ≈ 1.34e154 the square saturates. +Inf is the reading that
 		// rejects nothing, which is the only reading a saturated threshold has.
-		require.True(t, math.IsInf(segAdmissionRadius2(0, 1e300), 1),
+		require.True(t, math.IsInf(meshbool.SegAdmissionRadius2(0, 1e300), 1),
 			`a threshold whose square overflows must reject nothing`)
-		require.True(t, math.IsInf(segAdmissionRadius2(1e200, 100), 1),
+		require.True(t, math.IsInf(meshbool.SegAdmissionRadius2(1e200, 100), 1),
 			`the same holds when the slack is what overflows it`)
 	})
 
@@ -350,14 +352,14 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 			{`an infinite slack`, math.Inf(1), 100},
 			// A negative slack is the one that would bite: it cancels the
 			// rounding term instead of widening it, leaving a threshold BELOW
-			// the proven requirement, which rejects true hits. newConformScan
+			// the proven requirement, which rejects true hits. meshbool.NewConformScan
 			// builds its slack from a vector length and a positive cell width
 			// and so cannot produce one; the guard makes the precondition total.
 			{`a slack that cancels the rounding term`, -100 * 0x1p-50, 100},
 			{`a negative mesh extent`, 0, -100},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				require.True(t, math.IsInf(segAdmissionRadius2(tc.slack, tc.maxAbs), 1),
+				require.True(t, math.IsInf(meshbool.SegAdmissionRadius2(tc.slack, tc.maxAbs), 1),
 					`a threshold this function cannot state must reject nothing`)
 			})
 		}
@@ -441,11 +443,11 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 				rp := refPointOf(p)
 
 				want := refOrientSign(ra, rb, rc, rp)
-				got := xhpOrientSign(ha, hb, hc, proofbound.XhpOf(p))
+				got := meshbool.XhpOrientSign(ha, hb, hc, proofbound.XhpOf(p))
 				require.Equalf(t, want, got, `direct probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 
 				wantLerp := refOrientSign(ra, rb, rc, refLerp(ra, rp, tRat))
-				gotLerp := xhpOrientSign(ha, hb, hc, xhpLerp(ha, proofbound.XhpOf(p), tn, td))
+				gotLerp := meshbool.XhpOrientSign(ha, hb, hc, meshbool.XhpLerp(ha, proofbound.XhpOf(p), tn, td))
 				require.Equalf(t, wantLerp, gotLerp, `lerped probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 			}
 		}
@@ -453,7 +455,7 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 }
 
 // TestXHPLerpDenotesTheSameCoordinate pins the positivity invariant the sign
-// argument rests on: for every lerped probe xhpLerp produces, the exact
+// argument rests on: for every lerped probe meshbool.XhpLerp produces, the exact
 // rational it denotes (x/w, y/w, z/w) equals the coordinate an independent
 // math/big.Rat lerp computes for the identical t, and w is strictly positive.
 func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
@@ -468,9 +470,9 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 			for _, pz := range xhpGrid {
 				p := r3.NewVec(px, py, pz)
 				want := refLerp(ra, refPointOf(p), tRat)
-				got := xhpLerp(ha, proofbound.XhpOf(p), tn, td)
+				got := meshbool.XhpLerp(ha, proofbound.XhpOf(p), tn, td)
 				require.Positive(t, got.W.Sign(), `the homogeneous denominator must stay positive`)
-				gx, gy, gz := xhpRat(got)
+				gx, gy, gz := meshbool.XhpRat(got)
 				require.Zerof(t, gx.Cmp(want.x), `x at probe (%v,%v,%v)`, px, py, pz)
 				require.Zerof(t, gy.Cmp(want.y), `y at probe (%v,%v,%v)`, px, py, pz)
 				require.Zerof(t, gz.Cmp(want.z), `z at probe (%v,%v,%v)`, px, py, pz)
@@ -506,7 +508,7 @@ func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
 	sharedA, sharedB := r3.NewVec(1.5, 2.25, 0), r3.NewVec(-0.5, 1.25, 0)
 	assertXHPRatEqual(t, proofbound.XhpSub(proofbound.XhpOf(sharedA), proofbound.XhpOf(sharedB)),
 		refSub(refPointOf(sharedA), refPointOf(sharedB)))
-	gotCross := xhpCross(a, b)
+	gotCross := meshbool.XhpCross(a, b)
 	wantCross := refCross(ra, rb)
 	assertXHPRatEqual(t, gotCross, wantCross)
 	gotDot := new(big.Rat).SetFrac(proofbound.XhpDotNum(a, b), new(big.Int).Mul(a.W, b.W))
@@ -530,14 +532,14 @@ func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
 
 func assertXHPRatEqual(t *testing.T, got proofbound.Xhp, want refPoint) {
 	t.Helper()
-	x, y, z := xhpRat(got)
+	x, y, z := meshbool.XhpRat(got)
 	require.Zero(t, x.Cmp(want.x))
 	require.Zero(t, y.Cmp(want.y))
 	require.Zero(t, z.Cmp(want.z))
 }
 
 // TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
-// into: orientRat's materialised value and orientSignExact's plain integer
+// into: meshbool.OrientRat's materialised value and meshbool.OrientSignExact's plain integer
 // sign must agree over the same probes, sign consumer and value consumer
 // alike.
 func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
@@ -548,7 +550,7 @@ func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
 		for _, py := range xhpGrid {
 			for _, pz := range xhpGrid {
 				p := proofbound.XptOf(r3.NewVec(px, py, pz))
-				require.Equalf(t, orientSignExact(xa, xb, xc, p), orientRat(xa, xb, xc, p).Sign(),
+				require.Equalf(t, meshbool.OrientSignExact(xa, xb, xc, p), meshbool.OrientRat(xa, xb, xc, p).Sign(),
 					`probe (%v,%v,%v): the sign and the materialised value must agree`, px, py, pz)
 			}
 		}
@@ -573,8 +575,8 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 	t.Parallel()
 	a, b, c := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
-	depth1 := xhpLerp(a, b, tn, td)
-	depth2 := xhpLerp(depth1, c, tn, td)
+	depth1 := meshbool.XhpLerp(a, b, tn, td)
+	depth2 := meshbool.XhpLerp(depth1, c, tn, td)
 
 	six := big.NewInt(6)
 	scaled := proofbound.Xhp{
@@ -594,8 +596,8 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 	require.Equal(t, canonA.Z.String(), canonB.Z.String())
 	require.Equal(t, canonA.W.String(), canonB.W.String())
 
-	rx, ry, rz := xhpRat(depth2)
-	crx, cry, crz := xhpRat(canonA)
+	rx, ry, rz := meshbool.XhpRat(depth2)
+	crx, cry, crz := meshbool.XhpRat(canonA)
 	require.Zero(t, rx.Cmp(crx), `canonicalising must not change the denoted x`)
 	require.Zero(t, ry.Cmp(cry), `canonicalising must not change the denoted y`)
 	require.Zero(t, rz.Cmp(crz), `canonicalising must not change the denoted z`)
@@ -640,7 +642,7 @@ func TestXHPDenominatorStaysBounded(t *testing.T) {
 	}
 	tn, td := big.NewInt(37), big.NewInt(91)
 	for _, target := range targets {
-		p = proofbound.XhpStripTwosOwned(xhpLerp(p, proofbound.XhpOf(target), tn, td))
+		p = proofbound.XhpStripTwosOwned(meshbool.XhpLerp(p, proofbound.XhpOf(target), tn, td))
 	}
 	require.Less(t, p.W.BitLen(), 4096,
 		`the stripped denominator must stay far below the unreduced 14113-bit growth at the same depth`)
@@ -653,17 +655,17 @@ func TestPolyArea2SignAgreesWithRationalArea(t *testing.T) {
 	huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 700), big.NewInt(3))
 	large := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 699), big.NewInt(5))
 	near := new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(2, 1), large), r(1, 97))
-	cases := [][]xp2{
-		{newXP2(zero, zero), newXP2(r(1, 3), r(2, 7)), newXP2(r(5, 11), r(3, 13))},
-		{newXP2(zero, zero), newXP2(huge, large), newXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), near)},
-		{newXP2(zero, zero), newXP2(huge, large),
-			newXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), new(big.Rat).Mul(big.NewRat(2, 1), large))},
+	cases := [][]meshbool.Xp2{
+		{meshbool.NewXP2(zero, zero), meshbool.NewXP2(r(1, 3), r(2, 7)), meshbool.NewXP2(r(5, 11), r(3, 13))},
+		{meshbool.NewXP2(zero, zero), meshbool.NewXP2(huge, large), meshbool.NewXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), near)},
+		{meshbool.NewXP2(zero, zero), meshbool.NewXP2(huge, large),
+			meshbool.NewXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), new(big.Rat).Mul(big.NewRat(2, 1), large))},
 	}
 	rng := rand.New(rand.NewPCG(29, 31))
 	for range 64 {
-		poly := make([]xp2, 3+rng.IntN(6))
+		poly := make([]meshbool.Xp2, 3+rng.IntN(6))
 		for i := range poly {
-			poly[i] = newXP2(
+			poly[i] = meshbool.NewXP2(
 				r(int64(rng.IntN(2001)-1000), int64(2*rng.IntN(31)+1)),
 				r(int64(rng.IntN(2001)-1000), int64(2*rng.IntN(31)+1)),
 			)
@@ -671,13 +673,13 @@ func TestPolyArea2SignAgreesWithRationalArea(t *testing.T) {
 		cases = append(cases, poly)
 	}
 	for _, poly := range cases {
-		for _, points := range [][]xp2{poly, {poly[2], poly[1], poly[0]}} {
+		for _, points := range [][]meshbool.Xp2{poly, {poly[2], poly[1], poly[0]}} {
 			want := new(big.Rat)
 			for i, a := range points {
 				b := points[(i+1)%len(points)]
-				want.Add(want, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(b.u, a.v)))
+				want.Add(want, new(big.Rat).Sub(new(big.Rat).Mul(a.U, b.V), new(big.Rat).Mul(b.U, a.V)))
 			}
-			got, err := polyArea2Sign(proofbound.NewWorkBudget(t.Context()), points)
+			got, err := meshbool.PolyArea2Sign(proofbound.NewWorkBudget(t.Context()), points)
 			require.NoError(t, err)
 			require.Equal(t, want.Sign(), got)
 		}
@@ -693,34 +695,34 @@ func BenchmarkOrientSignExact(b *testing.B) {
 	p := proofbound.XhpOf(r3.NewVec(0.3, -1, 2.75))
 	b.ResetTimer()
 	for b.Loop() {
-		xhpOrientSign(ta, tb, tc, p)
+		meshbool.XhpOrientSign(ta, tb, tc, p)
 	}
 }
 
 // BenchmarkOrientSignExactLerped is BenchmarkOrientSignExact with an
-// xhpLerp-derived probe in place of a float-derived one (baseline:
+// meshbool.XhpLerp-derived probe in place of a float-derived one (baseline:
 // 15.0us/199 allocs/op — indistinguishable from the dyadic case, which is
 // what disproves the "non-dyadic denominators" half of the original claim).
 func BenchmarkOrientSignExactLerped(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
-	p := xhpLerp(tb, tc, tn, td)
+	p := meshbool.XhpLerp(tb, tc, tn, td)
 	b.ResetTimer()
 	for b.Loop() {
-		xhpOrientSign(ta, tb, tc, p)
+		meshbool.XhpOrientSign(ta, tb, tc, p)
 	}
 }
 
-// BenchmarkPlaneCrossingChain measures the planeCrossings → predicate path:
+// BenchmarkPlaneCrossingChain measures the meshbool.PlaneCrossings → predicate path:
 // two lerps feeding one orient sign (baseline: 26.1us/348 allocs/op).
 func BenchmarkPlaneCrossingChain(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p1 := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-		p2 := proofbound.XhpStripTwosOwned(xhpLerp(tb, tc, tn, td))
-		xhpOrientSign(ta, p1, p2, tc)
+		p1 := proofbound.XhpStripTwosOwned(meshbool.XhpLerp(ta, tb, tn, td))
+		p2 := proofbound.XhpStripTwosOwned(meshbool.XhpLerp(tb, tc, tn, td))
+		meshbool.XhpOrientSign(ta, p1, p2, tc)
 	}
 }
 
@@ -734,10 +736,10 @@ func BenchmarkLerpDepth3Orient(b *testing.B) {
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-		p = proofbound.XhpStripTwosOwned(xhpLerp(p, tc, tn, td))
-		p = proofbound.XhpStripTwosOwned(xhpLerp(p, ta, tn, td))
-		xhpOrientSign(ta, tb, tc, p)
+		p := proofbound.XhpStripTwosOwned(meshbool.XhpLerp(ta, tb, tn, td))
+		p = proofbound.XhpStripTwosOwned(meshbool.XhpLerp(p, tc, tn, td))
+		p = proofbound.XhpStripTwosOwned(meshbool.XhpLerp(p, ta, tn, td))
+		meshbool.XhpOrientSign(ta, tb, tc, p)
 	}
 }
 
@@ -750,8 +752,8 @@ func BenchmarkLerpDepth3Orient(b *testing.B) {
 func BenchmarkExactVertexKey(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
-	p1 := proofbound.XhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
-	p2 := proofbound.XhpStripTwosOwned(xhpLerp(p1, tc, tn, td))
+	p1 := proofbound.XhpStripTwosOwned(meshbool.XhpLerp(ta, tb, tn, td))
+	p2 := proofbound.XhpStripTwosOwned(meshbool.XhpLerp(p1, tc, tn, td))
 	b.ResetTimer()
 	for b.Loop() {
 		_ = proofbound.Xpt(p2).Key()
@@ -759,71 +761,71 @@ func BenchmarkExactVertexKey(b *testing.B) {
 }
 
 // This section is fu158 task 1's own proof obligation
-// (.tmp/followup-tasks/fu158-tasks.md §4/§5): floatInterval's five operations
+// (.tmp/followup-tasks/fu158-tasks.md §4/§5): meshbool.FloatInterval's five operations
 // and its contains/disjoint tests, first on hand-picked values, then a
 // randomized proof that its arithmetic really does enclose the exact
 // (big.Rat) value of the same expression — the same "reject-only, never
-// argued" discipline segFilter's own tests above pin for the conforming
+// argued" discipline meshbool.SegFilter's own tests above pin for the conforming
 // pass's segment filter.
 
-// TestFloatIntervalArithmeticSanity exercises floatInterval's own five
+// TestFloatIntervalArithmeticSanity exercises meshbool.FloatInterval's own five
 // operations and its contains/disjoint tests directly, on hand-picked values,
 // ahead of the randomized enclosure proof below.
 func TestFloatIntervalArithmeticSanity(t *testing.T) {
 	t.Parallel()
-	a := floatInterval{lo: 1, hi: 2}
-	b := floatInterval{lo: 3, hi: 4}
+	a := meshbool.FloatInterval{Lo: 1, Hi: 2}
+	b := meshbool.FloatInterval{Lo: 3, Hi: 4}
 
-	require.True(t, a.disjoint(b))
-	require.False(t, a.disjoint(floatInterval{lo: 1.5, hi: 5}))
-	require.True(t, a.contains(1.5))
-	require.False(t, a.contains(2.5))
+	require.True(t, a.Disjoint(b))
+	require.False(t, a.Disjoint(meshbool.FloatInterval{Lo: 1.5, Hi: 5}))
+	require.True(t, a.Contains(1.5))
+	require.False(t, a.Contains(2.5))
 
-	sum := a.add(b)
-	require.LessOrEqual(t, sum.lo, 4.0)
-	require.GreaterOrEqual(t, sum.hi, 6.0)
+	sum := a.Add(b)
+	require.LessOrEqual(t, sum.Lo, 4.0)
+	require.GreaterOrEqual(t, sum.Hi, 6.0)
 
-	diff := b.sub(a)
-	require.LessOrEqual(t, diff.lo, 1.0)
-	require.GreaterOrEqual(t, diff.hi, 3.0)
+	diff := b.Sub(a)
+	require.LessOrEqual(t, diff.Lo, 1.0)
+	require.GreaterOrEqual(t, diff.Hi, 3.0)
 
-	prod := a.mul(b)
-	require.LessOrEqual(t, prod.lo, 3.0)
-	require.GreaterOrEqual(t, prod.hi, 8.0)
+	prod := a.Mul(b)
+	require.LessOrEqual(t, prod.Lo, 3.0)
+	require.GreaterOrEqual(t, prod.Hi, 8.0)
 	for _, tc := range []struct {
 		name     string
-		a, b     floatInterval
+		a, b     meshbool.FloatInterval
 		wantLo   float64
 		wantHigh float64
 	}{
-		{name: "positive-positive", a: floatInterval{1, 2}, b: floatInterval{3, 4}, wantLo: 3, wantHigh: 8},
-		{name: "positive-negative", a: floatInterval{1, 2}, b: floatInterval{-4, -3}, wantLo: -8, wantHigh: -3},
-		{name: "positive-spanning", a: floatInterval{1, 2}, b: floatInterval{-4, 3}, wantLo: -8, wantHigh: 6},
-		{name: "negative-positive", a: floatInterval{-2, -1}, b: floatInterval{3, 4}, wantLo: -8, wantHigh: -3},
-		{name: "negative-negative", a: floatInterval{-2, -1}, b: floatInterval{-4, -3}, wantLo: 3, wantHigh: 8},
-		{name: "negative-spanning", a: floatInterval{-2, -1}, b: floatInterval{-4, 3}, wantLo: -6, wantHigh: 8},
-		{name: "spanning-positive", a: floatInterval{-2, 1}, b: floatInterval{3, 4}, wantLo: -8, wantHigh: 4},
-		{name: "spanning-negative", a: floatInterval{-2, 1}, b: floatInterval{-4, -3}, wantLo: -4, wantHigh: 8},
-		{name: "spanning-spanning", a: floatInterval{-2, 1}, b: floatInterval{-4, 3}, wantLo: -6, wantHigh: 8},
+		{name: "positive-positive", a: meshbool.FloatInterval{Lo: 1, Hi: 2}, b: meshbool.FloatInterval{Lo: 3, Hi: 4}, wantLo: 3, wantHigh: 8},
+		{name: "positive-negative", a: meshbool.FloatInterval{Lo: 1, Hi: 2}, b: meshbool.FloatInterval{Lo: -4, Hi: -3}, wantLo: -8, wantHigh: -3},
+		{name: "positive-spanning", a: meshbool.FloatInterval{Lo: 1, Hi: 2}, b: meshbool.FloatInterval{Lo: -4, Hi: 3}, wantLo: -8, wantHigh: 6},
+		{name: "negative-positive", a: meshbool.FloatInterval{Lo: -2, Hi: -1}, b: meshbool.FloatInterval{Lo: 3, Hi: 4}, wantLo: -8, wantHigh: -3},
+		{name: "negative-negative", a: meshbool.FloatInterval{Lo: -2, Hi: -1}, b: meshbool.FloatInterval{Lo: -4, Hi: -3}, wantLo: 3, wantHigh: 8},
+		{name: "negative-spanning", a: meshbool.FloatInterval{Lo: -2, Hi: -1}, b: meshbool.FloatInterval{Lo: -4, Hi: 3}, wantLo: -6, wantHigh: 8},
+		{name: "spanning-positive", a: meshbool.FloatInterval{Lo: -2, Hi: 1}, b: meshbool.FloatInterval{Lo: 3, Hi: 4}, wantLo: -8, wantHigh: 4},
+		{name: "spanning-negative", a: meshbool.FloatInterval{Lo: -2, Hi: 1}, b: meshbool.FloatInterval{Lo: -4, Hi: -3}, wantLo: -4, wantHigh: 8},
+		{name: "spanning-spanning", a: meshbool.FloatInterval{Lo: -2, Hi: 1}, b: meshbool.FloatInterval{Lo: -4, Hi: 3}, wantLo: -6, wantHigh: 8},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.a.mul(tc.b)
-			require.LessOrEqual(t, got.lo, tc.wantLo)
-			require.GreaterOrEqual(t, got.hi, tc.wantHigh)
+			got := tc.a.Mul(tc.b)
+			require.LessOrEqual(t, got.Lo, tc.wantLo)
+			require.GreaterOrEqual(t, got.Hi, tc.wantHigh)
 		})
 	}
 
-	quot := b.div(a)
-	require.LessOrEqual(t, quot.lo, 1.5)
-	require.GreaterOrEqual(t, quot.hi, 4.0)
+	quot := b.Div(a)
+	require.LessOrEqual(t, quot.Lo, 1.5)
+	require.GreaterOrEqual(t, quot.Hi, 4.0)
 
-	straddling := floatInterval{lo: -1, hi: 1}
-	require.True(t, a.div(straddling).abstains(),
+	straddling := meshbool.FloatInterval{Lo: -1, Hi: 1}
+	require.True(t, a.Div(straddling).Abstains(),
 		`a denominator interval containing zero must abstain, never resolve`)
 
-	require.True(t, fivPoint(math.NaN()).abstains())
-	require.True(t, fivPoint(math.Inf(1)).abstains())
-	require.True(t, floatInterval{lo: math.Inf(1), hi: math.Inf(1)}.add(a).abstains())
+	require.True(t, meshbool.FivPoint(math.NaN()).Abstains())
+	require.True(t, meshbool.FivPoint(math.Inf(1)).Abstains())
+	require.True(t, meshbool.FloatInterval{Lo: math.Inf(1), Hi: math.Inf(1)}.Add(a).Abstains())
 }
 
 func TestFloatIntervalNextMatchesMath(t *testing.T) {
@@ -849,8 +851,8 @@ func TestFloatIntervalNextMatchesMath(t *testing.T) {
 	for _, value := range values {
 		wantDown := math.Float64bits(math.Nextafter(value, math.Inf(-1)))
 		wantUp := math.Float64bits(math.Nextafter(value, math.Inf(1)))
-		require.Equal(t, wantDown, math.Float64bits(fivNextDown(value)))
-		require.Equal(t, wantUp, math.Float64bits(fivNextUp(value)))
+		require.Equal(t, wantDown, math.Float64bits(meshbool.FivNextDown(value)))
+		require.Equal(t, wantUp, math.Float64bits(meshbool.FivNextUp(value)))
 	}
 }
 
@@ -867,25 +869,25 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 	for range 5000 {
 		a, b, c, d := sample(), sample(), sample(), sample()
 
-		got := fivPoint(a).mul(fivPoint(b)).sub(fivPoint(c).mul(fivPoint(d)))
+		got := meshbool.FivPoint(a).Mul(meshbool.FivPoint(b)).Sub(meshbool.FivPoint(c).Mul(meshbool.FivPoint(d)))
 		exact := new(big.Rat).Sub(
 			new(big.Rat).Mul(freeform.MustRatOf(a), freeform.MustRatOf(b)),
 			new(big.Rat).Mul(freeform.MustRatOf(c), freeform.MustRatOf(d)),
 		)
-		require.False(t, got.abstains(), `a finite product/difference must never abstain`)
-		require.LessOrEqual(t, freeform.MustRatOf(got.lo).Cmp(exact), 0)
-		require.GreaterOrEqual(t, freeform.MustRatOf(got.hi).Cmp(exact), 0)
+		require.False(t, got.Abstains(), `a finite product/difference must never abstain`)
+		require.LessOrEqual(t, freeform.MustRatOf(got.Lo).Cmp(exact), 0)
+		require.GreaterOrEqual(t, freeform.MustRatOf(got.Hi).Cmp(exact), 0)
 
 		if a == b {
 			continue // a/(a-b) is undefined; the filter's own div guard covers it
 		}
-		gotDiv := fivPoint(a).div(fivPoint(a).sub(fivPoint(b)))
-		if gotDiv.abstains() {
+		gotDiv := meshbool.FivPoint(a).Div(meshbool.FivPoint(a).Sub(meshbool.FivPoint(b)))
+		if gotDiv.Abstains() {
 			continue // an abstained bound trivially encloses every value
 		}
 		exactDiv := new(big.Rat).Quo(freeform.MustRatOf(a), new(big.Rat).Sub(freeform.MustRatOf(a), freeform.MustRatOf(b)))
-		require.LessOrEqual(t, freeform.MustRatOf(gotDiv.lo).Cmp(exactDiv), 0)
-		require.GreaterOrEqual(t, freeform.MustRatOf(gotDiv.hi).Cmp(exactDiv), 0)
+		require.LessOrEqual(t, freeform.MustRatOf(gotDiv.Lo).Cmp(exactDiv), 0)
+		require.GreaterOrEqual(t, freeform.MustRatOf(gotDiv.Hi).Cmp(exactDiv), 0)
 	}
 }
 
@@ -900,27 +902,27 @@ func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
 		proofbound.XptOf(r3.NewVec(-2.0, 3.125, 5.5)),
 	}
 	for _, axes := range [][2]int{{0, 1}, {2, 0}, {1, 2}} {
-		hom := [3]xp2{
-			newXP2FromXpt(points[0], axes[0], axes[1]),
-			newXP2FromXpt(points[1], axes[0], axes[1]),
-			newXP2FromXpt(points[2], axes[0], axes[1]),
+		hom := [3]meshbool.Xp2{
+			meshbool.NewXP2FromXpt(points[0], axes[0], axes[1]),
+			meshbool.NewXP2FromXpt(points[1], axes[0], axes[1]),
+			meshbool.NewXP2FromXpt(points[2], axes[0], axes[1]),
 		}
-		rat := [3]xp2{
-			newXP2(ratCoordOf(points[0], axes[0]), ratCoordOf(points[0], axes[1])),
-			newXP2(ratCoordOf(points[1], axes[0]), ratCoordOf(points[1], axes[1])),
-			newXP2(ratCoordOf(points[2], axes[0]), ratCoordOf(points[2], axes[1])),
+		rat := [3]meshbool.Xp2{
+			meshbool.NewXP2(meshbool.RatCoordOf(points[0], axes[0]), meshbool.RatCoordOf(points[0], axes[1])),
+			meshbool.NewXP2(meshbool.RatCoordOf(points[1], axes[0]), meshbool.RatCoordOf(points[1], axes[1])),
+			meshbool.NewXP2(meshbool.RatCoordOf(points[2], axes[0]), meshbool.RatCoordOf(points[2], axes[1])),
 		}
-		want := cross2x(rat[0], rat[1], rat[2])
-		got := cross2x(hom[0], hom[1], hom[2])
+		want := meshbool.Cross2x(rat[0], rat[1], rat[2])
+		got := meshbool.Cross2x(hom[0], hom[1], hom[2])
 		require.Zero(t, got.Cmp(want), "projection axes %v must preserve the exact cross product", axes)
-		require.Equal(t, cross2xSign(rat[0], rat[1], rat[2]), cross2xSign(hom[0], hom[1], hom[2]))
+		require.Equal(t, meshbool.Cross2xSign(rat[0], rat[1], rat[2]), meshbool.Cross2xSign(hom[0], hom[1], hom[2]))
 	}
 }
 
 // referenceMeshParityContext is the PRE-OPTIMIZATION reference copy of
-// meshParityContext, captured verbatim before the query projection was hoisted
+// meshbool.MeshParityContext, captured verbatim before the query projection was hoisted
 // out of the triangle loop: same arithmetic, same branch order, same returns,
-// and the same per-triangle newXP2 construction the hoist removes.
+// and the same per-triangle meshbool.NewXP2 construction the hoist removes.
 //
 // It is frozen on purpose. A later production edit must NEVER be mirrored into
 // this function — the whole value of the comparison is that the reference
@@ -928,7 +930,7 @@ func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
 // and this function disagree, production changed a classification and the
 // change is wrong, not this copy.
 func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
-	for _, ray := range axisRays {
+	for _, ray := range meshbool.AxisRays {
 		crossings := 0
 		ambiguous := false
 		onBoundary := false
@@ -940,13 +942,13 @@ func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r
 			}
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-			pa := newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
-			qa := newXP2(freeform.MustRatOf(coordOf(a, ray.u)), freeform.MustRatOf(coordOf(a, ray.v)))
-			qb := newXP2(freeform.MustRatOf(coordOf(b, ray.u)), freeform.MustRatOf(coordOf(b, ray.v)))
-			qc := newXP2(freeform.MustRatOf(coordOf(c, ray.u)), freeform.MustRatOf(coordOf(c, ray.v)))
-			s1 := cross2xSign(qa, qb, pa)
-			s2 := cross2xSign(qb, qc, pa)
-			s3 := cross2xSign(qc, qa, pa)
+			pa := meshbool.NewXP2(meshbool.RatCoordOf(p, ray.U), meshbool.RatCoordOf(p, ray.V))
+			qa := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(a, ray.U)), freeform.MustRatOf(meshbool.CoordOf(a, ray.V)))
+			qb := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(b, ray.U)), freeform.MustRatOf(meshbool.CoordOf(b, ray.V)))
+			qc := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(c, ray.U)), freeform.MustRatOf(meshbool.CoordOf(c, ray.V)))
+			s1 := meshbool.Cross2xSign(qa, qb, pa)
+			s2 := meshbool.Cross2xSign(qb, qc, pa)
+			s3 := meshbool.Cross2xSign(qc, qa, pa)
 			neg := s1 < 0 || s2 < 0 || s3 < 0
 			pos := s1 > 0 || s2 > 0 || s3 > 0
 			if neg && pos {
@@ -961,14 +963,14 @@ func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
 			xa, xb, xc := proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c)
-			n := xcross(proofbound.Xsub(xb, xa), proofbound.Xsub(xc, xa))
-			nAxis := xIntCoordOf(n, ray.axis)
+			n := meshbool.Xcross(proofbound.Xsub(xb, xa), proofbound.Xsub(xc, xa))
+			nAxis := meshbool.XIntCoordOf(n, ray.Axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true
 				break
 			}
 			tNum := proofbound.XdotNum(proofbound.Xsub(xa, p), n)
-			switch s := tNum.Sign() * nAxis.Sign() * ray.dir; {
+			switch s := tNum.Sign() * nAxis.Sign() * ray.Dir; {
 			case s > 0:
 				crossings++
 			case tNum.Sign() == 0:
@@ -1117,7 +1119,7 @@ func parityCubeQueries(o r3.Vec) []parityCase {
 		{`vertex`, proofbound.XptOf(v[0])},
 		{`one ulp inside the face`, proofbound.XptOf(r3.NewVec(math.Nextafter(o.X, o.X+1), o.Y+0.25, o.Z+0.375))},
 		{`one ulp outside the face`, proofbound.XptOf(r3.NewVec(math.Nextafter(o.X, o.X-1), o.Y+0.25, o.Z+0.375))},
-		{`facet centroid`, xCentroid(proofbound.XptOf(v[0]), proofbound.XptOf(v[2]), proofbound.XptOf(v[1]))},
+		{`facet centroid`, meshbool.XCentroid(proofbound.XptOf(v[0]), proofbound.XptOf(v[2]), proofbound.XptOf(v[1]))},
 		{`rational interior`, xptFromRat(
 			parityRat(o.X, 1, 3), parityRat(o.Y, 1, 7), parityRat(o.Z, 5, 11))},
 	}
@@ -1162,7 +1164,7 @@ func parityTetraQueries() []parityCase {
 		{`exterior`, proofbound.XptOf(r3.NewVec(2, 0.1875, 0.25))},
 		{`slanted face`, proofbound.XptOf(r3.NewVec(0.25, 0.25, 0.5))},
 		{`vertex`, proofbound.XptOf(r3.NewVec(0, 0, 0))},
-		{`facet centroid`, xCentroid(proofbound.XptOf(v[1]), proofbound.XptOf(v[2]), proofbound.XptOf(v[3]))},
+		{`facet centroid`, meshbool.XCentroid(proofbound.XptOf(v[1]), proofbound.XptOf(v[2]), proofbound.XptOf(v[3]))},
 		{`rational interior`, xptFromRat(big.NewRat(1, 7), big.NewRat(1, 11), big.NewRat(1, 13))},
 	}
 }
@@ -1178,15 +1180,15 @@ func requireParityMatches(ctx context.Context, t *testing.T, p proofbound.Xpt, v
 	wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, p, verts, tris, subset)
 	want := parityOutcome{inside: wantIn, onBoundary: wantBoundary, err: wantErr}
 
-	gotIn, gotBoundary, gotErr := meshParityContext(ctx, p, verts, tris, subset)
+	gotIn, gotBoundary, gotErr := meshbool.MeshParityContext(ctx, p, verts, tris, subset)
 	requireParityOutcome(t, `raw wrapper`, want,
 		parityOutcome{inside: gotIn, onBoundary: gotBoundary, err: gotErr})
 
-	prepared := newParityMesh(verts, tris)
-	coldIn, coldBoundary, coldErr := meshParityPreparedContext(ctx, p, prepared, subset)
+	prepared := meshbool.NewParityMesh(verts, tris)
+	coldIn, coldBoundary, coldErr := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 	requireParityOutcome(t, `prepared cold`, want,
 		parityOutcome{inside: coldIn, onBoundary: coldBoundary, err: coldErr})
-	warmIn, warmBoundary, warmErr := meshParityPreparedContext(ctx, p, prepared, subset)
+	warmIn, warmBoundary, warmErr := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 	requireParityOutcome(t, `prepared warm`, want,
 		parityOutcome{inside: warmIn, onBoundary: warmBoundary, err: warmErr})
 
@@ -1422,10 +1424,10 @@ func parityReuseFixtures() []parityReuseFixture {
 
 // requirePreparedMatchesReference requires one query against one prepared
 // object to reproduce the frozen reference on the same buffers.
-func requirePreparedMatchesReference(ctx context.Context, t *testing.T, arm string, prepared *parityMesh, p proofbound.Xpt, subset []int) {
+func requirePreparedMatchesReference(ctx context.Context, t *testing.T, arm string, prepared *meshbool.ParityMesh, p proofbound.Xpt, subset []int) {
 	t.Helper()
-	wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, p, prepared.verts, prepared.tris, subset)
-	gotIn, gotBoundary, gotErr := meshParityPreparedContext(ctx, p, prepared, subset)
+	wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, p, prepared.Verts, prepared.Tris, subset)
+	gotIn, gotBoundary, gotErr := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 	requireParityOutcome(t, arm,
 		parityOutcome{inside: wantIn, onBoundary: wantBoundary, err: wantErr},
 		parityOutcome{inside: gotIn, onBoundary: gotBoundary, err: gotErr})
@@ -1433,10 +1435,10 @@ func requirePreparedMatchesReference(ctx context.Context, t *testing.T, arm stri
 
 // parityAllocatedAxes reports which of the three axis projection slices the
 // cache has allocated at all.
-func parityAllocatedAxes(pm *parityMesh) [3]bool {
+func parityAllocatedAxes(pm *meshbool.ParityMesh) [3]bool {
 	var out [3]bool
 	for axis := range out {
-		out[axis] = pm.projections[axis] != nil
+		out[axis] = pm.Projections[axis] != nil
 	}
 	return out
 }
@@ -1444,10 +1446,10 @@ func parityAllocatedAxes(pm *parityMesh) [3]bool {
 // parityFilledVertices returns, in index order, the vertices whose projection
 // on axis is materialized. A nil u is the unfilled marker; an exact zero
 // coordinate is a non-nil rational, so a filled entry never reads as unfilled.
-func parityFilledVertices(pm *parityMesh, axis int) []int {
+func parityFilledVertices(pm *meshbool.ParityMesh, axis int) []int {
 	var out []int
-	for vi, e := range pm.projections[axis] {
-		if e.u != nil {
+	for vi, e := range pm.Projections[axis] {
+		if e.U != nil {
 			out = append(out, vi)
 		}
 	}
@@ -1464,15 +1466,15 @@ type parityCacheEntry struct {
 }
 
 // parityCacheSnapshot records every materialized entry of the cache.
-func parityCacheSnapshot(pm *parityMesh) []parityCacheEntry {
+func parityCacheSnapshot(pm *meshbool.ParityMesh) []parityCacheEntry {
 	var out []parityCacheEntry
-	for axis := range pm.projections {
+	for axis := range pm.Projections {
 		for _, vi := range parityFilledVertices(pm, axis) {
-			e := pm.projections[axis][vi]
+			e := pm.Projections[axis][vi]
 			out = append(out, parityCacheEntry{
 				axis: axis, vi: vi,
-				u: e.u, v: e.v,
-				us: e.u.RatString(), vs: e.v.RatString(),
+				u: e.U, v: e.V,
+				us: e.U.RatString(), vs: e.V.RatString(),
 			})
 		}
 	}
@@ -1482,16 +1484,16 @@ func parityCacheSnapshot(pm *parityMesh) []parityCacheEntry {
 // requireSnapshotPreserved requires every entry recorded earlier to still be
 // present, still be the SAME *big.Rat, and still hold the same value: a later
 // query must neither rebuild an entry nor use one as an arithmetic destination.
-func requireSnapshotPreserved(t *testing.T, want []parityCacheEntry, pm *parityMesh) {
+func requireSnapshotPreserved(t *testing.T, want []parityCacheEntry, pm *meshbool.ParityMesh) {
 	t.Helper()
 	require.NotEmpty(t, want, `the snapshot must cover at least one materialized entry`)
 	for _, e := range want {
-		require.NotNil(t, pm.projections[e.axis], `axis %d must still be allocated`, e.axis)
-		got := pm.projections[e.axis][e.vi]
-		require.Same(t, e.u, got.u, `axis %d vertex %d must keep its u rational`, e.axis, e.vi)
-		require.Same(t, e.v, got.v, `axis %d vertex %d must keep its v rational`, e.axis, e.vi)
-		require.Equal(t, e.us, got.u.RatString(), `axis %d vertex %d must keep its u value`, e.axis, e.vi)
-		require.Equal(t, e.vs, got.v.RatString(), `axis %d vertex %d must keep its v value`, e.axis, e.vi)
+		require.NotNil(t, pm.Projections[e.axis], `axis %d must still be allocated`, e.axis)
+		got := pm.Projections[e.axis][e.vi]
+		require.Same(t, e.u, got.U, `axis %d vertex %d must keep its u rational`, e.axis, e.vi)
+		require.Same(t, e.v, got.V, `axis %d vertex %d must keep its v rational`, e.axis, e.vi)
+		require.Equal(t, e.us, got.U.RatString(), `axis %d vertex %d must keep its u value`, e.axis, e.vi)
+		require.Equal(t, e.vs, got.V.RatString(), `axis %d vertex %d must keep its v value`, e.axis, e.vi)
 	}
 }
 
@@ -1524,7 +1526,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 			t.Run(fixture.name, func(t *testing.T) {
 				// ONE cache for the whole group: every later query in it reads
 				// projections an earlier query materialized.
-				prepared := newParityMesh(fixture.verts, fixture.tris)
+				prepared := meshbool.NewParityMesh(fixture.verts, fixture.tris)
 				for _, subset := range fixture.subsets {
 					for _, c := range fixture.queries {
 						requirePreparedMatchesReference(ctx, t,
@@ -1544,10 +1546,10 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		for i := range rest {
 			rest[i] += 12
 		}
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 		p := proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625))
 
-		firstIn, firstBoundary, firstErr := meshParityPreparedContext(ctx, p, prepared, first)
+		firstIn, firstBoundary, firstErr := meshbool.MeshParityPreparedContext(ctx, p, prepared, first)
 		require.NoError(t, firstErr)
 		require.True(t, firstIn, `the query is interior to the first cube`)
 		require.False(t, firstBoundary)
@@ -1560,7 +1562,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 			}
 		}
 
-		againIn, againBoundary, againErr := meshParityPreparedContext(ctx, p, prepared, first)
+		againIn, againBoundary, againErr := meshbool.MeshParityPreparedContext(ctx, p, prepared, first)
 		require.NoError(t, againErr, `the repeated query must not start failing`)
 		require.Equal(t, firstIn, againIn, `the repeated query must return its first answer`)
 		require.Equal(t, firstBoundary, againBoundary, `the repeated query must keep its boundary verdict`)
@@ -1585,13 +1587,13 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 			{`falls back to the third axis`, r3.NewVec(0.25, 0.75, 0.25), [3]bool{true, true, true}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				prepared := newParityMesh(verts, tris)
+				prepared := meshbool.NewParityMesh(verts, tris)
 				p := proofbound.XptOf(tc.query)
 				requirePreparedMatchesReference(ctx, t, tc.name, prepared, p, subset)
 				require.Equal(t, tc.axes, parityAllocatedAxes(prepared),
 					`only the axes actually swept may hold a projection slice`)
 
-				inside, onBoundary, err := meshParityPreparedContext(ctx, p, prepared, subset)
+				inside, onBoundary, err := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 				require.NoError(t, err)
 				require.True(t, inside, `the query is interior to the unit cube`)
 				require.False(t, onBoundary)
@@ -1602,7 +1604,7 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 	t.Run(`cached rationals survive later queries`, func(t *testing.T) {
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
 		subset := parityIdentitySubset(len(tris))
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 
 		// Sweep all three axes first, so the snapshot covers every slot.
 		requirePreparedMatchesReference(ctx, t, `seed`, prepared,
@@ -1618,8 +1620,8 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 
 	t.Run(`two prepared meshes keep their own coordinates`, func(t *testing.T) {
 		second := r3.NewVec(3, 0, 0)
-		firstMesh := newParityMesh(parityCubeVerts(origin), parityCubeTris(0))
-		secondMesh := newParityMesh(parityCubeVerts(second), parityCubeTris(0))
+		firstMesh := meshbool.NewParityMesh(parityCubeVerts(origin), parityCubeTris(0))
+		secondMesh := meshbool.NewParityMesh(parityCubeVerts(second), parityCubeTris(0))
 		subset := parityIdentitySubset(12)
 
 		for _, c := range parityCubeQueries(origin) {
@@ -1634,11 +1636,11 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		// Vertex 6 is (1, 1, 1) in the first mesh and (4, 1, 1) in the second.
 		// Axis 0 projects onto (y, z), which the offset leaves alone, so the
 		// separation shows on an axis the offset does move.
-		firstIn, _, err := meshParityPreparedContext(ctx,
+		firstIn, _, err := meshbool.MeshParityPreparedContext(ctx,
 			proofbound.XptOf(r3.NewVec(3.25, 0.375, 0.5625)), firstMesh, subset)
 		require.NoError(t, err)
 		require.False(t, firstIn, `a point in the second cube is outside the first`)
-		secondIn, _, err := meshParityPreparedContext(ctx,
+		secondIn, _, err := meshbool.MeshParityPreparedContext(ctx,
 			proofbound.XptOf(r3.NewVec(3.25, 0.375, 0.5625)), secondMesh, subset)
 		require.NoError(t, err)
 		require.True(t, secondIn, `and interior to the second`)
@@ -1646,8 +1648,8 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 
 	t.Run(`an empty subset allocates nothing`, func(t *testing.T) {
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
-		prepared := newParityMesh(verts, tris)
-		inside, onBoundary, err := meshParityPreparedContext(ctx,
+		prepared := meshbool.NewParityMesh(verts, tris)
+		inside, onBoundary, err := meshbool.MeshParityPreparedContext(ctx,
 			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, nil)
 		require.NoError(t, err)
 		require.False(t, inside)
@@ -1661,9 +1663,9 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		cancel()
 		verts, tris := parityCubeVerts(origin), parityCubeTris(0)
 		subset := parityIdentitySubset(len(tris))
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 
-		_, _, err := meshParityPreparedContext(canceled,
+		_, _, err := meshbool.MeshParityPreparedContext(canceled,
 			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), prepared, subset)
 		require.ErrorIs(t, err, context.Canceled, `a nonempty subset observes the cancellation`)
 		require.Equal(t, [3]bool{false, false, false}, parityAllocatedAxes(prepared),
@@ -1674,13 +1676,13 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		second := r3.NewVec(3, 0, 0)
 		verts := append(parityCubeVerts(origin), parityCubeVerts(second)...)
 		tris := append(parityCubeTris(0), parityCubeTris(8)...)
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 
 		requirePreparedMatchesReference(ctx, t, `first component`, prepared,
 			proofbound.XptOf(r3.NewVec(0.25, 0.375, 0.5625)), parityIdentitySubset(12))
 
-		for axis := range prepared.projections {
-			if prepared.projections[axis] == nil {
+		for axis := range prepared.Projections {
+			if prepared.Projections[axis] == nil {
 				continue
 			}
 			require.Equal(t, []int{0, 1, 2, 3, 4, 5, 6, 7}, parityFilledVertices(prepared, axis),
@@ -1700,10 +1702,10 @@ func TestPreparedParityProjectionReuse(t *testing.T) {
 		_, _, wantErr := referenceMeshParityContext(refCtx, p, verts, tris, subset)
 		require.ErrorIs(t, wantErr, context.Canceled, `the reference stops mid-scan`)
 
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 		gotCtx := &parityCancelAfterErr{Context: ctx, clean: 1}
 		//nolint:contextcheck // same wrapper, its own counter, so both arms stop at the same facet.
-		_, _, gotErr := meshParityPreparedContext(gotCtx, p, prepared, subset)
+		_, _, gotErr := meshbool.MeshParityPreparedContext(gotCtx, p, prepared, subset)
 		require.ErrorIs(t, gotErr, context.Canceled, `the prepared kernel stops mid-scan too`)
 		require.Equal(t, wantErr.Error(), gotErr.Error(), `and reports the same error`)
 		require.NotEmpty(t, parityFilledVertices(prepared, 0),
@@ -1756,7 +1758,7 @@ func BenchmarkParityQueryProjection(b *testing.B) {
 		fn   func(context.Context, proofbound.Xpt, []r3.Vec, [][3]int, []int) (bool, bool, error)
 	}{
 		{`reference`, referenceMeshParityContext},
-		{`production`, meshParityContext},
+		{`production`, meshbool.MeshParityContext},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
 			b.ReportAllocs()
@@ -1768,10 +1770,10 @@ func BenchmarkParityQueryProjection(b *testing.B) {
 	}
 
 	b.Run(`prepared warm`, func(b *testing.B) {
-		prepared := newParityMesh(verts, tris)
+		prepared := meshbool.NewParityMesh(verts, tris)
 		b.ReportAllocs()
 		for b.Loop() {
-			inside, onBoundary, err := meshParityPreparedContext(ctx, p, prepared, subset)
+			inside, onBoundary, err := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 			requireBenchInside(b, inside, onBoundary, err)
 		}
 	})
@@ -1779,7 +1781,7 @@ func BenchmarkParityQueryProjection(b *testing.B) {
 	b.Run(`prepared cold`, func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			inside, onBoundary, err := meshParityPreparedContext(ctx, p, newParityMesh(verts, tris), subset)
+			inside, onBoundary, err := meshbool.MeshParityPreparedContext(ctx, p, meshbool.NewParityMesh(verts, tris), subset)
 			requireBenchInside(b, inside, onBoundary, err)
 		}
 	})
@@ -1828,10 +1830,10 @@ func parityScatterMesh(side int) ([]r3.Vec, [][3]int) {
 // parityProjectedCorners returns one facet's three projected corners as the
 // exact rational pairs the parity kernel classifies against, built the frozen
 // reference's way rather than through the cache under test.
-func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]xp2 {
-	var out [3]xp2
+func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]meshbool.Xp2 {
+	var out [3]meshbool.Xp2
 	for k, vi := range tri {
-		out[k] = newXP2(freeform.MustRatOf(coordOf(verts[vi], u)), freeform.MustRatOf(coordOf(verts[vi], v)))
+		out[k] = meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(verts[vi], u)), freeform.MustRatOf(meshbool.CoordOf(verts[vi], v)))
 	}
 	return out
 }
@@ -1841,11 +1843,11 @@ func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]xp2 {
 // answered.
 func parityFloatAreaAbstains(verts []r3.Vec, tri [3]int, u, v int) bool {
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-	au, av := coordOf(a, u), coordOf(a, v)
-	bu, bv := coordOf(b, u), coordOf(b, v)
-	cu, cv := coordOf(c, u), coordOf(c, v)
+	au, av := meshbool.CoordOf(a, u), meshbool.CoordOf(a, v)
+	bu, bv := meshbool.CoordOf(b, u), meshbool.CoordOf(b, v)
+	cu, cv := meshbool.CoordOf(c, u), meshbool.CoordOf(c, v)
 	left, right := (bu-au)*(cv-av), (bv-av)*(cu-au)
-	bound := parityAreaErrCoef*(math.Abs(left)+math.Abs(right)) + parityAreaFloor
+	bound := meshbool.ParityAreaErrCoef*(math.Abs(left)+math.Abs(right)) + meshbool.ParityAreaFloor
 	det := left - right
 	return !(det > bound || det < -bound)
 }
@@ -1884,22 +1886,22 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 	t.Run(`bounds and area match the exact projection`, func(t *testing.T) {
 		for _, fx := range parityBoxFixtures() {
 			t.Run(fx.name, func(t *testing.T) {
-				pm := newParityMesh(fx.verts, fx.tris)
-				for _, ray := range axisRays {
+				pm := meshbool.NewParityMesh(fx.verts, fx.tris)
+				for _, ray := range meshbool.AxisRays {
 					for ti := range fx.tris {
-						box := pm.buildFacetBox(ray.axis, ray.u, ray.v, ti)
-						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.u, ray.v)
-						require.True(t, box.built, `a built box must say so`)
-						require.Equal(t, math.Min(q[0].fu, math.Min(q[1].fu, q[2].fu)), box.minU,
-							`axis %d facet %d: minU is the smallest projected u`, ray.axis, ti)
-						require.Equal(t, math.Max(q[0].fu, math.Max(q[1].fu, q[2].fu)), box.maxU,
-							`axis %d facet %d: maxU is the largest projected u`, ray.axis, ti)
-						require.Equal(t, math.Min(q[0].fv, math.Min(q[1].fv, q[2].fv)), box.minV,
-							`axis %d facet %d: minV is the smallest projected v`, ray.axis, ti)
-						require.Equal(t, math.Max(q[0].fv, math.Max(q[1].fv, q[2].fv)), box.maxV,
-							`axis %d facet %d: maxV is the largest projected v`, ray.axis, ti)
-						require.Equal(t, cross2xSign(q[0], q[1], q[2]) != 0, box.nondegenerate,
-							`axis %d facet %d: nondegenerate must be the exact area sign`, ray.axis, ti)
+						box := pm.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.U, ray.V)
+						require.True(t, box.Built, `a built box must say so`)
+						require.Equal(t, math.Min(q[0].Fu, math.Min(q[1].Fu, q[2].Fu)), box.MinU,
+							`axis %d facet %d: minU is the smallest projected u`, ray.Axis, ti)
+						require.Equal(t, math.Max(q[0].Fu, math.Max(q[1].Fu, q[2].Fu)), box.MaxU,
+							`axis %d facet %d: maxU is the largest projected u`, ray.Axis, ti)
+						require.Equal(t, math.Min(q[0].Fv, math.Min(q[1].Fv, q[2].Fv)), box.MinV,
+							`axis %d facet %d: minV is the smallest projected v`, ray.Axis, ti)
+						require.Equal(t, math.Max(q[0].Fv, math.Max(q[1].Fv, q[2].Fv)), box.MaxV,
+							`axis %d facet %d: maxV is the largest projected v`, ray.Axis, ti)
+						require.Equal(t, meshbool.Cross2xSign(q[0], q[1], q[2]) != 0, box.Nondegenerate,
+							`axis %d facet %d: nondegenerate must be the exact area sign`, ray.Axis, ti)
 					}
 				}
 			})
@@ -1919,11 +1921,11 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 				r3.NewVec(0, 0, 5), r3.NewVec(1, 1, 5), r3.NewVec(2, 4, 5)}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				pm := newParityMesh(tc.verts, [][3]int{{0, 1, 2}})
-				box := pm.buildFacetBox(0, 1, 2, 0)
-				require.False(t, box.nondegenerate,
+				pm := meshbool.NewParityMesh(tc.verts, [][3]int{{0, 1, 2}})
+				box := pm.BuildFacetBox(0, 1, 2, 0)
+				require.False(t, box.Nondegenerate,
 					`a projection whose exact area is zero may never license a skip`)
-				require.False(t, box.rejects(-1e9, -1e9),
+				require.False(t, box.Rejects(-1e9, -1e9),
 					`an unusable box rejects nothing, however far away the query is`)
 			})
 		}
@@ -1933,11 +1935,11 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 		for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 			verts := []r3.Vec{
 				r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, bad)}
-			pm := newParityMesh(verts, [][3]int{{0, 1, 2}})
-			box := pm.buildFacetBox(0, 1, 2, 0)
-			require.False(t, box.nondegenerate,
+			pm := meshbool.NewParityMesh(verts, [][3]int{{0, 1, 2}})
+			box := pm.BuildFacetBox(0, 1, 2, 0)
+			require.False(t, box.Nondegenerate,
 				`a box built over %v bounds nothing`, bad)
-			require.False(t, box.rejects(-1e9, -1e9))
+			require.False(t, box.Rejects(-1e9, -1e9))
 		}
 	})
 
@@ -1952,15 +1954,15 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 		require.True(t, parityFloatAreaAbstains(verts, tri, 1, 2),
 			`the case is only meaningful while the float filter abstains`)
 		q := parityProjectedCorners(verts, tri, 1, 2)
-		require.NotEqual(t, 0, cross2xSign(q[0], q[1], q[2]),
+		require.NotEqual(t, 0, meshbool.Cross2xSign(q[0], q[1], q[2]),
 			`and while the exact area is genuinely nonzero`)
 
-		pm := newParityMesh(verts, [][3]int{tri})
-		box := pm.buildFacetBox(0, 1, 2, 0)
-		require.True(t, box.nondegenerate,
+		pm := meshbool.NewParityMesh(verts, [][3]int{tri})
+		box := pm.BuildFacetBox(0, 1, 2, 0)
+		require.True(t, box.Nondegenerate,
 			`the exact leg must recover the area the float filter could not prove`)
-		require.True(t, box.rejects(-1, 0), `a query below minU is rejected`)
-		require.False(t, box.rejects(0, 0), `a query on the box boundary is not`)
+		require.True(t, box.Rejects(-1, 0), `a query below minU is rejected`)
+		require.False(t, box.Rejects(0, 0), `a query on the box boundary is not`)
 	})
 }
 
@@ -1970,27 +1972,27 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 // on every axis — the boundary the filter's strict comparison decides.
 func parityBoxQueries(fx parityFixture) []parityCase {
 	out := append(parityCubeQueries(r3.NewVec(0, 0, 0)), parityTetraQueries()...)
-	pm := newParityMesh(fx.verts, fx.tris)
-	for _, ray := range axisRays {
-		box := pm.buildFacetBox(ray.axis, ray.u, ray.v, 0)
-		for _, edge := range []float64{box.minU, box.maxU} {
+	pm := meshbool.NewParityMesh(fx.verts, fx.tris)
+	for _, ray := range meshbool.AxisRays {
+		box := pm.BuildFacetBox(ray.Axis, ray.U, ray.V, 0)
+		for _, edge := range []float64{box.MinU, box.MaxU} {
 			for _, at := range []float64{edge,
 				math.Nextafter(edge, math.Inf(-1)), math.Nextafter(edge, math.Inf(1))} {
 				c := make([]float64, 3)
-				c[ray.u] = at
-				c[ray.v] = box.minV
+				c[ray.U] = at
+				c[ray.V] = box.MinV
 				out = append(out, parityCase{
-					fmt.Sprintf(`axis %d facet 0 u-bound %v`, ray.axis, at),
+					fmt.Sprintf(`axis %d facet 0 u-bound %v`, ray.Axis, at),
 					proofbound.XptOf(r3.NewVec(c[0], c[1], c[2])),
 				})
 				// The same place reached as an exact rational a hair off the
 				// bound, which is what a midpoint or centroid witness is.
 				out = append(out, parityCase{
-					fmt.Sprintf(`axis %d facet 0 u-bound %v minus 1/3 ulp`, ray.axis, at),
+					fmt.Sprintf(`axis %d facet 0 u-bound %v minus 1/3 ulp`, ray.Axis, at),
 					xptFromRat(
-						parityBoxOffsetRat(c[0], ray.u == 0, at),
-						parityBoxOffsetRat(c[1], ray.u == 1, at),
-						parityBoxOffsetRat(c[2], ray.u == 2, at)),
+						parityBoxOffsetRat(c[0], ray.U == 0, at),
+						parityBoxOffsetRat(c[1], ray.U == 1, at),
+						parityBoxOffsetRat(c[2], ray.U == 2, at)),
 				})
 			}
 		}
@@ -2021,28 +2023,28 @@ func TestParityBoxFilterOnlySkipsStrictlyOutsideFacets(t *testing.T) {
 	skips := 0
 	for _, fx := range parityBoxFixtures() {
 		t.Run(fx.name, func(t *testing.T) {
-			pm := newParityMesh(fx.verts, fx.tris)
+			pm := meshbool.NewParityMesh(fx.verts, fx.tris)
 			for _, c := range parityBoxQueries(fx) {
-				for _, ray := range axisRays {
-					pa := newXP2(ratCoordOf(c.p, ray.u), ratCoordOf(c.p, ray.v))
-					if !pa.floatFinite {
+				for _, ray := range meshbool.AxisRays {
+					pa := meshbool.NewXP2(meshbool.RatCoordOf(c.p, ray.U), meshbool.RatCoordOf(c.p, ray.V))
+					if !pa.FloatFinite {
 						continue
 					}
 					for ti := range fx.tris {
-						box := pm.buildFacetBox(ray.axis, ray.u, ray.v, ti)
-						if !box.rejects(pa.fu, pa.fv) {
+						box := pm.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+						if !box.Rejects(pa.Fu, pa.Fv) {
 							continue
 						}
 						skips++
-						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.u, ray.v)
-						s1 := cross2xSign(q[0], q[1], pa)
-						s2 := cross2xSign(q[1], q[2], pa)
-						s3 := cross2xSign(q[2], q[0], pa)
+						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.U, ray.V)
+						s1 := meshbool.Cross2xSign(q[0], q[1], pa)
+						s2 := meshbool.Cross2xSign(q[1], q[2], pa)
+						s3 := meshbool.Cross2xSign(q[2], q[0], pa)
 						neg := s1 < 0 || s2 < 0 || s3 < 0
 						pos := s1 > 0 || s2 > 0 || s3 > 0
 						require.True(t, neg && pos,
 							`%s: axis %d facet %d was skipped, but its exact signs (%d, %d, %d) are not the strictly-outside pattern`,
-							c.name, ray.axis, ti, s1, s2, s3)
+							c.name, ray.Axis, ti, s1, s2, s3)
 					}
 				}
 			}
@@ -2100,9 +2102,9 @@ func TestParityBoxFilterMatchesTheUnfilteredKernel(t *testing.T) {
 
 	// ONE cache per arm across every query, so a box built for an earlier query
 	// is what a later one reads.
-	filtered := newParityMesh(verts, tris)
-	plain := newParityMesh(verts, tris)
-	plain.unfiltered = true
+	filtered := meshbool.NewParityMesh(verts, tris)
+	plain := meshbool.NewParityMesh(verts, tris)
+	plain.Unfiltered = true
 
 	for _, subset := range subsets {
 		for _, c := range queries {
@@ -2110,11 +2112,11 @@ func TestParityBoxFilterMatchesTheUnfilteredKernel(t *testing.T) {
 			wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, c.p, verts, tris, subset.facets)
 			want := parityOutcome{inside: wantIn, onBoundary: wantBoundary, err: wantErr}
 
-			plainIn, plainBoundary, plainErr := meshParityPreparedContext(ctx, c.p, plain, subset.facets)
+			plainIn, plainBoundary, plainErr := meshbool.MeshParityPreparedContext(ctx, c.p, plain, subset.facets)
 			requireParityOutcome(t, `unfiltered/`+arm, want,
 				parityOutcome{inside: plainIn, onBoundary: plainBoundary, err: plainErr})
 
-			gotIn, gotBoundary, gotErr := meshParityPreparedContext(ctx, c.p, filtered, subset.facets)
+			gotIn, gotBoundary, gotErr := meshbool.MeshParityPreparedContext(ctx, c.p, filtered, subset.facets)
 			requireParityOutcome(t, `filtered/`+arm, want,
 				parityOutcome{inside: gotIn, onBoundary: gotBoundary, err: gotErr})
 		}
@@ -2131,20 +2133,20 @@ func TestParityBoxFilterLeavesAnEmptySubsetAlone(t *testing.T) {
 	p := proofbound.XptOf(parityScatterInterior())
 
 	t.Run(`an empty subset builds no boxes`, func(t *testing.T) {
-		pm := newParityMesh(verts, tris)
-		_, _, err := meshParityPreparedContext(ctx, p, pm, nil)
+		pm := meshbool.NewParityMesh(verts, tris)
+		_, _, err := meshbool.MeshParityPreparedContext(ctx, p, pm, nil)
 		require.NoError(t, err)
-		require.Equal(t, [3][]parityFacetBox{}, pm.boxes,
+		require.Equal(t, [3][]meshbool.ParityFacetBox{}, pm.Boxes,
 			`no facet was visited, so no axis may hold a box slice`)
 	})
 
 	t.Run(`a canceled context returns before the first box`, func(t *testing.T) {
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
-		pm := newParityMesh(verts, tris)
-		_, _, err := meshParityPreparedContext(canceled, p, pm, parityIdentitySubset(len(tris)))
+		pm := meshbool.NewParityMesh(verts, tris)
+		_, _, err := meshbool.MeshParityPreparedContext(canceled, p, pm, parityIdentitySubset(len(tris)))
 		require.ErrorIs(t, err, context.Canceled)
-		require.Equal(t, [3][]parityFacetBox{}, pm.boxes,
+		require.Equal(t, [3][]meshbool.ParityFacetBox{}, pm.Boxes,
 			`the context check runs before the first box`)
 	})
 }
@@ -2167,11 +2169,11 @@ func BenchmarkParityBoxFilter(b *testing.B) {
 		unfiltered bool
 	}{{`filtered`, false}, {`unfiltered`, true}} {
 		b.Run(arm.name, func(b *testing.B) {
-			prepared := newParityMesh(verts, tris)
-			prepared.unfiltered = arm.unfiltered
+			prepared := meshbool.NewParityMesh(verts, tris)
+			prepared.Unfiltered = arm.unfiltered
 			b.ReportAllocs()
 			for b.Loop() {
-				inside, onBoundary, err := meshParityPreparedContext(ctx, p, prepared, subset)
+				inside, onBoundary, err := meshbool.MeshParityPreparedContext(ctx, p, prepared, subset)
 				requireBenchInside(b, inside, onBoundary, err)
 			}
 		})

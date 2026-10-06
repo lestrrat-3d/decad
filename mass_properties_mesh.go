@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -127,7 +129,7 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 			return MassProperties{}, fmt.Errorf("%w: mesh mass vertex is nonfinite", ErrUnsupported)
 		}
 		lifted[i] = proofbound.Xsub(proofbound.XptOf(v), anchorExact)
-		x, y, z := xhpRat(proofbound.Xhp(lifted[i]))
+		x, y, z := meshbool.XhpRat(proofbound.Xhp(lifted[i]))
 		vertices[i] = [3]*big.Rat{x, y, z}
 		for axis, coord := range vertices[i] {
 			magnitude := new(big.Rat).Abs(coord)
@@ -141,7 +143,7 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 		if err := budget.Step(); err != nil {
 			return MassProperties{}, err
 		}
-		det := proofbound.XdotRat(lifted[tri[0]], xcross(lifted[tri[1]], lifted[tri[2]]))
+		det := proofbound.XdotRat(lifted[tri[0]], meshbool.Xcross(lifted[tri[1]], lifted[tri[2]]))
 		sums.add(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]], det)
 	}
 	if err := budget.Err(); err != nil {

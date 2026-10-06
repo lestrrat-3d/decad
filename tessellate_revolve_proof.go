@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -590,7 +592,7 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 	out.lu = proofbound.DvLenUpper(out.u)
 	out.lv = proofbound.DvLenUpper(out.v)
 	out.lw = proofbound.DvLenUpper(out.w)
-	out.box = triBox(verts, tri)
+	out.box = meshbool.TriBox(verts, tri)
 	out.off[0] = [2]revolveOffset{{v: out.u, length: out.lu}, {v: out.v, length: out.lv}}
 	out.off[1] = [2]revolveOffset{revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[1])), {v: out.w, length: out.lw}}
 	out.off[2] = [2]revolveOffset{revolveOffsetOf(proofarith.DvSub(out.p[0], out.p[2])), revolveOffsetOf(proofarith.DvSub(out.p[1], out.p[2]))}

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -78,8 +80,8 @@ import (
 // G1-G4 (admitPrismPairBudget) and the work cap are shared, unchanged, by
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
 // per §3.2's table.
-func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPayload, bool, error) {
-	if op == opIntersect {
+func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (prismPayload, bool, error) {
+	if op == meshbool.OpIntersect {
 		if result, ok, err := tryPrismHoledIntersect(ctx, a, b); ok || err != nil {
 			return result, ok, err
 		}
@@ -131,14 +133,14 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 	}
 
 	switch op {
-	case opUnion:
+	case meshbool.OpUnion:
 		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free
 			return prismPayload{}, false, nil
 		}
 		if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
 			return prismPayload{}, false, nil
 		}
-	case opCut:
+	case meshbool.OpCut:
 		if len(pb.profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
 			return prismPayload{}, false, nil
 		}
@@ -147,7 +149,7 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 		}
 	default:
 		// No other op reaches this evaluator through performBoolean's dispatch
-		// (opIntersect is handled above, before this shared preamble runs).
+		// (meshbool.OpIntersect is handled above, before this shared preamble runs).
 		return prismPayload{}, false, nil
 	}
 
@@ -167,9 +169,9 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 	}
 
 	switch op {
-	case opUnion:
+	case meshbool.OpUnion:
 		return resolveAndBuildPrismUnion(ctx, budget, pa, pb, reexpress)
-	default: // opCut
+	default: // meshbool.OpCut
 		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
 	}
 }
@@ -180,10 +182,10 @@ func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPa
 // hole-free arms, G5's Intersect z-interval overlap
 // (prismIntersectZIntervalOverlaps), the arrangement work cap
 // (prismSceneWithinWorkCap), and the operand re-expression
-// (newPrismReexpression) — factored out of tryPrismBoolean's opIntersect arm
+// (newPrismReexpression) — factored out of tryPrismBoolean's meshbool.OpIntersect arm
 // (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: tryPrismBoolean's own
-// opIntersect case above, and §4.5's overlap-area reading
+// meshbool.OpIntersect case above, and §4.5's overlap-area reading
 // (prismOverlapVolume, prism_overlap.go). This task adds no capability and
 // changes no behaviour — every gate below runs in the exact order and shape
 // it always has.
@@ -233,7 +235,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 	if !withinCap {
 		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			ErrUnsupported, opIntersect, segments, prismMaxArrangementSegments)
+			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
 	}
 
 	reexpress, err = newPrismReexpression(pa, pb)
