@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -30,21 +32,21 @@ type rulingSide struct {
 // occupied set meets the separating plane in exactly its tangent ruling; a
 // plane side holds the whole certified ruling inside its trim. The complete
 // contact set is then one segment, published as its two ends.
-func publishRulingManifold(report *ContactReport, ruling *rulingContact) {
-	outward := ruling.normal
-	sideA, reason := rulingSideOf(report.A, ruling.faceA, outward, ruling.offset)
+func publishRulingManifold(report *ContactReport, ruling *clearance.RulingContact) {
+	outward := ruling.Normal
+	sideA, reason := rulingSideOf(report.A, ruling.FaceA, outward, ruling.Offset)
 	if reason != ContactNoReason {
 		report.Reason = reason
 		return
 	}
 	inward := proofarith.DvSub(proofarith.DyV3{}, outward)
-	sideB, reason := rulingSideOf(report.B, ruling.faceB, inward, proofarith.DyNeg(ruling.offset))
+	sideB, reason := rulingSideOf(report.B, ruling.FaceB, inward, proofarith.DyNeg(ruling.Offset))
 	if reason != ContactNoReason {
 		report.Reason = reason
 		return
 	}
 	ends, ok := rulingContactSet(sideA, sideB)
-	if !ok || !rulingEndsEqual(ends, ruling.ends) {
+	if !ok || !rulingEndsEqual(ends, ruling.Ends) {
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
@@ -78,10 +80,10 @@ func publishRulingManifold(report *ContactReport, ruling *rulingContact) {
 // rulingSideOf maps one certified carrier back to its body's original face.
 // outward is the side's exact outward normal at the contact and offset the
 // separating plane's offset along it.
-func rulingSideOf(b *Body, carrier *cFace, outward proofarith.DyV3,
+func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 	offset proofarith.Dyadic) (rulingSide, ContactReason) {
-	if carrier.kind == ckPlane {
-		face, ok := uniquePlaneFace(b, dyAxisVec(outward), offset)
+	if carrier.Kind == clearance.CkPlane {
+		face, ok := uniquePlaneFace(b, clearance.DyAxisVec(outward), offset)
 		if !ok {
 			return rulingSide{}, ContactAmbiguousFeature
 		}
@@ -91,7 +93,7 @@ func rulingSideOf(b *Body, carrier *cFace, outward proofarith.DyV3,
 	if !ok {
 		return rulingSide{}, ContactPayloadUnsupported
 	}
-	normalAxis, side, ok := signedAxis(dyAxisVec(outward))
+	normalAxis, side, ok := clearance.SignedAxis(clearance.DyAxisVec(outward))
 	if !ok || normalAxis == cylinder.axis {
 		return rulingSide{}, ContactAmbiguousFeature
 	}
@@ -145,7 +147,7 @@ func uniquePlaneFace(b *Body, normal r3.Vec, offset proofarith.Dyadic) (*Face, b
 		if face.reversed {
 			faceNormal = faceNormal.Scale(-1)
 		}
-		origin, okOrigin := dyVecOf(plane.Frame.Origin())
+		origin, okOrigin := clearance.DyVecOf(plane.Frame.Origin())
 		if faceNormal != normal || !okOrigin ||
 			proofarith.DyCmp(proofarith.DvDot(proofarith.DyVec(normal), origin), offset) != 0 {
 			continue
@@ -175,11 +177,11 @@ func rulingContactSet(a, b rulingSide) ([2]proofarith.DyV3, bool) {
 		if rulingEndsEqual([2]proofarith.DyV3{lo, lo}, [2]proofarith.DyV3{hi, hi}) {
 			return [2]proofarith.DyV3{}, false
 		}
-		return orderedRulingEnds([2]proofarith.DyV3{lo, hi}), true
+		return clearance.OrderedRulingEnds([2]proofarith.DyV3{lo, hi}), true
 	case a.curved:
-		return orderedRulingEnds(a.ends), true
+		return clearance.OrderedRulingEnds(a.ends), true
 	case b.curved:
-		return orderedRulingEnds(b.ends), true
+		return clearance.OrderedRulingEnds(b.ends), true
 	default:
 		return [2]proofarith.DyV3{}, false
 	}
@@ -243,7 +245,7 @@ func rulingSideNormal(side rulingSide, witness VecMeasurement,
 	if !finiteMeasurementValues(bound) {
 		return VecMeasurement{}, false
 	}
-	value, ok := dyVecOf(reading.Value)
+	value, ok := clearance.DyVecOf(reading.Value)
 	if !ok {
 		return VecMeasurement{}, false
 	}
@@ -653,7 +655,7 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	for i, center := range c.centers {
 		rims[i] = proofarith.DvSub(center, dyScaleVec(plane.normal, c.radius))
 	}
-	if ordered := orderedRulingEnds(rims); !sameDyV3(ordered[0], rims[0]) {
+	if ordered := clearance.OrderedRulingEnds(rims); !sameDyV3(ordered[0], rims[0]) {
 		rims = ordered
 	}
 	direction := plane.normal

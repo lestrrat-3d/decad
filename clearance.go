@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -58,7 +60,7 @@ type pairResult struct {
 	contained *Body
 	// ruling is non-nil only on a pairTouching verdict proved by a §6
 	// ruling certificate; it keeps the certified faces and feet.
-	ruling *rulingContact
+	ruling *clearance.RulingContact
 }
 
 // pairKernel is one pair's working state.
@@ -274,14 +276,14 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if fa.kind != ckPlane {
+		if fa.Kind != clearance.CkPlane {
 			continue
 		}
 		for _, fb := range k.b.faces {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			if fb.kind != ckPlane {
+			if fb.Kind != clearance.CkPlane {
 				continue
 			}
 			// The certificate is EXACT and reject-only: a zero row may
@@ -289,10 +291,10 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 			// separation, tilt, or side penetration leaves the pair
 			// undecided — a tolerance here would bless a real sub-tol
 			// overlap as a Sound Exact-zero clearance.
-			if fa.n.Dot(fb.n) != -1 {
+			if fa.N.Dot(fb.N) != -1 {
 				continue // not exactly opposing
 			}
-			if fb.o.Sub(fa.o).Dot(fa.n) != 0 {
+			if fb.O.Sub(fa.O).Dot(fa.N) != 0 {
 				continue // not exactly coplanar
 			}
 			rel, _, err := k.coplanarRelation(budget, fa, fb)
@@ -302,9 +304,9 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 			if rel != 1 {
 				continue // no proven positive-area overlap
 			}
-			c := fa.planeOffset()
-			aLo, aHi, okA := payloadExtent(ctx, k.a.body, fa.n)
-			bLo, bHi, okB := payloadExtent(ctx, k.b.body, fa.n)
+			c := fa.PlaneOffset()
+			aLo, aHi, okA := payloadExtent(ctx, k.a.body, fa.N)
+			bLo, bHi, okB := payloadExtent(ctx, k.b.body, fa.N)
 			if !okA || !okB {
 				continue
 			}

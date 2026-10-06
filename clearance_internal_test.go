@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -35,58 +37,58 @@ func TestDegOracleIsThreeValued(t *testing.T) {
 	z := r3.NewVec(0, 0, 1)
 
 	t.Run("parallel", func(t *testing.T) {
-		require.Equal(t, degYes, k.parallel(z, r3.NewVec(0, 0, -4)), `exactly antiparallel is parallel`)
-		require.Equal(t, degNo, k.parallel(z, r3.NewVec(1, 0, 1)), `45° apart`)
+		require.Equal(t, clearance.DegYes, k.parallel(z, r3.NewVec(0, 0, -4)), `exactly antiparallel is parallel`)
+		require.Equal(t, clearance.DegNo, k.parallel(z, r3.NewVec(1, 0, 1)), `45° apart`)
 		// A tilt of 1e-12 rad: too small to disprove parallelism, not zero.
-		require.Equal(t, degUnknown, k.parallel(z, r3.NewVec(1e-12, 0, 1)))
+		require.Equal(t, clearance.DegUnknown, k.parallel(z, r3.NewVec(1e-12, 0, 1)))
 	})
 
 	t.Run("onAxis", func(t *testing.T) {
 		anchor := r3.NewVec(0, 0, 3)
-		require.Equal(t, degYes, k.onAxis(r3.NewVec(0, 0, -7), anchor, z))
-		require.Equal(t, degYes, k.onAxis(anchor, anchor, z), `the anchor itself`)
-		require.Equal(t, degNo, k.onAxis(r3.NewVec(0.5, 0, 0), anchor, z))
+		require.Equal(t, clearance.DegYes, k.onAxis(r3.NewVec(0, 0, -7), anchor, z))
+		require.Equal(t, clearance.DegYes, k.onAxis(anchor, anchor, z), `the anchor itself`)
+		require.Equal(t, clearance.DegNo, k.onAxis(r3.NewVec(0.5, 0, 0), anchor, z))
 		// 1e-12 mm off the axis, under the kernel's 1e-8 mm length noise.
-		require.Equal(t, degUnknown, k.onAxis(r3.NewVec(1e-12, 0, 0), anchor, z))
+		require.Equal(t, clearance.DegUnknown, k.onAxis(r3.NewVec(1e-12, 0, 0), anchor, z))
 	})
 
 	t.Run("coincident", func(t *testing.T) {
 		p := r3.NewVec(1, 2, 3)
-		require.Equal(t, degYes, k.coincident(p, r3.NewVec(1, 2, 3)))
-		require.Equal(t, degNo, k.coincident(p, r3.NewVec(1, 2, 3.5)))
-		require.Equal(t, degUnknown, k.coincident(p, r3.NewVec(1, 2, 3+1e-12)))
+		require.Equal(t, clearance.DegYes, k.coincident(p, r3.NewVec(1, 2, 3)))
+		require.Equal(t, clearance.DegNo, k.coincident(p, r3.NewVec(1, 2, 3.5)))
+		require.Equal(t, clearance.DegUnknown, k.coincident(p, r3.NewVec(1, 2, 3+1e-12)))
 	})
 
 	t.Run("a non-finite input never proves a degeneracy", func(t *testing.T) {
 		bad := r3.NewVec(math.Inf(1), 0, 0)
-		require.Equal(t, degUnknown, k.parallel(bad, z))
-		require.Equal(t, degUnknown, k.coincident(bad, bad))
+		require.Equal(t, clearance.DegUnknown, k.parallel(bad, z))
+		require.Equal(t, clearance.DegUnknown, k.coincident(bad, bad))
 	})
 }
 
 // cylFace/sphFace/torFace build the kernel's carrier records directly — the
 // spine geometry is all these cells read.
-func cylFace(anchor, axis r3.Vec, radius float64) *cFace {
-	u := perpTo(axis)
-	return &cFace{
-		kind: ckCylinder, anchor: anchor, axis: axis, refU: u, refV: axis.Cross(u),
-		radius: radius, zWin: linWindow{lo: -100, hi: 100}, sweep: angWindow{full: true},
+func cylFace(anchor, axis r3.Vec, radius float64) *clearance.CFace {
+	u := clearance.PerpTo(axis)
+	return &clearance.CFace{
+		Kind: clearance.CkCylinder, Anchor: anchor, Axis: axis, RefU: u, RefV: axis.Cross(u),
+		Radius: radius, ZWin: clearance.LinWindow{Lo: -100, Hi: 100}, Sweep: clearance.AngWindow{Full: true},
 	}
 }
 
-func sphFace(center r3.Vec, radius float64) *cFace {
-	u := perpTo(r3.NewVec(0, 0, 1))
-	return &cFace{
-		kind: ckSphere, anchor: center, axis: r3.NewVec(0, 0, 1), refU: u, refV: r3.NewVec(0, 0, 1).Cross(u),
-		radius: radius, merid: angWindow{full: true}, sweep: angWindow{full: true},
+func sphFace(center r3.Vec, radius float64) *clearance.CFace {
+	u := clearance.PerpTo(r3.NewVec(0, 0, 1))
+	return &clearance.CFace{
+		Kind: clearance.CkSphere, Anchor: center, Axis: r3.NewVec(0, 0, 1), RefU: u, RefV: r3.NewVec(0, 0, 1).Cross(u),
+		Radius: radius, Merid: clearance.AngWindow{Full: true}, Sweep: clearance.AngWindow{Full: true},
 	}
 }
 
-func torFace(center, axis r3.Vec, major, minor float64) *cFace {
-	u := perpTo(axis)
-	return &cFace{
-		kind: ckTorus, anchor: center, axis: axis, refU: u, refV: axis.Cross(u),
-		major: major, radius: minor, merid: angWindow{full: true}, sweep: angWindow{full: true},
+func torFace(center, axis r3.Vec, major, minor float64) *clearance.CFace {
+	u := clearance.PerpTo(axis)
+	return &clearance.CFace{
+		Kind: clearance.CkTorus, Anchor: center, Axis: axis, RefU: u, RefV: axis.Cross(u),
+		Major: major, Radius: minor, Merid: clearance.AngWindow{Full: true}, Sweep: clearance.AngWindow{Full: true},
 	}
 }
 
@@ -178,32 +180,32 @@ func TestDegPointCircleCritsNeverGuessAnAzimuth(t *testing.T) {
 	z := r3.NewVec(0, 0, 1)
 	center := r3.NewVec(0, 0, 0)
 	u, v := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)
-	arc := newAngWindow(math.Pi/2, math.Pi) // a quarter arc, away from refU
+	arc := clearance.NewAngWindow(math.Pi/2, math.Pi) // a quarter arc, away from refU
 
 	t.Run("a point exactly on the axis is one constant critical inside the trim", func(t *testing.T) {
 		crits, ok := k.pointCircleCrits(r3.NewVec(0, 0, 8), center, z, u, v, 6, arc)
 		require.True(t, ok)
 		require.Len(t, crits, 1)
-		require.True(t, crits[0].exact)
-		require.InDelta(t, 10.0, crits[0].lo, 1e-12, `hypot(8, 6) at every azimuth`)
+		require.True(t, crits[0].Exact)
+		require.InDelta(t, 10.0, crits[0].Lo, 1e-12, `hypot(8, 6) at every azimuth`)
 		// The representative must sit INSIDE the arc, not at a fixed refU.
-		th := math.Atan2(crits[0].fb.Y, crits[0].fb.X)
-		require.Equal(t, 1, arc.classify(th, 1e-9))
+		th := math.Atan2(crits[0].Fb.Y, crits[0].Fb.X)
+		require.Equal(t, 1, arc.Classify(th, 1e-9))
 	})
 
 	t.Run("a point provenly off the axis carries the near and far criticals", func(t *testing.T) {
-		crits, ok := k.pointCircleCrits(r3.NewVec(2, 0, 0), center, z, u, v, 6, angWindow{full: true})
+		crits, ok := k.pointCircleCrits(r3.NewVec(2, 0, 0), center, z, u, v, 6, clearance.AngWindow{Full: true})
 		require.True(t, ok)
 		require.Len(t, crits, 2)
-		require.InDelta(t, 4.0, crits[0].lo, 1e-12)
-		require.InDelta(t, 8.0, crits[1].lo, 1e-12)
+		require.InDelta(t, 4.0, crits[0].Lo, 1e-12)
+		require.InDelta(t, 8.0, crits[1].Lo, 1e-12)
 	})
 
 	t.Run("an offset in the undecided band yields no critical at all", func(t *testing.T) {
 		// A closed circle edge against a full sphere face: neither carries an
 		// edge or vertex tier that could out-vote a wrong Exact here, so the
 		// cell must decline rather than pick an arbitrary azimuth.
-		_, ok := k.pointCircleCrits(r3.NewVec(1e-12, 0, 8), center, z, u, v, 6, angWindow{full: true})
+		_, ok := k.pointCircleCrits(r3.NewVec(1e-12, 0, 8), center, z, u, v, 6, clearance.AngWindow{Full: true})
 		require.False(t, ok)
 	})
 }
@@ -218,8 +220,8 @@ func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
 		crits, ok := k.circleCircleCrits(torFace(r3.NewVec(0, 0, 0), z, 5, 1), outer)
 		require.True(t, ok)
 		require.Len(t, crits, 1)
-		require.True(t, crits[0].exact)
-		require.InDelta(t, 5.0, crits[0].lo, 1e-12)
+		require.True(t, crits[0].Exact)
+		require.InDelta(t, 5.0, crits[0].Lo, 1e-12)
 	})
 
 	t.Run("a 1e-12 offset ACROSS the axis carries none", func(t *testing.T) {
@@ -230,19 +232,19 @@ func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
 	t.Run("an offset ALONG the axis is still coaxial", func(t *testing.T) {
 		crits, ok := k.circleCircleCrits(torFace(r3.NewVec(0, 0, 3), z, 5, 1), outer)
 		require.True(t, ok)
-		require.True(t, crits[0].exact)
-		require.InDelta(t, math.Hypot(3, 5), crits[0].lo, 1e-12)
+		require.True(t, crits[0].Exact)
+		require.InDelta(t, math.Hypot(3, 5), crits[0].Lo, 1e-12)
 	})
 }
 
 func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
-	full := func(center, axis r3.Vec, radius float64) *cEdge {
-		u := perpTo(axis)
-		return &cEdge{
-			center: center, axis: axis, refU: u, refV: axis.Cross(u),
-			radius: radius, ang: angWindow{full: true},
+	full := func(center, axis r3.Vec, radius float64) *clearance.CEdge {
+		u := clearance.PerpTo(axis)
+		return &clearance.CEdge{
+			Center: center, Axis: axis, RefU: u, RefV: axis.Cross(u),
+			Radius: radius, Ang: clearance.AngWindow{Full: true},
 		}
 	}
 	k := testKernel()
@@ -252,9 +254,9 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 		sink := &cellSink{}
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
 		require.Len(t, sink.contribs, 1)
-		require.Equal(t, 5.0, sink.contribs[0].lo)
-		require.Equal(t, 5.0, sink.contribs[0].hi)
-		require.True(t, sink.contribs[0].exact)
+		require.Equal(t, 5.0, sink.contribs[0].Lo)
+		require.Equal(t, 5.0, sink.contribs[0].Hi)
+		require.True(t, sink.contribs[0].Exact)
 	})
 	t.Run("irrational distance is enclosed", func(t *testing.T) {
 		b := full(r3.NewVec(6, 0, 1), z, 2)
@@ -262,25 +264,25 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
 		require.Len(t, sink.contribs, 1)
 		c := sink.contribs[0]
-		require.LessOrEqual(t, c.lo, math.Sqrt(10))
-		require.GreaterOrEqual(t, c.hi, math.Sqrt(10))
-		require.False(t, c.exact)
+		require.LessOrEqual(t, c.Lo, math.Sqrt(10))
+		require.GreaterOrEqual(t, c.Hi, math.Sqrt(10))
+		require.False(t, c.Exact)
 	})
 	t.Run("other principal direction", func(t *testing.T) {
 		b := full(r3.NewVec(0, -7, 3), z, 2)
 		sink := &cellSink{}
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
-		require.Equal(t, 5.0, sink.contribs[0].lo)
+		require.Equal(t, 5.0, sink.contribs[0].Lo)
 	})
 	t.Run("uncertified shapes fall back", func(t *testing.T) {
-		cases := map[string]*cEdge{
+		cases := map[string]*clearance.CEdge{
 			"near contact":     full(r3.NewVec(3+1e-12, 0, 0), z, 2),
 			"diagonal centers": full(r3.NewVec(7, 1, 0), z, 2),
 			"tilted axis":      full(r3.NewVec(7, 0, 0), r3.NewVec(1e-12, 0, 1), 2),
 			"nonfinite center": full(r3.NewVec(math.Inf(1), 0, 0), z, 2),
 		}
 		partial := full(r3.NewVec(7, 0, 0), z, 2)
-		partial.ang = newAngWindow(0, math.Pi)
+		partial.Ang = clearance.NewAngWindow(0, math.Pi)
 		cases["partial arc"] = partial
 		for name, b := range cases {
 			t.Run(name, func(t *testing.T) {
@@ -295,7 +297,7 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 		cancel()
 		b := full(r3.NewVec(7, 0, 0), z, 2)
 		kernel := &pairKernel{
-			a: &bodyGeom{edges: []*cEdge{a}}, b: &bodyGeom{edges: []*cEdge{b}},
+			a: &bodyGeom{edges: []*clearance.CEdge{a}}, b: &bodyGeom{edges: []*clearance.CEdge{b}},
 			ctx: ctx, tol: k.tol,
 		}
 		_, err := kernel.enumerate()
@@ -354,13 +356,13 @@ func TestLineCircleBracketsAcceptsFinitePolynomial(t *testing.T) {
 
 func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
 	t.Parallel()
-	face := cFace{
-		kind:   ckTorus,
-		axis:   r3.NewVec(0, 0, 1),
-		major:  math.MaxFloat64,
-		radius: 1,
+	face := clearance.CFace{
+		Kind:   clearance.CkTorus,
+		Axis:   r3.NewVec(0, 0, 1),
+		Major:  math.MaxFloat64,
+		Radius: 1,
 	}
-	count, decided, err := face.torusCrossings(
+	count, decided, err := face.TorusCrossings(
 		t.Context(),
 		r3.Vec{},
 		r3.NewVec(1, 0, 0),
@@ -540,7 +542,7 @@ func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
 	face := torFace(r3.Vec{}, r3.NewVec(0, 0, 1), 5, 1)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SturmChainContext"}
 
-	count, decided, err := face.torusCrossings(ctx, r3.NewVec(0.31, 0.73, 0.19), r3.NewVec(1, 0, 0), 1e-9)
+	count, decided, err := face.TorusCrossings(ctx, r3.NewVec(0.31, 0.73, 0.19), r3.NewVec(1, 0, 0), 1e-9)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, decided)
@@ -730,33 +732,33 @@ func BenchmarkCircleCircleBrackets(b *testing.B) {
 // This file tests the private clearance-tier work boundary. Public Verify
 // coverage cannot distinguish cancellation inside a tier from an outer poll.
 
-func tierPlaneFace(region region2) *cFace {
-	return &cFace{
-		kind:   ckPlane,
-		o:      r3.Vec{},
-		u:      r3.NewVec(1, 0, 0),
-		v:      r3.NewVec(0, 1, 0),
-		n:      r3.NewVec(0, 0, 1),
-		region: region,
+func tierPlaneFace(region clearance.Region2) *clearance.CFace {
+	return &clearance.CFace{
+		Kind:   clearance.CkPlane,
+		O:      r3.Vec{},
+		U:      r3.NewVec(1, 0, 0),
+		V:      r3.NewVec(0, 1, 0),
+		N:      r3.NewVec(0, 0, 1),
+		Region: region,
 	}
 }
 
-func tierSphereFace(x float64) *cFace {
-	return &cFace{
-		kind:   ckSphere,
-		anchor: r3.NewVec(x, 0, 0),
-		axis:   r3.NewVec(0, 0, 1),
-		refU:   r3.NewVec(1, 0, 0),
-		refV:   r3.NewVec(0, 1, 0),
-		radius: 1,
-		merid:  angWindow{full: true},
-		sweep:  angWindow{full: true},
+func tierSphereFace(x float64) *clearance.CFace {
+	return &clearance.CFace{
+		Kind:   clearance.CkSphere,
+		Anchor: r3.NewVec(x, 0, 0),
+		Axis:   r3.NewVec(0, 0, 1),
+		RefU:   r3.NewVec(1, 0, 0),
+		RefV:   r3.NewVec(0, 1, 0),
+		Radius: 1,
+		Merid:  clearance.AngWindow{Full: true},
+		Sweep:  clearance.AngWindow{Full: true},
 	}
 }
 
 func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
 	t.Parallel()
-	faces := make([]*cFace, proofbound.WorkPollInterval+64)
+	faces := make([]*clearance.CFace, proofbound.WorkPollInterval+64)
 	for i := range faces {
 		faces[i] = tierSphereFace(100 + float64(i))
 	}
@@ -776,13 +778,13 @@ func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
 
 func TestVertexTierCountsEdges(t *testing.T) {
 	t.Parallel()
-	edges := make([]*cEdge, proofbound.WorkPollInterval+64)
+	edges := make([]*clearance.CEdge, proofbound.WorkPollInterval+64)
 	for i := range edges {
 		y := 100 + float64(i)
-		edges[i] = &cEdge{
-			line: true,
-			a:    r3.NewVec(100, y, 0),
-			b:    r3.NewVec(101, y, 0),
+		edges[i] = &clearance.CEdge{
+			Line: true,
+			A:    r3.NewVec(100, y, 0),
+			B:    r3.NewVec(101, y, 0),
 		}
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "vertexTier"}
@@ -797,8 +799,8 @@ func TestVertexTierCountsEdges(t *testing.T) {
 func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval+64)
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionBoundaryDistBudget"}
-	k := &pairKernel{ctx: ctx, tol: region.tol()}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RegionBoundaryDistBudget"}
+	k := &pairKernel{ctx: ctx, tol: region.Tol()}
 
 	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
@@ -809,8 +811,8 @@ func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 func TestVertexFaceCountsWindingScan(t *testing.T) {
 	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval-16)
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionContainsBudget"}
-	k := &pairKernel{ctx: ctx, tol: region.tol()}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RegionContainsBudget"}
+	k := &pairKernel{ctx: ctx, tol: region.Tol()}
 
 	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
@@ -833,7 +835,7 @@ func TestVertexTierPropagatesBudgetExhaustion(t *testing.T) {
 		ErrFn: func() error { return nil },
 	}
 	k := &pairKernel{ctx: t.Context(), tol: 1e-9}
-	other := &bodyGeom{faces: []*cFace{tierSphereFace(100), tierSphereFace(200)}}
+	other := &bodyGeom{faces: []*clearance.CFace{tierSphereFace(100), tierSphereFace(200)}}
 
 	err := k.vertexTier(budget, r3.Vec{}, other, &cellSink{})
 
@@ -844,22 +846,22 @@ func TestVertexTierPropagatesBudgetExhaustion(t *testing.T) {
 func TestVertexTierBudgetKeepsNormalResult(t *testing.T) {
 	t.Parallel()
 	region := internalPolygonRegion(t, 0, 1, 10, 4)
-	k := &pairKernel{ctx: t.Context(), tol: region.tol()}
+	k := &pairKernel{ctx: t.Context(), tol: region.Tol()}
 	sink := &cellSink{}
 
 	err := k.vertexTier(
 		proofbound.NewWorkBudget(t.Context()),
 		r3.NewVec(0, 0, 5),
-		&bodyGeom{faces: []*cFace{tierPlaneFace(region)}},
+		&bodyGeom{faces: []*clearance.CFace{tierPlaneFace(region)}},
 		sink,
 	)
 
 	require.NoError(t, err)
 	require.Len(t, sink.contribs, 1)
-	require.Equal(t, 5.0, sink.contribs[0].lo)
-	require.Equal(t, 5.0, sink.contribs[0].hi)
-	require.True(t, sink.contribs[0].exact)
-	require.False(t, math.IsInf(sink.contribs[0].lo, 0))
+	require.Equal(t, 5.0, sink.contribs[0].Lo)
+	require.Equal(t, 5.0, sink.contribs[0].Hi)
+	require.True(t, sink.contribs[0].Exact)
+	require.False(t, math.IsInf(sink.contribs[0].Lo, 0))
 }
 
 // TestAddPrismFacesOmitsCapsForSurfaceResult is docs/surface-design.md §4.1's
@@ -894,8 +896,8 @@ func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
 	require.True(t, ok, `a surface-result prism must still admit a kernel model`)
 	require.Len(t, g.faces, 4, `a rectangle's 4 straight walls, no caps`)
 	for _, f := range g.faces {
-		require.Equal(t, ckPlane, f.kind)
-		require.InDelta(t, 0, f.n.Dot(sweepDir), 1e-9,
+		require.Equal(t, clearance.CkPlane, f.Kind)
+		require.InDelta(t, 0, f.N.Dot(sweepDir), 1e-9,
 			`a wall's normal runs across the sweep direction; a cap's would run along it`)
 	}
 }
@@ -976,7 +978,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 
 // TestAddStitchFacesBuildsExactPlanarCarriers is docs/clearance-design.md
 // §2's stitch arm (C2), computed-geometry coverage beside the public
-// apitest/stitch_test.go rows: every one of the box's 6 faces builds a ckPlane
+// apitest/stitch_test.go rows: every one of the box's 6 faces builds a clearance.CkPlane
 // carrier whose outward normal is an exact signed unit axis vector — the
 // same box T3 already proves closed and outward-wound — and whose own
 // region correctly admits an interior probe and rejects an exterior one.
@@ -990,17 +992,17 @@ func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
 
 	var normals []r3.Vec
 	for _, f := range g.faces {
-		require.Equal(t, ckPlane, f.kind)
-		require.InDelta(t, 1, f.n.Len(), 1e-12, "every face normal is a unit vector")
-		normals = append(normals, f.n)
+		require.Equal(t, clearance.CkPlane, f.Kind)
+		require.InDelta(t, 1, f.N.Len(), 1e-12, "every face normal is a unit vector")
+		normals = append(normals, f.N)
 
-		require.NotEmpty(t, f.wit, "every face carries at least one interior witness")
-		for _, w := range f.wit {
-			lx, ly := f.planeCoords(w)
-			require.Equal(t, 1, f.region.classify(lx, ly, f.region.tol()),
+		require.NotEmpty(t, f.Wit, "every face carries at least one interior witness")
+		for _, w := range f.Wit {
+			lx, ly := f.PlaneCoords(w)
+			require.Equal(t, 1, f.Region.Classify(lx, ly, f.Region.Tol()),
 				"a recorded triangle centroid must classify strictly inside its own face's region")
 		}
-		require.Equal(t, -1, f.region.classify(1e6, 1e6, f.region.tol()),
+		require.Equal(t, -1, f.Region.Classify(1e6, 1e6, f.Region.Tol()),
 			"a point far outside the box's own extent must classify strictly outside")
 	}
 

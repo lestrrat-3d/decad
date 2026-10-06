@@ -553,7 +553,7 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 // taken through the identical witness maximum a shipped prismPayload already
 // reads its own diameter through above (addPrismFaces gives two witnesses
 // per circular wall — the mid-angle point at mid-height and th0 at z0 —
-// which pointSetDiameterWithBudget maxes pairwise, and region2.samples adds
+// which pointSetDiameterWithBudget maxes pairwise, and clearance.Region2.samples adds
 // each cap arc's own th0 and mid-angle). That reader ranges over the body's
 // own farthest pair — whose exact distance it then publishes rounded toward
 // zero, so even the best case here is the largest float at or below the
@@ -606,7 +606,7 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 		if err := budget.Step(); err != nil {
 			return 0, false, err
 		}
-		pts = append(pts, f.wit...)
+		pts = append(pts, f.Wit...)
 	}
 	d, ok, err := pointSetDiameterWithBudget(budget, pts)
 	if err != nil || !ok {

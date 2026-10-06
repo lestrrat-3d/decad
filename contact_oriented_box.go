@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -498,7 +500,7 @@ func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 			normal = normal.Scale(-1)
 		}
 		normal = pose.ApplyDir(normal)
-		foundAxis, foundSide, ok := signedAxis(normal)
+		foundAxis, foundSide, ok := clearance.SignedAxis(normal)
 		if ok && foundAxis == axis && foundSide == side {
 			return face
 		}

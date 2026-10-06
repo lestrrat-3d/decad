@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/clearance"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -38,7 +39,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		circle.Radius.Base() <= 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	axis, _, ok := signedAxis(pose.ApplyDir(pp.xform.ApplyDir(pp.frame.N())))
+	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(pp.xform.ApplyDir(pp.frame.N())))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
@@ -60,7 +61,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 			if face.reversed {
 				normal = normal.Scale(-1)
 			}
-			faceAxis, side, valid := signedAxis(pose.ApplyDir(normal))
+			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))
 			if !valid || endFaces[side] != nil || faceAxis != axis {
 				return sourceCylinderContactProof{}, false
 			}
@@ -108,7 +109,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	if _, _, ok := signedAxis(r3.Vec{X: rp.ax.dU, Y: rp.ax.dV}); !ok {
+	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.ax.dU, Y: rp.ax.dV}); !ok {
 		return sourceCylinderContactProof{}, false
 	}
 	if !finiteMeasurementValues(rp.ax.aU, rp.ax.aV) {
@@ -141,7 +142,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
 	low := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zlo))))
 	high := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zhi))))
-	axis, _, ok := signedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
+	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
@@ -170,7 +171,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 			if face.reversed {
 				normal = normal.Scale(-1)
 			}
-			faceAxis, side, valid := signedAxis(pose.ApplyDir(normal))
+			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))
 			if !valid || faceAxis != axis || endFaces[side] != nil {
 				return sourceCylinderContactProof{}, false
 			}

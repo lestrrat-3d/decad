@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -24,11 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func internalDiskRegion(t *testing.T, cx, cy, radius float64) region2 {
+func internalDiskRegion(t *testing.T, cx, cy, radius float64) clearance.Region2 {
 	t.Helper()
 	e, ok := survey2d.ArcElem(cx, cy, radius, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	return newRegion2([]survey2d.SurveyElem{e})
+	return clearance.NewRegion2([]survey2d.SurveyElem{e})
 }
 
 func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
@@ -39,32 +41,32 @@ func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
 	k.ctx = t.Context()
 
 	t.Run("partial cylinder sweep outside the plane trim", func(t *testing.T) {
-		plane := &cFace{kind: ckPlane, u: x, v: y, n: z, region: internalDiskRegion(t, -10, 0, 2), box: wide}
-		cyl := &cFace{
-			kind: ckCylinder, axis: z, refU: x, refV: y, radius: 10,
-			zWin: newLinWindow(-2, 2), sweep: newAngWindow(0, math.Pi/4), box: wide,
+		plane := &clearance.CFace{Kind: clearance.CkPlane, U: x, V: y, N: z, Region: internalDiskRegion(t, -10, 0, 2), Box: wide}
+		cyl := &clearance.CFace{
+			Kind: clearance.CkCylinder, Axis: z, RefU: x, RefV: y, Radius: 10,
+			ZWin: clearance.NewLinWindow(-2, 2), Sweep: clearance.NewAngWindow(0, math.Pi/4), Box: wide,
 		}
 		sink := &cellSink{}
 		k.planeCrossesRevolved(plane, cyl, sink)
 		require.False(t, sink.overlap,
 			`the full carrier meets the plane trim only outside the partial revolve sweep`)
-		cyl.sweep = angWindow{full: true}
+		cyl.Sweep = clearance.AngWindow{Full: true}
 		sink = &cellSink{}
 		k.planeCrossesRevolved(plane, cyl, sink)
 		require.True(t, sink.overlap)
 	})
 
 	t.Run("sphere meridian outside the plane trim", func(t *testing.T) {
-		plane := &cFace{kind: ckPlane, u: x, v: y, n: z, region: internalDiskRegion(t, 10, 0, 2), box: wide}
-		sphere := &cFace{
-			kind: ckSphere, axis: z, refU: x, refV: y, radius: 10,
-			merid: newAngWindow(0, math.Pi/4), sweep: angWindow{full: true}, box: wide,
+		plane := &clearance.CFace{Kind: clearance.CkPlane, U: x, V: y, N: z, Region: internalDiskRegion(t, 10, 0, 2), Box: wide}
+		sphere := &clearance.CFace{
+			Kind: clearance.CkSphere, Axis: z, RefU: x, RefV: y, Radius: 10,
+			Merid: clearance.NewAngWindow(0, math.Pi/4), Sweep: clearance.AngWindow{Full: true}, Box: wide,
 		}
 		sink := &cellSink{}
 		k.planeSphere(plane, sphere, sink)
 		require.False(t, sink.overlap,
 			`the equator is outside the shipped sphere patch's meridian trim`)
-		sphere.merid = angWindow{full: true}
+		sphere.Merid = clearance.AngWindow{Full: true}
 		sink = &cellSink{}
 		k.planeSphere(plane, sphere, sink)
 		require.True(t, sink.overlap)
@@ -114,7 +116,7 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
 	torus := torFace(r3.Vec{}, z, 5, 1)
-	g := &bodyGeom{faces: []*cFace{torus}}
+	g := &bodyGeom{faces: []*clearance.CFace{torus}}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 4}
 
 	_, _, err := g.pointInBody(ctx, r3.NewVec(0.31, 0.73, 0.19), 1e-9)
@@ -169,7 +171,7 @@ func TestFacetCutCancellationIsBounded(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
-func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) region2 {
+func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) clearance.Region2 {
 	t.Helper()
 	elems := make([]survey2d.SurveyElem, sides)
 	for i := range sides {
@@ -182,27 +184,27 @@ func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) regi
 		require.True(t, ok)
 		elems[i] = e
 	}
-	return newRegion2(elems)
+	return clearance.NewRegion2(elems)
 }
 
 func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	f := &cFace{
-		kind: ckPlane, u: x, v: y, n: z,
-		region: internalPolygonRegion(t, -30, 0, 10, 24),
+	f := &clearance.CFace{
+		Kind: clearance.CkPlane, U: x, V: y, N: z,
+		Region: internalPolygonRegion(t, -30, 0, 10, 24),
 	}
-	g := &cFace{
-		kind: ckPlane, u: x, v: y.Scale(-1), n: z.Scale(-1),
-		region: internalPolygonRegion(t, 30, 0, 10, 24),
+	g := &clearance.CFace{
+		Kind: clearance.CkPlane, U: x, V: y.Scale(-1), N: z.Scale(-1),
+		Region: internalPolygonRegion(t, 30, 0, 10, 24),
 	}
 	k := &pairKernel{
-		a: &bodyGeom{faces: []*cFace{f}},
-		b: &bodyGeom{faces: []*cFace{g}},
+		a: &bodyGeom{faces: []*clearance.CFace{f}},
+		b: &bodyGeom{faces: []*clearance.CFace{g}},
 	}
 
 	t.Run("whole certificate", func(t *testing.T) {
-		ctx := &internalFrameCancelContext{Context: t.Context(), target: "coplanarBoundaryClearanceBudget"}
+		ctx := &internalFrameCancelContext{Context: t.Context(), target: "CoplanarBoundaryClearanceBudget"}
 		_, err := k.coplanarContactCertified(ctx)
 		require.ErrorIs(t, err, context.Canceled)
 		require.True(t, ctx.entered, `the public certificate path must reach the nested boundary scan before cancellation`)
@@ -210,7 +212,7 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 
 	t.Run("nested boundary scan", func(t *testing.T) {
 		ctx := &internalCancelContext{Context: t.Context(), limit: 1}
-		_, err := coplanarBoundaryClearanceBudget(proofbound.NewWorkBudget(ctx), f.region, g.region)
+		_, err := clearance.CoplanarBoundaryClearanceBudget(proofbound.NewWorkBudget(ctx), f.Region, g.Region)
 		require.ErrorIs(t, err, context.Canceled)
 	})
 }
