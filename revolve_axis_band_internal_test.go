@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -177,7 +179,7 @@ func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 0)
 	line := axisLine2{dU: 1, dV: 0}
-	ax, side, err := resolveAxisSide(t.Context(), profile, line, newFreeformWork())
+	ax, side, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 1.0, side)
 	require.Zero(t, ax.radialAdmitAllow, "an exact axis proving the radial minimum non-negative charges nothing")
@@ -195,7 +197,7 @@ func TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis(t *test
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 1e-7)
 	line := axisLine2{dU: 1, dV: 0}
-	_, _, err := resolveAxisSide(t.Context(), profile, line, newFreeformWork())
+	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -219,7 +221,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
-	_, _, err := resolveAxisSide(t.Context(), profile, line, newFreeformWork())
+	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not decide which side")
 	// The error's own stated bound is the roff charge itself: zero would mean

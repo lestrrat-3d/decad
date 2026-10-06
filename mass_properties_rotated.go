@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -294,13 +296,13 @@ func combineVolumeMoments(a, b volumeMoments, op func(proofbound.RatInterval, pr
 // rational intervals: exact when the moment engine certified every field
 // exactly, else each held value widened by its own published bound.
 func prismSectionMoments(ctx context.Context, pp prismPayload) ([6]proofbound.RatInterval, error) {
-	ig, err := pp.profile.evaluatorIntegralsContext(ctx, momentSecondOrder, nil)
+	ig, err := pp.profile.evaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, nil)
 	if err != nil {
 		return [6]proofbound.RatInterval{}, err
 	}
 	section := [6]proofbound.RatInterval{}
-	if !ig.exactDead && ig.exact.complete() {
-		for i, value := range ig.exact.fields() {
+	if !ig.exactDead && ig.exact.Complete() {
+		for i, value := range ig.exact.Fields() {
 			section[i] = proofbound.PointInterval(value)
 		}
 		return section, nil
@@ -333,7 +335,7 @@ func prismSectionMoments(ctx context.Context, pp prismPayload) ([6]proofbound.Ra
 // the denoted boundary within sectionDelta of it; the denoted levels lie
 // within their own displacement of h/2 from zm.
 func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbound.RatInterval, h *big.Rat) (*big.Rat, *big.Rat, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	walks, err := resolveProfileWalks(pp.profile, work)
 	if err != nil {
 		return nil, nil, err

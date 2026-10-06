@@ -57,7 +57,7 @@ while the boolean refuses the operand.
 |---|---|---|---|
 | **R0** | tess T1 completion | `Mesh` carries `faceBound`, `volSymDiff`, `symDiffOK`; prism/cup/faceted populate them; boolean reads them | every later row publishes into this record; without it R1 is boolean-unsound (§1) |
 | **R1** | tess T6 | `loftPayload` exact restatement + boolean admission | cheapest reach: the triangle set already exists; unblocks loft booleans and interference, the north-star oracle |
-| **R2** | spline §10 P5 | free-form arm of `chordLoop`: dyadic station chain over `spline_sagitta.go` | rides the existing prism path; spline Table C orders export/booleans/interference for free-form walls "before revolve" |
+| **R2** | spline §10 P5 | free-form arm of `chordLoop`: dyadic station chain over `internal/freeform/spline_sagitta.go` | rides the existing prism path; spline Table C orders export/booleans/interference for free-form walls "before revolve" |
 | **R3** | tess T2 | revolve, line generators only: cylinder/cone/plane/axis, poles, partial caps, both coordinate proofs, `Ecell`, export | first revolve export; largest single increment, so it follows the two cheap ones |
 | **R4** | tess T3 | revolve circular generators: sphere/torus, axis-to-axis minimum, intra-loop tube clearance, circular `Ecell` | extends R3's cells; same files |
 | **R5** | tess T4 | `Mmeridian` + certified `Icell`; `symDiffOK` true; revolve admitted to booleans | the last revolve proof; heaviest proof engineering |
@@ -250,8 +250,8 @@ changes: `requireLoopClearance`, `triangulate2DContext`, `earClip` and the wall/
 
 ### Machinery
 
-`spline_sagitta.go` is the machinery. It owns `dyadicSpanSagittaUpper` (spline §6.2.1's control-point-to-
-chord-SEGMENT bound), `dyadicSpan.split` (`spline_length.go`, exact midpoint de Casteljau), `spanSpeedUpper`
+`internal/freeform/spline_sagitta.go` is the machinery. It owns `dyadicSpanSagittaUpper` (spline §6.2.1's control-point-to-
+chord-SEGMENT bound), `dyadicSpan.split` (`internal/freeform/spline_length.go`, exact midpoint de Casteljau), `spanSpeedUpper`
 (a proven arc-length upper bound), and `sagittaStationWalk`, a two-sided measure-then-bisect walker built for
 the loft's paired chains. R2 adds the ONE-sided sibling:
 
@@ -377,7 +377,7 @@ composes both in one expression.
 | §9 endpoint + homotopy audits | `revolveContactAudit(budget, data, tris, deltaC + deltaR)`, at `VerifyBoundary` and above | ONE pass, at the final stored coordinates, against the COMBINED displacement. Every mesh on either homotopy is a vertex-wise displacement of the stored one by at most that (the placement between the two stages is an exact isometry), and every predicate the classification consults is multilinear in the vertices, so a stored reading exceeding its own perturbation allowance fixes the sign for the whole family. A pair sharing nothing is proven apart by an exact separating axis with the same margin; a pair sharing a vertex or an edge is proven to meet ONLY there by a boundary plane built as a polynomial in the pair's own corners, so the plane keeps containing the shared feature identically. Facet-pair count preflighted against `maxFacetPairTestsPerCall` (tess §3), as `loft_audit.go` does |
 | §9 link audit | `requireVertexLinks(mesh)` | every link one connected degree-two cycle; a pinched pole is `ErrUnsupported` |
 | §10.1 bounds | `faceBound`: wall `deltaM + deltaPhi + deltaC + deltaR`; partial cap `deltaM + deltaC + deltaR`; exact-line cap `deltaC + deltaR` | `bound` = max |
-| §10.2 `Ecell` | `revolveCellAreaSlack` / `revolveFanAreaSlack` over `absLinearIntegral` | tess §15's choice for T2, recorded there: COMPLETE SIGN DECOMPOSITION in closed form, with no root isolation at all. For a straight generator `Jtrue = L·dφ·ρ(t)` does not depend on `u` and `Jheld` is constant on each half of the domain the fixed diagonal cuts, so the difference is LINEAR in `t`, its single zero is an exact rational quotient, and each sign-fixed piece integrates through its own primitive. `clearance_poly.go`'s Sturm engine is not reached, and `cos dφ`/`sin dφ` enter only through the ideal triangle's own area — never inside a root isolation — so the widening §9's open question worried about cannot lose a sign. One evaluation answers for every angular interval: interval `l`'s ideal samples are the exact rotation of interval 0's, and a rotation is an isometry |
+| §10.2 `Ecell` | `revolveCellAreaSlack` / `revolveFanAreaSlack` over `absLinearIntegral` | tess §15's choice for T2, recorded there: COMPLETE SIGN DECOMPOSITION in closed form, with no root isolation at all. For a straight generator `Jtrue = L·dφ·ρ(t)` does not depend on `u` and `Jheld` is constant on each half of the domain the fixed diagonal cuts, so the difference is LINEAR in `t`, its single zero is an exact rational quotient, and each sign-fixed piece integrates through its own primitive. `internal/freeform/clearance_poly.go`'s Sturm engine is not reached, and `cos dφ`/`sin dφ` enter only through the ideal triangle's own area — never inside a root isolation — so the widening §9's open question worried about cannot lose a sign. One evaluation answers for every angular interval: interval `l`'s ideal samples are the exact rotation of interval 0's, and a rotation is an isometry |
 | §10.2 caps + coordinate stages | circular-segment areas (R4); `perturbedTriangleAreaAllow(·, deltaC + deltaR)` per facet | a straight generator's cap trim is exact, so a cap contributes no chording area at all; the combined displacement covers the ideal, stored-unplaced and placed triangles alike. Summed upward, after `Ecell` |
 | §3 ceilings | `revolvePreflightFacets`: facet count, cumulative facet work AND, at a level that runs the facet-contact audit, that audit's own `F·(F−1)/2`, all with checked unsigned arithmetic before any slice | charging the pair ceiling here rather than at the audit is strictly earlier than §3 asks. It binds at `VerifyBoundary` and above, where a revolve mesh therefore carries at most 4000 facets. At `VerifyNone` no pair predicate runs, so §3 charges that ceiling nothing and `maxFacetsPerMesh` binds instead, at 65_536 facets |
 
@@ -735,7 +735,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R2 — free-form prism
 
-11. **Files:** `spline_sagitta.go`. **What:** generalise `sagittaStationWalk` to a slice of sides; add
+11. **Files:** `internal/freeform/spline_sagitta.go`. **What:** generalise `sagittaStationWalk` to a slice of sides; add
     `chainStations` and `freeformChain` per §5; `pairStations` keeps its signature. **Tests:**
     `spline_sagitta` internal tests: `chainStations` on one side of an existing `pairStations` fixture
     returns the same station parameters that side had; the cap refuses at the same count; metering test

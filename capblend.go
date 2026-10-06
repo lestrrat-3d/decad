@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -179,7 +181,7 @@ func (cbp capBlendPayload) axialDelta() float64 {
 // A direction along the sweep ignores contour displacement but
 // still reads the cap level's own inherited axial displacement.
 func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return cbp.extentBoundedAlong(context.Background(), g, newFreeformWork())
+	return cbp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
 // extentBoundedAlong is the reading itself: the interval AND the proven
@@ -198,7 +200,7 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, err
 // extremized candidate, charged exactly by proofbound.ExactSumRound (internal/proofbound/bounds.go), since a
 // placement can leave every coefficient exactly right and still round when the
 // terms are added.
-func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
+func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
 	gu := pl.dir(1, 0, 0).Dot(g)
@@ -220,7 +222,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if up {
 			return proofbound.UpRound(v + allow)
 		}
-		return downRound(v - allow)
+		return freeform.DownRound(v - allow)
 	}
 	take := func(l, h, z, allow float64) {
 		lv, hv := l+z*gz, h+z*gz

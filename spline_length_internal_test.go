@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -40,7 +42,7 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	for i, point := range control {
 		coords[i] = [2]float64{point.U, point.V}
 	}
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
 	reference := denseSplineLength(t, coords)
@@ -49,11 +51,11 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	for _, depth := range []int{0, 2, 4, 6, 8, 10} {
 		lo, hi := 0.0, 0.0
 		for _, span := range spans {
-			spanLo, spanHi := spanLengthBracket(span, depth)
-			direct, err := dyadicSpanOf(nil, span)
+			spanLo, spanHi := freeform.SpanLengthBracket(span, depth)
+			direct, err := freeform.DyadicSpanOf(nil, span)
 			require.NoError(t, err)
-			direct.denSq = new(big.Int).Mul(direct.den, direct.den)
-			originalLo, originalHi := direct.lengthBracket(depth)
+			direct.DenSq = new(big.Int).Mul(direct.Den, direct.Den)
+			originalLo, originalHi := direct.LengthBracket(depth)
 			require.Equal(t, originalLo, spanLo, "scratch and original splits have identical lower sums")
 			require.Equal(t, originalHi, spanHi, "scratch and original splits have identical upper sums")
 			lo += spanLo
@@ -88,10 +90,10 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 		left, right := referenceSplit(span)
 		leftLo, leftHi := rationalBracket(left, depth-1)
 		rightLo, rightHi := rationalBracket(right, depth-1)
-		return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
+		return freeform.DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 	}
-	wantLo, wantHi := rationalBracket(spans[0], freeformLengthDepth)
-	gotLo, gotHi := spanLengthBracket(spans[0], freeformLengthDepth)
+	wantLo, wantHi := rationalBracket(spans[0], freeform.FreeformLengthDepth)
+	gotLo, gotHi := freeform.SpanLengthBracket(spans[0], freeform.FreeformLengthDepth)
 	require.Equal(t, wantLo, gotLo, "the complete lower bracket matches rational leaves")
 	require.Equal(t, wantHi, gotHi, "the complete upper bracket matches rational leaves")
 }
@@ -166,16 +168,16 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Equal derivatives at every uniform split boundary imply equal
 			// exact lengths for the two adjoining control edges.
-			root, err := dyadicSpanOf(nil, span)
+			root, err := freeform.DyadicSpanOf(nil, span)
 			require.NoError(t, err)
-			var leaves []dyadicSpan
-			var collect func(dyadicSpan, int)
-			collect = func(s dyadicSpan, depth int) {
+			var leaves []freeform.DyadicSpan
+			var collect func(freeform.DyadicSpan, int)
+			collect = func(s freeform.DyadicSpan, depth int) {
 				if depth == 0 {
 					leaves = append(leaves, s)
 					return
 				}
-				left, right, splitErr := s.split(nil)
+				left, right, splitErr := s.Split(nil)
 				require.NoError(t, splitErr)
 				collect(left, depth-1)
 				collect(right, depth-1)
@@ -183,25 +185,25 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 			collect(root, 4)
 			for i := 1; i < len(leaves); i++ {
 				previous, next := leaves[i-1], leaves[i]
-				n := len(previous.points)
-				last := previous.squaredDistance(previous.points[n-2], previous.points[n-1])
-				first := next.squaredDistance(next.points[0], next.points[1])
+				n := len(previous.Points)
+				last := previous.SquaredDistance(previous.Points[n-2], previous.Points[n-1])
+				first := next.SquaredDistance(next.Points[0], next.Points[1])
 				require.Zero(t, last.Cmp(first), "adjacent leaf edges %d and %d", i-1, i)
 			}
-			for _, depth := range []int{0, 1, 4, freeformLengthDepth} {
-				original, err := dyadicSpanOf(nil, span)
+			for _, depth := range []int{0, 1, 4, freeform.FreeformLengthDepth} {
+				original, err := freeform.DyadicSpanOf(nil, span)
 				require.NoError(t, err)
-				original.denSq = new(big.Int).Mul(original.den, original.den)
-				wantLo, wantHi := original.lengthBracket(depth)
-				gotLo, gotHi := spanLengthBracket(span, depth)
+				original.DenSq = new(big.Int).Mul(original.Den, original.Den)
+				wantLo, wantHi := original.LengthBracket(depth)
+				gotLo, gotHi := freeform.SpanLengthBracket(span, depth)
 				require.Equal(t, math.Float64bits(wantLo), math.Float64bits(gotLo))
 				require.Equal(t, math.Float64bits(wantHi), math.Float64bits(gotHi))
 			}
-			cost := freeformBracketCost(len(span))
-			work := &freeformWork{spent: freeformWorkLimit - cost + 1}
-			_, _, err = freeformArcLength([]survey2d.BezierSpan{span}, work)
+			cost := freeform.FreeformBracketCost(len(span))
+			work := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - cost + 1}
+			_, _, err = freeform.FreeformArcLength([]survey2d.BezierSpan{span}, work)
 			require.ErrorIs(t, err, ErrUnsupported)
-			require.Equal(t, freeformWorkLimit, work.spent)
+			require.Equal(t, freeform.FreeformWorkLimit, work.Spent)
 		})
 	}
 }
@@ -215,27 +217,27 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 // 2.20e-05, over a hundred times coarser, and it narrows by as little as 1.37x
 // at one of its ten levels, so no per-level rate sizes it either.
 //
-// The admitted width is DISCOVERED from freeformBracketCost rather than passed
+// The admitted width is DISCOVERED from freeform.FreeformBracketCost rather than passed
 // to it, so the fixture measures whatever that preflight currently admits; the
 // pinned 32 is there to make a change in the preflight read as the REACH change
 // it is, never as a test to retune quietly.
 func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 	t.Parallel()
 	widest := 2
-	for freeformBracketCost(widest+1) <= freeformWorkLimit {
+	for freeform.FreeformBracketCost(widest+1) <= freeform.FreeformWorkLimit {
 		widest++
 	}
-	require.LessOrEqual(t, freeformBracketCost(widest), freeformWorkLimit,
+	require.LessOrEqual(t, freeform.FreeformBracketCost(widest), freeform.FreeformWorkLimit,
 		"the discovered width's bracket is affordable")
-	require.Greater(t, freeformBracketCost(widest+1), freeformWorkLimit,
+	require.Greater(t, freeform.FreeformBracketCost(widest+1), freeform.FreeformWorkLimit,
 		"one control past it is over the ceiling, so this is the widest span measured here")
 	require.Equal(t, 32, widest,
 		"the preflight admits 32 controls; a change here moves what this evaluator can bracket at all")
 
 	cubic := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeformWork{})
+	spans, err := splineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
-	value, bound, err := freeformArcLength(spans, &freeformWork{})
+	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.InDelta(t, 1.9213e-07, bound/value, 1e-11,
 		"an ordinary cubic's measured relative half width")
@@ -243,11 +245,11 @@ func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 	wide := windingControlNet(widest, 8, 10)
 	seg := equalWeightNURBS(wide)
 	require.NoError(t, validateNURBSSegment(seg), "the widest span is a well-formed record")
-	wideSpans, _, err := freeformBezierSpans(seg, &freeformWork{})
+	wideSpans, _, err := freeformBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Len(t, wideSpans, 1, "no interior knot, so the record IS one Bézier span")
 
-	value, bound, err = freeformArcLength(wideSpans, &freeformWork{})
+	value, bound, err = freeform.FreeformArcLength(wideSpans, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Greater(t, bound/value, 1e-05,
 		"the widest admitted span's width is nowhere near an ordinary curve's")
@@ -308,10 +310,10 @@ func denseBezierLength(control []Point2, samples int) float64 {
 func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 	require.NoError(t, err)
 
-	value, bound, err := freeformArcLength(spans, &freeformWork{})
+	value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 	require.NoError(t, err)
 	require.Positive(t, value)
 	require.Positive(t, bound, "an arc length is never exact, so its bound is never zero")
@@ -342,16 +344,16 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			seg := SplineSeg{Control: tc.control, TStart: 0, TEnd: 1}
 
-			spans, err := splineBezierSpans(seg, &freeformWork{})
+			spans, err := splineBezierSpans(seg, &freeform.FreeformWork{})
 			require.NoError(t, err, "the record itself converts")
-			_, _, err = freeformArcLength(spans, &freeformWork{})
+			_, _, err = freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 			require.ErrorIs(t, err, ErrDegenerate)
 			require.Contains(t, err.Error(), "coincide")
 
-			_, err = walkOf(seg, newFreeformWork())
+			_, err = walkOf(seg, freeform.NewFreeformWork())
 			require.ErrorIs(t, err, ErrDegenerate, "no walk carries a zero length bound")
 
-			_, _, _, err = validateFreeformMomentSegment(seg, &freeformWork{})
+			_, _, _, err = validateFreeformMomentSegment(seg, &freeform.FreeformWork{})
 			require.ErrorIs(t, err, ErrDegenerate, "the moments path refuses the same record")
 		})
 	}
@@ -362,8 +364,8 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 // below it and the upper at or above.
 func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	t.Parallel()
-	a := survey2d.RatPoint{U: mustRatOf(0), V: mustRatOf(0)}
-	b := survey2d.RatPoint{U: mustRatOf(1), V: mustRatOf(1)}
+	a := survey2d.RatPoint{U: freeform.MustRatOf(0), V: freeform.MustRatOf(0)}
+	b := survey2d.RatPoint{U: freeform.MustRatOf(1), V: freeform.MustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
 
 	lo := proofbound.RatSqrtDown(squared)
@@ -396,8 +398,8 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 	} {
 		t.Run(strconv.FormatFloat(leg, 'g', -1, 64), func(t *testing.T) {
 			q := ratSquaredDistance(
-				survey2d.RatPoint{U: mustRatOf(0), V: mustRatOf(0)},
-				survey2d.RatPoint{U: mustRatOf(leg), V: mustRatOf(0)},
+				survey2d.RatPoint{U: freeform.MustRatOf(0), V: freeform.MustRatOf(0)},
+				survey2d.RatPoint{U: freeform.MustRatOf(leg), V: freeform.MustRatOf(0)},
 			)
 
 			lo := proofbound.RatSqrtDown(q)
@@ -438,10 +440,10 @@ func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
-			value, bound, err := freeformArcLength(spans, &freeformWork{})
+			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 			require.NoError(t, err, "a valid curve is never refused for its scale alone")
 			require.Positive(t, value)
 			require.Positive(t, bound, "an arc length is never exact")
@@ -467,10 +469,10 @@ func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
 			for i, c := range coords {
 				control[i] = Point2{U: c[0], V: c[1]}
 			}
-			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})
 			require.NoError(t, err)
 
-			value, bound, err := freeformArcLength(spans, &freeformWork{})
+			value, bound, err := freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 			require.NoError(t, err, "a near-duplicate pair is a valid curve, not a refusal")
 
 			reference := denseSplineLength(t, coords)
@@ -493,15 +495,15 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 		TEnd:    1,
 	}
 
-	spans, err := splineBezierSpans(seg, &freeformWork{})
+	spans, err := splineBezierSpans(seg, &freeform.FreeformWork{})
 	require.NoError(t, err, "the record itself is finite and converts")
 
-	_, _, err = freeformArcLength(spans, &freeformWork{})
+	_, _, err = freeform.FreeformArcLength(spans, &freeform.FreeformWork{})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrNotFinite, "every coordinate here is finite")
 	require.Contains(t, err.Error(), "representable float64 range")
 
-	_, err = walkOf(seg, newFreeformWork())
+	_, err = walkOf(seg, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "the walk carries the same refusal")
 	require.NotErrorIs(t, err, ErrNotFinite)
 }
@@ -513,7 +515,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
+	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
 	require.Equal(t, survey2d.WalkFreeform, walk.Kind)
 	require.False(t, walk.IsLine(), "a free-form walk is not a line")
@@ -532,12 +534,12 @@ func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 // counts leaves alone admits a span whose splits run for hours.
 func TestFreeformBracketCostGrowsWithDegree(t *testing.T) {
 	t.Parallel()
-	require.Less(t, freeformBracketCost(4), freeformWorkLimit, "a cubic span's bracket is affordable")
-	require.Greater(t, freeformBracketCost(8), 3*freeformBracketCost(4),
+	require.Less(t, freeform.FreeformBracketCost(4), freeform.FreeformWorkLimit, "a cubic span's bracket is affordable")
+	require.Greater(t, freeform.FreeformBracketCost(8), 3*freeform.FreeformBracketCost(4),
 		"doubling the degree more than triples the charge")
-	require.Equal(t, freeformCostCeiling, freeformBracketCost(1025), "the finding's degree-1024 span")
-	require.Equal(t, freeformCostCeiling, freeformBracketCost(1<<20), "an absurd degree saturates, never wraps")
-	require.Less(t, uint64(1)<<freeformLengthDepth, freeformWorkLimit,
+	require.Equal(t, freeform.FreeformCostCeiling, freeform.FreeformBracketCost(1025), "the finding's degree-1024 span")
+	require.Equal(t, freeform.FreeformCostCeiling, freeform.FreeformBracketCost(1<<20), "an absurd degree saturates, never wraps")
+	require.Less(t, uint64(1)<<freeform.FreeformLengthDepth, freeform.FreeformWorkLimit,
 		"a charge counting only the leaves is what let that degree through")
 }
 
@@ -552,19 +554,19 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 	seg := oneSpanNURBS(degree)
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
-	work := &freeformWork{}
+	work := &freeform.FreeformWork{}
 	spans, _, err := freeformBezierSpans(seg, work)
 	require.NoError(t, err, "a single span needs no knot insertion")
 	require.Len(t, spans, 1)
 
 	start := time.Now()
-	_, _, err = freeformArcLength(spans, work)
+	_, _, err = freeform.FreeformArcLength(spans, work)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the subdivision")
 
 	start = time.Now()
-	_, err = walkOf(seg, newFreeformWork())
+	_, err = walkOf(seg, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 10*time.Second, "the walk refuses on the same preflight")
@@ -620,7 +622,7 @@ func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 
 	pre, err := validateMomentFields(record)
 	require.NoError(t, err, "the preflight admits this record")
-	require.Greater(t, pre.work.spent, freeformWorkLimit/2,
+	require.Greater(t, pre.work.Spent, freeform.FreeformWorkLimit/2,
 		"the fixture is sized so the preflight alone spends most of the record's ceiling")
 
 	var before, after runtime.MemStats
@@ -653,16 +655,16 @@ func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
 		TStart:  0,
 		TEnd:    1,
 	}
-	shared := newFreeformWork()
+	shared := freeform.NewFreeformWork()
 
 	_, err := walkOf(seg, shared)
 	require.NoError(t, err)
-	first := shared.spent
+	first := shared.Spent
 	require.Positive(t, first, "a free-form walk charges its conversion and its bracket")
 
 	_, err = walkOf(seg, shared)
 	require.NoError(t, err)
-	require.Equal(t, 2*first, shared.spent,
+	require.Equal(t, 2*first, shared.Spent,
 		"the second resolution accumulates onto the same counter")
 }
 
@@ -686,7 +688,7 @@ func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 
 // The subdivision's own arithmetic must introduce NOTHING but powers of two.
 // That is what lets a split value be an integer numerator beside a binary
-// exponent (dyadicPoint), and it is a fact about de Casteljau at t = 1/2 rather
+// exponent (freeform.DyadicPoint), and it is a fact about de Casteljau at t = 1/2 rather
 // than about the representation: a blend anywhere else, or a level that scaled
 // by anything but a half, would bring a new odd factor into the denominators and
 // the exponent could no longer carry it.
@@ -725,14 +727,14 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		{name: "wide NURBS span", seg: equalWeightNURBS(windingControlNet(12, 3, 10))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			spans, _, err := freeformBezierSpans(tc.seg, newFreeformWork())
+			spans, _, err := freeformBezierSpans(tc.seg, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.NotEmpty(t, spans)
 
 			for i, span := range spans {
-				dyadic, err := dyadicSpanOf(nil, span)
+				dyadic, err := freeform.DyadicSpanOf(nil, span)
 				require.NoError(t, err)
-				odd := oddPart(dyadic.den)
+				odd := oddPart(dyadic.Den)
 				requireSameSpan(t, dyadic, span, "span %d is re-expressed exactly", i)
 				requireSubdivisionStaysDyadic(t, dyadic, span, odd, 4)
 			}
@@ -751,20 +753,20 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
 			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
 		}
-		s, err := dyadicSpanOf(nil, span)
+		s, err := freeform.DyadicSpanOf(nil, span)
 		require.NoError(t, err)
-		s.denSq = new(big.Int).Mul(s.den, s.den)
-		d := s.distanceSquared(s.points[0], s.points[1])
-		scratch := &lengthDistanceScratch{}
-		scratchDistance := s.distanceSquaredScratch(s.points[0], s.points[1], scratch)
-		require.Zero(t, d.num.Cmp(scratchDistance.num), "reused numerator matches the original")
+		s.DenSq = new(big.Int).Mul(s.Den, s.Den)
+		d := s.DistanceSquared(s.Points[0], s.Points[1])
+		scratch := &freeform.LengthDistanceScratch{}
+		scratchDistance := s.DistanceSquaredScratch(s.Points[0], s.Points[1], scratch)
+		require.Zero(t, d.Num.Cmp(scratchDistance.Num), "reused numerator matches the original")
 		q := ratSquaredDistance(span[0], span[1])
-		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(scratchDistance, scratch)),
+		require.Equal(t, math.Float64bits(freeform.SpanSqrtSeed(d)), math.Float64bits(freeform.SpanSqrtSeedScratch(scratchDistance, scratch)),
 			"scratch seed matches the original at every finite scale")
-		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
-		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
-		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(scratchDistance, scratch), "scratch lower bound")
-		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(scratchDistance, scratch), "scratch upper bound")
+		require.Equal(t, proofbound.RatSqrtDown(q), freeform.SpanSqrtDown(d), "random distance lower bound")
+		require.Equal(t, proofbound.RatSqrtUp(q), freeform.SpanSqrtUp(d), "random distance upper bound")
+		require.Equal(t, freeform.SpanSqrtDown(d), freeform.SpanSqrtDownScratch(scratchDistance, scratch), "scratch lower bound")
+		require.Equal(t, freeform.SpanSqrtUp(d), freeform.SpanSqrtUpScratch(scratchDistance, scratch), "scratch upper bound")
 	}
 
 	// The raw representation can have large factors shared by numerator and
@@ -777,25 +779,25 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		new(big.Rat).Mul(proofarith.FloatRat(math.MaxFloat64), proofarith.FloatRat(math.MaxFloat64)),
 		new(big.Rat).Add(proofarith.FloatRat(1), proofarith.FloatRat(math.SmallestNonzeroFloat64)),
 	} {
-		d := spanSquaredDistance{
-			num:   new(big.Int).Lsh(new(big.Int).Mul(q.Num(), factor), 34),
-			denSq: new(big.Int).Mul(q.Denom(), factor),
-			exp:   17,
+		d := freeform.SpanSquaredDistance{
+			Num:   new(big.Int).Lsh(new(big.Int).Mul(q.Num(), factor), 34),
+			DenSq: new(big.Int).Mul(q.Denom(), factor),
+			Exp:   17,
 		}
-		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
-		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
-		scratch := &lengthDistanceScratch{}
-		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(d, scratch)),
+		require.Equal(t, proofbound.RatSqrtDown(q), freeform.SpanSqrtDown(d), "large common factor lower bound")
+		require.Equal(t, proofbound.RatSqrtUp(q), freeform.SpanSqrtUp(d), "large common factor upper bound")
+		scratch := &freeform.LengthDistanceScratch{}
+		require.Equal(t, math.Float64bits(freeform.SpanSqrtSeed(d)), math.Float64bits(freeform.SpanSqrtSeedScratch(d, scratch)),
 			"large common factor scratch seed")
-		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(d, scratch), "large common factor scratch lower bound")
-		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(d, scratch), "large common factor scratch upper bound")
+		require.Equal(t, freeform.SpanSqrtDown(d), freeform.SpanSqrtDownScratch(d, scratch), "large common factor scratch lower bound")
+		require.Equal(t, freeform.SpanSqrtUp(d), freeform.SpanSqrtUpScratch(d, scratch), "large common factor scratch upper bound")
 		for _, f := range []float64{
 			0, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
 			1, -1, math.MaxFloat64, -math.MaxFloat64,
 		} {
 			sq := new(big.Rat).Mul(proofarith.FloatRat(f), proofarith.FloatRat(f))
-			require.Equal(t, sq.Cmp(q), spanSquareCmp(f, d), "large common factor square comparison")
-			require.Equal(t, spanSquareCmp(f, d), spanSquareCmpScratch(f, d, scratch),
+			require.Equal(t, sq.Cmp(q), freeform.SpanSquareCmp(f, d), "large common factor square comparison")
+			require.Equal(t, freeform.SpanSquareCmp(f, d), freeform.SpanSquareCmpScratch(f, d, scratch),
 				"large common factor scratch square comparison")
 		}
 	}
@@ -804,7 +806,7 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 // requireSubdivisionStaysDyadic walks the whole subdivision tree to the given
 // depth, checking every level of both computations against each other and every
 // reference denominator against the span's odd part.
-func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference survey2d.BezierSpan, odd *big.Int, depth int) {
+func requireSubdivisionStaysDyadic(t *testing.T, dyadic freeform.DyadicSpan, reference survey2d.BezierSpan, odd *big.Int, depth int) {
 	t.Helper()
 	for _, point := range reference {
 		for _, coord := range []*big.Rat{point.U, point.V} {
@@ -815,7 +817,7 @@ func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference su
 	if depth == 0 {
 		return
 	}
-	dyadicLeft, dyadicRight, err := dyadic.split(nil)
+	dyadicLeft, dyadicRight, err := dyadic.Split(nil)
 	require.NoError(t, err)
 	referenceLeft, referenceRight := referenceSplit(reference)
 	requireSameSpan(t, dyadicLeft, referenceLeft, "the left half agrees with the rational reference")
@@ -824,21 +826,21 @@ func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference su
 	requireSubdivisionStaysDyadic(t, dyadicRight, referenceRight, odd, depth-1)
 }
 
-func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference survey2d.BezierSpan, msgAndArgs ...any) {
+func requireSameSpan(t *testing.T, dyadic freeform.DyadicSpan, reference survey2d.BezierSpan, msgAndArgs ...any) {
 	t.Helper()
-	require.Len(t, dyadic.points, len(reference), msgAndArgs...)
-	for i, point := range dyadic.points {
-		require.Zero(t, dyadicRat(dyadic.den, point.u, point.exp).Cmp(reference[i].U), msgAndArgs...)
-		require.Zero(t, dyadicRat(dyadic.den, point.v, point.exp).Cmp(reference[i].V), msgAndArgs...)
+	require.Len(t, dyadic.Points, len(reference), msgAndArgs...)
+	for i, point := range dyadic.Points {
+		require.Zero(t, dyadicRat(dyadic.Den, point.U, point.Exp).Cmp(reference[i].U), msgAndArgs...)
+		require.Zero(t, dyadicRat(dyadic.Den, point.V, point.Exp).Cmp(reference[i].V), msgAndArgs...)
 	}
 	// The leaf reading is where the split form hands the bracket back a
 	// rational, so it is checked against the plain one every leg of the way.
 	for i := 0; i+1 < len(reference); i++ {
-		d := dyadic.distanceSquared(dyadic.points[i], dyadic.points[i+1])
+		d := dyadic.DistanceSquared(dyadic.Points[i], dyadic.Points[i+1])
 		q := ratSquaredDistance(reference[i], reference[i+1])
-		require.Zero(t, dyadic.squaredDistance(dyadic.points[i], dyadic.points[i+1]).Cmp(q), msgAndArgs...)
-		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), msgAndArgs...)
-		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), msgAndArgs...)
+		require.Zero(t, dyadic.SquaredDistance(dyadic.Points[i], dyadic.Points[i+1]).Cmp(q), msgAndArgs...)
+		require.Equal(t, proofbound.RatSqrtDown(q), freeform.SpanSqrtDown(d), msgAndArgs...)
+		require.Equal(t, proofbound.RatSqrtUp(q), freeform.SpanSqrtUp(d), msgAndArgs...)
 	}
 }
 
@@ -857,7 +859,7 @@ func oddPart(n *big.Int) *big.Int {
 }
 
 // ratSquaredDistance is |b−a|² taken straight over normalising rationals — the
-// plain reading dyadicSpan.squaredDistance must reproduce exactly, and the exact
+// plain reading freeform.DyadicSpan.squaredDistance must reproduce exactly, and the exact
 // value the directed square-root bounds are proven against.
 func ratSquaredDistance(a, b survey2d.RatPoint) *big.Rat {
 	du := new(big.Rat).Sub(b.U, a.U)

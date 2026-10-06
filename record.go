@@ -411,7 +411,7 @@ func validateNURBSSegmentSizes(seg NURBSSeg) error {
 // is a scan whose length the caller chose, so a description built for every knot
 // and every weight dominated the walk itself by roughly seventy times.
 //
-// On the moment path this runs behind chargeRationalLift (spline_bezier.go), and
+// On the moment path this runs behind freeform.ChargeRationalLift (spline_bezier.go), and
 // every check here must keep that charge's invariant: a single walk over Control,
 // Knots or Weights, whose length the charge counts. A check of any other shape —
 // over an array none of those lengths measures, or more than a constant number of
@@ -477,7 +477,7 @@ func validateNURBSSegmentContent(seg NURBSSeg) error {
 // continuity there is decided SOLELY by whether those two coordinates are
 // identical. Identical, and the curve is continuous and the body exists, so this
 // admits it: what refuses it later is the evaluator's own stride-degree slicing
-// precondition (bezierSliceCount), which is a limitation of the evaluator and
+// precondition (freeform.BezierSliceCount), which is a limitation of the evaluator and
 // reports ErrUnsupported. Different, and no such body exists, which is this
 // refusal.
 //

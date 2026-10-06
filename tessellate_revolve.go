@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -202,8 +204,8 @@ func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord fl
 func (p *revolvePlan) refine(r revolveRefine) error {
 	if r.loop < 0 {
 		n := p.nPhi + 1
-		if n > maxChordsPerWalk {
-			return errTooManyChords
+		if n > freeform.MaxChordsPerWalk {
+			return freeform.ErrTooManyChords
 		}
 		p.nPhi = n
 		p.deltaPhi = chordSagitta(p.rhoMax, p.sweep, n)
@@ -214,8 +216,8 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 		return fmt.Errorf(`%w: a straight revolve generator carries no meridian chording to refine`, ErrUnsupported)
 	}
 	n := p.counts[r.loop][r.walk] + 1
-	if n > maxChordsPerWalk {
-		return errTooManyChords
+	if n > freeform.MaxChordsPerWalk {
+		return freeform.ErrTooManyChords
 	}
 	p.counts[r.loop][r.walk] = n
 	p.sags[r.loop][r.walk] = chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), n)
@@ -262,7 +264,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 
 	// One resolution of every loop, shared with the builder (revolveLoopWalks),
 	// so the mesh is read off the walks the body was built from.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	resolved := make([]revolveWalks, len(loops))
 	junctions := make([][]revMeridian, len(loops))
@@ -345,7 +347,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 
 	// §8 steps 2-3: the meridian takes half the remaining budget and chords
 	// every circular walk; deltaM is the largest sagitta those choices prove.
-	meridian := downRound(available / 2)
+	meridian := freeform.DownRound(available / 2)
 	counts := make([][]int, len(resolved))
 	sags := make([][]float64, len(resolved))
 	deltaM := 0.0
@@ -368,7 +370,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 
 	// §8 steps 4-5: the angular sequence takes what the meridian left.
 	sweep := math.Abs(rp.phi1 - rp.phi0)
-	angular := downRound(available - deltaM)
+	angular := freeform.DownRound(available - deltaM)
 	if angular <= 0 || proofbound.IsNonFinite(angular) {
 		return nil, fmt.Errorf(`%w: this revolve's meridian chording spends the whole chord budget its tolerance left, so no angular count remains; retry with a coarser tolerance`, ErrUnsupported)
 	}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -33,7 +35,7 @@ import (
 // only a band has an offset foot whose locus the proof must follow.
 func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlendPayload) (error, error) {
 	for li, loop := range cbp.loops() {
-		cl, err := oneLoopCornerLoop(budget, loop, newFreeformWork())
+		cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err
 		}

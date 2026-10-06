@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -370,7 +372,7 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	require.GreaterOrEqual(t, result.z1Delta, proofarith.RationalFloatError(exact, result.z1))
 	require.Equal(t, proofbound.AbsSumUpper(0, proofarith.RationalFloatError(exact, result.z1)), result.z1Delta)
 
-	body, err := evalPrism(New(), producerID(0), result, newFreeformWork())
+	body, err := evalPrism(New(), producerID(0), result, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -1747,7 +1749,7 @@ func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
 			pp, ok, err := tryPrismBoolean(t.Context(), op, target2, tool2)
 			require.NoErrorf(t, err, "trial %d op %v: analytic path", i, op)
 			require.Truef(t, ok, "trial %d op %v: the crossing classifier must admit this pair", i, op)
-			analyticBody, err := evalPrismContext(t.Context(), doc2, doc2.nextProducerID(), pp, newFreeformWork())
+			analyticBody, err := evalPrismContext(t.Context(), doc2, doc2.nextProducerID(), pp, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			analyticVol, err := analyticBody.Volume()
 			require.NoError(t, err)

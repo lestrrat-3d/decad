@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -30,7 +32,7 @@ import (
 //
 // with Sφ = ∫cos φ dφ and Cφ = ∫sin φ dφ over [φ0, φ1], every section
 // integral over dA. The ∫ρ³, ∫zρ² and ∫z²ρ terms are the third-order ones
-// momentThirdOrder supplies. A full turn's Sφ, Cφ and ∫sinφcosφ are the exact
+// freeform.MomentThirdOrder supplies. A full turn's Sφ, Cφ and ∫sinφcosφ are the exact
 // zero and its ∫cos² and ∫sin² are π, through the same formulas, because the
 // turn-stated endpoints have exact sine and cosine (quarterTurnSinCos).
 //
@@ -82,7 +84,7 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments
 		return volumeMoments{}, err
 	}
 
-	ig, err := rp.profile.evaluatorIntegralsContext(ctx, momentThirdOrder, nil)
+	ig, err := rp.profile.evaluatorIntegralsContext(ctx, freeform.MomentThirdOrder, nil)
 	if err != nil {
 		return volumeMoments{}, err
 	}
@@ -299,8 +301,8 @@ func revolveRotation(rp revolvePayload) ([3][3]*big.Rat, error) {
 func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, error) {
 	var m [4][4]proofbound.RatInterval
 	slots := [6]*proofbound.RatInterval{&m[0][0], &m[1][0], &m[0][1], &m[2][0], &m[1][1], &m[0][2]}
-	if !ig.exactDead && ig.exact.complete() {
-		for i, value := range ig.exact.fields() {
+	if !ig.exactDead && ig.exact.Complete() {
+		for i, value := range ig.exact.Fields() {
 			*slots[i] = proofbound.PointInterval(value)
 		}
 	} else {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -52,7 +54,7 @@ import (
 // LineSeg-only form did) is unavoidable once the admitted set has three
 // types, and it does not relax PRECEDENCE: the first (i, j) whose pair fails
 // is still the first refusal reported, in the same walk order as before.
-func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
+func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
 			ErrUnsupported, len(p0.Holes), len(p1.Holes))
@@ -296,8 +298,8 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // A LineSeg cell's own chord IS the curve it denotes, so its entry is
 // exactly 0; a circular cell's own sagitta discharges this half exactly
 // (loftCircularCellStations' own doc comment), so its entry equals its
-// sagitta; a free-form cell's entry is spanMatchedDeltaUpper's own
-// per-cell reading (spline_sagitta.go's pairStations), which can differ cell
+// sagitta; a free-form cell's entry is freeform.SpanMatchedDeltaUpper's own
+// per-cell reading (internal/freeform/spline_sagitta.go's freeform.PairStations), which can differ cell
 // to cell within one paired segment where the bisection settled at different
 // depths.
 //
@@ -358,7 +360,7 @@ type loftLoopPair struct {
 // the RECORDED segment behind each side's walk (loftCellStations' own doc
 // comment), so each side's segment is handed to the generator alongside its
 // walk, under the same alignment offset the walk itself is read at.
-func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, float64, error) {
+func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk, target float64, work0, work1 *freeform.FreeformWork) ([]loftLoopPair, float64, float64, float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))

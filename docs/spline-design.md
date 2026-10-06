@@ -286,7 +286,7 @@ cannot decide.
 ### 5.1 The reduction
 
 Take the control coordinates exactly. They are floats, so they are exact
-rationals — the same take-the-floats-exactly discipline `clearance_poly.go`
+rationals — the same take-the-floats-exactly discipline `internal/freeform/clearance_poly.go`
 already uses.
 
 **Take the KNOT VECTOR exactly too, from sketch, and NEVER re-derive it.** Every
@@ -815,7 +815,7 @@ meets the target, under a HARD ITERATION CAP. The cap is not a safety net but a
 termination proof: every leaf sum is rounded outward, so the measured relative
 gap cannot fall below a small multiple of `2⁻⁵³` — a few tens of ulps on the
 spans measured — and a target below that floor never arrives however long the
-loop runs. `clearance_poly.go`'s `rpRefineRootContext` is the shape that already
+loop runs. `internal/freeform/clearance_poly.go`'s `rpRefineRootContext` is the shape that already
 does this correctly: a measured stopping predicate, a fixed iteration cap, and
 the honest wide interval standing when the cap is reached.
 
@@ -958,7 +958,7 @@ sweep's cap areas are the §5 region area, likewise exact.
 
 ### 6.2 Extremes, sagitta, normals and curvature reduce to one existing engine
 
-`clearance_poly.go` already owns a certified polynomial root engine — `ratPoly`
+`internal/freeform/clearance_poly.go` already owns a certified polynomial root engine — `ratPoly`
 over `math/big.Rat`, Sturm chains, square-free reduction, Cauchy root bounds,
 root isolation into intervals that cannot lie, and deterministic bisection under
 a fixed depth budget, all context-aware. In Bézier form every free-form question
@@ -996,7 +996,7 @@ They are not the candidate set and NEVER stand in for one: a span can hold its
 tightest radius at a parameter where `K` is far from zero.
 
 An extreme VALUE bracket follows from the isolated parameter interval plus the
-row's own Lipschitz bound, exactly the pattern `clearance_poly.go` already uses
+row's own Lipschitz bound, exactly the pattern `internal/freeform/clearance_poly.go` already uses
 for its critical values. Bracket EVERY isolated root and both span endpoints
 before reporting a `Box`, a through-all stop or a `ConcaveRadius`: a candidate set
 that misses an interior root understates the reading, which is the direction that
@@ -1005,7 +1005,7 @@ breaks the proof rather than merely widening it.
 **A stationarity polynomial that is identically ZERO makes its objective
 constant, and a zero root count is never on its own the proof of anything.**
 Isolation returns an empty list for every polynomial below degree 1 —
-`clearance_poly.go` trims trailing zero coefficients and returns early for
+`internal/freeform/clearance_poly.go` trims trailing zero coefficients and returns early for
 `rpDeg < 1` — so a nonzero constant, which genuinely has no root, and the zero
 polynomial, which is a root everywhere, come back identical. The rows above
 survive that because each candidate set carries BOTH span endpoints and a
@@ -1309,7 +1309,7 @@ coefficient until it closes:
 - `S(t) = u′² + v′²` is a polynomial with exact rational coefficients (§6.3)
   and `S ≥ 0` by construction, so `S` with no root on the CLOSED span is
   `S > 0` on it.
-- `ratPoly`'s Sturm chain (`clearance_poly.go`) counts roots on the HALF-OPEN
+- `ratPoly`'s Sturm chain (`internal/freeform/clearance_poly.go`) counts roots on the HALF-OPEN
   `(t_lo, t_hi]`, so pair a count of `0` with `S(t_lo) ≠ 0` and the closed
   span is covered. That pairing is not a formality: a net whose first two
   control points coincide has its only root exactly at `t_lo`, which a
@@ -1359,10 +1359,10 @@ Now read `K`'s coefficients:
 - MIXED signs → INCONCLUSIVE, and never a disproof: the hull over-estimates
   the range, so a mixed coefficient set is consistent with a `K` that keeps
   one sign throughout. Subdivide the span at its midpoint by exact dyadic de
-  Casteljau — the same split `spline_length.go` already runs — and fold the
+  Casteljau — the same split `internal/freeform/spline_length.go` already runs — and fold the
   children's verdicts. The cap is a FIXED depth rather than a measured target,
   and it is `freeformLengthDepth`, the same constant §6.1's own bracket
-  subdivides to (`spline_length.go` owns its value). A child still mixed at
+  subdivides to (`internal/freeform/spline_length.go` owns its value). A child still mixed at
   that depth refuses: Table R row **R19**, `ErrUnsupported`.
 
 **The joint a SUBDIVISION creates is known `0`, not folded.** A midpoint de
@@ -1462,7 +1462,7 @@ example does.
      unconditionally and so also covers a fit point where the interpolant's tangent vanishes — a case
      §6.5's regularity precondition must refuse as R19. The mechanism cannot occur, because the
      precondition is a PER-SPAN gate that runs before any joint verdict exists.
-     `freeformWallConvexityContext` (`spline_convexity.go`) calls `spanConvexitySignContext` for each
+     `freeformWallConvexityContext` (`internal/freeform/spline_convexity.go`) calls `spanConvexitySignContext` for each
      span — whose first statement is `requireSpanSpeedRegularContext` — before it forms any joint's
      verdict, so both spans adjacent to a joint have already been admitted or the walk has already
      refused. §6.4's own statement of the ordering says the same ("The span's speed must be proven

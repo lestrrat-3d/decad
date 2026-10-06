@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -33,7 +35,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	budget := chord
 	if sp.sectionDelta > 0 {
-		budget = downRound(downRound(chord - sp.sectionDelta))
+		budget = freeform.DownRound(freeform.DownRound(chord - sp.sectionDelta))
 		if budget <= 0 {
 			return nil, fmt.Errorf(`%w: requested tolerance %s leaves no chord budget above the body's own section displacement %s`,
 				ErrUnsupported, units.Millimeters(chord), units.Millimeters(sp.sectionDelta))
@@ -54,7 +56,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	var mesh Mesh
 	base := sp.outerPrism()
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	var vertexStore []float64
 	faceTrim := map[*Face]float64{}
 	faceAxial := map[*Face]float64{}

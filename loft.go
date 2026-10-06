@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -171,8 +173,8 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// counter per profile, threaded through to evalLoft so a single loft
 	// operation opens exactly two R7 ceilings — one per record — rather than
 	// four (docs/spline-design.md §5.2).
-	work0 := newFreeformWork()
-	work1 := newFreeformWork()
+	work0 := freeform.NewFreeformWork()
+	work1 := freeform.NewFreeformWork()
 	if err := falsifyRecordedArea(profile0, area0, work0); err != nil {
 		return nil, err
 	}
@@ -253,7 +255,7 @@ func (lp chainLoftPayload) transform() r3.Transform { return lp.xform }
 // scratch, exactly as docs/loft-design.md §4 states a loft placement does.
 func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	lp.xform = composed
-	return evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	return evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
 
 // LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
@@ -326,7 +328,7 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 		plane0: plane0, plane1: plane1,
 		frame0: frame0, frame1: frame1,
 		xform: r3.Identity(),
-	}, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	}, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +351,7 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 // has no counterpart here. Each segment is walked exactly ONCE, in the same
 // interleaved order validateLoftRecords uses, because walkOf charges the
 // free-form work budget on every call.
-func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, work1 *freeformWork) ([]survey2d.SegmentWalk, []survey2d.SegmentWalk, error) {
+func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, work1 *freeform.FreeformWork) ([]survey2d.SegmentWalk, []survey2d.SegmentWalk, error) {
 	n := len(c0.Segments)
 	if n != len(c1.Segments) {
 		return nil, nil, fmt.Errorf(
@@ -494,7 +496,7 @@ func chainLoftStations(walks0, walks1 []survey2d.SegmentWalk) ([]Point2, []Point
 // assemble; chainLoftPlaneSideGate is what states the side instead, and the
 // local winding below is emitted unflipped because that gate has already
 // proven it correct.
-func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp chainLoftPayload, budget *proofbound.WorkBudget, work0, work1 *freeformWork) (*Body, error) {
+func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp chainLoftPayload, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

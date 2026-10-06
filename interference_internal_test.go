@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -120,14 +122,14 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {
 	t.Parallel()
-	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
+	p := freeform.RatPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
 	chain := mustSturmChainInt(t, p)
-	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
+	ivs, err := freeform.RpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)
 	ctx := &internalCancelContext{Context: t.Context(), limit: 1}
 
-	_, err = rpRefineRootContext(ctx, chain, ivs[0], func(float64, float64) bool { return false })
+	_, err = freeform.RpRefineRootContext(ctx, chain, ivs[0], func(float64, float64) bool { return false })
 	require.ErrorIs(t, err, context.Canceled)
 }
 

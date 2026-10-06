@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -61,7 +63,7 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 
 	// The same value, re-derived through the build's own capBandResult.
 	budget := proofbound.NewWorkBudget(t.Context())
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], work)
 	require.NoError(t, err)
 	joins, err := capOffsetJoins(budget, cl, cbp.d)
@@ -113,7 +115,7 @@ func holedPlateSection(s *sketch.Sketch) {
 // the loop's own circular wall so the caller can say which one decided.
 func requireCapBlendSharedCount(t *testing.T, cbp capBlendPayload, li int, tol float64) (int, int) {
 	t.Helper()
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, li, cbp.loops()[li], tol, newFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, li, cbp.loops()[li], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	n := len(lm.walks)
 
@@ -165,7 +167,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
 
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, newFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	sag := 0.0
 	for i, w := range lm.walks {
@@ -207,7 +209,7 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	chamfered, cbp := chamferedSectionBody(t, diskSection(0, 0, 10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, newFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, lm.whole, `a cornerless circle is the one whole-turn band`)
 	sag := math.Max(lm.sideSag[0], lm.capSag[0])
@@ -234,7 +236,7 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 	}, 1.5)
 	const tol = 0.05
 	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 1, cbp.loops()[1],
-		tol, newFreeformWork())
+		tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, len(lm.capPts), lm.capArcStart[0]+lm.arcCount[0],
 		"corner 0's connector ends at the sample array boundary")
@@ -298,7 +300,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk, []cornerJoin) {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], newFreeformWork())
+	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capOffsetJoins(budget, cl, cbp.d)
 	require.NoError(t, err)
@@ -364,7 +366,7 @@ func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) (
 	loops := cbp.loops()
 	lms := make([]capBlendLoopMesh, len(loops))
 	for li, loop := range loops {
-		lm, err := chordCapBlendLoop(t.Context(), budget, cbp, li, loop, chord, newFreeformWork())
+		lm, err := chordCapBlendLoop(t.Context(), budget, cbp, li, loop, chord, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.NoError(t, capBlendCapMotion(budget, cbp, &lm))
 		lms[li] = lm

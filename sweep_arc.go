@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -44,7 +46,7 @@ func evalArcSweepContext(
 	frame r3.Frame,
 	path *Path,
 	pathRecord pathSegmentRecord,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
 	if err := ctx.Err(); err != nil {

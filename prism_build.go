@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -32,15 +34,15 @@ import (
 // work is the record's ONE free-form work counter: the preflight this build runs
 // and every walkOf under it charge the same ceiling, and a caller that already
 // spent part of it on this record passes it in rather than opening a second one.
-func evalPrism(d *Document, ref producerID, pp prismPayload, work *freeformWork) (*Body, error) {
+func evalPrism(d *Document, ref producerID, pp prismPayload, work *freeform.FreeformWork) (*Body, error) {
 	return evalPrismContext(context.Background(), d, ref, pp, work)
 }
 
-func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, work *freeformWork) (*Body, error) {
+func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, momentFirstOrder, work)
+	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +345,7 @@ func freeformVertexAllow(w survey2d.SegmentWalk, bound proofbound.WalkEndBound) 
 // turn — circular or genuinely curved free-form — decides convexity from its
 // own turn instead, exactly as buildLoopSidesAs's per-kind switch did before
 // this was pulled out of it.
-func rimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work *freeformWork) (bool, error) {
+func rimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work *freeform.FreeformWork) (bool, error) {
 	switch w.Kind {
 	case survey2d.WalkCircular:
 		// A clockwise walk's material lies outside its circle, so the
@@ -361,16 +363,16 @@ func rimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work 
 		// convention the circular case above fixes. NEVER negate again for
 		// a hole loop: a hole rim's concavity falls out of the clockwise
 		// walk itself, exactly as it does for a circular hole wall.
-		verdict, err := freeformWallConvexityContext(ctx, w.Spans, w.Closed, w.Reversed, w.FitInterpolated, work)
+		verdict, err := freeform.FreeformWallConvexityContext(ctx, w.Spans, w.Closed, w.Reversed, w.FitInterpolated, work)
 		if err != nil {
 			return false, err
 		}
 		switch verdict {
-		case freeformConvexityPositive:
+		case freeform.FreeformConvexityPositive:
 			return true, nil
-		case freeformConvexityNegative:
+		case freeform.FreeformConvexityNegative:
 			return false, nil
-		case freeformConvexityStraight:
+		case freeform.FreeformConvexityStraight:
 			// Every live span lies on one line and no joint turns off it
 			// (§6.5's Table K): the chain has no turn of its own, so
 			// evaluator §3's straight-wall rule decides it by its loop's
@@ -513,7 +515,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 // straight-prism build, false from every other caller (shell_cup.go,
 // capblend_moments.go), which mint no curve identity for their own rim and
 // so keep every certificate check refusing by default.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
@@ -549,7 +551,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // what keeps two separate builds from ever sharing one (denotation.go).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
 	mintCurve := func() curveToken {
 		if !mintCurveTokens {
 			return curveToken{}

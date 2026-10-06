@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -20,7 +22,7 @@ import (
 // Bézier chain of every free-form segment.
 //
 // It is the record-level step docs/spline-design.md §5's work ceilings need.
-// ONE freeformWork state runs through the entire record and every later phase
+// ONE freeform.FreeformWork state runs through the entire record and every later phase
 // that reads it. Its exact-rational and reconstruction counters each bound that
 // record's aggregate work, rather than each segment or pass independently. The
 // conversion, re-anchoring and exact integration charges use the former; the
@@ -53,7 +55,7 @@ type momentPreflight struct {
 	// (§5.2). The topology reconstruction re-arranges the whole scene once per
 	// candidate profile it authenticates, so those arrangements are charged here
 	// as they happen rather than predicted.
-	work *freeformWork
+	work *freeform.FreeformWork
 	// arrangement is one whole-scene arrangement's charge. This preflight levies
 	// it only for a record holding a free-form segment; a record holding none
 	// leaves it zero here and is charged the same way by validateMomentRecord,
@@ -83,7 +85,7 @@ func (p momentPreflight) planAt(loopIndex, segmentIndex int) freeformPlan {
 // then asks sketch to decide whether those entities form the recorded region.
 // decad does not carry a second planar-arrangement implementation.
 func validateMomentRecord(record ProfileRecord) (momentPreflight, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	if err := chargeKnownOverBudgetAnalyticReconstruction(record, work); err != nil {
 		return momentPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)
 	}
@@ -169,12 +171,12 @@ func (p *momentPreflight) chargeAnalyticReconstruction() error {
 // arrangement. Free-form records are also exempt: their conversion preflight
 // owns their error precedence and charges the exact-rational counter before
 // their record-level reconstruction charge is known.
-func chargeKnownOverBudgetAnalyticReconstruction(record ProfileRecord, work *freeformWork) error {
+func chargeKnownOverBudgetAnalyticReconstruction(record ProfileRecord, work *freeform.FreeformWork) error {
 	if wholeCircleRecordShape(record) || !analyticRecord(record) {
 		return nil
 	}
 	demand := reconstructionOf(record)
-	if reconstructionCostMul(2, demand.arrangement) <= reconstructionWorkLimit {
+	if freeform.ReconstructionCostMul(2, demand.Arrangement) <= freeform.ReconstructionWorkLimit {
 		return nil
 	}
 	_, err := chargeReconstruction(record, work)
@@ -222,15 +224,15 @@ func validateMomentFields(record ProfileRecord) (momentPreflight, error) {
 // validateMomentFieldsWork is the preflight an evaluator runs when it already
 // holds this record's work state: the charges below continue it rather than
 // start fresh ceilings on the same record (docs/spline-design.md §5.2).
-func validateMomentFieldsWork(work *freeformWork, record ProfileRecord) (momentPreflight, error) {
+func validateMomentFieldsWork(work *freeform.FreeformWork, record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsWithPoll(nil, record, work)
 }
 
 func validateMomentFieldsBudget(budget *proofbound.WorkBudget, record ProfileRecord) (momentPreflight, error) {
-	return validateMomentFieldsWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, record, newFreeformWork())
+	return validateMomentFieldsWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, record, freeform.NewFreeformWork())
 }
 
-func validateMomentFieldsContext(ctx context.Context, work *freeformWork, record ProfileRecord) (momentPreflight, error) {
+func validateMomentFieldsContext(ctx context.Context, work *freeform.FreeformWork, record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsWithPoll(ctx.Err, record, work)
 }
 
@@ -238,7 +240,7 @@ func validateMomentFieldsContext(ctx context.Context, work *freeformWork, record
 // local because each ceiling is the RECORD's across a whole operation: an
 // evaluator that already charged this record's conversion passes the same work
 // state back in, so a later phase spends what is left instead of a fresh ceiling.
-func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work *freeformWork) (momentPreflight, error) {
+func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work *freeform.FreeformWork) (momentPreflight, error) {
 	loops := append([]LoopRecord{record.Outer}, record.Holes...)
 	normalized := make([]LoopRecord, len(loops))
 	// Plan storage is minted on the first segment that converts, so a record
@@ -247,7 +249,7 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work 
 	if work == nil {
 		// One work state for the whole record: each ceiling bounds the record's
 		// total work in its own cost model, never each segment's own.
-		work = newFreeformWork()
+		work = freeform.NewFreeformWork()
 	}
 	var anchor Point2
 	freeform := false
@@ -385,7 +387,7 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 	if scale == 0 {
 		return ProfileRecord{}, fmt.Errorf(`%w: a recorded region has no geometric extent`, ErrDegenerate)
 	}
-	if !finiteMomentValues(scale) {
+	if !freeform.FiniteMomentValues(scale) {
 		return ProfileRecord{}, fmt.Errorf(`%w: the recorded region's extent is not finite`, ErrNotFinite)
 	}
 
@@ -460,7 +462,7 @@ func growAll(points []Point2, grow func(Point2)) {
 // run (validateFreeformMomentSegment), so it is read directly from the same
 // conversion the build's own survey2d.WalkKind == survey2d.WalkFreeform arm reads
 // (extrude.go's buildLoopSidesAs).
-func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
+func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return nil, Point2{}, freeformPlan{}, err
@@ -478,10 +480,10 @@ func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegme
 // validateAnalyticMomentSegment normalizes and checks one line, circle or arc
 // segment — the kinds integrated from their own closed forms, with no
 // conversion and so no charge against the record's work counter.
-func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, error) {
+func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, error) {
 	switch segment := segment.(type) {
 	case LineSeg:
-		if !finiteMomentValues(
+		if !freeform.FiniteMomentValues(
 			segment.Start.U,
 			segment.Start.V,
 			segment.End.U,
@@ -499,7 +501,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		if err != nil {
 			return nil, Point2{}, err
 		}
-		if !finiteMomentValues(segment.Center.U, segment.Center.V, segment.TStart, segment.TEnd) {
+		if !freeform.FiniteMomentValues(segment.Center.U, segment.Center.V, segment.TStart, segment.TEnd) {
 			return nil, Point2{}, fmt.Errorf(`%w: a circle segment field is not finite`, ErrNotFinite)
 		}
 		if err := validateMomentRange(segment.TStart, segment.TEnd); err != nil {
@@ -511,7 +513,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		segment.Radius = units.Millimeters(radius)
 		return validateMomentWalk(segment, work)
 	case ArcSeg:
-		if !finiteMomentValues(
+		if !freeform.FiniteMomentValues(
 			segment.Center.U,
 			segment.Center.V,
 			segment.Start.U,
@@ -528,7 +530,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		}
 		startRadius := math.Hypot(segment.Start.U-segment.Center.U, segment.Start.V-segment.Center.V)
 		endRadius := math.Hypot(segment.End.U-segment.Center.U, segment.End.V-segment.Center.V)
-		if !finiteMomentValues(startRadius, endRadius) {
+		if !freeform.FiniteMomentValues(startRadius, endRadius) {
 			return nil, Point2{}, fmt.Errorf(`%w: an arc segment's derived radius is not finite`, ErrNotFinite)
 		}
 		if !arcPinnedRadiiJoin(segment, startRadius, endRadius) {
@@ -564,22 +566,22 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 // bound has already run. The sketch RECONSTRUCTION is charged separately, by
 // the record-level preflight above: it arranges the whole scene at once, so its
 // cost is a property of the record rather than of any segment in it.
-func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
+func validateFreeformMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	spans, reversed, err := freeformBezierSpans(segment, work)
 	if err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
-	if err := chargeFreeformShift(spans, work); err != nil {
+	if err := freeform.ChargeFreeformShift(spans, work); err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
-	if err := chargeFreeformSpans(spans, work); err != nil {
+	if err := freeform.ChargeFreeformSpans(spans, work); err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
 	start, end, err := freeformEndpoints(spans, reversed)
 	if err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
-	if !finiteMomentValues(start.U, start.V) {
+	if !freeform.FiniteMomentValues(start.U, start.V) {
 		return nil, Point2{}, freeformPlan{}, fmt.Errorf(`%w: a free-form segment's start point is not finite`, ErrNotFinite)
 	}
 	if freeformDegenerate(spans) {
@@ -644,7 +646,7 @@ func requireFitSplineTerminalJoins(segment CurveSegment, start, end Point2, reve
 //
 // It is this path's half of Table R row R14. The length bracket refuses the
 // same record on its own terms — a collapsed net is the one shape whose bracket
-// has zero width (spline_length.go) — so the two paths agree.
+// has zero width (internal/freeform/spline_length.go) — so the two paths agree.
 func freeformDegenerate(spans []survey2d.BezierSpan) bool {
 	if len(spans) == 0 || len(spans[0]) == 0 {
 		return true
@@ -660,12 +662,12 @@ func freeformDegenerate(spans []survey2d.BezierSpan) bool {
 	return true
 }
 
-func validateMomentWalk(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, error) {
+func validateMomentWalk(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, error) {
 	walk, err := walkOf(segment, work)
 	if err != nil {
 		return nil, Point2{}, err
 	}
-	if !finiteMomentValues(
+	if !freeform.FiniteMomentValues(
 		walk.StartU,
 		walk.StartV,
 		walk.EndU,
@@ -755,7 +757,7 @@ func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
 	for holeIndex, hole := range circles[1:] {
 		holeRadius, _ := hole.Radius.In(units.Millimeter)
 		distance := math.Hypot(hole.Center.U-circles[0].Center.U, hole.Center.V-circles[0].Center.V)
-		if !finiteMomentValues(distance) {
+		if !freeform.FiniteMomentValues(distance) {
 			return true, fmt.Errorf(`%w: a circle separation is not finite`, ErrNotFinite)
 		}
 		if holeRadius >= outerRadius || distance >= outerRadius-holeRadius {
@@ -771,7 +773,7 @@ func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
 				circles[a].Center.U-circles[b].Center.U,
 				circles[a].Center.V-circles[b].Center.V,
 			)
-			if !finiteMomentValues(minimum, distance) {
+			if !freeform.FiniteMomentValues(minimum, distance) {
 				return true, fmt.Errorf(`%w: a circle separation is not finite`, ErrNotFinite)
 			}
 			if distance <= minimum {
@@ -911,7 +913,7 @@ func equalNURBSWeights(weights []float64) bool {
 // reaching this pass carries a positive arrangement charge, whatever its kinds:
 // an analytic-only record is charged by chargeAnalyticReconstruction, so the
 // loop is never free.
-func momentRecordMatchesSketch(record ProfileRecord, work *freeformWork, arrangement uint64) (bool, error) {
+func momentRecordMatchesSketch(record ProfileRecord, work *freeform.FreeformWork, arrangement uint64) (bool, error) {
 	record = normalizeReconstructionWeights(record)
 	s, built := momentRecordScene(record)
 	if !built {
@@ -922,7 +924,7 @@ func momentRecordMatchesSketch(record ProfileRecord, work *freeformWork, arrange
 			continue
 		}
 		// One more whole-scene arrangement, charged before it runs.
-		if err := work.reconstructionStep(arrangement); err != nil {
+		if err := work.ReconstructionStep(arrangement); err != nil {
 			return false, err
 		}
 		candidate, _, err := RecordProfile(s, profile)

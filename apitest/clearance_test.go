@@ -910,7 +910,7 @@ func (c *sturmBuildCancelContext) Err() error {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, ".sturmChainContext") {
+		if strings.HasSuffix(frame.Function, ".SturmChainContext") {
 			c.entered = true
 			return context.Canceled
 		}

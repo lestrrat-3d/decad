@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -209,7 +211,7 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	// segment) indices of the SOURCE record, and the offset mints its own
 	// segment list, so carrying them over would name arbitrary result walls.
 	pp.blendSegs, pp.blendKind = nil, ""
-	return evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 }
 
 // offsetPrismSection constructs and certifies the one section the result is

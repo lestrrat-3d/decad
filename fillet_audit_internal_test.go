@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -124,7 +126,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 			Start:  Point2{U: 10, V: 0},
 			End:    Point2{U: -10, V: 0},
 			TEnd:   1,
-		}, newFreeformWork())
+		}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		segs := []segEntry{{loop: 0, idx: 0, n: 1, w: w}}
 
@@ -145,7 +147,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 			Radius: units.Millimeters(5),
 			CCW:    true,
 			TEnd:   1,
-		}, newFreeformWork())
+		}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		segs := []segEntry{{loop: 0, idx: 0, n: 1, w: w}}
 
@@ -261,7 +263,7 @@ func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 	for _, loop := range append([]LoopRecord{prof.Outer}, prof.Holes...) {
 		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
-			w, err := walkOf(seg, newFreeformWork())
+			w, err := walkOf(seg, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}

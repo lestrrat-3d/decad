@@ -358,7 +358,7 @@ func TestExtrudeChainOverEachChainOfACutVertex(t *testing.T) {
 // TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate is
 // docs/surface-design.md's T141: a chain holding a Tier A free-form fragment
 // builds a NURBSSurface wall whose area is Approximate over
-// spline_length.go's proven bracket, and Chain.Length·h — the sampling-
+// internal/freeform/spline_length.go's proven bracket, and Chain.Length·h — the sampling-
 // convergent underestimate §13.3 forbids ExtrudeChain from ever publishing —
 // sits at or below that interval's own lower end, never inside it.
 func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *testing.T) {

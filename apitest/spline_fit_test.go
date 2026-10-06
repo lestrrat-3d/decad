@@ -349,7 +349,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 // TestFitSplineAllCoincidentFitPointsRefuses is Table R row R14: a fit
 // spline whose control net collapses to a single point contributes no
 // boundary, on the same terms the length bracket refuses on
-// (spline_length.go's freeformArcLength / freeformDegenerate).
+// (internal/freeform/spline_length.go's freeformArcLength / freeformDegenerate).
 func TestFitSplineAllCoincidentFitPointsRefuses(t *testing.T) {
 	t.Parallel()
 	fit := []decad.Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}

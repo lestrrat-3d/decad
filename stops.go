@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -349,7 +351,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		far := hi - base
 		tol := relStopTol(math.Max(math.Abs(hi), math.Abs(base)))
 		switch {
-		case downRound(far-delta) > tol:
+		case freeform.DownRound(far-delta) > tol:
 			// Material beyond the plane whatever the displacement hides.
 		case proofbound.UpRound(far+delta) <= tol:
 			// No material beyond the plane, whatever it hides.

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -238,7 +240,7 @@ func wedgeArcEnvelope(t *testing.T) float64 {
 	require.NoError(t, err)
 	rec1, _, err := RecordProfile(s1, p1)
 	require.NoError(t, err)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	u0, err := profileCoordinateUpper(rec0, work, nil)
 	require.NoError(t, err)
 	u1, err := profileCoordinateUpper(rec1, work, nil)
@@ -262,7 +264,7 @@ func wedgeSplineEnvelope(t *testing.T) float64 {
 	require.NoError(t, err)
 	rec1, _, err := RecordProfile(s1, p1)
 	require.NoError(t, err)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	u0, err := profileCoordinateEnvelope(rec0, work, nil)
 	require.NoError(t, err)
 	u1, err := profileCoordinateEnvelope(rec1, work, nil)

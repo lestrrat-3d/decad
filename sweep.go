@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -88,7 +90,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	if err != nil {
 		return nil, err
 	}
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
@@ -412,7 +414,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 		return body, nil
 	}
 	sp.prism.xform = composed
-	body, err := evalPrismContext(ctx, d, ref, sp.prism, newFreeformWork())
+	body, err := evalPrismContext(ctx, d, ref, sp.prism, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +466,7 @@ func (sp chainSweepPayload) transform() r3.Transform { return sp.chain.transform
 // path-span role prefix the reduction itself does not mint.
 func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	sp.chain.xform = composed
-	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, newFreeformWork())
+	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +547,7 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 
 	// ONE free-form work counter for the whole call, exactly as ExtrudeChain
 	// opens for its own build (docs/spline-design.md §5.2).
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
 	// z0 is exactly zero and carries no bound: the recorded walk sits in the
 	// sketch plane by construction and the path starts there (S5's own gate

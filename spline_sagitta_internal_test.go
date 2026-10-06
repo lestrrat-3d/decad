@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -16,17 +18,17 @@ import (
 )
 
 // This file asserts docs/spline-design.md §6.2.1's chord-sagitta bound
-// (spanSagittaUpper) and the shared dyadic station generator built on top of
-// it (pairStations), both in spline_sagitta.go.
+// (freeform.SpanSagittaUpper) and the shared dyadic station generator built on top of
+// it (freeform.PairStations), both in internal/freeform/spline_sagitta.go.
 //
 // FALSIFICATION LEDGER — a10-plan.md Part 3 PR 8's own mandatory protocol.
-// Every leg below was broken IN spline_sagitta.go, `go test` was run against
+// Every leg below was broken IN internal/freeform/spline_sagitta.go, `go test` was run against
 // the fixture that exists to catch it, the fixture was watched go RED, and
 // the file was then restored (`git diff` confirmed clean before this file was
 // committed). A leg with no red run has its redundancy argued instead, never
 // silently skipped.
 //
-//   - Remove the [0,1] clamp in chordSegmentSquaredDistance (project onto the
+//   - Remove the [0,1] clamp in freeform.ChordSegmentSquaredDistance (project onto the
 //     chord's carrier LINE instead of the SEGMENT): TestSpanSagittaUpper
 //     EnclosesOvershootingChordSegment went red — the reported bound fell to
 //     ~0.01 (both interior control points' perpendicular distance to the
@@ -39,7 +41,7 @@ import (
 //     excluding two points whose contribution is always the additive
 //     identity of a max cannot change any max this file computes, on any
 //     span, ever. No fixture can tell the two forms apart.
-//   - Swap proofbound.RatSqrtUp for proofbound.RatSqrtDown in dyadicSpanSagittaUpper's final
+//   - Swap proofbound.RatSqrtUp for proofbound.RatSqrtDown in freeform.DyadicSpanSagittaUpper's final
 //     rounding: TestSpanSagittaUpperRoundsOutward went red — the returned
 //     bound, converted to a big.Float, fell strictly BELOW the exact rational
 //     maximum squared distance's own proven square root, violating the
@@ -70,16 +72,16 @@ import (
 //     visible falsification signal, and removing the length check and running
 //     that single test was confirmed to panic before the gate was restored.
 //   - Charge the hard cap per cell VISITED instead of per chord ACCEPTED
-//     (count every walkCell entry against maxChordsPerWalk):
+//     (count every walkCell entry against freeform.MaxChordsPerWalk):
 //     TestPairStationsAcceptsTheStatedChordCap went red — a walk needing
-//     exactly maxChordsPerWalk chords was refused with errTooManyChords
+//     exactly freeform.MaxChordsPerWalk chords was refused with freeform.ErrTooManyChords
 //     barely halfway through, because a binary refinement visits 2L−m cells
 //     for L chords over m spans and so trips a visit-charged ceiling at
 //     roughly half the chord count that ceiling's own message names.
-//   - Drop pairStations' span-count entry guard:
+//   - Drop freeform.PairStations' span-count entry guard:
 //     TestPairStationsSpanCountPastTheCapRefusesUpFront went red — a chain of
-//     maxChordsPerWalk+1 straight spans returned that many chords and no
-//     error, one past the count errTooManyChords names.
+//     freeform.MaxChordsPerWalk+1 straight spans returned that many chords and no
+//     error, one past the count freeform.ErrTooManyChords names.
 //   - Move the cap charge from the SPLIT to the accept (count only chords
 //     already accepted, with nothing charged before a bisection): NOT
 //     separately falsified, argued instead. The two forms return the
@@ -96,7 +98,7 @@ import (
 // SECOND PASS — an independent adversarial audit of this file, closing gaps
 // its own falsification did not reach the first time:
 //
-//   - A1: chordSegmentSquaredDistance's d==0 branch (a degenerate CHORD, e.g.
+//   - A1: freeform.ChordSegmentSquaredDistance's d==0 branch (a degenerate CHORD, e.g.
 //     a closed free-form loop whose first and last control point coincide —
 //     not a collapsed SPAN) returning 0 instead of |p-a|^2:
 //     TestSpanSagittaUpperClosedLoopChordIsAPointNotZero went red — the
@@ -106,7 +108,7 @@ import (
 //     independentMaxChordSquaredDistance, asserted abLenSq.Sign() nonzero and
 //     so could not exercise this branch at all; it is now fixed to answer
 //     |p-a|^2 directly for a degenerate chord, the same derivation
-//     chordSegmentSquaredDistance's own doc comment states.
+//     freeform.ChordSegmentSquaredDistance's own doc comment states.
 //   - A2: the accept test math.Max(sag0, sag1) <= target narrowed to
 //     sag0 <= target alone: TestPairStationsAcceptTestRequiresBothSidesUnderTarget
 //     went red — a cell whose side 0 already met a target=0.01 but whose side
@@ -130,27 +132,27 @@ import (
 //     — stations[0] no longer equaled the chain's own start control point,
 //     exactly.
 //   - A6: the cost model charged one flat 8 units per control point for both
-//     readings, left ratPointAt's reconstruction, dyadicSpanOf's conversion
+//     readings, left ratPointAt's reconstruction, freeform.DyadicSpanOf's conversion
 //     and the per-call proofbound.RatSqrtUp entirely free, and so was not the upper
 //     bound its own doc comment claimed. Each charge is now counted on its own
 //     code path. Five mutations were each run red against the new fixtures:
 //     deleting the conversion charge (TestPairStationsChargesEveryPhaseOfA
 //     WalkThatNeverSplits and TestPairStationsBudgetBindsAtTheWholeCharged
 //     Total), paying the matched delta at the sagitta's rate (the same phase
-//     fixture), zeroing ratPointReconstructCost, dropping the per-call
-//     ratSqrtUpCost, and narrowing chordProjectionCost back to 8
+//     fixture), zeroing freeform.RatPointReconstructCost, dropping the per-call
+//     freeform.RatSqrtUpCost, and narrowing freeform.ChordProjectionCost back to 8
 //     (TestSagittaCostTermsMatchTheOperationsTheyName and
 //     TestSagittaAndMatchedDeltaCostsAreDerivedSeparately). Note what stays
 //     GREEN under all five: TestPairStationsChargesBothCountersSeparately,
 //     which pins only the RATIO between two differently-sized sides' charges
 //     — a ratio-only fixture cannot see a rescaled or missing cost at all.
-//   - B1: dyadicSpanSagittaUpper's own n==0 guard was already dead-ended —
-//     nothing in pairStations prevented a zero-control-point span from
+//   - B1: freeform.DyadicSpanSagittaUpper's own n==0 guard was already dead-ended —
+//     nothing in freeform.PairStations prevented a zero-control-point span from
 //     reaching walkCell, whose accept branch then panicked on
 //     c0.ratPointAt(0)'s empty slice. Removing the new entry-level guard and
 //     running TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking
 //     reproduced exactly that panic (index out of range on
-//     dyadicSpan.ratPointAt); pairStations now refuses a zero-control span on
+//     freeform.DyadicSpan.ratPointAt); freeform.PairStations now refuses a zero-control span on
 //     either side with ErrDegenerate before any cell is walked, so the
 //     dead-ended guard's own 0 answer is no longer reachable from this walk.
 //   - B2: the final station's own append reverted from a fresh
@@ -163,16 +165,16 @@ import (
 //
 // THIRD PASS — the cost model moved from caller-side aggregates into the
 // callees, so a charge's multiplicity is the call count rather than a number a
-// caller restates. Every leg below was broken in spline_sagitta.go or
-// spline_length.go, watched go RED against the fixture that exists to catch it,
+// caller restates. Every leg below was broken in internal/freeform/spline_sagitta.go or
+// internal/freeform/spline_length.go, watched go RED against the fixture that exists to catch it,
 // and restored:
 //
-//   - C1: the two chord-end reconstructions in dyadicSpanSagittaUpper run
+//   - C1: the two chord-end reconstructions in freeform.DyadicSpanSagittaUpper run
 //     unmetered (the exact blind spot a per-point aggregate had, since it
 //     multiplied one rate by n and the chord ends are n+1 and n+2):
 //     TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths went red at 144 units
 //     against 158, and both walk-total fixtures with it.
-//   - C2: ratChordFrame's shared chord vector and squared length run unmetered
+//   - C2: freeform.RatChordFrame's shared chord vector and squared length run unmetered
 //     — five exact operations per span that the old model charged nothing for:
 //     the same two fixtures went red, at 153 and 616 units.
 //   - C3: the accept branch's own station reads run unmetered:
@@ -180,24 +182,24 @@ import (
 //     against 626, and TestPairStationsBudgetBindsAtTheWholeChargedTotal with it.
 //   - C4: the two final-station copies run unmetered:
 //     TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits went red at 624.
-//   - C5: ratRunningMax's own comparison runs unmetered: red at 155 and 620.
-//   - C6: dyadicMidpointOps narrowed from 6 back to the 2 per blend the old
+//   - C5: freeform.RatRunningMax's own comparison runs unmetered: red at 155 and 620.
+//   - C6: freeform.DyadicMidpointOps narrowed from 6 back to the 2 per blend the old
 //     split charge paid: TestSagittaCostTermsMatchTheOperationsTheyName went
 //     red against its own independent derivation of what an aligned sum runs.
-//   - C7: dyadicSplitBookkeepingOps zeroed (a split's three allocations, its
+//   - C7: freeform.DyadicSplitBookkeepingOps zeroed (a split's three allocations, its
 //     copy and its 2n appends left free): the same fixture went red. This leg
 //     had NO red run on its first attempt — both split fixtures derived from the
 //     constant they were meant to check — and the independent derivation was
 //     added because of it.
-//   - C8: dyadicSpan.split's own charge deleted:
+//   - C8: freeform.DyadicSpan.split's own charge deleted:
 //     TestDyadicSplitChargesItselfAndRefusesBeforeSplitting went red at 0 units
 //     against 52.
-//   - C9: widthUnits flattened to 1, and separately the three primitives that
+//   - C9: freeform.WidthUnits flattened to 1, and separately the three primitives that
 //     scale by it left on a count-only charge:
 //     TestChargesScaleWithOperandWidth went red both ways — decisively on the
 //     second, where the identical hull scan over 4096-bit coordinates charged
 //     the SAME 96 units as over machine words.
-//   - C10: ratChordFrame renamed without renaming it in the guard's own metered
+//   - C10: freeform.RatChordFrame renamed without renaming it in the guard's own metered
 //     set: TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive went
 //     red, so a primitive cannot be silently dropped out of the metered surface.
 //   - C11: an unmetered new(big.Rat).Add added to walkCell: the same guard went
@@ -205,8 +207,8 @@ import (
 //     operation. This is the leg that keeps the class closed rather than the
 //     numbers repaired.
 //
-// Part C's three primitives (spanHodographGapUpper, spanMatchedDeltaUpper,
-// spanSpeedUpper) were new proofs rather than repairs of an existing leg when
+// Part C's three primitives (freeform.SpanHodographGapUpper, freeform.SpanMatchedDeltaUpper,
+// freeform.SpanSpeedUpper) were new proofs rather than repairs of an existing leg when
 // they landed, so only the fourth pass below records a mutation against one of
 // them. Their own soundness rests on
 // TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses (the decisive
@@ -220,10 +222,10 @@ import (
 
 // FOURTH PASS — the matched delta's own halving moved out of float arithmetic
 // and into the exact rational radicand. The leg below was broken in
-// spline_sagitta.go, watched go RED against the fixture that exists to catch
+// internal/freeform/spline_sagitta.go, watched go RED against the fixture that exists to catch
 // it, and restored:
 //
-//   - D1: spanMatchedDeltaUpper's exact quartering replaced by the float
+//   - D1: freeform.SpanMatchedDeltaUpper's exact quartering replaced by the float
 //     halving proofbound.UpRound(gap / 2) of the already-rounded hodograph gap:
 //     TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero went red on
 //     every row of its window — the published bound read exactly 0 where the
@@ -249,7 +251,7 @@ func quarterCircleFitSpans(t *testing.T) []survey2d.BezierSpan {
 		theta := float64(k) * math.Pi / 8
 		fit[k] = Point2{U: radius * math.Cos(theta), V: radius * math.Sin(theta)}
 	}
-	spans, err := fitSplineBezierSpans(FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, newFreeformWork())
+	spans, err := fitSplineBezierSpans(FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotEmpty(t, spans)
 	return spans
@@ -258,7 +260,7 @@ func quarterCircleFitSpans(t *testing.T) []survey2d.BezierSpan {
 // scaleSpans returns a new chain with every control point's coordinate
 // multiplied by the exact integer factor — used to build a second "side" of
 // genuinely different absolute sagitta from the same shape, over exact
-// rationals so the relationship pairStations must preserve (station1 = factor
+// rationals so the relationship freeform.PairStations must preserve (station1 = factor
 // * station0 at every shared dyadic parameter) is checkable bit-for-bit.
 func scaleSpans(spans []survey2d.BezierSpan, factor int64) []survey2d.BezierSpan {
 	f := big.NewRat(factor, 1)
@@ -274,58 +276,58 @@ func scaleSpans(spans []survey2d.BezierSpan, factor int64) []survey2d.BezierSpan
 }
 
 // maxSagittaAtDepth measures a single span's own §6.2.1 sagitta at a FIXED
-// uniform dyadic depth, over the same production primitives pairStations
-// itself bisects with (dyadicSpanOf, dyadicSpan.split, dyadicSpanSagittaUpper)
+// uniform dyadic depth, over the same production primitives freeform.PairStations
+// itself bisects with (freeform.DyadicSpanOf, freeform.DyadicSpan.split, freeform.DyadicSpanSagittaUpper)
 // — a different (uniform, non-adaptive) traversal of the real machinery,
 // never a parallel reimplementation of the bound it measures.
-func maxSagittaAtDepth(t *testing.T, s dyadicSpan, depth int) float64 {
+func maxSagittaAtDepth(t *testing.T, s freeform.DyadicSpan, depth int) float64 {
 	t.Helper()
 	if depth == 0 {
-		bound, err := dyadicSpanSagittaUpper(nil, s)
+		bound, err := freeform.DyadicSpanSagittaUpper(nil, s)
 		require.NoError(t, err)
 		return bound
 	}
-	left, right, err := s.split(nil)
+	left, right, err := s.Split(nil)
 	require.NoError(t, err)
 	return math.Max(maxSagittaAtDepth(t, left, depth-1), maxSagittaAtDepth(t, right, depth-1))
 }
 
 func levelSagitta(t *testing.T, span survey2d.BezierSpan, depth int) float64 {
 	t.Helper()
-	s, err := dyadicSpanOf(nil, span)
+	s, err := freeform.DyadicSpanOf(nil, span)
 	require.NoError(t, err)
 	return maxSagittaAtDepth(t, s, depth)
 }
 
 // Every bound below is read through one of these four unmetered readers. Each
 // primitive now takes the counter that pays for it and returns that counter's
-// own refusal (spline_sagitta.go's header); a nil counter never refuses, so a
+// own refusal (internal/freeform/spline_sagitta.go's header); a nil counter never refuses, so a
 // fixture measuring a BOUND rather than a CHARGE reads it here and asserts the
 // error away once instead of at every call.
 func sagittaOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
-	bound, err := spanSagittaUpper(nil, span)
+	bound, err := freeform.SpanSagittaUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
 func hodographGapOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
-	bound, err := spanHodographGapUpper(nil, span)
+	bound, err := freeform.SpanHodographGapUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
 func matchedDeltaOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
-	bound, err := spanMatchedDeltaUpper(nil, span)
+	bound, err := freeform.SpanMatchedDeltaUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
 func speedOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
-	bound, err := spanSpeedUpper(nil, span)
+	bound, err := freeform.SpanSpeedUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
@@ -457,9 +459,9 @@ func TestPairStationsStationDeterminism(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	const target = 1e-4
 
-	s0a, s1a, _, sagA, err := pairStations(spans, spans, target, nil, nil)
+	s0a, s1a, _, sagA, err := freeform.PairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
-	s0b, s1b, _, sagB, err := pairStations(spans, spans, target, nil, nil)
+	s0b, s1b, _, sagB, err := freeform.PairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, sagA, sagB, "the achieved sagittaUpper must be bit-identical across calls")
@@ -520,14 +522,14 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 
 	single := []survey2d.BezierSpan{span}
 
-	s0Fine, _, _, sagFine, err := pairStations(single, single, targetFine, nil, nil)
+	s0Fine, _, _, sagFine, err := freeform.PairStations(single, single, targetFine, nil, nil)
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagFine, targetFine, "the achieved sagitta must honor the fine target")
 	leavesFine := len(s0Fine) - 1
 	require.LessOrEqual(t, leavesFine, 1<<d,
 		"the generator must never need more cells than uniform refinement to depth %d already guarantees suffices", d)
 
-	s0Coarse, _, _, sagCoarse, err := pairStations(single, single, targetCoarse, nil, nil)
+	s0Coarse, _, _, sagCoarse, err := freeform.PairStations(single, single, targetCoarse, nil, nil)
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagCoarse, targetCoarse, "the achieved sagitta must honor the coarse target")
 	leavesCoarse := len(s0Coarse) - 1
@@ -538,14 +540,14 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 		"a strictly laxer target must settle on strictly fewer cells, proving the walk tracks the target rather than a fixed depth")
 }
 
-// --- 6. over-cap refuses errTooManyChords ---
+// --- 6. over-cap refuses freeform.ErrTooManyChords ---
 
 func TestPairStationsOverCapRefuses(t *testing.T) {
 	t.Parallel()
 	spans := []survey2d.BezierSpan{parabolaSpan()}
-	_, _, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := freeform.PairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
-	require.ErrorIs(t, err, errTooManyChords)
+	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -570,22 +572,22 @@ func straightSpanFrom(u float64) survey2d.BezierSpan {
 }
 
 // capDepth is the uniform bisection depth whose leaves number exactly
-// maxChordsPerWalk, read off the cap itself rather than written down as a
+// freeform.MaxChordsPerWalk, read off the cap itself rather than written down as a
 // tuned number.
 func capDepth(t *testing.T) int {
 	t.Helper()
 	d := 0
-	for 1<<d < maxChordsPerWalk {
+	for 1<<d < freeform.MaxChordsPerWalk {
 		d++
 	}
-	require.Equal(t, maxChordsPerWalk, 1<<d,
+	require.Equal(t, freeform.MaxChordsPerWalk, 1<<d,
 		"these fixtures read their refinement depth off the cap; a cap that is not a power of two needs a different construction")
 	return d
 }
 
 // TestPairStationsAcceptsTheStatedChordCap puts the cap where its own message
-// puts it. errTooManyChords reads "more than maxChordsPerWalk chords on one
-// curve", so a walk that settles on EXACTLY maxChordsPerWalk chords is inside
+// puts it. freeform.ErrTooManyChords reads "more than freeform.MaxChordsPerWalk chords on one
+// curve", so a walk that settles on EXACTLY freeform.MaxChordsPerWalk chords is inside
 // the ceiling and must be built, not refused.
 //
 // This is the fixture that goes red if the cap ever binds below the count it
@@ -599,9 +601,9 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 	chain := []survey2d.BezierSpan{span}
 	target := levelSagitta(t, span, capDepth(t))
 
-	s0, s1, _, sag, err := pairStations(chain, chain, target, nil, nil)
+	s0, s1, _, sag, err := freeform.PairStations(chain, chain, target, nil, nil)
 	require.NoError(t, err, "a walk needing exactly the chord count the cap names must be built")
-	require.Len(t, s0, maxChordsPerWalk+1,
+	require.Len(t, s0, freeform.MaxChordsPerWalk+1,
 		"a chain of exactly maxChordsPerWalk chords carries one more station than that")
 	require.Len(t, s1, len(s0), "both sides share one station set by construction")
 	require.LessOrEqual(t, sag, target, "the achieved sagitta must honor the target it settled on")
@@ -609,7 +611,7 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 
 // TestPairStationsRefusesOneChordPastTheStatedCap is the other half of the
 // same boundary. The identical parabola walk gains ONE straight span, which is
-// accepted whole at depth 0, so the chain needs maxChordsPerWalk+1 chords —
+// accepted whole at depth 0, so the chain needs freeform.MaxChordsPerWalk+1 chords —
 // the first count the message's "more than" covers — and the walk refuses.
 func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 	t.Parallel()
@@ -617,8 +619,8 @@ func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 	chain := []survey2d.BezierSpan{span, straightSpanFrom(2)}
 	target := levelSagitta(t, span, capDepth(t))
 
-	_, _, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
-	require.ErrorIs(t, err, errTooManyChords)
+	_, _, _, _, err := freeform.PairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -629,13 +631,13 @@ func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 // is deliberately lax enough that every span would otherwise be accepted whole.
 func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 	t.Parallel()
-	chain := make([]survey2d.BezierSpan, maxChordsPerWalk+1)
+	chain := make([]survey2d.BezierSpan, freeform.MaxChordsPerWalk+1)
 	for i := range chain {
 		chain[i] = straightSpanFrom(float64(2 * i))
 	}
 
-	_, _, _, _, err := pairStations(chain, chain, 1, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
-	require.ErrorIs(t, err, errTooManyChords)
+	_, _, _, _, err := freeform.PairStations(chain, chain, 1, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -644,8 +646,8 @@ func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 func TestPairStationsOverBudgetRefusesR7(t *testing.T) {
 	t.Parallel()
 	spans := quarterCircleFitSpans(t)
-	exhausted := &freeformWork{spent: freeformWorkLimit}
-	_, _, _, _, err := pairStations(spans, spans, 1e-9, exhausted, newFreeformWork()) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	exhausted := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit}
+	_, _, _, _, err := freeform.PairStations(spans, spans, 1e-9, exhausted, freeform.NewFreeformWork()) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -656,8 +658,8 @@ func TestPairStationsOverBudgetRefusesR7(t *testing.T) {
 // exact integer scaling of itself (factor 5): the two curves have
 // GENUINELY different absolute sagitta at every cell (scaling multiplies
 // every squared distance by 25 and every sagitta by 5 exactly), yet
-// pairStations always bisects both sides from the SAME cell together
-// (spline_sagitta.go's own doc comment), so the two station lists must land
+// freeform.PairStations always bisects both sides from the SAME cell together
+// (internal/freeform/spline_sagitta.go's own doc comment), so the two station lists must land
 // on the identical dyadic parameter fractions. That is checked directly, not
 // merely by length: because de Casteljau blending is linear, station1[k]
 // must equal EXACTLY 5*station0[k] for every k, which only holds if index k
@@ -669,7 +671,7 @@ func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
 	scaled := scaleSpans(base, 5)
 
 	target := levelSagitta(t, base[0], 2) // fine enough to force several splits
-	s0, s1, _, _, err := pairStations(base, scaled, target, nil, nil)
+	s0, s1, _, _, err := freeform.PairStations(base, scaled, target, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, len(s0), len(s1))
 	require.Greater(t, len(s0), len(base)+1, "the target must force genuine subdivision for this test to exercise the shared-cell claim")
@@ -701,13 +703,13 @@ func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
 	})
 
 	target := math.Min(levelSagitta(t, small, 2), levelSagitta(t, big8, 2))
-	work0, work1 := newFreeformWork(), newFreeformWork()
-	_, _, _, _, err := pairStations([]survey2d.BezierSpan{small}, []survey2d.BezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	_, _, _, _, err := freeform.PairStations([]survey2d.BezierSpan{small}, []survey2d.BezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
 	require.NoError(t, err)
 
-	require.Positive(t, work0.spent, "side 0's own counter must be charged")
-	require.Positive(t, work1.spent, "side 1's own counter must be charged")
-	require.Greater(t, work1.spent, work0.spent,
+	require.Positive(t, work0.Spent, "side 0's own counter must be charged")
+	require.Positive(t, work1.Spent, "side 1's own counter must be charged")
+	require.Greater(t, work1.Spent, work0.Spent,
 		"side 1's higher control count must cost strictly more under the same split/measure counts, proving each side's charge reads its OWN control count")
 }
 
@@ -731,17 +733,17 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 	target := bulgeSag * (1 + 1e-9)
 	spans0 := []survey2d.BezierSpan{bulge, flat}
 	spans1 := []survey2d.BezierSpan{bulge, flat}
-	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
+	_, _, _, sagUp, err := freeform.PairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, bulgeSag, sagUp, 1e-9, "sagittaUpper must be the running MAXIMUM (the first, bulging cell), never the last cell's own tiny reading")
 }
 
-// --- extra: pairStations refuses a span-count mismatch defensively ---
+// --- extra: freeform.PairStations refuses a span-count mismatch defensively ---
 
 func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
 	t.Parallel()
 	spans := quarterCircleFitSpans(t)
-	_, _, _, _, err := pairStations(spans, spans[:len(spans)-1], 1e-6, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := freeform.PairStations(spans, spans[:len(spans)-1], 1e-6, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, errors.Is(err, ErrDegenerate))
@@ -752,10 +754,10 @@ func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
 // TestSpanSagittaUpperRoundsOutward proves the outward-rounding contract
 // directly over exact rationals, at a precision no dense-sample test could
 // resolve: the exact maximum squared distance is computed independently (a
-// different formula, not chordSegmentSquaredDistance's own code path — the
+// different formula, not freeform.ChordSegmentSquaredDistance's own code path — the
 // single interior control point's own clamped-projection distance, worked out
 // by hand for this fixture) and its square root is bracketed to 200 bits with
-// math/big.Float.Sqrt. spanSagittaUpper's returned float64 must sit AT OR
+// math/big.Float.Sqrt. freeform.SpanSagittaUpper's returned float64 must sit AT OR
 // ABOVE that bracket, never below it — the property that distinguishes
 // proofbound.RatSqrtUp from proofbound.RatSqrtDown, and one dense sampling at float64 precision is
 // too coarse (both round within a handful of ulps of the true root) to catch
@@ -788,9 +790,9 @@ func TestSpanSagittaUpperRoundsOutward(t *testing.T) {
 
 // independentMaxChordSquaredDistance is TestSpanSagittaUpperRoundsOutward's
 // own independent oracle: it re-derives the same maximum-squared-distance-to-
-// segment quantity chordSegmentSquaredDistance computes, but via a separately
+// segment quantity freeform.ChordSegmentSquaredDistance computes, but via a separately
 // written clamped-projection formula (Cramer-style, no shared helper with
-// spline_sagitta.go), so agreement between the two is the §1 falsifier
+// internal/freeform/spline_sagitta.go), so agreement between the two is the §1 falsifier
 // working rather than one call site echoing the other's arithmetic.
 func independentMaxChordSquaredDistance(t *testing.T, span survey2d.BezierSpan) *big.Rat {
 	t.Helper()
@@ -807,8 +809,8 @@ func independentMaxChordSquaredDistance(t *testing.T, span survey2d.BezierSpan) 
 		if abLenSq.Sign() == 0 {
 			// The chord's own two ends coincide (a == b), so the segment
 			// degenerates to the single point a — §6.2.1's own explicit
-			// "distance to a one-point set" case (spline_sagitta.go's own
-			// chordSegmentSquaredDistance doc comment). There is nothing to
+			// "distance to a one-point set" case (internal/freeform/spline_sagitta.go's own
+			// freeform.ChordSegmentSquaredDistance doc comment). There is nothing to
 			// clamp: the distance is |p-a|^2 directly, worked out here by an
 			// independent formula rather than deferring to that function's
 			// own d==0 branch, which is exactly the branch A1's own
@@ -840,7 +842,7 @@ func independentMaxChordSquaredDistance(t *testing.T, span survey2d.BezierSpan) 
 // TestSpanSagittaUpperClosedLoopChordIsAPointNotZero pins the audit's own
 // most serious finding: a closed free-form loop — first and last control
 // point coincident, so the chord collapses to a single point — is exactly a
-// shape a loft cap can contribute, and chordSegmentSquaredDistance's own
+// shape a loft cap can contribute, and freeform.ChordSegmentSquaredDistance's own
 // d==0 branch must still report the true |p-a|^2 for it, never a bolted-on
 // 0. The net (0,0) (1,5) (-1,5) (0,0) is a non-collapsed control polygon (the
 // FIRST and LAST points coincide; the interior two do not) whose farthest
@@ -887,7 +889,7 @@ func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
 
 	spans0 := []survey2d.BezierSpan{small}
 	spans1 := []survey2d.BezierSpan{large}
-	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
+	_, _, _, sagUp, err := freeform.PairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagUp, target,
 		"the achieved sagittaUpper must honor the target on BOTH sides, never side 0 alone")
@@ -918,7 +920,7 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 	target := largeSag * (1 + 1e-9)
 	spans0 := []survey2d.BezierSpan{small}
 	spans1 := []survey2d.BezierSpan{large}
-	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
+	_, _, _, sagUp, err := freeform.PairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, largeSag, sagUp, 1e-9,
 		"sagittaUpper must reflect the LARGER side's own reading, never the smaller side's")
@@ -939,7 +941,7 @@ func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(t, spans[0], 3)
 
-	s0, _, _, _, err := pairStations(spans, spans, target, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
+	s0, _, _, _, err := freeform.PairStations(spans, spans, target, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
 	require.Greater(t, len(s0), len(spans)+1,
 		"the target must force genuine subdivision across the chain for this test to exercise cross-cell order")
@@ -974,7 +976,7 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(t, spans[0], 3)
 
-	s0, s1, _, _, err := pairStations(spans, spans, target, nil, nil)
+	s0, s1, _, _, err := freeform.PairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
 	require.Greater(t, len(s0), len(spans)+1, "the target must force genuine subdivision for this test to exercise anything")
 
@@ -996,7 +998,7 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 // TestSagittaCostTermsMatchTheOperationsTheyName re-derives every named term
 // of this file's cost model from the operation count its own doc comment
 // enumerates, written here as an explicit sum rather than borrowed from the
-// constant. A term narrowed below the work it pays for turns freeformWork from
+// constant. A term narrowed below the work it pays for turns freeform.FreeformWork from
 // an upper bound into an under-report, so each term is pinned against its own
 // derivation and not against itself.
 func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
@@ -1004,57 +1006,57 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	// ratPointAt: 1 big.Int.Lsh, then 2 big.Rat.SetFrac, each NORMALISING (a
 	// GCD plus a division of numerator and of denominator).
 	const ratPointAtOps = 1 + 3 + 3
-	require.Equal(t, ratPointAtOps, ratPointReconstructCost,
+	require.Equal(t, ratPointAtOps, freeform.RatPointReconstructCost,
 		"ratPointAt's reconstruction must be charged, and charged for SetFrac's own normalisation")
 
-	// chordSegmentSquaredDistance's non-degenerate branch. The running-maximum
-	// comparison is NOT folded in here: ratRunningMax charges it on its own
+	// freeform.ChordSegmentSquaredDistance's non-degenerate branch. The running-maximum
+	// comparison is NOT folded in here: freeform.RatRunningMax charges it on its own
 	// call, so one comparison is charged per fold rather than per projection.
 	// The most expensive path computes p-a, the dot product, the zero-length
 	// check and two interval comparisons, then p-b and its squared length.
 	const chordProjectionOps = 2 + (2 + 1) + 1 + 1 + 1 + 2 + (2 + 1)
-	require.Equal(t, chordProjectionOps, chordProjectionCost,
+	require.Equal(t, chordProjectionOps, freeform.ChordProjectionCost,
 		"every exact operation the clamped projection performs must be charged")
-	require.Equal(t, 1, ratCompareCost, "the running-maximum comparison is one big.Rat.Cmp")
+	require.Equal(t, 1, freeform.RatCompareCost, "the running-maximum comparison is one big.Rat.Cmp")
 
-	// ratChordFrame: 2 Sub for the chord vector, 2 Mul + 1 Add for its squared
+	// freeform.RatChordFrame: 2 Sub for the chord vector, 2 Mul + 1 Add for its squared
 	// length. This is the per-call work the old per-point aggregate charged
 	// nothing at all for.
 	const chordFrameOps = 2 + (2 + 1)
-	require.Equal(t, chordFrameOps, chordFrameCost,
+	require.Equal(t, chordFrameOps, freeform.ChordFrameCost,
 		"the shared chord frame every projection reads must be charged")
-	require.Equal(t, 2, chordVectorCost, "spanChordVector is two big.Rat.Sub")
-	require.Equal(t, 2+1, chordSquaredCost, "spanChordSquared squares and sums that vector")
-	require.Equal(t, 2, ratPointCopyCost, "a station copy is two big.Rat.Set")
+	require.Equal(t, 2, freeform.ChordVectorCost, "spanChordVector is two big.Rat.Sub")
+	require.Equal(t, 2+1, freeform.ChordSquaredCost, "spanChordSquared squares and sums that vector")
+	require.Equal(t, 2, freeform.RatPointCopyCost, "a station copy is two big.Rat.Set")
 
-	// spanHodographGapSquared per index: hu, hv, the squared norm, the compare.
+	// freeform.SpanHodographGapSquared per index: hu, hv, the squared norm, the compare.
 	const hodographOps = 3 + 3 + (2 + 1) + 1
-	require.Equal(t, hodographOps, hodographGapCost,
+	require.Equal(t, hodographOps, freeform.HodographGapCost,
 		"every exact operation the hodograph hull scan performs must be charged")
 
-	// ratQuarterOf: one big.NewRat for the factor, then a NORMALISING Mul (a GCD
+	// freeform.RatQuarterOf: one big.NewRat for the factor, then a NORMALISING Mul (a GCD
 	// plus a division of numerator and of denominator).
 	const ratQuarterOps = 1 + 3
-	require.Equal(t, ratQuarterOps, ratQuarterCost,
+	require.Equal(t, ratQuarterOps, freeform.RatQuarterCost,
 		"the exact quartering the matched delta roots must be charged, and charged for the Mul's own normalisation")
 
 	// proofbound.RatSqrtUp: the seed, then at most proofbound.SqrtAdjustLimit walks of two ratSquare
 	// probes (floatRat, Mul, Cmp) plus one Nextafter.
 	const ratSqrtUpOps = 4 + proofbound.SqrtAdjustLimit*(2*3+1)
-	require.GreaterOrEqual(t, ratSqrtUpCost, ratSqrtUpOps,
+	require.GreaterOrEqual(t, freeform.RatSqrtUpCost, ratSqrtUpOps,
 		"the per-call outward rounding must be charged, and charged for its whole bounded walk")
 
-	// dyadicSpanOf per point: two ratLCM folds (GCD, Quo, Mul) and two
-	// scaledNumerator scalings (Quo, Mul).
+	// freeform.DyadicSpanOf per point: two freeform.RatLCM folds (GCD, Quo, Mul) and two
+	// freeform.ScaledNumerator scalings (Quo, Mul).
 	const dyadicConversionOps = 2*3 + 2*2
-	require.Equal(t, dyadicConversionOps, dyadicConversionCostPerPoint,
+	require.Equal(t, dyadicConversionOps, freeform.DyadicConversionCostPerPoint,
 		"dyadicSpanOf's own conversion arithmetic must be charged")
 
-	// dyadicMidpoint: two alignedSum, each a big.Int.Lsh plus an Add, plus the
+	// freeform.DyadicMidpoint: two freeform.AlignedSum, each a big.Int.Lsh plus an Add, plus the
 	// second operand's own Lsh where its shift is nonzero — the branch that
 	// shifts BOTH, since only an over-count bounds the other.
 	const midpointOps = 2 * (1 + 1 + 1)
-	require.Equal(t, midpointOps, dyadicMidpointOps,
+	require.Equal(t, midpointOps, freeform.DyadicMidpointOps,
 		"one exact midpoint blend runs two aligned sums, each of which may shift both operands")
 
 	// split's own per-control-point bookkeeping, outside the blends: three
@@ -1062,7 +1064,7 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	// into each half per level. It is O(n) work that a blend count alone leaves
 	// entirely free.
 	const splitBookkeepingOps = 3 + 1
-	require.Equal(t, splitBookkeepingOps, dyadicSplitBookkeepingOps,
+	require.Equal(t, splitBookkeepingOps, freeform.DyadicSplitBookkeepingOps,
 		"a split's own allocations, copy and appends must be charged, not left free beside its blends")
 }
 
@@ -1072,25 +1074,25 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 // off the blend count alone spends; it also allocates three slices, copies the
 // parent's points and appends into both halves at every level.
 //
-// freeformBracketCost stays on its own coordinate-blend unit and is pinned here
+// freeform.FreeformBracketCost stays on its own coordinate-blend unit and is pinned here
 // as STRICTLY CHEAPER than this count, so the gap between the two is a measured
 // fact of the tree rather than something a reader has to notice. Closing it
 // would refuse the involute record that spends 91% of the shared ceiling today,
-// which makes it a §6.1 decision about freeformWorkLimit and not an accounting
-// repair (freeformBracketCost's own doc comment).
+// which makes it a §6.1 decision about freeform.FreeformWorkLimit and not an accounting
+// repair (freeform.FreeformBracketCost's own doc comment).
 func TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns(t *testing.T) {
 	t.Parallel()
 	for _, n := range []uint64{2, 3, 4, 8, 32} {
 		blends := n * (n - 1) / 2
-		require.Equal(t, blends*dyadicMidpointOps+dyadicSplitBookkeepingOps*n, dyadicSplitOps(n), "n=%d", n)
-		require.Greater(t, dyadicSplitOps(n), 2*blends,
+		require.Equal(t, blends*freeform.DyadicMidpointOps+freeform.DyadicSplitBookkeepingOps*n, freeform.DyadicSplitOps(n), "n=%d", n)
+		require.Greater(t, freeform.DyadicSplitOps(n), 2*blends,
 			"n=%d: two units per blend is the under-charge the metered unit replaces", n)
 	}
 
-	leaves := uint64(1) << freeformLengthDepth
+	leaves := uint64(1) << freeform.FreeformLengthDepth
 	require.Less(t,
-		freeformBracketCost(4),
-		costAdd(costMul(leaves-1, dyadicSplitOps(4)), costMul(leaves, 4)),
+		freeform.FreeformBracketCost(4),
+		freeform.CostAdd(freeform.CostMul(leaves-1, freeform.DyadicSplitOps(4)), freeform.CostMul(leaves, 4)),
 		"the arc-length preflight charges its own coordinate-blend unit, knowingly below the metered operation count")
 }
 
@@ -1100,17 +1102,17 @@ func TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns(t *testing.T) {
 // Table R row R7 back with no bisection performed.
 func TestDyadicSplitChargesItselfAndRefusesBeforeSplitting(t *testing.T) {
 	t.Parallel()
-	cell, err := dyadicSpanOf(nil, ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}))
+	cell, err := freeform.DyadicSpanOf(nil, ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}))
 	require.NoError(t, err)
 
-	work := newFreeformWork()
-	_, _, err = cell.split(work)
+	work := freeform.NewFreeformWork()
+	_, _, err = cell.Split(work)
 	require.NoError(t, err)
-	require.Equal(t, costMul(dyadicSplitOps(4), widthUnits(cell.spanWidth())), work.spent,
+	require.Equal(t, freeform.CostMul(freeform.DyadicSplitOps(4), freeform.WidthUnits(cell.SpanWidth())), work.Spent,
 		"a split charges its own cost, read off its own control count and operand width")
 
-	exhausted := &freeformWork{spent: freeformWorkLimit}
-	_, _, err = cell.split(exhausted)
+	exhausted := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit}
+	_, _, err = cell.Split(exhausted)
 	require.ErrorIs(t, err, ErrUnsupported, "an exhausted counter refuses the split rather than running it")
 }
 
@@ -1122,10 +1124,10 @@ func TestDyadicSplitChargesItselfAndRefusesBeforeSplitting(t *testing.T) {
 // walk and fifteen seconds on another.
 func TestChargesScaleWithOperandWidth(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, uint64(1), widthUnits(0), "a value with no bits still pays its operation count once")
-	require.Equal(t, uint64(1), widthUnits(63))
-	require.Equal(t, uint64(2), widthUnits(64), "one more unit per 64-bit word")
-	require.Equal(t, uint64(1+4096/64), widthUnits(4096))
+	require.Equal(t, uint64(1), freeform.WidthUnits(0), "a value with no bits still pays its operation count once")
+	require.Equal(t, uint64(1), freeform.WidthUnits(63))
+	require.Equal(t, uint64(2), freeform.WidthUnits(64), "one more unit per 64-bit word")
+	require.Equal(t, uint64(1+4096/64), freeform.WidthUnits(4096))
 
 	narrow := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 	huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 4096), big.NewInt(3))
@@ -1134,22 +1136,22 @@ func TestChargesScaleWithOperandWidth(t *testing.T) {
 		wide[i] = survey2d.RatPoint{U: new(big.Rat).Mul(p.U, huge), V: new(big.Rat).Mul(p.V, huge)}
 	}
 
-	narrowWork, wideWork := newFreeformWork(), newFreeformWork()
-	_, err := spanHodographGapUpper(narrowWork, narrow)
+	narrowWork, wideWork := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	_, err := freeform.SpanHodographGapUpper(narrowWork, narrow)
 	require.NoError(t, err)
-	_, err = spanHodographGapUpper(wideWork, wide)
+	_, err = freeform.SpanHodographGapUpper(wideWork, wide)
 	require.NoError(t, err)
 
-	require.Positive(t, narrowWork.spent)
-	require.Greater(t, wideWork.spent, 30*narrowWork.spent,
+	require.Positive(t, narrowWork.Spent)
+	require.Greater(t, wideWork.Spent, 30*narrowWork.Spent,
 		"the same hull scan over 4096-bit coordinates must cost orders of magnitude more than over machine words")
 }
 
 // TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths pins each reading's total
 // against the primitive calls its own code actually makes, and decisively that
 // the two are NOT the same number: the matched-delta reading runs
-// spanHodographGapSquared and one exact quartering where the sagitta runs
-// chordSegmentSquaredDistance.
+// freeform.SpanHodographGapSquared and one exact quartering where the sagitta runs
+// freeform.ChordSegmentSquaredDistance.
 //
 // It is also the multiplicity fixture. The sagitta reading reconstructs n+2
 // points — the two chord ends in ADDITION to its own loop's n — and a charge
@@ -1158,28 +1160,28 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 	t.Parallel()
 	const n = 3
 	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
-	cell, err := dyadicSpanOf(nil, span)
+	cell, err := freeform.DyadicSpanOf(nil, span)
 	require.NoError(t, err)
-	require.Len(t, cell.points, n)
+	require.Len(t, cell.Points, n)
 
-	sagWork := newFreeformWork()
-	_, err = dyadicSpanSagittaUpper(sagWork, cell)
+	sagWork := freeform.NewFreeformWork()
+	_, err = freeform.DyadicSpanSagittaUpper(sagWork, cell)
 	require.NoError(t, err)
 
-	mdWork := newFreeformWork()
-	reconstructed, err := cell.bezierSpan(mdWork)
+	mdWork := freeform.NewFreeformWork()
+	reconstructed, err := cell.BezierSpan(mdWork)
 	require.NoError(t, err)
-	_, err = spanMatchedDeltaUpper(mdWork, reconstructed)
+	_, err = freeform.SpanMatchedDeltaUpper(mdWork, reconstructed)
 	require.NoError(t, err)
 
 	// Written from the literals, never from the constants under test. Every
 	// coordinate here is a small integer, so every operand is one machine word
 	// and each operation count is spent once.
-	require.Equal(t, uint64((n+2)*7+5+n*(13+1)+64), sagWork.spent,
+	require.Equal(t, uint64((n+2)*7+5+n*(13+1)+64), sagWork.Spent,
 		"the sagitta pays for n+2 reconstructions, one chord frame, n projections, n comparisons and one rounding")
-	require.Equal(t, uint64(n*7+2+10*n+4+64), mdWork.spent,
+	require.Equal(t, uint64(n*7+2+10*n+4+64), mdWork.Spent,
 		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan, one exact quartering and one rounding")
-	require.NotEqual(t, sagWork.spent, mdWork.spent,
+	require.NotEqual(t, sagWork.Spent, mdWork.Spent,
 		"the two readings must carry their own separately derived charge, never one reused for the other")
 
 	// Replay the original fused reading with its full endpoint projections.
@@ -1195,48 +1197,48 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 		"wide":            {{0, 0}, {1e100, 2e100}, {3e100, 0}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cell, err := dyadicSpanOf(nil, ratSpan(points))
+			cell, err := freeform.DyadicSpanOf(nil, ratSpan(points))
 			require.NoError(t, err)
 
-			reference := func(w *freeformWork) (float64, error) {
-				span, err := cell.bezierSpan(w)
+			reference := func(w *freeform.FreeformWork) (float64, error) {
+				span, err := cell.BezierSpan(w)
 				if err != nil {
 					return 0, err
 				}
 				a, b := span[0], span[len(span)-1]
-				bax, bay, d, err := ratChordFrame(w, a, b)
+				bax, bay, d, err := freeform.RatChordFrame(w, a, b)
 				if err != nil {
 					return 0, err
 				}
 				var maxSq *big.Rat
 				for _, p := range span {
-					sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+					sq, err := freeform.ChordSegmentSquaredDistance(w, p, a, bax, bay, d)
 					if err != nil {
 						return 0, err
 					}
-					maxSq, err = ratRunningMax(w, maxSq, sq)
+					maxSq, err = freeform.RatRunningMax(w, maxSq, sq)
 					if err != nil {
 						return 0, err
 					}
 				}
-				return chargedRatSqrtUp(w, maxSq)
+				return freeform.ChargedRatSqrtUp(w, maxSq)
 			}
 
-			originalWork := newFreeformWork()
+			originalWork := freeform.NewFreeformWork()
 			original, err := reference(originalWork)
 			require.NoError(t, err)
-			optimizedWork := newFreeformWork()
-			optimized, _, err := dyadicSpanSagittaUpperWithSpan(optimizedWork, cell)
+			optimizedWork := freeform.NewFreeformWork()
+			optimized, _, err := freeform.DyadicSpanSagittaUpperWithSpan(optimizedWork, cell)
 			require.NoError(t, err)
 			require.Equal(t, original, optimized)
-			require.Equal(t, originalWork.spent, optimizedWork.spent)
+			require.Equal(t, originalWork.Spent, optimizedWork.Spent)
 
-			exact := &freeformWork{spent: freeformWorkLimit - originalWork.spent}
-			_, _, err = dyadicSpanSagittaUpperWithSpan(exact, cell)
+			exact := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - originalWork.Spent}
+			_, _, err = freeform.DyadicSpanSagittaUpperWithSpan(exact, cell)
 			require.NoError(t, err)
-			require.Equal(t, freeformWorkLimit, exact.spent)
-			short := &freeformWork{spent: freeformWorkLimit - originalWork.spent + 1}
-			_, _, err = dyadicSpanSagittaUpperWithSpan(short, cell)
+			require.Equal(t, freeform.FreeformWorkLimit, exact.Spent)
+			short := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - originalWork.Spent + 1}
+			_, _, err = freeform.DyadicSpanSagittaUpperWithSpan(short, cell)
 			require.ErrorIs(t, err, ErrUnsupported)
 		})
 	}
@@ -1262,13 +1264,13 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 		ratSpan([][2]float64{{3, 0}, {4, -2}, {5, -2}, {6, 0}}),
 	}
 
-	work0, work1 := newFreeformWork(), newFreeformWork()
-	_, _, _, _, err := pairStations(side0, side1, math.Inf(1), work0, work1) //nolint:dogsled // only the charged totals are under test
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	_, _, _, _, err := freeform.PairStations(side0, side1, math.Inf(1), work0, work1) //nolint:dogsled // only the charged totals are under test
 	require.NoError(t, err)
 
-	require.Equal(t, 2*neverSplittingSpanCharge(3)+2, work0.spent,
+	require.Equal(t, 2*neverSplittingSpanCharge(3)+2, work0.Spent,
 		"side 0's total must be its own per-span charge twice, plus the one final-station copy")
-	require.Equal(t, 2*neverSplittingSpanCharge(4)+2, work1.spent,
+	require.Equal(t, 2*neverSplittingSpanCharge(4)+2, work1.Spent,
 		"side 1's total must be its own per-span charge twice, plus the one final-station copy")
 }
 
@@ -1299,13 +1301,13 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 	total := neverSplittingSpanCharge(3) + 2 // the one span, plus the final-station copy
 
-	exact := &freeformWork{spent: freeformWorkLimit - total}
-	_, _, _, _, err := pairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), exact, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	exact := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - total}
+	_, _, _, _, err := freeform.PairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), exact, freeform.NewFreeformWork()) //nolint:dogsled // only the budget boundary is under test
 	require.NoError(t, err, "a counter holding exactly the charged total must finish")
-	require.Equal(t, freeformWorkLimit, exact.spent)
+	require.Equal(t, freeform.FreeformWorkLimit, exact.Spent)
 
-	short := &freeformWork{spent: freeformWorkLimit - total + 1}
-	_, _, _, _, err = pairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), short, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	short := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - total + 1}
+	_, _, _, _, err = freeform.PairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), short, freeform.NewFreeformWork()) //nolint:dogsled // only the budget boundary is under test
 	require.Error(t, err, "one unit short of the charged total must refuse")
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -1313,11 +1315,11 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 // --- B1: a zero-control-point span must refuse, never panic ---
 
 // TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking pins the fix for
-// dyadicSpanSagittaUpper's own dead-ended n==0 guard: with no entry-level
+// freeform.DyadicSpanSagittaUpper's own dead-ended n==0 guard: with no entry-level
 // gate, a zero-control span reaches walkCell, both sides' sagitta reads 0
-// (dyadicSpanSagittaUpper's own guard), the accept test passes trivially,
+// (freeform.DyadicSpanSagittaUpper's own guard), the accept test passes trivially,
 // and the accept branch's own c0.ratPointAt(0) panics with an index out of
-// range on the empty points slice. pairStations must refuse this input
+// range on the empty points slice. freeform.PairStations must refuse this input
 // cleanly, on either side, before any cell is ever walked.
 func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 	t.Parallel()
@@ -1325,12 +1327,12 @@ func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 	line := ratSpan([][2]float64{{0, 0}, {1, 0}})
 
 	t.Run("side0", func(t *testing.T) {
-		_, _, _, _, err := pairStations([]survey2d.BezierSpan{empty}, []survey2d.BezierSpan{line}, 1, nil, nil)
+		_, _, _, _, err := freeform.PairStations([]survey2d.BezierSpan{empty}, []survey2d.BezierSpan{line}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("side1", func(t *testing.T) {
-		_, _, _, _, err := pairStations([]survey2d.BezierSpan{line}, []survey2d.BezierSpan{empty}, 1, nil, nil)
+		_, _, _, _, err := freeform.PairStations([]survey2d.BezierSpan{line}, []survey2d.BezierSpan{empty}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
@@ -1352,7 +1354,7 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 	// target=1 is far above this straight span's own (zero) sagitta, so the
 	// single cell accepts whole with no bisection — the final station is
 	// exactly the code path under test.
-	s0, _, _, _, err := pairStations(spans, spans, 1, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
+	s0, _, _, _, err := freeform.PairStations(spans, spans, 1, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
 
 	wantU := new(big.Rat).Set(span[len(span)-1].U) // the input's own value, before any mutation
@@ -1364,14 +1366,14 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 }
 
 // --- C: matched-delta primitives (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
-// matchedDeltaUpper obligation) — spanHodographGapUpper, spanMatchedDeltaUpper,
-// spanSpeedUpper ---
+// matchedDeltaUpper obligation) — freeform.SpanHodographGapUpper, freeform.SpanMatchedDeltaUpper,
+// freeform.SpanSpeedUpper ---
 
 // denseMatchedDeviation samples a single-span chain densely and returns the
 // maximum true |C(t) - (P_0 + t*Delta)| over the span's own NATIVE parameter
-// t — the parameter-matched deviation spanMatchedDeltaUpper bounds, sampled
+// t — the parameter-matched deviation freeform.SpanMatchedDeltaUpper bounds, sampled
 // through the same independent de Casteljau oracle (evalSpans) the sagitta
-// tests already use, never through any of spline_sagitta.go's own machinery.
+// tests already use, never through any of internal/freeform/spline_sagitta.go's own machinery.
 func denseMatchedDeviation(t *testing.T, span survey2d.BezierSpan, samples int) float64 {
 	t.Helper()
 	floatSpan := floatBezierSpanOf(span)
@@ -1390,7 +1392,7 @@ func denseMatchedDeviation(t *testing.T, span survey2d.BezierSpan, samples int) 
 
 // denseSpeedSample samples ||C'(t)|| densely via a central finite difference
 // over evalSpans — an INDEPENDENT numerical estimate, never a reuse of
-// spanHodographGapUpper's own exact-rational hodograph.
+// freeform.SpanHodographGapUpper's own exact-rational hodograph.
 func denseSpeedSample(t *testing.T, span survey2d.BezierSpan, samples int) float64 {
 	t.Helper()
 	const h = 1e-5
@@ -1429,7 +1431,7 @@ func zigzagHuggingSpan() survey2d.BezierSpan {
 // TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses is the decisive C4
 // fixture: it densely proves the sagitta of 0 FAILS to bound the true
 // parameter-matched deviation on zigzagHuggingSpan, and that
-// spanMatchedDeltaUpper (d/2) DOES bound it. This is F1's rule made
+// freeform.SpanMatchedDeltaUpper (d/2) DOES bound it. This is F1's rule made
 // concrete: proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation is a
 // strictly stronger claim than the sagitta, and confusing the two is exactly
 // the unsoundness this function exists to prevent a downstream caller from
@@ -1562,7 +1564,7 @@ func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
 }
 
 // TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength checks
-// both of spanSpeedUpper's own obligations: it encloses a dense finite-
+// both of freeform.SpanSpeedUpper's own obligations: it encloses a dense finite-
 // difference sample of ||C'(t)||, and it never reads below the span's own
 // chord length — the floor proofbound.CellChordCurveAreaUpper's own tangent-magnitude
 // argument depends on.
@@ -1588,8 +1590,8 @@ func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testi
 // point coincident, chord length 0 too), all three quantities read exactly
 // 0. On a STRAIGHT, uniformly-spaced span (collinear controls at equal
 // parameter spacing — genuine constant-speed motion along a chord of
-// POSITIVE length), the two GAP terms (spanHodographGapUpper,
-// spanMatchedDeltaUpper) still read exactly 0, because a uniformly-spaced
+// POSITIVE length), the two GAP terms (freeform.SpanHodographGapUpper,
+// freeform.SpanMatchedDeltaUpper) still read exactly 0, because a uniformly-spaced
 // collinear net's hodograph is the CONSTANT vector Delta itself at every
 // control point; the speed bound is NOT zero there — it reads exactly the
 // span's own chord length, since d=0 leaves nothing to widen it by.
@@ -1608,35 +1610,35 @@ func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *test
 		"a straight uniformly-spaced span's speed bound must equal its own chord length exactly (d=0), never merely enclose it")
 }
 
-// --- chainStations: the one-sided twin (docs/tessellation-reach-design.md §5) ---
+// --- freeform.ChainStations: the one-sided twin (docs/tessellation-reach-design.md §5) ---
 
 // TestChainStationsIsOneSideOfThePairWalk pins the refactor's own contract: a
 // chain walked on its own must settle on exactly the cells the pair walk
 // settles on when both of its sides are that same chain, and must report the
 // same measured sagitta. The station lists differ in one documented way only —
-// chainStations EXCLUDES the chain's final boundary from stations and carries
+// freeform.ChainStations EXCLUDES the chain's final boundary from stations and carries
 // it in end instead — so the pair's own list is reproduced by appending end.
 func TestChainStationsIsOneSideOfThePairWalk(t *testing.T) {
 	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	const target = 1e-4
 
-	paired, _, _, pairSag, err := pairStations(spans, spans, target, nil, nil)
+	paired, _, _, pairSag, err := freeform.PairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
 
-	chain, err := chainStations(spans, target, nil)
+	chain, err := freeform.ChainStations(spans, target, nil)
 	require.NoError(t, err)
 
-	require.Equal(t, pairSag, chain.sagitta, "the one-sided walk must measure the identical sagitta, bit for bit")
-	require.Len(t, chain.stations, len(paired)-1,
+	require.Equal(t, pairSag, chain.Sagitta, "the one-sided walk must measure the identical sagitta, bit for bit")
+	require.Len(t, chain.Stations, len(paired)-1,
 		"the chain carries one station per CELL; the pair carries one per cell BOUNDARY, which is one more")
-	for i := range chain.stations {
-		require.Zero(t, paired[i].U.Cmp(chain.stations[i].U), "station %d U must be the pair walk's own", i)
-		require.Zero(t, paired[i].V.Cmp(chain.stations[i].V), "station %d V must be the pair walk's own", i)
+	for i := range chain.Stations {
+		require.Zero(t, paired[i].U.Cmp(chain.Stations[i].U), "station %d U must be the pair walk's own", i)
+		require.Zero(t, paired[i].V.Cmp(chain.Stations[i].V), "station %d V must be the pair walk's own", i)
 	}
 	last := paired[len(paired)-1]
-	require.Zero(t, last.U.Cmp(chain.end.U), "the chain's end must be the pair walk's own final station")
-	require.Zero(t, last.V.Cmp(chain.end.V))
+	require.Zero(t, last.U.Cmp(chain.End.U), "the chain's end must be the pair walk's own final station")
+	require.Zero(t, last.V.Cmp(chain.End.V))
 }
 
 // TestChainStationsHonorsItsTargetAndLoosensWithIt asserts the measured sagitta
@@ -1647,14 +1649,14 @@ func TestChainStationsHonorsItsTargetAndLoosensWithIt(t *testing.T) {
 	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 
-	fine, err := chainStations(spans, 1e-4, nil)
+	fine, err := freeform.ChainStations(spans, 1e-4, nil)
 	require.NoError(t, err)
-	require.LessOrEqual(t, fine.sagitta, 1e-4, "the measured sagitta must honor the target it was asked for")
+	require.LessOrEqual(t, fine.Sagitta, 1e-4, "the measured sagitta must honor the target it was asked for")
 
-	coarse, err := chainStations(spans, 1e-2, nil)
+	coarse, err := freeform.ChainStations(spans, 1e-2, nil)
 	require.NoError(t, err)
-	require.LessOrEqual(t, coarse.sagitta, 1e-2)
-	require.Less(t, len(coarse.stations), len(fine.stations),
+	require.LessOrEqual(t, coarse.Sagitta, 1e-2)
+	require.Less(t, len(coarse.Stations), len(fine.Stations),
 		"a laxer target must settle on strictly fewer cells")
 }
 
@@ -1666,17 +1668,17 @@ func TestChainStationsHonorsItsTargetAndLoosensWithIt(t *testing.T) {
 // what proves each is rounded in its own direction rather than both in one.
 func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
 	t.Parallel()
-	curved, err := chainStations(quarterCircleFitSpans(t), 1e-3, nil)
+	curved, err := freeform.ChainStations(quarterCircleFitSpans(t), 1e-3, nil)
 	require.NoError(t, err)
-	require.Len(t, curved.cellArcUpper, len(curved.stations), "one arc reading per accepted cell")
-	require.Len(t, curved.cellChordLower, len(curved.stations), "one chord reading per accepted cell")
+	require.Len(t, curved.CellArcUpper, len(curved.Stations), "one arc reading per accepted cell")
+	require.Len(t, curved.CellChordLower, len(curved.Stations), "one chord reading per accepted cell")
 	summedChord, summedArc := 0.0, 0.0
-	for k := range curved.cellArcUpper {
-		require.Positive(t, curved.cellChordLower[k], "cell %d spans a positive chord", k)
-		require.GreaterOrEqual(t, curved.cellArcUpper[k], curved.cellChordLower[k],
+	for k := range curved.CellArcUpper {
+		require.Positive(t, curved.CellChordLower[k], "cell %d spans a positive chord", k)
+		require.GreaterOrEqual(t, curved.CellArcUpper[k], curved.CellChordLower[k],
 			"cell %d: a chord never exceeds the arc it subtends", k)
-		summedChord += curved.cellChordLower[k]
-		summedArc += curved.cellArcUpper[k]
+		summedChord += curved.CellChordLower[k]
+		summedArc += curved.CellArcUpper[k]
 	}
 	// The fixture interpolates a quarter circle of radius 5, whose arc length
 	// is 5*pi/2. The inscribed chords of a chain this fine sit just under that
@@ -1691,17 +1693,17 @@ func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
 	// represents. That is what makes the two roundings distinguishable — each
 	// must land on its OWN side of the exact value, one ulp apart.
 	diagonal := ratSpan([][2]float64{{0, 0}, {0.5, 0.5}, {1, 1}})
-	straight, err := chainStations([]survey2d.BezierSpan{diagonal}, 1, nil)
+	straight, err := freeform.ChainStations([]survey2d.BezierSpan{diagonal}, 1, nil)
 	require.NoError(t, err)
-	require.Len(t, straight.stations, 1, "a collinear span carries sagitta 0 and is accepted whole")
-	require.Zero(t, straight.sagitta)
-	require.GreaterOrEqual(t, straight.cellArcUpper[0]*straight.cellArcUpper[0], 2.0,
+	require.Len(t, straight.Stations, 1, "a collinear span carries sagitta 0 and is accepted whole")
+	require.Zero(t, straight.Sagitta)
+	require.GreaterOrEqual(t, straight.CellArcUpper[0]*straight.CellArcUpper[0], 2.0,
 		"the arc reading must square to at least the exact squared chord length 2")
-	require.LessOrEqual(t, straight.cellChordLower[0]*straight.cellChordLower[0], 2.0,
+	require.LessOrEqual(t, straight.CellChordLower[0]*straight.CellChordLower[0], 2.0,
 		"the chord reading must square to at most the exact squared chord length 2")
-	require.Greater(t, straight.cellArcUpper[0], straight.cellChordLower[0],
+	require.Greater(t, straight.CellArcUpper[0], straight.CellChordLower[0],
 		"the two readings must straddle the exact value, never both land on one side of it")
-	require.InDelta(t, math.Sqrt2, straight.cellChordLower[0], 1e-15)
+	require.InDelta(t, math.Sqrt2, straight.CellChordLower[0], 1e-15)
 }
 
 // TestChainStationsRefusals pins every entry gate the one-sided walk inherits
@@ -1711,25 +1713,25 @@ func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
 func TestChainStationsRefusals(t *testing.T) {
 	t.Parallel()
 	t.Run("no span", func(t *testing.T) {
-		_, err := chainStations(nil, 1, nil)
+		_, err := freeform.ChainStations(nil, 1, nil)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("a span with no control point", func(t *testing.T) {
-		_, err := chainStations([]survey2d.BezierSpan{{}}, 1, nil)
+		_, err := freeform.ChainStations([]survey2d.BezierSpan{{}}, 1, nil)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("more spans than the cap admits", func(t *testing.T) {
-		spans := make([]survey2d.BezierSpan, maxChordsPerWalk+1)
+		spans := make([]survey2d.BezierSpan, freeform.MaxChordsPerWalk+1)
 		for i := range spans {
 			spans[i] = straightSpanFrom(float64(2 * i))
 		}
-		_, err := chainStations(spans, 1, nil)
-		require.ErrorIs(t, err, errTooManyChords)
+		_, err := freeform.ChainStations(spans, 1, nil)
+		require.ErrorIs(t, err, freeform.ErrTooManyChords)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("a target past the cap's reach", func(t *testing.T) {
-		_, err := chainStations([]survey2d.BezierSpan{parabolaSpan()}, 1e-20, nil)
-		require.ErrorIs(t, err, errTooManyChords)
+		_, err := freeform.ChainStations([]survey2d.BezierSpan{parabolaSpan()}, 1e-20, nil)
+		require.ErrorIs(t, err, freeform.ErrTooManyChords)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -1741,12 +1743,12 @@ func TestChainStationsChargesTheCounterItIsHanded(t *testing.T) {
 	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 
-	work := newFreeformWork()
-	_, err := chainStations(spans, 1e-3, work)
+	work := freeform.NewFreeformWork()
+	_, err := freeform.ChainStations(spans, 1e-3, work)
 	require.NoError(t, err)
-	require.Positive(t, work.spent, "the walk must charge the counter it was handed")
+	require.Positive(t, work.Spent, "the walk must charge the counter it was handed")
 
-	exhausted := &freeformWork{spent: freeformWorkLimit}
-	_, err = chainStations(spans, 1e-3, exhausted)
+	exhausted := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit}
+	_, err = freeform.ChainStations(spans, 1e-3, exhausted)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

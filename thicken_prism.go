@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -45,7 +47,7 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	pp.profile = annulus
 	pp.surfaceResult = false
 	pp.walks = nil
-	return evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 }
 
 // thickenAmount is the per-side offset magnitude: the whole thickness for a

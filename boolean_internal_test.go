@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -558,7 +560,7 @@ func xptFromRat(x, y, z *big.Rat) proofbound.Xpt {
 // xat is an exact point from whole millimetres, optionally nudged by a
 // sub-ulp offset on one axis.
 func xat(x, y, z float64, nudge int) proofbound.Xpt {
-	rx, ry, rz := mustRatOf(x), mustRatOf(y), mustRatOf(z)
+	rx, ry, rz := freeform.MustRatOf(x), freeform.MustRatOf(y), freeform.MustRatOf(z)
 	switch nudge {
 	case 0:
 		rx = new(big.Rat).Add(rx, tinyOffset())

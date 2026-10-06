@@ -1,4 +1,4 @@
-package decad
+package freeform
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func literalBernsteinMonomial(values []*big.Rat) ratPoly {
+func literalBernsteinMonomial(values []*big.Rat) RatPoly {
 	degree := len(values) - 1
 	if degree < 0 {
 		return nil
@@ -39,7 +39,7 @@ func literalBernsteinMonomial(values []*big.Rat) ratPoly {
 			}
 			term = next
 		}
-		scale := new(big.Rat).Mul(value, binomialRat(degree, i))
+		scale := new(big.Rat).Mul(value, BinomialRat(degree, i))
 		for k, coefficient := range term {
 			result[k].Add(result[k], new(big.Rat).Mul(coefficient, scale))
 		}
@@ -47,7 +47,7 @@ func literalBernsteinMonomial(values []*big.Rat) ratPoly {
 	return trimTestRatPoly(result)
 }
 
-func trimTestRatPoly(p ratPoly) ratPoly {
+func trimTestRatPoly(p RatPoly) RatPoly {
 	for len(p) > 0 && p[len(p)-1].Sign() == 0 {
 		p = p[:len(p)-1]
 	}
@@ -74,7 +74,7 @@ func TestRPFromBernsteinMatchesLiteralExpansion(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := rpFromBernstein(tc.values)
+			got := RpFromBernstein(tc.values)
 			want := literalBernsteinMonomial(tc.values)
 			if len(got) != len(want) {
 				t.Fatalf("coefficient count: got %d, want %d", len(got), len(want))
@@ -96,7 +96,7 @@ func BenchmarkExactFreeformMomentsDegreeAndSpans(b *testing.B) {
 			b.Run(name, func(b *testing.B) {
 				b.ReportAllocs()
 				for range b.N {
-					_ = exactFreeformMoments(spans, false, momentSecondOrder)
+					_ = ExactFreeformMoments(spans, false, MomentSecondOrder)
 				}
 			})
 		}
@@ -128,10 +128,10 @@ func benchmarkMomentSpans(degree, count int) []survey2d.BezierSpan {
 func TestFreeformThirdMomentsParabolicRegion(t *testing.T) {
 	point := func(u, v int64) survey2d.RatPoint { return survey2d.RatPoint{U: big.NewRat(u, 1), V: big.NewRat(v, 1)} }
 	parabola := []survey2d.BezierSpan{{point(0, 0), point(1, 0), point(2, 4)}}
-	curve := freeformThirdMoments(parabola, false)
-	chord := polyThirdMoments(
-		ratPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},
-		ratPoly{big.NewRat(4, 1), big.NewRat(-4, 1)},
+	curve := FreeformThirdMoments(parabola, false)
+	chord := PolyThirdMoments(
+		RatPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},
+		RatPoly{big.NewRat(4, 1), big.NewRat(-4, 1)},
 	)
 	for i, pq := range [4][2]int{{3, 0}, {2, 1}, {1, 2}, {0, 3}} {
 		p, q := pq[0], pq[1]
@@ -146,7 +146,7 @@ func TestFreeformThirdMomentsParabolicRegion(t *testing.T) {
 		got := new(big.Rat).Add(curve[i], chord[i])
 		require.Zero(t, got.Cmp(want), "∫u^%d·v^%d dA: got %s, want %s", p, q, got, want)
 	}
-	reversed := freeformThirdMoments(parabola, true)
+	reversed := FreeformThirdMoments(parabola, true)
 	for i := range curve {
 		require.Zero(t, new(big.Rat).Neg(curve[i]).Cmp(reversed[i]), "term %d: a reversed span must negate", i)
 	}

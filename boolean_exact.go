@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -1333,7 +1335,7 @@ func (pm *parityMesh) vertexProjection(axis, u, v, vi int) xp2 {
 	}
 	if slot[vi].u == nil {
 		vert := pm.verts[vi]
-		slot[vi] = newXP2(mustRatOf(coordOf(vert, u)), mustRatOf(coordOf(vert, v)))
+		slot[vi] = newXP2(freeform.MustRatOf(coordOf(vert, u)), freeform.MustRatOf(coordOf(vert, v)))
 	}
 	return slot[vi]
 }

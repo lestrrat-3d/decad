@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -181,7 +183,7 @@ func vecL1(v r3.Vec) float64 {
 // through walkOf as before. A non-nil walks that was not resolved from THIS
 // profile — the recorded segments compared, not their count — is a plumbing
 // bug and refuses rather than silently resolving anyway.
-func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *profileWalks) (float64, error) {
+func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
 	if walks != nil && !walks.matches(profile) {
 		return 0, errResolvedWalksMismatch
 	}
@@ -203,7 +205,7 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *pr
 
 // profileCoordinateEnvelope is profileCoordinateUpper without the analytic
 // requirement: every walk kind, free-form included, states its own coordUpper
-// (walkOf's per-kind construction — freeformControlExtent for a free-form
+// (walkOf's per-kind construction — freeform.FreeformControlExtent for a free-form
 // span), so a caller that only needs a coordinate MAGNITUDE envelope — never a
 // placed cap frame, which genuinely cannot represent a free-form wall — reads
 // it directly rather than refusing on a section the caller's own reading
@@ -213,7 +215,7 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *pr
 //
 // walks is profileCoordinateUpper's own optional pre-resolved set, same
 // contract: nil resolves as before, a non-matching non-nil set refuses.
-func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks *profileWalks) (float64, error) {
+func profileCoordinateEnvelope(profile ProfileRecord, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
 	if walks != nil && !walks.matches(profile) {
 		return 0, errResolvedWalksMismatch
 	}
@@ -235,14 +237,14 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks 
 // (and already checked against the profile by the caller) reads
 // walks.at(loopIndex, segIndex); walks nil calls walkOf, exactly as every
 // consumer did before profileWalks existed.
-func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
+func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *profileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
 	if walks != nil {
 		if walks.readCharges != nil {
 			charge := walks.readCharges[loopIndex][segIndex]
-			if err := work.step(charge.spent); err != nil {
+			if err := work.Step(charge.spent); err != nil {
 				return survey2d.SegmentWalk{}, err
 			}
-			if err := work.reconstructionStep(charge.reconstructionSpent); err != nil {
+			if err := work.ReconstructionStep(charge.reconstructionSpent); err != nil {
 				return survey2d.SegmentWalk{}, err
 			}
 		}
@@ -259,14 +261,14 @@ func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, lo
 // It reads coordUpper through profileCoordinateEnvelope, never
 // profileCoordinateUpper: this proof needs a coordinate MAGNITUDE envelope,
 // never a placed cap frame, and every walk kind states one — a free-form
-// span's own convex-hull envelope (freeformControlExtent) included — so the
+// span's own convex-hull envelope (freeform.FreeformControlExtent) included — so the
 // analytic-only refusal profileCoordinateUpper carries for its OTHER callers
 // (capblend_centroid.go, revolve.go) would refuse a centroid this build must
 // publish for a section this same build just proved buildable.
 //
 // walks is the profile's pre-resolved segment walks, or nil; same contract as
 // profileCoordinateEnvelope's own.
-func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeformWork, walks *profileWalks) (float64, error) {
+func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeform.FreeformWork, walks *profileWalks) (float64, error) {
 	coordUpper, err := profileCoordinateEnvelope(profile, work, walks)
 	if err != nil {
 		return 0, err
@@ -310,5 +312,5 @@ func (pp prismPayload) transform() r3.Transform { return pp.xform }
 // here exactly as it did on the way in (docs/spline-design.md §5.2).
 func (pp prismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalPrismContext(ctx, d, ref, pp, newFreeformWork())
+	return evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 }

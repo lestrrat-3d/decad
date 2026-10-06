@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -23,7 +25,7 @@ import (
 // square root of a rational, generically irrational) and is never Exact,
 // for the same reason spline design §3 gives arc length. It is still PROVEN:
 // each triangle's area is bracketed from its own exact rational cross-norm by
-// spline_length.go's outward-rounded proofbound.RatSqrtDown/proofbound.RatSqrtUp, and the published
+// internal/freeform/spline_length.go's outward-rounded proofbound.RatSqrtDown/proofbound.RatSqrtUp, and the published
 // bound sums those per-triangle widths beside the summation loop's own slop —
 // or is +Inf where either of those two terms has itself saturated, since a
 // saturated term states no scale for the bound to be proven at (wallBound).
@@ -169,7 +171,7 @@ func newLoftMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDe
 // add folds one outward-oriented triangle (A, B, C) of T into the volume,
 // centroid and bounds accumulators, and — when wall is true — into the area
 // accumulator's float sum and that sum's two proof terms. Every vertex
-// coordinate is a float64, hence an exact rational (clearance_poly.go's
+// coordinate is a float64, hence an exact rational (internal/freeform/clearance_poly.go's
 // take-the-floats-exactly discipline); the volume and centroid sums round
 // nothing until publication, and the area sum's own terms are the endpoints
 // of a proven per-triangle enclosure rather than a float evaluation.
@@ -237,7 +239,7 @@ func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]
 // wallTriangleArea brackets one wall triangle's own area between two floats,
 // both PROVEN. u and v are the triangle's exact rational edge vectors, so
 // |u×v|² is an exact rational and the area is the square root of |u×v|²/4;
-// proofbound.RatSqrtDown/proofbound.RatSqrtUp (spline_length.go) bracket that rational root with
+// proofbound.RatSqrtDown/proofbound.RatSqrtUp (internal/freeform/spline_length.go) bracket that rational root with
 // OUTWARD rounding decided by exact comparison, so lo ≤ area ≤ hi holds
 // whatever the platform's own sqrt does.
 //
@@ -385,7 +387,7 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 // under a curved pairing alone (a10-plan.md Part 3 PR 6): delta's own fast
 // path (delta == 0) does not imply epsV == 0, and EITHER section quantity on
 // its own reaches it, since a free-form cell can carry a positive
-// matchedDelta at an exactly-zero sagitta (spline_sagitta.go's own
+// matchedDelta at an exactly-zero sagitta (internal/freeform/spline_sagitta.go's own
 // counterexample).
 func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasurement, error) {
 	vol6 := new(big.Rat).Set(m.vol6)
@@ -575,7 +577,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	// offset, spends unfolded. Both are gated on sectionDelta > 0 OR
 	// sectionMatchedDelta > 0 — never sectionDelta alone — so a free-form
 	// cell whose matchedDelta is positive at an exactly-zero sagitta
-	// (spline_sagitta.go's own counterexample) still has its wall and cap
+	// (internal/freeform/spline_sagitta.go's own counterexample) still has its wall and cap
 	// excess charged; an unplaced LineSeg-only loft, where both are exactly
 	// 0, stays bit-identical to PR 1's.
 	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
@@ -785,7 +787,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 	// Derive cap1's offset before lifting any wall cell into exact rationals.
 	// Production has already refused non-finite vertices at S13, while direct
 	// internal callers still receive S14's existing derivation refusal instead
-	// of reaching mustRatOf with a NaN.
+	// of reaching freeform.MustRatOf with a NaN.
 	h1Upper := math.Inf(1)
 	for _, row := range wIdx {
 		for _, idx := range row {
@@ -872,9 +874,9 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			vLoX := proofbound.XptOf(vLo)
 			lowerLo, _ := wallTriangleArea(proofbound.Xsub(proofbound.XptOf(vHi), vLoX), proofbound.Xsub(proofbound.XptOf(wHi), vLoX))
 			upperLo, _ := wallTriangleArea(proofbound.Xsub(proofbound.XptOf(wHi), vLoX), proofbound.Xsub(proofbound.XptOf(wLo), vLoX))
-			areaCorrection.Add(areaCorrection, mustRatOf(bilinearValue))
-			areaCorrection.Sub(areaCorrection, mustRatOf(lowerLo))
-			areaCorrection.Sub(areaCorrection, mustRatOf(upperLo))
+			areaCorrection.Add(areaCorrection, freeform.MustRatOf(bilinearValue))
+			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(lowerLo))
+			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(upperLo))
 			stationLeg := proofbound.CellStationShiftAreaAllow(
 				vLo, vHi, wLo, wHi,
 				p.arcUpperV[j], p.arcUpperW[j], cellMatched, delta,

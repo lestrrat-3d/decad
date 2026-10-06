@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -60,7 +62,7 @@ import (
 // [ErrNegativeMagnitude], and a non-finite field or arithmetic result is
 // [ErrNotFinite]. No measurement is returned on error.
 func (r ProfileRecord) Area() (Measurement, error) {
-	ig, err := r.integralsTo(momentAreaOrder)
+	ig, err := r.integralsTo(freeform.MomentAreaOrder)
 	if err != nil {
 		return Measurement{}, err
 	}
@@ -93,7 +95,7 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // [ErrUnsupported]: the division has no bounded result. Record validation and
 // arithmetic errors match [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
-	ig, err := r.integralsTo(momentFirstOrder)
+	ig, err := r.integralsTo(freeform.MomentFirstOrder)
 	if err != nil {
 		return VecMeasurement{}, err
 	}
@@ -134,11 +136,11 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 // representable. The float path stays for the regions this one cannot serve:
 // those whose accumulator a circular contribution retired.
 func (ig regionIntegrals) exactCentroid() (VecMeasurement, bool) {
-	if ig.exactDead || !ig.exact.complete() || ig.exact.area.Sign() <= 0 {
+	if ig.exactDead || !ig.exact.Complete() || ig.exact.Area.Sign() <= 0 {
 		return VecMeasurement{}, false
 	}
-	u := new(big.Rat).Quo(ig.exact.mu, ig.exact.area)
-	v := new(big.Rat).Quo(ig.exact.mv, ig.exact.area)
+	u := new(big.Rat).Quo(ig.exact.Mu, ig.exact.Area)
+	v := new(big.Rat).Quo(ig.exact.Mv, ig.exact.Area)
 	uHeld, _ := u.Float64()
 	vHeld, _ := v.Float64()
 	if proofbound.IsNonFinite(uHeld) || proofbound.IsNonFinite(vHeld) {
@@ -173,7 +175,7 @@ type SecondMoments struct {
 // is [ErrUnsupported], and malformed or non-finite records are rejected before
 // a measurement is constructed.
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
-	ig, err := r.integralsTo(momentSecondOrder)
+	ig, err := r.integralsTo(freeform.MomentSecondOrder)
 	if err != nil {
 		return SecondMoments{}, err
 	}
@@ -217,14 +219,14 @@ type regionIntegrals struct {
 	// (docs/spline-design.md §3/§5.2). Rounding per segment instead would make
 	// the held float a sum of roundings, so a multi-segment region would miss
 	// the single-rounding property a one-segment region has.
-	exact exactMoments
+	exact freeform.ExactMoments
 	// exactDead records that some contribution had no exact rational — a
 	// circular walk's integral carries π and trig terms — so the region's own
 	// sum is not exact and the per-segment float accumulation with its own
 	// proven bounds is what gets published.
 	exactDead bool
 
-	// third is the momentThirdOrder sum (∫u³, ∫u²v, ∫uv², ∫v³ dA, in that
+	// third is the freeform.MomentThirdOrder sum (∫u³, ∫u²v, ∫uv², ∫v³ dA, in that
 	// order) as rational enclosures about the PLANE ORIGIN rather than the walk
 	// anchor. It has no float twin: its only consumer is the revolve mass path,
 	// which composes rational intervals, so no float conditioning needs the
@@ -258,7 +260,7 @@ func (ig *regionIntegrals) addThird(terms [4]proofbound.RatInterval, ok bool) {
 
 // thirdMoments returns the region's third-order sum and whether every
 // boundary contribution had an enclosure. It is only populated by an
-// integration run at momentThirdOrder.
+// integration run at freeform.MomentThirdOrder.
 func (ig regionIntegrals) thirdMoments() ([4]proofbound.RatInterval, bool) {
 	if ig.thirdDead || ig.third[0].Lo == nil {
 		return [4]proofbound.RatInterval{}, false
@@ -272,37 +274,14 @@ func accumulateMoment(value, bound *float64, term, termBound float64) {
 	*value = next
 }
 
-type momentIntegralOrder uint8
-
-// The orders are cumulative: each integrates everything the lower ones do.
-// momentThirdOrder adds regionIntegrals.third, the section moments a revolve's
-// volume second moments need (docs/dynamic-mass-design.md §2.1): the
-// cylindrical Jacobian contributes one radius and a transverse second moment
-// two more.
-const (
-	momentAreaOrder momentIntegralOrder = iota
-	momentFirstOrder
-	momentSecondOrder
-	momentThirdOrder
-)
-
-func finiteMomentValues(values ...float64) bool {
-	for _, value := range values {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return false
-		}
-	}
-	return true
-}
-
-func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
+func (ig regionIntegrals) isFinite(order freeform.MomentIntegralOrder) bool {
 	switch order {
-	case momentAreaOrder:
-		return finiteMomentValues(ig.area)
-	case momentFirstOrder:
-		return finiteMomentValues(ig.area, ig.mu, ig.mv)
+	case freeform.MomentAreaOrder:
+		return freeform.FiniteMomentValues(ig.area)
+	case freeform.MomentFirstOrder:
+		return freeform.FiniteMomentValues(ig.area, ig.mu, ig.mv)
 	default:
-		return finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
+		return freeform.FiniteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
 	}
 }
 
@@ -314,10 +293,10 @@ func (r ProfileRecord) integralsBudget(budget *proofbound.WorkBudget) (regionInt
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordBudget(pre, momentSecondOrder, budget)
+	return integrateMomentRecordBudget(pre, freeform.MomentSecondOrder, budget)
 }
 
-func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
+func (r ProfileRecord) integralsTo(order freeform.MomentIntegralOrder) (regionIntegrals, error) {
 	pre, err := validateMomentRecord(r)
 	if err != nil {
 		return regionIntegrals{}, err
@@ -333,7 +312,7 @@ func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, 
 // work is the record's free-form work counter (docs/spline-design.md §5.2). An
 // evaluator that already spent part of this record's ceiling passes the same
 // counter, so the preflight below continues it rather than open a second one.
-func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+func (r ProfileRecord) evaluatorIntegrals(order freeform.MomentIntegralOrder, work *freeform.FreeformWork) (regionIntegrals, error) {
 	pre, err := validateMomentFieldsWork(work, r)
 	if err != nil {
 		return regionIntegrals{}, err
@@ -341,7 +320,7 @@ func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder, work *freef
 	return integrateMomentRecord(pre, order)
 }
 
-func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order freeform.MomentIntegralOrder, work *freeform.FreeformWork) (regionIntegrals, error) {
 	pre, err := validateMomentFieldsContext(ctx, work, r)
 	if err != nil {
 		return regionIntegrals{}, err
@@ -349,7 +328,7 @@ func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order mome
 	return integrateMomentRecordModeContext(ctx, pre, order, true)
 }
 
-func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order freeform.MomentIntegralOrder, work *freeform.FreeformWork) (regionIntegrals, error) {
 	pre, err := validateMomentFieldsContext(ctx, work, r)
 	if err != nil {
 		return regionIntegrals{}, err
@@ -357,27 +336,27 @@ func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, o
 	return integrateMomentRecordUncheckedContext(ctx, pre, order)
 }
 
-func integrateMomentRecord(pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+func integrateMomentRecord(pre momentPreflight, order freeform.MomentIntegralOrder) (regionIntegrals, error) {
 	return integrateMomentRecordBudget(pre, order, nil)
 }
 
-func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder, budget *proofbound.WorkBudget) (regionIntegrals, error) {
+func integrateMomentRecordBudget(pre momentPreflight, order freeform.MomentIntegralOrder, budget *proofbound.WorkBudget) (regionIntegrals, error) {
 	return integrateMomentRecordMode(pre, order, true, budget)
 }
 
-func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *proofbound.WorkBudget) (regionIntegrals, error) {
+func integrateMomentRecordMode(pre momentPreflight, order freeform.MomentIntegralOrder, checkFinite bool, budget *proofbound.WorkBudget) (regionIntegrals, error) {
 	return integrateMomentRecordWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, pre, order, checkFinite)
 }
 
-func integrateMomentRecordUncheckedContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+func integrateMomentRecordUncheckedContext(ctx context.Context, pre momentPreflight, order freeform.MomentIntegralOrder) (regionIntegrals, error) {
 	return integrateMomentRecordModeContext(ctx, pre, order, false)
 }
 
-func integrateMomentRecordModeContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+func integrateMomentRecordModeContext(ctx context.Context, pre momentPreflight, order freeform.MomentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	return integrateMomentRecordWithPoll(ctx.Err, pre, order, checkFinite)
 }
 
-func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order freeform.MomentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for loopIndex, loop := range append([]LoopRecord{pre.record.Outer}, pre.record.Holes...) {
 		if poll != nil {
@@ -423,8 +402,8 @@ func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order
 // Only where a contribution has no exact rational at all — a circular walk,
 // whose integral carries π — does the float sum decide, as it always has.
 func (ig *regionIntegrals) requirePositiveArea() error {
-	if !ig.exactDead && ig.exact.complete() {
-		if ig.exact.area.Sign() > 0 {
+	if !ig.exactDead && ig.exact.Complete() {
+		if ig.exact.Area.Sign() > 0 {
 			return nil
 		}
 		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
@@ -454,17 +433,17 @@ func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
 	return out
 }
 
-func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentIntegralOrder) regionIntegrals {
+func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order freeform.MomentIntegralOrder) regionIntegrals {
 	if !ig.exactDead {
 		ig.exact = translateExactMoments(ig.exact, anchor, order)
 	}
-	if order == momentAreaOrder {
+	if order == freeform.MomentAreaOrder {
 		return ig
 	}
 	area := proofbound.MeasuredScalar(ig.area, ig.areaBound)
 	mu := proofbound.MeasuredScalar(ig.mu, ig.muBound)
 	mv := proofbound.MeasuredScalar(ig.mv, ig.mvBound)
-	if order >= momentSecondOrder {
+	if order >= freeform.MomentSecondOrder {
 		two := proofbound.ExactScalar(2)
 		anchorU := proofbound.ExactScalar(anchor.U)
 		anchorV := proofbound.ExactScalar(anchor.V)
@@ -521,12 +500,12 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 // A free-form segment arrives with the chain the record-level preflight already
 // converted and charged (moments_validate.go), so this pass converts nothing and
 // charges nothing.
-func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2, order momentIntegralOrder) error {
+func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2, order freeform.MomentIntegralOrder) error {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return err
 	}
-	if order == momentThirdOrder {
+	if order == freeform.MomentThirdOrder {
 		// Before the switch: the free-form arm below shifts its spans to the
 		// anchor in place, and the third-order sum is kept about the origin.
 		ig.addThird(segmentThirdMoments(segment, plan))
@@ -550,7 +529,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof proofbound.RatInterval
 		var haveSecondMomentProof bool
-		if order >= momentSecondOrder {
+		if order >= freeform.MomentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -580,7 +559,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof proofbound.RatInterval
 		var haveSecondMomentProof bool
-		if order >= momentSecondOrder {
+		if order >= freeform.MomentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -645,9 +624,9 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound
 		if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
 			return [4]proofbound.RatInterval{}, false
 		}
-		exact = polyThirdMoments(
-			ratPoly{u0, new(big.Rat).Sub(u1, u0)},
-			ratPoly{v0, new(big.Rat).Sub(v1, v0)},
+		exact = freeform.PolyThirdMoments(
+			freeform.RatPoly{u0, new(big.Rat).Sub(u1, u0)},
+			freeform.RatPoly{v0, new(big.Rat).Sub(v1, v0)},
 		)
 	case CircleSeg, ArcSeg:
 		return circularThirdMomentInterval(segment)
@@ -655,7 +634,7 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound
 		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
 			return [4]proofbound.RatInterval{}, false
 		}
-		exact = freeformThirdMoments(plan.spans, plan.reversed)
+		exact = freeform.FreeformThirdMoments(plan.spans, plan.reversed)
 	}
 	var out [4]proofbound.RatInterval
 	for i, value := range exact {
@@ -669,18 +648,18 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound
 // loops are proven walkable before any area is asked for — walkOf refuses every
 // free-form kind — so no converted chain is involved and no work is charged.
 func (ig *regionIntegrals) addAnalytic(segment CurveSegment, anchor Point2) error {
-	return ig.add(segment, freeformPlan{}, anchor, momentSecondOrder)
+	return ig.add(segment, freeformPlan{}, anchor, freeform.MomentSecondOrder)
 }
 
 // addFor skips second-moment work when the caller needs only area or first moments.
-func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, order momentIntegralOrder) error {
+func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, order freeform.MomentIntegralOrder) error {
 	return ig.add(segment, plan, anchor, order)
 }
 
 // addLine accumulates the straight chord from the walk's start point to its
 // end point. The recorded range picks the walked piece of the entity's own
 // Start→End parameterization.
-func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentIntegralOrder) {
+func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order freeform.MomentIntegralOrder) {
 	exact := exactLineMoments(seg, anchor, order)
 	seg.Start = shiftPoint(seg.Start, anchor)
 	seg.End = shiftPoint(seg.End, anchor)
@@ -696,10 +675,10 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	mu := (v1 - v0) * (u0*u0 + u0*u1 + u1*u1) / 6
 	mv := -(u1 - u0) * (v0*v0 + v0*v1 + v1*v1) / 6
 
-	accumulateMoment(&ig.area, &ig.areaBound, area, proofarith.RationalFloatError(exact.area, area))
-	accumulateMoment(&ig.mu, &ig.muBound, mu, proofarith.RationalFloatError(exact.mu, mu))
-	accumulateMoment(&ig.mv, &ig.mvBound, mv, proofarith.RationalFloatError(exact.mv, mv))
-	if order < momentSecondOrder {
+	accumulateMoment(&ig.area, &ig.areaBound, area, proofarith.RationalFloatError(exact.Area, area))
+	accumulateMoment(&ig.mu, &ig.muBound, mu, proofarith.RationalFloatError(exact.Mu, mu))
+	accumulateMoment(&ig.mv, &ig.mvBound, mv, proofarith.RationalFloatError(exact.Mv, mv))
+	if order < freeform.MomentSecondOrder {
 		ig.addExact(exact)
 		return
 	}
@@ -713,46 +692,25 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	intU2V := v0*(u0*u0+u0*du+du*du/3) + dv*(u0*u0/2+2*u0*du/3+du*du/4)
 	muv := 0.5 * dv * intU2V
 
-	accumulateMoment(&ig.muu, &ig.muuBound, muu, proofarith.RationalFloatError(exact.muu, muu))
-	accumulateMoment(&ig.muv, &ig.muvBound, muv, proofarith.RationalFloatError(exact.muv, muv))
-	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, proofarith.RationalFloatError(exact.mvv, mvv))
+	accumulateMoment(&ig.muu, &ig.muuBound, muu, proofarith.RationalFloatError(exact.Muu, muu))
+	accumulateMoment(&ig.muv, &ig.muvBound, muv, proofarith.RationalFloatError(exact.Muv, muv))
+	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, proofarith.RationalFloatError(exact.Mvv, mvv))
 	ig.addExact(exact)
 }
 
-type exactMoments struct {
-	area *big.Rat
-	mu   *big.Rat
-	mv   *big.Rat
-	muu  *big.Rat
-	muv  *big.Rat
-	mvv  *big.Rat
-}
-
-func newExactMoments() exactMoments {
-	return exactMoments{
-		area: new(big.Rat),
-		mu:   new(big.Rat),
-		mv:   new(big.Rat),
-		muu:  new(big.Rat),
-		muv:  new(big.Rat),
-		mvv:  new(big.Rat),
+func newExactMoments() freeform.ExactMoments {
+	return freeform.ExactMoments{
+		Area: new(big.Rat),
+		Mu:   new(big.Rat),
+		Mv:   new(big.Rat),
+		Muu:  new(big.Rat),
+		Muv:  new(big.Rat),
+		Mvv:  new(big.Rat),
 	}
 }
 
-// complete reports whether every moment has an exact rational. A contributor
-// that could not build one leaves a nil field, which is the signal to retire
-// the region-level accumulator rather than publish a partial sum.
-func (m exactMoments) complete() bool {
-	return m.area != nil && m.mu != nil && m.mv != nil &&
-		m.muu != nil && m.muv != nil && m.mvv != nil
-}
-
-func (m exactMoments) fields() [6]*big.Rat {
-	return [6]*big.Rat{m.area, m.mu, m.mv, m.muu, m.muv, m.mvv}
-}
-
 // heldFields pairs each accumulated float moment with its bound, in the same
-// order exactMoments.fields uses, so a rational and its published float are
+// order freeform.ExactMoments.fields uses, so a rational and its published float are
 // never matched up by hand at a call site.
 func (ig *regionIntegrals) heldFields() [6]struct{ value, bound *float64 } {
 	return [6]struct{ value, bound *float64 }{
@@ -767,19 +725,19 @@ func (ig *regionIntegrals) heldFields() [6]struct{ value, bound *float64 } {
 
 // addExact folds one segment's exact contribution into the region-level
 // rational accumulator.
-func (ig *regionIntegrals) addExact(exact exactMoments) {
+func (ig *regionIntegrals) addExact(exact freeform.ExactMoments) {
 	if ig.exactDead {
 		return
 	}
-	if !exact.complete() {
+	if !exact.Complete() {
 		ig.dropExact()
 		return
 	}
-	if !ig.exact.complete() {
+	if !ig.exact.Complete() {
 		ig.exact = newExactMoments()
 	}
-	running := ig.exact.fields()
-	for i, term := range exact.fields() {
+	running := ig.exact.Fields()
+	for i, term := range exact.Fields() {
 		running[i].Add(running[i], term)
 	}
 }
@@ -788,7 +746,7 @@ func (ig *regionIntegrals) addExact(exact exactMoments) {
 // contribution has no exact rational, the region's own sum has none either.
 func (ig *regionIntegrals) dropExact() {
 	ig.exactDead = true
-	ig.exact = exactMoments{}
+	ig.exact = freeform.ExactMoments{}
 }
 
 // publishExact replaces the per-segment float accumulation with the region's
@@ -809,10 +767,10 @@ func (ig *regionIntegrals) dropExact() {
 // properties, Centroid's bounded-quotient fallback — is interval arithmetic,
 // which asks only that each input interval encloses the truth.
 func (ig *regionIntegrals) publishExact() {
-	if ig.exactDead || !ig.exact.complete() {
+	if ig.exactDead || !ig.exact.Complete() {
 		return
 	}
-	exact := ig.exact.fields()
+	exact := ig.exact.Fields()
 	for i, field := range ig.heldFields() {
 		held, _ := exact[i].Float64()
 		if proofbound.IsNonFinite(held) {
@@ -831,36 +789,36 @@ func (ig *regionIntegrals) publishExact() {
 // anchor back to the profile origin, mirroring translateMomentIntegrals step
 // for step but over rationals — the anchor coordinates are floats, hence exact
 // rationals, and the shift is only sums and products, so nothing rounds here.
-func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegralOrder) exactMoments {
-	if order == momentAreaOrder || !exact.complete() {
+func translateExactMoments(exact freeform.ExactMoments, anchor Point2, order freeform.MomentIntegralOrder) freeform.ExactMoments {
+	if order == freeform.MomentAreaOrder || !exact.Complete() {
 		return exact
 	}
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
-		return exactMoments{}
+		return freeform.ExactMoments{}
 	}
-	if order >= momentSecondOrder {
+	if order >= freeform.MomentSecondOrder {
 		// Second-order terms read the PRE-shift first moments, so they are
 		// re-referenced before mu and mv are.
-		exact.muu = proofbound.RatAdd(
-			exact.muu,
-			proofbound.RatMul(big.NewRat(2, 1), anchorU, exact.mu),
-			proofbound.RatMul(anchorU, anchorU, exact.area),
+		exact.Muu = proofbound.RatAdd(
+			exact.Muu,
+			proofbound.RatMul(big.NewRat(2, 1), anchorU, exact.Mu),
+			proofbound.RatMul(anchorU, anchorU, exact.Area),
 		)
-		exact.muv = proofbound.RatAdd(
-			exact.muv,
-			proofbound.RatMul(anchorV, exact.mu),
-			proofbound.RatMul(anchorU, exact.mv),
-			proofbound.RatMul(anchorU, anchorV, exact.area),
+		exact.Muv = proofbound.RatAdd(
+			exact.Muv,
+			proofbound.RatMul(anchorV, exact.Mu),
+			proofbound.RatMul(anchorU, exact.Mv),
+			proofbound.RatMul(anchorU, anchorV, exact.Area),
 		)
-		exact.mvv = proofbound.RatAdd(
-			exact.mvv,
-			proofbound.RatMul(big.NewRat(2, 1), anchorV, exact.mv),
-			proofbound.RatMul(anchorV, anchorV, exact.area),
+		exact.Mvv = proofbound.RatAdd(
+			exact.Mvv,
+			proofbound.RatMul(big.NewRat(2, 1), anchorV, exact.Mv),
+			proofbound.RatMul(anchorV, anchorV, exact.Area),
 		)
 	}
-	exact.mu = proofbound.RatAdd(exact.mu, proofbound.RatMul(anchorU, exact.area))
-	exact.mv = proofbound.RatAdd(exact.mv, proofbound.RatMul(anchorV, exact.area))
+	exact.Mu = proofbound.RatAdd(exact.Mu, proofbound.RatMul(anchorU, exact.Area))
+	exact.Mv = proofbound.RatAdd(exact.Mv, proofbound.RatMul(anchorV, exact.Area))
 	return exact
 }
 
@@ -904,14 +862,14 @@ func ratLerp(start, end, t float64) *big.Rat {
 // subtracting is identical to subtracting then lerping — but only in exact
 // arithmetic: fl(p−anchor) rounds, and the rational taken over those rounded
 // coordinates would be a different chord's exact area.
-func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exactMoments {
+func exactLineMoments(seg LineSeg, anchor Point2, order freeform.MomentIntegralOrder) freeform.ExactMoments {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
 	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
-		return exactMoments{}
+		return freeform.ExactMoments{}
 	}
 	u0.Sub(u0, anchorU)
 	u1.Sub(u1, anchorU)
@@ -925,13 +883,13 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 	area := ratScale(new(big.Rat).Sub(proofbound.RatMul(u0, v1), proofbound.RatMul(u1, v0)), 1, 2)
 	mu := ratScale(proofbound.RatMul(dv, proofbound.RatAdd(u0sq, proofbound.RatMul(u0, u1), u1sq)), 1, 6)
 	mv := ratScale(proofbound.RatMul(du, proofbound.RatAdd(v0sq, proofbound.RatMul(v0, v1), v1sq)), -1, 6)
-	if order < momentSecondOrder {
+	if order < freeform.MomentSecondOrder {
 		// The accumulator still requires six non-nil fields. These zero
 		// placeholders are never read by an area- or first-order caller; they
 		// let the region publish its exact area and centroid without cubic work.
-		return exactMoments{
-			area: area, mu: mu, mv: mv,
-			muu: new(big.Rat), muv: new(big.Rat), mvv: new(big.Rat),
+		return freeform.ExactMoments{
+			Area: area, Mu: mu, Mv: mv,
+			Muu: new(big.Rat), Muv: new(big.Rat), Mvv: new(big.Rat),
 		}
 	}
 
@@ -956,7 +914,7 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 		ratScale(duSq, 1, 4),
 	))
 	muv := ratScale(proofbound.RatMul(dv, proofbound.RatAdd(u2v0, u2dv)), 1, 2)
-	return exactMoments{area: area, mu: mu, mv: mv, muu: muu, muv: muv, mvv: mvv}
+	return freeform.ExactMoments{Area: area, Mu: mu, Mv: mv, Muu: muu, Muv: muv, Mvv: mvv}
 }
 
 // addCircular accumulates a circular path about center c with radius r, from
@@ -972,7 +930,7 @@ func (ig *regionIntegrals) addCircular(
 	haveMomentProof bool,
 	muuProof, muvProof, mvvProof proofbound.RatInterval,
 	haveSecondMomentProof bool,
-	order momentIntegralOrder,
+	order freeform.MomentIntegralOrder,
 ) {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -1019,7 +977,7 @@ func (ig *regionIntegrals) addCircular(
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
-	if order < momentSecondOrder {
+	if order < freeform.MomentSecondOrder {
 		return
 	}
 

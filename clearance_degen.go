@@ -22,7 +22,7 @@ import (
 //
 //   - degYes — proven degenerate by EXACT arithmetic on the payload's own
 //     floats (rational cross/dot products over math/big.Rat, the same
-//     take-the-floats-exactly discipline as clearance_poly.go's Sturm
+//     take-the-floats-exactly discipline as internal/freeform/clearance_poly.go's Sturm
 //     brackets). The closed form IS the answer, and the candidate is Exact.
 //   - degNo — proven NOT degenerate, by a residual clearly above the kernel's
 //     own noise. The general (non-degenerate) closed form applies, and no

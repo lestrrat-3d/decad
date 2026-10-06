@@ -252,7 +252,6 @@
 0	0.00	TestFreeformBracketCostGrowsWithDegree
 0	0.00	TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures
 0	0.00	TestFreeformSpanCostIsCubic
-0	0.00	TestFreeformThirdMomentsParabolicRegion
 0	0.00	TestFreeformWalkWithoutCounterRefuses
 0	0.00	TestFreeformWorkLimitRefuses
 0	0.00	TestFullRevolveShellsContextPollsEachLoop
@@ -439,7 +438,6 @@
 0	0.00	TestProvenNormFixturesLargeMagnitudeCornersPastFloor
 0	0.00	TestProximityGateWalkAdmitsNoGraze
 0	0.00	TestProximityGateWalksPastCornerSamples
-0	0.00	TestRPFromBernsteinMatchesLiteralExpansion
 0	0.00	TestRatLenAtLeastDecidesExactly
 0	0.00	TestRatLerpEndpointReturnsAFreshRational
 0	0.06	TestRatLerpEndpointsMatchTheGeneralPath
@@ -534,7 +532,6 @@
 0	0.04	TestSpanSagittaUpperEnclosesOvershootingChordSegment
 0	0.00	TestSpanSagittaUpperRoundsOutward
 0	0.00	TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength
-0	0.01	TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive
 0	0.00	TestStitchAuditRefusesOverlappingAssembly
 0	0.00	TestStitchChargesTheFacetsTheWeldDrops
 0	0.00	TestStitchClosureRefusesNonManifoldEdge

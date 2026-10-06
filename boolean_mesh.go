@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -1409,9 +1411,9 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 		}
 		remap[i] = fi
 		px, py, pz := xhpRat(proofbound.Xhp(p))
-		d := new(big.Rat).Sub(px, mustRatOf(v.X))
+		d := new(big.Rat).Sub(px, freeform.MustRatOf(v.X))
 		d.Abs(d)
-		for _, pair := range [][2]*big.Rat{{py, mustRatOf(v.Y)}, {pz, mustRatOf(v.Z)}} {
+		for _, pair := range [][2]*big.Rat{{py, freeform.MustRatOf(v.Y)}, {pz, freeform.MustRatOf(v.Z)}} {
 			dd := new(big.Rat).Sub(pair[0], pair[1])
 			dd.Abs(dd)
 			if dd.Cmp(d) > 0 {

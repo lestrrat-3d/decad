@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -43,7 +45,7 @@ func (pp patchPayload) transform() r3.Transform { return pp.xform }
 // placed re-evaluates the same record under the composed motion (core §8).
 func (pp patchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalPatchContext(ctx, d, ref, pp, newFreeformWork())
+	return evalPatchContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 }
 
 // prism is a *view* of pp as a zero-height prismPayload — never a body this
@@ -87,7 +89,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	// ONE free-form work counter for this whole call, same convention as
 	// Extrude: the area falsifier's preflight opens it and evalPatchContext's
 	// own walk resolution spends what is left (docs/spline-design.md §5.2).
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
@@ -118,11 +120,11 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 // carrying one loop per recorded loop, the free edges that bound it, and the
 // measurements the finished body publishes. It mirrors evalPrismContext's own
 // order (prism_build.go) without ever building a solid.
-func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patchPayload, work *freeformWork) (*Body, error) {
+func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patchPayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsContext(ctx, momentAreaOrder, work)
+	ig, err := pp.profile.evaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +231,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 // same convention buildLoopSides derives it by. resolved is pp.profile's
 // pre-resolved segment walks, or nil to resolve each segment through walkOf
 // as before (segment_walk.go's profileWalks doc comment).
-func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]coedge, error) {
+func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecord, work *freeform.FreeformWork, resolved *profileWalks) ([]coedge, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

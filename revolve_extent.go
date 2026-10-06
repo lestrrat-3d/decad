@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -36,11 +38,11 @@ import (
 // publishes that bracket's width, and the stop charges it to the level it
 // resolves (docs/evaluator-design.md §5/§6).
 func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return rp.extentBoundedAlong(context.Background(), g, newFreeformWork())
+	return rp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
 func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
-	return rp.extentAlongWork(ctx, g, newFreeformWork())
+	return rp.extentAlongWork(ctx, g, freeform.NewFreeformWork())
 }
 
 // extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
@@ -52,7 +54,7 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 // reaches through math.Sin/Cos — refuses here rather than publish a held
 // coordinate as the one it denotes. A through-all stop instead consumes the
 // bounded reading and charges the displacement to its own level (stops.go).
-func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
 	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
@@ -114,7 +116,7 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // coefficients are every one of them exactly right, whose sum nonetheless
 // rounds. It is zero wherever that addition is exactly representable, so an
 // unplaced revolve's box keeps its zero bound.
-func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
+func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	return rp.extentBoundedAlongProfile(ctx, g, work, nil)
 }
 
@@ -127,7 +129,7 @@ type revolveExtentProfile struct {
 }
 
 func (rp revolvePayload) extentBoundedAlongProfile(
-	ctx context.Context, g r3.Vec, work *freeformWork, profile *revolveExtentProfile,
+	ctx context.Context, g r3.Vec, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
@@ -265,7 +267,7 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
 func (rp revolvePayload) frameRoundAllow(
-	g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeformWork, profile *revolveExtentProfile,
+	g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, error) {
 	coordUpper := 0.0
 	if profile != nil {
@@ -323,7 +325,7 @@ func (rp revolvePayload) frameRoundAllow(
 // adds; an extent whose radial envelope cannot be proven finite is refused
 // rather than published against a bound that omits it.
 func (rp revolvePayload) sweepBoundAlong(
-	c0, c1, mlo, mhi float64, work *freeformWork, profile *revolveExtentProfile,
+	c0, c1, mlo, mhi float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, float64, error) {
 	coordUpper := 0.0
 	if profile != nil {
@@ -364,7 +366,7 @@ func (rp revolvePayload) sweepBoundAlong(
 // maxes the three axes' half-widths. Charging one of them here instead would
 // leave the same coordinate bounded on this path and exact on the
 // through-all stop path.
-func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
+func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform.FreeformWork) (Box, error) {
 	var profile *revolveExtentProfile
 	analytic, err := analyticRevolveProfile(ctx, rp.profile)
 	if err != nil {
@@ -423,7 +425,7 @@ func analyticRevolveProfile(ctx context.Context, profile ProfileRecord) (bool, e
 // polls cancellation before each segment. Analytic walks charge no free-form
 // work, so this local view needs no replay charge when the three axes read it.
 func resolveAnalyticRevolveExtentProfile(
-	ctx context.Context, profile ProfileRecord, work *freeformWork,
+	ctx context.Context, profile ProfileRecord, work *freeform.FreeformWork,
 ) (*revolveExtentProfile, error) {
 	walks := &profileWalks{
 		profile: profile,
@@ -697,7 +699,7 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 // direction it is read against.
 func axisExtremeContext(
 	ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool,
-	work *freeformWork, profile *revolveExtentProfile,
+	work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
 	var walks *profileWalks

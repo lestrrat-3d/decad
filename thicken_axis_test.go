@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/stretchr/testify/require"
@@ -85,7 +87,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 		LineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
+	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 }
@@ -116,7 +118,7 @@ func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			budget := proofbound.NewWorkBudget(t.Context())
-			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
+			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, freeform.NewFreeformWork(), nil)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())
 		})

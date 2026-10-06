@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1798,49 +1800,49 @@ func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) 
 	a1 := dir.Dot(f.axis)
 	k := f.major*f.major + q0 - f.radius*f.radius
 	// f(t) = (|x−C|² + R² − r²)² − 4R²(|x−C|² − axial²)
-	quad, ok := ratPolyOf(k, q1, q2)
+	quad, ok := freeform.RatPolyOf(k, q1, q2)
 	if !ok {
 		return 0, false, nil
 	}
-	sq := rpMul(quad, quad)
-	perpBase, ok := ratPolyOf(q0, q1, q2)
+	sq := freeform.RpMul(quad, quad)
+	perpBase, ok := freeform.RatPolyOf(q0, q1, q2)
 	if !ok {
 		return 0, false, nil
 	}
-	axial, ok := ratPolyOf(a0, a1)
+	axial, ok := freeform.RatPolyOf(a0, a1)
 	if !ok {
 		return 0, false, nil
 	}
-	perp := rpSub(perpBase, rpMul(axial, axial))
+	perp := freeform.RpSub(perpBase, freeform.RpMul(axial, axial))
 	four, ok := proofbound.RatOf(4 * f.major * f.major)
 	if !ok {
 		return 0, false, nil
 	}
-	poly := rpTrim(rpSub(sq, rpScale(perp, four)))
-	if rpDeg(poly) < 1 {
+	poly := freeform.RpTrim(freeform.RpSub(sq, freeform.RpScale(perp, four)))
+	if freeform.RpDeg(poly) < 1 {
 		return 0, false, nil
 	}
-	sf := rpSquareFree(poly)
-	if rpDeg(sf) != rpDeg(poly) {
+	sf := freeform.RpSquareFree(poly)
+	if freeform.RpDeg(sf) != freeform.RpDeg(poly) {
 		// A repeated root is a tangency somewhere on the line: ambiguous.
 		return 0, false, nil
 	}
-	chain, err := sturmChainIntContext(ctx, sf)
+	chain, err := freeform.SturmChainIntContext(ctx, sf)
 	if err != nil {
 		return 0, false, err
 	}
 	n := 0
-	ivs, err := rpIsolateRootsContext(ctx, sf, chain)
+	ivs, err := freeform.RpIsolateRootsContext(ctx, sf, chain)
 	if err != nil {
 		return 0, false, err
 	}
 	for _, iv := range ivs {
-		iv, err = rpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+		iv, err = freeform.RpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
 		if err != nil {
 			return 0, false, err
 		}
-		tLo, _ := iv.lo.Float64()
-		tHi, _ := iv.hi.Float64()
+		tLo, _ := iv.Lo.Float64()
+		tHi, _ := iv.Hi.Float64()
 		if tHi <= -tol {
 			continue // behind the start
 		}

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -55,7 +57,7 @@ import (
 // wedge forces 64 stations and its calibrated twin settles at 65, so the cap
 // sits more than seven times above the largest fixture that ships.
 //
-// The cap is deliberately NOT maxChordsPerWalk (tessellate.go). That constant
+// The cap is deliberately NOT freeform.MaxChordsPerWalk (tessellate.go). That constant
 // bounds how finely ONE curve may be chorded and knows nothing of how many
 // curves a build holds; this one bounds the build.
 const loftStationCap = 500
@@ -66,12 +68,12 @@ const loftStationCap = 500
 //
 // It is a type rather than an fmt.Errorf wrapper because the refusal must NAME
 // the segment whose own share it exceeded (§5.1) while still answering
-// errors.Is for errTooManyChords, the sentinel §5.1 assigns this row (spline
-// design Table R row R8). Wrapping errTooManyChords with %w would prepend that
+// errors.Is for freeform.ErrTooManyChords, the sentinel §5.1 assigns this row (spline
+// design Table R row R8). Wrapping freeform.ErrTooManyChords with %w would prepend that
 // sentinel's own text — "the chord tolerance asks for more than 16384 chords
 // on one curve" — which names no segment and describes a caller-supplied
 // tessellation tolerance a loft has no such knob for (§5.1: "The target is not
-// a caller option"). Unwrap keeps errors.Is answering for both errTooManyChords
+// a caller option"). Unwrap keeps errors.Is answering for both freeform.ErrTooManyChords
 // and, through it, ErrUnsupported.
 type loftStationCapError struct {
 	loop, seg int
@@ -85,7 +87,7 @@ func (e *loftStationCapError) Error() string {
 	)
 }
 
-func (e *loftStationCapError) Unwrap() error { return errTooManyChords }
+func (e *loftStationCapError) Unwrap() error { return freeform.ErrTooManyChords }
 
 // loftPairCounts reads docs/loft-design.md §5.1's two build-wide counts off
 // Table P over both records: P, the total paired-segment count, and C, the
@@ -165,7 +167,7 @@ func loftStationShare(p, c uint64) int {
 // is that segment's (loftStationCapError). A walk-up that cannot settle at all
 // propagates its own refusal instead: errLoftSagittaUnderivable is S14's
 // DERIVATION arm, which §5.1 places beside this row precisely because the
-// walk-up that settles m is what asks for that term, and errTooManyChords bare
+// walk-up that settles m is what asks for that term, and freeform.ErrTooManyChords bare
 // is chordCount's own per-walk ceiling.
 func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) error {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
@@ -342,7 +344,7 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWa
 // the segment's own sagittaUpper (loftCircularCellStations' own doc comment);
 // a future free-form arm's own per-cell reading can vary within these two
 // extremes cell to cell.
-func loftCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
+func loftCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeform.FreeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
 	case w0.Kind == survey2d.WalkLine && w1.Kind == survey2d.WalkLine:
 		return loftLineCellStations(w0, w1)
@@ -430,7 +432,7 @@ func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, floa
 // The two refusals it raises are the two docs/loft-design.md §4's gate-order
 // paragraph assigns to this walk-up: errLoftSagittaUnderivable is S14's
 // DERIVATION arm — a candidate count whose certified sagitta has no derivation
-// from the record — and errTooManyChords is the per-walk ceiling chordCount
+// from the record — and freeform.ErrTooManyChords is the per-walk ceiling chordCount
 // itself enforces, raised again here because the certified sagitta shrinks
 // with m but is floored by its own enclosure width, so a target below that
 // floor would otherwise walk forever. That per-walk ceiling is NOT the station
@@ -456,8 +458,8 @@ func loftSettleStationCount(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment
 		if s0 <= target && s1 <= target {
 			return m, s0, s1, nil
 		}
-		if m >= maxChordsPerWalk {
-			return 0, 0, 0, errTooManyChords
+		if m >= freeform.MaxChordsPerWalk {
+			return 0, 0, 0, freeform.ErrTooManyChords
 		}
 		m++
 	}

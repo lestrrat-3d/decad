@@ -1,9 +1,11 @@
-package decad
+package freeform
 
 import (
 	"fmt"
 	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -30,7 +32,7 @@ import (
 // comparison — so the reported interval encloses the true length whatever the
 // platform's sqrt does.
 
-// freeformLengthDepth is how far the bracket subdivides, and the depth is
+// FreeformLengthDepth is how far the bracket subdivides, and the depth is
 // FIXED. This bracket has no target of its own — nothing downstream compares an
 // arc length against a caller tolerance — so there is no threshold for a
 // measured-target loop to stop on, and the depth is sized to bound both the work
@@ -39,14 +41,14 @@ import (
 // loop there: §6.4's build-time gate and §6.1.1's product enclosure.
 //
 // A fixed depth promises NO relative width, and nothing here claims one:
-// freeformArcLength sums the ACTUAL leaf brackets at this depth and reports the
+// FreeformArcLength sums the ACTUAL leaf brackets at this depth and reports the
 // half width of the enclosure it just measured. What that width comes to varies
 // with the span, and the spread is wide — an ordinary cubic measures a relative
 // half width of 1.9e-7, while the widest span this bracket's own preflight
-// admits (32 controls, freeformBracketCost) measures above 2e-5.
-const freeformLengthDepth = 10
+// admits (32 controls, FreeformBracketCost) measures above 2e-5.
+const FreeformLengthDepth = 10
 
-// freeformArcLength brackets the converted chain's arc length. It returns the
+// FreeformArcLength brackets the converted chain's arc length. It returns the
 // interval midpoint and its half width, so the caller reports a value with a
 // proven bound and NEVER an Exact zero — §6.1 forbids one here.
 //
@@ -68,43 +70,43 @@ const freeformLengthDepth = 10
 // never refuses otherwise: the square-root seeds work at every scale a finite
 // coordinate can reach (proofbound.RatSqrtSeed), so a valid curve is never turned away for
 // being merely small or large.
-func freeformArcLength(spans []survey2d.BezierSpan, work *freeformWork) (float64, float64, error) {
+func FreeformArcLength(spans []survey2d.BezierSpan, work *FreeformWork) (float64, float64, error) {
 	lo, hi := 0.0, 0.0
 	for _, span := range spans {
-		if err := work.step(freeformBracketCost(len(span))); err != nil {
+		if err := work.Step(FreeformBracketCost(len(span))); err != nil {
 			return 0, 0, err
 		}
-		spanLo, spanHi := spanLengthBracket(span, freeformLengthDepth)
-		lo = downRound(lo + spanLo)
+		spanLo, spanHi := SpanLengthBracket(span, FreeformLengthDepth)
+		lo = DownRound(lo + spanLo)
 		hi = proofbound.UpRound(hi + spanHi)
 	}
 	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || hi < lo {
-		return 0, 0, errFreeformLengthUnrepresentable
+		return 0, 0, ErrFreeformLengthUnrepresentable
 	}
 	mid := lo + (hi-lo)/2
 	bound := proofbound.UpRound(math.Max(mid-lo, hi-mid))
 	if bound <= 0 {
-		return 0, 0, errFreeformLengthDegenerate
+		return 0, 0, ErrFreeformLengthDegenerate
 	}
 	return mid, bound, nil
 }
 
-// errFreeformLengthUnrepresentable is Table R row R15: the enclosure is still
+// ErrFreeformLengthUnrepresentable is Table R row R15: the enclosure is still
 // proven, but no float64 interval holds it, so there is no Measurement to
 // publish. The sentinel is ErrUnsupported — the curve EXISTS and this evaluator
 // cannot report its length — never ErrNotFinite, whose subject is a non-finite
 // INPUT while every coordinate reaching here is finite. The guard also catches
 // an inverted interval, which the outward rounding makes unreachable and which
 // no reading could use either.
-var errFreeformLengthUnrepresentable = fmt.Errorf(
-	`%w: a free-form segment's arc length runs past the representable float64 range`, ErrUnsupported,
+var ErrFreeformLengthUnrepresentable = fmt.Errorf(
+	`%w: a free-form segment's arc length runs past the representable float64 range`, decaderr.ErrUnsupported,
 )
 
-var errFreeformLengthDegenerate = fmt.Errorf(
-	`%w: a free-form segment whose control points all coincide bounds no arc length`, ErrDegenerate,
+var ErrFreeformLengthDegenerate = fmt.Errorf(
+	`%w: a free-form segment whose control points all coincide bounds no arc length`, decaderr.ErrDegenerate,
 )
 
-// freeformBracketCost is the conservative preflight of ONE span's bracket,
+// FreeformBracketCost is the conservative preflight of ONE span's bracket,
 // charged before the first subdivision allocates anything.
 //
 // The cost is driven by the subdivision depth and the span DEGREE together.
@@ -115,14 +117,14 @@ var errFreeformLengthDegenerate = fmt.Errorf(
 // lets an arbitrarily wide span through: a single degree-1000 span is 1024
 // leaves and over five hundred million rational midpoints.
 //
-// This preflight is why the fixed-depth bracket calls dyadicSpan.split
+// This preflight is why the fixed-depth bracket calls DyadicSpan.split
 // UNMETERED: the whole subtree is paid for here, before the first level
 // allocates anything, and charging each split again would charge the same work
 // twice.
 //
 // ITS UNIT IS NOT THE METERED UNIT. perSplit counts one unit per COORDINATE
 // blend — a split's n(n−1)/2 de Casteljau pairs over two coordinates — while
-// dyadicSplitOps (spline_sagitta.go) counts the big.Int OPERATIONS the same
+// DyadicSplitOps (spline_sagitta.go) counts the big.Int OPERATIONS the same
 // bisection performs, which is 6 per blend plus the split's own allocations and
 // copies. So this bracket charges about a third of what the sagitta walk
 // charges for the identical code. That gap is deliberate and is NOT closed
@@ -130,48 +132,48 @@ var errFreeformLengthDegenerate = fmt.Errorf(
 // and reconstruction (§5.2), the involute fit-spline record already spends 91%
 // of it, and raising the per-split term to the metered count would refuse a
 // capability that ships today. Reconciling the two units is a §6.1 decision
-// about freeformWorkLimit itself, not an accounting repair.
+// about FreeformWorkLimit itself, not an accounting repair.
 //
 // Saturating arithmetic keeps the estimate an UPPER bound at every size, so an
-// oversized span refuses at freeformWorkLimit instead of wrapping to a small
+// oversized span refuses at FreeformWorkLimit instead of wrapping to a small
 // charge (spline_bezier.go).
-func freeformBracketCost(controls int) uint64 {
+func FreeformBracketCost(controls int) uint64 {
 	if controls < 2 {
 		return 0
 	}
 	n := uint64(controls)
-	leaves := uint64(1) << freeformLengthDepth
-	perSplit := costMul(n, n-1)
+	leaves := uint64(1) << FreeformLengthDepth
+	perSplit := CostMul(n, n-1)
 	perLeaf := n
-	return costAdd(costMul(leaves-1, perSplit), costMul(leaves, perLeaf))
+	return CostAdd(CostMul(leaves-1, perSplit), CostMul(leaves, perLeaf))
 }
 
-// spanLengthBracket brackets one Bézier span's arc length, subdividing to the
+// SpanLengthBracket brackets one Bézier span's arc length, subdividing to the
 // given depth and summing each piece's chord (below) and control polygon
 // (above).
 //
 // The span is re-expressed once, here, into the split form below; every level
 // under it works in that form and only the leaves come back out as rationals.
-func spanLengthBracket(span survey2d.BezierSpan, depth int) (float64, float64) {
-	// Unmetered on purpose: freeformArcLength has already charged this whole
-	// span's subtree through freeformBracketCost, and a nil counter is exactly
-	// how freeformWork.step spells "already accounted for". The error a metered
+func SpanLengthBracket(span survey2d.BezierSpan, depth int) (float64, float64) {
+	// Unmetered on purpose: FreeformArcLength has already charged this whole
+	// span's subtree through FreeformBracketCost, and a nil counter is exactly
+	// how FreeformWork.step spells "already accounted for". The error a metered
 	// conversion could return is unreachable here for that reason.
-	s, _ := dyadicSpanOf(nil, span)
+	s, _ := DyadicSpanOf(nil, span)
 	// This square is part of the bracket's already-paid subtree, not the
 	// conversion shared with other dyadic-span consumers.
-	s.denSq = new(big.Int).Mul(s.den, s.den)
-	if depth <= 0 || len(s.points) < 2 {
-		return s.chordLower(), s.polygonUpper()
+	s.DenSq = new(big.Int).Mul(s.Den, s.Den)
+	if depth <= 0 || len(s.Points) < 2 {
+		return s.ChordLower(), s.PolygonUpper()
 	}
-	frames := make([]lengthSplitScratch, depth)
+	frames := make([]LengthSplitScratch, depth)
 	for i := range frames {
-		frames[i].init(len(s.points))
+		frames[i].Init(len(s.Points))
 	}
-	return s.lengthBracketScratch(frames, &lengthDistanceScratch{})
+	return s.LengthBracketScratch(frames, &LengthDistanceScratch{})
 }
 
-// dyadicPoint is one split value: the plane-local coordinate
+// DyadicPoint is one split value: the plane-local coordinate
 // (u, v) / (den · 2ᵉˣᵖ), over its span's own shared den.
 //
 // SUBDIVIDING INTRODUCES NOTHING BUT POWERS OF TWO. Every blend below is a
@@ -189,211 +191,211 @@ func spanLengthBracket(span survey2d.BezierSpan, depth int) (float64, float64) {
 // converted control point carries whatever odd denominator that left it. That
 // denominator is a CONSTANT of the whole subdivision, so it is lifted out once
 // per span and the exponent carries everything the splitting adds.
-type dyadicPoint struct {
-	u, v *big.Int
-	exp  uint
+type DyadicPoint struct {
+	U, V *big.Int
+	Exp  uint
 }
 
-// dyadicSpan is one Bézier span in that form: its split values beside the
+// DyadicSpan is one Bézier span in that form: its split values beside the
 // denominator every one of them shares.
-type dyadicSpan struct {
-	points []dyadicPoint
-	den    *big.Int
+type DyadicSpan struct {
+	Points []DyadicPoint
+	Den    *big.Int
 	// denSq is populated by the arc-length path and shared by its child spans.
 	// Other dyadic-span consumers do not need to pay for this cache.
-	denSq *big.Int
+	DenSq *big.Int
 }
 
 // valueWidth is one split value's own operand width in bits: the widest of its
 // two integer numerators and of the den·2^exp denominator they are read
 // against. It is the shape every charge over a single dyadic value scales by
-// (spline_sagitta.go's widthUnits).
-func (s dyadicSpan) valueWidth(p dyadicPoint) int {
-	return max(s.den.BitLen()+int(p.exp), p.u.BitLen(), p.v.BitLen())
+// (spline_sagitta.go's WidthUnits).
+func (s DyadicSpan) ValueWidth(p DyadicPoint) int {
+	return max(s.Den.BitLen()+int(p.Exp), p.U.BitLen(), p.V.BitLen())
 }
 
 // spanWidth is the widest operand width any of the span's own values carries —
 // the shape a whole-span charge scales by.
-func (s dyadicSpan) spanWidth() int {
-	widest := s.den.BitLen()
-	for _, p := range s.points {
-		widest = max(widest, s.valueWidth(p))
+func (s DyadicSpan) SpanWidth() int {
+	widest := s.Den.BitLen()
+	for _, p := range s.Points {
+		widest = max(widest, s.ValueWidth(p))
 	}
 	return widest
 }
 
-// dyadicSpanOf re-expresses a converted span over one shared denominator. The
+// DyadicSpanOf re-expresses a converted span over one shared denominator. The
 // denominator is the least common multiple of the span's own, so every
 // coordinate lifts to an EXACT integer numerator and the span it describes is
 // the span it was given, to the last bit.
 //
 // It is the ONE entry point for that conversion, and it meters itself: it
-// charges dyadicSpanOfCharge (spline_sagitta.go) as its first statement and
-// returns freeformWork.step's own refusal, having converted nothing, when the
+// charges DyadicSpanOfCharge (spline_sagitta.go) as its first statement and
+// returns FreeformWork.step's own refusal, having converted nothing, when the
 // counter cannot cover it. A nil counter is unmetered, which is what the
-// fixed-depth arc-length bracket passes under its own freeformBracketCost
+// fixed-depth arc-length bracket passes under its own FreeformBracketCost
 // preflight.
-func dyadicSpanOf(w *freeformWork, span survey2d.BezierSpan) (dyadicSpan, error) {
-	if err := w.step(dyadicSpanOfCharge(span)); err != nil {
-		return dyadicSpan{}, err
+func DyadicSpanOf(w *FreeformWork, span survey2d.BezierSpan) (DyadicSpan, error) {
+	if err := w.Step(DyadicSpanOfCharge(span)); err != nil {
+		return DyadicSpan{}, err
 	}
 	den := big.NewInt(1)
 	for _, point := range span {
-		den = ratLCM(den, point.U.Denom())
-		den = ratLCM(den, point.V.Denom())
+		den = RatLCM(den, point.U.Denom())
+		den = RatLCM(den, point.V.Denom())
 	}
-	points := make([]dyadicPoint, len(span))
+	points := make([]DyadicPoint, len(span))
 	for i, point := range span {
-		points[i] = dyadicPoint{u: scaledNumerator(point.U, den), v: scaledNumerator(point.V, den)}
+		points[i] = DyadicPoint{U: ScaledNumerator(point.U, den), V: ScaledNumerator(point.V, den)}
 	}
-	return dyadicSpan{points: points, den: den}, nil
+	return DyadicSpan{Points: points, Den: den}, nil
 }
 
-// ratLCM returns the least common multiple of two positive integers. A big.Rat
+// RatLCM returns the least common multiple of two positive integers. A big.Rat
 // denominator is always positive, so no sign case arises.
-func ratLCM(a, b *big.Int) *big.Int {
+func RatLCM(a, b *big.Int) *big.Int {
 	gcd := new(big.Int).GCD(nil, nil, a, b)
 	out := new(big.Int).Quo(a, gcd)
 	return out.Mul(out, b)
 }
 
-// scaledNumerator returns r·den as an exact integer. den is a common multiple
+// ScaledNumerator returns r·den as an exact integer. den is a common multiple
 // of every denominator in the span, so the division leaves no remainder.
-func scaledNumerator(r *big.Rat, den *big.Int) *big.Int {
+func ScaledNumerator(r *big.Rat, den *big.Int) *big.Int {
 	out := new(big.Int).Quo(den, r.Denom())
 	return out.Mul(out, r.Num())
 }
 
-func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
-	if depth == 0 || len(s.points) < 2 {
-		return s.chordLower(), s.polygonUpper()
+func (s DyadicSpan) LengthBracket(depth int) (float64, float64) {
+	if depth == 0 || len(s.Points) < 2 {
+		return s.ChordLower(), s.PolygonUpper()
 	}
-	// Unmetered: freeformBracketCost already charged every split in this
+	// Unmetered: FreeformBracketCost already charged every split in this
 	// subtree up front (its own doc comment), so a nil counter cannot refuse.
-	left, right, _ := s.split(nil)
-	leftLo, leftHi := left.lengthBracket(depth - 1)
-	rightLo, rightHi := right.lengthBracket(depth - 1)
-	return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
+	left, right, _ := s.Split(nil)
+	leftLo, leftHi := left.LengthBracket(depth - 1)
+	rightLo, rightHi := right.LengthBracket(depth - 1)
+	return DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
-// lengthSplitScratch owns the three control nets used at one subdivision
+// LengthSplitScratch owns the three control nets used at one subdivision
 // level. Its integer storage remains live for the whole depth-first walk, so
 // sibling subtrees reuse it without changing the order of leaf summation.
-type lengthSplitScratch struct {
-	work, left, right []dyadicPoint
-	tmp               big.Int
+type LengthSplitScratch struct {
+	Work, Left, Right []DyadicPoint
+	Tmp               big.Int
 }
 
-func (f *lengthSplitScratch) init(n int) {
-	f.work = make([]dyadicPoint, n)
-	f.left = make([]dyadicPoint, n)
-	f.right = make([]dyadicPoint, n)
-	for _, points := range [][]dyadicPoint{f.work, f.left, f.right} {
+func (f *LengthSplitScratch) Init(n int) {
+	f.Work = make([]DyadicPoint, n)
+	f.Left = make([]DyadicPoint, n)
+	f.Right = make([]DyadicPoint, n)
+	for _, points := range [][]DyadicPoint{f.Work, f.Left, f.Right} {
 		for i := range points {
-			points[i].u = new(big.Int)
-			points[i].v = new(big.Int)
+			points[i].U = new(big.Int)
+			points[i].V = new(big.Int)
 		}
 	}
 }
 
-func (s dyadicSpan) lengthBracketScratch(
-	frames []lengthSplitScratch, distance *lengthDistanceScratch,
+func (s DyadicSpan) LengthBracketScratch(
+	frames []LengthSplitScratch, distance *LengthDistanceScratch,
 ) (float64, float64) {
 	if len(frames) == 0 {
-		return s.chordLowerScratch(distance), s.polygonUpperScratch(distance)
+		return s.ChordLowerScratch(distance), s.PolygonUpperScratch(distance)
 	}
 	f := &frames[len(frames)-1]
-	f.split(s.points)
-	left := dyadicSpan{points: f.left, den: s.den, denSq: s.denSq}
-	right := dyadicSpan{points: f.right, den: s.den, denSq: s.denSq}
-	leftLo, leftHi := left.lengthBracketScratch(frames[:len(frames)-1], distance)
-	rightLo, rightHi := right.lengthBracketScratch(frames[:len(frames)-1], distance)
-	return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
+	f.Split(s.Points)
+	left := DyadicSpan{Points: f.Left, Den: s.Den, DenSq: s.DenSq}
+	right := DyadicSpan{Points: f.Right, Den: s.Den, DenSq: s.DenSq}
+	leftLo, leftHi := left.LengthBracketScratch(frames[:len(frames)-1], distance)
+	rightLo, rightHi := right.LengthBracketScratch(frames[:len(frames)-1], distance)
+	return DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
-func (f *lengthSplitScratch) split(points []dyadicPoint) {
+func (f *LengthSplitScratch) Split(points []DyadicPoint) {
 	n := len(points)
 	for i, p := range points {
-		f.work[i].u.Set(p.u)
-		f.work[i].v.Set(p.v)
-		f.work[i].exp = p.exp
+		f.Work[i].U.Set(p.U)
+		f.Work[i].V.Set(p.V)
+		f.Work[i].Exp = p.Exp
 	}
-	f.left[0].u.Set(f.work[0].u)
-	f.left[0].v.Set(f.work[0].v)
-	f.left[0].exp = f.work[0].exp
-	f.right[n-1].u.Set(f.work[n-1].u)
-	f.right[n-1].v.Set(f.work[n-1].v)
-	f.right[n-1].exp = f.work[n-1].exp
+	f.Left[0].U.Set(f.Work[0].U)
+	f.Left[0].V.Set(f.Work[0].V)
+	f.Left[0].Exp = f.Work[0].Exp
+	f.Right[n-1].U.Set(f.Work[n-1].U)
+	f.Right[n-1].V.Set(f.Work[n-1].V)
+	f.Right[n-1].Exp = f.Work[n-1].Exp
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			midpointInto(&f.work[i], f.work[i], f.work[i+1], &f.tmp)
+			MidpointInto(&f.Work[i], f.Work[i], f.Work[i+1], &f.Tmp)
 		}
-		f.left[n-round].u.Set(f.work[0].u)
-		f.left[n-round].v.Set(f.work[0].v)
-		f.left[n-round].exp = f.work[0].exp
-		f.right[round-1].u.Set(f.work[round-1].u)
-		f.right[round-1].v.Set(f.work[round-1].v)
-		f.right[round-1].exp = f.work[round-1].exp
+		f.Left[n-round].U.Set(f.Work[0].U)
+		f.Left[n-round].V.Set(f.Work[0].V)
+		f.Left[n-round].Exp = f.Work[0].Exp
+		f.Right[round-1].U.Set(f.Work[round-1].U)
+		f.Right[round-1].V.Set(f.Work[round-1].V)
+		f.Right[round-1].Exp = f.Work[round-1].Exp
 	}
 }
 
-func midpointInto(dst *dyadicPoint, a, b dyadicPoint, tmp *big.Int) {
-	exp := max(a.exp, b.exp)
-	dst.u.Lsh(a.u, exp-a.exp)
-	tmp.Lsh(b.u, exp-b.exp)
-	dst.u.Add(dst.u, tmp)
-	dst.v.Lsh(a.v, exp-a.exp)
-	tmp.Lsh(b.v, exp-b.exp)
-	dst.v.Add(dst.v, tmp)
-	dst.exp = exp + 1
+func MidpointInto(dst *DyadicPoint, a, b DyadicPoint, tmp *big.Int) {
+	exp := max(a.Exp, b.Exp)
+	dst.U.Lsh(a.U, exp-a.Exp)
+	tmp.Lsh(b.U, exp-b.Exp)
+	dst.U.Add(dst.U, tmp)
+	dst.V.Lsh(a.V, exp-a.Exp)
+	tmp.Lsh(b.V, exp-b.Exp)
+	dst.V.Add(dst.V, tmp)
+	dst.Exp = exp + 1
 }
 
 // split halves a span by de Casteljau at t = 1/2, exactly: every blend is a
 // midpoint, so the arithmetic is a binary bisection over integer numerators.
 //
 // It is the ONE entry point for that bisection, and it meters itself: it
-// charges dyadicSplitOps (spline_sagitta.go) at its own operand width as its
+// charges DyadicSplitOps (spline_sagitta.go) at its own operand width as its
 // first statement — the span's control count and its widest value are the
 // receiver's own shape, never a caller's loop bound — and returns
-// freeformWork.step's own refusal, having split nothing, when the counter
+// FreeformWork.step's own refusal, having split nothing, when the counter
 // cannot cover it. A nil counter is unmetered, which is what the fixed-depth
-// arc-length bracket passes under its own freeformBracketCost preflight.
-func (s dyadicSpan) split(w *freeformWork) (dyadicSpan, dyadicSpan, error) {
-	n := len(s.points)
-	if err := w.step(costMul(dyadicSplitOps(uint64(n)), widthUnits(s.spanWidth()))); err != nil {
-		return dyadicSpan{}, dyadicSpan{}, err
+// arc-length bracket passes under its own FreeformBracketCost preflight.
+func (s DyadicSpan) Split(w *FreeformWork) (DyadicSpan, DyadicSpan, error) {
+	n := len(s.Points)
+	if err := w.Step(CostMul(DyadicSplitOps(uint64(n)), WidthUnits(s.SpanWidth()))); err != nil {
+		return DyadicSpan{}, DyadicSpan{}, err
 	}
-	work := make([]dyadicPoint, n)
-	copy(work, s.points)
-	left := make([]dyadicPoint, 0, n)
-	right := make([]dyadicPoint, n)
+	work := make([]DyadicPoint, n)
+	copy(work, s.Points)
+	left := make([]DyadicPoint, 0, n)
+	right := make([]DyadicPoint, n)
 	left = append(left, work[0])
 	right[n-1] = work[n-1]
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			work[i] = dyadicMidpoint(work[i], work[i+1])
+			work[i] = DyadicMidpoint(work[i], work[i+1])
 		}
 		left = append(left, work[0])
 		right[round-1] = work[round-1]
 	}
-	return dyadicSpan{points: left, den: s.den, denSq: s.denSq},
-		dyadicSpan{points: right, den: s.den, denSq: s.denSq}, nil
+	return DyadicSpan{Points: left, Den: s.Den, DenSq: s.DenSq},
+		DyadicSpan{Points: right, Den: s.Den, DenSq: s.DenSq}, nil
 }
 
-// dyadicMidpoint is (a+b)/2 exactly: the two numerators are raised to their
+// DyadicMidpoint is (a+b)/2 exactly: the two numerators are raised to their
 // common exponent, added, and the exponent goes up by one for the halving.
-func dyadicMidpoint(a, b dyadicPoint) dyadicPoint {
-	exp := max(a.exp, b.exp)
-	return dyadicPoint{
-		u:   alignedSum(a.u, exp-a.exp, b.u, exp-b.exp),
-		v:   alignedSum(a.v, exp-a.exp, b.v, exp-b.exp),
-		exp: exp + 1,
+func DyadicMidpoint(a, b DyadicPoint) DyadicPoint {
+	exp := max(a.Exp, b.Exp)
+	return DyadicPoint{
+		U:   AlignedSum(a.U, exp-a.Exp, b.U, exp-b.Exp),
+		V:   AlignedSum(a.V, exp-a.Exp, b.V, exp-b.Exp),
+		Exp: exp + 1,
 	}
 }
 
-// alignedSum is a+b with each numerator first shifted up to the common
+// AlignedSum is a+b with each numerator first shifted up to the common
 // exponent. Shifting is exact, so the sum is the sum of the two values.
-func alignedSum(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
+func AlignedSum(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
 	out := new(big.Int).Lsh(a, aShift)
 	if bShift == 0 {
 		return out.Add(out, b)
@@ -401,8 +403,8 @@ func alignedSum(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
 	return out.Add(out, new(big.Int).Lsh(b, bShift))
 }
 
-// alignedDifference is a−b under the same alignment.
-func alignedDifference(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
+// AlignedDifference is a−b under the same alignment.
+func AlignedDifference(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
 	out := new(big.Int).Lsh(a, aShift)
 	if bShift == 0 {
 		return out.Sub(out, b)
@@ -413,147 +415,147 @@ func alignedDifference(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.In
 // chordLower is a proven lower bound on the distance between the span's two
 // ends: the largest float whose square does not exceed the exact squared
 // distance.
-func (s dyadicSpan) chordLower() float64 {
-	return spanSqrtDown(s.distanceSquared(s.points[0], s.points[len(s.points)-1]))
+func (s DyadicSpan) ChordLower() float64 {
+	return SpanSqrtDown(s.DistanceSquared(s.Points[0], s.Points[len(s.Points)-1]))
 }
 
-func (s dyadicSpan) chordLowerScratch(scratch *lengthDistanceScratch) float64 {
-	return spanSqrtDownScratch(s.distanceSquaredScratch(s.points[0], s.points[len(s.points)-1], scratch), scratch)
+func (s DyadicSpan) ChordLowerScratch(scratch *LengthDistanceScratch) float64 {
+	return SpanSqrtDownScratch(s.DistanceSquaredScratch(s.Points[0], s.Points[len(s.Points)-1], scratch), scratch)
 }
 
 // polygonUpper is a proven upper bound on a control polygon's length.
-func (s dyadicSpan) polygonUpper() float64 {
+func (s DyadicSpan) PolygonUpper() float64 {
 	total := 0.0
-	for i := 0; i+1 < len(s.points); i++ {
-		total = proofbound.UpRound(total + spanSqrtUp(s.distanceSquared(s.points[i], s.points[i+1])))
+	for i := 0; i+1 < len(s.Points); i++ {
+		total = proofbound.UpRound(total + SpanSqrtUp(s.DistanceSquared(s.Points[i], s.Points[i+1])))
 	}
 	return total
 }
 
-func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 {
+func (s DyadicSpan) PolygonUpperScratch(scratch *LengthDistanceScratch) float64 {
 	total := 0.0
-	for i := 0; i+1 < len(s.points); i++ {
+	for i := 0; i+1 < len(s.Points); i++ {
 		// Uniform halves of one Bézier have the same derivative at their
 		// shared endpoint. Their adjoining control edges therefore have
 		// equal exact lengths, so the previous leaf's last upper bound is
 		// this leaf's first upper bound. Keep every outward sum in place.
-		edge := scratch.lastUpper
-		if i != 0 || !scratch.hasLastUpper {
-			edge = spanSqrtUpScratch(s.distanceSquaredScratch(s.points[i], s.points[i+1], scratch), scratch)
+		edge := scratch.LastUpper
+		if i != 0 || !scratch.HasLastUpper {
+			edge = SpanSqrtUpScratch(s.DistanceSquaredScratch(s.Points[i], s.Points[i+1], scratch), scratch)
 		}
 		total = proofbound.UpRound(total + edge)
-		if i+2 == len(s.points) {
-			scratch.lastUpper = edge
-			scratch.hasLastUpper = true
+		if i+2 == len(s.Points) {
+			scratch.LastUpper = edge
+			scratch.HasLastUpper = true
 		}
 	}
 	return total
 }
 
-// lengthDistanceScratch reuses exact integer operands across successive leaf
+// LengthDistanceScratch reuses exact integer operands across successive leaf
 // distances. A leaf completes each square-root comparison before the next
 // distance overwrites num, so no returned interval holds one of these values.
-type lengthDistanceScratch struct {
-	du, dv, tmp, num, lhs, rhs, squareMant big.Int
-	seedMant, seedRatio, seedNum, seedDen  big.Float
-	// spanLengthBracket creates one scratch per original span, so this
+type LengthDistanceScratch struct {
+	Du, Dv, Tmp, Num, Lhs, Rhs, SquareMant big.Int
+	SeedMant, SeedRatio, SeedNum, SeedDen  big.Float
+	// SpanLengthBracket creates one scratch per original span, so this
 	// bound is never reused across unrelated control nets.
-	lastUpper    float64
-	hasLastUpper bool
+	LastUpper    float64
+	HasLastUpper bool
 }
 
-// spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
+// SpanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
 // denominator in this form lets the leaf square roots compare integers without
 // reducing a new rational for every control-polygon leg.
-type spanSquaredDistance struct {
-	num, denSq *big.Int
-	exp        uint
+type SpanSquaredDistance struct {
+	Num, DenSq *big.Int
+	Exp        uint
 }
 
-func (s dyadicSpan) distanceSquared(a, b dyadicPoint) spanSquaredDistance {
-	exp := max(a.exp, b.exp)
-	du := alignedDifference(b.u, exp-b.exp, a.u, exp-a.exp)
-	dv := alignedDifference(b.v, exp-b.exp, a.v, exp-a.exp)
+func (s DyadicSpan) DistanceSquared(a, b DyadicPoint) SpanSquaredDistance {
+	exp := max(a.Exp, b.Exp)
+	du := AlignedDifference(b.U, exp-b.Exp, a.U, exp-a.Exp)
+	dv := AlignedDifference(b.V, exp-b.Exp, a.V, exp-a.Exp)
 	num := du.Mul(du, du)
 	num.Add(num, dv.Mul(dv, dv))
-	denSq := s.denSq
+	denSq := s.DenSq
 	if denSq == nil {
-		denSq = new(big.Int).Mul(s.den, s.den)
+		denSq = new(big.Int).Mul(s.Den, s.Den)
 	}
-	return spanSquaredDistance{num: num, denSq: denSq, exp: exp}
+	return SpanSquaredDistance{Num: num, DenSq: denSq, Exp: exp}
 }
 
-func (s dyadicSpan) distanceSquaredScratch(
-	a, b dyadicPoint, scratch *lengthDistanceScratch,
-) spanSquaredDistance {
-	exp := max(a.exp, b.exp)
-	scratch.du.Lsh(b.u, exp-b.exp)
-	scratch.tmp.Lsh(a.u, exp-a.exp)
-	scratch.du.Sub(&scratch.du, &scratch.tmp)
-	scratch.dv.Lsh(b.v, exp-b.exp)
-	scratch.tmp.Lsh(a.v, exp-a.exp)
-	scratch.dv.Sub(&scratch.dv, &scratch.tmp)
-	scratch.num.Mul(&scratch.du, &scratch.du)
-	scratch.tmp.Mul(&scratch.dv, &scratch.dv)
-	scratch.num.Add(&scratch.num, &scratch.tmp)
-	return spanSquaredDistance{num: &scratch.num, denSq: s.denSq, exp: exp}
+func (s DyadicSpan) DistanceSquaredScratch(
+	a, b DyadicPoint, scratch *LengthDistanceScratch,
+) SpanSquaredDistance {
+	exp := max(a.Exp, b.Exp)
+	scratch.Du.Lsh(b.U, exp-b.Exp)
+	scratch.Tmp.Lsh(a.U, exp-a.Exp)
+	scratch.Du.Sub(&scratch.Du, &scratch.Tmp)
+	scratch.Dv.Lsh(b.V, exp-b.Exp)
+	scratch.Tmp.Lsh(a.V, exp-a.Exp)
+	scratch.Dv.Sub(&scratch.Dv, &scratch.Tmp)
+	scratch.Num.Mul(&scratch.Du, &scratch.Du)
+	scratch.Tmp.Mul(&scratch.Dv, &scratch.Dv)
+	scratch.Num.Add(&scratch.Num, &scratch.Tmp)
+	return SpanSquaredDistance{Num: &scratch.Num, DenSq: s.DenSq, Exp: exp}
 }
 
 // squaredDistance is the rational reference for callers that need the exact
 // squared distance rather than a directed float square root.
-func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
-	d := s.distanceSquared(a, b)
-	return new(big.Rat).SetFrac(d.num, new(big.Int).Lsh(d.denSq, 2*d.exp))
+func (s DyadicSpan) SquaredDistance(a, b DyadicPoint) *big.Rat {
+	d := s.DistanceSquared(a, b)
+	return new(big.Rat).SetFrac(d.Num, new(big.Int).Lsh(d.DenSq, 2*d.Exp))
 }
 
-// spanSquareCmp compares f² to the exact squared distance without a rational
+// SpanSquareCmp compares f² to the exact squared distance without a rational
 // reduction. A finite float is an integer mantissa times a power of two, so
 // multiplying by the shared denSq and shifting preserves the exact ordering.
-func spanSquareCmp(f float64, d spanSquaredDistance) int {
+func SpanSquareCmp(f float64, d SpanSquaredDistance) int {
 	square, ok := proofarith.DyOf(f)
 	if !ok {
 		return 1
 	}
 	if square.IsZero() {
-		return -d.num.Sign()
+		return -d.Num.Sign()
 	}
 	mant := square.Mant()
 	lhs := new(big.Int).Mul(mant, mant)
-	lhs.Mul(lhs, d.denSq)
-	shift := 2 * (square.Exp() + int(d.exp))
+	lhs.Mul(lhs, d.DenSq)
+	shift := 2 * (square.Exp() + int(d.Exp))
 	if shift >= 0 {
-		return lhs.Lsh(lhs, uint(shift)).Cmp(d.num)
+		return lhs.Lsh(lhs, uint(shift)).Cmp(d.Num)
 	}
-	return lhs.Cmp(new(big.Int).Lsh(d.num, uint(-shift)))
+	return lhs.Cmp(new(big.Int).Lsh(d.Num, uint(-shift)))
 }
 
-func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDistanceScratch) int {
+func SpanSquareCmpScratch(f float64, d SpanSquaredDistance, scratch *LengthDistanceScratch) int {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return 1
 	}
 	if f == 0 {
-		return -d.num.Sign()
+		return -d.Num.Sign()
 	}
 	square := proofarith.DyOfFinite(f)
-	mant := square.MantInto(&scratch.squareMant)
-	scratch.lhs.Mul(mant, mant)
-	scratch.lhs.Mul(&scratch.lhs, d.denSq)
-	shift := 2 * (square.Exp() + int(d.exp))
+	mant := square.MantInto(&scratch.SquareMant)
+	scratch.Lhs.Mul(mant, mant)
+	scratch.Lhs.Mul(&scratch.Lhs, d.DenSq)
+	shift := 2 * (square.Exp() + int(d.Exp))
 	if shift >= 0 {
-		return scratch.lhs.Lsh(&scratch.lhs, uint(shift)).Cmp(d.num)
+		return scratch.Lhs.Lsh(&scratch.Lhs, uint(shift)).Cmp(d.Num)
 	}
-	return scratch.lhs.Cmp(scratch.rhs.Lsh(d.num, uint(-shift)))
+	return scratch.Lhs.Cmp(scratch.Rhs.Lsh(d.Num, uint(-shift)))
 }
 
-// spanSqrtSeed follows proofbound.RatSqrtSeed's 64-bit big.Float quotient, while keeping
+// SpanSqrtSeed follows proofbound.RatSqrtSeed's 64-bit big.Float quotient, while keeping
 // the power-of-two part of the denominator as an exponent. SetRat uses the same
 // full-precision integer operands and Quo for a noninteger rational.
-func spanSqrtSeed(d spanSquaredDistance) float64 {
+func SpanSqrtSeed(d SpanSquaredDistance) float64 {
 	mant := new(big.Float).SetPrec(64)
 	ratio := new(big.Float).SetPrec(64).Quo(
-		new(big.Float).SetInt(d.num), new(big.Float).SetInt(d.denSq),
+		new(big.Float).SetInt(d.Num), new(big.Float).SetInt(d.DenSq),
 	)
-	exp := ratio.MantExp(mant) - 2*int(d.exp)
+	exp := ratio.MantExp(mant) - 2*int(d.Exp)
 	if exp%2 != 0 {
 		exp--
 		mant.SetMantExp(mant, 1)
@@ -562,36 +564,36 @@ func spanSqrtSeed(d spanSquaredDistance) float64 {
 	return math.Ldexp(math.Sqrt(m), exp/2)
 }
 
-// spanSqrtSeedScratch uses the same precision and rounding as spanSqrtSeed.
+// SpanSqrtSeedScratch uses the same precision and rounding as SpanSqrtSeed.
 // Each integer input starts with zero precision so SetInt gives it its full
 // bit length, as a newly allocated big.Float would. The quotient and mantissa
 // use 64 bits, while their storage is reused across this bracket's leaf legs.
-func spanSqrtSeedScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
-	scratch.seedMant.SetPrec(64)
-	scratch.seedRatio.SetPrec(64)
-	ratio := scratch.seedRatio.Quo(
-		scratch.seedNum.SetPrec(0).SetInt(d.num),
-		scratch.seedDen.SetPrec(0).SetInt(d.denSq),
+func SpanSqrtSeedScratch(d SpanSquaredDistance, scratch *LengthDistanceScratch) float64 {
+	scratch.SeedMant.SetPrec(64)
+	scratch.SeedRatio.SetPrec(64)
+	ratio := scratch.SeedRatio.Quo(
+		scratch.SeedNum.SetPrec(0).SetInt(d.Num),
+		scratch.SeedDen.SetPrec(0).SetInt(d.DenSq),
 	)
-	exp := ratio.MantExp(&scratch.seedMant) - 2*int(d.exp)
+	exp := ratio.MantExp(&scratch.SeedMant) - 2*int(d.Exp)
 	if exp%2 != 0 {
 		exp--
-		scratch.seedMant.SetMantExp(&scratch.seedMant, 1)
+		scratch.SeedMant.SetMantExp(&scratch.SeedMant, 1)
 	}
-	m, _ := scratch.seedMant.Float64()
+	m, _ := scratch.SeedMant.Float64()
 	return math.Ldexp(math.Sqrt(m), exp/2)
 }
 
-func spanSqrtDown(d spanSquaredDistance) float64 {
-	if d.num.Sign() <= 0 {
+func SpanSqrtDown(d SpanSquaredDistance) float64 {
+	if d.Num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeed(d)
+	f := SpanSqrtSeed(d)
 	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
 	for range proofbound.SqrtAdjustLimit {
-		if spanSquareCmp(f, d) <= 0 {
+		if SpanSquareCmp(f, d) <= 0 {
 			return f
 		}
 		f = math.Nextafter(f, 0)
@@ -599,16 +601,16 @@ func spanSqrtDown(d spanSquaredDistance) float64 {
 	return 0
 }
 
-func spanSqrtDownScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
-	if d.num.Sign() <= 0 {
+func SpanSqrtDownScratch(d SpanSquaredDistance, scratch *LengthDistanceScratch) float64 {
+	if d.Num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeedScratch(d, scratch)
+	f := SpanSqrtSeedScratch(d, scratch)
 	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
 	for range proofbound.SqrtAdjustLimit {
-		if spanSquareCmpScratch(f, d, scratch) <= 0 {
+		if SpanSquareCmpScratch(f, d, scratch) <= 0 {
 			return f
 		}
 		f = math.Nextafter(f, 0)
@@ -616,16 +618,16 @@ func spanSqrtDownScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) 
 	return 0
 }
 
-func spanSqrtUp(d spanSquaredDistance) float64 {
-	if d.num.Sign() <= 0 {
+func SpanSqrtUp(d SpanSquaredDistance) float64 {
+	if d.Num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeed(d)
+	f := SpanSqrtSeed(d)
 	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
 	for range proofbound.SqrtAdjustLimit {
-		if spanSquareCmp(f, d) >= 0 {
+		if SpanSquareCmp(f, d) >= 0 {
 			return f
 		}
 		f = math.Nextafter(f, math.Inf(1))
@@ -633,16 +635,16 @@ func spanSqrtUp(d spanSquaredDistance) float64 {
 	return math.Inf(1)
 }
 
-func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
-	if d.num.Sign() <= 0 {
+func SpanSqrtUpScratch(d SpanSquaredDistance, scratch *LengthDistanceScratch) float64 {
+	if d.Num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeedScratch(d, scratch)
+	f := SpanSqrtSeedScratch(d, scratch)
 	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
 	for range proofbound.SqrtAdjustLimit {
-		if spanSquareCmpScratch(f, d, scratch) >= 0 {
+		if SpanSquareCmpScratch(f, d, scratch) >= 0 {
 			return f
 		}
 		f = math.Nextafter(f, math.Inf(1))
@@ -650,9 +652,9 @@ func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) fl
 	return math.Inf(1)
 }
 
-// downRound is proofbound.UpRound's mirror: the next float toward zero, so a sum of lower
+// DownRound is proofbound.UpRound's mirror: the next float toward zero, so a sum of lower
 // bounds stays a lower bound.
-func downRound(x float64) float64 {
+func DownRound(x float64) float64 {
 	if x <= 0 || proofbound.IsNonFinite(x) {
 		return x
 	}

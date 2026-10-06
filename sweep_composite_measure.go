@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -74,7 +76,7 @@ func replayCompositeSweep(
 	ref producerID,
 	payload sweepPayload,
 ) (*Body, error) {
-	return replayCompositeSweepWork(ctx, d, ref, payload, newFreeformWork())
+	return replayCompositeSweepWork(ctx, d, ref, payload, freeform.NewFreeformWork())
 }
 
 func replayCompositeSweepWork(
@@ -82,7 +84,7 @@ func replayCompositeSweepWork(
 	d *Document,
 	ref producerID,
 	payload sweepPayload,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 ) (*Body, error) {
 	if err := preflightCompositeSweep(payload.prism.profile, len(payload.spans)); err != nil {
 		return nil, err
@@ -121,7 +123,7 @@ func evalCompositeSweepContext(
 	plane PlaneRecord,
 	frame r3.Frame,
 	path *Path,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
 	if err := preflightCompositeSweep(profile, len(path.records)); err != nil {
@@ -221,7 +223,7 @@ func compositeArcSweepSpan(
 	plane PlaneRecord,
 	frame r3.Frame,
 	record pathSegmentRecord,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 ) (sweepSpanPayload, error) {
 	geometry, err := deriveSweepArc(record, plane)
 	if err != nil {
@@ -268,7 +270,7 @@ func (span *sweepSpanPayload) build(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 ) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

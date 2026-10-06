@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -118,7 +120,7 @@ func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (fl
 	if widen == 0 {
 		return lo, hi, exact
 	}
-	lo = math.Max(0, downRound(lo-widen))
+	lo = math.Max(0, freeform.DownRound(lo-widen))
 	hi = proofbound.AbsSumUpper(hi, widen)
 	return lo, hi, false
 }

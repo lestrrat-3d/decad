@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -292,11 +294,11 @@ func (k *pairKernel) spineCriticals(f, g *cFace) ([]spineCrit, bool) {
 	case sf == 1 && sg == 1:
 		return k.lineLineCrits(f, g)
 	case sf == 1 && sg == 2:
-		cp := circleParam{
-			c: [3]float64{g.anchor.X, g.anchor.Y, g.anchor.Z},
-			u: [3]float64{g.refU.X, g.refU.Y, g.refU.Z},
-			v: [3]float64{g.refV.X, g.refV.Y, g.refV.Z},
-			r: g.major,
+		cp := freeform.CircleParam{
+			C: [3]float64{g.anchor.X, g.anchor.Y, g.anchor.Z},
+			U: [3]float64{g.refU.X, g.refU.Y, g.refU.Z},
+			V: [3]float64{g.refV.X, g.refV.Y, g.refV.Z},
+			R: g.major,
 		}
 		return k.lineCircleBracketCrits(cp, g.anchor, g.refU, g.refV, f.anchor, f.axis)
 	default:
@@ -387,10 +389,10 @@ func (k *pairKernel) lineLineCrits(f, g *cFace) ([]spineCrit, bool) {
 }
 
 // lineCircleBracketCrits runs the P4 machinery for an explicit circle.
-func (k *pairKernel) lineCircleBracketCrits(cp circleParam, center, refU, refV, la, ld r3.Vec) ([]spineCrit, bool) {
-	brs, ok, err := lineCircleBracketsContext(k.ctx, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, k.slack)
+func (k *pairKernel) lineCircleBracketCrits(cp freeform.CircleParam, center, refU, refV, la, ld r3.Vec) ([]spineCrit, bool) {
+	brs, ok, err := freeform.LineCircleBracketsContext(k.ctx, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, k.slack)
 	if err != nil {
-		if errors.Is(err, errNonFiniteClearancePolynomial) {
+		if errors.Is(err, freeform.ErrNonFiniteClearancePolynomial) {
 			k.clearanceRefused = true
 			return nil, false
 		}
@@ -400,15 +402,15 @@ func (k *pairKernel) lineCircleBracketCrits(cp circleParam, center, refU, refV, 
 	if !ok {
 		// Constant distance over the circle (a coaxial configuration):
 		// closed form at a deterministic azimuth.
-		q := center.Add(refU.Scale(cp.r))
+		q := center.Add(refU.Scale(cp.R))
 		d := q.Sub(linePoint(la, ld, q)).Len()
 		return []spineCrit{{lo: d, hi: d, exact: true, fa: linePoint(la, ld, q), fb: q}}, true
 	}
 	var out []spineCrit
 	for _, br := range brs {
-		s, c := math.Sincos(br.mid())
-		q := center.Add(refU.Scale(cp.r * c)).Add(refV.Scale(cp.r * s))
-		out = append(out, spineCrit{lo: br.lo, hi: br.hi, fa: linePoint(la, ld, q), fb: q})
+		s, c := math.Sincos(br.Mid())
+		q := center.Add(refU.Scale(cp.R * c)).Add(refV.Scale(cp.R * s))
+		out = append(out, spineCrit{lo: br.Lo, hi: br.Hi, fa: linePoint(la, ld, q), fb: q})
 	}
 	return out, true
 }
@@ -445,21 +447,21 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 	if axisDist-f.major <= k.tol {
 		return nil, false
 	}
-	c1 := circleParam{
-		c: [3]float64{f.anchor.X, f.anchor.Y, f.anchor.Z},
-		u: [3]float64{f.refU.X, f.refU.Y, f.refU.Z},
-		v: [3]float64{f.refV.X, f.refV.Y, f.refV.Z},
-		r: f.major,
+	c1 := freeform.CircleParam{
+		C: [3]float64{f.anchor.X, f.anchor.Y, f.anchor.Z},
+		U: [3]float64{f.refU.X, f.refU.Y, f.refU.Z},
+		V: [3]float64{f.refV.X, f.refV.Y, f.refV.Z},
+		R: f.major,
 	}
-	c2 := circleParam{
-		c: [3]float64{g.anchor.X, g.anchor.Y, g.anchor.Z},
-		u: [3]float64{g.refU.X, g.refU.Y, g.refU.Z},
-		v: [3]float64{g.refV.X, g.refV.Y, g.refV.Z},
-		r: g.major,
+	c2 := freeform.CircleParam{
+		C: [3]float64{g.anchor.X, g.anchor.Y, g.anchor.Z},
+		U: [3]float64{g.refU.X, g.refU.Y, g.refU.Z},
+		V: [3]float64{g.refV.X, g.refV.Y, g.refV.Z},
+		R: g.major,
 	}
-	brs, ok, err := circleCircleBracketsContext(k.ctx, c1, c2, [3]float64{g.axis.X, g.axis.Y, g.axis.Z}, k.slack)
+	brs, ok, err := freeform.CircleCircleBracketsContext(k.ctx, c1, c2, [3]float64{g.axis.X, g.axis.Y, g.axis.Z}, k.slack)
 	if err != nil {
-		if errors.Is(err, errNonFiniteClearancePolynomial) {
+		if errors.Is(err, freeform.ErrNonFiniteClearancePolynomial) {
 			k.clearanceRefused = true
 			return nil, false
 		}
@@ -471,7 +473,7 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 	}
 	var out []spineCrit
 	for _, br := range brs {
-		s, c := math.Sincos(br.mid())
+		s, c := math.Sincos(br.Mid())
 		pf := f.anchor.Add(f.refU.Scale(f.major * c)).Add(f.refV.Scale(f.major * s))
 		// The matching foot on g's spine: the nearest spine point.
 		relP := pf.Sub(g.anchor)
@@ -481,7 +483,7 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 			return nil, false
 		}
 		pg := g.anchor.Add(dir.Scale(g.major))
-		out = append(out, spineCrit{lo: br.lo, hi: br.hi, fa: pf, fb: pg})
+		out = append(out, spineCrit{lo: br.Lo, hi: br.Hi, fa: pf, fb: pg})
 	}
 	return out, true
 }

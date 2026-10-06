@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -89,7 +91,7 @@ func boxLoftPayload(t *testing.T) loftPayload {
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	return body
 }
@@ -143,7 +145,7 @@ func TestEvalLoftRolesUseTheGivenProducerID(t *testing.T) {
 	t.Parallel()
 	const ref = producerID(7)
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	require.Equal(t, ref, body.Origin().producer)
@@ -368,14 +370,14 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // pairs with vertex k of loop1; with an offset, it pairs with vertex
 // (k+offset) mod n — asserted on the built correspondence's own coordinates.
 // resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
-// into its own per-segment walk slice, on a fresh freeformWork per loop — the
+// into its own per-segment walk slice, on a fresh freeform.FreeformWork per loop — the
 // shape validateLoftRecords returns and loftPairings consumes.
 func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]survey2d.SegmentWalk {
 	t.Helper()
 	loops := append([]LoopRecord{p.Outer}, p.Holes...)
 	walks := make([][]survey2d.SegmentWalk, len(loops))
 	for i, loop := range loops {
-		work := newFreeformWork()
+		work := freeform.NewFreeformWork()
 		w := make([]survey2d.SegmentWalk, len(loop.Segments))
 		for j, seg := range loop.Segments {
 			var err error
@@ -460,19 +462,19 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	}
 
 	// The reference: what ONE walkOf(fit) costs on a fresh counter.
-	single := &freeformWork{}
+	single := &freeform.FreeformWork{}
 	_, err := walkOf(fit, single)
 	require.NoError(t, err)
-	require.Greater(t, single.spent, uint64(0), "a FitSplineSeg's own walk must charge the free-form counter")
+	require.Greater(t, single.Spent, uint64(0), "a FitSplineSeg's own walk must charge the free-form counter")
 
 	const k = 4
-	loopWork := &freeformWork{}
+	loopWork := &freeform.FreeformWork{}
 	walks := make([]survey2d.SegmentWalk, k)
 	for i := range walks {
 		walks[i], err = walkOf(fit, loopWork)
 		require.NoError(t, err)
 	}
-	require.Equal(t, k*single.spent, loopWork.spent,
+	require.Equal(t, k*single.Spent, loopWork.Spent,
 		"walkOf charges the same amount every call, so k calls read k reference charges")
 
 	// The production gate's own charge, on the same segment. p0's segment 0
@@ -480,18 +482,18 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// a second time instead of threading the resolved walk onward is exactly
 	// the difference between one reference charge here and two.
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	work0, work1 := newFreeformWork(), newFreeformWork()
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	err = validateLoftRecordsErr(
 		ProfileRecord{Outer: squareLoopWithFirstSegment(fit)}, unitSquareProfile(),
 		pl0, pl1, nil, work0, work1)
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a FitSplineSeg is not a LineSeg")
-	require.Equal(t, single.spent, work0.spent,
+	require.Equal(t, single.Spent, work0.Spent,
 		"the gate walks that segment ONCE: its counter reads a single reference charge, not two")
-	require.Zero(t, work1.spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
+	require.Zero(t, work1.Spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
 
 	// loftPairings, handed those already-resolved walks, spends nothing
 	// further.
-	before := loopWork.spent
+	before := loopWork.Spent
 	loop := LoopRecord{Segments: make([]CurveSegment, k)}
 	for i := range loop.Segments {
 		loop.Segments[i] = fit
@@ -502,7 +504,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// first) — this is asserted below for the charge, not the correspondence.
 	_, _, _, _, err = loftPairings(profile, profile, []int{0}, [][]survey2d.SegmentWalk{walks}, [][]survey2d.SegmentWalk{walks}, 0, loopWork, loopWork) //nolint:dogsled // only the error matters here.
 	require.Error(t, err)
-	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
+	require.Equal(t, before, loopWork.Spent, "loftPairings must spend no further free-form work")
 }
 
 // TestLoftPairingsConsumesTheGateResolvedWalks pins Task 1's other half on
@@ -519,7 +521,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
-	offsets, walks0, walks1, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, newFreeformWork(), newFreeformWork())
+	offsets, walks0, walks1, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{1}, offsets)
 	require.Len(t, walks0, 1)
@@ -571,7 +573,7 @@ func TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile(t *test
 	p1 := ProfileRecord{Outer: LoopRecord{Segments: segs}}
 
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3 on the first profile's own segment 0 must win")
 	require.NotErrorIs(t, err, ErrDegenerate)
 	require.Contains(t, err.Error(), "first profile")
@@ -804,7 +806,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := proofbound.NewWorkBudget(ctx)
-	_, err := evalLoft(ctx, New(), producerID(0), boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(ctx, New(), producerID(0), boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -813,7 +815,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 // validateLoftRecordsErr is validateLoftRecords with only the error kept, for
 // the gate tests below that assert a refusal and don't need the resolved
 // offsets or walks.
-func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) error {
+func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) error {
 	_, _, _, err := validateLoftRecords(p0, p1, pl0, pl1, alignment, work0, work1) //nolint:dogsled // only the error matters here.
 	return err
 }
@@ -823,7 +825,7 @@ func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
 	p0 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.1, false)}}
 	p1 := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S1: hole-count mismatch")
 }
 
@@ -832,7 +834,7 @@ func TestValidateLoftRecordsSegmentCountMismatch(t *testing.T) {
 	p0 := unitSquareProfile()
 	p1 := ProfileRecord{Outer: triangleLoop()}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S2: segment-count mismatch")
 }
 
@@ -849,7 +851,7 @@ func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a mixed LineSeg/ArcSeg pair")
 }
 
@@ -867,7 +869,7 @@ func TestValidateLoftRecordsSameKindCircularPairIsAdmitted(t *testing.T) {
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(circle())}
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(circle())}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err, "S3: a same-kind CircleSeg pair at matching positions is admitted")
 }
 
@@ -876,10 +878,10 @@ func TestValidateLoftRecordsMalformedAlignment(t *testing.T) {
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
-	err := validateLoftRecordsErr(p, p, pl0, pl1, []int{0, 1}, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p, p, pl0, pl1, []int{0, 1}, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S4: wrong-length alignment (2 offsets for 1 loop)")
 
-	err = validateLoftRecordsErr(p, p, pl0, pl1, []int{5}, newFreeformWork(), newFreeformWork())
+	err = validateLoftRecordsErr(p, p, pl0, pl1, []int{5}, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S4: an offset outside [0, 4)")
 }
 
@@ -888,11 +890,11 @@ func TestValidateLoftRecordsCoincidentPlanes(t *testing.T) {
 	p := unitSquareProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 
-	err := validateLoftRecordsErr(p, p, pl0, pl0, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p, p, pl0, pl0, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S5: identical planes")
 
 	rotated := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(-1, 0, 0)}
-	err = validateLoftRecordsErr(p, p, pl0, rotated, nil, newFreeformWork(), newFreeformWork())
+	err = validateLoftRecordsErr(p, p, pl0, rotated, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S5: the same geometric plane under a rotated U/V basis")
 }
 
@@ -900,7 +902,7 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{0}, offsets)
 	require.Len(t, walks0, 1)
@@ -926,7 +928,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S6: a corner shared by both profiles collapses its incident wall triangles")
 }
 
@@ -947,7 +949,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S7: a mirrored correspondence self-crosses")
 }
 
@@ -982,7 +984,7 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }
 
@@ -994,11 +996,11 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 // directly rather than only the published body.
 func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	t.Helper()
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, newFreeformWork(), newFreeformWork())
+	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, newFreeformWork(), newFreeformWork())
+	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
@@ -1012,9 +1014,9 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 // triangle areas.
 func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
 	a, b, c := pts[tri[0]], pts[tri[1]], pts[tri[2]]
-	ua, va := mustRatOf(a.U), mustRatOf(a.V)
-	ub, vb := mustRatOf(b.U), mustRatOf(b.V)
-	uc, vc := mustRatOf(c.U), mustRatOf(c.V)
+	ua, va := freeform.MustRatOf(a.U), freeform.MustRatOf(a.V)
+	ub, vb := freeform.MustRatOf(b.U), freeform.MustRatOf(b.V)
+	uc, vc := freeform.MustRatOf(c.U), freeform.MustRatOf(c.V)
 	sum := new(big.Rat).Mul(ua, new(big.Rat).Sub(vb, vc))
 	sum.Add(sum, new(big.Rat).Mul(ub, new(big.Rat).Sub(vc, va)))
 	sum.Add(sum, new(big.Rat).Mul(uc, new(big.Rat).Sub(va, vb)))
@@ -1034,15 +1036,15 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	pl := boxLoftPayload(t)
 	a := assembleLoftFixture(t, pl)
 
-	ig, err := pl.profile0.integralsTo(momentAreaOrder)
+	ig, err := pl.profile0.integralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
 	require.False(t, ig.exactDead)
-	require.True(t, ig.exact.complete())
+	require.True(t, ig.exact.Complete())
 
 	got := capPolygonAreaRat(a.pts0, a.loopIdx0)
-	require.Equalf(t, 0, ig.exact.area.Cmp(got),
+	require.Equalf(t, 0, ig.exact.Area.Cmp(got),
 		"untrimmed LineSeg: shoelace %s must equal moments.go's own region rational %s exactly",
-		got.RatString(), ig.exact.area.RatString())
+		got.RatString(), ig.exact.Area.RatString())
 }
 
 // trimmedLineTriangleProfile is a triangle whose first segment is a TRIMMED
@@ -1103,11 +1105,11 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	// The other rational this cap could have been read from: moments.go's
 	// own region-level integral of the record, independent of whatever
 	// assembleLoft actually walked.
-	ig, err := p.integralsTo(momentAreaOrder)
+	ig, err := p.integralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
 	require.False(t, ig.exactDead)
-	require.True(t, ig.exact.complete())
-	recordRat := ig.exact.area
+	require.True(t, ig.exact.Complete())
+	recordRat := ig.exact.Area
 
 	require.NotEqualf(t, 0, recordRat.Cmp(polyRat),
 		"a trimmed LineSeg must leave moments.go's record-level area %s and the assembled cap polygon's own shoelace %s different, or this fixture no longer exercises the trimmed path",
@@ -1304,27 +1306,27 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 			got0 := capPolygonAreaRat(a.pts0, a.loopIdx0)
 			got1 := capPolygonAreaRat(a.pts1, a.loopIdx1)
 
-			ig0, err := pl.profile0.integralsTo(momentAreaOrder)
+			ig0, err := pl.profile0.integralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
 			require.False(t, ig0.exactDead)
-			require.True(t, ig0.exact.complete())
-			ig1, err := pl.profile1.integralsTo(momentAreaOrder)
+			require.True(t, ig0.exact.Complete())
+			ig1, err := pl.profile1.integralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
 			require.False(t, ig1.exactDead)
-			require.True(t, ig1.exact.complete())
+			require.True(t, ig1.exact.Complete())
 
-			require.Equalf(t, 0, ig0.exact.area.Cmp(got0),
+			require.Equalf(t, 0, ig0.exact.Area.Cmp(got0),
 				"capStart: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
-				got0.RatString(), ig0.exact.area.RatString())
-			require.Equalf(t, 0, ig1.exact.area.Cmp(got1),
+				got0.RatString(), ig0.exact.Area.RatString())
+			require.Equalf(t, 0, ig1.exact.Area.Cmp(got1),
 				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
-				got1.RatString(), ig1.exact.area.RatString())
+				got1.RatString(), ig1.exact.Area.RatString())
 
 			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta, 0, 0)
 			for k, tri := range a.tris {
 				mass.add(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls)
 			}
-			want := mass.area(ig0.exact.area, ig1.exact.area)
+			want := mass.area(ig0.exact.Area, ig1.exact.Area)
 			area := mass.area(got0, got1)
 			require.Equal(t, want.Value.Base(), area.Value.Base(), "published area value")
 			require.Equal(t, want.Bound.Base(), area.Bound.Base(), "published area bound")

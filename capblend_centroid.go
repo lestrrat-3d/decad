@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -379,7 +381,7 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz proofbound.BoundedScalar) {
 // ProfileRecord) — proofbound.SweptMomentAllow's coordUpper input, one dimension's worth
 // of the SAME envelope prismCentroidGeometryBound already forms for a whole
 // profile.
-func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
+func loopCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64, error) {
 	return profileCoordinateUpper(ProfileRecord{Outer: loop}, work, nil)
 }
 
@@ -414,7 +416,7 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // OUTWARD — capArea's own boundary is exactly that displaced coordinate set,
 // and proofbound.SweptMomentAllow's own contract (internal/proofbound/bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
-func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
+func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	capZB := cbp.capBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*cbp.d, cbp.dDelta))
 	sideZ := sideZB.Value

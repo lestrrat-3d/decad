@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -328,7 +330,7 @@ func revolveConstructionPrior(b revolveBasis, meridianGap, rhoMax, coordMax floa
 // mesh whose bound it cannot honour. Both subtractions round downward, which is
 // the direction that leaves the reservation whole.
 func revolveBudget(tol, deltaC, deltaR float64) (float64, error) {
-	available := downRound(downRound(tol - deltaC - deltaR))
+	available := freeform.DownRound(freeform.DownRound(tol - deltaC - deltaR))
 	if available <= 0 || proofbound.IsNonFinite(available) {
 		requested := units.Millimeters(tol)
 		reserved := units.Millimeters(proofbound.AbsSumUpper(deltaC, deltaR))
@@ -398,7 +400,7 @@ func vecComponent(v r3.Vec, i int) float64 {
 // the domain — the half the fixed diagonal cuts. Their difference is therefore
 // LINEAR in t on each half, its single zero is an exact rational quotient, and
 // each sign-fixed piece integrates in closed form. No polynomial root
-// isolation, no interval subdivision, and clearance_poly.go's Sturm engine is
+// isolation, no interval subdivision, and internal/freeform/clearance_poly.go's Sturm engine is
 // not reached: the certified enclosures of cos dφ and sin dφ enter only through
 // the ideal triangle's own area, never inside a root isolation, so the
 // widening tess §9's open question worried about cannot lose a sign here.
@@ -694,7 +696,7 @@ func dvProject(p [3]proofarith.DyV3, g proofarith.DyV3) (proofarith.Dyadic, proo
 // difference is rounded DOWNWARD, so a gap this reports is one the exact
 // arithmetic also has.
 func boxGapExceeds(a, b [2]r3.Vec, margin float64) bool {
-	gap := func(x, y float64) bool { return downRound(y-x) > margin }
+	gap := func(x, y float64) bool { return freeform.DownRound(y-x) > margin }
 	return gap(a[1].X, b[0].X) || gap(b[1].X, a[0].X) ||
 		gap(a[1].Y, b[0].Y) || gap(b[1].Y, a[0].Y) ||
 		gap(a[1].Z, b[0].Z) || gap(b[1].Z, a[0].Z)

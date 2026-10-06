@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -224,8 +226,8 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 	// published reading is proven below it.
 	scan := naiveNorm(r3.NewVec(bx, by, 0).Sub(r3.NewVec(0, 0, bh)))
 	require.Greater(t, scan, exactDiameter)
-	require.GreaterOrEqual(t, downRound(scan-2*displacement), exactDiameter-2*(delta+delta))
-	require.Less(t, d, downRound(scan-2*displacement),
+	require.GreaterOrEqual(t, freeform.DownRound(scan-2*displacement), exactDiameter-2*(delta+delta))
+	require.Less(t, d, freeform.DownRound(scan-2*displacement),
 		`the shrink is applied to the exact-rational pair distance, never to naiveNorm's own scan`)
 }
 
@@ -287,7 +289,7 @@ func sCurveFreeformProfile() ProfileRecord {
 func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec {
 	t.Helper()
 	var pts []r3.Vec
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		for _, seg := range loop.Segments {
 			w, err := walkOf(seg, work)
@@ -365,7 +367,7 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
+	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	diagonal := box.Max.Sub(box.Min).Len()
 	require.Less(t, d, diagonal, "the diameter arm must read tighter than the section's own bounding-box diagonal")
@@ -844,7 +846,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Run("build proof survives placement and respects cancellation", func(t *testing.T) {
 		t.Parallel()
 		profile := rectangleProfile(5, 15)
-		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, newFreeformWork())
+		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, 1.0, side)
 		require.True(t, ax.radialProof)
@@ -874,7 +876,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Run("flipped axis and chain view keep the scan", func(t *testing.T) {
 		t.Parallel()
 		profile := rectangleProfile(-15, -5)
-		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, newFreeformWork())
+		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, -1.0, side)
 		require.False(t, ax.radialProof)

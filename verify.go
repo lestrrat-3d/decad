@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -1224,7 +1226,7 @@ func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 		return true
 	}
 	nU, nV := -rp.ax.dV, rp.ax.dU
-	rawLo, _, rawBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, newFreeformWork(), nil)
+	rawLo, _, rawBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, freeform.NewFreeformWork(), nil)
 	if err != nil {
 		return false
 	}

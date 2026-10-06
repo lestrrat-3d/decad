@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -231,7 +233,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		xform:     pp.xform,
 		blendSegs: chamferSegs,
 		blendKind: "chamfer",
-	}, newFreeformWork())
+	}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}

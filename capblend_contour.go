@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -821,7 +823,7 @@ func capWholeCircleDelta(w survey2d.SideWalk, d float64) (float64, error) {
 // disagree about the same contour.
 func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return 0, err
@@ -1018,7 +1020,7 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 	if rd == nil {
 		return fallback
 	}
-	turn, ok := arcSweepAllow(downRound(math.Abs(capRadius)), shift)
+	turn, ok := arcSweepAllow(freeform.DownRound(math.Abs(capRadius)), shift)
 	if !ok {
 		return fallback
 	}
@@ -1045,7 +1047,7 @@ func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wrap
 	if !ok {
 		return fallback
 	}
-	r := downRound(math.Abs(radius))
+	r := freeform.DownRound(math.Abs(radius))
 	lengthTurn, ok := arcSweepAllow(r, shift)
 	if !ok {
 		return fallback
