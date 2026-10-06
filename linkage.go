@@ -1,0 +1,393 @@
+package decad
+
+import (
+	"fmt"
+	"math/big"
+	"slices"
+
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// This file is the linkage vocabulary of docs/linkage-check-design.md §2 and
+// §4: Linkage, Link and the sealed Joint set, the Drive that moves them,
+// Linkage.PoseAt, and the LinkageReport records. linkage_verify.go runs
+// Document.VerifyLinkage over motion_verify.go's engine, and linkage_bound.go
+// proves the chain travel bound its interval certificate consumes.
+
+// Linkage is a tree of links joined by joints, rooted at the ground link. A
+// link is created only through its parent, so the tree has no cycles. Every
+// body of the Document that belongs to no link is static.
+//
+// The zero pose is the document as it stands: every joint value is 0 when the
+// linkage is built, and a joint's Center, Axis and Dir are world coordinates
+// at that pose. Building a linkage is not safe for concurrent use; a built
+// linkage is only read, by PoseAt and VerifyLinkage.
+type Linkage struct {
+	ground *Link
+	links  []*Link
+	member map[*Body]struct{} // every body already listed in a link
+}
+
+// NewLinkage returns a linkage holding the ground link alone.
+func NewLinkage() *Linkage {
+	l := &Linkage{member: make(map[*Body]struct{})}
+	l.ground = &Link{linkage: l, index: -1}
+	return l
+}
+
+// Ground returns the ground link, which carries no joint and no body.
+func (l *Linkage) Ground() *Link {
+	return l.ground
+}
+
+// Links returns every link but the ground, in creation order. A link's parent
+// always precedes it.
+func (l *Linkage) Links() []*Link {
+	return slices.Clone(l.links)
+}
+
+// Link is one rigid set of bodies and the joint that attaches it to its
+// parent. Two bodies of one link never move relative to each other.
+type Link struct {
+	linkage *Linkage
+	parent  *Link
+	joint   Joint
+	bodies  []*Body
+	index   int // the position in Linkage.Links(); −1 for the ground
+}
+
+// Revolute attaches a new child link of p, holding bodies, on a revolute
+// joint about the axis through center along axis (world coordinates at the
+// zero pose). It refuses, in this order: a nil p or a Link no linkage built
+// (ErrDegenerate); an empty bodies, a nil body, or a body listed twice or
+// already listed in a link of this linkage (ErrDegenerate); a non-finite
+// center or axis component (ErrNotFinite); the zero axis (ErrDegenerate).
+// Liveness and document membership are checked by VerifyLinkage.
+func (p *Link) Revolute(center, axis r3.Vec, bodies []*Body) (*Link, error) {
+	if err := p.admit(bodies); err != nil {
+		return nil, err
+	}
+	if !proofbound.FiniteVec(center) || !proofbound.FiniteVec(axis) {
+		return nil, fmt.Errorf(`%w: a revolute joint's center and axis must be finite, got %v and %v`, ErrNotFinite, center, axis)
+	}
+	if zeroVec(axis) {
+		return nil, fmt.Errorf(`%w: a zero rotation axis names no direction`, ErrDegenerate)
+	}
+	return p.attach(RevoluteJoint{Center: center, Axis: axis}, bodies), nil
+}
+
+// Prismatic attaches a new child link of p, holding bodies, on a prismatic
+// joint sliding along dir (a world direction at the zero pose; only its
+// direction is used). It refuses, in this order: a nil p or a Link no linkage
+// built (ErrDegenerate); an empty bodies, a nil body, or a body listed twice
+// or already listed in a link of this linkage (ErrDegenerate); a non-finite
+// dir component (ErrNotFinite); a dir r3.Vec.Normalize reports no direction
+// for (ErrDegenerate). Liveness and document membership are checked by
+// VerifyLinkage.
+func (p *Link) Prismatic(dir r3.Vec, bodies []*Body) (*Link, error) {
+	if err := p.admit(bodies); err != nil {
+		return nil, err
+	}
+	if !proofbound.FiniteVec(dir) {
+		return nil, fmt.Errorf(`%w: a prismatic joint's direction must be finite, got %v`, ErrNotFinite, dir)
+	}
+	if _, ok := dir.Normalize(); !ok {
+		return nil, fmt.Errorf(`%w: the prismatic direction %v names no direction`, ErrDegenerate, dir)
+	}
+	return p.attach(PrismaticJoint{Dir: dir}, bodies), nil
+}
+
+// admit applies a child link's parent and body refusals.
+func (p *Link) admit(bodies []*Body) error {
+	if p == nil || p.linkage == nil {
+		return fmt.Errorf(`%w: a link is attached only to a link of a linkage`, ErrDegenerate)
+	}
+	if len(bodies) == 0 {
+		return fmt.Errorf(`%w: a link with no body moves nothing`, ErrDegenerate)
+	}
+	seen := make(map[*Body]struct{}, len(bodies))
+	for _, b := range bodies {
+		if b == nil {
+			return fmt.Errorf(`%w: a nil body cannot belong to a link`, ErrDegenerate)
+		}
+		if _, dup := seen[b]; dup {
+			return fmt.Errorf(`%w: a body is listed twice in one link`, ErrDegenerate)
+		}
+		if _, taken := p.linkage.member[b]; taken {
+			return fmt.Errorf(`%w: a body already belongs to a link of this linkage`, ErrDegenerate)
+		}
+		seen[b] = struct{}{}
+	}
+	return nil
+}
+
+func (p *Link) attach(j Joint, bodies []*Body) *Link {
+	l := p.linkage
+	child := &Link{linkage: l, parent: p, joint: j, bodies: slices.Clone(bodies), index: len(l.links)}
+	for _, b := range bodies {
+		l.member[b] = struct{}{}
+	}
+	l.links = append(l.links, child)
+	return child
+}
+
+// Parent returns the link k is attached to; nil for the ground.
+func (k *Link) Parent() *Link {
+	return k.parent
+}
+
+// Joint returns the joint attaching k to its parent; nil for the ground.
+func (k *Link) Joint() Joint {
+	return k.joint
+}
+
+// Bodies returns k's bodies in the order they were given; none for the
+// ground.
+func (k *Link) Bodies() []*Body {
+	return slices.Clone(k.bodies)
+}
+
+// Joint is how a link moves against its parent. The set is sealed:
+// RevoluteJoint and PrismaticJoint are its only members.
+type Joint interface{ joint() }
+
+// RevoluteJoint rotates its link about the axis through Center along Axis,
+// right-handed, by the joint's value, an Angle. Center and Axis are world
+// coordinates at the zero pose.
+type RevoluteJoint struct {
+	Center r3.Vec // a position, millimetres (core §5.2)
+	Axis   r3.Vec // a direction; only its direction is used
+}
+
+func (RevoluteJoint) joint() {}
+
+// PrismaticJoint slides its link along Dir by the joint's value, a Length.
+// Dir is a world direction at the zero pose; only its direction is used.
+type PrismaticJoint struct {
+	Dir r3.Vec
+}
+
+func (PrismaticJoint) joint() {}
+
+// Drive is a one-parameter motion of a linkage, parameterised by the
+// Dimensionless fraction s ∈ [0, 1]: each listed joint runs linearly from
+// From to To as s runs from 0 to 1, and an unlisted joint holds 0.
+type Drive []JointSweep
+
+// JointSweep moves one link's joint. From == To holds the joint at that value
+// for the whole drive; From > To runs it the other way.
+type JointSweep struct {
+	Link     *Link       // the link whose joint this moves
+	From, To units.Value // the joint's Kind: Angle for a revolute, Length for a prismatic
+}
+
+// LinkagePose is every link's pose at one parameter value.
+type LinkagePose struct {
+	At     units.Value    // the Dimensionless fraction s
+	Values []units.Value  // each link's joint value at s, in Linkage.Links() order
+	Poses  []r3.Transform // each link's world pose at s, in the same order
+}
+
+// PoseAt returns every link's joint value and world pose at the fraction at
+// of drive (docs/linkage-check-design.md §2.4). A joint's value is
+// From + at·(To − From), carried in From's unit, and 0 in its Kind's base unit
+// for an unlisted joint. A link's pose is its own joint's motion, then its
+// parent's pose: J_k(q_k).Then(Pose_parent), with J_k the rotation a Revolute
+// and the translation a Prismatic of the same axis or direction build, and
+// the ground's pose the identity; it composes onto each body's own placement
+// as Body.Placed composes. It is the one place a linkage pose is built, so a
+// renderer above and VerifyLinkage below evaluate the same transform.
+//
+// It refuses a nil linkage, a sweep naming no link, the ground, a link of
+// another linkage or a link twice (ErrDegenerate); a sweep From or To of the
+// wrong Kind for its joint (ErrUnitKind) or non-finite (ErrNotFinite); an at
+// that is not a finite Dimensionless value (ErrUnitKind, ErrNotFinite); and a
+// pose r3 cannot represent (ErrNotFinite). An at outside [0, 1] is legal: PoseAt
+// takes no range, and a drive whose every sweep holds is legal here.
+func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
+	spec, err := l.resolveDrive(d)
+	if err != nil {
+		return LinkagePose{}, err
+	}
+	if err := motionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
+		return LinkagePose{}, err
+	}
+	p, ok := motionbound.ExactMotionParam(at)
+	if !ok {
+		return LinkagePose{}, fmt.Errorf(`%w: the pose fraction is not representable`, ErrNotFinite)
+	}
+	values, poses, err := spec.posesAt(p.Base)
+	if err != nil {
+		return LinkagePose{}, err
+	}
+	return LinkagePose{At: at, Values: values, Poses: poses}, nil
+}
+
+// LinkageReport is what VerifyLinkage returns (docs/linkage-check-design.md
+// §4): VerifyMotion's vocabulary over the links of a linkage.
+// Diagnostics lists interval findings in interval order, then pose findings
+// in pose order, then the whole-drive reading's own tolerance finding; it is
+// empty exactly when Status is Sound, and Status is the worst
+// Diagnostic.Status in it. Every At, From and To is the Dimensionless
+// fraction s.
+type LinkageReport struct {
+	Request     MotionRequest       // the validated effective settings, including defaults
+	Linkage     *Linkage            // the linkage as given
+	Drive       Drive               // the drive as stated
+	Links       []*Link             // Linkage.Links() order
+	Against     []*Body             // every static body, in Document.Bodies() order
+	Poses       []LinkagePoseResult // every pose evaluated, from s = 0 to s = 1
+	Intervals   []MotionInterval    // between adjacent Poses, in the same order
+	Collisions  []LinkCollision     // every proven collision, in traversal order then pair order
+	Clearance   *ScalarReading      // the minimum gap over the whole drive; nil unless every interval is IntervalClear
+	Assessment  Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
+	Diagnostics []Diagnostic        // interval findings, then pose findings, then the whole-drive reading's
+	Status      Status              // Unverified on a zero value; VerifyLinkage always returns a decided status
+}
+
+// Passed reports whether the report is Sound. It returns false for a nil
+// report and for any other Status.
+func (r *LinkageReport) Passed() bool {
+	return r != nil && r.Status == Sound
+}
+
+// LinkagePoseResult is one evaluated pose: every link's pose there and the
+// pair results at it in Verify's own shape. In every row and diagnostic, A is
+// a link body and B a static body or a body of a later link (pair order,
+// docs/linkage-check-design.md §4); a row names the caller's own bodies, never
+// the transient placements the check evaluated. A Clearance row is a
+// measurement at this pose only; the continuous claim lives on the
+// MotionInterval.
+type LinkagePoseResult struct {
+	Pose          LinkagePose
+	Interferences []Interference // proven overlap, bounded volume
+	Clearances    []Clearance    // every pair proven disjoint or touching
+	Diagnostics   []Diagnostic   // this pose's undecided or unsupported pairs and invalid bodies, At set
+}
+
+// LinkCollision is a proven overlap at an evaluated pose, about the ideal
+// pose (docs/linkage-check-design.md §5.1): the measured overlap survives
+// both bodies' deviation from their ideal poses, and Volume's Bound carries
+// that allowance, so Volume.Value − Volume.Bound is a proven lower bound on
+// the ideal overlap. A belongs to a link; B is a static body or a body of a
+// later link. Nothing is claimed about the interval around it.
+type LinkCollision struct {
+	At     units.Value // the Dimensionless fraction s
+	A, B   *Body
+	Volume Measurement
+}
+
+// linkageSpec is a linkage and a drive read into one joint per link.
+type linkageSpec struct {
+	linkage *Linkage
+	joints  []linkJoint // Linkage.Links() order
+}
+
+// linkJoint is one link's joint under a drive: its axis or direction, and
+// its value's domain — the sweep as stated, or, for an unlisted joint, a
+// hold at 0 in its Kind's base unit.
+type linkJoint struct {
+	link     *Link
+	parent   int // the parent's position in Linkage.Links(); −1 for the ground
+	revolute bool
+	center   r3.Vec
+	axis     r3.Vec // the revolute's axis, or the prismatic's direction
+	listed   bool
+	dom      motionDomain
+}
+
+// resolveDrive validates d against l (docs/linkage-check-design.md §2.4).
+func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
+	if l == nil {
+		return nil, fmt.Errorf(`%w: a nil linkage has no link to move`, ErrDegenerate)
+	}
+	spec := &linkageSpec{linkage: l, joints: make([]linkJoint, len(l.links))}
+	for k, link := range l.links {
+		jt := linkJoint{link: link, parent: link.parent.index}
+		switch j := link.joint.(type) {
+		case RevoluteJoint:
+			jt.revolute, jt.center, jt.axis = true, j.Center, j.Axis
+			jt.dom = heldAtZero(units.Angle, units.Radian)
+		case PrismaticJoint:
+			jt.axis = j.Dir
+			jt.dom = heldAtZero(units.Length, units.Millimeter)
+		}
+		spec.joints[k] = jt
+	}
+	for _, sw := range d {
+		link := sw.Link
+		if link == nil || link.linkage != l || link.joint == nil {
+			return nil, fmt.Errorf(`%w: a drive names a link that is not a jointed link of this linkage`, ErrDegenerate)
+		}
+		jt := &spec.joints[link.index]
+		if jt.listed {
+			return nil, fmt.Errorf(`%w: a drive names link %d twice`, ErrDegenerate, link.index)
+		}
+		if err := motionKinds(jt.dom.quantity, sw.From, sw.To); err != nil {
+			return nil, err
+		}
+		if err := motionFinite(sw.From, sw.To); err != nil {
+			return nil, err
+		}
+		fromP, okF := motionbound.ExactMotionParam(sw.From)
+		toP, okT := motionbound.ExactMotionParam(sw.To)
+		if !okF || !okT {
+			return nil, fmt.Errorf(`%w: a sweep endpoint is not representable`, ErrNotFinite)
+		}
+		jt.listed = true
+		jt.dom = motionDomain{quantity: jt.dom.quantity, from: sw.From, to: sw.To, fromP: fromP, toP: toP}
+	}
+	return spec, nil
+}
+
+// heldAtZero is the domain of a joint the drive does not list.
+func heldAtZero(kind units.Kind, unit units.Unit) motionDomain {
+	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
+	return motionDomain{quantity: kind, from: units.New(0, unit), to: units.New(0, unit), fromP: zero, toP: zero}
+}
+
+// holds reports whether every listed sweep of the drive holds its joint, so
+// that the drive names no motion.
+func (s *linkageSpec) holds() bool {
+	for _, jt := range s.joints {
+		if jt.listed && !sameMotionValue(jt.dom.from, jt.dom.to) {
+			return false
+		}
+	}
+	return true
+}
+
+// pose is the joint's own float motion at the value q.
+func (jt linkJoint) pose(q units.Value) (r3.Transform, error) {
+	if jt.revolute {
+		return revolutePose(jt.center, jt.axis, q)
+	}
+	return prismaticPose(jt.axis, q)
+}
+
+// posesAt is every link's joint value and world pose at the exact fraction f:
+// Pose_k = J_k(q_k).Then(Pose_parent), a link under the ground taking its
+// joint's motion alone.
+func (s *linkageSpec) posesAt(f *big.Rat) ([]units.Value, []r3.Transform, error) {
+	values := make([]units.Value, len(s.joints))
+	poses := make([]r3.Transform, len(s.joints))
+	for k, jt := range s.joints {
+		values[k] = jt.dom.label(f)
+		pose, err := jt.pose(values[k])
+		if err != nil {
+			return nil, nil, err
+		}
+		if jt.parent >= 0 {
+			if pose, err = pose.Then(poses[jt.parent]); err != nil {
+				return nil, nil, fmt.Errorf(`%w: composing a link's pose onto its parent's failed: %w`, ErrNotFinite, err)
+			}
+		}
+		poses[k] = pose
+	}
+	return values, poses, nil
+}

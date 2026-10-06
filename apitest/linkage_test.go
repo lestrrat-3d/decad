@@ -1,0 +1,653 @@
+package apitest_test
+
+import (
+	"context"
+	"math"
+	"testing"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// This file holds the PR 1 tests of docs/linkage-check-design.md §11: scene 1
+// (the folding arm), the agreement of a one-link linkage with VerifyMotion,
+// PoseAt's composition, and the standing tests. Bounds are asserted against
+// geometric truths or as small, never pinned to a measured literal: FMA
+// contraction moves the last ulp between amd64 and arm64. The internal tests
+// of the chain bound sit in linkage_internal_test.go.
+//
+// Scene 1's upper arm is the motion arm, x ∈ [0, 48], y ∈ [−14, 14],
+// z ∈ [0, 10], on a revolute joint about Z through the origin sweeping
+// 0° → 90°. Its forearm, x ∈ [48, 96], y ∈ [−14, 14], z ∈ [12, 22], rides
+// under it on a revolute joint about Z through (48, 0, 0) sweeping 0° → −90°.
+// The two sweeps cancel in orientation: at s, with θ = 90°·s, the forearm
+// keeps its zero-pose orientation and translates on the circle of radius 48
+// about the origin, so its top face is the plane y = 48·sin θ + 14.
+
+// foldingArm is scene 1's linkage, with the wall when asked for.
+type foldingArm struct {
+	doc             *decad.Document
+	upper, forearm  *decad.Body
+	wall            *decad.Body
+	linkage         *decad.Linkage
+	shoulder, elbow *decad.Link
+}
+
+func buildFoldingArm(t *testing.T, withWall bool) foldingArm {
+	t.Helper()
+	a := foldingArm{doc: decad.New()}
+	a.upper = boxBody(t, a.doc, 0, -14, 48, 14, 10)
+	a.forearm = boxBodyAtZ(t, a.doc, 48, -14, 96, 14, 12, 10)
+	if withWall {
+		// The wall reaches past every cap, so no pair shares a face plane.
+		a.wall = boxBodyAtZ(t, a.doc, -100, 38, 150, 58, -10, 50)
+	}
+	a.linkage = decad.NewLinkage()
+	var err error
+	a.shoulder, err = a.linkage.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*decad.Body{a.upper})
+	require.NoError(t, err)
+	a.elbow, err = a.shoulder.Revolute(r3.NewVec(48, 0, 0), r3.NewVec(0, 0, 1), []*decad.Body{a.forearm})
+	require.NoError(t, err)
+	return a
+}
+
+func (a foldingArm) drive() decad.Drive {
+	return decad.Drive{
+		{Link: a.shoulder, From: units.Degrees(0), To: units.Degrees(90)},
+		{Link: a.elbow, From: units.Degrees(0), To: units.Degrees(-90)},
+	}
+}
+
+func verifyLinkage(t *testing.T, doc *decad.Document, l *decad.Linkage, d decad.Drive, opts ...decad.MotionOption) *decad.LinkageReport {
+	t.Helper()
+	before := doc.Bodies()
+	report, err := doc.VerifyLinkage(t.Context(), l, d, opts...)
+	require.NoError(t, err)
+	require.Equal(t, before, doc.Bodies(), `VerifyLinkage must leave the live body set and its order unchanged`)
+	return report
+}
+
+// requirePosesArePoseAt asserts every evaluated pose is the one Linkage.PoseAt
+// builds at the same fraction: PoseAt is the one place a linkage pose is built.
+func requirePosesArePoseAt(t *testing.T, report *decad.LinkageReport) {
+	t.Helper()
+	for _, p := range report.Poses {
+		want, err := report.Linkage.PoseAt(report.Drive, p.Pose.At)
+		require.NoError(t, err)
+		require.Equal(t, want, p.Pose)
+	}
+}
+
+// TestVerifyLinkageFoldingArm is scene 1 of docs/linkage-check-design.md §11.
+//
+// The forearm's top face y = 48·sin θ + 14 reaches the wall's face y = 38 at
+// sin θ = 1/2: θ* = 30°, s* = 1/3. The upper arm's far corner (48, 14), at
+// radius 50, reaches it at θ = asin(38/50) − atan(7/24) ≈ 33.2°, later. At
+// WithResolution(1/256) the onset bisection brackets the first collision to
+// the grid point 86/256, where the forearm overlaps the wall in the slab
+// 48 × (48·sin θ − 24) × 10 mm³. The arms never meet: their caps are the
+// parallel planes z = 10 and z = 12, 2 mm apart at every s, and the pair's
+// relative motion is the elbow joint alone, so its certificate is
+// 2 + 2 > 50·(π/2)·Δs, which holds at Δs = 1/32.
+//
+// Leg seen to fail when deleted: summing a link-link pair's τ over the joints
+// strictly below the two links' lowest common ancestor only — leaving the
+// shoulder joint in the arms' travel makes the arms certify only at
+// Δs = 1/128, and the drive evaluates 50 poses against 21 with the leg in
+// place, so the pose-count assertion goes red.
+func TestVerifyLinkageFoldingArm(t *testing.T) {
+	t.Parallel()
+	t.Run("the forearm reaches the wall at one third of the drive", func(t *testing.T) {
+		t.Parallel()
+		a := buildFoldingArm(t, true)
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithResolution(units.Scalar(1.0/256)))
+		sStar := 1.0 / 3
+		sUpper := (math.Asin(38.0/50) - math.Atan(7.0/24)) / (math.Pi / 2)
+
+		require.Equal(t, decad.Interfering, report.Status)
+		require.Same(t, a.linkage, report.Linkage)
+		require.Equal(t, a.drive(), report.Drive)
+		require.Equal(t, []*decad.Link{a.shoulder, a.elbow}, report.Links)
+		require.Equal(t, []*decad.Body{a.wall}, report.Against)
+		require.Equal(t, units.Scalar(1.0/256), report.Request.Resolution)
+		require.Less(t, len(report.Poses), 32, `the arms certify at a step of 1/32 through the elbow joint alone`)
+		requirePosesArePoseAt(t, report)
+
+		require.NotEmpty(t, report.Collisions)
+		first := report.Collisions[0]
+		require.Same(t, a.forearm, first.A)
+		require.Same(t, a.wall, first.B)
+		require.Equal(t, units.Scalar(86.0/256), first.At, `the first grid point above s* = 1/3`)
+		theta := 90.0 * 86 / 256 * math.Pi / 180
+		require.InDelta(t, 480*(48*math.Sin(theta)-24), first.Volume.Value.Mag(), 1e-3)
+		require.Less(t, first.Volume.Bound.Mag(), first.Volume.Value.Mag())
+		for _, c := range report.Collisions {
+			require.Greater(t, c.At.Mag(), sStar)
+			require.Same(t, a.wall, c.B, `the arms never meet`)
+			if c.A == a.upper {
+				require.Greater(t, c.At.Mag(), sUpper)
+			}
+		}
+		for _, iv := range report.Intervals {
+			if iv.Outcome == decad.IntervalClear {
+				require.LessOrEqual(t, iv.To.Mag(), sStar)
+			}
+			if iv.From.Mag() <= sStar && sStar <= iv.To.Mag() {
+				require.NotEqual(t, decad.IntervalClear, iv.Outcome, `the interval holding s* is never clear`)
+			}
+		}
+		arms := 0
+		for _, p := range report.Poses {
+			require.Len(t, p.Pose.Values, 2)
+			require.InDelta(t, 90*p.Pose.At.Mag(), p.Pose.Values[0].Mag(), 1e-12)
+			require.InDelta(t, -90*p.Pose.At.Mag(), p.Pose.Values[1].Mag(), 1e-12)
+			for _, row := range p.Interferences {
+				require.NotSame(t, a.forearm, row.B, `the arms never overlap`)
+			}
+			for _, row := range p.Clearances {
+				if row.A != a.upper || row.B != a.forearm {
+					continue
+				}
+				arms++
+				require.InDelta(t, 2, row.Gap.Value.Mag(), 1e-6)
+				require.LessOrEqual(t, row.Gap.Value.Mag()-row.Gap.Bound.Mag(), 2.0)
+				require.GreaterOrEqual(t, row.Gap.Value.Mag()+row.Gap.Bound.Mag(), 2.0)
+			}
+		}
+		require.Equal(t, len(report.Poses), arms, `the arms' gap is measured at every pose`)
+	})
+	t.Run("without the wall the drive is clear", func(t *testing.T) {
+		t.Parallel()
+		// The arms' interval lower bound is 2 − 25·(π/2)·Δs, so the
+		// whole-drive reading's half-width is about 19.6·Δs mm. At the
+		// default rel = 1e-3 the gate on a 2 mm gap admits 0.002 mm, which
+		// takes Δs ≈ 1e-4; rel = 0.05 admits 0.1 mm, which the default floor
+		// of 1/1024 reaches with room to spare.
+		a := buildFoldingArm(t, false)
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)))
+		require.Equal(t, decad.Sound, report.Status)
+		require.True(t, report.Passed())
+		require.Empty(t, report.Diagnostics)
+		require.Empty(t, report.Against)
+		require.Empty(t, report.Collisions)
+		require.Equal(t, units.Scalar(1.0/1024), report.Request.Resolution)
+		for _, iv := range report.Intervals {
+			require.Equal(t, decad.IntervalClear, iv.Outcome)
+			require.NotNil(t, iv.Clearance)
+			require.LessOrEqual(t, iv.Clearance.Value.Mag(), 2.0, `a proven lower bound never exceeds the true minimum`)
+		}
+		require.NotNil(t, report.Clearance)
+		require.InDelta(t, 2, report.Clearance.Value.Mag(), 0.1)
+		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), 2.0)
+		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 2.0)
+		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+	})
+	t.Run("a 1 mm margin between the arms is met", func(t *testing.T) {
+		t.Parallel()
+		a := buildFoldingArm(t, false)
+		minimum := units.Millimeters(1)
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)), decad.WithMinClearance(minimum))
+		require.Equal(t, decad.AssessmentMet, report.Assessment)
+		require.Equal(t, decad.Sound, report.Status)
+		require.Equal(t, &minimum, report.Request.MinClearance)
+		for _, iv := range report.Intervals {
+			require.GreaterOrEqual(t, iv.Clearance.Value.Mag(), 1.0)
+		}
+	})
+	t.Run("a 3 mm margin between the arms is violated", func(t *testing.T) {
+		t.Parallel()
+		a := buildFoldingArm(t, false)
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)), decad.WithMinClearance(units.Millimeters(3)))
+		require.Equal(t, decad.AssessmentViolated, report.Assessment)
+		require.Equal(t, decad.Violating, report.Status)
+		var violations int
+		for _, d := range report.Diagnostics {
+			if d.Code != decad.DiagMotionClearanceViolated {
+				continue
+			}
+			violations++
+			require.Equal(t, &decad.DiagnosticPair{A: a.upper, B: a.forearm}, d.Pair)
+			require.NotNil(t, d.At)
+			require.Less(t, d.Observed.Value.Mag()+d.Observed.Bound.Mag(), 3.0)
+		}
+		require.Equal(t, len(report.Poses), violations, `the 2 mm gap disproves the margin at every pose`)
+	})
+}
+
+// TestLinkagePoseAt pins the composition Pose_k = J_k(q_k).Then(Pose_parent)
+// on three joints: scene 1's arms and a slider on the forearm, a prismatic
+// joint along +X sweeping 0 → 30 mm. At s = 1/3 the shoulder stands at 30°,
+// the elbow at −30° and the slider at 10 mm. The forearm keeps its zero-pose
+// orientation and rides the elbow's circle, so its far end (96, 0, 0) lands
+// at (48·cos 30° + 48, 48·sin 30°, 0) and the elbow centre (48, 0, 0) at
+// (48·cos 30°, 48·sin 30°, 0); the slider's point (100, 0, 0) slides to
+// (110, 0, 0) and then rides the forearm's pose. Composing the parent's pose
+// first, then the joint about its zero-pose axis, lands (96, 0, 0) elsewhere.
+func TestLinkagePoseAt(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, false)
+	pin := boxBody(t, a.doc, 100, -2, 104, 2, 4)
+	slider, err := a.elbow.Prismatic(r3.NewVec(2, 0, 0), []*decad.Body{pin})
+	require.NoError(t, err)
+	drive := append(a.drive(), decad.JointSweep{Link: slider, From: units.Millimeters(0), To: units.Millimeters(30)})
+	require.Equal(t, []*decad.Link{a.shoulder, a.elbow, slider}, a.linkage.Links())
+	require.Same(t, a.elbow, slider.Parent())
+	require.Equal(t, decad.PrismaticJoint{Dir: r3.NewVec(2, 0, 0)}, slider.Joint())
+	require.Equal(t, decad.RevoluteJoint{Center: r3.NewVec(48, 0, 0), Axis: r3.NewVec(0, 0, 1)}, a.elbow.Joint())
+	require.Equal(t, []*decad.Body{pin}, slider.Bodies())
+	require.Nil(t, a.linkage.Ground().Parent())
+	require.Nil(t, a.linkage.Ground().Joint())
+	require.Empty(t, a.linkage.Ground().Bodies())
+
+	pose, err := a.linkage.PoseAt(drive, units.Scalar(1.0/3))
+	require.NoError(t, err)
+	require.Equal(t, units.Scalar(1.0/3), pose.At)
+	require.Len(t, pose.Values, 3)
+	require.InDelta(t, 30, pose.Values[0].Mag(), 1e-12)
+	require.Equal(t, units.Degree, pose.Values[0].Unit())
+	require.InDelta(t, -30, pose.Values[1].Mag(), 1e-12)
+	require.InDelta(t, 10, pose.Values[2].Mag(), 1e-12)
+	require.Equal(t, units.Millimeter, pose.Values[2].Unit())
+	c, s := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
+	requireNear := func(t *testing.T, want, got r3.Vec) {
+		t.Helper()
+		require.InDelta(t, want.X, got.X, 1e-12)
+		require.InDelta(t, want.Y, got.Y, 1e-12)
+		require.InDelta(t, want.Z, got.Z, 1e-12)
+	}
+	requireNear(t, r3.NewVec(48*c, 48*s, 0), pose.Poses[0].Apply(r3.NewVec(48, 0, 0)))
+	requireNear(t, r3.NewVec(48*c, 48*s, 0), pose.Poses[1].Apply(r3.NewVec(48, 0, 0)))
+	requireNear(t, r3.NewVec(48*c+48, 48*s, 0), pose.Poses[1].Apply(r3.NewVec(96, 0, 0)))
+	requireNear(t, r3.NewVec(48*c+62, 48*s, 0), pose.Poses[2].Apply(r3.NewVec(100, 0, 0)))
+
+	t.Run("the ends are the stated values and an unlisted joint holds 0", func(t *testing.T) {
+		t.Parallel()
+		end, err := a.linkage.PoseAt(a.drive(), units.Scalar(1))
+		require.NoError(t, err)
+		require.Equal(t, units.Degrees(90), end.Values[0])
+		require.Equal(t, units.Degrees(-90), end.Values[1])
+		require.Zero(t, end.Values[2].Mag())
+		require.Equal(t, units.Length, end.Values[2].Kind())
+		requireNear(t, r3.NewVec(52, 48, 0), end.Poses[2].Apply(r3.NewVec(100, 0, 0)))
+		beyond, err := a.linkage.PoseAt(a.drive(), units.Scalar(2))
+		require.NoError(t, err, `PoseAt takes no range`)
+		require.InDelta(t, 180, beyond.Values[0].Mag(), 1e-12)
+	})
+
+	other := buildFoldingArm(t, false)
+	refusals := []struct {
+		name  string
+		l     *decad.Linkage
+		drive decad.Drive
+		at    units.Value
+		want  error
+	}{
+		{"nil linkage", nil, nil, units.Scalar(0), decad.ErrDegenerate},
+		{"a sweep naming no link", a.linkage, decad.Drive{{From: units.Degrees(0), To: units.Degrees(1)}}, units.Scalar(0), decad.ErrDegenerate},
+		{"a sweep naming the ground", a.linkage, decad.Drive{{Link: a.linkage.Ground(), From: units.Degrees(0), To: units.Degrees(1)}}, units.Scalar(0), decad.ErrDegenerate},
+		{"a link of another linkage", a.linkage, decad.Drive{{Link: other.shoulder, From: units.Degrees(0), To: units.Degrees(1)}}, units.Scalar(0), decad.ErrDegenerate},
+		{"a link named twice", a.linkage, append(a.drive(), a.drive()[0]), units.Scalar(0), decad.ErrDegenerate},
+		{"a length on a revolute", a.linkage, decad.Drive{{Link: a.shoulder, From: units.Millimeters(0), To: units.Degrees(1)}}, units.Scalar(0), decad.ErrUnitKind},
+		{"an angle on a prismatic", a.linkage, decad.Drive{{Link: slider, From: units.Millimeters(0), To: units.Degrees(1)}}, units.Scalar(0), decad.ErrUnitKind},
+		{"a non-finite sweep", a.linkage, decad.Drive{{Link: a.shoulder, From: units.Degrees(0), To: units.Degrees(math.NaN())}}, units.Scalar(0), decad.ErrNotFinite},
+		{"an angle as the fraction", a.linkage, a.drive(), units.Degrees(1), decad.ErrUnitKind},
+		{"a non-finite fraction", a.linkage, a.drive(), units.Scalar(math.Inf(1)), decad.ErrNotFinite},
+	}
+	for _, tc := range refusals {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := tc.l.PoseAt(tc.drive, tc.at)
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+// TestLinkageConstructorRefusals is one subtest per refusal of
+// docs/linkage-check-design.md §2.1, in the order the constructors check them.
+func TestLinkageConstructorRefusals(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	body := boxBody(t, doc, 0, 0, 10, 10, 10)
+	free := boxBody(t, doc, 20, 0, 30, 10, 10)
+	l := decad.NewLinkage()
+	_, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{body})
+	require.NoError(t, err)
+	z := r3.NewVec(0, 0, 1)
+	var nilLink *decad.Link
+	cases := []struct {
+		name string
+		make func() (*decad.Link, error)
+		want error
+	}{
+		{"nil parent", func() (*decad.Link, error) { return nilLink.Revolute(r3.Vec{}, z, []*decad.Body{free}) }, decad.ErrDegenerate},
+		{"a link no linkage built", func() (*decad.Link, error) { return (&decad.Link{}).Prismatic(z, []*decad.Body{free}) }, decad.ErrDegenerate},
+		{"no body", func() (*decad.Link, error) { return l.Ground().Revolute(r3.Vec{}, z, nil) }, decad.ErrDegenerate},
+		{"a nil body", func() (*decad.Link, error) { return l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{nil}) }, decad.ErrDegenerate},
+		{"a body listed twice", func() (*decad.Link, error) { return l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{free, free}) }, decad.ErrDegenerate},
+		{"a body already in a link", func() (*decad.Link, error) { return l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{body}) }, decad.ErrDegenerate},
+		{"a non-finite center", func() (*decad.Link, error) {
+			return l.Ground().Revolute(r3.NewVec(math.NaN(), 0, 0), z, []*decad.Body{free})
+		}, decad.ErrNotFinite},
+		{"a non-finite axis", func() (*decad.Link, error) {
+			return l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, math.Inf(1)), []*decad.Body{free})
+		}, decad.ErrNotFinite},
+		{"a non-finite direction", func() (*decad.Link, error) {
+			return l.Ground().Prismatic(r3.NewVec(math.Inf(-1), 0, 0), []*decad.Body{free})
+		}, decad.ErrNotFinite},
+		{"a zero axis", func() (*decad.Link, error) { return l.Ground().Revolute(r3.Vec{}, r3.Vec{}, []*decad.Body{free}) }, decad.ErrDegenerate},
+		{"a zero direction", func() (*decad.Link, error) { return l.Ground().Prismatic(r3.Vec{}, []*decad.Body{free}) }, decad.ErrDegenerate},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			link, err := tc.make()
+			require.ErrorIs(t, err, tc.want)
+			require.Nil(t, link)
+			require.Len(t, l.Links(), 1, `a refused link is never attached`)
+		})
+	}
+}
+
+// TestVerifyLinkageAgreesWithVerifyMotion is §11's agreement test: a one-link
+// linkage on a revolute joint and the same body under the equivalent
+// Revolute, on motion §9's fixtures 1 (a wall the arm hits), 2 (a wall it
+// clears by 10 mm) and 4 (a stop it rests on). The one-link τ is
+// ρ_{11}·|Δq_1|, which is MoverTravel's value, and the ideal pose is one
+// MotionFrame.At, so the two paths read the same bounds and evaluate the same
+// poses at s = θ/90°.
+//
+// Leg seen to fail when deleted: the link's own revolute term ρ_{kk}·|Δq_k|
+// in τ (fixture 2's swing certifies at the endpoints, so the interval
+// outcomes and pose counts part from VerifyMotion's).
+func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		static     func(t *testing.T, doc *decad.Document)
+		motionRes  []decad.MotionOption
+		linkageRes []decad.MotionOption
+	}{
+		{"a wall the arm hits", func(t *testing.T, doc *decad.Document) { boxBodyAtZ(t, doc, -100, 40, 100, 60, -10, 40) },
+			[]decad.MotionOption{decad.WithResolution(units.Degrees(0.25))}, []decad.MotionOption{decad.WithResolution(units.Scalar(0.25 / 90))}},
+		{"a wall the arm clears", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, -100, 60, 100, 80, 10) }, nil, nil},
+		{"a stop the arm rests on", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, 0, -24, 48, -14, 10) }, nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			arm := motionArm(t, doc)
+			tc.static(t, doc)
+			motion := verifyMotion(t, doc, []*decad.Body{arm}, armSwing(), tc.motionRes...)
+
+			l := decad.NewLinkage()
+			link, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*decad.Body{arm})
+			require.NoError(t, err)
+			drive := decad.Drive{{Link: link, From: units.Degrees(0), To: units.Degrees(90)}}
+			linkage := verifyLinkage(t, doc, l, drive, tc.linkageRes...)
+
+			require.Equal(t, motion.Status, linkage.Status)
+			require.Equal(t, motion.Against, linkage.Against)
+			require.Len(t, linkage.Poses, len(motion.Poses))
+			require.Len(t, linkage.Intervals, len(motion.Intervals))
+			for k, iv := range motion.Intervals {
+				got := linkage.Intervals[k]
+				require.Equal(t, iv.Outcome, got.Outcome)
+				require.InDelta(t, iv.From.Mag(), 90*got.From.Mag(), 1e-9)
+				if iv.Clearance == nil {
+					require.Nil(t, got.Clearance)
+					continue
+				}
+				require.NotNil(t, got.Clearance)
+				require.InDelta(t, iv.Clearance.Value.Mag(), got.Clearance.Value.Mag(), 1e-9)
+			}
+			require.Len(t, linkage.Collisions, len(motion.Collisions))
+			for k, c := range motion.Collisions {
+				got := linkage.Collisions[k]
+				require.InDelta(t, c.At.Mag(), 90*got.At.Mag(), 1e-9)
+				require.Same(t, c.Moving, got.A)
+				require.Same(t, c.Static, got.B)
+				require.InDelta(t, c.Volume.Value.Mag(), got.Volume.Value.Mag(), 1e-9)
+			}
+			if motion.Clearance == nil {
+				require.Nil(t, linkage.Clearance)
+			} else {
+				require.NotNil(t, linkage.Clearance)
+				require.InDelta(t, motion.Clearance.Value.Mag(), linkage.Clearance.Value.Mag(), 1e-9)
+			}
+			first, linkFirst := motion.Poses[0], linkage.Poses[0]
+			require.Len(t, linkFirst.Clearances, len(first.Clearances))
+			for k, row := range first.Clearances {
+				require.Equal(t, row.Gap, linkFirst.Clearances[k].Gap, `the zero pose carries no placement rounding on either path`)
+			}
+		})
+	}
+}
+
+// TestVerifyLinkagePoseDeviationIsCharged: an arm swings 90° about a pivot
+// (cx, 0, 0), and a block rides past its tip on a prismatic joint the drive
+// leaves at 0, so the block's pose is its joint's identity composed onto the
+// arm's. A wall stands 10 mm beyond the block at the end of the swing. The
+// far pivot's pose rounds at its magnitude, and the block's row carries that
+// rounding through the composition: its gap bound at cx = 1e6 exceeds the
+// one at cx = 0, and both stay inside the tolerance gate.
+func TestVerifyLinkagePoseDeviationIsCharged(t *testing.T) {
+	t.Parallel()
+	endBound := func(t *testing.T, cx float64) float64 {
+		t.Helper()
+		doc := decad.New()
+		arm := boxBody(t, doc, cx, -14, cx+48, 14, 10)
+		block := boxBody(t, doc, cx+50, -4, cx+58, 4, 10)
+		// At 90° about (cx, 0, 0) the block spans y ∈ [50, 58]: the wall
+		// stands 10 mm beyond it.
+		wall := boxBody(t, doc, cx-20, 68, cx+20, 78, 10)
+		l := decad.NewLinkage()
+		swing, err := l.Ground().Revolute(r3.NewVec(cx, 0, 0), r3.NewVec(0, 0, 1), []*decad.Body{arm})
+		require.NoError(t, err)
+		_, err = swing.Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{block})
+		require.NoError(t, err)
+		report := verifyLinkage(t, doc, l, decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}},
+			decad.WithResolution(units.Scalar(1)))
+		end := report.Poses[len(report.Poses)-1]
+		for _, row := range end.Clearances {
+			if row.A != block || row.B != wall {
+				continue
+			}
+			require.LessOrEqual(t, row.Gap.Value.Mag()-row.Gap.Bound.Mag(), 10.0)
+			require.GreaterOrEqual(t, row.Gap.Value.Mag()+row.Gap.Bound.Mag(), 10.0)
+			require.Less(t, row.Gap.Bound.Mag(), 1e-3*10, `the bound passes the default gate at a 10 mm gap`)
+			return row.Gap.Bound.Mag()
+		}
+		require.Fail(t, `the block's row against the wall is missing`)
+		return 0
+	}
+	near := endBound(t, 0)
+	far := endBound(t, 1e6)
+	require.Greater(t, near, 0.0)
+	require.Greater(t, far, near)
+}
+
+// TestVerifyLinkageErrors is one subtest per row of
+// docs/linkage-check-design.md §8's table that PR 1's public API can reach,
+// each asserting the sentinel, no report, and an unchanged document. The row
+// for a body this evaluator did not build lives in linkage_internal_test.go.
+func TestVerifyLinkageErrors(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, true)
+	doc := a.doc
+	retired := boxBody(t, doc, 200, 200, 210, 210, 10)
+	translated(t, retired, 0, 0, 100)
+	foreign := boxBody(t, decad.New(), 0, 0, 10, 10, 10)
+	withBody := func(b *decad.Body) *decad.Linkage {
+		l := decad.NewLinkage()
+		_, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{b})
+		require.NoError(t, err)
+		return l
+	}
+	slide := func(l *decad.Linkage) decad.Drive {
+		return decad.Drive{{Link: l.Links()[0], From: units.Millimeters(0), To: units.Millimeters(1)}}
+	}
+	retiredLinkage, foreignLinkage := withBody(retired), withBody(foreign)
+	far := decad.NewLinkage()
+	farLink, err := far.Ground().Revolute(r3.NewVec(math.MaxFloat64, math.MaxFloat64, 0), r3.NewVec(0, 0, 1), []*decad.Body{a.upper})
+	require.NoError(t, err)
+	other := buildFoldingArm(t, false)
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	held := decad.Drive{{Link: a.shoulder, From: units.Degrees(30), To: units.Degrees(30)}}
+	opt := func(o decad.MotionOption) []decad.MotionOption { return []decad.MotionOption{o} }
+
+	cases := []struct {
+		name  string
+		ctx   context.Context //nolint:containedctx // a table of per-case contexts.
+		l     *decad.Linkage
+		drive decad.Drive
+		opts  []decad.MotionOption
+		want  error
+	}{
+		{name: "nil linkage", drive: a.drive(), want: decad.ErrDegenerate},
+		{name: "a linkage with no link", l: decad.NewLinkage(), want: decad.ErrDegenerate},
+		{name: "an empty drive", l: a.linkage, want: decad.ErrDegenerate},
+		{name: "a drive whose every sweep holds", l: a.linkage, drive: held, want: decad.ErrDegenerate},
+		{name: "a drive whose sweep holds across units", l: a.linkage, drive: decad.Drive{{Link: a.shoulder, From: units.Degrees(0), To: units.Radians(0)}}, want: decad.ErrDegenerate},
+		{name: "a link named twice", l: a.linkage, drive: append(a.drive(), a.drive()[1]), want: decad.ErrDegenerate},
+		{name: "a link of another linkage", l: a.linkage, drive: decad.Drive{{Link: other.elbow, From: units.Degrees(0), To: units.Degrees(1)}}, want: decad.ErrDegenerate},
+		{name: "a retired link body", l: retiredLinkage, drive: slide(retiredLinkage), want: decad.ErrRetiredBody},
+		{name: "a foreign link body", l: foreignLinkage, drive: slide(foreignLinkage), want: decad.ErrForeignBody},
+		{name: "a wrong-kind sweep", l: a.linkage, drive: decad.Drive{{Link: a.shoulder, From: units.Millimeters(0), To: units.Millimeters(1)}}, want: decad.ErrUnitKind},
+		{name: "a wrong-kind resolution", l: a.linkage, drive: a.drive(), opts: opt(decad.WithResolution(units.Degrees(1))), want: decad.ErrUnitKind},
+		{name: "a wrong-kind tolerance", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMotionTolerance(units.Millimeters(1))), want: decad.ErrUnitKind},
+		{name: "a wrong-kind minimum", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMinClearance(units.Degrees(1))), want: decad.ErrUnitKind},
+		{name: "a non-finite sweep", l: a.linkage, drive: decad.Drive{{Link: a.shoulder, From: units.Degrees(math.Inf(-1)), To: units.Degrees(1)}}, want: decad.ErrNotFinite},
+		{name: "a non-finite resolution", l: a.linkage, drive: a.drive(), opts: opt(decad.WithResolution(units.Scalar(math.NaN()))), want: decad.ErrNotFinite},
+		{name: "a pose r3 cannot represent", l: far, drive: decad.Drive{{Link: farLink, From: units.Degrees(0), To: units.Degrees(90)}}, want: decad.ErrNotFinite},
+		{name: "a negative resolution", l: a.linkage, drive: a.drive(), opts: opt(decad.WithResolution(units.Scalar(-1))), want: decad.ErrNegativeMagnitude},
+		{name: "a zero resolution", l: a.linkage, drive: a.drive(), opts: opt(decad.WithResolution(units.Scalar(0))), want: decad.ErrNegativeMagnitude},
+		{name: "a negative tolerance", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMotionTolerance(units.Scalar(-1))), want: decad.ErrNegativeMagnitude},
+		{name: "a negative minimum", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMinClearance(units.Millimeters(-1))), want: decad.ErrNegativeMagnitude},
+		{name: "a zero minimum", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMinClearance(units.Millimeters(0))), want: decad.ErrDegenerate},
+		{name: "validation wins over a canceled context", ctx: canceled, l: a.linkage, drive: held, want: decad.ErrDegenerate},
+		{name: "canceled after validation", ctx: canceled, l: a.linkage, drive: a.drive(), want: context.Canceled},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := tc.ctx
+			if ctx == nil {
+				ctx = t.Context()
+			}
+			before := doc.Bodies()
+			report, err := doc.VerifyLinkage(ctx, tc.l, tc.drive, tc.opts...)
+			require.ErrorIs(t, err, tc.want)
+			require.Nil(t, report)
+			require.Equal(t, before, doc.Bodies())
+		})
+	}
+	t.Run("nil document", func(t *testing.T) {
+		var nilDoc *decad.Document
+		report, err := nilDoc.VerifyLinkage(t.Context(), a.linkage, a.drive())
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Nil(t, report)
+	})
+}
+
+// TestVerifyLinkageNonMutationAndDeterminism is §11's standing test, as
+// motion §9 test 7: the live body set and its order survive the call, and two
+// calls on the same inputs return reports equal in every field. The producer
+// identity half lives in linkage_internal_test.go, which can read it.
+func TestVerifyLinkageNonMutationAndDeterminism(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, true)
+	before := a.doc.Bodies()
+	first := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithResolution(units.Scalar(1.0/64)))
+	second := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithResolution(units.Scalar(1.0/64)))
+	require.Equal(t, before, a.doc.Bodies())
+	require.Equal(t, first, second)
+}
+
+// TestVerifyLinkageCancellation: a context canceled at successively later
+// checks after validation — through the endpoints and on through the
+// bisection of scene 1 — returns ctx.Err() and no report, and leaves the
+// document unchanged.
+func TestVerifyLinkageCancellation(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, true)
+	before := a.doc.Bodies()
+	var completed *decad.LinkageReport
+	canceled := 0
+	for limit := int32(1); limit <= 1<<24; limit += 1 + limit/2 {
+		ctx := newCancelAfterContext(t.Context(), limit)
+		report, err := a.doc.VerifyLinkage(ctx, a.linkage, a.drive(), decad.WithResolution(units.Scalar(1.0/256)))
+		require.Equal(t, before, a.doc.Bodies())
+		if err == nil {
+			completed = report
+			break
+		}
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, report)
+		canceled++
+	}
+	require.NotNil(t, completed, `the check finishes once the context outlasts it`)
+	require.Greater(t, len(completed.Poses), 2, `the probed checks reach into bisection`)
+	require.Greater(t, canceled, 10)
+}
+
+// TestVerifyLinkageSweptBoxExclusion: a far body changes nothing but the
+// static set. Scene 1 with a block at x ∈ [500, 510] lists the block in
+// Against and in no pose row, and the report's Status, poses and collisions
+// match scene 1's own.
+func TestVerifyLinkageSweptBoxExclusion(t *testing.T) {
+	t.Parallel()
+	plain := buildFoldingArm(t, true)
+	want := verifyLinkage(t, plain.doc, plain.linkage, plain.drive(), decad.WithResolution(units.Scalar(1.0/256)))
+
+	a := buildFoldingArm(t, true)
+	far := boxBody(t, a.doc, 500, -14, 510, 14, 10)
+	report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithResolution(units.Scalar(1.0/256)))
+	require.Equal(t, []*decad.Body{a.wall, far}, report.Against)
+	for _, p := range report.Poses {
+		for _, row := range p.Clearances {
+			require.NotSame(t, far, row.B)
+		}
+		for _, row := range p.Interferences {
+			require.NotSame(t, far, row.B)
+		}
+		for _, d := range p.Diagnostics {
+			require.Nil(t, d.Pair)
+		}
+	}
+	require.Equal(t, want.Status, report.Status)
+	require.Len(t, report.Poses, len(want.Poses))
+	require.Len(t, report.Collisions, len(want.Collisions))
+	for k, c := range want.Collisions {
+		require.Equal(t, c.At, report.Collisions[k].At)
+		require.Equal(t, c.Volume, report.Collisions[k].Volume)
+	}
+}
+
+// TestVerifyLinkageSweptBoxCoversAncestorTravel pins how far a link body's
+// swept box reaches. The shoulder of scene 1 swings from 80° to 90° and the
+// elbow holds 0, so the forearm turns rigidly with the upper arm about the
+// origin. A wall at y ∈ [60, 80] lies 46 mm beyond the forearm's zero-pose
+// box, past anything its own joint moves it, and past the shoulder's travel
+// across [80°, 90°] alone — but the forearm overlaps it at both ends. The box
+// must grow by the travel from the zero pose through every joint on the
+// forearm's path, ρ_12·90°.
+//
+// Legs seen to fail when deleted: the reach measured from the zero pose
+// rather than across [From, To] (the wall is excluded and the report reads
+// Sound over two collisions), and the ancestor joints' terms of the reach.
+func TestVerifyLinkageSweptBoxCoversAncestorTravel(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, false)
+	wall := boxBodyAtZ(t, a.doc, -50, 60, 50, 80, -10, 50)
+	report := verifyLinkage(t, a.doc, a.linkage, decad.Drive{{Link: a.shoulder, From: units.Degrees(80), To: units.Degrees(90)}})
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Collisions, 2)
+	for _, c := range report.Collisions {
+		require.Same(t, a.forearm, c.A)
+		require.Same(t, wall, c.B)
+	}
+	require.Equal(t, units.Scalar(0), report.Collisions[0].At)
+	require.Equal(t, units.Scalar(1), report.Collisions[1].At)
+}

@@ -976,3 +976,9 @@
 2	0.55	TestRotationalSweepRadiusMatchesPerCornerForm
 2	0.01	TestSweepRadiusMemoEvictsOldest
 2	0.50	TestSweepRunMemoChangesNoReport
+1	0.01	TestLinkageBallReading
+1	0.01	TestLinkageChainTravel
+2	0.01	TestLinkageIdealPoseComposesTheChain
+2	0.02	TestLinkagePairGapCarriesBothDeviations
+3	0.01	TestVerifyLinkageKeepsTheNextProducerIdentity
+3	0.00	TestVerifyLinkageRefusesABodyItDidNotBuild

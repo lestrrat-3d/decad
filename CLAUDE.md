@@ -14,8 +14,7 @@ interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
 **Current state: the public API is landing incrementally against approved
-designs.** Unshipped APIs remain design-only. Collision dynamics:
-`docs/collision-dynamics-design.md`.
+designs.** Unshipped APIs remain design-only.
 `docs/api-design.md` is the core contract for the whole surface.
 `docs/layout.md` lists every companion design and every root file with what
 each owns.
@@ -27,6 +26,7 @@ each owns.
 | Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
 | Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout.md` |
 | Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md`, `docs/multibody-dynamics-design.md` |
+| Linkages and joints | `docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
 | STEP export | `docs/step-export-design.md` |

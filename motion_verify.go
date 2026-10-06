@@ -16,10 +16,22 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.VerifyMotion (docs/motion-check-design.md §3, §5-§8):
-// validation, the swept-box exclusion, the per-pose pair proof over transient
-// placements, the two-sided interval certificate, and the report assembly.
-// motion.go owns the vocabulary and motion_bound.go the bounds.
+// This file is Document.VerifyMotion (docs/motion-check-design.md §3, §5-§8)
+// and the engine it shares with Document.VerifyLinkage
+// (docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
+// per-pose pair proof over transient placements, the two-sided interval
+// certificate, and the report assembly. motion.go owns the vocabulary and
+// motion_bound.go the bounds; linkage_verify.go drives the same engine over a
+// chain of joints.
+//
+// The engine moves one or more GROUPS of bodies, each group rigid under one
+// pose per parameter, against every other live body of the document. A
+// VerifyMotion call is one group under one Motion; a VerifyLinkage call is one
+// group per link. A pair is a moving body and a static body, or two moving
+// bodies of different groups; two bodies of one group form no pair, since a
+// shared rigid motion preserves their relation. The driver (motionDriver)
+// supplies each group's float and ideal poses at a parameter and each pair's
+// travel bound across an interval; everything else is the engine's.
 //
 // The check evaluates the two endpoints, then bisects on a dyadic grid of the
 // path (§6): first for the verdict, until every interval is certified clear,
@@ -37,34 +49,47 @@ import (
 // never committed, never published, and its provenance is never read back.
 const transientProducer producerID = -1
 
+// motionDomain is the parameter a check bisects: its Kind, its two endpoints
+// as stated, and their exact denotations. A Motion's domain is its own From
+// and To; a linkage drive's is the Dimensionless fraction [0, 1], exactly a
+// Between's (fractionDomain).
+type motionDomain struct {
+	quantity   units.Kind
+	from, to   units.Value
+	fromP, toP motionbound.MotionParam
+}
+
+// paramKind is the Kind the parameter, and so its resolution, is stated in.
+func (s motionDomain) paramKind() units.Kind {
+	return s.quantity
+}
+
+// fractionDomain is the Dimensionless fraction s ∈ [0, 1] a Between and a
+// linkage drive both run over.
+func fractionDomain() motionDomain {
+	return motionDomain{
+		quantity: units.Dimensionless,
+		from:     units.Scalar(0),
+		to:       units.Scalar(1),
+		fromP:    motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)},
+		toP:      motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, 1)},
+	}
+}
+
 // motionSpec is a validated Motion read into the fields every pose and bound
 // is built from. A Between's parameter runs over the dimensionless fraction
 // [0, 1], so its from and to are units.Scalar(0) and units.Scalar(1), and
 // between and screw carry its poses and the screw r3 reads off them.
 type motionSpec struct {
-	motion     Motion
-	kind       motionbound.MotionKind
-	center     r3.Vec
-	axis       r3.Vec
-	dir        r3.Vec
-	between    Between
-	screw      r3.Screw
-	from, to   units.Value
-	fromP, toP motionbound.MotionParam
-	frame      motionbound.MotionFrame
-}
-
-// paramKind is the Kind the motion's parameter, and so its resolution, is
-// stated in.
-func (s motionSpec) paramKind() units.Kind {
-	switch s.kind {
-	case motionbound.MotionRevolute:
-		return units.Angle
-	case motionbound.MotionBetween:
-		return units.Dimensionless
-	default:
-		return units.Length
-	}
+	motionDomain
+	motion  Motion
+	kind    motionbound.MotionKind
+	center  r3.Vec
+	axis    r3.Vec
+	dir     r3.Vec
+	between Between
+	screw   r3.Screw
+	frame   motionbound.MotionFrame
 }
 
 // resolveMotion validates m (docs/motion-check-design.md §2, §8): the
@@ -77,7 +102,8 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionbound.MotionRevolute, center: mv.Center, axis: mv.Axis, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionbound.MotionRevolute, center: mv.Center, axis: mv.Axis,
+			motionDomain: motionDomain{quantity: units.Angle, from: mv.From, to: mv.To}}
 	case *Revolute:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -87,7 +113,8 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionbound.MotionPrismatic, dir: mv.Dir, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionbound.MotionPrismatic, dir: mv.Dir,
+			motionDomain: motionDomain{quantity: units.Length, from: mv.From, to: mv.To}}
 	case *Prismatic:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -98,7 +125,8 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionbound.MotionBetween, between: mv, screw: sc, from: units.Scalar(0), to: units.Scalar(1)}
+		spec = motionSpec{kind: motionbound.MotionBetween, between: mv, screw: sc,
+			motionDomain: motionDomain{quantity: units.Dimensionless, from: units.Scalar(0), to: units.Scalar(1)}}
 	case *Between:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -136,9 +164,9 @@ func resolveMotion(m Motion) (motionSpec, error) {
 // carried in From's unit. When that value underflows in From's unit or its
 // base unit, it returns the smallest positive resolution in From's unit
 // accepted by WithResolution and reports clamped so the check uses that floor.
-func (s motionSpec) defaultResolution() (units.Value, bool) {
+func (s motionDomain) defaultResolution() (units.Value, bool) {
 	var d *big.Rat
-	if s.kind == motionbound.MotionPrismatic {
+	if s.quantity == units.Length {
 		// The exact base-unit difference survives conversion that could round
 		// two distinct endpoints to the same float in From's unit.
 		d = new(big.Rat).Sub(s.toP.Base, s.fromP.Base)
@@ -181,7 +209,7 @@ func (s motionSpec) defaultResolution() (units.Value, bool) {
 // defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
 // exact rationals: never zero for a validated motion, and exactly one
 // dyadic step of depth ten whatever units From and To were stated in.
-func (s motionSpec) defaultResolutionParam() motionbound.MotionParam {
+func (s motionDomain) defaultResolutionParam() motionbound.MotionParam {
 	part := func(a, b *big.Rat) *big.Rat {
 		d := new(big.Rat).Sub(b, a)
 		d.Abs(d)
@@ -197,7 +225,7 @@ func (s motionSpec) defaultResolutionParam() motionbound.MotionParam {
 // bound is built from the exact parameter fromP.lerp(toP, f), and
 // motionbound.PoseDeviation charges whatever separates the pose PoseAt builds from this
 // label and the ideal pose at f.
-func (s motionSpec) label(f *big.Rat) units.Value {
+func (s motionDomain) label(f *big.Rat) units.Value {
 	switch {
 	case f.Sign() == 0:
 		return s.from
@@ -314,32 +342,66 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	}
 	run := &motionRun{ctx: ctx, d: d, spec: spec, cfg: cfg, cache: &bodyGeomCache{}}
 	run.setup(moving)
-	return run.execute()
+	poses, spans, err := run.refine()
+	if err != nil {
+		return nil, err
+	}
+	return run.publish(poses, spans), nil
 }
 
-// motionRun is one VerifyMotion call's working state. It lives in the call
-// alone, never on the Document.
+// motionRun is one call's working state, for VerifyMotion and VerifyLinkage
+// alike. It lives in the call alone, never on the Document.
 type motionRun struct {
-	ctx       context.Context //nolint:containedctx // motionRun is per-call state and never outlives VerifyMotion.
+	ctx       context.Context //nolint:containedctx // motionRun is per-call state and never outlives its call.
 	d         *Document
 	transient *Document // per-call identity counters for uncommitted pose bodies
-	spec      motionSpec
+	dom       motionDomain
 	cfg       motionConfig
 	cache     *bodyGeomCache
-	movers    []motionMover
-	statics   []motionStatic
-	pairs     [][]motionPair // [mover][static]
-	// stretch and stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
+	drive     motionDriver
+	movers    []motionMover  // every moving body, group by group
+	statics   []motionStatic // every other live body, in Document.Bodies() order
+	// pairs is, per mover, its row of pairs in pair order: every static body
+	// in order, then every body of every later group in order.
+	pairs [][]motionPair
+
+	// VerifyMotion's own motion. spec is the validated Motion; stretch and
+	// stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
 	// pose before the end and for the end itself: exactly 1 for a Revolute
-	// and a Prismatic; motionbound.BasisSigmaUpper of From, and at s = 1 the larger of
-	// From's and To's, for a Between.
+	// and a Prismatic; motionbound.BasisSigmaUpper of From, and at s = 1 the
+	// larger of From's and To's, for a Between.
+	spec                motionSpec
 	stretch, stretchEnd float64
+}
+
+// motionDriver is what a check's moving groups answer for: their poses at a
+// parameter and a pair's travel bound across an interval.
+type motionDriver interface {
+	// posesAt builds every group's pose at fraction f of the path, published
+	// as the parameter at, whose exact denotation is param.
+	posesAt(f *big.Rat, at units.Value, param motionbound.MotionParam) ([]motionGroupPose, error)
+	// travel is a proven upper bound, as an exact rational, on how much the
+	// distance between the two bodies of pair k of mover i can change while
+	// the parameter runs from a to b; nil when no bound exists.
+	travel(i, k int, a, b motionbound.MotionParam) *big.Rat
+}
+
+// motionGroupPose is one moving group's pose at one parameter: the float
+// transform composed onto each of its bodies' own placements, the ideal poses
+// η is charged against, PathAreaUpper's stretch base, and, for a linkage, the
+// joint value of the group's link.
+type motionGroupPose struct {
+	pose    r3.Transform
+	ideals  []motionbound.IdealPose
+	stretch float64
+	value   units.Value
 }
 
 type motionMover struct {
 	body     *Body
+	group    int
 	validity ValidityResult
-	rho      float64 // ρ_max; revolute and between only
+	rho      float64 // ρ_max under VerifyMotion's revolute or between motion
 	r0       float64 // the record radius motionbound.PoseDeviation charges at
 	area     float64 // a proven upper bound on the mover's surface area at rest
 	sigma    float64 // a proven lower bound on its placement's smallest singular value
@@ -350,8 +412,11 @@ type motionStatic struct {
 	validity ValidityResult
 }
 
-// motionPair is one (mover, static) pair's standing for the whole call.
+// motionPair is one pair's standing for the whole call.
 type motionPair struct {
+	// other is the partner mover's index, or −1 when the partner is the
+	// static body at the pair's own position in its row.
+	other int
 	// excluded: the swept-box exclusion proved the pair apart over the whole
 	// path, with lower a proven lower bound on its distance throughout.
 	excluded bool
@@ -366,9 +431,16 @@ type motionPair struct {
 
 func (p motionPair) evaluated() bool { return !p.excluded && !p.invalid && !p.sheet }
 
+// motionSweptBox is one mover's swept box over the whole path, as exact
+// rational extremes per axis; ok is false when none could be formed.
+type motionSweptBox struct {
+	lo, hi motionbound.RatVec
+	ok     bool
+}
+
 // motionPairPose is one pair's answer at one pose. A gap is a proven interval
-// [lo, hi] on the distance between the IDEAL placed mover and the static
-// body, η already charged.
+// [lo, hi] on the distance between the IDEAL placed bodies, η already
+// charged.
 type motionPairPose struct {
 	hasGap    bool
 	lo, hi    float64
@@ -376,10 +448,14 @@ type motionPairPose struct {
 	collision bool
 }
 
-// motionPose is one evaluated pose.
+// motionPose is one evaluated pose. result carries the pose's rows in
+// PoseResult's shape, with Pose the first group's pose — the whole pose for
+// VerifyMotion's one group. collisions name the moving body as Moving and its
+// partner, static or moving, as Static.
 type motionPose struct {
 	f          *big.Rat
 	param      motionbound.MotionParam
+	groups     []motionGroupPose
 	violated   bool // some pair's gap here is proven below the requested minimum
 	result     PoseResult
 	pairs      [][]motionPairPose
@@ -387,40 +463,31 @@ type motionPose struct {
 	collisions []Collision
 }
 
+// motionPlaced is one mover's transient placement at one pose, with the pose
+// deviation η it carries and the swept-volume allowance a collision on it
+// must clear.
+type motionPlaced struct {
+	body      *Body
+	eta       float64
+	allowance float64
+}
+
+// setup reads VerifyMotion's one moving group: ρ_max for a revolute or a
+// between, the stretch bases, and the swept box each mover's exclusion
+// compares the static bodies against.
 func (r *motionRun) setup(moving []*Body) {
-	// Payload rebuilding mints level and curve denotations. Start above every
-	// live identity, then mint only on this copy: successive pose bodies stay
-	// distinct from static geometry without changing the caller's document.
-	live := r.d.liveBodies()
-	r.transient = &Document{
-		bodies:       live,
-		nextProducer: r.d.nextProducer,
-		nextLevel:    r.d.nextLevel,
-		nextCurve:    r.d.nextCurve,
-	}
-	isMover := make(map[*Body]struct{}, len(moving))
-	for _, b := range moving {
-		isMover[b] = struct{}{}
-		r.movers = append(r.movers, motionMover{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
-	}
-	for _, b := range live {
-		if _, ok := isMover[b]; ok {
-			continue
-		}
-		r.statics = append(r.statics, motionStatic{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
-	}
+	r.dom = r.spec.motionDomain
+	r.drive = singleMotion{r: r}
+	r.readBodies([][]*Body{moving})
 	r.stretch, r.stretchEnd = 1, 1
 	if r.spec.kind == motionbound.MotionBetween {
 		r.stretch = motionbound.BasisSigmaUpper(r.spec.between.From)
 		r.stretchEnd = math.Max(r.stretch, motionbound.BasisSigmaUpper(r.spec.between.To))
 	}
 	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
-	r.pairs = make([][]motionPair, len(r.movers))
+	swept := make([]motionSweptBox, len(r.movers))
 	for i := range r.movers {
 		mv := &r.movers[i]
-		mv.r0 = moverRecordRadius(r.ctx, mv.body)
-		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
-		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
 		if r.spec.kind != motionbound.MotionPrismatic {
 			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
 		}
@@ -433,25 +500,128 @@ func (r *motionRun) setup(moving []*Body) {
 			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
 			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
 		)
-		sweptLo, sweptHi, sweptOK := moverSweptBox(mv.body.bounds, r.spec.frame, travel)
-		r.pairs[i] = make([]motionPair, len(r.statics))
-		for j, st := range r.statics {
-			pair := &r.pairs[i][j]
-			if mv.validity.Outcome != ValidityValid || st.validity.Outcome != ValidityValid {
-				pair.invalid = true
-				continue
-			}
-			if sweptOK {
-				if lower, ok := sweptBoxLower(sweptLo, sweptHi, st.body.bounds); ok {
-					pair.excluded, pair.lower = true, lower
-					continue
-				}
-			}
-			if mv.body.Kind() == BodySheet || st.body.Kind() == BodySheet {
-				pair.sheet = true
-			}
+		lo, hi, ok := moverSweptBox(mv.body.bounds, r.spec.frame, travel)
+		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
+	}
+	r.formPairs(swept)
+}
+
+// readBodies reads every moving group's bodies and every static body: the
+// transient identity counters, each body's validity, and each mover's record
+// radius, area and singular-value bound.
+func (r *motionRun) readBodies(groups [][]*Body) {
+	// Payload rebuilding mints level and curve denotations. Start above every
+	// live identity, then mint only on this copy: successive pose bodies stay
+	// distinct from static geometry without changing the caller's document.
+	live := r.d.liveBodies()
+	r.transient = &Document{
+		bodies:       live,
+		nextProducer: r.d.nextProducer,
+		nextLevel:    r.d.nextLevel,
+		nextCurve:    r.d.nextCurve,
+	}
+	isMover := make(map[*Body]struct{})
+	for g, bodies := range groups {
+		for _, b := range bodies {
+			isMover[b] = struct{}{}
+			r.movers = append(r.movers, motionMover{body: b, group: g, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
 		}
 	}
+	for _, b := range live {
+		if _, ok := isMover[b]; ok {
+			continue
+		}
+		r.statics = append(r.statics, motionStatic{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
+	}
+	for i := range r.movers {
+		mv := &r.movers[i]
+		mv.r0 = moverRecordRadius(r.ctx, mv.body)
+		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
+		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
+	}
+}
+
+// formPairs forms every mover's row of pairs in pair order and settles each
+// pair's standing for the whole call. A (mover, static) pair is excluded when
+// the mover's swept box separates from the static body's box; a pair of two
+// movers is always evaluated.
+func (r *motionRun) formPairs(swept []motionSweptBox) {
+	r.pairs = make([][]motionPair, len(r.movers))
+	for i, mv := range r.movers {
+		row := make([]motionPair, 0, len(r.statics))
+		for _, st := range r.statics {
+			row = append(row, staticPair(mv, st, swept[i]))
+		}
+		for o := i + 1; o < len(r.movers); o++ {
+			other := r.movers[o]
+			if other.group == mv.group {
+				continue
+			}
+			pair := motionPair{other: o}
+			switch {
+			case mv.validity.Outcome != ValidityValid || other.validity.Outcome != ValidityValid:
+				pair.invalid = true
+			case mv.body.Kind() == BodySheet || other.body.Kind() == BodySheet:
+				pair.sheet = true
+			}
+			row = append(row, pair)
+		}
+		r.pairs[i] = row
+	}
+}
+
+// staticPair settles a (mover, static) pair: invalid when an operand is not
+// proven valid, excluded when the swept-box exclusion separates it, a sheet
+// pair when an operand is a sheet, and evaluated otherwise.
+func staticPair(mv motionMover, st motionStatic, swept motionSweptBox) motionPair {
+	pair := motionPair{other: -1}
+	if mv.validity.Outcome != ValidityValid || st.validity.Outcome != ValidityValid {
+		pair.invalid = true
+		return pair
+	}
+	if swept.ok {
+		if lower, ok := sweptBoxLower(swept.lo, swept.hi, st.body.bounds); ok {
+			pair.excluded, pair.lower = true, lower
+			return pair
+		}
+	}
+	pair.sheet = mv.body.Kind() == BodySheet || st.body.Kind() == BodySheet
+	return pair
+}
+
+// partner is the caller's own body pair k of mover i names beside the mover.
+func (r *motionRun) partner(i, k int) *Body {
+	if o := r.pairs[i][k].other; o >= 0 {
+		return r.movers[o].body
+	}
+	return r.statics[k].body
+}
+
+// singleMotion drives VerifyMotion's one group along its Motion.
+type singleMotion struct{ r *motionRun }
+
+func (m singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
+	r := m.r
+	pose, err := r.spec.motion.PoseAt(at)
+	if err != nil {
+		return nil, err
+	}
+	ideals := []motionbound.IdealPose{r.spec.frame.At(param)}
+	stretch := r.stretch
+	if r.spec.kind == motionbound.MotionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
+		// PoseAt(1) returns the stated To, which the exact screw of the read
+		// parameters rebuilds only to rounding: the pose is charged against
+		// both the ideal end and To itself (§5.1, η_1 = max(η_ideal, η_To)).
+		ideals = append(ideals, r.spec.frame.StatedEnd())
+		stretch = r.stretchEnd
+	}
+	return []motionGroupPose{{pose: pose, ideals: ideals, stretch: stretch}}, nil
+}
+
+// travel is τ of docs/motion-check-design.md §5.2 for mover i: every pair of
+// one group's mover has a static partner, which does not move.
+func (m singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
+	return motionbound.MoverTravel(m.r.spec.frame, m.r.movers[i].rho, a, b)
 }
 
 // maxRat is the larger of two optional rationals; a nil (unbounded) operand
@@ -472,15 +642,17 @@ type motionSpan struct {
 	clearance *Measurement
 }
 
-func (r *motionRun) execute() (*MotionReport, error) {
+// refine evaluates the two endpoints and bisects (§6), returning the poses in
+// parameter order and the intervals between them.
+func (r *motionRun) refine() ([]*motionPose, []motionSpan, error) {
 	var poses []*motionPose
 	for _, end := range []struct {
 		f  *big.Rat
 		at units.Value
-	}{{new(big.Rat), r.spec.from}, {big.NewRat(1, 1), r.spec.to}} {
+	}{{new(big.Rat), r.dom.from}, {big.NewRat(1, 1), r.dom.to}} {
 		pose, err := r.evaluatePose(end.f, end.at)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		poses = append(poses, pose)
 	}
@@ -492,18 +664,18 @@ func (r *motionRun) execute() (*MotionReport, error) {
 		}
 		f := new(big.Rat).Add(poses[k].f, poses[k+1].f)
 		f.Quo(f, big.NewRat(2, 1))
-		mid, err := r.evaluatePose(f, r.spec.label(f))
+		mid, err := r.evaluatePose(f, r.dom.label(f))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		poses = slices.Insert(poses, k+1, mid)
 		spans[k] = r.intervalVerdict(poses[k], mid)
 		spans = slices.Insert(spans, k+1, r.intervalVerdict(mid, poses[k+2]))
 	}
 	if err := r.ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return r.publish(poses, spans), nil
+	return poses, spans, nil
 }
 
 // nextRefinement picks the interval §6 bisects next, or −1 when refinement is
@@ -566,34 +738,28 @@ func anyViolated(poses []*motionPose) bool {
 	return slices.ContainsFunc(poses, func(p *motionPose) bool { return p.violated })
 }
 
-// evaluatePose builds every mover's transient placement at fraction f of the
-// path, published as the parameter at, and runs every evaluated pair at it.
-// Every bound is built from the exact parameter at f; motionbound.PoseDeviation charges
-// whatever separates the pose PoseAt builds from at and the ideal pose at f.
+// evaluatePose builds every group's pose at fraction f of the path, published
+// as the parameter at, and runs every evaluated pair at it. Every bound is
+// built from the exact parameter at f; motionbound.PoseDeviation charges
+// whatever separates the pose the driver builds from at and the ideal pose at
+// f. Each mover's transient placement is built when its first pair needs it
+// and dropped from the carrier cache when the pose is done.
 func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error) {
 	if err := r.ctx.Err(); err != nil {
 		return nil, err
 	}
-	param := r.spec.fromP.Lerp(r.spec.toP, f)
-	pose, err := r.spec.motion.PoseAt(at)
+	param := r.dom.fromP.Lerp(r.dom.toP, f)
+	groups, err := r.drive.posesAt(f, at, param)
 	if err != nil {
 		return nil, err
 	}
-	ideals := []motionbound.IdealPose{r.spec.frame.At(param)}
-	stretch := r.stretch
-	if r.spec.kind == motionbound.MotionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
-		// PoseAt(1) returns the stated To, which the exact screw of the read
-		// parameters rebuilds only to rounding: the pose is charged against
-		// both the ideal end and To itself (§5.1, η_1 = max(η_ideal, η_To)).
-		ideals = append(ideals, r.spec.frame.StatedEnd())
-		stretch = r.stretchEnd
-	}
 	mp := &motionPose{
-		f:     f,
-		param: param,
+		f:      f,
+		param:  param,
+		groups: groups,
 		result: PoseResult{
 			At:            at,
-			Pose:          pose,
+			Pose:          groups[0].pose,
 			Interferences: []Interference{},
 			Clearances:    []Clearance{},
 			Diagnostics:   []Diagnostic{},
@@ -606,9 +772,17 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	for _, st := range r.statics {
 		r.validityFindings(mp, st.validity)
 	}
+	placed := make([]*motionPlaced, len(r.movers))
+	defer func() {
+		for _, p := range placed {
+			if p != nil {
+				delete(r.cache.entries, p.body)
+			}
+		}
+	}()
 	for i := range r.movers {
-		mp.pairs[i] = make([]motionPairPose, len(r.statics))
-		if err := r.evaluateMover(mp, i, pose, ideals, stretch); err != nil {
+		mp.pairs[i] = make([]motionPairPose, len(r.pairs[i]))
+		if err := r.evaluateMover(mp, i, placed); err != nil {
 			return nil, err
 		}
 	}
@@ -633,17 +807,14 @@ func withAt(diag Diagnostic, at units.Value) Diagnostic {
 	return diag
 }
 
-// evaluateMover places mover i at the pose as a transient body and runs its
-// evaluated pairs. η is the largest motionbound.PoseDeviation against every ideal pose
-// the claim at this parameter speaks for, and the swept-volume allowance is
-// charged at the largest linear factor among them and the pose's stretch base.
-func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, ideals []motionbound.IdealPose, stretch float64) error {
+// evaluateMover runs mover i's row of pairs at the pose: a sheet pair's
+// finding first, then every evaluated pair over the transient placements.
+func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced) error {
 	mv := r.movers[i]
 	need := false
-	for j := range r.statics {
-		pair := r.pairs[i][j]
+	for k, pair := range r.pairs[i] {
 		if pair.sheet {
-			diag := withAt(pairDiagNone(mv.body, r.statics[j].body, DiagUnsupportedPairSheet,
+			diag := withAt(pairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
 				"a sheet operand has no clearance the motion check can certify, so this pair is undecided at every pose"), mp.result.At)
 			mp.result.Diagnostics = append(mp.result.Diagnostics, diag)
 			mp.findings = append(mp.findings, diag)
@@ -653,18 +824,48 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	if !need {
 		return nil
 	}
-	placement := mv.body.payload.transform()
-	composed, err := placement.Then(pose)
-	if err != nil {
-		return fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
-	}
-	transient, err := mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
+	a, err := r.place(mp, i, placed)
 	if err != nil {
 		return err
 	}
-	defer delete(r.cache.entries, transient)
+	for k, pair := range r.pairs[i] {
+		if !pair.evaluated() {
+			continue
+		}
+		var b *motionPlaced
+		if pair.other >= 0 {
+			if b, err = r.place(mp, pair.other, placed); err != nil {
+				return err
+			}
+		}
+		if err := r.evaluatePair(mp, i, k, a, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// place builds mover i's transient placement at the pose once. η is the
+// largest motionbound.PoseDeviation against every ideal pose the claim at
+// this parameter speaks for, and the swept-volume allowance is charged at the
+// largest linear factor among them and the group's stretch base.
+func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motionPlaced, error) {
+	if placed[i] != nil {
+		return placed[i], nil
+	}
+	mv := r.movers[i]
+	group := mp.groups[mv.group]
+	placement := mv.body.payload.transform()
+	composed, err := placement.Then(group.pose)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
+	}
+	transient, err := mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
+	if err != nil {
+		return nil, err
+	}
 	var eta, linear float64
-	for _, ideal := range ideals {
+	for _, ideal := range group.ideals {
 		e, l := motionbound.PoseDeviation(composed, placement, ideal, mv.r0)
 		eta, linear = math.Max(eta, e), math.Max(linear, l)
 	}
@@ -672,30 +873,30 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	// (§5.1): every boundary point moves at most η along the straight path
 	// between the two images, and the area that path carries is the mover's
 	// own, scaled by the path's largest linear stretch.
-	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(mv.area, linear, mv.sigma, stretch))
-	for j := range r.statics {
-		if !r.pairs[i][j].evaluated() {
-			continue
-		}
-		if err := r.evaluatePair(mp, i, j, transient, eta, allowance); err != nil {
-			return err
-		}
-	}
-	return nil
+	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(mv.area, linear, mv.sigma, group.stretch))
+	placed[i] = &motionPlaced{body: transient, eta: eta, allowance: allowance}
+	return placed[i], nil
 }
 
-// evaluatePair runs Verify's own pair procedure (verify.go) on one (placed
-// mover, static) pair at one pose, with the gap always asked: box separation,
-// the closed-form axis-box gap or the clearance kernel, then the read-only
-// overlap proof.
-func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta, allowance float64) error {
-	mover, static := r.movers[i].body, r.statics[j].body
+// evaluatePair runs Verify's own pair procedure (verify.go) on pair k of
+// mover i at one pose, with the gap always asked: box separation, the
+// closed-form axis-box gap or the clearance kernel, then the read-only
+// overlap proof. a is the mover's transient placement; b is its partner's,
+// or nil when the partner is a static body measured as it stands. A moving
+// partner adds its own η to the gap's widening and its own allowance to the
+// collision transfer (docs/linkage-check-design.md §5.1).
+func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) error {
+	mover, partner := r.movers[i].body, r.partner(i, k)
+	target, etaB, allowance := partner, 0.0, a.allowance
+	if b != nil {
+		target, etaB, allowance = b.body, b.eta, proofbound.AbsSumUpper(a.allowance, b.allowance)
+	}
 	at := mp.result.At
-	boxProven := boxesDisjoint(transient.bounds, static.bounds)
-	res, fast := clearanceAxisBoxes(transient, static)
+	boxProven := boxesDisjoint(a.body.bounds, target.bounds)
+	res, fast := clearanceAxisBoxes(a.body, target)
 	if !fast {
 		var err error
-		res, err = clearancePairCached(r.ctx, transient, static, boxProven, r.cache)
+		res, err = clearancePairCached(r.ctx, a.body, target, boxProven, r.cache)
 		if err != nil {
 			return err
 		}
@@ -704,21 +905,21 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta,
 		return err
 	}
 	if res.verdict == pairDisjoint || res.verdict == pairTouching {
-		r.recordGap(mp, i, j, res, eta)
+		r.recordGap(mp, i, k, res, a.eta, etaB)
 		return nil
 	}
 	if boxProven {
-		r.poseDiag(mp, withAt(pairDiagNone(mover, static, DiagUndecidedClearance,
+		r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedClearance,
 			"the pair is proven disjoint at this pose but its gap is unmeasured"), at))
 		return nil
 	}
-	volume, outcome, err := measuredInterference(r.ctx, transient, static, res, pairMeshes{})
+	volume, outcome, err := measuredInterference(r.ctx, a.body, target, res, pairMeshes{})
 	if err != nil {
 		return err
 	}
 	if outcome != interferenceMeasured && res.verdict != pairOverlapping {
-		diag := undecidedPairDiag(transient, static, res.verdict, outcome)
-		diag.Pair = &DiagnosticPair{A: mover, B: static}
+		diag := undecidedPairDiag(a.body, target, res.verdict, outcome)
+		diag.Pair = &DiagnosticPair{A: mover, B: partner}
 		r.poseDiag(mp, withAt(diag, at))
 		return nil
 	}
@@ -728,31 +929,35 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta,
 		if outcome == interferenceMeasured {
 			msg = fmt.Sprintf("the pair is proven to overlap at the evaluated float pose, but the measured volume %s does not clear the %v mm^3 the pose's deviation from the ideal motion can sweep, so no collision is proven at this parameter", volume.Value, allowance)
 		}
-		r.poseDiag(mp, withAt(pairDiagNone(mover, static, DiagUndecidedInterference, msg), at))
+		r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedInterference, msg), at))
 		return nil
 	}
-	mp.pairs[i][j].collision = true
+	mp.pairs[i][k].collision = true
 	obs := published
-	mp.collisions = append(mp.collisions, Collision{At: at, Pose: mp.result.Pose, Moving: mover, Static: static, Volume: published})
-	mp.result.Interferences = append(mp.result.Interferences, Interference{A: mover, B: static, Volume: published})
+	mp.collisions = append(mp.collisions, Collision{At: at, Pose: mp.result.Pose, Moving: mover, Static: partner, Volume: published})
+	mp.result.Interferences = append(mp.result.Interferences, Interference{A: mover, B: partner, Volume: published})
+	msg := fmt.Sprintf("the moving body overlaps a static body at %s", at)
+	if b != nil {
+		msg = fmt.Sprintf("the moving body overlaps another moving body at %s", at)
+	}
 	mp.findings = append(mp.findings, withAt(Diagnostic{
 		Code:     DiagMotionCollision,
 		Status:   Interfering,
-		Pair:     &DiagnosticPair{A: mover, B: static},
+		Pair:     &DiagnosticPair{A: mover, B: partner},
 		Reading:  ReadingOverlapVolume,
 		Observed: &obs,
-		Message:  fmt.Sprintf("the moving body overlaps a static body at %s", at),
+		Message:  msg,
 	}, at))
-	pairD, err := interferencePairDiameter(r.ctx, transient, static)
+	pairD, err := interferencePairDiameter(r.ctx, a.body, target)
 	if err != nil {
 		return err
 	}
-	pass, ref, haveRef := interferenceToleranceRef(published, transient, static, pairD, r.cfg.rel)
+	pass, ref, haveRef := interferenceToleranceRef(published, a.body, target, pairD, r.cfg.rel)
 	if !pass {
 		beyond := Diagnostic{
 			Code:     DiagMeasurementBeyondTolerance,
 			Status:   Suspect,
-			Pair:     &DiagnosticPair{A: mover, B: static},
+			Pair:     &DiagnosticPair{A: mover, B: partner},
 			Reading:  ReadingOverlapVolume,
 			Observed: &obs,
 			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
@@ -801,23 +1006,23 @@ func (r *motionRun) poseDiag(mp *motionPose, diag Diagnostic) {
 }
 
 // recordGap charges η into the kernel's proven gap interval and publishes the
-// pose's Clearance row. The kernel's interval is about the float placement it
-// measured; widening it by η on both sides — distance is 1-Lipschitz in a
-// displacement of either set — makes it a proven interval on the IDEAL pose,
-// which is what the interval certificate consumes. An η that cannot be
-// bounded leaves the gap unmeasured.
-func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta float64) {
-	mover, static := r.movers[i].body, r.statics[j].body
+// pose's Clearance row. The kernel's interval is about the float placements it
+// measured; widening it by both bodies' η on both sides — distance is
+// 1-Lipschitz in a displacement of either set — makes it a proven interval on
+// the IDEAL poses, which is what the interval certificate consumes. A static
+// partner's η is zero. An η that cannot be bounded leaves the gap unmeasured.
+func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, etaB float64) {
+	mover, partner := r.movers[i].body, r.partner(i, k)
 	at := mp.result.At
-	if proofbound.IsNonFinite(eta) {
-		r.poseDiag(mp, withAt(pairDiagNone(mover, static, DiagUndecidedClearance,
+	if proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
+		r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedClearance,
 			"the pair is proven disjoint at this pose, but the pose's departure from the ideal motion is unbounded for this payload, so its gap is unmeasured"), at))
 		return
 	}
-	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, eta, 0)
-	mp.pairs[i][j] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
+	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, etaA, etaB)
+	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
 	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
-	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: static, Gap: gap})
+	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 	if r.cfg.minimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.minimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
 		// the margin is disproven here, whatever the reading's precision.
@@ -826,7 +1031,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 		mp.findings = append(mp.findings, withAt(Diagnostic{
 			Code:     DiagMotionClearanceViolated,
 			Status:   Violating,
-			Pair:     &DiagnosticPair{A: mover, B: static},
+			Pair:     &DiagnosticPair{A: mover, B: partner},
 			Reading:  ReadingGap,
 			Observed: &violation,
 			Required: r.cfg.minimum,
@@ -841,7 +1046,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 	beyond := Diagnostic{
 		Code:     DiagMeasurementBeyondTolerance,
 		Status:   Suspect,
-		Pair:     &DiagnosticPair{A: mover, B: static},
+		Pair:     &DiagnosticPair{A: mover, B: partner},
 		Reading:  ReadingGap,
 		Observed: &obs,
 		Message:  fmt.Sprintf("the gap reading's bound %s is beyond the relative tolerance", gap.Bound),
@@ -854,12 +1059,12 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 
 // intervalVerdict decides one interval between adjacent poses a and b
 // (docs/motion-check-design.md §5.2). A proven collision at either end makes
-// it IntervalColliding. Otherwise it is IntervalClear only when EVERY (mover,
-// static) pair certifies: a swept-box-excluded pair by its whole-path lower
-// bound, an evaluated pair by lo_a + lo_b > τ — taken over exact rationals, so
-// no rounding sits between the proven terms and the strict comparison. The
-// lower envelope's minimum over the interval, (lo_a + lo_b − τ)/2, is rounded
-// down to the float the Clearance publishes.
+// it IntervalColliding. Otherwise it is IntervalClear only when EVERY pair
+// certifies: a swept-box-excluded pair by its whole-path lower bound, an
+// evaluated pair by lo_a + lo_b > τ — taken over exact rationals, so no
+// rounding sits between the proven terms and the strict comparison. The lower
+// envelope's minimum over the interval, (lo_a + lo_b − τ)/2, is rounded down
+// to the float the Clearance publishes.
 func (r *motionRun) intervalVerdict(a, b *motionPose) motionSpan {
 	outcome, clearance := r.intervalOutcome(a, b)
 	return motionSpan{outcome: outcome, clearance: clearance}
@@ -867,25 +1072,24 @@ func (r *motionRun) intervalVerdict(a, b *motionPose) motionSpan {
 
 func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measurement) {
 	for i := range r.movers {
-		for j := range r.statics {
-			if a.pairs[i][j].collision || b.pairs[i][j].collision {
+		for k := range r.pairs[i] {
+			if a.pairs[i][k].collision || b.pairs[i][k].collision {
 				return IntervalColliding, nil
 			}
 		}
 	}
 	var lowest *big.Rat
-	for i, mv := range r.movers {
-		for j := range r.statics {
-			pair := r.pairs[i][j]
+	for i := range r.movers {
+		for k, pair := range r.pairs[i] {
 			if pair.excluded {
 				lowest = minRat(lowest, proofarith.FloatRat(pair.lower))
 				continue
 			}
-			pa, pb := a.pairs[i][j], b.pairs[i][j]
+			pa, pb := a.pairs[i][k], b.pairs[i][k]
 			if !pair.evaluated() || !pa.hasGap || !pb.hasGap {
 				return IntervalUndecided, nil
 			}
-			tau := motionbound.MoverTravel(r.spec.frame, mv.rho, a.param, b.param)
+			tau := r.drive.travel(i, k, a.param, b.param)
 			if tau == nil {
 				return IntervalUndecided, nil
 			}
@@ -915,24 +1119,32 @@ func minRat(running, candidate *big.Rat) *big.Rat {
 	return running
 }
 
-// publish assembles the report (docs/motion-check-design.md §4).
-func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionReport {
-	report := &MotionReport{
-		Request: MotionRequest{
+// motionConclusion is the part of a report every check publishes the same
+// way (docs/motion-check-design.md §4, docs/linkage-check-design.md §4).
+type motionConclusion struct {
+	request     MotionRequest
+	against     []*Body
+	intervals   []MotionInterval
+	clearance   *ScalarReading
+	assessment  Assessment
+	diagnostics []Diagnostic // interval findings, then pose findings, then the path reading's
+	status      Status
+}
+
+// conclude assembles the intervals, the whole-path reading, the assessment,
+// the diagnostics and the status from the evaluated poses and intervals.
+func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConclusion {
+	c := motionConclusion{
+		request: MotionRequest{
 			RelativeTolerance: units.Scalar(r.cfg.rel),
 			Resolution:        r.cfg.resolution,
 			MinClearance:      r.cfg.minimum,
 		},
-		Motion:      r.spec.motion,
-		Diagnostics: []Diagnostic{},
-		Collisions:  []Collision{},
+		against:     []*Body{},
+		diagnostics: []Diagnostic{},
 	}
-	for _, mv := range r.movers {
-		report.Moving = append(report.Moving, mv.body)
-	}
-	report.Against = []*Body{}
 	for _, st := range r.statics {
-		report.Against = append(report.Against, st.body)
+		c.against = append(c.against, st.body)
 	}
 
 	violated := anyViolated(poses)
@@ -941,7 +1153,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 	for k, span := range spans {
 		a, b := poses[k], poses[k+1]
 		interval := MotionInterval{From: a.result.At, To: b.result.At, Outcome: span.outcome, Clearance: span.clearance}
-		report.Intervals = append(report.Intervals, interval)
+		c.intervals = append(c.intervals, interval)
 		if span.outcome != IntervalClear {
 			allClear, met = false, false
 		}
@@ -950,7 +1162,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		}
 		switch {
 		case span.outcome == IntervalUndecided:
-			report.Diagnostics = append(report.Diagnostics, withAt(Diagnostic{
+			c.diagnostics = append(c.diagnostics, withAt(Diagnostic{
 				Code:    DiagMotionUndecidedInterval,
 				Status:  Suspect,
 				Reading: ReadingNone,
@@ -962,7 +1174,7 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 				break
 			}
 			obs := *span.clearance
-			report.Diagnostics = append(report.Diagnostics, withAt(Diagnostic{
+			c.diagnostics = append(c.diagnostics, withAt(Diagnostic{
 				Code:     DiagMotionUndecidedClearance,
 				Status:   Suspect,
 				Reading:  ReadingGap,
@@ -974,30 +1186,52 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 	}
 	switch {
 	case r.cfg.minimumMM == nil:
-		report.Assessment = AssessmentNotEvaluated
+		c.assessment = AssessmentNotEvaluated
 	case violated:
-		report.Assessment = AssessmentViolated
+		c.assessment = AssessmentViolated
 	case met:
-		report.Assessment = AssessmentMet
+		c.assessment = AssessmentMet
 	default:
-		report.Assessment = AssessmentUndecided
+		c.assessment = AssessmentUndecided
+	}
+	for _, pose := range poses {
+		c.diagnostics = append(c.diagnostics, pose.findings...)
+	}
+	if allClear && lowest != nil {
+		if reading, diag := r.pathClearance(poses, lowest); reading != nil {
+			c.clearance = reading
+			if diag != nil {
+				c.diagnostics = append(c.diagnostics, *diag)
+			}
+		}
+	}
+	c.status = Sound
+	for _, diag := range c.diagnostics {
+		c.status = max(c.status, diag.Status)
+	}
+	return c
+}
+
+// publish assembles VerifyMotion's report (docs/motion-check-design.md §4).
+func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionReport {
+	c := r.conclude(poses, spans)
+	report := &MotionReport{
+		Request:     c.request,
+		Motion:      r.spec.motion,
+		Against:     c.against,
+		Intervals:   c.intervals,
+		Collisions:  []Collision{},
+		Clearance:   c.clearance,
+		Assessment:  c.assessment,
+		Diagnostics: c.diagnostics,
+		Status:      c.status,
+	}
+	for _, mv := range r.movers {
+		report.Moving = append(report.Moving, mv.body)
 	}
 	for _, pose := range poses {
 		report.Poses = append(report.Poses, pose.result)
 		report.Collisions = append(report.Collisions, pose.collisions...)
-		report.Diagnostics = append(report.Diagnostics, pose.findings...)
-	}
-	if allClear && lowest != nil {
-		if reading, diag := r.pathClearance(poses, lowest); reading != nil {
-			report.Clearance = reading
-			if diag != nil {
-				report.Diagnostics = append(report.Diagnostics, *diag)
-			}
-		}
-	}
-	report.Status = Sound
-	for _, diag := range report.Diagnostics {
-		report.Status = max(report.Status, diag.Status)
 	}
 	return report
 }
