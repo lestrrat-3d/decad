@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -70,9 +72,9 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		}
 		first, last := sp.slabs[col.start], sp.slabs[col.end]
 		cl, err := chordLoop(ctx, col.loop, budget, last.z1-first.z0, work, nil, col.loopIndex,
-			func(w sideWalk) (*Face, error) {
+			func(w survey2d.SideWalk) (*Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(0).side(%d,%d)",
-					col.start, col.loopIndex, w.segs[0]))
+					col.start, col.loopIndex, w.Segs[0]))
 			})
 		if err != nil {
 			return nil, err

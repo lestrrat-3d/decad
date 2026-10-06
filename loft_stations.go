@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -99,7 +101,7 @@ func (e *loftStationCapError) Unwrap() error { return errTooManyChords }
 // The accumulation is checked (proofbound.WallCheckedAdd, internal/proofbound/budget.go) and answers false on
 // overflow rather than wrapping, the discipline §5.1 states for every sum the
 // mMax comparison reads.
-func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segmentWalk) (uint64, uint64, bool) {
+func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (uint64, uint64, bool) {
 	var p, c uint64
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
@@ -110,7 +112,7 @@ func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segme
 				return 0, 0, false
 			}
 			k := (j + off) % n
-			if walks0[i][j].kind == walkCircular && walks1[i][k].kind == walkCircular {
+			if walks0[i][j].Kind == survey2d.WalkCircular && walks1[i][k].Kind == survey2d.WalkCircular {
 				if c, ok = proofbound.WallCheckedAdd(c, 1); !ok {
 					return 0, 0, false
 				}
@@ -165,7 +167,7 @@ func loftStationShare(p, c uint64) int {
 // DERIVATION arm, which §5.1 places beside this row precisely because the
 // walk-up that settles m is what asks for that term, and errTooManyChords bare
 // is chordCount's own per-walk ceiling.
-func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk) error {
+func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) error {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 
@@ -189,7 +191,7 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 		for j := range n {
 			k := (j + off) % n
 			w0, w1 := walks0[i][j], walks1[i][k]
-			if w0.kind != walkCircular || w1.kind != walkCircular {
+			if w0.Kind != survey2d.WalkCircular || w1.Kind != survey2d.WalkCircular {
 				continue
 			}
 			m, _, _, err := loftSettleStationCount(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], target)
@@ -260,7 +262,7 @@ const loftChordFraction = 3.76491e-05
 // validateLoftRecords charged this work against its own counters, and a view
 // that restated the charge as its own would let a later replay levy it twice.
 // Neither leaves this function, so neither can reach a payload that replays it.
-func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (float64, error) {
+func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) (float64, error) {
 	pw0 := &profileWalks{profile: p0, outer: walks0[0], holes: walks0[1:]}
 	pw1 := &profileWalks{profile: p1, outer: walks1[0], holes: walks1[1:]}
 	u0, err := profileCoordinateUpper(p0, nil, pw0)
@@ -275,7 +277,7 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 }
 
 // loftCellStations generates one paired loft segment's shared chord stations:
-// a kind switch on w0/w1's own walkKind, fixed here for every future arm
+// a kind switch on w0/w1's own survey2d.WalkKind, fixed here for every future arm
 // (a10-plan.md Part 3 PR 5's own constraint). Every arm publishes the
 // identical contract — two per-plane station chains at a SHARED count, plus
 // the sagitta this cell's own chording commits — so a later Tier A free-form
@@ -340,11 +342,11 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // the segment's own sagittaUpper (loftCircularCellStations' own doc comment);
 // a future free-form arm's own per-cell reading can vary within these two
 // extremes cell to cell.
-func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
+func loftCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
-	case w0.kind == walkLine && w1.kind == walkLine:
+	case w0.Kind == survey2d.WalkLine && w1.Kind == survey2d.WalkLine:
 		return loftLineCellStations(w0, w1)
-	case w0.kind == walkCircular && w1.kind == walkCircular:
+	case w0.Kind == survey2d.WalkCircular && w1.Kind == survey2d.WalkCircular:
 		return loftCircularCellStations(w0, w1, seg0, seg1, target)
 	default:
 		// Unreached from any real build today: validateLoftRecords' own S3
@@ -402,12 +404,12 @@ func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float6
 // record gates exclude long before any walk is resolved. It stands so that an
 // underivable term can never be published as a finite bound, which is the S14
 // discipline §5.2's table states for every term in it.
-func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
-	round := math.Max(walkEndPlaneDelta(w0.startBound), walkEndPlaneDelta(w1.startBound))
+func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
+	round := math.Max(walkEndPlaneDelta(w0.StartBound), walkEndPlaneDelta(w1.StartBound))
 	if proofbound.IsNonFinite(round) {
 		return nil, nil, 0, nil, 0, errLoftStationDisplacementUnderivable
 	}
-	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, []float64{0}, round, nil
+	return []Point2{{U: w0.StartU, V: w0.StartV}}, []Point2{{U: w1.StartU, V: w1.StartV}}, 0, []float64{0}, round, nil
 }
 
 // loftSettleStationCount runs docs/loft-design.md §5.1's JOINT WALK-UP for one
@@ -434,7 +436,7 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []fl
 // floor would otherwise walk forever. That per-walk ceiling is NOT the station
 // cap: it bounds one curve's own chording and knows nothing of how many curves
 // the build holds, while loftStationCap bounds the build's station total.
-func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) (int, float64, float64, error) {
+func loftSettleStationCount(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64) (int, float64, float64, error) {
 	m0, _, err := chordCount(w0, target, chordWalkMin(w0))
 	if err != nil {
 		return 0, 0, 0, err
@@ -516,7 +518,7 @@ func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target 
 // shares the same true angular width, so the same value — math.Max(s0, s1) —
 // is the correct, exact per-cell reading for all m cells, not merely a safe
 // upper bound repeated m times.
-func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, []float64, float64, error) {
+func loftCircularCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, []float64, float64, error) {
 	m, s0, s1, err := loftSettleStationCount(w0, w1, seg0, seg1, target)
 	if err != nil {
 		return nil, nil, 0, nil, 0, err
@@ -577,7 +579,7 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 //
 // For a circular segment (CircleSeg/ArcSeg) that whole-length bound is
 // moments.go's circularLengthInterval — an EXACT rational bracket on the
-// segment's true length — never segmentWalk.lengthUpper: that field's own
+// segment's true length — never survey2d.SegmentWalk.lengthUpper: that field's own
 // bound is deliberately loose (proofbound.CircularSweepUpper bounds any ArcSeg's sweep
 // by the full 2*pi it could reach, never the sweep THIS record states, per
 // its own doc comment), so a quarter-turn arc's lengthUpper overstates its
@@ -589,20 +591,20 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 // close to the true one.
 //
 // For the LineSeg arm (m=1, and every other kind circularLengthInterval
-// declines) this falls back to segmentWalk.lengthUpper exactly, unaffected —
+// declines) this falls back to survey2d.SegmentWalk.lengthUpper exactly, unaffected —
 // a straight chord's own recorded length bound was never the loose one. A
 // non-finite whole-length bound propagates rather than silently shrinking
 // under the division.
-func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
+func perCellArcUpper(seg CurveSegment, w survey2d.SegmentWalk, m int) float64 {
 	if ns, err := normalizeSegment(seg); err == nil {
 		if iv, ok := circularLengthInterval(ns); ok {
 			return proofbound.UpRound(proofbound.RatFloatUp(iv.Hi) / float64(m))
 		}
 	}
-	if proofbound.IsNonFinite(w.lengthUpper) {
+	if proofbound.IsNonFinite(w.LengthUpper) {
 		return math.Inf(1)
 	}
-	return proofbound.UpRound(w.lengthUpper / float64(m))
+	return proofbound.UpRound(w.LengthUpper / float64(m))
 }
 
 // chordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
@@ -678,11 +680,11 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 // +Inf here until it carries a proof of its own, so it degrades
 // proofbound.CellChordCurveAreaAllow to that helper's premise-free arm rather than being
 // silently handed a bound whose premise it does not meet.
-func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
-	switch w.kind {
-	case walkLine:
+func perCellTangentEnergy(seg CurveSegment, w survey2d.SegmentWalk, m int) float64 {
+	switch w.Kind {
+	case survey2d.WalkLine:
 		return 0
-	case walkCircular:
+	case survey2d.WalkCircular:
 		return proofbound.UniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), loftCertifiedChordLower(seg, m))
 	default:
 		return math.Inf(1)
@@ -744,10 +746,10 @@ func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 // A station the record cannot enclose answers +Inf, which the caller refuses
 // on rather than publishing the certified sagitta as if it were the whole
 // bound.
-func circularStationChain(w segmentWalk, seg CurveSegment, m int) ([]Point2, float64) {
+func circularStationChain(w survey2d.SegmentWalk, seg CurveSegment, m int) ([]Point2, float64) {
 	pts := make([]Point2, m)
-	pts[0] = Point2{U: w.startU, V: w.startV}
-	delta := math.Max(walkEndPlaneDelta(w.startBound), walkEndPlaneDelta(w.endBound))
+	pts[0] = Point2{U: w.StartU, V: w.StartV}
+	delta := math.Max(walkEndPlaneDelta(w.StartBound), walkEndPlaneDelta(w.EndBound))
 	delta = math.Max(delta, arcNaturalEndRadialUpper(seg))
 	tStart, dt, ok := circularSegmentRange(seg)
 	if !ok {
@@ -755,9 +757,9 @@ func circularStationChain(w segmentWalk, seg CurveSegment, m int) ([]Point2, flo
 	}
 	for k := 1; k < m; k++ {
 		t := float64(k) / float64(m)
-		theta := w.th0 + t*(w.th1-w.th0)
+		theta := w.Th0 + t*(w.Th1-w.Th0)
 		sin, cos := math.Sincos(theta)
-		pts[k] = Point2{U: w.cU + w.radius*cos, V: w.cV + w.radius*sin}
+		pts[k] = Point2{U: w.CU + w.Radius*cos, V: w.CV + w.Radius*sin}
 
 		tk := new(big.Rat).Add(tStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), dt))
 		delta = math.Max(delta, walkEndPlaneDelta(circularPointBound(seg, tk, pts[k].U, pts[k].V)))

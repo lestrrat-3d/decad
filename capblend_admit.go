@@ -40,20 +40,20 @@ func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlend
 		walks := cl.walks
 		n := len(walks)
 		for i, w := range walks {
-			if !w.isLine() && !w.isCircular() {
+			if !w.IsLine() && !w.IsCircular() {
 				// Unreachable today: Chamfer refuses a free-form wall before a
 				// payload exists. The arm keeps the predicate's own contract
 				// true for any payload that reaches it.
 				return capBlendAdmissionRefusal(li, i, `a wall that is neither straight nor circular`), nil
 			}
 		}
-		if n == 1 && walks[0].closed {
+		if n == 1 && walks[0].Closed {
 			// The whole turn: one closed circle, no corner, and a band whose two
 			// directrices sweep the same exact window.
 			continue
 		}
 		for i, w := range walks {
-			for _, si := range w.segs {
+			for _, si := range w.Segs {
 				if err := budget.Step(); err != nil {
 					return nil, err
 				}
@@ -81,16 +81,16 @@ func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlend
 			if joins[i].arc {
 				return capBlendAdmissionRefusal(li, i, `a reflex corner, whose apex fan's stations no recorded window states`), nil
 			}
-			if prev.isLine() && cur.isLine() {
+			if prev.IsLine() && cur.IsLine() {
 				// A line-line miter: the foot is the intersection of two offset
 				// lines, affine in the offset amount.
 				continue
 			}
-			prevSeg, err := normalizeSegment(loop.Segments[prev.segs[len(prev.segs)-1]])
+			prevSeg, err := normalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
 			if err != nil {
 				return nil, err
 			}
-			curSeg, err := normalizeSegment(loop.Segments[cur.segs[0]])
+			curSeg, err := normalizeSegment(loop.Segments[cur.Segs[0]])
 			if err != nil {
 				return nil, err
 			}

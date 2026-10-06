@@ -104,7 +104,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
-| `normal_bound.go` | The proof behind every `Face.NormalAt` bound: rational-interval enclosures of each arm's exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's doc comment. |
+| `normal_bound.go` | The proof behind every `Face.NormalAt` bound, per surface arm. See the file's doc comment. |
 | `document.go` | `Document`, commit, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
@@ -130,7 +130,7 @@ to the byte budget.
 | `sweep_transport.go` | Rotation-minimizing endpoint-frame transport over exact path records, with rational enclosures of each held frame. See `docs/sweep-design.md` §3.2. |
 | `prism_payload.go` | `prismPayload` and its coordinate readings: a world point, its proven bound, and the coordinate envelopes later bounds charge against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
-| `segment_walk.go` | The profile-boundary walk extrude, revolve and loft read a `CurveSegment` through: `segmentWalk`, `profileWalks` and the per-kind builders; a kind with no stated bound refuses. See the file's doc comment. |
+| `segment_walk.go` | Builds the profile-boundary walks extrude, revolve and loft read; a kind with no stated bound refuses. See the file's doc comment. |
 | `prism_extent.go` | A finished prism's extent readings, reach along a direction and the containing box, each a bounded interval charging the frame, section and axial terms. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and `WithSurfaceResult` parsing, angular-extent resolution. Axis, build and extent readings: the other `revolve_*.go` files. |
 | `revolve_axis.go` | Resolves the axis into the sketch plane and decides what the profile may do around it: `axisLine2`, `axisFrame`, `wallKind`, and the contact gates. See `docs/evaluator-design.md` §6. |
@@ -204,8 +204,7 @@ to the byte budget.
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
 | `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials and Lipschitz brackets of critical values. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
-| `survey_undercut.go` | The exact three-valued receiver-face undercut reader the surveys share, decided over the rationals. See the file's doc comment. |
-| `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey and the modify section audit. See `docs/verification-design.md` §6. |
+| `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Exact motion bounds. See its doc comment. |
@@ -263,6 +262,7 @@ to the byte budget.
 | `internal/tessellation/` | Mesh audits and the loft exact restatement over neutral triangle data. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
+| `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `_gallery/` | Own nested module for README images, landing clip and dynamics scenes; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; race shards run `race-binary`'s root and `apitest` binaries. `codeql.yml`. `test-shards*.txt` assign each test a shard. |

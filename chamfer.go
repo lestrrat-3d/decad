@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -259,8 +261,8 @@ func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
 	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := loop.walks[ci]          // walk B, leaving the corner
 
-	ax, ay, la := normalize2(arrive.tanOutU, arrive.tanOutV)
-	bx, by, lb := normalize2(leave.tanInU, leave.tanInV)
+	ax, ay, la := normalize2(arrive.TanOutU, arrive.TanOutV)
+	bx, by, lb := normalize2(leave.TanInU, leave.TanInV)
 	if la == 0 || lb == 0 {
 		return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 	}
@@ -288,23 +290,23 @@ func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
 // line steps by d along its unit travel tangent; an arc steps by the angle d/R
 // in the walk's own turn sense — CCW (th1 > th0) increases the bearing, CW
 // decreases it — so the foot lands on the arc itself, exactly.
-func setbackFoot(w sideWalk, d float64, back bool) Point2 {
-	if !w.isCircular() {
+func setbackFoot(w survey2d.SideWalk, d float64, back bool) Point2 {
+	if !w.IsCircular() {
 		if back {
-			ux, uy, _ := normalize2(w.tanOutU, w.tanOutV)
-			return Point2{U: w.endU - d*ux, V: w.endV - d*uy}
+			ux, uy, _ := normalize2(w.TanOutU, w.TanOutV)
+			return Point2{U: w.EndU - d*ux, V: w.EndV - d*uy}
 		}
-		ux, uy, _ := normalize2(w.tanInU, w.tanInV)
-		return Point2{U: w.startU + d*ux, V: w.startV + d*uy}
+		ux, uy, _ := normalize2(w.TanInU, w.TanInV)
+		return Point2{U: w.StartU + d*ux, V: w.StartV + d*uy}
 	}
-	dtheta := d / w.radius
+	dtheta := d / w.Radius
 	sign := 1.0 // a CCW walk (th1 > th0) increases the bearing along travel
-	if w.th1 < w.th0 {
+	if w.Th1 < w.Th0 {
 		sign = -1.0
 	}
-	th := w.th0 + sign*dtheta // forward from the start
+	th := w.Th0 + sign*dtheta // forward from the start
 	if back {
-		th = w.th1 - sign*dtheta // backward from the end
+		th = w.Th1 - sign*dtheta // backward from the end
 	}
-	return Point2{U: w.cU + w.radius*math.Cos(th), V: w.cV + w.radius*math.Sin(th)}
+	return Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
 }

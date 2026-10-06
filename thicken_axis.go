@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -87,30 +89,30 @@ func thickenAxisDirections(loop cornerLoop, budget *proofbound.WorkBudget) ([]th
 	}
 	dirs := make([]thickenAxisDir, n)
 	for i, w := range loop.walks {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		next := loop.walks[(i+1)%n]
-		if w.startBound.U != 0 || w.startBound.V != 0 || w.endBound.U != 0 || w.endBound.V != 0 {
+		if w.StartBound.U != 0 || w.StartBound.V != 0 || w.EndBound.U != 0 || w.EndBound.V != 0 {
 			return nil, fmt.Errorf(`%w: a source line endpoint has an unresolved coordinate bound`, ErrUnsupported)
 		}
-		if w.endU != next.startU || w.endV != next.startV {
+		if w.EndU != next.StartU || w.EndV != next.StartV {
 			return nil, fmt.Errorf(`%w: the prism loop has no exact adjacent joins`, ErrUnsupported)
 		}
 		switch {
-		case w.startU == w.endU && w.startV < w.endV:
+		case w.StartU == w.EndU && w.StartV < w.EndV:
 			dirs[i] = thickenAxisDir{v: 1}
-		case w.startU == w.endU && w.startV > w.endV:
+		case w.StartU == w.EndU && w.StartV > w.EndV:
 			dirs[i] = thickenAxisDir{v: -1}
-		case w.startV == w.endV && w.startU < w.endU:
+		case w.StartV == w.EndV && w.StartU < w.EndU:
 			dirs[i] = thickenAxisDir{u: 1}
-		case w.startV == w.endV && w.startU > w.endU:
+		case w.StartV == w.EndV && w.StartU > w.EndU:
 			dirs[i] = thickenAxisDir{u: -1}
 		default:
 			return nil, fmt.Errorf(`%w: the prism loop is not axis-parallel`, ErrUnsupported)
 		}
-		if proofarith.FloatRat(w.startU) == nil || proofarith.FloatRat(w.startV) == nil ||
-			proofarith.FloatRat(w.endU) == nil || proofarith.FloatRat(w.endV) == nil {
+		if proofarith.FloatRat(w.StartU) == nil || proofarith.FloatRat(w.StartV) == nil ||
+			proofarith.FloatRat(w.EndU) == nil || proofarith.FloatRat(w.EndV) == nil {
 			return nil, fmt.Errorf(`%w: a prism boundary coordinate is not finite`, ErrUnsupported)
 		}
 	}
@@ -144,7 +146,7 @@ func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated 
 	t := proofarith.FloatRat(amount)
 	joins := make([]thickenAxisJoin, n)
 	for i := range dirs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		prev, cur := dirs[(i+n-1)%n], dirs[i]
@@ -152,14 +154,14 @@ func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated 
 		vertex := loop.walks[i]
 		j := &joins[i]
 		j.arc = turn == -sense
-		j.before = thickenExactOffset(vertex.startU, vertex.startV, sense*(-prev.v), sense*prev.u, t)
-		j.after = thickenExactOffset(vertex.startU, vertex.startV, sense*(-cur.v), sense*cur.u, t)
-		j.m = thickenExactOffset(vertex.startU, vertex.startV,
+		j.before = thickenExactOffset(vertex.StartU, vertex.StartV, sense*(-prev.v), sense*prev.u, t)
+		j.after = thickenExactOffset(vertex.StartU, vertex.StartV, sense*(-cur.v), sense*cur.u, t)
+		j.m = thickenExactOffset(vertex.StartU, vertex.StartV,
 			sense*(-prev.v-cur.v), sense*(prev.u+cur.u), t)
 	}
 	idx := 0
 	for i := range dirs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		if idx >= len(generated.Segments) {
@@ -196,7 +198,7 @@ func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated 
 			before, after = after, before
 		}
 		v := loop.walks[corner]
-		center := thickenExactOffset(v.startU, v.startV, 0, 0, t)
+		center := thickenExactOffset(v.StartU, v.StartV, 0, 0, t)
 		if !thickenPointIsExact(arc.Center, center) ||
 			!thickenPointIsExact(arc.Start, before) || !thickenPointIsExact(arc.End, after) ||
 			(sense < 0 && (arc.TStart != 0 || arc.TEnd != 1)) ||
@@ -325,21 +327,21 @@ func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thick
 		m, before, after thickenMovingPoint
 	}, n)
 	for i := range dirs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		prev, cur := dirs[(i+n-1)%n], dirs[i]
 		v := loop.walks[i]
 		j := &joins[i]
 		j.arc = prev.u*cur.v-prev.v*cur.u == -sense
-		j.before = thickenMovingOffset(v.startU, v.startV, sense*-prev.v, sense*prev.u)
-		j.after = thickenMovingOffset(v.startU, v.startV, sense*-cur.v, sense*cur.u)
-		j.m = thickenMovingOffset(v.startU, v.startV,
+		j.before = thickenMovingOffset(v.StartU, v.StartV, sense*-prev.v, sense*prev.u)
+		j.after = thickenMovingOffset(v.StartU, v.StartV, sense*-cur.v, sense*cur.u)
+		j.m = thickenMovingOffset(v.StartU, v.StartV,
 			sense*(-prev.v-cur.v), sense*(prev.u+cur.u))
 	}
 	var pieces []thickenMovingPiece
 	for i, dir := range dirs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		start, end := joins[i].m, joins[(i+1)%n].m
@@ -355,7 +357,7 @@ func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thick
 			v := loop.walks[(i+1)%n]
 			pieces = append(pieces, thickenMovingPiece{
 				start: joins[(i+1)%n].before, end: joins[(i+1)%n].after,
-				center: thickenExactPoint{u: proofarith.FloatRat(v.startU), v: proofarith.FloatRat(v.startV)},
+				center: thickenExactPoint{u: proofarith.FloatRat(v.StartU), v: proofarith.FloatRat(v.StartV)},
 			})
 		}
 	}
@@ -370,7 +372,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 	limit *big.Rat, budget *proofbound.WorkBudget, radial *thickenRadial) error {
 	boxes := make([]thickenExactBox, len(pieces))
 	for i, piece := range pieces {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		boxes[i] = thickenPieceBox(piece, limit)
@@ -408,7 +410,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 			}
 		}
 		for j := i + 1; j < len(pieces); j++ {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return err
 			}
 			if j == i+1 || (i == 0 && j == len(pieces)-1) {
@@ -578,39 +580,39 @@ func thickenRibbonSides(side ThickenSide) (right, left thickenRibbonSide) {
 // one open walk's per-segment axis direction, refusing an inexact endpoint, a
 // junction the two walks do not share exactly, a segment that is not
 // axis-parallel, and an interior corner that is not a right angle.
-func thickenOpenDirections(walks []sideWalk, budget *proofbound.WorkBudget) ([]thickenAxisDir, error) {
+func thickenOpenDirections(walks []survey2d.SideWalk, budget *proofbound.WorkBudget) ([]thickenAxisDir, error) {
 	n := len(walks)
 	if n == 0 {
 		return nil, fmt.Errorf(`%w: an open walk holds no segment`, ErrUnsupported)
 	}
 	dirs := make([]thickenAxisDir, n)
 	for i, w := range walks {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		if w.startBound.U != 0 || w.startBound.V != 0 || w.endBound.U != 0 || w.endBound.V != 0 {
+		if w.StartBound.U != 0 || w.StartBound.V != 0 || w.EndBound.U != 0 || w.EndBound.V != 0 {
 			return nil, fmt.Errorf(`%w: an open walk endpoint has an unresolved coordinate bound`, ErrUnsupported)
 		}
 		if i+1 < n {
 			next := walks[i+1]
-			if w.endU != next.startU || w.endV != next.startV {
+			if w.EndU != next.StartU || w.EndV != next.StartV {
 				return nil, fmt.Errorf(`%w: the open walk has no exact interior joins`, ErrUnsupported)
 			}
 		}
 		switch {
-		case w.startU == w.endU && w.startV < w.endV:
+		case w.StartU == w.EndU && w.StartV < w.EndV:
 			dirs[i] = thickenAxisDir{v: 1}
-		case w.startU == w.endU && w.startV > w.endV:
+		case w.StartU == w.EndU && w.StartV > w.EndV:
 			dirs[i] = thickenAxisDir{v: -1}
-		case w.startV == w.endV && w.startU < w.endU:
+		case w.StartV == w.EndV && w.StartU < w.EndU:
 			dirs[i] = thickenAxisDir{u: 1}
-		case w.startV == w.endV && w.startU > w.endU:
+		case w.StartV == w.EndV && w.StartU > w.EndU:
 			dirs[i] = thickenAxisDir{u: -1}
 		default:
 			return nil, fmt.Errorf(`%w: the open walk is not axis-parallel`, ErrUnsupported)
 		}
-		if proofarith.FloatRat(w.startU) == nil || proofarith.FloatRat(w.startV) == nil ||
-			proofarith.FloatRat(w.endU) == nil || proofarith.FloatRat(w.endV) == nil {
+		if proofarith.FloatRat(w.StartU) == nil || proofarith.FloatRat(w.StartV) == nil ||
+			proofarith.FloatRat(w.EndU) == nil || proofarith.FloatRat(w.EndV) == nil {
 			return nil, fmt.Errorf(`%w: an open walk coordinate is not finite`, ErrUnsupported)
 		}
 	}
@@ -636,7 +638,7 @@ type thickenRibbonCopy struct {
 // sign(cross) == −s rule the closed offset takes (shell_offset.go); the other
 // corner miters. A copy with steps == 0 is the recorded walk itself and takes
 // neither.
-func thickenRibbonCopyOf(walks []sideWalk, dirs []thickenAxisDir, c thickenRibbonSide) thickenRibbonCopy {
+func thickenRibbonCopyOf(walks []survey2d.SideWalk, dirs []thickenAxisDir, c thickenRibbonSide) thickenRibbonCopy {
 	n := len(dirs)
 	k := c.steps * c.normal
 	offset := func(u, v float64, d thickenAxisDir) thickenMovingPoint {
@@ -652,15 +654,15 @@ func thickenRibbonCopyOf(walks []sideWalk, dirs []thickenAxisDir, c thickenRibbo
 		v := walks[i]
 		joins[i] = join{
 			arc:    c.steps != 0 && prev.u*cur.v-prev.v*cur.u == -c.normal,
-			before: offset(v.startU, v.startV, prev),
-			after:  offset(v.startU, v.startV, cur),
-			m: thickenMovingOffset(v.startU, v.startV,
+			before: offset(v.StartU, v.StartV, prev),
+			after:  offset(v.StartU, v.StartV, cur),
+			m: thickenMovingOffset(v.StartU, v.StartV,
 				k*(-prev.v-cur.v), k*(prev.u+cur.u)),
 		}
 	}
 	out := thickenRibbonCopy{
-		head: offset(walks[0].startU, walks[0].startV, dirs[0]),
-		tail: offset(walks[n-1].endU, walks[n-1].endV, dirs[n-1]),
+		head: offset(walks[0].StartU, walks[0].StartV, dirs[0]),
+		tail: offset(walks[n-1].EndU, walks[n-1].EndV, dirs[n-1]),
 	}
 	for i, dir := range dirs {
 		start, end := out.head, out.tail
@@ -682,7 +684,7 @@ func thickenRibbonCopyOf(walks []sideWalk, dirs []thickenAxisDir, c thickenRibbo
 			v := walks[i+1]
 			out.pieces = append(out.pieces, thickenMovingPiece{
 				start: joins[i+1].before, end: joins[i+1].after,
-				center: thickenExactPoint{u: proofarith.FloatRat(v.startU), v: proofarith.FloatRat(v.startV)},
+				center: thickenExactPoint{u: proofarith.FloatRat(v.StartU), v: proofarith.FloatRat(v.StartV)},
 			})
 		}
 	}
@@ -775,7 +777,7 @@ func thickenArcIsCCW(start, end, center Point2) bool {
 // whole interval 0 < τ ≤ amount.
 func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amount float64,
 	budget *proofbound.WorkBudget, work *freeformWork, radial *thickenRadial) (ProfileRecord, error) {
-	raw := make([]sideWalk, len(chain.Segments))
+	raw := make([]survey2d.SideWalk, len(chain.Segments))
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
 			return ProfileRecord{}, err
@@ -787,7 +789,7 @@ func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amo
 		if err != nil {
 			return ProfileRecord{}, err
 		}
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {

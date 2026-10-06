@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -236,7 +238,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 	}
 	holeLoop := li != 0
 
-	var loopWalks []segmentWalk
+	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
 		if !resolved.loopMatches(li, loop) {
 			return nil, errResolvedWalksMismatch
@@ -244,7 +246,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 		loopWalks = resolved.loopWalks(li)
 	}
 
-	raw := make([]sideWalk, len(loop.Segments))
+	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -253,7 +255,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 		if err != nil {
 			return nil, err
 		}
-		var w segmentWalk
+		var w survey2d.SegmentWalk
 		if loopWalks != nil {
 			w = loopWalks[i]
 		} else {
@@ -262,14 +264,14 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 				return nil, err
 			}
 		}
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
 		return nil, err
 	}
 	n := len(walks)
-	singleClosed := n == 1 && walks[0].closed
+	singleClosed := n == 1 && walks[0].Closed
 
 	// A patch's own record is its own denotation (patchPayload carries no
 	// section displacement), so the boundBase term below is always zero;
@@ -281,8 +283,8 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 	var verts []*Vertex
 	if singleClosed {
 		w := walks[0]
-		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
-		seam = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
+		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
+		seam = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
 	} else {
 		verts = make([]*Vertex, n)
 		for i, w := range walks {
@@ -290,8 +292,8 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 				return nil, err
 			}
 			prev := walks[(i+n-1)%n]
-			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
-			verts[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
+			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
+			verts[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(boundBase, extra))}
 		}
 	}
 
@@ -311,13 +313,13 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 			return nil, err
 		}
 		var curve Curve
-		switch w.kind {
-		case walkCircular:
-			// The same circular edgeSign rule buildLoopSidesAs's walkCircular
+		switch w.Kind {
+		case survey2d.WalkCircular:
+			// The same circular edgeSign rule buildLoopSidesAs's survey2d.WalkCircular
 			// arm applies to its own rim edges: an Arc3/Circle3 is CCW from
 			// start to end about its axis, and a clockwise walk (or a
 			// reflected placement) inverts that sense.
-			clockwise := w.th1 < w.th0
+			clockwise := w.Th1 < w.Th0
 			edgeSign := 1.0
 			if clockwise {
 				edgeSign = -1
@@ -326,19 +328,19 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop LoopRecor
 				edgeSign = -edgeSign
 			}
 			edgeAxis := pp.dir(0, 0, 1).Scale(edgeSign)
-			center := pp.point(w.cU, w.cV, pp.z0)
-			radius := units.Millimeters(w.radius)
+			center := pp.point(w.CU, w.CV, pp.z0)
+			radius := units.Millimeters(w.Radius)
 			if singleClosed {
 				curve = Circle3{Center: center, Axis: edgeAxis, Radius: radius}
 			} else {
 				curve = Arc3{Center: center, Axis: edgeAxis, Radius: radius}
 			}
-		case walkFreeform:
+		case survey2d.WalkFreeform:
 			curve = NURBSCurve{}
 		default:
 			curve = Line3{}
 		}
-		edge := &Edge{curve: curve, start: start, end: end, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		edge := &Edge{curve: curve, start: start, end: end, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		coedges = append(coedges, coedge{edge: edge, forward: true})
 	}
 	return coedges, nil

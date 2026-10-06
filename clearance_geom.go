@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -55,7 +57,7 @@ func (w angWindow) classify(th, margin float64) int {
 	if w.full {
 		return 1
 	}
-	off := mod2pi(th - w.lo)
+	off := survey2d.Mod2pi(th - w.lo)
 	ext := w.hi - w.lo
 	if off <= ext {
 		if off >= margin && ext-off >= margin {
@@ -90,11 +92,11 @@ func (w linWindow) classify(z, margin float64) int {
 // 2D frame, queried by exact crossing parity with a deterministic retry
 // ladder — the same discipline as the wall survey's containment test.
 type region2 struct {
-	elems []surveyElem
+	elems []survey2d.SurveyElem
 	scale float64
 }
 
-func newRegion2(elems []surveyElem) region2 {
+func newRegion2(elems []survey2d.SurveyElem) region2 {
 	scale := 1.0
 	grow := func(vs ...float64) {
 		for _, v := range vs {
@@ -104,11 +106,11 @@ func newRegion2(elems []surveyElem) region2 {
 		}
 	}
 	for _, e := range elems {
-		if e.kind == surveyLine {
-			grow(e.ax, e.ay, e.bx, e.by)
+		if e.Kind == survey2d.SurveyLine {
+			grow(e.Ax, e.Ay, e.Bx, e.By)
 			continue
 		}
-		grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
+		grow(e.Qx-e.Rr, e.Qx+e.Rr, e.Qy-e.Rr, e.Qy+e.Rr)
 	}
 	return region2{elems: elems, scale: scale}
 }
@@ -123,7 +125,7 @@ func (r region2) contains(px, py float64) (bool, bool) {
 		dx, dy := math.Cos(th), math.Sin(th)
 		crossings, ok := 0, true
 		for _, e := range r.elems {
-			n, good := rayCrossings(e, px, py, dx, dy, r.tol())
+			n, good := survey2d.RayCrossings(e, px, py, dx, dy, r.tol())
 			if !good {
 				ok = false
 				break
@@ -141,7 +143,7 @@ func (r region2) contains(px, py float64) (bool, bool) {
 func (r region2) boundaryDist(px, py float64) float64 {
 	best := math.Inf(1)
 	for _, e := range r.elems {
-		d, _, _ := e.nearest(px, py, survTiny*r.scale)
+		d, _, _ := e.Nearest(px, py, survey2d.SurvTiny*r.scale)
 		if d < best {
 			best = d
 		}
@@ -171,13 +173,13 @@ func (r region2) classify(px, py, margin float64) int {
 func (r region2) samples() [][2]float64 {
 	var out [][2]float64
 	for _, e := range r.elems {
-		if e.kind == surveyLine {
-			out = append(out, [2]float64{e.ax, e.ay}, [2]float64{(e.ax + e.bx) / 2, (e.ay + e.by) / 2})
+		if e.Kind == survey2d.SurveyLine {
+			out = append(out, [2]float64{e.Ax, e.Ay}, [2]float64{(e.Ax + e.Bx) / 2, (e.Ay + e.By) / 2})
 			continue
 		}
-		lo, hi := e.arcRange()
+		lo, hi := e.ArcRange()
 		for _, th := range []float64{lo, (lo + hi) / 2} {
-			out = append(out, [2]float64{e.qx + e.rr*math.Cos(th), e.qy + e.rr*math.Sin(th)})
+			out = append(out, [2]float64{e.Qx + e.Rr*math.Cos(th), e.Qy + e.Rr*math.Sin(th)})
 		}
 	}
 	return out
@@ -189,20 +191,20 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 	probe := func(x, y float64) bool { return r.classify(x, y, r.tol()) == 1 }
 	for _, e := range r.elems {
 		var px, py, nx, ny float64
-		if e.kind == surveyLine {
-			px, py = (e.ax+e.bx)/2, (e.ay+e.by)/2
-			nx, ny = e.nx, e.ny
+		if e.Kind == survey2d.SurveyLine {
+			px, py = (e.Ax+e.Bx)/2, (e.Ay+e.By)/2
+			nx, ny = e.Nx, e.Ny
 		} else {
-			lo, hi := e.arcRange()
+			lo, hi := e.ArcRange()
 			th := (lo + hi) / 2
-			px, py = e.qx+e.rr*math.Cos(th), e.qy+e.rr*math.Sin(th)
-			s := e.matSign()
+			px, py = e.Qx+e.Rr*math.Cos(th), e.Qy+e.Rr*math.Sin(th)
+			s := e.MatSign()
 			nx, ny = -s*math.Cos(th), -s*math.Sin(th)
 		}
 		for _, f := range []float64{0.25, 0.03, 1e-4} {
 			step := f * r.scale
-			if e.kind == surveyArc && step > e.rr/2 {
-				step = e.rr / 2
+			if e.Kind == survey2d.SurveyArc && step > e.Rr/2 {
+				step = e.Rr / 2
 			}
 			x, y := px+nx*step, py+ny*step
 			if probe(x, y) {
@@ -215,7 +217,7 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 
 // newRegion2Budget is newRegion2 with cancellation charged to the caller's
 // shared coplanar-scan budget.
-func newRegion2Budget(budget *proofbound.WorkBudget, elems []surveyElem) (region2, error) {
+func newRegion2Budget(budget *proofbound.WorkBudget, elems []survey2d.SurveyElem) (region2, error) {
 	scale := 1.0
 	grow := func(vs ...float64) {
 		for _, v := range vs {
@@ -228,11 +230,11 @@ func newRegion2Budget(budget *proofbound.WorkBudget, elems []surveyElem) (region
 		if err := budget.Step(); err != nil {
 			return region2{}, err
 		}
-		if e.kind == surveyLine {
-			grow(e.ax, e.ay, e.bx, e.by)
+		if e.Kind == survey2d.SurveyLine {
+			grow(e.Ax, e.Ay, e.Bx, e.By)
 			continue
 		}
-		grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
+		grow(e.Qx-e.Rr, e.Qx+e.Rr, e.Qy-e.Rr, e.Qy+e.Rr)
 	}
 	return region2{elems: elems, scale: scale}, nil
 }
@@ -249,7 +251,7 @@ func regionContainsBudget(budget *proofbound.WorkBudget, r region2, px, py float
 			if err := budget.Step(); err != nil {
 				return false, false, err
 			}
-			n, good := rayCrossings(e, px, py, dx, dy, r.tol())
+			n, good := survey2d.RayCrossings(e, px, py, dx, dy, r.tol())
 			if !good {
 				ok = false
 				break
@@ -269,7 +271,7 @@ func regionBoundaryDistBudget(budget *proofbound.WorkBudget, r region2, px, py f
 		if err := budget.Step(); err != nil {
 			return 0, err
 		}
-		d, _, _ := e.nearest(px, py, survTiny*r.scale)
+		d, _, _ := e.Nearest(px, py, survey2d.SurvTiny*r.scale)
 		if d < best {
 			best = d
 		}
@@ -304,13 +306,13 @@ func regionSamplesBudget(budget *proofbound.WorkBudget, r region2) ([][2]float64
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		if e.kind == surveyLine {
-			out = append(out, [2]float64{e.ax, e.ay}, [2]float64{(e.ax + e.bx) / 2, (e.ay + e.by) / 2})
+		if e.Kind == survey2d.SurveyLine {
+			out = append(out, [2]float64{e.Ax, e.Ay}, [2]float64{(e.Ax + e.Bx) / 2, (e.Ay + e.By) / 2})
 			continue
 		}
-		lo, hi := e.arcRange()
+		lo, hi := e.ArcRange()
 		for _, th := range []float64{lo, (lo + hi) / 2} {
-			out = append(out, [2]float64{e.qx + e.rr*math.Cos(th), e.qy + e.rr*math.Sin(th)})
+			out = append(out, [2]float64{e.Qx + e.Rr*math.Cos(th), e.Qy + e.Rr*math.Sin(th)})
 		}
 	}
 	return out, nil
@@ -322,14 +324,14 @@ func regionInteriorPointBudget(budget *proofbound.WorkBudget, r region2) ([2]flo
 			return [2]float64{}, false, err
 		}
 		var px, py, nx, ny float64
-		if e.kind == surveyLine {
-			px, py = (e.ax+e.bx)/2, (e.ay+e.by)/2
-			nx, ny = e.nx, e.ny
+		if e.Kind == survey2d.SurveyLine {
+			px, py = (e.Ax+e.Bx)/2, (e.Ay+e.By)/2
+			nx, ny = e.Nx, e.Ny
 		} else {
-			lo, hi := e.arcRange()
+			lo, hi := e.ArcRange()
 			th := (lo + hi) / 2
-			px, py = e.qx+e.rr*math.Cos(th), e.qy+e.rr*math.Sin(th)
-			s := e.matSign()
+			px, py = e.Qx+e.Rr*math.Cos(th), e.Qy+e.Rr*math.Sin(th)
+			s := e.MatSign()
 			nx, ny = -s*math.Cos(th), -s*math.Sin(th)
 		}
 		for _, f := range []float64{0.25, 0.03, 1e-4} {
@@ -337,8 +339,8 @@ func regionInteriorPointBudget(budget *proofbound.WorkBudget, r region2) ([2]flo
 				return [2]float64{}, false, err
 			}
 			step := f * r.scale
-			if e.kind == surveyArc && step > e.rr/2 {
-				step = e.rr / 2
+			if e.Kind == survey2d.SurveyArc && step > e.Rr/2 {
+				step = e.Rr / 2
 			}
 			x, y := px+nx*step, py+ny*step
 			class, err := regionClassifyBudget(budget, r, x, y, r.tol())
@@ -356,18 +358,18 @@ func regionInteriorPointBudget(budget *proofbound.WorkBudget, r region2) ([2]flo
 // elemLineHits collects the crossing parameters of the (infinite) 2D line
 // p + t·d with one boundary element; ok is false on an ambiguous geometry
 // (near-parallel overlap, grazing an endpoint).
-func elemLineHits(e surveyElem, px, py, dx, dy, tol float64) ([]float64, bool) {
-	if e.kind == surveyLine {
-		ex, ey := e.bx-e.ax, e.by-e.ay
+func elemLineHits(e survey2d.SurveyElem, px, py, dx, dy, tol float64) ([]float64, bool) {
+	if e.Kind == survey2d.SurveyLine {
+		ex, ey := e.Bx-e.Ax, e.By-e.Ay
 		seg := math.Hypot(ex, ey)
 		det := dx*(-ey) + ex*dy
 		if math.Abs(det) <= 1e-12*math.Max(1, seg) {
-			if math.Abs((e.ax-px)*dy-(e.ay-py)*dx) <= tol {
+			if math.Abs((e.Ax-px)*dy-(e.Ay-py)*dx) <= tol {
 				return nil, false
 			}
 			return nil, true
 		}
-		rx, ry := e.ax-px, e.ay-py
+		rx, ry := e.Ax-px, e.Ay-py
 		t := (rx*(-ey) + ex*ry) / det
 		u := (dx*ry - dy*rx) / det
 		uTol := tol / seg
@@ -379,12 +381,12 @@ func elemLineHits(e surveyElem, px, py, dx, dy, tol float64) ([]float64, bool) {
 		}
 		return []float64{t}, true
 	}
-	fx, fy := px-e.qx, py-e.qy
+	fx, fy := px-e.Qx, py-e.Qy
 	b := fx*dx + fy*dy
-	cc := fx*fx + fy*fy - e.rr*e.rr
+	cc := fx*fx + fy*fy - e.Rr*e.Rr
 	disc := b*b - cc
 	if disc <= 0 {
-		if disc > -tol*e.rr {
+		if disc > -tol*e.Rr {
 			return nil, false
 		}
 		return nil, true
@@ -396,15 +398,15 @@ func elemLineHits(e surveyElem, px, py, dx, dy, tol float64) ([]float64, bool) {
 	var out []float64
 	for _, t := range []float64{-b - s, -b + s} {
 		x, y := px+t*dx, py+t*dy
-		th := math.Atan2(y-e.qy, x-e.qx)
-		if e.closed {
+		th := math.Atan2(y-e.Qy, x-e.Qx)
+		if e.Closed {
 			out = append(out, t)
 			continue
 		}
-		lo, hi := e.arcRange()
-		off := mod2pi(th - lo)
+		lo, hi := e.ArcRange()
+		off := survey2d.Mod2pi(th - lo)
 		ext := hi - lo
-		angTol := tol / e.rr
+		angTol := tol / e.Rr
 		if off <= angTol || math.Abs(off-ext) <= angTol || math.Abs(off-2*math.Pi) <= angTol {
 			return nil, false
 		}
@@ -459,20 +461,20 @@ func (r region2) lineIntervals(px, py, dx, dy float64) ([]clrIv, bool) {
 // ambiguous contact (a parallel overlap, an endpoint graze, a tangency) —
 // the ingredients of a SUPERSET of the region's intersection with the line,
 // which may only ever exclude, never bless.
-func elemLineSuperset(e surveyElem, px, py, dx, dy, tol float64) ([]float64, []clrIv) {
-	if e.kind == surveyLine {
-		ex, ey := e.bx-e.ax, e.by-e.ay
+func elemLineSuperset(e survey2d.SurveyElem, px, py, dx, dy, tol float64) ([]float64, []clrIv) {
+	if e.Kind == survey2d.SurveyLine {
+		ex, ey := e.Bx-e.Ax, e.By-e.Ay
 		seg := math.Hypot(ex, ey)
 		det := dx*(-ey) + ex*dy
 		if math.Abs(det) <= 1e-12*math.Max(1, seg) {
-			if math.Abs((e.ax-px)*dy-(e.ay-py)*dx) <= tol {
-				ta := (e.ax-px)*dx + (e.ay-py)*dy
-				tb := (e.bx-px)*dx + (e.by-py)*dy
+			if math.Abs((e.Ax-px)*dy-(e.Ay-py)*dx) <= tol {
+				ta := (e.Ax-px)*dx + (e.Ay-py)*dy
+				tb := (e.Bx-px)*dx + (e.By-py)*dy
 				return nil, []clrIv{{lo: math.Min(ta, tb) - tol, hi: math.Max(ta, tb) + tol}}
 			}
 			return nil, nil
 		}
-		rx, ry := e.ax-px, e.ay-py
+		rx, ry := e.Ax-px, e.Ay-py
 		t := (rx*(-ey) + ex*ry) / det
 		u := (dx*ry - dy*rx) / det
 		uTol := tol / seg
@@ -484,12 +486,12 @@ func elemLineSuperset(e surveyElem, px, py, dx, dy, tol float64) ([]float64, []c
 		}
 		return []float64{t}, nil
 	}
-	fx, fy := px-e.qx, py-e.qy
+	fx, fy := px-e.Qx, py-e.Qy
 	b := fx*dx + fy*dy
-	cc := fx*fx + fy*fy - e.rr*e.rr
+	cc := fx*fx + fy*fy - e.Rr*e.Rr
 	disc := b*b - cc
 	if disc <= 0 {
-		if disc > -tol*e.rr {
+		if disc > -tol*e.Rr {
 			w := math.Sqrt(math.Abs(disc)) + tol
 			return nil, []clrIv{{lo: -b - w, hi: -b + w}}
 		}
@@ -503,15 +505,15 @@ func elemLineSuperset(e surveyElem, px, py, dx, dy, tol float64) ([]float64, []c
 	var spans []clrIv
 	for _, t := range []float64{-b - s, -b + s} {
 		x, y := px+t*dx, py+t*dy
-		th := math.Atan2(y-e.qy, x-e.qx)
-		if e.closed {
+		th := math.Atan2(y-e.Qy, x-e.Qx)
+		if e.Closed {
 			hits = append(hits, t)
 			continue
 		}
-		lo, hi := e.arcRange()
-		off := mod2pi(th - lo)
+		lo, hi := e.ArcRange()
+		off := survey2d.Mod2pi(th - lo)
 		ext := hi - lo
-		angTol := tol / e.rr
+		angTol := tol / e.Rr
 		if off <= angTol || math.Abs(off-ext) <= angTol || math.Abs(off-2*math.Pi) <= angTol {
 			spans = append(spans, clrIv{lo: t - tol, hi: t + tol})
 			continue
@@ -597,16 +599,16 @@ func (r region2) segmentHits(ax, ay, bx, by float64) (int, [2]float64) {
 // segElemDistLB is a lower bound on the distance between a 2D segment and a
 // boundary element (the arc bound goes through its full circle — an
 // underestimate, which is the sound direction for exclusion proofs).
-func segElemDistLB(e surveyElem, ax, ay, bx, by float64) float64 {
-	if e.kind == surveyLine {
-		return segSegDist(ax, ay, bx, by, e.ax, e.ay, e.bx, e.by)
+func segElemDistLB(e survey2d.SurveyElem, ax, ay, bx, by float64) float64 {
+	if e.Kind == survey2d.SurveyLine {
+		return segSegDist(ax, ay, bx, by, e.Ax, e.Ay, e.Bx, e.By)
 	}
-	lo, hi := segPointDistRange(ax, ay, bx, by, e.qx, e.qy)
-	if hi < e.rr {
-		return e.rr - hi
+	lo, hi := segPointDistRange(ax, ay, bx, by, e.Qx, e.Qy)
+	if hi < e.Rr {
+		return e.Rr - hi
 	}
-	if lo > e.rr {
-		return lo - e.rr
+	if lo > e.Rr {
+		return lo - e.Rr
 	}
 	return 0
 }
@@ -1147,55 +1149,55 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 	nDir := pp.dir(0, 0, 1)
 	h := pp.z1 - pp.z0
 
-	var capElems []surveyElem
+	var capElems []survey2d.SurveyElem
 	maxCoordUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			el, ok := walkElem(w.segmentWalk)
+			el, ok := walkElem(w.SegmentWalk)
 			if !ok {
 				return false, nil
 			}
-			maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+			maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
 			if !pp.surfaceResult {
 				capElems = append(capElems, el)
 			}
 
-			if w.isCircular() {
+			if w.IsCircular() {
 				f := &cFace{
 					kind:   ckCylinder,
-					anchor: pp.point(w.cU, w.cV, pp.z0),
+					anchor: pp.point(w.CU, w.CV, pp.z0),
 					axis:   nDir,
 					refU:   pp.dir(1, 0, 0),
 					refV:   pp.dir(0, 1, 0),
-					radius: w.radius,
+					radius: w.Radius,
 					zWin:   newLinWindow(0, h),
-					sweep:  angWindow{full: w.closed},
+					sweep:  angWindow{full: w.Closed},
 				}
-				if !w.closed {
-					f.sweep = newAngWindow(w.th0, w.th1)
+				if !w.Closed {
+					f.sweep = newAngWindow(w.Th0, w.Th1)
 				}
-				top := pp.point(w.cU, w.cV, pp.z1)
-				f.box = boxUnion(circleBox(f.anchor, nDir, w.radius), circleBox(top, nDir, w.radius))
-				midTh := (w.th0 + w.th1) / 2
+				top := pp.point(w.CU, w.CV, pp.z1)
+				f.box = boxUnion(circleBox(f.anchor, nDir, w.Radius), circleBox(top, nDir, w.Radius))
+				midTh := (w.Th0 + w.Th1) / 2
 				f.wit = append(f.wit,
-					pp.point(w.cU+w.radius*math.Cos(midTh), w.cV+w.radius*math.Sin(midTh), (pp.z0+pp.z1)/2),
-					pp.point(w.cU+w.radius*math.Cos(w.th0), w.cV+w.radius*math.Sin(w.th0), pp.z0))
+					pp.point(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (pp.z0+pp.z1)/2),
+					pp.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), pp.z0))
 				g.faces = append(g.faces, f)
 				continue
 			}
 
-			l := math.Hypot(w.endU-w.startU, w.endV-w.startV)
+			l := math.Hypot(w.EndU-w.StartU, w.EndV-w.StartV)
 			if l == 0 {
 				return false, nil
 			}
-			e1, ok := pp.dir(w.endU-w.startU, w.endV-w.startV, 0).Normalize()
+			e1, ok := pp.dir(w.EndU-w.StartU, w.EndV-w.StartV, 0).Normalize()
 			if !ok {
 				return false, nil
 			}
-			tu, tv := w.tanInU, w.tanInV
+			tu, tv := w.TanInU, w.TanInV
 			if pp.reflected() {
 				tu, tv = -tu, -tv
 			}
@@ -1205,16 +1207,16 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 			}
 			f := &cFace{
 				kind: ckPlane,
-				o:    pp.point(w.startU, w.startV, pp.z0),
+				o:    pp.point(w.StartU, w.StartV, pp.z0),
 				u:    e1,
 				v:    nDir,
 				n:    nOut,
 			}
-			le0, _ := lineElem(0, 0, l, 0)
-			le1, _ := lineElem(l, 0, l, h)
-			le2, _ := lineElem(l, h, 0, h)
-			le3, _ := lineElem(0, h, 0, 0)
-			f.region = newRegion2([]surveyElem{le0, le1, le2, le3})
+			le0, _ := survey2d.LineElem(0, 0, l, 0)
+			le1, _ := survey2d.LineElem(l, 0, l, h)
+			le2, _ := survey2d.LineElem(l, h, 0, h)
+			le3, _ := survey2d.LineElem(0, h, 0, 0)
+			f.region = newRegion2([]survey2d.SurveyElem{le0, le1, le2, le3})
 			f.box = boxOf(f.o, f.o.Add(e1.Scale(l)), f.o.Add(nDir.Scale(h)), f.o.Add(e1.Scale(l)).Add(nDir.Scale(h)))
 			f.wit = append(f.wit, f.o.Add(e1.Scale(l/2)).Add(nDir.Scale(h/2)), f.o)
 			g.faces = append(g.faces, f)
@@ -1264,12 +1266,12 @@ func capBox(f *cFace) [2]r3.Vec {
 		r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1)),
 	}
 	for _, e := range f.region.elems {
-		if e.kind == surveyLine {
-			box = boxUnion(box, boxOf(at(e.ax, e.ay), at(e.bx, e.by)))
+		if e.Kind == survey2d.SurveyLine {
+			box = boxUnion(box, boxOf(at(e.Ax, e.Ay), at(e.Bx, e.By)))
 			continue
 		}
 		axis := f.u.Cross(f.v)
-		box = boxUnion(box, circleBox(at(e.qx, e.qy), axis, e.rr))
+		box = boxUnion(box, circleBox(at(e.Qx, e.Qy), axis, e.Rr))
 	}
 	return box
 }
@@ -1321,40 +1323,40 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 	midPhi := (rp.phi0 + rp.phi1) / 2
 	onAxis := func(z float64) r3.Vec { return a3p.Add(wp.Scale(z)) }
 
-	var capElems []surveyElem
+	var capElems []survey2d.SurveyElem
 	maxAxisRadiusUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			kind := rp.ax.classify(w.segmentWalk)
-			if el, ok := walkElem(w.segmentWalk); ok {
+			kind := rp.ax.classify(w.SegmentWalk)
+			if el, ok := walkElem(w.SegmentWalk); ok {
 				capElems = append(capElems, el)
 			}
-			maxAxisRadiusUpper = math.Max(maxAxisRadiusUpper, w.axisRadiusUpper)
+			maxAxisRadiusUpper = math.Max(maxAxisRadiusUpper, w.AxisRadiusUpper)
 			switch kind {
 			case wallAxis:
 				continue
 			case wallCylinder:
-				r := (w.startV + w.endV) / 2
+				r := (w.StartV + w.EndV) / 2
 				f := &cFace{
 					kind: ckCylinder, anchor: a3p, axis: wp, refU: e0p, refV: e1p,
-					radius: r, zWin: newLinWindow(w.startU, w.endU), sweep: sweep,
+					radius: r, zWin: newLinWindow(w.StartU, w.EndU), sweep: sweep,
 				}
-				f.box = boxUnion(circleBox(onAxis(w.startU), wp, r), circleBox(onAxis(w.endU), wp, r))
-				f.wit = append(f.wit, rp.point(b, (w.startU+w.endU)/2, r, midPhi), rp.point(b, w.startU, r, rp.phi0))
+				f.box = boxUnion(circleBox(onAxis(w.StartU), wp, r), circleBox(onAxis(w.EndU), wp, r))
+				f.wit = append(f.wit, rp.point(b, (w.StartU+w.EndU)/2, r, midPhi), rp.point(b, w.StartU, r, rp.phi0))
 				g.faces = append(g.faces, f)
 			case wallPlane:
-				rlo := math.Min(w.startV, w.endV)
-				rhi := math.Max(w.startV, w.endV)
+				rlo := math.Min(w.StartV, w.EndV)
+				rhi := math.Max(w.StartV, w.EndV)
 				sign := 1.0
-				if w.tanInV < 0 {
+				if w.TanInV < 0 {
 					sign = -1
 				}
 				f := &cFace{
 					kind: ckPlane,
-					o:    onAxis(w.startU),
+					o:    onAxis(w.StartU),
 					u:    e0p, v: e1p,
 					n: wp.Scale(sign),
 				}
@@ -1363,8 +1365,8 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 				f.wit = capWitnesses(f)
 				g.faces = append(g.faces, f)
 			case wallCone:
-				dz, dr := w.endU-w.startU, w.endV-w.startV
-				apexZ := w.startU - w.startV*dz/dr
+				dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
+				apexZ := w.StartU - w.StartV*dz/dr
 				growth := 1.0
 				if dz*dr < 0 {
 					growth = -1
@@ -1375,13 +1377,13 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 					axis:   wp.Scale(growth),
 					refU:   e0p, refV: e1p,
 					half:  math.Atan2(math.Abs(dr), math.Abs(dz)),
-					zWin:  newLinWindow(math.Abs(w.startU-apexZ), math.Abs(w.endU-apexZ)),
+					zWin:  newLinWindow(math.Abs(w.StartU-apexZ), math.Abs(w.EndU-apexZ)),
 					sweep: sweep,
 				}
-				f.box = boxUnion(circleBox(onAxis(w.startU), wp, w.startV), circleBox(onAxis(w.endU), wp, w.endV))
-				f.wit = append(f.wit, rp.point(b, (w.startU+w.endU)/2, (w.startV+w.endV)/2, midPhi))
+				f.box = boxUnion(circleBox(onAxis(w.StartU), wp, w.StartV), circleBox(onAxis(w.EndU), wp, w.EndV))
+				f.wit = append(f.wit, rp.point(b, (w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, midPhi))
 				g.faces = append(g.faces, f)
-				if w.startV <= 0 || w.endV <= 0 {
+				if w.StartV <= 0 || w.EndV <= 0 {
 					// The apex sits on the trimmed face: a surface singular
 					// point, synthesized as a vertex-like candidate (§3).
 					g.verts = append(g.verts, onAxis(apexZ))
@@ -1389,52 +1391,52 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 			case wallSphere:
 				f := &cFace{
 					kind:   ckSphere,
-					anchor: onAxis(w.cU),
+					anchor: onAxis(w.CU),
 					axis:   wp,
 					refU:   e0p, refV: e1p,
-					radius: w.radius,
-					merid:  angWindow{full: w.closed},
+					radius: w.Radius,
+					merid:  angWindow{full: w.Closed},
 					sweep:  sweep,
 				}
-				if !w.closed {
-					f.merid = newAngWindow(w.th0, w.th1)
+				if !w.Closed {
+					f.merid = newAngWindow(w.Th0, w.Th1)
 				}
 				f.box = [2]r3.Vec{
-					f.anchor.Sub(r3.NewVec(w.radius, w.radius, w.radius)),
-					f.anchor.Add(r3.NewVec(w.radius, w.radius, w.radius)),
+					f.anchor.Sub(r3.NewVec(w.Radius, w.Radius, w.Radius)),
+					f.anchor.Add(r3.NewVec(w.Radius, w.Radius, w.Radius)),
 				}
-				midTh := (w.th0 + w.th1) / 2
-				f.wit = append(f.wit, rp.point(b, w.cU+w.radius*math.Cos(midTh), math.Max(0, w.radius*math.Sin(midTh)), midPhi))
+				midTh := (w.Th0 + w.Th1) / 2
+				f.wit = append(f.wit, rp.point(b, w.CU+w.Radius*math.Cos(midTh), math.Max(0, w.Radius*math.Sin(midTh)), midPhi))
 				g.faces = append(g.faces, f)
 			case wallTorus:
 				f := &cFace{
 					kind:   ckTorus,
-					anchor: onAxis(w.cU),
+					anchor: onAxis(w.CU),
 					axis:   wp,
 					refU:   e0p, refV: e1p,
-					radius:  w.radius,
-					major:   w.cV,
-					merid:   angWindow{full: w.closed},
+					radius:  w.Radius,
+					major:   w.CV,
+					merid:   angWindow{full: w.Closed},
 					sweep:   sweep,
-					spindle: w.radius >= w.cV-clrAngTol*math.Max(1, w.cV),
+					spindle: w.Radius >= w.CV-clrAngTol*math.Max(1, w.CV),
 				}
-				if !w.closed {
-					f.merid = newAngWindow(w.th0, w.th1)
+				if !w.Closed {
+					f.merid = newAngWindow(w.Th0, w.Th1)
 				}
 				spineBox := circleBox(f.anchor, wp, f.major)
-				pad := r3.NewVec(w.radius, w.radius, w.radius)
+				pad := r3.NewVec(w.Radius, w.Radius, w.Radius)
 				f.box = [2]r3.Vec{spineBox[0].Sub(pad), spineBox[1].Add(pad)}
-				midTh := (w.th0 + w.th1) / 2
-				f.wit = append(f.wit, rp.point(b, w.cU+w.radius*math.Cos(midTh), w.cV+w.radius*math.Sin(midTh), midPhi))
+				midTh := (w.Th0 + w.Th1) / 2
+				f.wit = append(f.wit, rp.point(b, w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), midPhi))
 				g.faces = append(g.faces, f)
 				// A spindle patch reaching the axis at a walk endpoint has a
 				// singular axis-collapse point there, synthesized like a cone
 				// apex (§3).
-				if !w.closed && w.startV == 0 {
-					g.verts = append(g.verts, onAxis(w.cU+w.radius*math.Cos(w.th0)))
+				if !w.Closed && w.StartV == 0 {
+					g.verts = append(g.verts, onAxis(w.CU+w.Radius*math.Cos(w.Th0)))
 				}
-				if !w.closed && w.endV == 0 {
-					g.verts = append(g.verts, onAxis(w.cU+w.radius*math.Cos(w.th1)))
+				if !w.Closed && w.EndV == 0 {
+					g.verts = append(g.verts, onAxis(w.CU+w.Radius*math.Cos(w.Th1)))
 				}
 			}
 		}
@@ -1521,7 +1523,7 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 		}
 		cf := &cFace{kind: ckPlane, o: pl.Frame.Origin(), u: pl.Frame.U(), v: pl.Frame.V(), n: normal}
 
-		var elems []surveyElem
+		var elems []survey2d.SurveyElem
 		var pts []r3.Vec
 		for _, l := range f.loops {
 			cnt := len(l.coedges)
@@ -1539,7 +1541,7 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 			}
 			for i := range local {
 				a, next := local[i], local[(i+1)%cnt]
-				if el, ok := lineElem(a.X, a.Y, next.X, next.Y); ok {
+				if el, ok := survey2d.LineElem(a.X, a.Y, next.X, next.Y); ok {
 					elems = append(elems, el)
 				}
 			}
@@ -1573,32 +1575,32 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 // annularRegion builds the 2D region of a revolve wallPlane face in its
 // (e0, e1) frame: an annular sector, a disk sector, an annulus or a disk.
 func annularRegion(rlo, rhi, phi0, phi1 float64, full bool) region2 {
-	var elems []surveyElem
+	var elems []survey2d.SurveyElem
 	if full {
-		if e, ok := arcElem(0, 0, rhi, 0, 2*math.Pi, true); ok {
+		if e, ok := survey2d.ArcElem(0, 0, rhi, 0, 2*math.Pi, true); ok {
 			elems = append(elems, e)
 		}
 		if rlo > 0 {
-			if e, ok := arcElem(0, 0, rlo, 0, 2*math.Pi, true); ok {
+			if e, ok := survey2d.ArcElem(0, 0, rlo, 0, 2*math.Pi, true); ok {
 				elems = append(elems, e)
 			}
 		}
 		return newRegion2(elems)
 	}
-	if e, ok := arcElem(0, 0, rhi, phi0, phi1, false); ok {
+	if e, ok := survey2d.ArcElem(0, 0, rhi, phi0, phi1, false); ok {
 		elems = append(elems, e)
 	}
 	if rlo > 0 {
-		if e, ok := arcElem(0, 0, rlo, phi0, phi1, false); ok {
+		if e, ok := survey2d.ArcElem(0, 0, rlo, phi0, phi1, false); ok {
 			elems = append(elems, e)
 		}
 	}
 	s0, c0 := math.Sincos(phi0)
 	s1, c1 := math.Sincos(phi1)
-	if e, ok := lineElem(rlo*c0, rlo*s0, rhi*c0, rhi*s0); ok {
+	if e, ok := survey2d.LineElem(rlo*c0, rlo*s0, rhi*c0, rhi*s0); ok {
 		elems = append(elems, e)
 	}
-	if e, ok := lineElem(rlo*c1, rlo*s1, rhi*c1, rhi*s1); ok {
+	if e, ok := survey2d.LineElem(rlo*c1, rlo*s1, rhi*c1, rhi*s1); ok {
 		elems = append(elems, e)
 	}
 	return newRegion2(elems)
@@ -1651,7 +1653,7 @@ func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool
 	return false, false, nil
 }
 
-// rayCrossings counts certified transversal crossings of the ray p + t·dir
+// survey2d.RayCrossings counts certified transversal crossings of the ray p + t·dir
 // (t > tol) with the trimmed face; good is false on any ambiguity.
 func (f *cFace) rayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {
 	if err := ctx.Err(); err != nil {

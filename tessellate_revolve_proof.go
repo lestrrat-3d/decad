@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -42,7 +44,7 @@ import (
 // revolveTrigGapPrior is the a-priori ceiling on how far one stored cosine or
 // sine sits from the exact value it stands for. The tessellator does not call
 // math.Sincos: it encloses the ideal angle's cosine and sine as rational
-// intervals (proofbound.TurnSinCosInterval / radSinCosInterval, neither of which ever
+// intervals (proofbound.TurnSinCosInterval / survey2d.RadSinCosInterval, neither of which ever
 // compares against π) and stores the float64 NEAREST the enclosure's midpoint.
 // So the stored value is within half an ulp of a point inside an enclosure
 // whose own width is below 2⁻¹⁸⁰ — comfortably inside 2⁻⁵⁰ — and the bound is
@@ -113,7 +115,7 @@ type revolveAngular struct {
 // denote), this falls back to the prior reading over the held floats alone,
 // which reproduces today's construction exactly: a partial sweep's angle
 // φ0 + l·(φ1 − φ0)/n as an exact rational in the payload's own two floats
-// (radSinCosInterval), a full turn starting at zero as l/n of a TURN
+// (survey2d.RadSinCosInterval), a full turn starting at zero as l/n of a TURN
 // (proofbound.TurnSinCosInterval, no π entering at all), and a full turn starting
 // elsewhere as the same radian enclosure over φ0 + 2π·l/n, widened by the 2π
 // enclosure's own (sub-2⁻²⁴⁰) width.
@@ -168,7 +170,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolveAngular, error) {
 		default:
 			angle := new(big.Rat).Add(r0, new(big.Rat).Mul(frac, new(big.Rat).Sub(r1, r0)))
 			var ok bool
-			sinIv, cosIv, ok = radSinCosInterval(angle)
+			sinIv, cosIv, ok = survey2d.RadSinCosInterval(angle)
 			if !ok {
 				return revolveAngular{}, errRevolveAngleEnclosure
 			}
@@ -199,24 +201,26 @@ var errRevolveAngleEnclosure = fmt.Errorf(`%w: an angular sample's cosine and si
 // e0 = −dV·U + dU·V and e1 = w × e0. The gap between this and the stored basis
 // is one of the terms deltaC measures.
 func revolveIdealBasis(rp revolvePayload) (revolveBasis3Iv, bool) {
-	origin, ok0 := ivVec3Of(rp.frame.Origin())
-	fu, ok1 := ivVec3Of(rp.frame.U())
-	fv, ok2 := ivVec3Of(rp.frame.V())
+	origin, ok0 := survey2d.IvVec3Of(rp.frame.Origin())
+	fu, ok1 := survey2d.IvVec3Of(rp.frame.U())
+	fv, ok2 := survey2d.IvVec3Of(rp.frame.V())
 	aU, aV := proofarith.FloatRat(rp.ax.aU), proofarith.FloatRat(rp.ax.aV)
 	dU, dV := proofarith.FloatRat(rp.ax.dU), proofarith.FloatRat(rp.ax.dV)
 	if !ok0 || !ok1 || !ok2 || aU == nil || aV == nil || dU == nil || dV == nil {
 		return revolveBasis3Iv{}, false
 	}
-	scale := func(v ivVec3, s *big.Rat) ivVec3 { return ivVec3Mul(v, proofbound.PointInterval(s)) }
-	a3 := ivVec3Add(origin, ivVec3Add(scale(fu, aU), scale(fv, aV)))
-	w := ivVec3Add(scale(fu, dU), scale(fv, dV))
-	e0 := ivVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
+	scale := func(v survey2d.IvVec3, s *big.Rat) survey2d.IvVec3 {
+		return survey2d.IvVec3Mul(v, proofbound.PointInterval(s))
+	}
+	a3 := survey2d.IvVec3Add(origin, survey2d.IvVec3Add(scale(fu, aU), scale(fv, aV)))
+	w := survey2d.IvVec3Add(scale(fu, dU), scale(fv, dV))
+	e0 := survey2d.IvVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
 	return revolveBasis3Iv{a3: a3, w: w, e0: e0, e1: ivVec3Cross(w, e0)}, true
 }
 
 // revolveBasis3Iv is revolveBasis enclosed exactly.
 type revolveBasis3Iv struct {
-	a3, w, e0, e1 ivVec3
+	a3, w, e0, e1 survey2d.IvVec3
 }
 
 // revolveMeridianEnclosure encloses one meridian sample's IDEAL axis
@@ -237,8 +241,8 @@ func revolveMeridianEnclosure(ax axisFrame, u, v float64, bound proofbound.WalkE
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 	return axisCoordInterval(ax,
-		intervalWiden(proofbound.PointInterval(ru), bu),
-		intervalWiden(proofbound.PointInterval(rv), bv),
+		survey2d.IntervalWiden(proofbound.PointInterval(ru), bu),
+		survey2d.IntervalWiden(proofbound.PointInterval(rv), bv),
 	)
 }
 
@@ -269,9 +273,9 @@ func axisCoordInterval(ax axisFrame, u, v proofbound.RatInterval) (proofbound.Ra
 
 // revolveIdealPoint encloses X(z, ρ, φ) exactly: the ideal unplaced sample
 // docs/tessellation-design.md §8 measures every stored vertex against.
-func revolveIdealPoint(b revolveBasis3Iv, z, rho, cos, sin proofbound.RatInterval) ivVec3 {
-	radial := ivVec3Add(ivVec3Mul(b.e0, cos), ivVec3Mul(b.e1, sin))
-	return ivVec3Add(b.a3, ivVec3Add(ivVec3Mul(b.w, z), ivVec3Mul(radial, rho)))
+func revolveIdealPoint(b revolveBasis3Iv, z, rho, cos, sin proofbound.RatInterval) survey2d.IvVec3 {
+	radial := survey2d.IvVec3Add(survey2d.IvVec3Mul(b.e0, cos), survey2d.IvVec3Mul(b.e1, sin))
+	return survey2d.IvVec3Add(b.a3, survey2d.IvVec3Add(survey2d.IvVec3Mul(b.w, z), survey2d.IvVec3Mul(radial, rho)))
 }
 
 // revolveCoordMax is §8's upward-rounded envelope of every ideal unplaced
@@ -549,9 +553,9 @@ func linearWeightPrimitive(alpha, beta, t *big.Rat, weight int) *big.Rat {
 
 // ivTwoTriangleArea encloses twice the area of a triangle whose corners are
 // themselves enclosed — the |A × B| the held facet's own Jacobian is.
-func ivTwoTriangleArea(p0, p1, p2 ivVec3) (proofbound.RatInterval, bool) {
+func ivTwoTriangleArea(p0, p1, p2 survey2d.IvVec3) (proofbound.RatInterval, bool) {
 	n := ivVec3Cross(ivVec3Sub(p1, p0), ivVec3Sub(p2, p0))
-	return intervalSqrt(ivVec3NormSq(n))
+	return survey2d.IntervalSqrt(survey2d.IvVec3NormSq(n))
 }
 
 // revolveAuditTri is one triangle's exact lift, held for the whole audit: its

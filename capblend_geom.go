@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -32,10 +34,10 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 		return nil, fmt.Errorf(`%w: a cap loop holds no walks`, ErrDegenerate)
 	}
 	for _, w := range walks {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		if w.isCircular() {
+		if w.IsCircular() {
 			if _, err := capBandRadius(w, d); err != nil {
 				return nil, err
 			}
@@ -43,14 +45,14 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 	}
 	joins := make([]cornerJoin, n)
 	for i := range n {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		prev := walks[(i+n-1)%n]
 		cur := walks[i]
-		vU, vV := cur.startU, cur.startV
-		aox, aoy, la := normalize2(prev.tanOutU, prev.tanOutV)
-		bix, biy, lb := normalize2(cur.tanInU, cur.tanInV)
+		vU, vV := cur.StartU, cur.StartV
+		aox, aoy, la := normalize2(prev.TanOutU, prev.TanOutV)
+		bix, biy, lb := normalize2(cur.TanInU, cur.TanInV)
 		if la == 0 || lb == 0 {
 			return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 		}
@@ -102,13 +104,13 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 // tiny, taper) and this evaluator cannot state its carrier in float64 at that
 // scale, which is §4's ErrUnsupported side of the existence test (Table SX row
 // SX13).
-func capBandRadius(w sideWalk, d float64) (float64, error) {
+func capBandRadius(w survey2d.SideWalk, d float64) (float64, error) {
 	r, ok := offsetRadius(w, 1, d)
 	if !ok {
 		return 0, errOffsetDrop
 	}
-	if r == w.radius {
-		return 0, fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of a circular wall's own radius %v mm, so the cap contour's radial change rounds away and the band's cone patch cannot be told from a cylinder; a wider setback or a smaller radius states a chamfer this evaluator can build`, ErrUnsupported, d, w.radius)
+	if r == w.Radius {
+		return 0, fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of a circular wall's own radius %v mm, so the cap contour's radial change rounds away and the band's cone patch cannot be told from a cylinder; a wider setback or a smaller radius states a chamfer this evaluator can build`, ErrUnsupported, d, w.Radius)
 	}
 	return r, nil
 }
@@ -157,9 +159,9 @@ func capWallSweep(cU, cV float64, start, end Point2, refSweep float64) (capTh0, 
 // corner walk, the same decomposition prismCornerLoopsBudget applies to
 // every loop of a section.
 func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *freeformWork) (cornerLoop, error) {
-	raw := make([]sideWalk, len(loop.Segments))
+	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return cornerLoop{}, err
 		}
 		w, err := walkOf(seg, work)
@@ -169,7 +171,7 @@ func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *fre
 		if err := requireAnalyticWalk(w, "a cap-loop chamfer"); err != nil {
 			return cornerLoop{}, err
 		}
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
 	walks, err := coalesceWalksBudget(raw, budget)
 	if err != nil {
@@ -329,7 +331,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// unwidened for their own, separate bound.
 	maxCoordUpper := 0.0
 	for _, w := range walks {
-		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
 	}
 	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pl.frame, pl.xform, math.Max(maxCoordUpper, math.Max(math.Abs(capZ), math.Abs(sideZ))))
 
@@ -347,7 +349,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	capDelta := cbp.capBandLevel(capZ, matSign).Bound
 
 	// A single closed circle has no corner: one Cone patch, full turn.
-	if n == 1 && walks[0].closed {
+	if n == 1 && walks[0].Closed {
 		w := walks[0]
 		capRadius, err := capBandRadius(w, d)
 		if err != nil {
@@ -367,13 +369,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// bound — its returned Edge's own lengthBound comes from
 		// capCircleLengthBound instead — so widening it here by
 		// frameLiftAllow charges the vertex alone.
-		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
-		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
+		capEdge := wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, proofbound.AbsSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
+		patch := buildConePatch(pl, body, ref, li, 0, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
-		if w.th1 < w.th0 {
+		if w.Th1 < w.Th0 {
 			sign = -1
 		}
-		samplePoint := pl.point(w.cU+w.radius, w.cV, sideZ)
+		samplePoint := pl.point(w.CU+w.Radius, w.CV, sideZ)
 		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign); err != nil {
 			return capBandResult{}, err
 		}
@@ -381,7 +383,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// walked sense: the DX7 survey reads the window as an increasing
 		// pair. The sense itself is not discarded — sweepCCW keeps it, and
 		// patchRawFlux negates a clockwise-walked patch's flux with it.
-		gth0, gth1 := w.th0, w.th1
+		gth0, gth1 := w.Th0, w.Th1
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
@@ -389,7 +391,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// full circumference) and slant distance (the radial change ruled
 		// against the axial one), the two factors proofbound.BandPatchAreaAllow needs.
 		chordUpper := proofbound.AbsSumUpper(capEdge.length, capEdge.lengthBound)
-		slant := math.Hypot(math.Abs(capRadius-w.radius), math.Abs(capZ-sideZ))
+		slant := math.Hypot(math.Abs(capRadius-w.Radius), math.Abs(capZ-sideZ))
 		// capThAllow: the whole-turn patch's cap-level sweep is the WALL's own
 		// recorded th0/th1 (there is no offset corner to trim it — wholeTurn is
 		// exactly this structural fact), so its true value is 2π as a fact of
@@ -400,7 +402,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// circumference.
 		dthHeld := gth1 - gth0
 		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
+		geom := capPatchGeom{circular: true, cU: w.CU, cV: w.CV, sideRadius: w.Radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.Th1 > w.Th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
@@ -484,11 +486,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(vertexCapLevelDelta)}
 		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(vertexCapLevelDelta)}
 		var errA, errB error
-		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, sideWalk{}, sideWalk{}, 0, true)
+		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, 0, true)
 		if errA != nil {
 			return capBandResult{}, errA
 		}
-		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, sideWalk{}, sideWalk{}, 0, true)
+		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, 0, true)
 		if errB != nil {
 			return capBandResult{}, errB
 		}
@@ -640,7 +642,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capRadius := 0.0
 		capTh0, capTh1, wraps := 0.0, 0.0, 0
 		capThAllow := 0.0
-		if w.isCircular() {
+		if w.IsCircular() {
 			r, err := capBandRadius(w, d)
 			if err != nil {
 				return capBandResult{}, err
@@ -649,18 +651,18 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				return capBandResult{}, errCapContourUnbounded
 			}
 			capRadius = r
-			capTh0, capTh1, wraps = capWallSweep(w.cU, w.cV, start, end, w.th1-w.th0)
+			capTh0, capTh1, wraps = capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 			// capThAllow is capSweepAllow's own enclosure of THIS sweep
 			// (capTh1-capTh0), computed here where start/end/wraps are still
 			// the ones capWallSweep just resolved: patchAreaOf's later swap of
 			// g.capTh0/g.capTh1 (below) negates the raw difference but not its
 			// absolute value, and this bound is symmetric in sign (it bounds
 			// |held-true|), so computing it once, pre-swap, stays valid after.
-			capThAllow = capSweepAllow(w.cU, w.cV, capRadius, start, end, capTh1-capTh0, wraps, delta)
+			capThAllow = capSweepAllow(w.CU, w.CV, capRadius, start, end, capTh1-capTh0, wraps, delta)
 		}
 
 		var capEdge *Edge
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			held := math.Hypot(end.U-start.U, end.V-start.V)
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
@@ -673,19 +675,19 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		} else {
 			sweepSigned := capTh1 - capTh0
 			held := math.Abs(capRadius * sweepSigned)
-			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
-				capWallArcBound(w.cU, w.cV, start, end, capRadius, capRadius*sweepSigned, wraps, delta))
+			capEdge = arcEdge(pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
+				capWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweepSigned, wraps, delta))
 		}
 
 		var surf Surface
-		if !w.isCircular() {
-			f, err := planeFromThree(liftSide(Point2{U: w.startU, V: w.startV}), liftSide(Point2{U: w.endU, V: w.endV}), capB.position)
+		if !w.IsCircular() {
+			f, err := planeFromThree(liftSide(Point2{U: w.StartU, V: w.StartV}), liftSide(Point2{U: w.EndU, V: w.EndV}), capB.position)
 			if err != nil {
 				return capBandResult{}, err
 			}
 			surf = f
 		} else {
-			surf = coneSurface(pl, w.cU, w.cV, w.radius, capRadius, sideZ, capZ)
+			surf = coneSurface(pl, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ)
 		}
 
 		// Walk order mirrors the ordinary prism side face's own convention
@@ -719,16 +721,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// trusted: fixPatchOrientation reverses only if they disagree.
 		var refU, refV float64
 		var samplePoint r3.Vec
-		if !w.isCircular() {
-			refU, refV = w.tanInV, -w.tanInU
-			samplePoint = liftSide(Point2{U: w.startU, V: w.startV})
+		if !w.IsCircular() {
+			refU, refV = w.TanInV, -w.TanInU
+			samplePoint = liftSide(Point2{U: w.StartU, V: w.StartV})
 		} else {
 			sign := 1.0
-			if w.th1 < w.th0 {
+			if w.Th1 < w.Th0 {
 				sign = -1
 			}
-			refU, refV = sign*math.Cos(w.th0), sign*math.Sin(w.th0)
-			samplePoint = pl.point(w.cU+w.radius*math.Cos(w.th0), w.cV+w.radius*math.Sin(w.th0), sideZ)
+			refU, refV = sign*math.Cos(w.Th0), sign*math.Sin(w.Th0)
+			samplePoint = pl.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), sideZ)
 		}
 		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, -matSign); err != nil {
 			return capBandResult{}, err
@@ -740,16 +742,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		patches = append(patches, face)
 
 		g := capPatchGeom{sideZ: sideZ, capZ: capZ, levelDelta: levelDelta}
-		if w.isCircular() {
+		if w.IsCircular() {
 			g.circular = true
-			g.cU, g.cV = w.cU, w.cV
-			g.sideRadius, g.capRadius = w.radius, capRadius
+			g.cU, g.cV = w.CU, w.CV
+			g.sideRadius, g.capRadius = w.Radius, capRadius
 			// th0, th1 record the ANGULAR EXTENT, not the wall's own walked
 			// sense — see the single-closed-circle branch's comment above;
 			// the same normalization applies to a partial arc wall, and
 			// sweepCCW keeps the sense the normalization drops.
-			g.sweepCCW = w.th1 > w.th0
-			g.th0, g.th1 = w.th0, w.th1
+			g.sweepCCW = w.Th1 > w.Th0
+			g.th0, g.th1 = w.Th0, w.Th1
 			g.capTh0, g.capTh1 = capTh0, capTh1
 			g.capThAllow = capThAllow
 			if g.th1 < g.th0 {
@@ -761,8 +763,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				g.capTh0, g.capTh1 = g.capTh1, g.capTh0
 			}
 		} else {
-			g.sideA = Point2{U: w.startU, V: w.startV}
-			g.sideB = Point2{U: w.endU, V: w.endV}
+			g.sideA = Point2{U: w.StartU, V: w.StartV}
+			g.sideB = Point2{U: w.EndU, V: w.EndV}
 			g.capA, g.capB = start, end
 		}
 		// chordUpper/slant are this wall patch's own held chord (its cap-level
@@ -868,7 +870,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // band's build; each sub-range's own enclosure charges one step, so a band
 // with many mitered circular corners cannot spend unbounded work here any
 // more than it can building the contour displacement itself.
-func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, affine bool) (*Edge, float64, error) {
+func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, dc float64, affine bool) (*Edge, float64, error) {
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := dySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := straightEdgeBound(held, squared, squaredOK, delta, levelDelta)
@@ -877,7 +879,7 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 		length:      held,
 		lengthBound: heldBound,
 	}
-	if affine || dc <= 0 || (!prev.isCircular() && !cur.isCircular()) {
+	if affine || dc <= 0 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return e, heldBound, nil
 	}
 	chordUpper := proofbound.AbsSumUpper(held, heldBound)
@@ -910,14 +912,14 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 // built, which every caller answers by withholding its reading rather than
 // publishing an understated one. Each sub-range charges one budget step, so a
 // band with many mitered circular corners cannot spend unbounded work here.
-func capMiterLocusUpper(budget *proofbound.WorkBudget, prev, cur sideWalk, apexU, apexV, axialSpan, dc float64) (float64, bool, error) {
+func capMiterLocusUpper(budget *proofbound.WorkBudget, prev, cur survey2d.SideWalk, apexU, apexV, axialSpan, dc float64) (float64, bool, error) {
 	if dc <= 0 {
 		return 0, false, nil
 	}
 	step := dc / capMiterLocusSubdivisions
 	total := 0.0
 	for k := range capMiterLocusSubdivisions {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, false, err
 		}
 		t0 := float64(k) * step

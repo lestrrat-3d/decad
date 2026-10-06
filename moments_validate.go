@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch"
@@ -66,7 +68,7 @@ type momentPreflight struct {
 // the segment is not a converted free-form one — a line, an arc or a circle,
 // each integrated from its own closed form.
 type freeformPlan struct {
-	spans    []bezierSpan
+	spans    []survey2d.BezierSpan
 	reversed bool
 }
 
@@ -225,7 +227,7 @@ func validateMomentFieldsWork(work *freeformWork, record ProfileRecord) (momentP
 }
 
 func validateMomentFieldsBudget(budget *proofbound.WorkBudget, record ProfileRecord) (momentPreflight, error) {
-	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record, newFreeformWork())
+	return validateMomentFieldsWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, record, newFreeformWork())
 }
 
 func validateMomentFieldsContext(ctx context.Context, work *freeformWork, record ProfileRecord) (momentPreflight, error) {
@@ -456,7 +458,7 @@ func growAll(points []Point2, grow func(Point2)) {
 // chain rather than through walkOf: the moments path needs that point before
 // any tier is decided, ahead of where walkOf's own free-form arm would even
 // run (validateFreeformMomentSegment), so it is read directly from the same
-// conversion the build's own walkKind == walkFreeform arm reads
+// conversion the build's own survey2d.WalkKind == survey2d.WalkFreeform arm reads
 // (extrude.go's buildLoopSidesAs).
 func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	segment, err := normalizeSegment(segment)
@@ -643,14 +645,14 @@ func requireFitSplineTerminalJoins(segment CurveSegment, start, end Point2, reve
 // It is this path's half of Table R row R14. The length bracket refuses the
 // same record on its own terms — a collapsed net is the one shape whose bracket
 // has zero width (spline_length.go) — so the two paths agree.
-func freeformDegenerate(spans []bezierSpan) bool {
+func freeformDegenerate(spans []survey2d.BezierSpan) bool {
 	if len(spans) == 0 || len(spans[0]) == 0 {
 		return true
 	}
 	first := spans[0][0]
 	for _, span := range spans {
 		for _, point := range span {
-			if point.u.Cmp(first.u) != 0 || point.v.Cmp(first.v) != 0 {
+			if point.U.Cmp(first.U) != 0 || point.V.Cmp(first.V) != 0 {
 				return false
 			}
 		}
@@ -664,27 +666,27 @@ func validateMomentWalk(segment CurveSegment, work *freeformWork) (CurveSegment,
 		return nil, Point2{}, err
 	}
 	if !finiteMomentValues(
-		walk.startU,
-		walk.startV,
-		walk.endU,
-		walk.endV,
-		walk.tanInU,
-		walk.tanInV,
-		walk.tanOutU,
-		walk.tanOutV,
-		walk.length,
-		walk.cU,
-		walk.cV,
-		walk.radius,
-		walk.th0,
-		walk.th1,
+		walk.StartU,
+		walk.StartV,
+		walk.EndU,
+		walk.EndV,
+		walk.TanInU,
+		walk.TanInV,
+		walk.TanOutU,
+		walk.TanOutV,
+		walk.Length,
+		walk.CU,
+		walk.CV,
+		walk.Radius,
+		walk.Th0,
+		walk.Th1,
 	) {
 		return nil, Point2{}, fmt.Errorf(`%w: a segment's derived walk is not finite`, ErrNotFinite)
 	}
-	if walk.length <= 0 {
+	if walk.Length <= 0 {
 		return nil, Point2{}, fmt.Errorf(`%w: a zero-length segment contributes no boundary`, ErrDegenerate)
 	}
-	return segment, Point2{U: walk.startU, V: walk.startV}, nil
+	return segment, Point2{U: walk.StartU, V: walk.StartV}, nil
 }
 
 func validateMomentRange(start, end float64) error {

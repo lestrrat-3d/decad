@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -252,7 +254,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			if err != nil {
 				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
 			}
-			for _, bound := range [2]proofbound.WalkEndBound{walk.startBound, walk.endBound} {
+			for _, bound := range [2]proofbound.WalkEndBound{walk.StartBound, walk.EndBound} {
 				endAllow := proofbound.WalkEndBoundAllow(bound)
 				if !usableMagnitude(endAllow) {
 					return 0, false, nil
@@ -477,25 +479,25 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 				// rather than propagates.
 				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
 			}
-			if w.kind != walkFreeform {
-				if !addWitness(w.startU, w.startV, w.startBound) || !addWitness(w.endU, w.endV, w.endBound) {
+			if w.Kind != survey2d.WalkFreeform {
+				if !addWitness(w.StartU, w.StartV, w.StartBound) || !addWitness(w.EndU, w.EndV, w.EndBound) {
 					return 0, false, nil
 				}
 				continue
 			}
 			sawFreeform = true
-			for _, span := range w.spans {
+			for _, span := range w.Spans {
 				if len(span) == 0 {
 					return 0, false, nil
 				}
-				for _, cp := range [2]ratPoint{span[0], span[len(span)-1]} {
+				for _, cp := range [2]survey2d.RatPoint{span[0], span[len(span)-1]} {
 					held, ok := point2Of(cp)
 					if !ok {
 						return 0, false, nil
 					}
 					bound := proofbound.WalkEndBound{
-						U: proofarith.RationalFloatError(cp.u, held.U),
-						V: proofarith.RationalFloatError(cp.v, held.V),
+						U: proofarith.RationalFloatError(cp.U, held.U),
+						V: proofarith.RationalFloatError(cp.V, held.V),
 					}
 					if !addWitness(held.U, held.V, bound) {
 						return 0, false, nil

@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -155,7 +157,7 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	}
 	left := new(big.Rat).Sub(low, proofarith.FloatRat(value))
 	right := new(big.Rat).Sub(high, proofarith.FloatRat(value))
-	boundExact := ratMax(left.Abs(left), right.Abs(right))
+	boundExact := survey2d.RatMax(left.Abs(left), right.Abs(right))
 	boundExact.Add(boundExact, proofarith.FloatRat(onA.Bound.Base()))
 	boundExact.Add(boundExact, proofarith.FloatRat(onB.Bound.Base()))
 	bound := proofbound.RatFloatUp(boundExact)

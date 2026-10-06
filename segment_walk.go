@@ -7,13 +7,15 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the package's profile-boundary walk: segmentWalk, the resolved
+// This file is the package's profile-boundary walk: survey2d.SegmentWalk, the resolved
 // per-segment form every feature reads a recorded CurveSegment through, and
 // the per-kind builders that produce one.
 //
@@ -28,167 +30,13 @@ import (
 // resolves a whole profile once and re-checks, on every later read, that the
 // walks it holds still match the record they were resolved from.
 
-// walkKind discriminates what a segmentWalk's geometry IS. It replaced a
-// line-versus-circular boolean because a free-form walk is neither: a two-state
-// flag left every "not circular" branch silently building a straight line out of
-// a spline, which is exactly the confidently-wrong answer decad exists to
-// prevent (docs/spline-design.md §6.2).
-//
-// A switch on walkKind MUST be total. A consumer that cannot yet handle
-// walkFreeform refuses before building an analytic face: where it needs a walk
-// it uses requireAnalyticWalk, and where no resolution can contribute it gates
-// the recorded free-form kind before walkOf.
-type walkKind uint8
-
-const (
-	// walkLine is a straight walk between its endpoints.
-	walkLine walkKind = iota
-	// walkCircular is a circular walk about (cU, cV) — a circle or an arc.
-	walkCircular
-	// walkFreeform is a free-form walk, whose geometry lives in its converted
-	// Bézier spans rather than in the circular fields.
-	walkFreeform
-)
-
-// segmentWalk is one boundary segment's walk geometry in plane coordinates.
-type segmentWalk struct {
-	// start/end are the walk's endpoints in (u, v); closed is true for a
-	// whole closed curve (no junction vertices at all).
-	startU, startV float64
-	endU, endV     float64
-	// startBound/endBound are the PROVEN error bounds on the endpoint beside
-	// them, in the coordinates' own millimetres — radiusBound's twin two fields
-	// up, and stated for the same reason. An endpoint is an exact leaf only
-	// where the record STATES it: a line's own bounds and an arc's own bounds
-	// are recorded coordinates the walk reads verbatim (lerp2, pinArcWalkEnds),
-	// and those read zero. That zero is about THIS walk's own rounding, not
-	// about the recorded coordinate agreeing with the curve the record denotes
-	// at that parameter — arcWalkEnd's own doc comment states where an arc's
-	// two readings part company, and names who owes the difference. Every other endpoint is computed — a trimmed line's
-	// is a float lerp, a trimmed arc's and EVERY circle's is a
-	// math.Cos/math.Sin at an angle this package itself computed — so each kind
-	// STATES what its own endpoint is worth (lineWalkEndBound,
-	// circularWalkEndBound, freeformEndpointBounds) or REFUSES with +Inf, never
-	// leaves it silently zero. A reading that folds an endpoint into an answer
-	// charges it through proofbound.PointPerturbationAllow; one that cannot state the
-	// charge refuses on the +Inf rather than publishing an exactness the
-	// evaluator never proved.
-	startBound, endBound proofbound.WalkEndBound
-	closed               bool
-	// tanIn/tanOut are the walk tangents at start and end (unit not
-	// required), for junction convexity.
-	tanInU, tanInV   float64
-	tanOutU, tanOutV float64
-	// tanInBound/tanOutBound are the PROVEN error bound on EITHER component
-	// of the tangent beside them, in the coordinates' own millimetres. A
-	// tangent is NOT an exact leaf the way a recorded coordinate is: a line
-	// walk's is the float difference of two endpoints, a circular walk's runs
-	// through math.Sincos at a computed angle, and a free-form walk's is an
-	// exact rational leg rounded once into float64. Each kind therefore
-	// STATES its bound or REFUSES with +Inf — never leaves it silently zero —
-	// so a reading composed from a tangent can charge the error the evaluator
-	// actually committed. The refusal is the circular kind's: its held
-	// components come from a trig evaluation at an angle that is itself
-	// computed, and this walk states no enclosure of either, so +Inf is the
-	// underivable bound every consumer refuses on rather than publishes
-	// (arcWalkRadiusBound's own convention).
-	tanInBound, tanOutBound float64
-	length                  float64
-	lengthBound             float64
-	lengthUpper             float64
-	coordUpper              float64
-	axisRadiusUpper         float64
-	axisMomentUpper         float64
-	// startVBound/endVBound/cVBound are the PROVEN error bounds on the radial
-	// (V) axis-coordinate beside them — startV/endV/cV's own displacement from
-	// the value the axis's TRUE (unrounded) direction and anchor would give,
-	// through axisFrame.toAxisRhoBound, composed for startV/endV with whatever
-	// magnitude that walk's own axis snap discarded to assign an endpoint
-	// exactly zero. They are set ONLY by axisFrame.walk,
-	// which re-expresses a plane-local walk into axis coordinates: a walk that
-	// has not been through it (every use before revolve resolves an axis)
-	// leaves them at their zero value, meaningless there. axisFrame.toAxis
-	// itself states no such bound (its own doc comment), so a caller
-	// composing a reading from startV/endV/cV — the revolve minimum-radius
-	// meridian survey (survey.go's revolveMinRadius) — reads these instead of
-	// the coordinate as an exact leaf; axisMoments (revolve.go) folds the
-	// SAME axis-direction/anchor uncertainty into the region's moments through
-	// bounded arithmetic instead, and does not read these fields.
-	startVBound, endVBound, cVBound float64
-	// kind says which geometry the walk carries; the fields below it are
-	// meaningful only for walkCircular.
-	kind   walkKind
-	cU, cV float64
-	radius float64
-	// radiusBound is the PROVEN error bound on radius (millimetres). A
-	// CircleSeg states its radius, so its walk holds that number and the bound
-	// is zero; an ArcSeg states Start and Center only, so its walk's radius is
-	// a math.Hypot evaluation and the bound is arcWalkRadiusBound's rational
-	// bracket. It exists because radius is NOT an exact leaf the way a
-	// recorded coordinate is, and a reading that treats it as one can publish
-	// an interval its own truth sits outside of. The analytic surveys
-	// (survey.go's minimum-radius arms, and survey2d.go through
-	// surveyElem.rrBound) take it; a consumer that reads radius as a leaf
-	// still owes its own account of the error, from its own envelope.
-	radiusBound float64
-	th0, th1    float64
-	// spans is the converted Bézier chain of a walkFreeform walk, in the
-	// curve's natural direction; reversed says the walk runs against it. Both
-	// are zero for every other kind.
-	//
-	// The chain is SHARED and MUST NOT be mutated in place. A segmentWalk
-	// copies only the slice header, so every reader of one profileWalks set
-	// holds the same ratPoints: the build (buildLoopSidesAs), the tessellation
-	// (chordLoop), the extent readings, and a rigid re-evaluation that reads
-	// the published set back. Writing through any of them writes through all
-	// of them.
-	//
-	// The guard cannot catch such a write. profileWalks.reusable decides on
-	// matches, which compares the RECORD by float bits and never inspects the
-	// walks, so a mutated set still reads back as the resolution of its own
-	// record. The corruption would also be quiet rather than loud: a
-	// re-anchoring subtracts a constant from every control point, which leaves
-	// a valid curve sitting somewhere else, so the lengths and areas built from
-	// it stay plausible and the build and the tessellation still agree with
-	// each other, both being wrong in the same way.
-	//
-	// shiftFreeformSpans (spline_bezier.go) is exactly this write. It is safe
-	// where it stands because validateFreeformMomentSegment converts its own
-	// chain through freeformBezierSpans and hands it that private copy, never a
-	// walk. A caller that hands it one of THESE chains instead has no test that
-	// would fail. Re-anchor a copy, or convert afresh.
-	spans    []bezierSpan
-	reversed bool
-	// fitInterpolated is set only for a walkFreeform walk whose chain came
-	// from FitSplineSeg's §5.1.2 conversion (spline_fit.go's isFitSplineSeg,
-	// read on the segment walkOf resolved — walkOf normalizes as its first
-	// statement, so freeformWalk's own seg, and every isFitSplineSeg check
-	// downstream of it, always sees the normalized value form). §6.5's
-	// convexity certificate needs it to apply the FitSplineSeg carve-out: a
-	// joint interior to that conversion's chain is verdict 0 BY CONSTRUCTION,
-	// never by jointConvexitySign's cross product, because that cross carries
-	// sketch's own rounded SecondDerivs solve rather than a turn of the
-	// recorded curve (docs/spline-design.md §6.5, §5.1.2). It is false for
-	// every other Tier A kind, whose joints are genuine C⁰ corners the cross
-	// product must still fold.
-	fitInterpolated bool
-}
-
-// isCircular reports whether the walk is a circle or arc — the question the
-// closed-form circular branches ask.
-func (w segmentWalk) isCircular() bool { return w.kind == walkCircular }
-
-// isLine reports whether the walk is straight. It is NOT "not circular": a
-// free-form walk answers false to both.
-func (w segmentWalk) isLine() bool { return w.kind == walkLine }
-
 // requireAnalyticWalk refuses a free-form walk on behalf of a consumer that has
 // no free-form construction yet. Reaching it is a staging limit, never a wrong
 // answer — the reason each consumer stages is its own row in
 // docs/spline-design.md Table R. The prism side-face build itself no longer
-// calls this: buildLoopSidesAs switches on walkKind instead (§10 P4b), with its
+// calls this: buildLoopSidesAs switches on survey2d.WalkKind instead (§10 P4b), with its
 // own free-form arm, and tessellate.go's chordLoop no longer calls it either:
-// it switches on walkKind, with its own free-form chording arm
+// it switches on survey2d.WalkKind, with its own free-form chording arm
 // (docs/tessellation-reach-design.md §5). Every remaining call site is a
 // capability neither increment reaches — the modify ops (fillet.go,
 // shell_offset.go, capblend_geom.go), revolve (revolve.go), and
@@ -201,8 +49,8 @@ func (w segmentWalk) isLine() bool { return w.kind == walkLine }
 // (spline_bezier.go/spline_moments.go), so a free-form segment never reaches
 // it. This is deliberate, not a missed gate — adding one here would be dead
 // code guarding an unreachable case.
-func requireAnalyticWalk(w segmentWalk, what string) error {
-	if w.kind != walkFreeform {
+func requireAnalyticWalk(w survey2d.SegmentWalk, what string) error {
+	if w.Kind != survey2d.WalkFreeform {
 		return nil
 	}
 	return fmt.Errorf(`%w: %s does not support a free-form boundary segment`, ErrUnsupported, what)
@@ -244,12 +92,12 @@ type profileWalks struct {
 	profile ProfileRecord
 	// outer holds loop index 0's resolved walks, one per pp.profile.Outer
 	// segment, in recorded order.
-	outer []segmentWalk
+	outer []survey2d.SegmentWalk
 	// holes holds loop index i>0's resolved walks as holes[i-1], one slice
 	// per pp.profile.Holes entry, each in recorded order — the same
 	// append([]LoopRecord{profile.Outer}, profile.Holes...) indexing every
 	// consumer below already walks.
-	holes [][]segmentWalk
+	holes [][]survey2d.SegmentWalk
 	// spent and reconstructionSpent are what resolving this set CHARGED each of
 	// its counters when it ran, measured across the resolution rather than
 	// estimated. A later re-evaluation that reads these walks back replays the
@@ -280,7 +128,7 @@ type walkReadCharge struct {
 // re-running the work (charge).
 func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
 	before, beforeRecon := workSpent(work)
-	outer := make([]segmentWalk, len(profile.Outer.Segments))
+	outer := make([]survey2d.SegmentWalk, len(profile.Outer.Segments))
 	for i, seg := range profile.Outer.Segments {
 		w, err := walkOf(seg, work)
 		if err != nil {
@@ -288,9 +136,9 @@ func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWal
 		}
 		outer[i] = w
 	}
-	holes := make([][]segmentWalk, len(profile.Holes))
+	holes := make([][]survey2d.SegmentWalk, len(profile.Holes))
 	for hi, hole := range profile.Holes {
-		hw := make([]segmentWalk, len(hole.Segments))
+		hw := make([]survey2d.SegmentWalk, len(hole.Segments))
 		for i, seg := range hole.Segments {
 			w, err := walkOf(seg, work)
 			if err != nil {
@@ -353,7 +201,7 @@ func workSpent(work *freeformWork) (uint64, uint64) {
 // the same indexing every consumer's
 // append([]LoopRecord{profile.Outer}, profile.Holes...) walk already uses.
 // Callers check matches first; at itself trusts the index it is given.
-func (pw *profileWalks) at(loopIndex, segIndex int) segmentWalk {
+func (pw *profileWalks) at(loopIndex, segIndex int) survey2d.SegmentWalk {
 	if loopIndex == 0 {
 		return pw.outer[segIndex]
 	}
@@ -365,7 +213,7 @@ func (pw *profileWalks) at(loopIndex, segIndex int) segmentWalk {
 // single-loop consumer (buildLoopSidesAs) uses this instead of at plus its
 // own per-segment loop, since it already owns the per-segment index into the
 // slice it gets back.
-func (pw *profileWalks) loopWalks(loopIndex int) []segmentWalk {
+func (pw *profileWalks) loopWalks(loopIndex int) []survey2d.SegmentWalk {
 	if loopIndex == 0 {
 		return pw.outer
 	}
@@ -516,10 +364,10 @@ var errUnmeteredWalksCharge = fmt.Errorf(`%w: resolved walks did not measure the
 // ceiling; callers with no preflight in hand mint exactly one for the whole
 // record walk. An analytic segment charges nothing, so a nil counter is harmless
 // there and refused on the free-form arm rather than quietly replaced.
-func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
+func walkOf(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
-		return segmentWalk{}, err
+		return survey2d.SegmentWalk{}, err
 	}
 	switch seg := seg.(type) {
 	case LineSeg:
@@ -529,25 +377,25 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		length := math.Hypot(du, dv)
 		lengthBound, lengthUpper, coordUpper := lineWalkBounds(seg, length)
 		tangentBound := lineWalkTangentBound(seg, du, dv)
-		return segmentWalk{
-			startU: u0, startV: v0, endU: u1, endV: v1,
-			startBound: lineWalkEndBound(seg, seg.TStart, u0, v0),
-			endBound:   lineWalkEndBound(seg, seg.TEnd, u1, v1),
-			tanInU:     du, tanInV: dv, tanOutU: du, tanOutV: dv,
-			tanInBound:  tangentBound,
-			tanOutBound: tangentBound,
-			length:      length,
-			lengthBound: lengthBound,
-			lengthUpper: lengthUpper,
-			coordUpper:  coordUpper,
+		return survey2d.SegmentWalk{
+			StartU: u0, StartV: v0, EndU: u1, EndV: v1,
+			StartBound: lineWalkEndBound(seg, seg.TStart, u0, v0),
+			EndBound:   lineWalkEndBound(seg, seg.TEnd, u1, v1),
+			TanInU:     du, TanInV: dv, TanOutU: du, TanOutV: dv,
+			TanInBound:  tangentBound,
+			TanOutBound: tangentBound,
+			Length:      length,
+			LengthBound: lengthBound,
+			LengthUpper: lengthUpper,
+			CoordUpper:  coordUpper,
 		}, nil
 	case CircleSeg:
 		r, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return segmentWalk{}, fmt.Errorf(`decad: a circle segment's radius is not a length: %w`, err)
+			return survey2d.SegmentWalk{}, fmt.Errorf(`decad: a circle segment's radius is not a length: %w`, err)
 		}
 		if seg.CCW != (seg.TStart < seg.TEnd) {
-			return segmentWalk{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
+			return survey2d.SegmentWalk{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		th0, th1 := 2*math.Pi*seg.TStart, 2*math.Pi*seg.TEnd
 		w := circularWalk(
@@ -559,11 +407,11 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			math.Abs(r),
 			proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 		)
-		w.closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
-		w.startBound = circularWalkEndBound(seg, seg.TStart, w.startU, w.startV)
-		w.endBound = circularWalkEndBound(seg, seg.TEnd, w.endU, w.endV)
+		w.Closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
+		w.StartBound = circularWalkEndBound(seg, seg.TStart, w.StartU, w.StartV)
+		w.EndBound = circularWalkEndBound(seg, seg.TEnd, w.EndU, w.EndV)
 		if iv, ok := circularLengthInterval(seg); ok {
-			w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(iv, w.length))
+			w.LengthBound = math.Min(w.LengthBound, proofbound.IntervalFloatError(iv, w.Length))
 		}
 		return w, nil
 	case ArcSeg:
@@ -594,15 +442,15 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		if rIv, sweepIv, ok := circularWalkEnclosures(seg); ok {
 			rLo, _ := rIv.Lo.Float64()
 			rHi, _ := rIv.Hi.Float64()
-			w.radiusBound = arcRadiusBoundFromBracket(radius, rLo, rHi)
-			w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(proofbound.IntervalMul(rIv, sweepIv), w.length))
+			w.RadiusBound = arcRadiusBoundFromBracket(radius, rLo, rHi)
+			w.LengthBound = math.Min(w.LengthBound, proofbound.IntervalFloatError(proofbound.IntervalMul(rIv, sweepIv), w.Length))
 		} else {
-			w.radiusBound = arcWalkRadiusBound(seg, radius)
+			w.RadiusBound = arcWalkRadiusBound(seg, radius)
 		}
 		return w, nil
 	default:
 		if !isFreeformSegment(seg) {
-			return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc, circle and Tier A free-form segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+			return survey2d.SegmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc, circle and Tier A free-form segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
 		}
 		return freeformWalk(seg, work)
 	}
@@ -698,7 +546,7 @@ func circularPointBound(seg CurveSegment, t *big.Rat, heldU, heldV float64) proo
 }
 
 // arcWalkRadiusBound is the single owner of the proven bound on an ArcSeg
-// walk's radius, and the reason segmentWalk carries radiusBound at all: the
+// walk's radius, and the reason survey2d.SegmentWalk carries radiusBound at all: the
 // record states Start and Center, never the radius, so the walk's held radius
 // is the float math.Hypot of their difference. The exact radius is
 // √((Su−Cu)² + (Sv−Cv)²) over the recorded coordinates, which proofbound.RatSqrtDown and
@@ -749,49 +597,49 @@ func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
 // — the record's, never one minted here. A caller that reaches this arm with no
 // counter has no ceiling at all, which is the one thing §5.2 forbids, so the
 // resolution refuses rather than run unbounded work.
-func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
+func freeformWalk(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, error) {
 	if work == nil {
-		return segmentWalk{}, errFreeformWalkUncounted
+		return survey2d.SegmentWalk{}, errFreeformWalkUncounted
 	}
 	spans, reversed, err := freeformBezierSpans(seg, work)
 	if err != nil {
-		return segmentWalk{}, err
+		return survey2d.SegmentWalk{}, err
 	}
 	start, end, err := freeformEndpoints(spans, reversed)
 	if err != nil {
-		return segmentWalk{}, err
+		return survey2d.SegmentWalk{}, err
 	}
 	length, bound, err := freeformArcLength(spans, work)
 	if err != nil {
-		return segmentWalk{}, err
+		return survey2d.SegmentWalk{}, err
 	}
 	tangents, err := freeformEndTangents(spans, reversed)
 	if err != nil {
-		return segmentWalk{}, err
+		return survey2d.SegmentWalk{}, err
 	}
 	startBound, endBound := freeformEndpointBounds(spans, reversed, start, end)
-	return segmentWalk{
-		startU: start.U, startV: start.V,
-		endU: end.U, endV: end.V,
-		startBound: startBound,
-		endBound:   endBound,
+	return survey2d.SegmentWalk{
+		StartU: start.U, StartV: start.V,
+		EndU: end.U, EndV: end.V,
+		StartBound: startBound,
+		EndBound:   endBound,
 		// A closed free-form curve returns to its start, so it carries no
 		// junction vertex — the same fact CircleSeg's closed walk states.
-		closed:          start == end,
-		tanInU:          tangents.inU,
-		tanInV:          tangents.inV,
-		tanInBound:      tangents.inBound,
-		tanOutU:         tangents.outU,
-		tanOutV:         tangents.outV,
-		tanOutBound:     tangents.outBound,
-		length:          length,
-		lengthBound:     bound,
-		lengthUpper:     proofbound.UpRound(length + bound),
-		coordUpper:      freeformControlExtent(spans),
-		kind:            walkFreeform,
-		spans:           spans,
-		reversed:        reversed,
-		fitInterpolated: isFitSplineSeg(seg),
+		Closed:          start == end,
+		TanInU:          tangents.inU,
+		TanInV:          tangents.inV,
+		TanInBound:      tangents.inBound,
+		TanOutU:         tangents.outU,
+		TanOutV:         tangents.outV,
+		TanOutBound:     tangents.outBound,
+		Length:          length,
+		LengthBound:     bound,
+		LengthUpper:     proofbound.UpRound(length + bound),
+		CoordUpper:      freeformControlExtent(spans),
+		Kind:            survey2d.WalkFreeform,
+		Spans:           spans,
+		Reversed:        reversed,
+		FitInterpolated: isFitSplineSeg(seg),
 	}, nil
 }
 
@@ -825,9 +673,9 @@ var errFreeformWalkUncounted = fmt.Errorf(
 // the bound circularWalk's route actually owes — see arcWalkEnd, which owns the
 // natural-bound test for both readings so the pinned position and the zero
 // bound can never drift apart.
-func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
-	w.startU, w.startV, w.startBound = arcWalkEnd(seg, seg.TStart, w.startU, w.startV)
-	w.endU, w.endV, w.endBound = arcWalkEnd(seg, seg.TEnd, w.endU, w.endV)
+func pinArcWalkEnds(w *survey2d.SegmentWalk, seg ArcSeg) {
+	w.StartU, w.StartV, w.StartBound = arcWalkEnd(seg, seg.TStart, w.StartU, w.StartV)
+	w.EndU, w.EndV, w.EndBound = arcWalkEnd(seg, seg.TEnd, w.EndU, w.EndV)
 }
 
 // arcWalkEnd states one arc walk end: its position and the proven bound on each
@@ -873,7 +721,7 @@ func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, proofbou
 // from, and stamps the enclosure that record proves for its own endpoints
 // (circularWalkEndBound) over the zero this function leaves behind. What has no
 // enclosure is the tangent, not the point.
-func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {
+func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) survey2d.SegmentWalk {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
 	sign := 1.0
@@ -883,19 +731,19 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 	length := r * math.Abs(th1-th0)
 	lengthUpper := proofbound.ProductUpper(radiusUpper, sweepUpper)
 	coordUpper := proofbound.AbsSumUpper(cu, cv, radiusUpper, radiusUpper)
-	return segmentWalk{
-		startU: cu + r*cos0, startV: cv + r*sin0,
-		endU: cu + r*cos1, endV: cv + r*sin1,
-		tanInU: -sign * sin0, tanInV: sign * cos0,
-		tanOutU: -sign * sin1, tanOutV: sign * cos1,
-		tanInBound:  math.Inf(1),
-		tanOutBound: math.Inf(1),
-		length:      length,
-		lengthBound: proofbound.ConservativeValueError(length, lengthUpper),
-		lengthUpper: lengthUpper,
-		coordUpper:  coordUpper,
-		kind:        walkCircular,
-		cU:          cu, cV: cv, radius: r, th0: th0, th1: th1,
+	return survey2d.SegmentWalk{
+		StartU: cu + r*cos0, StartV: cv + r*sin0,
+		EndU: cu + r*cos1, EndV: cv + r*sin1,
+		TanInU: -sign * sin0, TanInV: sign * cos0,
+		TanOutU: -sign * sin1, TanOutV: sign * cos1,
+		TanInBound:  math.Inf(1),
+		TanOutBound: math.Inf(1),
+		Length:      length,
+		LengthBound: proofbound.ConservativeValueError(length, lengthUpper),
+		LengthUpper: lengthUpper,
+		CoordUpper:  coordUpper,
+		Kind:        survey2d.WalkCircular,
+		CU:          cu, CV: cv, Radius: r, Th0: th0, Th1: th1,
 	}
 }
 
@@ -953,28 +801,19 @@ func ratL1Upper(values ...*big.Rat) float64 {
 	return upper
 }
 
-// sideWalk is one side face's walk after canonicalization: consecutive
-// collinear line walks coalesce into one (evaluator §3 — "adjacent coplanar
-// side faces merge"), and the merged face carries every constituent
-// segment's role.
-type sideWalk struct {
-	segmentWalk
-	segs []int // the recorded segment indices this walk covers
-}
-
 // coalesceWalks merges consecutive collinear line walks, wrap-around
 // included. Circular walks never merge; a loop that is entirely one straight
 // line is degenerate and left to the area gate.
-func coalesceWalks(walks []sideWalk) []sideWalk {
+func coalesceWalks(walks []survey2d.SideWalk) []survey2d.SideWalk {
 	out, _ := coalesceWalksBudget(walks, nil)
 	return out
 }
 
-func coalesceWalksBudget(walks []sideWalk, budget *proofbound.WorkBudget) ([]sideWalk, error) {
-	return coalesceWalksWithPoll(func() error { return wallBudgetStep(budget) }, walks, true)
+func coalesceWalksBudget(walks []survey2d.SideWalk, budget *proofbound.WorkBudget) ([]survey2d.SideWalk, error) {
+	return coalesceWalksWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, walks, true)
 }
 
-func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, error) {
+func coalesceWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]survey2d.SideWalk, error) {
 	return coalesceWalksWithPoll(ctx.Err, walks, true)
 }
 
@@ -983,36 +822,36 @@ func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, er
 // but never wraps the last walk into the first. An open chain's two ends are
 // free — they meet no neighbour to merge into
 // (docs/surface-design.md §13.4).
-func coalesceChainWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, error) {
+func coalesceChainWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]survey2d.SideWalk, error) {
 	return coalesceWalksWithPoll(ctx.Err, walks, false)
 }
 
-func coalesceWalksWithPoll(poll func() error, walks []sideWalk, wrap bool) ([]sideWalk, error) {
-	collinear := func(a, b sideWalk) bool {
-		if !a.isLine() || !b.isLine() {
+func coalesceWalksWithPoll(poll func() error, walks []survey2d.SideWalk, wrap bool) ([]survey2d.SideWalk, error) {
+	collinear := func(a, b survey2d.SideWalk) bool {
+		if !a.IsLine() || !b.IsLine() {
 			return false
 		}
-		cross := a.tanOutU*b.tanInV - a.tanOutV*b.tanInU
-		dot := a.tanOutU*b.tanInU + a.tanOutV*b.tanInV
-		scale := math.Hypot(a.tanOutU, a.tanOutV) * math.Hypot(b.tanInU, b.tanInV)
+		cross := a.TanOutU*b.TanInV - a.TanOutV*b.TanInU
+		dot := a.TanOutU*b.TanInU + a.TanOutV*b.TanInV
+		scale := math.Hypot(a.TanOutU, a.TanOutV) * math.Hypot(b.TanInU, b.TanInV)
 		return dot > 0 && math.Abs(cross) <= 1e-12*scale
 	}
-	merge := func(a, b sideWalk) sideWalk {
-		a.endU, a.endV = b.endU, b.endV
+	merge := func(a, b survey2d.SideWalk) survey2d.SideWalk {
+		a.EndU, a.EndV = b.EndU, b.EndV
 		// The merged walk leaves where b leaves, so it inherits b's leaving
 		// tangent AND the bound b proved on it — never a's, and never zero.
-		a.tanOutU, a.tanOutV = b.tanOutU, b.tanOutV
-		a.tanOutBound = b.tanOutBound
-		length := proofbound.BoundedAdd(proofbound.MeasuredScalar(a.length, a.lengthBound), proofbound.MeasuredScalar(b.length, b.lengthBound))
-		a.length, a.lengthBound = length.Value, length.Bound
-		a.lengthUpper = proofbound.AbsSumUpper(a.lengthUpper, b.lengthUpper)
-		a.coordUpper = math.Max(a.coordUpper, b.coordUpper)
-		a.axisRadiusUpper = math.Max(a.axisRadiusUpper, b.axisRadiusUpper)
-		a.axisMomentUpper = proofbound.AbsSumUpper(a.axisMomentUpper, b.axisMomentUpper)
-		a.segs = append(a.segs, b.segs...)
+		a.TanOutU, a.TanOutV = b.TanOutU, b.TanOutV
+		a.TanOutBound = b.TanOutBound
+		length := proofbound.BoundedAdd(proofbound.MeasuredScalar(a.Length, a.LengthBound), proofbound.MeasuredScalar(b.Length, b.LengthBound))
+		a.Length, a.LengthBound = length.Value, length.Bound
+		a.LengthUpper = proofbound.AbsSumUpper(a.LengthUpper, b.LengthUpper)
+		a.CoordUpper = math.Max(a.CoordUpper, b.CoordUpper)
+		a.AxisRadiusUpper = math.Max(a.AxisRadiusUpper, b.AxisRadiusUpper)
+		a.AxisMomentUpper = proofbound.AbsSumUpper(a.AxisMomentUpper, b.AxisMomentUpper)
+		a.Segs = append(a.Segs, b.Segs...)
 		return a
 	}
-	out := make([]sideWalk, 0, len(walks))
+	out := make([]survey2d.SideWalk, 0, len(walks))
 	for _, w := range walks {
 		if poll != nil {
 			if err := poll(); err != nil {

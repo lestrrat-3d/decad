@@ -3,6 +3,8 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +25,7 @@ func chargeProbeAxis() axisFrame {
 	return axisFrame{aU: 0, aV: 0, dU: 0, dV: 1}
 }
 
-func chargeProbeWalk(t *testing.T) segmentWalk {
+func chargeProbeWalk(t *testing.T) survey2d.SegmentWalk {
 	t.Helper()
 	w, err := walkOf(LineSeg{
 		Start:  Point2{U: 3, V: 0},
@@ -46,13 +48,13 @@ func TestAxisFrameWalkChargeIsAbsentAtZero(t *testing.T) {
 	// derived from the INPUT walk and the axis rather than read back off
 	// another walkCharged call, so the comparison carries content rather than
 	// restating the same expression twice.
-	require.Equal(t, ax.toAxisRhoBound(w.startU, w.startV), charged.startVBound)
-	require.Equal(t, ax.toAxisRhoBound(w.endU, w.endV), charged.endVBound)
-	require.Equal(t, w.lengthBound, charged.lengthBound)
-	require.Equal(t, w.lengthUpper, charged.lengthUpper)
-	require.Equal(t, w.coordUpper, charged.coordUpper)
-	require.Equal(t, ax.radialUpper(w.coordUpper), charged.axisRadiusUpper)
-	require.Equal(t, proofbound.ProductUpper(w.lengthUpper, ax.radialUpper(w.coordUpper)), charged.axisMomentUpper)
+	require.Equal(t, ax.toAxisRhoBound(w.StartU, w.StartV), charged.StartVBound)
+	require.Equal(t, ax.toAxisRhoBound(w.EndU, w.EndV), charged.EndVBound)
+	require.Equal(t, w.LengthBound, charged.LengthBound)
+	require.Equal(t, w.LengthUpper, charged.LengthUpper)
+	require.Equal(t, w.CoordUpper, charged.CoordUpper)
+	require.Equal(t, ax.radialUpper(w.CoordUpper), charged.AxisRadiusUpper)
+	require.Equal(t, proofbound.ProductUpper(w.LengthUpper, ax.radialUpper(w.CoordUpper)), charged.AxisMomentUpper)
 
 	// axisFrame.walk IS walkCharged with both charges absent, so an ordinary
 	// revolve reaches exactly the values above and no other.
@@ -69,18 +71,18 @@ func TestAxisFrameWalkChargeWidensEveryFieldItTouches(t *testing.T) {
 	// envelope figures must.
 	charge := proofbound.WalkEndBound{U: 1e-9, V: 1e-9}
 	startOnly := ax.walkCharged(w, charge, proofbound.WalkEndBound{})
-	require.Greater(t, startOnly.startVBound, plain.startVBound)
-	require.Equal(t, plain.endVBound, startOnly.endVBound, "a charge at one end never moves the other end's own radial bound")
-	require.Greater(t, startOnly.lengthBound, plain.lengthBound)
-	require.Greater(t, startOnly.lengthUpper, plain.lengthUpper)
-	require.Greater(t, startOnly.coordUpper, plain.coordUpper)
+	require.Greater(t, startOnly.StartVBound, plain.StartVBound)
+	require.Equal(t, plain.EndVBound, startOnly.EndVBound, "a charge at one end never moves the other end's own radial bound")
+	require.Greater(t, startOnly.LengthBound, plain.LengthBound)
+	require.Greater(t, startOnly.LengthUpper, plain.LengthUpper)
+	require.Greater(t, startOnly.CoordUpper, plain.CoordUpper)
 	// The envelope has to widen with it, or walkAxisMoment's own math.Min
 	// against proofbound.ConservativeValueError(value, axisMomentUpper) would clamp the
 	// charge straight back off (§7.1).
-	require.Greater(t, startOnly.axisMomentUpper, plain.axisMomentUpper)
-	require.Greater(t, startOnly.axisRadiusUpper, plain.axisRadiusUpper)
+	require.Greater(t, startOnly.AxisMomentUpper, plain.AxisMomentUpper)
+	require.Greater(t, startOnly.AxisRadiusUpper, plain.AxisRadiusUpper)
 
 	both := ax.walkCharged(w, charge, charge)
-	require.Greater(t, both.endVBound, plain.endVBound)
-	require.Greater(t, both.lengthBound, startOnly.lengthBound, "two moved ends move the chord by more than one does")
+	require.Greater(t, both.EndVBound, plain.EndVBound)
+	require.Greater(t, both.LengthBound, startOnly.LengthBound, "two moved ends move the chord by more than one does")
 }

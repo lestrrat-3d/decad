@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -104,7 +106,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{start.U, start.V, end.U, end.V},
-			[4]float64{w.startU, w.startV, w.endU, w.endV})
+			[4]float64{w.StartU, w.StartV, w.EndU, w.EndV})
 
 		// A reversed whole edge records TStart = 1, TEnd = 0 (seam.go), so the
 		// walk's own ends swap while each still states a recorded coordinate.
@@ -112,7 +114,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{end.U, end.V, start.U, start.V},
-			[4]float64{rev.startU, rev.startV, rev.endU, rev.endV})
+			[4]float64{rev.StartU, rev.StartV, rev.EndU, rev.EndV})
 	})
 
 	t.Run("arc", func(t *testing.T) {
@@ -136,7 +138,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 
 		require.Equal(t,
 			[4]float64{seg.Start.U, seg.Start.V, seg.End.U, seg.End.V},
-			[4]float64{w.startU, w.startV, w.endU, w.endV})
+			[4]float64{w.StartU, w.StartV, w.EndU, w.EndV})
 
 		rev, err := walkOf(ArcSeg{
 			Center: seg.Center, Start: seg.Start, End: seg.End,
@@ -145,7 +147,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t,
 			[4]float64{seg.End.U, seg.End.V, seg.Start.U, seg.Start.V},
-			[4]float64{rev.startU, rev.startV, rev.endU, rev.endV})
+			[4]float64{rev.StartU, rev.StartV, rev.EndU, rev.EndV})
 
 		// A trimmed bound keeps the circular model's own value: the record
 		// states no coordinate there, and this seam never invents one.
@@ -154,8 +156,8 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 			TStart: 0, TEnd: 0.5,
 		}, nil)
 		require.NoError(t, err)
-		require.Equal(t, [2]float64{seg.Start.U, seg.Start.V}, [2]float64{part.startU, part.startV})
-		require.Equal(t, walkEndFromModel(part), Point2{U: part.endU, V: part.endV})
+		require.Equal(t, [2]float64{seg.Start.U, seg.Start.V}, [2]float64{part.StartU, part.StartV})
+		require.Equal(t, walkEndFromModel(part), Point2{U: part.EndU, V: part.EndV})
 
 		// The premise, stated over the family the diagnosis measured rather
 		// than over one fixture: across these arcs at least one walk's own end
@@ -183,7 +185,7 @@ func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t,
 						[4]float64{fam.Start.U, fam.Start.V, fam.End.U, fam.End.V},
-						[4]float64{fw.startU, fw.startV, fw.endU, fw.endV},
+						[4]float64{fw.StartU, fw.StartV, fw.EndU, fw.EndV},
 						`the walk states this arc's own recorded endpoints`)
 					total++
 					if walkEndFromModel(fw) != fam.End {
@@ -264,9 +266,9 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := walkOf(tc.seg, nil)
 			require.NoError(t, err)
-			require.Positive(t, w.startBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
-			require.Positive(t, w.endBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
-			require.Less(t, w.startBound.U, 1e-15,
+			require.Positive(t, w.StartBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
+			require.Positive(t, w.EndBound.U, `a trimmed circular endpoint is not a recorded coordinate`)
+			require.Less(t, w.StartBound.U, 1e-15,
 				`the bound is this endpoint's own displacement, not the circle's extent`)
 
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
@@ -294,8 +296,8 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 
 		w, err := walkOf(seg, nil)
 		require.NoError(t, err)
-		require.Positive(t, w.startBound.U)
-		require.Equal(t, proofbound.WalkEndBound{}, w.endBound, `t = 1 names the recorded End`)
+		require.Positive(t, w.StartBound.U)
+		require.Equal(t, proofbound.WalkEndBound{}, w.EndBound, `t = 1 names the recorded End`)
 
 		lo, hi, bound, err := boundaryExtremesBoundedContext(
 			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
@@ -316,7 +318,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		}
 		w, err := walkOf(seg, nil)
 		require.NoError(t, err)
-		require.False(t, w.startBound.Derivable())
+		require.False(t, w.StartBound.Derivable())
 
 		_, _, _, err = boundaryExtremesBoundedContext(
 			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
@@ -376,21 +378,21 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	// the v error is still stated rather than dropped.
 	w, err := walkOf(wholeCircle, nil)
 	require.NoError(t, err)
-	require.Equal(t, proofbound.WalkEndBound{}, w.startBound)
-	require.Equal(t, 0.0, w.endBound.U)
-	require.Positive(t, w.endBound.V)
-	require.Less(t, w.endBound.V, 1e-15)
-	require.Equal(t, 0.0, proofbound.PointPerturbationAllow(w.endBound, 1, 0))
-	require.Positive(t, proofbound.PointPerturbationAllow(w.endBound, 0, 1))
+	require.Equal(t, proofbound.WalkEndBound{}, w.StartBound)
+	require.Equal(t, 0.0, w.EndBound.U)
+	require.Positive(t, w.EndBound.V)
+	require.Less(t, w.EndBound.V, 1e-15)
+	require.Equal(t, 0.0, proofbound.PointPerturbationAllow(w.EndBound, 1, 0))
+	require.Positive(t, proofbound.PointPerturbationAllow(w.EndBound, 0, 1))
 }
 
 // walkEndFromModel re-derives a circular walk's far endpoint from the walk's OWN
 // published model — its centre, radius and end angle — rather than from a second
 // copy of walkOf's formula. It is the coordinate the walk would carry at that
 // bound if it answered its model there instead of the record.
-func walkEndFromModel(w segmentWalk) Point2 {
-	sin, cos := math.Sincos(w.th1)
-	return Point2{U: w.cU + w.radius*cos, V: w.cV + w.radius*sin}
+func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
+	sin, cos := math.Sincos(w.Th1)
+	return Point2{U: w.CU + w.Radius*cos, V: w.CV + w.Radius*sin}
 }
 
 // This file pins the fix for docs/spline-design.md §5.2's own discipline:

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // This file is docs/spline-design.md §6.5: a proof of one wall edge's
@@ -64,7 +66,7 @@ const (
 // negation at the end.
 //
 // fitInterpolated names whether spans came from FitSplineSeg's §5.1.2
-// conversion (extrude.go's segmentWalk.fitInterpolated, itself set from
+// conversion (extrude.go's survey2d.SegmentWalk.fitInterpolated, itself set from
 // spline_fit.go's isFitSplineSeg read on the segment walkOf resolved — the
 // normalized value form, since walkOf normalizes before freeformWalk ever
 // sees it). Every joint INTERIOR to that conversion's chain is verdict 0 BY
@@ -106,7 +108,7 @@ const (
 // record's total free-form work, so a counter minted per certificate would
 // hand this pass a fresh full ceiling instead of spending down what the
 // record's other free-form passes already charged.
-func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, closed, reversed, fitInterpolated bool, work *freeformWork) (freeformConvexitySign, error) {
+func freeformWallConvexityContext(ctx context.Context, spans []survey2d.BezierSpan, closed, reversed, fitInterpolated bool, work *freeformWork) (freeformConvexitySign, error) {
 	verdict := freeformConvexityStraight
 	firstLive, prevLive := -1, -1
 	for i, span := range spans {
@@ -196,7 +198,7 @@ func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, close
 // builds its Sturm chain — §5.2's charge-early rule — so a record whose
 // certificate cannot fit the remaining budget refuses before any of that
 // chain, or the subdivision below it, allocates.
-func spanConvexitySignContext(ctx context.Context, span bezierSpan, work *freeformWork) (freeformConvexitySign, error) {
+func spanConvexitySignContext(ctx context.Context, span survey2d.BezierSpan, work *freeformWork) (freeformConvexitySign, error) {
 	if err := work.step(freeformConvexityCost(len(span))); err != nil {
 		return 0, err
 	}
@@ -219,7 +221,7 @@ func spanConvexitySignContext(ctx context.Context, span bezierSpan, work *freefo
 // shipped exact Bernstein-to-monomial restatement spline_moments.go already
 // integrates through (spanCoordinatePolys, rpFromBernstein), so nothing here
 // rounds and nothing forks a second basis conversion.
-func curvatureNumerator(span bezierSpan) ratPoly {
+func curvatureNumerator(span survey2d.BezierSpan) ratPoly {
 	u, v := spanCoordinatePolys(span)
 	du, dv := rpDeriv(u), rpDeriv(v)
 	ddu, ddv := rpDeriv(du), rpDeriv(dv)
@@ -235,7 +237,7 @@ func curvatureNumerator(span bezierSpan) ratPoly {
 // rpToBernstein with this degree-0 result — it is stated here only so the
 // function is total over every degree Table K names, exactly as the section
 // itself is.
-func statedCurvatureDegree(span bezierSpan) int {
+func statedCurvatureDegree(span survey2d.BezierSpan) int {
 	p := len(span) - 1
 	if d := 2*p - 3; d > 0 {
 		return d
@@ -370,7 +372,7 @@ var half = big.NewRat(1, 2)
 // covers the closed span, because a half-open count alone misses a root
 // sitting exactly at the span's own start (a net whose first two control
 // points coincide).
-func requireSpanSpeedRegularContext(ctx context.Context, span bezierSpan) error {
+func requireSpanSpeedRegularContext(ctx context.Context, span survey2d.BezierSpan) error {
 	u, v := spanCoordinatePolys(span)
 	du, dv := rpDeriv(u), rpDeriv(v)
 	s := rpAdd(rpMul(du, du), rpMul(dv, dv))
@@ -390,9 +392,9 @@ func requireSpanSpeedRegularContext(ctx context.Context, span bezierSpan) error 
 // spanCollapsed is §5.1's collapsed span: every control point of the span the
 // same point, so the span has no nonzero control edge, no direction, and (per
 // Table K) no verdict or joint of its own.
-func spanCollapsed(span bezierSpan) bool {
+func spanCollapsed(span survey2d.BezierSpan) bool {
 	for i := 1; i < len(span); i++ {
-		if span[i].u.Cmp(span[0].u) != 0 || span[i].v.Cmp(span[0].v) != 0 {
+		if span[i].U.Cmp(span[0].U) != 0 || span[i].V.Cmp(span[0].V) != 0 {
 			return false
 		}
 	}
@@ -413,7 +415,7 @@ func spanCollapsed(span bezierSpan) bool {
 // pointing the same way is verdict 0 (parallel tangents turn off no line); a
 // zero cross with them pointing OPPOSITE ways is a reversal the walk doubles
 // back at, which no curvature sign covers — refuse, R19.
-func jointConvexitySign(incoming, outgoing bezierSpan) (freeformConvexitySign, error) {
+func jointConvexitySign(incoming, outgoing survey2d.BezierSpan) (freeformConvexitySign, error) {
 	inU, inV := controlEdgeVector(incoming[len(incoming)-2], incoming[len(incoming)-1])
 	outU, outV := controlEdgeVector(outgoing[0], outgoing[1])
 	cross := new(big.Rat).Sub(new(big.Rat).Mul(inU, outV), new(big.Rat).Mul(inV, outU))
@@ -432,8 +434,8 @@ func jointConvexitySign(incoming, outgoing bezierSpan) (freeformConvexitySign, e
 
 // controlEdgeVector is the exact rational vector from one control point to
 // the next — the quantity every joint verdict crosses.
-func controlEdgeVector(from, to ratPoint) (u, v *big.Rat) {
-	return new(big.Rat).Sub(to.u, from.u), new(big.Rat).Sub(to.v, from.v)
+func controlEdgeVector(from, to survey2d.RatPoint) (u, v *big.Rat) {
+	return new(big.Rat).Sub(to.U, from.U), new(big.Rat).Sub(to.V, from.V)
 }
 
 // foldConvexitySign is §6.5's own fold: 0 is the identity, a sign folds with

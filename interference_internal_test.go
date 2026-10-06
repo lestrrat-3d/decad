@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -20,9 +22,9 @@ import (
 
 func internalDiskRegion(t *testing.T, cx, cy, radius float64) region2 {
 	t.Helper()
-	e, ok := arcElem(cx, cy, radius, 0, 2*math.Pi, true)
+	e, ok := survey2d.ArcElem(cx, cy, radius, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	return newRegion2([]surveyElem{e})
+	return newRegion2([]survey2d.SurveyElem{e})
 }
 
 func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
@@ -165,11 +167,11 @@ func TestFacetCutCancellationIsBounded(t *testing.T) {
 
 func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) region2 {
 	t.Helper()
-	elems := make([]surveyElem, sides)
+	elems := make([]survey2d.SurveyElem, sides)
 	for i := range sides {
 		a := 2 * math.Pi * float64(i) / float64(sides)
 		b := 2 * math.Pi * float64(i+1) / float64(sides)
-		e, ok := lineElem(
+		e, ok := survey2d.LineElem(
 			cx+radius*math.Cos(a), cy+radius*math.Sin(a),
 			cx+radius*math.Cos(b), cy+radius*math.Sin(b),
 		)

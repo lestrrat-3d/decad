@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -78,7 +80,7 @@ type capPatchModel struct {
 //
 // Dotting that with the pull p leaves cos h·(r̂·p) - sin h·(â·p), whose only
 // varying term is r̂·p. Writing the patch's cap-level point at azimuth θ through
-// the placed frame's own EXACT map (placedFrameMap: the map prismPayload.point
+// the placed frame's own EXACT map (survey2d.PlacedFrameMap: the map prismPayload.point
 // rounds twice), the axis-perpendicular part of that point relative to the
 // cone's origin is
 //
@@ -94,7 +96,7 @@ type capPatchModel struct {
 // cap radius, its cap level, and the window start the coefficients are anchored
 // on — and nothing here is sampled at all.
 func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (capPatchModel, bool) {
-	pv, okP := ivVec3Of(p)
+	pv, okP := survey2d.IvVec3Of(p)
 	if !okP {
 		return capPatchModel{}, false
 	}
@@ -102,8 +104,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !okS {
 		return capPatchModel{}, false
 	}
-	axisIv, okA := ivVec3Of(axis)
-	originIv, okO := ivVec3Of(origin)
+	axisIv, okA := survey2d.IvVec3Of(axis)
+	originIv, okO := survey2d.IvVec3Of(origin)
 	if !okA || !okO {
 		return capPatchModel{}, false
 	}
@@ -120,10 +122,12 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if cU == nil || cV == nil || capZ == nil || radius == nil || th0 == nil {
 		return capPatchModel{}, false
 	}
-	perp := func(v ivVec3) ivVec3 { return ivVec3Sub(v, ivVec3Mul(ahat, ivVec3Dot(v, ahat))) }
-	offset := perp(ivVec3Sub(world.point(cU, cV, capZ), originIv))
-	qu := ivVec3Mul(perp(world.du), proofbound.PointInterval(radius))
-	qv := ivVec3Mul(perp(world.dv), proofbound.PointInterval(radius))
+	perp := func(v survey2d.IvVec3) survey2d.IvVec3 {
+		return ivVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
+	}
+	offset := perp(ivVec3Sub(world.Point(cU, cV, capZ), originIv))
+	qu := survey2d.IvVec3Mul(perp(world.Du), proofbound.PointInterval(radius))
+	qv := survey2d.IvVec3Mul(perp(world.Dv), proofbound.PointInterval(radius))
 
 	length, okLen := radialLengthEnclosure(offset, qu, qv)
 	if !okLen {
@@ -133,7 +137,7 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	invFixed := new(big.Rat).Inv(fixed)
 	// The largest |1/|g(θ)| - 1/fixed| the enclosure allows, taken from whichever
 	// end is further from the fixed length in reciprocal terms.
-	gap := ratMax(
+	gap := survey2d.RatMax(
 		new(big.Rat).Sub(new(big.Rat).Inv(length.Lo), invFixed),
 		new(big.Rat).Sub(invFixed, new(big.Rat).Inv(length.Hi)),
 	)
@@ -142,9 +146,9 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	// window's own start: the survey's recovered form is anchored at th0, and a
 	// model anchored anywhere else would be charged a difference that is only a
 	// change of phase.
-	uComp, vComp := ivVec3Dot(qu, pv), ivVec3Dot(qv, pv)
-	offComp := ivVec3Dot(offset, pv)
-	sin0, cos0, okT := radSinCosInterval(th0)
+	uComp, vComp := survey2d.IvVec3Dot(qu, pv), survey2d.IvVec3Dot(qv, pv)
+	offComp := survey2d.IvVec3Dot(offset, pv)
+	sin0, cos0, okT := survey2d.RadSinCosInterval(th0)
 	if !okT {
 		return capPatchModel{}, false
 	}
@@ -156,7 +160,7 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		sign = big.NewRat(-1, 1)
 	}
 	scale := proofbound.IntervalScale(cosH, new(big.Rat).Mul(sign, invFixed))
-	axial := proofbound.IntervalScale(proofbound.IntervalMul(sinH, ivVec3Dot(ahat, pv)), sign)
+	axial := proofbound.IntervalScale(proofbound.IntervalMul(sinH, survey2d.IvVec3Dot(ahat, pv)), sign)
 	return capPatchModel{
 		a: proofbound.IntervalMul(scale, anchoredU),
 		b: proofbound.IntervalMul(scale, anchoredV),
@@ -186,7 +190,7 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 		if rHalf == nil {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
-		sin, cos, ok := radSinCosInterval(rHalf)
+		sin, cos, ok := survey2d.RadSinCosInterval(rHalf)
 		if !ok {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
@@ -214,17 +218,17 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 // It refuses rather than clamp where the enclosure reaches zero: a length that
 // is not proven positive gives the patch no radial direction, so there is no
 // normal to state a range for.
-func radialLengthEnclosure(offset, qu, qv ivVec3) (proofbound.RatInterval, bool) {
+func radialLengthEnclosure(offset, qu, qv survey2d.IvVec3) (proofbound.RatInterval, bool) {
 	half := big.NewRat(1, 2)
-	uSq, vSq := ivVec3NormSq(qu), ivVec3NormSq(qv)
-	base := proofbound.IntervalAdd(ivVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
-	skew, okSkew := intervalSqrt(proofbound.IntervalAdd(
-		intervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
-		intervalSquare(ivVec3Dot(qu, qv)),
+	uSq, vSq := survey2d.IvVec3NormSq(qu), survey2d.IvVec3NormSq(qv)
+	base := proofbound.IntervalAdd(survey2d.IvVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
+	skew, okSkew := survey2d.IntervalSqrt(proofbound.IntervalAdd(
+		survey2d.IntervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
+		survey2d.IntervalSquare(survey2d.IvVec3Dot(qu, qv)),
 	))
-	eccentric, okEcc := intervalSqrt(proofbound.IntervalAdd(
-		intervalSquare(ivVec3Dot(offset, qu)),
-		intervalSquare(ivVec3Dot(offset, qv)),
+	eccentric, okEcc := survey2d.IntervalSqrt(proofbound.IntervalAdd(
+		survey2d.IntervalSquare(survey2d.IvVec3Dot(offset, qu)),
+		survey2d.IntervalSquare(survey2d.IvVec3Dot(offset, qv)),
 	))
 	if !okSkew || !okEcc {
 		return proofbound.RatInterval{}, false
@@ -234,7 +238,7 @@ func radialLengthEnclosure(offset, qu, qv ivVec3) (proofbound.RatInterval, bool)
 	if squared.Lo.Sign() <= 0 {
 		return proofbound.RatInterval{}, false
 	}
-	length, ok := intervalSqrt(squared)
+	length, ok := survey2d.IntervalSqrt(squared)
 	if !ok || length.Lo.Sign() <= 0 {
 		return proofbound.RatInterval{}, false
 	}
@@ -275,7 +279,7 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 	if width.Sign() < 0 {
 		return harmonicExtremes{}, false
 	}
-	amp, okAmp := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
+	amp, okAmp := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return harmonicExtremes{}, false
 	}
@@ -289,7 +293,7 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
 	var ext harmonicExtremes
 	for j := range arcs + 1 {
-		sin, cos, ok := radSinCosInterval(proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
+		sin, cos, ok := survey2d.RadSinCosInterval(proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
 		if !ok {
 			return harmonicExtremes{}, false
 		}
@@ -310,98 +314,52 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 		// charges minHi-minLo and maxHi-maxLo into the allowance DX7 reads, so
 		// its listing test mn+allow < 0 can never fire on a positive true
 		// minimum.
-		ext.minLo, ext.minHi = ratMin(ext.minLo, at.Lo), ratMin(ext.minHi, at.Hi)
-		ext.maxLo, ext.maxHi = ratMax(ext.maxLo, at.Lo), ratMax(ext.maxHi, at.Hi)
+		ext.minLo, ext.minHi = survey2d.RatMin(ext.minLo, at.Lo), survey2d.RatMin(ext.minHi, at.Hi)
+		ext.maxLo, ext.maxHi = survey2d.RatMax(ext.maxLo, at.Lo), survey2d.RatMax(ext.maxHi, at.Hi)
 	}
 
-	sure, maybe := windowReachesDirection(coss, sins, a, b)
+	sure, maybe := survey2d.WindowReachesDirection(coss, sins, a, b)
 	if maybe {
-		ext.maxHi = ratMax(ext.maxHi, peak.Hi)
+		ext.maxHi = survey2d.RatMax(ext.maxHi, peak.Hi)
 	}
 	if sure {
-		ext.maxLo = ratMax(ext.maxLo, peak.Lo)
+		ext.maxLo = survey2d.RatMax(ext.maxLo, peak.Lo)
 	}
-	sure, maybe = windowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
+	sure, maybe = survey2d.WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
 	if maybe {
-		ext.minLo = ratMin(ext.minLo, trough.Lo)
+		ext.minLo = survey2d.RatMin(ext.minLo, trough.Lo)
 	}
 	if sure {
-		ext.minHi = ratMin(ext.minHi, trough.Hi)
+		ext.minHi = survey2d.RatMin(ext.minHi, trough.Hi)
 	}
 	return ext, true
 }
 
-// windowReachesDirection decides, over arcs each shorter than a half turn,
-// whether the direction (dx, dy) lies inside the window the given cosines and
-// sines bound. It returns the proven answer first and the possible one second,
-// and never collapses the two: a straddling cross product leaves the direction
-// possible but unproven, which is exactly the case an extreme may only widen an
-// enclosure with rather than fix an end of it.
-//
-// A zero direction — the constant form, a = b = 0 — makes both cross products
-// exactly zero and so reads as proven inside, which is right: every azimuth
-// attains the constant.
-func windowReachesDirection(coss, sins []proofbound.RatInterval, dx, dy *big.Rat) (bool, bool) {
-	sure, maybe := false, false
-	for j := 0; j+1 < len(coss); j++ {
-		// The cross product of the arc's start with the direction, then of the
-		// direction with the arc's end: both non-negative places it between them.
-		from := proofbound.IntervalSub(proofbound.IntervalScale(coss[j], dy), proofbound.IntervalScale(sins[j], dx))
-		to := proofbound.IntervalSub(proofbound.IntervalScale(sins[j+1], dx), proofbound.IntervalScale(coss[j+1], dy))
-		if from.Lo.Sign() >= 0 && to.Lo.Sign() >= 0 {
-			sure = true
-		}
-		if from.Hi.Sign() >= 0 && to.Hi.Sign() >= 0 {
-			maybe = true
-		}
-	}
-	return sure, maybe
-}
-
-// placedFrameMap is a prism payload's plane-local to world map, evaluated in
-// EXACT arithmetic on the held frame and placement numbers alone.
-// prismPayload.point rounds that map twice — once through the frame, once
-// through the placement — and this is the map those roundings approximate,
-// which is the map the payload DENOTES: a placement re-evaluates the record and
-// stores its own coordinates, so the held numbers ARE what they denote (the same
-// rule normal_bound.go states).
-type placedFrameMap struct {
-	origin, du, dv, dn ivVec3
-}
-
-func newPlacedFrameMap(pp prismPayload) (placedFrameMap, bool) {
+func newPlacedFrameMap(pp prismPayload) (survey2d.PlacedFrameMap, bool) {
 	basis := pp.xform.Basis()
-	ex, okX := ivVec3Of(basis.EX)
-	ey, okY := ivVec3Of(basis.EY)
-	ez, okZ := ivVec3Of(basis.EZ)
-	translation, okT := ivVec3Of(pp.xform.Translation())
-	origin, okO := ivVec3Of(pp.frame.Origin())
-	u, okU := ivVec3Of(pp.frame.U())
-	v, okV := ivVec3Of(pp.frame.V())
-	n, okN := ivVec3Of(pp.frame.N())
+	ex, okX := survey2d.IvVec3Of(basis.EX)
+	ey, okY := survey2d.IvVec3Of(basis.EY)
+	ez, okZ := survey2d.IvVec3Of(basis.EZ)
+	translation, okT := survey2d.IvVec3Of(pp.xform.Translation())
+	origin, okO := survey2d.IvVec3Of(pp.frame.Origin())
+	u, okU := survey2d.IvVec3Of(pp.frame.U())
+	v, okV := survey2d.IvVec3Of(pp.frame.V())
+	n, okN := survey2d.IvVec3Of(pp.frame.N())
 	if !okX || !okY || !okZ || !okT || !okO || !okU || !okV || !okN {
-		return placedFrameMap{}, false
+		return survey2d.PlacedFrameMap{}, false
 	}
-	place := func(local ivVec3) ivVec3 {
-		return ivVec3Add(
-			ivVec3Mul(ex, local[0]),
-			ivVec3Add(ivVec3Mul(ey, local[1]), ivVec3Mul(ez, local[2])),
+	place := func(local survey2d.IvVec3) survey2d.IvVec3 {
+		return survey2d.IvVec3Add(
+			survey2d.IvVec3Mul(ex, local[0]),
+			survey2d.IvVec3Add(survey2d.IvVec3Mul(ey, local[1]), survey2d.IvVec3Mul(ez, local[2])),
 		)
 	}
-	return placedFrameMap{
-		origin: ivVec3Add(place(origin), translation),
-		du:     place(u),
-		dv:     place(v),
-		dn:     place(n),
+	return survey2d.PlacedFrameMap{
+		Origin: survey2d.IvVec3Add(place(origin), translation),
+		Du:     place(u),
+		Dv:     place(v),
+		Dn:     place(n),
 	}, true
-}
-
-// point is the exact image of a plane-local (u, v) at height z.
-func (m placedFrameMap) point(u, v, z *big.Rat) ivVec3 {
-	return ivVec3Add(m.origin, ivVec3Add(
-		ivVec3Mul(m.du, proofbound.PointInterval(u)),
-		ivVec3Add(ivVec3Mul(m.dv, proofbound.PointInterval(v)), ivVec3Mul(m.dn, proofbound.PointInterval(z))),
-	))
 }
 
 // intervalMid is one rational strictly inside an enclosure, the point a bound
@@ -412,19 +370,5 @@ func intervalMid(a proofbound.RatInterval) *big.Rat {
 
 // intervalAbsUpper is the largest magnitude an enclosure allows.
 func intervalAbsUpper(a proofbound.RatInterval) *big.Rat {
-	return ratMax(new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi))
-}
-
-func ratMin(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) <= 0 {
-		return a
-	}
-	return b
-}
-
-func ratMax(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) >= 0 {
-		return a
-	}
-	return b
+	return survey2d.RatMax(new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi))
 }

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -193,7 +195,7 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *pr
 			if err := requireAnalyticWalk(w, "a placed cap frame"); err != nil {
 				return 0, err
 			}
-			upper = math.Max(upper, w.coordUpper)
+			upper = math.Max(upper, w.CoordUpper)
 		}
 	}
 	return upper, nil
@@ -222,7 +224,7 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks 
 			if err != nil {
 				return 0, err
 			}
-			upper = math.Max(upper, w.coordUpper)
+			upper = math.Max(upper, w.CoordUpper)
 		}
 	}
 	return upper, nil
@@ -233,15 +235,15 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks 
 // (and already checked against the profile by the caller) reads
 // walks.at(loopIndex, segIndex); walks nil calls walkOf, exactly as every
 // consumer did before profileWalks existed.
-func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, loopIndex, segIndex int) (segmentWalk, error) {
+func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
 	if walks != nil {
 		if walks.readCharges != nil {
 			charge := walks.readCharges[loopIndex][segIndex]
 			if err := work.step(charge.spent); err != nil {
-				return segmentWalk{}, err
+				return survey2d.SegmentWalk{}, err
 			}
 			if err := work.reconstructionStep(charge.reconstructionSpent); err != nil {
-				return segmentWalk{}, err
+				return survey2d.SegmentWalk{}, err
 			}
 		}
 		return walks.at(loopIndex, segIndex), nil

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -100,11 +102,11 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	undecided := false
 	for li, loop := range loops {
 		for _, w := range loop {
-			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
+			f := roles[fmt.Sprintf("side(%d,%d)", li, w.Segs[0])]
 			if f == nil {
 				return undercutOutcome{}
 			}
-			verdict, ok := wallNormalDecision(w, m, pull)
+			verdict, ok := survey2d.WallNormalDecision(w, m, pull)
 			if !listVerdict(&faces, &undecided, f, verdict, ok) {
 				return undercutOutcome{}
 			}
@@ -118,7 +120,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		if f == nil {
 			return undercutOutcome{}
 		}
-		verdict, ok := capNormalDecision(m, pull, cap.sign)
+		verdict, ok := survey2d.CapNormalDecision(m, pull, cap.sign)
 		if !listVerdict(&faces, &undecided, f, verdict, ok) {
 			return undercutOutcome{}
 		}
@@ -164,12 +166,12 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		// lists this patch; only an all-clear needs every point to clear. A
 		// remaining straddle makes this patch undecided without discarding
 		// other patches, receiver or patch, already proven to oppose —
-		// decidePull's own three-valued rule (survey_undercut.go), read at this
+		// survey2d.DecidePull's own three-valued rule (survey_undercut.go), read at this
 		// patch's own allowance rather than the receiver faces' proven zero.
-		switch decidePull(mn, mx, allow) {
-		case pullOpposes:
+		switch survey2d.DecidePull(mn, mx, allow) {
+		case survey2d.PullOpposes:
 			faces = append(faces, f)
-		case pullUndecided:
+		case survey2d.PullUndecided:
 			undecided = true
 		}
 	}
@@ -323,12 +325,12 @@ func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, 
 	if err != nil || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(v) {
 		return 0, 0, false
 	}
-	nv, okN := ivVec3Of(n.Value)
-	pv, okP := ivVec3Of(p)
+	nv, okN := survey2d.IvVec3Of(n.Value)
+	pv, okP := survey2d.IvVec3Of(p)
 	if !okN || !okP {
 		return 0, 0, false
 	}
-	allow := proofbound.AbsSumUpper(proofbound.ProductUpper(bound, pLen), proofbound.IntervalFloatError(ivVec3Dot(nv, pv), v))
+	allow := proofbound.AbsSumUpper(proofbound.ProductUpper(bound, pLen), proofbound.IntervalFloatError(survey2d.IvVec3Dot(nv, pv), v))
 	if proofbound.IsNonFinite(allow) {
 		return 0, 0, false
 	}
@@ -339,11 +341,11 @@ func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, 
 // one ulp either side of one, and stating it beats assuming it: a bound scaled
 // by a length that is 1+e is a bound, and one scaled by an assumed 1 is not.
 func pullLengthUpper(p r3.Vec) (float64, bool) {
-	pv, ok := ivVec3Of(p)
+	pv, ok := survey2d.IvVec3Of(p)
 	if !ok {
 		return 0, false
 	}
-	length, okSqrt := intervalSqrt(ivVec3NormSq(pv))
+	length, okSqrt := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(pv))
 	if !okSqrt {
 		return 0, false
 	}

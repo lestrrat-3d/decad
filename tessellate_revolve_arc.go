@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -64,9 +66,9 @@ type revArcCell struct {
 // divided into n chords. th0/th1 on an axis walk are the plane walk's own
 // angles shifted by the axis rotation, so their difference is the recorded
 // sweep and chord k spans [θ0 + k·Δθ, θ0 + (k+1)·Δθ] exactly.
-func revolveArcChordCell(w segmentWalk, k, n int) (*revArcCell, bool) {
-	cV, radius := proofarith.FloatRat(w.cV), proofarith.FloatRat(w.radius)
-	th0, th1 := proofarith.FloatRat(w.th0), proofarith.FloatRat(w.th1)
+func revolveArcChordCell(w survey2d.SegmentWalk, k, n int) (*revArcCell, bool) {
+	cV, radius := proofarith.FloatRat(w.CV), proofarith.FloatRat(w.Radius)
+	th0, th1 := proofarith.FloatRat(w.Th0), proofarith.FloatRat(w.Th1)
 	if cV == nil || radius == nil || th0 == nil || th1 == nil || n <= 0 || radius.Sign() < 0 {
 		return nil, false
 	}
@@ -84,7 +86,7 @@ func (c revArcCell) speed() *big.Rat {
 // rhoNodes encloses ρ at each node of the fixed subdivision, and states the
 // per-piece second-order allowance the integral below charges beside them.
 //
-// Nothing here compares against π. Two radSinCosInterval calls enclose the
+// Nothing here compares against π. Two survey2d.RadSinCosInterval calls enclose the
 // starting angle and one step. The addition identities then carry certified
 // intervals from one node to the next. This avoids running the trig series at
 // every node while preserving an enclosure at each exact rational angle.
@@ -101,11 +103,11 @@ func (c revArcCell) speed() *big.Rat {
 func (c revArcCell) rhoNodes() ([]proofbound.RatInterval, *big.Rat, bool) {
 	nodes := make([]proofbound.RatInterval, revolveArcIntegralSteps+1)
 	step := new(big.Rat).Quo(c.dth, big.NewRat(revolveArcIntegralSteps, 1))
-	sinIv, cosIv, ok := radSinCosInterval(c.th0)
+	sinIv, cosIv, ok := survey2d.RadSinCosInterval(c.th0)
 	if !ok {
 		return nil, nil, false
 	}
-	stepSinIv, stepCosIv, ok := radSinCosInterval(step)
+	stepSinIv, stepCosIv, ok := survey2d.RadSinCosInterval(step)
 	if !ok {
 		return nil, nil, false
 	}

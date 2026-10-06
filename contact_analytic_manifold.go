@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -588,7 +590,7 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 		// its upper end stays the least height, since the ruling's feet lie
 		// inside the face and S has material under the cylinder there.
 		if plane.clearance != nil {
-			sigmaLo = ratMin(sigmaLo, plane.clearance)
+			sigmaLo = survey2d.RatMin(sigmaLo, plane.clearance)
 		}
 		gap, ok := ratIntervalMeasurement(sigmaLo, sigmaHi)
 		if !ok {
@@ -627,8 +629,8 @@ func placedRulingFootInside(c *placedCylinder, plane *rulingPlane, lateral *big.
 	var lo, hi [2]*big.Rat
 	for slot, axis := range [2]int{(plane.face.drop + 1) % 3, (plane.face.drop + 2) % 3} {
 		a, b := c.centers[0][axis].Rat(), c.centers[1][axis].Rat()
-		lo[slot] = new(big.Rat).Sub(ratMin(a, b), lateral)
-		hi[slot] = new(big.Rat).Add(ratMax(a, b), lateral)
+		lo[slot] = new(big.Rat).Sub(survey2d.RatMin(a, b), lateral)
+		hi[slot] = new(big.Rat).Add(survey2d.RatMax(a, b), lateral)
 	}
 	return plane.face.holdsBox(lo, hi)
 }
@@ -706,7 +708,7 @@ func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
 	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
 	value := ratFloatNearest(mid)
 	held := proofarith.FloatRat(value)
-	spread := ratMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
+	spread := survey2d.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
 	bound := proofbound.RatFloatUp(spread)
 	if !finiteMeasurementValues(value, bound) {
 		return Measurement{}, false

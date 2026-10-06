@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch"
@@ -91,7 +93,7 @@ func oldRevolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope pr
 	prev := at(0)
 	for i := range revolveArcIntegralSteps {
 		next := at(i + 1)
-		piece := new(big.Rat).Add(ratMax(prev, next), extra)
+		piece := new(big.Rat).Add(survey2d.RatMax(prev, next), extra)
 		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
 		prev = next
 	}
@@ -315,7 +317,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 
 func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 	t.Parallel()
-	whole := segmentWalk{radius: 1, th0: 0, th1: 2 * math.Pi, closed: true}
+	whole := survey2d.SegmentWalk{Radius: 1, Th0: 0, Th1: 2 * math.Pi, Closed: true}
 
 	t.Run("a budget at or above 2r takes the minimum with no inverse", func(t *testing.T) {
 		// docs/tessellation-design.md §14: for radius 1, budgets equal to and
@@ -344,15 +346,15 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 	t.Run("an axis-to-axis meridian takes at least two chords", func(t *testing.T) {
 		// A circular generator with both ends on the axis cannot chord to a
 		// single on-axis segment (docs/tessellation-design.md §9).
-		meridian := segmentWalk{radius: 5, th0: 0, th1: math.Pi, kind: walkCircular, startV: 0, endV: 0}
+		meridian := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: math.Pi, Kind: survey2d.WalkCircular, StartV: 0, EndV: 0}
 		require.Equal(t, 2, revolveMeridianMin(meridian))
 		n, _, err := chordCount(meridian, 1000, revolveMeridianMin(meridian))
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 
-		offAxis := segmentWalk{radius: 5, th0: 0, th1: math.Pi, kind: walkCircular, startV: 1, endV: 2}
+		offAxis := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: math.Pi, Kind: survey2d.WalkCircular, StartV: 1, EndV: 2}
 		require.Equal(t, 1, revolveMeridianMin(offAxis))
-		closed := segmentWalk{radius: 5, th0: 0, th1: 2 * math.Pi, kind: walkCircular, closed: true}
+		closed := survey2d.SegmentWalk{Radius: 5, Th0: 0, Th1: 2 * math.Pi, Kind: survey2d.WalkCircular, Closed: true}
 		require.Equal(t, 3, revolveMeridianMin(closed))
 	})
 

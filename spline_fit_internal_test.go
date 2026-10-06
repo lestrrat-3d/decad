@@ -73,8 +73,8 @@ func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 	}
 
 	for i, span := range spans {
-		gotX := monomialFromBezierCubic(span[0].u, span[1].u, span[2].u, span[3].u)
-		gotY := monomialFromBezierCubic(span[0].v, span[1].v, span[2].v, span[3].v)
+		gotX := monomialFromBezierCubic(span[0].U, span[1].U, span[2].U, span[3].U)
+		gotY := monomialFromBezierCubic(span[0].V, span[1].V, span[2].V, span[3].V)
 		want := geomSpans[i]
 		for k := range 4 {
 			almostEqual(t, want.X[k], gotX[k], "span %d X[%d]")

@@ -1,7 +1,5 @@
 package proofbound
 
-// Moved from the root package's segment_walk.go.
-
 // WalkEndBound is the proven error bound on a walk endpoint's two components,
 // stated PER COMPONENT and never merged into one number. The two are
 // independent readings and an endpoint routinely proves one exactly while the

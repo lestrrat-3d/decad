@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -147,7 +149,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	// Stage 3 (§4): the construction's own gates, per corner — S4 (a corner
 	// exists) then S5 (a blend of that radius exists).
 	for _, corner := range matched {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		cb, err := computeFillet(loops[corner.loop], corner.corner, rmm)
@@ -212,7 +214,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 // same decomposition buildLoopSides and the surveys use: a lateral edge is a
 // junction between two consecutive walks.
 type cornerLoop struct {
-	walks []sideWalk
+	walks []survey2d.SideWalk
 }
 
 // matchedCorner retains one selector result beside the section coordinate it
@@ -234,7 +236,7 @@ func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLo
 		edge:        edge,
 		loop:        loop,
 		corner:      corner,
-		point:       Point2{U: w.startU, V: w.startV},
+		point:       Point2{U: w.StartU, V: w.StartV},
 	}
 }
 
@@ -317,7 +319,7 @@ func requireExactSection(pp prismPayload, op string) error {
 }
 
 func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]cornerLoop, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return nil, err
 	}
 	// One free-form counter for this whole record walk: no moments preflight ran
@@ -326,12 +328,12 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 	work := newFreeformWork()
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		raw := make([]sideWalk, len(loop.Segments))
+		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
 			w, err := walkOf(seg, work)
@@ -341,7 +343,7 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 			if err := requireAnalyticWalk(w, "a modify corner rewrite"); err != nil {
 				return nil, err
 			}
-			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
 		if err != nil {
@@ -366,19 +368,19 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 	}
 	const tol = 1e-6
 	for li, loop := range loops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, 0, false, err
 		}
 		n := len(loop.walks)
-		if n == 1 && loop.walks[0].closed {
+		if n == 1 && loop.walks[0].Closed {
 			continue
 		}
 		for ci, w := range loop.walks {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return 0, 0, false, err
 			}
-			j0 := pp.point(w.startU, w.startV, pp.z0)
-			j1 := pp.point(w.startU, w.startV, pp.z1)
+			j0 := pp.point(w.StartU, w.StartV, pp.z0)
+			j1 := pp.point(w.StartU, w.StartV, pp.z1)
 			if matchEndpoints(e.start.position, e.end.position, j0, j1, tol) {
 				return li, ci, true, nil
 			}
@@ -431,15 +433,15 @@ type offCurve struct {
 
 // carrierOf builds the carrier of a walk at a corner: (tx, ty) is the walk's
 // unit travel tangent there.
-func carrierOf(w sideWalk, tx, ty float64) carrier {
-	if !w.isCircular() {
-		return carrier{isLine: true, px: w.startU, py: w.startV, tx: tx, ty: ty}
+func carrierOf(w survey2d.SideWalk, tx, ty float64) carrier {
+	if !w.IsCircular() {
+		return carrier{isLine: true, px: w.StartU, py: w.StartV, tx: tx, ty: ty}
 	}
 	inside := 1.0
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		inside = -1.0
 	}
-	return carrier{cx: w.cU, cy: w.cV, radius: w.radius, insideSign: inside}
+	return carrier{cx: w.CU, cy: w.CV, radius: w.Radius, insideSign: inside}
 }
 
 // offsetOf offsets a carrier by r, signed by offsetSign (+1 a convex corner
@@ -480,11 +482,11 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 	n := len(loop.walks)
 	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := loop.walks[ci]          // walk B, leaving the corner
-	px, py := leave.startU, leave.startV
+	px, py := leave.StartU, leave.StartV
 
 	// Unit travel tangents at the corner: A's outgoing, B's incoming.
-	ax, ay, la := normalize2(arrive.tanOutU, arrive.tanOutV)
-	bx, by, lb := normalize2(leave.tanInU, leave.tanInV)
+	ax, ay, la := normalize2(arrive.TanOutU, arrive.TanOutV)
+	bx, by, lb := normalize2(leave.TanInU, leave.TanInV)
 	if la == 0 || lb == 0 {
 		return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 	}
@@ -664,7 +666,7 @@ func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loo
 	newLoops := make([]LoopRecord, len(origLoops))
 	blendSegs := make([]map[int]struct{}, len(origLoops))
 	for li := range origLoops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return ProfileRecord{}, nil, err
 		}
 		blendSegs[li] = map[int]struct{}{}
@@ -679,7 +681,7 @@ func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loo
 		newLoops[li] = LoopRecord{Segments: segs}
 		blendSegs[li] = connectors
 	}
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return ProfileRecord{}, nil, err
 	}
 	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
@@ -694,15 +696,15 @@ func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]
 	var segs []CurveSegment
 	connectors := map[int]struct{}{}
 	for i := range n {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, nil, err
 		}
 		w := loop.walks[i]
-		startU, startV := w.startU, w.startV
+		startU, startV := w.StartU, w.StartV
 		if cb := blends[i]; cb != nil { // corner i trims this walk's start
 			startU, startV = cb.fB.U, cb.fB.V
 		}
-		endU, endV := w.endU, w.endV
+		endU, endV := w.EndU, w.EndV
 		if cb := blends[(i+1)%n]; cb != nil { // corner i+1 trims this walk's end
 			endU, endV = cb.fA.U, cb.fA.V
 		}
@@ -717,11 +719,11 @@ func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]
 
 // walkSegment re-emits a coalesced walk, trimmed to (start, end), as a
 // LineSeg or an ArcSeg in the walk's own sense.
-func walkSegment(w sideWalk, sU, sV, eU, eV float64) CurveSegment {
-	if !w.isCircular() {
+func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) CurveSegment {
+	if !w.IsCircular() {
 		return LineSeg{Start: Point2{U: sU, V: sV}, End: Point2{U: eU, V: eV}, TStart: 0, TEnd: 1}
 	}
-	return arcSegment(Point2{U: w.cU, V: w.cV}, Point2{U: sU, V: sV}, Point2{U: eU, V: eV}, w.th1 > w.th0)
+	return arcSegment(Point2{U: w.CU, V: w.CV}, Point2{U: sU, V: sV}, Point2{U: eU, V: eV}, w.Th1 > w.Th0)
 }
 
 // arcSegment builds an ArcSeg walking from start to end about center: an

@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -156,7 +158,7 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 	}
 	w, err := walkOf(seg, newFreeformWork())
 	require.NoError(t, err)
-	require.True(t, w.isCircular())
+	require.True(t, w.IsCircular())
 
 	for _, n := range []int{1, 2, 5, 32} {
 		want := r * r / 2 * (math.Pi/2 - float64(n)*math.Sin(math.Pi/2/float64(n)))
@@ -412,7 +414,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	pp, ok := body.payload.(prismPayload)
 	require.True(t, ok)
 
-	var spans []bezierSpan
+	var spans []survey2d.BezierSpan
 	for _, seg := range pp.profile.Outer.Segments {
 		if _, isFree := seg.(FitSplineSeg); !isFree {
 			continue

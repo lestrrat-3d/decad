@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -56,7 +58,7 @@ func freeformSpanCost(controls int) uint64 {
 // the conversion samples or reconstructs the curve, since the ceiling exists
 // precisely because the public ProfileRecord methods take no context and cannot
 // be cancelled.
-func chargeFreeformSpans(spans []bezierSpan, work *freeformWork) error {
+func chargeFreeformSpans(spans []survey2d.BezierSpan, work *freeformWork) error {
 	for _, span := range spans {
 		if err := work.step(freeformSpanCost(len(span))); err != nil {
 			return err
@@ -112,11 +114,11 @@ func binomialRat(n, k int) *big.Rat {
 }
 
 // spanCoordinatePolys returns one span's u(t) and v(t) in monomial form.
-func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
+func spanCoordinatePolys(span survey2d.BezierSpan) (ratPoly, ratPoly) {
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {
-		us[i], vs[i] = point.u, point.v
+		us[i], vs[i] = point.U, point.V
 	}
 	return rpFromBernstein(us), rpFromBernstein(vs)
 }
@@ -134,7 +136,7 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 //	∫u² dA = ⅓∮u³ dv
 //	∫v² dA = −⅓∮v³ du
 //	∫uv dA = ½∮u²v dv
-func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
+func exactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
 	half := big.NewRat(1, 2)
 	var third *big.Rat
 	if order >= momentSecondOrder {
@@ -183,7 +185,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegra
 //
 // The chain arrives already converted, re-anchored and CHARGED by the
 // record-level preflight, so nothing here consults the work counter.
-func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, order momentIntegralOrder) {
+func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed bool, order momentIntegralOrder) {
 	exact := exactFreeformMoments(spans, reversed, order)
 	if extent := freeformControlExtent(spans); extent > ig.coordUpper {
 		ig.coordUpper = extent
@@ -238,7 +240,7 @@ func polyThirdMoments(u, v ratPoly) [4]*big.Rat {
 // control points, before regionIntegrals.add shifts them to the walk anchor,
 // because the third-order sum is kept about the origin. reversed negates
 // every term, as it does in exactFreeformMoments.
-func freeformThirdMoments(spans []bezierSpan, reversed bool) [4]*big.Rat {
+func freeformThirdMoments(spans []survey2d.BezierSpan, reversed bool) [4]*big.Rat {
 	out := [4]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)}
 	for _, span := range spans {
 		u, v := spanCoordinatePolys(span)

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -118,69 +120,6 @@ func intervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
 	return proofbound.Interval(lo, hi)
 }
 
-// intervalQuo divides two intervals. ok is false where the divisor straddles
-// zero, since the quotient is then unbounded and no box encloses it.
-func intervalQuo(a, b proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	if b.Lo.Sign() <= 0 && b.Hi.Sign() >= 0 {
-		return proofbound.RatInterval{}, false
-	}
-	corners := [4]*big.Rat{
-		new(big.Rat).Quo(a.Lo, b.Lo),
-		new(big.Rat).Quo(a.Lo, b.Hi),
-		new(big.Rat).Quo(a.Hi, b.Lo),
-		new(big.Rat).Quo(a.Hi, b.Hi),
-	}
-	lo, hi := corners[0], corners[0]
-	for _, c := range corners[1:] {
-		if c.Cmp(lo) < 0 {
-			lo = c
-		}
-		if c.Cmp(hi) > 0 {
-			hi = c
-		}
-	}
-	return proofbound.Interval(lo, hi), true
-}
-
-// intervalSquare is x² over an interval. It is not proofbound.IntervalMul(a, a): the
-// corner products of an interval straddling zero put a NEGATIVE value at the
-// low end, and a square never takes one.
-func intervalSquare(a proofbound.RatInterval) proofbound.RatInterval {
-	lo2 := new(big.Rat).Mul(a.Lo, a.Lo)
-	hi2 := new(big.Rat).Mul(a.Hi, a.Hi)
-	if a.Lo.Sign() >= 0 {
-		return proofbound.Interval(lo2, hi2)
-	}
-	if a.Hi.Sign() <= 0 {
-		return proofbound.Interval(hi2, lo2)
-	}
-	hi := lo2
-	if hi2.Cmp(hi) > 0 {
-		hi = hi2
-	}
-	return proofbound.Interval(new(big.Rat), hi)
-}
-
-// intervalSqrt encloses the square root over a non-negative interval, each end
-// rounded OUTWARD through spline_length.go's exact-comparison bracket, so no
-// platform's sqrt can narrow it. A lower end below zero is clamped to zero:
-// the enclosure then covers the tangency the float discriminant reached for.
-func intervalSqrt(a proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	if a.Hi.Sign() < 0 {
-		return proofbound.RatInterval{}, false
-	}
-	lo := 0.0
-	if a.Lo.Sign() > 0 {
-		lo = proofbound.RatSqrtDown(a.Lo)
-	}
-	hi := proofbound.RatSqrtUp(a.Hi)
-	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
-	if rlo == nil || rhi == nil {
-		return proofbound.RatInterval{}, false
-	}
-	return proofbound.Interval(rlo, rhi), true
-}
-
 // ivUnitVec encloses the EXACT unit vector of a float pair — the value
 // normalize2 rounds. The pair itself is exact, so the only widening is the
 // length's own outward-rounded square root.
@@ -193,12 +132,12 @@ func ivUnitVec(x, y float64) (ivPoint, bool) {
 	if n2.Sign() == 0 {
 		return ivPoint{}, false
 	}
-	l, ok := intervalSqrt(proofbound.PointInterval(n2))
+	l, ok := survey2d.IntervalSqrt(proofbound.PointInterval(n2))
 	if !ok || l.Lo.Sign() <= 0 {
 		return ivPoint{}, false
 	}
-	u, okU := intervalQuo(proofbound.PointInterval(rx), l)
-	v, okV := intervalQuo(proofbound.PointInterval(ry), l)
+	u, okU := survey2d.IntervalQuo(proofbound.PointInterval(rx), l)
+	v, okV := survey2d.IntervalQuo(proofbound.PointInterval(ry), l)
 	if !okU || !okV {
 		return ivPoint{}, false
 	}
@@ -236,10 +175,10 @@ type ivCarrier struct {
 	r      proofbound.RatInterval
 }
 
-func ivCarrierOf(w sideWalk, d float64) (ivCarrier, bool) {
-	if !w.isCircular() {
-		p, okP := ivOffsetFoot(w.startU, w.startV, w.tanInU, w.tanInV, d)
-		dir, okD := ivUnitVec(w.tanInU, w.tanInV)
+func ivCarrierOf(w survey2d.SideWalk, d float64) (ivCarrier, bool) {
+	if !w.IsCircular() {
+		p, okP := ivOffsetFoot(w.StartU, w.StartV, w.TanInU, w.TanInV, d)
+		dir, okD := ivUnitVec(w.TanInU, w.TanInV)
 		if !okP || !okD {
 			return ivCarrier{}, false
 		}
@@ -249,7 +188,7 @@ func ivCarrierOf(w sideWalk, d float64) (ivCarrier, bool) {
 	if !ok {
 		return ivCarrier{}, false
 	}
-	c, okC := ivExactPoint(w.cU, w.cV)
+	c, okC := ivExactPoint(w.CU, w.CV)
 	if !okC {
 		return ivCarrier{}, false
 	}
@@ -259,12 +198,12 @@ func ivCarrierOf(w sideWalk, d float64) (ivCarrier, bool) {
 // ivExactOffsetRadius is offsetRadius's own R − insideSign·d taken EXACTLY:
 // both operands are float64s, so their difference is a rational with no
 // rounding at all, and the float the build holds is the rounding of THIS value.
-func ivExactOffsetRadius(w sideWalk, d float64) (*big.Rat, bool) {
+func ivExactOffsetRadius(w survey2d.SideWalk, d float64) (*big.Rat, bool) {
 	inside := 1.0
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		inside = -1.0
 	}
-	rr, rd := proofarith.FloatRat(w.radius), proofarith.FloatRat(inside*d)
+	rr, rd := proofarith.FloatRat(w.Radius), proofarith.FloatRat(inside*d)
 	if rr == nil || rd == nil {
 		return nil, false
 	}
@@ -296,7 +235,7 @@ func ivLineLine(a, b ivCarrier) ([]ivPoint, bool) {
 		proofbound.IntervalMul(proofbound.IntervalSub(b.p.u, a.p.u), b.dir.v),
 		proofbound.IntervalMul(proofbound.IntervalSub(b.p.v, a.p.v), b.dir.u),
 	)
-	s, ok := intervalQuo(num, den)
+	s, ok := survey2d.IntervalQuo(num, den)
 	if !ok {
 		return nil, false
 	}
@@ -310,15 +249,15 @@ func ivLineCircle(l, c ivCarrier) ([]ivPoint, bool) {
 	fx := proofbound.IntervalSub(l.p.u, c.c.u)
 	fy := proofbound.IntervalSub(l.p.v, c.c.v)
 	bb := proofbound.IntervalAdd(proofbound.IntervalMul(fx, l.dir.u), proofbound.IntervalMul(fy, l.dir.v))
-	cc := proofbound.IntervalSub(proofbound.IntervalAdd(intervalSquare(fx), intervalSquare(fy)), intervalSquare(c.r))
-	disc := proofbound.IntervalSub(intervalSquare(bb), cc)
+	cc := proofbound.IntervalSub(proofbound.IntervalAdd(survey2d.IntervalSquare(fx), survey2d.IntervalSquare(fy)), survey2d.IntervalSquare(c.r))
+	disc := proofbound.IntervalSub(survey2d.IntervalSquare(bb), cc)
 	if disc.Hi.Sign() < 0 {
 		// The exact carriers miss each other entirely: the float solve reached
 		// a root of a system that has none, so there is no denoted point to
 		// enclose.
 		return nil, false
 	}
-	sq, ok := intervalSqrt(disc)
+	sq, ok := survey2d.IntervalSqrt(disc)
 	if !ok {
 		return nil, false
 	}
@@ -336,28 +275,28 @@ func ivLineCircle(l, c ivCarrier) ([]ivPoint, bool) {
 func ivCircleCircle(a, b ivCarrier) ([]ivPoint, bool) {
 	dx := proofbound.IntervalSub(b.c.u, a.c.u)
 	dy := proofbound.IntervalSub(b.c.v, a.c.v)
-	dsq := proofbound.IntervalAdd(intervalSquare(dx), intervalSquare(dy))
-	dist, ok := intervalSqrt(dsq)
+	dsq := proofbound.IntervalAdd(survey2d.IntervalSquare(dx), survey2d.IntervalSquare(dy))
+	dist, ok := survey2d.IntervalSqrt(dsq)
 	if !ok || dist.Lo.Sign() <= 0 {
 		return nil, false
 	}
-	mid, okMid := intervalQuo(
-		proofbound.IntervalSub(proofbound.IntervalAdd(dsq, intervalSquare(a.r)), intervalSquare(b.r)),
+	mid, okMid := survey2d.IntervalQuo(
+		proofbound.IntervalSub(proofbound.IntervalAdd(dsq, survey2d.IntervalSquare(a.r)), survey2d.IntervalSquare(b.r)),
 		proofbound.IntervalScale(dist, big.NewRat(2, 1)),
 	)
 	if !okMid {
 		return nil, false
 	}
-	h2 := proofbound.IntervalSub(intervalSquare(a.r), intervalSquare(mid))
+	h2 := proofbound.IntervalSub(survey2d.IntervalSquare(a.r), survey2d.IntervalSquare(mid))
 	if h2.Hi.Sign() < 0 {
 		return nil, false
 	}
-	h, okH := intervalSqrt(h2)
+	h, okH := survey2d.IntervalSqrt(h2)
 	if !okH {
 		return nil, false
 	}
-	along, okA := intervalQuo(mid, dist)
-	across, okC := intervalQuo(h, dist)
+	along, okA := survey2d.IntervalQuo(mid, dist)
+	across, okC := survey2d.IntervalQuo(h, dist)
 	if !okA || !okC {
 		return nil, false
 	}
@@ -394,8 +333,8 @@ func ivNearestTo(cands []ivPoint, corner ivPoint) (ivPoint, bool) {
 	d2 := make([]proofbound.RatInterval, len(cands))
 	for i, c := range cands {
 		d2[i] = proofbound.IntervalAdd(
-			intervalSquare(proofbound.IntervalSub(c.u, corner.u)),
-			intervalSquare(proofbound.IntervalSub(c.v, corner.v)),
+			survey2d.IntervalSquare(proofbound.IntervalSub(c.u, corner.u)),
+			survey2d.IntervalSquare(proofbound.IntervalSub(c.v, corner.v)),
 		)
 	}
 	best := d2[0].Hi
@@ -438,10 +377,10 @@ func ivNearestTo(cands []ivPoint, corner ivPoint) (ivPoint, bool) {
 // Exactness or lengthBound, so an edge whose length field were ever widened
 // to signal uncertainty would silently match every LongerThan query instead.
 // Uncertainty belongs in lengthBound alone.
-func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, error) {
+func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d float64) (float64, error) {
 	delta := 0.0
 	for _, w := range walks {
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			continue
 		}
 		held, err := capBandRadius(w, d)
@@ -464,8 +403,8 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 		}
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if j.arc {
-			a, okA := ivOffsetFoot(j.vU, j.vV, prev.tanOutU, prev.tanOutV, d)
-			b, okB := ivOffsetFoot(j.vU, j.vV, cur.tanInU, cur.tanInV, d)
+			a, okA := ivOffsetFoot(j.vU, j.vV, prev.TanOutU, prev.TanOutV, d)
+			b, okB := ivOffsetFoot(j.vU, j.vV, cur.TanInU, cur.TanInV, d)
 			if !okA || !okB {
 				return 0, errCapContourUnbounded
 			}
@@ -478,8 +417,8 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 			// the enclosure is the HULL of the two shared-normal feet, so a join the
 			// dead zone classified G1 with a residual turn is charged the spread
 			// between the two normals it could have taken.
-			a, okA := ivOffsetFoot(j.vU, j.vV, prev.tanOutU, prev.tanOutV, d)
-			b, okB := ivOffsetFoot(j.vU, j.vV, cur.tanInU, cur.tanInV, d)
+			a, okA := ivOffsetFoot(j.vU, j.vV, prev.TanOutU, prev.TanOutV, d)
+			b, okB := ivOffsetFoot(j.vU, j.vV, cur.TanInU, cur.TanInV, d)
 			if !okA || !okB {
 				return 0, errCapContourUnbounded
 			}
@@ -536,33 +475,33 @@ func ivOffsetFootRange(vU, vV, tu, tv float64, tRange proofbound.RatInterval) (i
 // radius now encloses the offset radius's own range rather than one value.
 // At t0 == t1 == d it reduces to ivCarrierOf(w, d)'s own enclosure, since
 // both build the offset amount from the identical closed form.
-func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
+func ivCarrierOverRange(w survey2d.SideWalk, t0, t1 float64) (ivCarrier, bool) {
 	rt0, rt1 := proofarith.FloatRat(t0), proofarith.FloatRat(t1)
 	if rt0 == nil || rt1 == nil {
 		return ivCarrier{}, false
 	}
 	tRange := proofbound.Interval(rt0, rt1)
-	if !w.isCircular() {
-		p, okP := ivOffsetFootRange(w.startU, w.startV, w.tanInU, w.tanInV, tRange)
-		dir, okD := ivUnitVec(w.tanInU, w.tanInV)
+	if !w.IsCircular() {
+		p, okP := ivOffsetFootRange(w.StartU, w.StartV, w.TanInU, w.TanInV, tRange)
+		dir, okD := ivUnitVec(w.TanInU, w.TanInV)
 		if !okP || !okD {
 			return ivCarrier{}, false
 		}
 		return ivCarrier{isLine: true, p: p, dir: dir}, true
 	}
-	rr := proofarith.FloatRat(w.radius)
+	rr := proofarith.FloatRat(w.Radius)
 	if rr == nil {
 		return ivCarrier{}, false
 	}
 	inside := big.NewRat(1, 1)
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		inside = big.NewRat(-1, 1)
 	}
 	r := proofbound.IntervalSub(proofbound.PointInterval(rr), proofbound.IntervalMul(tRange, proofbound.PointInterval(inside)))
 	if r.Lo.Sign() <= 0 {
 		return ivCarrier{}, false
 	}
-	c, okC := ivExactPoint(w.cU, w.cV)
+	c, okC := ivExactPoint(w.CU, w.CV)
 	if !okC {
 		return ivCarrier{}, false
 	}
@@ -585,25 +524,25 @@ func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
 // û = (X-c)/|X-c| the unit radial direction AT THE FOOT — which does depend
 // on t, so it is enclosed from the box foot proves rather than read at one
 // point.
-func miterConstraintRow(w sideWalk, c ivCarrier, foot ivPoint) (ivPoint, *big.Rat, bool) {
+func miterConstraintRow(w survey2d.SideWalk, c ivCarrier, foot ivPoint) (ivPoint, *big.Rat, bool) {
 	if c.isLine {
 		n := ivPoint{u: proofbound.IntervalNeg(c.dir.v), v: c.dir.u}
 		return n, big.NewRat(1, 1), true
 	}
 	dx := proofbound.IntervalSub(foot.u, c.c.u)
 	dy := proofbound.IntervalSub(foot.v, c.c.v)
-	distSq := proofbound.IntervalAdd(intervalSquare(dx), intervalSquare(dy))
-	dist, ok := intervalSqrt(distSq)
+	distSq := proofbound.IntervalAdd(survey2d.IntervalSquare(dx), survey2d.IntervalSquare(dy))
+	dist, ok := survey2d.IntervalSqrt(distSq)
 	if !ok || dist.Lo.Sign() <= 0 {
 		return ivPoint{}, nil, false
 	}
-	ux, okU := intervalQuo(dx, dist)
-	uy, okV := intervalQuo(dy, dist)
+	ux, okU := survey2d.IntervalQuo(dx, dist)
+	uy, okV := survey2d.IntervalQuo(dy, dist)
 	if !okU || !okV {
 		return ivPoint{}, nil, false
 	}
 	rhs := big.NewRat(-1, 1)
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		rhs = big.NewRat(1, 1)
 	}
 	return ivPoint{u: ux, v: uy}, rhs, true
@@ -632,7 +571,7 @@ func miterConstraintRow(w sideWalk, c ivCarrier, foot ivPoint) (ivPoint, *big.Ra
 // circle-circle miter it does not cover, on the same reject-only footing
 // every other refusal here stands on: never a wrong bound, only a
 // conservative one at a tangent circle-circle corner.
-func circleCircleLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (float64, bool) {
+func circleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
 	ca, okA := ivCarrierOverRange(prev, t0, t1)
 	cb, okB := ivCarrierOverRange(cur, t0, t1)
 	if !okA || !okB {
@@ -655,12 +594,12 @@ func circleCircleLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (fl
 	if det.Lo.Sign() <= 0 && det.Hi.Sign() >= 0 {
 		return 0, false
 	}
-	pu, okU := intervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.v, rhsA), proofbound.IntervalScale(rowA.v, rhsB)), det)
-	pv, okV := intervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.u, rhsB), proofbound.IntervalScale(rowB.u, rhsA)), det)
+	pu, okU := survey2d.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.v, rhsA), proofbound.IntervalScale(rowA.v, rhsB)), det)
+	pv, okV := survey2d.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.u, rhsB), proofbound.IntervalScale(rowB.u, rhsA)), det)
 	if !okU || !okV {
 		return 0, false
 	}
-	mag, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(pu), intervalSquare(pv)))
+	mag, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(pu), survey2d.IntervalSquare(pv)))
 	if !ok {
 		return 0, false
 	}
@@ -696,20 +635,20 @@ type lineWallFrame struct {
 // to be in. To falsify this claim, exhibit an admitted corner whose published
 // Edge.Length interval fails to enclose the true locus length — not merely one
 // where normalize2's output falls outside e, which is every rotated wall.
-func lineWallFrameOf(w sideWalk) (lineWallFrame, bool) {
-	e, ok := ivUnitVec(w.tanInU, w.tanInV)
+func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
+	e, ok := ivUnitVec(w.TanInU, w.TanInV)
 	if !ok {
 		return lineWallFrame{}, false
 	}
 	n := ivPoint{u: proofbound.IntervalNeg(e.v), v: e.u}
-	return lineWallFrame{anchorU: w.startU, anchorV: w.startV, n: n, e: e}, true
+	return lineWallFrame{anchorU: w.StartU, anchorV: w.StartV, n: n, e: e}, true
 }
 
 // insideSignOf is the exact ±1 rational offsetRadius's own sign convention
 // reads off a circular wall's walked sense: +1 when the wall's material
 // lies inside the circle (th1 >= th0), −1 when it lies outside.
-func insideSignOf(w sideWalk) *big.Rat {
-	if w.th1 < w.th0 {
+func insideSignOf(w survey2d.SideWalk) *big.Rat {
+	if w.Th1 < w.Th0 {
 		return big.NewRat(-1, 1)
 	}
 	return big.NewRat(1, 1)
@@ -762,13 +701,13 @@ func insideSignOf(w sideWalk) *big.Rat {
 // through to the general bound below, which is sound but can refuse on a
 // near-tangent corner no public fixture reaches today — the PR body for
 // this change names that as a known limitation.
-func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, bool) {
+func lineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (float64, bool) {
 	frame, ok := lineWallFrameOf(line)
 	if !ok {
 		return 0, false
 	}
-	cx, cy := proofarith.FloatRat(circle.cU), proofarith.FloatRat(circle.cV)
-	radius := proofarith.FloatRat(circle.radius)
+	cx, cy := proofarith.FloatRat(circle.CU), proofarith.FloatRat(circle.CV)
+	radius := proofarith.FloatRat(circle.Radius)
 	anchorU, anchorV := proofarith.FloatRat(frame.anchorU), proofarith.FloatRat(frame.anchorV)
 	if cx == nil || cy == nil || radius == nil || anchorU == nil || anchorV == nil {
 		return 0, false
@@ -779,7 +718,7 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	inside := insideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
-	delta0 := proofbound.IntervalSub(intervalSquare(proofbound.PointInterval(radius)), intervalSquare(alpha))
+	delta0 := proofbound.IntervalSub(survey2d.IntervalSquare(proofbound.PointInterval(radius)), survey2d.IntervalSquare(alpha))
 	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
 
 	// Delta1 == 0 EXACTLY (both ends of its own enclosure) is the persistent-
@@ -792,7 +731,7 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	// every tangent-filleted corner in this codebase's own test fixtures —
 	// to be worth the tighter bound.
 	if delta1.Lo.Sign() == 0 && delta1.Hi.Sign() == 0 {
-		nMagUpper := proofbound.RatSqrtUp(intervalAbsUpper(proofbound.IntervalAdd(intervalSquare(frame.n.u), intervalSquare(frame.n.v))))
+		nMagUpper := proofbound.RatSqrtUp(intervalAbsUpper(proofbound.IntervalAdd(survey2d.IntervalSquare(frame.n.u), survey2d.IntervalSquare(frame.n.v))))
 		if proofbound.IsNonFinite(nMagUpper) {
 			return 0, false
 		}
@@ -849,11 +788,11 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 // where both are circular. At least one of prev, cur must be circular — the
 // caller (capSlantEdge) never reaches here for a line-line miter, whose
 // locus is already exact.
-func miterLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (float64, bool) {
+func miterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
 	switch {
-	case !prev.isCircular() && cur.isCircular():
+	case !prev.IsCircular() && cur.IsCircular():
 		return lineCircleLocusSpeedUpper(prev, cur, t0, t1)
-	case prev.isCircular() && !cur.isCircular():
+	case prev.IsCircular() && !cur.IsCircular():
 		return lineCircleLocusSpeedUpper(cur, prev, t0, t1)
 	default:
 		return circleCircleLocusSpeedUpper(prev, cur, t0, t1, vU, vV)
@@ -863,7 +802,7 @@ func miterLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (float64, 
 // capWholeCircleDelta is the cornerless closed circle's own contour
 // displacement — the one shape with no corner join at all, whose whole contour
 // is the concentric circle at the offset radius.
-func capWholeCircleDelta(w sideWalk, d float64) (float64, error) {
+func capWholeCircleDelta(w survey2d.SideWalk, d float64) (float64, error) {
 	held, err := capBandRadius(w, d)
 	if err != nil {
 		return 0, err
@@ -887,7 +826,7 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64,
 	if err != nil {
 		return 0, err
 	}
-	if len(cl.walks) == 1 && cl.walks[0].closed {
+	if len(cl.walks) == 1 && cl.walks[0].Closed {
 		return capWholeCircleDelta(cl.walks[0], d)
 	}
 	joins, err := capOffsetJoins(budget, cl, d)

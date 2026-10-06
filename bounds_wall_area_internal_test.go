@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -638,7 +640,7 @@ func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 
 	// The energy that bound feeds must stay an UPPER bound on L^2-c^2: with
 	// the chord overstated it fell BELOW the true energy on this record.
-	w := segmentWalk{kind: walkCircular}
+	w := survey2d.SegmentWalk{Kind: survey2d.WalkCircular}
 	arcUpper := perCellArcUpper(seg, w, 1)
 	energy := perCellTangentEnergy(seg, w, 1)
 	require.Greater(t, energy, 0.0, "a curved cell carries a positive tangent-deviation energy")

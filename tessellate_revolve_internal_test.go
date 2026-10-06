@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -295,8 +297,8 @@ func TestRevolveCoordMaxCoversEveryIdealCoordinate(t *testing.T) {
 	}
 }
 
-func mustIvVec(v r3.Vec) ivVec3 {
-	out, ok := ivVec3Of(v)
+func mustIvVec(v r3.Vec) survey2d.IvVec3 {
+	out, ok := survey2d.IvVec3Of(v)
 	if !ok {
 		panic("decad: test vector is not enclosable")
 	}
@@ -378,7 +380,7 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	// charged here, before a single vertex is built.
 	loop := revLoopMesh{
 		resolved: revolveWalks{
-			walks: make([]sideWalk, 4),
+			walks: make([]survey2d.SideWalk, 4),
 			kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
 		},
 		samples: []revMeridian{{walk: 0}, {walk: 1}, {walk: 2}, {walk: 3}},

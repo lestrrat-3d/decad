@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -425,11 +427,11 @@ func resolveAnalyticRevolveExtentProfile(
 ) (*revolveExtentProfile, error) {
 	walks := &profileWalks{
 		profile: profile,
-		outer:   make([]segmentWalk, len(profile.Outer.Segments)),
-		holes:   make([][]segmentWalk, len(profile.Holes)),
+		outer:   make([]survey2d.SegmentWalk, len(profile.Outer.Segments)),
+		holes:   make([][]survey2d.SegmentWalk, len(profile.Holes)),
 	}
 	coordUpper := 0.0
-	resolve := func(segments []CurveSegment, result []segmentWalk) error {
+	resolve := func(segments []CurveSegment, result []survey2d.SegmentWalk) error {
 		for i, segment := range segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -442,7 +444,7 @@ func resolveAnalyticRevolveExtentProfile(
 				return err
 			}
 			result[i] = walk
-			coordUpper = math.Max(coordUpper, walk.coordUpper)
+			coordUpper = math.Max(coordUpper, walk.CoordUpper)
 		}
 		return nil
 	}
@@ -450,7 +452,7 @@ func resolveAnalyticRevolveExtentProfile(
 		return nil, err
 	}
 	for i, hole := range profile.Holes {
-		walks.holes[i] = make([]segmentWalk, len(hole.Segments))
+		walks.holes[i] = make([]survey2d.SegmentWalk, len(hole.Segments))
 		if err := resolve(hole.Segments, walks.holes[i]); err != nil {
 			return nil, err
 		}
@@ -504,7 +506,7 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // angleDenotation.sinCosFor, which reads a pure-turn end (a degree-stated
 // extent) through proofbound.TurnSinCosInterval, EXACT at every eighth-turn boundary and
 // never comparing against π, rather than through the radian-space bracket
-// (normal_bound.go's radSinCosInterval, the Cone normal's own primitive) that
+// (normal_bound.go's survey2d.RadSinCosInterval, the Cone normal's own primitive) that
 // a detour through π would otherwise force even at a quarter turn, and the
 // amplitude √(c0²+c1²) by the rational square-root brackets
 // circularLengthInterval reads an ArcSeg's radius through (proofbound.RatSqrtDown/

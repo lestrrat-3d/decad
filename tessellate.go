@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -538,8 +540,8 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w sideWalk) (*Face, error) {
-			return faceOfRole(wallRole(li, w.segs[0]))
+		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
+			return faceOfRole(wallRole(li, w.Segs[0]))
 		})
 		if err != nil {
 			return nil, err
@@ -953,7 +955,7 @@ type chordedLoop struct {
 // it binds a resolving one. A non-nil resolved whose loop at roleLoop was not
 // resolved from exactly this loop's recorded segments is a plumbing bug and
 // refuses rather than silently resolving anyway.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, resolved *profileWalks, roleLoop int, wallFace func(w sideWalk) (*Face, error)) (chordedLoop, error) {
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, resolved *profileWalks, roleLoop int, wallFace func(w survey2d.SideWalk) (*Face, error)) (chordedLoop, error) {
 	if len(loop.Segments) == 0 {
 		return chordedLoop{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -961,14 +963,14 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	// nested under it: a single walk emits many samples, and it is the SAMPLES
 	// that are the candidate operations §7.2 counts.
 	budget := proofbound.NewWorkBudget(ctx)
-	var loopWalks []segmentWalk
+	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
 		if !resolved.loopMatches(roleLoop, loop) {
 			return chordedLoop{}, errResolvedWalksMismatch
 		}
 		loopWalks = resolved.loopWalks(roleLoop)
 	}
-	raw := make([]sideWalk, len(loop.Segments))
+	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	// The loop's analytic length, upper bound included: buildLoopSidesAs sums the
 	// same RAW walk lengths for the body's own perimeter, so both readings of one
 	// section speak for the same curve.
@@ -981,7 +983,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		// (resolveProfileWalks), so it carries the same refusal that
 		// resolution would surface here, and it holds nothing
 		// placement-dependent to restate (docs/evaluator-design.md §8).
-		var w segmentWalk
+		var w survey2d.SegmentWalk
 		if loopWalks != nil {
 			w = loopWalks[i]
 		} else {
@@ -991,8 +993,8 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 				return chordedLoop{}, err
 			}
 		}
-		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, w.length, w.lengthBound)
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, w.Length, w.LengthBound)
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
@@ -1012,21 +1014,21 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		if err != nil {
 			return chordedLoop{}, err
 		}
-		// A switch on walkKind must be total (extrude.go's walkKind doc
+		// A switch on survey2d.WalkKind must be total (extrude.go's survey2d.WalkKind doc
 		// comment): a straight walk contributes its own start alone, a
 		// free-form walk chords through its Bézier chain, and a circular walk
 		// through its own angle.
-		switch w.kind {
-		case walkLine:
-			samples = append(samples, Point2{U: w.startU, V: w.startV})
+		switch w.Kind {
+		case survey2d.WalkLine:
+			samples = append(samples, Point2{U: w.StartU, V: w.StartV})
 			faceOf = append(faceOf, face)
 			sagOf = append(sagOf, 0)
-			boundOf = append(boundOf, w.startBound)
-		case walkFreeform:
+			boundOf = append(boundOf, w.StartBound)
+		case survey2d.WalkFreeform:
 			// One chain per free-form walk, chorded at the same budget every
 			// other walk of this loop is chorded at, over the record's own
 			// shared free-form counter (docs/tessellation-reach-design.md §5).
-			chain, err := chainStations(w.spans, chord, work)
+			chain, err := chainStations(w.Spans, chord, work)
 			if err != nil {
 				return chordedLoop{}, err
 			}
@@ -1053,8 +1055,8 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			wallSlack = proofbound.AbsSumUpper(wallSlack, wall)
 			capSlack = proofbound.AbsSumUpper(capSlack, segment)
 			segmentArea = proofbound.AbsSumUpper(segmentArea, segment)
-		case walkCircular:
-			n, sag, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
+		case survey2d.WalkCircular:
+			n, sag, err := chordCount(w.SegmentWalk, chord, chordWalkMin(w.SegmentWalk))
 			if err != nil {
 				return chordedLoop{}, err
 			}
@@ -1065,25 +1067,25 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			// totals, rather than after the two are combined: that is what
 			// lets the caller decline the cap half for a sheet without
 			// losing the pad on the half it keeps.
-			wallSlack = proofbound.AbsSumUpper(wallSlack, proofbound.ProductUpper(walkWallSlack(w.segmentWalk, n, height), 1+1e-9))
-			capSlack = proofbound.AbsSumUpper(capSlack, proofbound.ProductUpper(walkSegmentArea(w.segmentWalk, n), 1+1e-9))
-			segmentArea = proofbound.AbsSumUpper(segmentArea, walkSegmentArea(w.segmentWalk, n))
+			wallSlack = proofbound.AbsSumUpper(wallSlack, proofbound.ProductUpper(walkWallSlack(w.SegmentWalk, n, height), 1+1e-9))
+			capSlack = proofbound.AbsSumUpper(capSlack, proofbound.ProductUpper(walkSegmentArea(w.SegmentWalk, n), 1+1e-9))
+			segmentArea = proofbound.AbsSumUpper(segmentArea, walkSegmentArea(w.SegmentWalk, n))
 			// A circular walk never coalesces (coalesceWalks), so it covers
 			// exactly one recorded segment and every station on it is that
 			// segment's own parameter — which is what lets chordStationBound
 			// enclose the point the RECORD denotes there rather than the point
 			// this walk's float trig landed on.
-			seg := loop.Segments[w.segs[0]]
-			dth := (w.th1 - w.th0) / float64(n)
+			seg := loop.Segments[w.Segs[0]]
+			dth := (w.Th1 - w.Th0) / float64(n)
 			for k := range n {
 				if err := budget.Step(); err != nil {
 					return chordedLoop{}, err
 				}
-				p := Point2{U: w.startU, V: w.startV}
-				bound := w.startBound
+				p := Point2{U: w.StartU, V: w.StartV}
+				bound := w.StartBound
 				if k > 0 {
-					th := w.th0 + float64(k)*dth
-					p = Point2{U: w.cU + w.radius*math.Cos(th), V: w.cV + w.radius*math.Sin(th)}
+					th := w.Th0 + float64(k)*dth
+					p = Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
 					bound = chordStationBound(seg, k, n, p.U, p.V)
 				}
 				samples = append(samples, p)
@@ -1092,7 +1094,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 				boundOf = append(boundOf, bound)
 			}
 		default:
-			return chordedLoop{}, fmt.Errorf(`%w: chording a boundary loop does not support walk kind %d`, ErrUnsupported, w.kind)
+			return chordedLoop{}, fmt.Errorf(`%w: chording a boundary loop does not support walk kind %d`, ErrUnsupported, w.Kind)
 		}
 	}
 	return chordedLoop{
@@ -1132,12 +1134,12 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 // A station whose plane coordinates are unrepresentable, or whose rounding gap
 // this record cannot enclose, refuses before any sample is emitted
 // (docs/tessellation-design.md §12: a mesh states its bound or it is not built).
-func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []proofbound.WalkEndBound, error) {
+func freeformWalkStations(w survey2d.SideWalk, chain freeformChain) ([]Point2, []proofbound.WalkEndBound, error) {
 	if len(chain.stations) == 0 {
 		return nil, nil, fmt.Errorf(`%w: a free-form walk chorded to no station has no boundary sample`, ErrDegenerate)
 	}
-	ordered := make([]ratPoint, 0, len(chain.stations))
-	if !w.reversed {
+	ordered := make([]survey2d.RatPoint, 0, len(chain.stations))
+	if !w.Reversed {
 		ordered = append(ordered, chain.stations...)
 	} else {
 		ordered = append(ordered, chain.end)
@@ -1154,19 +1156,19 @@ func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []proofbou
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station has no representable plane coordinate`, ErrUnsupported)
 		}
 		bound := proofbound.WalkEndBound{
-			U: proofarith.RationalFloatError(station.u, p.U),
-			V: proofarith.RationalFloatError(station.v, p.V),
+			U: proofarith.RationalFloatError(station.U, p.U),
+			V: proofarith.RationalFloatError(station.V, p.V),
 		}
 		if !bound.Derivable() {
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station states no bound on the rounding its held plane coordinates commit`, ErrUnsupported)
 		}
 		pts[i], bounds[i] = p, bound
 	}
-	if !w.startBound.Derivable() {
+	if !w.StartBound.Derivable() {
 		return nil, nil, fmt.Errorf(`%w: a free-form walk states no bound on its own start, so the junction it shares carries no displacement`, ErrUnsupported)
 	}
-	pts[0] = Point2{U: w.startU, V: w.startV}
-	bounds[0] = w.startBound
+	pts[0] = Point2{U: w.StartU, V: w.StartV}
+	bounds[0] = w.StartBound
 	return pts, bounds, nil
 }
 
@@ -1280,8 +1282,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		// A cup chords the DERIVED region loops — an offset cavity, an outer
 		// contour — which no payload holds a resolution of, so each segment
 		// resolves through walkOf here as it always has.
-		cl, err := chordLoop(ctx, loop, chord, h, work, nil, 0, func(w sideWalk) (*Face, error) {
-			return faceOfRole(fmt.Sprintf(role, w.segs[0]))
+		cl, err := chordLoop(ctx, loop, chord, h, work, nil, 0, func(w survey2d.SideWalk) (*Face, error) {
+			return faceOfRole(fmt.Sprintf(role, w.Segs[0]))
 		})
 		if err != nil {
 			return ring{}, err
@@ -1634,16 +1636,16 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 // only; chordLoop keeps the wall and one cap's own share apart
 // (chordedLoop.wallSlack/capSlack) so a sheet mesh, which triangulates no
 // cap, can decline the cap half entirely (docs/surface-design.md §10).
-func walkAreaSlack(w segmentWalk, n int, h float64) float64 {
+func walkAreaSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 	return (walkWallSlack(w, n, h) + 2*walkSegmentArea(w, n)) * (1 + 1e-9)
 }
 
 // walkWallSlack is the WALL half of walkAreaSlack: the area one circular walk's
 // side face loses by standing on n chords instead of its arc, (arc − chord) × h.
-func walkWallSlack(w segmentWalk, n int, h float64) float64 {
-	sweep := math.Abs(w.th1 - w.th0)
-	arc := sweep * w.radius
-	chord := float64(n) * 2 * w.radius * math.Sin(sweep/(2*float64(n)))
+func walkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
+	sweep := math.Abs(w.Th1 - w.Th0)
+	arc := sweep * w.Radius
+	chord := float64(n) * 2 * w.Radius * math.Sin(sweep/(2*float64(n)))
 	return math.Max(arc-chord, 0) * h
 }
 
@@ -1659,9 +1661,9 @@ func walkWallSlack(w segmentWalk, n int, h float64) float64 {
 // prism it denotes by their sum times the sweep height — an area a hole gains
 // and an outline loses, summed in ABSOLUTE value here because occupied volume
 // admits no cancellation (docs/tessellation-design.md §2).
-func walkSegmentArea(w segmentWalk, n int) float64 {
-	sweep := math.Abs(w.th1 - w.th0)
-	return w.radius * w.radius / 2 * math.Max(sweep-float64(n)*math.Sin(sweep/float64(n)), 0)
+func walkSegmentArea(w survey2d.SegmentWalk, n int) float64 {
+	sweep := math.Abs(w.Th1 - w.Th0)
+	return w.Radius * w.Radius / 2 * math.Max(sweep-float64(n)*math.Sin(sweep/float64(n)), 0)
 }
 
 // facetedBoundError is tessellateFaceted's refusal of a chord tolerance
@@ -1741,8 +1743,8 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 // other walk needs one. A revolve meridian has a third case of its own
 // (revolveMeridianMin), which is why the minimum is chordCount's parameter
 // rather than a property it reads off the walk.
-func chordWalkMin(w segmentWalk) int {
-	if w.closed {
+func chordWalkMin(w survey2d.SegmentWalk) int {
+	if w.Closed {
 		return 3
 	}
 	return 1
@@ -1759,25 +1761,25 @@ func chordWalkMin(w segmentWalk) int {
 // FIRST: when its own sagitta already fits the budget it is the answer, and the
 // inverse below — which is undefined for a budget at or above 2r — is never
 // evaluated at all.
-func chordCount(w segmentWalk, tol float64, nMin int) (int, float64, error) {
-	sweep := math.Abs(w.th1 - w.th0)
+func chordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, error) {
+	sweep := math.Abs(w.Th1 - w.Th0)
 	if nMin < 1 {
 		nMin = 1
 	}
 	if nMin > maxChordsPerWalk {
 		return 0, 0, errTooManyChords
 	}
-	if s := chordSagitta(w.radius, sweep, nMin); s <= tol {
+	if s := chordSagitta(w.Radius, sweep, nMin); s <= tol {
 		return nMin, s, nil
 	}
 	maxD := math.Pi
-	if tol < w.radius {
+	if tol < w.Radius {
 		// The TRUE sagitta 2r·sin²(Δθ/4) inverts to Δθ_max = 4·asin(√(tol/2r))
 		// — the stable inverse: acos(1 − tol/r) rounds to zero for tiny tol
 		// and would seed an unbounded walk-up. It seeds the search only; the
 		// walk-up below decides on chordSagitta's larger proven figure, so
 		// this seed can land one chord short and is corrected there.
-		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.radius)))
+		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.Radius)))
 	}
 	// A tolerance this fine asks for more chords than any mesh can hold;
 	// the intent cannot be built, so it is refused outright (evaluator §2).
@@ -1794,13 +1796,13 @@ func chordCount(w segmentWalk, tol float64, nMin int) (int, float64, error) {
 	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
-	s := chordSagitta(w.radius, sweep, n)
+	s := chordSagitta(w.Radius, sweep, n)
 	for s > tol && sweep > 0 {
 		if n == maxChordsPerWalk {
 			return 0, 0, errTooManyChords
 		}
 		n++
-		s = chordSagitta(w.radius, sweep, n)
+		s = chordSagitta(w.Radius, sweep, n)
 	}
 	return n, s, nil
 }

@@ -244,7 +244,7 @@ properties, and it is drawn by *whose claim it is*:
   case: the evaluator evaluates from the record, and a replay holds no sketch
   (evaluator §1). The rewrite is new geometry decad synthesizes from decad's
   own data, in the same class as the boundary integrals of evaluator §4 and the
-  inscribed-disk kernel of `survey2d.go`.
+  inscribed-disk kernel of `internal/survey2d/survey2d.go`.
 
 **The falsify-only rule is not in tension with the audit, because there is no
 upstream claim to bless.** That rule governs admission of what `sketch` hands
@@ -294,7 +294,7 @@ closed form over decad's own line and arc segments:
 3. **No crossing, and no boundary contact.** Every pair of segments within a
    rewritten loop, and every pair drawn from two loops of the section, is tested
    for intersection — line×line, line×circle, circle×circle, the same closed
-   forms the clearance kernel's 2D reduction and `survey2d.go`'s boundary walks
+   forms the clearance kernel's 2D reduction and `internal/survey2d/survey2d.go`'s boundary walks
    use. A transverse crossing is **S7**; so is a mere **boundary contact** — a
    tangency, a shared boundary point, a pinch. A touch is the limiting case of a
    crossing, so it takes the same sentinel: the loops provably meet but bound no
@@ -324,7 +324,7 @@ closed form over decad's own line and arc segments:
    boundary point — a tangency or a pinch — leaves them not cleanly nested even
    with no crossing, and test 3 has already refused it (S7). Containment is *not*
    a crossing test and is not free: the classifier is the ray-parity walk with
-   direction retries that `survey2d.go` already runs, and it admits an
+   direction retries that `internal/survey2d/survey2d.go` already runs, and it admits an
    **undecided** outcome. A build-time audit has no `Suspect` to fall back on, so
    an undecided containment is **S9** — the evaluator declines. The audit passes
    only when the outer loop is proven to contain each hole and the holes are
@@ -576,7 +576,7 @@ because each needs the one before it to have passed.**
   carries **two independent limits**:
   - the **section** limit: `P ⊖ t` is non-empty exactly when `t` is strictly less
     than the section's **inradius** — the radius of its largest inscribed disk,
-    which `survey2d.go` computes as part of the wall survey. A contained disk
+    which `internal/survey2d/survey2d.go` computes as part of the wall survey. A contained disk
     whose radius exceeds the requested thickness plus the rounding margin
     proves the success side without the full survey. A failure still uses
     the inradius reading that answers `Wall.Minimum`;

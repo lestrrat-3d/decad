@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -127,16 +129,16 @@ func requireCapBlendSharedCount(t *testing.T, cbp capBlendPayload, li int, tol f
 		}
 		require.Equal(t, lm.count[i], sideLen, `walk %d's side ring holds its own count`, i)
 		require.Equal(t, lm.count[i], capLen, `walk %d's cap ring holds the SAME count`, i)
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			require.Equal(t, 1, lm.count[i])
 			continue
 		}
 		circular++
-		nSide, _, err := chordCount(w.segmentWalk, tol, chordWalkMin(w.segmentWalk))
+		nSide, _, err := chordCount(w.SegmentWalk, tol, chordWalkMin(w.SegmentWalk))
 		require.NoError(t, err)
-		capWalk := segmentWalk{
-			kind: walkCircular, radius: lm.capRadius[i],
-			th0: lm.capTh0[i], th1: lm.capTh1[i], closed: w.closed,
+		capWalk := survey2d.SegmentWalk{
+			Kind: survey2d.WalkCircular, Radius: lm.capRadius[i],
+			Th0: lm.capTh0[i], Th1: lm.capTh1[i], Closed: w.Closed,
 		}
 		nCap, _, err := chordCount(capWalk, tol, chordWalkMin(capWalk))
 		require.NoError(t, err)
@@ -167,7 +169,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 	require.NoError(t, err)
 	sag := 0.0
 	for i, w := range lm.walks {
-		if w.isCircular() {
+		if w.IsCircular() {
 			sag = math.Max(lm.sideSag[i], lm.capSag[i])
 		}
 	}
@@ -293,7 +295,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 
 // capBlendCornerSetup resolves one payload's outer loop into the walks and
 // offset joins the corner readings take.
-func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]sideWalk, []cornerJoin) {
+func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk, []cornerJoin) {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], newFreeformWork())
@@ -408,7 +410,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	// capBlendVertices turns this assertion red.
 	bore := lms[1]
 	require.True(t, bore.whole)
-	seg := bore.loop.Segments[bore.walks[0].segs[0]]
+	seg := bore.loop.Segments[bore.walks[0].Segs[0]]
 	held := bore.capPts[0]
 	gap := proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, 0, bore.count[0],
 		capWallRadiusOffset(bore.walks[0], cbp.d), held.U, held.V))

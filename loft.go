@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -341,13 +343,13 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 // holes, so P1 and P2 have nothing left to decide and P3's segment-count
 // comparison is over the two walks themselves.
 //
-// It returns each walk's own resolved segmentWalk list, in recorded order and
+// It returns each walk's own resolved survey2d.SegmentWalk list, in recorded order and
 // never rotated: P4's modular wrap is exactly what an open walk drops, so
 // segment j pairs with segment j and the alignment offset a loop pair carries
 // has no counterpart here. Each segment is walked exactly ONCE, in the same
 // interleaved order validateLoftRecords uses, because walkOf charges the
 // free-form work budget on every call.
-func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, work1 *freeformWork) ([]segmentWalk, []segmentWalk, error) {
+func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, work1 *freeformWork) ([]survey2d.SegmentWalk, []survey2d.SegmentWalk, error) {
 	n := len(c0.Segments)
 	if n != len(c1.Segments) {
 		return nil, nil, fmt.Errorf(
@@ -355,8 +357,8 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 			ErrUnsupported, n, len(c1.Segments))
 	}
 
-	walks0 := make([]segmentWalk, n)
-	walks1 := make([]segmentWalk, n)
+	walks0 := make([]survey2d.SegmentWalk, n)
+	walks1 := make([]survey2d.SegmentWalk, n)
 	for j := range n {
 		w0, err := walkOf(c0.Segments[j], work0)
 		if err != nil {
@@ -459,7 +461,7 @@ func chainLoftPlaneSideGate(pl0, pl1 PlaneRecord) error {
 // station lands on walkOf's float lerp2 endpoint rather than the exact
 // rational the record denotes, so this term is not zero merely because the
 // pairing is straight.
-func chainLoftStations(walks0, walks1 []segmentWalk) ([]Point2, []Point2, float64, error) {
+func chainLoftStations(walks0, walks1 []survey2d.SegmentWalk) ([]Point2, []Point2, float64, error) {
 	n := len(walks0)
 	v := make([]Point2, 0, n+1)
 	w := make([]Point2, 0, n+1)
@@ -473,12 +475,12 @@ func chainLoftStations(walks0, walks1 []segmentWalk) ([]Point2, []Point2, float6
 		w = append(w, s1...)
 		round = math.Max(round, cellRound)
 	}
-	terminal := math.Max(walkEndPlaneDelta(walks0[n-1].endBound), walkEndPlaneDelta(walks1[n-1].endBound))
+	terminal := math.Max(walkEndPlaneDelta(walks0[n-1].EndBound), walkEndPlaneDelta(walks1[n-1].EndBound))
 	if proofbound.IsNonFinite(terminal) {
 		return nil, nil, 0, errLoftStationDisplacementUnderivable
 	}
-	v = append(v, Point2{U: walks0[n-1].endU, V: walks0[n-1].endV})
-	w = append(w, Point2{U: walks1[n-1].endU, V: walks1[n-1].endV})
+	v = append(v, Point2{U: walks0[n-1].EndU, V: walks0[n-1].EndV})
+	w = append(w, Point2{U: walks1[n-1].EndU, V: walks1[n-1].EndV})
 	return v, w, math.Max(round, terminal), nil
 }
 

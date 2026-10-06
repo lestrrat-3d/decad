@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -69,72 +71,39 @@ const (
 	normalUnproven
 )
 
-// ivVec3 encloses a 3D vector coordinate-wise. A vector built from held
-// float64s alone encloses it EXACTLY — every interval is a point — and only a
-// square root or a sine widens one.
-type ivVec3 [3]proofbound.RatInterval
-
-// ivVec3Of encloses a held vector exactly, one point interval per coordinate.
-func ivVec3Of(v r3.Vec) (ivVec3, bool) {
-	x, y, z := proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)
-	if x == nil || y == nil || z == nil {
-		return ivVec3{}, false
-	}
-	return ivVec3{proofbound.PointInterval(x), proofbound.PointInterval(y), proofbound.PointInterval(z)}, true
+func ivVec3Sub(a, b survey2d.IvVec3) survey2d.IvVec3 {
+	return survey2d.IvVec3{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
 }
 
-func ivVec3Add(a, b ivVec3) ivVec3 {
-	return ivVec3{proofbound.IntervalAdd(a[0], b[0]), proofbound.IntervalAdd(a[1], b[1]), proofbound.IntervalAdd(a[2], b[2])}
-}
-
-func ivVec3Sub(a, b ivVec3) ivVec3 {
-	return ivVec3{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
-}
-
-func ivVec3Mul(a ivVec3, s proofbound.RatInterval) ivVec3 {
-	return ivVec3{proofbound.IntervalMul(a[0], s), proofbound.IntervalMul(a[1], s), proofbound.IntervalMul(a[2], s)}
-}
-
-func ivVec3Cross(a, b ivVec3) ivVec3 {
-	return ivVec3{
+func ivVec3Cross(a, b survey2d.IvVec3) survey2d.IvVec3 {
+	return survey2d.IvVec3{
 		proofbound.IntervalSub(proofbound.IntervalMul(a[1], b[2]), proofbound.IntervalMul(a[2], b[1])),
 		proofbound.IntervalSub(proofbound.IntervalMul(a[2], b[0]), proofbound.IntervalMul(a[0], b[2])),
 		proofbound.IntervalSub(proofbound.IntervalMul(a[0], b[1]), proofbound.IntervalMul(a[1], b[0])),
 	}
 }
 
-func ivVec3Dot(a, b ivVec3) proofbound.RatInterval {
-	return proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalMul(a[0], b[0]), proofbound.IntervalMul(a[1], b[1])), proofbound.IntervalMul(a[2], b[2]))
-}
-
-// ivVec3NormSq is |v|² — intervalSquare per coordinate, never proofbound.IntervalMul with
-// itself, so a coordinate straddling zero cannot contribute a negative low
-// end.
-func ivVec3NormSq(a ivVec3) proofbound.RatInterval {
-	return proofbound.IntervalAdd(proofbound.IntervalAdd(intervalSquare(a[0]), intervalSquare(a[1])), intervalSquare(a[2]))
-}
-
 // ivVec3Unit encloses the exact unit vector of an enclosed direction. It is
 // the 3D sibling of capblend_contour.go's ivUnitVec, and like it the only
 // widening a held-float input suffers is the length's own outward-rounded
 // square root.
-func ivVec3Unit(a ivVec3) (ivVec3, normalStatus) {
-	n2 := ivVec3NormSq(a)
+func ivVec3Unit(a survey2d.IvVec3) (survey2d.IvVec3, normalStatus) {
+	n2 := survey2d.IvVec3NormSq(a)
 	if n2.Hi.Sign() <= 0 {
-		return ivVec3{}, normalZero
+		return survey2d.IvVec3{}, normalZero
 	}
 	if n2.Lo.Sign() <= 0 {
-		return ivVec3{}, normalUnproven
+		return survey2d.IvVec3{}, normalUnproven
 	}
-	length, ok := intervalSqrt(n2)
+	length, ok := survey2d.IntervalSqrt(n2)
 	if !ok || length.Lo.Sign() <= 0 {
-		return ivVec3{}, normalUnproven
+		return survey2d.IvVec3{}, normalUnproven
 	}
-	var out ivVec3
+	var out survey2d.IvVec3
 	for i, comp := range a {
-		q, ok := intervalQuo(comp, length)
+		q, ok := survey2d.IntervalQuo(comp, length)
 		if !ok {
-			return ivVec3{}, normalUnproven
+			return survey2d.IvVec3{}, normalUnproven
 		}
 		out[i] = q
 	}
@@ -148,7 +117,7 @@ func ivVec3Unit(a ivVec3) (ivVec3, normalStatus) {
 // The sign a reversed face applies is a float negation, which is exact, so
 // the bound is the same for the outward direction and the geometric one and
 // the caller may pass either — as long as both arguments carry the same sign.
-func unitDirAllow(exact ivVec3, held r3.Vec) (float64, normalStatus) {
+func unitDirAllow(exact survey2d.IvVec3, held r3.Vec) (float64, normalStatus) {
 	unit, st := ivVec3Unit(exact)
 	if st != normalProven {
 		return 0, st
@@ -178,19 +147,19 @@ func unitDirAllow(exact ivVec3, held r3.Vec) (float64, normalStatus) {
 // Writing it with the unit axis matters: the arms spell the projection with
 // the tag's held Axis, which a placement leaves only near-unit, and the
 // difference between the two spellings is part of what this file is charging.
-func axialRadialExact(p, origin, axis r3.Vec) (ivVec3, bool) {
-	pi, okP := ivVec3Of(p)
-	oi, okO := ivVec3Of(origin)
-	ai, okA := ivVec3Of(axis)
+func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
+	pi, okP := survey2d.IvVec3Of(p)
+	oi, okO := survey2d.IvVec3Of(origin)
+	ai, okA := survey2d.IvVec3Of(axis)
 	if !okP || !okO || !okA {
-		return ivVec3{}, false
+		return survey2d.IvVec3{}, false
 	}
 	rel := ivVec3Sub(pi, oi)
-	share, ok := intervalQuo(ivVec3Dot(rel, ai), ivVec3NormSq(ai))
+	share, ok := survey2d.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
 	if !ok {
-		return ivVec3{}, false
+		return survey2d.IvVec3{}, false
 	}
-	return ivVec3Sub(rel, ivVec3Mul(ai, share)), true
+	return ivVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
 }
 
 // planeNormalAllow bounds the Plane arm's own reading. An r3.Frame stores no
@@ -203,8 +172,8 @@ func axialRadialExact(p, origin, axis r3.Vec) (ivVec3, bool) {
 // held axes cross exactly and give a unit result, which is every axis-aligned
 // frame.
 func planeNormalAllow(fr r3.Frame, held r3.Vec) (float64, normalStatus) {
-	u, okU := ivVec3Of(fr.U())
-	v, okV := ivVec3Of(fr.V())
+	u, okU := survey2d.IvVec3Of(fr.U())
+	v, okV := survey2d.IvVec3Of(fr.V())
 	if !okU || !okV {
 		return 0, normalUnproven
 	}
@@ -224,8 +193,8 @@ func axialNormalAllow(p, origin, axis r3.Vec, held r3.Vec) (float64, normalStatu
 // radialNormalAllow bounds a reading whose exact direction is one held
 // difference — the Sphere arm's centre-to-point.
 func radialNormalAllow(p, center r3.Vec, held r3.Vec) (float64, normalStatus) {
-	pi, okP := ivVec3Of(p)
-	ci, okC := ivVec3Of(center)
+	pi, okP := survey2d.IvVec3Of(p)
+	ci, okC := survey2d.IvVec3Of(center)
 	if !okP || !okC {
 		return 0, normalUnproven
 	}
@@ -246,7 +215,7 @@ func coneNormalAllow(p r3.Vec, s Cone, half float64, held r3.Vec) (float64, norm
 	if st != normalProven {
 		return 0, st
 	}
-	axis, okA := ivVec3Of(s.Axis)
+	axis, okA := survey2d.IvVec3Of(s.Axis)
 	if !okA {
 		return 0, normalUnproven
 	}
@@ -258,11 +227,11 @@ func coneNormalAllow(p r3.Vec, s Cone, half float64, held r3.Vec) (float64, norm
 	if rHalf == nil {
 		return 0, normalUnproven
 	}
-	sin, cos, okT := radSinCosInterval(rHalf)
+	sin, cos, okT := survey2d.RadSinCosInterval(rHalf)
 	if !okT {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(ivVec3Sub(ivVec3Mul(rdir, cos), ivVec3Mul(adir, sin)), held)
+	return unitDirAllow(ivVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
 }
 
 // torusNormalAllow bounds the Torus arm's reading: the exact direction runs
@@ -278,55 +247,16 @@ func torusNormalAllow(p r3.Vec, s Torus, major float64, held r3.Vec) (float64, n
 		return 0, st
 	}
 	rMajor := proofarith.FloatRat(major)
-	pi, okP := ivVec3Of(p)
-	ci, okC := ivVec3Of(s.Center)
+	pi, okP := survey2d.IvVec3Of(p)
+	ci, okC := survey2d.IvVec3Of(s.Center)
 	if rMajor == nil || !okP || !okC {
 		return 0, normalUnproven
 	}
 	rel := ivVec3Sub(pi, ci)
-	return unitDirAllow(ivVec3Sub(rel, ivVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
+	return unitDirAllow(ivVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
 }
 
-// turnGridShift is the dyadic grid the radian-to-turn conversion lands on
-// before internal/proofbound/moments_trig.go's series runs. π's own in-tree bounds carry
-// seventy-odd digits, so the quotient by 2π is a rational nothing needs to
-// square that wide; rounding it down to a 2⁻⁹⁶ grid and charging the whole
-// gap back through the sine's own Lipschitz constant keeps the series input
-// small while leaving the enclosure valid.
-const turnGridShift = 96
-
-// radSinCosInterval encloses sin(x) and cos(x) for an exact rational RADIAN
-// value x, which is what a Cone's half angle is once it has been read out in
-// radians.
-//
-// internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval answers for a rational TURN, and a
-// radian value is not one: dividing by 2π lands on an interval, since π is
-// itself only enclosed. So the turn is rounded DOWN onto a dyadic grid, the
-// series is evaluated at that one point, and both readings are widened by
-// 2π·w with w the whole remaining gap — sound because |sin(2πt) − sin(2πt₀)|
-// ≤ 2π|t − t₀| and the same for the cosine, so no monotonicity over the gap
-// need be argued.
-func radSinCosInterval(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
-	if x.Sign() == 0 {
-		zero, one := new(big.Rat), big.NewRat(1, 1)
-		return proofbound.Interval(zero, zero), proofbound.Interval(one, one), true
-	}
-	twoPi := proofbound.TwoPiInterval()
-	turn, ok := intervalQuo(proofbound.PointInterval(x), twoPi)
-	if !ok {
-		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
-	}
-	base := ratFloorGrid(turn.Lo, turnGridShift)
-	gap := new(big.Rat).Sub(turn.Hi, base)
-	if gap.Sign() < 0 {
-		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
-	}
-	sin, cos := proofbound.TurnSinCosInterval(base)
-	slop := new(big.Rat).Mul(twoPi.Hi, gap)
-	return intervalWiden(sin, slop), intervalWiden(cos, slop), true
-}
-
-// radSinCosSpan is radSinCosInterval over a whole radian INTERVAL rather than
+// radSinCosSpan is survey2d.RadSinCosInterval over a whole radian INTERVAL rather than
 // one exact radian value — what a caller holds when the angle itself is only
 // enclosed, as an arc's own a0 + t·sweep is (both terms come from
 // proofbound.Atan2Interval).
@@ -334,31 +264,15 @@ func radSinCosInterval(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterv
 // It evaluates the point enclosure at the span's lower end and widens both
 // readings by the span's own width. That is sound because sine and cosine are
 // 1-Lipschitz, so no monotonicity over the span need be argued — the same
-// argument radSinCosInterval makes for its own grid gap, one level up.
+// argument survey2d.RadSinCosInterval makes for its own grid gap, one level up.
 func radSinCosSpan(x proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	width := new(big.Rat).Sub(x.Hi, x.Lo)
 	if width.Sign() < 0 {
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	sin, cos, ok := radSinCosInterval(x.Lo)
+	sin, cos, ok := survey2d.RadSinCosInterval(x.Lo)
 	if !ok {
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	return intervalWiden(sin, width), intervalWiden(cos, width), true
-}
-
-// intervalWiden grows an enclosure by a non-negative rational on both ends.
-func intervalWiden(a proofbound.RatInterval, w *big.Rat) proofbound.RatInterval {
-	return proofbound.Interval(new(big.Rat).Sub(a.Lo, w), new(big.Rat).Add(a.Hi, w))
-}
-
-// ratFloorGrid rounds a rational DOWN onto the 2⁻ˢʰⁱᶠᵗ grid, so the result is
-// never above the input and sits within 2⁻ˢʰⁱᶠᵗ of it. Rounding down in one
-// direction only is what lets the caller charge the whole gap from one end.
-func ratFloorGrid(x *big.Rat, shift uint) *big.Rat {
-	scale := new(big.Int).Lsh(big.NewInt(1), shift)
-	num := new(big.Int).Mul(x.Num(), scale)
-	// Denom is positive for every big.Rat, so Div is the floor.
-	q := new(big.Int).Div(num, x.Denom())
-	return new(big.Rat).SetFrac(q, scale)
+	return survey2d.IntervalWiden(sin, width), survey2d.IntervalWiden(cos, width), true
 }

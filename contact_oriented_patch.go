@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -104,7 +106,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 			limits[axis] = [2]*big.Rat{value, value}
 			continue
 		}
-		limits[axis] = [2]*big.Rat{ratMax(alo[axis], blo[axis]), ratMin(ahi[axis], bhi[axis])}
+		limits[axis] = [2]*big.Rat{survey2d.RatMax(alo[axis], blo[axis]), survey2d.RatMin(ahi[axis], bhi[axis])}
 		if limits[axis][0].Cmp(limits[axis][1]) >= 0 {
 			report.Reason = ContactAmbiguousFeature
 			return

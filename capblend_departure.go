@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -221,8 +223,8 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	if !okTag {
 		return 0, false
 	}
-	tagU, okU := ivVec3Of(tag.Frame.U())
-	tagV, okV := ivVec3Of(tag.Frame.V())
+	tagU, okU := survey2d.IvVec3Of(tag.Frame.U())
+	tagV, okV := survey2d.IvVec3Of(tag.Frame.V())
 	a0, a1, okS := capStraightEnds(b.sideDir)
 	b0, b1, okC := capStraightEnds(b.capDir)
 	if !okU || !okV || !okS || !okC {
@@ -238,10 +240,10 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 
 	// |N| from below: the constant term's own length, less what the two affine
 	// terms can take from it anywhere in the unit square.
-	baseLen, okB := intervalSqrt(ivVec3NormSq(c0))
-	uLen, okU := intervalSqrt(ivVec3NormSq(cu))
-	vLen, okV := intervalSqrt(ivVec3NormSq(cv))
-	tagLen, okL := intervalSqrt(ivVec3NormSq(n))
+	baseLen, okB := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(c0))
+	uLen, okU := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(cu))
+	vLen, okV := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(cv))
+	tagLen, okL := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(n))
 	if !okB || !okU || !okV || !okL {
 		return 0, false
 	}
@@ -259,7 +261,7 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 		comp := proofbound.RatAdd(intervalAbsUpper(k0[i]), intervalAbsUpper(ku[i]), intervalAbsUpper(kv[i]))
 		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
 	}
-	crossLen, okX := intervalSqrt(proofbound.PointInterval(crossSq))
+	crossLen, okX := survey2d.IntervalSqrt(proofbound.PointInterval(crossSq))
 	if !okX {
 		return 0, false
 	}
@@ -280,14 +282,14 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 // capStraightEnds encloses one straight directrix's two held ruling endpoints,
 // which is everything the flat derivation reads off it. A directrix the body
 // publishes as anything but a `Line3` carrying exactly two ends is refused.
-func capStraightEnds(ref capDirectrixRef) (ivVec3, ivVec3, bool) {
+func capStraightEnds(ref capDirectrixRef) (survey2d.IvVec3, survey2d.IvVec3, bool) {
 	if !ref.straight || len(ref.ends) != 2 {
-		return ivVec3{}, ivVec3{}, false
+		return survey2d.IvVec3{}, survey2d.IvVec3{}, false
 	}
-	first, okF := ivVec3Of(ref.ends[0])
-	second, okS := ivVec3Of(ref.ends[1])
+	first, okF := survey2d.IvVec3Of(ref.ends[0])
+	second, okS := survey2d.IvVec3Of(ref.ends[1])
 	if !okF || !okS {
-		return ivVec3{}, ivVec3{}, false
+		return survey2d.IvVec3{}, survey2d.IvVec3{}, false
 	}
 	return first, second, true
 }
@@ -304,8 +306,8 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 		return 0, false
 	}
 	tagRadius, okR := coneTagRadius(f)
-	axisIv, okA := ivVec3Of(axisVec)
-	originIv, okO := ivVec3Of(originVec)
+	axisIv, okA := survey2d.IvVec3Of(axisVec)
+	originIv, okO := survey2d.IvVec3Of(originVec)
 	if !okR || !okA || !okO {
 		return 0, false
 	}
@@ -354,7 +356,7 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 			return 0, false
 		}
 		arms++
-		tangent = ratMax(tangent, new(big.Rat).Quo(
+		tangent = survey2d.RatMax(tangent, new(big.Rat).Quo(
 			proofbound.RatMul(cosMax, proofbound.RatAdd(proofbound.RatMul(d.rho.Hi, sigma), d.offset)),
 			d.armLo,
 		))
@@ -385,9 +387,9 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	default:
 		return 0, false
 	}
-	rulingLen, okLen := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(
-		intervalSquare(dz).Hi,
-		intervalSquare(proofbound.IntervalSub(capped.rho, side.rho)).Hi,
+	rulingLen, okLen := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(
+		survey2d.IntervalSquare(dz).Hi,
+		survey2d.IntervalSquare(proofbound.IntervalSub(capped.rho, side.rho)).Hi,
 		proofbound.RatMul(side.rho.Hi, capped.rho.Hi, sigmaSq),
 	)))
 	if !okLen {
@@ -432,12 +434,12 @@ type capDirectrix struct {
 // It refuses a directrix whose own axis is not proven exactly parallel to the
 // tag's: the enclosure of a circle's axial coordinate as a constant is that
 // parallelism, and nothing else here would notice its loss.
-func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin ivVec3) (capDirectrix, bool) {
+func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin survey2d.IvVec3) (capDirectrix, bool) {
 	radius := proofarith.FloatRat(ref.radius)
 	if ref.straight || radius == nil || radius.Sign() < 0 {
 		return capDirectrix{}, false
 	}
-	centerIv, okC := ivVec3Of(ref.center)
+	centerIv, okC := survey2d.IvVec3Of(ref.center)
 	if !okC || len(ref.ends) == 0 {
 		return capDirectrix{}, false
 	}
@@ -462,8 +464,8 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 	}
 
 	rel := ivVec3Sub(centerIv, origin)
-	zc := ivVec3Dot(rel, ahat)
-	offset, okOff := intervalSqrt(ivVec3NormSq(ivVec3Sub(rel, ivVec3Mul(ahat, zc))))
+	zc := survey2d.IvVec3Dot(rel, ahat)
+	offset, okOff := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(ivVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
 	if !okOff {
 		return capDirectrix{}, false
 	}
@@ -474,21 +476,21 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 		offset: offset.Hi,
 	}
 	for _, v := range ref.ends {
-		vIv, ok := ivVec3Of(v)
+		vIv, ok := survey2d.IvVec3Of(v)
 		if !ok {
 			return capDirectrix{}, false
 		}
 		relV := ivVec3Sub(vIv, origin)
-		zv := ivVec3Dot(relV, ahat)
-		rho, okRho := intervalSqrt(ivVec3NormSq(ivVec3Sub(relV, ivVec3Mul(ahat, zv))))
+		zv := survey2d.IvVec3Dot(relV, ahat)
+		rho, okRho := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(ivVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
 		armRel := ivVec3Sub(vIv, centerIv)
-		arm, okArm := intervalSqrt(ivVec3NormSq(ivVec3Sub(armRel, ivVec3Mul(ahat, ivVec3Dot(armRel, ahat)))))
+		arm, okArm := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(ivVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
 		if !okRho || !okArm {
 			return capDirectrix{}, false
 		}
 		out.rho = intervalHull(out.rho, rho)
 		out.z = intervalHull(out.z, zv)
-		out.armLo = ratMin(out.armLo, arm.Lo)
+		out.armLo = survey2d.RatMin(out.armLo, arm.Lo)
 	}
 	return out, true
 }
@@ -507,7 +509,7 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 // A patch with a point directrix has no such pair at all: its rulings all leave
 // the tag's own origin, where every ruling's own azimuth is the other end's, so
 // the spread is an exact zero.
-func capRulingSkew(b capPatchBuilt, side, capped capDirectrix, ahat, origin ivVec3) (*big.Rat, bool) {
+func capRulingSkew(b capPatchBuilt, side, capped capDirectrix, ahat, origin survey2d.IvVec3) (*big.Rat, bool) {
 	if side.point || capped.point {
 		return new(big.Rat), true
 	}
@@ -521,25 +523,25 @@ func capRulingSkew(b capPatchBuilt, side, capped capDirectrix, ahat, origin ivVe
 		if !oks || !okc {
 			return nil, false
 		}
-		dot := ivVec3Dot(qs, qc)
+		dot := survey2d.IvVec3Dot(qs, qc)
 		if dot.Lo.Sign() <= 0 {
 			return nil, false
 		}
-		cross := ivVec3Dot(ahat, ivVec3Cross(qs, qc))
-		skew = ratMax(skew, new(big.Rat).Quo(intervalAbsUpper(cross), dot.Lo))
+		cross := survey2d.IvVec3Dot(ahat, ivVec3Cross(qs, qc))
+		skew = survey2d.RatMax(skew, new(big.Rat).Quo(intervalAbsUpper(cross), dot.Lo))
 	}
 	return skew, true
 }
 
 // capAxisPerp is a held point's own axis-perpendicular offset from the tag's
 // origin, exactly enclosed.
-func capAxisPerp(p r3.Vec, ahat, origin ivVec3) (ivVec3, bool) {
-	pIv, ok := ivVec3Of(p)
+func capAxisPerp(p r3.Vec, ahat, origin survey2d.IvVec3) (survey2d.IvVec3, bool) {
+	pIv, ok := survey2d.IvVec3Of(p)
 	if !ok {
-		return ivVec3{}, false
+		return survey2d.IvVec3{}, false
 	}
 	rel := ivVec3Sub(pIv, origin)
-	return ivVec3Sub(rel, ivVec3Mul(ahat, ivVec3Dot(rel, ahat))), true
+	return ivVec3Sub(rel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(rel, ahat))), true
 }
 
 // capAxesParallel decides, in exact arithmetic on the two held vectors alone,
@@ -549,8 +551,8 @@ func capAxisPerp(p r3.Vec, ahat, origin ivVec3) (ivVec3, bool) {
 // cross product is exactly zero wherever the build is the one this file
 // describes, and anything else refuses.
 func capAxesParallel(a, b r3.Vec) bool {
-	av, oka := ivVec3Of(a)
-	bv, okb := ivVec3Of(b)
+	av, oka := survey2d.IvVec3Of(a)
+	bv, okb := survey2d.IvVec3Of(b)
 	if !oka || !okb {
 		return false
 	}

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -368,13 +370,13 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
 // into its own per-segment walk slice, on a fresh freeformWork per loop — the
 // shape validateLoftRecords returns and loftPairings consumes.
-func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
+func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]survey2d.SegmentWalk {
 	t.Helper()
 	loops := append([]LoopRecord{p.Outer}, p.Holes...)
-	walks := make([][]segmentWalk, len(loops))
+	walks := make([][]survey2d.SegmentWalk, len(loops))
 	for i, loop := range loops {
 		work := newFreeformWork()
-		w := make([]segmentWalk, len(loop.Segments))
+		w := make([]survey2d.SegmentWalk, len(loop.Segments))
 		for j, seg := range loop.Segments {
 			var err error
 			w[j], err = walkOf(seg, work)
@@ -465,7 +467,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 
 	const k = 4
 	loopWork := &freeformWork{}
-	walks := make([]segmentWalk, k)
+	walks := make([]survey2d.SegmentWalk, k)
 	for i := range walks {
 		walks[i], err = walkOf(fit, loopWork)
 		require.NoError(t, err)
@@ -498,7 +500,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// A free-form pairing has no station rule yet (loftCellStations' own
 	// default case, unreached from any real build since S3 refuses it
 	// first) — this is asserted below for the charge, not the correspondence.
-	_, _, _, _, err = loftPairings(profile, profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks}, 0, loopWork, loopWork) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = loftPairings(profile, profile, []int{0}, [][]survey2d.SegmentWalk{walks}, [][]survey2d.SegmentWalk{walks}, 0, loopWork, loopWork) //nolint:dogsled // only the error matters here.
 	require.Error(t, err)
 	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
 }
@@ -532,9 +534,9 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, pairs[0].w, n)
 	for j := range n {
 		k := (j + offsets[0]) % n
-		require.Equal(t, pt(walks0[0][j].startU, walks0[0][j].startV), pairs[0].v[j],
+		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), pairs[0].v[j],
 			"v[%d] is walks0[0][%d]'s own start point", j, j)
-		require.Equal(t, pt(walks1[0][k].startU, walks1[0][k].startV), pairs[0].w[j],
+		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), pairs[0].w[j],
 			"w[%d] is walks1[0][%d]'s own start point", j, k)
 	}
 	// The same claim as literal coordinates: v runs p0's own corners from

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -161,7 +163,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 	var centroidal [3][3]proofbound.RatInterval
 	for i := range 3 {
 		for j := i; j < 3; j++ {
-			shift, ok := intervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
+			shift, ok := survey2d.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
 			if !ok {
 				return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 			}
@@ -189,7 +191,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 	widen.Mul(widen, tensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
-			world[i][j] = intervalWiden(world[i][j], widen)
+			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -235,7 +237,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 // value widened by its own bound, both read as exact rationals.
 func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
 	entry := func(m Measurement) proofbound.RatInterval {
-		return intervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
+		return survey2d.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
 	}
 	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
 	return [3][3]proofbound.RatInterval{

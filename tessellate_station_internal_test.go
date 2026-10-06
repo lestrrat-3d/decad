@@ -55,11 +55,11 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 	w, err := walkOf(seg, newFreeformWork())
 	require.NoError(t, err)
 	const n = 4
-	dth := (w.th1 - w.th0) / n
+	dth := (w.Th1 - w.Th0) / n
 	for k := 1; k < n; k++ {
-		th := w.th0 + float64(k)*dth
-		heldU := w.cU + w.radius*math.Cos(th)
-		heldV := w.cV + w.radius*math.Sin(th)
+		th := w.Th0 + float64(k)*dth
+		heldU := w.CU + w.Radius*math.Cos(th)
+		heldV := w.CV + w.Radius*math.Sin(th)
 		got := chordStationBound(seg, k, n, heldU, heldV)
 		require.True(t, got.Derivable(), `k=%d`, k)
 		require.Positive(t, math.Max(got.U, got.V), `k=%d: an arc station is never held exactly`, k)

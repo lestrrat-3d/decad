@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -257,16 +259,16 @@ func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, f
 	if lengthSquared.Sign() == 0 {
 		return fallbackU, fallbackV
 	}
-	sqrtIv, ok := intervalSqrt(proofbound.PointInterval(lengthSquared))
+	sqrtIv, ok := survey2d.IntervalSqrt(proofbound.PointInterval(lengthSquared))
 	if !ok {
 		return fallbackU, fallbackV
 	}
 	uBound := fallbackU
-	if enc, ok := intervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
+	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
 		uBound = math.Min(fallbackU, proofbound.IntervalFloatError(enc, heldU))
 	}
 	vBound := fallbackV
-	if enc, ok := intervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
+	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
 		vBound = math.Min(fallbackV, proofbound.IntervalFloatError(enc, heldV))
 	}
 	return uBound, vBound
@@ -350,7 +352,7 @@ func (ax axisFrame) toAxisRhoBound(u, v float64) float64 {
 // the radial distance ρ = |cross(d, p−a)| from THIS resolved axis to any
 // boundary point p the caller's own coordUpper covers. coordUpper is a proven
 // upper bound on p's plane-local coordinates about the FRAME origin
-// (profileCoordinateUpper for a whole profile, segmentWalk.coordUpper for one
+// (profileCoordinateUpper for a whole profile, survey2d.SegmentWalk.coordUpper for one
 // walk), and ρ is measured from the AXIS, so the anchor a's own offset is the
 // whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
 // through its own recorded bounds. Every reading whose error scales with ρ —
@@ -431,7 +433,7 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // shortfall |L'−L|·(r0'+r1')/2 grows without limit as the wall turns from steep
 // (a cone, where |L'−L| is a fraction of the discarded radius) toward radial (a
 // disk, where it is the whole of it).
-func (ax axisFrame) walk(w segmentWalk) segmentWalk {
+func (ax axisFrame) walk(w survey2d.SegmentWalk) survey2d.SegmentWalk {
 	return ax.walkCharged(w, proofbound.WalkEndBound{}, proofbound.WalkEndBound{})
 }
 
@@ -481,54 +483,54 @@ func (ax axisFrame) axisCharge(c proofbound.WalkEndBound) (float64, float64) {
 //     walkAxisMoment clamps its composed bound with math.Min against
 //     proofbound.ConservativeValueError(value, axisMomentUpper), and an envelope covering
 //     only the recorded meridian would clamp the charge straight back off.
-func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge proofbound.WalkEndBound) segmentWalk {
+func (ax axisFrame) walkCharged(w survey2d.SegmentWalk, startCharge, endCharge proofbound.WalkEndBound) survey2d.SegmentWalk {
 	out := w
-	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
-	out.endU, out.endV = ax.toAxis(w.endU, w.endV)
-	out.startVBound = ax.toAxisRhoBound(w.startU, w.startV)
-	out.endVBound = ax.toAxisRhoBound(w.endU, w.endV)
+	out.StartU, out.StartV = ax.toAxis(w.StartU, w.StartV)
+	out.EndU, out.EndV = ax.toAxis(w.EndU, w.EndV)
+	out.StartVBound = ax.toAxisRhoBound(w.StartU, w.StartV)
+	out.EndVBound = ax.toAxisRhoBound(w.EndU, w.EndV)
 	startZ, startRho := ax.axisCharge(startCharge)
 	endZ, endRho := ax.axisCharge(endCharge)
 	if startRho > 0 {
-		out.startVBound = proofbound.AbsSumUpper(out.startVBound, startRho)
+		out.StartVBound = proofbound.AbsSumUpper(out.StartVBound, startRho)
 	}
 	if endRho > 0 {
-		out.endVBound = proofbound.AbsSumUpper(out.endVBound, endRho)
+		out.EndVBound = proofbound.AbsSumUpper(out.EndVBound, endRho)
 	}
-	out.tanInU = w.tanInU*ax.dU + w.tanInV*ax.dV
-	out.tanInV = w.tanInV*ax.dU - w.tanInU*ax.dV
-	out.tanOutU = w.tanOutU*ax.dU + w.tanOutV*ax.dV
-	out.tanOutV = w.tanOutV*ax.dU - w.tanOutU*ax.dV
-	if m := math.Abs(out.startV); m <= ax.snapTol {
-		out.startVBound = proofbound.SnapToZeroAllow(out.startVBound, m)
-		out.lengthBound = proofbound.SnapToZeroAllow(out.lengthBound, m)
-		out.startV = 0
+	out.TanInU = w.TanInU*ax.dU + w.TanInV*ax.dV
+	out.TanInV = w.TanInV*ax.dU - w.TanInU*ax.dV
+	out.TanOutU = w.TanOutU*ax.dU + w.TanOutV*ax.dV
+	out.TanOutV = w.TanOutV*ax.dU - w.TanOutU*ax.dV
+	if m := math.Abs(out.StartV); m <= ax.snapTol {
+		out.StartVBound = proofbound.SnapToZeroAllow(out.StartVBound, m)
+		out.LengthBound = proofbound.SnapToZeroAllow(out.LengthBound, m)
+		out.StartV = 0
 	}
-	if m := math.Abs(out.endV); m <= ax.snapTol {
-		out.endVBound = proofbound.SnapToZeroAllow(out.endVBound, m)
-		out.lengthBound = proofbound.SnapToZeroAllow(out.lengthBound, m)
-		out.endV = 0
+	if m := math.Abs(out.EndV); m <= ax.snapTol {
+		out.EndVBound = proofbound.SnapToZeroAllow(out.EndVBound, m)
+		out.LengthBound = proofbound.SnapToZeroAllow(out.LengthBound, m)
+		out.EndV = 0
 	}
-	if w.isCircular() {
+	if w.IsCircular() {
 		beta := math.Atan2(ax.dV, ax.dU)
-		out.cU, out.cV = ax.toAxis(w.cU, w.cV)
-		out.cVBound = ax.toAxisRhoBound(w.cU, w.cV)
-		out.th0 = w.th0 - beta
-		out.th1 = w.th1 - beta
+		out.CU, out.CV = ax.toAxis(w.CU, w.CV)
+		out.CVBound = ax.toAxisRhoBound(w.CU, w.CV)
+		out.Th0 = w.Th0 - beta
+		out.Th1 = w.Th1 - beta
 	}
 	// §7.1's remaining two folds. chord is the displacement the wall's own two
 	// ends can put between them; coord is the L1 magnitude the same two
 	// displacements can add to the envelope, which coordUpper is measured in.
 	if chord := proofbound.AbsSumUpper(startZ, startRho, endZ, endRho); chord > 0 {
-		out.lengthBound = proofbound.AbsSumUpper(out.lengthBound, chord)
-		out.lengthUpper = proofbound.AbsSumUpper(out.lengthUpper, chord)
+		out.LengthBound = proofbound.AbsSumUpper(out.LengthBound, chord)
+		out.LengthUpper = proofbound.AbsSumUpper(out.LengthUpper, chord)
 	}
 	if coord := math.Max(proofbound.AbsSumUpper(startCharge.U, startCharge.V), proofbound.AbsSumUpper(endCharge.U, endCharge.V)); coord > 0 {
-		out.coordUpper = proofbound.AbsSumUpper(out.coordUpper, coord)
+		out.CoordUpper = proofbound.AbsSumUpper(out.CoordUpper, coord)
 	}
-	rhoUpper := ax.radialUpper(out.coordUpper)
-	out.axisRadiusUpper = rhoUpper
-	out.axisMomentUpper = proofbound.ProductUpper(out.lengthUpper, rhoUpper)
+	rhoUpper := ax.radialUpper(out.CoordUpper)
+	out.AxisRadiusUpper = rhoUpper
+	out.AxisMomentUpper = proofbound.ProductUpper(out.LengthUpper, rhoUpper)
 	return out
 }
 
@@ -553,17 +555,17 @@ const (
 )
 
 // classify names the surface of revolution one axis-coordinate walk sweeps.
-func (ax axisFrame) classify(w segmentWalk) wallKind {
-	if w.isCircular() {
-		if math.Abs(w.cV) <= ax.snapTol {
+func (ax axisFrame) classify(w survey2d.SegmentWalk) wallKind {
+	if w.IsCircular() {
+		if math.Abs(w.CV) <= ax.snapTol {
 			return wallSphere
 		}
 		return wallTorus
 	}
-	if w.startV == 0 && w.endV == 0 {
+	if w.StartV == 0 && w.EndV == 0 {
 		return wallAxis
 	}
-	dz, dr := w.endU-w.startU, w.endV-w.startV
+	dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
 	l := math.Hypot(dz, dr)
 	if math.Abs(dr) <= 1e-9*l {
 		return wallCylinder
@@ -801,18 +803,18 @@ func (a regionSnapAllow) add(b regionSnapAllow) regionSnapAllow {
 // built surface keeps the recorded circle's own center, radius and angles: the
 // snap still displaces the endpoint its neighbouring walls meet it at, by the
 // same δ over the same walk, so the same ribbon dominates the difference.
-func snapAllowOf(walked segmentWalk, discarded float64) regionSnapAllow {
+func snapAllowOf(walked survey2d.SegmentWalk, discarded float64) regionSnapAllow {
 	if !(discarded > 0) {
 		return regionSnapAllow{}
 	}
-	ribbon := proofbound.ProductUpper(proofbound.AbsSumUpper(walked.length, walked.lengthBound), discarded)
+	ribbon := proofbound.ProductUpper(proofbound.AbsSumUpper(walked.Length, walked.LengthBound), discarded)
 	rhoUp := walkRadialUpper(walked, discarded)
 	// |z| = |(p−a)·d| ≤ |p−a| ≤ |p| + |a|, which is exactly what
 	// axisFrame.radialUpper composes — it is the envelope of the whole axis-
 	// local position, so it bounds the axial coordinate as well as the radial
 	// one, and for a profile far down the axis it is the axial one that is
 	// large.
-	zUp := proofbound.AbsSumUpper(walked.axisRadiusUpper, discarded)
+	zUp := proofbound.AbsSumUpper(walked.AxisRadiusUpper, discarded)
 	first := proofbound.ProductUpper(ribbon, rhoUp)
 	return regionSnapAllow{
 		area:   ribbon,
@@ -830,25 +832,25 @@ func snapAllowOf(walked segmentWalk, discarded float64) regionSnapAllow {
 // radial coordinate plus its radius, each read through its own bound. The
 // answer is capped by the walk's own axis-radius envelope, which is proven
 // independently, so this can only ever tighten and never widen it.
-func walkRadialUpper(w segmentWalk, discarded float64) float64 {
+func walkRadialUpper(w survey2d.SegmentWalk, discarded float64) float64 {
 	held := proofbound.AbsSumUpper(
-		math.Max(math.Abs(w.startV), math.Abs(w.endV)),
-		math.Max(w.startVBound, w.endVBound),
+		math.Max(math.Abs(w.StartV), math.Abs(w.EndV)),
+		math.Max(w.StartVBound, w.EndVBound),
 		discarded,
 	)
-	if w.isCircular() {
-		held = proofbound.AbsSumUpper(math.Abs(w.cV), w.cVBound, w.radius, w.radiusBound, discarded)
+	if w.IsCircular() {
+		held = proofbound.AbsSumUpper(math.Abs(w.CV), w.CVBound, w.Radius, w.RadiusBound, discarded)
 	}
-	return math.Min(held, proofbound.AbsSumUpper(w.axisRadiusUpper, discarded))
+	return math.Min(held, proofbound.AbsSumUpper(w.AxisRadiusUpper, discarded))
 }
 
 // snapDiscarded is the largest radial magnitude axisFrame.walk's snap discards
 // over one walk's two endpoints, read from the walk BEFORE it was re-expressed
 // — the same toAxis reading and the same snapTol comparison walk itself makes,
 // so the two can never disagree about whether an endpoint snapped.
-func (ax axisFrame) snapDiscarded(w segmentWalk) float64 {
+func (ax axisFrame) snapDiscarded(w survey2d.SegmentWalk) float64 {
 	var discarded float64
-	for _, end := range [][2]float64{{w.startU, w.startV}, {w.endU, w.endV}} {
+	for _, end := range [][2]float64{{w.StartU, w.StartV}, {w.EndU, w.EndV}} {
 		_, rho := ax.toAxis(end[0], end[1])
 		if m := math.Abs(rho); m <= ax.snapTol && m > discarded {
 			discarded = m
@@ -890,17 +892,17 @@ func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeformWork) 
 			discarded := ax.snapDiscarded(w)
 			w = ax.walk(w)
 			snap = snap.add(snapAllowOf(w, discarded))
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				continue
 			}
-			if w.cV < -ax.snapTol {
+			if w.CV < -ax.snapTol {
 				return regionSnapAllow{}, fmt.Errorf(`%w: a boundary arc centered across the revolve axis sweeps a spindle torus this evaluator cannot represent`, ErrUnsupported)
 			}
-			if w.cV-w.radius > ax.snapTol {
+			if w.CV-w.Radius > ax.snapTol {
 				continue
 			}
-			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-			if w.closed {
+			lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
+			if w.Closed {
 				return regionSnapAllow{}, fmt.Errorf(`%w: a closed curve touching the revolve axis sweeps a self-touching solid`, ErrDegenerate)
 			}
 			// The minimum-ρ angle is −π/2 modulo a full turn.

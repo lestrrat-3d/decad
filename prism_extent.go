@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -346,25 +348,25 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 // is this closed form, and reading it this way charges no π-rounding guard for
 // an angle that never enters the answer. The three inputs that are not exact
 // leaves each enter through the bounded arithmetic: the walk's radius under its
-// own proven bound (segmentWalk.radiusBound — an ArcSeg states Start and Center,
+// own proven bound (survey2d.SegmentWalk.radiusBound — an ArcSeg states Start and Center,
 // so its radius is a math.Hypot), the direction's magnitude through
 // proofbound.BoundedNorm2's certified square-root brackets, and every product and sum
 // through proofbound.BoundedMul/proofbound.BoundedAdd's own exact rounding terms. An exactly
 // representable apex therefore still reports a zero bound, which is what lets a
 // recorded circle's box stay Exact along an axis whose reading the apex holds —
 // the walk's own endpoints answer for themselves there
-// (segmentWalk.startBound/endBound).
-func circularExtremeInterval(w segmentWalk, gu, gv float64) (proofbound.BoundedScalar, proofbound.BoundedScalar) {
+// (survey2d.SegmentWalk.startBound/endBound).
+func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound.BoundedScalar, proofbound.BoundedScalar) {
 	gmag := proofbound.BoundedNorm2(proofbound.ExactScalar(gu), proofbound.ExactScalar(gv))
 	centre := proofbound.BoundedAdd(
-		proofbound.BoundedMul(proofbound.ExactScalar(gu), proofbound.ExactScalar(w.cU)),
-		proofbound.BoundedMul(proofbound.ExactScalar(gv), proofbound.ExactScalar(w.cV)),
+		proofbound.BoundedMul(proofbound.ExactScalar(gu), proofbound.ExactScalar(w.CU)),
+		proofbound.BoundedMul(proofbound.ExactScalar(gv), proofbound.ExactScalar(w.CV)),
 	)
-	amplitude := proofbound.BoundedMul(proofbound.MeasuredScalar(w.radius, w.radiusBound), gmag)
+	amplitude := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Radius, w.RadiusBound), gmag)
 	return proofbound.BoundedSub(centre, amplitude), proofbound.BoundedAdd(centre, amplitude)
 }
 
-// boundaryExtremesBoundedContext is the one scan, total over walkKind
+// boundaryExtremesBoundedContext is the one scan, total over survey2d.WalkKind
 // (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
 // the recorded region's boundary, AND the proven half-width every CANDIDATE's
 // own position contributes to that interval.
@@ -381,11 +383,11 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (proofbound.BoundedS
 //
 // An ENDPOINT candidate is the walk's own endpoint read through the direction
 // the caller holds, which this evaluator reads as an exact leaf throughout (the
-// convention survey2d.go's own file comment states). The endpoint itself is an
+// convention internal/survey2d/survey2d.go's own file comment states). The endpoint itself is an
 // exact leaf only where the record STATES it — a line's or an arc's natural
 // bounds — and there the candidate has zero width, so an all-straight section's
 // reading stays exact. Every other endpoint is one this evaluator computed, and
-// the walk states what it is worth (segmentWalk.startBound/endBound);
+// the walk states what it is worth (survey2d.SegmentWalk.startBound/endBound);
 // proofbound.PointPerturbationAllow carries that displacement through the functional so
 // the candidate enters at the width its own construction owes, never at zero.
 // An endpoint whose bound no arithmetic could state refuses the whole scan
@@ -487,8 +489,8 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 			if err != nil {
 				return 0, 0, 0, err
 			}
-			if w.kind == walkFreeform {
-				for _, span := range w.spans {
+			if w.Kind == survey2d.WalkFreeform {
+				for _, span := range w.Spans {
 					minIv, maxIv, err := spanExtremeEnclosureContext(ctx, span, gu, gv, work)
 					if err != nil {
 						return 0, 0, 0, err
@@ -506,12 +508,12 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 				}
 				continue
 			}
-			if !w.startBound.Derivable() || !w.endBound.Derivable() {
+			if !w.StartBound.Derivable() || !w.EndBound.Derivable() {
 				return 0, 0, 0, fmt.Errorf(`%w: a boundary segment's walked endpoint states no proven displacement, so this scan cannot bound the region's extremes`, ErrUnsupported)
 			}
-			takeVertex(w.startU, w.startV, w.startBound)
-			takeVertex(w.endU, w.endV, w.endBound)
-			if !w.isCircular() {
+			takeVertex(w.StartU, w.StartV, w.StartBound)
+			takeVertex(w.EndU, w.EndV, w.EndBound)
+			if !w.IsCircular() {
 				continue
 			}
 			// Interior extremes at θ* where the functional's gradient
@@ -524,7 +526,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 			}
 			minIv, maxIv := circularExtremeInterval(w, gu, gv)
 			star := math.Atan2(gv, gu)
-			tlo, thi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+			tlo, thi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 			for ci, cand := range [2]float64{star, star + math.Pi} {
 				apex := maxIv
 				if ci == 1 {
@@ -535,7 +537,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 					if th < tlo-1e-12 {
 						continue
 					}
-					held := gu*(w.cU+w.radius*math.Cos(th)) + gv*(w.cV+w.radius*math.Sin(th))
+					held := gu*(w.CU+w.Radius*math.Cos(th)) + gv*(w.CV+w.Radius*math.Sin(th))
 					take(held, proofbound.BoundedFloatError(apex, held))
 				}
 			}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -452,11 +454,11 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	for axis := range 3 {
 		low, high := corners.hull(axis)
 		axisLow, axisHigh := centers.hull(axis)
-		low = ratMax(low, new(big.Rat).Sub(axisLow, box.reach))
-		high = ratMin(high, new(big.Rat).Add(axisHigh, box.reach))
+		low = survey2d.RatMax(low, new(big.Rat).Sub(axisLow, box.reach))
+		high = survey2d.RatMin(high, new(big.Rat).Add(axisHigh, box.reach))
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
-		lo[axis] = new(big.Rat).Sub(low, ratMax(shift, zero))
-		hi[axis] = new(big.Rat).Sub(high, ratMin(shift, zero))
+		lo[axis] = new(big.Rat).Sub(low, survey2d.RatMax(shift, zero))
+		hi[axis] = new(big.Rat).Sub(high, survey2d.RatMin(shift, zero))
 	}
 	solid := pair.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
 	_, apart, err := pair.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
@@ -470,7 +472,7 @@ func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) b
 	for slot, axis := range [2]int{(support.axis + 1) % 3, (support.axis + 2) % 3} {
 		low, high := spans.hull(axis)
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
-		shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
+		shiftLo, shiftHi := survey2d.RatMin(shift, new(big.Rat)), survey2d.RatMax(shift, new(big.Rat))
 		lo[slot] = proofbound.RatAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
 		hi[slot] = proofbound.RatAdd(high, new(big.Rat).Neg(shiftLo), growth)
 	}

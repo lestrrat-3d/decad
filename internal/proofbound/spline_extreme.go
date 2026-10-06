@@ -5,8 +5,6 @@ import (
 	"math/big"
 )
 
-// Moved from the root package's spline_extreme.go.
-
 // RatFloatDown and RatFloatUp are proven outward roundings of an exact
 // rational to float64: the largest float64 at or below q, and the smallest
 // at or above it. big.Rat.Float64() already rounds to nearest, which can

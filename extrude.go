@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -568,7 +570,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 }
 
 type chainWalkCapture struct {
-	walks   []segmentWalk
+	walks   []survey2d.SegmentWalk
 	charges []walkReadCharge
 }
 
@@ -611,9 +613,9 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// proofbound.SectionDisplacementLength), zero for every payload ExtrudeChain builds
 	// directly.
 	walkLenAllow := proofbound.SectionDisplacementLength(pp.sectionDelta, 1)
-	raw := make([]sideWalk, len(chain.Segments))
+	raw := make([]survey2d.SideWalk, len(chain.Segments))
 	if capture != nil {
-		capture.walks = make([]segmentWalk, len(chain.Segments))
+		capture.walks = make([]survey2d.SegmentWalk, len(chain.Segments))
 		capture.charges = make([]walkReadCharge, len(chain.Segments))
 	}
 	for i, seg := range chain.Segments {
@@ -630,8 +632,8 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			capture.walks[i] = w
 			capture.charges[i] = walkReadCharge{after - before, afterRecon - beforeRecon}
 		}
-		w.lengthBound = proofbound.AbsSumUpper(w.lengthBound, walkLenAllow)
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {
@@ -642,7 +644,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
 	maxCoordUpper := 0.0
 	for _, w := range walks {
-		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
 	}
 	// frameLiftAllow is the one proven bound this ribbon's rim vertices share
 	// for the payload's own frame lift and accumulated placement
@@ -667,14 +669,14 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		var u, v, extra float64
 		if i < n {
-			u, v = walks[i].startU, walks[i].startV
-			extra = freeformVertexAllow(walks[i].segmentWalk, walks[i].startBound)
+			u, v = walks[i].StartU, walks[i].StartV
+			extra = freeformVertexAllow(walks[i].SegmentWalk, walks[i].StartBound)
 		} else {
-			u, v = walks[n-1].endU, walks[n-1].endV
-			extra = freeformVertexAllow(walks[n-1].segmentWalk, walks[n-1].endBound)
+			u, v = walks[n-1].EndU, walks[n-1].EndV
+			extra = freeformVertexAllow(walks[n-1].SegmentWalk, walks[n-1].EndBound)
 		}
 		if i > 0 && i < n {
-			extra = math.Max(extra, freeformVertexAllow(walks[i-1].segmentWalk, walks[i-1].endBound))
+			extra = math.Max(extra, freeformVertexAllow(walks[i-1].SegmentWalk, walks[i-1].EndBound))
 		}
 		bottomV[i] = &Vertex{position: prismView.point(u, v, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra))}
 		topV[i] = &Vertex{position: prismView.point(u, v, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra))}
@@ -693,7 +695,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		convex := false
 		if i > 0 && i < n {
 			prev, w := walks[i-1], walks[i]
-			convex = prev.tanOutU*w.tanInV-prev.tanOutV*w.tanInU > 0
+			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
 		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.Bound}
 	}
@@ -714,11 +716,11 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, chainIdx, w.segs)
+		origins, err := sideOriginsContext(ctx, ref, chainIdx, w.Segs)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.length, w.lengthBound), height)
+		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
