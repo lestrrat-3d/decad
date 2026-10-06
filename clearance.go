@@ -139,6 +139,23 @@ func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (fl
 	return lo, hi, false
 }
 
+// newPairKernel builds one pair's working state over two carrier models. Its
+// scale is the largest coordinate magnitude of either body's bounds, at least
+// 1, and the tolerance and slack are 1e-9 of it.
+func newPairKernel(ctx context.Context, ga, gb *bodyGeom) *pairKernel {
+	scale := 1.0
+	for _, g := range []*bodyGeom{ga, gb} {
+		for _, p := range []r3.Vec{g.body.bounds.Min, g.body.bounds.Max} {
+			for _, c := range []float64{p.X, p.Y, p.Z} {
+				if v := math.Abs(c); v > scale {
+					scale = v
+				}
+			}
+		}
+	}
+	return &pairKernel{a: ga, b: gb, scale: scale, tol: 1e-9 * scale, slack: 1e-9 * scale, ctx: ctx}
+}
+
 // clearancePair runs the kernel over one pair of proven solids.
 // nestingExcluded is true when box separation has already excluded nesting
 // (a box-proven pair needs the kernel only for its gap — §7).
@@ -178,17 +195,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if !oka || !okb {
 		return pairResult{}, nil
 	}
-	scale := 1.0
-	for _, bb := range [][2]r3.Vec{{a.bounds.Min, a.bounds.Max}, {b.bounds.Min, b.bounds.Max}} {
-		for _, p := range bb {
-			for _, c := range []float64{p.X, p.Y, p.Z} {
-				if v := math.Abs(c); v > scale {
-					scale = v
-				}
-			}
-		}
-	}
-	k := &pairKernel{a: ga, b: gb, scale: scale, tol: 1e-9 * scale, slack: 1e-9 * scale, ctx: ctx}
+	k := newPairKernel(ctx, ga, gb)
 	diam, err := k.pairDiameter()
 	if err != nil {
 		return pairResult{}, err
@@ -236,31 +243,10 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if sink.unsure {
 		return pairResult{diam: diam}, nil
 	}
-	hi := math.Inf(1)
-	for _, c := range sink.contribs {
-		if c.hi < hi {
-			hi = c.hi
-		}
-	}
-	if math.IsInf(hi, 1) {
+	lo, hi, exact, ok := sink.interval()
+	if !ok {
 		return pairResult{diam: diam}, nil
 	}
-	lo := hi
-	exact := false
-	for _, c := range sink.contribs {
-		if c.lo >= hi {
-			continue // §5 pruning: a bound at or above the best upper bound cannot hold the minimum
-		}
-		if c.lo < lo {
-			lo = c.lo
-		}
-	}
-	for _, c := range sink.contribs {
-		if c.exact && c.lo == hi && c.hi == hi {
-			exact = true
-		}
-	}
-	exact = exact && lo == hi
 	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, ga.delta, gb.delta)
 	if lo <= k.tol {
 		return pairResult{diam: diam}, nil
@@ -532,17 +518,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 		// §2). The pair stays undecided rather than guessing a side.
 		return sheetSolidResult{verdict: sheetSolidUndecided}, nil
 	}
-	scale := 1.0
-	for _, bb := range [][2]r3.Vec{{sheet.bounds.Min, sheet.bounds.Max}, {solid.bounds.Min, solid.bounds.Max}} {
-		for _, p := range bb {
-			for _, c := range []float64{p.X, p.Y, p.Z} {
-				if v := math.Abs(c); v > scale {
-					scale = v
-				}
-			}
-		}
-	}
-	k := &pairKernel{a: gs, b: gb, scale: scale, tol: 1e-9 * scale, slack: 1e-9 * scale, ctx: ctx}
+	k := newPairKernel(ctx, gs, gb)
 	diam, err := k.pairDiameter()
 	if err != nil {
 		return sheetSolidResult{}, err
@@ -559,31 +535,10 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	if sink.unsure {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
-	hi := math.Inf(1)
-	for _, c := range sink.contribs {
-		if c.hi < hi {
-			hi = c.hi
-		}
-	}
-	if math.IsInf(hi, 1) {
+	lo, hi, exact, ok := sink.interval()
+	if !ok {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
-	lo := hi
-	exact := false
-	for _, c := range sink.contribs {
-		if c.lo >= hi {
-			continue // §5 pruning: a bound at or above the best upper bound cannot hold the minimum
-		}
-		if c.lo < lo {
-			lo = c.lo
-		}
-	}
-	for _, c := range sink.contribs {
-		if c.exact && c.lo == hi && c.hi == hi {
-			exact = true
-		}
-	}
-	exact = exact && lo == hi
 	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, gs.delta, gb.delta)
 	if lo <= k.tol {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil

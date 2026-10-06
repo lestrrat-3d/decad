@@ -1,8 +1,10 @@
 package decad
 
 import (
+	"cmp"
 	"errors"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -46,6 +48,79 @@ type cellSink struct {
 	// equality where a branch demands strictness (§4: equality routes to §6,
 	// where only the coplanar plane pair is certified).
 	unsure bool
+
+	// prune enables §5's cell pruning (pruned, below). A zero-value sink
+	// never prunes, so a cell run on its own reports everything it finds.
+	prune bool
+	// margin is the length charged against a box distance before it may
+	// prune. The kernel passes its slack, 1e-9 × the pair's coordinate
+	// scale, which covers the few-ulp rounding of the float boxes, of the
+	// box distance and of the subtraction many times over.
+	margin float64
+	// best is the smallest finite contribution hi among contribs[:seen].
+	best float64
+	seen int
+	// skipped counts the cells pruned so far.
+	skipped int
+}
+
+// newPruningSink returns a sink that prunes against its own best upper
+// bound, charging margin against every box distance.
+func newPruningSink(margin float64) *cellSink {
+	return &cellSink{prune: true, margin: margin, best: math.Inf(1)}
+}
+
+// pruned reports whether a cell whose two features' boxes lie lb apart
+// cannot hold the pair's minimum, and counts it when so (§5). Every
+// contribution's hi bounds the true gap from above, and every point of the
+// cell's features lies at least lb − margin from the other's, so a cell with
+// lb − margin STRICTLY above the best hi in hand lies wholly beyond the
+// minimum. Equality never prunes: a feature pair at exactly the best upper
+// bound may hold the minimum itself. A non-finite lb never prunes.
+func (s *cellSink) pruned(lb float64) bool {
+	if !s.prune || proofbound.IsNonFinite(lb) {
+		return false
+	}
+	for _, c := range s.contribs[s.seen:] {
+		if c.hi < s.best {
+			s.best = c.hi
+		}
+	}
+	s.seen = len(s.contribs)
+	if lb-s.margin <= s.best {
+		return false
+	}
+	s.skipped++
+	return true
+}
+
+// interval folds the contributions into the held-candidate gap interval
+// [lo, hi] (§1): hi is the least upper bound, lo the least lower bound below
+// it, and exact holds only for a closed-form winner at hi with every rival's
+// lo at or above it. ok is false when no contribution carries a finite hi.
+func (s *cellSink) interval() (float64, float64, bool, bool) {
+	hi := math.Inf(1)
+	for _, c := range s.contribs {
+		if c.hi < hi {
+			hi = c.hi
+		}
+	}
+	if math.IsInf(hi, 1) {
+		return 0, 0, false, false
+	}
+	lo := hi
+	for _, c := range s.contribs {
+		if c.lo < lo {
+			lo = c.lo
+		}
+	}
+	exact := false
+	for _, c := range s.contribs {
+		if c.exact && c.lo == hi && c.hi == hi {
+			exact = true
+		}
+	}
+	return lo, hi, exact && lo == hi, true
 }
 
 // crossing records a carrier crossing after trim admission: admitted proves
@@ -103,11 +178,41 @@ func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 	s.contribs = append(s.contribs, gapContrib{lo: math.Max(0, lo), hi: hi})
 }
 
-// enumerate runs every tier over the pair. One shared budget bounds
-// cancellation latency across both the outer candidate walk and the nested
-// work performed by a vertex tier.
+// The feature-pair cell kinds enumerate sorts by box distance.
+const (
+	cellFF uint8 = iota // a face × b face
+	cellFE              // a face × b edge
+	cellEF              // b face × a edge
+	cellEE              // a edge × b edge
+)
+
+// featureCell is one face/edge cell queued for the sorted walk: its kind,
+// the two feature indices, and the distance between the features' boxes.
+type featureCell struct {
+	lb   float64
+	kind uint8
+	i, j int
+}
+
+// enumerate runs every tier over the pair, pruning per §5. One shared budget
+// bounds cancellation latency across the cell queue build, the outer
+// candidate walk, and the nested work performed by a vertex tier.
+//
+// The order is chosen so good upper bounds arrive early, and it is fixed, so
+// a replay prunes identically: the vertex × vertex distances first (cheap and
+// exact), then the vertex tiers (closed form), then every face/edge cell in
+// ascending box distance, ties in the fixed face × face, face × edge,
+// edge × face, edge × edge order. Within that last walk a cell is pruned
+// exactly when its box distance, less the margin, exceeds the final best
+// upper bound: every cell nearer than it has already run, the one holding
+// the best hi among them.
 func (k *pairKernel) enumerate() (*cellSink, error) {
-	sink := &cellSink{}
+	return k.enumerateInto(newPruningSink(k.slack))
+}
+
+// enumerateInto runs enumerate's walk into the given sink. A zero-value sink
+// never prunes, so it runs every cell.
+func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 	budget := proofbound.NewWorkBudget(k.ctx)
 	check := func() error {
 		if k.err != nil {
@@ -115,36 +220,13 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 		}
 		return budget.Step()
 	}
-	for _, fa := range k.a.faces {
-		for _, fb := range k.b.faces {
+	for _, va := range k.a.verts {
+		for _, vb := range k.b.verts {
 			if err := check(); err != nil {
 				return nil, err
 			}
-			k.ffCell(fa, fb, sink)
-		}
-	}
-	for _, fa := range k.a.faces {
-		for _, eb := range k.b.edges {
-			if err := check(); err != nil {
-				return nil, err
-			}
-			k.feCell(fa, eb, sink)
-		}
-	}
-	for _, fb := range k.b.faces {
-		for _, ea := range k.a.edges {
-			if err := check(); err != nil {
-				return nil, err
-			}
-			k.feCell(fb, ea, sink)
-		}
-	}
-	for _, ea := range k.a.edges {
-		for _, eb := range k.b.edges {
-			if err := check(); err != nil {
-				return nil, err
-			}
-			k.eeCell(ea, eb, sink)
+			d := va.Sub(vb).Len()
+			sink.candidate(k, 1, d, d, true, va, vb)
 		}
 	}
 	for _, va := range k.a.verts {
@@ -163,13 +245,26 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 			return nil, err
 		}
 	}
-	for _, va := range k.a.verts {
-		for _, vb := range k.b.verts {
-			if err := check(); err != nil {
-				return nil, err
-			}
-			d := va.Sub(vb).Len()
-			sink.candidate(k, 1, d, d, true, va, vb)
+	cells, err := k.featureCells(budget)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range cells {
+		if err := check(); err != nil {
+			return nil, err
+		}
+		if sink.pruned(c.lb) {
+			continue
+		}
+		switch c.kind {
+		case cellFF:
+			k.ffCell(k.a.faces[c.i], k.b.faces[c.j], sink)
+		case cellFE:
+			k.feCell(k.a.faces[c.i], k.b.edges[c.j], sink)
+		case cellEF:
+			k.feCell(k.b.faces[c.i], k.a.edges[c.j], sink)
+		default:
+			k.eeCell(k.a.edges[c.i], k.b.edges[c.j], sink)
 		}
 	}
 	if k.err != nil {
@@ -182,6 +277,52 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 		sink.unsure = true
 	}
 	return sink, nil
+}
+
+// featureCells queues every face × face, face × edge, edge × face and
+// edge × edge cell with its box distance, sorted ascending. The sort is
+// stable, so ties keep the queue's own fixed order.
+func (k *pairKernel) featureCells(budget *proofbound.WorkBudget) ([]featureCell, error) {
+	a, b := k.a, k.b
+	n := len(a.faces)*(len(b.faces)+len(b.edges)) + len(b.faces)*len(a.edges) + len(a.edges)*len(b.edges)
+	cells := make([]featureCell, 0, n)
+	push := func(kind uint8, i, j int, boxA, boxB [2]r3.Vec) error {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		cells = append(cells, featureCell{lb: clrBoxDist(boxA, boxB), kind: kind, i: i, j: j})
+		return nil
+	}
+	for i, fa := range a.faces {
+		for j, fb := range b.faces {
+			if err := push(cellFF, i, j, fa.box, fb.box); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for i, fa := range a.faces {
+		for j, eb := range b.edges {
+			if err := push(cellFE, i, j, fa.box, eb.box); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for i, fb := range b.faces {
+		for j, ea := range a.edges {
+			if err := push(cellEF, i, j, fb.box, ea.box); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for i, ea := range a.edges {
+		for j, eb := range b.edges {
+			if err := push(cellEE, i, j, ea.box, eb.box); err != nil {
+				return nil, err
+			}
+		}
+	}
+	slices.SortStableFunc(cells, func(x, y featureCell) int { return cmp.Compare(x.lb, y.lb) })
+	return cells, nil
 }
 
 // ffCell dispatches one face pair through the §4 table.

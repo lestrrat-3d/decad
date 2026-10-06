@@ -175,8 +175,15 @@ local minimum, the global one included, is a candidate in exactly one tier:
 | edge interior × vertex | foot of the point on the curve | point–curve, closed form for all three curves |
 | vertex × vertex | — | a distance |
 
+The enumeration walks its cells in a fixed order, so a replay prunes (§5)
+the same cells: the vertex × vertex distances first, then each vertex against the
+other body's faces and edges, then every face × face, face × edge and
+edge × edge cell, sorted ascending by the distance between the two features'
+boxes, ties kept in that kind order.
+
 Tier enumeration uses one shared work counter for cancellation. Every outer
-face, edge and vertex cell steps it; a vertex tier continues that same counter
+face, edge and vertex cell steps it, and so does queueing each face/edge cell
+for the sort; a vertex tier continues that same counter
 through each inner face and edge. Planar vertex admission also steps it for
 every boundary-distance element, retry direction and winding element. The
 counter polls the context at least once per 256 combined operations and at the
@@ -418,11 +425,47 @@ Two upgrades and one downgrade close the table:
   failure is a loose bound — it costs refinement, never soundness — the same
   one-sided discipline as verification §4's noise floor, which may sit too
   low but never too high.
-- **Pruning reads the bounds it just proved.** A face pair or subdomain whose
-  lower bound exceeds the current best upper bound cannot hold the minimum
-  and is dropped; because the bound is conservative, pruning never discards
-  the argmin. Body boxes prune first (the shipped `boxesDisjoint` machinery),
-  then per-face enclosures, then subdomains.
+- **Pruning reads the bounds it just proved.** Body boxes prune first (the
+  shipped `boxesDisjoint` machinery), then cells. The enumeration (§3) keeps
+  `H`, the least `hi` among the contributions so far, and skips a vertex ×
+  face, vertex × edge, face × face, face × edge or edge × edge cell when
+  `b − m > H` STRICTLY. Here `b` is the distance between the two features'
+  boxes, and `m` is the kernel's slack, `1e-9 ×` the pair's coordinate
+  scale. The vertex × vertex distances are never skipped. The argument:
+  - every point of the two features lies inside its box, up to a few ulps
+    of box and distance rounding, which `m` covers many times over (the
+    same boxes, at the same margin, already exclude crossings in §4), so
+    every point pair of the cell lies at least `b − m` apart;
+  - every contribution's `hi` is an admitted witness (above), so
+    `H ≥ Gap`;
+  - so a skipped cell's features lie more than `H ≥ Gap` apart. The point
+    pair that attains `Gap` lies in a feature pair whose `b − m` is at most
+    `Gap ≤ H`, and that cell is never skipped. By §3's completeness its
+    candidate still reaches the sink, so `lo ≤ Gap` still holds, and every
+    `hi` still bounds `Gap` from above;
+  - a crossing needs two features at distance zero, whose boxes lie within
+    `m` of each other, so no cell that could set `overlap` is ever skipped.
+
+  A cell at exactly `b − m = H` runs: equality never prunes.
+
+  Because every face/edge cell nearer than a given one runs before it, the
+  face/edge walk skips exactly the cells with `b − m` above the final least
+  `hi`. A vertex cell is skipped against the `H` in hand when it runs.
+
+  Pruning never changes the least upper bound, the `overlap` finding or the
+  pair diameter. Three outputs can change, each only toward a tighter or
+  more decided answer:
+  - a skipped cell no longer adds a lower bound below `H` through a loose
+    bracket, so the row's `lo` can rise and its `Bound` shrink;
+  - for the same reason, a closed-form winner whose only rival below it
+    was a skipped cell reads `Exact` where the full walk would read
+    `Approximate`. The skipped rival is proven above the winner;
+  - a skipped cell no longer sets `unsure` (an uncertified bracket, a
+    degeneracy the oracle cannot decide, an arithmetic-range refusal) for
+    features proven farther apart than the minimum. A pair the full walk
+    would leave undecided then goes on to the widening and the nesting cast
+    like any other, and can read decided, with the report's rows, status
+    and diagnostics following.
 - **Refinement stops at the caller's own gate.** Subdivision runs until
   `(hi − lo)/2 ≤ rel × max(lo, δ)` — the verification §2/§5 test evaluated
   conservatively from below — because figures past the gate change no
