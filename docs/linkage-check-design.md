@@ -4,7 +4,8 @@ How `Document.VerifyLinkage` answers "does any link of this mechanism hit a fixt
 the joints move?" without changing the document: where the capability sits (§1), the linkage vocabulary
 (§2), the entry point (§3), the report (§4), what a pose and an interval prove for a chain of joints (§5),
 the procedure (§6), coverage (§7), errors (§8), what is deferred and why (§9), cost (§10), required tests
-(§11), increments (§12) and settled points (§13). Companion to `docs/motion-check-design.md` ("motion §N"),
+(§11), increments (§12), settled points (§13), and the joint-box check `Document.VerifyJointBox`, which
+proves a whole box of joint values clear cell by cell (§14). Companion to `docs/motion-check-design.md` ("motion §N"),
 which owns the one-mover check this design generalises and every proof piece it reuses; to
 `docs/api-design.md` ("core §N"); to `docs/verification-design.md` ("verification §N"), which owns `Status`,
 `Diagnostic` and the result vocabulary; and to `docs/clearance-design.md` ("clearance §N") and
@@ -38,7 +39,7 @@ The layering rule holds: `decad -> sketch -> r3 -> units`. Every joint pose is `
 | Out of scope for v1 | Where it goes |
 |---|---|
 | Closed loops (a four-bar, a slider-crank) | §9.1: deferred until `sketch` certifies a solved configuration |
-| A box of joint values (a multi-DOF workspace sweep) | §9.2: a later increment over the same travel bound |
+| A box of joint values (a multi-DOF workspace sweep) | §14: `VerifyJointBox`, a second entry point over the same travel bound |
 | Screw, cylindrical, spherical and planar joints; a joint driven by a caller-supplied transform | a later addition to the sealed `Joint` set |
 | Dynamics, forces, time | the `dynamics` subpackage |
 | Drawing the mechanism | a module above decad that calls `Linkage.PoseAt` (§2.4) |
@@ -189,7 +190,7 @@ This is option (a) of the two the design weighed: one scalar drives every joint 
 It is the natural extension of `VerifyMotion`, whose `Between` already proves a path over a dimensionless
 fraction, and it covers the question a mechanism designer asks first — "does this coordinated motion
 clear?" — with the interval certificate unchanged in form. Option (b), proving a whole box of joint values
-clear, is §9.2.
+clear, is the second entry point of §14.
 
 ### 2.4 The pose
 
@@ -475,7 +476,8 @@ reads `AssessmentViolated`. This is motion §6 step 3's outcome for a swept-box-
 
 ### 5.6 What is never claimed
 
-- Nothing about `s` outside `[0, 1]`, nothing about a configuration the drive does not visit (§9.2).
+- Nothing about `s` outside `[0, 1]`, nothing about a configuration the drive does not visit (§14 is the
+  check over a box of them).
 - Nothing between two bodies of one link.
 - Nothing continuous about a declared joint contact (§5.4).
 - Nothing about a closed loop: v1 builds trees only, and a caller who drives two joints to keep an
@@ -612,11 +614,9 @@ speaks for that stated motion, not for closure (§5.6).
 
 ### 9.2 A box of joint values
 
-Proving every configuration in `[Min_1, Max_1] × … × [Min_n, Max_n]` clear is the same certificate over a
-grid in `n` dimensions: §5.2's `τ` already bounds travel for any change of several joints at once, so a
-box bisected per axis to a resolution floor certifies cell by cell with the same `lo + lo > τ` test at its
-`2^n` corners. The cost is exponential in `n` and the report needs a cell vocabulary; it is a later
-increment that adds a second entry point and changes nothing here.
+Proving every configuration in `[Min_1, Max_1] × … × [Min_n, Max_n]` clear is §5.2's travel bound over
+cells of joint space instead of intervals of one parameter. It is a second entry point,
+`VerifyJointBox`, designed in §14 and landing as §14.9's increments; it changes nothing in §1–§8.
 
 ### 9.3 A tighter `ρ` for parallel axes
 
@@ -881,8 +881,9 @@ and a public multi-body primitive carrying rational-interval ideal poses is not 
 (§1). Links are sets of bodies and joints attach a link to its parent; the zero pose is the document as
 it stands; joint frames are world coordinates at the zero pose (§2.1). v1's joints are revolute and
 prismatic; there is no fixed joint, because a rigidly attached part is listed in its link (§2.1). The
-drive is one dimensionless fraction with a piecewise-linear schedule per joint; a box sweep is a later entry point
-(§2.3, §9.2). Closed loops wait on a certified solve from `sketch`; decad never admits an uncertified one
+drive is one dimensionless fraction with a piecewise-linear schedule per joint; a box of joint values is the
+second entry point `VerifyJointBox` (§2.3, §14). Closed loops wait on a certified solve from `sketch`; decad
+never admits an uncertified one
 (§9.1). Joint contacts are declared by the caller per pair, listed in the report, and still checked for
 overlap at every pose (§2.2, §5.4). The travel bound is the telescoping joint-by-joint sum with ball
 enclosures read down the chain, over exact rationals (§5.2); a pair's bound sums only the joints below the
@@ -892,3 +893,425 @@ separated, is settled before any pose by an exact layer exclusion (§5.7). A dri
 through waypoints stated per joint as `Via` values, each segment an equal share of `s`, and an interval
 holding a waypoint takes each joint's travel on both sides of it (§2.3, §5.2). The options and the report
 vocabulary are `VerifyMotion`'s (§3, §4).
+
+## 14. The joint box
+
+`Document.VerifyJointBox` answers "is every configuration in this box of joint values clear?" — the
+question §9.2 defers — with the same per-pose kernel, the same travel bound and the same report
+vocabulary as `VerifyLinkage`, over cells of joint space instead of intervals of one parameter. A drive
+is one path through joint space; a box is every configuration in `[Min_1, Max_1] × … × [Min_n, Max_n]`
+of the joints the caller varies, with the other joints held. Everything §1–§8 states holds here unless
+this section says otherwise, with "the drive's range" read as "the box": a joint's reach `m_i` is
+`max(|Min_i|, |Max_i|)`, and a held joint's reach its held value.
+
+### 14.1 The entry point
+
+```go
+// JointBox is a box of joint values. A listed joint ranges over [Min, Max]
+// when Min < Max and holds at Min when Min == Max; an unlisted joint holds 0.
+type JointBox []JointRange
+
+type JointRange struct {
+    Link     *Link
+    Min, Max units.Value // the joint's Kind: Angle for a revolute, Length for a prismatic
+}
+
+func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox, opts ...JointBoxOption) (*JointBoxReport, error)
+
+// JointBoxOption configures VerifyJointBox. Every MotionOption is one.
+type JointBoxOption interface{ /* sealed, option.Interface */ }
+
+// MotionOption configures VerifyMotion and VerifyLinkage; it embeds
+// JointBoxOption, so the three shared options pass to VerifyJointBox unchanged.
+type MotionOption interface { JointBoxOption /* sealed */ }
+
+// WithCellBudget caps the number of cell centres the check evaluates
+// (§14.4); default 16384. cells < 1 is ErrDegenerate.
+func WithCellBudget(cells int) JointBoxOption
+
+// JointConfiguration is one point of joint space: every link's joint value
+// and world pose, in Linkage.Links() order.
+type JointConfiguration struct {
+    Values []units.Value
+    Poses  []r3.Transform
+}
+
+// Configuration builds every link's pose at the stated joint values, one per
+// link in Links() order; it composes exactly as PoseAt composes (§2.4).
+func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error)
+```
+
+A **varying** joint is a listed joint with `Min < Max`; `n` is their count. A box with no varying joint
+names one configuration, which `PlacedCopy` then `Verify` already answers, and is `ErrDegenerate`, as a
+drive in which every sweep holds is. `Min > Max` is `ErrDegenerate`: a box has no sense of traversal, so
+nothing is run the other way. A range's `Kind`, finiteness and limits are checked as a sweep's are (§2.4):
+both ends inside the joint's declared limits put the whole range inside them, and an unlisted joint whose
+limits exclude `0` is refused with a message naming the link. A link named twice is `ErrDegenerate`.
+
+`WithMotionTolerance`, `WithResolution` and `WithMinClearance` keep §3's meanings. The resolution is a
+`Dimensionless` fraction **of each varying joint's own range**: `WithResolution(Scalar(1.0/64))` lets no
+cell be narrower than `(Max_i − Min_i)/64` along joint `i`, whatever its `Kind`. Unstated, the verdict
+floor is `Scalar(1.0/1024)` and the reading floor `Scalar(1.0/16384)` per axis, as §3 fixes them for a
+drive; stated, one value is both floors. `WithCellBudget` is the box's own: the sealed set is widened by
+making every `MotionOption` a `JointBoxOption`, so passing the budget to `VerifyMotion` or `VerifyLinkage`
+does not compile, and no runtime refusal is needed. `Configuration` refuses a value count other than
+`len(Links())` (`ErrDegenerate`), a wrong `Kind` (`ErrUnitKind`), a non-finite value (`ErrNotFinite`), a
+value outside its joint's limits (`ErrDegenerate`, naming the link) and a pose `r3` cannot represent
+(`ErrNotFinite`). It is the one place a configuration's poses are built, so a renderer drawing a cell's
+corner and the verifier evaluating its centre read the same transform; `PoseAt` is `Configuration` of the
+drive's values at `s`.
+
+One joint varying is legal and is not what the box is for: a drive over the same range costs about half
+the poses — an interval's endpoint serves two intervals, a cell's centre serves one cell (§14.3) — and
+brackets the onset of a collision, which §14.4 does not. `VerifyLinkage` stays the entry point for one
+parameter.
+
+### 14.2 The report
+
+```go
+type JointBoxReport struct {
+    Request           JointBoxRequest   // the validated effective settings, including defaults
+    ReadingResolution units.Value       // the reading floor (§14.1)
+    Linkage           *Linkage
+    Box               JointBox          // as stated
+    Links             []*Link           // Linkage.Links() order
+    Against           []*Body           // every static body, in Document.Bodies() order
+    JointContacts     []DiagnosticPair  // every declared joint contact, in declaration order
+    Cells             []JointCellResult // the leaves of the subdivision, in cell order (§14.4); they tile the box
+    CellsEvaluated    int               // every centre evaluated, split cells included
+    Collisions        []JointBoxCollision // every proven collision at every evaluated centre, in evaluation order
+    Clearance         *ScalarReading    // the minimum gap over the whole box; nil unless every cell is CellClear
+    Assessment        Assessment        // against WithMinClearance
+    Diagnostics       []Diagnostic      // per leaf its centre's findings then its own, in cell order; then split cells' collisions; then the budget's; then the reading's
+    Status            Status
+}
+
+func (r *JointBoxReport) Passed() bool // Status == Sound
+
+type JointBoxRequest struct {
+    RelativeTolerance units.Value
+    Resolution        units.Value  // Dimensionless, per axis
+    MinClearance      *units.Value // non-nil exactly when requested
+    CellBudget        int
+}
+
+// JointCell is a box of joint values inside the stated box: per link, in
+// Links() order, the least and greatest value the cell holds. A held or
+// unlisted joint has Min == Max.
+type JointCell struct {
+    Min, Max []units.Value
+}
+
+type JointCellResult struct {
+    Cell          JointCell
+    Outcome       CellOutcome
+    Center        JointConfiguration // the evaluated centre
+    Interferences []Interference     // at the centre; A moves, B is static or belongs to a later link
+    Clearances    []Clearance        // at the centre, the same A/B rule
+    Diagnostics   []Diagnostic       // the centre's undecided or unsupported pairs, and the cell's own finding
+    Clearance     *Measurement       // a proven lower bound on the gap over the whole cell; nil unless CellClear
+}
+
+type CellOutcome int
+// CellNotEvaluated | CellClear | CellBlocked | CellColliding | CellUndecided
+
+// JointBoxCollision is a proven overlap at an evaluated centre, about the ideal
+// poses (§5.1), with the configuration as its witness.
+type JointBoxCollision struct {
+    Configuration JointConfiguration
+    A, B          *Body
+    Volume        Measurement
+}
+```
+
+| Outcome | Claim |
+|---|---|
+| `CellClear` | at EVERY configuration of the cell, every undeclared evaluated pair has disjoint interiors, and every declared pair is free of transferred overlap at the centre; `Clearance` is a proven lower bound on the gap over the cell (§14.3) |
+| `CellBlocked` | at EVERY configuration of the cell, some pair overlaps (§14.3); the centre's collisions are its witnesses |
+| `CellColliding` | a proven collision sits at the centre; nothing is claimed about the rest of the cell. The floor or the budget stopped the split that would have told more |
+| `CellUndecided` | none of the above: the centre certifies nothing and the floor or the budget stopped the split |
+
+`CellNotEvaluated` is the zero value and never appears in a returned report: every published cell's centre
+was evaluated (§14.4). `Interference`, `Clearance`, `Diagnostic`, `ScalarReading`, `Assessment` and the
+pair order of §4 are reused as they are; `A` is the earlier body in that order. The four `DiagMotion*`
+codes carry the same findings: a `CellUndecided` cell raises `DiagMotionUndecidedInterval`, a `CellClear`
+cell whose bound does not reach a requested margin `DiagMotionUndecidedClearance`, a centre's transferred
+overlap `DiagMotionCollision`, and a centre's gap below the margin `DiagMotionClearanceViolated`. One code
+is added: `DiagJointBoxBudgetExhausted` (`joint_box_budget_exhausted`, `Suspect`, raised at most once, with
+`Pair`, `Body` and `Cell` nil) says that `WithCellBudget` stopped a split the floor would have allowed, and
+its `Message` names the budget and the cells it held.
+
+**`Diagnostic` gains one field.** `Cell *JointCell` is the cell a joint-box finding concerns: for a cell
+finding the cell itself, for a centre finding the cell whose centre was evaluated — which may since have
+been split, so it need not be in `Cells`. It is nil on every diagnostic `Verify`, `VerifyMotion` and
+`VerifyLinkage` emit, and on the budget and reading findings. It is additive, as `At` was (motion §4.1),
+and `report.go` owns it; verification §1.1 gains the one-line statement that it exists. `At` is nil in a
+joint-box report: a cell has no scalar parameter.
+
+`Cells` lists the leaves of the subdivision and nothing else, so they tile the box exactly, as
+`Intervals` tile `[0, 1]`. A split cell's centre is gone from `Cells`, but a collision proven there is a
+fact the caller asked for, so `Collisions` keeps every transferred collision at every evaluated centre, and
+`Diagnostics` keeps their `DiagMotionCollision` findings; a split cell's other centre findings are not
+published, because its leaves carry their own.
+
+### 14.3 What a cell proves
+
+**Travel over a cell.** For a cell `C = Π [a_i, b_i]` with centre `m`, and a configuration `q` in `C`,
+§5.2's telescoping bound moves one joint at a time from `m` to `q`: a point of link `k` travels at most
+`Σ_i w_i·|q_i − m_i|`, with `w_i = ρ_{ik}` for a revolute joint `i` on the link's path and `1` for a
+prismatic one. `ρ_{ik}` is read over the whole box (`readLinkBounds` with `m_i = max(|Min_i|, |Max_i|)`),
+so one reading serves every cell. Since `|q_i − m_i| ≤ (b_i − a_i)/2`,
+
+```text
+τ_half(C) = ½ · Σ_i w_i · span_i(C),    span_i = MotionParam.SpanUpper of the cell's two ends along joint i
+```
+
+bounds the travel of every point of the link from the centre to any configuration of the cell. For a pair
+the sum runs, as in §5.2, over the joints strictly below the two links' lowest common ancestor on each
+branch, each body with its own `ρ`; a (link body, static) pair sums every joint on the body's path. A held
+joint has `span_i = 0` and contributes nothing; its value still enters the balls, as a held sweep's does.
+
+**The centre certificate.** With `lo_m` the proven lower end of the pair's gap at the centre after `η`
+(§5.1), the 1-Lipschitz fact of motion §5.2 gives `gap(q) ≥ lo_m − τ_half` for every `q` in `C`, so the
+cell is clear for the pair exactly when
+
+```text
+lo_m > τ_half(C)      (compared over exact rationals; lo_m the float the pose proved)
+```
+
+and its proven lower bound over the cell is `lo_m − τ_half`, rounded down. The cell is `CellClear` when
+every undeclared evaluated pair certifies and no declared pair collides at the centre; an excluded pair
+(§5.7, §6 step 4) contributes its proven lower bound and nothing else. A touching or undecided centre
+certifies nothing for that pair, as a touching endpoint does (motion §5.2).
+
+**Why the centre and not the corners.** §9.2's sketch evaluated a cell's `2^n` corners. Both forms rest on
+the same `τ_half`: from any configuration of the cell, the nearest corner is at most `τ_half` away in the
+weighted travel metric, and so is the centre. The corner form certifies on `min_c lo_c > τ_half`; the
+centre form on `lo_m > τ_half`. For a gap that is linear across the cell the two sides agree to first
+order, and for one that bows the centre reading is the one that is not pulled down by the farthest
+corner. The costs differ: a centre is one pose per cell, while bisecting one axis of a cell adds
+`2^(n−1)` new corners, so corners cost `2^(n−1)` poses per split even when shared between neighbours — equal
+at `n = 2`, double at `n = 3`. The centre is taken. What corners would buy is the mixed-cell rule of §6
+step 5 (some corners colliding, some clear ⇒ the boundary passes through); the blocked certificate below
+replaces it on the colliding side, and the floor brackets the boundary on the clear side.
+
+**The blocked certificate.** The overlap volume of two bodies changes, along any path in joint space, at a
+rate bounded by each body's surface area times its speed: the derivative of `vol(M_a ∩ M_b)` is the
+integral over the part of `∂M_a` inside `M_b` of the normal velocity, plus the same for `M_b`, so
+`|Δvol| ≤ A_a·(travel of a) + A_b·(travel of b)`, with `A` the proven upper bound on the body's area at
+rest (`motionMover.area`; a rigid motion preserves it). On the straight joint-space segment from `m` to
+`q`, a point of link `k` moves at speed at most `Σ_i w_i·|q̇_i|` — the instantaneous form of the
+telescoping bound, the velocity under joint `i` alone being `|q̇_i|·dist(y, axis_i) ≤ |q̇_i|·ρ_{ik}` with the
+prefix an isometry — so its travel is at most `τ_half`. A pair whose transferred collision at the centre
+has `V_lo = Volume.Value − Volume.Bound` (the published bound, `η`'s allowance already in it) therefore
+overlaps at every configuration of the cell when
+
+```text
+V_lo > SweptVolumeAllow(τ_half(a), A_a) + SweptVolumeAllow(τ_half(b), A_b)
+```
+
+with each term `proofbound.SweptVolumeAllow`'s up-rounded product, the right side read back as exact
+rationals and the comparison exact; `τ_half(b)` is `0` for a static partner. A cell with such a pair,
+declared or not, is `CellBlocked`, and is not split: the question inside a proven collision is answered.
+A colliding centre whose volume does not clear the allowance leaves the cell `CellColliding` until a split
+produces children whose centres decide more, or the floor stops it.
+
+**Declared pairs, exclusions, held links and limits** are §5.4, §5.7, §6 steps 2 and 4, and §2.4 verbatim
+over the box: a declared pair runs at every centre, publishes a transferred collision and a measured gap
+row, enters no certificate, and claims nothing continuous; a link whose path joints all hold `0` stands as
+static and forms no pair against a static body; a link whose path joints all hold is one constant
+placement; the swept-box exclusion grows each body's rest box by its link's reach `Σ ρ_{ik}·m_i` over the
+box; the layer exclusion admits a direction every varying joint on the relative path keeps. The settled
+pairs are settled before any cell, and `settlePairs` runs unchanged.
+
+**What is exact, what is bounded.** §5.3's table holds. `span_i` for an angle carries `π` at its upper
+enclosure; every product and sum in `τ_half` and the allowance is `big.Rat` arithmetic; a cell's ends and
+centre are dyadic fractions of each range, exact in float, and each joint's value at the centre is the
+label `motionDomain.label` gives a pose at that fraction, while every bound reads the exact
+`Min_i + f·(Max_i − Min_i)`.
+
+### 14.4 The procedure
+
+1. **Validate** (§14.1, §14.6) before reading `ctx`.
+2. **Resolve each link's standing, read the bounds, settle pairs** as §6 steps 2–4 over the box.
+3. **Evaluate the root.** The whole box is one cell; its centre is evaluated as §5.1 evaluates a pose,
+   under the link poses `Configuration` builds and the ideal poses `MotionFrame.At` composes at the exact
+   centre values. The root's centre is always evaluated, so declared pairs are checked at least once.
+4. **Classify** the cell from its centre: `CellBlocked` when the blocked certificate holds for some pair;
+   else `CellColliding` when some pair collides there; else `CellClear` when every pair certifies; else
+   `CellUndecided` for now.
+5. **Split for the verdict.** A cell is **splittable** when it is `CellUndecided` or `CellColliding` and
+   some varying joint's span is wider than the verdict floor. Its split axis is the varying joint
+   maximising `w_i·span_i` over the pairs that held the cell back — the uncertified pairs of an undecided
+   cell, the colliding pairs of a colliding one — ties to the earliest link, among the axes wider than the
+   floor; halving that axis lowers `τ_half` the most for the pair that needs it. Among the splittable
+   cells, the next to split is the **shallowest first, then earliest in cell order**: level by level, so
+   that a budget that runs out leaves the whole box examined coarsely rather than one corner finely. The
+   cell is replaced in place by its two halves, lower half first, each with its centre evaluated and
+   classified; **cell order** is that left-to-right order of the subdivision tree, and `Cells` lists the
+   leaves in it. A cell no centre can certify — one held back by a pair that is never evaluated, an
+   invalid operand or a sheet (§7) — is not split: it is published `CellUndecided` with that pair's own
+   finding, since no split changes the pair's standing.
+6. **Split for the reading and the margin**, once no splittable cell remains: while every leaf is
+   `CellClear` and the whole-box reading would fail the tolerance gate, split the clear cell holding the
+   smallest lower bound (ties in cell order) along the axis maximising `w_i·span_i` for the pair that
+   attained it, while that axis is wider than the reading floor; and while a requested margin is neither
+   proven by every cell's bound nor disproven by some centre's `hi`, split the same cell on the same terms
+   while the axis is wider than the verdict floor. A child evaluated here is an ordinary cell: it can
+   collide, be blocked, or be undecided, and step 5 then resumes on it.
+7. **The budget.** Every split evaluates two centres. When fewer than two evaluations remain of
+   `WithCellBudget`, no cell is split: each stands as classified, and the report raises
+   `DiagJointBoxBudgetExhausted` once. A budget of `1` evaluates the root alone.
+8. **Publish** (§14.2). `Status` is verification §6's worst-wins aggregate over the findings; `Assessment`
+   is `AssessmentViolated` when some centre proves `hi < minimum`, else `AssessmentMet` when every leaf is
+   `CellClear` with a bound at or above the minimum, else `AssessmentUndecided`; `Clearance` is present
+   only when every leaf is `CellClear`, and is motion §5.3's reading with the leaves' bounds as the lower
+   end and the smallest evaluated `hi` as the upper end.
+
+`ctx` is checked before every centre and inside every kernel call. The subdivision is a deterministic
+function of the inputs — dyadic cells, a fixed split rule, a fixed order — so two calls on the same inputs
+return reports equal in every field. The pose count is `CellsEvaluated ≤ CellBudget`.
+
+### 14.5 What is never claimed
+
+§5.6 holds, and in addition:
+
+- Nothing about a configuration outside the box.
+- Nothing about a `CellColliding` cell beyond its centre, and nothing about a `CellUndecided` cell. The
+  boundary of the colliding region is bracketed by the undecided and colliding leaves around it, to the
+  floor or the budget, and never reported as a curve.
+- A `CellBlocked` cell claims overlap of SOME pair at every configuration; it does not claim that the pair
+  found at the centre is the one overlapping everywhere when several collide there — the certificate is
+  per pair, and the report names the pairs that held it.
+- No tolerance decides admission: every comparison above is a strict inequality over bounds rounded
+  against the claim.
+
+### 14.6 Errors
+
+`VerifyJointBox` returns `(*JointBoxReport, error)` by core §12. §8's table holds with "drive" read as
+"box" and "sweep" as "range", and these rows are added or changed:
+
+| Condition | Error |
+|---|---|
+| a box with no varying joint; a range with `Min > Max`; a link named twice | `ErrDegenerate` |
+| `WithCellBudget` below `1` | `ErrDegenerate` |
+| `Configuration` with a value count other than `len(Links())`, or a value outside its joint's limits | `ErrDegenerate` |
+| a sheet, an invalid operand, an undecided pair, a floor or a budget reached | a finding, never an error |
+
+### 14.7 Cost
+
+Each centre costs one pose, as §10 prices it: about `3` ms for the three-joint arm's four pairs. Cells
+certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells of weighted side about
+`2g/Σ_i w_i·range_i` per axis and the leaf count grows as the product over axes.
+
+- **Two joints.** Scene 6 (§14.8): the crane's boom under the mast's quarter turn (`ρ ≈ 91`) and a `30`
+  mm slide, so `τ_half` at the root is `½·(91·(4π/9) + 30) ≈ 79` mm. At `WithResolution(Scalar(1.0/64))`
+  the leaves number at most `4096`; the estimate is a few hundred clear leaves, about `90` undecided leaves
+  along the boundary curve, and the colliding side split until the blocked certificate closes — about
+  `1000`–`2000` centres, `3`–`6` s. The test records the measured count.
+- **Three joints.** The three-joint arm of §10 over three quarter turns has `τ_half ≈ 236` mm at the root;
+  a `10` mm gap everywhere needs cells of about `1/24` per axis, `24³ ≈ 14000` leaves and twice that many
+  centres, at the edge of the default budget: the default run reaches depth `14`, about `1/20` per axis,
+  and raises the budget finding. A caller who wants that box proven states `WithCellBudget(65536)` and
+  waits about three minutes, or holds one joint. The layer exclusion is what makes a planar stack cheap: a
+  pair it settles costs no cell, and scene 1's arms without the wall read `Sound` from the root alone.
+- **The reading.** Around an isolated minimum, step 6 costs about `n·log₂(1/ReadingResolution)` splits;
+  a gap constant along one axis makes every cell along it tie, and the cost is linear in that axis's cell
+  count, capped by the budget.
+
+### 14.8 Required tests
+
+§11's standard holds: every assertion is on computed geometry through the production path, every bound
+is `InDelta` at a stated slack, and each guarding leg is deleted once and seen to fail.
+
+**Scene 6 — the crane's box (the acceptance target).** Scene 3's mast and boom, the mast turning
+`θ ∈ [0°, 80°]` and the boom sliding `d ∈ [0, 30]` mm, against a wall `x ∈ [−100, 150], y ∈ [62, 82],
+z ∈ [30, 100]`. The boom's `+5` tip corner sits at `y(θ, d) = (60 + d)·sin θ + 5·cos θ`, which increases
+in `d` and, since `∂y/∂θ = (60 + d)·cos θ − 5·sin θ > 0` for `θ < 85.2°`, in `θ` over the whole box. The
+colliding region is therefore `{y(θ, d) > 62}`, closed toward larger `θ` and `d`, and its boundary is the
+one curve `d*(θ) = (62 − 5·cos θ)/sin θ − 60`, from `θ* = asin(62/√(90² + 5²)) − atan(5/90) ≈ 40.29°` at
+`d = 30` to `d* ≈ 2.075` at `θ = 80°`. The `(mast, boom)` pair is settled by the layer exclusion along `Z`
+and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, wall)` alone. At
+`WithResolution(Scalar(1.0/64))` assert:
+
+- `Status` is `Interfering`; the leaves tile the box: their fraction extents sum to `1` and no two overlap;
+  every leaf's `Center` is the midpoint of its `Cell`.
+- Every `CellClear` leaf has `y < 62` at its `(Max θ, Max d)` corner — monotonicity makes that corner the
+  whole cell's worst — and its `Clearance.Value` at or below `62 − y` there, the true minimum gap over the
+  cell. This is the leg that goes red when `τ_half` is halved again or a joint's term is dropped from it.
+- Every `CellBlocked` leaf has `y > 62` at its `(Min θ, Min d)` corner; every `CellColliding` leaf has
+  `y > 62` at its centre; every `CellUndecided` leaf, grown by its own width along each axis, has `y < 62`
+  at its lower corner and `y > 62` at its upper one — the boundary curve passes within one cell of it.
+- Every `JointBoxCollision` has `y > 62` at its configuration; where the corner's depth `δ = y − 62` is
+  below `10·cos θ`, `50·sin θ` and `20`, so that only the one corner has crossed, its `Volume` is the
+  triangular prism `10·δ²/(2·sin θ·cos θ)` within `1e-6`, `Bound` below `Value`; at least one collision is
+  that shallow.
+- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised. The test
+  file records the measured count.
+- `examples/` gains `Example_decad_jointBox` on this scene at `WithResolution(Scalar(1.0/16))`, printing
+  `Status`, the first collision's bodies and its `θ` and `d` to two decimals; the centres are dyadic, so
+  the printed values hold on every platform.
+
+**The clear box and its reading.** The same box with the wall moved to `y ∈ [100, 120]`: the minimum gap
+over the box is `100 − y(80°, 30) = 100 − 90·sin 80° − 5·cos 80° ≈ 10.499` mm, at the box's corner.
+Assert `Sound`, every leaf `CellClear`, `Clearance` enclosing `10.499` with `ToleranceSatisfied` at the
+defaults, `ReadingResolution` `1/16384`, some leaf narrower than `1/1024` along `θ`; `WithMinClearance`
+`10` mm `AssessmentMet`, `11` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose `Cell` is
+set. At `WithResolution(Scalar(1.0/64))` the reading is beyond tolerance and the report `Suspect` with no
+leaf narrower than `1/64`; red when a stated resolution leaves the reading floor at its default.
+
+**The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
+so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
+overlap `100·20/sin θ ≈ 2071` mm³ against a boom area of `2200` mm², so the blocked certificate closes
+once `τ_half` falls under about `0.9` mm — cells of `1/32` along `θ` and `1/8` along `d`. Assert every leaf
+`CellBlocked`, `CellsEvaluated` below `1024`, no undecided or merely colliding leaf. Red when the blocked
+certificate is dropped: the run then splits to the floor, exhausts the budget, and reads `CellColliding`
+with `DiagJointBoxBudgetExhausted`.
+
+**The budget.** Scene 6 at `WithCellBudget(16)`: `CellsEvaluated ≤ 16`, `DiagJointBoxBudgetExhausted`
+raised once, some leaf wider than the floor that is `CellUndecided` or `CellColliding`, every leaf's centre
+evaluated. At `WithCellBudget(1)`: one leaf, the whole box, its centre `(40°, 15)` clear
+(`y = 75·sin 40° + 5·cos 40° ≈ 52.0`), outcome `CellUndecided`.
+
+**One varying joint.** Scene 2's elbow as the box `[0°, 180°]` with the shoulder unlisted: `Interfering`;
+every `CellClear` leaf ends at or below `s* ≈ 0.6844` of the range, every `CellBlocked` leaf begins above
+it, and the `(A, B)` declared pair raises no finding. The leg that a held joint contributes nothing to
+`τ_half` while its value enters the balls: scene 4b's blade held at `180°` on its own joint, the hub's
+joint the one varying joint over `[0°, 90°]`, at `WithResolution(Scalar(1.0/900))` reads `Interfering`
+with a witness within `0.41/90` of `31/64` of the range.
+
+**Standing tests.** Errors, one subtest per row of §14.6 and per shared row of §8; non-mutation and
+determinism; cancellation; pose deviation charged at a centre; `Configuration` pinned against scene 1's
+closed-form point and against `PoseAt` at `s = 1/3`. Internal tests in `linkage_internal_test.go` pin
+`τ_half` for scene 6's root against `½·(ρ·(4π/9) + 30)` with `ρ` the ball reading, each joint's term red
+when dropped; the split-axis choice (the `θ` axis first at the root, since `91·(4π/9) > 30`); the
+shallowest-first order on a hand-built tree; and the blocked allowance as `A·τ_half` per moving body, red
+when a static partner is charged an area or a moving one is not.
+
+`.github/test-shards.txt` and `.github/test-shards-apitest.txt` are updated for every test and example,
+and `go test . ./apitest/ -run '^TestCI'` is run before the push.
+
+### 14.9 Increments
+
+| PR | lands | still `Suspect` after it |
+|---|---|---|
+| 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box; scene 6's verdict and tiling assertions, its example, the one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
+| 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions and the blocked box; the budget tests | a clear box's whole-box reading at the default floor |
+| 3 | step 6: the whole-box reading, the reading floor, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis whose gate needs the budget |
+
+PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
+one report, with scene 6's closed-form region as its acceptance. The `JointBoxReport` of PR 1 carries
+`CellBlocked` in the enumeration and never returns it. This section ships in PR 1.
+
+### 14.10 Settled points
+
+A box is stated per joint as a range, held joints as `Min == Max`, unlisted joints at `0`, with no
+traversal sense (§14.1). The options are `VerifyLinkage`'s plus a cell budget, and the sealed set is
+widened by embedding so the budget cannot reach the one-parameter checks (§14.1). The cell certificate
+evaluates the centre and charges half the cell's weighted span, not the `2^n` corners: the bound is the
+same and the cost is one pose per cell (§14.3). A colliding cell is proven colliding throughout by the
+volume's Lipschitz bound in the bodies' areas, with the same `τ_half` (§14.3). Bisection halves one axis,
+the one whose halving lowers `τ_half` most for the pair that held the cell back, shallowest cell first
+(§14.4). The resolution is a fraction of each joint's own range, and the budget counts evaluated centres
+(§14.1, §14.4). Leaves tile the box; a split cell's collisions stay in the report (§14.2). One diagnostic
+code and one `Diagnostic` field are added (§14.2).

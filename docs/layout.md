@@ -43,7 +43,7 @@ the rules leave to the byte budget.
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
-| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, joint contacts, the chain travel bound. |
+| `docs/linkage-check-design.md` | `Document.VerifyLinkage` and `VerifyJointBox`: links, joints, drives, joint boxes, joint contacts, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
