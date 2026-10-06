@@ -87,18 +87,33 @@ func requirePosesArePoseAt(t *testing.T, report *decad.LinkageReport) {
 // radius 50, reaches it at θ = asin(38/50) − atan(7/24) ≈ 33.2°, later. At
 // WithResolution(1/256) the onset bisection brackets the first collision to
 // the grid point 86/256, where the forearm overlaps the wall in the slab
-// 48 × (48·sin θ − 24) × 10 mm³. The arms never meet: their caps are the
-// parallel planes z = 10 and z = 12, 2 mm apart at every s, and the pair's
-// relative motion is the elbow joint alone, so its certificate is
-// 2 + 2 > 50·(π/2)·Δs, which holds at Δs = 1/32.
+// 48 × (48·sin θ − 24) × 10 mm³. The arms never meet: their relative motion
+// is the elbow joint alone, about Z, so their z-extents [0, 10] and [12, 22]
+// hold at every s and the layer exclusion (§5.7) settles the pair with the
+// lower bound 2 mm, evaluating it at no pose.
 //
-// Leg seen to fail when deleted: summing a link-link pair's τ over the joints
-// strictly below the two links' lowest common ancestor only — leaving the
-// shoulder joint in the arms' travel makes the arms certify only at
-// Δs = 1/128, and the drive evaluates 50 poses against 21 with the leg in
-// place, so the pose-count assertion goes red.
+// A post rigidly on the upper arm, x ∈ [20, 30], y ∈ [26, 36], z ∈ [0, 30],
+// shares the forearm's layer, so that pair is evaluated; its relative motion
+// is again the elbow alone, and its gap, 21-31 mm, certifies at Δs = 1/4.
+//
+// Legs seen to fail when deleted: the layer exclusion (the arms are evaluated
+// and the wall-free drive refines to the floor and reads Suspect); and
+// summing a link-link pair's τ over the joints strictly below the two links'
+// lowest common ancestor only — leaving the shoulder in the post's pair at
+// WithResolution(1/4) leaves every interval undecided.
 func TestVerifyLinkageFoldingArm(t *testing.T) {
 	t.Parallel()
+	requireArmsUnevaluated := func(t *testing.T, a foldingArm, report *decad.LinkageReport) {
+		t.Helper()
+		for _, p := range report.Poses {
+			for _, row := range p.Clearances {
+				require.False(t, row.A == a.upper && row.B == a.forearm, `the layer exclusion settles the arms`)
+			}
+			for _, row := range p.Interferences {
+				require.NotSame(t, a.forearm, row.B, `the arms never overlap`)
+			}
+		}
+	}
 	t.Run("the forearm reaches the wall at one third of the drive", func(t *testing.T) {
 		t.Parallel()
 		a := buildFoldingArm(t, true)
@@ -112,8 +127,8 @@ func TestVerifyLinkageFoldingArm(t *testing.T) {
 		require.Equal(t, []*decad.Link{a.shoulder, a.elbow}, report.Links)
 		require.Equal(t, []*decad.Body{a.wall}, report.Against)
 		require.Equal(t, units.Scalar(1.0/256), report.Request.Resolution)
-		require.Less(t, len(report.Poses), 32, `the arms certify at a step of 1/32 through the elbow joint alone`)
 		requirePosesArePoseAt(t, report)
+		requireArmsUnevaluated(t, a, report)
 
 		require.NotEmpty(t, report.Collisions)
 		first := report.Collisions[0]
@@ -138,81 +153,80 @@ func TestVerifyLinkageFoldingArm(t *testing.T) {
 				require.NotEqual(t, decad.IntervalClear, iv.Outcome, `the interval holding s* is never clear`)
 			}
 		}
-		arms := 0
 		for _, p := range report.Poses {
 			require.Len(t, p.Pose.Values, 2)
 			require.InDelta(t, 90*p.Pose.At.Mag(), p.Pose.Values[0].Mag(), 1e-12)
 			require.InDelta(t, -90*p.Pose.At.Mag(), p.Pose.Values[1].Mag(), 1e-12)
-			for _, row := range p.Interferences {
-				require.NotSame(t, a.forearm, row.B, `the arms never overlap`)
-			}
-			for _, row := range p.Clearances {
-				if row.A != a.upper || row.B != a.forearm {
-					continue
-				}
-				arms++
-				require.InDelta(t, 2, row.Gap.Value.Mag(), 1e-6)
-				require.LessOrEqual(t, row.Gap.Value.Mag()-row.Gap.Bound.Mag(), 2.0)
-				require.GreaterOrEqual(t, row.Gap.Value.Mag()+row.Gap.Bound.Mag(), 2.0)
-			}
 		}
-		require.Equal(t, len(report.Poses), arms, `the arms' gap is measured at every pose`)
 	})
-	t.Run("without the wall the drive is clear", func(t *testing.T) {
+	t.Run("without the wall the drive is clear at the endpoints", func(t *testing.T) {
 		t.Parallel()
-		// The arms' interval lower bound is 2 − 25·(π/2)·Δs, so the
-		// whole-drive reading's half-width is about 19.6·Δs mm. At the
-		// default rel = 1e-3 the gate on a 2 mm gap admits 0.002 mm, which
-		// takes Δs ≈ 1e-4; rel = 0.05 admits 0.1 mm, which the default floor
-		// of 1/1024 reaches with room to spare.
 		a := buildFoldingArm(t, false)
-		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)))
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive())
 		require.Equal(t, decad.Sound, report.Status)
 		require.True(t, report.Passed())
 		require.Empty(t, report.Diagnostics)
 		require.Empty(t, report.Against)
 		require.Empty(t, report.Collisions)
 		require.Equal(t, units.Scalar(1.0/1024), report.Request.Resolution)
-		for _, iv := range report.Intervals {
-			require.Equal(t, decad.IntervalClear, iv.Outcome)
-			require.NotNil(t, iv.Clearance)
-			require.LessOrEqual(t, iv.Clearance.Value.Mag(), 2.0, `a proven lower bound never exceeds the true minimum`)
-		}
-		require.NotNil(t, report.Clearance)
-		require.InDelta(t, 2, report.Clearance.Value.Mag(), 0.1)
-		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), 2.0)
-		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 2.0)
-		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+		require.Len(t, report.Poses, 2, `the only pair is settled before any pose`)
+		requireArmsUnevaluated(t, a, report)
+		require.Len(t, report.Intervals, 1)
+		iv := report.Intervals[0]
+		require.Equal(t, decad.IntervalClear, iv.Outcome)
+		require.NotNil(t, iv.Clearance)
+		require.Equal(t, 2.0, iv.Clearance.Value.Mag(), `the layer gap is exact: 12 − 10 along Z`)
+		require.Nil(t, report.Clearance, `a settled pair measures no upper bound`)
 	})
 	t.Run("a 1 mm margin between the arms is met", func(t *testing.T) {
 		t.Parallel()
 		a := buildFoldingArm(t, false)
 		minimum := units.Millimeters(1)
-		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)), decad.WithMinClearance(minimum))
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMinClearance(minimum))
 		require.Equal(t, decad.AssessmentMet, report.Assessment)
 		require.Equal(t, decad.Sound, report.Status)
 		require.Equal(t, &minimum, report.Request.MinClearance)
-		for _, iv := range report.Intervals {
-			require.GreaterOrEqual(t, iv.Clearance.Value.Mag(), 1.0)
+	})
+	t.Run("a 3 mm margin between the arms is undecided", func(t *testing.T) {
+		t.Parallel()
+		// The layer's proven 2 mm lower bound cannot meet 3 mm, and no pose
+		// measures the arms to disprove it.
+		a := buildFoldingArm(t, false)
+		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMinClearance(units.Millimeters(3)))
+		require.Equal(t, decad.AssessmentUndecided, report.Assessment)
+		require.Equal(t, decad.Suspect, report.Status)
+		require.NotEmpty(t, report.Diagnostics)
+		for _, d := range report.Diagnostics {
+			require.Equal(t, decad.DiagMotionUndecidedClearance, d.Code)
 		}
 	})
-	t.Run("a 3 mm margin between the arms is violated", func(t *testing.T) {
+	t.Run("a post in the forearm's layer certifies through the elbow alone", func(t *testing.T) {
 		t.Parallel()
-		a := buildFoldingArm(t, false)
-		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMotionTolerance(units.Scalar(0.05)), decad.WithMinClearance(units.Millimeters(3)))
-		require.Equal(t, decad.AssessmentViolated, report.Assessment)
-		require.Equal(t, decad.Violating, report.Status)
-		var violations int
-		for _, d := range report.Diagnostics {
-			if d.Code != decad.DiagMotionClearanceViolated {
-				continue
+		doc := decad.New()
+		upper := boxBody(t, doc, 0, -14, 48, 14, 10)
+		post := boxBody(t, doc, 20, 26, 30, 36, 30)
+		forearm := boxBodyAtZ(t, doc, 48, -14, 96, 14, 12, 10)
+		l := decad.NewLinkage()
+		shoulder, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{upper, post})
+		require.NoError(t, err)
+		elbow, err := shoulder.Revolute(r3.NewVec(48, 0, 0), zAxis, []*decad.Body{forearm})
+		require.NoError(t, err)
+		report := verifyLinkage(t, doc, l, decad.Drive{
+			{Link: shoulder, From: units.Degrees(0), To: units.Degrees(90)},
+			{Link: elbow, From: units.Degrees(0), To: units.Degrees(-90)},
+		}, decad.WithResolution(units.Scalar(1.0/4)))
+		rows := 0
+		for _, p := range report.Poses {
+			for _, row := range p.Clearances {
+				if row.A == post && row.B == forearm {
+					rows++
+				}
 			}
-			violations++
-			require.Equal(t, &decad.DiagnosticPair{A: a.upper, B: a.forearm}, d.Pair)
-			require.NotNil(t, d.At)
-			require.Less(t, d.Observed.Value.Mag()+d.Observed.Bound.Mag(), 3.0)
 		}
-		require.Equal(t, len(report.Poses), violations, `the 2 mm gap disproves the margin at every pose`)
+		require.Equal(t, len(report.Poses), rows, `the post's pair is evaluated at every pose`)
+		for _, iv := range report.Intervals {
+			require.Equal(t, decad.IntervalClear, iv.Outcome)
+		}
 	})
 }
 

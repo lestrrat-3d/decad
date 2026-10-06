@@ -367,6 +367,9 @@ type motionRun struct {
 	// declared names the pairs a linkage declares as joint contacts, each in
 	// both orders; nil for VerifyMotion.
 	declared map[[2]*Body]struct{}
+	// constPlaced holds, per mover of a constant group, the transient
+	// placement built at its first pose and reused at every later one.
+	constPlaced []*motionPlaced
 
 	// VerifyMotion's own motion. spec is the validated Motion; stretch and
 	// stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
@@ -393,11 +396,19 @@ type motionDriver interface {
 // transform composed onto each of its bodies' own placements, the ideal poses
 // η is charged against, PathAreaUpper's stretch base, and, for a linkage, the
 // joint value of the group's link.
+//
+// fixed marks a group whose ideal pose is the identity at every parameter:
+// its bodies are measured as they stand, with no transient placement and no
+// η. constant marks a group whose pose is the same at every parameter: its
+// transient placements are built once and reused
+// (docs/linkage-check-design.md §6 step 2).
 type motionGroupPose struct {
-	pose    r3.Transform
-	ideals  []motionbound.IdealPose
-	stretch float64
-	value   units.Value
+	pose     r3.Transform
+	ideals   []motionbound.IdealPose
+	stretch  float64
+	value    units.Value
+	fixed    bool
+	constant bool
 }
 
 type motionMover struct {
@@ -430,6 +441,11 @@ type motionPair struct {
 	// sheet: an operand is a sheet; the pair reads DiagUnsupportedPairSheet
 	// at every pose and leaves every interval undecided.
 	sheet bool
+	// unformed: the pair is not a question this check asks — a held link's
+	// body against a static body, or two held links' bodies, whose relation
+	// is Verify's (docs/linkage-check-design.md §6 step 2). It is never
+	// evaluated, raises nothing, and enters no interval.
+	unformed bool
 	// declared: a linkage's declared joint contact
 	// (docs/linkage-check-design.md §5.4). It is evaluated at every pose and
 	// publishes a transferred collision and a measured gap row, but no
@@ -438,7 +454,7 @@ type motionPair struct {
 	declared bool
 }
 
-func (p motionPair) evaluated() bool { return !p.excluded && !p.invalid && !p.sheet }
+func (p motionPair) evaluated() bool { return !p.excluded && !p.invalid && !p.sheet && !p.unformed }
 
 // motionSweptBox is one mover's swept box over the whole path, as exact
 // rational extremes per axis; ok is false when none could be formed.
@@ -479,6 +495,9 @@ type motionPlaced struct {
 	body      *Body
 	eta       float64
 	allowance float64
+	// kept: the placement outlives the pose — a fixed group's own body, or a
+	// constant group's reused transient — so its carriers stay cached.
+	kept bool
 }
 
 // setup reads VerifyMotion's one moving group: ρ_max for a revolute or a
@@ -792,7 +811,7 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	placed := make([]*motionPlaced, len(r.movers))
 	defer func() {
 		for _, p := range placed {
-			if p != nil {
+			if p != nil && !p.kept {
 				delete(r.cache.entries, p.body)
 			}
 		}
@@ -830,7 +849,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced)
 	mv := r.movers[i]
 	need := false
 	for k, pair := range r.pairs[i] {
-		if pair.sheet && !pair.declared {
+		if pair.sheet && !pair.declared && !pair.unformed {
 			diag := withAt(pairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
 				"a sheet operand has no clearance the motion check can certify, so this pair is undecided at every pose"), mp.result.At)
 			mp.result.Diagnostics = append(mp.result.Diagnostics, diag)
@@ -872,6 +891,14 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 	}
 	mv := r.movers[i]
 	group := mp.groups[mv.group]
+	switch {
+	case group.fixed:
+		placed[i] = &motionPlaced{body: mv.body, kept: true}
+		return placed[i], nil
+	case group.constant && r.constPlaced != nil && r.constPlaced[i] != nil:
+		placed[i] = r.constPlaced[i]
+		return placed[i], nil
+	}
 	placement := mv.body.payload.transform()
 	composed, err := placement.Then(group.pose)
 	if err != nil {
@@ -892,6 +919,13 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 	// own, scaled by the path's largest linear stretch.
 	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(mv.area, linear, mv.sigma, group.stretch))
 	placed[i] = &motionPlaced{body: transient, eta: eta, allowance: allowance}
+	if group.constant {
+		if r.constPlaced == nil {
+			r.constPlaced = make([]*motionPlaced, len(r.movers))
+		}
+		placed[i].kept = true
+		r.constPlaced[i] = placed[i]
+	}
 	return placed[i], nil
 }
 
@@ -1125,7 +1159,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 	var lowest *big.Rat
 	for i := range r.movers {
 		for k, pair := range r.pairs[i] {
-			if pair.declared {
+			if pair.declared || pair.unformed {
 				continue
 			}
 			if pair.excluded {

@@ -229,6 +229,10 @@ func TestLinkageIdealPoseComposesTheChain(t *testing.T) {
 func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 	t.Parallel()
 	run, upper, fore := foldingArmRun(t)
+	// The layer exclusion settles the arms (§5.7); reopen the pair so the
+	// pose evaluates it, which is the widening this test pins.
+	require.True(t, run.pairs[0][1].excluded)
+	run.pairs[0][1] = motionPair{other: 1}
 	f := big.NewRat(1, 3)
 	pose, err := run.evaluatePose(f, run.dom.label(f))
 	require.NoError(t, err)
@@ -301,4 +305,52 @@ func TestVerifyLinkageRefusesABodyItDidNotBuild(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Nil(t, report)
 	require.Equal(t, before, doc.Bodies())
+}
+
+// TestLinkageConstantPlacementIsReused pins §6 step 2's constant placement: a
+// link held at 30° has the same pose at every s, so its body's transient
+// placement is built at the first pose and the same one serves every later
+// pose, kept in the carrier cache between them; a moving link's is built
+// afresh and dropped.
+//
+// Leg seen to fail when deleted: the reuse (each pose builds its own
+// placement and no constant placement is kept).
+func TestLinkageConstantPlacementIsReused(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	base := internalBoxBody(t, doc, -10, -10, 10, 10, 10)
+	arm := internalBoxBodyAtZ(t, doc, 0, -14, 48, 14, 12, 10)
+	internalBoxBody(t, doc, 15, -30, 25, 30, 10)
+	l := NewLinkage()
+	pedestal, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{base})
+	require.NoError(t, err)
+	swing, err := pedestal.Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{arm})
+	require.NoError(t, err)
+	spec, err := l.resolveDrive(Drive{
+		{Link: pedestal, From: units.Degrees(30), To: units.Degrees(30)},
+		{Link: swing, From: units.Degrees(0), To: units.Degrees(90)},
+	})
+	require.NoError(t, err)
+	frames, ok := linkageFrames(spec)
+	require.True(t, ok)
+	bounds, ok := readLinkBounds(spec, frames)
+	require.True(t, ok)
+	cfg, err := resolveMotionOptions(nil, motionSpec{motionDomain: fractionDomain()})
+	require.NoError(t, err)
+	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
+	require.Equal(t, []linkStanding{linkConstant, linkMoving}, run.drive.(*linkageDriver).standing)
+
+	_, err = run.evaluatePose(new(big.Rat), run.dom.label(new(big.Rat)))
+	require.NoError(t, err)
+	require.NotNil(t, run.constPlaced)
+	held := run.constPlaced[0]
+	require.NotNil(t, held)
+	require.NotSame(t, base, held.body, `a constant placement is a transient body`)
+	require.Nil(t, run.constPlaced[1], `a moving link's placement is never kept`)
+	half := big.NewRat(1, 2)
+	_, err = run.evaluatePose(half, run.dom.label(half))
+	require.NoError(t, err)
+	require.Same(t, held, run.constPlaced[0])
+	_, cached := run.cache.entries[held.body]
+	require.True(t, cached, `the kept placement's carriers stay cached between poses`)
 }
