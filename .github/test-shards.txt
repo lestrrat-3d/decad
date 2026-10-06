@@ -195,6 +195,7 @@
 0	0.00	TestDirectedSqrtBracketsIrrationalLength
 0	0.00	TestDisplacedCupGateAndIdentity
 0	0.00	TestDisplacedCupMinRadius
+0	0.00	TestDocumentRemoveMintsNoProducer
 0	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
 0	0.00	TestDyadicSplitChargesItselfAndRefusesBeforeSplitting
 0	0.00	TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns

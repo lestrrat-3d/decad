@@ -266,7 +266,9 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // validation, cancellation returns ctx.Err() and a nil report; validation
 // errors take precedence even when ctx is already canceled. An empty document
 // retains its Sound result even when the context is already canceled. The
-// document remains unchanged.
+// document remains unchanged. Verify reads the live set once, as it stands
+// when the call begins, so a concurrent Remove never changes the bodies one
+// call reports on.
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control verification`, ErrDegenerate)
@@ -301,7 +303,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// is what keeps §9.3's sheet pair rule from ever running on a sheet that
 	// is not itself proven sound.
 	var pairBodies []*BodyReport
-	for _, b := range d.bodies {
+	for _, b := range d.liveBodies() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

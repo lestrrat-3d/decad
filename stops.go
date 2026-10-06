@@ -319,7 +319,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		ref   producerID
 	}
 	var stops []stopAt
-	for _, b := range d.bodies {
+	for _, b := range d.liveBodies() {
 		// A sheet encloses no material, so it cannot stop a sweep; skip it
 		// rather than refuse, or a document holding one sheet could never use
 		// ThroughAll at all (docs/surface-design.md §11 Table X).
