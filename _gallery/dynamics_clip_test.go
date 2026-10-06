@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -420,6 +421,151 @@ func TestTumbleClip(t *testing.T) {
 	clip, err := kinetograph.NewClip(clipScene, 60, scene.length)
 	require.NoError(t, err)
 	require.Equal(t, 180, clip.FrameCount())
+	for i := range clip.FrameCount() {
+		frame, err := clip.Frame(t.Context(), i)
+		require.NoError(t, err, "frame %d", i)
+		state, err := timeline.Sample(units.Seconds(float64(clip.FrameTime(i)) / 1e9))
+		require.NoError(t, err, "frame %d", i)
+		require.Len(t, frame.Poses, len(scene.parts))
+		for k, part := range scene.parts {
+			entry, ok := state.Body(part.body)
+			require.True(t, ok)
+			require.Equal(t, part.name, frame.Poses[k].Name)
+			require.Equal(t, entry.Pose, frame.Poses[k].Transform, "frame %d part %s", i, part.name)
+		}
+	}
+}
+
+// These tests run the parts-bin exit scene of
+// docs/multibody-dynamics-design.md §2 through the real producers and the
+// real viewer (§11.3), as the tumble tests above run theirs. dynamics'
+// scene_test.go asserts every exit criterion inside the decad module, on two
+// of the bodies in CI and on the whole scene when DECAD_PARTSBIN_FULL is set;
+// CI runs the whole scene here, and these check its end, its events, its
+// rests and rolls, and its clip.
+
+// partsBinRun is the scene and its timeline advanced to the clip length,
+// computed once for every test here.
+var partsBinRun struct {
+	once     sync.Once
+	scene    *dynamicsScene
+	timeline *dynamics.Timeline
+	err      error
+}
+
+func partsBin(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
+	t.Helper()
+	run := &partsBinRun
+	run.once.Do(func() {
+		run.scene, run.err = partsBinScene(t.Context())
+		if run.err == nil {
+			run.timeline, run.err = run.scene.advance(t.Context())
+		}
+	})
+	require.NoError(t, run.err)
+	require.NoError(t, run.scene.stopError(run.timeline))
+	return run.scene, run.timeline
+}
+
+// TestPartsBinTimeline checks the gallery's scene reaches its 4 s with every
+// body's mass published and every event a body on the tray's floor; the
+// bottle's landing island publishes a WitnessSpin below 1 rad/s and every
+// island that leaves it at rest one below 0.05 rad/s; every dropped body ends
+// at rest, the chamfered block and the bottle each on a ContactBand whose gap
+// bound is at most its held mesh's δ plus SupportBand and the cup on four
+// lifted points; and the cylinder ends still rolling without slip, its
+// contact point's speed within VelocityResidual.
+func TestPartsBinTimeline(t *testing.T) {
+	scene, timeline := partsBin(t)
+	require.Nil(t, timeline.Stopped())
+	require.Equal(t, units.Seconds(4), timeline.End())
+	require.Len(t, timeline.Steps(), 1024)
+	config := scene.config.Step
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	parts := map[string]*decad.Body{}
+	for _, part := range scene.parts {
+		parts[part.name] = part.body
+		properties, err := part.body.MassProperties(t.Context(), density)
+		require.NoError(t, err, part.name)
+		require.Positive(t, properties.Mass.Value.Base(), part.name)
+	}
+	tray, bottle := parts["tray"], parts["bottle"]
+
+	landed := false
+	for k, report := range timeline.Steps() {
+		for _, event := range report.Events {
+			require.Equal(t, tray, event.Pair.A, "step %d", k)
+			for _, point := range event.Manifold.Points {
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
+			}
+		}
+		next, ok := report.Next.Body(bottle)
+		require.True(t, ok)
+		atRest := next.LinearVelocity == millimetersPerSecond(0, 0, 0) && next.AngularVelocity == radiansPerSecond(0, 0, 0)
+		for _, island := range report.Islands {
+			if !slices.Contains(island.Bodies, bottle) {
+				continue
+			}
+			spin := island.Solver.WitnessSpin.Base()
+			if !landed {
+				require.Less(t, spin, 1.0, "step %d: the landing's witness spin", k)
+			}
+			if atRest {
+				require.Less(t, spin, .05, "step %d: a resting island's witness spin", k)
+			}
+			landed = true
+		}
+	}
+	require.True(t, landed)
+
+	end, err := timeline.Sample(timeline.End())
+	require.NoError(t, err)
+	band := config.Contact.SupportBand.Base()
+	for _, name := range []string{"cup", "block", "loft", "sweep", "bottle"} {
+		entry, ok := end.Body(parts[name])
+		require.True(t, ok)
+		for _, v := range []dynamics.QuantityVec{entry.LinearVelocity, entry.AngularVelocity} {
+			for _, c := range []units.Value{v.X, v.Y, v.Z} {
+				require.LessOrEqual(t, math.Abs(c.Base()), config.VelocityResidual.Base(), name)
+			}
+		}
+		contact, err := scene.doc.ContactPair(t.Context(), tray, parts[name], r3.Identity(), entry.Pose, config.Contact)
+		require.NoError(t, err, name)
+		require.NotNil(t, contact.Manifold, "%s reason=%v", name, contact.Reason)
+		switch name {
+		case "block", "bottle":
+			mesh, err := parts[name].Tessellate(t.Context(), config.Contact.HeldChord)
+			require.NoError(t, err, name)
+			require.Equal(t, decad.ContactBand, contact.Relation, name)
+			require.LessOrEqual(t, contact.Gap.Bound.Base(), mesh.Bound().Base()+band, name)
+		case "cup":
+			require.Equal(t, decad.ContactBand, contact.Relation, name)
+			require.Len(t, contact.Manifold.Points, 4, name)
+		}
+	}
+
+	// The cylinder rolls on: its axis 10 mm up, 60 mm along +y from its
+	// release, and its lowest line at rest, v + ω × (−10·ẑ) within
+	// VelocityResidual.
+	cylinder, ok := end.Body(parts["cylinder"])
+	require.True(t, ok)
+	at := cylinder.Pose.Translation()
+	require.InDelta(t, partsBinCylinderStart.Y+4*partsBinOmega*10, at.Y, 1e-8)
+	require.InDelta(t, 10, at.Z, 1e-8)
+	slip := cylinder.LinearVelocity.Y.Base() + cylinder.AngularVelocity.X.Base()*10
+	require.LessOrEqual(t, math.Abs(slip), config.VelocityResidual.Base())
+}
+
+// TestPartsBinClip films the timeline: the 60 fps clip holds 240 frames, and
+// every frame's part transforms are exactly the timeline's certified poses
+// at the frame time.
+func TestPartsBinClip(t *testing.T) {
+	scene, timeline := partsBin(t)
+	clipScene, err := scene.clipScene(timeline)
+	require.NoError(t, err)
+	clip, err := kinetograph.NewClip(clipScene, 60, scene.length)
+	require.NoError(t, err)
+	require.Equal(t, 240, clip.FrameCount())
 	for i := range clip.FrameCount() {
 		frame, err := clip.Frame(t.Context(), i)
 		require.NoError(t, err, "frame %d", i)

@@ -48,6 +48,7 @@ type dynamicsPart struct {
 
 // dynamicsScenes are the scenes `go run . dynamics -scene <name>` renders.
 var dynamicsScenes = map[string]func(context.Context) (*dynamicsScene, error){
+	"parts-bin":      partsBinScene,
 	"stack-and-drop": stackAndDropScene,
 	"tumble":         tumbleScene,
 }
@@ -316,7 +317,8 @@ type dynamicsOptions struct {
 //
 // Flags:
 //
-//   - -scene <name> picks the scene (required; stack-and-drop or tumble).
+//   - -scene <name> picks the scene (required; stack-and-drop, tumble or
+//     parts-bin).
 //   - -out <dir> is where the frames go (default "out").
 //   - -fps sets the frame rate (default 60).
 //   - -width and -height set the frame size (default 1280x720).
@@ -734,4 +736,257 @@ func trianglePatch(ctx context.Context, doc *decad.Document, w *sketch.World, pl
 		return nil, err
 	}
 	return doc.Patch(ctx, s, s.Profiles()[0])
+}
+
+// partsBinOmega is the parts-bin cylinder's spin about −x, in rad/s; it rolls
+// without slip along +y at partsBinOmega·10 mm/s.
+const partsBinOmega = 1.5
+
+// partsBinCylinderStart is the rolling cylinder's axis at release, on its
+// side on the tray floor: its 30 mm length spans x = 30…60 and it rolls 60 mm
+// in 4 s, its axis ending at y = 20, at least 20 mm inside the walls.
+var partsBinCylinderStart = r3.Vec{X: 45, Y: -40, Z: 10}
+
+// partsBinLoftBase and partsBinLoftTop are the loft's sections, on z = 0 and
+// z = 16: a square with each side pushed out to a point 8.5 mm from the axis,
+// and an octagon, every corner dyadic.
+var (
+	partsBinLoftBase = [][2]float64{{8.5, 0}, {8, 8}, {0, 8.5}, {-8, 8}, {-8.5, 0}, {-8, -8}, {0, -8.5}, {8, -8}}
+	partsBinLoftTop  = [][2]float64{{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6}}
+)
+
+// partsBinHexagon is the swept hexagon, 20 mm across its flats, centered on
+// the origin with dyadic corners.
+var partsBinHexagon = [][2]float64{{-11.5, 0}, {-5.75, -10}, {5.75, -10}, {11.5, 0}, {5.75, 10}, {-5.75, 10}}
+
+// partsBinScene is §2's Phase 3 scene: tumble's tray, the scene's one fixed
+// body, and every remaining solid payload. Dropped 8 mm onto the floor at
+// rest, each at a translation pose at least 20 mm inside the walls: a
+// 24×16×16 mm box shelled 2 mm through its top (a non-convex cup), a 12 mm
+// cube with its top loop chamfered 2.3 mm (its held mesh displaced by its
+// contour's rounding), a loft from a pushed-out square to an octagon, a
+// straight 14 mm sweep of a hexagon and a revolved bottle (a Ø16 mm base, a
+// quarter-circle shoulder to a Ø8 mm neck, read as a held mesh at HeldChord).
+// A Ø20×30 mm source cylinder starts on its side on the floor, rolling along
+// +y without slip. Every body takes restitution 0.3 and friction 0.4 at
+// density 0.001 kg/mm³, under the tumble step with §2's Phase 3 residuals:
+// PenetrationResidual 0.125 mm, SupportBand 0.05 mm, HeldChord 0.03 mm and
+// PointResolution 0.1 mm, since a displaced body's witness balls carry its δ.
+// The clip is 4 s.
+func partsBinScene(ctx context.Context) (*dynamicsScene, error) {
+	scene := &dynamicsScene{
+		name:   "parts-bin",
+		doc:    decad.New(),
+		input:  dynamics.StepInput{Gravity: millimetersPerSecondSquared(0, 0, -9810)},
+		dt:     units.Seconds(1.0 / 256),
+		length: 4 * time.Second,
+		camera: kinetograph.Camera{
+			Position: r3.Vec{X: -150, Y: -260, Z: 230},
+			Target:   r3.Vec{Z: 5},
+			Up:       r3.Vec{Z: 1},
+			FOV:      kinetograph.Constant(units.Degrees(45)),
+		},
+	}
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	material := dynamics.Material{Restitution: units.Scalar(0.3), Friction: units.Scalar(0.4)}
+	var entries []dynamics.BodyState
+	add := func(name string, body *decad.Body, role dynamics.BodyRole, at r3.Vec,
+		linear, spin dynamics.QuantityVec, color solidlens.Color) error {
+		definition := dynamics.RigidBody{Body: body, Role: role, Material: material}
+		if role == dynamics.Dynamic {
+			definition.Density = &density
+		}
+		pose, err := r3.Translation(at)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		scene.config.Bodies = append(scene.config.Bodies, definition)
+		entries = append(entries, dynamics.BodyState{Body: body, Pose: pose, LinearVelocity: linear,
+			AngularVelocity: spin})
+		scene.parts = append(scene.parts, dynamicsPart{name: name, body: body, color: color})
+		return nil
+	}
+	still, rest := radiansPerSecond(0, 0, 0), millimetersPerSecond(0, 0, 0)
+
+	tray, err := tumbleTray(ctx, scene.doc)
+	if err != nil {
+		return nil, fmt.Errorf("tray: %w", err)
+	}
+	if err := add("tray", tray, dynamics.Fixed, r3.Vec{}, rest, still, navy); err != nil {
+		return nil, err
+	}
+	for _, shape := range []struct {
+		name  string
+		build func() (*decad.Body, error)
+		at    r3.Vec
+		color solidlens.Color
+	}{
+		{"cup", func() (*decad.Body, error) { return shelledCup(ctx, scene.doc) }, r3.Vec{X: -45, Y: -45, Z: 8}, violet},
+		{"block", func() (*decad.Body, error) { return chamferedBlock(ctx, scene.doc) }, r3.Vec{Y: -45, Z: 8}, coral},
+		{"loft", func() (*decad.Body, error) { return polygonLoft(ctx, scene.doc) }, r3.Vec{X: -45, Z: 8}, gold},
+		{"sweep", func() (*decad.Body, error) { return hexagonSweep(ctx, scene.doc) }, r3.Vec{X: -45, Y: 45, Z: 8}, sky},
+		{"bottle", func() (*decad.Body, error) { return revolvedBottle(ctx, scene.doc) }, r3.Vec{Y: 45, Z: 8}, cyan},
+	} {
+		body, err := shape.build()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", shape.name, err)
+		}
+		if err := add(shape.name, body, dynamics.Dynamic, shape.at, rest, still, shape.color); err != nil {
+			return nil, err
+		}
+	}
+	cylinder, err := sideCylinder(ctx, scene.doc, 10, 30)
+	if err != nil {
+		return nil, fmt.Errorf("cylinder: %w", err)
+	}
+	if err := add("cylinder", cylinder, dynamics.Dynamic, partsBinCylinderStart,
+		millimetersPerSecond(0, partsBinOmega*10, 0), radiansPerSecond(-partsBinOmega, 0, 0), orange); err != nil {
+		return nil, err
+	}
+
+	scene.config.Step = sceneStepConfig()
+	scene.config.Step.PenetrationResidual = units.Millimeters(0.125)
+	scene.config.Step.Contact.SupportBand = units.Millimeters(0.05)
+	scene.config.Step.Contact.HeldChord = units.Millimeters(0.03)
+	scene.config.Step.Contact.PointResolution = units.Millimeters(0.1)
+	scene.config.Step.MaxPoseEvaluations = 512
+	scene.world, err = dynamics.NewWorld(ctx, scene.doc, scene.config)
+	if err != nil {
+		return nil, fmt.Errorf("world: %w", err)
+	}
+	scene.start, err = scene.world.NewState(entries)
+	if err != nil {
+		return nil, fmt.Errorf("start state: %w", err)
+	}
+	return scene, nil
+}
+
+// shelledCup is a 24×16×16 mm box on z = 0 shelled 2 mm inward through its
+// top cap.
+func shelledCup(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	box, err := extrudedBox(ctx, doc, -12, -8, 12, 8, 0, 16)
+	if err != nil {
+		return nil, err
+	}
+	return box.Shell(ctx, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+}
+
+// chamferedBlock is a 12 mm cube on z = 0 with its top loop chamfered
+// 2.3 mm.
+func chamferedBlock(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	box, err := extrudedBox(ctx, doc, -6, -6, 6, 6, 0, 12)
+	if err != nil {
+		return nil, err
+	}
+	return box.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+}
+
+// fixedPolygon sketches the closed polygon corners on plane, every corner
+// fixed.
+func fixedPolygon(ctx context.Context, w *sketch.World, plane *sketch.Plane, corners [][2]float64) (*sketch.Sketch,
+	*sketch.Profile, error) {
+	s, err := w.CreateSketch(plane)
+	if err != nil {
+		return nil, nil, err
+	}
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, nil, err
+	}
+	if len(s.Profiles()) != 1 {
+		return nil, nil, fmt.Errorf("polygon: %d profiles, want 1", len(s.Profiles()))
+	}
+	return s, s.Profiles()[0], nil
+}
+
+// polygonLoft is the 16 mm loft from partsBinLoftBase to partsBinLoftTop.
+func polygonLoft(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 16)
+	if err != nil {
+		return nil, err
+	}
+	s0, p0, err := fixedPolygon(ctx, w, w.XY(), partsBinLoftBase)
+	if err != nil {
+		return nil, err
+	}
+	s1, p1, err := fixedPolygon(ctx, w, top, partsBinLoftTop)
+	if err != nil {
+		return nil, err
+	}
+	return doc.Loft(ctx, s0, p0, s1, p1)
+}
+
+// hexagonSweep sweeps partsBinHexagon 14 mm up a straight path.
+func hexagonSweep(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, p, err := fixedPolygon(ctx, w, w.XY(), partsBinHexagon)
+	if err != nil {
+		return nil, err
+	}
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
+	if err != nil {
+		return nil, err
+	}
+	return doc.Sweep(ctx, s, p, path)
+}
+
+// revolvedBottle is the full revolve about z of a line-and-arc half-profile
+// on the XZ plane: an 8 mm base radius up 14 mm, a quarter-circle shoulder of
+// radius 4 to a 4 mm neck radius at z = 18, and the neck to z = 24.
+func revolvedBottle(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	if err != nil {
+		return nil, err
+	}
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(8, 0)
+	c := s.CreatePoint(8, 14)
+	center := s.CreatePoint(4, 14)
+	d := s.CreatePoint(4, 18)
+	e := s.CreatePoint(4, 24)
+	f := s.CreatePoint(0, 24)
+	for _, p := range []*sketch.Point{a, b, c, center, d, e, f} {
+		s.Fix(p)
+	}
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateArc(center, c, d)
+	s.CreateLine(d, e)
+	s.CreateLine(e, f)
+	s.CreateLine(f, a)
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	if len(s.Profiles()) != 1 {
+		return nil, fmt.Errorf("bottle: %d profiles, want 1", len(s.Profiles()))
+	}
+	return doc.Revolve(s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
+		decad.FullRevolution{})
+}
+
+// sideCylinder is the source cylinder of the given radius and length lying
+// on its side, its axis along x and centered on the origin: a rectangle
+// revolved a full turn about the x axis.
+func sideCylinder(ctx context.Context, doc *decad.Document, radius, length float64) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		return nil, err
+	}
+	r := s.CreateRectangle(-length/2, 0, length/2, radius)
+	s.Fix(r.A)
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	return doc.Revolve(s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
+		decad.FullRevolution{})
 }

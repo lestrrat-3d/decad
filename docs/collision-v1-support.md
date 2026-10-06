@@ -355,6 +355,14 @@ corners and edges and comes to rest face down on the tray's floor within a
 third of a second. The whole 3 s scene takes minutes, so `dynamics` runs
 it when `DECAD_TUMBLE_FULL` is set and runs four of its bodies otherwise;
 the `_gallery` module runs and renders all of it.
+Its parts-bin scene test drops a shelled cup, a block chamfered `2.3 mm`, a
+loft, a straight hexagon sweep and a revolved bottle onto the same tray while
+a cylinder rolls across its floor without slipping. The block and the bottle,
+read as displaced held meshes, rest on their lifted bands; the bottle's
+landing publishes its witness spin; the cup rests on its four bottom corners.
+The whole 4 s runs when `DECAD_PARTSBIN_FULL` is set, `dynamics` runs every
+body but the bottle for an eighth of a second otherwise, and the `_gallery`
+module runs and renders all of it.
 
 Two- and three-body worlds take the same step as larger ones.
 [Kinematic impact tests](../dynamics/kinematic_impact_test.go)

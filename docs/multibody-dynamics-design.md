@@ -177,8 +177,8 @@ with its contact-point speed within `VelocityResidual` of zero (rolling without 
 the chamfered block and the bottle each rest on a `ContactBand` whose published `Gap.Bound` is at most the
 body's boundary displacement plus `SupportBand`; the bottle's landing island publishes a `WitnessSpin`
 (§6.3) below `1 rad/s` and each of its resting islands one below `0.05 rad/s`, the spin its `δ` leaves
-uncertain in its published zero; the cup rests on four lifted points; every body's final velocity is
-within `VelocityResidual` of zero.
+uncertain in its published zero; the cup rests on four lifted points; every body but the rolling
+cylinder ends with both velocities within `VelocityResidual` of zero.
 
 ## 3. N-body data model
 
@@ -3026,6 +3026,21 @@ scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
   scene test records its cost after PR 20b's cache, and a scene that exceeds the `dynamics` package's race
   budget shortens by a change to §2.
 - Depends on: PRs 15, 17, 18, 20, 20a–20g.
+- Shipped at §2's settings. The tray is PR 15's; the cup, the block, the loft, the sweep and the bottle drop
+  from `8 mm` at `(−45, −45)`, `(0, −45)`, `(−45, 0)`, `(−45, 45)` and `(0, 45)`, and the cylinder's axis
+  starts at `(45, −40, 10)`, rolling `15 mm/s` along `+y` to `y = 20` in the `4 s`. Every step is `Advanced`.
+  The five dropped bodies land in step `9`, bounce, land again and rest from step `17`, every one on a
+  `ContactBand`: the cup on four lifted corners, the block on four with `δ` about `1.8e-15 mm`, the loft on
+  eight, the sweep on six and the bottle on its `49` lifted base vertices with `δ` about `0.0295 mm` and
+  `Gap.Bound` about `0.079 mm`. The bottle's landing `WitnessSpin` is about `0.50 rad/s` and its resting
+  islands' at most about `0.042 rad/s`. The cylinder rides a rolling band track in every step after its first,
+  its ruling ends at rest within `VelocityResidual`. `dynamics/scene_test.go`'s `requirePartsBinExit` asserts
+  §2's criteria plus every step's linear momentum balance and every event on the floor's `+Z`. The whole scene
+  takes about four minutes on an amd64 workstation, nearly all of it in the bottle (each of its three impact
+  steps about `5 s`, each resting step about `0.2 s`): `TestPartsBinScene` runs it under
+  `DECAD_PARTSBIN_FULL`, `TestPartsBinSceneSubset` runs every body but the bottle for `0.125 s` (about `3 s`,
+  `10 s` under the race detector), and the `_gallery` job runs the whole scene in its tests and its smoke
+  render.
 
 ## 14. Test and fixture strategy
 

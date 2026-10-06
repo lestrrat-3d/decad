@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -793,4 +794,453 @@ func TestTumbleSceneSubset(t *testing.T) {
 	}
 	scene := newTumble(t, "box0", "hexagon", "wedge", "tetrahedron")
 	requireTumbleExit(t, scene, tumbleTimeline(t, scene, 128), 128)
+}
+
+// The Phase 3 exit scene of docs/multibody-dynamics-design.md §2, parts-bin,
+// end to end through the same producers: §2's tray with a shelled cup, a
+// block whose top loop is chamfered 2.3 mm, a loft, a straight hexagon sweep
+// and a revolved bottle dropped 8 mm onto its floor, and a source cylinder
+// rolling on its side. The cup, loft and sweep are exact; the block's held
+// mesh carries its contour's rounding as δ and the bottle's its chord
+// sagitta at HeldChord, so both land and rest through §10.4's lifted band.
+// The _gallery module renders the same scene.
+//
+// The whole scene's 1024 steps take about four minutes on an amd64
+// workstation without the race detector, nearly all of it in the bottle: its
+// three impact steps take about five seconds each, and every resting step
+// about 0.2 s for its 49 lifted base vertices. TestPartsBinScene therefore
+// runs it only when DECAD_PARTSBIN_FULL is set, and CI runs it in the
+// _gallery module (TestPartsBinTimeline there, and the smoke render), as
+// tumble's whole scene runs. TestPartsBinSceneSubset runs every body but the
+// bottle through the same assertions for 0.125 s, by which each dropped body
+// rests: about three seconds, and ten under the race detector. The bottle's
+// drop onto the same tray at the same residuals is
+// TestDisplacedBottleRestsOnTray's fixture.
+
+// partsBinScene is a parts-bin world: the tray as its one fixed body and the
+// dynamic bodies in release order, with each body's held-mesh δ at the
+// scene's HeldChord (zero for an exact body).
+type partsBinScene struct {
+	doc      *decad.Document
+	tray     *decad.Body
+	names    []string
+	bodies   []*decad.Body
+	byName   map[string]*decad.Body
+	masses   map[*decad.Body]float64
+	deltas   map[*decad.Body]float64
+	density  units.Value
+	config   dynamics.StepConfig
+	world    *dynamics.World
+	state    dynamics.State
+	cylinder partsBinRoll
+}
+
+// partsBinRoll is the cylinder's release: the axis at partsBinCylinderStart,
+// rolling along +y without slip, v = −ω × (−r·ẑ) = (0, ω·r, 0) for
+// ω = (−partsBinOmega, 0, 0).
+type partsBinRoll struct {
+	start r3.Vec
+	omega float64
+}
+
+// partsBinOmega is the cylinder's spin about −x, in rad/s, and
+// partsBinCylinderStart its axis's start. The Ø20 cylinder rolls 15 mm/s,
+// 60 mm in 4 s, its axis ending at y = 20; its 30 mm length spans x = 30…60,
+// so it keeps 20 mm inside the walls and clear of every other body.
+const partsBinOmega = 1.5
+
+var partsBinCylinderStart = r3.Vec{X: 45, Y: -40, Z: 10}
+
+// partsBinRelease is one dropped body: its builder and where its modeled
+// base, on its own z = 0, is released.
+type partsBinRelease struct {
+	name  string
+	build func(t *testing.T, doc *decad.Document) *decad.Body
+	at    r3.Vec
+}
+
+// partsBinReleases are §2's dropped bodies, each released at rest 8 mm above
+// the floor at a translation pose, at least 20 mm inside the walls.
+var partsBinReleases = []partsBinRelease{
+	{name: "cup", build: partsBinCup, at: r3.Vec{X: -45, Y: -45, Z: 8}},
+	{name: "block", build: partsBinBlock, at: r3.Vec{Y: -45, Z: 8}},
+	{name: "loft", build: partsBinLoft, at: r3.Vec{X: -45, Z: 8}},
+	{name: "sweep", build: partsBinSweep, at: r3.Vec{X: -45, Y: 45, Z: 8}},
+	{name: "bottle", build: bottleBody, at: r3.Vec{Y: 45, Z: 8}},
+}
+
+// partsBinSteps is the scene's 4 s in steps of 1/256 s.
+const partsBinSteps = 1024
+
+// partsBinCup is §2's cup: a 24×16×16 mm box shelled 2 mm through its top,
+// a non-convex exact cupPayload.
+func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	box := makeBox(t, doc, -12, -8, 12, 8, 0, 16)
+	cup, err := box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+	require.NoError(t, err)
+	return cup
+}
+
+// partsBinBlock is §2's 12 mm cube with its top loop chamfered 2.3 mm: its
+// feet are not dyadic, so its held mesh carries its contour's rounding as δ,
+// and that mesh carries §9.2's convexity certificate.
+func partsBinBlock(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
+	block, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+	require.NoError(t, err)
+	return block
+}
+
+// partsBinPolygon sketches the closed polygon corners on plane, every corner
+// fixed.
+func partsBinPolygon(t *testing.T, w *sketch.World, plane *sketch.Plane, corners [][2]float64) (*sketch.Sketch,
+	*sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// partsBinLoft is §2's loft, 16 mm tall, from a square with each side pushed
+// out to a point 8.5 mm from the axis up to a regular-sided octagon, every
+// corner dyadic, so the loft is exact.
+func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 16)
+	require.NoError(t, err)
+	s0, p0 := partsBinPolygon(t, w, w.XY(), [][2]float64{
+		{8.5, 0}, {8, 8}, {0, 8.5}, {-8, 8}, {-8.5, 0}, {-8, -8}, {0, -8.5}, {8, -8},
+	})
+	s1, p1 := partsBinPolygon(t, w, top, [][2]float64{
+		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6},
+	})
+	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	return loft
+}
+
+// partsBinSweep is §2's straight 14 mm sweep of a hexagon 20 mm across its
+// flats, which reads as its prism.
+func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, p := partsBinPolygon(t, w, w.XY(), [][2]float64{
+		{-11.5, 0}, {-5.75, -10}, {5.75, -10}, {11.5, 0}, {5.75, 10}, {-5.75, 10},
+	})
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
+	require.NoError(t, err)
+	sweep, err := doc.Sweep(t.Context(), s, p, path)
+	require.NoError(t, err)
+	return sweep
+}
+
+// newPartsBin builds the tray, the named bodies of partsBinReleases and, when
+// cylinder is set, the rolling cylinder, at restitution 0.3 and friction 0.4
+// with density 0.001 kg/mm³ under §2's Phase 3 step (partsBinConfig). Every
+// body's mass properties publish here.
+func newPartsBin(t *testing.T, cylinder bool, names ...string) partsBinScene {
+	t.Helper()
+	scene := partsBinScene{doc: decad.New(), density: units.KilogramsPerCubicMillimeter(0.001),
+		config: partsBinConfig(), byName: map[string]*decad.Body{}, masses: map[*decad.Body]float64{},
+		deltas: map[*decad.Body]float64{}, cylinder: partsBinRoll{start: partsBinCylinderStart, omega: partsBinOmega}}
+	scene.tray = tumbleTray(t, scene.doc)
+	material := dynamics.Material{Restitution: units.Scalar(0.3), Friction: units.Scalar(0.4)}
+	bodies := []dynamics.RigidBody{{Body: scene.tray, Role: dynamics.Fixed, Material: material}}
+	entries := []dynamics.BodyState{{Body: scene.tray, Pose: r3.Identity(), LinearVelocity: zeroVelocity(),
+		AngularVelocity: zeroAngular(t)}}
+	add := func(name string, body *decad.Body, pose r3.Transform, linear, spin dynamics.QuantityVec) {
+		properties, err := body.MassProperties(t.Context(), scene.density)
+		require.NoError(t, err, name)
+		require.Positive(t, properties.Mass.Value.Base(), name)
+		scene.masses[body] = properties.Mass.Value.Base()
+		mesh, err := body.Tessellate(t.Context(), scene.config.Contact.HeldChord)
+		require.NoError(t, err, name)
+		scene.deltas[body] = mesh.Bound().Base()
+		scene.names = append(scene.names, name)
+		scene.bodies = append(scene.bodies, body)
+		scene.byName[name] = body
+		bodies = append(bodies, dynamics.RigidBody{Body: body, Role: dynamics.Dynamic, Density: &scene.density,
+			Material: material})
+		entries = append(entries, dynamics.BodyState{Body: body, Pose: pose, LinearVelocity: linear,
+			AngularVelocity: spin})
+	}
+	for _, name := range names {
+		var release partsBinRelease
+		for _, candidate := range partsBinReleases {
+			if candidate.name == name {
+				release = candidate
+			}
+		}
+		require.NotNil(t, release.build, name)
+		add(name, release.build(t, scene.doc), translation(t, release.at), zeroVelocity(), zeroAngular(t))
+	}
+	if cylinder {
+		linear := zeroVelocity()
+		linear.Y = units.MillimetersPerSecond(scene.cylinder.omega * 10)
+		spin := zeroAngular(t)
+		spin.X = units.RadiansPerSecond(-scene.cylinder.omega)
+		add("cylinder", sideCylinder(t, scene.doc), translation(t, scene.cylinder.start), linear, spin)
+	}
+	var err error
+	scene.world, err = dynamics.NewWorld(t.Context(), scene.doc, dynamics.WorldConfig{Bodies: bodies, Step: scene.config})
+	require.NoError(t, err)
+	scene.state, err = scene.world.NewState(entries)
+	require.NoError(t, err)
+	return scene
+}
+
+// partsBinTimeline advances the scene's timeline through the given number of
+// steps of 1/256 s, failing at the first Undecided step with its
+// diagnostics.
+func partsBinTimeline(t *testing.T, scene partsBinScene, steps int) *dynamics.Timeline {
+	t.Helper()
+	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
+	require.NoError(t, err)
+	for k := range steps {
+		report, err := timeline.Advance(t.Context(), dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+		require.NoError(t, err)
+		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", k, report.Diagnostics)
+	}
+	return timeline
+}
+
+// requirePartsBinExit asserts §2's Phase 3 exit criteria on a parts-bin
+// timeline advanced steps steps, for the bodies the scene holds.
+func requirePartsBinExit(t *testing.T, scene partsBinScene, timeline *dynamics.Timeline, steps int) {
+	t.Helper()
+	require.Nil(t, timeline.Stopped())
+	require.Equal(t, units.Seconds(float64(steps)/256), timeline.End())
+	reports := timeline.Steps()
+	require.Len(t, reports, steps)
+	config := scene.config
+	band := config.Contact.SupportBand.Base()
+	velocityResidual := config.VelocityResidual.Base()
+	cylinder := scene.byName["cylinder"]
+	bottle := scene.byName["bottle"]
+
+	landed := map[*decad.Body]bool{}
+	for k, report := range reports {
+		// Every step's linear momentum balances: the dynamic bodies' change
+		// equals the gravity and contact impulses, within the readings' own
+		// bounds plus, for every island, each dynamic body's certified
+		// linear-law limit ImpulseResidual + m·VelocityResidual.
+		c := report.Conservation
+		require.NotNil(t, c, "step %d", k)
+		limit := 0.0
+		for _, island := range report.Islands {
+			for _, body := range island.Bodies {
+				if mass, ok := scene.masses[body]; ok {
+					limit += config.ImpulseResidual.Base() + mass*velocityResidual
+				}
+			}
+		}
+		for axis, get := range []func(dynamics.QuantityVec) units.Value{
+			func(v dynamics.QuantityVec) units.Value { return v.X },
+			func(v dynamics.QuantityVec) units.Value { return v.Y },
+			func(v dynamics.QuantityVec) units.Value { return v.Z },
+		} {
+			change := get(c.Completion.LinearMomentum.Value).Base() - get(c.Input.LinearMomentum.Value).Base()
+			applied := get(c.GravityImpulse.Value).Base() + get(c.ContactImpulse.Value).Base()
+			slack := get(c.Completion.LinearMomentum.Bound).Base() + get(c.Input.LinearMomentum.Bound).Base() +
+				get(c.GravityImpulse.Bound).Base() + get(c.ContactImpulse.Bound).Base() + limit
+			require.InDelta(t, applied, change, slack, "step %d axis %d", k, axis)
+		}
+
+		// Every event joins a body and the tray's floor, whose normal is +Z:
+		// no body reaches another one or a wall.
+		for _, event := range report.Events {
+			require.Equal(t, scene.tray, event.Pair.A, "step %d", k)
+			for _, point := range event.Manifold.Points {
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
+			}
+		}
+
+		// The bottle's landing island publishes a WitnessSpin below 1 rad/s,
+		// and every island that leaves it at rest one below 0.05 rad/s: the
+		// spin its δ leaves uncertain in its published zero (§6.3).
+		if bottle != nil {
+			next, ok := report.Next.Body(bottle)
+			require.True(t, ok)
+			atRest := next.LinearVelocity == zeroVelocity() && next.AngularVelocity == zeroAngular(t)
+			for _, island := range report.Islands {
+				if !slices.Contains(island.Bodies, bottle) {
+					continue
+				}
+				spin := island.Solver.WitnessSpin.Base()
+				require.Positive(t, spin, "step %d: the bottle's δ leaves a witness spin", k)
+				if !landed[bottle] {
+					require.Less(t, spin, 1.0, "step %d: the landing's witness spin", k)
+				}
+				if atRest {
+					require.Less(t, spin, .05, "step %d: a resting island's witness spin", k)
+				}
+				landed[bottle] = true
+			}
+		}
+
+		// The rolling cylinder rides a rotating band track on the tray's
+		// floor through every step's last slice: an exact touch from its
+		// signed-axis release, a band of the turned pose's rounding after it.
+		// Halfway along the track its two ruling ends are at rest on the
+		// cylinder within VelocityResidual, beyond |ω| times each point's
+		// ball.
+		if cylinder != nil {
+			requirePartsBinRolls(t, scene, report, k)
+		}
+	}
+
+	// Every dropped body ends at rest, both velocities within
+	// VelocityResidual of zero, inside the walls, every vertex staged through
+	// the published pose at least −PenetrationResidual above the floor.
+	last := reports[len(reports)-1]
+	residual := config.PenetrationResidual.Base()
+	for i, body := range scene.bodies {
+		name := scene.names[i]
+		entry, ok := last.Next.Body(body)
+		require.True(t, ok)
+		for _, v := range body.Vertices() {
+			p := entry.Pose.Apply(v.Position().Value)
+			require.Less(t, math.Max(math.Abs(p.X), math.Abs(p.Y)), 80.0, name)
+		}
+		for _, height := range vertexHeights(body, entry.Pose) {
+			require.GreaterOrEqual(t, height.Cmp(rat(-residual)), 0, name)
+		}
+		if body == cylinder {
+			continue
+		}
+		for _, v := range []dynamics.QuantityVec{entry.LinearVelocity, entry.AngularVelocity} {
+			require.InDelta(t, 0, v.X.Base(), velocityResidual, name)
+			require.InDelta(t, 0, v.Y.Base(), velocityResidual, name)
+			require.InDelta(t, 0, v.Z.Base(), velocityResidual, name)
+		}
+
+		// At rest each displaced body hovers on a ContactBand whose
+		// published gap bound is at most its δ plus SupportBand, every
+		// manifold point a lifted vertex inside the band; the cup rests on
+		// its four lifted bottom corners.
+		contact, err := scene.doc.ContactPair(t.Context(), scene.tray, body, r3.Identity(), entry.Pose, config.Contact)
+		require.NoError(t, err, name)
+		require.NotNil(t, contact.Manifold, "%s reason=%v", name, contact.Reason)
+		for _, point := range contact.Manifold.Points {
+			require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, name)
+			require.GreaterOrEqual(t, point.Separation.Value.Base(), 0.0, name)
+			require.LessOrEqual(t, point.Separation.Value.Base(), band, name)
+		}
+		switch name {
+		case "block", "bottle":
+			require.Positive(t, scene.deltas[body], name)
+			require.Equal(t, decad.ContactBand, contact.Relation, "%s reason=%v", name, contact.Reason)
+			require.LessOrEqual(t, contact.Gap.Bound.Base(), scene.deltas[body]+band, name)
+		case "cup":
+			require.Equal(t, decad.ContactBand, contact.Relation, "%s reason=%v", name, contact.Reason)
+			require.Len(t, contact.Manifold.Points, 4, name)
+		}
+	}
+
+	// Every frame time of a 60 fps clip replays a certified state.
+	for frame := range steps * 60 / 256 {
+		_, err := timeline.Sample(units.Seconds(float64(frame) / 60))
+		require.NoError(t, err, "frame %d", frame)
+	}
+}
+
+// requirePartsBinRolls asserts that step k rolls the cylinder without slip on
+// the tray's floor: its axis stays 10 mm up and travels ω·r per second along
+// +y, the step's last slice continues the pair on a rolling track to the
+// step's end, and halfway along it the track's ruling ends are at rest on
+// the cylinder.
+func requirePartsBinRolls(t *testing.T, scene partsBinScene, report *dynamics.StepReport, k int) {
+	t.Helper()
+	config := scene.config
+	cylinder := scene.byName["cylinder"]
+	pair := dynamics.BodyPair{A: scene.tray, B: cylinder}
+	omega, start := scene.cylinder.omega, scene.cylinder.start
+	// The closed forms run in float64 over coordinates below 100 mm, every
+	// pose a float composition of up to 1024 turns.
+	const slack = 1e-8
+	entry, ok := report.Next.Body(cylinder)
+	require.True(t, ok)
+	at := entry.Pose.Translation()
+	require.InDelta(t, start.X, at.X, slack, "step %d", k)
+	require.InDelta(t, start.Z, at.Z, slack, "step %d", k)
+	require.InDelta(t, start.Y+omega*10*float64(k+1)/256, at.Y, slack, "step %d", k)
+	require.InDelta(t, omega*10, entry.LinearVelocity.Y.Base(), config.VelocityResidual.Base(), "step %d", k)
+	require.InDelta(t, -omega, entry.AngularVelocity.X.Base(), config.AngularVelocityResidual.Base(), "step %d", k)
+
+	proofs := dynamics.TraceSliceProofs(report.Trace)
+	require.NotEmpty(t, proofs, "step %d", k)
+	var sweep *decad.SweepReport
+	for _, proof := range proofs[len(proofs)-1] {
+		if proof.Pair == pair {
+			sweep = proof.Sweep
+		}
+	}
+	require.NotNil(t, sweep, "step %d", k)
+	track := sweep.ContactTrack
+	require.NotNil(t, track, "step %d", k)
+	require.Equal(t, 1.0, track.End().Fraction.Base(), "step %d", k)
+	if k == 0 {
+		require.Equal(t, decad.SweepPersistentTouch, sweep.Outcome)
+	} else {
+		require.Equal(t, decad.SweepPersistentBand, sweep.Outcome, "step %d", k)
+		require.NotNil(t, track.Band(), "step %d", k)
+		require.LessOrEqual(t, track.Band().Value.Base()+track.Band().Bound.Base(), config.PenetrationResidual.Base(),
+			"step %d", k)
+	}
+
+	// The track's fractions run over the slice's drift of the cylinder,
+	// which starts at the slice's own start, the step's last event: its
+	// center at fraction one half is Center + v·Duration/2, and its velocity
+	// is the drift's.
+	path, ok := sweep.PathB.(decad.RigidDriftSegment)
+	require.True(t, ok, "step %d: %T", k, sweep.PathB)
+	v := r3.Vec{X: path.LinearVelocity.X.Base(), Y: path.LinearVelocity.Y.Base(), Z: path.LinearVelocity.Z.Base()}
+	w := r3.Vec{X: path.AngularVelocity.X.Base(), Y: path.AngularVelocity.Y.Base(), Z: path.AngularVelocity.Z.Base()}
+	center := path.Center.Add(v.Scale(path.Duration.Base() / 2))
+	manifold, err := track.ManifoldAt(units.Scalar(.5))
+	require.NoError(t, err, "step %d", k)
+	require.Len(t, manifold.Points, 2, "step %d", k)
+	for i, point := range manifold.Points {
+		speed := v.Add(w.Cross(point.OnB.Value.Sub(center))).Len()
+		require.LessOrEqual(t, speed, config.VelocityResidual.Base()+omega*point.OnB.Bound.Base(),
+			"step %d end %d", k, i)
+	}
+}
+
+// TestPartsBinScene runs the whole scene for its 4 s and asserts §2's Phase 3
+// exit criteria. It runs when DECAD_PARTSBIN_FULL is set; see the comment at
+// the top of this section.
+func TestPartsBinScene(t *testing.T) {
+	if os.Getenv("DECAD_PARTSBIN_FULL") == "" {
+		t.Skip("set DECAD_PARTSBIN_FULL to run the whole parts-bin scene")
+	}
+	names := make([]string, len(partsBinReleases))
+	for i, release := range partsBinReleases {
+		names[i] = release.name
+	}
+	scene := newPartsBin(t, true, names...)
+	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, partsBinSteps), partsBinSteps)
+}
+
+// TestPartsBinSceneSubset runs the cup, the chamfered block, the loft, the
+// sweep and the rolling cylinder at their §2 releases in the §2 tray for
+// 0.125 s, by which each dropped body rests (the run records all four at
+// rest from step 17), and asserts the same criteria.
+func TestPartsBinSceneSubset(t *testing.T) {
+	scene := newPartsBin(t, true, "cup", "block", "loft", "sweep")
+	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, 32), 32)
 }
