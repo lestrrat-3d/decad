@@ -236,3 +236,92 @@ func TestFixedPairContactBandAgainstResidual(t *testing.T) {
 	require.Equal(t, dynamics.BodyPair{A: tight.knob, B: tight.octagon}, report.Diagnostics[0].Pair)
 	require.Equal(t, units.Millimeters(1e-4), report.Diagnostics[0].Limit)
 }
+
+// partsBinConfig is §2's Phase 3 step configuration: PenetrationResidual
+// 0.1 mm, SupportBand 0.05 mm, HeldChord 0.03 mm and PointResolution 0.1 mm,
+// since a displaced body's witness balls carry its δ.
+func partsBinConfig() dynamics.StepConfig {
+	config := tumbleStepConfig()
+	config.PenetrationResidual = units.Millimeters(.1)
+	config.Contact.SupportBand = units.Millimeters(.05)
+	config.Contact.HeldChord = units.Millimeters(.03)
+	config.Contact.PointResolution = units.Millimeters(.1)
+	return config
+}
+
+// TestDisplacedBlockRestsOnTray is docs/multibody-dynamics-design.md §13
+// PR 20c's dynamics fixture: §2's 12 mm block, its top loop chamfered
+// 2.1 mm so its held mesh carries δ ≈ 1e-15 mm, dropped 8 mm onto the tray.
+// Its held gap first enters the lifted band b = max(SupportBand, δ) as a
+// four-point ContactBand, which brackets the landing; the block bounces at
+// restitution 0.3 and rests on that band with both velocities exactly zero.
+//
+// Leg shown to fail: the displaced pair's lifted band deleted, the landing's
+// right sample is a held overlap of the block's flat face, which neither
+// §9.3 (the tray is not convex) nor §9.6 (the deepest set is a face)
+// publishes, and the landing step stops with StepManifoldMissing.
+func TestDisplacedBlockRestsOnTray(t *testing.T) {
+	doc := decad.New()
+	tray := tumbleTray(t, doc)
+	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
+	block, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.1))
+	require.NoError(t, err)
+	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
+	require.NoError(t, err)
+	delta := mesh.Bound().Base()
+	require.Positive(t, delta)
+	config := partsBinConfig()
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := dynamics.Material{Restitution: units.Scalar(.3), Friction: units.Scalar(.4)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: tray, Role: dynamics.Fixed, Material: material},
+		{Body: block, Role: dynamics.Dynamic, Density: &density, Material: material},
+	}, Step: config})
+	require.NoError(t, err)
+	state, err := world.NewState([]dynamics.BodyState{
+		{Body: tray, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: block, Pose: translation(t, r3.Vec{Z: 8}), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+
+	landed, rested := false, -1
+	for k := range 32 {
+		report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+		require.NoError(t, err)
+		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", k, report.Diagnostics)
+		for _, event := range report.Events {
+			require.Len(t, event.Manifold.Points, 4, "step %d", k)
+			for _, point := range event.Manifold.Points {
+				// Each point is a lifted corner: an exact height inside the
+				// band, charged with δ, under the floor's exact normal.
+				require.Positive(t, point.Separation.Value.Base())
+				require.LessOrEqual(t, point.Separation.Value.Base(), config.Contact.SupportBand.Base())
+				require.GreaterOrEqual(t, point.Separation.Bound.Base(), delta)
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+			}
+			landed = true
+		}
+		next, ok := report.Next.Body(block)
+		require.True(t, ok)
+		state = *report.Next
+		if !landed || next.LinearVelocity != zeroVelocity() || next.AngularVelocity != zeroAngular(t) {
+			rested = -1
+			continue
+		}
+		if rested < 0 {
+			rested = k
+		}
+	}
+	require.True(t, landed)
+	require.GreaterOrEqual(t, rested, 0, "the block rests within 32 steps")
+
+	// At rest the block hovers on its four lifted corners.
+	resting, ok := state.Body(block)
+	require.True(t, ok)
+	contact, err := doc.ContactPair(t.Context(), tray, block, r3.Identity(), resting.Pose, config.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactBand, contact.Relation, "reason=%v", contact.Reason)
+	require.NotNil(t, contact.Manifold)
+	require.Len(t, contact.Manifold.Points, 4)
+	require.LessOrEqual(t, contact.Gap.Bound.Base(), delta+config.Contact.SupportBand.Base())
+}

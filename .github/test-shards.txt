@@ -2185,3 +2185,6 @@
 1	0.01	TestHeldChordValidation
 3	0.06	TestPlanarManifoldNonConvexGuest
 0	0.01	TestPlanarManifoldNonConvexGuestBehind
+3	4.29	TestDisplacedSupportSetBottle
+0	0.14	TestDisplacedSupportSetChamferedBlock
+5	0.09	TestDisplacedPenetrationWallMargin

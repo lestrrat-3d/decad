@@ -32,6 +32,14 @@ import (
 //
 // With all four, M ∩ S lies behind h's plane inside M's sunk part, and
 // moving M along h's normal by the depth d of its deepest feature clears it.
+//
+// A held M that stands for its true boundary within a displacement δ
+// (docs/multibody-dynamics-design.md §10.4) reads conditions 3 and 4 over its
+// held vertices grown by δ (PlanarFacePenetrationGrown): the true M lies
+// within δ of the held one, so its part behind the plane lies within δ of the
+// held part at most δ in front of it, and its column within δ of the held
+// vertex box. A true M that would poke a second face of S within δ is then
+// refused as the held one would be.
 
 // PlanarFacePenetration publishes the face-local patch of an Overlapping
 // pair from the crossings ClassifyPlanar recorded. Each convex solid in turn
@@ -46,6 +54,17 @@ import (
 // throughout; its error is returned unchanged.
 func PlanarFacePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, convexA, convexB bool,
 	poll func() error) (PlanarManifold, error) {
+	return PlanarFacePenetrationGrown(a, b, crossings, convexA, convexB, proof.DyZero(), proof.DyZero(), poll)
+}
+
+// PlanarFacePenetrationGrown is PlanarFacePenetration with each solid, when
+// tried as M, read grown by its own nonnegative displacement, growA for a
+// and growB for b: condition 3's sunk part is every held point at most the
+// growth in front of h's plane, whose projected hull grown by the growth must
+// lie strictly inside h's region, and condition 4's vertex box grows by it on
+// every axis. Zero growths are PlanarFacePenetration.
+func PlanarFacePenetrationGrown(a, b *PlanarSolid, crossings []PlanarCrossing, convexA, convexB bool,
+	growA, growB proof.Dyadic, poll func() error) (PlanarManifold, error) {
 	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || len(crossings) == 0 {
 		return PlanarManifold{}, nil
 	}
@@ -55,7 +74,11 @@ func PlanarFacePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, convex
 		if mIsA && !convexA || !mIsA && !convexB {
 			continue
 		}
-		got, err := facePenetration(a, b, crossings, mIsA, poll)
+		grow := growB
+		if mIsA {
+			grow = growA
+		}
+		got, err := facePenetration(a, b, crossings, mIsA, grow, poll)
 		if err != nil {
 			return PlanarManifold{}, err
 		}
@@ -75,8 +98,9 @@ func PlanarFacePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, convex
 	}
 }
 
-// facePenetration runs the four tests with M the A solid when mIsA.
-func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool,
+// facePenetration runs the four tests with M the A solid when mIsA, M grown
+// by grow.
+func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool, grow proof.Dyadic,
 	poll func() error) (PlanarManifold, error) {
 	mSolid, sSolid := b, a
 	if mIsA {
@@ -125,24 +149,39 @@ func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool,
 		return PlanarManifold{}, nil
 	}
 
-	// 3. The sunk part's projection lies strictly inside h's region.
+	// 3. The sunk part's projection lies strictly inside h's region. A grown
+	// M's sunk part is every held point at most grow·|n|_hi above the plane
+	// in n·x units, at least grow along the unit normal.
 	frame := NewPlaneFrame(n, q)
 	outer, holes, ok := host.frameLoops(h, frame, Point3{})
 	if !ok {
 		return PlanarManifold{}, nil
 	}
 	region := append([][]Point2{outer}, holes...)
-	sunk, err := sunkOutline(guest, heights, plane, frame, poll)
+	sunkLevel := plane
+	if grow.Sign() > 0 {
+		length, ok := proof.DyOf(proof.DySqrtUp(proof.DvDot(n, n)))
+		if !ok {
+			return PlanarManifold{}, nil
+		}
+		sunkLevel = proof.DyAdd(plane, proof.DyMul(grow, length))
+	}
+	sunk, err := sunkOutline(guest, heights, sunkLevel, frame, poll)
 	if err != nil {
 		return PlanarManifold{}, err
 	}
-	inside, err := hullInsideRegion(sunk, region, poll)
+	inside, err := hullInsideRegion(sunk, region, grow.Rat(), poll)
 	if err != nil || !inside {
 		return PlanarManifold{}, err
 	}
 
-	// 4. S's material in front of the plane stays clear of M's column.
+	// 4. S's material in front of the plane stays clear of M's column, the
+	// vertex box grown by grow on every axis.
 	lo, hi := vertexBox(mSolid.Verts)
+	for axis := range 3 {
+		lo[axis] = new(big.Rat).Sub(lo[axis], grow.Rat())
+		hi[axis] = new(big.Rat).Add(hi[axis], grow.Rat())
+	}
 	_, columnClear, err := PlanarColumnClear(sSolid, n, q, lo, hi, poll)
 	if err != nil || !columnClear {
 		return PlanarManifold{}, err
@@ -189,20 +228,29 @@ func sunkOutline(m *patchSide, heights []proof.Dyadic, plane proof.Dyadic, frame
 	return out, nil
 }
 
-// hullInsideRegion reports whether the convex hull of points lies strictly
-// inside the region the loops bound: every point strictly inside, no hull
-// edge meeting a loop edge, and no loop vertex in the closed hull. With the
-// first two, the hull's boundary lies in the region's interior, so a loop can
-// reach the hull only by lying wholly inside it, which the third refuses.
-func hullInsideRegion(points []Point2, loops [][]Point2, poll func() error) (bool, error) {
+// hullInsideRegion reports whether the convex hull of points, grown by the
+// nonnegative margin, lies strictly inside the region the loops bound: every
+// point strictly inside and farther than margin from every loop edge, no hull
+// edge meeting a loop edge, and no loop vertex in the closed hull or within
+// margin of it. With the first two, the hull's boundary lies in the region's
+// interior, so a loop can reach the hull only by lying wholly inside it,
+// which the third refuses. Two segments that do not meet are nearest at an
+// end of one of them, so the distance checks put every loop edge farther than
+// margin from the hull.
+func hullInsideRegion(points []Point2, loops [][]Point2, margin *big.Rat, poll func() error) (bool, error) {
 	if len(points) == 0 {
 		return false, nil
 	}
+	grown := margin.Sign() > 0
+	limit := new(big.Rat).Mul(margin, margin)
 	for _, p := range points {
 		if err := poll(); err != nil {
 			return false, err
 		}
 		if locate(p, loops) <= 0 {
+			return false, nil
+		}
+		if grown && !fartherThan(p, loops, limit) {
 			return false, nil
 		}
 	}
@@ -228,9 +276,47 @@ func hullInsideRegion(points []Point2, loops [][]Point2, poll func() error) (boo
 			if inConvexHull(a, hull) {
 				return false, nil
 			}
+			if grown && !fartherThan(a, [][]Point2{hull}, limit) {
+				return false, nil
+			}
 		}
 	}
 	return true, nil
+}
+
+// fartherThan reports whether x lies farther than √limit from every edge of
+// every loop, a loop of one point standing for that point and a loop of two
+// for their segment, compared exactly through squares.
+func fartherThan(x Point2, loops [][]Point2, limit *big.Rat) bool {
+	for _, loop := range loops {
+		for i, u := range loop {
+			w := loop[(i+1)%len(loop)]
+			if segmentDistance2(x, u, w).Cmp(limit) <= 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// segmentDistance2 is the exact squared distance from x to the closed
+// segment uw.
+func segmentDistance2(x, u, w Point2) *big.Rat {
+	e, rel := sub2(w, u), sub2(x, u)
+	length := dot2(e, e)
+	nearest := u
+	if length.Sign() > 0 {
+		t := new(big.Rat).Quo(dot2(e, rel), length)
+		switch {
+		case t.Sign() <= 0:
+		case t.Cmp(big.NewRat(1, 1)) >= 0:
+			nearest = w
+		default:
+			nearest = at2(u, w, t)
+		}
+	}
+	d := sub2(x, nearest)
+	return dot2(d, d)
 }
 
 // convexHull2 returns the corners of the points' convex hull counterclockwise

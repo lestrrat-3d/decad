@@ -21,7 +21,7 @@ shows a box impact and computed rebound.
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses; against a signed-axis face of an exact planar solid, a touch, gap or `ContactBand` at any pose, and a rolling touch or band track from such a start | Rolling on a fixed floor in a scheduled world, with and without gravity |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
-| A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
+| A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement, the lifted set within `max(SupportBand, δ)`, and a deep overlap's face-local patch; a clear path, first impact onto the band, or band track | A chamfered block lands and rests on its lifted corners |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -194,7 +194,14 @@ deeper than it inside the other body is a true overlap. A held touch, or a
 held gap or shallow depth within it, is `ContactBand`: the true pair lies
 within `Gap.Bound`, twice the summed δ, of touching. Its manifold is the
 held one with each point's ball grown by its body's δ, and it is published
-only when a face of a body with no displacement supplies the normal.
+only when a face of a body with no displacement supplies the normal. A held
+gap within `max(SupportBand, δ)` over which a face of the body with no
+displacement holds corners of the other is `ContactBand` with
+`Gap = [0 ± (g + δ)]`, g the held gap's upper end, and those corners as its
+manifold, each ball grown by its body's δ and each `Separation` by the
+summed δ. A deep overlap publishes the held patch of a convex body poking
+through one face, its conditions read over the held corners grown by that
+body's δ, then the corners within the band, charged the same way.
 `SweepPair` brackets a first impact onto a band sample; a pair that starts
 in its band never departs, and under `ContinueCertifiedTouch` it carries a
 band track whose `Band()` adds twice the summed δ.
@@ -328,7 +335,9 @@ touch. Under `SupportBand = PenetrationResidual/2` it comes to rest flat: a
 four-corner solve stops it with exactly zero velocities, and every later
 step absorbs its kick on all four corners.
 [Band rest tests](../dynamics/contact_band_test.go) rest a body on a
-displaced one within `PenetrationResidual` and stop below its band.
+displaced one within `PenetrationResidual` and stop below its band, and drop
+a chamfered block onto the tray, where it bounces and rests on its four
+lifted corners.
 The [stack-and-drop scene test](../dynamics/scene_test.go) runs 2 s of a
 box pyramid resting under friction while three spheres land on the floor and
 on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module

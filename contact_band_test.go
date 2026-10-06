@@ -210,10 +210,22 @@ func TestContactPairBandChargesHeldGap(t *testing.T) {
 	require.Equal(t, decad.ContactBand, touch.Relation)
 	require.Equal(t, 2*delta, touch.Gap.Bound.Base())
 
-	// A held gap inside δ may close on the true bodies.
+	// A held gap inside δ may close on the true bodies. The exact floor hosts
+	// the knob's four lower corners as its lifted set, read within b = δ, and
+	// the gap carries δ on the held one (§10.4).
 	near := at(math.Ldexp(1, -14))
-	require.Equal(t, decad.ContactBand, near.Relation)
-	require.Nil(t, near.Manifold)
+	require.Equal(t, decad.ContactBand, near.Relation, "reason=%v", near.Reason)
+	require.Zero(t, near.Gap.Value.Base())
+	require.GreaterOrEqual(t, near.Gap.Bound.Base(), math.Ldexp(1, -14)+delta)
+	require.NotNil(t, near.Manifold, "reason=%v", near.Reason)
+	require.Len(t, near.Manifold.Points, 4)
+	for _, point := range near.Manifold.Points {
+		require.Equal(t, math.Ldexp(1, -14), point.Separation.Value.Base())
+		require.GreaterOrEqual(t, point.Separation.Bound.Base(), delta)
+		require.GreaterOrEqual(t, point.OnB.Bound.Base(), delta)
+		require.Zero(t, point.OnA.Bound.Base())
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	}
 
 	// A held gap past δ is a true gap with δ charged.
 	far := at(1)
@@ -646,4 +658,313 @@ func TestHeldChordValidation(t *testing.T) {
 		_, err = doc.SweepPair(t.Context(), floor, block, still, skew, sweep)
 		require.ErrorIs(t, err, tc.want, tc.name)
 	}
+}
+
+// The fixtures of docs/multibody-dynamics-design.md §13 PR 20c: §10.4's rows
+// for a displaced pair's lifted set and deep overlap, each run in both body
+// orders over the §2 tray. A held separated pair within the lifted band
+// b = max(SupportBand, δ) over which the tray, the zero-δ body, hosts a
+// lifted set publishes ContactBand with Gap [0 ± (g + δ)] and that set; a
+// held overlap deeper than δ publishes §9.6's face-local patch read over the
+// held vertices grown by M's δ, then the lifted set, every point charged.
+//
+// §9.6 needs M's convexity certificate (§9.2), which the 2.1 mm block's held
+// mesh does not carry: its rounded feet leave a vertex an ulp in front of a
+// facet plane. The overlap fixtures use a 2.3 mm block, whose held mesh does,
+// and TestDisplacedSupportSetChamferedBlock records the 2.1 mm block's
+// refusal.
+//
+// Legs shown to fail (each deleted in turn, fixture red, then restored):
+//   - δ on the lifted band's gap: TestDisplacedSupportSetBottle's bottle on
+//     its side, a chord of its base lowest at a held height δ/10, publishes
+//     [0 ± δ/10], which excludes the true base's lowest point, evaluated in
+//     512-bit arithmetic a sagitta below the chord (its upright fixture's
+//     bound check goes red first);
+//   - the zero-δ host gate: TestDisplacedSupportSetBottle's bottle on the
+//     2.1 mm block reads a lifted band hosted by the bottle's held base, whose
+//     Gap.Bound g + δ lies below the held band's 2δ (chargedManifold's
+//     exact-face check still withholds the normal read off that held face);
+//   - b read from δ: with b read as SupportBand alone (0.01 mm, below the
+//     upright bottle's held gap of 0.8·δ), TestDisplacedSupportSetBottle's
+//     upright bottle publishes the held band [−2δ, 2δ] with no lifted set;
+//   - §9.6's growth by M's δ, both conditions' growth deleted together:
+//     TestDisplacedPenetrationWallMargin's block, whose held side stands δ/2
+//     from the wall while it is sunk in the floor, publishes the floor's
+//     patch. Either growth alone still refuses it (condition 3's sunk hull
+//     reaches within δ of the floor's rim at the wall's foot, and condition
+//     4's grown column meets the wall), so each was deleted alone as well and
+//     the fixture stayed green; internal/pair's TestHullInsideRegionMargin
+//     shows each of condition 3's distance checks red on its own;
+//   - each witness ball's δ and each Separation's δ: the published bounds
+//     fall below δ in TestDisplacedSupportSetChamferedBlock and
+//     TestDisplacedSupportSetBottle.
+//
+// No fixture puts a true point outside a bare ball or Separation: every
+// shipped tessellation samples its vertices on the true surface within
+// rounding. The charges follow Bound's contract, which places the true
+// boundary within δ of the held mesh and says nothing of where a held vertex
+// lies, rather than any producer's behavior, as PR 14b records its vertBound
+// term.
+
+// tiltedBlock is a 12 mm block over [−6, 6]×[y0, y0+12] with its top loop
+// chamfered by setback, and its displacement.
+func tiltedBlock(t *testing.T, doc *decad.Document, y0, setback float64) (*decad.Body, float64) {
+	t.Helper()
+	box := boxBody(t, doc, -6, y0, 6, y0+12, 12)
+	block, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(setback))
+	require.NoError(t, err)
+	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
+	require.NoError(t, err)
+	delta := mesh.Bound().Base()
+	require.Positive(t, delta, "the chamfer's feet are not dyadic")
+	return block, delta
+}
+
+// tiltAboutY turns a body about Y with sin θ = s, then moves it by at. A
+// body point (x, y, 0) lands at height at.Z − s·x, exactly.
+func tiltAboutY(t *testing.T, s float64, at r3.Vec) r3.Transform {
+	t.Helper()
+	c := math.Sqrt(1 - s*s)
+	return basisPose(t, r3.Vec{X: c, Z: -s}, r3.Vec{Y: 1}, r3.Vec{X: s, Z: c}, at)
+}
+
+// components lists a vector's coordinates.
+func components(v r3.Vec) [3]float64 { return [3]float64{v.X, v.Y, v.Z} }
+
+// stagedRat is the exact image of a body point under a pose.
+func stagedRat(pose r3.Transform, p r3.Vec) [3]*big.Rat {
+	basis, at := pose.Basis(), components(pose.Translation())
+	columns := [3][3]float64{components(basis.EX), components(basis.EY), components(basis.EZ)}
+	local := components(p)
+	var out [3]*big.Rat
+	for axis := range 3 {
+		sum := new(big.Rat).SetFloat64(at[axis])
+		for k := range 3 {
+			sum.Add(sum, new(big.Rat).Mul(new(big.Rat).SetFloat64(columns[k][axis]), new(big.Rat).SetFloat64(local[k])))
+		}
+		out[axis] = sum
+	}
+	return out
+}
+
+// withinBall reports whether the exact point lies inside the witness's ball.
+func withinBall(witness decad.VecMeasurement, exact [3]*big.Rat) bool {
+	distance := new(big.Rat)
+	value := components(witness.Value)
+	for axis := range 3 {
+		d := new(big.Rat).Sub(new(big.Rat).SetFloat64(value[axis]), exact[axis])
+		distance.Add(distance, d.Mul(d, d))
+	}
+	bound := new(big.Rat).SetFloat64(witness.Bound.Base())
+	return distance.Cmp(bound.Mul(bound, bound)) <= 0
+}
+
+// requireBlockCorners checks that each published point's block witness holds
+// the exact image of one distinct bottom corner of the block over
+// [−6, 6]×[−6, 6], with the block's δ in its ball, that its Separation is
+// that corner's exact height with at least δ in its bound, and that its
+// normal is the floor's +z. It returns the matched corners' heights in point
+// order.
+func requireBlockCorners(t *testing.T, points []decad.ContactPoint, pose r3.Transform, delta float64) []float64 {
+	t.Helper()
+	corners := []r3.Vec{{X: -6, Y: -6}, {X: 6, Y: -6}, {X: -6, Y: 6}, {X: 6, Y: 6}}
+	used := make([]bool, len(corners))
+	var heights []float64
+	for _, point := range points {
+		match := -1
+		for i, corner := range corners {
+			if !used[i] && withinBall(point.OnB, stagedRat(pose, corner)) {
+				match = i
+				break
+			}
+		}
+		require.GreaterOrEqual(t, match, 0, "the witness %v holds no bottom corner", point.OnB.Value)
+		used[match] = true
+		height := stagedRat(pose, corners[match])[2]
+		exact, ok := height.Float64()
+		require.True(t, ok, "the fixtures place every corner at a float height")
+		require.Equal(t, exact, point.Separation.Value.Base())
+		require.GreaterOrEqual(t, point.Separation.Bound.Base(), delta)
+		require.GreaterOrEqual(t, point.OnB.Bound.Base(), delta, "a held corner is no point of the true block")
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		heights = append(heights, exact)
+	}
+	return heights
+}
+
+func TestDisplacedSupportSetChamferedBlock(t *testing.T) {
+	const (
+		s    = 1.0 / (1 << 24)
+		band = 1.0 / (1 << 20)
+	)
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	block, delta := tiltedBlock(t, doc, -6, 2.1)
+
+	// Lifted 2⁻³⁰ mm: the x = 6 edge's corners stand at 2⁻³⁰ and the
+	// x = −6 edge's 12·2⁻²⁴ higher, all four inside the 2⁻²⁰ mm band.
+	lifted := tiltAboutY(t, s, r3.Vec{Z: math.Ldexp(1, -30) + 6*s})
+	report := trayCubeTwoWays(t, doc, tray, block, lifted, supportBandRequest(band))
+	require.Equal(t, decad.ContactBand, report.Relation, "reason=%v", report.Reason)
+	require.Equal(t, decad.ContactNoReason, report.Reason)
+	require.Zero(t, report.Gap.Value.Base())
+	// [0 ± (g + δ)]: the held gap is the lowest corner's exact height, and δ
+	// at the pose is the block's times a stretch a hair over one.
+	require.GreaterOrEqual(t, report.Gap.Bound.Base(), math.Ldexp(1, -30)+delta)
+	require.LessOrEqual(t, report.Gap.Bound.Base(), math.Ldexp(1, -30)+2*delta)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 4)
+	heights := requireBlockCorners(t, report.Manifold.Points, lifted, delta)
+	slices.Sort(heights)
+	require.Equal(t, []float64{math.Ldexp(1, -30), math.Ldexp(1, -30), 769 * math.Ldexp(1, -30),
+		769 * math.Ldexp(1, -30)}, heights)
+
+	// Sunk 2⁻²⁰ mm, the x = 6 edge pokes through the floor, a true overlap
+	// at a depth far past δ. §9.6 needs M's convexity certificate, which the
+	// 2.1 mm block's held mesh does not carry: its rounded feet fold a face
+	// pair the wrong way by an ulp. The pair is Overlapping with no manifold.
+	sunk := tiltAboutY(t, s, r3.Vec{Z: -band + 6*s})
+	report = trayCubeTwoWays(t, doc, tray, block, sunk, supportBandRequest(band))
+	require.Equal(t, decad.ContactOverlapping, report.Relation, "reason=%v", report.Reason)
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactNonConvex, report.Reason)
+
+	// A 2.3 mm block, whose held mesh is certified convex, sunk the same:
+	// §9.6 publishes its two deep corners at −2⁻²⁰ ± δ, then the x = −6
+	// edge's corners, at −2⁻²², as its lifted set.
+	convex, convexDelta := tiltedBlock(t, doc, -6, 2.3)
+	report = trayCubeTwoWays(t, doc, tray, convex, sunk, supportBandRequest(band))
+	require.Equal(t, decad.ContactOverlapping, report.Relation, "reason=%v", report.Reason)
+	require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+	require.Len(t, report.Manifold.Points, 4)
+	heights = requireBlockCorners(t, report.Manifold.Points, sunk, convexDelta)
+	require.Equal(t, []float64{-band, -band, -band / 4, -band / 4}, heights)
+	for _, point := range report.Manifold.Points[:2] {
+		require.NotNil(t, point.FeatureB.Edge, "the deepest feature is the edge")
+	}
+	for _, point := range report.Manifold.Points[2:] {
+		require.NotNil(t, point.FeatureB.Vertex)
+	}
+}
+
+func TestDisplacedPenetrationWallMargin(t *testing.T) {
+	const s = 1.0 / (1 << 24)
+	doc := decad.New()
+	// The tray moved so its +y wall's inner face is the plane y = 0, the
+	// floor's top z = 0 beside it.
+	tray := sceneTrayBody(t, doc)
+	trayPose := contactPose(t, r3.Vec{Y: -80})
+	// A 2.3 mm block over [−6, 6]×[−12, 0], whose held mesh carries the
+	// convexity certificate §9.6 needs of M. Turned about Y its x = 6 edge
+	// sinks 2⁻²⁰ mm into the floor and its x = −6 edge 2⁻²² mm, and its
+	// y = 0 side stays parallel to the wall at the pose's y.
+	block, delta := tiltedBlock(t, doc, -12, 2.3)
+	clearing := func(y float64) *decad.ContactReport {
+		t.Helper()
+		pose := tiltAboutY(t, s, r3.Vec{Y: y, Z: -math.Ldexp(1, -20) + 6*s})
+		return contactBothWays(t, doc, tray, block, trayPose, pose, supportBandRequest(math.Ldexp(1, -20)))
+	}
+
+	// Clear of the wall by far more than δ, the patch publishes the deep
+	// edge and then the lifted x = −6 edge.
+	apart := clearing(-math.Ldexp(1, -40))
+	require.Equal(t, decad.ContactOverlapping, apart.Relation)
+	require.NotNil(t, apart.Manifold, "reason=%v", apart.Reason)
+	require.Len(t, apart.Manifold.Points, 4)
+	for _, point := range apart.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	}
+
+	// The held side δ/2 from the wall: the true block may reach the wall, a
+	// second face, so the held patch claims nothing.
+	near := clearing(-delta / 2)
+	require.Equal(t, decad.ContactOverlapping, near.Relation)
+	require.Nil(t, near.Manifold)
+	require.Equal(t, decad.ContactNoNormalProof, near.Reason)
+}
+
+func TestDisplacedSupportSetBottle(t *testing.T) {
+	const chord = .03
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	bottle := partsBinBottle(t, doc)
+	mesh, err := bottle.Tessellate(t.Context(), units.Millimeters(chord))
+	require.NoError(t, err)
+	delta := mesh.Bound().Base()
+	require.Greater(t, delta, .01, "the band reads δ, above the 0.01 mm SupportBand")
+	req := supportBandRequest(.01)
+	req.HeldChord = units.Millimeters(chord)
+	req.PointResolution = units.Millimeters(.1)
+
+	// Upright with its held base 0.8·δ up, every base vertex is lifted.
+	up := .8 * delta
+	upright := trayCubeTwoWays(t, doc, tray, bottle, contactPose(t, r3.Vec{Z: up}), req)
+	require.Equal(t, decad.ContactBand, upright.Relation, "reason=%v", upright.Reason)
+	require.Equal(t, decad.ContactNoReason, upright.Reason)
+	require.GreaterOrEqual(t, upright.Gap.Bound.Base(), up+delta)
+	require.Less(t, upright.Gap.Bound.Base(), up+delta*(1+1e-9))
+	var base []r3.Vec
+	for _, v := range mesh.Vertices() {
+		if v.Z == 0 {
+			base = append(base, r3.Vec{X: v.X, Y: v.Y, Z: up})
+		}
+	}
+	require.Greater(t, len(base), 8)
+	require.NotNil(t, upright.Manifold)
+	require.Len(t, upright.Manifold.Points, len(base))
+	for _, point := range upright.Manifold.Points {
+		require.Contains(t, base, point.OnB.Value)
+		require.Equal(t, r3.Vec{X: point.OnB.Value.X, Y: point.OnB.Value.Y}, point.OnA.Value)
+		require.Equal(t, up, point.Separation.Value.Base())
+		require.GreaterOrEqual(t, point.Separation.Bound.Base(), delta)
+		require.GreaterOrEqual(t, point.OnB.Bound.Base(), delta)
+		require.Zero(t, point.OnA.Bound.Base())
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	}
+
+	// On its side, turned about its axis by half a chord step so the facet
+	// between two adjacent base-rim vertices is lowest at a held height of
+	// δ/10. The true base hangs its sagitta below that facet.
+	var rim []float64
+	for _, v := range mesh.Vertices() {
+		if v.Z == 0 && math.Abs(math.Hypot(v.X, v.Y)-8) < 1e-9 {
+			rim = append(rim, math.Atan2(v.Y, v.X))
+		}
+	}
+	slices.Sort(rim)
+	mid := (rim[0] + rim[1]) / 2
+	sinPhi, cosPhi := -math.Cos(mid), -math.Sin(mid)
+	basis := r3.Basis{EX: r3.Vec{X: cosPhi, Z: sinPhi}, EY: r3.Vec{X: -sinPhi, Z: cosPhi}, EZ: r3.Vec{Y: -1}}
+	turned, err := r3.FromBasis(basis, r3.Vec{})
+	require.NoError(t, err)
+	held := math.Inf(1)
+	for _, v := range mesh.Vertices() {
+		held = math.Min(held, turned.Apply(v).Z)
+	}
+	side, err := r3.FromBasis(basis, r3.Vec{Z: delta/10 - held})
+	require.NoError(t, err)
+	b := side.Basis()
+	row := new(big.Float).SetPrec(512).Mul(big.NewFloat(b.EX.Z), big.NewFloat(b.EX.Z))
+	row.Add(row, new(big.Float).SetPrec(512).Mul(big.NewFloat(b.EY.Z), big.NewFloat(b.EY.Z)))
+	row.Sqrt(row)
+	truth := new(big.Float).SetPrec(512).SetFloat64(side.Translation().Z)
+	truth.Sub(truth, row.Mul(row, big.NewFloat(8)))
+	require.Negative(t, truth.Cmp(big.NewFloat(-delta/10)), "the sagitta reaches past the held gap below zero")
+	lying := trayCubeTwoWays(t, doc, tray, bottle, side, req)
+	require.Equal(t, decad.ContactBand, lying.Relation, "reason=%v", lying.Reason)
+	require.NotNil(t, lying.Manifold, "reason=%v", lying.Reason)
+	requireGapHolds(t, lying, truth)
+
+	// On the 2.1 mm block, whose held mesh carries its own δ, neither body has
+	// an exact face to host a lifted set: the pair is the held band
+	// [−2δ, 2δ] with no manifold.
+	block, blockDelta := tiltedBlock(t, doc, -6, 2.1)
+	sum := new(big.Rat).Add(new(big.Rat).SetFloat64(delta), new(big.Rat).SetFloat64(blockDelta))
+	gap, _ := new(big.Rat).Mul(sum, big.NewRat(4, 5)).Float64()
+	stacked := contactBothWays(t, doc, block, bottle, r3.Identity(), contactPose(t, r3.Vec{Z: 12 + gap}), req)
+	require.Equal(t, decad.ContactBand, stacked.Relation, "reason=%v", stacked.Reason)
+	require.Nil(t, stacked.Manifold)
+	require.Equal(t, decad.ContactNoNormalProof, stacked.Reason)
+	require.Zero(t, stacked.Gap.Value.Base())
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(stacked.Gap.Bound.Base()).Cmp(new(big.Rat).Mul(sum, big.NewRat(2, 1))), 0)
 }
