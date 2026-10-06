@@ -58,7 +58,7 @@ type PatchPoint struct {
 // PlanarManifold is a published manifold, or a Reason when it is withheld.
 // Supports names the host face plane of every accepted face-face and support
 // piece, in the order the pieces were accepted, each once: the planes whose
-// support set (PlanarSupportSet) a positive band adds to the manifold.
+// support set (PlanarSupportSets) a positive band adds to the manifold.
 type PlanarManifold struct {
 	Points   []PatchPoint
 	Reason   Reason
@@ -86,7 +86,13 @@ type patchSide struct {
 }
 
 func newPatchSide(s *PlanarSolid, convex, isA bool) *patchSide {
-	p := &patchSide{prep: preparePlanar(s), faces: s.Faces, faceTris: make(map[int][]int),
+	return newPreparedPatchSide(preparePlanar(s), convex, isA)
+}
+
+// newPreparedPatchSide builds the adjacency over derived data already built.
+func newPreparedPatchSide(prep *planarPrep, convex, isA bool) *patchSide {
+	s := prep.s
+	p := &patchSide{prep: prep, faces: s.Faces, faceTris: make(map[int][]int),
 		vertTris: make([][]int, len(s.Verts)), edgeTris: make(map[[2]int][]int),
 		flat: make(map[int]bool), convex: convex, isA: isA}
 	for t, tri := range s.Tris {
@@ -1007,30 +1013,51 @@ func canonicalSqrt(x frac) (ScalarReading, bool) {
 	return fracSqrtReading(frac{num: num, den: den})
 }
 
-// PlanarSupportSet returns the lifted points of one support plane
-// (docs/multibody-dynamics-design.md §10.5): every guest vertex whose exact
+// PlanarSupportSets returns the lifted sets of the support planes
+// (docs/multibody-dynamics-design.md §10.5), each plane's in turn, in the
+// order of planes. One plane's lifted set is every guest vertex whose exact
 // height h = n·(p − q) over the host face's plane is at most band (in
 // millimetres, h² <= band²·n·n, compared exactly) and whose exact foot on the
-// plane lies strictly inside the face, holes excluded. Without overlap every guest vertex must
-// lie on or in front of it, and the vertices at zero height, the contact set,
-// are left out; with overlap the guest must poke through it, and its deepest
-// vertices, which the penetration patch publishes, are left out instead.
-// Each point pairs the foot on the host with the vertex on the guest, carries
-// the host face's outward normal oriented A to B, and the vertex's exact
-// signed height enclosed once as its Separation. A nil result means the
-// plane is not a support plane or its set is empty. poll is charged once per
-// vertex.
-func PlanarSupportSet(a, b *PlanarSolid, plane SupportPlane, band proof.Dyadic, overlap bool,
-	poll func() error) ([]PatchPoint, error) {
-	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || band.Sign() <= 0 {
+// plane lies strictly inside the face, holes excluded. Without overlap every
+// guest vertex must lie on or in front of it, and the vertices at zero
+// height, the contact set, are left out; with overlap the guest must poke
+// through it, and its deepest vertices, which the penetration patch
+// publishes, are left out instead. Each point pairs the foot on the host with
+// the vertex on the guest, carries the host face's outward normal oriented A
+// to B, and the vertex's exact signed height enclosed once as its
+// Separation. A plane that is not a support plane adds nothing. A nil result
+// means no plane added a point. result is ClassifyPlanar's result for a and
+// b, whose derived data each solid's adjacency is built over once for every
+// plane; the zero PlanarResult builds that data afresh. poll is charged once
+// per guest vertex per plane, twice for a plane that reaches its feet.
+func PlanarSupportSets(a, b *PlanarSolid, result PlanarResult, planes []SupportPlane, band proof.Dyadic,
+	overlap bool, poll func() error) ([]PatchPoint, error) {
+	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || band.Sign() <= 0 || len(planes) == 0 {
 		return nil, nil
 	}
-	hostSolid, guestSolid := b, a
-	if plane.HostIsA {
-		hostSolid, guestSolid = a, b
+	sa := newPreparedPatchSide(result.preparedFor(a), false, true)
+	sb := newPreparedPatchSide(result.preparedFor(b), false, false)
+	var out []PatchPoint
+	for _, plane := range planes {
+		host, guest := sb, sa
+		if plane.HostIsA {
+			host, guest = sa, sb
+		}
+		points, err := supportSet(host, guest, plane, band, overlap, poll)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, points...)
 	}
-	host := newPatchSide(hostSolid, false, plane.HostIsA)
-	guest := newPatchSide(guestSolid, false, !plane.HostIsA)
+	return out, nil
+}
+
+// supportSet is one plane's lifted set (PlanarSupportSets) over the host and
+// guest sides. A nil result means the plane is not a support plane or its set
+// is empty.
+func supportSet(host, guest *patchSide, plane SupportPlane, band proof.Dyadic, overlap bool,
+	poll func() error) ([]PatchPoint, error) {
+	guestSolid := guest.prep.s
 	if _, ok := host.faceTris[plane.Face]; !ok || !host.isFlat(plane.Face) {
 		return nil, nil
 	}
