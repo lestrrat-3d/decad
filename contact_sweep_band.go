@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -43,20 +45,20 @@ import (
 // coordinates. A path that does not rotate has a zero omega, and its center
 // is its first start vertex, so every distance below stays defined.
 type planarMotion struct {
-	velocity ratVec   // mm/s
-	omega    ratVec   // rad/s
-	center   ratVec   // world pivot at the start
-	rotating bool     // omega is nonzero
-	omegaSq  *big.Rat // exact |ω|²
-	omegaUp  *big.Rat // upper bound on |ω|
-	rho      *big.Rat // upper bound on the largest start-vertex distance from center
+	velocity motionbound.RatVec // mm/s
+	omega    motionbound.RatVec // rad/s
+	center   motionbound.RatVec // world pivot at the start
+	rotating bool               // omega is nonzero
+	omegaSq  *big.Rat           // exact |ω|²
+	omegaUp  *big.Rat           // upper bound on |ω|
+	rho      *big.Rat           // upper bound on the largest start-vertex distance from center
 }
 
 func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
 	if p.path.screw != nil || len(p.startPoints) == 0 {
 		return planarMotion{}, false
 	}
-	m := planarMotion{omega: ratVec{new(big.Rat), new(big.Rat), new(big.Rat)},
+	m := planarMotion{omega: motionbound.RatVec{new(big.Rat), new(big.Rat), new(big.Rat)},
 		omegaSq: new(big.Rat), omegaUp: new(big.Rat)}
 	if p.path.drift == nil {
 		for k := range 3 {
@@ -65,12 +67,12 @@ func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
 		m.center = ratOfDyV3(p.startPoints[0])
 	} else {
 		for k := range 3 {
-			if p.velocity[k] == nil || p.frame.axis[k] == nil || p.frame.center[k] == nil {
+			if p.velocity[k] == nil || p.frame.Axis[k] == nil || p.frame.Center[k] == nil {
 				return planarMotion{}, false
 			}
 			m.velocity[k] = new(big.Rat).Set(p.velocity[k])
-			m.omega[k] = new(big.Rat).Set(p.frame.axis[k])
-			m.center[k] = new(big.Rat).Set(p.frame.center[k])
+			m.omega[k] = new(big.Rat).Set(p.frame.Axis[k])
+			m.center[k] = new(big.Rat).Set(p.frame.Center[k])
 		}
 		m.rotating = true
 		m.omegaSq = ratDot3(m.omega, m.omega)
@@ -1109,24 +1111,24 @@ func (p *planarTrackProof) replayHeights(f *big.Rat) (*big.Rat, bool) {
 	return deviation, true
 }
 
-func ratOfDyV3(v proofarith.DyV3) ratVec {
-	return ratVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
+func ratOfDyV3(v proofarith.DyV3) motionbound.RatVec {
+	return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 }
 
-func ratAdd3(a, b ratVec) ratVec {
-	return ratVec{new(big.Rat).Add(a[0], b[0]), new(big.Rat).Add(a[1], b[1]), new(big.Rat).Add(a[2], b[2])}
+func ratAdd3(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{new(big.Rat).Add(a[0], b[0]), new(big.Rat).Add(a[1], b[1]), new(big.Rat).Add(a[2], b[2])}
 }
 
-func ratSub3(a, b ratVec) ratVec {
-	return ratVec{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
+func ratSub3(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
 }
 
-func ratDot3(a, b ratVec) *big.Rat {
+func ratDot3(a, b motionbound.RatVec) *big.Rat {
 	return proofbound.RatAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
 }
 
-func ratCross3(a, b ratVec) ratVec {
-	return ratVec{
+func ratCross3(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{
 		new(big.Rat).Sub(new(big.Rat).Mul(a[1], b[2]), new(big.Rat).Mul(a[2], b[1])),
 		new(big.Rat).Sub(new(big.Rat).Mul(a[2], b[0]), new(big.Rat).Mul(a[0], b[2])),
 		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
