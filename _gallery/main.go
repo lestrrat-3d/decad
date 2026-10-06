@@ -41,6 +41,13 @@
 // clip length and renders it with one kinetograph driven node per body under
 // out/. Its flags (-scene, -out, -fps, -width, -height, -workers, -smoke)
 // follow the subcommand; runDynamics documents them.
+//
+// The linkage subcommand films a mechanism decad verifies: `go run . linkage`
+// runs Document.VerifyLinkage over a two-link folding arm swinging into a
+// wall, then renders the same drive with one kinetograph driven node per link
+// under out/, the colliding link turning coral from the frame of the first
+// collision the check proves. Its flags (-out, -width, -height, -workers,
+// -smoke) follow the subcommand; runLinkage documents them.
 package main
 
 import (
@@ -116,8 +123,12 @@ func main() {
 }
 
 // run renders the hero still and each feature thumbnail. A first argument of
-// "hero", "clip" or "dynamics" renders the corresponding animation instead.
+// "hero", "clip", "dynamics" or "linkage" renders the corresponding animation
+// instead.
 func run(ctx context.Context) error {
+	if len(os.Args) > 1 && os.Args[1] == "linkage" {
+		return runLinkage(ctx, os.Args[2:], os.Stderr)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "dynamics" {
 		return runDynamics(ctx, os.Args[2:], os.Stderr)
 	}
@@ -133,6 +144,7 @@ func run(ctx context.Context) error {
 		fmt.Fprintln(out, "       go run . clip [clip flags]   (go run . clip -h lists the clip flags)")
 		fmt.Fprintln(out, "       go run . hero [hero flags]   (go run . hero -h lists the hero flags)")
 		fmt.Fprintln(out, "       go run . dynamics -scene <name> [dynamics flags]   (go run . dynamics -h lists them)")
+		fmt.Fprintln(out, "       go run . linkage [linkage flags]   (go run . linkage -h lists them)")
 		fmt.Fprintln(out, "Flags:")
 		flag.PrintDefaults()
 	}
@@ -153,7 +165,7 @@ func run(ctx context.Context) error {
 	list := flag.Bool("list", false, "print each shot's name, default chord tolerance and default size, then exit")
 	flag.Parse()
 	if flag.NArg() > 0 {
-		return fmt.Errorf("unexpected argument %q; the subcommands are clip, hero and dynamics, and one must come first", flag.Arg(0))
+		return fmt.Errorf("unexpected argument %q; the subcommands are clip, hero, dynamics and linkage, and one must come first", flag.Arg(0))
 	}
 
 	renders := append([]imageRender{heroRender()}, featureRenders()...)
