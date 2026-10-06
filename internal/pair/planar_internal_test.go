@@ -64,14 +64,15 @@ func TestPrunedMatchesGapComparison(t *testing.T) {
 	for _, best := range minima {
 		k := planarKernel{}
 		if best != nil {
-			k.best, k.hasBest = *best, true
+			k.best, k.bestUp, k.hasBest = *best, fracAbove(*best), true
 		}
 		for range 2000 {
 			alo, ahi := box()
 			blo, bhi := box()
 			want := k.hasBest &&
 				fracCmp(frac{num: boxGapSquared(alo, ahi, blo, bhi), den: proof.DyInt(1)}, k.best) > 0
-			require.Equal(t, want, k.pruned(alo, ahi, blo, bhi), "minimum %+v", best)
+			require.Equal(t, want, k.pruned(alo, ahi, blo, bhi, floatBoxOf(alo, ahi), floatBoxOf(blo, bhi)),
+				"minimum %+v", best)
 			if want {
 				pruned++
 			} else {

@@ -238,6 +238,12 @@ type planarPrep struct {
 	edgeLo, edgeHi [][3]proof.Dyadic
 	shellOf        []int
 	shells         int
+
+	// The distance scan's shortcuts (planar_prune.go), filled on first use.
+	vertBox, triBox, edgeBox []floatBox
+	sides                    [][3]proof.DyV3
+	sideBoxes                [][3]floatBox
+	sidesSet                 []bool
 }
 
 func preparePlanar(s *PlanarSolid) *planarPrep {
@@ -418,6 +424,7 @@ type planarKernel struct {
 	a, b    *planarPrep
 	poll    func() error
 	best    frac
+	bestUp  float64 // a float at or above best (fracAbove)
 	hasBest bool
 	sites   []contactSite
 	seen    map[PlanarContact]struct{}
@@ -608,7 +615,7 @@ func (k *planarKernel) addSite(site contactSite) {
 // offer folds one candidate squared distance into the running minimum.
 func (k *planarKernel) offer(d frac) {
 	if !k.hasBest || fracCmp(d, k.best) < 0 {
-		k.best, k.hasBest = d, true
+		k.best, k.bestUp, k.hasBest = d, fracAbove(d), true
 	}
 }
 
@@ -616,9 +623,18 @@ func (k *planarKernel) offer(d frac) {
 // minimum, so no candidate inside it can lower the minimum or touch. Every
 // offered candidate has a nonnegative numerator, so boxes that are not apart
 // (gap zero) are never pruned, and against a zero minimum over a positive
-// denominator any boxes apart are.
-func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic) bool {
-	if !k.hasBest || !boxesApart(alo, ahi, blo, bhi) {
+// denominator any boxes apart are. fa and fb are the boxes' outward float
+// copies. A float gap already past the minimum's float upper bound prunes
+// without an exact test (planar_prune.go): that bound is at least zero, so a
+// float gap past it also proves the boxes apart.
+func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBox) bool {
+	if !k.hasBest {
+		return false
+	}
+	if gapSquaredBelow(fa, fb) > k.bestUp {
+		return true
+	}
+	if !boxesApart(alo, ahi, blo, bhi) {
 		return false
 	}
 	if k.best.num.Sign() == 0 && k.best.den.Sign() > 0 {
@@ -630,6 +646,8 @@ func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic) bool {
 // distances computes the exact minimum squared distance over vertex-facet
 // and edge-edge candidates and records every zero-distance site.
 func (k *planarKernel) distances() error {
+	k.a.floatBoxes()
+	k.b.floatBoxes()
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		verts, tris := side[0], side[1]
 		for v, point := range verts.s.Verts {
@@ -637,7 +655,7 @@ func (k *planarKernel) distances() error {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if k.pruned(point, point, tris.triLo[t], tris.triHi[t]) {
+				if k.pruned(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
 					continue
 				}
 				k.vertexFacet(verts, v, tris, t)
@@ -649,7 +667,7 @@ func (k *planarKernel) distances() error {
 			if err := k.poll(); err != nil {
 				return err
 			}
-			if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb]) {
+			if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
 				continue
 			}
 			k.edgeEdge(edgeA, edgeB)
@@ -661,13 +679,20 @@ func (k *planarKernel) distances() error {
 // vertexFacet offers the distance from a vertex to a facet's plane when its
 // projection lies in the closed facet; projections outside are covered by
 // the edge-edge candidates. A zero distance records a site at the vertex.
+// Each side sign is edgeSide's, read through the triangle's side planes and
+// their float pre-test (planar_prune.go).
 func (k *planarKernel) vertexFacet(verts *planarPrep, v int, tris *planarPrep, t int) {
 	point := verts.s.Verts[v]
 	tri := tris.s.Tris[t]
 	normal := tris.normal[t]
+	planes, boxes := tris.sidePlanes(t)
 	var sides [3]int
 	for i := range 3 {
-		sides[i] = edgeSide(normal, tris.s.Verts[tri[i]], tris.s.Verts[tri[(i+1)%3]], dyPoint(point))
+		sign, ok := floatDotSign(verts.vertBox[v], tris.vertBox[tri[i]], boxes[i])
+		if !ok {
+			sign = proof.DvDot(proof.DvSub(point, tris.s.Verts[tri[i]]), planes[i]).Sign()
+		}
+		sides[i] = sign
 		if sides[i] < 0 {
 			return
 		}
