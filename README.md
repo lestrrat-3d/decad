@@ -34,16 +34,17 @@ change a dimension or feature, run the program again, and inspect the new body
 and verification report. With the program and inputs held fixed, **the same
 model can be rebuilt** without a fresh request to the agent.
 
+That Go program can be the CAD workflow in its own right. decad's performance
+still needs work, but matching the speed of Autodesk Fusion or other CAD apps is
+not its primary goal. If a workflow needs the speed of one of those apps, an
+agent can develop and verify the construction in decad before implementing it
+as an add-in there. The agent checks the part in the app too, because it may
+interpret the steps differently.
+
 For certified shape and motion paths, decad can detect a collision and compute
 the resulting rigid-body motion. The [current support guide](docs/collision-v1-support.md)
 names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
 runs an impact and reports the rebound.
-
-That Go program can be the CAD workflow in its own right. Matching the
-performance of Autodesk Fusion and other CAD apps is not decad's primary goal.
-For performance-sensitive work, an agent can check the construction in decad
-before implementing it as an add-in for one of those apps. The app may
-interpret the steps differently, so the agent checks the part it builds there.
 
 ## What it builds
 
