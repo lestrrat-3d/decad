@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -233,6 +234,10 @@ func requireSameRat(t *testing.T, want, got *big.Rat, msgAndArgs ...any) {
 	}
 	require.Zero(t, want.Cmp(got), append([]any{"want %s, got %s", want.RatString(), got.RatString()},
 		msgAndArgs...)...)
+	// The same lowest terms, numerator and denominator, not only the same
+	// value: a form that skips big.Rat's reduction must still reach them.
+	require.Zero(t, want.Num().Cmp(got.Num()), msgAndArgs...)
+	require.Zero(t, want.Denom().Cmp(got.Denom()), msgAndArgs...)
 }
 
 func requireSameRats(t *testing.T, want, got [3]*big.Rat, msgAndArgs ...any) {
@@ -398,6 +403,45 @@ func TestCertBodyMatchesOldForm(t *testing.T) {
 	}
 	require.Positive(t, seen[true], "premise: some bodies read")
 	require.Positive(t, seen[false], "premise: some bodies fail to read")
+}
+
+// TestCertPointMatchesOldForm compares newCertPoint's balls and levers with
+// the old form's over bodies with and without a mass center.
+func TestCertPointMatchesOldForm(t *testing.T) {
+	t.Parallel()
+	g := newEquivalenceInputs(t, 14)
+	read := 0
+	for k := 0; read < 200; k++ {
+		w := g.world(3)
+		state, drive := g.state(w), g.drive(w)
+		bodies := make([]certBody, len(w.bodies))
+		ok := true
+		for i := range bodies {
+			bodies[i], ok = w.newCertBody(i, state.entries[i], state.entries[i], drive)
+			if !ok {
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		read++
+		a := g.r.IntN(len(bodies) - 1)
+		b := a + 1 + g.r.IntN(len(bodies)-1-a)
+		point := g.contactPoint()
+		want, okWant := oldNewCertPoint(0, a, b, point, bodies, new(big.Rat))
+		got, okGot := newCertPoint(0, a, b, point, bodies, new(big.Rat))
+		require.Equal(t, okWant, okGot, "draw %d", k)
+		if !okWant {
+			continue
+		}
+		for _, pair := range [][2]ivec{{want.normal, got.normal}, {want.onA, got.onA}, {want.onB, got.onB},
+			{want.rA, got.rA}, {want.rB, got.rB}} {
+			requireSameIVec(t, pair[0], pair[1], "draw %d", k)
+		}
+		requireSameRat(t, want.ballA, got.ballA, "draw %d", k)
+		requireSameRat(t, want.ballB, got.ballB, "draw %d", k)
+	}
 }
 
 func TestPointVelocityMatchesOldForm(t *testing.T) {
@@ -604,6 +648,47 @@ func TestConservationStateMatchesOldForm(t *testing.T) {
 		seen[okWant]++
 	}
 	require.Len(t, seen, 2, "premise: readable and unreadable states both occur")
+}
+
+// TestStepWorkConservationReuse checks the readings a step reuses: the
+// input state's carried Completion only for entries equal to the cache's,
+// and a reading the step already took only for equal entries. A planted
+// carried reading shows which path answered.
+func TestStepWorkConservationReuse(t *testing.T) {
+	t.Parallel()
+	g := newEquivalenceInputs(t, 15)
+	readable := 0
+	for k := 0; readable < 50; k++ {
+		w := g.world(1 + g.r.IntN(4))
+		from, other := g.state(w), g.state(w)
+		if _, ok := w.conservationState(from); !ok {
+			continue
+		}
+		readable++
+		planted := ConservationState{KineticEnergy: decad.Measurement{Value: units.New(float64(k+1),
+			units.KilogramSquareMillimeterPerSecondSquared)}}
+		from.cache = &contactCache{entries: slices.Clone(from.entries), completion: &planted}
+		work := newStepWork(w, from)
+		got, ok := work.conservation(from)
+		require.True(t, ok)
+		require.Equal(t, planted, got, "draw %d: the carried reading answers its own entries", k)
+		want, okWant := w.conservationState(other)
+		got, okGot := work.conservation(other)
+		require.Equal(t, okWant, okGot, "draw %d", k)
+		require.Equal(t, want, got, "draw %d: other entries read afresh", k)
+		again, okAgain := work.conservation(State{world: w, entries: slices.Clone(other.entries)})
+		require.Equal(t, [2]any{want, okWant}, [2]any{again, okAgain}, "draw %d: equal entries reuse", k)
+		moved := from.clone()
+		speed := 7.0
+		if moved.entries[0].LinearVelocity.X.Base() == speed {
+			speed = 8
+		}
+		moved.entries[0].LinearVelocity.X = units.MillimetersPerSecond(speed)
+		want, okWant = w.conservationState(moved)
+		got, okGot = work.conservation(moved)
+		require.Equal(t, [2]any{want, okWant}, [2]any{got, okGot}, "draw %d: changed entries read afresh", k)
+		require.NotEqual(t, planted, got, "draw %d", k)
+	}
 }
 
 func requireSameCertificate(t *testing.T, want, got islandCertificate, msgAndArgs ...any) {

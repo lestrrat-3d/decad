@@ -26,7 +26,8 @@ var errPairBudget = errors.New("dynamics: pair sweep budget exhausted")
 
 // contactCache is the immutable reuse record one scheduled step attaches to
 // the state it publishes: every swept box and pair sweep the step used, keyed
-// by their exact inputs, and every island it certified. It
+// by their exact inputs, every island it certified, and the conservation
+// reading of the published entries. It
 // describes entries, the state it was published with, and is read only by a
 // step from that state.
 type contactCache struct {
@@ -34,6 +35,9 @@ type contactCache struct {
 	boxes   map[boxKey]decad.SweptBox
 	sweeps  map[sweepKey]*decad.SweepReport
 	islands []*warmIsland
+	// completion is the conservation reading of entries, the step's
+	// Completion; nil until the step publishes it.
+	completion *ConservationState
 }
 
 // boxKey names one SweptBox call. A stationary PoseSegment's box is its
@@ -83,10 +87,19 @@ type warmPair struct {
 // cache. A stepWork without an out record (directWork) calls decad directly
 // and charges nothing, as Trace.Sample does.
 type stepWork struct {
-	w     *World
-	input *contactCache
-	out   *contactCache
-	calls uint64
+	w        *World
+	input    *contactCache
+	out      *contactCache
+	calls    uint64
+	readings []heldReading
+}
+
+// heldReading is one conservation reading the step took, with the entries it
+// read.
+type heldReading struct {
+	entries []BodyState
+	reading ConservationState
+	ok      bool
 }
 
 // directWork calls decad for every query, with no reuse and no budget.
@@ -102,6 +115,27 @@ func newStepWork(w *World, from State) *stepWork {
 		work.input = from.cache
 	}
 	return work
+}
+
+// conservation is World.conservationState of state, reused when the step
+// read the same entries before or the input state's cache holds their
+// reading. The reading is a pure function of the World and the entries, so a
+// reused reading is the one the same call returns. A step reads the input,
+// the kicked and the completed state and both ends of every drift slice;
+// the kicked state starts the first slice and the completed one ends the
+// last, and the input state is the previous step's completed one.
+func (s *stepWork) conservation(state State) (ConservationState, bool) {
+	for _, held := range s.readings {
+		if slices.Equal(held.entries, state.entries) {
+			return held.reading, held.ok
+		}
+	}
+	if s.input != nil && s.input.completion != nil && slices.Equal(s.input.entries, state.entries) {
+		return *s.input.completion, true
+	}
+	reading, ok := s.w.conservationState(state)
+	s.readings = append(s.readings, heldReading{entries: state.entries, reading: reading, ok: ok})
+	return reading, ok
 }
 
 // charge counts one decad call against MaxPairSweeps.

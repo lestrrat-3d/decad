@@ -206,8 +206,8 @@ func ballIVec(v r3.Vec, radius *big.Rat) (ivec, bool) {
 	}
 	var out ivec
 	for axis := range out {
-		out[axis] = proof.OwnedInterval(new(big.Rat).Sub(center[axis], radius),
-			new(big.Rat).Add(center[axis], radius))
+		out[axis] = proof.OwnedInterval(proof.SubRat(new(big.Rat), center[axis], radius),
+			proof.AddRat(new(big.Rat), center[axis], radius))
 	}
 	return out, true
 }
@@ -256,13 +256,13 @@ func euclideanUpper(v ivec) *big.Rat {
 	sum := new(big.Rat)
 	for axis := range v {
 		m := magnitude(v[axis])
-		sum.Add(sum, new(big.Rat).Mul(m, m))
+		proof.AddRat(sum, sum, proof.MulRat(new(big.Rat), m, m))
 	}
 	approx, _ := sum.Float64()
 	root := math.Sqrt(approx)
 	for {
 		r := ratFloat(root)
-		if r != nil && new(big.Rat).Mul(r, r).Cmp(sum) >= 0 {
+		if r != nil && proof.MulRat(new(big.Rat), r, r).Cmp(sum) >= 0 {
 			return r
 		}
 		root = math.Nextafter(root, math.Inf(1))
@@ -294,22 +294,22 @@ func (w *World) newCertBody(index int, entry BodyState, post BodyState,
 		for j := range 3 {
 			entry := new(big.Rat)
 			for k := range 3 {
-				entry.Add(entry, new(big.Rat).Mul(body.rotation[k][i], body.rotation[k][j]))
+				proof.AddRat(entry, entry, proof.MulRat(new(big.Rat), body.rotation[k][i], body.rotation[k][j]))
 			}
 			if i == j {
-				entry.Sub(entry, big.NewRat(1, 1))
+				proof.SubRat(entry, entry, big.NewRat(1, 1))
 			}
-			d.Add(d, absRat(entry))
+			proof.AddRat(d, d, absRat(entry))
 		}
 	}
-	body.defect = new(big.Rat).Mul(big.NewRat(3, 1), d)
-	body.defect.Mul(body.defect, new(big.Rat).Add(big.NewRat(2, 1), d))
-	body.defect.Mul(body.defect, exact.largest)
+	body.defect = proof.MulRat(new(big.Rat), big.NewRat(3, 1), d)
+	proof.MulRat(body.defect, body.defect, proof.AddRat(new(big.Rat), big.NewRat(2, 1), d))
+	proof.MulRat(body.defect, body.defect, exact.largest)
 	body.inertiaLower = exact.floor
 	body.rowCeiling = exact.rowCeiling
 	body.centerL1 = new(big.Rat)
 	for axis := range 3 {
-		body.centerL1.Add(body.centerL1, magnitude(body.center[axis]))
+		proof.AddRat(body.centerL1, body.centerL1, magnitude(body.center[axis]))
 	}
 	body.vPost, ok = quantityRats(post.LinearVelocity)
 	if !ok {
@@ -354,8 +354,8 @@ func (w *World) certMotion(index int, entry BodyState, drive map[int]driverMotio
 		return certBody{}, false
 	}
 	for axis := range 3 {
-		body.center[axis] = proof.OwnedInterval(new(big.Rat).Sub(center[axis], centerError[axis]),
-			new(big.Rat).Add(center[axis], centerError[axis]))
+		body.center[axis] = proof.OwnedInterval(proof.SubRat(new(big.Rat), center[axis], centerError[axis]),
+			proof.AddRat(new(big.Rat), center[axis], centerError[axis]))
 	}
 	var valid [2]bool
 	body.v, valid[0] = quantityRats(entry.LinearVelocity)
@@ -376,7 +376,7 @@ func (b certBody) inertiaApply(x [3]*big.Rat) ivec {
 	for j := range local {
 		local[j] = new(big.Rat)
 		for i := range 3 {
-			local[j].Add(local[j], new(big.Rat).Mul(b.rotation[i][j], x[i]))
+			proof.AddRat(local[j], local[j], proof.MulRat(new(big.Rat), b.rotation[i][j], x[i]))
 		}
 	}
 	var y ivec
@@ -388,16 +388,16 @@ func (b certBody) inertiaApply(x [3]*big.Rat) ivec {
 	}
 	widen := new(big.Rat)
 	for _, value := range x {
-		widen.Add(widen, absRat(new(big.Rat).Set(value)))
+		proof.AddRat(widen, widen, absRat(new(big.Rat).Set(value)))
 	}
-	widen.Mul(widen, b.defect)
+	proof.MulRat(widen, widen, b.defect)
 	var out ivec
 	for row := range out {
 		out[row] = proof.ScaleInterval(y[0], b.rotation[row][0])
 		for i := 1; i < 3; i++ {
 			out[row] = proof.AddInterval(out[row], proof.ScaleInterval(y[i], b.rotation[row][i]))
 		}
-		out[row] = proof.OwnedInterval(new(big.Rat).Sub(out[row].Lo, widen), new(big.Rat).Add(out[row].Hi, widen))
+		out[row] = proof.OwnedInterval(proof.SubRat(new(big.Rat), out[row].Lo, widen), proof.AddRat(new(big.Rat), out[row].Hi, widen))
 	}
 	return out
 }
@@ -422,7 +422,7 @@ func newCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
 	if normalBound == nil || angle == nil || boundA == nil || boundB == nil {
 		return certPoint{}, false
 	}
-	normal, okN := ballIVec(point.Normal.Value, new(big.Rat).Add(normalBound, angle))
+	normal, okN := ballIVec(point.Normal.Value, proof.AddRat(new(big.Rat), normalBound, angle))
 	onA, okA := ballIVec(point.OnA.Value, boundA)
 	onB, okB := ballIVec(point.OnB.Value, boundB)
 	if !okN || !okA || !okB {
@@ -496,8 +496,8 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		raise(&cert.spin, euclideanUpper(pointIVec(body.wPost)))
 		var dv, dw [3]*big.Rat
 		for axis := range 3 {
-			dv[axis] = new(big.Rat).Sub(body.vPost[axis], body.v[axis])
-			dw[axis] = new(big.Rat).Sub(body.wPost[axis], body.w[axis])
+			dv[axis] = proof.SubRat(new(big.Rat), body.vPost[axis], body.v[axis])
+			dw[axis] = proof.SubRat(new(big.Rat), body.wPost[axis], body.w[axis])
 		}
 		force, torque := zeroIVec(), zeroIVec()
 		for k, p := range points {
@@ -511,7 +511,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 			}
 		}
 		// Linear law: m·(v' − v) − ΣJ over the mass interval.
-		linearLimit := new(big.Rat).Add(impulseLimit, new(big.Rat).Mul(body.mass.Hi, velocityLimit))
+		linearLimit := proof.AddRat(new(big.Rat), impulseLimit, proof.MulRat(new(big.Rat), body.mass.Hi, velocityLimit))
 		momentumChange := ivec{}
 		for axis := range 3 {
 			momentumChange[axis] = proof.MulInterval(body.mass, proof.PointInterval(dv[axis]))
@@ -529,9 +529,9 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		witnessTorque := bodyWitnessTorque(slot, points, impulses)
 		raise(&cert.witnessTorque, witnessTorque)
 		raise(&cert.witnessSpin, new(big.Rat).Quo(witnessTorque, body.inertiaLower))
-		angularBodyLimit := new(big.Rat).Add(new(big.Rat).Mul(impulseLimit, rho),
-			new(big.Rat).Mul(body.inertiaLower, angularLimit))
-		angularBodyLimit.Add(angularBodyLimit, witnessTorque)
+		angularBodyLimit := proof.AddRat(new(big.Rat), proof.MulRat(new(big.Rat), impulseLimit, rho),
+			proof.MulRat(new(big.Rat), body.inertiaLower, angularLimit))
+		proof.AddRat(angularBodyLimit, angularBodyLimit, witnessTorque)
 		for axis := range 3 {
 			residual := magnitude(proof.SubInterval(spinChange[axis], torque[axis]))
 			raise(&cert.angular, residual)
@@ -545,43 +545,43 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		linearMomentum = addIVec(linearMomentum, momentumChange)
 		angularMomentum = addIVec(angularMomentum,
 			addIVec(spinChange, proof.CrossInterval3(body.center, momentumChange)))
-		linearMomentumLimit.Add(linearMomentumLimit, linearLimit)
-		angularMomentumLimit.Add(angularMomentumLimit, angularBodyLimit)
-		angularMomentumLimit.Add(angularMomentumLimit, new(big.Rat).Mul(body.centerL1, linearLimit))
+		proof.AddRat(linearMomentumLimit, linearMomentumLimit, linearLimit)
+		proof.AddRat(angularMomentumLimit, angularMomentumLimit, angularBodyLimit)
+		proof.AddRat(angularMomentumLimit, angularMomentumLimit, proof.MulRat(new(big.Rat), body.centerL1, linearLimit))
 		// Energy: the squared-speed difference with the mass endpoint that
 		// maximises it, the rotational change over the inertia intervals, and
 		// the defect widening of both rotational readings.
 		squaredChange := new(big.Rat)
 		for axis := range 3 {
-			squaredChange.Add(squaredChange, new(big.Rat).Sub(new(big.Rat).Mul(body.vPost[axis], body.vPost[axis]),
-				new(big.Rat).Mul(body.v[axis], body.v[axis])))
-			speeds := new(big.Rat).Add(absRat(new(big.Rat).Set(body.v[axis])),
+			proof.AddRat(squaredChange, squaredChange, proof.SubRat(new(big.Rat), proof.MulRat(new(big.Rat), body.vPost[axis], body.vPost[axis]),
+				proof.MulRat(new(big.Rat), body.v[axis], body.v[axis])))
+			speeds := proof.AddRat(new(big.Rat), absRat(new(big.Rat).Set(body.v[axis])),
 				absRat(new(big.Rat).Set(body.vPost[axis])))
-			speeds.Add(speeds, velocityLimit)
-			energyAllowance.Add(energyAllowance, new(big.Rat).Mul(linearLimit, speeds))
-			spins := new(big.Rat).Add(absRat(new(big.Rat).Set(body.w[axis])),
+			proof.AddRat(speeds, speeds, velocityLimit)
+			proof.AddRat(energyAllowance, energyAllowance, proof.MulRat(new(big.Rat), linearLimit, speeds))
+			spins := proof.AddRat(new(big.Rat), absRat(new(big.Rat).Set(body.w[axis])),
 				absRat(new(big.Rat).Set(body.wPost[axis])))
-			spins.Add(spins, angularLimit)
-			energyAllowance.Add(energyAllowance, new(big.Rat).Mul(
-				new(big.Rat).Mul(big.NewRat(3, 1), new(big.Rat).Mul(body.rowCeiling, angularLimit)), spins))
+			proof.AddRat(spins, spins, angularLimit)
+			proof.AddRat(energyAllowance, energyAllowance, proof.MulRat(new(big.Rat),
+				proof.MulRat(new(big.Rat), big.NewRat(3, 1), proof.MulRat(new(big.Rat), body.rowCeiling, angularLimit)), spins))
 		}
 		if squaredChange.Sign() > 0 {
-			energyUpper.Add(energyUpper, new(big.Rat).Mul(body.mass.Hi, squaredChange))
+			proof.AddRat(energyUpper, energyUpper, proof.MulRat(new(big.Rat), body.mass.Hi, squaredChange))
 		} else {
-			energyUpper.Add(energyUpper, new(big.Rat).Mul(body.mass.Lo, squaredChange))
+			proof.AddRat(energyUpper, energyUpper, proof.MulRat(new(big.Rat), body.mass.Lo, squaredChange))
 		}
 		spinUpper, ok := spinEnergyChange(&w.bodies[body.index].exact.components, body.rotation, body.w, body.wPost)
 		if !ok {
 			cert.fail(gateEnergy, new(big.Rat), new(big.Rat))
 			continue
 		}
-		energyUpper.Add(energyUpper, spinUpper)
+		proof.AddRat(energyUpper, energyUpper, spinUpper)
 		for _, omega := range [2][3]*big.Rat{body.w, body.wPost} {
 			l1 := new(big.Rat)
 			for _, value := range omega {
-				l1.Add(l1, absRat(new(big.Rat).Set(value)))
+				proof.AddRat(l1, l1, absRat(new(big.Rat).Set(value)))
 			}
-			energyUpper.Add(energyUpper, new(big.Rat).Mul(body.defect, new(big.Rat).Mul(l1, l1)))
+			proof.AddRat(energyUpper, energyUpper, proof.MulRat(new(big.Rat), body.defect, proof.MulRat(new(big.Rat), l1, l1)))
 		}
 	}
 	for k, p := range points {
@@ -600,8 +600,8 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		combined := func(body certBody, r ivec) ivec {
 			var u, omega [3]*big.Rat
 			for axis := range 3 {
-				u[axis] = new(big.Rat).Add(body.vPost[axis], new(big.Rat).Mul(e, body.v[axis]))
-				omega[axis] = new(big.Rat).Add(body.wPost[axis], new(big.Rat).Mul(e, body.w[axis]))
+				u[axis] = proof.AddRat(new(big.Rat), body.vPost[axis], proof.MulRat(new(big.Rat), e, body.v[axis]))
+				omega[axis] = proof.AddRat(new(big.Rat), body.wPost[axis], proof.MulRat(new(big.Rat), e, body.w[axis]))
 			}
 			return pointVelocity(body, u, omega, r)
 		}
@@ -636,7 +636,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 			if side == 1 {
 				work = proof.NegInterval(work)
 			}
-			kinematicWork.Add(kinematicWork, work.Hi)
+			proof.AddRat(kinematicWork, kinematicWork, work.Hi)
 		}
 		// External impulses: those a Fixed or Kinematic body delivers. A dynamic pair's
 		// two sides read the same λ and normal interval and cancel exactly in
@@ -663,7 +663,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 	energyUpper.Quo(energyUpper, big.NewRat(2, 1))
 	cert.energy = energyUpper
 	// The island's kinetic energy may grow by the work its drivers deliver.
-	energyAllowance.Add(energyAllowance, kinematicWork)
+	proof.AddRat(energyAllowance, energyAllowance, kinematicWork)
 	if energyUpper.Cmp(energyAllowance) > 0 {
 		cert.fail(gateEnergy, energyUpper, energyAllowance)
 	}
@@ -703,9 +703,9 @@ func bodyWitnessTorque(slot int, points []certPoint, impulses []ivec) *big.Rat {
 		}
 		l1 := new(big.Rat)
 		for axis := range 3 {
-			l1.Add(l1, magnitude(impulses[k][axis]))
+			proof.AddRat(l1, l1, magnitude(impulses[k][axis]))
 		}
-		torque.Add(torque, new(big.Rat).Mul(ball, l1))
+		proof.AddRat(torque, torque, proof.MulRat(new(big.Rat), ball, l1))
 	}
 	return torque
 }
@@ -722,16 +722,16 @@ func (w *World) certifyFriction(cert *islandCertificate, p certPoint, bodies []c
 	impulseLimit, velocityLimit *big.Rat) {
 	square := new(big.Rat)
 	for _, component := range p.tangent {
-		square.Add(square, new(big.Rat).Mul(component, component))
+		proof.AddRat(square, square, proof.MulRat(new(big.Rat), component, component))
 	}
-	coneLower := new(big.Rat).Mul(p.mu, p.lambda)
-	allowed := new(big.Rat).Add(coneLower, impulseLimit)
+	coneLower := proof.MulRat(new(big.Rat), p.mu, p.lambda)
+	allowed := proof.AddRat(new(big.Rat), coneLower, impulseLimit)
 	norm := ratSqrtUpper(square)
-	if excess := new(big.Rat).Sub(norm, coneLower); excess.Sign() > 0 {
+	if excess := proof.SubRat(new(big.Rat), norm, coneLower); excess.Sign() > 0 {
 		raise(&cert.cone, excess)
 	}
-	if allowed.Sign() < 0 || square.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
-		cert.fail(gateCone, new(big.Rat).Sub(norm, coneLower), impulseLimit)
+	if allowed.Sign() < 0 || square.Cmp(proof.MulRat(new(big.Rat), allowed, allowed)) > 0 {
+		cert.fail(gateCone, proof.SubRat(new(big.Rat), norm, coneLower), impulseLimit)
 	}
 	relative := subIVec(pointVelocity(bodies[p.b], bodies[p.b].vPost, bodies[p.b].wPost, p.rB),
 		pointVelocity(bodies[p.a], bodies[p.a].vPost, bodies[p.a].wPost, p.rA))
@@ -741,8 +741,8 @@ func (w *World) certifyFriction(cert *islandCertificate, p certPoint, bodies []c
 		slide[axis] = proof.SubInterval(relative[axis], proof.MulInterval(normalSpeed, p.normal[axis]))
 	}
 	speedUpper := euclideanUpper(slide)
-	threshold := new(big.Rat).Sub(coneLower, impulseLimit)
-	if threshold.Sign() > 0 && square.Cmp(new(big.Rat).Mul(threshold, threshold)) < 0 {
+	threshold := proof.SubRat(new(big.Rat), coneLower, impulseLimit)
+	if threshold.Sign() > 0 && square.Cmp(proof.MulRat(new(big.Rat), threshold, threshold)) < 0 {
 		raise(&cert.tangent, speedUpper)
 		if speedUpper.Cmp(velocityLimit) > 0 {
 			cert.fail(gateStick, speedUpper, velocityLimit)
@@ -750,9 +750,9 @@ func (w *World) certifyFriction(cert *islandCertificate, p certPoint, bodies []c
 		return
 	}
 	opposed := proof.DotInterval3(pointIVec(p.tangent), slide).Hi
-	opposed = new(big.Rat).Add(opposed, new(big.Rat).Mul(norm, speedUpper))
-	limit := new(big.Rat).Mul(impulseLimit, euclideanLower(slide))
-	limit.Add(limit, new(big.Rat).Mul(velocityLimit, ratSqrtLower(square)))
+	opposed = proof.AddRat(new(big.Rat), opposed, proof.MulRat(new(big.Rat), norm, speedUpper))
+	limit := proof.MulRat(new(big.Rat), impulseLimit, euclideanLower(slide))
+	proof.AddRat(limit, limit, proof.MulRat(new(big.Rat), velocityLimit, ratSqrtLower(square)))
 	if opposed.Cmp(limit) > 0 {
 		cert.fail(gateSlip, opposed, limit)
 	}

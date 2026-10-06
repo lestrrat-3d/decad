@@ -1,6 +1,7 @@
 package dynamics
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
@@ -15,7 +16,12 @@ import (
 // (exact_mass.go) and before the zero shortcuts of the certificate and the
 // readings. They convert every reading where they read it, through
 // SetFloat64 and an unconditional unit-factor product, and take no
-// shortcut. exact_mass_internal_test.go feeds them and the current forms
+// shortcut. Every sum and product in them, the interval operations
+// internal/proof's RatInterval provides included (oldAddInterval and its
+// siblings at the end of the file), is big.Rat's own Add, Sub and Mul, with
+// its reduction to lowest terms after each one, rather than the
+// common-denominator AddRat, SubRat and MulRat the current forms use.
+// exact_mass_internal_test.go feeds them and the current forms
 // the same inputs and requires exactly equal rationals and decisions. A
 // deliberate change to what the certificate or a reading computes changes
 // the matching form here with it.
@@ -146,13 +152,13 @@ func oldPointVelocity(body certBody, v, omega [3]*big.Rat, lever ivec) ivec {
 	if !body.dynamic && !body.kinematic {
 		return pointIVec(v)
 	}
-	return addIVec(pointIVec(v), proof.CrossInterval3(pointIVec(omega), lever))
+	return oldAddIVec(pointIVec(v), oldCrossInterval3(pointIVec(omega), lever))
 }
 
 func oldPreNormalSpeed(p certPoint, bodies []certBody) proof.RatInterval {
-	relative := subIVec(oldPointVelocity(bodies[p.b], bodies[p.b].v, bodies[p.b].w, p.rB),
+	relative := oldSubIVec(oldPointVelocity(bodies[p.b], bodies[p.b].v, bodies[p.b].w, p.rB),
 		oldPointVelocity(bodies[p.a], bodies[p.a].v, bodies[p.a].w, p.rA))
-	return proof.DotInterval3(relative, p.normal)
+	return oldDotInterval3(relative, p.normal)
 }
 
 func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCertificate {
@@ -166,16 +172,16 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 	rho := new(big.Rat)
 	for _, p := range points {
 		if bodies[p.a].dynamic {
-			raise(&rho, euclideanUpper(p.rA))
+			raise(&rho, oldEuclideanUpper(p.rA))
 		}
 		if bodies[p.b].dynamic {
-			raise(&rho, euclideanUpper(p.rB))
+			raise(&rho, oldEuclideanUpper(p.rB))
 		}
 	}
 	// Each point's impulse on B, λ·n + λt; A receives its negation.
 	impulses := make([]ivec, len(points))
 	for k, p := range points {
-		impulses[k] = addIVec(scaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
+		impulses[k] = oldAddIVec(oldScaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
 	}
 	linearMomentum, angularMomentum := zeroIVec(), zeroIVec()
 	linearMomentumLimit, angularMomentumLimit := new(big.Rat), new(big.Rat)
@@ -184,7 +190,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		if !body.dynamic {
 			continue
 		}
-		raise(&cert.spin, euclideanUpper(pointIVec(body.wPost)))
+		raise(&cert.spin, oldEuclideanUpper(pointIVec(body.wPost)))
 		var dv, dw [3]*big.Rat
 		for axis := range 3 {
 			dv[axis] = new(big.Rat).Sub(body.vPost[axis], body.v[axis])
@@ -194,19 +200,19 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		for k, p := range points {
 			switch slot {
 			case p.b:
-				force = addIVec(force, impulses[k])
-				torque = addIVec(torque, proof.CrossInterval3(p.rB, impulses[k]))
+				force = oldAddIVec(force, impulses[k])
+				torque = oldAddIVec(torque, oldCrossInterval3(p.rB, impulses[k]))
 			case p.a:
-				force = subIVec(force, impulses[k])
-				torque = subIVec(torque, proof.CrossInterval3(p.rA, impulses[k]))
+				force = oldSubIVec(force, impulses[k])
+				torque = oldSubIVec(torque, oldCrossInterval3(p.rA, impulses[k]))
 			}
 		}
 		// Linear law: m·(v' − v) − ΣJ over the mass interval.
 		linearLimit := new(big.Rat).Add(impulseLimit, new(big.Rat).Mul(body.mass.Hi, velocityLimit))
 		momentumChange := ivec{}
 		for axis := range 3 {
-			momentumChange[axis] = proof.MulInterval(body.mass, proof.PointInterval(dv[axis]))
-			residual := magnitude(proof.SubInterval(momentumChange[axis], force[axis]))
+			momentumChange[axis] = oldMulInterval(body.mass, proof.PointInterval(dv[axis]))
+			residual := magnitude(oldSubInterval(momentumChange[axis], force[axis]))
 			raise(&cert.linear, residual)
 			if residual.Cmp(linearLimit) > 0 {
 				cert.fail(gateLinearLaw, residual, linearLimit)
@@ -216,15 +222,15 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		// intervals. The limit carries the body's witness torque T_β; the
 		// mass-center ball, the normal ball and the inertia intervals stay in
 		// the residual alone.
-		spinChange := body.inertiaApply(dw)
-		witnessTorque := bodyWitnessTorque(slot, points, impulses)
+		spinChange := oldInertiaApply(body, dw)
+		witnessTorque := oldBodyWitnessTorque(slot, points, impulses)
 		raise(&cert.witnessTorque, witnessTorque)
 		raise(&cert.witnessSpin, new(big.Rat).Quo(witnessTorque, body.inertiaLower))
 		angularBodyLimit := new(big.Rat).Add(new(big.Rat).Mul(impulseLimit, rho),
 			new(big.Rat).Mul(body.inertiaLower, angularLimit))
 		angularBodyLimit.Add(angularBodyLimit, witnessTorque)
 		for axis := range 3 {
-			residual := magnitude(proof.SubInterval(spinChange[axis], torque[axis]))
+			residual := magnitude(oldSubInterval(spinChange[axis], torque[axis]))
 			raise(&cert.angular, residual)
 			if residual.Cmp(angularBodyLimit) > 0 {
 				cert.fail(gateAngularLaw, residual, angularBodyLimit)
@@ -233,9 +239,9 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		// Island momentum about the world origin: Σ m·Δv and
 		// Σ (I·Δω + c×m·Δv), against the impulses delivered by Fixed bodies.
 		// The angular limit sums each body's angular-law limit, T_β included.
-		linearMomentum = addIVec(linearMomentum, momentumChange)
-		angularMomentum = addIVec(angularMomentum,
-			addIVec(spinChange, proof.CrossInterval3(body.center, momentumChange)))
+		linearMomentum = oldAddIVec(linearMomentum, momentumChange)
+		angularMomentum = oldAddIVec(angularMomentum,
+			oldAddIVec(spinChange, oldCrossInterval3(body.center, momentumChange)))
 		linearMomentumLimit.Add(linearMomentumLimit, linearLimit)
 		angularMomentumLimit.Add(angularMomentumLimit, angularBodyLimit)
 		angularMomentumLimit.Add(angularMomentumLimit, new(big.Rat).Mul(body.centerL1, linearLimit))
@@ -296,7 +302,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 			}
 			return oldPointVelocity(body, u, omega, r)
 		}
-		q := proof.DotInterval3(subIVec(combined(bodies[p.b], p.rB), combined(bodies[p.a], p.rA)), p.normal)
+		q := oldDotInterval3(oldSubIVec(combined(bodies[p.b], p.rB), combined(bodies[p.a], p.rA)), p.normal)
 		if below := new(big.Rat).Neg(q.Lo); below.Cmp(velocityLimit) > 0 {
 			cert.fail(gateNonPenetration, below, velocityLimit)
 		}
@@ -323,7 +329,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 				lever = p.rB
 			}
 			field := oldPointVelocity(bodies[slot], bodies[slot].v, bodies[slot].w, lever)
-			work := proof.DotInterval3(impulses[k], field)
+			work := oldDotInterval3(impulses[k], field)
 			if side == 1 {
 				work = proof.NegInterval(work)
 			}
@@ -341,13 +347,13 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 			if side == 1 {
 				witness, sign = p.onB, big.NewRat(1, 1)
 			}
-			angularMomentum = subIVec(angularMomentum, scaleIVec(proof.CrossInterval3(witness, impulses[k]), sign))
+			angularMomentum = oldSubIVec(angularMomentum, oldScaleIVec(oldCrossInterval3(witness, impulses[k]), sign))
 			other := p.b
 			if side == 1 {
 				other = p.a
 			}
 			if !bodies[other].dynamic {
-				linearMomentum = subIVec(linearMomentum, scaleIVec(impulses[k], sign))
+				linearMomentum = oldSubIVec(linearMomentum, oldScaleIVec(impulses[k], sign))
 			}
 		}
 	}
@@ -388,14 +394,14 @@ func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
 	if allowed.Sign() < 0 || square.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
 		cert.fail(gateCone, new(big.Rat).Sub(norm, coneLower), impulseLimit)
 	}
-	relative := subIVec(oldPointVelocity(bodies[p.b], bodies[p.b].vPost, bodies[p.b].wPost, p.rB),
+	relative := oldSubIVec(oldPointVelocity(bodies[p.b], bodies[p.b].vPost, bodies[p.b].wPost, p.rB),
 		oldPointVelocity(bodies[p.a], bodies[p.a].vPost, bodies[p.a].wPost, p.rA))
-	normalSpeed := proof.DotInterval3(relative, p.normal)
+	normalSpeed := oldDotInterval3(relative, p.normal)
 	var slide ivec
 	for axis := range slide {
-		slide[axis] = proof.SubInterval(relative[axis], proof.MulInterval(normalSpeed, p.normal[axis]))
+		slide[axis] = oldSubInterval(relative[axis], oldMulInterval(normalSpeed, p.normal[axis]))
 	}
-	speedUpper := euclideanUpper(slide)
+	speedUpper := oldEuclideanUpper(slide)
 	threshold := new(big.Rat).Sub(coneLower, impulseLimit)
 	if threshold.Sign() > 0 && square.Cmp(new(big.Rat).Mul(threshold, threshold)) < 0 {
 		raise(&cert.tangent, speedUpper)
@@ -404,7 +410,7 @@ func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
 		}
 		return
 	}
-	opposed := proof.DotInterval3(pointIVec(p.tangent), slide).Hi
+	opposed := oldDotInterval3(pointIVec(p.tangent), slide).Hi
 	opposed = new(big.Rat).Add(opposed, new(big.Rat).Mul(norm, speedUpper))
 	limit := new(big.Rat).Mul(impulseLimit, euclideanLower(slide))
 	limit.Add(limit, new(big.Rat).Mul(velocityLimit, ratSqrtLower(square)))
@@ -676,7 +682,7 @@ func oldPairActive(w *World, pair islandPair, state State, drive map[int]driverM
 	bodies := []certBody{a, b}
 	limit := oldExactBase(w.step.VelocityResidual)
 	for _, point := range pair.manifold.Points {
-		p, ok := newCertPoint(0, 0, 1, point, bodies, new(big.Rat))
+		p, ok := oldNewCertPoint(0, 0, 1, point, bodies, new(big.Rat))
 		if !ok {
 			return false, false
 		}
@@ -696,10 +702,220 @@ func oldGrazeSpeedWithin(w *World, pair islandPair, state State, drive map[int]d
 	bodies := []certBody{a, b}
 	limit := oldExactBase(w.step.VelocityResidual)
 	for _, point := range pair.manifold.Points {
-		p, ok := newCertPoint(0, 0, 1, point, bodies, new(big.Rat))
+		p, ok := oldNewCertPoint(0, 0, 1, point, bodies, new(big.Rat))
 		if !ok || magnitude(oldPreNormalSpeed(p, bodies)).Cmp(limit) > 0 {
 			return false
 		}
 	}
 	return true
+}
+
+func oldAddInterval(a, b proof.RatInterval) proof.RatInterval {
+	return proof.OwnedInterval(new(big.Rat).Add(a.Lo, b.Lo), new(big.Rat).Add(a.Hi, b.Hi))
+}
+
+func oldSubInterval(a, b proof.RatInterval) proof.RatInterval {
+	return proof.OwnedInterval(new(big.Rat).Sub(a.Lo, b.Hi), new(big.Rat).Sub(a.Hi, b.Lo))
+}
+
+func oldScaleInterval(a proof.RatInterval, scale *big.Rat) proof.RatInterval {
+	if scale.Sign() < 0 {
+		return proof.OwnedInterval(
+			new(big.Rat).Mul(a.Hi, scale),
+			new(big.Rat).Mul(a.Lo, scale),
+		)
+	}
+	return proof.OwnedInterval(
+		new(big.Rat).Mul(a.Lo, scale),
+		new(big.Rat).Mul(a.Hi, scale),
+	)
+}
+
+func oldMulInterval(a, b proof.RatInterval) proof.RatInterval {
+	if a.Lo.Sign() >= 0 {
+		switch {
+		case b.Lo.Sign() >= 0:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Lo, b.Lo), new(big.Rat).Mul(a.Hi, b.Hi))
+		case b.Hi.Sign() <= 0:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Hi, b.Lo), new(big.Rat).Mul(a.Lo, b.Hi))
+		default:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Hi, b.Lo), new(big.Rat).Mul(a.Hi, b.Hi))
+		}
+	}
+	if a.Hi.Sign() <= 0 {
+		switch {
+		case b.Lo.Sign() >= 0:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Lo, b.Hi), new(big.Rat).Mul(a.Hi, b.Lo))
+		case b.Hi.Sign() <= 0:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Hi, b.Hi), new(big.Rat).Mul(a.Lo, b.Lo))
+		default:
+			return proof.OwnedInterval(new(big.Rat).Mul(a.Lo, b.Hi), new(big.Rat).Mul(a.Lo, b.Lo))
+		}
+	}
+	if b.Lo.Sign() >= 0 {
+		return proof.OwnedInterval(new(big.Rat).Mul(a.Lo, b.Hi), new(big.Rat).Mul(a.Hi, b.Hi))
+	}
+	if b.Hi.Sign() <= 0 {
+		return proof.OwnedInterval(new(big.Rat).Mul(a.Hi, b.Lo), new(big.Rat).Mul(a.Lo, b.Lo))
+	}
+
+	loA := new(big.Rat).Mul(a.Lo, b.Hi)
+	loB := new(big.Rat).Mul(a.Hi, b.Lo)
+	hiA := new(big.Rat).Mul(a.Lo, b.Lo)
+	hiB := new(big.Rat).Mul(a.Hi, b.Hi)
+	if loB.Cmp(loA) < 0 {
+		loA = loB
+	}
+	if hiB.Cmp(hiA) > 0 {
+		hiA = hiB
+	}
+	return proof.OwnedInterval(loA, hiA)
+}
+
+func oldDotInterval3(a, b [3]proof.RatInterval) proof.RatInterval {
+	sum := oldMulInterval(a[0], b[0])
+	for axis := 1; axis < 3; axis++ {
+		sum = oldAddInterval(sum, oldMulInterval(a[axis], b[axis]))
+	}
+	return sum
+}
+
+func oldCrossInterval3(a, b [3]proof.RatInterval) [3]proof.RatInterval {
+	var out [3]proof.RatInterval
+	for axis := range out {
+		j, k := (axis+1)%3, (axis+2)%3
+		out[axis] = oldSubInterval(oldMulInterval(a[j], b[k]), oldMulInterval(a[k], b[j]))
+	}
+	return out
+}
+
+func oldAddIVec(a, b ivec) ivec {
+	var out ivec
+	for axis := range out {
+		out[axis] = oldAddInterval(a[axis], b[axis])
+	}
+	return out
+}
+
+func oldSubIVec(a, b ivec) ivec {
+	var out ivec
+	for axis := range out {
+		out[axis] = oldSubInterval(a[axis], b[axis])
+	}
+	return out
+}
+
+func oldScaleIVec(a ivec, scale *big.Rat) ivec {
+	var out ivec
+	for axis := range out {
+		out[axis] = oldScaleInterval(a[axis], scale)
+	}
+	return out
+}
+
+func oldBallIVec(v r3.Vec, radius *big.Rat) (ivec, bool) {
+	center, ok := oldRatVec(v)
+	if !ok || radius == nil || radius.Sign() < 0 {
+		return ivec{}, false
+	}
+	var out ivec
+	for axis := range out {
+		out[axis] = proof.OwnedInterval(new(big.Rat).Sub(center[axis], radius),
+			new(big.Rat).Add(center[axis], radius))
+	}
+	return out, true
+}
+
+func oldEuclideanUpper(v ivec) *big.Rat {
+	sum := new(big.Rat)
+	for axis := range v {
+		m := magnitude(v[axis])
+		sum.Add(sum, new(big.Rat).Mul(m, m))
+	}
+	approx, _ := sum.Float64()
+	root := math.Sqrt(approx)
+	for {
+		r := oldRatFloat(root)
+		if r != nil && new(big.Rat).Mul(r, r).Cmp(sum) >= 0 {
+			return r
+		}
+		root = math.Nextafter(root, math.Inf(1))
+	}
+}
+
+func oldInertiaApply(b certBody, x [3]*big.Rat) ivec {
+	var local [3]*big.Rat
+	for j := range local {
+		local[j] = new(big.Rat)
+		for i := range 3 {
+			local[j].Add(local[j], new(big.Rat).Mul(b.rotation[i][j], x[i]))
+		}
+	}
+	var y ivec
+	for i := range y {
+		y[i] = oldScaleInterval(b.inertia[i][0], local[0])
+		for j := 1; j < 3; j++ {
+			y[i] = oldAddInterval(y[i], oldScaleInterval(b.inertia[i][j], local[j]))
+		}
+	}
+	widen := new(big.Rat)
+	for _, value := range x {
+		widen.Add(widen, absRat(new(big.Rat).Set(value)))
+	}
+	widen.Mul(widen, b.defect)
+	var out ivec
+	for row := range out {
+		out[row] = oldScaleInterval(y[0], b.rotation[row][0])
+		for i := 1; i < 3; i++ {
+			out[row] = oldAddInterval(out[row], oldScaleInterval(y[i], b.rotation[row][i]))
+		}
+		out[row] = proof.OwnedInterval(new(big.Rat).Sub(out[row].Lo, widen), new(big.Rat).Add(out[row].Hi, widen))
+	}
+	return out
+}
+
+func oldBodyWitnessTorque(slot int, points []certPoint, impulses []ivec) *big.Rat {
+	torque := new(big.Rat)
+	for k, p := range points {
+		var ball *big.Rat
+		switch slot {
+		case p.b:
+			ball = p.ballB
+		case p.a:
+			ball = p.ballA
+		default:
+			continue
+		}
+		l1 := new(big.Rat)
+		for axis := range 3 {
+			l1.Add(l1, magnitude(impulses[k][axis]))
+		}
+		torque.Add(torque, new(big.Rat).Mul(ball, l1))
+	}
+	return torque
+}
+
+func oldNewCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
+	restitution *big.Rat) (certPoint, bool) {
+	normalBound, angle := oldExactBase(point.Normal.Bound), oldExactBase(point.NormalAngle)
+	boundA, boundB := oldExactBase(point.OnA.Bound), oldExactBase(point.OnB.Bound)
+	if normalBound == nil || angle == nil || boundA == nil || boundB == nil {
+		return certPoint{}, false
+	}
+	normal, okN := oldBallIVec(point.Normal.Value, new(big.Rat).Add(normalBound, angle))
+	onA, okA := oldBallIVec(point.OnA.Value, boundA)
+	onB, okB := oldBallIVec(point.OnB.Value, boundB)
+	if !okN || !okA || !okB {
+		return certPoint{}, false
+	}
+	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution,
+		ballA: boundA, ballB: boundB}
+	p.rA, p.rB = zeroIVec(), zeroIVec()
+	if bodies[a].dynamic || bodies[a].kinematic {
+		p.rA = oldSubIVec(onA, bodies[a].center)
+	}
+	if bodies[b].dynamic || bodies[b].kinematic {
+		p.rB = oldSubIVec(onB, bodies[b].center)
+	}
+	return p, true
 }

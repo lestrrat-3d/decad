@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -219,13 +220,10 @@ func intervalDeviation(value, low, high *big.Rat) *big.Rat {
 }
 
 // ratFloat is the exact rational value of a float64, or nil when it is not
-// finite. A zero, of either sign, skips SetFloat64, whose pre-normalising
-// loop shifts a zero mantissa 1074 times before it gives up.
+// finite: SetFloat64's value in its lowest terms, written by proof.FloatRat
+// without the GCD SetFloat64's normalisation runs.
 func ratFloat(value float64) *big.Rat {
-	if value == 0 {
-		return new(big.Rat)
-	}
-	return new(big.Rat).SetFloat64(value)
+	return proof.FloatRat(value)
 }
 
 // exactBase is the exact rational of a value's magnitude times its unit's

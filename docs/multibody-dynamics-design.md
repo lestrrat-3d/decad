@@ -259,8 +259,12 @@ impulses.
 
 The cache is pure reuse: dropping it changes no published value except `Solver.Iterations`. It holds
 every `SweptBox` and `SweepPair` result the step used, keyed by their exact inputs (§5.3), and every
-island the step certified, with its exact problem and final proposal state (§6.2). A
-step reads it only when its entries equal the input state's entries.
+island the step certified, with its exact problem and final proposal state (§6.2), and the step's
+`Completion` conservation reading of those entries, which the next step publishes as its `Input`. A
+step reads it only when its entries equal the input state's entries. Within one step, a conservation
+reading of entries equal to ones the step already read is reused too: the kicked state starts the first
+drift slice and the completed state ends the last. Each reading is a pure function of the world and the
+entries, so a reused one is the one a new reading returns.
 
 ### 3.3 Step configuration and report
 

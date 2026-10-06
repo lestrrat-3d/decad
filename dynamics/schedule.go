@@ -533,17 +533,21 @@ func (r *scheduleRun) undecided(diagnostics ...StepDiagnostic) *StepReport {
 // publish attaches the conservation readings of an advanced step.
 func (r *scheduleRun) publish(end State, trace Trace) *StepReport {
 	w := r.w
-	input, okInput := w.conservationState(r.from)
-	afterKick, okKick := w.conservationState(r.kicked)
-	completion, okEnd := w.conservationState(end)
+	input, okInput := r.work.conservation(r.from)
+	afterKick, okKick := r.work.conservation(r.kicked)
+	completion, okEnd := r.work.conservation(end)
 	gravityImpulse, loadImpulse, okForce := w.forceImpulses(r.gravity, r.loads, r.dt)
 	torqueImpulse, okTorque := w.torqueImpulse(r.loads, r.dt)
 	contactImpulse, okContact := w.islandContactImpulse(r.published)
-	driftChange, okDrift := w.driftConservationSlices(r.drift)
+	driftChange, okDrift := w.driftConservationSlices(r.work, r.drift)
 	kinematicWork, okWork := w.islandKinematicWork(r.published)
 	if !okInput || !okKick || !okEnd || !okForce || !okTorque || !okContact || !okDrift || !okWork {
 		return r.undecided(r.diagnostic(StepConservationFailed, BodyPair{},
 			"conservation readings cannot be represented with finite bounds"))
+	}
+	if end.cache != nil {
+		// The next step from end reads its input reading here.
+		end.cache.completion = &completion
 	}
 	return &StepReport{Status: Advanced, Next: &end, Events: r.published, Islands: r.islands,
 		Excluded: w.Excluded(), Trace: trace,
