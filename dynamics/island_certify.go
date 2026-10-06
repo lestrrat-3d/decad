@@ -53,6 +53,8 @@ type certPoint struct {
 	normal      ivec
 	onA, onB    ivec
 	rA, rB      ivec
+	ballA       *big.Rat // the witness ball radius on A (OnA.Bound)
+	ballB       *big.Rat // the witness ball radius on B (OnB.Bound)
 	lambda      *big.Rat
 	tangent     [3]*big.Rat // published world tangent impulse on B; zero without friction
 	mu          *big.Rat    // the pair's lower friction coefficient μ_lo
@@ -135,11 +137,13 @@ func (g islandGate) String() string {
 // islandCertificate holds the largest attained value of each gate (the
 // signed upper end of the kinetic-energy change; the cone's excess over
 // μ_lo·λn; a sticking point's tangent speed), the largest published
-// post-solve angular speed, every refused gate, and the first refused gate
-// in evaluation order.
+// post-solve angular speed, the largest witness torque T_β and spin
+// T_β / λ_lo(I_β) over the dynamic bodies, every refused gate, and the first
+// refused gate in evaluation order.
 type islandCertificate struct {
 	linear, angular, normal, energy, momentum, angularMomentum *big.Rat
 	cone, tangent, spin                                        *big.Rat
+	witnessTorque, witnessSpin                                 *big.Rat
 	failed                                                     islandGate
 	value, limit                                               *big.Rat
 	refused                                                    map[islandGate]struct{}
@@ -420,7 +424,8 @@ func newCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
 	if !okN || !okA || !okB {
 		return certPoint{}, false
 	}
-	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution}
+	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution,
+		ballA: boundA, ballB: boundB}
 	p.rA, p.rB = zeroIVec(), zeroIVec()
 	if bodies[a].dynamic || bodies[a].kinematic {
 		p.rA = subIVec(onA, bodies[a].center)
@@ -458,7 +463,8 @@ func restitutionTarget(c proof.RatInterval, e, impactSpeed *big.Rat) (*big.Rat, 
 func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCertificate {
 	cert := islandCertificate{linear: new(big.Rat), angular: new(big.Rat), normal: new(big.Rat),
 		energy: new(big.Rat), momentum: new(big.Rat), angularMomentum: new(big.Rat),
-		cone: new(big.Rat), tangent: new(big.Rat), spin: new(big.Rat)}
+		cone: new(big.Rat), tangent: new(big.Rat), spin: new(big.Rat),
+		witnessTorque: new(big.Rat), witnessSpin: new(big.Rat)}
 	impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
 	angularLimit, impactSpeed := exactBase(w.step.AngularVelocityResidual), exactBase(w.step.ImpactSpeed)
 	// The island's largest lever bound ρ.
@@ -512,10 +518,16 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 			}
 		}
 		// Angular law: I_world·(ω' − ω) − Σ r×J over the inertia and lever
-		// intervals.
+		// intervals. The limit carries the body's witness torque T_β; the
+		// mass-center ball, the normal ball and the inertia intervals stay in
+		// the residual alone.
 		spinChange := body.inertiaApply(dw)
+		witnessTorque := bodyWitnessTorque(slot, points, impulses)
+		raise(&cert.witnessTorque, witnessTorque)
+		raise(&cert.witnessSpin, new(big.Rat).Quo(witnessTorque, body.inertiaLower))
 		angularBodyLimit := new(big.Rat).Add(new(big.Rat).Mul(impulseLimit, rho),
 			new(big.Rat).Mul(body.inertiaLower, angularLimit))
+		angularBodyLimit.Add(angularBodyLimit, witnessTorque)
 		for axis := range 3 {
 			residual := magnitude(proof.SubInterval(spinChange[axis], torque[axis]))
 			raise(&cert.angular, residual)
@@ -525,6 +537,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		}
 		// Island momentum about the world origin: Σ m·Δv and
 		// Σ (I·Δω + c×m·Δv), against the impulses delivered by Fixed bodies.
+		// The angular limit sums each body's angular-law limit, T_β included.
 		linearMomentum = addIVec(linearMomentum, momentumChange)
 		angularMomentum = addIVec(angularMomentum,
 			addIVec(spinChange, proof.CrossInterval3(body.center, momentumChange)))
@@ -663,6 +676,34 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		}
 	}
 	return cert
+}
+
+// bodyWitnessTorque is §6.3's witness torque T_β = Σ_k b_k·|J_k|_1 of the
+// body in slot: over the body's points, b_k is the body's own witness ball
+// (OnA.Bound on side A, OnB.Bound on side B) and |J_k|_1 the L1 norm of the
+// point's impulse interval at its upper end. A contact point is known only to
+// the ball the caller's PointResolution admitted, so the published impulses,
+// applied anywhere within those balls, can differ from their published torque
+// by up to T_β per component.
+func bodyWitnessTorque(slot int, points []certPoint, impulses []ivec) *big.Rat {
+	torque := new(big.Rat)
+	for k, p := range points {
+		var ball *big.Rat
+		switch slot {
+		case p.b:
+			ball = p.ballB
+		case p.a:
+			ball = p.ballA
+		default:
+			continue
+		}
+		l1 := new(big.Rat)
+		for axis := range 3 {
+			l1.Add(l1, magnitude(impulses[k][axis]))
+		}
+		torque.Add(torque, new(big.Rat).Mul(ball, l1))
+	}
+	return torque
 }
 
 // certifyFriction runs the cone, stick and slip rows at one point. With
@@ -821,7 +862,9 @@ func solverReport(cert islandCertificate, penetration *big.Rat, iterations int) 
 	tangent, tangentErr := up(cert.tangent)
 	cone, coneErr := up(cert.cone)
 	spin, spinErr := up(cert.spin)
-	for _, readErr := range []error{tangentErr, coneErr, spinErr} {
+	witnessTorque, torqueErr := up(cert.witnessTorque)
+	witnessSpin, witnessErr := up(cert.witnessSpin)
+	for _, readErr := range []error{tangentErr, coneErr, spinErr, torqueErr, witnessErr} {
 		if readErr != nil {
 			err = readErr
 		}
@@ -829,6 +872,8 @@ func solverReport(cert islandCertificate, penetration *big.Rat, iterations int) 
 	out.TangentResidual = units.MillimetersPerSecond(tangent)
 	out.ConeResidual = units.KilogramMillimetersPerSecond(cone)
 	out.AngularUpper = units.RadiansPerSecond(spin)
+	out.WitnessTorque = units.New(witnessTorque, units.KilogramSquareMillimeterPerSecond)
+	out.WitnessSpin = units.RadiansPerSecond(witnessSpin)
 	out.Iterations = iterations
 	return out, err
 }

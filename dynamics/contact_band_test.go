@@ -1,6 +1,8 @@
 package dynamics_test
 
 import (
+	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -238,11 +240,11 @@ func TestFixedPairContactBandAgainstResidual(t *testing.T) {
 }
 
 // partsBinConfig is §2's Phase 3 step configuration: PenetrationResidual
-// 0.1 mm, SupportBand 0.05 mm, HeldChord 0.03 mm and PointResolution 0.1 mm,
-// since a displaced body's witness balls carry its δ.
+// 0.125 mm, SupportBand 0.05 mm, HeldChord 0.03 mm and PointResolution
+// 0.1 mm, since a displaced body's witness balls carry its δ.
 func partsBinConfig() dynamics.StepConfig {
 	config := tumbleStepConfig()
-	config.PenetrationResidual = units.Millimeters(.1)
+	config.PenetrationResidual = units.Millimeters(.125)
 	config.Contact.SupportBand = units.Millimeters(.05)
 	config.Contact.HeldChord = units.Millimeters(.03)
 	config.Contact.PointResolution = units.Millimeters(.1)
@@ -324,4 +326,263 @@ func TestDisplacedBlockRestsOnTray(t *testing.T) {
 	require.NotNil(t, contact.Manifold)
 	require.Len(t, contact.Manifold.Points, 4)
 	require.LessOrEqual(t, contact.Gap.Bound.Base(), delta+config.Contact.SupportBand.Base())
+}
+
+// bottleBody is §2's revolved bottle: the full revolve of a line-and-arc
+// half-profile, a Ø16 mm base, a quarter-circle shoulder to a Ø8 mm neck and
+// 24 mm tall. Contact reads it as a held mesh at the request's HeldChord,
+// whose displacement δ is the curved faces' chord sagitta.
+func bottleBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(8, 0)
+	c := s.CreatePoint(8, 14)
+	center := s.CreatePoint(4, 14)
+	d := s.CreatePoint(4, 18)
+	e := s.CreatePoint(4, 24)
+	f := s.CreatePoint(0, 24)
+	for _, p := range []*sketch.Point{a, b, c, center, d, e, f} {
+		s.Fix(p)
+	}
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateArc(center, c, d)
+	s.CreateLine(d, e)
+	s.CreateLine(e, f)
+	s.CreateLine(f, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := doc.Revolve(s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// bottleScene is the bottle over §2's tray. delta is the held mesh's
+// displacement and base the number of its vertices on the base plane z = 0.
+type bottleScene struct {
+	doc          *decad.Document
+	tray, bottle *decad.Body
+	delta        float64
+	base         int
+}
+
+func newBottleScene(t *testing.T) bottleScene {
+	t.Helper()
+	scene := bottleScene{doc: decad.New()}
+	scene.tray = tumbleTray(t, scene.doc)
+	scene.bottle = bottleBody(t, scene.doc)
+	mesh, err := scene.bottle.Tessellate(t.Context(), partsBinConfig().Contact.HeldChord)
+	require.NoError(t, err)
+	scene.delta = mesh.Bound().Base()
+	for _, vertex := range mesh.Vertices() {
+		if vertex.Z == 0 {
+			scene.base++
+		}
+	}
+	return scene
+}
+
+// world builds the scene's world under config, the bottle at pose with
+// velocity (0, 0, vz).
+func (s bottleScene) world(t *testing.T, config dynamics.StepConfig, pose r3.Transform,
+	vz float64) (*dynamics.World, dynamics.State) {
+	t.Helper()
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := dynamics.Material{Restitution: units.Scalar(.3), Friction: units.Scalar(.4)}
+	world, err := dynamics.NewWorld(t.Context(), s.doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: s.tray, Role: dynamics.Fixed, Material: material},
+		{Body: s.bottle, Role: dynamics.Dynamic, Density: &density, Material: material},
+	}, Step: config})
+	require.NoError(t, err)
+	velocity := zeroVelocity()
+	velocity.Z = units.MillimetersPerSecond(vz)
+	state, err := world.NewState([]dynamics.BodyState{
+		{Body: s.tray, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: s.bottle, Pose: pose, LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	return world, state
+}
+
+// exactFloat is the exact rational a float64 denotes.
+func exactFloat(t *testing.T, f float64) *big.Rat {
+	t.Helper()
+	r := new(big.Rat).SetFloat64(f)
+	require.NotNil(t, r, "%v is not finite", f)
+	return r
+}
+
+// roundedUp is the smallest float64 at or above x.
+func roundedUp(x *big.Rat) float64 {
+	f, _ := x.Float64()
+	if new(big.Rat).SetFloat64(f).Cmp(x) < 0 {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return f
+}
+
+// witnessTorqueOnB recomputes §6.3's witness torque T_β = Σ b_k·|J_k|_1 of
+// an event's side-B body, exactly, from the event's manifold and point
+// impulses: b_k is OnB.Bound, and |J_k|_1 the L1 norm at its upper end of the
+// impulse λ_k·n + λt_k over the normal ball n ± (Normal.Bound + NormalAngle),
+// which per component is |λ_k·n_i + λt_i| + λ_k·(Normal.Bound + NormalAngle).
+func witnessTorqueOnB(t *testing.T, event dynamics.ContactEvent) *big.Rat {
+	t.Helper()
+	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
+	torque := new(big.Rat)
+	for k, point := range event.Manifold.Points {
+		lambda := exactFloat(t, event.PointImpulses[k].Normal.Base())
+		ball := new(big.Rat).Add(exactFloat(t, point.Normal.Bound.Base()), exactFloat(t, point.NormalAngle.Base()))
+		tangent := event.PointImpulses[k].Tangent
+		l1 := new(big.Rat)
+		for _, pair := range [3][2]float64{{point.Normal.Value.X, tangent.X.Base()},
+			{point.Normal.Value.Y, tangent.Y.Base()}, {point.Normal.Value.Z, tangent.Z.Base()}} {
+			component := new(big.Rat).Mul(lambda, exactFloat(t, pair[0]))
+			component.Add(component, exactFloat(t, pair[1]))
+			l1.Add(l1, component.Abs(component))
+			l1.Add(l1, new(big.Rat).Mul(lambda, ball))
+		}
+		torque.Add(torque, new(big.Rat).Mul(exactFloat(t, point.OnB.Bound.Base()), l1))
+	}
+	return torque
+}
+
+// TestDisplacedBottleRestsOnTray is docs/multibody-dynamics-design.md §13
+// PR 20g's fixture: §2's revolved bottle, read as a held mesh whose δ is
+// about 0.03 mm, dropped 8 mm onto §2's tray at §2's Phase 3 residuals. It
+// lands on a ContactBand on every vertex of its held base, rebounds at
+// restitution 0.3, lands again, and comes to rest within 32 steps. Each
+// landing solve certifies through §6.3's witness torque: every lifted point's
+// witness ball carries δ, so the landing impulse's torque about the mass
+// center is known only to δ times the impulse, which the angular law's limit
+// carries and the island publishes as WitnessTorque and WitnessSpin.
+//
+// Legs shown to fail (each changed in turn, fixture red, then restored):
+//   - T_β zeroed: the landing step is StepIslandResidual at the angular law,
+//     its residual about 55 kg·mm²/s against a limit of about 1.2e-4;
+//   - T_β left out of the angular-momentum limit alone: the same landing is
+//     refused at the angular momentum row;
+//   - WitnessTorque published from PointResolution in place of the attained
+//     witness balls: the recomputation reads a published torque about 3.4
+//     times the recomputed one.
+//
+// The mass-center ball added to b_k is the fourth leg; it is shown on
+// TestFacetedFloorImpactRefusesUncertifiedResponse's "mass center
+// uncertainty", which then advances.
+func TestDisplacedBottleRestsOnTray(t *testing.T) {
+	scene := newBottleScene(t)
+	config := partsBinConfig()
+	require.Positive(t, scene.delta)
+	require.Less(t, config.Contact.SupportBand.Base()+2*scene.delta, config.PenetrationResidual.Base(),
+		"the band track that carries the rest fits the residual")
+	require.Positive(t, scene.base)
+	world, state := scene.world(t, config, translation(t, r3.Vec{Z: 8}), 0)
+	floor := dynamics.CertifiedInertiaFloor(world, scene.bottle)
+	require.NotNil(t, floor)
+
+	var landing *dynamics.ContactEvent
+	var landingState dynamics.State
+	rebounds, rested := 0, -1
+	for k := range 32 {
+		report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+		require.NoError(t, err)
+		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", k, report.Diagnostics)
+		next, ok := report.Next.Body(scene.bottle)
+		require.True(t, ok)
+		atRest := next.LinearVelocity == zeroVelocity() && next.AngularVelocity == zeroAngular(t)
+		for _, island := range report.Islands {
+			require.Len(t, island.Events, 1)
+			event := report.Events[island.Events[0]]
+			require.Equal(t, dynamics.BodyPair{A: scene.tray, B: scene.bottle}, event.Pair)
+			require.Len(t, event.Manifold.Points, scene.base, "step %d: every base vertex is lifted", k)
+			for _, point := range event.Manifold.Points {
+				// Each point is a lifted base vertex: a height inside the band,
+				// charged with δ, under the floor's exact normal.
+				require.GreaterOrEqual(t, point.Separation.Value.Base(), 0.0)
+				require.LessOrEqual(t, point.Separation.Value.Base(), config.Contact.SupportBand.Base())
+				require.GreaterOrEqual(t, point.Separation.Bound.Base(), scene.delta)
+				require.GreaterOrEqual(t, point.OnB.Bound.Base(), scene.delta)
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+			}
+			// The published witness torque is the exact T_β rounded up, and
+			// its spin that over the bottle's certified lower eigenvalue.
+			torque := witnessTorqueOnB(t, event)
+			require.Equal(t, roundedUp(torque), island.Solver.WitnessTorque.Base(), "step %d", k)
+			require.Equal(t, roundedUp(new(big.Rat).Quo(torque, floor)), island.Solver.WitnessSpin.Base(), "step %d", k)
+			pre, post := event.PreVelocityB.Z.Base(), event.PostVelocityB.Z.Base()
+			if pre < -config.ImpactSpeed.Base() {
+				require.InDelta(t, -.3*pre, post, 1e-9*-pre, "step %d rebounds at restitution 0.3", k)
+				rebounds++
+			}
+			if landing == nil {
+				landing, landingState = &event, state
+				require.Less(t, island.Solver.WitnessSpin.Base(), 1.0)
+			}
+			if atRest {
+				require.Less(t, island.Solver.WitnessSpin.Base(), .05, "step %d", k)
+			}
+		}
+		state = *report.Next
+		if landing == nil || !atRest {
+			require.Negative(t, rested, "step %d leaves rest", k)
+			continue
+		}
+		if rested >= 0 {
+			break
+		}
+		rested = k
+	}
+	require.NotNil(t, landing)
+	require.GreaterOrEqual(t, rebounds, 2, "the bottle rebounds at the landing and again")
+	require.GreaterOrEqual(t, rested, 0, "the bottle rests within 32 steps")
+
+	// At rest the pair is a ContactBand whose gap bound is at most δ +
+	// SupportBand.
+	resting, ok := state.Body(scene.bottle)
+	require.True(t, ok)
+	contact, err := scene.doc.ContactPair(t.Context(), scene.tray, scene.bottle, r3.Identity(), resting.Pose,
+		config.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactBand, contact.Relation, "reason=%v", contact.Reason)
+	require.LessOrEqual(t, contact.Gap.Bound.Base(), scene.delta+config.Contact.SupportBand.Base())
+
+	// At PointResolution 1e-6 mm the lifted points' δ-wide witness balls are
+	// too coarse: the landing pose's band is published without its manifold
+	// (ContactPointTooCoarse), so the landing step brackets the impact and
+	// stops with StepManifoldMissing at the rounded event poses.
+	fine := config
+	fine.Contact.PointResolution = units.Millimeters(1e-6)
+	coarse, err := scene.doc.ContactPair(t.Context(), scene.tray, scene.bottle, r3.Identity(), landing.PoseB,
+		fine.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactPointTooCoarse, coarse.Reason)
+	require.Nil(t, coarse.Manifold)
+	landed, ok := landingState.Body(scene.bottle)
+	require.True(t, ok)
+	fineWorld, fineState := scene.world(t, fine, landed.Pose, landed.LinearVelocity.Z.Base())
+	report, err := fineWorld.Step(t.Context(), fineState, dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepManifoldMissing, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
+	require.Equal(t, dynamics.BodyPair{A: scene.tray, B: scene.bottle}, report.Diagnostics[0].Pair)
+	require.Empty(t, report.Events)
+
+	// At PenetrationResidual 0.1 mm the landing solves, but the band track
+	// after the rebound holds the lifted base at SupportBand + 2δ, beyond the
+	// residual.
+	tight := config
+	tight.PenetrationResidual = units.Millimeters(.1)
+	tightWorld, tightState := scene.world(t, tight, landed.Pose, landed.LinearVelocity.Z.Base())
+	report, err = tightWorld.Step(t.Context(), tightState, dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepTrackUnproved, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
+	require.Equal(t, tight.PenetrationResidual, report.Diagnostics[0].Limit)
 }

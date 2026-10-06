@@ -789,8 +789,8 @@ the warm start never changes a published impulse
 (`docs/multibody-dynamics-design.md` §6.2).
 
 Publish the maximum normal-velocity, tangent-velocity, friction-cone
-(Impulse kind), and penetration residuals, plus iteration count, for each
-island. `VelocityResidual`, `ImpulseResidual`, and
+(Impulse kind), and penetration residuals, the witness torque and spin, plus
+iteration count, for each island. `VelocityResidual`, `ImpulseResidual`, and
 `PenetrationResidual` gate success. If a residual exceeds its limit when
 `MaxIterations` is reached, return `Undecided`. Use no random ordering or
 solver tolerance hidden from `StepConfig`. Island formation, the proposal
@@ -804,7 +804,11 @@ its prescribed trajectory cannot receive an impulse.
 Evaluate each residual over the admitted mass/inertia, contact-point, and
 normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
-narrow; the arithmetic residual still applies.
+narrow; the arithmetic residual still applies. The angular law's limit also
+carries each contact point's witness ball times its impulse, the witness
+torque, which the island publishes as `WitnessTorque` with its spin
+equivalent `WitnessSpin`; the mass-center and normal balls stay in the
+residual (`docs/multibody-dynamics-design.md` §6.3).
 
 The fixed/dynamic frictional step uses the identity-placed floor's real
 four-corner manifold, exact-rational impulse and torque sums, and the

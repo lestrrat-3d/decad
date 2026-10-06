@@ -158,22 +158,27 @@ at which the exact drift of its lowest corner enters the `SupportBand`, which is
 first `ContactBand` sample lies (§10.5).
 
 **Phase 3 — `parts-bin`.** The tray plus: a `24×16×16 mm` box shelled `2 mm` through its top
-(`cupPayload`, non-convex, exact); a `12 mm` cube whose top loop is chamfered `2.1 mm`, so its feet are
-not dyadic and its displacement is its contour's rounding (about `1e-15 mm`, §10.4); a loft from a pushed-out
+(`cupPayload`, non-convex, exact); a `12 mm` cube whose top loop is chamfered `2.3 mm`, so its feet are
+not dyadic and its displacement is its contour's rounding (about `1e-15 mm`, §10.4), and whose held mesh
+carries §9.2's convexity certificate (a `2.1 mm` chamfer rounds one foot an ulp in front of a facet plane,
+which §9.6's overlap path refuses, §13 PR 20c); a loft from a pushed-out
 square to an octagon (exact); a straight `14 mm` sweep of a hexagon (exact, read as its prism); a revolved
 bottle, the full revolve of a line-and-arc half-profile (`Ø16 mm` base, a quarter-circle shoulder to a
 `Ø8 mm` neck), read as a held mesh at the request's `HeldChord` (§10.4); and a `Ø20 × 30 mm` source
 cylinder released on its side on the tray floor with `ω = (−1.5, 0, 0) rad/s` and `v = (0, 15, 0) mm/s`, so
 it rolls without slip from its first step. Every other body is released `8 mm` above the floor at a
 translation pose, at least `20 mm` inside the walls, as PR 15 places its bodies. Material as above, with
-`PenetrationResidual = 0.1 mm`, `SupportBand = 0.05 mm`, `HeldChord = 0.03 mm` (the bottle's `δ` is then
-about `0.03 mm`, so `2δ` fits the residual) and `PointResolution = 0.1 mm`, since a displaced body's witness
-balls carry its `δ` (§10.4). `4 s`. Exit criterion: `Body.MassProperties` publishes for every body; the
-timeline reaches `4 s`; the rolling cylinder's trace carries a rotating band track on the tray's floor with
-its contact-point speed within `VelocityResidual` of zero (rolling without slip under friction `0.4`); the
-chamfered block and the bottle each rest on a `ContactBand` whose published `Gap.Bound` is at most the
-body's boundary displacement plus `SupportBand`; the cup rests on four lifted points; every body's final
-velocity is within `VelocityResidual` of zero.
+`PenetrationResidual = 0.125 mm`, `SupportBand = 0.05 mm`, `HeldChord = 0.03 mm` (the bottle's `δ` is then
+about `0.03 mm`; the band track that carries its rest holds its lifted base at up to `SupportBand + 2δ`,
+about `0.109 mm`, inside the residual, §10.4) and `PointResolution = 0.1 mm`, since a displaced body's
+witness balls carry its `δ` (§10.4). `4 s`. Exit criterion: `Body.MassProperties` publishes for every body;
+the timeline reaches `4 s`; the rolling cylinder's trace carries a rotating band track on the tray's floor
+with its contact-point speed within `VelocityResidual` of zero (rolling without slip under friction `0.4`);
+the chamfered block and the bottle each rest on a `ContactBand` whose published `Gap.Bound` is at most the
+body's boundary displacement plus `SupportBand`; the bottle's landing island publishes a `WitnessSpin`
+(§6.3) below `1 rad/s` and each of its resting islands one below `0.05 rad/s`, the spin its `δ` leaves
+uncertain in its published zero; the cup rests on four lifted points; every body's final velocity is
+within `VelocityResidual` of zero.
 
 ## 3. N-body data model
 
@@ -674,7 +679,7 @@ The certificate then checks, every comparison over the full interval:
 | Gate | Exact statement | Limit |
 |---|---|---|
 | Linear law | `m·(v' − v) − ΣJ` per component, over both mass endpoints | `ImpulseResidual + m_hi·VelocityResidual` |
-| Angular law | `I_world·(ω' − ω) − Σ r×J` per component, over the inertia and point intervals | `ImpulseResidual·ρ + λ_lo(I)·AngularVelocityResidual`, with `ρ` the island's largest lever bound and `λ_lo(I)` the certified lower eigenvalue (rigid-dynamics "World and State") |
+| Angular law | `I_world·(ω' − ω) − Σ r×J` per component, over the inertia and point intervals | `ImpulseResidual·ρ + λ_lo(I)·AngularVelocityResidual + T_β`, with `ρ` the island's largest lever bound, `λ_lo(I)` the certified lower eigenvalue (rigid-dynamics "World and State") and `T_β` the body's witness torque (below) |
 | Normal sign | `λn_k >= 0` exactly | none |
 | Non-penetration | `w'_k·n_k − target_k` lower end | `>= −VelocityResidual` |
 | Complementarity | if `λn_k > 0`: `|w'_k·n_k − target_k|` upper end | `<= VelocityResidual` |
@@ -703,6 +708,40 @@ term. A gate that fails at `MaxIterations` is `Undecided` with `StepIslandResidu
 the gate and the limit. Residuals are decided over intervals, so a proposal whose nominal value passes
 but whose interval does not is refused; narrow source intervals keep the arithmetic residual the binding
 one, exactly as rigid-dynamics "Response" states.
+
+WITNESS TORQUE. A contact point is known to its witness ball, whose radius the caller's `PointResolution`
+admits (§6.1; contact-geometry §3), so the torque of an impulse about the mass center is known only to that
+radius times the impulse: over the lever interval the angular residual spreads by up to `b_k·|J_k|_1` per
+component at each point, `b_k` the body's own witness ball (`OnA.Bound` on side `A`, `OnB.Bound` on side
+`B`) and `|J_k|_1` the L1 norm of the point's impulse interval at its upper end. A `0.03 mm` ball under the
+§2 bottle's `1877 kg·mm/s` landing impulse is a torque of `55 kg·mm²/s`, and no gate can certify the spin
+closer than the admitted geometry fixes it. The angular law's limit therefore carries that spread as the
+body's WITNESS TORQUE `T_β = Σ_k b_k·|J_k|_1` over the body's points, and nothing else widens it: the
+mass-center ball, the normal ball and the inertia intervals stay in the residual alone, so a mass center or
+normal too uncertain for the published spin is refused as before
+(`TestFacetedFloorImpactRefusesUncertifiedResponse`). The angular-momentum row sums each body's limit and so
+carries `T_β` with it. The term is published, never silent: `ContactSolverReport.WitnessTorque` is the
+largest `T_β` over the island's dynamic bodies and `WitnessSpin` the largest `T_β / λ_lo(I_β)`, both rounded
+up, and a refusal's `Limit` carries it. What the gate certifies, for every admissible inertia, mass center,
+normal and contact point at once, is `|I·Δω_pub − Σ r×J|_∞ <= L_β := ImpulseResidual·ρ +
+λ_lo·AngularVelocityResidual + T_β`; with `Δω*` the exact law's spin change at the true inertia and the true
+contact points, `I*·(Δω_pub − Δω*)` is that residual at one admissible instantiation, so
+`|Δω_pub − Δω*|_2 <= √3·L_β / λ_lo`: the published spin lies within
+`√3·(AngularVelocityResidual + (ImpulseResidual·ρ + T_β) / λ_lo)` of the law at the true contact points.
+That claim is the one every exact fixture already makes, since an exact planar body's `T_β` is the rounding
+of its vertices times the impulse and no published number of theirs changes; for the §2 bottle it is the
+record of §13 PR 20g: `WitnessSpin` about `0.5 rad/s` at the landing and `0.04 rad/s` at each resting kick.
+Raising `AngularVelocityResidual` to the landing's `0.5 rad/s` instead would state one flat tolerance for
+every body and every event, widen every body's energy allowance with it (rigid-dynamics "Completion,
+conservation, and trace"), and leave the resting kicks' tenfold smaller uncertainty unstated; shrinking `HeldChord` until the
+spread fits the old limit needs `δ` below `1e-7 mm`, tens of thousands of base vertices at a classification
+cost of seconds per step already at `0.03 mm`.
+
+The velocity rows carry no such term: non-penetration, complementarity, stick and slip enclose each point's
+velocity over the lever interval, so a spinning displaced body's point speed spreads by `|ω'|·b_k` (and the
+restitution target's by `e·|ω|·b_k`), which those rows refuse beyond `VelocityResidual`. A displaced body
+therefore certifies an event only while its spin times its witness ball lies within `VelocityResidual`; the
+§2 bottle lands and rests with exactly zero spin.
 
 These gates are the solver's CLAIM, not an admission of a geometric fact: the published state is defined
 as "velocities that satisfy the discrete law within the stated residuals", and the certificate proves that
@@ -1566,8 +1605,13 @@ replay keeps reading the held depth against the held vertices.
 beyond the residual are `StepPairUndecided`, a completed contact-set pair is `StepTrackUnproved`, a
 corrected island pair must touch or lie in an admitted band, and a non-excluded Fixed/Fixed pair in a
 band beyond the residual is `StepFixedPairRelation` (§3.1), each with `PenetrationResidual` as its
-`Limit`. A positive-`δ` body therefore needs a `PenetrationResidual` above `2δ`, which the caller sets; a
-tighter residual leaves the pair `Undecided`, never silently touching.
+`Limit`. A positive-`δ` body therefore needs a `PenetrationResidual` above `2δ`, and one that rests on a
+lifted set (§10.5) above `max(SupportBand, δ) + 2δ`, since the band track that carries its rest holds each
+lifted height, at most that band, widened by `2δ`; the caller sets it, and a tighter residual leaves the
+pair `Undecided` at the first band track after its landing, never silently touching. The landing solve
+itself certifies through §6.3's witness torque: every lifted point's witness ball carries `δ`, so the
+landing impulse's torque about the mass center is known only to `δ` times the impulse, which the angular
+law's limit carries and the island publishes as `WitnessTorque` and `WitnessSpin`.
 
 Curved source families with their own exact occupied sets (sphere, axial cylinder) keep their exact
 paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
@@ -2826,20 +2870,18 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Test (`dynamics`): `dynamics/contact_band_test.go` gains the `2.1 mm` block dropped `8 mm` onto the §2 tray
   at §2's Phase 3 residuals, landing through an `Overlapping` initial contact with a charged manifold and
   resting within `32` steps on a four-point `ContactBand` whose `Gap.Bound` is at most `δ + SupportBand`,
-  both velocities exactly zero; and the bottle dropped the same at `HeldChord = 0.03 mm` and
-  `PointResolution = 0.1 mm`, landing, bouncing at restitution `0.3` and resting at a held gap at most `δ`;
-  at `PointResolution = 1e-6 mm` its landing step is `StepPairUndecided` (`ContactPointTooCoarse` withholds
-  the track's manifold). Legs shown to fail: the overlap manifold deleted, the block's landing is
-  `StepManifoldMissing`; `b` read as `SupportBand` alone at `SupportBand = 0.01 mm`, the bottle's rest is
-  `StepManifoldMissing` on a band with no lifted set.
+  both velocities exactly zero. Leg shown to fail: the overlap manifold deleted, the block's landing is
+  `StepManifoldMissing`. The bottle's drop is PR 20g's fixture: its landing solve needs §6.3's witness
+  torque.
 - Depends on: PRs 14d, 18, 20b.
 - Shipped. `planarBandPair.liftedBand` publishes the lifted set and `overlapManifold` the deep overlap's
   patch, both charged by `chargedManifold`; `pair.PlanarFacePenetrationGrown` reads §9.6's conditions 3
   and 4 over M grown by its δ. `planarLiftedSet` reads every guest, as PR 20d states. The §9.6 path needs
   M's §9.2 certificate, which the `2.1 mm` block's held mesh does not carry (a rounded foot leaves a vertex
   an ulp in front of a facet plane), so that block sunk in the floor reads `Overlapping` with
-  `ContactNonConvex` and the overlap fixtures use a `2.3 mm` block, whose held mesh is certified; the
-  `2.1 mm` block's landing in the scene does not take the overlap path. The §9.6 margin fixture moves the
+  `ContactNonConvex` and the overlap fixtures use a `2.3 mm` block, whose held mesh is certified; §2's scene
+  drops the `2.3 mm` block for that reason, and this PR's `2.1 mm` drop takes the same lifted-band landing,
+  never the overlap path. The §9.6 margin fixture moves the
   tray so its wall is the plane `y = 0`, where `δ/2` is a float, and both growths must be deleted for it
   to go red, since either alone refuses it. The host-gate fixture sets the bottle on the `2.1 mm` block
   instead of the knob, whose held pair with the bottle costs `14 s` of exact classification; its red reads
@@ -2848,12 +2890,10 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   corners under the octagon's face. In `dynamics`, the block's held gap enters the lifted band at about
   `SupportBand` above the floor, so it lands on a four-point `ContactBand` rather than an overlap and
   rests at step `17` (leg shown to fail: the lifted band deleted, the landing's right sample is an
-  overlap of the block's flat face and the step stops with `StepManifoldMissing`). The bottle's dynamics
-  fixtures are not shipped: its landing solve stops with `StepIslandResidual` at §6.3's angular law
-  gate, whose residual carries each lever's witness ball, `δ` about `0.03 mm`, times the landing impulse
-  (about `55 kg·mm²/s` against a limit of `1.2e-4`), while the limit charges no lever uncertainty; the
-  bottle's rest waits on that charge. Its refusal at `PointResolution = 1e-6 mm` reads
-  `StepPairUndecided` as stated, but its exact classification against the tray costs about `2 s` a step.
+  overlap of the block's flat face and the step stops with `StepManifoldMissing`). Without PR 20g the
+  bottle's landing solve stops with `StepIslandResidual` at §6.3's angular law, its residual the witness
+  torque of its `49` lifted base vertices, about `55 kg·mm²/s`, against a limit of `1.2e-4`; its exact
+  classification against the tray costs about `2 s` a step.
 
 ### PR 20d (Phase 3) — the support set of a non-convex guest
 
@@ -2928,18 +2968,64 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   narrowing read the same figure. `contact_band_test.go`'s knob falling onto the floor replays its
   bracket's left edge, whose proven gap is far under `δ`.
 
+### PR 20g (Phase 3) — the witness torque
+
+- Delivers §6.3's witness torque: each dynamic body's angular-law limit gains `T_β = Σ_k b_k·|J_k|_1` over
+  the body's points, `b_k` its own witness ball and `|J_k|_1` the impulse interval's L1 norm at its upper
+  end; the angular-momentum limit inherits it through the per-body sum; `ContactSolverReport` gains
+  `WitnessTorque` (the island's largest `T_β`, `AngularMomentum` kind) and `WitnessSpin` (the largest
+  `T_β / λ_lo(I_β)`, `AngularVelocity` kind), both rounded up. The mass-center ball, the normal ball and the
+  velocity rows are unchanged. Rigid-dynamics "Response" names the term and the two fields and points here.
+- Files: `dynamics/island_certify.go`, `dynamics/step.go`, `docs/rigid-dynamics-design.md`.
+- Test (`dynamics`): `dynamics/contact_band_test.go` gains `TestDisplacedBottleRestsOnTray`: the §2 bottle
+  dropped `8 mm` onto the §2 tray at §2's Phase 3 residuals, landing through a `ContactBand` initial contact
+  on every vertex of its held base, bouncing at restitution `0.3`, bouncing again below `ImpactSpeed` and
+  resting within `32` steps with both velocities exactly zero, its `ContactPair` at rest a `ContactBand` whose
+  `Gap.Bound` is at most `δ + SupportBand`; the landing island's `WitnessTorque` equals, within one rounding,
+  `Σ_k b_k·|J_k|_1` recomputed in the test from the event's manifold balls and point impulses, its
+  `WitnessSpin` equals that over the bottle's certified lower eigenvalue (read through `export_test.go`) and
+  lies below `1 rad/s`, and each resting island's `WitnessSpin` lies below `0.05 rad/s`; at
+  `PointResolution = 1e-6 mm` the landing step is `StepManifoldMissing` (`ContactPointTooCoarse` withholds the
+  band's manifold at the rounded event poses); at `PenetrationResidual = 0.1 mm` the landing step is `StepTrackUnproved`, the band
+  track after the bounce holding the lifted base at `SupportBand + 2δ` (§10.4). `dynamics/island_test.go`
+  gains the tamper leg of the bottle's landing proposal (`IslandProposalGates`): its spin about `Z` raised
+  by four times `WitnessSpin + AngularVelocityResidual` is refused at the angular law and the angular
+  momentum, and the untampered proposal passes every gate; its leg comment records that `T_β` is the one
+  limit term that is not a rounding residual, with the legs below.
+- Legs shown to fail: `T_β` zeroed, the bottle's landing is `StepIslandResidual` at the angular law with a
+  residual about `55 kg·mm²/s` against `1.2e-4` (§13 PR 20c's record); `T_β` left out of the
+  angular-momentum sum alone, the same landing is refused at the angular momentum row; the mass-center
+  ball added to `b_k`, `TestFacetedFloorImpactRefusesUncertifiedResponse`'s "mass center uncertainty"
+  advances; `WitnessTorque` published from `PointResolution` in place of the attained balls, the
+  recomputation leg reads a published torque about `3.4` times the recomputed one. Every shipped `dynamics`
+  fixture keeps its numbers: an exact body's `T_β` is the rounding of its witnesses times the impulse, and
+  every refusal fixture at the angular law stands by more than that.
+- Depends on: PR 20c.
+- Rejected alternatives, each recorded in §6.3: a scene-wide `AngularVelocityResidual` of `0.5 rad/s`, and a
+  `HeldChord` small enough for the spread to fit the old limit.
+- Shipped. `bodyWitnessTorque` (`dynamics/island_certify.go`) sums `T_β` per body. The bottle's held base
+  lifts `49` vertices; it lands at step `9` (`WitnessSpin` about `0.5 rad/s`), rebounds at `0.3` again at
+  step `15`, meets the floor below `ImpactSpeed` and rests at step `17` (`WitnessSpin` about `0.04 rad/s`).
+  `IslandProposalGates` solves a step's initial contacts and the drop's landing is an interior impact, so
+  the tamper fixture (`TestIslandWitnessTorqueGates`) starts the bottle `1/32 mm` above the floor, inside
+  the lifted band, closing at the landing's `383.203125 mm/s`; with `T_β` zeroed its landing is refused at the drop's
+  angular residual.
+  The drop costs about `33 s` locally: each of its three impact steps about `5.5 s`, the
+  `PointResolution = 1e-6 mm` landing step about `4 s` and the `0.1 mm` one about `5 s`.
+
 PRs 20a, 20e and 20f touch disjoint files and may land in any order; PR 20b follows 20a only for the
-scene's sweep; PRs 20c and 20d follow 20b.
+scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
 
 ### PR 21 (Phase 3) — `parts-bin`
 
-- Delivers the Phase 3 exit scene of §2.
+- Delivers the Phase 3 exit scene of §2: the `2.3 mm` block, the `0.125 mm` residual and the bottle's
+  `WitnessSpin` criteria are §2's.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
 - Test: the Phase 3 exit criteria. The exploration run (`dynamics/partsbin_explore_test.go`, kept out of
   the tree) of 48 steps with the six bodies took `63 s` with every held snapshot rebuilt at each call; the
   scene test records its cost after PR 20b's cache, and a scene that exceeds the `dynamics` package's race
   budget shortens by a change to §2.
-- Depends on: PRs 15, 17, 18, 20, 20a–20f.
+- Depends on: PRs 15, 17, 18, 20, 20a–20g.
 
 ## 14. Test and fixture strategy
 

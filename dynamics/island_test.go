@@ -430,6 +430,23 @@ func TestIslandTwoSphereImpactThroughGeneralPath(t *testing.T) {
 // m_hi·VelocityResidual, ImpulseResidual·ρ and λ_lo·AngularVelocityResidual
 // only admit a rounding residual; deleting one tightens the gate and can
 // never admit a proposal.
+//
+// The witness torque T_β (§6.3) is the one limit term that is not a rounding
+// residual: it widens the angular law, and through the per-body sum the
+// angular momentum, by each contact point's witness ball times its impulse,
+// the torque the admitted contact points leave unknown. Its legs, each shown
+// to fail:
+//   - T_β zeroed: TestDisplacedBottleRestsOnTray's landing is
+//     StepIslandResidual at the angular law, and
+//     TestIslandWitnessTorqueGates' untampered proposal is refused;
+//   - T_β left out of the angular-momentum limit alone: the same landing is
+//     refused at the angular momentum row;
+//   - the mass-center ball added to b_k:
+//     TestFacetedFloorImpactRefusesUncertifiedResponse/"mass center
+//     uncertainty" advances;
+//   - WitnessTorque published from PointResolution in place of the attained
+//     balls: TestDisplacedBottleRestsOnTray's recomputation reads a published
+//     torque about 3.4 times the recomputed one.
 
 // TestIslandCertificateGates tampers with the certified proposal of the
 // two-sphere island and requires the named gate among the refusals. The
@@ -476,6 +493,41 @@ func TestIslandCertificateGates(t *testing.T) {
 			require.Contains(t, gates(tc.tamper), tc.gate)
 		})
 	}
+}
+
+// TestIslandWitnessTorqueGates tampers with the bottle's landing proposal:
+// §2's revolved bottle, its held base lifted 1/32 mm above the tray's floor
+// and closing at the landing's 383.203125 mm/s. The untampered proposal
+// passes every gate, its witness torque inside the angular limit. A spin
+// about Z of four times WitnessSpin + AngularVelocityResidual lies beyond
+// the √3·(AngularVelocityResidual + (ImpulseResidual·ρ + T_β)/λ_lo) the
+// certificate leaves the published spin, so the angular law and the angular
+// momentum refuse it.
+func TestIslandWitnessTorqueGates(t *testing.T) {
+	scene := newBottleScene(t)
+	config := partsBinConfig()
+	world, state := scene.world(t, config, translation(t, r3.Vec{Z: 1.0 / 32}), -383.203125)
+	report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, pyramidDt())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotEmpty(t, report.Islands)
+	landing := report.Islands[0].Solver
+	require.Positive(t, landing.WitnessSpin.Base())
+	require.Less(t, landing.WitnessSpin.Base(), 1.0)
+	gates := func(tamper func(*dynamics.IslandProposal)) []string {
+		t.Helper()
+		names, err := dynamics.IslandProposalGates(t.Context(), world, state, zeroAcceleration(), pyramidDt(), tamper)
+		require.NoError(t, err)
+		return names
+	}
+	require.Empty(t, gates(func(*dynamics.IslandProposal) {}))
+	raise := 4 * (landing.WitnessSpin.Base() + config.AngularVelocityResidual.Base())
+	names := gates(func(p *dynamics.IslandProposal) {
+		require.Equal(t, scene.bottle, p.Bodies[1])
+		p.Angular[1].Z = units.RadiansPerSecond(p.Angular[1].Z.Base() + raise)
+	})
+	require.Contains(t, names, "angular law")
+	require.Contains(t, names, "angular momentum")
 }
 
 // TestIslandUncertainMassRefuses gives every sphere a supplied mass known
