@@ -32,6 +32,23 @@ import (
 //     the boxes' squared gap still exceeds the minimum's upper bound, the exact
 //     gap exceeds the exact minimum, so the exact prune would also prune. In
 //     every other case the exact test decides, as before.
+//   - A hinted bound on the minimum. The caller may name one candidate pair,
+//     usually the nearest pair of an earlier call (ClassifyPlanarHinted). Its
+//     exact squared distance, when it offers one, is a candidate, so it is at
+//     or above the exact minimum, and it prunes box pairs as the running
+//     minimum does (the cap). It is never offered. Every box pair that holds
+//     a candidate at the minimum has a squared gap at or below the minimum,
+//     so at or below the cap, and is scanned as before. In particular the
+//     first such candidate in scan order is still the first one to reach the
+//     minimum, so the recorded minimum is the same fraction. Every
+//     zero-distance site lies in a box pair with a zero gap, which no bound
+//     prunes, so the sites are the same, in the same order.
+//   - Block boxes. The scan's inner loop runs over runs of scanBlock
+//     consecutive facets, or edges, each with the union of their float boxes.
+//     A float gap to the block past the bound proves the float gap to every
+//     box in it past the bound, so the whole run is skipped, in place, as the
+//     per-pair float pre-test would skip each pair. The visit order is
+//     unchanged.
 //   - Per-triangle side planes for the vertex-facet test. The edge test
 //     ((w−u)×(x−u))·n equals (x−u)·(n×(w−u)) exactly, by the scalar triple
 //     product, so its sign is the same. The plane n×(w−u) is computed once per
@@ -67,6 +84,8 @@ func (p *planarPrep) floatBoxes() {
 	for e, edge := range p.edges {
 		p.edgeBox[e] = p.unionBox(edge[:])
 	}
+	p.triBlock = blockBoxes(p.triBox)
+	p.edgeBlock = blockBoxes(p.edgeBox)
 }
 
 // unionBox is the smallest float box holding the float boxes of the given
@@ -249,4 +268,101 @@ func floatDotSign(x, u, m floatBox) (int, bool) {
 		return -1, true
 	}
 	return 0, false
+}
+
+// hintKind names the kind of candidate pair a PlanarHint names.
+type hintKind uint8
+
+const (
+	// A vertex of the first solid against a facet of the second. The zero
+	// kind names no pair.
+	hintVertexFacet hintKind = iota + 1
+	// A vertex of the second solid against a facet of the first.
+	hintFacetVertex
+	// An edge of the first solid against an edge of the second.
+	hintEdgeEdge
+)
+
+// PlanarHint names one candidate pair of the distance scan by index: a vertex
+// and a facet, or two edges. The zero hint names none.
+type PlanarHint struct {
+	kind hintKind
+	i, j int
+}
+
+func vertexFacetHint(second bool, v, t int) PlanarHint {
+	if second {
+		return PlanarHint{kind: hintFacetVertex, i: v, j: t}
+	}
+	return PlanarHint{kind: hintVertexFacet, i: v, j: t}
+}
+
+// applyHint sets the cap from the hinted candidate pair's exact squared
+// distance. A hint with an index out of range, or a vertex whose projection
+// misses the facet, offers nothing and sets no cap. The candidate is read in a
+// scratch kernel, so it offers nothing to best and records no site here.
+func (k *planarKernel) applyHint() {
+	h := k.hint
+	scratch := &planarKernel{a: k.a, b: k.b, poll: k.poll}
+	switch h.kind {
+	case hintVertexFacet, hintFacetVertex:
+		verts, tris := k.a, k.b
+		if h.kind == hintFacetVertex {
+			verts, tris = k.b, k.a
+		}
+		if h.i < 0 || h.i >= len(verts.s.Verts) || h.j < 0 || h.j >= len(tris.s.Tris) {
+			return
+		}
+		scratch.vertexFacet(verts, h.i, tris, h.j)
+	case hintEdgeEdge:
+		if h.i < 0 || h.i >= len(k.a.edges) || h.j < 0 || h.j >= len(k.b.edges) {
+			return
+		}
+		scratch.edgeEdge(k.a.edges[h.i], k.b.edges[h.j])
+	default:
+		return
+	}
+	if scratch.hasBest {
+		k.cap, k.capUp, k.hasCap = scratch.best, scratch.bestUp, true
+	}
+}
+
+// scanBlock is the number of consecutive facets, or edges, one block box of
+// the distance scan holds.
+const scanBlock = 16
+
+// blockBoxes returns the union float box of each run of scanBlock
+// consecutive boxes, the last run possibly shorter.
+func blockBoxes(boxes []floatBox) []floatBox {
+	out := make([]floatBox, 0, (len(boxes)+scanBlock-1)/scanBlock)
+	for i0 := 0; i0 < len(boxes); i0 += scanBlock {
+		b := boxes[i0]
+		for _, o := range boxes[i0+1 : min(i0+scanBlock, len(boxes))] {
+			for axis := range 3 {
+				b.lo[axis] = math.Min(b.lo[axis], o.lo[axis])
+				b.hi[axis] = math.Max(b.hi[axis], o.hi[axis])
+			}
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+// blockPruned reports whether the float pre-test prunes the pair of a with
+// every one of the n boxes block holds, charging poll once per pair as their
+// own scan would. Each held box lies inside block, and gapSquaredBelow only
+// grows as a box shrinks, so a block gap past the bound puts every held gap
+// past it. Nothing is offered while the block is skipped, so the bound is the
+// one each held pair would have met.
+func (k *planarKernel) blockPruned(a, block floatBox, n int) (bool, error) {
+	up, bounded := k.boundUp()
+	if !bounded || !(gapSquaredBelow(a, block) > up) {
+		return false, nil
+	}
+	for range n {
+		if err := k.poll(); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
