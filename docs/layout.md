@@ -69,7 +69,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `doc.go` | Package doc: scope, the evaluator support-and-refusal map, and the layering contract (`decad -> sketch -> r3 -> units`). |
-| `errors.go` | The core §12 sentinel errors, plus the H2 typed `BooleanError`, whose `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
+| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`), plus the H2 typed `BooleanError`, whose `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
 | `record.go` | Sketch profile, chain, loop and curve records; NURBS validation. See `docs/sketch-seam-design.md` §2. |
@@ -258,6 +258,7 @@ to the byte budget.
 | `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |
 | `internal/tessellation/` | Mesh audits and the loft exact restatement over neutral triangle data. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
+| `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `_gallery/` | Own nested module for README images, landing clip and dynamics scenes; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; root race shards depend on `race-binary`. `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |
