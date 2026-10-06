@@ -539,41 +539,27 @@ func (w *World) commonVelocities(isl island, solution islandSolution) {
 	}
 }
 
-// certifyProposal reads a published proposal and its inputs as exact
-// intervals and runs the certificate over them.
+// certifyProposal runs the certificate over a published proposal and its
+// inputs.
 func (w *World) certifyProposal(isl island, pre State, points []nominalPoint,
 	solution islandSolution, drive map[int]driverMotion) (islandCertificate, *islandFailure) {
-	certBodies := make([]certBody, len(isl.bodies))
+	in := certInput{bodies: make([]certBodyInput, len(isl.bodies)), points: make([]certPointInput, 0, len(points)),
+		drive: drive}
 	for slot, index := range isl.bodies {
-		after := pre.entries[index]
-		after.LinearVelocity, after.AngularVelocity = solution.linear[slot], solution.angular[slot]
-		body, ok := w.newCertBody(index, pre.entries[index], after, drive)
-		if !ok {
-			return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: fmt.Sprintf("body %d cannot be read as exact intervals", index)}
-		}
-		certBodies[slot] = body
+		in.bodies[slot] = certBodyInput{index: index, entry: pre.entries[index], vPost: solution.linear[slot],
+			wPost: solution.angular[slot]}
 	}
-	certPoints := make([]certPoint, 0, len(points))
 	k := 0
-	for pairIndex, pair := range isl.pairs {
-		restitution := exactBase(w.pairs[pair.key].restitution)
-		mu := w.pairs[pair.key].friction.lower
-		for _, point := range pair.manifold.Points {
-			p, ok := newCertPoint(pairIndex, points[k].a, points[k].b, point, certBodies, restitution)
-			if !ok || restitution == nil || mu == nil {
-				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "manifold point cannot be read as exact intervals"}
-			}
-			p.lambda, p.mu = ratFloat(solution.lambda[k]), mu
-			tangent, okTangent := ratVec(solution.tangent[k])
-			if p.lambda == nil || !okTangent {
-				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "island impulse is not finite"}
-			}
-			p.tangent = tangent
-			certPoints = append(certPoints, p)
+	for _, pair := range isl.pairs {
+		material := w.pairs[pair.key]
+		for i := range pair.manifold.Points {
+			in.points = append(in.points, certPointInput{a: points[k].a, b: points[k].b,
+				point: &pair.manifold.Points[i], restitution: material.restitution, mu: material.friction.lower,
+				lambda: solution.lambda[k], tangent: solution.tangent[k]})
 			k++
 		}
 	}
-	return w.certifyIsland(certBodies, certPoints), nil
+	return w.certifyIsland(in)
 }
 
 // islandPenetration is the deepest penetration the island's manifolds

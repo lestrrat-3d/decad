@@ -261,66 +261,6 @@ func inertiaComponents(inertia decad.InertiaReading) [6]inertiaComponent {
 		{inertia.XY, 0, 1}, {inertia.XZ, 0, 2}, {inertia.YZ, 1, 2}}
 }
 
-// spinEnergyChange keeps each source inertia interval shared across the
-// before/after squared-speed difference of one impulse. It returns the upper
-// end of ωᵀIω's change, twice the rotational energy change. rotation is the
-// pose basis as exact rationals, rotation[row][column]; before and after are
-// exact angular velocities, each component read at its nearest float64 as a
-// rad/s quantity would hold it.
-func spinEnergyChange(components *[6]exactComponent, rotation [3][3]*big.Rat,
-	before, after [3]*big.Rat) (*big.Rat, bool) {
-	initial, ok := localSpin(rotation, before)
-	if !ok {
-		return nil, false
-	}
-	final, ok := localSpin(rotation, after)
-	if !ok {
-		return nil, false
-	}
-	upper := new(big.Rat)
-	for _, component := range components {
-		quantity, bound := component.value, component.bound
-		if quantity == nil || bound == nil || bound.Sign() < 0 {
-			return nil, false
-		}
-		coefficient := proof.SubRat(new(big.Rat),
-			proof.MulRat(new(big.Rat), final[component.i], final[component.j]),
-			proof.MulRat(new(big.Rat), initial[component.i], initial[component.j]))
-		if component.i != component.j {
-			proof.MulRat(coefficient, coefficient, big.NewRat(2, 1))
-		}
-		contribution := proof.MulRat(new(big.Rat), quantity, coefficient)
-		proof.AddRat(upper, upper, proof.AddRat(new(big.Rat), contribution,
-			proof.MulRat(new(big.Rat), bound, absRat(coefficient))))
-	}
-	return upper, true
-}
-
-// localSpin is Rᵀω for an exact basis and an angular velocity read through
-// float64, as a rad/s QuantityVec of its components would hold it: each
-// component is rounded to its nearest float64 and fails when that is not
-// finite.
-func localSpin(rotation [3][3]*big.Rat, omega [3]*big.Rat) ([3]*big.Rat, bool) {
-	var velocity, local [3]*big.Rat
-	for axis, value := range omega {
-		f, _ := value.Float64()
-		velocity[axis] = ratFloat(f)
-		if velocity[axis] == nil {
-			return local, false
-		}
-	}
-	for i := range local {
-		local[i] = new(big.Rat)
-		for axis := range 3 {
-			if velocity[axis].Sign() == 0 {
-				continue
-			}
-			proof.AddRat(local[i], local[i], proof.MulRat(new(big.Rat), rotation[axis][i], velocity[axis]))
-		}
-	}
-	return local, true
-}
-
 // spinBasis reads a pose basis as exact rationals, rotation[row][column],
 // and the angular velocity in its axes, Rᵀω.
 func spinBasis(pose r3.Transform, omega QuantityVec) ([3][3]*big.Rat, [3]*big.Rat, bool) {
