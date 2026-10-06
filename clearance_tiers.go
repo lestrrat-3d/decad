@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -333,11 +335,11 @@ func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 			return
 		}
 	default:
-		cp := circleParam{
-			c: [3]float64{f.anchor.X, f.anchor.Y, f.anchor.Z},
-			u: [3]float64{f.refU.X, f.refU.Y, f.refU.Z},
-			v: [3]float64{f.refV.X, f.refV.Y, f.refV.Z},
-			r: f.major,
+		cp := freeform.CircleParam{
+			C: [3]float64{f.anchor.X, f.anchor.Y, f.anchor.Z},
+			U: [3]float64{f.refU.X, f.refU.Y, f.refU.Z},
+			V: [3]float64{f.refV.X, f.refV.Y, f.refV.Z},
+			R: f.major,
 		}
 		var okc bool
 		// The bracket feet come back as (line foot, spine point) — exactly
@@ -433,11 +435,11 @@ func (k *pairKernel) circleOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 				return
 			}
 		case degNo:
-			cp := circleParam{
-				c: [3]float64{e.center.X, e.center.Y, e.center.Z},
-				u: [3]float64{e.refU.X, e.refU.Y, e.refU.Z},
-				v: [3]float64{e.refV.X, e.refV.Y, e.refV.Z},
-				r: e.radius,
+			cp := freeform.CircleParam{
+				C: [3]float64{e.center.X, e.center.Y, e.center.Z},
+				U: [3]float64{e.refU.X, e.refU.Y, e.refU.Z},
+				V: [3]float64{e.refV.X, e.refV.Y, e.refV.Z},
+				R: e.radius,
 			}
 			cs, ok := k.lineCircleBracketCrits(cp, e.center, e.refU, e.refV, f.anchor, f.axis)
 			if !ok {
@@ -584,11 +586,11 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 		sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
 		return
 	}
-	cp := circleParam{
-		c: [3]float64{ec.center.X, ec.center.Y, ec.center.Z},
-		u: [3]float64{ec.refU.X, ec.refU.Y, ec.refU.Z},
-		v: [3]float64{ec.refV.X, ec.refV.Y, ec.refV.Z},
-		r: ec.radius,
+	cp := freeform.CircleParam{
+		C: [3]float64{ec.center.X, ec.center.Y, ec.center.Z},
+		U: [3]float64{ec.refU.X, ec.refU.Y, ec.refU.Z},
+		V: [3]float64{ec.refV.X, ec.refV.Y, ec.refV.Z},
+		R: ec.radius,
 	}
 	crits, ok := k.lineCircleBracketCrits(cp, ec.center, ec.refU, ec.refV, el.a, u)
 	if !ok {

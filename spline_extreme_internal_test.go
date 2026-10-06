@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/r3"
@@ -26,7 +28,7 @@ import (
 func ratSpan(uv [][2]float64) survey2d.BezierSpan {
 	span := make(survey2d.BezierSpan, len(uv))
 	for i, p := range uv {
-		span[i] = survey2d.RatPoint{U: mustRatOf(p[0]), V: mustRatOf(p[1])}
+		span[i] = survey2d.RatPoint{U: freeform.MustRatOf(p[0]), V: freeform.MustRatOf(p[1])}
 	}
 	return span
 }
@@ -75,12 +77,12 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, newFreeformWork(), nil)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
 
-	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
+	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	_, denseHi := denseSpanExtreme(t, spans, 0, 1, 20_000)
 	require.LessOrEqual(t, denseHi, hi+bound, "the enclosure's upper end must not fall below a dense sample")
@@ -101,7 +103,7 @@ func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork(), nil)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Zero(t, bound, "an extreme held by a recorded control coordinate carries no bound")
 	require.Equal(t, control[0].U, lo, "the minimum is the first control point's own U")
@@ -109,7 +111,7 @@ func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 }
 
 // 3. A symmetric quadratic hump with its stationary point exactly at
-// t = 1/2: bernsteinRestrict must handle a rational parameter sitting on a
+// t = 1/2: freeform.BernsteinRestrict must handle a rational parameter sitting on a
 // bisection boundary without dividing by a zero span width, and the span's
 // own enclosure must still contain the exact interior maximum.
 func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
@@ -119,43 +121,43 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
 	gu, gv := 1.0, 0.0
 
-	half := mustRatOf(0.5)
-	restricted := bernsteinRestrict(spanDirectionalValues(span, mustRatOf(gu), mustRatOf(gv)), half, half)
-	lo, hi := bernsteinHull(restricted)
-	one := mustRatOf(1)
+	half := freeform.MustRatOf(0.5)
+	restricted := freeform.BernsteinRestrict(freeform.SpanDirectionalValues(span, freeform.MustRatOf(gu), freeform.MustRatOf(gv)), half, half)
+	lo, hi := freeform.BernsteinHull(restricted)
+	one := freeform.MustRatOf(1)
 	require.Zero(t, lo.Cmp(one), "restricting to the zero-width interval [1/2, 1/2] evaluates P there exactly")
 	require.Zero(t, hi.Cmp(one))
 
-	minIv, maxIv, err := spanExtremeEnclosureContext(t.Context(), span, gu, gv, newFreeformWork())
+	minIv, maxIv, err := freeform.SpanExtremeEnclosureContext(t.Context(), span, gu, gv, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	maxLo, _ := maxIv.lo.Float64()
-	maxHi, _ := maxIv.hi.Float64()
+	maxLo, _ := maxIv.Lo.Float64()
+	maxHi, _ := maxIv.Hi.Float64()
 	require.LessOrEqual(t, maxLo, 1.0, "the enclosure must contain the true maximum 1")
 	require.GreaterOrEqual(t, maxHi, 1.0)
-	minLo, _ := minIv.lo.Float64()
-	minHi, _ := minIv.hi.Float64()
+	minLo, _ := minIv.Lo.Float64()
+	minHi, _ := minIv.Hi.Float64()
 	require.LessOrEqual(t, minLo, 0.0, "the minimum is held at both endpoints, value 0")
 	require.GreaterOrEqual(t, minHi, 0.0)
 }
 
 // 3b. Cancellation during the span's own Sturm chain build: the context
-// reports cancellation only while sturmChainContext is on the stack, so the
+// reports cancellation only while freeform.SturmChainContext is on the stack, so the
 // refusal here cannot have come from the entry poll this function already
 // ran. A free-form span's stationarity chain is built before any root is
 // isolated, and the caller must not wait it out.
 func TestSpanExtremeEnclosureCancelsInsideTheChainBuild(t *testing.T) {
 	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 3}, {3, 1}, {4, 0}})
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sturmChainContext"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SturmChainContext"}
 
-	_, _, err := spanExtremeEnclosureContext(ctx, span, 0, 1, newFreeformWork())
+	_, _, err := freeform.SpanExtremeEnclosureContext(ctx, span, 0, 1, freeform.NewFreeformWork())
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, "the stationarity polynomial must reach the Sturm chain build")
 }
 
 // 4. A collapsed span (every control point coincident): the stationarity
-// polynomial is identically zero, rpIsolateRootsContext returns no interval
+// polynomial is identically zero, freeform.RpIsolateRootsContext returns no interval
 // (§6.2: a zero root count is never on its own the proof of anything, but the
 // endpoint candidates carry the constant either way), and both endpoints
 // report the same constant with a zero-width enclosure.
@@ -164,13 +166,13 @@ func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
 	span := ratSpan([][2]float64{{5, -1}, {5, -1}, {5, -1}, {5, -1}})
 	gu, gv := 1.0, 1.0
 
-	minIv, maxIv, err := spanExtremeEnclosureContext(t.Context(), span, gu, gv, newFreeformWork())
+	minIv, maxIv, err := freeform.SpanExtremeEnclosureContext(t.Context(), span, gu, gv, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	require.Zero(t, minIv.lo.Cmp(minIv.hi), "a collapsed span's minimum has zero width")
-	require.Zero(t, maxIv.lo.Cmp(maxIv.hi), "a collapsed span's maximum has zero width")
-	four := mustRatOf(4)
-	require.Zero(t, minIv.lo.Cmp(four), "the constant value is 5*1 + (-1)*1 = 4")
-	require.Zero(t, maxIv.lo.Cmp(four))
+	require.Zero(t, minIv.Lo.Cmp(minIv.Hi), "a collapsed span's minimum has zero width")
+	require.Zero(t, maxIv.Lo.Cmp(maxIv.Hi), "a collapsed span's maximum has zero width")
+	four := freeform.MustRatOf(4)
+	require.Zero(t, minIv.Lo.Cmp(four), "the constant value is 5*1 + (-1)*1 = 4")
+	require.Zero(t, maxIv.Lo.Cmp(four))
 }
 
 // 5. A NURBSSeg with a repeated interior knot: the interior knot 0.5 repeats
@@ -190,7 +192,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 		TStart:  0, TEnd: 1,
 	}
 	require.NoError(t, validateNURBSSegment(seg))
-	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	spans, _, err := freeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 2, "the repeated interior knot splits the chain into two spans")
 	// The second span's three control points coincide (compared by rational
@@ -204,7 +206,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
 	gu, gv := 1.0, 2.0
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, newFreeformWork(), nil)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 
 	denseLo, denseHi := denseSpanExtreme(t, spans, gu, gv, 20_000)
@@ -214,8 +216,8 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 	require.GreaterOrEqual(t, denseHi, lo-bound)
 }
 
-// 6. R7: a freeformWork pre-drained to just under the ceiling refuses
-// ErrUnsupported from spanExtremeEnclosureContext itself, before a single
+// 6. R7: a freeform.FreeformWork pre-drained to just under the ceiling refuses
+// ErrUnsupported from freeform.SpanExtremeEnclosureContext itself, before a single
 // Bernstein coefficient is built — the charge is the function's first
 // statement. The NaN case is the ORDER's own witness (§5.2: every charge is
 // levied before the work allocates): the direction's rational lift allocates,
@@ -224,7 +226,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 func TestSpanExtremeEnclosureRefusesOverBudget(t *testing.T) {
 	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
-	cost := freeformExtremeCost(len(span))
+	cost := freeform.FreeformExtremeCost(len(span))
 	require.Positive(t, cost, "the fixture span must actually cost something to charge against")
 
 	for _, tc := range []struct {
@@ -235,8 +237,8 @@ func TestSpanExtremeEnclosureRefusesOverBudget(t *testing.T) {
 		{"non-finite direction", math.NaN(), 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			work := &freeformWork{spent: freeformWorkLimit - cost/2}
-			_, _, err := spanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, work)
+			work := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - cost/2}
+			_, _, err := freeform.SpanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, work)
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Contains(t, err.Error(), "work budget")
@@ -259,7 +261,7 @@ func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
 		{"Inf gv", 0, math.Inf(1), "gv"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := spanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, newFreeformWork())
+			_, _, err := freeform.SpanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, freeform.NewFreeformWork())
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrNotFinite)
 			require.Contains(t, err.Error(), tc.component)
@@ -284,7 +286,7 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 		{"Inf gv", 0, math.Inf(1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, err := boundaryExtremesBoundedContext(t.Context(), profile, tc.gu, tc.gv, newFreeformWork(), nil)
+			_, _, _, err := boundaryExtremesBoundedContext(t.Context(), profile, tc.gu, tc.gv, freeform.NewFreeformWork(), nil)
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrNotFinite)
 		})
@@ -306,7 +308,7 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 // this one could not be made parallel even if the reading were tolerant.
 func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 	var gate error
-	allocs := testing.AllocsPerRun(100, func() { gate = requireFiniteDirection(1.5, -2.25) })
+	allocs := testing.AllocsPerRun(100, func() { gate = freeform.RequireFiniteDirection(1.5, -2.25) })
 	require.NoError(t, gate)
 	require.Zero(t, allocs, "the accepted direction gate must allocate nothing")
 }
@@ -331,11 +333,11 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 	// The Y axis: this fixture's control U values are strictly increasing
 	// (monotone, so extentAlongWork along X would answer exactly), but its V
 	// values rise and fall — a genuine interior extreme.
-	_, _, err := pp.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), newFreeformWork())
+	_, _, err := pp.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
+	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Approximate, box.Exactness)
 	require.Positive(t, box.Bound.Base())
@@ -361,12 +363,12 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 
 	// The refusing wrapper keys on that same width, so this section's extent
 	// along X answers outright where test 8's interior-root fixture refuses.
-	lo, hi, err := pp.extentAlongWork(t.Context(), r3.NewVec(1, 0, 0), newFreeformWork())
+	lo, hi, err := pp.extentAlongWork(t.Context(), r3.NewVec(1, 0, 0), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 0.0, lo)
 	require.Equal(t, 3.0, hi)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
+	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Exact, box.Exactness, "an endpoint-held free-form extreme has no width to report")
 	require.Zero(t, box.Bound.Base())
@@ -384,12 +386,12 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
-	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, newFreeformWork(), nil)
+	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0, "an interior free-form extreme is held by a bracket, never exactly")
 
 	free := prismPayload{profile: splineProfile(control), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
-	_, _, err = free.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), newFreeformWork())
+	_, _, err = free.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
@@ -400,7 +402,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 		LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{profile: analytic, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
+	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Exact, box.Exactness)
 	require.Zero(t, box.Bound.Base())
@@ -422,7 +424,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	}
 	profile := splineProfile(control)
 
-	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, newFreeformWork(), nil)
+	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, freeform.NewFreeformWork(), nil)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrDegenerate,
@@ -434,7 +436,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	// The refusing wrapper over the same scan keeps that sentinel: it answers a
 	// free-form section it cannot state exactly with ErrUnsupported.
 	pp := prismPayload{profile: profile, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
-	_, _, err = pp.extentAlongWork(t.Context(), r3.NewVec(1, 1, 0), newFreeformWork())
+	_, _, err = pp.extentAlongWork(t.Context(), r3.NewVec(1, 1, 0), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrDegenerate)
 
@@ -446,13 +448,13 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	rotated, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
 	require.NoError(t, err)
 	tilted := prismPayload{profile: profile, frame: rotated, z0: 0, z1: 5, xform: r3.Identity()}
-	_, err = prismBoundsContext(t.Context(), tilted, newFreeformWork(), nil)
+	_, err = prismBoundsContext(t.Context(), tilted, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// The identical fixture read along a direction whose enclosure IS
 	// representable still answers, so the refusal is the range's and not the
 	// fixture's.
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork(), nil)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, control[0].U, lo, "U is monotone here, so the minimum is the first control point's own U")
 	require.Equal(t, control[len(control)-1].U, hi)
@@ -466,24 +468,24 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 // enclosure has no reading either.
 func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
 	t.Parallel()
-	lo, hi, err := freeformExtremeFloats(ratIv{lo: mustRatOf(-2.5), hi: mustRatOf(4)})
+	lo, hi, err := freeform.FreeformExtremeFloats(freeform.RatIv{Lo: freeform.MustRatOf(-2.5), Hi: freeform.MustRatOf(4)})
 	require.NoError(t, err)
 	require.Equal(t, -2.5, lo, "an exactly representable end comes back unchanged")
 	require.Equal(t, 4.0, hi)
 
-	past := new(big.Rat).Mul(mustRatOf(math.MaxFloat64), mustRatOf(4))
+	past := new(big.Rat).Mul(freeform.MustRatOf(math.MaxFloat64), freeform.MustRatOf(4))
 	for _, tc := range []struct {
 		name string
-		iv   ratIv
+		iv   freeform.RatIv
 	}{
-		{"lower end past the range", ratIv{lo: new(big.Rat).Neg(past), hi: mustRatOf(0)}},
-		{"upper end past the range", ratIv{lo: mustRatOf(0), hi: past}},
-		{"finite ends, width past the range", ratIv{
-			lo: mustRatOf(-math.MaxFloat64), hi: mustRatOf(math.MaxFloat64),
+		{"lower end past the range", freeform.RatIv{Lo: new(big.Rat).Neg(past), Hi: freeform.MustRatOf(0)}},
+		{"upper end past the range", freeform.RatIv{Lo: freeform.MustRatOf(0), Hi: past}},
+		{"finite ends, width past the range", freeform.RatIv{
+			Lo: freeform.MustRatOf(-math.MaxFloat64), Hi: freeform.MustRatOf(math.MaxFloat64),
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := freeformExtremeFloats(tc.iv)
+			_, _, err := freeform.FreeformExtremeFloats(tc.iv)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.NotErrorIs(t, err, ErrNotFinite, "every coordinate reaching the bracket is finite")
 			require.NotErrorIs(t, err, ErrDegenerate)
@@ -499,7 +501,7 @@ func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, 1, 0, newFreeformWork(), nil)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Zero(t, lo)
 	require.Zero(t, hi)

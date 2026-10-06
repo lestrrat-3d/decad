@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -91,7 +93,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	}
 	switch pl := b.payload.(type) {
 	case prismPayload:
-		coordUpper, err := profileCoordinateEnvelope(pl.profile, newFreeformWork(), pl.walks)
+		coordUpper, err := profileCoordinateEnvelope(pl.profile, freeform.NewFreeformWork(), pl.walks)
 		if err != nil {
 			return math.Inf(1)
 		}
@@ -104,7 +106,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 			proofbound.ProductUpper(vecL1(pl.frame.N()), zUpper),
 		)
 	case revolvePayload:
-		coordUpper, err := profileCoordinateUpper(pl.profile, newFreeformWork(), nil)
+		coordUpper, err := profileCoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)
 		}

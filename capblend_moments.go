@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -69,7 +71,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	loops := cbp.loops()
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
@@ -376,7 +378,7 @@ func capContourPerimeterUpper(capCo []coedge) float64 {
 // the band's closing disk at the cap level.
 func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return LoopRecord{}, err
@@ -1244,7 +1246,7 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 // it as an Exact position would assert an accuracy the offset solve never had.
 // extentBoundedAlong keeps the two apart per candidate, so a contour that loses
 // the extremization contributes nothing here.
-func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freeformWork) (Box, error) {
+func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freeform.FreeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	bound := 0.0

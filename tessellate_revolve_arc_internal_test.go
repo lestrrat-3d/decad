@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -359,7 +361,7 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 	})
 
 	t.Run("a minimum past the per-walk cap refuses", func(t *testing.T) {
-		_, _, err := chordCount(whole, 1, maxChordsPerWalk+1)
+		_, _, err := chordCount(whole, 1, freeform.MaxChordsPerWalk+1)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -244,7 +246,7 @@ func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (
 // from the axis's own exact direction, through the same sqrt bracket the
 // straight-prism campaign proved (segment_walk.go's lineWalkBounds /
 // dySqrtIntervalError): L² = du²+dv² is exact rational arithmetic, and
-// proofbound.RatSqrtDown/proofbound.RatSqrtUp (spline_length.go) bracket its root by exact
+// proofbound.RatSqrtDown/proofbound.RatSqrtUp (internal/freeform/spline_length.go) bracket its root by exact
 // comparison, without assuming any libm accuracy from the division that
 // produced the held float. du and dv are the axis's own exact-rational
 // leaves — a SketchLine's endpoint coordinate differences, or a
@@ -630,7 +632,7 @@ func (ax axisFrame) classify(w survey2d.SegmentWalk) wallKind {
 //     lower than −tol), and radialAdmitAllow carries exactly that worst case
 //     forward to revolve_build.go, which charges it into every published
 //     measurement the snap/unsnap mismatch can touch.
-func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
+func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2, work *freeform.FreeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.dV, line.dU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
@@ -876,7 +878,7 @@ func (ax axisFrame) snapDiscarded(w survey2d.SegmentWalk) float64 {
 // here rather than in a second pass of its own: re-walking a profile costs a
 // second free-form conversion and a second rational bracket per segment for an
 // answer this loop already holds.
-func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeformWork) (regionSnapAllow, error) {
+func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeform.FreeformWork) (regionSnapAllow, error) {
 	const angEps = 1e-9
 	var snap regionSnapAllow
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)

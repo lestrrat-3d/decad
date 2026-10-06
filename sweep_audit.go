@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -44,7 +46,7 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 	}
 
 	operation := proofbound.NewWorkBudget(ctx)
-	geometry := newFreeformWork()
+	geometry := freeform.NewFreeformWork()
 	for i := range spans {
 		for j := i + 1; j < len(spans); j++ {
 			if err := operation.Step(); err != nil {
@@ -67,7 +69,7 @@ func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
 func auditAdjacentSweepSpans(
 	ctx context.Context,
 	before, after sweepAuditSpan,
-	geometry *freeformWork,
+	geometry *freeform.FreeformWork,
 ) error {
 	if _, ok := before.endCap.surface.(Plane); !ok {
 		return fmt.Errorf(`%w: an adjacent sweep section is not planar`, ErrUnsupported)
@@ -143,7 +145,7 @@ func sweepAuditExtent(
 	ctx context.Context,
 	body *Body,
 	direction r3.Vec,
-	work *freeformWork,
+	work *freeform.FreeformWork,
 ) (float64, float64, float64, error) {
 	switch payload := body.payload.(type) {
 	case prismPayload:

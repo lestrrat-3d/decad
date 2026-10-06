@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -156,7 +158,7 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, newFreeformWork())
+	w, err := walkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, w.IsCircular())
 
@@ -420,7 +422,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 			continue
 		}
 		var err error
-		spans, _, err = freeformBezierSpans(seg, newFreeformWork())
+		spans, _, err = freeformBezierSpans(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 	}
 	require.NotEmpty(t, spans, `the fixture's own free-form segment`)

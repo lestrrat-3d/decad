@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -31,7 +33,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		t.Helper()
 		payload := body.payload.(chainPayload)
 		profile := payload.prism().profile
-		work := newFreeformWork()
+		work := freeform.NewFreeformWork()
 		captures := make([]chainWalkCapture, len(payload.chains))
 		for ci, chain := range payload.chains {
 			for _, segment := range chain.Segments {
@@ -78,7 +80,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 				if charge.spent <= 1 {
 					continue
 				}
-				near := freeformWork{spent: freeformWorkLimit - charge.spent + 1}
+				near := freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - charge.spent + 1}
 				cachedNear, freshNear := near, near
 				_, cachedErr := resolveOrRead(segment, &cachedNear, cachedWalks, ci, si)
 				_, freshErr := walkOf(segment, &freshNear)

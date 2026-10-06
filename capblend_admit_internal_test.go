@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -67,7 +69,7 @@ func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 	loops := cbp.loops()
 	require.Len(t, loops, 2)
 	budget := proofbound.NewWorkBudget(t.Context())
-	outer, err := oneLoopCornerLoop(budget, loops[0], newFreeformWork())
+	outer, err := oneLoopCornerLoop(budget, loops[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	n := len(outer.walks)
 	require.Equal(t, 8, n)
@@ -78,7 +80,7 @@ func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 		require.True(t, capJoinIsG1(prevSeg, curSeg), `corner %d is an exactly tangent join`, i)
 	}
 
-	bore, err := oneLoopCornerLoop(budget, loops[1], newFreeformWork())
+	bore, err := oneLoopCornerLoop(budget, loops[1], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, bore.walks, 1)
 	require.True(t, bore.walks[0].Closed, `the bore takes the whole-turn branch`)

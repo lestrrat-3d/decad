@@ -9,6 +9,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -383,7 +385,7 @@ var xhpGrid = [8]float64{-2.5, -1, -0.125, 0, 0.1, 0.3, 1, 2.75}
 type refPoint struct{ x, y, z *big.Rat }
 
 func refPointOf(v r3.Vec) refPoint {
-	return refPoint{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)}
+	return refPoint{freeform.MustRatOf(v.X), freeform.MustRatOf(v.Y), freeform.MustRatOf(v.Z)}
 }
 
 func refSub(a, b refPoint) refPoint {
@@ -867,12 +869,12 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 
 		got := fivPoint(a).mul(fivPoint(b)).sub(fivPoint(c).mul(fivPoint(d)))
 		exact := new(big.Rat).Sub(
-			new(big.Rat).Mul(mustRatOf(a), mustRatOf(b)),
-			new(big.Rat).Mul(mustRatOf(c), mustRatOf(d)),
+			new(big.Rat).Mul(freeform.MustRatOf(a), freeform.MustRatOf(b)),
+			new(big.Rat).Mul(freeform.MustRatOf(c), freeform.MustRatOf(d)),
 		)
 		require.False(t, got.abstains(), `a finite product/difference must never abstain`)
-		require.LessOrEqual(t, mustRatOf(got.lo).Cmp(exact), 0)
-		require.GreaterOrEqual(t, mustRatOf(got.hi).Cmp(exact), 0)
+		require.LessOrEqual(t, freeform.MustRatOf(got.lo).Cmp(exact), 0)
+		require.GreaterOrEqual(t, freeform.MustRatOf(got.hi).Cmp(exact), 0)
 
 		if a == b {
 			continue // a/(a-b) is undefined; the filter's own div guard covers it
@@ -881,9 +883,9 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 		if gotDiv.abstains() {
 			continue // an abstained bound trivially encloses every value
 		}
-		exactDiv := new(big.Rat).Quo(mustRatOf(a), new(big.Rat).Sub(mustRatOf(a), mustRatOf(b)))
-		require.LessOrEqual(t, mustRatOf(gotDiv.lo).Cmp(exactDiv), 0)
-		require.GreaterOrEqual(t, mustRatOf(gotDiv.hi).Cmp(exactDiv), 0)
+		exactDiv := new(big.Rat).Quo(freeform.MustRatOf(a), new(big.Rat).Sub(freeform.MustRatOf(a), freeform.MustRatOf(b)))
+		require.LessOrEqual(t, freeform.MustRatOf(gotDiv.lo).Cmp(exactDiv), 0)
+		require.GreaterOrEqual(t, freeform.MustRatOf(gotDiv.hi).Cmp(exactDiv), 0)
 	}
 }
 
@@ -939,9 +941,9 @@ func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 			pa := newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
-			qa := newXP2(mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v)))
-			qb := newXP2(mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v)))
-			qc := newXP2(mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v)))
+			qa := newXP2(freeform.MustRatOf(coordOf(a, ray.u)), freeform.MustRatOf(coordOf(a, ray.v)))
+			qb := newXP2(freeform.MustRatOf(coordOf(b, ray.u)), freeform.MustRatOf(coordOf(b, ray.v)))
+			qc := newXP2(freeform.MustRatOf(coordOf(c, ray.u)), freeform.MustRatOf(coordOf(c, ray.v)))
 			s1 := cross2xSign(qa, qb, pa)
 			s2 := cross2xSign(qb, qc, pa)
 			s3 := cross2xSign(qc, qa, pa)
@@ -1829,7 +1831,7 @@ func parityScatterMesh(side int) ([]r3.Vec, [][3]int) {
 func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]xp2 {
 	var out [3]xp2
 	for k, vi := range tri {
-		out[k] = newXP2(mustRatOf(coordOf(verts[vi], u)), mustRatOf(coordOf(verts[vi], v)))
+		out[k] = newXP2(freeform.MustRatOf(coordOf(verts[vi], u)), freeform.MustRatOf(coordOf(verts[vi], v)))
 	}
 	return out
 }
@@ -2000,11 +2002,11 @@ func parityBoxQueries(fx parityFixture) []parityCase {
 // the caller marks, where it is the bound minus a third of the gap to the next
 // float below it — a value no float64 names, sitting inside the last ulp.
 func parityBoxOffsetRat(c float64, offset bool, at float64) *big.Rat {
-	r := mustRatOf(c)
+	r := freeform.MustRatOf(c)
 	if !offset {
 		return r
 	}
-	gap := new(big.Rat).Sub(mustRatOf(at), mustRatOf(math.Nextafter(at, math.Inf(-1))))
+	gap := new(big.Rat).Sub(freeform.MustRatOf(at), freeform.MustRatOf(math.Nextafter(at, math.Inf(-1))))
 	return new(big.Rat).Sub(r, new(big.Rat).Quo(gap, big.NewRat(3, 1)))
 }
 

@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -264,7 +266,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 		return nil, err
 	} else if ok {
 		ref := d.nextProducerID()
-		body, err := evalPrismContext(ctx, d, ref, pp, newFreeformWork())
+		body, err := evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err
 		}
@@ -361,7 +363,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 		return nil, false, nil
 	}
 	d := a.doc
-	body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, false, err
 	}
@@ -1150,7 +1152,7 @@ func certifiedInteriorDepth(p proofbound.Xpt, other *boolMesh) float64 {
 func pointRoundBound(p proofbound.Xpt, pf r3.Vec) float64 {
 	px, py, pz := xhpRat(proofbound.Xhp(p))
 	worst := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{px, mustRatOf(pf.X)}, {py, mustRatOf(pf.Y)}, {pz, mustRatOf(pf.Z)}} {
+	for _, pair := range [][2]*big.Rat{{px, freeform.MustRatOf(pf.X)}, {py, freeform.MustRatOf(pf.Y)}, {pz, freeform.MustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])
 		d.Abs(d)
 		if d.Cmp(worst) > 0 {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -166,7 +168,7 @@ func revolveVertexFrameLiftAllow(rp revolvePayload, axisRadiusUpper float64) flo
 // Pappus quotient. Every material point starts in the recorded profile plane,
 // rotates about the resolved axis, then passes through a rigid placement. The
 // L1 envelopes use three times an input L1 norm for any orthogonal map.
-func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeformWork) (float64, error) {
+func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform.FreeformWork) (float64, error) {
 	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return 0, err
@@ -284,28 +286,28 @@ func revolveAxisAdmitVolumeCharge(ax axisFrame) float64 {
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
 func evalRevolve(d *Document, ref producerID, rp revolvePayload) (*Body, error) {
-	return evalRevolveWork(d, ref, newFreeformWork(), rp)
+	return evalRevolveWork(d, ref, freeform.NewFreeformWork(), rp)
 }
 
 // evalRevolveWork is the build an operation that already holds this record's
 // free-form work counter runs: the preflight below and every walkOf under it
 // continue that counter rather than open a second ceiling on the same record.
-func evalRevolveWork(d *Document, ref producerID, work *freeformWork, rp revolvePayload) (*Body, error) {
+func evalRevolveWork(d *Document, ref producerID, work *freeform.FreeformWork, rp revolvePayload) (*Body, error) {
 	return evalRevolveContextWork(context.Background(), d, ref, rp, work)
 }
 
 func evalRevolveContext(ctx context.Context, d *Document, ref producerID, rp revolvePayload) (*Body, error) {
-	return evalRevolveContextWork(ctx, d, ref, rp, newFreeformWork())
+	return evalRevolveContextWork(ctx, d, ref, rp, freeform.NewFreeformWork())
 }
 
-func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp revolvePayload, work *freeformWork) (*Body, error) {
+func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp revolvePayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if err := requireExactRevolveSection(rp, "a profile-fed revolve"); err != nil {
 		return nil, err
 	}
-	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, momentSecondOrder, work)
+	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, freeform.MomentSecondOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +648,7 @@ type revolveWalks struct {
 // two copies of it (docs/tessellation-design.md §3: the mesh reads the
 // evaluator's payload, never live sketch input). what names the caller in the
 // free-form refusal.
-func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, work *freeformWork, what string) (revolveWalks, error) {
+func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, work *freeform.FreeformWork, what string) (revolveWalks, error) {
 	if err := ctx.Err(); err != nil {
 		return revolveWalks{}, err
 	}
@@ -692,7 +694,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork) (revLoopParts, error) {
 	resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve wall build")
 	if err != nil {
 		return revLoopParts{}, err
@@ -1157,7 +1159,7 @@ func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (proofbound.RatI
 // work is the record's ONE free-form work counter (docs/spline-design.md
 // §5.2): the caller opens it once and this build and the final bounds
 // reading both spend from it.
-func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, rp chainRevolvePayload, work *freeformWork) (*Body, error) {
+func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, rp chainRevolvePayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -1265,7 +1267,7 @@ func requireChainAxisIncidence(resolved revolveWalks) error {
 // continue into its first (docs/surface-design.md §13.4). singleClosed is
 // always false: RecordChain admits no whole closed segment
 // (docs/sketch-seam-design.md §2.2).
-func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord, work *freeformWork) (revolveWalks, error) {
+func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord, work *freeform.FreeformWork) (revolveWalks, error) {
 	if len(chain.Segments) == 0 {
 		return revolveWalks{}, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
 	}

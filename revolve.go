@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -142,7 +144,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	// area falsifier's preflight opens it, the axis gates and the revolve build's
 	// own preflight continue it, and every walkOf under them spends what is left
 	// (docs/spline-design.md §5.2).
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
@@ -526,7 +528,7 @@ func (rp chainRevolvePayload) transform() r3.Transform { return rp.xform }
 // (docs/spline-design.md §5.2), exactly as revolvePayload.placed does.
 func (rp chainRevolvePayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	rp.xform = composed
-	return evalChainRevolveContext(ctx, d, ref, rp, newFreeformWork())
+	return evalChainRevolveContext(ctx, d, ref, rp, freeform.NewFreeformWork())
 }
 
 // RevolveChain spins the open chain ch of sketch s about axis per the
@@ -593,7 +595,7 @@ func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a
 	// opens for its own profile-fed build (docs/spline-design.md §5.2): the
 	// axis gates below, the chain wall build and the final bounds reading all
 	// spend from the same ceiling.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	chainProfile := ProfileRecord{Outer: LoopRecord(chain)}
 	ax, side, err := resolveAxisSide(context.Background(), chainProfile, line, work)
 	if err != nil {

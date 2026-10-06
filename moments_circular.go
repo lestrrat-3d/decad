@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1182,7 +1184,7 @@ func circularGreenMoment(walk circularMomentWalk, j [][]proofbound.RatInterval, 
 			for range q - k {
 				cvPow.Mul(cvPow, walk.cV)
 			}
-			coefficient := proofbound.RatMul(binomialRat(p+1, i), binomialRat(q, k), cuPow, cvPow)
+			coefficient := proofbound.RatMul(freeform.BinomialRat(p+1, i), freeform.BinomialRat(q, k), cuPow, cvPow)
 			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(j[i+1][k], coefficient))
 		}
 	}

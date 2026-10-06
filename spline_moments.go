@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -14,164 +16,9 @@ import (
 // integral is an exact rational — which is what earns a Tier A kind its zero
 // bound, and why §5.2 forbids a quadrature fallback here.
 //
-// The polynomial machinery is clearance_poly.go's ratPoly, reused rather than
+// The polynomial machinery is internal/freeform/clearance_poly.go's freeform.RatPoly, reused rather than
 // forked (spline design §6.2): that file already owns dense rational
 // polynomials with the products and derivatives these forms need.
-
-// freeformSpanCeiling is the span length, in control points, past which
-// freeformSpanCost stops evaluating its own formula: a span this wide is
-// hopeless at any budget, and cutting off here keeps the cubic term far inside
-// uint64 rather than relying on saturation to catch an overflow.
-const freeformSpanCeiling = 1 << 12
-
-// freeformSpanCost is the conservative preflight of one span's exact
-// integration, charged BEFORE any coefficient is allocated. The charge keeps
-// its original cubic ceiling even though rpFromBernstein now computes the
-// coefficients with a quadratic difference table. Keeping the charge gives
-// existing records the same work-budget acceptance and refusal.
-//
-// The cubic term bounds the former Bernstein expansion's
-// p(p+1)(2p+1)/3 products per coordinate. The difference table performs fewer
-// products, while the six Green's-theorem products (none above degree 4p, so
-// under 24(p+1)² together) and their ∫₀¹ terms remain quadratic in p. The
-// unchanged 64(p+1)² term covers those quadratic operations, and it still
-// covers them when momentThirdOrder adds freeformThirdMoments: its second
-// coefficient conversion and its four boundary forms (none above degree 5p)
-// bring the total to under 63(p+1)² coefficient products.
-func freeformSpanCost(controls int) uint64 {
-	if controls <= 0 {
-		return 0
-	}
-	if controls > freeformSpanCeiling {
-		return freeformCostCeiling
-	}
-	p, n := uint64(controls-1), uint64(controls)
-	bernstein := 2 * (p * n * (2*p + 1) / 3)
-	return costAdd(bernstein, 64*n*n)
-}
-
-// chargeFreeformSpans preflights the exact integration of a WHOLE converted
-// chain, before any of it runs. It is the SINGLE owner of that charge: the
-// record-level preflight levies it (moments_validate.go) and the moments pass
-// then integrates the chain the preflight already paid for. A record whose
-// integration cannot fit the budget must refuse before anything downstream of
-// the conversion samples or reconstructs the curve, since the ceiling exists
-// precisely because the public ProfileRecord methods take no context and cannot
-// be cancelled.
-func chargeFreeformSpans(spans []survey2d.BezierSpan, work *freeformWork) error {
-	for _, span := range spans {
-		if err := work.step(freeformSpanCost(len(span))); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// rpIntegral01 is the exact ∫₀¹ of a rational polynomial: Σ cᵢ/(i+1).
-func rpIntegral01(p ratPoly) *big.Rat {
-	out := new(big.Rat)
-	for i, coefficient := range p {
-		out.Add(out, new(big.Rat).Quo(coefficient, big.NewRat(int64(i)+1, 1)))
-	}
-	return out
-}
-
-// rpFromBernstein converts one coordinate's Bézier control values to the
-// monomial form of the same polynomial. Its coefficient of tᵏ is
-// C(n,k)·Δᵏb₀, where Δ is the forward difference on the control values.
-// This is the binomial expansion of Σ bᵢ·C(n,i)·tⁱ·(1−t)ⁿ⁻ⁱ; the difference
-// table computes all coefficients with quadratic rather than cubic rational
-// work. The record's existing conservative integration charge is unchanged.
-func rpFromBernstein(values []*big.Rat) ratPoly {
-	degree := len(values) - 1
-	if degree < 0 {
-		return nil
-	}
-	differences := append([]*big.Rat(nil), values...)
-	out := make(ratPoly, len(values))
-	choose := big.NewRat(1, 1)
-	for k := range out {
-		out[k] = new(big.Rat).Mul(choose, differences[0])
-		for i := range len(differences) - 1 {
-			differences[i] = new(big.Rat).Sub(differences[i+1], differences[i])
-		}
-		differences = differences[:len(differences)-1]
-		if k < degree {
-			choose.Mul(choose, big.NewRat(int64(degree-k), int64(k+1)))
-		}
-	}
-	return rpTrim(out)
-}
-
-// binomialRat is C(n, k) as an exact rational. n is a Bézier degree, so it is
-// small and the multiplicative form cannot overflow the rationals it builds.
-func binomialRat(n, k int) *big.Rat {
-	out := big.NewRat(1, 1)
-	for i := 1; i <= k; i++ {
-		out.Mul(out, big.NewRat(int64(n-k+i), int64(i)))
-	}
-	return out
-}
-
-// spanCoordinatePolys returns one span's u(t) and v(t) in monomial form.
-func spanCoordinatePolys(span survey2d.BezierSpan) (ratPoly, ratPoly) {
-	us := make([]*big.Rat, len(span))
-	vs := make([]*big.Rat, len(span))
-	for i, point := range span {
-		us[i], vs[i] = point.U, point.V
-	}
-	return rpFromBernstein(us), rpFromBernstein(vs)
-}
-
-// exactFreeformMoments integrates the region moments of one converted
-// free-form curve exactly. reversed negates every signed result, which is how
-// the recorded range order carries the walk direction (spline design §2).
-//
-// The boundary forms are the same ones the line path integrates, so the two
-// implementations are checkable against each other on a degree-1 span:
-//
-//	A     = ½∮(u dv − v du)
-//	∫u dA = ½∮u² dv
-//	∫v dA = −½∮v² du
-//	∫u² dA = ⅓∮u³ dv
-//	∫v² dA = −⅓∮v³ du
-//	∫uv dA = ½∮u²v dv
-func exactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
-	half := big.NewRat(1, 2)
-	var third *big.Rat
-	if order >= momentSecondOrder {
-		third = big.NewRat(1, 3)
-	}
-	out := exactMoments{
-		area: new(big.Rat),
-		mu:   new(big.Rat),
-		mv:   new(big.Rat),
-		muu:  new(big.Rat),
-		muv:  new(big.Rat),
-		mvv:  new(big.Rat),
-	}
-	for _, span := range spans {
-		u, v := spanCoordinatePolys(span)
-		du, dv := rpDeriv(u), rpDeriv(v)
-		uu := rpMul(u, u)
-		vv := rpMul(v, v)
-
-		out.area.Add(out.area, new(big.Rat).Mul(half, rpIntegral01(rpSub(rpMul(u, dv), rpMul(v, du)))))
-		out.mu.Add(out.mu, new(big.Rat).Mul(half, rpIntegral01(rpMul(uu, dv))))
-		out.mv.Sub(out.mv, new(big.Rat).Mul(half, rpIntegral01(rpMul(vv, du))))
-		if order >= momentSecondOrder {
-			out.muu.Add(out.muu, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(uu, u), dv))))
-			out.mvv.Sub(out.mvv, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(vv, v), du))))
-			out.muv.Add(out.muv, new(big.Rat).Mul(half, rpIntegral01(rpMul(rpMul(uu, v), dv))))
-		}
-	}
-	if reversed {
-		for _, value := range []*big.Rat{out.area, out.mu, out.mv, out.muu, out.muv, out.mvv} {
-			value.Neg(value)
-		}
-	}
-	return out
-}
 
 // addFreeformTo accumulates one converted free-form curve's contribution. The
 // exact rational goes into the REGION's own accumulator, which is what the
@@ -185,9 +32,9 @@ func exactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order mome
 //
 // The chain arrives already converted, re-anchored and CHARGED by the
 // record-level preflight, so nothing here consults the work counter.
-func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed bool, order momentIntegralOrder) {
-	exact := exactFreeformMoments(spans, reversed, order)
-	if extent := freeformControlExtent(spans); extent > ig.coordUpper {
+func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed bool, order freeform.MomentIntegralOrder) {
+	exact := freeform.ExactFreeformMoments(spans, reversed, order)
+	if extent := freeform.FreeformControlExtent(spans); extent > ig.coordUpper {
 		ig.coordUpper = extent
 	}
 	moments := []struct {
@@ -195,14 +42,14 @@ func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed b
 		bound *float64
 		exact *big.Rat
 	}{
-		{&ig.area, &ig.areaBound, exact.area},
-		{&ig.mu, &ig.muBound, exact.mu},
-		{&ig.mv, &ig.mvBound, exact.mv},
-		{&ig.muu, &ig.muuBound, exact.muu},
-		{&ig.muv, &ig.muvBound, exact.muv},
-		{&ig.mvv, &ig.mvvBound, exact.mvv},
+		{&ig.area, &ig.areaBound, exact.Area},
+		{&ig.mu, &ig.muBound, exact.Mu},
+		{&ig.mv, &ig.mvBound, exact.Mv},
+		{&ig.muu, &ig.muuBound, exact.Muu},
+		{&ig.muv, &ig.muvBound, exact.Muv},
+		{&ig.mvv, &ig.mvvBound, exact.Mvv},
 	}
-	if order < momentSecondOrder {
+	if order < freeform.MomentSecondOrder {
 		moments = moments[:3]
 	}
 	for _, moment := range moments {
@@ -210,48 +57,4 @@ func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed b
 		accumulateMoment(moment.value, moment.bound, held, proofarith.RationalFloatError(moment.exact, held))
 	}
 	ig.addExact(exact)
-}
-
-// polyThirdMoments integrates one polynomial boundary path's third-order
-// contributions exactly, through the dv form every third-order contribution
-// takes (moments.go's momentThirdOrder):
-//
-//	∫u³ dA  = ¼∮u⁴ dv
-//	∫u²v dA = ⅓∮u³v dv
-//	∫uv² dA = ½∮u²v² dv
-//	∫v³ dA  = ∮uv³ dv
-//
-// A line is the degree-1 path, so moments.go's line arm and this file's span
-// arm share it.
-func polyThirdMoments(u, v ratPoly) [4]*big.Rat {
-	dv := rpDeriv(v)
-	uu, vv := rpMul(u, u), rpMul(v, v)
-	uuu := rpMul(uu, u)
-	return [4]*big.Rat{
-		new(big.Rat).Mul(big.NewRat(1, 4), rpIntegral01(rpMul(rpMul(uu, uu), dv))),
-		new(big.Rat).Mul(big.NewRat(1, 3), rpIntegral01(rpMul(rpMul(uuu, v), dv))),
-		new(big.Rat).Mul(big.NewRat(1, 2), rpIntegral01(rpMul(rpMul(uu, vv), dv))),
-		rpIntegral01(rpMul(rpMul(u, rpMul(vv, v)), dv)),
-	}
-}
-
-// freeformThirdMoments integrates one converted free-form curve's third-order
-// contributions about the plane origin. The spans must be the RECORDED
-// control points, before regionIntegrals.add shifts them to the walk anchor,
-// because the third-order sum is kept about the origin. reversed negates
-// every term, as it does in exactFreeformMoments.
-func freeformThirdMoments(spans []survey2d.BezierSpan, reversed bool) [4]*big.Rat {
-	out := [4]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)}
-	for _, span := range spans {
-		u, v := spanCoordinatePolys(span)
-		for i, term := range polyThirdMoments(u, v) {
-			out[i].Add(out[i], term)
-		}
-	}
-	if reversed {
-		for _, value := range out {
-			value.Neg(value)
-		}
-	}
-	return out
 }

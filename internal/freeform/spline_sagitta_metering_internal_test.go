@@ -1,4 +1,4 @@
-package decad
+package freeform
 
 import (
 	"go/ast"
@@ -32,7 +32,7 @@ import (
 // built from, and they perform no arithmetic.
 
 // meteredPrimitives names every function in spline_sagitta.go whose body is
-// permitted to run exact arithmetic: each one takes the *freeformWork counter
+// permitted to run exact arithmetic: each one takes the *FreeformWork counter
 // that pays for it and charges its own documented cost before doing any work.
 // A method is named receiverType.methodName.
 //
@@ -40,16 +40,16 @@ import (
 // entry is only correct if the function actually charges its own cost first and
 // returns having done nothing when the counter refuses.
 var meteredPrimitives = map[string]struct{}{
-	"chordSegmentSquaredDistance":  {},
-	"chordEndpointSquaredDistance": {},
-	"ratChordFrame":                {},
-	"ratRunningMax":                {},
-	"ratPointCopy":                 {},
-	"dyadicSpan.ratPointAt":        {},
-	"spanChordVector":              {},
-	"spanChordSquared":             {},
-	"spanHodographGapSquared":      {},
-	"ratQuarterOf":                 {},
+	"ChordSegmentSquaredDistance":  {},
+	"ChordEndpointSquaredDistance": {},
+	"RatChordFrame":                {},
+	"RatRunningMax":                {},
+	"RatPointCopy":                 {},
+	"DyadicSpan.RatPointAt":        {},
+	"SpanChordVector":              {},
+	"SpanChordSquared":             {},
+	"SpanHodographGapSquared":      {},
+	"RatQuarterOf":                 {},
 }
 
 // bigArithmeticMethods are the math/big method names that DO work: they

@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -598,5 +600,5 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 		z0Delta: pp.z0Delta,
 		z1Delta: pp.z1Delta,
 		xform:   pp.xform,
-	}, newFreeformWork())
+	}, freeform.NewFreeformWork())
 }

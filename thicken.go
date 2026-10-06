@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -122,7 +124,7 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 	prism.z0, prism.z0Delta = z0.Value, z0.Bound
 	prism.z1, prism.z1Delta = z1.Value, z1.Bound
 	ref := d.nextProducerID()
-	return evalPrismContext(ctx, d, ref, prism, newFreeformWork())
+	return evalPrismContext(ctx, d, ref, prism, freeform.NewFreeformWork())
 }
 
 // thickenRadial is the revolve arm's radial-axis gate (docs/surface-design.md
@@ -217,7 +219,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	// allowances, radial admission charge and axial envelope are proven here
 	// rather than inherited from the sheet's: every one of them is an integral
 	// over the region, and the region changed.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	ax, axisSide, err := resolveAxisSide(ctx, annulus, axisLine2{
 		aU: rp.ax.aU, aV: rp.ax.aV, dU: rp.ax.dU, dV: rp.ax.dV,
 	}, work)
@@ -254,7 +256,7 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	}
 	// ONE free-form work counter for the record: the walk resolution below and
 	// the build that consumes its section both spend from it.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, nil)
 	if err != nil {
 		return nil, err
@@ -294,7 +296,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	}
 	// ONE free-form work counter for the record: the walk resolution, the axis
 	// re-resolution and the build that consumes the section all spend from it.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, &radial)
 	if err != nil {
 		return nil, err

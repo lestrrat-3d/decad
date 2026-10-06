@@ -906,7 +906,7 @@ manifold, watertight (when closed) and free of self-intersection:
 **`Area` is the sum of the constituent faces' own `area`/`areaBound`, through
 `boundedAdd` — never a triangle-sum reading.** A general planar triangle's
 own area is a square root of a rational and is therefore never `Exact` the
-way `spline_length.go`'s outward brackets state for `docs/loft-design.md`
+way `internal/freeform/spline_length.go`'s outward brackets state for `docs/loft-design.md`
 §8's wall reading; each stitched face's own area, by contrast, already comes
 from the closed-form region integral (`moments.go`) or the surface-result
 subtraction (§4.3) that built it, and is `Exact` wherever that integral is.
@@ -2212,7 +2212,7 @@ publishes nowhere, and so never reaches a chain. Nor does a `ChainRecord` feed
 any region reading: `moments.go` integrates `Area`, `Centroid` and
 `SecondMoments` over a region, and a chain bounds none. Its only 2D reading is
 per-segment arc length, through `segment_walk.go` and, for a free-form segment,
-`spline_length.go`'s proven bracket.
+`internal/freeform/spline_length.go`'s proven bracket.
 
 **The gates are the existing ones, in the existing order, and every sentinel is
 reused unchanged.**
@@ -2331,7 +2331,7 @@ path does not have and give one built surface two admissible orientations.
 | `Volume()`, `Centroid()` | `ErrNotSolid`, by KIND rather than by soundness (§8) |
 | faces | one per recorded segment, Table G |
 | `Edges(Free())` | Table G's own count: a full-turn chain with one pole has one free rim; a partial turn with one pole and one segment has two free meridian edges plus one off-axis sweep arc |
-| `Area` | the sum of each wall's own area through `boundedAdd`: `segment length · h` for an extrude, `boundedMul(walkAxisMoment, sweep)` for a revolve. A pole adds zero area. `walkAxisMoment` charges the snapped radial endpoint's bound and the segment-length bound, and that length bound itself carries what the snap discarded: moving an endpoint onto the axis moves the wall's two ends APART as well as inward, by at most the sum of the two discarded radial magnitudes, and the recorded length is the unsnapped one (`axisFrame.walk`). Charging only the radial endpoint would leave a nearly RADIAL wall short — a disk spends the whole discarded radius on its length where a steep cone spends a fraction of it. The sweep carries its angle-denotation bound; `boundedMul` charges the product and `boundedAdd` charges the wall sum. A circular wall also carries its proven integral enclosure, and a free-form wall carries `spline_length.go`'s proven bracket |
+| `Area` | the sum of each wall's own area through `boundedAdd`: `segment length · h` for an extrude, `boundedMul(walkAxisMoment, sweep)` for a revolve. A pole adds zero area. `walkAxisMoment` charges the snapped radial endpoint's bound and the segment-length bound, and that length bound itself carries what the snap discarded: moving an endpoint onto the axis moves the wall's two ends APART as well as inward, by at most the sum of the two discarded radial magnitudes, and the recorded length is the unsnapped one (`axisFrame.walk`). Charging only the radial endpoint would leave a nearly RADIAL wall short — a disk spends the whole discarded radius on its length where a steep cone spends a fraction of it. The sweep carries its angle-denotation bound; `boundedMul` charges the product and `boundedAdd` charges the wall sum. A circular wall also carries its proven integral enclosure, and a free-form wall carries `internal/freeform/spline_length.go`'s proven bracket |
 | `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
 
 No bound in that table is new, because no geometry is: every wall is built by

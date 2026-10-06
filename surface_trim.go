@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -82,7 +84,7 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 	}
 	rcv.chains = chains
 	rcv.sectionDelta = cutDelta
-	result, err := evalChainExtrudeContext(ctx, d, d.nextProducerID(), rcv, newFreeformWork())
+	result, err := evalChainExtrudeContext(ctx, d, d.nextProducerID(), rcv, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +568,7 @@ func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, erro
 		sectionDelta: sectionDelta,
 	}
 	ref := d.nextProducerID()
-	body, err := evalChainExtrudeContext(ctx, d, ref, pp, newFreeformWork())
+	body, err := evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -906,7 +908,7 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 // gates it on pp.sectionDelta != 0, which no construction but this design's
 // Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
 // no augmentation.
-func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
+func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profileWalks, error) {
 	before, beforeRecon := workSpent(work)
 	walkCharged := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
 		w, err := walkOf(seg, work)
@@ -1327,7 +1329,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), piece, newFreeformWork())
+		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), piece, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err
 		}
@@ -1666,7 +1668,7 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 		// derives.
 		sectionDelta: sectionDelta,
 	}
-	body, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	body, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -1809,7 +1811,7 @@ func revolveAxisIdentical(a, b axisFrame) bool {
 // sweeps a pole, and a cut fragment ending at one would need pole topology this
 // arm does not place.
 func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
 		resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the trim axis-clearance gate")
 		if err != nil {
@@ -1830,7 +1832,7 @@ func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, e
 // loop could merge the two free ends into one walk and hide an endpoint the
 // clearance clause has to see.
 func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	for ci := range rp.chains {
 		resolved, err := chainRevolveWalks(ctx, rp.walkView(ci), rp.chains[ci], work)
 		if err != nil {
@@ -1877,7 +1879,7 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 	// §7.1's fold reads this field as its gate, and resolveExtend's own δ_cut is
 	// the whole of it: S4 and S7 zero every other term prism §7 derives.
 	rcv.sectionDelta = cutDelta
-	result, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), rcv, newFreeformWork())
+	result, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), rcv, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}

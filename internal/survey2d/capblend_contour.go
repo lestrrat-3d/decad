@@ -52,7 +52,7 @@ func IntervalSquare(a proofbound.RatInterval) proofbound.RatInterval {
 }
 
 // IntervalSqrt encloses the square root over a non-negative interval, each end
-// rounded OUTWARD through spline_length.go's exact-comparison bracket, so no
+// rounded OUTWARD through internal/freeform/spline_length.go's exact-comparison bracket, so no
 // platform's sqrt can narrow it. A lower end below zero is clamped to zero:
 // the enclosure then covers the tangency the float discriminant reached for.
 func IntervalSqrt(a proofbound.RatInterval) (proofbound.RatInterval, bool) {

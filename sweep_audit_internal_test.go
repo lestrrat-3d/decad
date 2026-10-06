@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -23,7 +25,7 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 			z0:      float64(i),
 			z1:      float64(i + 1),
 			xform:   r3.Identity(),
-		}, newFreeformWork())
+		}, freeform.NewFreeformWork())
 		require.NoError(t, buildErr)
 		spans[i] = sweepAuditSpan{
 			body:     body,
@@ -47,7 +49,7 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 			z0:      z0,
 			z1:      z1,
 			xform:   r3.Identity(),
-		}, newFreeformWork())
+		}, freeform.NewFreeformWork())
 		require.NoError(t, buildErr)
 		return sweepAuditSpan{
 			body:     body,

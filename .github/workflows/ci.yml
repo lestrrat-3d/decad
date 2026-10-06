@@ -223,7 +223,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/ ./internal/decaderr/ ./internal/survey2d/ ./internal/motionbound/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/ ./internal/decaderr/ ./internal/survey2d/ ./internal/motionbound/ ./internal/freeform/"
             timeout: "10m"
           - os: ubuntu-latest
             race: "-race"

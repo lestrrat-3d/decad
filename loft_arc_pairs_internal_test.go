@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -281,8 +283,8 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 			// obligation here exactly as perCellTangentEnergy's own circular
 			// arm does in the real build; the half-chord is rounded DOWN
 			// twice so it stays the lower bound that helper requires.
-			energyV[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperV[k], downRound(downRound(2*r0*math.Sin(dth/2))))
-			energyW[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperW[k], downRound(downRound(2*r1*math.Sin(dth/2))))
+			energyV[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperV[k], freeform.DownRound(freeform.DownRound(2*r0*math.Sin(dth/2))))
+			energyW[k] = proofbound.UniformSpeedTangentEnergyUpper(arcUpperW[k], freeform.DownRound(freeform.DownRound(2*r1*math.Sin(dth/2))))
 		}
 	}
 	pairs := []loftLoopPair{{
@@ -472,7 +474,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	bnd, err := body.Bounds()
@@ -517,7 +519,7 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 		TStart: 0, TEnd: 1,
 	})}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3: an arc-to-fit-spline pair is a mixed kind")
 }
 
@@ -536,7 +538,7 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccw)}
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(cw)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate, "S7's own sentinel, whichever arm decides it")
 	require.False(t, errors.Is(err, ErrUnsupported), "must NOT be S3's sentinel (ErrUnsupported), the opposite existence claim")
@@ -560,7 +562,7 @@ func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(cwArc)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate, "S7's own sentinel, whichever arm decides it")
 	require.False(t, errors.Is(err, ErrUnsupported), "must NOT be S3's sentinel (ErrUnsupported), the opposite existence claim")
@@ -590,21 +592,21 @@ func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwCircle)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
-	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3: an ArcSeg against a CircleSeg is a mixed-kind pairing")
 	require.Contains(t, err.Error(), "same admitted segment type")
 	require.NotContains(t, err.Error(), "opposite directions",
 		"the two sides agree in walk sense, so only the segment-type test can refuse this pair")
 
 	// Both orders refuse: the gate reads neither side as privileged.
-	err = validateLoftRecordsErr(p1, p0, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	err = validateLoftRecordsErr(p1, p0, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a CircleSeg against an ArcSeg refuses the same way")
 
 	// The premise the refusal rests on: a survey2d.WalkKind test could not have made
 	// this decision, because both sides resolve to the SAME survey2d.WalkCircular.
-	w0, err := walkOf(ccwArc, newFreeformWork())
+	w0, err := walkOf(ccwArc, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	w1, err := walkOf(ccwCircle, newFreeformWork())
+	w1, err := walkOf(ccwCircle, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, survey2d.WalkCircular, w0.Kind)
 	require.Equal(t, w0.Kind, w1.Kind, "both sides resolve to one walk kind; only the recorded type separates them")
@@ -683,7 +685,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	loaded, ok := body.payload.(loftPayload)
@@ -756,7 +758,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	loaded, ok := body.payload.(loftPayload)

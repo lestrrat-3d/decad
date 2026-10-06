@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -117,7 +119,7 @@ import (
 // power-of-two scaling), so the difference is the one rounding here, and
 // round-to-nearest can land it ABOVE the exact d - 2*delta — a reference
 // larger than the one proven, which loosens the very gate this arm exists to
-// tighten. downRound (spline_length.go, proofbound.UpRound's mirror) steps it back
+// tighten. freeform.DownRound (internal/freeform/spline_length.go, proofbound.UpRound's mirror) steps it back
 // toward zero, so the published reference is at or below the exact shrunken
 // value for every input rather than only for the ones whose subtraction
 // happens to round down. A shrink that collapses to non-positive leaves the
@@ -221,7 +223,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 			d, ok = lowerDiameterForDisplacement(d, payload.axialDelta())
 		}
 		if payload, isRevolve := body.payload.(revolvePayload); isRevolve {
-			coordUpper, err := profileCoordinateUpper(payload.profile, newFreeformWork(), nil)
+			coordUpper, err := profileCoordinateUpper(payload.profile, freeform.NewFreeformWork(), nil)
 			if err != nil {
 				return 0, false, err
 			}
@@ -243,7 +245,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // It reads every source segment, including those later coalesced into one
 // wall, so the result also covers a coalesced line's last endpoint.
 func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64, bool, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	allow := 0.0
 	for _, chain := range chains {
 		for _, segment := range chain.Segments {
@@ -356,7 +358,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 	if !usableMagnitude(d) || !usableMagnitude(displacement) {
 		return 0, false
 	}
-	d = downRound(d - 2*displacement)
+	d = freeform.DownRound(d - 2*displacement)
 	return d, d > 0 && usableMagnitude(d)
 }
 
@@ -443,7 +445,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // this arm's structural (0, false, nil) answer, which states only that the
 // recorded section gives this arm nothing to read.
 func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	sawFreeform := false
 	ownBound := 0.0
 	var pts []r3.Vec
@@ -473,7 +475,7 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 			}
 			w, err := walkOf(seg, work)
 			if err != nil {
-				// Likewise walkOf: it reads the record's own freeformWork
+				// Likewise walkOf: it reads the record's own freeform.FreeformWork
 				// counter, never ctx, so its error is always a build-time
 				// refusal (an R-table sentinel) this arm reads as "no arm"
 				// rather than propagates.
@@ -790,7 +792,7 @@ func pointSetDiameterWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) 
 // exactPairDistanceDown returns the largest float64 at or below the EXACT
 // distance between two points. Both coordinates of each axis are float64s and
 // so are exact rationals; the difference and its square are exact in that
-// arithmetic, and proofbound.RatSqrtDown (spline_length.go) decides the last step by
+// arithmetic, and proofbound.RatSqrtDown (internal/freeform/spline_length.go) decides the last step by
 // comparing a candidate's exact square against the exact sum rather than by
 // trusting the platform's own square root. Nothing in the chain rounds outward,
 // so the answer is proven to be at or below the pair's true distance.

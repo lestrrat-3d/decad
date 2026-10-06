@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -222,7 +224,7 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		return nil, err
 	}
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	var faces []*Face
 	for ci := range columns {
@@ -249,7 +251,7 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	regionCentroid := make([]r3.Vec, len(sp.slabs))
 	regionCentroidBound := make([]float64, len(sp.slabs))
 	for k, slab := range sp.slabs {
-		ig, err := slab.regions[0].evaluatorIntegralsContext(ctx, momentFirstOrder, work)
+		ig, err := slab.regions[0].evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 		if err != nil {
 			return nil, err
 		}

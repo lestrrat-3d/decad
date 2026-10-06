@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -117,7 +119,7 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]surv
 	// One free-form counter for the whole record: the surveys read a built body's
 	// own section with no preflight counter in hand, so the ceiling starts here
 	// and spans every loop below.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	var out [][]survey2d.SideWalk
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
@@ -163,7 +165,7 @@ func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([]
 // z, the V fields ρ), mirroring buildRevolveLoop.
 func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, error) {
 	// One free-form counter for the whole record, as recordLoops opens.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	var out [][]survey2d.SideWalk
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	for _, loop := range loops {

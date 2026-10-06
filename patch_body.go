@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -934,8 +936,8 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 // so a patch face's Area answers on the identical Exactness/Bound terms
 // docs/surface-design.md §5.1 already states for a sketch-recorded patch.
 func patchChainIntegrals(ctx context.Context, segs []CurveSegment) (regionIntegrals, error) {
-	work := newFreeformWork()
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}.evaluatorIntegralsContext(ctx, momentAreaOrder, work)
+	work := freeform.NewFreeformWork()
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}.evaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
 }
 
 // patchRemapCrossingError maps fillet_audit.go's own [ErrUnsupported] boundary

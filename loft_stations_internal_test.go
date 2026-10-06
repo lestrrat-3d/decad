@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -715,10 +717,10 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // --- S15: the station cap ---
 
 // TestLoftCellStationsStationCapFiresBeforeAuditCeiling is S15: a target this
-// fine on a radius-5 quarter arc demands far more than maxChordsPerWalk
+// fine on a radius-5 quarter arc demands far more than freeform.MaxChordsPerWalk
 // (2^14) chords — chordSagitta ~ r*sweep^2/(8n^2), so meeting it needs n well
 // past the cap — and chordCount refuses outright rather than build past it
-// (errTooManyChords, reused from tessellate.go per spline design Table R row
+// (freeform.ErrTooManyChords, reused from tessellate.go per spline design Table R row
 // R8).
 //
 // This necessarily precedes S8's own audit-budget ceiling, each row decided at
@@ -735,7 +737,7 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	t.Parallel()
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 	_, _, _, _, _, err := loftCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
-	require.ErrorIs(t, err, errTooManyChords)
+	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
 }
@@ -776,7 +778,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
 		t.Helper()
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-		offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+		offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, err)
 		pairs, _, _, stationRound, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
 		require.NoError(t, err)
@@ -817,7 +819,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 // TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling is Table S row
 // S15 (docs/loft-design.md §5.1): a same-kind circular pair whose settled
 // station count exceeds its own share of loftStationCap refuses with
-// errTooManyChords, and the refusal NAMES the segment whose share it exceeded.
+// freeform.ErrTooManyChords, and the refusal NAMES the segment whose share it exceeded.
 //
 // It is also the fixture §13 requires for this row — one that fires BEFORE S8
 // on a construction that would otherwise reach the audit ceiling. That is
@@ -841,7 +843,7 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 
 	mMax := loftStationShare(n, n)
 	require.Greater(t, m, mMax, "the fixture must settle past its own share, or it proves nothing")
-	require.Less(t, m, maxChordsPerWalk, "the fixture must stay inside the per-walk ceiling, so only the CAP can refuse it")
+	require.Less(t, m, freeform.MaxChordsPerWalk, "the fixture must stay inside the per-walk ceiling, so only the CAP can refuse it")
 
 	// What this build would have assembled had the cap not fired: §7's
 	// F = 4*Σstations - 4 over this hole-free loop, and S8's own pair count
@@ -852,12 +854,12 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 		"the fixture must be one that would otherwise reach S8's audit ceiling")
 
 	err = loftStationCapGate(p, p, make([]int, 1), walks, walks)
-	require.ErrorIs(t, err, errTooManyChords, "S15 carries chordCount's own sentinel (spline design Table R row R8)")
+	require.ErrorIs(t, err, freeform.ErrTooManyChords, "S15 carries chordCount's own sentinel (spline design Table R row R8)")
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "loop 0 segment 0", "the refusal must name the segment whose share it exceeded")
 	require.Contains(t, err.Error(), fmt.Sprintf("%d chord cells", m))
 	require.NotContains(t, err.Error(), "chord tolerance", "a loft's chord target is not a caller-supplied tolerance")
-	require.NotContains(t, err.Error(), fmt.Sprintf("%d chords on one curve", maxChordsPerWalk),
+	require.NotContains(t, err.Error(), fmt.Sprintf("%d chords on one curve", freeform.MaxChordsPerWalk),
 		"the refusal must not report the per-walk ceiling it never reached")
 }
 
@@ -1293,7 +1295,7 @@ func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 	}
 	loop := LoopRecord{Segments: []CurveSegment{fit, fit, fit}}
 	p := ProfileRecord{Outer: loop}
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	walks := make([]survey2d.SegmentWalk, 3)
 	var err error
 	for i := range walks {

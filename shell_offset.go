@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -351,7 +353,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 	// One free-form counter for this loop's walk: reversal is reached from the
 	// offset construction and the cup build, neither of which holds a preflight
 	// counter for the loop it hands over.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	n := len(l.Segments)
 	walks := make([]survey2d.SegmentWalk, n)
 	for i, seg := range l.Segments {

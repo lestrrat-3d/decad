@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -48,11 +50,11 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 				den:     test.den,
 				xform:   r3.Identity(),
 			}
-			got, err := revolveBoundsContext(t.Context(), rp, newFreeformWork())
+			got, err := revolveBoundsContext(t.Context(), rp, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			cached, err := resolveAnalyticRevolveExtentProfile(t.Context(), test.profile, newFreeformWork())
+			cached, err := resolveAnalyticRevolveExtentProfile(t.Context(), test.profile, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			envelope, err := profileCoordinateEnvelope(test.profile, newFreeformWork(), nil)
+			envelope, err := profileCoordinateEnvelope(test.profile, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Equal(t, envelope, cached.coordUpper)
 
@@ -61,7 +63,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 			bound := 0.0
 			for i, axis := range axes {
 				var axisBound float64
-				low[i], high[i], axisBound, err = rp.extentBoundedAlong(t.Context(), axis, newFreeformWork())
+				low[i], high[i], axisBound, err = rp.extentBoundedAlong(t.Context(), axis, freeform.NewFreeformWork())
 				require.NoError(t, err)
 				bound = math.Max(bound, axisBound)
 			}
@@ -95,6 +97,6 @@ func (ctx *cancelAfterExtentChecks) Err() error {
 func TestRevolveBoundsSharedProfilePollsCancellation(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterExtentChecks{remaining: 3}
-	_, err := resolveAnalyticRevolveExtentProfile(ctx, dipShaftBandProfile(10, 0), newFreeformWork())
+	_, err := resolveAnalyticRevolveExtentProfile(ctx, dipShaftBandProfile(10, 0), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }

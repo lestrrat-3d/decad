@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -248,12 +250,12 @@ func thickenMovingOffset(u, v float64, du, dv int) thickenMovingPoint {
 	return thickenMovingPoint{u: thickenAffineCoord(u, du), v: thickenAffineCoord(v, dv)}
 }
 
-func thickenAffineSub(a, b thickenAffine) ratPoly {
-	return ratPoly{new(big.Rat).Sub(a.a, b.a), new(big.Rat).Sub(a.b, b.b)}
+func thickenAffineSub(a, b thickenAffine) freeform.RatPoly {
+	return freeform.RatPoly{new(big.Rat).Sub(a.a, b.a), new(big.Rat).Sub(a.b, b.b)}
 }
 
-func thickenAffineConst(a thickenAffine, b *big.Rat) ratPoly {
-	return ratPoly{new(big.Rat).Sub(a.a, b), new(big.Rat).Set(a.b)}
+func thickenAffineConst(a thickenAffine, b *big.Rat) freeform.RatPoly {
+	return freeform.RatPoly{new(big.Rat).Sub(a.a, b), new(big.Rat).Set(a.b)}
 }
 
 func thickenAffineAt(a thickenAffine, at *big.Rat) *big.Rat {
@@ -301,16 +303,16 @@ func thickenBoxesDisjoint(a, b thickenExactBox) bool {
 		a.maxV.Cmp(b.minV) < 0 || b.maxV.Cmp(a.minV) < 0
 }
 
-func thickenContactEvent(ctx context.Context, p ratPoly, limit *big.Rat) (bool, error) {
-	p = rpSquareFree(p)
-	if rpDeg(p) < 1 {
+func thickenContactEvent(ctx context.Context, p freeform.RatPoly, limit *big.Rat) (bool, error) {
+	p = freeform.RpSquareFree(p)
+	if freeform.RpDeg(p) < 1 {
 		return false, nil
 	}
-	chain, err := sturmChainIntContext(ctx, p)
+	chain, err := freeform.SturmChainIntContext(ctx, p)
 	if err != nil {
 		return false, err
 	}
-	return sturmCount(chain, new(big.Rat), limit) > 0, nil
+	return freeform.SturmCount(chain, new(big.Rat), limit) > 0, nil
 }
 
 // thickenAxisIntervalClear isolates every possible first contact event of
@@ -389,7 +391,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 			}
 		}
 	}
-	check := func(p ratPoly) error {
+	check := func(p freeform.RatPoly) error {
 		contact, err := thickenContactEvent(ctx, p, limit)
 		if err != nil {
 			return err
@@ -426,7 +428,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 				}
 				continue
 			}
-			var candidates []ratPoly
+			var candidates []freeform.RatPoly
 			switch {
 			case a.line:
 				candidates = thickenLineArcEvents(a, b)
@@ -436,7 +438,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 				du := new(big.Rat).Sub(a.center.u, b.center.u)
 				dv := new(big.Rat).Sub(a.center.v, b.center.v)
 				d2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-				candidates = []ratPoly{{new(big.Rat).Neg(d2), new(big.Rat), big.NewRat(4, 1)}}
+				candidates = []freeform.RatPoly{{new(big.Rat).Neg(d2), new(big.Rat), big.NewRat(4, 1)}}
 			}
 			for _, p := range candidates {
 				if err := check(p); err != nil {
@@ -453,7 +455,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 // rational; test finite segment inclusion at each exact root.
 func thickenLineLineContact(a, b thickenMovingPiece, limit *big.Rat) bool {
 	for _, p := range thickenLineLineEvents(a, b) {
-		p = rpTrim(p)
+		p = freeform.RpTrim(p)
 		if len(p) != 2 || p[1].Sign() == 0 {
 			continue
 		}
@@ -496,16 +498,16 @@ func thickenLinesTouchAt(a, b thickenMovingPiece, at *big.Rat) bool {
 	return thickenWithin(au0, bu0, bu1) && thickenWithin(bv0, av0, av1)
 }
 
-func thickenLineLineEvents(a, b thickenMovingPiece) []ratPoly {
+func thickenLineLineEvents(a, b thickenMovingPiece) []freeform.RatPoly {
 	if a.horizontal && b.horizontal {
-		return []ratPoly{
+		return []freeform.RatPoly{
 			thickenAffineSub(a.start.v, b.start.v),
 			thickenAffineSub(a.start.u, b.start.u), thickenAffineSub(a.start.u, b.end.u),
 			thickenAffineSub(a.end.u, b.start.u), thickenAffineSub(a.end.u, b.end.u),
 		}
 	}
 	if !a.horizontal && !b.horizontal {
-		return []ratPoly{
+		return []freeform.RatPoly{
 			thickenAffineSub(a.start.u, b.start.u),
 			thickenAffineSub(a.start.v, b.start.v), thickenAffineSub(a.start.v, b.end.v),
 			thickenAffineSub(a.end.v, b.start.v), thickenAffineSub(a.end.v, b.end.v),
@@ -515,7 +517,7 @@ func thickenLineLineEvents(a, b thickenMovingPiece) []ratPoly {
 	if !a.horizontal {
 		horizontal, vertical = b, a
 	}
-	return []ratPoly{
+	return []freeform.RatPoly{
 		thickenAffineSub(vertical.start.u, horizontal.start.u),
 		thickenAffineSub(vertical.start.u, horizontal.end.u),
 		thickenAffineSub(horizontal.start.v, vertical.start.v),
@@ -523,8 +525,8 @@ func thickenLineLineEvents(a, b thickenMovingPiece) []ratPoly {
 	}
 }
 
-func thickenLineArcEvents(line, arc thickenMovingPiece) []ratPoly {
-	var distance ratPoly
+func thickenLineArcEvents(line, arc thickenMovingPiece) []freeform.RatPoly {
+	var distance freeform.RatPoly
 	var arcStart, arcEnd, lineCoord thickenAffine
 	if line.horizontal {
 		distance = thickenAffineConst(line.start.v, arc.center.v)
@@ -535,14 +537,14 @@ func thickenLineArcEvents(line, arc thickenMovingPiece) []ratPoly {
 		arcStart, arcEnd = arc.start.u, arc.end.u
 		lineCoord = line.start.u
 	}
-	tau := ratPoly{new(big.Rat), big.NewRat(1, 1)}
-	contact := rpSub(rpMul(distance, distance), rpMul(tau, tau))
-	endpoint := func(p thickenMovingPoint) ratPoly {
+	tau := freeform.RatPoly{new(big.Rat), big.NewRat(1, 1)}
+	contact := freeform.RpSub(freeform.RpMul(distance, distance), freeform.RpMul(tau, tau))
+	endpoint := func(p thickenMovingPoint) freeform.RatPoly {
 		du := thickenAffineConst(p.u, arc.center.u)
 		dv := thickenAffineConst(p.v, arc.center.v)
-		return rpSub(rpAdd(rpMul(du, du), rpMul(dv, dv)), rpMul(tau, tau))
+		return freeform.RpSub(freeform.RpAdd(freeform.RpMul(du, du), freeform.RpMul(dv, dv)), freeform.RpMul(tau, tau))
 	}
-	return []ratPoly{contact, endpoint(line.start), endpoint(line.end),
+	return []freeform.RatPoly{contact, endpoint(line.start), endpoint(line.end),
 		thickenAffineSub(arcStart, lineCoord), thickenAffineSub(arcEnd, lineCoord)}
 }
 
@@ -776,7 +778,7 @@ func thickenArcIsCCW(start, end, center Point2) bool {
 // proven simple there and proven free of any nonadjacent contact over the
 // whole interval 0 < τ ≤ amount.
 func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amount float64,
-	budget *proofbound.WorkBudget, work *freeformWork, radial *thickenRadial) (ProfileRecord, error) {
+	budget *proofbound.WorkBudget, work *freeform.FreeformWork, radial *thickenRadial) (ProfileRecord, error) {
 	raw := make([]survey2d.SideWalk, len(chain.Segments))
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {

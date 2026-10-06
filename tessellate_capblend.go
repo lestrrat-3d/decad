@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -124,7 +126,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 
 	pl := cbp.prismLike(0, 0)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	budget := proofbound.NewWorkBudget(ctx)
 	loops := cbp.loops()
 	lms := make([]capBlendLoopMesh, len(loops))
@@ -484,7 +486,7 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 // two independently sampled polylines. A straight wall needs one sample; a
 // reflex corner's connector arc is a directrix of its own and chords with its
 // own count.
-func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp capBlendPayload, li int, loop LoopRecord, chord float64, work *freeformWork) (capBlendLoopMesh, error) {
+func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp capBlendPayload, li int, loop LoopRecord, chord float64, work *freeform.FreeformWork) (capBlendLoopMesh, error) {
 	if err := ctx.Err(); err != nil {
 		return capBlendLoopMesh{}, err
 	}

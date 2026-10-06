@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -234,7 +236,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 		z1:      20,
 		z1Delta: 0.25,
 		xform:   r3.Identity(),
-	}, newFreeformWork())
+	}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.bodies = []*Body{host}
 

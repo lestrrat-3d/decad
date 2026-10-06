@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -26,7 +28,7 @@ import (
 // refusing the body (Table K). This reuses
 // TestConsecutiveCollapsedSpansPairAcrossTheWholeRun's own fixture
 // (spline_convexity_internal_test.go), which already pins the certificate's
-// own verdict on it (freeformConvexityPositive); this test pins the BUILD.
+// own verdict on it (freeform.FreeformConvexityPositive); this test pins the BUILD.
 func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	t.Parallel()
 	seg := NURBSSeg{
@@ -51,7 +53,7 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 		frame:   frame,
 		z1:      3,
 		xform:   r3.Identity(),
-	}, newFreeformWork())
+	}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotNil(t, body)
 	require.Greater(t, body.volume.Value.Mag(), 0.0, "the walk's own length stays positive despite the collapsed run")
@@ -272,7 +274,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 				`the bound is this endpoint's own displacement, not the circle's extent`)
 
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
-				t.Context(), oneSegmentProfile(tc.seg), 1, 0, newFreeformWork(), nil)
+				t.Context(), oneSegmentProfile(tc.seg), 1, 0, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Positive(t, bound)
 			requireEnclosesTruth(t, hi, bound, cosEighthPi, `the maximum along (1, 0)`)
@@ -300,7 +302,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.Equal(t, proofbound.WalkEndBound{}, w.EndBound, `t = 1 names the recorded End`)
 
 		lo, hi, bound, err := boundaryExtremesBoundedContext(
-			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
+			t.Context(), oneSegmentProfile(seg), 1, 0, freeform.NewFreeformWork(), nil)
 		require.NoError(t, err)
 		require.Positive(t, bound)
 		requireEnclosesTruth(t, lo, bound, truth, `the minimum along (1, 0)`)
@@ -321,7 +323,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.False(t, w.StartBound.Derivable())
 
 		_, _, _, err = boundaryExtremesBoundedContext(
-			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
+			t.Context(), oneSegmentProfile(seg), 1, 0, freeform.NewFreeformWork(), nil)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -362,7 +364,7 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
-				t.Context(), tc.profile, 1, 0, newFreeformWork(), nil)
+				t.Context(), tc.profile, 1, 0, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, bound, `every candidate here is a value the record states exactly`)
 			require.Equal(t, tc.lo, lo)
@@ -466,14 +468,14 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 	t.Parallel()
 	pp := involuteFitPrismPayload(t)
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 
 	body, err := evalPrism(New(), 0, pp, work)
 	require.NoError(t, err, "the deduplicated charge must fit inside the work budget")
 	require.NotNil(t, body)
 	require.Greater(t, body.volume.Value.Mag(), 0.0, "the built prism must enclose positive volume")
 
-	require.Less(t, work.spent, freeformWorkLimit,
+	require.Less(t, work.Spent, freeform.FreeformWorkLimit,
 		"the whole build's deduplicated charge must sit strictly below the ceiling")
 	// The charge is asserted as a BAND, not an exact equality. Most of it is
 	// count-driven and identical everywhere, but §6.5's certificate subdivides
@@ -485,9 +487,9 @@ func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 	// than the deduplication this test is for. The band is tight enough to
 	// fail loudly if the walk were resolved even twice: a second resolution
 	// alone adds 230,168 units, far outside it.
-	require.Greater(t, work.spent, uint64(900000),
+	require.Greater(t, work.Spent, uint64(900000),
 		"the build must still do its real free-form work, not silently skip it")
-	require.Less(t, work.spent, uint64(1000000),
+	require.Less(t, work.Spent, uint64(1000000),
 		"measured 959,408 on amd64; a second walk resolution would add 230,168 and break this")
 }
 
@@ -501,11 +503,11 @@ func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 // (walkOf's own doc comment: "An analytic segment charges nothing").
 func TestResolveProfileWalksChargesSegmentOnce(t *testing.T) {
 	t.Parallel()
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	pw, err := resolveProfileWalks(involuteFitProfile(), work)
 	require.NoError(t, err)
 	require.NotNil(t, pw)
-	require.Equal(t, uint64(230168), work.spent,
+	require.Equal(t, uint64(230168), work.Spent,
 		"one resolution of one free-form segment must charge exactly its own single-walk cost")
 }
 
@@ -527,7 +529,7 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 		LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	wrongWalks, err := resolveProfileWalks(square, newFreeformWork())
+	wrongWalks, err := resolveProfileWalks(square, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	involute := involuteFitProfile()
@@ -536,15 +538,15 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 	require.False(t, wrongWalks.matches(involute), "matches must catch the shape mismatch")
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
-		_, err := profileCoordinateEnvelope(involute, newFreeformWork(), wrongWalks)
+		_, err := profileCoordinateEnvelope(involute, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("profileCoordinateUpper", func(t *testing.T) {
-		_, err := profileCoordinateUpper(involute, newFreeformWork(), wrongWalks)
+		_, err := profileCoordinateUpper(involute, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
-		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), involute, 1, 0, newFreeformWork(), wrongWalks)
+		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), involute, 1, 0, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -576,54 +578,54 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	require.Empty(t, near.Holes)
 	require.Empty(t, far.Holes)
 
-	pw, err := resolveProfileWalks(near, newFreeformWork())
+	pw, err := resolveProfileWalks(near, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, pw.matches(near), "premise: the resolved profile itself must still read back")
 	require.False(t, pw.matches(far), "a same-shaped profile with different segment data is not the resolved profile")
 
 	// The two readings the mismatch used to conflate: near's coordinate
 	// envelope is 1, far's is 2.
-	nearUpper, err := profileCoordinateEnvelope(near, newFreeformWork(), pw)
+	nearUpper, err := profileCoordinateEnvelope(near, freeform.NewFreeformWork(), pw)
 	require.NoError(t, err)
 	require.Equal(t, 1.0, nearUpper, "near's own envelope, read through its own resolved walks")
-	farUpper, err := profileCoordinateEnvelope(far, newFreeformWork(), nil)
+	farUpper, err := profileCoordinateEnvelope(far, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, 2.0, farUpper, "far's true envelope, resolved from far's own segment")
 
 	t.Run("profileCoordinateEnvelope", func(t *testing.T) {
-		_, err := profileCoordinateEnvelope(far, newFreeformWork(), pw)
+		_, err := profileCoordinateEnvelope(far, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("profileCoordinateUpper", func(t *testing.T) {
-		_, err := profileCoordinateUpper(far, newFreeformWork(), pw)
+		_, err := profileCoordinateUpper(far, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 	})
 	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
-		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), far, 1, 0, newFreeformWork(), pw)
+		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), far, 1, 0, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {
 		pp := prismPayload{profile: near, frame: identityFrame(t), z1: 5, xform: r3.Identity()}
 		body := &Body{doc: New(), solid: true}
-		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, newFreeformWork(), pw, levelToken{}, levelToken{}, false)
+		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 	})
 	t.Run("one ulp apart", func(t *testing.T) {
 		ulp := lineEndProfile(Point2{U: math.Nextafter(1, 2), V: 0})
 		require.False(t, pw.matches(ulp), "the comparison is exact: one ulp of difference is a mismatch")
-		_, err := profileCoordinateEnvelope(ulp, newFreeformWork(), pw)
+		_, err := profileCoordinateEnvelope(ulp, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 	})
 	t.Run("hole data", func(t *testing.T) {
 		withHole := near
 		withHole.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
-		holed, err := resolveProfileWalks(withHole, newFreeformWork())
+		holed, err := resolveProfileWalks(withHole, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		other := near
 		other.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 3}).Outer}
 		require.False(t, holed.matches(other), "a hole loop's own segment data is compared too")
-		_, err = profileCoordinateEnvelope(other, newFreeformWork(), holed)
+		_, err = profileCoordinateEnvelope(other, freeform.NewFreeformWork(), holed)
 		require.ErrorIs(t, err, errResolvedWalksMismatch)
 	})
 }
@@ -635,13 +637,13 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	pw, err := resolveProfileWalks(profile, newFreeformWork())
+	pw, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, pw.matches(profile))
 	require.True(t, pw.loopMatches(0, profile.Outer))
 
 	for si, seg := range profile.Outer.Segments {
-		fresh, err := walkOf(seg, newFreeformWork())
+		fresh, err := walkOf(seg, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, fresh, pw.at(0, si),
 			"segment %d's read-back walk must be exactly the walk walkOf resolves for it", si)
@@ -649,9 +651,9 @@ func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 
 	// The whole cached-read path still produces the reading it did before:
 	// the involute section's own coordinate envelope, unchanged by the guard.
-	cached, err := profileCoordinateEnvelope(profile, newFreeformWork(), pw)
+	cached, err := profileCoordinateEnvelope(profile, freeform.NewFreeformWork(), pw)
 	require.NoError(t, err)
-	direct, err := profileCoordinateEnvelope(profile, newFreeformWork(), nil)
+	direct, err := profileCoordinateEnvelope(profile, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, direct, cached, "reading the cache must give the resolve-every-segment answer")
 	require.Greater(t, cached, 0.0)
@@ -667,10 +669,10 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 		},
 		LineSeg{Start: Point2{}, End: Point2{U: 2}, TStart: 0, TEnd: 1},
 	}}}
-	work := newFreeformWork()
-	_, err := profile.evaluatorIntegrals(momentAreaOrder, work)
+	work := freeform.NewFreeformWork()
+	_, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, work)
 	require.NoError(t, err)
-	spent := work.spent
+	spent := work.Spent
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 
@@ -682,7 +684,7 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	}, work)
 	require.NoError(t, err, "a Tier A free-form side face now builds (§10 P4b)")
 	require.NotNil(t, body)
-	require.Greater(t, work.spent, spent)
+	require.Greater(t, work.Spent, spent)
 }
 
 // BenchmarkMomentAreaInvoluteFit measures the area pass used by Extrude's
@@ -690,7 +692,7 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 func BenchmarkMomentAreaInvoluteFit(b *testing.B) {
 	profile := involuteFitProfile()
 	for b.Loop() {
-		if _, err := profile.evaluatorIntegrals(momentAreaOrder, newFreeformWork()); err != nil {
+		if _, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork()); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -711,7 +713,7 @@ func prismPayloadOf(t *testing.T, b *Body) prismPayload {
 // placed mints one internally, which is the single thing about the placement
 // path a test cannot otherwise observe. The payload it carries over and the
 // build it runs are the same.
-func rebuiltUnder(t *testing.T, pp prismPayload, motion r3.Transform, work *freeformWork) *Body {
+func rebuiltUnder(t *testing.T, pp prismPayload, motion r3.Transform, work *freeform.FreeformWork) *Body {
 	t.Helper()
 	pp.xform = motion
 	body, err := evalPrism(New(), 0, pp, work)
@@ -796,7 +798,7 @@ func TestPrismBuildPublishesItsOwnResolution(t *testing.T) {
 	source := involuteFitPrismPayload(t)
 	require.Nil(t, source.walks, "premise: a payload a caller draws carries no resolution")
 
-	built, err := evalPrism(New(), 0, source, newFreeformWork())
+	built, err := evalPrism(New(), 0, source, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	published := prismPayloadOf(t, built)
@@ -818,7 +820,7 @@ func TestPrismBuildPublishesItsOwnResolution(t *testing.T) {
 // call, so a placement that resolved again could not hand back this one.
 func TestPlacedReusesPublishedWalks(t *testing.T) {
 	t.Parallel()
-	cold := newFreeformWork()
+	cold := freeform.NewFreeformWork()
 	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), cold)
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
@@ -835,22 +837,22 @@ func TestPlacedReusesPublishedWalks(t *testing.T) {
 	// The charge is what it always was. The reused build and the resolve-again
 	// build levy the same total on their own counters, so a record sitting near
 	// the ceiling refuses in exactly the same place either way.
-	warm := newFreeformWork()
+	warm := freeform.NewFreeformWork()
 	reused := rebuiltUnder(t, source, turn, warm)
 	require.Same(t, source.walks, prismPayloadOf(t, reused).walks)
 
-	uncached := newFreeformWork()
+	uncached := freeform.NewFreeformWork()
 	plain := rebuiltUnder(t, withoutWalks(source), turn, uncached)
 	require.NotSame(t, source.walks, prismPayloadOf(t, plain).walks,
 		"premise: without a published resolution the build must allocate its own")
 
-	require.Equal(t, uncached.spent, warm.spent,
+	require.Equal(t, uncached.Spent, warm.Spent,
 		"replaying the recorded charge must levy exactly what doing the work levies")
-	require.Equal(t, uncached.reconstructionSpent, warm.reconstructionSpent,
+	require.Equal(t, uncached.ReconstructionSpent, warm.ReconstructionSpent,
 		"the reconstruction counter is replayed on the same terms")
-	require.Equal(t, cold.spent, warm.spent,
+	require.Equal(t, cold.Spent, warm.Spent,
 		"and that is the same figure the original build spent on this record")
-	require.Greater(t, warm.spent, published(t, source).spent,
+	require.Greater(t, warm.Spent, published(t, source).spent,
 		"premise: the whole build charges more than the walk resolution alone")
 }
 
@@ -872,14 +874,14 @@ func published(t *testing.T, pp prismPayload) *profileWalks {
 // A walk that had secretly carried any placement would disagree here first.
 func TestPlacedWalksReuseMatchesUncachedBuild(t *testing.T) {
 	t.Parallel()
-	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
 	for _, tc := range placementMotions(t) {
 		t.Run(tc.name, func(t *testing.T) {
-			reused := rebuiltUnder(t, source, tc.motion, newFreeformWork())
-			plain := rebuiltUnder(t, withoutWalks(source), tc.motion, newFreeformWork())
+			reused := rebuiltUnder(t, source, tc.motion, freeform.NewFreeformWork())
+			plain := rebuiltUnder(t, withoutWalks(source), tc.motion, freeform.NewFreeformWork())
 			requireSamePrismBuild(t, plain, reused)
 		})
 	}
@@ -929,7 +931,7 @@ func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 	// work-budget reproducer used by the other involute tests.
 	fit.Fit = []Point2{fit.Fit[0], fit.Fit[4], fit.Fit[7], fit.Fit[10], fit.Fit[14]}
 	pp.profile.Outer.Segments[1] = fit
-	built, err := evalPrism(New(), 0, pp, newFreeformWork())
+	built, err := evalPrism(New(), 0, pp, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
@@ -959,7 +961,7 @@ func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 // segments by their bits, so there is no near-miss arm to fall through.
 func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 	t.Parallel()
-	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
@@ -973,7 +975,7 @@ func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 		require.False(t, source.walks.reusable(nudged), "one ulp of difference is a different record")
 		stale := source
 		stale.profile = nudged
-		rebuilt, err := evalPrism(New(), 0, stale, newFreeformWork())
+		rebuilt, err := evalPrism(New(), 0, stale, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.NotSame(t, source.walks, prismPayloadOf(t, rebuilt).walks,
 			"a changed record must resolve its own walks")
@@ -1003,20 +1005,20 @@ func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
 // have admitted a build the budget had already proved unaffordable.
 func TestWalksChargeReplayRefusesAtTheCeiling(t *testing.T) {
 	t.Parallel()
-	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
 	// Spend all but one unit less than this record's own build costs, so the
 	// build refuses whichever way it gets its walks.
-	whole := newFreeformWork()
+	whole := freeform.NewFreeformWork()
 	_, err = evalPrism(New(), 0, withoutWalks(source), whole)
 	require.NoError(t, err)
-	require.Greater(t, whole.spent, uint64(0), "premise: this record charges real work")
+	require.Greater(t, whole.Spent, uint64(0), "premise: this record charges real work")
 
-	starve := func() *freeformWork {
-		w := newFreeformWork()
-		require.NoError(t, w.step(freeformWorkLimit-whole.spent+1))
+	starve := func() *freeform.FreeformWork {
+		w := freeform.NewFreeformWork()
+		require.NoError(t, w.Step(freeform.FreeformWorkLimit-whole.Spent+1))
 		return w
 	}
 
@@ -1038,17 +1040,17 @@ func TestWalksChargeReplayRefusesAtTheCeiling(t *testing.T) {
 func TestUnmeteredWalksAreNeverReused(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	metered, err := resolveProfileWalks(profile, newFreeformWork())
+	metered, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	view := &profileWalks{profile: profile, outer: metered.outer, holes: metered.holes}
 	require.True(t, view.matches(profile), "premise: the view is over this very record")
 	require.False(t, view.reusable(profile), "an unmetered set is never read back")
-	require.ErrorIs(t, view.charge(newFreeformWork()), errUnmeteredWalksCharge)
-	require.ErrorIs(t, view.charge(newFreeformWork()), ErrUnsupported)
+	require.ErrorIs(t, view.charge(freeform.NewFreeformWork()), errUnmeteredWalksCharge)
+	require.ErrorIs(t, view.charge(freeform.NewFreeformWork()), ErrUnsupported)
 
 	require.True(t, metered.reusable(profile), "the metered set it was built from still reads back")
-	require.NoError(t, metered.charge(newFreeformWork()))
+	require.NoError(t, metered.charge(freeform.NewFreeformWork()))
 }
 
 // TestPublishedWalksAreReadOnlyAcrossGoroutines runs two independent
@@ -1058,7 +1060,7 @@ func TestUnmeteredWalksAreNeverReused(t *testing.T) {
 // the test that says so under -race.
 func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
 	t.Parallel()
-	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
@@ -1076,7 +1078,7 @@ func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
 		go func() {
 			pp := source
 			pp.xform = motion
-			body, err := evalPrismContext(t.Context(), New(), 0, pp, newFreeformWork())
+			body, err := evalPrismContext(t.Context(), New(), 0, pp, freeform.NewFreeformWork())
 			results <- outcome{body: body, err: err}
 		}()
 	}
@@ -1104,7 +1106,7 @@ func benchInvoluteFitPayload(b *testing.B) prismPayload {
 // and it is the only difference between them — both build the same body, and
 // both charge their counter the same total.
 func BenchmarkPlacedFreeformPrism(b *testing.B) {
-	built, err := evalPrism(New(), 0, benchInvoluteFitPayload(b), newFreeformWork())
+	built, err := evalPrism(New(), 0, benchInvoluteFitPayload(b), freeform.NewFreeformWork())
 	require.NoError(b, err)
 	source, ok := built.payload.(prismPayload)
 	require.True(b, ok)
@@ -1122,7 +1124,7 @@ func BenchmarkPlacedFreeformPrism(b *testing.B) {
 			pp := arm.payload
 			pp.xform = turn
 			for b.Loop() {
-				if _, err := evalPrism(New(), 0, pp, newFreeformWork()); err != nil {
+				if _, err := evalPrism(New(), 0, pp, freeform.NewFreeformWork()); err != nil {
 					b.Fatal(err)
 				}
 			}

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -158,7 +160,7 @@ func capWallSweep(cU, cV float64, start, end Point2, refSweep float64) (capTh0, 
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk, the same decomposition prismCornerLoopsBudget applies to
 // every loop of a section.
-func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *freeformWork) (cornerLoop, error) {
+func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop LoopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
@@ -298,7 +300,7 @@ type capPatchGeom struct {
 // cap-level coedges that replace the loop's boundary in the cap face. The
 // side-level boundary reuses the trimmed side wall's own near-cap coedges
 // (sideCo, from buildLoopSidesAs) — shared, never re-derived.
-func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, work *freeformWork) (capBandResult, error) {
+func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, work *freeform.FreeformWork) (capBandResult, error) {
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}

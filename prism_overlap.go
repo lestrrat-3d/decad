@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch"
@@ -121,7 +123,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			sectionDelta: sectionDelta,
 		}
 
-		body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+		body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 		if err != nil {
 			if errors.Is(err, ErrDegenerate) || errors.Is(err, ErrUnsupported) {
 				// The region integrals refuse this cell's own section as

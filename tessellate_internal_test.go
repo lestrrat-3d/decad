@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -258,10 +260,10 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 // TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins the caller-facing
 // half of that same conservatism, at its exact boundary. chordCount decides
 // on the PROVEN bound, so the finest tolerance a full circle can be chorded
-// to is that bound's value at maxChordsPerWalk — not the smaller true
+// to is that bound's value at freeform.MaxChordsPerWalk — not the smaller true
 // sagitta there. Every tolerance in between, a window whose relative width
 // is the (x/sin x)^2 - 1 factor [Body.Tessellate] states, leaves no
-// admissible count and refuses with errTooManyChords, which is an
+// admissible count and refuses with freeform.ErrTooManyChords, which is an
 // ErrUnsupported. The refusal is the whole point: the alternative is a mesh
 // whose published bound is not one this package can prove.
 func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
@@ -280,11 +282,11 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 	}
 	for _, row := range rows {
 		w := survey2d.SegmentWalk{Radius: row.radius, Th0: 0, Th1: sweep, Closed: true}
-		atCap := chordSagitta(row.radius, sweep, maxChordsPerWalk)
+		atCap := chordSagitta(row.radius, sweep, freeform.MaxChordsPerWalk)
 
 		// The window has real width: the true sagitta at the cap sits
 		// strictly below the proven bound the walk-up must satisfy.
-		trueAtCap, _ := bigSagittaReference(row.radius, sweep, maxChordsPerWalk, prec).Float64()
+		trueAtCap, _ := bigSagittaReference(row.radius, sweep, freeform.MaxChordsPerWalk, prec).Float64()
 		require.Lessf(t, trueAtCap, atCap,
 			"radius=%g: the proven bound at the cap must exceed the true sagitta there", row.radius)
 		require.Greaterf(t, row.inside, trueAtCap,
@@ -295,12 +297,12 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 		// The proven bound itself is chordable, at exactly the cap count.
 		n, s, err := chordCount(w, atCap, chordWalkMin(w))
 		require.NoErrorf(t, err, "radius=%g: the proven sagitta at the cap must itself be admissible", row.radius)
-		require.Equalf(t, maxChordsPerWalk, n, "radius=%g: that tolerance must spend the whole cap", row.radius)
+		require.Equalf(t, freeform.MaxChordsPerWalk, n, "radius=%g: that tolerance must spend the whole cap", row.radius)
 		require.Equalf(t, atCap, s, "radius=%g: the returned sagitta is the proven bound itself", row.radius)
 
 		for _, tol := range []float64{math.Nextafter(atCap, 0), row.inside, trueAtCap} {
 			_, _, err := chordCount(w, tol, chordWalkMin(w))
-			require.ErrorIsf(t, err, errTooManyChords,
+			require.ErrorIsf(t, err, freeform.ErrTooManyChords,
 				"radius=%g: tol=%.20g lies in the window and must refuse", row.radius, tol)
 			require.ErrorIsf(t, err, ErrUnsupported,
 				"radius=%g: tol=%.20g must refuse with a typed ErrUnsupported", row.radius, tol)
@@ -368,12 +370,12 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 // NOT spend the resolution's charge a second time. The two counters differ by
 // exactly resolveProfileWalks' own figure for this record, which proves the
 // arc-length bracketing was skipped rather than merely repeated more cheaply —
-// everything else the chording charges (chainStations over the same Bézier
+// everything else the chording charges (freeform.ChainStations over the same Bézier
 // chain) is spent by both runs alike.
 func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	t.Parallel()
 	profile := involuteFitProfile()
-	pw, err := resolveProfileWalks(profile, newFreeformWork())
+	pw, err := resolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Greater(t, pw.spent, uint64(0), "premise: resolving this record costs free-form work")
 
@@ -382,19 +384,19 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	face := &Face{}
 	wall := func(survey2d.SideWalk) (*Face, error) { return face, nil }
 
-	direct := newFreeformWork()
+	direct := freeform.NewFreeformWork()
 	want, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall)
 	require.NoError(t, err)
 	require.NotEmpty(t, want.samples)
 
-	replay := newFreeformWork()
+	replay := freeform.NewFreeformWork()
 	got, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall)
 	require.NoError(t, err)
 
 	require.Equal(t, want, got, "reading the published walks must give the resolve-every-segment chording")
-	require.Equal(t, direct.spent-pw.spent, replay.spent,
+	require.Equal(t, direct.Spent-pw.spent, replay.Spent,
 		"the chording that read the walks back must spend everything EXCEPT the resolution's own charge")
-	require.Equal(t, direct.reconstructionSpent, replay.reconstructionSpent,
+	require.Equal(t, direct.ReconstructionSpent, replay.ReconstructionSpent,
 		"a walk resolution charges no reconstruction work, so both runs spend the same")
 }
 
@@ -404,7 +406,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 // own refusal, on the same exact-comparison terms.
 func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	t.Parallel()
-	pw, err := resolveProfileWalks(involuteFitProfile(), newFreeformWork())
+	pw, err := resolveProfileWalks(involuteFitProfile(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	other := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -413,7 +415,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
 	}}}
 	face := &Face{}
-	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, newFreeformWork(), pw, 0,
+	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
 		func(survey2d.SideWalk) (*Face, error) { return face, nil })
 	require.ErrorIs(t, err, errResolvedWalksMismatch)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -428,7 +430,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 // of chording it, so a reuse that changed any answer would change one here.
 func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	t.Parallel()
-	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	published := prismPayloadOf(t, body)
 	require.True(t, published.walks.reusable(published.profile),

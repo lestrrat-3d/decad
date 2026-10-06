@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -251,12 +253,12 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// cavity are the two halves of one recorded section and no preflight has run
 	// on either, so the ceiling opens here and both preflights and every walkOf
 	// below spend it (docs/spline-design.md §5.2).
-	work := newFreeformWork()
-	igO, err := cp.outer.evaluatorIntegralsContext(ctx, momentFirstOrder, work)
+	work := freeform.NewFreeformWork()
+	igO, err := cp.outer.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, momentFirstOrder, work)
+	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -677,7 +679,7 @@ func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv
 // perimeter, and that area times the largest coordinate magnitude any point
 // of the symmetric difference can have — the region's own envelope plus
 // delta.
-func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim proofbound.BoundedScalar, delta float64, work *freeformWork) (regionIntegrals, error) {
+func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim proofbound.BoundedScalar, delta float64, work *freeform.FreeformWork) (regionIntegrals, error) {
 	segments := len(profile.Outer.Segments)
 	for _, hole := range profile.Holes {
 		segments += len(hole.Segments)

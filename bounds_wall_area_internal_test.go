@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -269,7 +271,7 @@ func cellAllowFor(a, b ruledArc) float64 {
 	arcA, arcB := proofbound.UpRound(a.arcLen()), proofbound.UpRound(b.arcLen())
 	md := math.Max(a.sagittaUpper(), b.sagittaUpper())
 	chordLo := func(c ruledArc) float64 {
-		return downRound(downRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
+		return freeform.DownRound(freeform.DownRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
 	}
 	return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
 		proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(a)),
@@ -348,7 +350,7 @@ func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
 		vLo, vHi, wLo, wHi := lo.at(0), lo.at(1), hi.at(0), hi.at(1)
 		arcA, arcB := proofbound.UpRound(lo.arcLen()), proofbound.UpRound(hi.arcLen())
 		md := math.Max(lo.sagittaUpper(), hi.sagittaUpper())
-		chordLower := downRound(downRound(2 * radius * math.Sin(dt/2)))
+		chordLower := freeform.DownRound(freeform.DownRound(2 * radius * math.Sin(dt/2)))
 		energy := proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLower)
 		t.Run(fmt.Sprintf("sep=%g/energy", separation), func(t *testing.T) {
 			require.Positive(t, energy,
@@ -412,7 +414,7 @@ func TestUniformSpeedTangentEnergyUpperEnclosesTheIntegratedEnergy(t *testing.T)
 		}
 		integrated := sum / n
 		published := proofbound.UniformSpeedTangentEnergyUpper(proofbound.UpRound(lo.arcLen()),
-			downRound(downRound(2*math.Abs(lo.radius)*math.Sin(math.Abs(dt)/2))))
+			freeform.DownRound(freeform.DownRound(2*math.Abs(lo.radius)*math.Sin(math.Abs(dt)/2))))
 		t.Logf("cellSweep=%.3f integrated energy=%.9e published=%.9e", dt, integrated, published)
 		require.LessOrEqual(t, integrated, published,
 			"the published tangent-deviation energy must enclose the integrated one at cell sweep %.3f", dt)
@@ -742,7 +744,7 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 	arcA, arcB := proofbound.UpRound(a.arcLen()), proofbound.UpRound(b.arcLen())
 	md := math.Max(a.sagittaUpper(), b.sagittaUpper())
 	chordLo := func(c ruledArc) float64 {
-		return downRound(downRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
+		return freeform.DownRound(freeform.DownRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
 	}
 	energyA := proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(a))
 	energyB := proofbound.UniformSpeedTangentEnergyUpper(arcB, chordLo(b))
@@ -1099,7 +1101,7 @@ func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 
 			arcA, arcB := proofbound.UpRound(lo.arcLen()), proofbound.UpRound(hi.arcLen())
 			chordLo := func(a ruledArc) float64 {
-				return downRound(downRound(2 * math.Abs(a.radius) * math.Sin(math.Abs(a.dt)/2)))
+				return freeform.DownRound(freeform.DownRound(2 * math.Abs(a.radius) * math.Sin(math.Abs(a.dt)/2)))
 			}
 			// The build's own per-cell obligations: chordCellDeltaUpper
 			// composes the certified sagitta with the station displacement,

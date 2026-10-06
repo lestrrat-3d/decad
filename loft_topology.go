@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -240,7 +242,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 // translation before it ever reaches this evaluator. What runs off float64 is
 // decad's OWN evaluation of the lift, and the body EXISTS — it is the rigid
 // image of a body this evaluator already built — so modify §1's existence
-// test reads "a body this evaluator cannot build". spline_length.go's R15 and
+// test reads "a body this evaluator cannot build". internal/freeform/spline_length.go's R15 and
 // spline_fit.go's R16 draw the identical line for a finite input whose
 // derived magnitude runs off float64; errors.go scopes ErrNotFinite to a
 // non-finite PARAMETER or a derived non-finite MEASUREMENT, and
@@ -576,8 +578,8 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 // special case").
 //
 // Every coordinate is taken exactly as a math/big.Rat off its own float64
-// (clearance_poly.go's mustRatOf, the package's take-the-floats-exactly
-// discipline) — no float arithmetic anywhere in this sum. mustRatOf's
+// (internal/freeform/clearance_poly.go's freeform.MustRatOf, the package's take-the-floats-exactly
+// discipline) — no float arithmetic anywhere in this sum. freeform.MustRatOf's
 // finiteness precondition is already proven here: every pts entry is one
 // of the SAME (U, V) pairs assembleLoft already lifted through its plane
 // frame and checked with proofbound.FiniteVec before this function is ever reached
@@ -594,8 +596,8 @@ func capPolygonAreaRat(pts []Point2, loopIdx [][]int) *big.Rat {
 		n := len(idx)
 		for j := range n {
 			p, q := pts[idx[j]], pts[idx[(j+1)%n]]
-			term := new(big.Rat).Mul(mustRatOf(p.U), mustRatOf(q.V))
-			term.Sub(term, new(big.Rat).Mul(mustRatOf(q.U), mustRatOf(p.V)))
+			term := new(big.Rat).Mul(freeform.MustRatOf(p.U), freeform.MustRatOf(q.V))
+			term.Sub(term, new(big.Rat).Mul(freeform.MustRatOf(q.U), freeform.MustRatOf(p.V)))
 			sum.Add(sum, term)
 		}
 	}

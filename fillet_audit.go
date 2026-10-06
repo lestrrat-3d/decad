@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -221,7 +223,7 @@ func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
 func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([]segEntry, error) {
 	// One free-form counter for the whole audited section: the loops handed here
 	// are one record, and no preflight has run on them.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	var segs []segEntry
 	for li, loop := range loops {
 		n := len(loop.Segments)

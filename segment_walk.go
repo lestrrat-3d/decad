@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -126,7 +128,7 @@ type walkReadCharge struct {
 // §5.2), rather than once per consumer. The set it returns records what that
 // cost, so a later rigid re-evaluation can replay the charge instead of
 // re-running the work (charge).
-func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
+func resolveProfileWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profileWalks, error) {
 	before, beforeRecon := workSpent(work)
 	outer := make([]survey2d.SegmentWalk, len(profile.Outer.Segments))
 	for i, seg := range profile.Outer.Segments {
@@ -177,23 +179,23 @@ func (pw *profileWalks) reusable(profile ProfileRecord) bool {
 // SUM exceeds what the counter has left — the same condition, returning the same
 // step error, as the one aggregate step. It cannot refuse EARLIER than the work
 // would have either, because every walk this set holds already resolved.
-func (pw *profileWalks) charge(work *freeformWork) error {
+func (pw *profileWalks) charge(work *freeform.FreeformWork) error {
 	if pw == nil || !pw.metered {
 		return errUnmeteredWalksCharge
 	}
-	if err := work.step(pw.spent); err != nil {
+	if err := work.Step(pw.spent); err != nil {
 		return err
 	}
-	return work.reconstructionStep(pw.reconstructionSpent)
+	return work.ReconstructionStep(pw.reconstructionSpent)
 }
 
 // workSpent reads both of a counter's totals. A nil counter has spent nothing,
 // which is what step and reconstructionStep already treat it as.
-func workSpent(work *freeformWork) (uint64, uint64) {
+func workSpent(work *freeform.FreeformWork) (uint64, uint64) {
 	if work == nil {
 		return 0, 0
 	}
-	return work.spent, work.reconstructionSpent
+	return work.Spent, work.ReconstructionSpent
 }
 
 // at returns the resolved walk for loop index loopIndex (0 the outer loop,
@@ -364,7 +366,7 @@ var errUnmeteredWalksCharge = fmt.Errorf(`%w: resolved walks did not measure the
 // ceiling; callers with no preflight in hand mint exactly one for the whole
 // record walk. An analytic segment charges nothing, so a nil counter is harmless
 // there and refused on the free-form arm rather than quietly replaced.
-func walkOf(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, error) {
+func walkOf(seg CurveSegment, work *freeform.FreeformWork) (survey2d.SegmentWalk, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
@@ -586,7 +588,7 @@ func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
 //     collapsed to a single point has no positive bracket and refuses as
 //     ErrDegenerate rather than resolve into a walk (Table R row R14), and a
 //     curve whose enclosure runs past MaxFloat64 refuses as ErrUnsupported
-//     (R15); freeformArcLength owns both;
+//     (R15); freeform.FreeformArcLength owns both;
 //   - coordUpper and lengthUpper are convex-hull envelopes, so they bound the
 //     curve and not merely its control net.
 //
@@ -597,7 +599,7 @@ func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
 // — the record's, never one minted here. A caller that reaches this arm with no
 // counter has no ceiling at all, which is the one thing §5.2 forbids, so the
 // resolution refuses rather than run unbounded work.
-func freeformWalk(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, error) {
+func freeformWalk(seg CurveSegment, work *freeform.FreeformWork) (survey2d.SegmentWalk, error) {
 	if work == nil {
 		return survey2d.SegmentWalk{}, errFreeformWalkUncounted
 	}
@@ -609,11 +611,11 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, e
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
 	}
-	length, bound, err := freeformArcLength(spans, work)
+	length, bound, err := freeform.FreeformArcLength(spans, work)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
 	}
-	tangents, err := freeformEndTangents(spans, reversed)
+	tangents, err := freeform.FreeformEndTangents(spans, reversed)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
 	}
@@ -626,16 +628,16 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (survey2d.SegmentWalk, e
 		// A closed free-form curve returns to its start, so it carries no
 		// junction vertex — the same fact CircleSeg's closed walk states.
 		Closed:          start == end,
-		TanInU:          tangents.inU,
-		TanInV:          tangents.inV,
-		TanInBound:      tangents.inBound,
-		TanOutU:         tangents.outU,
-		TanOutV:         tangents.outV,
-		TanOutBound:     tangents.outBound,
+		TanInU:          tangents.InU,
+		TanInV:          tangents.InV,
+		TanInBound:      tangents.InBound,
+		TanOutU:         tangents.OutU,
+		TanOutV:         tangents.OutV,
+		TanOutBound:     tangents.OutBound,
 		Length:          length,
 		LengthBound:     bound,
 		LengthUpper:     proofbound.UpRound(length + bound),
-		CoordUpper:      freeformControlExtent(spans),
+		CoordUpper:      freeform.FreeformControlExtent(spans),
 		Kind:            survey2d.WalkFreeform,
 		Spans:           spans,
 		Reversed:        reversed,

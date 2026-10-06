@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -52,7 +54,7 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, newFreeformWork())
+	w, err := walkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	const n = 4
 	dth := (w.Th1 - w.Th0) / n

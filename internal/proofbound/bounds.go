@@ -575,7 +575,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // parametrization the caller chooses — constant ARC-LENGTH speed for the
 // circular arm, the free-form arm's own SPAN-UNIFORM native fraction (the
 // identical parameter the loft correspondence itself pairs stations on,
-// spline_sagitta.go's spanMatchedDeltaUpper) — never the side's own native
+// internal/freeform/spline_sagitta.go's spanMatchedDeltaUpper) — never the side's own native
 // curve parameter used unmatched. Nothing below actually depends on which
 // parametrization was chosen: the derivation reads exactly two properties of
 // it, and nothing more. (1) a per-side tangent-magnitude bound, arcLenUpperA/
@@ -645,7 +645,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // pins the exact counterexample). A free-form span under its OWN
 // span-uniform native fraction is the one other case this derivation admits
 // today, discharged not by the sagitta but by spanMatchedDeltaUpper
-// (spline_sagitta.go), which is proven under that exact parametrization
+// (internal/freeform/spline_sagitta.go), which is proven under that exact parametrization
 // rather than assumed equal to it. A caller that cannot prove the
 // parameter-matched bound under whichever shared parametrization it adopted
 // must pass +Inf, never the sagitta as a stand-in (F1's own rule: a

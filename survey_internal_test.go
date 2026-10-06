@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -314,7 +316,7 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 		TStart: 0,
 		TEnd:   1,
 	}
-	w, err := walkOf(seg, newFreeformWork())
+	w, err := walkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Greater(t, w.RadiusBound, 0.0, `a hypot radius is never exact`)
 	e, ok := walkElem(w)
@@ -1054,7 +1056,7 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 					End:    Point2{U: cu - du, V: cv - dv},
 					TStart: 0,
 					TEnd:   1,
-				}, newFreeformWork())
+				}, freeform.NewFreeformWork())
 				require.NoError(t, err)
 				e, ok := walkElem(w)
 				require.True(t, ok)

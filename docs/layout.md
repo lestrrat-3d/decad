@@ -91,13 +91,9 @@ to the byte budget.
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_circular.go` | Exact rational arc/circle enclosures for `moments.go` and `revolve_build.go`. See the file's doc comment. |
-| `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
-| `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
-| `spline_extreme.go` | `docs/spline-design.md` §6.2's Tier A directional-extreme bracket, reducing to `clearance_poly.go`'s root engine. See the file's doc comment. |
-| `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce. See the file's doc comment. |
-| `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. |
-| `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. See the file's doc comments. |
-| `spline_convexity.go` | `docs/spline-design.md` §6.5: proves a free-form wall edge's single curvature sign from its Bernstein certificate, or refuses. Owns Table R row R19's refusal. See the file's doc comment. |
+| `spline_bezier.go` | Builds a recorded free-form curve's exact Bézier spans and reconstruction over `internal/freeform/`'s reduction and work budget. See `docs/spline-design.md` §5.1. |
+| `spline_fit.go` | Converts a recorded `FitSplineSeg` into Bézier spans over `internal/freeform/`'s fit reduction. See `docs/spline-design.md` §5.1.2. |
+| `spline_moments.go` | `addFreeformTo` folds `internal/freeform/`'s exact span moments into a region's integrals. See `docs/spline-design.md` §5.1. |
 
 ### Features
 
@@ -202,7 +198,6 @@ to the byte budget.
 | `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The §3 curve and vertex tiers and the §6 ruling certificates. See `docs/clearance-design.md` §3/§4/§6. |
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
-| `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials and Lipschitz brackets of critical values. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
@@ -264,6 +259,7 @@ to the byte budget.
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`. See `docs/motion-check-design.md`. |
+| `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
 | `_gallery/` | Own nested module for README images, landing clip and dynamics scenes; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; race shards run `race-binary`'s root and `apitest` binaries. `codeql.yml`. `test-shards*.txt` assign each test a shard. |

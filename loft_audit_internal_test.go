@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -685,7 +687,7 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 	profile1, plane1, _, err := recordProfile(s1, p1)
 	require.NoError(t, err)
 
-	work0, work1 := newFreeformWork(), newFreeformWork()
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	offsets, walks0, walks1, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, work0, work1)
 	require.NoError(t, err)
 	target, err := loftChordTarget(profile0, profile1, walks0, walks1)

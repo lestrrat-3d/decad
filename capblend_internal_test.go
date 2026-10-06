@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -48,7 +50,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	loop := LoopRecord{Segments: []CurveSegment{
 		CircleSeg{Center: Point2{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
 	}}
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 
 	capBoundary, err := capLoopBoundary(t.Context(), loop, d)
 	require.NoError(t, err)
@@ -341,9 +343,9 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 			require.Greater(t, volumeWith.Bound, volumeWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band volume bound`)
 
-			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, newFreeformWork())
+			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, newFreeformWork())
+			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			require.Greater(t, momentWith.Bound, momentWithout.Bound,
 				`the cap disk's inherited axial displacement must reach the band first-moment bound`)

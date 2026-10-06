@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -87,7 +89,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	// continues it, and every walkOf under that build spends what is left
 	// (docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
@@ -162,8 +164,8 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // disagree, which is a bug somewhere. A small residual proves nothing and
 // admits nothing; the check can only reject, the same one-sided shape as the
 // seam's range falsifier.
-func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeformWork) error {
-	ig, err := profile.evaluatorIntegrals(momentAreaOrder, work)
+func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeform.FreeformWork) error {
+	ig, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, work)
 	if err != nil {
 		return err
 	}
@@ -413,7 +415,7 @@ func (pp chainPayload) transform() r3.Transform { return pp.xform }
 // (docs/spline-design.md §5.2), exactly as prismPayload.placed does.
 func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalChainExtrudeContext(ctx, d, ref, pp, newFreeformWork())
+	return evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 }
 
 // ExtrudeChain sweeps the open chain ch of sketch s along the sketch plane's
@@ -427,7 +429,7 @@ func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // WithSurfaceResult() does not compile against this call. A chain of any
 // segment count and kind builds — a line wall Exact, an arc or circle
 // fragment wall carrying rθ's own bound, a Tier A free-form wall carrying
-// spline_length.go's proven bracket (docs/spline-design.md); a Tier B or
+// internal/freeform/spline_length.go's proven bracket (docs/spline-design.md); a Tier B or
 // Tier C free-form segment is ErrUnsupported, exactly as Extrude's own
 // profile-fed wall refuses it. A failed evaluation leaves the document
 // untouched.
@@ -464,7 +466,7 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	// opens for its own profile-fed build (docs/spline-design.md §5.2):
 	// buildChainSides's own walkOf calls and the final bounds reading below
 	// spend from the same ceiling rather than each opening a fresh one.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
 	body, err := evalChainExtrudeContext(context.Background(), d, ref, chainPayload{
 		chains:  []ChainRecord{chain},
@@ -493,7 +495,7 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 // to exercise with more than one. work is the record's ONE free-form work
 // counter (docs/spline-design.md §5.2): the caller opens it once and every
 // walk's build and the final bounds reading all spend from it.
-func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload, work *freeformWork) (*Body, error) {
+func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -604,7 +606,7 @@ func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *profi
 // (docs/surface-design.md §13.4). It returns the faces and the walk's own
 // total wall area, folded through proofbound.BoundedAdd rather than summed as raw
 // floats.
-func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
+func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeform.FreeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
 	prismView := pp.prism()
 	// Every coordinate this walk's segments read sits within pp's own section
 	// displacement of the section it denotes, so each segment's own length

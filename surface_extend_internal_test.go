@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch"
@@ -190,7 +192,7 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 			// The named end now stands on the carrier at the new parameter, and
 			// the other end has not moved a float.
 			wantU, wantV := recordPointAt(t, tc.seg, tc.bound)
-			walk, err := walkOf(widened, newFreeformWork())
+			walk, err := walkOf(widened, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			movedU, movedV := walk.EndU, walk.EndV
 			stillU, stillV := walk.StartU, walk.StartV

@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -195,7 +197,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		xform:     pp.xform,
 		blendSegs: filletArcs,
 		blendKind: "fillet",
-	}, newFreeformWork())
+	}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +327,7 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 	// One free-form counter for this whole record walk: no moments preflight ran
 	// on the section this reads, so the ceiling starts here and covers every
 	// segment of every loop below.
-	work := newFreeformWork()
+	work := freeform.NewFreeformWork()
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		if err := survey2d.WallBudgetStep(budget); err != nil {

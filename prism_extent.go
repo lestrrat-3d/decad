@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -46,11 +48,11 @@ func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) 
 	if pp.sectionDelta != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
-	return pp.extentBoundedAlong(context.Background(), g, newFreeformWork(), nil)
+	return pp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork(), nil)
 }
 
 func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
-	return pp.extentAlongWork(ctx, g, newFreeformWork())
+	return pp.extentAlongWork(ctx, g, freeform.NewFreeformWork())
 }
 
 // extentAlongWork is extentBoundedAlong's refusing wrapper, mirroring
@@ -66,7 +68,7 @@ func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float6
 // through one nonzero bound. A through-all stop does not read through this wrapper:
 // it consumes the bounded reading and charges the displacement to its own level
 // (stops.go, docs/spline-design.md §6.4).
-func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
 	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work, nil)
 	if err != nil {
 		return 0, 0, err
@@ -106,7 +108,7 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // one of its three per-axis calls, so the record's boundary walks resolve
 // once for the whole box rather than once per axis (this file's profileWalks
 // doc comment).
-func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork, walks *profileWalks) (float64, float64, float64, error) {
+func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *profileWalks) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
@@ -258,7 +260,7 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 // extentBoundedAlong calls below (this file's profileWalks doc comment), so a
 // non-nil walks resolves the record's boundary once for the whole box instead
 // of once per axis.
-func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork, walks *profileWalks) (Box, error) {
+func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *profileWalks) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	extremeBound := 0.0
@@ -399,7 +401,7 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 // circularExtremeInterval derives — the single owner of that term, charged where
 // the candidate is produced rather than beside the fold by whichever consumer
 // noticed. A free-form walk folds each of its converted spans' own proven
-// enclosure (spanExtremeEnclosureContext) and takes no endpoint candidate of its
+// enclosure (freeform.SpanExtremeEnclosureContext) and takes no endpoint candidate of its
 // own: a span enclosure already covers the span's whole parameter range,
 // endpoints included.
 //
@@ -408,7 +410,7 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 // (loLower/loUpper) and to the region maximum (hiLower/hiUpper) separately, so
 // a candidate that loses the extremization contributes nothing to the reported
 // bound, and report the midpoint of each composed interval with the larger of
-// the two half widths, rounded up — the same convention freeformArcLength
+// the two half widths, rounded up — the same convention freeform.FreeformArcLength
 // already uses. The fold is sound because every candidate interval encloses a
 // value the true boundary actually attains: the reported minimum's lower end is
 // the least of the candidates' lower ends and so never exceeds the truth, and
@@ -416,15 +418,15 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 // the true minimum keeps at or above it.
 //
 // A span enclosure that convention cannot state in float64 refuses at the
-// conversion rather than entering the fold (spline_extreme.go's
-// freeformExtremeFloats, Table R row R18), so every number these accumulators
+// conversion rather than entering the fold (internal/freeform/spline_extreme.go's
+// freeform.FreeformExtremeFloats, Table R row R18), so every number these accumulators
 // hold is finite and the only reading left to the empty-region check below is
 // a region that genuinely contributed no candidate.
 //
 // The direction is carried through this scan as the two FLOATS the caller
-// holds, and it is gated by requireFiniteDirection, which reads them and
+// holds, and it is gated by freeform.RequireFiniteDirection, which reads them and
 // allocates nothing. The rational lift each span's Bernstein coefficients need
-// happens inside spanExtremeEnclosureContext, behind that span's own R7 charge
+// happens inside freeform.SpanExtremeEnclosureContext, behind that span's own R7 charge
 // — §5.2's rule is that every charge is levied before the work allocates, and
 // a rational built here would allocate ahead of every charge this scan makes.
 //
@@ -432,8 +434,8 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 // segment through walkOf as before (this file's profileWalks doc comment). A
 // non-nil walks that was not resolved from THIS profile's own recorded
 // segments refuses.
-func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork, walks *profileWalks) (float64, float64, float64, error) {
-	if err := requireFiniteDirection(gu, gv); err != nil {
+func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeform.FreeformWork, walks *profileWalks) (float64, float64, float64, error) {
+	if err := freeform.RequireFiniteDirection(gu, gv); err != nil {
 		return 0, 0, 0, err
 	}
 	if walks != nil && !walks.matches(profile) {
@@ -454,7 +456,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 	// generator derived. A zero bound enters as the held value twice: widening
 	// an exact candidate by a directed rounding would mint an error the
 	// arithmetic provably did not commit. A nonzero one is stepped outward with
-	// math.Nextafter rather than proofbound.UpRound/downRound, since a directional value
+	// math.Nextafter rather than proofbound.UpRound/freeform.DownRound, since a directional value
 	// can be negative and those two only move a POSITIVE bound toward zero.
 	take := func(g, allow float64) {
 		if allow == 0 {
@@ -470,10 +472,10 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 	takeVertex := func(u, v float64, bound proofbound.WalkEndBound) {
 		take(gu*u+gv*v, proofbound.PointPerturbationAllow(bound, gu, gv))
 	}
-	// Every span enclosure enters the fold through freeformExtremeFloats
-	// (spline_extreme.go), which rounds outward through proofbound.RatFloatDown/proofbound.RatFloatUp
-	// — never downRound/proofbound.UpRound: a directional value can be negative, and those
-	// only ever move a POSITIVE bound toward zero (spline_length.go's
+	// Every span enclosure enters the fold through freeform.FreeformExtremeFloats
+	// (internal/freeform/spline_extreme.go), which rounds outward through proofbound.RatFloatDown/proofbound.RatFloatUp
+	// — never freeform.DownRound/proofbound.UpRound: a directional value can be negative, and those
+	// only ever move a POSITIVE bound toward zero (internal/freeform/spline_length.go's
 	// arc-length-only convention), the wrong direction for a negative
 	// candidate and a spurious one-ulp widening of an exactly representable
 	// value either way — and refuses ErrUnsupported for an enclosure the
@@ -491,15 +493,15 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 			}
 			if w.Kind == survey2d.WalkFreeform {
 				for _, span := range w.Spans {
-					minIv, maxIv, err := spanExtremeEnclosureContext(ctx, span, gu, gv, work)
+					minIv, maxIv, err := freeform.SpanExtremeEnclosureContext(ctx, span, gu, gv, work)
 					if err != nil {
 						return 0, 0, 0, err
 					}
-					minLo, minHi, err := freeformExtremeFloats(minIv)
+					minLo, minHi, err := freeform.FreeformExtremeFloats(minIv)
 					if err != nil {
 						return 0, 0, 0, err
 					}
-					maxLo, maxHi, err := freeformExtremeFloats(maxIv)
+					maxLo, maxHi, err := freeform.FreeformExtremeFloats(maxIv)
 					if err != nil {
 						return 0, 0, 0, err
 					}

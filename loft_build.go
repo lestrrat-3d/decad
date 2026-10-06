@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -217,7 +219,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	// is exactly the disagreement the payload's own doc comment forbids.
 	next.capStartCount, next.cell, next.side = 0, nil, nil
 	next.proof = loftMeshProof{}
-	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), newFreeformWork(), newFreeformWork())
+	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
 
 // validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2).
@@ -263,7 +265,7 @@ func validateLoftBodyMeasurements(body *Body) error {
 // kind, so nothing here charges them yet — but the counters are still
 // threaded through so a future free-form correspondence does not silently
 // open a second ceiling per record.
-func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *proofbound.WorkBudget, work0, work1 *freeformWork) (*Body, error) {
+func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -370,7 +372,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// after the add loop, gated on EITHER sectionDelta or sectionMatchedDelta
 	// being positive rather than on sectionDelta alone: a free-form cell can
 	// carry a positive matchedDelta at an exactly-zero sagitta
-	// (spline_sagitta.go's own counterexample), and skipping the computation
+	// (internal/freeform/spline_sagitta.go's own counterexample), and skipping the computation
 	// there would silently drop a genuine chord-to-curve area/volume
 	// obligation. Left at its zero value (every field of loftChordedAllow)
 	// for a LineSeg-only build, where both are zero.
