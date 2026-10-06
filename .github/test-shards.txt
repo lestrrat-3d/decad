@@ -1087,6 +1087,12 @@
 4	0.00	TestContactPairCylinderPairRuling
 4	0.00	TestContactPairCylinderRulingOnFloor
 4	0.05	TestContactPairExactPlanarCancels
+4	0.11	TestContactPairConcurrentQueriesAgree
+4	0.09	TestContactPairMemoKeysEveryInput
+4	1.09	TestContactPairMemoMatchesUncachedProof
+4	0.03	TestContactPairRepeatReturnsEqualPrivateReport
+4	0.00	TestPairReportKeyIsBitExact
+4	0.01	TestPairReportMemoEvictsOldest
 4	0.05	TestContactPairExactPlanarHexagonOnTray
 4	0.05	TestContactPairExactPlanarNesting
 4	0.05	TestContactPairExactPlanarNonConvex

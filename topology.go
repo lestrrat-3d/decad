@@ -710,6 +710,9 @@ type Body struct {
 	// the body's logical geometry.
 	planarConvexity atomic.Pointer[planarConvexityEntry]
 	planarSnapshot  atomic.Pointer[planarSnapshotEntry]
+	// pairReports keeps the recent ContactPair reports this body is the
+	// first operand of (contact_pair_memo.go); it changes no outcome either.
+	pairReports pairReportMemo
 }
 
 // Document returns the document that owns (or owned) this body.
