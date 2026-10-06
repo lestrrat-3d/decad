@@ -11,6 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var kinematicUnderflowAngular = units.Define("decad-test-kinematic-angular-underflow",
+	units.AngularVelocity, 1e-200)
+
 func kinematicBoxWorld(t *testing.T, doc *decad.Document, driver, box *decad.Body) *dynamics.World {
 	return kinematicBoxWorldWithLimit(t, doc, driver, box, false, 2)
 }
@@ -367,9 +370,8 @@ func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
 	})
 	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
-	underflowAngular := units.Define("decad-test-kinematic-angular-underflow", units.AngularVelocity, 1e-200)
 	tinySpin := zeroAngular(t)
-	tinySpin.Z = units.New(1e-200, underflowAngular)
+	tinySpin.Z = units.New(1e-200, kinematicUnderflowAngular)
 	require.Zero(t, tinySpin.Z.Base())
 	_, err = w.NewState([]dynamics.BodyState{
 		{Body: driver, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: tinySpin},
