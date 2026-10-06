@@ -375,7 +375,7 @@ func (k *pairKernel) offsetPair(f, g *clearance.CFace, sink *cellSink) {
 	if minLo > rf+rg+k.tol {
 		return // strict exterior: the carriers never meet (§4)
 	}
-	if k.certifiedContainment(f, g) {
+	if k.oracle().CertifiedContainment(f, g) {
 		return
 	}
 	if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
@@ -427,7 +427,7 @@ func (k *pairKernel) spineCriticals(f, g *clearance.CFace) ([]clearance.SpineCri
 // decides a trim admission — so the cell reports no criticals rather than
 // guess (ok=false).
 func (k *pairKernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, win clearance.AngWindow) ([]clearance.SpineCrit, bool) {
-	switch k.onAxis(p, c, axis) {
+	switch k.oracle().OnAxis(p, c, axis) {
 	case clearance.DegYes:
 		th := 0.0
 		if !win.Full {
@@ -459,7 +459,7 @@ func (k *pairKernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64
 // minimum undercuts, and the common perpendicular is not resolvable — so the
 // cell falls to the coarse enclosure (ok=false).
 func (k *pairKernel) lineLineCrits(f, g *clearance.CFace) ([]clearance.SpineCrit, bool) {
-	switch k.parallel(f.Axis, g.Axis) {
+	switch k.oracle().Parallel(f.Axis, g.Axis) {
 	case clearance.DegYes:
 		// The representative sits at the overlap midpoint of the two axial
 		// windows, projected onto each axis.
@@ -526,7 +526,7 @@ func (k *pairKernel) lineCircleBracketCrits(cp freeform.CircleParam, center, ref
 // brackets' own foot map is not resolvable there.
 func (k *pairKernel) circleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit, bool) {
 	rel := f.Anchor.Sub(g.Anchor)
-	switch k.coaxial(g, f) {
+	switch k.oracle().Coaxial(g, f) {
 	case clearance.DegYes:
 		// Coaxial: constant distance hypot(dz, ΔR) at matched azimuths.
 		dz := rel.Dot(g.Axis)
@@ -603,7 +603,7 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *clearance.CFace, c c
 		// shells, coaxial cylinders — the peg-in-hole reading); a
 		// near-coincidence the oracle cannot decide is a contact question
 		// this cell has no right to answer.
-		if k.ringFamily(f, g) == clearance.DegYes {
+		if k.oracle().RingFamily(f, g) == clearance.DegYes {
 			k.emitRingCombos(sink, f, g, c)
 			return
 		}
@@ -959,7 +959,7 @@ func (k *pairKernel) planeCrossesRevolved(f, g *clearance.CFace, sink *cellSink)
 	if zw.Hi < g.ZWin.Lo-k.tol || zw.Lo > g.ZWin.Hi+k.tol {
 		return
 	}
-	if k.parallel(f.N, g.Axis) == clearance.DegYes {
+	if k.oracle().Parallel(f.N, g.Axis) == clearance.DegYes {
 		// Axis EXACTLY perpendicular to the plane: the crossing is a circle at
 		// the plane's own axial station, exact against the region. A tilted
 		// axis crosses in an ELLIPSE of semi-major radius R/|s| — reading it
@@ -1125,7 +1125,7 @@ func (k *pairKernel) coneSphere(f, g *clearance.CFace, sink *cellSink) {
 	rho := perp.Len()
 	sinA, cosA := math.Sincos(cone.Half)
 	var radial r3.Vec
-	switch k.onAxis(sph.Anchor, cone.Anchor, cone.Axis) {
+	switch k.oracle().OnAxis(sph.Anchor, cone.Anchor, cone.Axis) {
 	case clearance.DegYes:
 		// A center PROVENLY on the axis makes every azimuth equivalent — the
 		// meridian reading is the same all the way around — so the sweep

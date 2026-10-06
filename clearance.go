@@ -76,6 +76,10 @@ type pairKernel struct {
 	clearanceRefused bool
 }
 
+func (k *pairKernel) oracle() clearance.Oracle {
+	return clearance.Oracle{Tol: k.tol}
+}
+
 // bodyGeomCache reuses completed carrier models within one Verify call.
 // A failed or canceled build is never cached. It is safe for concurrent use:
 // Verify proves several pairs at once. A body's model is built outside the

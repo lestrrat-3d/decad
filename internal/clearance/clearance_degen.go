@@ -7,7 +7,7 @@ import (
 )
 
 // DegState is the three-valued answer of the clearance kernel's degeneracy
-// oracle (the root package's clearance_degen.go), and the discipline that
+// oracle (oracle.go), and the discipline that
 // keeps a certificate honest (docs/clearance-design.md §4/§5).
 //
 // A closed-form cell is exact only where the configuration it assumes actually

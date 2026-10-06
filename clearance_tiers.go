@@ -70,7 +70,7 @@ func (k *pairKernel) linePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *c
 		return
 	}
 	s := f.N.Dot(u)
-	switch k.perpendicularSeg(e.A, e.B, f.N) {
+	switch k.oracle().PerpendicularSeg(e.A, e.B, f.N) {
 	case clearance.DegYes:
 		h := e.A.Sub(f.O).Dot(f.N)
 		x0, y0 := f.PlaneCoords(e.A.Sub(f.N.Scale(h)))
@@ -117,7 +117,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 	hu := e.Radius * f.N.Dot(e.RefU)
 	hv := e.Radius * f.N.Dot(e.RefV)
 	h := func(th float64) float64 { return base + hu*math.Cos(th) + hv*math.Sin(th) }
-	parallel := k.parallel(f.N, e.Axis)
+	parallel := k.oracle().Parallel(f.N, e.Axis)
 	if parallel == clearance.DegUnknown {
 		// A tilt too small to prove or disprove: the extremal azimuth the
 		// criticals below rest on is not resolvable, and the plateau is not
@@ -262,7 +262,7 @@ func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		foot := clearance.LinePoint(e.A, u, f.Anchor)
 		crits = []clearance.SpineCrit{clearance.ExactCrit(foot, f.Anchor)}
 	case 1:
-		switch k.parallelSeg(e.A, e.B, f.Axis) {
+		switch k.oracle().ParallelSeg(e.A, e.B, f.Axis) {
 		case clearance.DegYes:
 			// EXACTLY parallel to the axis: constant distance, represented at
 			// the axial-overlap midpoint.
@@ -358,11 +358,11 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 		}
 		crits = cs
 	case 1:
-		switch k.parallel(e.Axis, f.Axis) {
+		switch k.oracle().Parallel(e.Axis, f.Axis) {
 		case clearance.DegYes:
 			// The circle's plane is EXACTLY perpendicular to the axis:
 			// in-plane point-to-circle geometry, closed form.
-			switch k.onAxis(e.Center, f.Anchor, f.Axis) {
+			switch k.oracle().OnAxis(e.Center, f.Anchor, f.Axis) {
 			case clearance.DegYes:
 				// Coaxial: constant distance — the peg-in-hole cap edge.
 				th := 0.0
@@ -454,7 +454,7 @@ func (k *pairKernel) lineLineEE(ea, eb *clearance.CEdge, sink *cellSink) {
 	if !oka || !okb {
 		return
 	}
-	switch k.parallelSegs(ea.A, ea.B, eb.A, eb.B) {
+	switch k.oracle().ParallelSegs(ea.A, ea.B, eb.A, eb.B) {
 	case clearance.DegYes:
 		// EXACTLY parallel: the constant family over the overlap of eb's
 		// parameter range projected onto ea.
@@ -499,12 +499,12 @@ func (k *pairKernel) lineCircleEE(el, ec *clearance.CEdge, sink *cellSink) {
 	if !ok {
 		return
 	}
-	switch k.parallelSeg(el.A, el.B, ec.Axis) {
+	switch k.oracle().ParallelSeg(el.A, el.B, ec.Axis) {
 	case clearance.DegYes:
 		// The segment is EXACTLY parallel to the circle's axis: in-plane
 		// point-to-circle geometry, closed form.
 		var ths []float64
-		switch k.onAxis(el.A, ec.Center, ec.Axis) {
+		switch k.oracle().OnAxis(el.A, ec.Center, ec.Axis) {
 		case clearance.DegYes:
 			th := 0.0
 			if !ec.Ang.Full {
@@ -670,7 +670,7 @@ func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clea
 		rho := perp.Len()
 		sinA, cosA := math.Sincos(f.Half)
 		var radial r3.Vec
-		switch k.onAxis(v, f.Anchor, f.Axis) {
+		switch k.oracle().OnAxis(v, f.Anchor, f.Axis) {
 		case clearance.DegYes:
 			// Provenly on the axis: every azimuth carries the same distance, so
 			// the sweep window's midpoint represents the family.
