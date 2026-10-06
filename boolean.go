@@ -840,7 +840,34 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 // while that refusal happens: docs/interference-design.md §5.2 states what must
 // settle such a pair before the refusal is removed.
 func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64, memo *contactMemo) (bool, error) {
-	var closeA, closeB []int
+	nc, deferred, err := gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
+	if err != nil || deferred {
+		return false, err
+	}
+	if len(nc.closeA) == 0 {
+		return false, nil // the facets stay clear of each other: nothing hides
+	}
+	deep, err := provenDepthExceeds(ctx, bmA, nc.closeA, bmB, nc.closeB, nc.spans, slack)
+	if err != nil {
+		return false, err
+	}
+	return !deep, nil
+}
+
+// nearContacts is what gatherNearContacts collects for one face pair: the
+// facets of each side that meet or come within slack of the other side, and
+// every contact segment among those meets.
+type nearContacts struct {
+	closeA, closeB []int
+	spans          []contactSpan
+}
+
+// gatherNearContacts classifies every facet pair of two faces whose boxes come
+// within slack and collects the pairs that meet or stay within slack. deferred
+// reports a coplanar face-on-face overlap, which facesNearMiss leaves to the
+// mesh pass's own refusal.
+func gatherNearContacts(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64, memo *contactMemo) (nearContacts, bool, error) {
+	var nc nearContacts
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
 	work := 0
@@ -852,13 +879,16 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 		if c.kind == contactNone && triTriDistance(triCorners(bmA, i), triCorners(bmB, j)) > slack {
 			return nil
 		}
+		if c.kind == contactSegment {
+			nc.spans = append(nc.spans, contactSpan{i: i, j: j, p0: c.p0, p1: c.p1})
+		}
 		if !seenA[i] {
 			seenA[i] = true
-			closeA = append(closeA, i)
+			nc.closeA = append(nc.closeA, i)
 		}
 		if !seenB[j] {
 			seenB[j] = true
-			closeB = append(closeB, j)
+			nc.closeB = append(nc.closeB, j)
 		}
 		return nil
 	})
@@ -867,7 +897,7 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			work++
 			if work%256 == 0 {
 				if err := ctx.Err(); err != nil {
-					return false, err
+					return nearContacts{}, false, err
 				}
 			}
 			if !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
@@ -875,35 +905,46 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			}
 			if err := contacts.add(i, j); err != nil {
 				if err == errContactBatchStop {
-					return false, nil
+					return nearContacts{}, true, nil
 				}
-				return false, err
+				return nearContacts{}, false, err
 			}
 		}
 	}
 	if err := contacts.done(); err != nil {
 		if err == errContactBatchStop {
-			return false, nil
+			return nearContacts{}, true, nil
 		}
-		return false, err
+		return nearContacts{}, false, err
 	}
-	if len(closeA) == 0 {
-		return false, nil // the facets stay clear of each other: nothing hides
-	}
-	deep, err := provenDepthExceeds(ctx, bmA, closeA, bmB, closeB, slack)
-	if err != nil {
-		return false, err
-	}
-	return !deep, nil
+	return nc, false, nil
 }
 
-// maxDepthWitnessFacets caps how many contacting facets provenDepthExceeds
-// probes for a deep interior witness on each side of a face pair. A genuine
-// deep crossing (a rod through a plate, a plug overlapping a ring) exposes a
-// deep witness on its very first contacting facets, so the cap never blocks an
-// admission; it only bounds the work the reject-only refusal path spends
-// confirming no witness exists. Capping over-refuses at worst, which is sound.
-const maxDepthWitnessFacets = 96
+// contactSpan is one exact contact segment of a face pair the gate examines:
+// facet i of operand A and facet j of operand B meet along p0–p1, and every
+// point of that segment lies on both closed facets (triTriClassify).
+type contactSpan struct {
+	i, j   int
+	p0, p1 xpt
+}
+
+// maxDepthWitnessFacets caps how many contacting facets deepWitnessInside
+// probes at their fixed sample points on each side of a face pair, and
+// maxDepthWitnessSpans caps how many contact segments spanWitness walks from.
+// The fixed samples sit wherever the tessellation put the facet's corners, so a
+// LONG facet can cross the other operand deeply while all seven of its samples
+// lie outside it (two prism walls crossing near the middle of their length);
+// the segment walk finds that crossing's witness at the segment itself. The
+// caps only bound the work the reject-only refusal path spends confirming no
+// witness exists: capping over-refuses at worst, which is sound.
+const (
+	maxDepthWitnessFacets = 96
+	maxDepthWitnessSpans  = 96
+	// spanWalkSteps is how many halving steps spanWitness takes from a contact
+	// segment's midpoint toward one facet corner: the step lengths run from
+	// half the corner's distance down to 2^-spanWalkSteps of it.
+	spanWalkSteps = 24
+)
 
 // provenDepthExceeds is the reject-only depth discriminator behind the meet
 // admission (docs/evaluator-design.md §9, docs/tessellation-design.md §11 step
@@ -916,70 +957,148 @@ const maxDepthWitnessFacets = 96
 // held meet is real. When it cannot prove such a witness it returns false and the
 // meet is treated as undecidable and refused upstream — over-refuse, never
 // over-admit.
-func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *boolMesh, closeB []int, b float64) (bool, error) {
+//
+// It looks for a witness in two places: the fixed sample points of every
+// contacting facet (deepWitnessInside), then points on each contact segment's
+// two facets walked inward from that segment (spanWitness). Both only nominate
+// candidates; deepWitnessAt alone certifies one.
+func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *boolMesh, closeB []int, spans []contactSpan, b float64) (bool, error) {
 	deep, err := deepWitnessInside(ctx, bmA, closeA, bmB, b)
 	if err != nil || deep {
 		return deep, err
 	}
-	return deepWitnessInside(ctx, bmB, closeB, bmA, b)
+	deep, err = deepWitnessInside(ctx, bmB, closeB, bmA, b)
+	if err != nil || deep {
+		return deep, err
+	}
+	return spanWitness(ctx, bmA, bmB, spans, b)
 }
 
 // deepWitnessInside reports whether any held-facet sample point of m's
 // contacting facets is PROVEN to lie strictly inside the other operand's solid
-// deeper than b. Each candidate — a facet vertex, edge midpoint or centroid — is
-// first measured for its certified LOWER-bound distance to the other mesh's
-// boundary; only a candidate deeper than b is then tested for strict containment
-// by the exact ray-parity predicate (never a boundary point). Checking the cheap
-// float depth before the costly exact parity leaves the witness set unchanged —
-// a witness is still exactly inside ∧ deeper than b — while skipping the parity
-// scan for every shallow sample, which is every sample on a refused near-miss. A
-// facet's deepest penetration need not fall on a mesh vertex (a rod pierces a
-// plate through the interior of its wall facets), so the midpoints and centroid
-// are sampled too. Reject-only: sampling and the facet cap can only miss a
-// witness and refuse, never admit a shallow meet.
+// deeper than b. The candidates are each facet's vertices, edge midpoints and
+// centroid: a facet's deepest penetration need not fall on a mesh vertex (a rod
+// pierces a plate through the interior of its wall facets), so the midpoints and
+// centroid are sampled too. Reject-only: sampling and the facet cap can only
+// miss a witness and refuse, never admit a shallow meet.
 func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, other *boolMesh, b float64) (bool, error) {
 	all := allFacets(other)
-	work := 0
 	for n, i := range closeFacets {
 		if n >= maxDepthWitnessFacets {
 			break
 		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
 		tri := m.tris[i]
 		for _, p := range facetSamplePoints(m.xverts[tri[0]], m.xverts[tri[1]], m.xverts[tri[2]]) {
-			work++
-			if work%64 == 0 {
-				if err := ctx.Err(); err != nil {
-					return false, err
-				}
+			deep, err := deepWitnessAt(ctx, p, other, all, b)
+			if err != nil || deep {
+				return deep, err
 			}
-			// A witness needs BOTH strict interior containment AND a certified
-			// depth beyond b. The depth is a float distance-to-boundary scan; the
-			// containment is the exact big.Rat ray-parity test, which is orders of
-			// magnitude costlier. Check the cheap depth first: a sample no deeper
-			// than b is no witness however it classifies, so gating the parity on
-			// depth > b skips the exact test for every shallow sample without
-			// changing which samples become witnesses (a witness is still exactly
-			// inside ∧ !boundary ∧ depth > b).
-			if certifiedInteriorDepth(p, other) <= b {
-				continue
-			}
-			inside, onBoundary, err := meshParityPreparedContext(ctx, p, other.parity, all)
-			if err != nil {
-				if ctxErr := ctx.Err(); ctxErr != nil {
-					return false, ctxErr
-				}
-				// The only other error is an all-axes-ambiguous parity ray: this
-				// sample cannot be PROVEN inside, so it is no witness. Skip it —
-				// reject-only, never a failure of the whole boolean.
-				continue
-			}
-			if !inside || onBoundary {
-				continue
-			}
-			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// spanWitness walks each contact segment's two facets for a deep witness.
+// Where facet i of A crosses facet j of B, the points of facet i next to their
+// shared segment lie on the inner side of facet j's plane on one side of the
+// segment, and so inside B whenever the crossing is real and B's other facets
+// stay farther than b away. The walk starts at the segment's exact midpoint,
+// which lies on both facets, and steps toward each corner of facet i that lies
+// STRICTLY on the inner side of facet j's plane (its outward normal is the CCW
+// winding normal), halving the step each time. Every candidate is the exact
+// point mid + (c − mid)/2^k, which lies on facet i because the facet is convex.
+// The same walk then runs on facet j against A. Points toward a corner on the
+// outer side lie outside the other solid near the segment, so the walk skips
+// that corner rather than pay an exact parity test per step; a skipped
+// candidate can only refuse. The halving
+// stops once the step falls below b, because the midpoint lies on the other
+// operand's boundary and no point within b of it can be deeper than b.
+// Reject-only: the walk only nominates; deepWitnessAt certifies each witness.
+func spanWitness(ctx context.Context, bmA, bmB *boolMesh, spans []contactSpan, b float64) (bool, error) {
+	if len(spans) == 0 {
+		return false, nil
+	}
+	allA, allB := allFacets(bmA), allFacets(bmB)
+	one, two := big.NewInt(1), big.NewInt(2)
+	for n, s := range spans {
+		if n >= maxDepthWitnessSpans {
+			break
+		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		mid := xlerp(s.p0, s.p1, one, two)
+		deep, err := walkFacetFromSpan(ctx, mid, bmA, s.i, bmB, s.j, allB, b)
+		if err != nil || deep {
+			return deep, err
+		}
+		deep, err = walkFacetFromSpan(ctx, mid, bmB, s.j, bmA, s.i, allA, b)
+		if err != nil || deep {
+			return deep, err
+		}
+	}
+	return false, nil
+}
+
+// walkFacetFromSpan is one side of spanWitness: from mid, a point on facet fi
+// of m and on facet fj of other, it steps toward every corner of facet fi that
+// lies strictly on the inner side of facet fj's plane and asks deepWitnessAt
+// about each step.
+func walkFacetFromSpan(ctx context.Context, mid xpt, m *boolMesh, fi int, other *boolMesh, fj int, all []int, b float64) (bool, error) {
+	ot := other.tris[fj]
+	origin, normal := other.xverts[ot[0]], other.norms[fj]
+	midF := mid.vec()
+	one := big.NewInt(1)
+	for _, vi := range m.tris[fi] {
+		c := m.xverts[vi]
+		if xdotSign(normal, xsub(c, origin)) >= 0 {
+			continue
+		}
+		// The float length only decides when to stop halving. Stopping early
+		// drops candidates, which can only refuse, so its rounding is harmless.
+		reach := m.verts[vi].Sub(midF).Len()
+		den := big.NewInt(1)
+		for range spanWalkSteps {
+			den = new(big.Int).Lsh(den, 1)
+			reach /= 2
+			if reach*(1+1e-6) <= b {
+				break
+			}
+			p := xlerp(mid, c, one, den)
+			deep, err := deepWitnessAt(ctx, p, other, all, b)
+			if err != nil || deep {
+				return deep, err
+			}
+		}
+	}
+	return false, nil
+}
+
+// deepWitnessAt reports whether the exact point p is PROVEN to lie strictly
+// inside other's solid, deeper than b: its certified LOWER-bound distance to the
+// other mesh's boundary exceeds b, and the exact ray-parity predicate places it
+// strictly inside (never on a boundary). This is the one certification every
+// witness search goes through. The cheap float depth runs before the costly
+// exact parity: a point no deeper than b is no witness however it classifies,
+// so the order changes which points are tested, never which become witnesses.
+func deepWitnessAt(ctx context.Context, p xpt, other *boolMesh, all []int, b float64) (bool, error) {
+	if certifiedInteriorDepth(p, other) <= b {
+		return false, nil
+	}
+	inside, onBoundary, err := meshParityPreparedContext(ctx, p, other.parity, all)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return false, ctxErr
+		}
+		// The only other error is an all-axes-ambiguous parity ray: this point
+		// cannot be PROVEN inside, so it is no witness — reject-only, never a
+		// failure of the whole boolean.
+		return false, nil
+	}
+	return inside && !onBoundary, nil
 }
 
 // facetSamplePoints returns the exact candidate interior witnesses of one held

@@ -1089,8 +1089,9 @@ Boolean composition then stays evaluator §9's:
    facets merely touch, overlap by at most `b`, or stay apart within `b` is
    undecidable — the chord error alone could open such a shallow meet from truly
    disjoint surfaces — so return `ErrUnsupported`. The penetration depth is the
-   maximum signed penetration of the two facet sets under the exact predicates.
-   A tangency without crossing has no positive-bound certificate and stays
+   maximum signed penetration of the two facet sets under the exact predicates;
+   evaluator §9 states the witness that proves it and where the gate looks for
+   one. A tangency without crossing has no positive-bound certificate and stays
    refused. Only a zero-bound pair may pass directly to held-facet predicates as
    exact geometry.
 5. Run the exact-predicate mesh boolean.
