@@ -244,6 +244,7 @@
 1	0.01	TestSurfaceTrimRefusesASecondTrim
 1	0.01	TestSweepLineGatesLeaveDocumentUnchanged
 1	0.44	TestSweepMitredTreeBranch
+1	0.95	TestSweepMitredTrunkSealedBore
 1	0.78	TestSweepPairBandFootStaysInsideFace
 1	0.06	TestSweepPairBandImpact
 1	0.95	TestSweepPairBandReplaysBracketLeftEdge
@@ -760,6 +761,7 @@
 2	0.00	TestSweepLineBuildsVerifiesAndReevaluatesPlacement
 2	0.00	TestSweepLineStagesModify
 2	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+2	1.87	TestSweepMitredHollowTrunkBranch
 2	0.00	TestSweepMitredOneSpanFrustum
 2	0.00	TestSweepMitredRefusals
 2	0.00	TestSweepMitredSelfCrossingNamesFaces

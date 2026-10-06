@@ -949,7 +949,7 @@ twice `delta`, rounded down.
 |---|---|---|
 | **DM1** | structural `Verify` + tolerance gate | lands with M1. The construction, SM6/SM7 per span and SM8's audit prove validity, and all four readings are judged |
 | **DM2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with M1 as an exact restatement: the held triangles of Table BM at any tolerance at or above `delta` (below it, `ErrUnsupported`, `docs/tessellation-design.md` §7's rule), `sourceBound(face) = delta` for every face, `areaSlack` the per-triangle perturbation at `delta` (`perturbedTriangleAreaAllow`, the `stitchPayload` row's term), `volSymDiff = sweptVolumeAllow(delta, area upper)` with `symDiffOK == true`, and the boundary proof the build's own SM8 certificate. The implementing PR adds this payload's row to `docs/tessellation-design.md` §2's table |
-| **DM3** | mesh booleans | lands with M2: an operand on `docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate |
+| **DM3** | mesh booleans | lands with M2: an operand on `docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate. A `Cut` whose tool is a mitred sweep wholly inside the target, such as a thinner bore through a trunk's corners that stops short of both caps, publishes the bore as a separate void shell (`docs/api-design.md` §6), and a later `Union` whose operand stays clear of the bore keeps that shell whole. A holed profile's passage cannot be capped into a void by a `Union` with end plugs, because a plug flush with the tube's cap is a coplanar contact this gate refuses |
 | **DM4** | interference | lands with M2, through DM3's mesh path |
 | **DM5** | clearance | box separation at once; `WithClearances` stays `Suspect` until a planar-body adapter admits the payload |
 | **DM6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`, as D6 |
@@ -1004,6 +1004,12 @@ deleted once and watched fail before it is trusted.
 - M2: the union of two branches that cross is one lump whose `Volume` lies
   within its published bound of an independently computed
   `V1 + V2 − overlap`.
+- M2: a leaning, tapered 16-gon trunk minus a thinner mitred bore that
+  reaches neither cap is one lump of one outer and one void shell, every void
+  face from the bore; its `Volume` encloses the exact trunk minus bore; the
+  verified mesh, the STL and the 3MF each hold two components enclosing the
+  trunk's volume and minus the bore's; and a branch whose root is buried in
+  the wall unions onto it with the void shell unchanged.
 
 ### 16.11 Companion edits
 
