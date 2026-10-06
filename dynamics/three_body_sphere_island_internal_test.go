@@ -51,6 +51,7 @@ func sphereIslandTestSphere(t *testing.T, doc *decad.Document) *decad.Body {
 // the ball's spin is the sum of both torque impulses over I_yy, larger than
 // either alone, and the certificate's AngularUpper covers it.
 func TestSphereIslandCombinedSpinChargesAlignedContactTorques(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sphereIslandTestFloor(t, doc)
 	ball, upper := sphereIslandTestSphere(t, doc), sphereIslandTestSphere(t, doc)

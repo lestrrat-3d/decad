@@ -19,6 +19,7 @@ import (
 // impulse 100/1.5, and restitution 0.5 separates the pair at 50 mm/s.
 // Each case asserts the step's certified impact.
 func TestTwoDynamicPatchUsesBothBodiesMassAndInertia(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := sourceBoxForFriction(t, doc, -5, -5, 5, 5, -10)
 	b := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)

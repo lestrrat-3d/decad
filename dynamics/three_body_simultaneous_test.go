@@ -11,6 +11,7 @@ import (
 )
 
 func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)

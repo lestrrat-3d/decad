@@ -11,6 +11,7 @@ import (
 )
 
 func TestKinematicInteriorZeroRestitutionPushUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -134,6 +135,7 @@ func TestKinematicInteriorZeroRestitutionPushUsesProductionGeometry(t *testing.T
 }
 
 func TestKinematicInteriorZeroRestitutionPushSupportsReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	driver := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -173,6 +175,7 @@ func TestKinematicInteriorZeroRestitutionPushSupportsReverseWorldOrder(t *testin
 }
 
 func TestKinematicInteriorZeroRestitutionPushRespectsEventLimit(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 20, 0, 30, 10, 0, 10)

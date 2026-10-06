@@ -31,6 +31,7 @@ func pairTableTestBox(t *testing.T, doc *decad.Document, x float64) *decad.Body 
 // or an override's exact values. Coefficients are dyadic and every mean is
 // an exact square root, so the bounding interval collapses to one value.
 func TestPairTableMixesMaterialPerPair(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	var bodies [5]*decad.Body
 	for i := range bodies {
@@ -106,6 +107,7 @@ func TestPairTableMixesMaterialPerPair(t *testing.T) {
 // one, and the box's mass is read once from its density. The box falls onto
 // the floor at 100 mm/s and leaves at 25 mm/s, the override's restitution.
 func TestThreeBodyStepReadsTheTable(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := pairTableTestBox(t, doc, 0)
 	box := pairTableTestBox(t, doc, 40)

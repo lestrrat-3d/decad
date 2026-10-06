@@ -11,6 +11,7 @@ import (
 )
 
 func TestDiagonalSphereImpactWithDensityMass(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	density := units.KilogramsPerCubicMillimeter(.001)

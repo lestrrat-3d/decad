@@ -12,6 +12,7 @@ import (
 )
 
 func TestThreeBodyFrictionIslandRealPath(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	wall := makeBox(t, doc, -10, -20, 0, 20, -10, 30)

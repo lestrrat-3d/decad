@@ -147,6 +147,7 @@ func newBandScene(t *testing.T, residual float64, role dynamics.BodyRole) bandSc
 }
 
 func TestContactBandRestsWithinResidual(t *testing.T) {
+	t.Parallel()
 	dt := units.Seconds(1.0 / 256)
 	scene := newBandScene(t, 1e-3, dynamics.Dynamic)
 	contact, err := scene.doc.ContactPair(t.Context(), scene.knob, scene.octagon, r3.Identity(),
@@ -221,6 +222,7 @@ func TestContactBandRestsWithinResidual(t *testing.T) {
 }
 
 func TestFixedPairContactBandAgainstResidual(t *testing.T) {
+	t.Parallel()
 	// The octagon fixed on the knob is a Fixed/Fixed pair in its band: it may
 	// overlap by 2δ, so the residual decides it.
 	dt := units.Seconds(1.0 / 256)
@@ -263,6 +265,7 @@ func partsBinConfig() dynamics.StepConfig {
 // §9.3 (the tray is not convex) nor §9.6 (the deepest set is a face)
 // publishes, and the landing step stops with StepManifoldMissing.
 func TestDisplacedBlockRestsOnTray(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	tray := tumbleTray(t, doc)
 	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
@@ -475,6 +478,7 @@ func witnessTorqueOnB(t *testing.T, event dynamics.ContactEvent) *big.Rat {
 // TestFacetedFloorImpactRefusesUncertifiedResponse's "mass center
 // uncertainty", which then advances.
 func TestDisplacedBottleRestsOnTray(t *testing.T) {
+	t.Parallel()
 	scene := newBottleScene(t)
 	config := partsBinConfig()
 	require.Positive(t, scene.delta)

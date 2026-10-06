@@ -11,6 +11,7 @@ import (
 )
 
 func TestFixedFloorInteriorFrictionImpactUsesRealGeometry(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "box first"}[reverse], func(t *testing.T) {
 			doc := decad.New()

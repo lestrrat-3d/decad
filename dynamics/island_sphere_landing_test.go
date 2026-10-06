@@ -117,6 +117,7 @@ func sceneBall(t *testing.T, doc *decad.Document) *decad.Body {
 // the pair apart by less than ContactPair can prove; the step pushes it
 // provably apart within its allowance.
 func TestIslandSphereLandsOnSphere(t *testing.T) {
+	t.Parallel()
 	scene := newSphereColumn(t, [3]float64{})
 	impacts := 0
 	for step := range 48 {
@@ -160,6 +161,7 @@ func TestIslandSphereLandsOnSphere(t *testing.T) {
 // spheres need two ulps of travel at 16 mm before a gap can be proved: a
 // 1e-9 mm allowance admits that, a 1e-16 mm one refuses it.
 func TestPushApartProvesASubUlpGap(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := sceneBall(t, doc), sceneBall(t, doc)
 	far, farther := farBox(t, doc, 1000), farBox(t, doc, 2000)
@@ -218,6 +220,7 @@ func TestPushApartProvesASubUlpGap(t *testing.T) {
 // first 80 steps (0.3125 s) advance; the top sphere then rolls off the
 // floor's edge.
 func TestIslandSphereGlancesOffSphere(t *testing.T) {
+	t.Parallel()
 	scene := newSphereColumn(t, [3]float64{0, 4, -4})
 	spheres := map[*decad.Body]struct{}{scene.lower: {}, scene.upper: {}, scene.top: {}}
 	spun, spinning := false, 0

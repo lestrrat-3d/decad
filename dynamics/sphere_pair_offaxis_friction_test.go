@@ -44,6 +44,7 @@ func offAxisSphereFrictionFixture(t *testing.T, coefficient float64, reverse boo
 }
 
 func TestSpherePairOffAxisFrictionImpactReplaysRotatingDeparture(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		mu      float64
@@ -123,6 +124,7 @@ func TestSpherePairOffAxisFrictionImpactReplaysRotatingDeparture(t *testing.T) {
 }
 
 func TestSpherePairOffAxisFrictionRefusesNoncentralMass(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	mass.Center.Value = r3.Vec{Z: 1}
 	doc, world, a, b, state, cfg := offAxisSphereFrictionFixture(t, .5, false, mass)
@@ -148,6 +150,7 @@ func TestSpherePairOffAxisFrictionRefusesNoncentralMass(t *testing.T) {
 }
 
 func TestSpherePairOffAxisFrictionSharedVelocityKeepsPersistentTouch(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	doc, world, a, b, initial, cfg := offAxisSphereFrictionFixture(t, .5, false, mass)
 	entries := initial.Entries()
@@ -177,6 +180,7 @@ func TestSpherePairOffAxisFrictionSharedVelocityKeepsPersistentTouch(t *testing.
 }
 
 func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	poseB, err := r3.Translation(r3.Vec{X: 8.5, Y: 13})

@@ -42,6 +42,7 @@ func farBox(t *testing.T, doc *decad.Document, x float64) *decad.Body {
 // −1000 mm/s² over 0.05 s. The floor delivers 150 kg·mm/s and the lower box
 // 100 kg·mm/s to the upper one, and both stop, within MaxIterations 8.
 func TestIslandDirectStartRestsAStack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	lower := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -92,6 +93,7 @@ func TestIslandDirectStartRestsAStack(t *testing.T) {
 // 160 kg·mm/s, friction 0.25·160 = 40 kg·mm/s removes the slide exactly, and
 // the box stops 2.5 mm along X with no spin.
 func TestIslandStickStartStopsAFrictionalImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -148,6 +150,7 @@ func TestIslandStickStartStopsAFrictionalImpact(t *testing.T) {
 // 40/9 kg·mm/s of friction against Y. The step's AngularVelocityResidual is
 // 100 rad/s.
 func TestIslandRollingSphereKeepsItsSpin(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	wall := makeBox(t, doc, -10, -20, 0, 20, -10, 30)

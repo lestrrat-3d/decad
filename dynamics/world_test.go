@@ -13,6 +13,7 @@ import (
 )
 
 func TestSuppliedMassAdmission(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -143,6 +144,7 @@ func fiveBodyConfig(t *testing.T, doc *decad.Document) ([5]*decad.Body, dynamics
 }
 
 func TestFiveBodyWorldPairTable(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	b, config := fiveBodyConfig(t, doc)
 	config.Excluded = []dynamics.BodyPair{{A: b[4], B: b[2]}, {A: b[3], B: b[0]}}
@@ -236,6 +238,7 @@ func TestFiveBodyWorldPairTable(t *testing.T) {
 }
 
 func TestFiveBodyWorldExclusionAndOverrideRules(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	b, base := fiveBodyConfig(t, doc)
 	outside := makeBox(t, doc, 300, 0, 310, 10, 0, 10)
@@ -319,6 +322,7 @@ func TestFiveBodyWorldExclusionAndOverrideRules(t *testing.T) {
 // The three-body step resolves a pair through the parent table, so a pair
 // override replaces the body coefficients in the published rebound.
 func TestThreeBodyStepReadsPairOverride(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -367,6 +371,7 @@ func TestThreeBodyStepReadsPairOverride(t *testing.T) {
 // through density-derived mass into NewWorld, whose own validation re-proves
 // the published tensor positive (docs/multibody-dynamics-design.md §8.1).
 func TestNewWorldAdmitsRotatedDensityBox(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -50, -50, 50, 50, -10, 10)
 	box := makeBox(t, doc, 0, 0, 20, 10, 40, 30)
@@ -402,6 +407,7 @@ func elongatedObliqueBox(t *testing.T, doc *decad.Document) (*decad.Body, decad.
 // NewWorld. Row dominance cannot prove this tensor positive; the leading
 // principal minors over the published intervals can.
 func TestNewWorldAdmitsElongatedObliqueBox(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	turned, mass := elongatedObliqueBox(t, doc)
@@ -472,6 +478,7 @@ func TestNewWorldAdmitsElongatedObliqueBox(t *testing.T) {
 // end is not separately exercised: these fixtures' trace intervals are too
 // narrow for the two ends to reach different verdicts.
 func TestNewWorldInertiaPositivityProof(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	turned, source := elongatedObliqueBox(t, doc)
@@ -563,6 +570,7 @@ func TestNewWorldInertiaPositivityProof(t *testing.T) {
 // admission: a HeldChord must be a finite nonnegative Length, zero admitting
 // no curved held mesh.
 func TestNewWorldRejectsHeldChord(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -601,6 +609,7 @@ func TestNewWorldRejectsHeldChord(t *testing.T) {
 // admission: a SupportBand must be a nonnegative Length within
 // PenetrationResidual, since every band it publishes must pass the residual.
 func TestNewWorldRejectsSupportBand(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

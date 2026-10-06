@@ -79,6 +79,7 @@ func fixedBoxContactWorldWithMaxEvents(t *testing.T, doc *decad.Document, floor,
 
 // The geometry producers and response solver all run here; no contact or mass fixture is fabricated.
 func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -212,6 +213,7 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 }
 
 func TestTraceSampleEarlyImpactNearEnd(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -246,6 +248,7 @@ func TestTraceSampleEarlyImpactNearEnd(t *testing.T) {
 }
 
 func TestTraceSampleMillisecondEndpointImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -275,6 +278,7 @@ func TestTraceSampleMillisecondEndpointImpact(t *testing.T) {
 }
 
 func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -336,6 +340,7 @@ func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {
 }
 
 func TestTwoAxisBoxDriftStaysClear(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -369,6 +374,7 @@ func TestTwoAxisBoxDriftStaysClear(t *testing.T) {
 }
 
 func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -399,6 +405,7 @@ func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
 }
 
 func TestInitiallyTouchingTangentialSlideUsesProductionTrack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -477,6 +484,7 @@ func TestInitiallyTouchingTangentialSlideUsesProductionTrack(t *testing.T) {
 }
 
 func TestSlideEdgeTransitionRespectsEventLimit(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -516,6 +524,7 @@ func TestSlideEdgeTransitionRespectsEventLimit(t *testing.T) {
 }
 
 func TestSlideEdgeTransitionContinuesClearWithProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -638,6 +647,7 @@ func TestSlideEdgeTransitionContinuesClearWithProductionGeometry(t *testing.T) {
 }
 
 func TestSlideEdgeTransitionDoesNotRepeatForceKick(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -669,6 +679,7 @@ func TestSlideEdgeTransitionDoesNotRepeatForceKick(t *testing.T) {
 }
 
 func TestSlideEdgeTransitionCertifiesRoundedRightPose(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -726,6 +737,7 @@ func TestSlideEdgeTransitionCertifiesRoundedRightPose(t *testing.T) {
 }
 
 func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -788,6 +800,7 @@ func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
 }
 
 func TestCenteredForceBoxReboundUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -853,6 +866,7 @@ func TestCenteredForceBoxReboundUsesProductionGeometry(t *testing.T) {
 }
 
 func TestRestingBoxUsesPersistentContactTrack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -943,6 +957,7 @@ func TestRestingBoxUsesPersistentContactTrack(t *testing.T) {
 }
 
 func TestZeroRestitutionImpactContinuesAsTouching(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -974,6 +989,7 @@ func TestZeroRestitutionImpactContinuesAsTouching(t *testing.T) {
 }
 
 func TestStationaryTouchAdvancesWithoutImpulse(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -995,6 +1011,7 @@ func TestStationaryTouchAdvancesWithoutImpulse(t *testing.T) {
 }
 
 func TestStationarySeparatedBoxesAdvanceClear(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -1032,6 +1049,7 @@ func TestStationarySeparatedBoxesAdvanceClear(t *testing.T) {
 }
 
 func TestTwoDynamicBoxesExchangeMomentum(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, -5, 10, 5, 0, 10)
 	b := makeBox(t, doc, 35, -5, 45, 5, 0, 10)
@@ -1105,6 +1123,7 @@ func TestTwoDynamicBoxesExchangeMomentum(t *testing.T) {
 }
 
 func TestKinematicBoxPushUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -1210,6 +1229,7 @@ func TestKinematicBoxPushUsesProductionGeometry(t *testing.T) {
 }
 
 func TestTwoDynamicBoxesUseBothMasses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, -5, 10, 5, 0, 10)
 	b := makeBox(t, doc, 35, -5, 45, 5, 0, 10)
@@ -1258,6 +1278,7 @@ func TestTwoDynamicBoxesUseBothMasses(t *testing.T) {
 }
 
 func TestClearIdealPathRejectsRoundedOverlappingEndpoint(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, 10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, math.Nextafter(1, 2))
@@ -1316,6 +1337,7 @@ func TestClearIdealPathRejectsRoundedOverlappingEndpoint(t *testing.T) {
 }
 
 func TestOffCenterBoxImpactRefusesOmittedSpin(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -5, -5, 5-1e-6, 5, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

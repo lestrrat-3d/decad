@@ -20,6 +20,7 @@ import (
 // at time zero and rests on the track for the rest of the step. Without the
 // track the first step stops after the landing with StepPairUndecided.
 func TestScheduledStepCylinderLandsAndRests(t *testing.T) {
+	t.Parallel()
 	const kick = 9810.0 / 256
 	for _, cylinderFirst := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor then cylinder", true: "cylinder then floor"}[cylinderFirst], func(t *testing.T) {

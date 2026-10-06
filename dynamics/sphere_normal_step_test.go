@@ -11,6 +11,7 @@ import (
 )
 
 func TestSourceSpherePairDiagonalImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	pa, err := r3.Translation(r3.Vec{X: -6, Y: -8})
@@ -202,6 +203,7 @@ func TestSourceSpherePairDiagonalImpact(t *testing.T) {
 }
 
 func TestSourceSpherePairDiagonalRefusals(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)}
@@ -231,6 +233,7 @@ func TestSourceSpherePairDiagonalRefusals(t *testing.T) {
 }
 
 func TestSourceSpherePairInitialDiagonalImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	poseB, err := r3.Translation(r3.Vec{X: 6, Y: 8})

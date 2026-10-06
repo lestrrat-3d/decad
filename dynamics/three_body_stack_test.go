@@ -11,6 +11,7 @@ import (
 )
 
 func TestTwoDynamicBoxStackRestsThroughTwoGravitySteps(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	lower := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -180,6 +181,7 @@ func TestTwoDynamicBoxStackRestsThroughTwoGravitySteps(t *testing.T) {
 }
 
 func TestTwoDynamicBoxStackUsesBothMasses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	lower := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestFixedOffcenterSuppliedMassReboundsWithCertifiedSpin(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -5, -5, 5, 5, -10, 10)
 	box := makeBox(t, doc, 0, -5, 10, 5, 0, 10)

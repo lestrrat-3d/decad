@@ -11,6 +11,7 @@ import (
 )
 
 func TestThreeBodyThreeDynamicIsolatedSphereImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b, c := makeBall(t, doc), makeBall(t, doc), makeBall(t, doc)
 	originalBodies := doc.Bodies()

@@ -12,6 +12,7 @@ import (
 )
 
 func TestCylinderSidewallImpactUsesRealContactSweepMassAndTrace(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	wall := makeBox(t, doc, -10, -20, 0, 20, -10, 30)
 	cylinder := makeCylinder(t, doc)
@@ -95,6 +96,7 @@ func TestCylinderSidewallImpactUsesRealContactSweepMassAndTrace(t *testing.T) {
 }
 
 func TestCylinderSidewallImpactReversesPairNormal(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	wall := makeBox(t, doc, -10, -20, 0, 20, -10, 30)
 	cylinder := makeCylinder(t, doc)
@@ -170,6 +172,7 @@ func requireRulingEnds(t *testing.T, report *decad.ContactReport, ends [2]r3.Vec
 }
 
 func TestCylinderSidewallRefusesUnprovedCorridors(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	narrowWall := makeBox(t, doc, -10, -5, 0, 5, -10, 30)
 	shortWall := makeBox(t, doc, -10, -20, 0, 20, -10, 15)

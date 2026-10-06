@@ -11,6 +11,7 @@ import (
 )
 
 func TestFixedFloorInteriorSlidingImpactUsesRealGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)

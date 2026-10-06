@@ -33,6 +33,7 @@ func pairMaterialStepConfig() dynamics.StepConfig {
 }
 
 func TestPairMaterialOverrideReboundsUsingProductionGeometry(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "world order", true: "reverse order"}[reverse], func(t *testing.T) {
 			doc := decad.New()
@@ -79,6 +80,7 @@ func TestPairMaterialOverrideReboundsUsingProductionGeometry(t *testing.T) {
 }
 
 func TestPairMaterialOverrideDrivesFixedFloorFriction(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -117,6 +119,7 @@ func TestPairMaterialOverrideDrivesFixedFloorFriction(t *testing.T) {
 }
 
 func TestBodyFrictionMixDrivesFixedFloorStep(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                   string
 		floorMu, boxMu         float64
@@ -167,6 +170,7 @@ func TestBodyFrictionMixDrivesFixedFloorStep(t *testing.T) {
 }
 
 func TestBodyFrictionMixRejectsUnrepresentableMean(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, math.MaxFloat64, overflowFriction.Base())
 	require.Zero(t, underflowFriction.Base())
 	for _, tc := range []struct {
@@ -195,6 +199,7 @@ func TestBodyFrictionMixRejectsUnrepresentableMean(t *testing.T) {
 }
 
 func TestPairMaterialOverrideValidatesPairAndCoefficients(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

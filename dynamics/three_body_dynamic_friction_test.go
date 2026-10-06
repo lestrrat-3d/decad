@@ -12,6 +12,7 @@ import (
 )
 
 func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b, c := makeBall(t, doc), makeBall(t, doc), makeBall(t, doc)
 	poseB, err := r3.Translation(r3.Vec{X: 10})
@@ -278,6 +279,7 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 }
 
 func TestThreeDynamicRotatingClearDriftConservation(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b, c := makeBall(t, doc), makeBall(t, doc), makeBall(t, doc)
 	mass := exactSphereMass()

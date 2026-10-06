@@ -45,6 +45,7 @@ func cylinderMass() decad.MassProperties {
 }
 
 func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
 			doc := decad.New()
@@ -140,6 +141,7 @@ func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
 }
 
 func TestCylinderSweepRefusesUnprovedCorridors(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
@@ -189,6 +191,7 @@ func TestCylinderSweepRefusesUnprovedCorridors(t *testing.T) {
 }
 
 func TestCylinderSweepRefusesTiltAndSpin(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
@@ -234,6 +237,7 @@ func TestCylinderSweepRefusesTiltAndSpin(t *testing.T) {
 }
 
 func TestCylinderAxialFaceContact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
@@ -281,6 +285,7 @@ func TestCylinderAxialFaceContact(t *testing.T) {
 }
 
 func TestCylinderImpactPoseBudgetIsUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
@@ -315,6 +320,7 @@ func TestCylinderImpactPoseBudgetIsUndecided(t *testing.T) {
 }
 
 func TestCylinderAxialFloorImpact(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
 			cylinderAxialFloorImpact(t, reverse, .2, 10)
@@ -323,6 +329,7 @@ func TestCylinderAxialFloorImpact(t *testing.T) {
 }
 
 func TestCylinderAxialEndpointImpact(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
 			cylinderAxialFloorImpact(t, reverse, .125, 8)
@@ -443,6 +450,7 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool, duration, speed float6
 }
 
 func TestCylinderSlowOffCenterSpinUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)

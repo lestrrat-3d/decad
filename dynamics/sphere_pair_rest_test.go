@@ -30,6 +30,7 @@ func sphereRestConfig() dynamics.StepConfig {
 }
 
 func TestSpherePairInitialZeroRestitutionRest(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	poseB, err := r3.Translation(r3.Vec{X: 6, Y: 8})
@@ -132,6 +133,7 @@ func spherePairRestFixture(t *testing.T, velocityA, velocityB r3.Vec,
 }
 
 func TestSpherePairInitialZeroRestitutionMovingRest(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	doc, world, a, b, poseB, state, config := spherePairRestFixture(t,
 		r3.Vec{X: 7, Y: 8}, r3.Vec{X: -5, Y: -8}, mass, mass, false)
@@ -179,6 +181,7 @@ func TestSpherePairInitialZeroRestitutionMovingRest(t *testing.T) {
 }
 
 func TestSpherePairInitialZeroRestitutionTangentialDeparture(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
@@ -223,6 +226,7 @@ func TestSpherePairInitialZeroRestitutionTangentialDeparture(t *testing.T) {
 }
 
 func TestSpherePairInitialZeroRestitutionRefusesUnboundedSpin(t *testing.T) {
+	t.Parallel()
 	massA, massB := exactSphereMass(), exactSphereMass()
 	massA.Center.Value = r3.Vec{Z: 2}
 	doc, world, a, b, _, state, _ := spherePairRestFixture(t,
@@ -244,6 +248,7 @@ func TestSpherePairInitialZeroRestitutionRefusesUnboundedSpin(t *testing.T) {
 }
 
 func TestSpherePairInteriorZeroRestitutionRest(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
 			doc := decad.New()

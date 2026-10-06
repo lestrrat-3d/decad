@@ -66,6 +66,7 @@ func gravityBounceHeight(at float64) (float64, float64) {
 // its SweepPair bracket's right sample. Positions carry that delay times the
 // speed, below 256 mm/s · 1e-9 s, so their slack is 1e-6 mm.
 func TestTimelineGravityBounce(t *testing.T) {
+	t.Parallel()
 	scene := newBounceScene(t, 0, 9, 0, bounceStepConfig())
 	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
 	require.NoError(t, err)
@@ -124,6 +125,7 @@ func TestTimelineGravityBounce(t *testing.T) {
 // StepEventBudget. The timeline keeps its certified end and refuses to
 // advance further.
 func TestTimelineStopsAtEventBudget(t *testing.T) {
+	t.Parallel()
 	config := bounceStepConfig()
 	config.MaxEvents = 3
 	scene := newBounceScene(t, 12, 6, -256, config)
@@ -158,6 +160,7 @@ func TestTimelineStopsAtEventBudget(t *testing.T) {
 // goroutines at once (run it with -race). Sample writes nothing, so every
 // call returns the state a sequential call returns for the same time.
 func TestTimelineConcurrentSample(t *testing.T) {
+	t.Parallel()
 	scene := newBounceScene(t, 0, 9, 0, bounceStepConfig())
 	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
 	require.NoError(t, err)
@@ -202,6 +205,7 @@ func TestTimelineConcurrentSample(t *testing.T) {
 }
 
 func TestNewTimelineRejectsForeignState(t *testing.T) {
+	t.Parallel()
 	scene := newBounceScene(t, 0, 9, 0, bounceStepConfig())
 	other := newBounceScene(t, 0, 9, 0, bounceStepConfig())
 	_, err := dynamics.NewTimeline(scene.world, other.state)

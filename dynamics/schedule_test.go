@@ -148,6 +148,7 @@ func requireDriftPose(t *testing.T, motion sixBoxMotion, pose r3.Transform, seco
 }
 
 func TestScheduledStepSweepsOnlyNearPairs(t *testing.T) {
+	t.Parallel()
 	scene := newSixBoxScene(t, sixBoxMotions, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
 	report, err := scene.step(t.Context())
 	require.NoError(t, err)
@@ -285,6 +286,7 @@ func (s sixBoxScene) outcome(t *testing.T, report *dynamics.StepReport) sixBoxOu
 }
 
 func TestScheduledStepIgnoresInsertionOrder(t *testing.T) {
+	t.Parallel()
 	closing := sixBoxMotions
 	closing[1].velocity = r3.Vec{}
 	for _, tc := range []struct {
@@ -310,6 +312,7 @@ func TestScheduledStepIgnoresInsertionOrder(t *testing.T) {
 }
 
 func TestScheduledStepSolvesAnInteriorImpact(t *testing.T) {
+	t.Parallel()
 	// Body 0 closes the 0.5 mm gap at 8 mm/s and strikes a still body 1 at
 	// 1/16 s, inside the 0.1 s slice. The step advances both boxes to the
 	// impact, solves the pair as an island with restitution zero (both leave
@@ -388,6 +391,7 @@ func TestScheduledStepSolvesAnInteriorImpact(t *testing.T) {
 }
 
 func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
+	t.Parallel()
 	// Two still boxes that merely meet touch from the start with zero
 	// relative normal speed. The pair's island certifies four zero impulses
 	// and changes no velocity, so it publishes nothing (§6.1), and the pair
@@ -460,6 +464,7 @@ func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
 }
 
 func TestScheduledStepPoseBudget(t *testing.T) {
+	t.Parallel()
 	// Two pose evaluations cannot resolve either spinning pair. The step stops
 	// with StepPairUndecided on those pairs and leaves the document as it was.
 	config := pairMaterialStepConfig()
@@ -508,6 +513,7 @@ func (c countdownContext) Err() error {
 }
 
 func TestScheduledStepCancellation(t *testing.T) {
+	t.Parallel()
 	scene := newSixBoxScene(t, sixBoxMotions, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
 	var calls atomic.Int64
 	report, err := scene.step(countdownContext{Context: t.Context(), calls: &calls, limit: math.MaxInt64})
@@ -609,6 +615,7 @@ func withoutIterations(report *dynamics.StepReport) *dynamics.StepReport {
 // again. Without the cache the second step makes every call again and solves
 // the island cold, and publishes the same bits.
 func TestScheduledStepReusesCertificates(t *testing.T) {
+	t.Parallel()
 	scene := newCachePyramid(t, islandStepConfig())
 	first, err := scene.stepFrom(t.Context(), scene.state)
 	require.NoError(t, err)
@@ -708,6 +715,7 @@ func TestScheduledStepReusesCertificates(t *testing.T) {
 // sweeps rather than sweeping on from it, and every published value matches
 // the cache-free step.
 func TestScheduledStepRepublishesUnsettledIsland(t *testing.T) {
+	t.Parallel()
 	config := islandStepConfig()
 	config.MaxIterations = 64
 	scene := newCachePyramid(t, config)
@@ -733,6 +741,7 @@ func TestScheduledStepRepublishesUnsettledIsland(t *testing.T) {
 // unchanged; a budget of exactly that many calls advances, and the second
 // step, which reuses the first step's certificates, fits in it as well.
 func TestScheduledStepPairBudget(t *testing.T) {
+	t.Parallel()
 	reference := newCachePyramid(t, islandStepConfig())
 	first, err := reference.stepFrom(t.Context(), reference.state)
 	require.NoError(t, err)

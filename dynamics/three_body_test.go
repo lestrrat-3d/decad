@@ -12,6 +12,7 @@ import (
 )
 
 func TestThreeBodyImpactWithThirdClear(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -82,6 +83,7 @@ func TestThreeBodyImpactWithThirdClear(t *testing.T) {
 }
 
 func TestThreeBodyOrdersContactsAndEnforcesEventLimit(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

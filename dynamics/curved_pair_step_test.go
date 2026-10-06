@@ -11,6 +11,7 @@ import (
 )
 
 func TestSourceSpherePairStationaryTouchStep(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed, moving := makeBall(t, doc), makeBall(t, doc)
 	pose, err := r3.Translation(r3.Vec{X: 10})
@@ -52,6 +53,7 @@ func TestSourceSpherePairStationaryTouchStep(t *testing.T) {
 }
 
 func TestSourceSpherePairGrazingStep(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed, moving := makeBall(t, doc), makeBall(t, doc)
 	startPose, err := r3.Translation(r3.Vec{X: 20, Y: 10})
@@ -174,6 +176,7 @@ func TestSourceSpherePairGrazingStep(t *testing.T) {
 }
 
 func TestSourceSpherePairTransverseEndpointImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	pa, err := r3.Translation(r3.Vec{X: -10})
