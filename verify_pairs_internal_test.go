@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -87,6 +88,30 @@ func TestRunVerifyPairsReturnsLowestFailingError(t *testing.T) {
 		return verifyPairOutcome{}, nil
 	})
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// TestRunVerifyPairsRunsContactBatchesOnTheirWorker requires every pair a
+// parallel pool proves to see one contact worker, so the boolean inside the
+// pair adds no goroutines beside the pool's own. The one-worker walk must
+// leave the caller's contact worker count as it was.
+func TestRunVerifyPairsRunsContactBatchesOnTheirWorker(t *testing.T) {
+	t.Parallel()
+	const n, caller = 12, 7
+	for _, tc := range []struct {
+		workers, want int
+	}{{workers: 1, want: caller}, {workers: 4, want: 1}} {
+		jobs, index := pairJobsByIndex(n)
+		seen := make([]int, n)
+		prove := func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
+			seen[index[job.a]] = meshbool.ContactWorkers(ctx)
+			return verifyPairOutcome{}, nil
+		}
+		_, err := runVerifyPairs(meshbool.WithContactWorkers(t.Context(), caller), jobs, tc.workers, prove)
+		require.NoError(t, err)
+		for i, got := range seen {
+			require.Equal(t, tc.want, got, `%d pool workers, job %d`, tc.workers, i)
+		}
+	}
 }
 
 // internalFrustumBody revolves the outline (0,0) (0,ra) (L,rb) (L,0) about

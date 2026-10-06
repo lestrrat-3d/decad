@@ -513,6 +513,7 @@
 0	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 0	0.60	TestRunVerifyPairsKeepsJobOrder
 0	0.10	TestRunVerifyPairsReturnsLowestFailingError
+0	0.10	TestRunVerifyPairsRunsContactBatchesOnTheirWorker
 0	0.00	TestRvLenUpperEnclosesTheExactNorm
 0	0.00	TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths
 0	0.00	TestSagittaCostTermsMatchTheOperationsTheyName

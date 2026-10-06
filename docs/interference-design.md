@@ -91,7 +91,16 @@ boolean's contact batches (`GOMAXPROCS`, at most 12). A pair's proof reads only
 its two operands, per-body caches that every caller fills with the same value,
 and the chord §5.3 fixes for each body before the pool starts, so its outcome
 does not depend on which pairs run before it or beside it. Each task writes its
-outcome to its own slot, and `Verify` appends the slots in pair order. When a
+outcome to its own slot, and `Verify` appends the slots in pair order. A pool
+of more than one worker runs the contact batches of every boolean inside its
+pairs on that pair's worker alone, so the pair proofs never run more
+goroutines than the pool has workers. Letting each pair's batches start their
+own workers beside the pool's put two layers of goroutines on the same cores:
+on a 24-core machine the 20-segment revolved star took 40 s that way and 19 s
+this way. No measured document got slower, down to a three-body star whose
+three pairs leave most cores idle. One worker proving the pairs alone leaves the
+batches their own workers. The worker count never changes a batch's result,
+because each batch merges its slots in input order. When a
 pair fails, no pair after it starts, every pair before it still runs, and
 `Verify` returns the failure at the lowest pair index: the error a walk of the
 pairs one at a time would stop on.
@@ -702,6 +711,9 @@ Every increment asserts geometry and report state, not only successful return.
   document pair order, independent of proof path.
 - Call `Verify` repeatedly; assert byte-stable report ordering and identical
   measurements.
+- Verify one document with one pool worker and with several; assert the two
+  reports equal field for field. Assert every pair a parallel pool proves sees
+  one contact worker, and the one-worker walk sees the caller's count.
 
 ### 10.2 Relation
 
@@ -791,6 +803,8 @@ Each row is a PR-sized stage. An unanswered verification question reads
 - Mesh each body once per `Verify` call, at the least tolerance any of its
   candidate pairs derives (§5.3). Restatements keep the public booleans' rule.
   Public booleans keep the pair's tolerance for both operands.
+- Run the contact batches inside a parallel pair pool on the pair's own worker
+  (§2): one layer of parallel workers, never two.
 - Require strict positive lower overlap volume except under a certified
   containment or equality set identity.
 - Treat empty, contact, unsupported, and coarse results as undecided; propagate

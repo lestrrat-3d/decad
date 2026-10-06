@@ -88,7 +88,9 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 // its own slot; once a job fails, no job after it starts, and every job
 // before it still runs, so the error returned is the one at the lowest
 // failing index — the error the one-at-a-time walk would have stopped on.
-// The context is polled before each job.
+// Each parallel worker proves its pairs with one contact worker
+// (meshbool.WithContactWorkers); the one-worker walk leaves the context's
+// contact workers as they are. The context is polled before each job.
 func runVerifyPairs(ctx context.Context, jobs []verifyPairJob, workers int, prove func(context.Context, verifyPairJob) (verifyPairOutcome, error)) ([]verifyPairOutcome, error) {
 	out := make([]verifyPairOutcome, len(jobs))
 	if workers > len(jobs) {
@@ -107,6 +109,12 @@ func runVerifyPairs(ctx context.Context, jobs []verifyPairJob, workers int, prov
 		}
 		return out, nil
 	}
+
+	// The pool already keeps the cores busy one pair per worker, so the
+	// contact batches inside each pair run on their worker alone instead of
+	// starting their own goroutines beside it (docs/interference-design.md
+	// §2). The worker count never changes a contact batch's result.
+	ctx = meshbool.WithContactWorkers(ctx, 1)
 
 	errs := make([]error, len(jobs))
 	var next atomic.Int64
