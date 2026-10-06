@@ -273,15 +273,27 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.Equal(t, fp.areaSlack, mesh.areaSlack)
 	require.True(t, mesh.symDiffOK)
 
-	// The payload holds one global composed Delta and no tighter per-face
-	// certificate, so every restated face publishes that Delta — never a zero
-	// for a restated planar polygon.
-	require.NotEmpty(t, mesh.faceBound)
-	for _, f := range mesh.source {
+	// The restatement publishes the payload's own per-vertex record, and each
+	// face states the largest facet bound over its own facets
+	// (docs/faceted-vertex-bounds-design.md §4.4): the drilled faces carry the
+	// rim's bound and the untouched ones keep their own.
+	require.Equal(t, fp.vertexBound, mesh.vertexBound)
+	want := map[*Face]float64{}
+	for i, tri := range mesh.triangles {
+		f := mesh.source[i]
+		want[f] = max(want[f], fp.vertexBound[tri[0]], fp.vertexBound[tri[1]], fp.vertexBound[tri[2]])
+	}
+	require.Len(t, mesh.faceBound, len(want))
+	finer := 0
+	for f, w := range want {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		require.Equal(t, fp.meshBound, d)
+		require.Equal(t, w, d)
+		if d < fp.meshBound {
+			finer++
+		}
 	}
+	require.Positive(t, finer, `a face the cut never touched states less than the body-wide bound`)
 }
 
 // internalFreeformArchBody is apitest/extrude_freeform_test.go's fit-spline arch built

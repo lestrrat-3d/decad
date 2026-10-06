@@ -133,12 +133,16 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	// INPUT coordinate and of the translation — inside the products and sums —
 	// never at the magnitude of the result: a body built far from the origin
 	// and moved back rounds at the far magnitude. Charge it there (internal/proofbound/bounds.go).
-	maxIn := 0.0
+	// Each vertex's own rounding reads that vertex's inputs alone, so each is
+	// charged at its own magnitude (docs/faceted-vertex-bounds-design.md §4.3).
+	tr := delta.Translation()
+	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
+	vertexAllow := make([]float64, len(fp.verts))
 	for i, v := range fp.verts {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		maxIn = math.Max(maxIn, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
+		vertexAllow[i] = proofbound.RigidRoundAllow(math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))), maxTrans)
 		next.verts[i] = delta.Apply(v)
 	}
 	if err := budget.Err(); err != nil {
@@ -153,17 +157,22 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			next.tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	tr := delta.Translation()
-	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
-	allow := proofbound.RigidRoundAllow(maxIn, maxTrans)
 	moved, err := keepPlacedEmbedded(ctx, fp.verts, next.verts, next.tris, delta)
 	if err != nil {
 		return nil, err
 	}
-	allow = math.Max(allow, moved)
+	// A vertex the embedding check moved is charged the larger of its own
+	// rounding allowance and its distance from its exact image; allow, the
+	// largest of them, is what the volume's swept allowance charges.
+	allow := 0.0
 	next.vertexBound = make([]float64, len(fp.vertexBound))
 	for i, beta := range fp.vertexBound {
-		next.vertexBound[i] = proofbound.AbsSumUpper(beta, allow)
+		a := vertexAllow[i]
+		if moved != nil {
+			a = math.Max(a, moved[i])
+		}
+		allow = math.Max(allow, a)
+		next.vertexBound[i] = proofbound.AbsSumUpper(beta, a)
 	}
 	next.meshBound = facetBoundMax(next.tris, next.vertexBound)
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, next.verts, next.tris, allow)
@@ -180,11 +189,12 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 // motion's float evaluation of its exact image. Every vertex that differs
 // from its exact image is checked and, where its facets fold, may move to a
 // corner of that image's float box (meshbool.EnforceHeldEmbedding); a fold no
-// corner clears is refused. It returns the proven 3D displacement of the
-// vertices the check moved — zero when it moved none — which the caller
-// charges alongside the motion's own rounding allowance, since a corner can
+// corner clears is refused. It returns, per vertex, the proven 3D
+// displacement of each vertex the check moved from its exact image — zero for
+// a vertex it left alone, and nil when it moved none — which the caller
+// charges alongside that vertex's own rounding allowance, since a corner can
 // sit farther from the exact image than the float evaluation did.
-func keepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, delta r3.Transform) (float64, error) {
+func keepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, delta r3.Transform) ([]float64, error) {
 	b, t := delta.Basis(), delta.Translation()
 	h := meshbool.HeldRounding{
 		Verts:   held,
@@ -198,7 +208,7 @@ func keepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, 
 	for i, p := range src {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return 0, err
+				return nil, err
 			}
 		}
 		x := meshbool.ExactRigidImage(b, t, p)
@@ -210,22 +220,22 @@ func keepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, 
 	}
 	n, err := meshbool.EnforceHeldEmbedding(ctx, h)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if n == 0 {
-		return 0, nil
+		return nil, nil
 	}
-	worst := new(big.Rat)
+	out := make([]float64, len(held))
 	for i := range held {
 		if held[i] == first[i] {
 			continue
 		}
-		if d := meshbool.CoordDistance(h.Exact[i], held[i]); d.Cmp(worst) > 0 {
-			worst = d
+		if d := meshbool.CoordDistance(h.Exact[i], held[i]); d.Sign() > 0 {
+			w, _ := d.Float64()
+			out[i] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 		}
 	}
-	w, _ := worst.Float64()
-	return proofbound.Radius3D(proofbound.ProvenUpRound(w)), nil
+	return out, nil
 }
 
 // meshAreaUpper is a proven upper bound on the held mesh's total facet area:
@@ -256,10 +266,67 @@ func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64,
 	return perimeter, nil
 }
 
-// facetedAreaBound composes nonnegative area allowances without losing a
-// positive product to underflow or rounding a sum below its exact value.
-func facetedAreaBound(meshBound, perimeterUpper, areaSlack, roundSlop float64) float64 {
-	return proofbound.AbsSumUpper(proofbound.ProductUpper(meshBound, perimeterUpper), areaSlack, roundSlop)
+// facetedAreaGeom is a face's geometric area allowance: the smaller of two
+// proven upper bounds on how far its held facets' area can differ from its
+// true piece's, the face's own displacement delta times its upper perimeter
+// (the product rounded outward, so a positive product never underflows to
+// zero) and facetAllow, the sum of each facet's perturbation at its own δ(t).
+func facetedAreaGeom(delta, perimeterUpper, facetAllow float64) float64 {
+	return math.Min(proofbound.ProductUpper(delta, perimeterUpper), facetAllow)
+}
+
+// facetedExtremeError is docs/faceted-vertex-bounds-design.md §4.2's box
+// reading: the largest per-coordinate error of the six held extremes lo, hi.
+// B is each vertex's largest facet bound δ(t) over the facets touching it and
+// beta its own β. Every true boundary point lies within δ(t) of some held
+// facet, so the true maximum on an axis is at most max_v (v + B(v)); and the
+// held vertex v has a true point within beta(v), so the true maximum is at
+// least max_v (v − beta(v)). The error of the held maximum m is the larger of
+// the two gaps, and the minimum is the mirror image. Each gap is formed in
+// exact arithmetic and rounded up; only a vertex whose own bound reaches past
+// the extreme can widen it beyond the extreme vertex's own figure.
+func facetedExtremeError(budget *proofbound.WorkBudget, verts []r3.Vec, beta, B []float64, lo, hi r3.Vec) (float64, error) {
+	worst := new(big.Rat)
+	widen := func(gap *big.Rat) {
+		if gap.Cmp(worst) > 0 {
+			worst = gap
+		}
+	}
+	for axis := range 3 {
+		m := [2]*big.Rat{new(big.Rat).SetFloat64(meshbool.CoordOf(lo, axis)), new(big.Rat).SetFloat64(meshbool.CoordOf(hi, axis))}
+		// reach[side] is the extreme a true point can reach past the held
+		// one; held[side] the extreme some true point is proven to attain.
+		var reach, held [2]*big.Rat
+		for i, v := range verts {
+			if err := budget.Step(); err != nil {
+				return 0, err
+			}
+			c := new(big.Rat).SetFloat64(meshbool.CoordOf(v, axis))
+			b := new(big.Rat).SetFloat64(B[i])
+			own := new(big.Rat).SetFloat64(beta[i])
+			if out := new(big.Rat).Sub(c, b); reach[0] == nil || out.Cmp(reach[0]) < 0 {
+				reach[0] = out
+			}
+			if out := new(big.Rat).Add(c, b); reach[1] == nil || out.Cmp(reach[1]) > 0 {
+				reach[1] = out
+			}
+			if in := new(big.Rat).Add(c, own); held[0] == nil || in.Cmp(held[0]) < 0 {
+				held[0] = in
+			}
+			if in := new(big.Rat).Sub(c, own); held[1] == nil || in.Cmp(held[1]) > 0 {
+				held[1] = in
+			}
+		}
+		widen(new(big.Rat).Sub(m[0], reach[0]))
+		widen(new(big.Rat).Sub(held[0], m[0]))
+		widen(new(big.Rat).Sub(reach[1], m[1]))
+		widen(new(big.Rat).Sub(m[1], held[1]))
+	}
+	if worst.Sign() == 0 {
+		return 0, nil
+	}
+	w, _ := worst.Float64()
+	return proofbound.ProvenUpRound(w), nil
 }
 
 // facetedMeshAudit is the shared, geometry-only component and shell proof.
@@ -466,7 +533,15 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	members, compVol, contains := audit.members, audit.compVol, audit.contains
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
-	boundMM := units.Millimeters(pp.meshBound)
+	if len(pp.vertexBound) != len(verts) {
+		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
+	}
+	// facetDelta is each held facet's δ(t), the largest of its corners' β
+	// (docs/faceted-vertex-bounds-design.md §2).
+	facetDelta := make([]float64, len(tris))
+	for i, t := range tris {
+		facetDelta[i] = max(pp.vertexBound[t[0]], pp.vertexBound[t[1]], pp.vertexBound[t[2]])
+	}
 
 	for _, s := range pp.src {
 		if err := budget.Step(); err != nil {
@@ -542,7 +617,6 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				surface:    Faceted{Bound: boundMM},
 				origins:    append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
 				body:       body,
 				heldPlanar: pp.groups[pp.src[i]].planar,
@@ -555,16 +629,36 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		f.area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 		facetFace[i] = f
 	}
+	// A face's bound is the largest δ(t) over its own facets, and its
+	// per-facet area allowance sums each facet's perturbation at its own δ(t)
+	// (§4.2).
+	faceDelta := map[*Face]float64{}
+	faceFacetArea := map[*Face]float64{}
+	for i, f := range facetFace {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		faceDelta[f] = max(faceDelta[f], facetDelta[i])
+		t := tris[i]
+		faceFacetArea[f] = proofbound.AbsSumUpper(faceFacetArea[f],
+			proofbound.PerturbedTriangleAreaAllow(verts[t[0]], verts[t[1]], verts[t[2]], facetDelta[i]))
+	}
+	for f, delta := range faceDelta {
+		f.surface = Faceted{Bound: units.Millimeters(delta)}
+	}
 
-	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar, pp.meshBound); err != nil {
+	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar, pp.vertexBound); err != nil {
 		return nil, err
 	}
 
-	// Per-face area bounds: the §4 shape — the rim's proven displacement times
-	// the face's own bounding edges — plus the operands' chord-length slack and
-	// the PROVEN slop of the float sum that produced the area. The perimeter it
-	// multiplies is the UPPER one: an edge's held chord length is itself only
-	// known within its own bound (internal/proofbound/bounds.go, proofbound.ChainLengthBound).
+	// Per-face area bounds: the smaller of two proven geometric terms — the
+	// §4 shape, the face's own displacement times its own bounding edges, and
+	// docs/faceted-vertex-bounds-design.md §4.2's sum of each facet's
+	// perturbation at its own δ(t) — plus the operands' chord-length slack and
+	// the PROVEN slop of the float sum that produced the area. The perimeter
+	// the first multiplies is the UPPER one: an edge's held chord length is
+	// itself only known within its own bound (internal/proofbound/bounds.go,
+	// proofbound.ChainLengthBound).
 	facetsOf := map[*Face]int{}
 	for _, f := range facetFace {
 		if err := budget.Step(); err != nil {
@@ -572,12 +666,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		}
 		facetsOf[f]++
 	}
-	// facePerimTotal is the sum of the faces' OWN perimeters, which counts every
-	// edge TWICE — once per face it bounds. That is the right multiplier for the
-	// whole body's area: a rim that moves perturbs BOTH faces it separates, and
-	// charging it once would understate the body's area error by up to a factor
-	// of two.
-	facePerimTotal := 0.0
+	// bodyGeom sums every face's own geometric term: a rim that moves perturbs
+	// BOTH faces it separates, and each face charges it.
+	bodyGeom := 0.0
 	for _, faces := range compFaces {
 		for _, f := range faces {
 			if err := budget.Step(); err != nil {
@@ -587,8 +678,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			if err != nil {
 				return nil, err
 			}
-			facePerimTotal = proofbound.AbsSumUpper(facePerimTotal, loopLen)
-			f.areaBound = facetedAreaBound(pp.meshBound, loopLen, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area))
+			geom := facetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
+			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
+			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area))
 		}
 	}
 
@@ -680,7 +772,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// (internal/proofbound/bounds.go, proofbound.SumSlop). It is ulp-scale in the total, so a genuinely
 	// tiny-bound planar boolean stays tiny — and never zero, which would claim
 	// an exactness a float sum of square roots does not have.
-	areaBound := facetedAreaBound(pp.meshBound, facePerimTotal, pp.areaSlack, proofbound.SumSlop(len(tris), areaF))
+	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.areaSlack, proofbound.SumSlop(len(tris), areaF))
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: exactnessOf(areaBound),
@@ -717,11 +809,22 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
 	}
 	// Min and Max are POSITIONS, and Bound is the error bound on them: a 3D
-	// radius, not a per-axis extent (core §5.2). The held extreme can be one
-	// displacement inside the truth on every axis at once, so the corner is up
-	// to √3 of it away — and the per-coordinate reading is exactly tight, so
-	// there is no headroom to absorb the factor (internal/proofbound/bounds.go, proofbound.Radius3D).
-	boxBound := proofbound.Radius3D(pp.meshBound)
+	// radius, not a per-axis extent (core §5.2). Each of the six extremes is
+	// off by at most facetedExtremeError's per-coordinate figure, which reads
+	// each vertex's own facet bound; the corner can be off on every axis at
+	// once, so the radius is √3 of the largest (internal/proofbound/bounds.go,
+	// proofbound.Radius3D).
+	vertexFacetDelta := make([]float64, len(verts))
+	for i, t := range tris {
+		for _, v := range t {
+			vertexFacetDelta[v] = max(vertexFacetDelta[v], facetDelta[i])
+		}
+	}
+	extremeErr, err := facetedExtremeError(budget, verts, pp.vertexBound, vertexFacetDelta, lo, hi)
+	if err != nil {
+		return nil, err
+	}
+	boxBound := proofbound.Radius3D(extremeErr)
 	body.bounds = Box{
 		Min: lo, Max: hi,
 		Exactness: exactnessOf(boxBound),
@@ -849,20 +952,25 @@ func facetedCentroidAllowance(sym, diameter, volumeFloor float64) float64 {
 
 // buildFacetedTopology chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
-// changes) and builds each face's loops by walking the facet fans.
+// changes) and builds each face's loops by walking the facet fans. Each
+// Vertex reports its own held bound vertexBound[v], and each Edge the largest
+// of its chain's vertices' bounds (docs/faceted-vertex-bounds-design.md
+// §4.2).
 func buildFacetedTopology(
 	ctx context.Context,
 	verts []r3.Vec,
 	tris [][3]int,
 	facetFace []*Face,
 	facePlanar map[*Face]bool,
-	bound float64,
+	vertexBound []float64,
 ) error {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return err
 	}
-	boundMM := units.Millimeters(bound)
+	if len(vertexBound) != len(verts) {
+		return fmt.Errorf(`%w: a faceted body carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(vertexBound), len(verts))
+	}
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
 	// belongs to a different face.
@@ -954,7 +1062,7 @@ func buildFacetedTopology(
 		if v, ok := vertexObj[vi]; ok {
 			return v
 		}
-		v := &Vertex{position: verts[vi], bound: boundMM}
+		v := &Vertex{position: verts[vi], bound: units.Millimeters(vertexBound[vi])}
 		vertexObj[vi] = v
 		return v
 	}
@@ -974,6 +1082,7 @@ func buildFacetedTopology(
 		info := hinges[ukey([2]int{path[0], path[1]})]
 		length := 0.0
 		nSegs := 0
+		bound := vertexBound[path[0]]
 		for k := 0; k+1 < len(path); k++ {
 			if err := budget.Step(); err != nil {
 				return err
@@ -982,6 +1091,7 @@ func buildFacetedTopology(
 			chainOf[key] = len(chains)
 			posInChain[key] = k
 			length += verts[path[k+1]].Sub(verts[path[k]]).Len()
+			bound = max(bound, vertexBound[path[k+1]])
 			nSegs++
 		}
 		// The chain holds nSegs chords, and BOTH endpoints of each move: the
@@ -991,7 +1101,7 @@ func buildFacetedTopology(
 		// Approximate rather than an Exact it cannot back.
 		lengthBound := proofbound.ChainLengthBound(nSegs, bound, length)
 		e := &Edge{
-			curve:       FacetedCurve{Bound: boundMM},
+			curve:       FacetedCurve{Bound: units.Millimeters(bound)},
 			start:       vertexOf(path[0]),
 			end:         vertexOf(path[len(path)-1]),
 			faces:       []*Face{info.fa, info.fb},

@@ -258,18 +258,19 @@ current tessellation, including trim chording and every proven coordinate-
 construction and final-placement rounding allowance. A planar carrier does not
 make a trimmed patch exact: zero requires proof that the held polygon equals the
 true trimmed patch and that its stored coordinates add no displacement.
-A faceted restatement copies each face's inherited boundary-certificate
-displacement; when the payload carries only one global composed displacement
-`Delta`, every faceted face uses `Delta`. It is zero only when the inherited
-certificate proves that face exact. A proof is rounded up at every sum/product
-that could understate it. A non-finite proof is a refusal, never an infinite
-bound.
+A faceted restatement publishes the payload's own per-vertex record, and
+each face's bound is the largest facet bound over that face's own facets, a
+facet's bound being the largest of its corners' vertex bounds
+(`docs/faceted-vertex-bounds-design.md` §2, §4.4). It is zero only when every
+corner of every facet of that face is held exactly. A proof is rounded up at
+every sum/product that could understate it. A non-finite proof is a refusal,
+never an infinite bound.
 
-A `facetedPayload` boundary certificate MUST retain global composed `Delta`.
-It MAY retain a tighter displacement per live faceted face. Every per-face value
-MUST be no greater than `Delta` and cover every true patch mapped to that face.
-Missing or incomplete per-face composition falls back to `Delta`; it NEVER
-falls back to zero.
+A `facetedPayload` boundary certificate MUST retain the global `meshBound`,
+the largest facet bound over the held mesh, beside its per-vertex record. Every
+per-face value is at most `meshBound` and covers every true patch mapped to
+that face. A payload whose per-vertex record is missing or does not match its
+mesh is an invariant failure; it NEVER falls back to zero.
 
 `areaSlack` is computed from non-cancelling local bounds. For each certified
 true-to-held patch correspondence, integrate the absolute local area-Jacobian
@@ -294,7 +295,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta`, the offset displacement on every face the offset region bounds (its walls, its own cap, every rim), and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no offset displacement | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance + the offset region's displacement area on its cap and on the rims, and its displacement length over its height | outer-prism + cavity-prism allowances + offset displacement area × the offset region's height + coordinate swept allowance (§6) |
 | `loftPayload` | held wall triangles plus both cap ranges for a solid; only `tris[:walls]` for a sheet | the payload's facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2), zero only when both terms are zero | that facet departure | the payload's nonnegative per-triangle perturbation and wall area-gap terms; its cap allowances also remain on a sheet as conservative excess | solid: `sweptVolumeAllow` plus four-leg `chordedBoundaryVolumeAllow`, `symDiffOK == true`; sheet: no occupied-volume proof, `symDiffOK == false` |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
-| `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
+| `facetedPayload` | held polygons + inherited boundary certificate | the largest facet bound over that face's own facets, each the largest of its corners' per-vertex bounds, which the restatement publishes as the mesh's own record | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | that document's §7 slice-wise proof — the chord-polygon segment integral over the trimmed and band ranges plus `sweptVolumeAllow` over the per-vertex motion — with `symDiffOK == true` for a band whose every corner is a line-line miter or an exactly G1 join, or a whole turn; `symDiffOK == false` for every other band |
 | `stitchPayload` | the triangle set `Stitch`'s own build assembled and audited (`docs/surface-design.md` §6.4), all-planar only (`stitchAllTetrahedronEligible`), CLOSED or OPEN; attributed by the payload's own recorded per-triangle live face, never by role (§4) | the largest `Vertex.Bound()` over the vertices that face's own triangles touch; zero only when every one of them is | max per-face source bound | `perturbedTriangleAreaAllow` per triangle at that triangle's own largest vertex bound, summed through `absSumUpper`; zero wherever every vertex bound is zero | zero, `symDiffOK == true`, for a CLOSED body (`b.Kind() == BodySolid`) whose every vertex carries a proven bound of exactly zero (`stitchZeroVertexBound`, the same gate `docs/clearance-design.md` §2's stitch arm applies): every held vertex is then the true boundary vertex, every triangulated polygon is that face's own exact `Line3` boundary, and ear clipping tiles it exactly, so the held triangle set occupies exactly the denoted volume; `symDiffOK == false` for every other case (open, curved/mixed, placed, or certificate-welded) — the tetrahedron sum there proves only SIGNED volume, never the occupied-volume symmetric-difference bound this row requires before a boolean may consume it |
 | `sweepPayload` | a one-span straight solid sweep is the `prismPayload` row unchanged, over the payload's own `prism` and with each wall read under its span-prefixed role `side(0,i,j)` (`docs/sweep-design.md` Table D row D2); the arc reduction, every composite path and every surface result are `ErrUnsupported` | the `prismPayload` row's | the `prismPayload` row's | the `prismPayload` row's | the `prismPayload` row's |
@@ -1141,9 +1142,9 @@ step 7's bound, and a vertex the cutter or the conforming pass places on an
 operand facet takes that facet's bound. Add each vertex's own weld (step 8);
 zero is allowed only when its coordinates are exact. The payload records the
 result per vertex, and its global `meshBound` is the largest facet bound, the
-largest of each facet's corners. Thus every faceted operand `sourceBound`,
-including a global-`Delta` fallback, and every final weld displacement flow
-into the next result's bounds. This makes the next boolean's hidden-tangency
+largest of each facet's corners. Thus every faceted operand's per-vertex
+bound or `sourceBound`, and every final weld displacement, flows into the next
+result's bounds. This makes the next boolean's hidden-tangency
 pre-pass sound without reconstructing analytic identity.
 
 ## 12. Refusals

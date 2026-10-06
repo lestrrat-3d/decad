@@ -690,8 +690,8 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 ### R0 — proof record
 
 1. **Files:** `tessellate.go`. **What:** add `faceBound`, `volSymDiff`, `symDiffOK` to `Mesh`; make
-   `tessellateFaceted` fill them from `facetedPayload` (`faceBound[f] = fp.meshBound` per face, or a tighter
-   per-face certificate where the payload holds one). **Tests:** `tessellate_internal_test.go` asserts the
+   `tessellateFaceted` fill them from `facetedPayload` (`faceBound[f]` the largest facet bound over that face's
+   facets, from the payload's per-vertex record). **Tests:** `tessellate_internal_test.go` asserts the
    three fields on a faceted restatement.
 2. **Files:** `tessellate.go`. **What:** split `walkAreaSlack` into `walkWallSlack` and `walkSegmentArea`
    (the exact `Σ a_c`), keep the composed helper. **Depends on:** none. **Tests:** existing `areaSlack`
