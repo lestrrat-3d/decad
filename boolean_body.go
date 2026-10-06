@@ -96,8 +96,9 @@ func facetedTranslationOnly(t r3.Transform) bool {
 
 // placed re-evaluates the held mesh under the composed motion: the vertices
 // move through the delta motion (float rounding is folded into the proven
-// bounds — the geometry is never silently trusted), a reflection flips the
-// windings, and the topology and measurements rebuild from the moved mesh.
+// bounds — the geometry is never silently trusted), the moved mesh is kept
+// embedded (keepPlacedEmbedded), a reflection flips the windings, and the
+// topology and measurements rebuild from the moved mesh.
 func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
@@ -149,6 +150,11 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	tr := delta.Translation()
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	allow := proofbound.RigidRoundAllow(maxIn, maxTrans)
+	moved, err := keepPlacedEmbedded(ctx, fp.verts, next.verts, next.tris, delta)
+	if err != nil {
+		return nil, err
+	}
+	allow = math.Max(allow, moved)
 	next.meshBound = proofbound.AbsSumUpper(next.meshBound, allow)
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, next.verts, next.tris, allow)
 	if err != nil {
@@ -156,6 +162,60 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, proofbound.SweptVolumeAllow(allow, areaUpper))
 	return buildFacetedBody(ctx, d, ref, next)
+}
+
+// keepPlacedEmbedded keeps a placed faceted mesh embedded through the float
+// evaluation of its motion (docs/evaluator-design.md §9): the exact image of
+// an embedded mesh under the motion is embedded, and each held vertex is the
+// motion's float evaluation of its exact image. Every vertex that differs
+// from its exact image is checked and, where its facets fold, may move to a
+// corner of that image's float box (meshbool.EnforceHeldEmbedding); a fold no
+// corner clears is refused. It returns the proven 3D displacement of the
+// vertices the check moved — zero when it moved none — which the caller
+// charges alongside the motion's own rounding allowance, since a corner can
+// sit farther from the exact image than the float evaluation did.
+func keepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, delta r3.Transform) (float64, error) {
+	b, t := delta.Basis(), delta.Translation()
+	h := meshbool.HeldRounding{
+		Verts:   held,
+		Tris:    tris,
+		Exact:   make([]proofbound.Xpt, len(held)),
+		Moved:   make([]bool, len(held)),
+		Movable: make([]bool, len(held)),
+	}
+	first := make([]r3.Vec, len(held))
+	copy(first, held)
+	for i, p := range src {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return 0, err
+			}
+		}
+		x := meshbool.ExactRigidImage(b, t, p)
+		h.Exact[i] = x
+		if meshbool.CoordDistance(x, held[i]).Sign() != 0 {
+			h.Moved[i] = true
+			h.Movable[i] = true
+		}
+	}
+	n, err := meshbool.EnforceHeldEmbedding(ctx, h)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	worst := new(big.Rat)
+	for i := range held {
+		if held[i] == first[i] {
+			continue
+		}
+		if d := meshbool.CoordDistance(h.Exact[i], held[i]); d.Cmp(worst) > 0 {
+			worst = d
+		}
+	}
+	w, _ := worst.Float64()
+	return proofbound.Radius3D(proofbound.ProvenUpRound(w)), nil
 }
 
 // meshAreaUpper is a proven upper bound on the held mesh's total facet area:

@@ -73,7 +73,7 @@ A mesh built at `VerifyBoundary` or above additionally satisfies:
 
 | Property | Requirement |
 |---|---|
-| **Embedding** | The facet set is embedded: no non-adjacent facet pair touches, and an adjacent pair meets only along the vertex or edge its indices share (§9). `BoundaryVerified()` is true |
+| **Embedding** | The facet set is embedded: no non-adjacent facet pair touches, and an adjacent pair meets only along the vertex or edge its indices share (§9; a faceted body proves it once, when the boolean or placement that creates it rounds its held mesh, §7). `BoundaryVerified()` is true |
 
 That row is what makes the word "outside" well defined. The Geometry row's
 winding is consistent and outward under the construction's own convention at
@@ -666,6 +666,11 @@ its held vertices and polygons; it NEVER fits or refines them.
 - NEVER set `sourceBound` to zero merely because no new chording ran; zero
   requires a certificate that the true patch equals its held polygons.
 - Copy `areaSlack` and `volSymDiff`; do not recompute either from the held mesh.
+- Run no facet-contact audit. The held mesh is embedded by its creation: the
+  boolean or placement that rounded it checked every facet the rounding moved
+  with exact predicates and refused a mesh it could not keep embedded
+  (`docs/evaluator-design.md` §9). Restatement changes no coordinate, so that
+  proof stands at every verification level and `BoundaryVerified()` is true.
 
 The copied `sourceBound`, `Bound`, and `volSymDiff` remain relative to the true
 boolean result the payload stands for. Restating held polygons does not erase

@@ -1332,7 +1332,6 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	out := &StitchedMesh{}
 	floatIdx := map[r3.Vec]int{}
 	remap := make([]int, len(xverts))
-	worst := new(big.Rat)
 	for i, p := range xverts {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -1347,27 +1346,6 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 			out.Verts = append(out.Verts, v)
 		}
 		remap[i] = fi
-		px, py, pz := XhpRat(proofbound.Xhp(p))
-		d := new(big.Rat).Sub(px, freeform.MustRatOf(v.X))
-		d.Abs(d)
-		for _, pair := range [][2]*big.Rat{{py, freeform.MustRatOf(v.Y)}, {pz, freeform.MustRatOf(v.Z)}} {
-			dd := new(big.Rat).Sub(pair[0], pair[1])
-			dd.Abs(dd)
-			if dd.Cmp(d) > 0 {
-				d = dd
-			}
-		}
-		if d.Cmp(worst) > 0 {
-			worst = d
-		}
-	}
-	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
-	// distance bound, and all three coordinates can round at once (internal/proofbound/bounds.go,
-	// proofbound.Radius3D). A positive rational error can round to zero as float64, so
-	// preserve that proof before widening it to a 3D radius.
-	if worst.Sign() > 0 {
-		w, _ := worst.Float64()
-		out.Round = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 	}
 
 	dropped := make([]bool, len(tris))
@@ -1387,6 +1365,31 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 	if err := RefuseWeldedAwayComponent(ctx, tris, dropped); err != nil {
 		return nil, err
+	}
+	if err := keepRoundedEmbedded(ctx, xverts, remap, out); err != nil {
+		return nil, err
+	}
+	// worst is the max PER-COORDINATE distance from an exact vertex to the
+	// held float that stands for it — measured AFTER the embedding check, so a
+	// vertex it placed at another corner of its float box is charged where it
+	// actually sits. The consumers read a 3D distance bound, and all three
+	// coordinates can round at once (internal/proofbound/bounds.go,
+	// proofbound.Radius3D). A positive rational error can round to zero as
+	// float64, so preserve that proof before widening it to a 3D radius.
+	worst := new(big.Rat)
+	for i, p := range xverts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		if d := CoordDistance(p, out.Verts[remap[i]]); d.Cmp(worst) > 0 {
+			worst = d
+		}
+	}
+	if worst.Sign() > 0 {
+		w, _ := worst.Float64()
+		out.Round = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 	}
 	// The pre-round surface: every facet the exact stitch produced, dropped
 	// ones included, measured on the held vertices and inflated by the
@@ -1412,6 +1415,57 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		}
 	}
 	return out, nil
+}
+
+// CoordDistance is the exact largest per-coordinate distance from p to v.
+func CoordDistance(p proofbound.Xpt, v r3.Vec) *big.Rat {
+	px, py, pz := XhpRat(proofbound.Xhp(p))
+	d := new(big.Rat)
+	for _, pair := range [][2]*big.Rat{{px, freeform.MustRatOf(v.X)}, {py, freeform.MustRatOf(v.Y)}, {pz, freeform.MustRatOf(v.Z)}} {
+		dd := new(big.Rat).Sub(pair[0], pair[1])
+		dd.Abs(dd)
+		if dd.Cmp(d) > 0 {
+			d = dd
+		}
+	}
+	return d
+}
+
+// keepRoundedEmbedded runs EnforceHeldEmbedding over the rounded result. A
+// held vertex is moved when it differs from an exact vertex it stands for,
+// and the search may place it only when it stands for exactly one exact
+// vertex: a welded vertex is checked where it sits, never moved, because no
+// single float box belongs to it.
+func keepRoundedEmbedded(ctx context.Context, xverts []proofbound.Xpt, remap []int, out *StitchedMesh) error {
+	h := HeldRounding{
+		Verts:   out.Verts,
+		Tris:    out.Tris,
+		Exact:   make([]proofbound.Xpt, len(out.Verts)),
+		Moved:   make([]bool, len(out.Verts)),
+		Movable: make([]bool, len(out.Verts)),
+	}
+	count := make([]int, len(out.Verts))
+	for i, p := range xverts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		fi := remap[i]
+		count[fi]++
+		h.Exact[fi] = p
+		if CoordDistance(p, out.Verts[fi]).Sign() != 0 {
+			h.Moved[fi] = true
+		}
+	}
+	for fi, n := range count {
+		if n > 1 {
+			h.Moved[fi] = true
+		}
+		h.Movable[fi] = n == 1 && h.Moved[fi]
+	}
+	_, err := EnforceHeldEmbedding(ctx, h)
+	return err
 }
 
 // RefuseWeldedAwayComponent refuses the one class of weld collapse no bound can

@@ -114,6 +114,7 @@
 0	0.02	TestSurfaceSweepArcAndCompositeSheetsVerifyUndecided
 0	0.03	TestSurfaceTrimS4IsExactFloatEquality
 0	0.01	TestSurveysAnsweredTogether
+0	32.94	TestSweepMitredClusteredBranchUnionChain
 0	0.01	TestSweepMitredCollinearFrustumChain
 0	0.45	TestSweepMitredTessellationTolerance
 0	0.78	TestSweepMitredZigzagRestatesAndPlaces

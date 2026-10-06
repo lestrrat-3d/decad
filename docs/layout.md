@@ -259,7 +259,7 @@ to the byte budget.
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
-| `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit and near-contact witnesses. See `docs/evaluator-design.md` §9. |
+| `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit, the rounding that keeps a held mesh embedded, and near-contact witnesses. See `docs/evaluator-design.md` §9. |
 | `_gallery/` | Own nested module for README images, landing clip and dynamics scenes; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; race shards run `race-binary`'s root and `apitest` binaries. `codeql.yml`. `test-shards*.txt` assign each test a shard. |
