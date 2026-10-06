@@ -809,16 +809,13 @@ func TestTumbleSceneSubset(t *testing.T) {
 // sagitta at HeldChord, so both land and rest through §10.4's lifted band.
 // The _gallery module renders the same scene.
 //
-// The whole scene's 1024 steps take about four minutes on an amd64
-// workstation without the race detector, nearly all of it in the bottle: its
-// three impact steps take about five seconds each, and every resting step
-// about 0.2 s for its 49 lifted base vertices. TestPartsBinScene therefore
-// runs it only when DECAD_PARTSBIN_FULL is set, and CI runs it in the
-// _gallery module (TestPartsBinTimeline there, and TestPartsBinClip, which
-// also renders its first frame), as tumble's whole scene runs. TestPartsBinSceneSubset runs every body but the
-// bottle through the same assertions for 0.125 s, by which each dropped body
-// rests: about three seconds, and ten under the race detector. The bottle's
-// drop onto the same tray at the same residuals is
+// The whole scene's 1024 steps take about 5.6 s on an amd64 workstation
+// without the race detector and about 33 s with it, nearly all of it in the
+// bottle: its three impact steps dominate, and each resting step reads its
+// 49 lifted base vertices through the band cache. TestPartsBinScene runs the
+// whole scene in every test run, and the _gallery module runs it again
+// (TestPartsBinTimeline there, and TestPartsBinClip, which also renders its
+// first frame). The bottle's drop onto the same tray at the same residuals is
 // TestDisplacedBottleRestsOnTray's fixture.
 
 // partsBinScene is a parts-bin world: the tray as its one fixed body and the
@@ -1226,27 +1223,13 @@ func requirePartsBinRolls(t *testing.T, scene partsBinScene, report *dynamics.St
 }
 
 // TestPartsBinScene runs the whole scene for its 4 s and asserts §2's Phase 3
-// exit criteria. It runs when DECAD_PARTSBIN_FULL is set; see the comment at
-// the top of this section.
+// exit criteria; see the comment at the top of this section for its cost.
 func TestPartsBinScene(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("DECAD_PARTSBIN_FULL") == "" {
-		t.Skip("set DECAD_PARTSBIN_FULL to run the whole parts-bin scene")
-	}
 	names := make([]string, len(partsBinReleases))
 	for i, release := range partsBinReleases {
 		names[i] = release.name
 	}
 	scene := newPartsBin(t, true, names...)
 	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, partsBinSteps), partsBinSteps)
-}
-
-// TestPartsBinSceneSubset runs the cup, the chamfered block, the loft, the
-// sweep and the rolling cylinder at their §2 releases in the §2 tray for
-// 0.125 s, by which each dropped body rests (the run records all four at
-// rest from step 17), and asserts the same criteria.
-func TestPartsBinSceneSubset(t *testing.T) {
-	t.Parallel()
-	scene := newPartsBin(t, true, "cup", "block", "loft", "sweep")
-	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, 32), 32)
 }
