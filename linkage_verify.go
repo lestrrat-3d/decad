@@ -95,6 +95,12 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if err != nil {
 		return nil, err
 	}
+	if !cfg.stated {
+		// docs/linkage-check-design.md §3: unstated, the reading refines
+		// past the verdict floor to its own.
+		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
+		cfg.readingP = &reading
+	}
 	bounds, ok := readLinkBounds(spec, frames)
 	if !ok {
 		return nil, linkageBoundsError()
@@ -109,6 +115,19 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 		return nil, err
 	}
 	return publishLinkage(run, l, drive, poses, spans), nil
+}
+
+// linkageReadingFloor is the denominator of the default reading floor,
+// units.Scalar(1.0/16384) (docs/linkage-check-design.md §3).
+const linkageReadingFloor = 16384
+
+// readingResolution is the reading floor a run used: the stated resolution,
+// or the default reading floor.
+func readingResolution(cfg motionConfig) units.Value {
+	if cfg.readingP == nil {
+		return cfg.resolution
+	}
+	return units.Scalar(1.0 / linkageReadingFloor)
 }
 
 // newLinkageRun is VerifyLinkage's working state over a validated drive: one
@@ -242,18 +261,19 @@ func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, spans []motionSpan) *LinkageReport {
 	c := r.conclude(poses, spans)
 	report := &LinkageReport{
-		Request:       c.request,
-		Linkage:       l,
-		Drive:         slices.Clone(drive),
-		Links:         l.Links(),
-		JointContacts: l.JointContacts(),
-		Against:       c.against,
-		Intervals:     c.intervals,
-		Collisions:    []LinkCollision{},
-		Clearance:     c.clearance,
-		Assessment:    c.assessment,
-		Diagnostics:   c.diagnostics,
-		Status:        c.status,
+		Request:           c.request,
+		ReadingResolution: readingResolution(r.cfg),
+		Linkage:           l,
+		Drive:             slices.Clone(drive),
+		Links:             l.Links(),
+		JointContacts:     l.JointContacts(),
+		Against:           c.against,
+		Intervals:         c.intervals,
+		Collisions:        []LinkCollision{},
+		Clearance:         c.clearance,
+		Assessment:        c.assessment,
+		Diagnostics:       c.diagnostics,
+		Status:            c.status,
 	}
 	for _, pose := range poses {
 		lp := LinkagePose{At: pose.result.At, Values: make([]units.Value, len(pose.groups)), Poses: make([]r3.Transform, len(pose.groups))}

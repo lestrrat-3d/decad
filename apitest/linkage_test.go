@@ -376,6 +376,9 @@ func TestLinkageConstructorRefusals(t *testing.T) {
 // outcomes and pose counts part from VerifyMotion's).
 func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 	t.Parallel()
+	// VerifyMotion's default floor is 90°/1024 for verdict and reading alike;
+	// the linkage states its 1/1024 so its reading stops there too (§3).
+	statedDefault := []decad.MotionOption{decad.WithResolution(units.Scalar(1.0 / 1024))}
 	cases := []struct {
 		name       string
 		static     func(t *testing.T, doc *decad.Document)
@@ -384,8 +387,8 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 	}{
 		{"a wall the arm hits", func(t *testing.T, doc *decad.Document) { boxBodyAtZ(t, doc, -100, 40, 100, 60, -10, 40) },
 			[]decad.MotionOption{decad.WithResolution(units.Degrees(0.25))}, []decad.MotionOption{decad.WithResolution(units.Scalar(0.25 / 90))}},
-		{"a wall the arm clears", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, -100, 60, 100, 80, 10) }, nil, nil},
-		{"a stop the arm rests on", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, 0, -24, 48, -14, 10) }, nil, nil},
+		{"a wall the arm clears", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, -100, 60, 100, 80, 10) }, nil, statedDefault},
+		{"a stop the arm rests on", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, 0, -24, 48, -14, 10) }, nil, statedDefault},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

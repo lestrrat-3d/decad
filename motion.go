@@ -351,6 +351,9 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 // |To − From|/1024, units.Scalar(1.0/1024) for a Between or a drive. If that
 // step underflows in From's unit or its base unit, the check uses and reports
 // the smallest positive resolution in From's unit accepted by WithResolution.
+// VerifyLinkage left without it refines its whole-drive reading further, to
+// units.Scalar(1.0/16384) (LinkageReport.ReadingResolution); stated, it is
+// the one floor of both calls.
 func WithResolution(step units.Value) MotionOption {
 	return motionOption{option.New(identResolution{}, step)}
 }
@@ -374,8 +377,15 @@ type motionConfig struct {
 	rel         float64
 	resolution  units.Value
 	resolutionP motionbound.MotionParam
-	minimum     *units.Value
-	minimumMM   *big.Rat
+	// stated: WithResolution set the resolution; false when it is the
+	// default.
+	stated bool
+	// readingP is the floor of the whole-path reading's refinement when it
+	// differs from resolutionP (docs/linkage-check-design.md §3); nil means
+	// the one floor governs both, as for every VerifyMotion call.
+	readingP  *motionbound.MotionParam
+	minimum   *units.Value
+	minimumMM *big.Rat
 }
 
 // resolveMotionOptions folds and validates the options against the resolved
@@ -432,7 +442,7 @@ func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, e
 			cfg.resolutionP, _ = motionbound.ExactMotionParam(cfg.resolution)
 		}
 	} else {
-		cfg.resolution = *resolution
+		cfg.resolution, cfg.stated = *resolution, true
 		var ok bool
 		if cfg.resolutionP, ok = motionbound.ExactMotionParam(cfg.resolution); !ok {
 			return motionConfig{}, fmt.Errorf(`%w: the resolution is not representable`, ErrNotFinite)
