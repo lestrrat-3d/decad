@@ -62,11 +62,19 @@ const heldGridCellSpan = 512
 // that failed or that a move touched until one moves nothing; the facets
 // that are still failing then are refused.
 func EnforceHeldEmbedding(ctx context.Context, h HeldRounding) (int, error) {
+	return enforceHeldEmbedding(ctx, h, true)
+}
+
+// enforceHeldEmbedding is EnforceHeldEmbedding with the per-facet box cache
+// and the pair memo switched by memo. Both only replay answers the same
+// positions already gave, so the result is the same either way; the tests
+// run both paths and compare them.
+func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return 0, err
 	}
-	e := newHeldEmbedding(h, budget)
+	e := newHeldEmbedding(h, budget, memo)
 	var query []int
 	for i, t := range h.Tris {
 		if err := budget.Step(); err != nil {
@@ -81,6 +89,11 @@ func EnforceHeldEmbedding(ctx context.Context, h HeldRounding) (int, error) {
 	}
 	if err := e.buildGrid(); err != nil {
 		return 0, err
+	}
+	if memo {
+		// A query facet meets a few dozen boxes around it; sizing the memo
+		// for that up front spares it the rehashing of growing there.
+		e.pairs = make(map[uint64]heldPair, 32*len(query))
 	}
 	// Every facet outside check is known embedded against all its
 	// neighbours; a move puts the facets around the moved vertex back in.
@@ -155,6 +168,21 @@ type heldEmbedding struct {
 	coneOK  [][3]bool
 	stamp   []int
 	stampID int
+	cands   []int
+
+	// memoOn enables the two caches below. box is each facet's float box
+	// (TriBox), invalidated when a vertex moves. pairs replays pairEmbedded
+	// for an unordered pair of facets: gen stamps each facet's current
+	// vertex positions, a move gives every incident facet a fresh stamp, and
+	// an entry holds only while both facets carry the stamps it was stored
+	// under. pairEmbedded is symmetric in its facets and depends on nothing
+	// but their six vertex positions, so a replayed answer is the answer.
+	memoOn  bool
+	box     [][2]r3.Vec
+	boxOK   []bool
+	gen     []uint64
+	nextGen uint64
+	pairs   map[uint64]heldPair
 
 	// The grid every query reads, built over facet boxes padded by pad so a
 	// vertex's move inside its float box never leaves its facets' cells.
@@ -166,10 +194,18 @@ type heldEmbedding struct {
 	wide   []int32
 }
 
-func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget) *heldEmbedding {
+// heldPair is one replayable pairEmbedded answer: the stamps of the lower and
+// the higher facet when it was decided, and whether the pair was embedded.
+type heldPair struct {
+	genLo, genHi uint64
+	ok           bool
+}
+
+func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
 	e := &heldEmbedding{
 		h:      h,
 		budget: budget,
+		memoOn: memo,
 		inc:    make([][]int, len(h.Verts)),
 		taken:  make(map[r3.Vec]int, len(h.Verts)),
 		xv:     make([]proofbound.Xpt, len(h.Verts)),
@@ -194,7 +230,61 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget) *heldEmbedd
 	for i := range e.plane {
 		e.plane[i] = -1
 	}
+	if memo {
+		e.box = make([][2]r3.Vec, len(h.Tris))
+		e.boxOK = make([]bool, len(h.Tris))
+		e.gen = make([]uint64, len(h.Tris))
+		e.nextGen = 1
+	}
 	return e
+}
+
+// triBox is facet i's float box, TriBox over the held vertices.
+func (e *heldEmbedding) triBox(i int) [2]r3.Vec {
+	if !e.memoOn {
+		return TriBox(e.h.Verts, e.h.Tris[i])
+	}
+	if !e.boxOK[i] {
+		e.box[i] = TriBox(e.h.Verts, e.h.Tris[i])
+		e.boxOK[i] = true
+	}
+	return e.box[i]
+}
+
+// pairOK is pairEmbedded, replayed from the pair memo when neither facet has
+// changed since the pair was last decided.
+func (e *heldEmbedding) pairOK(i, j int) bool {
+	if !e.memoOn {
+		return e.pairEmbedded(i, j)
+	}
+	if !BoxesOverlap(e.triBox(i), e.triBox(j)) {
+		return true
+	}
+	lo, hi := min(i, j), max(i, j)
+	key := uint64(lo)<<32 | uint64(hi)
+	if p, ok := e.pairs[key]; ok && p.genLo == e.gen[lo] && p.genHi == e.gen[hi] {
+		return p.ok
+	}
+	ok := e.pairEmbedded(i, j)
+	e.pairs[key] = heldPair{genLo: e.gen[lo], genHi: e.gen[hi], ok: ok}
+	return ok
+}
+
+// stamps copies the current stamps of v's incident facets.
+func (e *heldEmbedding) stamps(v int) []uint64 {
+	out := make([]uint64, len(e.inc[v]))
+	for k, f := range e.inc[v] {
+		out[k] = e.gen[f]
+	}
+	return out
+}
+
+// restamp gives v's incident facets back the stamps saved by stamps, which
+// is sound only while every vertex of those facets is where it was then.
+func (e *heldEmbedding) restamp(v int, saved []uint64) {
+	for k, f := range e.inc[v] {
+		e.gen[f] = saved[k]
+	}
 }
 
 func (e *heldEmbedding) lift(v int) proofbound.Xpt {
@@ -226,6 +316,11 @@ func (e *heldEmbedding) setVert(v int, p r3.Vec) {
 		e.normOK[f] = false
 		e.plane[f] = -1
 		e.coneOK[f] = [3]bool{}
+		if e.memoOn {
+			e.boxOK[f] = false
+			e.gen[f] = e.nextGen
+			e.nextGen++
+		}
 	}
 }
 
@@ -239,7 +334,7 @@ func zeroXpt(n proofbound.Xpt) bool {
 // fails, the refusing direction.
 func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	ti, tj := e.h.Tris[i], e.h.Tris[j]
-	if !BoxesOverlap(TriBox(e.h.Verts, ti), TriBox(e.h.Verts, tj)) {
+	if !BoxesOverlap(e.triBox(i), e.triBox(j)) {
 		return true
 	}
 	var sharedI, sharedJ []int
@@ -545,7 +640,7 @@ func (e *heldEmbedding) facetFailures(i int, firstOnly bool) ([]int, bool, error
 		if err := e.budget.Step(); err != nil {
 			return nil, false, err
 		}
-		if j == i || e.pairEmbedded(i, j) {
+		if j == i || e.pairOK(i, j) {
 			continue
 		}
 		bad = append(bad, j)
@@ -628,6 +723,12 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 		return false, err
 	}
 	bestAt := orig
+	// Each trial moves only v, so putting v back restores every incident
+	// facet's positions, and with them the stamps they carried.
+	var origGen []uint64
+	if e.memoOn {
+		origGen = e.stamps(v)
+	}
 	for _, c := range FloatBoxCorners(e.h.Exact[v]) {
 		if err := e.budget.Step(); err != nil {
 			return false, err
@@ -641,6 +742,9 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 		e.setVert(v, c)
 		n, err := e.vertexFailures(v)
 		e.setVert(v, orig)
+		if e.memoOn {
+			e.restamp(v, origGen)
+		}
 		if err != nil {
 			return false, err
 		}
@@ -778,7 +882,9 @@ func (e *heldEmbedding) cellRange(b [2]r3.Vec) ([3]int, [3]int) {
 func (e *heldEmbedding) candidates(i int) ([]int, error) {
 	e.stampID++
 	id := e.stampID
-	var out []int
+	// The list is reused across calls: each caller is done with it before
+	// the next query.
+	out := e.cands[:0]
 	add := func(j int32) {
 		if e.stamp[j] == id {
 			return
@@ -786,7 +892,7 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 		e.stamp[j] = id
 		out = append(out, int(j))
 	}
-	c0, c1 := e.cellRange(TriBox(e.h.Verts, e.h.Tris[i]))
+	c0, c1 := e.cellRange(e.triBox(i))
 	for x := c0[0]; x <= c1[0]; x++ {
 		for y := c0[1]; y <= c1[1]; y++ {
 			for z := c0[2]; z <= c1[2]; z++ {
@@ -802,6 +908,7 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 	for _, j := range e.wide {
 		add(j)
 	}
+	e.cands = out
 	return out, nil
 }
 
