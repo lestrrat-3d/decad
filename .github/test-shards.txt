@@ -752,6 +752,7 @@
 2	0.75	TestFreeformArcLengthBracketEnclosesAndNarrows
 2	1.42	TestFreeformArcLengthBracketsAtExtremeScale
 2	0.69	TestFreeformArcLengthNearDuplicateControlPair
+2	0.00	TestHeldGateReadsFacetsWithinThePrePassSlack
 2	10.89	TestLineWalkBoundsDyadicMatchRational
 2	0.22	TestLoftChordCalibrationTrueOutlineIsTheChordedTwin
 2	0.02	TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed
@@ -865,6 +866,7 @@
 4	0.01	TestFreeformCoincidentControlNetRefused
 4	0.08	TestFreeformPreflightBoundaryCost
 4	0.22	TestHarmonicWindowRangeEnclosesInteriorExtremes
+4	28.26	TestHeldGateCertifiesEachUnionsRimCeiling
 4	0.41	TestLoftArcWedgeAreaOracleAtGrowingRadius
 4	0.15	TestLoftArcWedgeBuildsAndMatchesClosedForm
 4	0.13	TestLoftArcWedgeMatchesExtrudeOracle

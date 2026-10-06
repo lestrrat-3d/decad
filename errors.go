@@ -134,9 +134,10 @@ var ErrNotFinite = decaderr.ErrNotFinite
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
 // boolean may consume (a cap-loop chamfer body whose band has a mitered
 // circular wall or a reflex corner, so its mesh carries no proof of the volume
-// it and the body it stands for differ by, or a Faceted operand
-// coarser than the pair tolerance) is a capability limit reached before any contact —
-// it passes through as a plain ErrUnsupported, not a [BooleanError].
+// it and the body it stands for differ by, or a held-mesh operand whose
+// facets where the pair meets are coarser than the pair tolerance) is a
+// capability limit of that operand, refused before any facet is cut — it
+// passes through as a plain ErrUnsupported, not a [BooleanError].
 // errors.Is(err, ErrUnsupported) branches on both.
 var ErrUnsupported = decaderr.ErrUnsupported
 
@@ -205,9 +206,9 @@ const (
 // reserved for a genuinely malformed operand and for the retryable coarse-chording
 // tessellation refusal; a whole-operand tessellation-staging [ErrUnsupported]
 // (a cap-loop chamfer operand whose mesh carries no occupied-volume proof, or a
-// Faceted operand coarser than the pair
-// tolerance)
-// passes through plain — none of these three is a BooleanError.
+// held-mesh operand whose facets where the pair meets are coarser than the
+// pair tolerance) passes through plain — none of these three is a
+// BooleanError.
 type BooleanError struct {
 	op   meshbool.OperationKind
 	Code BooleanErrorCode

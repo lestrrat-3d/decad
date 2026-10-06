@@ -97,7 +97,8 @@
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep,
 //	                     crossings                            builds
-//	  faceted operand coarser than the pair tolerance         ErrUnsupported
+//	  held-mesh operand coarser than the pair tolerance
+//	    where the pair meets it                               ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered
 //	    circular wall or a reflex corner                      ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported

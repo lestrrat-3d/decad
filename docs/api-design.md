@@ -937,32 +937,42 @@ into containment removes any former protruding volume. A caller proving a part
 against a model built elsewhere has to state the deviation it accepted; it is
 not free.
 
-**The chain depth.** A boolean's result is a `Faceted` body whose held `Bound`
-composes from the operation that made it, while §9's chord tolerance for the next
-pair is a fixed fraction of that pair's diameter. Where the composed bound is the
-coarser of the two, feeding the result back in as an operand is refused before
-any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, since
-the operand cannot be re-tessellated finer than the boundary it holds. The
-refusal names the operand (`Cut`'s target or tool; the first or second operand
-otherwise), quotes its held bound and the pair's chord tolerance, and states
-that a boolean takes no tolerance: there is nothing to retry with. Where the
-held bound stays under that tolerance the result is an ordinary operand and the
-chain continues, so the comparison at each step is what limits a chain, not the
-fact that an operand came out of a boolean. At every step, the result's held
-bound is composed per vertex (`docs/faceted-vertex-bounds-design.md` §3): a
-surviving operand vertex keeps its operand's bound, a vertex the boolean
-creates carries its own facet pair's trim amplification, each adds its own
-final rounding displacement, and the held bound is the largest of them. A rim
-cut through geometry that already carries a bound therefore raises the held
-bound for the next pair; successive booleans whose contacts land on bounded
-geometry do not keep that bound flat. Where
-the comparison does refuse, it is geometry rather than an argument the caller got
-wrong. The booleans take no tolerance parameter (§9), by the same decision that
-puts the tolerance's whole effect on the result's proven `Bound`. The bound is readable rather than
-merely printed in the refusal — `Body.Tessellate` at any tolerance the faceted
-body already meets returns a `Mesh` whose `Bound` is that held bound — so a
-caller can size the limit before planning a chain. A construction needing many
-booleans over one part has to be reshaped, not retried.
+**The chain depth.** A boolean's result is a `Faceted` body whose held bound
+is composed per vertex from the operation that made it
+(`docs/faceted-vertex-bounds-design.md` §3): a surviving operand vertex keeps
+its operand's bound, a vertex the boolean creates carries its own facet pair's
+trim amplification, and each adds its own final rounding displacement. §9's
+chord tolerance for the next pair is a fixed fraction of that pair's diameter.
+The next boolean compares the two only where the new pair meets the operand
+(`docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
+restates a held mesh (a boolean result or a mitred sweep) that the contact
+classification reports as meeting the other operand, or as coming within the
+tangency gate's slack of it, must carry a bound no coarser than the pair's
+chord tolerance. A chorded analytic operand is meshed at that tolerance and
+is not compared. Where one is coarser, the
+boolean is refused before any facet is cut, with a plain `ErrUnsupported`,
+not a `BooleanError`, since the limit is the bound the operand holds there.
+The refusal names the operand (`Cut`'s target or tool; the first or second
+operand otherwise), quotes the bound of the facets the pair touches and the
+pair's chord tolerance, and states that a boolean takes no tolerance: there is
+nothing to retry with. Geometry the new pair does not touch keeps the bound it
+already published and is never the reason for a refusal, so a result whose
+`Bound` exceeds the next pair's chord tolerance in untouched regions is still
+an ordinary operand. What limits a chain is therefore where its contacts land:
+a contact on an earlier rim whose bound has outgrown the pair tolerance is
+refused, and a contact elsewhere continues. A restating operand therefore
+contributes at most the pair's chord tolerance `tol` to any rim, as a freshly
+chorded operand does, so a rim between two such facets carries at most
+`2·tol/sin θ` of its own facet pair. Where the comparison does refuse, it is geometry rather than an
+argument the caller got wrong. The booleans take no tolerance parameter (§9),
+by the same decision that puts the tolerance's whole effect on the result's
+proven `Bound`. The bounds are readable rather than merely printed in the
+refusal: each `Vertex`, edge and face of a `Faceted` body reports its own
+bound, and `Body.Tessellate` at any tolerance the faceted body already meets
+returns a `Mesh` whose `Bound` is the largest of them, so a caller can see
+which regions carry coarse rims before planning the next contact. A
+construction needing many booleans through one region has to be reshaped, not
+retried.
 
 Modify operations return a new body, retiring the receiver, on the same terms:
 

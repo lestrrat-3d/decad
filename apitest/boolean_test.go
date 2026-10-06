@@ -3,9 +3,10 @@ package apitest_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -690,37 +691,171 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 	requireBodyWatertight(t, twice)
 }
 
-// TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance is
-// docs/api-design.md §8's "The chain depth" wording: three hole tools Placed
-// 16 mm down stay on the mesh path (the shared-axis arm excludes a
-// placement), and the third Cut's target holds a mesh bound coarser than the
-// pair's chord tolerance. The refusal names the target, quotes the held
-// bound, says a boolean takes no tolerance, and never tells this caller to
-// retry with one. Shown to fail: with evaluateBoolean's booleanOperandStaging
-// calls removed, the "retry with a tolerance" NotContains assertion went red
-// on the Tessellate caller's wording, which also lacks "cut's target" and
-// "a boolean takes no tolerance".
-func TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance(t *testing.T) {
+// TestBooleanChainDepthGateReadsOnlyTheTouchedRims is docs/api-design.md
+// §8's "The chain depth" rule (docs/faceted-vertex-bounds-design.md §5): two
+// hole tools Placed 16 mm down stay on the mesh path (the shared-axis arm
+// excludes a placement), and the second hole's rims hold bounds coarser than
+// the next pair's chord tolerance. A third hole clear of every earlier rim
+// cuts, and its volume matches the exact drilled plate within the published
+// bound. A pin placed ON the second hole's rim is refused: the refusal names
+// the target, quotes a touched bound above the pair's chord tolerance and no
+// larger than the target's held bound, says a boolean takes no tolerance, and
+// never tells this caller to retry with one. Shown to fail: with the gate
+// comparing the operand's meshBound instead of the touched facets' bounds,
+// the clear third hole refused with "coarser than this pair's chord
+// tolerance".
+func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	plate := boxBody(t, doc, -48, -34, 48, 34, 16)
-	tools := []struct{ cx, r float64 }{{0, 18}, {-36, 7}, {36, 7}}
-	for i, tool := range tools[:2] {
-		var err error
-		plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0, 0, -16))
-		require.NoError(t, err, "cut %d", i+1)
-		require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
+	drilled := func(t *testing.T, doc *decad.Document) *decad.Body {
+		t.Helper()
+		plate := boxBody(t, doc, -48, -34, 48, 34, 16)
+		for i, tool := range []struct{ cx, r float64 }{{0, 18}, {-36, 7}} {
+			var err error
+			plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0, 0, -16))
+			require.NoError(t, err, "cut %d", i+1)
+			require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
+		}
+		return plate
 	}
 
-	held := mustTessellate(t, plate, units.Millimeters(1)).Bound()
-	_, err := decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tools[2].cx, tools[2].r, 48), 0, 0, -16))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	var be *decad.BooleanError
-	require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
-	require.NotContains(t, err.Error(), "retry with a tolerance")
-	require.ErrorContains(t, err, "a boolean takes no tolerance")
-	require.ErrorContains(t, err, "cut's target")
-	require.ErrorContains(t, err, fmt.Sprint(held), "the refusal quotes the target's held mesh bound")
+	t.Run("a contact clear of the coarse rims cuts", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, 36, 7, 48), 0, 0, -16))
+		require.NoError(t, err, "geometry the pair does not touch is never the reason for a refusal")
+		vol, err := got.Volume()
+		require.NoError(t, err)
+		bound, err := vol.Bound.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		exact := 96.0*68*16 - math.Pi*16*(18*18+7*7+7*7)
+		require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-exact), bound, "the drilled plate's volume holds within its published bound")
+		requireBodyWatertight(t, got)
+	})
+
+	t.Run("a contact on a coarse rim refuses", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		plate := drilled(t, doc)
+		held, err := mustTessellate(t, plate, units.Millimeters(1)).Bound().In(units.Millimeter)
+		require.NoError(t, err)
+		_, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, -29, 1, 48), 0, 0, -16))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		var be *decad.BooleanError
+		require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
+		require.NotContains(t, err.Error(), "retry with a tolerance")
+		require.ErrorContains(t, err, "a boolean takes no tolerance")
+		require.ErrorContains(t, err, "cut's target")
+		m := regexp.MustCompile(`within a bound of (\S+) mm, coarser than this pair's chord tolerance (\S+) mm`).FindStringSubmatch(err.Error())
+		require.Len(t, m, 3, "the refusal quotes the touched bound and the pair's chord tolerance")
+		touched, err := strconv.ParseFloat(m[1], 64)
+		require.NoError(t, err)
+		tol, err := strconv.ParseFloat(m[2], 64)
+		require.NoError(t, err)
+		require.Greater(t, touched, tol)
+		require.LessOrEqual(t, touched, held, "a touched facet's bound is one of the target's own")
+	})
+}
+
+// coneSegment is the mtilt hand-off's tree segment: the outline (0,0) (0,ra)
+// (L,rb) (L,0) revolved about the sketch's U axis into a cone frustum, then
+// placed so that U runs from a to b.
+func coneSegment(t *testing.T, doc *decad.Document, a, b r3.Vec, ra, rb float64) *decad.Body {
+	t.Helper()
+	l := b.Sub(a).Len()
+	s, p := polygonSketch(t, [][2]float64{{0, 0}, {0, ra}, {l, rb}, {l, 0}})
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	d, ok := b.Sub(a).Normalize()
+	require.True(t, ok)
+	ref := r3.Vec{Y: 1}
+	if math.Abs(d.Y) > 0.9 {
+		ref = r3.Vec{X: 1}
+	}
+	q, ok := d.Cross(ref).Normalize()
+	require.True(t, ok)
+	frame, err := r3.FromBasis(r3.Basis{EX: d, EY: q.Cross(d), EZ: q}, a)
+	require.NoError(t, err)
+	body, err = body.Placed(t.Context(), frame)
+	require.NoError(t, err)
+	return body
+}
+
+// TestBooleanChainOfConesContinuesPastEachJoint is the mtilt hand-off's
+// request 1 shape (docs/faceted-vertex-bounds-design.md §6, "Curved operands"):
+// three cone frustums, each reaching back into the previous one by its own
+// root radius. Each joint's rims carry several times the pair's chord
+// tolerance, but the next segment meets the previous one only at its far end,
+// whose facets still carry their own chording, so both unions succeed. The
+// chain is one watertight solid lump that tessellates with the boundary proof
+// at 0.01 mm, its volume lies between the largest segment's and the sum of all
+// three, and its box is the hull of the three segments' boxes, each within the
+// published bounds. Shown to fail: with the gate comparing the operand's
+// meshBound, the second union refused with "coarser than this pair's chord
+// tolerance".
+func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	pts := []r3.Vec{r3.NewVec(46, 10, 0), r3.NewVec(46, 10, 15), r3.NewVec(40, 10, 25.4), r3.NewVec(36, 10, 32.3)}
+	radii := []float64{1.6, 1.4, 1.2, 1.0}
+	var chain *decad.Body
+	var maxVol, sumVol, segBound float64
+	hullMin := r3.Vec{X: math.Inf(1), Y: math.Inf(1), Z: math.Inf(1)}
+	hullMax := r3.Vec{X: math.Inf(-1), Y: math.Inf(-1), Z: math.Inf(-1)}
+	for i := 0; i+1 < len(pts); i++ {
+		dir, ok := pts[i+1].Sub(pts[i]).Normalize()
+		require.True(t, ok)
+		a, b := pts[i], pts[i+1]
+		if i > 0 {
+			a = a.Sub(dir.Scale(radii[i]))
+		}
+		if i+2 < len(pts) {
+			b = b.Add(dir.Scale(radii[i+1] * 0.5))
+		}
+		seg := coneSegment(t, doc, a, b, radii[i], radii[i+1])
+		vol, err := seg.Volume()
+		require.NoError(t, err)
+		maxVol = max(maxVol, volumeMM(t, vol))
+		sumVol += volumeMM(t, vol)
+		box, err := seg.Bounds()
+		require.NoError(t, err)
+		bound, err := box.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		segBound = max(segBound, bound)
+		hullMin = r3.Vec{X: min(hullMin.X, box.Min.X), Y: min(hullMin.Y, box.Min.Y), Z: min(hullMin.Z, box.Min.Z)}
+		hullMax = r3.Vec{X: max(hullMax.X, box.Max.X), Y: max(hullMax.Y, box.Max.Y), Z: max(hullMax.Z, box.Max.Z)}
+		if chain == nil {
+			chain = seg
+			continue
+		}
+		chain, err = decad.Union(t.Context(), chain, seg)
+		require.NoError(t, err, "union of segment %d onto the chain", i+1)
+	}
+
+	require.True(t, chain.IsSolid())
+	require.Len(t, chain.Lumps(), 1)
+	requireBodyWatertight(t, chain)
+	mesh, err := chain.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+
+	vol, err := chain.Volume()
+	require.NoError(t, err)
+	volBound, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Greater(t, volumeMM(t, vol)+volBound, maxVol, "the chain holds its largest segment")
+	require.Less(t, volumeMM(t, vol)-volBound, sumVol, "the segments overlap, so the chain holds less than their sum")
+
+	box, err := chain.Bounds()
+	require.NoError(t, err)
+	bound, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	slack := bound + segBound
+	for _, pair := range [][2]float64{
+		{box.Min.X, hullMin.X}, {box.Min.Y, hullMin.Y}, {box.Min.Z, hullMin.Z},
+		{box.Max.X, hullMax.X}, {box.Max.Y, hullMax.Y}, {box.Max.Z, hullMax.Z},
+	} {
+		require.InDelta(t, pair[1], pair[0], slack, "the chain's box is the hull of its segments' boxes")
+	}
 }
 
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their

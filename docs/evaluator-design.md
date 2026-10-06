@@ -550,8 +550,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Tessellate both operands** with an evaluator-internal chord tolerance —
   a documented default derived from the pair's own diameter, raised past either
   operand's own section displacement, which no mesh of that operand can go
-  below (`docs/prism-boolean-design.md` §7, tessellation §5). The booleans of
-  core §8 expose no tolerance parameter, on purpose. What IS caller-visible
+  below (`docs/prism-boolean-design.md` §7, tessellation §5). An operand that
+  restates a held mesh (a boolean result or a mitred sweep) is asked at that
+  tolerance raised to its own held floor, which its restatement always meets,
+  so the request never refuses; which of its facets the pair may cut is the
+  rim bullet's gate below (`docs/faceted-vertex-bounds-design.md` §5). The
+  booleans of core §8 expose no tolerance parameter, on purpose. What IS caller-visible
   is the proven bound the output carries: the tolerance's whole effect
   surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
   Verify. The machinery and its payload staging are
@@ -793,10 +797,25 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   `Faceted.Bound` the largest facet bound over its face, `FacetedCurve.Bound`
   the largest vertex bound along its chain, `Box` each extreme's own reach,
   and every area bound the smaller of its face's bound times its perimeter and
-  the sum of its facets' perturbations at their own bounds. It has no finite ceiling as the operands approach tangency: when
-  the inflated bound reaches the pair's own diameter it has stopped bounding
-  anything, and the operation is refused (`ErrUnsupported`) rather than
-  reported with a number nobody can use — per rim vertex, at its own bound. Every bound has exactly one owner
+  the sum of its facets' perturbations at their own bounds. The bound has no
+  finite ceiling as the operands approach tangency: when the inflated bound
+  reaches the pair's own diameter it has stopped bounding anything, and the
+  operation is refused (`ErrUnsupported`) rather than reported with a number
+  nobody can use — per rim vertex, at its own bound. Its ceiling in `δ` is
+  certified per pair by the local chain-depth gate
+  (`docs/faceted-vertex-bounds-design.md` §5, core §8 "The chain depth"):
+  after the contact classification and before any facet is cut, every facet
+  of a restating operand that meets the other operand, or comes within the
+  hidden-tangency pre-pass's slack of it, must carry `δ(t) ≤ tol`, the pair's
+  chord tolerance; otherwise the boolean is refused with a plain
+  `ErrUnsupported` (`meshbool.BooleanExpectedStaging`) naming the operand, the
+  touched bound and `tol`. So a restating operand contributes at most `tol`
+  to any rim, as a freshly chorded operand does, and a rim between two such
+  facets carries at most `2·tol/sin θ` of its own facet pair before its weld.
+  Held geometry the pair does not touch keeps whatever bound it already
+  published and never causes a refusal. A chorded analytic operand is not
+  gated: its `sourceBound` may exceed `tol` by tessellation §1's Tolerance row. The gate is reject-only: it compares two proven numbers
+  and admits nothing. Every bound has exactly one owner
   (`internal/proofbound/bounds.go`); no measurement site computes one inline.
 - Rejected alternatives: a third-party kernel (dependency rule; also the
   supply-chain surface); float-only BSP classification (the flipped-sign

@@ -432,10 +432,10 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the first operand tessellates, but its tessellation refused at the chord tolerance this read-only check derives from the pair's own size, which no option sets; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
+			"the first operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
 	case outcome == interferenceUnsupportedPayloadSecond:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the second operand tessellates, but its tessellation refused at the chord tolerance this read-only check derives from the pair's own size, which no option sets; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
+			"the second operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
 	case outcome == interferenceUnsupportedVolumeProofFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			"the first operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof")

@@ -1715,10 +1715,10 @@ func walkSegmentArea(w survey2d.SegmentWalk, n int) float64 {
 }
 
 // facetedBoundError is tessellateFaceted's refusal of a chord tolerance
-// finer than the bound the faceted body holds (docs/tessellation-design.md;
-// docs/api-design.md §8 "The chain depth"). It is a type so the boolean path
-// can restate it in its own terms: the Tessellate caller chose the tolerance,
-// a boolean caller did not.
+// finer than the bound the faceted body holds (docs/tessellation-design.md
+// §7). Only a Tessellate caller, who chose the tolerance, reaches it: the
+// boolean asks a restating operand at its held floor and gates the facets the
+// pair touches instead (heldFloorOf, meshbool.RefuseCoarseHeldContact).
 type facetedBoundError struct{ requested, held float64 }
 
 func (e *facetedBoundError) Error() string {

@@ -22,11 +22,11 @@ features (a hub and its teeth, a boss and a plate) — that pipeline is
 structurally worst-cased three ways, all traced in
 `.tmp/boolean-redesign/README.md` and `.tmp/gear-generator-feedback/README.md`:
 
-1. **No chaining.** The result's `meshBound` composes across operations and
-   exceeds the chord tolerance the next pair derives from its own diameter, so
-   a second boolean on the same lineage refuses (a plain `ErrUnsupported`
-   naming the operand whose held mesh bound is coarser than the pair's chord
-   tolerance — core §8, "The chain depth").
+1. **Limited chaining.** Each rim's bound composes across operations, and a
+   later boolean on the same lineage whose contacts touch a rim coarser than
+   the chord tolerance the pair derives from its own diameter refuses (a plain
+   `ErrUnsupported` naming the operand and quoting the touched bound and the
+   pair's chord tolerance — core §8, "The chain depth").
 2. **Coplanar contact refuses outright.** `triTriClassify`'s `contactRegion`
    is a tangency the exact chord predicates cannot classify
    (`errUnclassifiableContact`), and two bodies sharing an extrusion plane
@@ -1351,12 +1351,13 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   `rationalFloatError(fl(0.1) + fl(0.3), z1)` (no float), and the published
   volume bound contains the exact rational volume `area · (fl(0.3))`. The
   fixture is shown to fail with the charge deleted.
-- The chain-depth refusal's wording: three tools `Placed` 16 mm down (the
+- The chain-depth refusal's wording: two tools `Placed` 16 mm down (the
   shared-axis arm excludes a placement, so the pair stays on the mesh path)
-  refuse the third `Cut` with a plain `ErrUnsupported` that is not a
-  `BooleanError`, names the `target`, quotes the target's held bound and the
-  pair's chord tolerance, states that a boolean takes no tolerance, and
-  contains no "retry with a tolerance". `Body.Tessellate` on a faceted body at
+  leave rims coarser than the next pair's chord tolerance. A third tool clear
+  of them cuts; a pin placed on the second hole's rim is refused with a plain
+  `ErrUnsupported` that is not a `BooleanError`, names the `target`, quotes the
+  touched bound and the pair's chord tolerance, states that a boolean takes no
+  tolerance, and contains no "retry with a tolerance". `Body.Tessellate` on a faceted body at
   a finer tolerance keeps its own "retry with a tolerance of at least" text.
 
 ## Implementation notes

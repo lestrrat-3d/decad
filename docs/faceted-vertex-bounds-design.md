@@ -14,7 +14,7 @@ Nothing here changes a public type. `Vertex.Bound`, `Faceted.Bound`,
 `FacetedCurve.Bound`, `Measurement.Bound`, `Box.Bound` and `Mesh.Bound` keep
 their shapes; what changes is which proven number each one reports. The one
 behaviour change a caller can observe is §5's chain-depth refusal, which
-lands with its companion edit to core §8.
+core §8 "The chain depth" states.
 
 ## 1. Problem
 
@@ -264,11 +264,10 @@ reads.
 
 ## 5. The chain-depth comparison
 
-Today the boolean asks every operand for a mesh at the pair's chord tolerance
-`tol`, and a faceted operand holding `meshBound > tol` refuses inside
-`tessellateFaceted` before any contact is examined (`booleanOperandStaging`,
-core §8 "The chain depth"). With per-vertex bounds the global maximum is the
-wrong operand of that comparison: one coarse rim far from the new contact
+A global comparison, which asks every operand for a mesh at the pair's chord
+tolerance `tol` and refuses a faceted operand holding `meshBound > tol`
+inside `tessellateFaceted` before any contact is examined, compares the wrong
+number once bounds are per vertex: one coarse rim far from the new contact
 would refuse a pair whose every new rim is composed from fine geometry.
 
 **What the gate must certify.** Every rim vertex this operation creates is
@@ -295,8 +294,11 @@ request never coarsens the other. After the contact classification has run
 and before any facet is cut, the gate walks every operand facet the
 classification reports as meeting the other operand (`ContactPoint`,
 `ContactSegment`, or within the pre-pass slack) and refuses with
-`ErrUnsupported`, through `meshbool.BooleanExpectedStaging`, when any such facet of a
-RESTATING operand has `δ(t) > tol`. The message names the operand (`Cut`'s
+`ErrUnsupported`, through `meshbool.BooleanExpectedStaging`, when any such
+facet of a RESTATING operand has `δ(t) > tol` (`meshbool.RefuseCoarseHeldContact`,
+called from `MeshBoolean` on the classified contacts and from the root's
+hidden-tangency pre-pass on the facets within its slack;
+`booleanOperandStaging` restates it in the boolean's own terms). The message names the operand (`Cut`'s
 target or tool, else first or second), the bound of the touched facet, the
 pair's chord tolerance, and says that a boolean takes no tolerance. A chorded
 analytic operand is not gated: its `sourceBound` may exceed `tol` by
@@ -314,8 +316,8 @@ is refused only where a new contact lands on earlier rim geometry whose
 bound has outgrown the pair tolerance; §6 measured no such refusal over fifty
 unions. A result can carry a `Bound` above the next pair's tolerance in
 untouched regions and still serve as an operand. Core §8's "The chain depth"
-paragraph, evaluator §9's rim bullet and tessellation §7/§11 state the global
-rule today and are rewritten with PR 4 (§8).
+paragraph, evaluator §9's operand and rim bullets and tessellation §7/§11
+state this rule.
 
 ## 6. Measured growth
 
