@@ -1,7 +1,9 @@
 package proof_test
 
 import (
+	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -190,6 +192,81 @@ func TestRatIntervalVectorProducts(t *testing.T) {
 	for axis, want := range []*big.Rat{big.NewRat(-14, 1), big.NewRat(-25, 2), big.NewRat(13, 1)} {
 		require.Zero(t, pointCross[axis].Lo.Cmp(want), "axis %d", axis)
 		require.Zero(t, pointCross[axis].Hi.Cmp(want), "axis %d", axis)
+	}
+}
+
+// TestCommonDenominatorRatOpsMatchBigRat feeds AddRat, SubRat and MulRat and
+// big.Rat's own Add, Sub and Mul the same operands and requires the same
+// numerator and denominator, so a result in other than lowest terms fails
+// even where it compares equal. The operands mix held floats across the
+// whole exponent range, their sums and products (wide power-of-two
+// denominators), integers with trailing zero bits, zero, and fractions over
+// other denominators, which take big.Rat's path.
+func TestCommonDenominatorRatOpsMatchBigRat(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(0x452821E638D01377, 0xBE5466CF34E90C6C))
+	float := func() *big.Rat {
+		for {
+			f := math.Float64frombits(rng.Uint64())
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				continue
+			}
+			return new(big.Rat).SetFloat64(f)
+		}
+	}
+	scaled := func() *big.Rat {
+		f := (rng.Float64() - 0.5) * math.Ldexp(1, rng.IntN(80)-40)
+		return new(big.Rat).SetFloat64(f)
+	}
+	operand := func() *big.Rat {
+		switch rng.IntN(8) {
+		case 0:
+			return float()
+		case 1:
+			return new(big.Rat)
+		case 2:
+			return new(big.Rat).SetInt64(rng.Int64N(1<<20) << rng.IntN(12))
+		case 3:
+			return big.NewRat(rng.Int64N(2001)-1000, rng.Int64N(999)+1)
+		case 4:
+			return new(big.Rat).Add(scaled(), scaled())
+		case 5:
+			return new(big.Rat).Mul(scaled(), scaled())
+		case 6:
+			var zero big.Rat // an uninitialised denominator
+			return &zero
+		default:
+			return scaled()
+		}
+	}
+	ops := []struct {
+		name string
+		got  func(z, a, b *big.Rat) *big.Rat
+		want func(z, a, b *big.Rat) *big.Rat
+	}{
+		{"add", proof.AddRat, (*big.Rat).Add},
+		{"sub", proof.SubRat, (*big.Rat).Sub},
+		{"mul", proof.MulRat, (*big.Rat).Mul},
+	}
+	requireSame := func(want, got *big.Rat, msgAndArgs ...any) {
+		t.Helper()
+		require.Zero(t, want.Num().Cmp(got.Num()), msgAndArgs...)
+		require.Zero(t, want.Denom().Cmp(got.Denom()), msgAndArgs...)
+	}
+	for range 20000 {
+		a, b := operand(), operand()
+		heldA, heldB := new(big.Rat).Set(a), new(big.Rat).Set(b)
+		for _, op := range ops {
+			want := op.want(new(big.Rat), heldA, heldB)
+			requireSame(want, op.got(new(big.Rat), a, b), "%s(%v, %v)", op.name, heldA, heldB)
+			requireSame(heldA, a, "%s left operand unchanged", op.name)
+			requireSame(heldB, b, "%s right operand unchanged", op.name)
+			requireSame(want, op.got(new(big.Rat).Set(a), new(big.Rat).Set(a), b), "%s aliasing z and a", op.name)
+			z := new(big.Rat).Set(b)
+			requireSame(want, op.got(z, a, z), "%s aliasing z and b", op.name)
+			z = new(big.Rat).Set(a)
+			requireSame(op.want(new(big.Rat), heldA, heldA), op.got(z, z, z), "%s aliasing all three", op.name)
+		}
 	}
 }
 

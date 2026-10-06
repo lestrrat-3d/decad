@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -93,13 +94,13 @@ func (w *World) conservationState(state State) (ConservationState, bool) {
 			return ConservationState{}, false
 		}
 		for axis := range sums.angular {
-			sums.angular[axis].Add(sums.angular[axis], spin.value[axis])
-			sums.angularLow[axis].Add(sums.angularLow[axis], spin.low[axis])
-			sums.angularHigh[axis].Add(sums.angularHigh[axis], spin.high[axis])
+			proof.AddRat(sums.angular[axis], sums.angular[axis], spin.value[axis])
+			proof.AddRat(sums.angularLow[axis], sums.angularLow[axis], spin.low[axis])
+			proof.AddRat(sums.angularHigh[axis], sums.angularHigh[axis], spin.high[axis])
 		}
-		sums.energy.Add(sums.energy, spin.energy)
-		sums.energyLow.Add(sums.energyLow, spin.energyLow)
-		sums.energyHigh.Add(sums.energyHigh, spin.energyHigh)
+		proof.AddRat(sums.energy, sums.energy, spin.energy)
+		proof.AddRat(sums.energyLow, sums.energyLow, spin.energyLow)
+		proof.AddRat(sums.energyHigh, sums.energyHigh, spin.energyHigh)
 	}
 	return sums.readings()
 }
@@ -133,30 +134,30 @@ func (sums *conservationSums) addLinear(pose r3.Transform, exact *exactMass, vel
 	}
 	speedSquared := new(big.Rat)
 	for axis, v := range velocity {
-		sums.momentum[axis].Add(sums.momentum[axis], new(big.Rat).Mul(mass, v))
+		proof.AddRat(sums.momentum[axis], sums.momentum[axis], proof.MulRat(new(big.Rat), mass, v))
 		if v.Sign() < 0 {
-			sums.low[axis].Add(sums.low[axis], new(big.Rat).Mul(massHigh, v))
-			sums.high[axis].Add(sums.high[axis], new(big.Rat).Mul(massLow, v))
+			proof.AddRat(sums.low[axis], sums.low[axis], proof.MulRat(new(big.Rat), massHigh, v))
+			proof.AddRat(sums.high[axis], sums.high[axis], proof.MulRat(new(big.Rat), massLow, v))
 		} else {
-			sums.low[axis].Add(sums.low[axis], new(big.Rat).Mul(massLow, v))
-			sums.high[axis].Add(sums.high[axis], new(big.Rat).Mul(massHigh, v))
+			proof.AddRat(sums.low[axis], sums.low[axis], proof.MulRat(new(big.Rat), massLow, v))
+			proof.AddRat(sums.high[axis], sums.high[axis], proof.MulRat(new(big.Rat), massHigh, v))
 		}
-		speedSquared.Add(speedSquared, new(big.Rat).Mul(v, v))
+		proof.AddRat(speedSquared, speedSquared, proof.MulRat(new(big.Rat), v, v))
 	}
 	for axis := range sums.angular {
 		j, k := (axis+1)%3, (axis+2)%3
-		coefficient := new(big.Rat).Sub(new(big.Rat).Mul(center[j], velocity[k]),
-			new(big.Rat).Mul(center[k], velocity[j]))
-		uncertainty := new(big.Rat).Add(
-			new(big.Rat).Mul(centerError[j], absRat(new(big.Rat).Set(velocity[k]))),
-			new(big.Rat).Mul(centerError[k], absRat(new(big.Rat).Set(velocity[j]))))
+		coefficient := proof.SubRat(new(big.Rat), proof.MulRat(new(big.Rat), center[j], velocity[k]),
+			proof.MulRat(new(big.Rat), center[k], velocity[j]))
+		uncertainty := proof.AddRat(new(big.Rat),
+			proof.MulRat(new(big.Rat), centerError[j], absRat(new(big.Rat).Set(velocity[k]))),
+			proof.MulRat(new(big.Rat), centerError[k], absRat(new(big.Rat).Set(velocity[j]))))
 		addMassProduct(sums.angular[axis], sums.angularLow[axis], sums.angularHigh[axis],
 			mass, massLow, massHigh, coefficient,
-			new(big.Rat).Sub(coefficient, uncertainty), new(big.Rat).Add(coefficient, uncertainty))
+			proof.SubRat(new(big.Rat), coefficient, uncertainty), proof.AddRat(new(big.Rat), coefficient, uncertainty))
 	}
-	sums.energy.Add(sums.energy, new(big.Rat).Mul(mass, speedSquared))
-	sums.energyLow.Add(sums.energyLow, new(big.Rat).Mul(massLow, speedSquared))
-	sums.energyHigh.Add(sums.energyHigh, new(big.Rat).Mul(massHigh, speedSquared))
+	proof.AddRat(sums.energy, sums.energy, proof.MulRat(new(big.Rat), mass, speedSquared))
+	proof.AddRat(sums.energyLow, sums.energyLow, proof.MulRat(new(big.Rat), massLow, speedSquared))
+	proof.AddRat(sums.energyHigh, sums.energyHigh, proof.MulRat(new(big.Rat), massHigh, speedSquared))
 	return true
 }
 
@@ -231,17 +232,17 @@ func spinReadings(components *[6]exactComponent, pose r3.Transform, omega Quanti
 		if quantity == nil || errorBound == nil || errorBound.Sign() < 0 {
 			return spinReading{}, false
 		}
-		coefficient := new(big.Rat).Mul(local[component.i], local[component.j])
+		coefficient := proof.MulRat(new(big.Rat), local[component.i], local[component.j])
 		if component.i != component.j {
-			coefficient.Mul(coefficient, big.NewRat(2, 1))
+			proof.MulRat(coefficient, coefficient, big.NewRat(2, 1))
 		}
 		addIntervalProduct(reading.energy, reading.energyLow, reading.energyHigh,
 			quantity, errorBound, coefficient)
 		for axis := range reading.value {
-			coefficient = new(big.Rat).Mul(rotation[axis][component.i], local[component.j])
+			coefficient = proof.MulRat(new(big.Rat), rotation[axis][component.i], local[component.j])
 			if component.i != component.j {
-				coefficient.Add(coefficient,
-					new(big.Rat).Mul(rotation[axis][component.j], local[component.i]))
+				proof.AddRat(coefficient, coefficient,
+					proof.MulRat(new(big.Rat), rotation[axis][component.j], local[component.i]))
 			}
 			addIntervalProduct(reading.value[axis], reading.low[axis], reading.high[axis],
 				quantity, errorBound, coefficient)
@@ -282,15 +283,15 @@ func spinEnergyChange(components *[6]exactComponent, rotation [3][3]*big.Rat,
 		if quantity == nil || bound == nil || bound.Sign() < 0 {
 			return nil, false
 		}
-		coefficient := new(big.Rat).Sub(
-			new(big.Rat).Mul(final[component.i], final[component.j]),
-			new(big.Rat).Mul(initial[component.i], initial[component.j]))
+		coefficient := proof.SubRat(new(big.Rat),
+			proof.MulRat(new(big.Rat), final[component.i], final[component.j]),
+			proof.MulRat(new(big.Rat), initial[component.i], initial[component.j]))
 		if component.i != component.j {
-			coefficient.Mul(coefficient, big.NewRat(2, 1))
+			proof.MulRat(coefficient, coefficient, big.NewRat(2, 1))
 		}
-		contribution := new(big.Rat).Mul(quantity, coefficient)
-		upper.Add(upper, new(big.Rat).Add(contribution,
-			new(big.Rat).Mul(bound, absRat(coefficient))))
+		contribution := proof.MulRat(new(big.Rat), quantity, coefficient)
+		proof.AddRat(upper, upper, proof.AddRat(new(big.Rat), contribution,
+			proof.MulRat(new(big.Rat), bound, absRat(coefficient))))
 	}
 	return upper, true
 }
@@ -314,7 +315,7 @@ func localSpin(rotation [3][3]*big.Rat, omega [3]*big.Rat) ([3]*big.Rat, bool) {
 			if velocity[axis].Sign() == 0 {
 				continue
 			}
-			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity[axis]))
+			proof.AddRat(local[i], local[i], proof.MulRat(new(big.Rat), rotation[axis][i], velocity[axis]))
 		}
 	}
 	return local, true
@@ -346,7 +347,7 @@ func basisSpin(pose r3.Transform, velocity [3]*big.Rat) ([3][3]*big.Rat, [3]*big
 			if velocity[axis].Sign() == 0 {
 				continue
 			}
-			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity[axis]))
+			proof.AddRat(local[i], local[i], proof.MulRat(new(big.Rat), rotation[axis][i], velocity[axis]))
 		}
 	}
 	return rotation, local, true
@@ -359,16 +360,16 @@ func addIntervalProduct(value, low, high, nominal, uncertainty, coefficient *big
 	if coefficient.Sign() == 0 || (nominal.Sign() == 0 && uncertainty.Sign() == 0) {
 		return
 	}
-	contribution := new(big.Rat).Mul(nominal, coefficient)
-	value.Add(value, contribution)
+	contribution := proof.MulRat(new(big.Rat), nominal, coefficient)
+	proof.AddRat(value, value, contribution)
 	if uncertainty.Sign() == 0 {
-		low.Add(low, contribution)
-		high.Add(high, contribution)
+		proof.AddRat(low, low, contribution)
+		proof.AddRat(high, high, contribution)
 		return
 	}
-	width := new(big.Rat).Mul(uncertainty, absRat(new(big.Rat).Set(coefficient)))
-	low.Add(low, new(big.Rat).Sub(contribution, width))
-	high.Add(high, contribution.Add(contribution, width))
+	width := proof.MulRat(new(big.Rat), uncertainty, absRat(new(big.Rat).Set(coefficient)))
+	proof.AddRat(low, low, proof.SubRat(new(big.Rat), contribution, width))
+	proof.AddRat(high, high, proof.AddRat(contribution, contribution, width))
 }
 
 // worldCenterReading uses r3 for the point transform, then encloses both its
@@ -408,12 +409,12 @@ func worldCenterReading(pose r3.Transform, exact *exactMass) ([3]*big.Rat, [3]*b
 			if factor.Sign() == 0 {
 				continue
 			}
-			exactValue.Add(exactValue, new(big.Rat).Mul(factor, exact.local[j]))
-			rowSum.Add(rowSum, absRat(factor))
+			proof.AddRat(exactValue, exactValue, proof.MulRat(new(big.Rat), factor, exact.local[j]))
+			proof.AddRat(rowSum, rowSum, absRat(factor))
 		}
-		errorBound[axis] = absRat(exactValue.Sub(exactValue, nominal[axis]))
+		errorBound[axis] = absRat(proof.SubRat(exactValue, exactValue, nominal[axis]))
 		if radius.Sign() != 0 {
-			errorBound[axis].Add(errorBound[axis], rowSum.Mul(radius, rowSum))
+			proof.AddRat(errorBound[axis], errorBound[axis], proof.MulRat(rowSum, radius, rowSum))
 		}
 	}
 	return nominal, errorBound, true
@@ -444,25 +445,25 @@ func centerReadable(pose r3.Transform, exact *exactMass) bool {
 // other input compares all four.
 func addMassProduct(sum, low, high, mass, massLow, massHigh, coefficient, coefficientLow,
 	coefficientHigh *big.Rat) {
-	sum.Add(sum, new(big.Rat).Mul(mass, coefficient))
+	proof.AddRat(sum, sum, proof.MulRat(new(big.Rat), mass, coefficient))
 	if massLow.Sign() > 0 && massLow.Cmp(massHigh) <= 0 && coefficientLow.Cmp(coefficientHigh) <= 0 {
 		if coefficientLow.Sign() < 0 {
-			low.Add(low, new(big.Rat).Mul(massHigh, coefficientLow))
+			proof.AddRat(low, low, proof.MulRat(new(big.Rat), massHigh, coefficientLow))
 		} else {
-			low.Add(low, new(big.Rat).Mul(massLow, coefficientLow))
+			proof.AddRat(low, low, proof.MulRat(new(big.Rat), massLow, coefficientLow))
 		}
 		if coefficientHigh.Sign() > 0 {
-			high.Add(high, new(big.Rat).Mul(massHigh, coefficientHigh))
+			proof.AddRat(high, high, proof.MulRat(new(big.Rat), massHigh, coefficientHigh))
 		} else {
-			high.Add(high, new(big.Rat).Mul(massLow, coefficientHigh))
+			proof.AddRat(high, high, proof.MulRat(new(big.Rat), massLow, coefficientHigh))
 		}
 		return
 	}
 	products := [4]*big.Rat{
-		new(big.Rat).Mul(massLow, coefficientLow),
-		new(big.Rat).Mul(massLow, coefficientHigh),
-		new(big.Rat).Mul(massHigh, coefficientLow),
-		new(big.Rat).Mul(massHigh, coefficientHigh),
+		proof.MulRat(new(big.Rat), massLow, coefficientLow),
+		proof.MulRat(new(big.Rat), massLow, coefficientHigh),
+		proof.MulRat(new(big.Rat), massHigh, coefficientLow),
+		proof.MulRat(new(big.Rat), massHigh, coefficientHigh),
 	}
 	minimum, maximum := products[0], products[0]
 	for _, product := range products[1:] {
@@ -473,16 +474,18 @@ func addMassProduct(sum, low, high, mass, massLow, massHigh, coefficient, coeffi
 			maximum = product
 		}
 	}
-	low.Add(low, minimum)
-	high.Add(high, maximum)
+	proof.AddRat(low, low, minimum)
+	proof.AddRat(high, high, maximum)
 }
 
-func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, bool) {
+// driftConservationSlices reads every conservation reading it needs through
+// work, which reuses the step's own readings.
+func (w *World) driftConservationSlices(work *stepWork, slices [][2]State) (ConservationState, bool) {
 	for _, slice := range slices {
 		for i, part := range w.bodies {
 			if part.definition.Role == Dynamic && !sameOrientation(
 				slice[0].entries[i].Pose, slice[1].entries[i].Pose) {
-				return w.rotatingDriftChange(slices)
+				return w.rotatingDriftChange(work, slices)
 			}
 		}
 	}
@@ -557,7 +560,7 @@ func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, b
 // Rotating drift compares the independently enclosed endpoint readings.
 // This can be wider than the translation-only cancellation above but includes
 // world-frame inertia changes without attributing an event impulse to drift.
-func (w *World) rotatingDriftChange(slices [][2]State) (ConservationState, bool) {
+func (w *World) rotatingDriftChange(work *stepWork, slices [][2]State) (ConservationState, bool) {
 	var energyValue, energyLow, energyHigh big.Rat
 	var linearValue, linearLow, linearHigh, angularValue, angularLow, angularHigh [3]*big.Rat
 	for axis := range linearValue {
@@ -575,11 +578,11 @@ func (w *World) rotatingDriftChange(slices [][2]State) (ConservationState, bool)
 				return ConservationState{}, false
 			}
 		}
-		before, ok := w.conservationState(slice[0])
+		before, ok := work.conservation(slice[0])
 		if !ok {
 			return ConservationState{}, false
 		}
-		after, ok := w.conservationState(slice[1])
+		after, ok := work.conservation(slice[1])
 		if !ok {
 			return ConservationState{}, false
 		}
