@@ -209,12 +209,13 @@ jobs:
   # The packages outside the root run on two Ubuntu runners. macOS and Windows
   # run the whole suite without the race detector.
   #
-  # ./dynamics/ has a runner of its own. Its scenes run one after another, and
-  # their time under -race depends on the hardware the job lands on: the same
-  # tests take about twice as long on the slowest ubuntu-latest runners as on
-  # the fastest. The 30m -timeout covers the slowest runner with room for more
-  # scenes. The 600s soft budget (`budget:`) sits far below it, so growth in
-  # the scenes is reported long before the timeout would fail the job.
+  # ./dynamics/ has a runner of its own. Its top-level tests call t.Parallel(),
+  # so they run concurrently, and their time under -race depends on the
+  # hardware the job lands on: the same tests take about twice as long on the
+  # slowest ubuntu-latest runners as on the fastest. The 30m -timeout covers
+  # the slowest runner with room for more scenes. The 600s soft budget
+  # (`budget:`) sits far below it, so growth in the scenes is reported long
+  # before the timeout would fail the job.
   test:
     strategy:
       fail-fast: false
