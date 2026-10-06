@@ -20,13 +20,23 @@ func publishClippedHorizontalPatch(report *ContactReport, a, b orientedSourceBox
 	}
 }
 
+// axisAlignedOrientedBox reads box as an axis-aligned box when every source
+// edge lies along one world axis.
+//
+// It reads each Dyadic it compares into a named local before the comparison,
+// never as an element of a local DyV3 indexed by a loop variable: Go 1.26.0
+// to 1.26.5's stack-slot merging gave such a range copy the slot of an
+// inlined dyMax argument while the indexed read still needed it, and the
+// box's hi corner came back as its lo one.
 func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool) {
 	var aligned sourceBoxContactProof
 	var used [3]bool
-	for sourceAxis, edge := range box.edge {
+	for sourceAxis := range box.edge {
+		e0, e1, e2 := box.edge[sourceAxis][0], box.edge[sourceAxis][1], box.edge[sourceAxis][2]
+		signs := [3]int{e0.Sign(), e1.Sign(), e2.Sign()}
 		worldAxis := -1
-		for axis := range 3 {
-			if edge[axis].Sign() != 0 {
+		for axis, sign := range signs {
+			if sign != 0 {
 				if worldAxis >= 0 {
 					return sourceBoxContactProof{}, false
 				}
@@ -39,18 +49,24 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 		used[worldAxis] = true
 		for side := range 2 {
 			worldSide := side
-			if edge[worldAxis].Sign() < 0 {
+			if signs[worldAxis] < 0 {
 				worldSide = 1 - side
 			}
 			aligned.faces[worldAxis][worldSide] = box.faces[sourceAxis][side]
 		}
 	}
 	for axis := range 3 {
-		aligned.lo[axis], aligned.hi[axis] = box.corner[0][axis], box.corner[0][axis]
-		for _, corner := range box.corner[1:] {
-			aligned.lo[axis] = dyMin(aligned.lo[axis], corner[axis])
-			aligned.hi[axis] = dyMax(aligned.hi[axis], corner[axis])
+		lo, hi := box.corner[0][axis], box.corner[0][axis]
+		for k := 1; k < len(box.corner); k++ {
+			v := box.corner[k][axis]
+			if proofarith.DyCmp(v, lo) < 0 {
+				lo = v
+			}
+			if proofarith.DyCmp(v, hi) > 0 {
+				hi = v
+			}
 		}
+		aligned.lo[axis], aligned.hi[axis] = lo, hi
 	}
 	return aligned, true
 }

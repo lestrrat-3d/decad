@@ -40,7 +40,10 @@ type FloatBox3 struct {
 func DvFloatBox(v DyV3) FloatBox3 {
 	var out FloatBox3
 	for axis := range 3 {
-		out.Lo[axis], out.Hi[axis] = FloatBounds(v[axis])
+		// A named copy, never v[axis] as the call's argument (dyadic.go,
+		// "Indexed reads").
+		c := v[axis]
+		out.Lo[axis], out.Hi[axis] = FloatBounds(c)
 	}
 	return out
 }
@@ -92,31 +95,34 @@ func DvPrimitive(v DyV3) DyV3 {
 	if !found {
 		return DyV3{}
 	}
-	var ints [3]*big.Int
+	// The components are named locals, never elements of a local array indexed
+	// by a loop variable around a call (dyadic.go, "Indexed reads").
+	v0, v1, v2 := v[0], v[1], v[2]
 	gcd := new(big.Int)
-	for i, c := range v {
+	scaled := func(c Dyadic) *big.Int {
 		if c.IsZero() {
-			continue
+			return nil
 		}
-		ints[i] = c.MantInto(new(big.Int))
-		ints[i].Lsh(ints[i], uint(c.exp-exp))
+		k := c.MantInto(new(big.Int))
+		k.Lsh(k, uint(c.exp-exp))
 		if gcd.Sign() == 0 {
-			gcd.Abs(ints[i])
-			continue
+			gcd.Abs(k)
+			return k
 		}
-		gcd.GCD(nil, nil, gcd, new(big.Int).Abs(ints[i]))
+		gcd.GCD(nil, nil, gcd, new(big.Int).Abs(k))
+		return k
 	}
-	var out DyV3
-	for i, k := range ints {
+	k0, k1, k2 := scaled(v0), scaled(v1), scaled(v2)
+	primitive := func(k *big.Int) Dyadic {
 		if k == nil {
-			continue
+			return Dyadic{}
 		}
 		if gcd.BitLen() > 1 {
 			k.Quo(k, gcd)
 		}
-		out[i] = fromBig(k, 0)
+		return fromBig(k, 0)
 	}
-	return out
+	return DyV3{primitive(k0), primitive(k1), primitive(k2)}
 }
 
 // AppendKey appends a byte encoding of d to b. Two encodings are equal exactly
@@ -142,8 +148,9 @@ func (d Dyadic) AppendKey(b []byte) []byte {
 	}
 	n := (d.mag.bitLen() + 7) / 8
 	b = binary.AppendUvarint(b, uint64(n))
-	for i := n - 1; i >= 0; i-- {
-		b = append(b, byte(d.mag[i/8]>>(8*(i%8))))
+	var bytes [dyWords * 8]byte
+	for i, w := range d.mag {
+		binary.BigEndian.PutUint64(bytes[8*(dyWords-1-i):], w)
 	}
-	return b
+	return append(b, bytes[len(bytes)-n:]...)
 }

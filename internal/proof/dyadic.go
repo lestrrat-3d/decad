@@ -47,6 +47,16 @@ import (
 // big.Int paths compute the same exact integer; they differ only in where it
 // is stored.
 
+// Indexed reads. A Dyadic is a 48-byte struct the compiler keeps on the
+// stack, not in registers, so arrays of them (DyV3, a box's corners) are
+// stack locals too. Go 1.26.0 to 1.26.5 merge stack slots by a liveness
+// analysis that ends a local's life at the instruction computing an address
+// into it, not at the copy that reads through that address; a variable-
+// indexed element passed as a call argument could then be overwritten by
+// another argument sharing its slot before it was copied (fixed in Go 1.26.6,
+// golang/go#80127). Code over Dyadic arrays therefore copies an element into
+// a named local before it reaches a call, or indexes by constant.
+
 // dyWords is the inline mantissa's width in 64-bit words.
 const dyWords = 3
 
@@ -657,20 +667,16 @@ func DyVec(v r3.Vec) DyV3 {
 
 // DvSub returns a − b componentwise.
 func DvSub(a, b DyV3) DyV3 {
-	var out DyV3
-	for i := range out {
-		out[i] = DySubScalar(a[i], b[i])
-	}
-	return out
+	a0, a1, a2 := a[0], a[1], a[2]
+	b0, b1, b2 := b[0], b[1], b[2]
+	return DyV3{DySubScalar(a0, b0), DySubScalar(a1, b1), DySubScalar(a2, b2)}
 }
 
 // DvAdd returns a + b componentwise.
 func DvAdd(a, b DyV3) DyV3 {
-	var out DyV3
-	for i := range out {
-		out[i] = DyAdd(a[i], b[i])
-	}
-	return out
+	a0, a1, a2 := a[0], a[1], a[2]
+	b0, b1, b2 := b[0], b[1], b[2]
+	return DyV3{DyAdd(a0, b0), DyAdd(a1, b1), DyAdd(a2, b2)}
 }
 
 // DvCross returns a × b exactly.
@@ -682,13 +688,13 @@ func DvCross(a, b DyV3) DyV3 {
 	}
 }
 
-// DvDot returns a · b exactly.
+// DvDot returns a · b exactly, summed in component order from zero.
 func DvDot(a, b DyV3) Dyadic {
-	out := DyZero()
-	for i := range a {
-		out = DyAdd(out, DyMul(a[i], b[i]))
-	}
-	return out
+	a0, a1, a2 := a[0], a[1], a[2]
+	b0, b1, b2 := b[0], b[1], b[2]
+	out := DyAdd(DyZero(), DyMul(a0, b0))
+	out = DyAdd(out, DyMul(a1, b1))
+	return DyAdd(out, DyMul(a2, b2))
 }
 
 // DvIsZero reports whether every component is exactly zero.
@@ -916,17 +922,17 @@ func (d Dyadic) MantInto(z *big.Int) *big.Int {
 	if d.big != nil {
 		return z.Set(d.big)
 	}
-	words := z.Bits()[:0]
+	var words dyBuf
 	if bits.UintSize == 64 {
-		for _, w := range d.mag {
-			words = append(words, big.Word(w))
+		for i, w := range d.mag {
+			words[i] = big.Word(w)
 		}
 	} else {
-		for _, w := range d.mag {
-			words = append(words, big.Word(w), big.Word(w>>32))
+		for i, w := range d.mag {
+			words[2*i], words[2*i+1] = big.Word(w), big.Word(w>>32)
 		}
 	}
-	z.SetBits(words)
+	z.SetBits(append(z.Bits()[:0], words[:]...))
 	if d.neg {
 		z.Neg(z)
 	}
