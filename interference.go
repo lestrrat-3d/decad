@@ -164,7 +164,10 @@ const (
 // intersection unchanged. All three paths share §6's positive lower-volume
 // gate (positiveVolume). The outcome names why an unmeasured result is
 // unmeasured.
-func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, interferenceOutcome, error) {
+//
+// meshes supplies the mesh path's operand meshes: Verify's per-call cache,
+// or pairMeshes{} where a caller measures one pair on its own.
+func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshes operandMeshes) (Measurement, interferenceOutcome, error) {
 	if res.contained != nil {
 		return res.contained.volume, interferenceMeasured, nil
 	}
@@ -205,7 +208,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 		return overlap, interferenceMeasured, nil
 	}
 
-	eval, err := evaluateBoolean(ctx, meshbool.OpIntersect, a, b)
+	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return Measurement{}, interferenceOutcomeForExpected(expected), nil

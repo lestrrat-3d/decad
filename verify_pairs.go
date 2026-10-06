@@ -3,10 +3,12 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is Verify's pair partition (docs/interference-design.md §2): the
@@ -153,8 +155,8 @@ func runVerifyPairs(ctx context.Context, jobs []verifyPairJob, workers int, prov
 // a pair holding a sheet operand takes docs/surface-design.md §9.3's
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
-// clearances were asked, and must be safe for concurrent use.
-func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *bodyGeomCache) (verifyPairOutcome, error) {
+// clearances were asked; it and meshes must be safe for concurrent use.
+func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *bodyGeomCache, meshes operandMeshes) (verifyPairOutcome, error) {
 	var out verifyPairOutcome
 	a, b, boxProven := job.a, job.b, job.boxProven
 
@@ -268,7 +270,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	volume, outcome, err := measuredInterference(ctx, a, b, res)
+	volume, outcome, err := measuredInterference(ctx, a, b, res, meshes)
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
@@ -319,4 +321,114 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairResult, rel floa
 		o.undecided = true
 	}
 	o.clearances = append(o.clearances, scratch.Clearances...)
+}
+
+// verifyMeshCache meshes each body once per Verify call, at one chord for
+// every pair it takes part in (docs/interference-design.md §5.3). The chord is
+// the tightest one any of the body's candidate pairs would have asked for:
+// the least pairChordTolerance over the solid pairs whose boxes meet, which
+// are the only pairs that can reach the mesh path. The entries are fixed
+// before the worker pool starts and only read after it, and each entry's mesh
+// is built under its own sync.Once, so one Verify call meshes and audits a
+// body once however many workers ask for it at the same time.
+//
+// A body whose tessellation restates a held mesh (a faceted Boolean result,
+// a mitred sweep; heldFloorOf) chords nothing, so there is nothing to share:
+// it has no entry, and every pair meshes it as the public booleans do, at the
+// pair's own tolerance raised to its held floor, and gates the facets that
+// pair touches at the pair's own tolerance (docs/api-design.md §8 "The chain
+// depth", docs/faceted-vertex-bounds-design.md §5).
+type verifyMeshCache struct {
+	entries map[*Body]*verifyMeshEntry
+}
+
+// verifyMeshEntry is one body's shared mesh: the chord it is meshed at, and
+// the outcome of the one tessellation that builds it.
+type verifyMeshEntry struct {
+	chord float64
+	once  sync.Once
+	mesh  *Mesh
+	err   error
+}
+
+// newVerifyMeshCache fixes every body's chord from the pair jobs. A body or a
+// pair whose chord share cannot be read contributes nothing here: a pair that
+// reaches the mesh path anyway reads its own pairChordTolerance there and
+// fails with that error exactly as it would without the cache. The context is
+// polled once per job.
+func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshCache, error) {
+	cache := &verifyMeshCache{entries: map[*Body]*verifyMeshEntry{}}
+	shares := map[*Body]chordOperand{}
+	unreadable := map[*Body]struct{}{}
+	share := func(b *Body) (chordOperand, bool) {
+		if s, ok := shares[b]; ok {
+			return s, true
+		}
+		if _, ok := unreadable[b]; ok {
+			return chordOperand{}, false
+		}
+		s, err := chordOperandOf(ctx, b)
+		if err != nil {
+			unreadable[b] = struct{}{}
+			return chordOperand{}, false
+		}
+		shares[b] = s
+		return s, true
+	}
+	for _, job := range jobs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if job.boxProven || job.a.Kind() == BodySheet || job.b.Kind() == BodySheet {
+			continue
+		}
+		sa, ok := share(job.a)
+		if !ok {
+			continue
+		}
+		sb, ok := share(job.b)
+		if !ok {
+			continue
+		}
+		tol, _, err := pairChordFrom(sa, sb)
+		if err != nil {
+			continue
+		}
+		for _, b := range [2]*Body{job.a, job.b} {
+			if !sharesVerifyMesh(b) {
+				continue
+			}
+			e, ok := cache.entries[b]
+			if !ok {
+				cache.entries[b] = &verifyMeshEntry{chord: tol}
+				continue
+			}
+			e.chord = math.Min(e.chord, tol)
+		}
+	}
+	return cache, nil
+}
+
+// sharesVerifyMesh reports whether b's tessellation chords its boundary, so
+// that one mesh at one chord can serve every pair b takes part in: whether b
+// restates no held mesh.
+func sharesVerifyMesh(b *Body) bool {
+	_, restating := heldFloorOf(b)
+	return !restating
+}
+
+// operandMesh returns b's shared mesh, building it on the first call. A body
+// with no entry is meshed as pairMeshes meshes it. A body with an entry
+// restates no held mesh, so its pairs never gate it. A failed build is kept
+// like a mesh: the build is deterministic, so every pair would fail the same
+// way, and each pair maps the error to its own operand index.
+func (c *verifyMeshCache) operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error) {
+	e, ok := c.entries[b]
+	if !ok {
+		return pairMeshes{}.operandMesh(ctx, b, pairTol)
+	}
+	e.once.Do(func() {
+		e.mesh, e.err = tessellateContext(ctx, b, units.Millimeters(e.chord), VerifyAll)
+	})
+	return e.mesh, false, e.err
 }
