@@ -139,7 +139,6 @@ to the byte budget.
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from its curve, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
-| `loft_audit.go` | `loftCrossingAudit` proves the assembled triangles manifold and watertight. See `docs/loft-design.md` §6. |
 | `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum publishing Volume/Centroid/Bounds/Area. See §8, §12. |
 
 ### Modify
@@ -254,7 +253,7 @@ to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |
-| `internal/tessellation/` | Mesh audits and the loft exact restatement over neutral triangle data. |
+| `internal/tessellation/` | Mesh audits, the loft crossing audit and the loft exact restatement over neutral triangle data. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |

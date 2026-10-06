@@ -316,9 +316,9 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	trueGap := trueWall - held
 
 	t.Logf("cone frustum wall leg: trueWall=%.9g held=%.9g trueGap=%.6e chorded.areaExcess=%.6e",
-		trueWall, held, trueGap, chorded.areaExcess)
+		trueWall, held, trueGap, chorded.AreaExcess)
 	require.Greater(t, trueGap, 0.0, "the fixture must actually exercise a positive chord-to-curve gap")
-	require.LessOrEqual(t, trueGap, chorded.areaExcess,
+	require.LessOrEqual(t, trueGap, chorded.AreaExcess,
 		"the wall leg alone (no cap term) must enclose the true chord-to-curve gap")
 }
 

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -566,7 +568,7 @@ func ivTwoTriangleArea(p0, p1, p2 survey2d.IvVec3) (proofbound.RatInterval, bool
 // three corners, the three edge vectors (u = p1−p0, v = p2−p0, w = p2−p1),
 // their cross product, and proven upper bounds on the three edge lengths.
 // Every predicate below reads these rather than rebuilding them per pair,
-// exactly as loft_audit.go's own audit data does. fp holds the stored float
+// exactly as internal/tessellation/loft_audit.go's own audit data does. fp holds the stored float
 // corners, and fu, fv, fw and fn enclose u, v, w and n in float intervals for
 // the pre-test (tessellate_revolve_filter.go).
 type revolveAuditTri struct {
@@ -821,7 +823,7 @@ func revolveContactAudit(budget *proofbound.WorkBudget, data []revolveAuditTri, 
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			shared, count := sharedVertexIndices(tris[i], tris[j])
+			shared, count := tessellation.SharedVertexIndices(tris[i], tris[j])
 			if count == 0 && boxGapExceeds(data[i].box, data[j].box, margin) {
 				continue
 			}
@@ -1141,8 +1143,8 @@ func revolveEdgeIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, triB
 	e := proofbound.ProductUpper(2, delta)
 	p0 := triangleVertexSlot(triA, shared[0])
 	p1 := triangleVertexSlot(triA, shared[1])
-	apexA := triangleApexIndex(triA, shared[0], shared[1])
-	apexB := triangleApexIndex(triB, shared[0], shared[1])
+	apexA := tessellation.TriangleApexIndex(triA, shared[0], shared[1])
+	apexB := tessellation.TriangleApexIndex(triB, shared[0], shared[1])
 	if p0 < 0 || p1 < 0 || apexA < 0 || apexB < 0 {
 		return false
 	}

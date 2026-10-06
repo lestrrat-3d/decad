@@ -37,7 +37,7 @@ import (
 //
 //	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
 //
-// S8 (loft_audit.go) refuses unless F*(F−1)/2 is at or below
+// S8 (internal/tessellation/loft_audit.go) refuses unless F*(F−1)/2 is at or below
 // proofbound.MaxFacetPairTestsPerCall (8_000_000, internal/proofbound/budget.go), which admits F ≤ 4000:
 // 4000·3999/2 = 7_998_000 passes and 4001·4000/2 = 8_002_000 does not.
 //

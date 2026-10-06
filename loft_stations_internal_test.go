@@ -727,11 +727,11 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
 // calls loftPairings (which reaches this refusal through loftCellStations)
 // before assembleLoft ever builds a triangle and before
-// loftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
+// tessellation.LoftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
 // publish orders of magnitude more wall faces than S8's own
 // proofbound.MaxFacetPairTestsPerCall ceiling binds at, an F (§7) far past it
-// (loft_audit.go), so this fixture is exactly the one the plan names: one
+// (internal/tessellation/loft_audit.go), so this fixture is exactly the one the plan names: one
 // that would otherwise reach the audit ceiling.
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	t.Parallel()
@@ -847,7 +847,7 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 
 	// What this build would have assembled had the cap not fired: §7's
 	// F = 4*Σstations - 4 over this hole-free loop, and S8's own pair count
-	// over it (loft_audit.go).
+	// over it (internal/tessellation/loft_audit.go).
 	wouldBePairs, ok := proofbound.WallChoose2(uint64(4*n*m - 4))
 	require.True(t, ok)
 	require.Greater(t, wouldBePairs, uint64(proofbound.MaxFacetPairTestsPerCall),
@@ -1007,7 +1007,7 @@ func lineStationLoopFixture(t *testing.T, starts []Point2) (ProfileRecord, [][]s
 
 // requireOneSidedCellRefusal is S16's own reading: ErrUnsupported and never
 // ErrDegenerate. The distinction is the whole point of the row — a one-sided
-// collapse that escapes here falls through to S6 (loft_audit.go), whose
+// collapse that escapes here falls through to S6 (internal/tessellation/loft_audit.go), whose
 // collapse refusal claims no body exists under ANY evaluator, where this row
 // owes only that THIS evaluator's uniform two-faces-per-cell topology has no
 // case for a point-degenerate correspondence.

@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -23,7 +25,7 @@ import (
 // evaluator (loft_build.go). It owns the LoftOption surface, WithLoftAlignment,
 // gates S9-S11 and S4's arity half (§2/§4), and the atomic record->evaluate->
 // commit tail (§10). Every other gate — S1-S8 and S13's coordinate-range
-// gate — is validateLoftRecords', assembleLoft's and loftCrossingAudit's, run
+// gate — is validateLoftRecords', assembleLoft's and tessellation.LoftCrossingAudit's, run
 // inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
@@ -565,7 +567,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 		)
 	}
 
-	if err := loftCrossingAudit(budget, verts, tris); err != nil {
+	if err := tessellation.LoftCrossingAudit(budget, verts, tris); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

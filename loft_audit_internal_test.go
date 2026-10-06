@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -65,21 +67,21 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			plane := newLoftExactPlane(tc.anchor, tc.normal)
+			plane := tessellation.NewLoftExactPlane(tc.anchor, tc.normal)
 			var want [3]int
 			for i, p := range tc.other {
 				want[i] = meshbool.XdotSign(tc.normal, proofbound.Xsub(p, tc.anchor))
 			}
-			require.Equal(t, want, trianglePlaneSigns(plane, tc.other))
+			require.Equal(t, want, tessellation.TrianglePlaneSigns(plane, tc.other))
 		})
 	}
 	anchor, normal, p := point(1, 2, 3, 5), point(2, 3, 5, 7), point(4, 5, 6, 11)
-	plane := newLoftExactPlane(anchor, normal)
+	plane := tessellation.NewLoftExactPlane(anchor, normal)
 	var sum, term big.Int
-	want := plane.sign(p, &sum, &term)
+	want := plane.Sign(p, &sum, &term)
 	anchor.W.SetInt64(99)
 	normal.X.SetInt64(99)
-	require.Equal(t, want, plane.sign(p, &sum, &term), "cached coefficients must own their integers")
+	require.Equal(t, want, plane.Sign(p, &sum, &term), "cached coefficients must own their integers")
 }
 
 // boxLoftVerts and boxLoftTris are an untwisted, unit-square-to-unit-square
@@ -113,13 +115,13 @@ func boxLoftTris() [][3]int {
 func TestLoftCrossingAuditAdmitsUntwistedBox(t *testing.T) {
 	t.Parallel()
 	budget := proofbound.NewWorkBudget(t.Context())
-	err := loftCrossingAudit(budget, boxLoftVerts(), boxLoftTris())
+	err := tessellation.LoftCrossingAudit(budget, boxLoftVerts(), boxLoftTris())
 	require.NoError(t, err)
 }
 
 // TestLoftCrossingAuditAdmitsCoplanarSharedEdge proves a wall cell's own
 // lower/upper diagonal pair — coplanar, sharing the diagonal V0->W1 — is
-// admitted through triTriCoplanarSharedEdge, AND that the identical pair
+// admitted through tessellation.TriTriCoplanarSharedEdge, AND that the identical pair
 // still reports meshbool.ContactRegion from meshbool.TriTriClassify directly: the audit-only
 // helper does not change mesh-boolean contact classification
 // (docs/loft-design.md §6, required test).
@@ -129,12 +131,12 @@ func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
 	tris := boxLoftTris()
 	lower0, upper0 := tris[0], tris[1] // cell 0's own diagonal pair
 
-	require.NoError(t, auditLoftPair(verts, tris, 0, 1))
+	require.NoError(t, tessellation.AuditLoftPair(verts, tris, 0, 1))
 
-	ta := loftTriCorners(verts, lower0)
-	tb := loftTriCorners(verts, upper0)
-	xta := loftXTriCorners(verts, lower0)
-	xtb := loftXTriCorners(verts, upper0)
+	ta := tessellation.LoftTriCorners(verts, lower0)
+	tb := tessellation.LoftTriCorners(verts, upper0)
+	xta := tessellation.LoftXTriCorners(verts, lower0)
+	xtb := tessellation.LoftXTriCorners(verts, upper0)
 	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
 	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
 	contact, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
@@ -165,18 +167,18 @@ func sameSideApexesFixture() ([]r3.Vec, [][3]int) {
 }
 
 // TestLoftCrossingAuditRejectsSameSideApexes runs sameSideApexesFixture
-// through both auditLoftPair directly and the whole audit: S7 refuses.
+// through both tessellation.AuditLoftPair directly and the whole audit: S7 refuses.
 func TestLoftCrossingAuditRejectsSameSideApexes(t *testing.T) {
 	t.Parallel()
 	verts, tris := sameSideApexesFixture()
 
-	err := auditLoftPair(verts, tris, 0, 1)
+	err := tessellation.AuditLoftPair(verts, tris, 0, 1)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "triangles 0 and 1",
 		"the refusal must name the specific triangle pair the predicate found")
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	err = loftCrossingAudit(budget, verts, tris)
+	err = tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -199,19 +201,19 @@ func genuineCrossingFixture() ([]r3.Vec, [][3]int) {
 }
 
 // TestLoftCrossingAuditRejectsGenuineCrossing runs genuineCrossingFixture
-// through both auditLoftPair directly and the whole audit: S7 refuses,
+// through both tessellation.AuditLoftPair directly and the whole audit: S7 refuses,
 // naming the pair it found.
 func TestLoftCrossingAuditRejectsGenuineCrossing(t *testing.T) {
 	t.Parallel()
 	verts, tris := genuineCrossingFixture()
 
-	err := auditLoftPair(verts, tris, 0, 1)
+	err := tessellation.AuditLoftPair(verts, tris, 0, 1)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "triangles 0 and 1",
 		"the refusal must name the specific triangle pair the predicate found")
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	err = loftCrossingAudit(budget, verts, tris)
+	err = tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -233,12 +235,12 @@ func vertexCrossesAwayFixture() ([]r3.Vec, [][3]int) {
 }
 
 // TestLoftCrossingAuditRejectsVertexPairThatCrossesAway runs
-// vertexCrossesAwayFixture through auditLoftPair: S7 refuses.
+// vertexCrossesAwayFixture through tessellation.AuditLoftPair: S7 refuses.
 func TestLoftCrossingAuditRejectsVertexPairThatCrossesAway(t *testing.T) {
 	t.Parallel()
 	verts, tris := vertexCrossesAwayFixture()
 
-	err := auditLoftPair(verts, tris, 0, 1)
+	err := tessellation.AuditLoftPair(verts, tris, 0, 1)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -253,7 +255,7 @@ func TestLoftCrossingAuditRejectsCollapsedTriangle(t *testing.T) {
 	tris := [][3]int{{0, 1, 2}}
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	err := loftCrossingAudit(budget, verts, tris)
+	err := tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -293,7 +295,7 @@ func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 		ErrFn:  func() error { return nil },
 	}
 
-	err := loftCrossingAudit(budget, verts, tris)
+	err := tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Equal(t, n, calls,
 		"the budget must be spent only on S6's per-triangle scan; S8 must refuse before any pair test")
@@ -317,7 +319,7 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 		ErrFn: func() error { return nil },
 	}
 
-	err := loftCrossingAudit(budget, verts, tris)
+	err := tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -354,7 +356,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 		},
 	}
 
-	err := loftCrossingAudit(budget, verts, tris)
+	err := tessellation.LoftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, context.Canceled,
 		"a context cancelled on the final S7 step must come back from the audit")
 	require.Equal(t, finalPairStep, steps,
@@ -364,18 +366,18 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 	require.ErrorIs(t, ctx.Err(), context.Canceled)
 }
 
-// --- the S7 shortcuts (loft_audit.go's loftAuditShortcuts) ---
+// --- the S7 shortcuts (internal/tessellation/loft_audit.go's tessellation.LoftAuditShortcuts) ---
 //
 // loftAuditReference is the audit's independent reference path: no
 // broad-phase tier and no certificate, so every pair S8 admits reaches
 // meshbool.TriTriClassify's exact contact classification. Every equivalence assertion
 // below is against THIS, never against production run through a second
-// wrapper. loftAuditProduction is exactly what loftCrossingAudit itself
+// wrapper. loftAuditProduction is exactly what tessellation.LoftCrossingAudit itself
 // passes, so an equivalence proven here is a statement about the shipped
 // path.
 //
 // FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can
-// fail" discipline). Each leg below was actually broken in loft_audit.go,
+// fail" discipline). Each leg below was actually broken in internal/tessellation/loft_audit.go,
 // the suite re-run to confirm a RED failure, then reverted before this file
 // was committed:
 //
@@ -391,10 +393,10 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //     triangle's plane, evaluated at that shared vertex, is the signed
 //     volume of a tetrahedron with a repeated point — exactly zero, every
 //     time — so meshbool.AllOneSide (which demands all three signs strictly
-//     same-sign) can never be true for it. Both of loftPlaneSeparated's own
+//     same-sign) can never be true for it. Both of tessellation.LoftPlaneSeparated's own
 //     sign arrays therefore always contain at least one zero for a
 //     shared-vertex pair, and meshbool.BoxesOverlap can never separate it either.
-//     Both tiers of loftCrossingAudit's CURRENT broad-phase are structurally
+//     Both tiers of tessellation.LoftCrossingAudit's CURRENT broad-phase are structurally
 //     incapable of reporting "no contact" for a pair sharing a vertex INDEX,
 //     independent of the len(shared) guard — so this leg is genuinely
 //     redundant against the mechanism as shipped. The explicit guard stays
@@ -426,8 +428,8 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 // every equivalence assertion in this section is written against; the section
 // header above says what each one means.
 var (
-	loftAuditReference  = loftAuditShortcuts{}
-	loftAuditProduction = loftAuditShortcuts{broadPhase: true, certificates: true}
+	loftAuditReference  = tessellation.LoftAuditShortcuts{}
+	loftAuditProduction = tessellation.LoftAuditShortcuts{BroadPhase: true, Certificates: true}
 )
 
 func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
@@ -469,16 +471,16 @@ func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
 			if tc.reverse {
 				tris[1] = [3]int{0, 4, 3}
 			}
-			data := newLoftAuditData(verts, tris)
-			_, want := auditLoftPairData(data, tris, 0, 1, loftAuditReference)
-			outcome, got := auditLoftPairData(data, tris, 0, 1, loftAuditProduction)
+			data := tessellation.NewLoftAuditData(verts, tris)
+			_, want := tessellation.AuditLoftPairData(data, tris, 0, 1, loftAuditReference)
+			outcome, got := tessellation.AuditLoftPairData(data, tris, 0, 1, loftAuditProduction)
 			if want == nil {
 				require.NoError(t, got)
 			} else {
 				require.EqualError(t, got, want.Error())
 			}
 			if tc.certify {
-				require.Equal(t, loftPairVertexCertificate, outcome)
+				require.Equal(t, tessellation.LoftPairVertexCertificate, outcome)
 			}
 		})
 	}
@@ -510,7 +512,7 @@ func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {
 // combination production can reach, and asserts every run lands on the
 // IDENTICAL verdict: all nil, or all an error with the exact same message
 // (sentinel, wrapped text and the specific triangle indices it names, all
-// included, since Error() renders every one of them). This is loft_audit.go's
+// included, since Error() renders every one of them). This is internal/tessellation/loft_audit.go's
 // own soundness argument, exercised rather than assumed: a shortcut may only
 // ever change WHETHER a pair reaches the exact classification, never WHAT
 // that classification (or its absence) decides.
@@ -521,16 +523,16 @@ func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {
 func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris [][3]int) {
 	t.Helper()
 
-	_, refErr := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
+	_, refErr := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	for _, arm := range []struct {
 		name      string
-		shortcuts loftAuditShortcuts
+		shortcuts tessellation.LoftAuditShortcuts
 	}{
-		{name: "broad-phase only", shortcuts: loftAuditShortcuts{broadPhase: true}},
-		{name: "certificates only", shortcuts: loftAuditShortcuts{certificates: true}},
+		{name: "broad-phase only", shortcuts: tessellation.LoftAuditShortcuts{BroadPhase: true}},
+		{name: "certificates only", shortcuts: tessellation.LoftAuditShortcuts{Certificates: true}},
 		{name: "production", shortcuts: loftAuditProduction},
 	} {
-		_, gotErr := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, arm.shortcuts)
+		_, gotErr := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, arm.shortcuts)
 		if refErr == nil {
 			require.NoError(t, gotErr, "%s must not turn a passing audit into a failing one", arm.name)
 			continue
@@ -584,9 +586,9 @@ func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	work, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
-	require.Positive(t, work.skips,
+	require.Positive(t, work.Skips,
 		"40 mutually far-apart triangles must exercise the short-circuit at least once")
 }
 
@@ -600,18 +602,18 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	alone, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	alone, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
-	require.Positive(t, alone.skips)
-	require.Equal(t, 40*39/2, alone.skips+alone.edgeCerts+alone.vertexCerts+alone.classifications,
+	require.Positive(t, alone.Skips)
+	require.Equal(t, 40*39/2, alone.Skips+alone.EdgeCerts+alone.VertexCerts+alone.Classifications,
 		"every admitted pair is skipped by a broad-phase tier, admitted by a certificate, or classified")
 
 	var wg sync.WaitGroup
-	got := make([]loftAuditWork, 2)
+	got := make([]tessellation.LoftAuditWork, 2)
 	errs := make([]error, 2)
 	for k := range got {
 		wg.Go(func() {
-			got[k], errs[k] = loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+			got[k], errs[k] = tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		})
 	}
 	wg.Wait()
@@ -627,7 +629,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 // short-circuit is unreachable for a pair required to touch: both
 // vertexCrossesAwayFixture (one shared vertex) and sameSideApexesFixture (two
 // shared vertices) hold exactly one pair each, so if the call's own skip count
-// stays 0 after the audit runs, that one pair was decided by auditLoftPair
+// stays 0 after the audit runs, that one pair was decided by tessellation.AuditLoftPair
 // and not by the broad-phase — by construction, since the S7 loop's guard
 // gates both tiers behind len(shared) == 0 and neither fixture's pair has
 // zero shared vertices.
@@ -635,40 +637,40 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 	t.Parallel()
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
-		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
-		require.Zero(t, work.skips,
+		require.Zero(t, work.Skips,
 			"a pair sharing one recorded vertex is required to touch there; the broad-phase must never decide it")
 	})
 
 	t.Run("two shared vertices", func(t *testing.T) {
 		verts, tris := sameSideApexesFixture()
-		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
-		require.Zero(t, work.skips,
+		require.Zero(t, work.Skips,
 			"a pair sharing two recorded vertices is required to touch along that edge; the broad-phase must never decide it")
 	})
 }
 
 // TestLoftCrossingAuditBroadPhaseStillCatchesACrossing re-runs
 // sameSideApexesFixture — the same-side-apexes crossing docs/loft-design.md
-// §13 names — through loftCrossingAudit, the production entry point where the
+// §13 names — through tessellation.LoftCrossingAudit, the production entry point where the
 // broad-phase always runs, and asserts the refusal names the same triangle
-// pair auditLoftPair itself finds.
+// pair tessellation.AuditLoftPair itself finds.
 func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 	t.Parallel()
 	verts, tris := sameSideApexesFixture()
 
-	want := auditLoftPair(verts, tris, 0, 1)
+	want := tessellation.AuditLoftPair(verts, tris, 0, 1)
 	require.ErrorIs(t, want, ErrDegenerate)
 
-	got := loftCrossingAudit(proofbound.NewWorkBudget(t.Context()), verts, tris)
+	got := tessellation.LoftCrossingAudit(proofbound.NewWorkBudget(t.Context()), verts, tris)
 	require.ErrorIs(t, got, ErrDegenerate)
 	require.Equal(t, want.Error(), got.Error())
 }
 
 // chordedWedgeTriangles assembles the F~230 hand-chorded spline wedge's own
-// wall-and-cap triangle set — the very verts/tris loftCrossingAudit is handed
+// wall-and-cap triangle set — the very verts/tris tessellation.LoftCrossingAudit is handed
 // inside a Document.Loft of that shape — by running the same pipeline evalLoft
 // runs ahead of the audit (recordProfile, validateLoftRecords, loftPairings,
 // assembleLoft) and stopping at its output. It reuses
@@ -720,7 +722,7 @@ const loftAuditWorkDivisor = 4
 // the shortcuts actually remove work: it assembles the F~230 hand-chorded
 // spline wedge's triangle set once (m=112 stations) and audits that ONE set
 // twice, with the short-circuit off and then on, comparing how many pairs each
-// run pushed through auditLoftPair's exact classification.
+// run pushed through tessellation.AuditLoftPair's exact classification.
 //
 // The instrument is a COUNT, not a wall clock. Both counts depend only on the
 // geometry, so they are identical on every host and across repeats, and the
@@ -745,23 +747,23 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 	fs := wedgeFitSpline(t)
 	verts, tris := chordedWedgeTriangles(t, wedgeSplinePoints(fs, stations))
 
-	off, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
+	off, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	require.NoError(t, err)
-	on, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	on, err := tessellation.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 
 	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d edgeCerts=%d vertexCerts=%d",
-		stations, len(tris), off.classifications, on.classifications, on.skips, on.edgeCerts, on.vertexCerts)
+		stations, len(tris), off.Classifications, on.Classifications, on.Skips, on.EdgeCerts, on.VertexCerts)
 
-	require.Zero(t, off.skips,
+	require.Zero(t, off.Skips,
 		"with the short-circuit off, no pair may be skipped")
-	require.Zero(t, off.edgeCerts+off.vertexCerts,
+	require.Zero(t, off.EdgeCerts+off.VertexCerts,
 		"with the certificates off, no pair may be admitted by one")
-	require.Equal(t, off.classifications, on.classifications+on.skips+on.edgeCerts+on.vertexCerts,
+	require.Equal(t, off.Classifications, on.Classifications+on.Skips+on.EdgeCerts+on.VertexCerts,
 		"a shortcut only moves a pair out of the classified column; the pair count is the same either way")
-	require.Positive(t, on.classifications,
+	require.Positive(t, on.Classifications,
 		"the wedge's own adjacent and nearby pairs must still reach the exact classification")
-	require.Less(t, on.classifications, off.classifications/loftAuditWorkDivisor,
+	require.Less(t, on.Classifications, off.Classifications/loftAuditWorkDivisor,
 		"the shortcuts must still remove the bulk of the exact classification work")
 }
 
@@ -811,25 +813,25 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 
 	for _, arm := range []struct {
 		name      string
-		shortcuts loftAuditShortcuts
+		shortcuts tessellation.LoftAuditShortcuts
 	}{
 		{name: "off", shortcuts: loftAuditReference},
-		{name: "broadphase", shortcuts: loftAuditShortcuts{broadPhase: true}},
+		{name: "broadphase", shortcuts: tessellation.LoftAuditShortcuts{BroadPhase: true}},
 		{name: "on", shortcuts: loftAuditProduction},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
 			budget := proofbound.NewWorkBudget(b.Context())
-			var work loftAuditWork
+			var work tessellation.LoftAuditWork
 			for b.Loop() {
 				var err error
-				work, err = loftCrossingAuditWork(budget, verts, tris, arm.shortcuts)
+				work, err = tessellation.LoftCrossingAuditWork(budget, verts, tris, arm.shortcuts)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
-			b.ReportMetric(float64(work.classifications), "classifications/op")
-			b.ReportMetric(float64(work.skips), "skips/op")
-			b.ReportMetric(float64(work.edgeCerts+work.vertexCerts), "certificates/op")
+			b.ReportMetric(float64(work.Classifications), "classifications/op")
+			b.ReportMetric(float64(work.Skips), "skips/op")
+			b.ReportMetric(float64(work.EdgeCerts+work.VertexCerts), "certificates/op")
 		})
 	}
 }
@@ -873,7 +875,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 //  2. THE REFERENCE MUST NOT PAY THE PRODUCTION AUDIT. Routing every
 //     reference count through Document.Loft made this file cost 323s (the
 //     package suite was about 65s before it), because each hand-chorded
-//     build pays loft_audit.go's O(F^2) exact-rational crossing-audit cost
+//     build pays internal/tessellation/loft_audit.go's O(F^2) exact-rational crossing-audit cost
 //     for a manifold proof the REFERENCE never needed — it is a plain
 //     surface-area sum, not a solid this file certifies watertight.
 //     denseChordedArea below computes the identical Table B geometry

@@ -17,9 +17,9 @@ import (
 // loftPayload, Table S gates S1-S5, S7's STRUCTURAL arm and S13's
 // coordinate-range gate (S9-S11 are the public entry point's job,
 // docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
-// (loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
+// (internal/tessellation/loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
 // measurements. Document.Loft is PR 1b; nothing here is called
-// from outside this file's own tests, the same shape #114 (loft_audit.go/
+// from outside this file's own tests, the same shape #114 (internal/tessellation/loft_audit.go/
 // loft_moments.go) already shipped.
 //
 // Three sibling files carry the construction evalLoft drives, each with its
@@ -290,7 +290,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	if err := loftCrossingAudit(budget, a.verts, a.tris); err != nil {
+	if err := tessellation.LoftCrossingAudit(budget, a.verts, a.tris); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -362,7 +362,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	vertexDistances := make([]loftVertexDistance, len(a.verts))
+	vertexDistances := make([]tessellation.LoftVertexDistance, len(a.verts))
 	for k, t := range a.tris {
 		mass.addTriangle(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls, t, vertexDistances)
 	}
@@ -374,13 +374,13 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// carry a positive matchedDelta at an exactly-zero sagitta
 	// (internal/freeform/spline_sagitta.go's own counterexample), and skipping the computation
 	// there would silently drop a genuine chord-to-curve area/volume
-	// obligation. Left at its zero value (every field of loftChordedAllow)
+	// obligation. Left at its zero value (every field of tessellation.LoftChordedAllow)
 	// for a LineSeg-only build, where both are zero.
 	//
 	// It is also where S14's CONSTRUCTION arm decides the cap
 	// planeOffsetUpper term §5.2's table lists: an assembly stating no proven
 	// distance from the anchor to a held cap1 vertex refuses here
-	// (errLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
+	// (tessellation.ErrLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
 	// so no measurement below is ever composed from a substituted value.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
 		chorded, err := computeLoftChordedAllow(
@@ -492,22 +492,22 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 	return loftMeshProof{
 		facetDeparture: proofbound.AbsSumUpper(
 			chordCellDeltaUpper(sectionMatchedDelta, a.delta),
-			m.chorded.maxTwistOffsetUpper,
+			m.chorded.MaxTwistOffsetUpper,
 		),
 		areaSlack: proofbound.AbsSumUpper(
 			m.perturbAreaSum,
-			m.chorded.twistAreaAllow,
-			m.chorded.areaExcess,
-			m.chorded.capAreaExcess,
+			m.chorded.TwistAreaAllow,
+			m.chorded.AreaExcess,
+			m.chorded.CapAreaExcess,
 		),
 		volSymDiff: proofbound.AbsSumUpper(
 			proofbound.SweptVolumeAllow(a.delta, proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta)),
 			proofbound.ChordedBoundaryVolumeAllow(
 				matchedDelta,
-				m.chorded.wallAreaUpper,
-				m.chorded.twistVolumeUpper,
-				m.chorded.capVolumeUpper,
-				m.chorded.seamAllow,
+				m.chorded.WallAreaUpper,
+				m.chorded.TwistVolumeUpper,
+				m.chorded.CapVolumeUpper,
+				m.chorded.SeamAllow,
 			),
 		),
 	}
