@@ -1743,11 +1743,9 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))
 	budget := proofbound.NewWorkBudget(ctx)
-	// The payload carries one global composed displacement and no tighter
-	// per-face certificate, so every restated face publishes that Delta
-	// (docs/tessellation-design.md §2: an incomplete per-face composition falls
-	// back to Delta, NEVER to zero).
-	faceBound := map[*Face]float64{}
+	if len(fp.vertexBound) != len(fp.verts) || len(fp.faceOf) != len(fp.tris) {
+		return nil, fmt.Errorf(`%w: a faceted payload's per-vertex or per-facet record does not match its mesh`, ErrBooleanFailed)
+	}
 	for i, fi := range fp.faceOf {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -1761,18 +1759,25 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrBooleanFailed)
 		}
 		src[i] = faces[fi]
-		faceBound[src[i]] = fp.meshBound
 	}
-	return &Mesh{
+	m := &Mesh{
 		vertices:   fp.verts,
 		triangles:  fp.tris,
 		source:     src,
-		bound:      fp.meshBound,
-		faceBound:  faceBound,
 		areaSlack:  fp.areaSlack,
 		volSymDiff: fp.volSymDiff,
 		symDiffOK:  true,
-	}, nil
+	}
+	// The payload's own per-vertex record is restated unchanged, and each
+	// face's bound is the largest δ(t) over its own facets
+	// (docs/faceted-vertex-bounds-design.md §4.4), so the next boolean's
+	// pre-pass and rim composition read each face's and each facet's own
+	// figure. Their maximum is the payload's meshBound by construction.
+	m.setVertexBounds(fp.vertexBound)
+	if m.bound != fp.meshBound {
+		return nil, fmt.Errorf(`%w: a faceted payload's mesh bound is not the largest of its facet bounds`, ErrBooleanFailed)
+	}
+	return m, nil
 }
 
 // meshBottom and meshTop are the mesh vertex indices of 2D boundary sample g:

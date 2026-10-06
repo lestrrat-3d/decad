@@ -618,9 +618,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   A's facets and δ_B of B's, so the facet sets come within δ_A + δ_B of each
   other. An analytic face's δ is its complete `sourceBound`, including curved
   trim displacement and every coordinate-construction/final-placement rounding
-  allowance. A faceted face's δ is its inherited certified
-  displacement, falling back to the
-  payload's global composed boundary `Delta` when no tighter face value exists.
+  allowance. A faceted face's δ is the largest facet bound over that face's
+  own facets, each the largest of its corners' per-vertex bounds
+  (`docs/faceted-vertex-bounds-design.md` §4.4).
   Mesh facets carry this value as internal `sourceBound` beside their current
   operand `*Face`; grouping facets for the pre-pass takes the maximum bound for
   that face. NEVER derive zero from `KindFaceted` alone.
@@ -788,10 +788,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   upward rounding, its own displacement from the exact stitched point to its
   stored welded binary64 coordinate (§3.4 there); the global boundary
   certificate takes the largest facet bound, each the largest of its corners'
-  complete vertex bounds. That global value is what every boundary measurement
-  composes from (`Vertex.Position`,
-  `Faceted.Bound`, `FacetedCurve.Bound`, `Box`, and the perimeter term of every
-  area bound). It has no finite ceiling as the operands approach tangency: when
+  complete vertex bounds. Each boundary measurement reads the bounds of the
+  geometry it measures (§4.2 there): `Vertex.Position` its own vertex bound,
+  `Faceted.Bound` the largest facet bound over its face, `FacetedCurve.Bound`
+  the largest vertex bound along its chain, `Box` each extreme's own reach,
+  and every area bound the smaller of its face's bound times its perimeter and
+  the sum of its facets' perturbations at their own bounds. It has no finite ceiling as the operands approach tangency: when
   the inflated bound reaches the pair's own diameter it has stopped bounding
   anything, and the operation is refused (`ErrUnsupported`) rather than
   reported with a number nobody can use — per rim vertex, at its own bound. Every bound has exactly one owner

@@ -233,8 +233,11 @@
 0	0.00	TestFacetFaceIndicesMapsConsistentFaces
 0	0.00	TestFacetFaceIndicesRejectsUnmappedFacet
 0	0.00	TestFacetedAreaBoundCompositionRoundsOutward
+0	0.00	TestFacetedExtremeErrorCoversAnInnerVertexsReach
 0	0.00	TestFacetedMeasurementSumsEncloseSmallAllowances
+0	0.45	TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude
 0	0.00	TestFacetedPlacementRebuildsCachedDiameter
+0	1.71	TestFacetedReadingsReportEachVertexsOwnBound
 0	0.00	TestFitInterpolantChargeRefusesBeforeSolving
 0	0.00	TestFitInterpolantCostIsLinear
 0	0.00	TestFitInterpolantNonFiniteMapsToR16
