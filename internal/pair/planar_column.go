@@ -35,7 +35,7 @@ func PlanarColumnClear(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat, poll
 		}
 	}
 	i, j := (drop+1)%3, (drop+2)%3
-	box := [4][2]*big.Rat{{lo[i], lo[j]}, {hi[i], lo[j]}, {lo[i], hi[j]}, {hi[i], hi[j]}}
+	box := newColumnBox([2]*big.Rat{lo[i], lo[j]}, [2]*big.Rat{hi[i], hi[j]})
 	var clearance *big.Rat
 	for _, tri := range s.Tris {
 		if err := poll(); err != nil {
@@ -66,11 +66,52 @@ func PlanarColumnClear(s *PlanarSolid, n, q proof.DyV3, lo, hi [3]*big.Rat, poll
 	return clearance, true, nil
 }
 
+// columnBox is the projected box [lo, hi] in the common-denominator form
+// (proof.CommonDenom): its two in-plane extents as integer numerators over one
+// shared positive denominator.
+type columnBox struct {
+	den    *big.Int
+	lo, hi [2]*big.Int
+}
+
+func newColumnBox(lo, hi [2]*big.Rat) columnBox {
+	den := proof.CommonDenom(lo[0], lo[1], hi[0], hi[1])
+	box := columnBox{den: den}
+	for k := range 2 {
+		box.lo[k], box.hi[k] = proof.ScaledNum(lo[k], den), proof.ScaledNum(hi[k], den)
+		// The corners are the same four whichever end is larger.
+		if box.lo[k].Cmp(box.hi[k]) > 0 {
+			box.lo[k], box.hi[k] = box.hi[k], box.lo[k]
+		}
+	}
+	return box
+}
+
+// project is the box's extent along the axis (x, y)/q, as numerators over
+// den·q: a linear function over a box takes its least value at the corner that
+// picks, per coordinate, the low end for a nonnegative coefficient and the high
+// end for a negative one, and its greatest at the opposite corner, so the
+// extent over the four corners is exact.
+func (b columnBox) project(x, y *big.Int) (*big.Int, *big.Int) {
+	lo, hi := new(big.Int), new(big.Int)
+	term := new(big.Int)
+	for k, coefficient := range [2]*big.Int{x, y} {
+		low, high := b.lo[k], b.hi[k]
+		if coefficient.Sign() < 0 {
+			low, high = high, low
+		}
+		lo.Add(lo, term.Mul(coefficient, low))
+		hi.Add(hi, term.Mul(coefficient, high))
+	}
+	return lo, hi
+}
+
 // columnTriangleGap returns the largest separating gap between a projected
 // triangle and a projected box, over the box's two axes and the triangle's
 // edge normals, each gap over an upper bound on its axis's length. ok is false
-// when no axis separates them strictly.
-func columnTriangleGap(tri [3][2]proof.Dyadic, box [4][2]*big.Rat) (*big.Rat, bool) {
+// when no axis separates them strictly. The gaps compare in the
+// common-denominator form, and only a positive one becomes a big.Rat.
+func columnTriangleGap(tri [3][2]proof.Dyadic, box columnBox) (*big.Rat, bool) {
 	one := proof.DyInt(1)
 	axes := [][2]proof.Dyadic{{one, proof.DyZero()}, {proof.DyZero(), one}}
 	for k := range 3 {
@@ -83,23 +124,35 @@ func columnTriangleGap(tri [3][2]proof.Dyadic, box [4][2]*big.Rat) (*big.Rat, bo
 	}
 	var best *big.Rat
 	for slot, axis := range axes {
+		var triLo, triHi proof.Dyadic
+		for k, corner := range tri {
+			value := proof.DyAdd(proof.DyMul(axis[0], corner[0]), proof.DyMul(axis[1], corner[1]))
+			if k == 0 || proof.DyCmp(value, triLo) < 0 {
+				triLo = value
+			}
+			if k == 0 || proof.DyCmp(value, triHi) > 0 {
+				triHi = value
+			}
+		}
 		ax, ay := axis[0].Rat(), axis[1].Rat()
-		var triLo, triHi, boxLo, boxHi *big.Rat
-		for _, corner := range tri {
-			value := proof.DyAdd(proof.DyMul(axis[0], corner[0]), proof.DyMul(axis[1], corner[1])).Rat()
-			triLo, triHi = ratLower(triLo, value), ratUpper(triHi, value)
-		}
-		for _, corner := range box {
-			value := new(big.Rat).Add(new(big.Rat).Mul(ax, corner[0]), new(big.Rat).Mul(ay, corner[1]))
-			boxLo, boxHi = ratLower(boxLo, value), ratUpper(boxHi, value)
-		}
-		gap := new(big.Rat).Sub(triLo, boxHi)
-		if other := new(big.Rat).Sub(boxLo, triHi); other.Cmp(gap) > 0 {
+		axisDen := proof.LcmInt(new(big.Int).Set(ax.Denom()), ay.Denom())
+		boxLo, boxHi := box.project(proof.ScaledNum(ax, axisDen), proof.ScaledNum(ay, axisDen))
+		boxDen := new(big.Int).Mul(box.den, axisDen)
+		low, high := triLo.Rat(), triHi.Rat()
+		den := proof.LcmInt(proof.LcmInt(boxDen, low.Denom()), high.Denom())
+		scale := new(big.Int).Quo(den, boxDen)
+		// The gaps triLo − boxHi and boxLo − triHi over den.
+		gap := proof.ScaledNum(low, den)
+		gap.Sub(gap, boxHi.Mul(boxHi, scale))
+		other := boxLo.Mul(boxLo, scale)
+		other.Sub(other, proof.ScaledNum(high, den))
+		if other.Cmp(gap) > 0 {
 			gap = other
 		}
 		if gap.Sign() <= 0 {
 			continue
 		}
+		separation := new(big.Rat).SetFrac(gap, den)
 		// The box axes are unit vectors; an edge normal's length is bounded
 		// above by an exactly checked float square root.
 		if slot >= 2 {
@@ -107,25 +160,11 @@ func columnTriangleGap(tri [3][2]proof.Dyadic, box [4][2]*big.Rat) (*big.Rat, bo
 			if math.IsInf(length, 0) || math.IsNaN(length) || length <= 0 {
 				continue
 			}
-			gap.Quo(gap, proof.FloatRat(length))
+			separation.Quo(separation, proof.FloatRat(length))
 		}
-		if best == nil || gap.Cmp(best) > 0 {
-			best = gap
+		if best == nil || separation.Cmp(best) > 0 {
+			best = separation
 		}
 	}
 	return best, best != nil
-}
-
-func ratLower(current, value *big.Rat) *big.Rat {
-	if current == nil || value.Cmp(current) < 0 {
-		return value
-	}
-	return current
-}
-
-func ratUpper(current, value *big.Rat) *big.Rat {
-	if current == nil || value.Cmp(current) > 0 {
-		return value
-	}
-	return current
 }

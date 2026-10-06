@@ -323,6 +323,18 @@ func boxGapSquared(alo, ahi, blo, bhi [3]proof.Dyadic) proof.Dyadic {
 	return out
 }
 
+// boxesApart reports whether two closed boxes are strictly apart along some
+// axis, which is exactly when boxGapSquared is positive, without forming the
+// gap.
+func boxesApart(alo, ahi, blo, bhi [3]proof.Dyadic) bool {
+	for axis := range 3 {
+		if proof.DyCmp(ahi[axis], blo[axis]) < 0 || proof.DyCmp(bhi[axis], alo[axis]) < 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // frac is an exact nonnegative rational num/den with den > 0.
 type frac struct {
 	num, den proof.Dyadic
@@ -435,7 +447,7 @@ func (k *planarKernel) crossings() error {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if boxGapSquared(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]).Sign() > 0 {
+				if boxesApart(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]) {
 					continue
 				}
 				sp, sq := orientSign(tris, t, p), orientSign(tris, t, q)
@@ -460,7 +472,7 @@ func (k *planarKernel) crossings() error {
 			if err := k.poll(); err != nil {
 				return err
 			}
-			if boxGapSquared(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]).Sign() > 0 {
+			if boxesApart(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]) {
 				continue
 			}
 			coplanar := true
@@ -601,9 +613,18 @@ func (k *planarKernel) offer(d frac) {
 }
 
 // pruned reports whether a box pair is provably farther than the current
-// minimum, so no candidate inside it can lower the minimum or touch.
-func (k *planarKernel) pruned(gapSquared proof.Dyadic) bool {
-	return k.hasBest && fracCmp(frac{num: gapSquared, den: proof.DyInt(1)}, k.best) > 0
+// minimum, so no candidate inside it can lower the minimum or touch. Every
+// offered candidate has a nonnegative numerator, so boxes that are not apart
+// (gap zero) are never pruned, and against a zero minimum over a positive
+// denominator any boxes apart are.
+func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic) bool {
+	if !k.hasBest || !boxesApart(alo, ahi, blo, bhi) {
+		return false
+	}
+	if k.best.num.Sign() == 0 && k.best.den.Sign() > 0 {
+		return true
+	}
+	return fracCmp(frac{num: boxGapSquared(alo, ahi, blo, bhi), den: proof.DyInt(1)}, k.best) > 0
 }
 
 // distances computes the exact minimum squared distance over vertex-facet
@@ -616,7 +637,7 @@ func (k *planarKernel) distances() error {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if k.pruned(boxGapSquared(point, point, tris.triLo[t], tris.triHi[t])) {
+				if k.pruned(point, point, tris.triLo[t], tris.triHi[t]) {
 					continue
 				}
 				k.vertexFacet(verts, v, tris, t)
@@ -628,7 +649,7 @@ func (k *planarKernel) distances() error {
 			if err := k.poll(); err != nil {
 				return err
 			}
-			if k.pruned(boxGapSquared(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb])) {
+			if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb]) {
 				continue
 			}
 			k.edgeEdge(edgeA, edgeB)
@@ -832,8 +853,39 @@ func hasSign(signs [3]int, sign int) bool {
 	return signs[0] == sign || signs[1] == sign || signs[2] == sign
 }
 
-// pointInFacet reports whether x lies in the closed triangle t.
+// inBox reports whether x/w lies in the closed box [lo, hi]: lo·w ≤ x ≤ hi·w
+// on every axis for w > 0, the reverse for w < 0. A unit w compares the
+// coordinates directly. A zero w makes no claim and reports true.
+func (h hpoint) inBox(lo, hi [3]proof.Dyadic) bool {
+	sign := h.w.Sign()
+	if sign == 0 {
+		return true
+	}
+	unit := h.w.Exp() == 0 && h.w.Mant().IsInt64() && h.w.Mant().Int64() == 1
+	for axis := range 3 {
+		low, high := lo[axis], hi[axis]
+		if !unit {
+			low, high = proof.DyMul(low, h.w), proof.DyMul(high, h.w)
+			if sign < 0 {
+				low, high = high, low
+			}
+		}
+		if proof.DyCmp(h.x[axis], low) < 0 || proof.DyCmp(h.x[axis], high) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// pointInFacet reports whether x lies in the closed triangle t. The closed
+// triangle lies in its box, so a point outside the box, decided by
+// comparisons, is outside the triangle. The box decides only for a triangle
+// with a nonzero normal, the one the plane and edge tests below bound: on a
+// zero normal every test reads zero and accepts any point.
 func pointInFacet(p *planarPrep, t int, x hpoint) bool {
+	if !proof.DvIsZero(p.normal[t]) && !x.inBox(p.triLo[t], p.triHi[t]) {
+		return false
+	}
 	tri := p.s.Tris[t]
 	if proof.DvDot(p.normal[t], x.from(p.s.Verts[tri[0]])).Sign() != 0 {
 		return false

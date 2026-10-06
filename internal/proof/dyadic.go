@@ -170,6 +170,11 @@ func DyMul(a, b Dyadic) Dyadic {
 }
 
 // DyCmp compares a against b, returning -1, 0 or +1 the way big.Rat.Cmp does.
+//
+// Two values of opposite signs compare by sign, and two of one sign whose
+// magnitudes' leading bits sit at different binary positions compare by that
+// position: |m|·2^e lies in [2^(n+e−1), 2^(n+e)) for an n-bit mantissa m. Only
+// values whose leading bits coincide pay the aligning shift.
 func DyCmp(a, b Dyadic) int {
 	switch {
 	case a.IsZero():
@@ -178,6 +183,18 @@ func DyCmp(a, b Dyadic) int {
 		return a.Sign()
 	case a.exp == b.exp:
 		return a.mant.Cmp(b.mant)
+	}
+	sign := a.mant.Sign()
+	if sign != b.mant.Sign() {
+		return sign
+	}
+	if top, other := a.mant.BitLen()+a.exp, b.mant.BitLen()+b.exp; top != other {
+		if top > other {
+			return sign
+		}
+		return -sign
+	}
+	switch {
 	case a.exp > b.exp:
 		return new(big.Int).Lsh(a.mant, uint(a.exp-b.exp)).Cmp(b.mant)
 	default:
