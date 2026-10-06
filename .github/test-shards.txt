@@ -971,3 +971,8 @@
 5	0.01	TestWideSpanBracketRefusesBeforeSubdividing
 1	0.30	TestPlanarPairVerdictDisplacementBand
 2	0.25	TestPlanarPairVerdictTouchNeedsZeroDisplacement
+2	1.30	TestSweepPathMemoMatchesAfresh
+2	0.75	TestSweepPathMemoTablesStayBounded
+2	0.55	TestRotationalSweepRadiusMatchesPerCornerForm
+2	0.01	TestSweepRadiusMemoEvictsOldest
+2	0.50	TestSweepRunMemoChangesNoReport

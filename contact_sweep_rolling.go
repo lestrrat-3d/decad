@@ -130,6 +130,8 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, true, nil
 	}
+	attachSweepMemos(&preparedM, &preparedS)
+	defer closeSweepMemos(&preparedM, &preparedS)
 	run := &rollingPairSweep{doc: d, m: m, s: 1 - m, cylinder: start, req: req, report: report,
 		resolution: resolution}
 	run.paths[run.m], run.paths[run.s] = preparedM, preparedS

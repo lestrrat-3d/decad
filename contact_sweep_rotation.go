@@ -39,6 +39,7 @@ type rotationalSweepPath struct {
 	velocity     motionbound.RatVec
 	omegaLow     *big.Rat
 	omegaHigh    *big.Rat
+	memo         *sweepPathMemo // the run's memo (contact_sweep_memo.go); nil outside a run
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
@@ -156,13 +157,75 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	return prepared, true
 }
 
+// rotationalSweepRadius is §4.1's ρ: an upper bound, rounded to a float, on
+// the largest distance of the From-mapped inflated bounds corners from the
+// axis line through center, the root of max |(corner − center) × axis|² /
+// |axis|². Every squared cross product shares the one denominator |axis|², so
+// the largest is chosen by its numerator, which is exact dyadic arithmetic
+// for the dyadic corners, pivot and axis every caller holds; one division
+// then gives the same rational the per-corner quotients' maximum is. A body's
+// readings are memoized on it (sweepRadiusMemo), since a step reads each
+// path's radius both for its swept box and for its sweep.
 func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
+	axis motionbound.RatVec) (*big.Rat, bool) {
+	var dyAxis proofarith.DyV3
+	for k := range 3 {
+		component, ok := proofarith.DyOfRat(axis[k])
+		if !ok {
+			return rationalSweepRadius(body, from, center, axis)
+		}
+		dyAxis[k] = component
+	}
+	if !motionbound.MemosOn() {
+		return dyadicSweepRadius(body, from, center, dyAxis)
+	}
+	key := newSweepRadiusKey(from, center, dyAxis)
+	if radius, ok, hit := body.sweepRadii.load(key); hit {
+		if !ok {
+			return nil, false
+		}
+		return proofarith.FloatRat(radius), true
+	}
+	radius, ok := dyadicSweepRadius(body, from, center, dyAxis)
+	held := 0.0
+	if ok {
+		held, _ = radius.Float64()
+	}
+	body.sweepRadii.store(key, held, ok)
+	return radius, ok
+}
+
+// dyadicSweepRadius is rotationalSweepRadius over a dyadic axis, computed
+// afresh.
+func dyadicSweepRadius(body *Body, from r3.Transform, center r3.Vec, axis proofarith.DyV3) (*big.Rat, bool) {
+	corners, ok := inflatedBoundsCorners(body)
+	if !ok {
+		return nil, false
+	}
+	axisSquared := proofarith.DvDot(axis, axis)
+	if axisSquared.Sign() <= 0 {
+		return nil, false
+	}
+	pivot := proofarith.DyVec(center)
+	place := newExactContactMap(from)
+	best := proofarith.DyZero()
+	for _, corner := range corners {
+		cross := proofarith.DvCross(proofarith.DvSub(place.apply(corner), pivot), axis)
+		if squared := proofarith.DvDot(cross, cross); proofarith.DyCmp(squared, best) > 0 {
+			best = squared
+		}
+	}
+	return sweepRadiusOf(new(big.Rat).Quo(best.Rat(), axisSquared.Rat()))
+}
+
+// rationalSweepRadius is rotationalSweepRadius over an axis with a
+// non-dyadic component, which no caller holds today.
+func rationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	axis motionbound.RatVec) (*big.Rat, bool) {
 	corners, ok := inflatedBoundsCorners(body)
 	if !ok {
 		return nil, false
 	}
-	pivot := proofarith.DyVec(center)
 	axisSquared := new(big.Rat)
 	for k := range 3 {
 		axisSquared.Add(axisSquared, new(big.Rat).Mul(axis[k], axis[k]))
@@ -170,28 +233,27 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	if axisSquared.Sign() <= 0 {
 		return nil, false
 	}
+	pivot := proofarith.DyVec(center)
 	best := new(big.Rat)
 	for _, corner := range corners {
-		mapped := exactContactTransform(from, corner)
-		delta := proofarith.DvSub(mapped, pivot)
-		cross := [3]*big.Rat{
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[1].Rat(), axis[2]),
-				new(big.Rat).Mul(delta[2].Rat(), axis[1])),
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[2].Rat(), axis[0]),
-				new(big.Rat).Mul(delta[0].Rat(), axis[2])),
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[0].Rat(), axis[1]),
-				new(big.Rat).Mul(delta[1].Rat(), axis[0])),
-		}
+		delta := proofarith.DvSub(exactContactTransform(from, corner), pivot)
 		squared := new(big.Rat)
 		for k := range 3 {
-			squared.Add(squared, new(big.Rat).Mul(cross[k], cross[k]))
+			i, j := (k+1)%3, (k+2)%3
+			component := new(big.Rat).Sub(new(big.Rat).Mul(delta[i].Rat(), axis[j]),
+				new(big.Rat).Mul(delta[j].Rat(), axis[i]))
+			squared.Add(squared, component.Mul(component, component))
 		}
-		squared.Quo(squared, axisSquared)
 		if squared.Cmp(best) > 0 {
 			best = squared
 		}
 	}
-	radius := proofbound.RatSqrtUp(best)
+	return sweepRadiusOf(best.Quo(best, axisSquared))
+}
+
+// sweepRadiusOf rounds the exact squared radius's root up to a float.
+func sweepRadiusOf(squared *big.Rat) (*big.Rat, bool) {
+	radius := proofbound.RatSqrtUp(squared)
 	if !finiteMeasurementValues(radius) {
 		return nil, false
 	}
@@ -251,6 +313,22 @@ type sweepIdealPose struct {
 // image R·(t(From) − c) + c + v·t. ok is false only when the From basis does
 // not read as points, which motionbound.ExactTransform never produces.
 func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
+	if !p.memo.open() {
+		return p.idealAtAfresh(f)
+	}
+	key := ratKey(f)
+	if ideal, ok := p.memo.loadIdeal(key); ok {
+		return ideal, true
+	}
+	ideal, ok := p.idealAtAfresh(f)
+	if ok {
+		p.memo.storeIdeal(key, ideal)
+	}
+	return ideal, ok
+}
+
+// idealAtAfresh is idealAt computed without the memo.
+func (p rotationalSweepPath) idealAtAfresh(f *big.Rat) (sweepIdealPose, bool) {
 	if p.path.drift == nil {
 		shift := motionbound.PointVec(p.fromT)
 		for axis := range 3 {
@@ -320,7 +398,12 @@ func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*bi
 	if !ok {
 		return nil, nil, false
 	}
-	_, bound, ok, _ := p.pointDeviationFrom(pose, ideal, noSweepPoll)
+	var bound float64
+	if p.memo.open() {
+		_, bound, ok, _ = p.pointDeviation(pose, f, noSweepPoll)
+	} else {
+		_, bound, ok, _ = p.pointDeviationFrom(pose, ideal, noSweepPoll)
+	}
 	if !ok {
 		return nil, nil, false
 	}
@@ -394,16 +477,34 @@ func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealP
 // rot·p + shift, evaluated exactly in the common-denominator form (see
 // motionbound.ScaledIvMat): the source and staged points share one q, and every point's
 // sum shares one denominator, so points compare by numerator.
+//
+// A memo hit charges poll once per point, as the reading it replaces did.
 func (p rotationalSweepPath) pointDeviation(pose r3.Transform, f *big.Rat,
 	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
 	if !pose.IsValid() {
 		return nil, 0, false, nil
 	}
+	var key sweepDeviationKey
+	if p.memo.open() {
+		key = sweepDeviationKey{points: pointSetOf(p.sourcePoints), pose: poseBits(pose), f: ratKey(f)}
+		if entry, ok := p.memo.loadDeviation(key); ok {
+			for range p.sourcePoints {
+				if err := poll(); err != nil {
+					return nil, 0, false, err
+				}
+			}
+			return entry.points, entry.bound, entry.ok, nil
+		}
+	}
 	ideal, ok := p.idealAt(f)
 	if !ok {
 		return nil, 0, false, nil
 	}
-	return p.pointDeviationFrom(pose, ideal, poll)
+	points, bound, ok, err := p.pointDeviationFrom(pose, ideal, poll)
+	if err == nil && p.memo.open() {
+		p.memo.storeDeviation(key, sweepDeviation{points: points, bound: bound, ok: ok})
+	}
+	return points, bound, ok, err
 }
 
 // pointDeviationFrom is pointDeviation against an already enclosed ideal pose.
@@ -535,6 +636,8 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, nil
 	}
+	attachSweepMemos(&aPath, &bPath)
+	defer closeSweepMemos(&aPath, &bPath)
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report}
 	result, err := run.execute(ctx)
@@ -1611,6 +1714,20 @@ func (c cornerSpans) span(index, axis int) proofbound.RatInterval {
 // common-denominator form, so every endpoint is the exact rational the
 // interval expression denotes.
 func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
+	if !p.memo.open() {
+		return p.cornerSpanAfresh(from, to)
+	}
+	key := spanKey(p.startPoints, from, to)
+	if spans, ok := p.memo.loadSpans(key); ok {
+		return spans
+	}
+	spans := p.cornerSpanAfresh(from, to)
+	p.memo.storeSpans(key, spans)
+	return spans
+}
+
+// cornerSpanAfresh is cornerSpan computed without the memo.
+func (p rotationalSweepPath) cornerSpanAfresh(from, to *big.Rat) cornerSpans {
 	count := len(p.startPoints)
 	output := cornerSpans{lo: make([][3]*big.Int, count), hi: make([][3]*big.Int, count)}
 	if p.path.drift == nil {
@@ -1726,7 +1843,12 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 
 func rotationalSinCosSpan(low, high *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	loSin, loCos := motionbound.RadianSinCos(low)
-	hiSin, hiCos := motionbound.RadianSinCos(high)
+	// A path whose rate bounds agree (a screw's exact rate) reads its mid
+	// span at one angle; the pair read at low is the pair at high.
+	hiSin, hiCos := loSin, loCos
+	if low.Cmp(high) != 0 {
+		hiSin, hiCos = motionbound.RadianSinCos(high)
+	}
 	if low.Sign() >= 0 && high.Cmp(proofbound.HalfPiInterval().Lo) <= 0 {
 		return proofbound.Interval(loSin.Lo, hiSin.Hi), proofbound.Interval(hiCos.Lo, loCos.Hi)
 	}
