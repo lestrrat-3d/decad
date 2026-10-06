@@ -63,7 +63,7 @@ func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, 
 			}
 			setVelocityComponent(&out.entries[i].LinearVelocity, axis, units.MillimetersPerSecond(published))
 		}
-		if !kickAngular(&out.entries[i], part.mass, loads[i], dt, w.step.AngularVelocityResidual) {
+		if !w.kickAngular(i, &out.entries[i], loads[i], dt) {
 			return State{}, false
 		}
 	}
@@ -77,8 +77,8 @@ func zeroAngularVelocity(v QuantityVec) bool {
 
 // kickAngular applies the initial-orientation Euler kick. The residual is
 // checked over every admitted source-inertia component interval.
-func kickAngular(entry *BodyState, mass decad.MassProperties, load *BodyLoad,
-	dt, limit units.Value) bool {
+func (w *World) kickAngular(index int, entry *BodyState, load *BodyLoad, dt units.Value) bool {
+	mass, limit := w.bodies[index].mass, w.step.AngularVelocityResidual
 	for _, component := range []units.Value{entry.AngularVelocity.X, entry.AngularVelocity.Y,
 		entry.AngularVelocity.Z} {
 		if component.Mag() != 0 && component.Base() == 0 {
@@ -103,20 +103,11 @@ func kickAngular(entry *BodyState, mass decad.MassProperties, load *BodyLoad,
 		return true
 	}
 	inertia := mass.Inertia
-	tensor, err := r3.NewSymmetricTensor(inertia.XX.Value.Base(), inertia.YY.Value.Base(),
-		inertia.ZZ.Value.Base(), inertia.XY.Value.Base(), inertia.XZ.Value.Base(), inertia.YZ.Value.Base())
+	world, err := w.worldInertia(index, entry.Pose)
 	if err != nil {
 		return false
 	}
-	world, err := tensor.Rotate(entry.Pose)
-	if err != nil {
-		return false
-	}
-	inverse, err := world.Inverse()
-	if err != nil {
-		return false
-	}
-	acceleration := inverse.Apply(torque.Sub(omega.Cross(world.Apply(omega))))
+	acceleration := world.inverse.Apply(torque.Sub(omega.Cross(world.tensor.Apply(omega))))
 	updated := omega.Add(acceleration.Scale(dt.Base()))
 	if !finite(updated.X, updated.Y, updated.Z) {
 		return false

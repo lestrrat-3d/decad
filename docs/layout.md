@@ -195,7 +195,7 @@ to the byte budget.
 | `contact_analytic_manifold.go` | Ruling contacts: clearance certificates and placed poses. See `docs/contact-geometry-design.md` §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
-| `contact_sweep_replay.go` | Cached affine and rotating sweep replay. See `docs/contact-sweep-design.md` §6. |
+| `contact_sweep_replay.go` | Cached affine and rotating sweep replay, and each report's replay memo. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |
 | `clearance_cells.go` | Face-interior candidates and the pruned, box-sorted cell walk. See `docs/clearance-design.md` §3–§5. |
 | `clearance_tiers.go` | The §3 curve and vertex tiers and the §6 ruling certificates. See `docs/clearance-design.md` §3/§4/§6. |

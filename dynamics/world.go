@@ -93,6 +93,8 @@ type World struct {
 	pairs  []worldPair // canonical order: (0,1), (0,2), …, (1,2), …
 	index  map[*decad.Body]int
 	step   StepConfig
+
+	inertia *worldInertiaMemo // world-axis inertia by body and pose basis; changes no outcome
 }
 
 // NewWorld admits two or more bodies, in any role mix, and builds the
@@ -107,7 +109,7 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if len(cfg.Bodies) < 2 {
 		return nil, fmt.Errorf("%w: a world needs at least two bodies", ErrUnsupported)
 	}
-	w := &World{doc: doc, step: cfg.Step}
+	w := &World{doc: doc, step: cfg.Step, inertia: &worldInertiaMemo{}}
 	if err := w.admitBodies(ctx, cfg.Bodies); err != nil {
 		return nil, err
 	}

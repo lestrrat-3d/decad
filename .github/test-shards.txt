@@ -459,6 +459,8 @@
 0	0.00	TestRefineRootCachedVariationMatchesRecount
 0	0.00	TestRejectAxisCrossingRefusesUnprobableCurve
 0	0.00	TestRenameCavityRolesContextPollsNestedMetadata
+0	0.00	TestReplayFractionKeyIsExact
+0	0.00	TestReplayPoseMemoEvictsOldest
 0	0.82	TestReplayTransferChargeIsTheBasisDifference
 0	0.00	TestRequireDerivableStoreRefusesAnUnstatedDisplacement
 0	0.00	TestRequireFiniteDirectionAllocatesNothing
@@ -722,6 +724,7 @@
 1	0.01	TestPrismUnionCleanOperandsMergedLoopClosesExactly
 1	0.35	TestPrismWalkOnceInvoluteRecordFitsWorkBudget
 1	0.04	TestPrismWallFreeformRefusalKeepsItsSentinels
+1	1.89	TestReplayPoseMemoMatchesUncachedReplay
 1	0.02	TestSheetMeshFaceBoundCoversWallsOnly
 1	0.03	TestSpanSagittaUpperClosedLoopChordIsAPointNotZero
 1	0.01	TestSplineBezierMatchesGeomEvaluator
@@ -773,6 +776,7 @@
 2	0.01	TestPolyArea2SignAgreesWithRationalArea
 2	0.51	TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate
 2	0.05	TestPrismWallPropagatesNonFreeformRefusals
+2	0.94	TestReplayPoseMemoIsSafeConcurrently
 2	0.08	TestRevolveArcCellSlackBoundsASignChangingJacobianGap
 2	0.03	TestRevolveArcCellSlackIsExactOnAFixedSignCell
 2	0.01	TestRevolveMassPropertiesRefusesUnchargedTerms
