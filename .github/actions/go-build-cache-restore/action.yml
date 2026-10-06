@@ -1,0 +1,85 @@
+name: Restore Go build cache
+description: >-
+  Restores the calling job's own GOCACHE snapshot, then marks every restored
+  entry as unused, so go-build-cache-save keeps only what this run used.
+
+# Each job that compiles something different names its own cache. One key
+# shared across jobs is saved by whichever job finishes first, so the slower
+# jobs that build the most never get their output into it.
+#
+# The key is the cache name, the OS and arch, the Go version, and a hash of
+# go.mod, go.sum and the `sources` pathspecs. A job that lists the sources it
+# compiles restores an exact match whenever none of them changed. Every miss
+# falls back to the newest snapshot for the same name and Go version. The key
+# only chooses which snapshot to start from: Go checks each entry against the
+# current sources itself, so a stale snapshot costs time, never correctness.
+#
+# Go trims cache entries that have not been used for five days, and it decides
+# by mtime. A restored file keeps the mtime it had when its snapshot was saved,
+# so this action sets every restored file to two hours ago. That is too recent
+# for Go to trim, and old enough that Go sets the mtime to now when it uses
+# the entry (Go only rewrites an mtime older than one hour). The marker file
+# sits between the two, one hour ago: after the build, a file older than the
+# marker was restored and never used.
+
+inputs:
+  name:
+    description: >-
+      Cache name. Use one per job, or per matrix entry, that compiles a
+      different set of packages or flags.
+    required: true
+  sources:
+    description: >-
+      Git pathspecs, one per line, of the Go sources this job compiles. When
+      empty, the key covers go.mod and go.sum alone.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Compute the Go build cache key
+      id: key
+      shell: bash
+      env:
+        CACHE_NAME: ${{ inputs.name }}
+        CACHE_SOURCES: ${{ inputs.sources }}
+      run: |
+        mapfile -t specs < <(printf '%s\n' "$CACHE_SOURCES" | sed '/^[[:space:]]*$/d')
+        hash="$(git ls-files -s -- go.mod go.sum "${specs[@]}" | sha256sum | cut -c1-32)"
+        prefix="go-build-${RUNNER_OS}-${RUNNER_ARCH}-${CACHE_NAME}-$(go env GOVERSION)-"
+        dir="$(go env GOCACHE)"
+        marker="${RUNNER_TEMP}/go-build-cache.marker"
+        {
+          echo "dir=${dir}"
+          echo "prefix=${prefix}"
+          echo "key=${prefix}${hash}"
+        } >> "$GITHUB_OUTPUT"
+        {
+          echo "GO_BUILD_CACHE_DIR=${dir}"
+          echo "GO_BUILD_CACHE_KEY=${prefix}${hash}"
+          echo "GO_BUILD_CACHE_MARKER=${marker}"
+        } >> "$GITHUB_ENV"
+
+    - name: Restore the Go build cache
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.key.outputs.dir }}
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - name: Mark the restored entries as unused
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        CACHE_MATCHED: ${{ steps.restore.outputs.cache-matched-key }}
+      run: |
+        mkdir -p "$GO_BUILD_CACHE_DIR"
+        find "$GO_BUILD_CACHE_DIR" -type f -exec touch -m -d '2 hours ago' {} +
+        touch -m -d '1 hour ago' "$GO_BUILD_CACHE_MARKER"
+        echo "GO_BUILD_CACHE_HIT=${CACHE_HIT:-false}" >> "$GITHUB_ENV"
+        echo "wanted key:   $GO_BUILD_CACHE_KEY"
+        echo "restored key: ${CACHE_MATCHED:-none}"
+        echo "exact match:  ${CACHE_HIT:-false}"
+        echo "restored $(find "$GO_BUILD_CACHE_DIR" -type f | wc -l) files, $(du -sh "$GO_BUILD_CACHE_DIR" | cut -f1)"
