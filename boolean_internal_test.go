@@ -351,6 +351,185 @@ func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
 	require.True(t, near, `a proven crossing the gate cannot certify deeper than the slack stays undecidable`)
 }
 
+// internalAxisFrame is the rigid motion taking local +Z to dir and the origin
+// to a, built the way boolean_proximity_test.go's axisFrame builds it.
+func internalAxisFrame(t *testing.T, a, dir r3.Vec) r3.Transform {
+	t.Helper()
+	d, ok := dir.Normalize()
+	require.True(t, ok)
+	ref := r3.Vec{Y: 1}
+	if math.Abs(d.Y) > 0.9 {
+		ref = r3.Vec{X: 1}
+	}
+	p, ok := d.Cross(ref).Normalize()
+	require.True(t, ok)
+	frame, err := r3.FromBasis(r3.Basis{EX: p.Cross(d), EY: p, EZ: d}, a)
+	require.NoError(t, err)
+	return frame
+}
+
+// internalOctagonPrism is the internal-package twin of
+// boolean_proximity_test.go's placed prism: a regular octagon of circumradius r,
+// turned by phase, extruded l along local +Z and placed by frame.
+func internalOctagonPrism(t *testing.T, doc *Document, frame r3.Transform, l, r, phase float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	const n = 8
+	pts := make([]*sketch.Point, n)
+	for i := range n {
+		th := 2*math.Pi*float64(i)/n + phase
+		pts[i] = s.CreatePoint(r*math.Cos(th), r*math.Sin(th))
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%n])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
+	require.NoError(t, err)
+	body, err = body.Placed(t.Context(), frame)
+	require.NoError(t, err)
+	return body
+}
+
+// gateFacePair is one face pair the hidden-tangency gate examines, with the
+// contacts it gathered and the bound it decides them against.
+type gateFacePair struct {
+	slack float64
+	nc    nearContacts
+}
+
+// closeGateFacePairs prepares a and b the way evaluateBoolean does and returns
+// every face pair whose facets meet or come within the pair's bound — the
+// pairs refuseUndecidableProximity must decide — with the prepared meshes.
+func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateFacePair) {
+	t.Helper()
+	tolMM, _, err := pairChordTolerance(t.Context(), a, b)
+	require.NoError(t, err)
+	ma, err := tessellateContext(t.Context(), a, units.Millimeters(tolMM), VerifyAll)
+	require.NoError(t, err)
+	mb, err := tessellateContext(t.Context(), b, units.Millimeters(tolMM), VerifyAll)
+	require.NoError(t, err)
+	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
+	require.NoError(t, err)
+	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
+	require.NoError(t, err)
+	budget := newWorkBudget(t.Context())
+	fa, err := facesOfMesh(budget, ma)
+	require.NoError(t, err)
+	fb, err := facesOfMesh(budget, mb)
+	require.NoError(t, err)
+
+	memo := newContactMemo(bmA, bmB)
+	var out []gateFacePair
+	for _, ga := range fa {
+		for _, gb := range fb {
+			slack := (ga.delta + gb.delta) * (1 + 1e-9)
+			if slack <= 0 {
+				continue
+			}
+			nc, deferred, err := gatherNearContacts(t.Context(), bmA, ga.facets, bmB, gb.facets, slack, memo)
+			require.NoError(t, err)
+			require.False(t, deferred, `no two faces of the pair overlap in one plane`)
+			if len(nc.closeA) == 0 {
+				continue
+			}
+			out = append(out, gateFacePair{slack: slack, nc: nc})
+		}
+	}
+	return bmA, bmB, out
+}
+
+// TestProximityGateWalksPastCornerSamples pins why the hidden-tangency gate
+// walks from contact segments. The fixture is TestUnionOfTiltedPrismsCrossingMidWall's
+// pair: two placed octagonal prisms whose long walls cross near their middles.
+// For every face pair whose facets come within the bound, the gate must find a
+// deep witness, or the union is refused. At least one such pair has no witness
+// among its contacting facets' corners, edge midpoints and centroids on either
+// side (deepWitnessInside): those seven points sit at the far ends of facets
+// 11 mm long. The walk from the pair's contact segments (spanWitness) proves it.
+func TestProximityGateWalksPastCornerSamples(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	joint := r3.Vec{Z: 10}
+	lean := r3.Vec{X: math.Sin(math.Pi / 6), Z: math.Cos(math.Pi / 6)}
+	a := internalOctagonPrism(t, doc, internalAxisFrame(t, r3.Vec{}, r3.Vec{Z: 1}), 11, 1.5, 0)
+	b := internalOctagonPrism(t, doc, internalAxisFrame(t, joint.Sub(lean.Scale(1.5)), lean), 11.5, 1.2, 0.2)
+
+	bmA, bmB, pairs := closeGateFacePairs(t, a, b)
+	require.NotEmpty(t, pairs, `the walls come within the bound, so the gate has face pairs to decide`)
+	walkOnly := 0
+	for _, fp := range pairs {
+		sampled, err := deepWitnessInside(t.Context(), bmA, fp.nc.closeA, bmB, fp.slack)
+		require.NoError(t, err)
+		if !sampled {
+			sampled, err = deepWitnessInside(t.Context(), bmB, fp.nc.closeB, bmA, fp.slack)
+			require.NoError(t, err)
+		}
+		walked, err := spanWitness(t.Context(), bmA, bmB, fp.nc.spans, fp.slack)
+		require.NoError(t, err)
+		require.True(t, sampled || walked, `every close face pair of a genuine crossing is proven deep`)
+		if !sampled {
+			walkOnly++
+		}
+	}
+	require.Positive(t, walkOnly, `some face pair is refused by the fixed samples alone and proven only by the walk`)
+}
+
+// TestProximityGateWalkAdmitsNoGraze pins that the segment walk certifies no
+// witness on a pair that only touches or crosses no deeper than the bound. The
+// fixture is TestUnionRefusesPlacedPrismGrazingAlongAnEdge's: an octagonal
+// prism lying on its side, turned about Z, whose lowest long edge rests on a
+// slab top (touching) or one ulp below it (shallow). Its wall faces meet the
+// slab top along contact segments, and the walk steps across the slab top from
+// them. In the touching case those points are far deeper than the bound from
+// the prism's boundary but outside it, so the exact parity must reject each. In
+// the shallow case the prism's edge vertices lie inside the slab no deeper
+// than the bound, so the certified depth must reject each.
+func TestProximityGateWalkAdmitsNoGraze(t *testing.T) {
+	t.Parallel()
+	const r = 0.25
+	testcases := []struct {
+		Name  string
+		AxisZ float64
+		Depth float64
+	}{
+		{Name: "touching", AxisZ: 1 + r},
+		{Name: "crossing shallower than the bound", AxisZ: 1 + r - 0x1p-52, Depth: 0x1p-52},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			doc := New()
+			a := internalBoxBody(t, doc, 0, 0, 20, 20, 1)
+			c, s := math.Cos(0.3), math.Sin(0.3)
+			frame, err := r3.FromBasis(r3.Basis{EX: r3.Vec{X: -s, Y: c}, EY: r3.Vec{Z: 1}, EZ: r3.Vec{X: c, Y: s}}, r3.Vec{X: 4, Y: 5, Z: tc.AxisZ})
+			require.NoError(t, err)
+			b := internalOctagonPrism(t, doc, frame, 10, r, 0)
+
+			bmA, bmB, pairs := closeGateFacePairs(t, a, b)
+			walked := 0
+			for _, fp := range pairs {
+				if len(fp.nc.spans) == 0 {
+					continue
+				}
+				walked++
+				require.Greater(t, fp.slack, tc.Depth, `the held facets cross no deeper than the bound`)
+				deep, err := spanWitness(t.Context(), bmA, bmB, fp.nc.spans, fp.slack)
+				require.NoError(t, err)
+				require.False(t, deep, `the walk certifies no point deeper than the bound inside the other solid`)
+				deep, err = provenDepthExceeds(t.Context(), bmA, fp.nc.closeA, bmB, fp.nc.closeB, fp.nc.spans, fp.slack)
+				require.NoError(t, err)
+				require.False(t, deep)
+			}
+			require.Positive(t, walked, `the edge meets the slab top along contact segments the walk starts from`)
+		})
+	}
+}
+
 // tinyOffset is a displacement far below one ulp at the coordinates below, so
 // two exact points a tinyOffset apart round to the SAME float64 vertex — which
 // is what makes the stitcher weld them, and the facets they span collapse.

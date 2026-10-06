@@ -1492,6 +1492,8 @@
 4	0.00	TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 4	0.00	TestProvePatchChainPlaneRejectsANonPlanarChain
 4	0.00	TestProvenNormFixturesLargeMagnitudeCornersPastFloor
+4	0.05	TestProximityGateWalkAdmitsNoGraze
+4	0.03	TestProximityGateWalksPastCornerSamples
 4	0.00	TestQueryStringNegativeZeroNormalized
 4	0.00	TestQueryStringNonFiniteIsTotal
 4	0.00	TestQueryStringRendering
@@ -1839,6 +1841,8 @@
 4	0.00	TestUnderflowingLineRegionAreaPublishesBoundedZero
 4	0.00	TestUniformSpeedTangentEnergyUpperRefusesBrokenClaims
 4	0.05	TestUnionCoplanarCapsBuildAnalyticPrismUnion
+4	0.05	TestUnionOfTiltedPrismsCrossingMidWall
+4	0.02	TestUnionRefusesPlacedPrismGrazingAlongAnEdge
 4	0.02	TestUnstitchBoxFacesReportOwnTightBounds
 4	0.01	TestUnstitchBoxYieldsSixFreeSheets
 4	0.00	TestUnstitchNoPayloadIsDegenerate

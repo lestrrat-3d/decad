@@ -631,9 +631,18 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   a shallow penetration ≤ `b` proves nothing when `b > 0`. The interpenetration
   depth is the implementer's to compute: it is the maximum signed penetration of
   the two facet sets, decided by the exact predicates, never assumed cheaply
-  available. Reject-only in the undecidable band: it may refuse a valid model
-  whose operands genuinely pass that close, and that is the accepted price. A
-  TANGENCY — facets that touch without crossing — has no positive-bound contact
+  available. A depth past `b` is proven by a WITNESS: an exact point of one
+  operand's held facets that exact ray parity places strictly inside the other
+  operand, at a certified lower-bound distance greater than `b` from that
+  operand's facets. The gate looks for one at each contacting facet's corners,
+  edge midpoints and centroid, then at points walked from each contact
+  segment's midpoint toward the corners of the segment's two facets, halving
+  the step each time. The walk is needed: a long facet can cross the other
+  operand deeply while all seven of its fixed points lie outside it. A pair
+  with no witness is refused. Reject-only in the undecidable band: it may
+  refuse a valid model whose operands genuinely pass that close, and that is
+  the accepted price.
+  A TANGENCY — facets that touch without crossing — has no positive-bound contact
   certificate in this evaluator increment and stays refused; deciding such a
   pair for real is the clearance kernel's job (`docs/clearance-design.md`), not
   a held facet's. A planar face still carries
