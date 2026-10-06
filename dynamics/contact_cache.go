@@ -14,11 +14,14 @@ import (
 // §6.2 and §12): every SweptBox and SweepPair call the step makes passes
 // through one stepWork, which serves a call whose inputs it has seen before
 // from the step's own record or from the input state's cache, and charges
-// every other call against MaxPairSweeps. A solved island whose whole
-// problem matches a cached one restarts the proposal from that island's
-// final state. Nothing here changes a published value but a sweep count: a
-// reused report is the report the same call returns, and a restarted
-// proposal is the one the cold solve published.
+// every other call against MaxPairSweeps. A band track's reading (bandEnd)
+// of a report the step already read, there or in the input state's cache,
+// is reused the same way. A solved island whose whole problem matches a
+// cached one restarts the proposal from that island's final state. Nothing
+// here changes a published value but a sweep count: a reused report is the
+// report the same call returns, a reused band reading is the one bandEnd
+// returns for that report, and a restarted proposal is the one the cold
+// solve published.
 
 // errPairBudget stops a step whose SweptBox and SweepPair calls would exceed
 // MaxPairSweeps. The step reports it as StepPairBudget.
@@ -26,14 +29,16 @@ var errPairBudget = errors.New("dynamics: pair sweep budget exhausted")
 
 // contactCache is the immutable reuse record one scheduled step attaches to
 // the state it publishes: every swept box and pair sweep the step used, keyed
-// by their exact inputs, every island it certified, and the conservation
-// reading of the published entries. It
+// by their exact inputs, the band reading of every band-track report it read,
+// every island it certified, and the conservation reading of the published
+// entries. It
 // describes entries, the state it was published with, and is read only by a
 // step from that state.
 type contactCache struct {
 	entries []BodyState
 	boxes   map[boxKey]decad.SweptBox
 	sweeps  map[sweepKey]*decad.SweepReport
+	bands   map[*decad.SweepReport]bandReading
 	islands []*warmIsland
 	// completion is the conservation reading of entries, the step's
 	// Completion; nil until the step publishes it.
@@ -55,6 +60,16 @@ type sweepKey struct {
 	pair    int
 	a, b    decad.PairPath
 	request decad.SweepRequest
+}
+
+// bandReading is one World.bandEnd reading of a band-track report. It is
+// keyed by the report itself: a report is immutable once SweepPair returns
+// it, and the map holds it alive, so the key names one report's contents. A
+// State's cache is read only by its own World (Step requires it), whose step
+// configuration, the reading's other input, never changes.
+type bandReading struct {
+	cut      *big.Rat // the reading's own; bandEnd hands out copies
+	full, ok bool
 }
 
 // warmIsland is one certified island: the exact problem it solved (§6.2's
@@ -110,7 +125,7 @@ func directWork(w *World) *stepWork {
 // newStepWork reads the cache of from when it describes from's entries.
 func newStepWork(w *World, from State) *stepWork {
 	work := &stepWork{w: w, out: &contactCache{boxes: map[boxKey]decad.SweptBox{},
-		sweeps: map[sweepKey]*decad.SweepReport{}}}
+		sweeps: map[sweepKey]*decad.SweepReport{}, bands: map[*decad.SweepReport]bandReading{}}}
 	if from.cache != nil && slices.Equal(from.cache.entries, from.entries) {
 		work.input = from.cache
 	}
@@ -206,6 +221,31 @@ func (s *stepWork) sweepPair(ctx context.Context, key int, a, b decad.PairPath,
 	}
 	s.out.sweeps[held] = sweep
 	return sweep, nil
+}
+
+// bandEnd is World.bandEnd of a band-track report, reused when the step or
+// the input state's cache read the same report before. A resting pair
+// reuses its report step after step (§5.3), and each step reads its band
+// twice, in classify and in restingContacts, so most readings repeat. The
+// reading is a pure function of the World and the report, so a reused one is
+// the one a new reading returns; each caller gets its own cut.
+func (s *stepWork) bandEnd(sweep *decad.SweepReport) (*big.Rat, bool, bool) {
+	if s.out == nil {
+		return s.w.bandEnd(sweep)
+	}
+	held, ok := s.out.bands[sweep]
+	if !ok && s.input != nil {
+		held, ok = s.input.bands[sweep]
+	}
+	if !ok {
+		cut, full, okEnd := s.w.bandEnd(sweep)
+		held = bandReading{cut: cut, full: full, ok: okEnd}
+	}
+	s.out.bands[sweep] = held
+	if held.cut == nil {
+		return nil, held.full, held.ok
+	}
+	return new(big.Rat).Set(held.cut), held.full, held.ok
 }
 
 // warmStart returns the cached island whose problem equals isl at pre with

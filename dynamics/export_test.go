@@ -137,6 +137,30 @@ func WithoutCache(s State) State {
 	return s
 }
 
+// BandReading is one band reading a state's reuse cache holds (bandReading)
+// beside the reading World.bandEnd returns for the same report afresh.
+type BandReading struct {
+	Sweep               *decad.SweepReport
+	HeldCut, FreshCut   *big.Rat
+	HeldFull, FreshFull bool
+	HeldOK, FreshOK     bool
+}
+
+// CachedBandReadings returns every band reading s's cache holds, each beside
+// a fresh reading of its report by s's world.
+func CachedBandReadings(s State) []BandReading {
+	if s.cache == nil {
+		return nil
+	}
+	out := make([]BandReading, 0, len(s.cache.bands))
+	for sweep, held := range s.cache.bands {
+		cut, full, ok := s.world.bandEnd(sweep)
+		out = append(out, BandReading{Sweep: sweep, HeldCut: held.cut, FreshCut: cut, HeldFull: held.full,
+			FreshFull: full, HeldOK: held.ok, FreshOK: ok})
+	}
+	return out
+}
+
 // PushApart runs correctedRelation's passes on the pair (a, b) of state,
 // which the solve is taken to separate, with each body of allowances given
 // that correction allowance. normal, when nonzero, is the event manifold's

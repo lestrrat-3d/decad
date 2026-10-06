@@ -263,9 +263,12 @@ impulses.
 
 The cache is pure reuse: dropping it changes no published value except `Solver.Iterations`. It holds
 every `SweptBox` and `SweepPair` result the step used, keyed by their exact inputs (§5.3), and every
-island the step certified, with its exact problem and final proposal state (§6.2), and the step's
-`Completion` conservation reading of those entries, which the next step publishes as its `Input`. A
-step reads it only when its entries equal the input state's entries. Within one step, a conservation
+island the step certified, with its exact problem and final proposal state (§6.2), the band reading
+(§10.3: the slice cut, or that the track spans the slice) of every band-track report it read, keyed by
+the report, and the step's `Completion` conservation reading of those entries, which the next step
+publishes as its `Input`. A step reads it only when its entries equal the input state's entries. A
+resting band pair reuses its report step after step, and the step reads its band twice (§5 steps 4 and
+8), so its band is read once while the report is reused. Within one step, a conservation
 reading of entries equal to ones the step already read is reused too: the kicked state starts the first
 drift slice and the completed state ends the last. Each reading is a pure function of the world and the
 entries, so a reused one is the one a new reading returns.
