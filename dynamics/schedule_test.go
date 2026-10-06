@@ -517,8 +517,11 @@ func TestScheduledStepCancellation(t *testing.T) {
 	require.Positive(t, polls)
 	// Cancelling at any poll — before the kick, inside the fixed-pair, swept-box
 	// and sweep loops, or inside a sweep — returns the context error and no report.
+	// Each run builds the scene afresh: its bodies keep every completed contact
+	// query, which a repeat would read instead of polling through it again.
 	for limit := range polls {
 		var calls atomic.Int64
+		scene := newSixBoxScene(t, sixBoxMotions, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
 		report, err := scene.step(countdownContext{Context: t.Context(), calls: &calls, limit: limit})
 		require.ErrorIs(t, err, context.Canceled, "cancelled at poll %d of %d", limit, polls)
 		require.Nil(t, report, "cancelled at poll %d of %d", limit, polls)

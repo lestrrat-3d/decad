@@ -217,6 +217,22 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	key := newPairReportKey(b, poseA, poseB, req)
+	if report, ok := a.pairReports.load(key); ok {
+		return report, nil
+	}
+	report, err := classifyContactPair(ctx, a, b, poseA, poseB, req)
+	if err != nil {
+		return nil, err
+	}
+	a.pairReports.store(key, report)
+	return cloneContactReport(report), nil
+}
+
+// classifyContactPair is ContactPair's proof for validated, distinct, live
+// solids and a validated request, before the memo.
+func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
+	req ContactRequest) (*ContactReport, error) {
 	report := &ContactReport{A: a, B: b, PoseA: poseA, PoseB: poseB, Request: req}
 	boxA, okA := sourceBoxAtPose(a, poseA)
 	boxB, okB := sourceBoxAtPose(b, poseB)

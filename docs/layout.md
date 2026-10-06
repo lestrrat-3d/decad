@@ -183,7 +183,7 @@ to the byte budget.
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
-| `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
+| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, each body's report memo. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_pair.go` | Planar admission, convexity and the bands. See `docs/multibody-dynamics-design.md` §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |

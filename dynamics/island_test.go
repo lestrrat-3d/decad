@@ -604,8 +604,11 @@ func TestIslandCancellation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status)
 	polls := calls.Load()
+	// Each run builds the scene afresh: its bodies keep every completed
+	// contact query, which a repeat would read instead of polling through it.
 	for limit := int64(0); limit < polls; limit += 7 {
 		var calls atomic.Int64
+		scene := newPyramid(t, [7]int{-1, 0, 1, 2, 3, 4, 5}, islandStepConfig())
 		report, err := scene.world.Step(countdownContext{Context: t.Context(), calls: &calls, limit: limit},
 			scene.state, input, pyramidDt())
 		require.ErrorIs(t, err, context.Canceled, "cancelled at poll %d of %d", limit, polls)

@@ -260,21 +260,31 @@ func TestExactPlanarPairAdmitsStitchedSolid(t *testing.T) {
 }
 
 func TestContactPairExactPlanarCancels(t *testing.T) {
-	doc := decad.New()
-	tray := trayBody(t, doc)
-	hex := hexPrismBody(t, doc)
+	// A completed query is kept in the tray's report memo, so the polls are
+	// counted in one document and the cancellations run in a second, built
+	// the same way, that never completes the counted query before them. In
+	// each, a first query at another touching pose caches both convexity
+	// certificates, so the counted query reads them from the cache.
 	pose := hexPose(t, r3.Vec{X: -10})
-	// The first query also caches both convexity certificates; the second
-	// counts the polls of a query that reads them from the cache.
-	var polls int32
-	for range 2 {
-		counting := newCancelAfterContext(t.Context(), math.MaxInt32)
-		report, err := doc.ContactPair(counting, tray, hex, r3.Identity(), pose, contactRequest())
+	warm := hexPose(t, r3.Vec{X: -12})
+	setup := func() (*decad.Document, *decad.Body, *decad.Body) {
+		doc := decad.New()
+		tray := trayBody(t, doc)
+		hex := hexPrismBody(t, doc)
+		report, err := doc.ContactPair(t.Context(), tray, hex, r3.Identity(), warm, contactRequest())
 		require.NoError(t, err)
 		require.Equal(t, decad.ContactTouching, report.Relation)
-		polls = counting.calls.Load()
+		return doc, tray, hex
 	}
+	doc, tray, hex := setup()
+	counting := newCancelAfterContext(t.Context(), math.MaxInt32)
+	report, err := doc.ContactPair(counting, tray, hex, r3.Identity(), pose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, report.Relation)
+	polls := counting.calls.Load()
 	require.Greater(t, polls, int32(8), "the planar kernel polls inside its loops")
+
+	doc, tray, hex = setup()
 	before := doc.Bodies()
 	for _, limit := range []int32{3, polls / 2, polls} {
 		canceling := newCancelAfterContext(t.Context(), limit)
@@ -283,4 +293,15 @@ func TestContactPairExactPlanarCancels(t *testing.T) {
 		require.Nil(t, report)
 	}
 	require.Equal(t, before, doc.Bodies())
+	// No canceled query entered the memo: the next one does the whole proof,
+	// and only then does a repeat poll once, at entry, and read the memo.
+	counting = newCancelAfterContext(t.Context(), math.MaxInt32)
+	report, err = doc.ContactPair(counting, tray, hex, r3.Identity(), pose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, report.Relation)
+	require.Equal(t, polls, counting.calls.Load())
+	counting = newCancelAfterContext(t.Context(), math.MaxInt32)
+	_, err = doc.ContactPair(counting, tray, hex, r3.Identity(), pose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, int32(1), counting.calls.Load())
 }
