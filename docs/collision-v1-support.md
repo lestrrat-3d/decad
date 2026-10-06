@@ -20,7 +20,7 @@ shows a box impact and computed rebound.
 | Full source cylinder and source box | Axial disk in a wide face, including a disk resting or sliding on it; vertical extruded sidewall against a broad face | Centered frictionless rebound; rest on an end disk |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses; against a signed-axis face of an exact planar solid, a tray's floor included, a touch, gap or `ContactBand` at any pose, and a rolling touch or band track from such a start | Rolling on a fixed floor or tray floor in a scheduled world, with and without gravity |
-| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
+| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | Vertex, edge and face impacts under rotation, tipping, and rest on a face of a floor or a `Cut` tray's floor |
 | A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement, the lifted set within `max(SupportBand, δ)`, and a deep overlap's face-local patch; a clear path, first impact onto the band, or band track | A chamfered block lands and rests on its lifted corners; a revolved bottle lands and rests on its lifted base, its solve publishing the witness torque its δ leaves |
 
 The source-box path starts from rectangular source prisms. Signed-axis
@@ -103,8 +103,8 @@ axis without slip is an exact `SweepPersistentTouch` over a whole turn. A
 sink, an off-axis pivot or a tilt of the axis adds its own computed depth.
 From a turned start the track also carries that start's band. On a tray's
 floor the track ends before the cylinder's path box reaches a wall. The
-track's points, normal and replay follow the planar band track. A world of
-four or more bodies rolls such a cylinder on a fixed floor or tray floor, with
+track's points, normal and replay follow the planar band track. A scheduled
+world rolls such a cylinder on a fixed floor or tray floor, with
 each kick stopped at the step start, or with the contact set carrying the pair
 when nothing kicks it. [Rolling tests](../contact_sweep_rolling_test.go) check the ruling ends,
 the depth and the contact point's speed, and the
@@ -153,7 +153,7 @@ body in front of the face reaches the convex body. The manifold is withheld
 with `ContactAmbiguousFeature` when a corner or edge meets only a face's rim,
 when a hole cuts into the patch, when a convex face rests on an edge of a
 non-convex body, or when an overlap crosses two faces, such as a corner
-driven into a tray's floor and wall at once. The four-body step's islands use it.
+driven into a tray's floor and wall at once. The scheduled step's islands use it.
 [Planar manifold tests](../contact_faceted_manifold_test.go) check each case.
 
 `SweepPair` checks two such solids under any path, spinning or not, when no
@@ -193,7 +193,8 @@ cylinder keeps its exact path. A body whose every face is flat is read
 unchorded; a body with a curved face is read at `ContactRequest.HeldChord`,
 and a zero chord leaves it undecided. The true surface lies
 within δ of the held one: the mesh's `Bound`, or for a stitched solid its
-largest vertex bound. A held gap wider than the two
+largest vertex bound. A body whose δ is zero, such as an exact cup, loft or
+straight sweep, is checked as an exact planar solid. A held gap wider than the two
 bodies' δ summed is a true gap with that δ added to its bound, and a corner
 deeper than it inside the other body is a true overlap. A held touch, or a
 held gap or shallow depth within it, is `ContactBand`: the true pair lies
@@ -398,7 +399,8 @@ impact and the refusal.
 
 A generic positive-bound faceted body can prove strict clearance above a
 floor without proving a touching support face. Sphere contacts at box edges,
-tilted cylinders, posed or swept cylinders on their sides, and other rotating
-contacts also stop at their first missing proof. The detailed gates and algorithms are
+tilted cylinders, posed or swept cylinders on their sides against anything
+but a signed-axis face of an exact planar solid, and other rotating contacts
+also stop at their first missing proof. The detailed gates and algorithms are
 in the [collision design](collision-dynamics-design.md) and its linked
 contact, sweep, mass, and rigid-dynamics designs.

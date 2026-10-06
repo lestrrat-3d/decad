@@ -14,8 +14,8 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f, 15, 16,
-17, 18, 19 and 20 have shipped. `dynamics.World` holds any number of bodies, the canonical pair table and
+Current state: every PR of §13's delivery order has shipped, PRs 1 to 21 with 14a–14f and 20a–20g.
+`dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Every world, whatever its body count,
 takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
@@ -33,23 +33,24 @@ point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 `Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it. A source cylinder that lands on its end disk rests on contact-sweep §4.6's persistent
-disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's Phase 1
-scene, `stack-and-drop`, runs its full `2 s` in `dynamics/scene_test.go` and `_gallery`; the Phase 2 scene,
-`tumble`, runs its full `3 s` with every body resting face down (§13 PR 15).
+disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's three
+exit scenes run their full length in `_gallery` and in `dynamics/scene_test.go`, the last two there only
+under `DECAD_TUMBLE_FULL` and `DECAD_PARTSBIN_FULL` (§13 PRs 15 and 21): the Phase 1 scene,
+`stack-and-drop`, its `2 s`; the Phase 2 scene, `tumble`, its `3 s` with every body resting face down;
+and the Phase 3 scene, `parts-bin`, its `4 s` with the five dropped bodies resting on a `ContactBand` and
+the cylinder rolling without slip.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. No closed-form responder remains in `dynamics` (§6.5). The exact
-arithmetic every certificate below
-is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
-rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
-`internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
-shipped code. §5, §6.1–§6.6, §7, §3.3, §3.4 and §12 ship as well, for every world. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
-Booleans, directly or through a translation-only placement, and for closed all-planar stitched solids; lofts,
-sweeps, cups and general revolves wait on §10.4's held-mesh admission (§13 PR 20b).
-§10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
-all-planar cap-loop chamfers. §10.5 ships for the same exact bodies: under a positive `SupportBand` a box
-tipped over from its edge comes to rest flat. §10.4's rolling band track ships for a full source cylinder
-on an exact planar body from any start pose, and the scheduled step rolls such a cylinder (§13 PR 20).
-Everything else is design-only until the PR table in §13 says otherwise.
+arithmetic every certificate below is stated in is one package, `internal/proof` (`Dyadic`, `DyV3`,
+`RatInterval` and the float rounding bounds), which the root package and `dynamics` both import.
+§3 to §12 describe shipped code, for every world, with the limits each section states. §9's exact
+planar path admits prisms over whole `LineSeg` sections, zero-bound Booleans, directly or through a
+translation-only placement, closed all-planar stitched solids, and every other solid payload whose §10.4
+held mesh has zero `δ`, such as §2's cup, loft and sweep. §10.4's held mesh admits every remaining solid
+payload without an exact contact family of its own at its positive `δ`, a body with a curved face at the
+request's `HeldChord`. §10.4's rolling band track carries a full source cylinder on an exact planar body
+from any start pose, on a plain floor or a tray's floor (§10.6), and the scheduled step rolls such a
+cylinder.
 
 Navigation only; the named sections own the rules:
 
@@ -99,7 +100,7 @@ Non-goals, each with the reason it is out:
 | Joints, deformation, fracture | `docs/collision-dynamics-design.md` §2 limits the first stage to rigid solids; nothing here needs more. |
 | Sleeping or deactivation | A sleeping body publishes poses no certificate backs; a resting island costs one persistent track per pair and stays certified. |
 | A continuous-force integrator between events | The step's force law is the one semi-implicit kick `docs/rigid-dynamics-design.md` "Step and event schedule" defines; the caller picks `dt`. A tumbling body therefore moves at constant `ω` between kicks, and §10.3's band track is what lets it rest. |
-| Non-convex dynamic bodies with a manifold | §9 proves a manifold for a convex body against any planar face. A non-convex DYNAMIC body gets a relation and no manifold (`ContactNonConvex`); a non-convex FIXED or kinematic body is fine, since only its faces enter. |
+| A manifold for every contact of two non-convex bodies | §9 proves a manifold when one body of the pair is convex, and §10.5's guest rule when every contact of two non-convex bodies lies on one face of one of them (§2's cup on the tray's floor). Any other touch or overlap of two non-convex bodies gets a relation and no manifold (`ContactNonConvex`); a non-convex FIXED or kinematic body against a convex dynamic one is fine, since only its faces enter. |
 | kinetograph interpolating between certified poses | §11: the viewer asks for a pose at a frame time and shows that pose; it never blends two. |
 | Uncertified mass from a render mesh | `docs/dynamic-mass-design.md` §2.2: a `VerifyNone`/`VerifyBoundary` mesh never supplies inertia. |
 
@@ -217,9 +218,9 @@ func (w *World) Pairs() []BodyPair     // every pair in canonical order, exclude
 Pair material mixes per pair exactly as `docs/rigid-dynamics-design.md` "World and State" states; the
 `frictionCoefficient` interval lives on the pair, never on the world. An excluded pair is not mixed. A
 Fixed/Fixed pair enters no response, so a friction mean outside the finite nonzero range is refused only for a
-pair with a moving body. `NewWorld` returns `ErrUnsupported` for a positive-friction pair with a moving body
-whose family §6.4 cannot certify in the current phase. A non-excluded Fixed/Fixed pair is queried once per
-`Step` at its constant poses by `ContactPair`; an `Overlapping` or `Undecided` relation, or a `ContactBand`
+pair with a moving body. `NewWorld` returns `ErrUnsupported` for a positive-friction pair with a kinematic
+body (`dynamics/pairs.go`); §6.4 states where else friction stops. A non-excluded Fixed/Fixed pair is
+queried once per `Step` at its constant poses by `ContactPair`; an `Overlapping` or `Undecided` relation, or a `ContactBand`
 whose band exceeds `PenetrationResidual` (§10.4), makes the step `Undecided` with `StepFixedPairRelation`
 (§12). Exclude such pairs, or model a tray as one body, as the exit
 scenes do.
@@ -566,8 +567,8 @@ A solved island that changes nothing publishes nothing: when every point's enclo
 lies within `VelocityResidual` of zero, every certified normal and tangent impulse is exactly zero, every
 dynamic body keeps its exact pre-solve velocities and §6.6 moves no body, the island publishes no event and
 no `IslandReport`, and its pairs join the contact set under `ContinueCertifiedTouch`. A stationary or
-sliding touch at the step start therefore continues on its track without an event, as in the two- and
-three-body steps; in a later step the carried contact set continues it without this solve (§3.2).
+sliding touch at the step start therefore continues on its track without an event; in a later step the
+carried contact set continues it without this solve (§3.2).
 
 Islands are the connected components of the graph whose vertices are DYNAMIC bodies and whose edges are
 active constraints between two dynamic bodies; a constraint against a Fixed or Kinematic body attaches
@@ -751,10 +752,11 @@ upgrades one.
 
 ### 6.4 Friction families per phase
 
-The cone, stick and slip gates make friction generic, so no per-shape friction solver remains. What limits friction per phase is the manifold producer: a pair needs a bounded manifold with
-point and normal balls that keep the slip and cone intervals inside the limits. Phase 1 families all
-publish such manifolds; a positive-friction pair whose family publishes relation only (no manifold) is
-refused at `NewWorld` with `ErrUnsupported`, as today.
+The cone, stick and slip gates make friction generic, so no per-shape friction solver remains. What limits
+friction is the manifold producer: a pair needs a bounded manifold with point and normal balls that keep the
+slip and cone intervals inside the limits. A pair whose family publishes a relation only (no manifold)
+stops the step with `StepManifoldMissing` when it reaches an island (§6.1), with or without friction;
+`NewWorld` refuses positive friction only on a pair with a kinematic body (§3.1).
 
 The model applies every impulse of an island at once, with Newton restitution on each normal and Coulomb
 friction read at the post-event velocity. Friction at one contact can therefore drive a body into another
@@ -988,9 +990,8 @@ builds the scene (§11.2), so no render worker ever overlaps an `Advance`.
 
 ## 8. Mass-property extensions
 
-`docs/dynamic-mass-design.md` owns the integrals and admission gates; this section fixes which payload
-lands when and through which path, in the order below. Each item ships with the computed test of
-dynamic-mass §6 for that shape.
+`docs/dynamic-mass-design.md` owns the integrals and admission gates; this section fixes which path each
+payload's mass takes. Each item carries the computed test of dynamic-mass §6 for that shape.
 
 ### 8.1 Prism with a non-cardinal frame or placement basis
 
@@ -1097,8 +1098,9 @@ is exact: every vertex an exact dyadic rational at the query pose (the recorded 
 placement and query transforms with exact products and sums, as `sourceOrientedBoxAtPose` does for a
 box) and every face planar with a source normal read exactly off its vertices. That is: a prism whose
 section is all `LineSeg` with zero deltas, at any proper pose; a stitched all-planar solid with zero
-`delta`; a zero-bound Boolean or its translation-only placement; a loft whose stations are exact
-(`delta == 0`). A body with a positive boundary displacement is Phase 3 (§10.4).
+`delta`; a zero-bound Boolean or its translation-only placement; and any other solid payload whose
+§10.4 held mesh has zero `δ`, an exact loft, cup or one-span straight sweep among them. A body with a
+positive boundary displacement takes §10.4's held mesh at that `δ`.
 
 A stitched solid is read off its own audited triangle set (`stitchPayload.tris` over `verts`, with
 `triFaces` naming each triangle's live face), which `Stitch` assembles only for a closed all-planar weld
@@ -1155,10 +1157,11 @@ edge cross products) exactly as `classifyOrientedSourceBoxes` does; the triangle
 A body is CONVEX when every held vertex lies on or behind every facet plane, tested as exact rational
 signed volumes, and its mesh passes the solid audits of `docs/tessellation-design.md` §1. The certificate
 is computed once per body at its placement and cached on the body (it is invariant under any affine
-pose with a positive determinant, which is every pose §9 admits). A dynamic body without it publishes
-relations only, with the appended reason `ContactNonConvex` on an absent manifold. A Fixed or Kinematic
-body needs no certificate. `ContactPair` does not know motion types: it names `ContactNonConvex` on an
-overlapping pair when neither body carries the certificate, since §9.3 and §9.6 need one convex side, and on a
+pose with a positive determinant, which is every pose §9 admits). A dynamic body without it gets a
+manifold only against a body that carries one (§9.3, §9.6) or through §10.5's non-convex guest rule, and
+otherwise relations only, with the appended reason `ContactNonConvex` on an absent manifold. A Fixed or
+Kinematic body needs no certificate. `ContactPair` does not know motion types: it names
+`ContactNonConvex` on an overlapping pair when neither body carries the certificate, since §9.3 and §9.6 need one convex side, and on a
 touching pair of two such bodies that §10.5's non-convex guest rule does not cover.
 
 ### 9.3 Manifold
@@ -1195,7 +1198,8 @@ withholds the manifold with `ContactAmbiguousFeature`:
   edge's clipped pieces or that vertex, each piece reaching the face's interior; a piece that only meets
   the face's rim is a vertex-on-edge or parallel edge-on-edge contact and covers nothing;
 - the same with the roles swapped, only when `Y` is convex too: a face of `A` on an edge of a
-  non-convex `B` is not admitted and withholds the manifold;
+  non-convex `B` is not admitted and withholds the manifold, since §10.5's non-convex guest rule runs only
+  when neither body is convex;
 - a crease edge of `X` crossing a crease edge of `Y` at an interior point.
 
 Duplicate points are merged only under exact equality of point and features. The normal is normalized
@@ -1276,11 +1280,11 @@ vertex in, on or crossing the other box (§9.3's support and crossing rows and t
 vertex): a turned box on its edge. Face pairs stay with the box patches, which withhold the degenerate
 ones.
 
-**Positive-displacement bodies.** A body whose held boundary carries `δ > 0` never reaches this path in
-Phase 2 (§9's admission). In Phase 3 it reaches it only under §10.4's `ContactBand`: the clip runs on
-the held vertices, which are exact rationals at the pose, and the band is charged afterwards exactly as
-§10.4 states — every point ball widened by `δ` and `Separation` carrying the band instead of an exact
-zero. The clip itself is unchanged; only the published bounds differ.
+**Positive-displacement bodies.** A body whose held boundary carries `δ > 0` reaches this path only
+through §10.4's held mesh, under a `ContactBand` or a held overlap deeper than `δ`: the clip runs on the
+held vertices, which are exact rationals at the pose, and §10.4's charges follow — every point ball
+widened by its body's `δ`, and `Separation` carrying the band instead of an exact zero, or the held depth
+widened by the summed `δ`. The clip itself is unchanged; only the published bounds differ.
 
 **Tests** (`contact_faceted_manifold_test.go`, PR 11), every one asserting computed coordinates:
 
@@ -1617,7 +1621,9 @@ Curved source families with their own exact occupied sets (sphere, axial cylinde
 paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
 §7 stage C2 through the clearance kernel's face-pair table for the relation, with manifolds from the
 certified ruling feet of `docs/clearance-design.md` §6 (contact-geometry §4.5) and normals from
-`Face.NormalAt`. Their delivery is §13's last three PRs.
+`Face.NormalAt`. A full source cylinder's ruling is the one such manifold that ships: at identity query
+poses (§13 PR 19), and against a signed-axis face of an exact planar body at any pose, rolling included
+(§13 PRs 20 and 20e).
 
 **Rolling.** A cylinder rolling on a floor takes §10.3's track with the ruling's two ends as the
 contact set (`contact_sweep_rolling.go`). `SweepPair` admits a full source cylinder `M` at any start
