@@ -92,6 +92,9 @@
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
 //	  WithSweepTwist nonzero twist                            ErrUnsupported
+//	  WithMitredJoins / WithSectionScale over a LineTo path
+//	    and a whole-line profile                              builds
+//	  mitred or scaled sweep as a boolean operand             ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/revolve/loft/faceted,
 //	                     crossings                            builds
