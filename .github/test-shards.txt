@@ -148,7 +148,6 @@
 0	0.00	TestClampedConversionCostIsQuadratic
 0	0.00	TestClearDenomsIsAPositiveRescaling
 0	0.00	TestClearanceEnumerationCountsVertexTierFaces
-0	0.00	TestClipFracComparesExactlyAcrossDenominators
 0	0.00	TestClosedChainAddsTheWrapJointAnOpenChainNeverReads
 0	0.00	TestClosedSplineBezierMatchesGeomEvaluator
 0	0.00	TestCoalescedAnalyticEdgesCarryLengthBounds
@@ -731,7 +730,6 @@
 2	0.12	TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
 2	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
 2	1.70	TestCupWallCancellationCoversOffsetAuditAndReverse
-2	0.02	TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor
 2	0.09	TestEvalLoftAuditRefusesOverBudget
 2	0.01	TestFacetedAxisSupportRefusesTwoLowestFaces
 2	0.03	TestFloatIntervalNextMatchesMath
@@ -762,7 +760,6 @@
 2	0.20	TestRevolveMeshSymDiffFallsWithTolerance
 2	0.12	TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian
 2	0.04	TestRevolveSheetPublishesNoOccupiedVolumeProof
-2	0.02	TestSegTriOverlap2MatchesReference
 2	0.01	TestStackedPayloadAuditRejectsBrokenRecords
 2	0.02	TestSweepPairRealFacetedUnionClearAndImpact
 2	0.01	TestTessellateChargesSectionDisplacementToEveryProof
@@ -816,7 +813,6 @@
 3	1.38	TestRevolveCellSweptVolumeBoundsTheCellIntegral
 3	0.07	TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit
 3	0.01	TestScaledRotationMatchesRotation
-3	0.96	TestSegTriOverlap2MatchesReferenceRandomized
 3	0.02	TestSheetMeshPublishesNoOccupiedVolumeProof
 3	0.01	TestStitchCurvedMassCorrectsInwardOrientationForSphere
 3	0.22	TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound

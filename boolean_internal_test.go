@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -72,13 +74,13 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 
 // classify runs the pair classifier on two float triangles, lifting them the
 // way the mesh pass does.
-func classify(t *testing.T, ta, tb [3]r3.Vec) triContact {
+func classify(t *testing.T, ta, tb [3]r3.Vec) meshbool.TriContact {
 	t.Helper()
 	xta := [3]proofbound.Xpt{proofbound.XptOf(ta[0]), proofbound.XptOf(ta[1]), proofbound.XptOf(ta[2])}
 	xtb := [3]proofbound.Xpt{proofbound.XptOf(tb[0]), proofbound.XptOf(tb[1]), proofbound.XptOf(tb[2])}
-	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
-	c, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	c, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	return c
 }
@@ -97,17 +99,17 @@ func TestTriTriClassifyIsSymmetric(t *testing.T) {
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: -12, Y: 0, Z: -6}, {X: -12, Y: 0, Z: 5}}
 
 	fwd := classify(t, a, b)
-	require.Equal(t, contactPoint, fwd.kind)
-	require.Equal(t, r3.Vec{}, fwd.p0.Vec(), `the contact is the origin`)
+	require.Equal(t, meshbool.ContactPoint, fwd.Kind)
+	require.Equal(t, r3.Vec{}, fwd.P0.Vec(), `the contact is the origin`)
 	// The point lies on A's boundary (inside its edge) AND on B's (its corner).
-	require.True(t, fwd.p0OnA)
-	require.True(t, fwd.p0OnB)
+	require.True(t, fwd.P0OnA)
+	require.True(t, fwd.P0OnB)
 
 	rev := classify(t, b, a)
-	require.Equal(t, contactPoint, rev.kind)
-	require.Equal(t, fwd.p0.Vec(), rev.p0.Vec(), `the answer does not depend on the argument order`)
-	require.Equal(t, fwd.p0OnA, rev.p0OnB)
-	require.Equal(t, fwd.p0OnB, rev.p0OnA)
+	require.Equal(t, meshbool.ContactPoint, rev.Kind)
+	require.Equal(t, fwd.P0.Vec(), rev.P0.Vec(), `the answer does not depend on the argument order`)
+	require.Equal(t, fwd.P0OnA, rev.P0OnB)
+	require.Equal(t, fwd.P0OnB, rev.P0OnA)
 }
 
 func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
@@ -120,30 +122,30 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 	b := [3]r3.Vec{{X: -2, Y: -2, Z: 0}, {X: 6, Y: -2, Z: 0}, {X: 2, Y: 6, Z: 0}}
 
 	c := classify(t, a, b)
-	require.Equal(t, contactSegment, c.kind)
-	require.Equal(t, 0, c.edgeA, `the contact runs along A's edge 0`)
-	require.Equal(t, -1, c.edgeB, `it crosses B's interior, along no edge of B`)
+	require.Equal(t, meshbool.ContactSegment, c.Kind)
+	require.Equal(t, 0, c.EdgeA, `the contact runs along A's edge 0`)
+	require.Equal(t, -1, c.EdgeB, `it crosses B's interior, along no edge of B`)
 	// Both endpoints are A's own corners, so both lie on A's boundary; both lie
 	// strictly inside B, so neither is on B's.
-	require.True(t, c.p0OnA)
-	require.True(t, c.p1OnA)
-	require.False(t, c.p0OnB)
-	require.False(t, c.p1OnB)
+	require.True(t, c.P0OnA)
+	require.True(t, c.P1OnA)
+	require.False(t, c.P0OnB)
+	require.False(t, c.P1OnB)
 }
 
 // singleFacetBoolMesh prepares a one-triangle operand mesh, the smallest input
 // facesNearMiss can be asked about.
-func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
+func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
 	bm, err := prepBoolMeshContext(t.Context(), &Mesh{vertices: tri[:], triangles: [][3]int{{0, 1, 2}}}, []int{0})
 	require.NoError(t, err)
 	return bm
 }
 
-// TestContactMemoRepeatsTheClassifier pins that contactMemo.classify serves a
+// TestContactMemoRepeatsTheClassifier pins that meshbool.ContactMemo.classify serves a
 // repeat ask for the same facet pair from its store rather than recomputing
 // it, and that the served answer is coordinate-identical to a direct
-// triTriClassify call — for a genuine contact and for a miss alike.
+// meshbool.TriTriClassify call — for a genuine contact and for a miss alike.
 //
 // A repeat ask that recomputes returns the same answer as one served from the
 // store, so no comparison of the two answers can tell them apart, and neither
@@ -151,7 +153,7 @@ func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
 // separates them is WHICH facets the second ask reads. So each half below
 // rebinds the memo's operand mesh between the two asks, to one whose facet 0
 // classifies DIFFERENTLY against the same facet of ma — proven by a direct
-// triTriClassify on the swapped pair. A second ask that recomputed would have
+// meshbool.TriTriClassify on the swapped pair. A second ask that recomputed would have
 // to report that different answer; reporting the first one is only possible
 // from the store. Rebinding a live memo is a probe this test alone performs:
 // production binds ma/mb once per evaluateBoolean call precisely so a stored
@@ -168,72 +170,72 @@ func TestContactMemoRepeatsTheClassifier(t *testing.T) {
 	miss := [3]r3.Vec{{X: 100, Y: 0, Z: 0}, {X: 101, Y: 0, Z: 0}, {X: 100, Y: 1, Z: 0}}
 
 	direct := classify(t, a, b)
-	require.Equal(t, contactSegment, direct.kind)
-	require.Equal(t, contactNone, classify(t, a, miss).kind, `the two operands below give the same facet of A opposite answers`)
+	require.Equal(t, meshbool.ContactSegment, direct.Kind)
+	require.Equal(t, meshbool.ContactNone, classify(t, a, miss).Kind, `the two operands below give the same facet of A opposite answers`)
 
 	bmA, bmB, bmMiss := singleFacetBoolMesh(t, a), singleFacetBoolMesh(t, b), singleFacetBoolMesh(t, miss)
 
-	requireSameContact := func(want, got triContact) {
+	requireSameContact := func(want, got meshbool.TriContact) {
 		t.Helper()
-		require.Equal(t, want.kind, got.kind)
-		require.Equal(t, want.edgeA, got.edgeA)
-		require.Equal(t, want.edgeB, got.edgeB)
-		require.Zero(t, want.p0.X.Cmp(got.p0.X))
-		require.Zero(t, want.p0.Y.Cmp(got.p0.Y))
-		require.Zero(t, want.p0.Z.Cmp(got.p0.Z))
-		require.Zero(t, want.p1.X.Cmp(got.p1.X))
-		require.Zero(t, want.p1.Y.Cmp(got.p1.Y))
-		require.Zero(t, want.p1.Z.Cmp(got.p1.Z))
-		require.Zero(t, want.sin2.Cmp(got.sin2))
+		require.Equal(t, want.Kind, got.Kind)
+		require.Equal(t, want.EdgeA, got.EdgeA)
+		require.Equal(t, want.EdgeB, got.EdgeB)
+		require.Zero(t, want.P0.X.Cmp(got.P0.X))
+		require.Zero(t, want.P0.Y.Cmp(got.P0.Y))
+		require.Zero(t, want.P0.Z.Cmp(got.P0.Z))
+		require.Zero(t, want.P1.X.Cmp(got.P1.X))
+		require.Zero(t, want.P1.Y.Cmp(got.P1.Y))
+		require.Zero(t, want.P1.Z.Cmp(got.P1.Z))
+		require.Zero(t, want.Sin2.Cmp(got.Sin2))
 	}
 
-	memo := newContactMemo(bmA, bmB)
-	first, err := memo.classify(0, 0)
+	memo := meshbool.NewContactMemo(bmA, bmB)
+	first, err := memo.Classify(0, 0)
 	require.NoError(t, err)
 	requireSameContact(direct, first)
 
-	memo.mb = bmMiss
-	second, err := memo.classify(0, 0)
+	memo.Mb = bmMiss
+	second, err := memo.Classify(0, 0)
 	require.NoError(t, err)
-	require.Equal(t, contactSegment, second.kind, `the second ask was served from the store: a recompute would report the swapped operand's miss`)
+	require.Equal(t, meshbool.ContactSegment, second.Kind, `the second ask was served from the store: a recompute would report the swapped operand's miss`)
 	requireSameContact(first, second)
 
 	// A pair that misses is stored too, so a repeat of a non-contact does not
 	// reclassify either. The swap runs the other way round here: the second ask
 	// would report the contact if it recomputed.
-	missMemo := newContactMemo(bmA, bmMiss)
-	first, err = missMemo.classify(0, 0)
+	missMemo := meshbool.NewContactMemo(bmA, bmMiss)
+	first, err = missMemo.Classify(0, 0)
 	require.NoError(t, err)
-	require.Equal(t, contactNone, first.kind)
+	require.Equal(t, meshbool.ContactNone, first.Kind)
 
-	missMemo.mb = bmB
-	second, err = missMemo.classify(0, 0)
+	missMemo.Mb = bmB
+	second, err = missMemo.Classify(0, 0)
 	require.NoError(t, err)
-	require.Equal(t, contactNone, second.kind, `the stored miss was served: a recompute would report the swapped operand's segment`)
+	require.Equal(t, meshbool.ContactNone, second.Kind, `the stored miss was served: a recompute would report the swapped operand's segment`)
 }
 
 func TestContactMemoPromotesDenseWithoutChangingEntries(t *testing.T) {
 	t.Parallel()
 	const side = 64
-	ma := &boolMesh{tris: make([][3]int, side)}
-	mb := &boolMesh{tris: make([][3]int, side)}
-	memo := newContactMemo(ma, mb)
-	contacts := make([]triContact, side)
+	ma := &meshbool.BoolMesh{Tris: make([][3]int, side)}
+	mb := &meshbool.BoolMesh{Tris: make([][3]int, side)}
+	memo := meshbool.NewContactMemo(ma, mb)
+	contacts := make([]meshbool.TriContact, side)
 	for i := range side {
-		contacts[i] = triContact{kind: contactSegment, edgeA: i % 3, edgeB: (i + 1) % 3}
+		contacts[i] = meshbool.TriContact{Kind: meshbool.ContactSegment, EdgeA: i % 3, EdgeB: (i + 1) % 3}
 		if i%2 == 0 {
-			contacts[i] = triContact{edgeA: -1, edgeB: -1}
+			contacts[i] = meshbool.TriContact{EdgeA: -1, EdgeB: -1}
 		}
-		memo.store(i, i, contacts[i])
+		memo.Store(i, i, contacts[i])
 	}
-	require.Nil(t, memo.sparse)
-	require.Len(t, memo.dense, side*side)
+	require.Nil(t, memo.Sparse)
+	require.Len(t, memo.Dense, side*side)
 	for i, want := range contacts {
-		got, ok := memo.lookup(i, i)
+		got, ok := memo.Lookup(i, i)
 		require.True(t, ok)
 		require.Equal(t, want, got)
 	}
-	_, ok := memo.lookup(0, 1)
+	_, ok := memo.Lookup(0, 1)
 	require.False(t, ok)
 }
 
@@ -244,17 +246,17 @@ func TestContactBatchPreparedNormalsAgreeWithStandalone(t *testing.T) {
 	miss := [3]r3.Vec{{X: 100}, {X: 101}, {X: 100, Y: 1}}
 
 	bmA := singleFacetBoolMesh(t, a)
-	for _, bmB := range []*boolMesh{singleFacetBoolMesh(t, b), singleFacetBoolMesh(t, miss)} {
-		standalone, err := triTriClassify(triCorners(bmA, 0), triCorners(bmB, 0), xtriCorners(bmA, 0), xtriCorners(bmB, 0),
-			bmA.norms[0], bmB.norms[0])
+	for _, bmB := range []*meshbool.BoolMesh{singleFacetBoolMesh(t, b), singleFacetBoolMesh(t, miss)} {
+		standalone, err := meshbool.TriTriClassify(meshbool.TriCorners(bmA, 0), meshbool.TriCorners(bmB, 0), meshbool.XtriCorners(bmA, 0), meshbool.XtriCorners(bmB, 0),
+			bmA.Norms[0], bmB.Norms[0])
 		require.NoError(t, err)
-		results := make([]contactBatchResult, 1)
-		err = runContactBatch(t.Context(), bmA, bmB, []contactPair{{}}, results, 1)
+		results := make([]meshbool.ContactBatchResult, 1)
+		err = meshbool.RunContactBatch(t.Context(), bmA, bmB, []meshbool.ContactPair{{}}, results, 1)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
-		require.True(t, bmA.fnormsReady[0])
-		require.True(t, bmB.fnormsReady[0])
-		requireSameTriContact(t, standalone, results[0].contact)
+		require.True(t, bmA.FnormsReady[0])
+		require.True(t, bmB.FnormsReady[0])
+		requireSameTriContact(t, standalone, results[0].Contact)
 	}
 }
 
@@ -286,10 +288,10 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 		// positive area: what a cap-on-cap tangency looks like to the gate.
 		ta := [3]r3.Vec{{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 0, Y: 10}}
 		tb := [3]r3.Vec{{X: 0, Y: 0}, {X: 0, Y: 10}, {X: 10, Y: 0}}
-		require.Equal(t, contactRegion, classify(t, ta, tb).kind)
+		require.Equal(t, meshbool.ContactRegion, classify(t, ta, tb).Kind)
 
 		bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
-		near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, newContactMemo(bmA, bmB))
+		near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, meshbool.NewContactMemo(bmA, bmB))
 		require.NoError(t, err)
 		// The gate answers "no near miss" for the whole face pair without
 		// proving one: the pair is left to the mesh pass's own refusal of an
@@ -312,8 +314,8 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 		gap := math.Inf(1)
 		for _, ta := range a {
 			for _, tb := range b {
-				require.Equal(t, contactNone, classify(t, ta, tb).kind, `no held facet pair meets, so the arrangement has no positive-area cell to classify`)
-				gap = math.Min(gap, triTriDistance(ta, tb))
+				require.Equal(t, meshbool.ContactNone, classify(t, ta, tb).Kind, `no held facet pair meets, so the arrangement has no positive-area cell to classify`)
+				gap = math.Min(gap, meshbool.TriTriDistance(ta, tb))
 			}
 		}
 		// The true touch falls in the gap the two chords leave — two sagittas
@@ -326,11 +328,11 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 
 // TestNearMissKeepsACrossingTheDistanceRoutineMisreads pins the order the
 // proximity gate asks its two questions in: the EXACT classifier decides
-// whether a facet pair meets, and triTriDistance is consulted only afterwards,
-// on a pair the classifier has already proven disjoint (contactNone), where its
+// whether a facet pair meets, and meshbool.TriTriDistance is consulted only afterwards,
+// on a pair the classifier has already proven disjoint (meshbool.ContactNone), where its
 // own disjointness precondition holds.
 //
-// The pair below is why the order matters. triTriDistance minimises over nine
+// The pair below is why the order matters. meshbool.TriTriDistance minimises over nine
 // edge-edge and six vertex-to-triangle distances, which is where two DISJOINT
 // convex sets attain their minimum. An intersecting pair attains it in the
 // interiors instead, so that candidate set misses it entirely and the routine
@@ -347,12 +349,12 @@ func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
 	tb := [3]r3.Vec{{X: -2, Y: 0, Z: -0.5}, {X: 2, Y: 0, Z: -0.5}, {X: 0, Y: 0, Z: 0.5}}
 
 	const slack = 0.1
-	require.Equal(t, contactSegment, classify(t, ta, tb).kind, `the exact classifier proves the pair crosses`)
-	require.Greater(t, triTriDistance(ta, tb), slack,
+	require.Equal(t, meshbool.ContactSegment, classify(t, ta, tb).Kind, `the exact classifier proves the pair crosses`)
+	require.Greater(t, meshbool.TriTriDistance(ta, tb), slack,
 		`the distance routine reads the crossing pair as far apart, so it can never be the gate's first question`)
 
 	bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
-	near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, slack, newContactMemo(bmA, bmB))
+	near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, slack, meshbool.NewContactMemo(bmA, bmB))
 	require.NoError(t, err)
 	require.True(t, near, `a proven crossing the gate cannot certify deeper than the slack stays undecidable`)
 }
@@ -405,13 +407,13 @@ func internalOctagonPrism(t *testing.T, doc *Document, frame r3.Transform, l, r,
 // contacts it gathered and the bound it decides them against.
 type gateFacePair struct {
 	slack float64
-	nc    nearContacts
+	nc    meshbool.NearContacts
 }
 
 // closeGateFacePairs prepares a and b the way evaluateBoolean does and returns
 // every face pair whose facets meet or come within the pair's bound — the
 // pairs refuseUndecidableProximity must decide — with the prepared meshes.
-func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateFacePair) {
+func closeGateFacePairs(t *testing.T, a, b *Body) (*meshbool.BoolMesh, *meshbool.BoolMesh, []gateFacePair) {
 	t.Helper()
 	tolMM, _, err := pairChordTolerance(t.Context(), a, b)
 	require.NoError(t, err)
@@ -429,7 +431,7 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateF
 	fb, err := facesOfMesh(budget, mb)
 	require.NoError(t, err)
 
-	memo := newContactMemo(bmA, bmB)
+	memo := meshbool.NewContactMemo(bmA, bmB)
 	var out []gateFacePair
 	for _, ga := range fa {
 		for _, gb := range fb {
@@ -437,10 +439,10 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateF
 			if slack <= 0 {
 				continue
 			}
-			nc, deferred, err := gatherNearContacts(t.Context(), bmA, ga.facets, bmB, gb.facets, slack, memo)
+			nc, deferred, err := meshbool.GatherNearContacts(t.Context(), bmA, ga.facets, bmB, gb.facets, slack, memo)
 			require.NoError(t, err)
 			require.False(t, deferred, `no two faces of the pair overlap in one plane`)
-			if len(nc.closeA) == 0 {
+			if len(nc.CloseA) == 0 {
 				continue
 			}
 			out = append(out, gateFacePair{slack: slack, nc: nc})
@@ -456,7 +458,7 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateF
 // deep witness, or the union is refused. At least one such pair has no witness
 // among its contacting facets' corners, edge midpoints and centroids on either
 // side (deepWitnessInside): those seven points sit at the far ends of facets
-// 11 mm long. The walk from the pair's contact segments (spanWitness) proves it.
+// 11 mm long. The walk from the pair's contact segments (meshbool.SpanWitness) proves it.
 func TestProximityGateWalksPastCornerSamples(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -469,13 +471,13 @@ func TestProximityGateWalksPastCornerSamples(t *testing.T) {
 	require.NotEmpty(t, pairs, `the walls come within the bound, so the gate has face pairs to decide`)
 	walkOnly := 0
 	for _, fp := range pairs {
-		sampled, err := deepWitnessInside(t.Context(), bmA, fp.nc.closeA, bmB, fp.slack)
+		sampled, err := deepWitnessInside(t.Context(), bmA, fp.nc.CloseA, bmB, fp.slack)
 		require.NoError(t, err)
 		if !sampled {
-			sampled, err = deepWitnessInside(t.Context(), bmB, fp.nc.closeB, bmA, fp.slack)
+			sampled, err = deepWitnessInside(t.Context(), bmB, fp.nc.CloseB, bmA, fp.slack)
 			require.NoError(t, err)
 		}
-		walked, err := spanWitness(t.Context(), bmA, bmB, fp.nc.spans, fp.slack)
+		walked, err := meshbool.SpanWitness(t.Context(), bmA, bmB, fp.nc.Spans, fp.slack)
 		require.NoError(t, err)
 		require.True(t, sampled || walked, `every close face pair of a genuine crossing is proven deep`)
 		if !sampled {
@@ -519,15 +521,15 @@ func TestProximityGateWalkAdmitsNoGraze(t *testing.T) {
 			bmA, bmB, pairs := closeGateFacePairs(t, a, b)
 			walked := 0
 			for _, fp := range pairs {
-				if len(fp.nc.spans) == 0 {
+				if len(fp.nc.Spans) == 0 {
 					continue
 				}
 				walked++
 				require.Greater(t, fp.slack, tc.Depth, `the held facets cross no deeper than the bound`)
-				deep, err := spanWitness(t.Context(), bmA, bmB, fp.nc.spans, fp.slack)
+				deep, err := meshbool.SpanWitness(t.Context(), bmA, bmB, fp.nc.Spans, fp.slack)
 				require.NoError(t, err)
 				require.False(t, deep, `the walk certifies no point deeper than the bound inside the other solid`)
-				deep, err = provenDepthExceeds(t.Context(), bmA, fp.nc.closeA, bmB, fp.nc.closeB, fp.nc.spans, fp.slack)
+				deep, err = provenDepthExceeds(t.Context(), bmA, fp.nc.CloseA, bmB, fp.nc.CloseB, fp.nc.Spans, fp.slack)
 				require.NoError(t, err)
 				require.False(t, deep)
 			}
@@ -577,31 +579,31 @@ func xat(x, y, z float64, nudge int) proofbound.Xpt {
 // (A,D1,D2) collapse under the weld, while the component they belong to
 // survives as the tetra. Every directed edge pairs with its reverse, so the
 // exact closure audit passes before the rounding ever runs.
-func splitApexTetra() []keptFacet {
+func splitApexTetra() []meshbool.KeptFacet {
 	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
 	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xat(2, 2, 9, 0)
-	return []keptFacet{
-		{v: [3]proofbound.Xpt{a, c, b}},
-		{v: [3]proofbound.Xpt{a, b, d1}},
-		{v: [3]proofbound.Xpt{b, c, d2}},
-		{v: [3]proofbound.Xpt{c, a, d2}},
-		{v: [3]proofbound.Xpt{b, d2, d1}},
-		{v: [3]proofbound.Xpt{a, d1, d2}},
+	return []meshbool.KeptFacet{
+		{V: [3]proofbound.Xpt{a, c, b}},
+		{V: [3]proofbound.Xpt{a, b, d1}},
+		{V: [3]proofbound.Xpt{b, c, d2}},
+		{V: [3]proofbound.Xpt{c, a, d2}},
+		{V: [3]proofbound.Xpt{b, d2, d1}},
+		{V: [3]proofbound.Xpt{a, d1, d2}},
 	}
 }
 
 // subUlpTetra is a closed tetra whose four vertices all round to the SAME
 // float64 vertex: every one of its facets collapses under the weld, so the
 // whole component is welded out of existence.
-func subUlpTetra() []keptFacet {
+func subUlpTetra() []meshbool.KeptFacet {
 	p := proofbound.XptOf(r3.NewVec(40, 40, 40))
 	q, r, s := xat(40, 40, 40, 0), xat(40, 40, 40, 1), xat(40, 40, 40, 2)
-	return []keptFacet{
-		{v: [3]proofbound.Xpt{p, r, q}},
-		{v: [3]proofbound.Xpt{p, q, s}},
-		{v: [3]proofbound.Xpt{q, r, s}},
-		{v: [3]proofbound.Xpt{r, p, s}},
+	return []meshbool.KeptFacet{
+		{V: [3]proofbound.Xpt{p, r, q}},
+		{V: [3]proofbound.Xpt{p, q, s}},
+		{V: [3]proofbound.Xpt{q, r, s}},
+		{V: [3]proofbound.Xpt{r, p, s}},
 	}
 }
 
@@ -613,13 +615,13 @@ func TestStitchRefusesAWeldedAwayComponent(t *testing.T) {
 	// box. The closure audit does not see it: the component that remains still
 	// closes. Nothing downstream would report it either, so the stitcher
 	// refuses here.
-	_, err := stitchFacetsContext(t.Context(), append(splitApexTetra(), subUlpTetra()...))
+	_, err := meshbool.StitchFacetsContext(t.Context(), append(splitApexTetra(), subUlpTetra()...))
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// It is the SURVIVING company that made the loss silent: a result that is
 	// nothing but the tiny component has no extent left at all, and the stitcher
 	// already refused that outright.
-	_, err = stitchFacetsContext(t.Context(), subUlpTetra())
+	_, err = meshbool.StitchFacetsContext(t.Context(), subUlpTetra())
 	require.ErrorIs(t, err, ErrBooleanFailed)
 }
 
@@ -630,17 +632,17 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	// it drops were not zero-area before the weld, and both of the things they
 	// carried are charged: their swept volume, against the PRE-ROUND surface
 	// (preArea), and the area the held mesh can no longer report (dropArea).
-	got, err := stitchFacetsContext(t.Context(), splitApexTetra())
+	got, err := meshbool.StitchFacetsContext(t.Context(), splitApexTetra())
 	require.NoError(t, err)
-	require.Len(t, got.tris, 4, `the two bridging facets collapse; the tetra survives`)
+	require.Len(t, got.Tris, 4, `the two bridging facets collapse; the tetra survives`)
 
-	held := meshAreaUpper(got.verts, got.tris)
-	require.Greater(t, got.preArea, held, `the rounding is charged against the surface it acted on, not the one that survived it`)
-	require.Positive(t, got.dropArea, `the dropped facets' own area is charged`)
-	require.Positive(t, got.round)
+	held := meshAreaUpper(got.Verts, got.Tris)
+	require.Greater(t, got.PreArea, held, `the rounding is charged against the surface it acted on, not the one that survived it`)
+	require.Positive(t, got.DropArea, `the dropped facets' own area is charged`)
+	require.Positive(t, got.Round)
 	// The volume the weld can have moved is bounded by the displacement times
 	// the pre-round area — a strictly larger charge than the held mesh's own.
-	require.Greater(t, proofbound.SweptVolumeAllow(got.round, got.preArea), proofbound.SweptVolumeAllow(got.round, held))
+	require.Greater(t, proofbound.SweptVolumeAllow(got.Round, got.PreArea), proofbound.SweptVolumeAllow(got.Round, held))
 }
 
 func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
@@ -705,21 +707,21 @@ func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
 	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
 	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xptFromRat(new(big.Rat).Add(big.NewRat(2, 1), offset), big.NewRat(2, 1), big.NewRat(9, 1))
-	kept := []keptFacet{
-		{v: [3]proofbound.Xpt{a, c, b}},
-		{v: [3]proofbound.Xpt{a, b, d1}},
-		{v: [3]proofbound.Xpt{b, c, d2}},
-		{v: [3]proofbound.Xpt{c, a, d2}},
-		{v: [3]proofbound.Xpt{b, d2, d1}},
-		{v: [3]proofbound.Xpt{a, d1, d2}},
+	kept := []meshbool.KeptFacet{
+		{V: [3]proofbound.Xpt{a, c, b}},
+		{V: [3]proofbound.Xpt{a, b, d1}},
+		{V: [3]proofbound.Xpt{b, c, d2}},
+		{V: [3]proofbound.Xpt{c, a, d2}},
+		{V: [3]proofbound.Xpt{b, d2, d1}},
+		{V: [3]proofbound.Xpt{a, d1, d2}},
 	}
-	got, err := stitchFacetsContext(t.Context(), kept)
+	got, err := meshbool.StitchFacetsContext(t.Context(), kept)
 	require.NoError(t, err)
-	require.Len(t, got.tris, 4)
-	require.Positive(t, got.round)
-	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got.round).Cmp(offset), 0)
-	require.Positive(t, proofbound.SweptVolumeAllow(got.round, got.preArea))
-	require.Positive(t, pointRoundBound(d2, r3.NewVec(2, 2, 9)))
+	require.Len(t, got.Tris, 4)
+	require.Positive(t, got.Round)
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got.Round).Cmp(offset), 0)
+	require.Positive(t, proofbound.SweptVolumeAllow(got.Round, got.PreArea))
+	require.Positive(t, meshbool.PointRoundBound(d2, r3.NewVec(2, 2, 9)))
 }
 
 func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
@@ -802,14 +804,14 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			b, err = b.Placed(t.Context(), tr)
 			require.NoError(t, err)
 
-			var op operationKind
+			var op meshbool.OperationKind
 			switch tc.name {
 			case "Union":
-				op = opUnion
+				op = meshbool.OpUnion
 			case "Cut":
-				op = opCut
+				op = meshbool.OpCut
 			case "Intersect":
-				op = opIntersect
+				op = meshbool.OpIntersect
 			}
 			eval, err := evaluateBoolean(t.Context(), op, a, b)
 			require.NoError(t, err)
@@ -857,7 +859,7 @@ func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
 
 // internalDiscBody extrudes a radius-r circle centered on the origin into an
 // h mm prism — the internal-package twin of prism_boolean_bounds_test.go's
-// discBody, needed here because boolMesh and its prep helpers are unexported
+// discBody, needed here because meshbool.BoolMesh and its prep helpers are unexported
 // and so this fixture cannot be built from the decad_test package. It takes
 // testing.TB so a benchmark can build the same fixture as a test.
 func internalDiscBody(t testing.TB, doc *Document, r, h float64) *Body {
@@ -906,7 +908,7 @@ func internalWasherBodySymmetric(t testing.TB, doc *Document, outer, inner, half
 // two boolMeshes the mesh boolean itself would build for the pair's own Cut —
 // the same chord tolerance pairChordTolerance derives — so the corpus below
 // is the one the real evaluator classifies, not an approximation of it.
-func buildCircularWasherMeshes(t testing.TB) (*boolMesh, *boolMesh) {
+func buildCircularWasherMeshes(t testing.TB) (*meshbool.BoolMesh, *meshbool.BoolMesh) {
 	t.Helper()
 	doc := New()
 	target := internalDiscBody(t, doc, 15, 10)
@@ -928,43 +930,43 @@ func buildCircularWasherMeshes(t testing.TB) (*boolMesh, *boolMesh) {
 // field, comparing every exact rational by big.Rat.Cmp — never by float
 // equality — which is the "the fast path returns what the slow path
 // returned" proof over an exact corpus (fu158, .tmp/followup-tasks/fu158-tasks.md §5).
-func requireSameTriContact(t *testing.T, exact, filtered triContact) {
+func requireSameTriContact(t *testing.T, exact, filtered meshbool.TriContact) {
 	t.Helper()
-	require.Equal(t, exact.kind, filtered.kind)
-	if exact.kind == contactNone {
+	require.Equal(t, exact.Kind, filtered.Kind)
+	if exact.Kind == meshbool.ContactNone {
 		return
 	}
-	require.Zero(t, exact.p0.X.Cmp(filtered.p0.X))
-	require.Zero(t, exact.p0.Y.Cmp(filtered.p0.Y))
-	require.Zero(t, exact.p0.Z.Cmp(filtered.p0.Z))
-	require.Zero(t, exact.p1.X.Cmp(filtered.p1.X))
-	require.Zero(t, exact.p1.Y.Cmp(filtered.p1.Y))
-	require.Zero(t, exact.p1.Z.Cmp(filtered.p1.Z))
-	require.Equal(t, exact.p0OnA, filtered.p0OnA)
-	require.Equal(t, exact.p1OnA, filtered.p1OnA)
-	require.Equal(t, exact.p0OnB, filtered.p0OnB)
-	require.Equal(t, exact.p1OnB, filtered.p1OnB)
-	require.Equal(t, exact.edgeA, filtered.edgeA)
-	require.Equal(t, exact.edgeB, filtered.edgeB)
-	if exact.sin2 == nil {
-		require.Nil(t, filtered.sin2)
+	require.Zero(t, exact.P0.X.Cmp(filtered.P0.X))
+	require.Zero(t, exact.P0.Y.Cmp(filtered.P0.Y))
+	require.Zero(t, exact.P0.Z.Cmp(filtered.P0.Z))
+	require.Zero(t, exact.P1.X.Cmp(filtered.P1.X))
+	require.Zero(t, exact.P1.Y.Cmp(filtered.P1.Y))
+	require.Zero(t, exact.P1.Z.Cmp(filtered.P1.Z))
+	require.Equal(t, exact.P0OnA, filtered.P0OnA)
+	require.Equal(t, exact.P1OnA, filtered.P1OnA)
+	require.Equal(t, exact.P0OnB, filtered.P0OnB)
+	require.Equal(t, exact.P1OnB, filtered.P1OnB)
+	require.Equal(t, exact.EdgeA, filtered.EdgeA)
+	require.Equal(t, exact.EdgeB, filtered.EdgeB)
+	if exact.Sin2 == nil {
+		require.Nil(t, filtered.Sin2)
 		return
 	}
-	require.NotNil(t, filtered.sin2)
-	require.Zero(t, exact.sin2.Cmp(filtered.sin2))
+	require.NotNil(t, filtered.Sin2)
+	require.Zero(t, exact.Sin2.Cmp(filtered.Sin2))
 }
 
 // classifyPair runs one facet pair through the classifier with the early miss
 // filter on or off, which is what the two equivalence tests below compare. The
 // choice travels as an argument, so these tests decide nothing for any other
 // test running beside them.
-func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, useFilter bool) (triContact, error) {
-	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, useFilter)
+func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, useFilter bool) (meshbool.TriContact, error) {
+	return meshbool.TriTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, useFilter)
 }
 
 // TestTriTriClassifyFilterAgreesWithTheExactPath is fu158's own pin: every
 // AABB-surviving facet pair of the disc/washer fixture must classify
-// identically with triTriMissesFilter on and off. The filter changes no
+// identically with meshbool.TriTriMissesFilter on and off. The filter changes no
 // verdict, so this is what stands between "faster" and "a different answer"
 // (.tmp/followup-tasks/fu158-tasks.md §6).
 func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
@@ -972,15 +974,15 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 
 	ma, mb := buildCircularWasherMeshes(t)
 	pairs, nonNone := 0, 0
-	for i := range ma.tris {
-		for j := range mb.tris {
-			if !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
+	for i := range ma.Tris {
+		for j := range mb.Tris {
+			if !meshbool.BoxesOverlap(ma.Boxes[i], mb.Boxes[j]) {
 				continue
 			}
 			pairs++
-			ta, tb := triCorners(ma, i), triCorners(mb, j)
-			xta, xtb := xtriCorners(ma, i), xtriCorners(mb, j)
-			na, nb := ma.norms[i], mb.norms[j]
+			ta, tb := meshbool.TriCorners(ma, i), meshbool.TriCorners(mb, j)
+			xta, xtb := meshbool.XtriCorners(ma, i), meshbool.XtriCorners(mb, j)
+			na, nb := ma.Norms[i], mb.Norms[j]
 
 			filtered, err := classifyPair(ta, tb, xta, xtb, na, nb, true)
 			require.NoError(t, err)
@@ -988,7 +990,7 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 			require.NoError(t, err)
 
 			requireSameTriContact(t, exact, filtered)
-			if exact.kind != contactNone {
+			if exact.Kind != meshbool.ContactNone {
 				nonNone++
 			}
 		}
@@ -1001,7 +1003,7 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 // own named case (.tmp/followup-tasks/fu158-tasks.md §7): two facets sharing
 // an edge but meeting at a dihedral angle of about 1e-6 rad. dir = na × nb is
 // nearly zero there, and the crossing-point projections carry wide
-// intervals — exactly where triSpanOnLine's own doc comment says it must
+// intervals — exactly where meshbool.TriSpanOnLine's own doc comment says it must
 // abstain rather than resolve. Sharing an edge keeps the contact itself
 // unambiguous (a positive-length segment along it), so the pair exercises the
 // near-parallel path while still landing on a real answer.
@@ -1012,15 +1014,15 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
 	xta := [3]proofbound.Xpt{proofbound.XptOf(a[0]), proofbound.XptOf(a[1]), proofbound.XptOf(a[2])}
 	xtb := [3]proofbound.Xpt{proofbound.XptOf(b[0]), proofbound.XptOf(b[1]), proofbound.XptOf(b[2])}
-	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
 
 	filtered, err := classifyPair(a, b, xta, xtb, na, nb, true)
 	require.NoError(t, err)
 	exact, err := classifyPair(a, b, xta, xtb, na, nb, false)
 	require.NoError(t, err)
 
-	require.Equal(t, contactSegment, exact.kind, `the shared edge is a real, unambiguous contact`)
+	require.Equal(t, meshbool.ContactSegment, exact.Kind, `the shared edge is a real, unambiguous contact`)
 	requireSameTriContact(t, exact, filtered)
 
 	// The classifier's prepared plane signs must match its original adaptive
@@ -1038,21 +1040,21 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			xtri := [3]proofbound.Xpt{proofbound.XptOf(tc.tri[0]), proofbound.XptOf(tc.tri[1]), proofbound.XptOf(tc.tri[2])}
-			ntri := xcross(proofbound.Xsub(xtri[1], xtri[0]), proofbound.Xsub(xtri[2], xtri[0]))
+			ntri := meshbool.Xcross(proofbound.Xsub(xtri[1], xtri[0]), proofbound.Xsub(xtri[2], xtri[0]))
 			uncertain := 0
 			for i := range 3 {
-				_, certainA := orientSignFloat(a[0], a[1], a[2], tc.tri[i])
-				_, certainB := orientSignFloat(tc.tri[0], tc.tri[1], tc.tri[2], a[i])
+				_, certainA := meshbool.OrientSignFloat(a[0], a[1], a[2], tc.tri[i])
+				_, certainB := meshbool.OrientSignFloat(tc.tri[0], tc.tri[1], tc.tri[2], a[i])
 				if !certainA {
 					uncertain++
 				}
 				if !certainB {
 					uncertain++
 				}
-				require.Equal(t, orientSign(a[0], a[1], a[2], tc.tri[i]),
-					orientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
-				require.Equal(t, orientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
-					orientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
+				require.Equal(t, meshbool.OrientSign(a[0], a[1], a[2], tc.tri[i]),
+					meshbool.OrientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
+				require.Equal(t, meshbool.OrientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
+					meshbool.OrientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
 			}
 			require.Positive(t, uncertain, `this case must exercise the exact fallback`)
 		})
@@ -1062,15 +1064,15 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 // BenchmarkTriTriClassifyCircularPairs isolates fu158's fix from the rest of
 // the mesh-boolean pipeline: it builds the disc/washer fixture's two
 // boolMeshes once, harvests every AABB-surviving facet-pair index once, then
-// classifies the whole corpus per iteration — the cost triTriMissesFilter
+// classifies the whole corpus per iteration — the cost meshbool.TriTriMissesFilter
 // exists to cut (docs/evaluator-design.md §9).
 func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
 	ma, mb := buildCircularWasherMeshes(b)
 	type facetPair struct{ i, j int }
 	var pairs []facetPair
-	for i := range ma.tris {
-		for j := range mb.tris {
-			if boxesOverlap(ma.boxes[i], mb.boxes[j]) {
+	for i := range ma.Tris {
+		for j := range mb.Tris {
+			if meshbool.BoxesOverlap(ma.Boxes[i], mb.Boxes[j]) {
 				pairs = append(pairs, facetPair{i: i, j: j})
 			}
 		}
@@ -1079,8 +1081,8 @@ func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
 
 	for b.Loop() {
 		for _, p := range pairs {
-			ta, tb := triCorners(ma, p.i), triCorners(mb, p.j)
-			_, err := triTriClassify(ta, tb, xtriCorners(ma, p.i), xtriCorners(mb, p.j), ma.norms[p.i], mb.norms[p.j])
+			ta, tb := meshbool.TriCorners(ma, p.i), meshbool.TriCorners(mb, p.j)
+			_, err := meshbool.TriTriClassify(ta, tb, meshbool.XtriCorners(ma, p.i), meshbool.XtriCorners(mb, p.j), ma.Norms[p.i], mb.Norms[p.j])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -1243,7 +1245,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	substituted := mb.bound * meshAreaUpper(mb.vertices, mb.triangles)
 	require.Greater(t, substituted, symB)
 
-	eval, err := evaluateBoolean(t.Context(), opUnion, plate, pin)
+	eval, err := evaluateBoolean(t.Context(), meshbool.OpUnion, plate, pin)
 	require.NoError(t, err)
 	// Step 6 of docs/tessellation-design.md §11: the operands' own bounds plus
 	// the final weld's swept volume, which is non-negative and nothing else.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -258,20 +260,20 @@ func loftCircularSegmentCCW(seg CurveSegment) (bool, bool) {
 }
 
 // loftPlanesCoincide decides S5 over exact rationals on the recorded U/V/
-// Origin floats (boolean_exact.go's proofbound.XptOf/xcross/xdot, the take-the-floats-
+// Origin floats (internal/meshbool/boolean_exact.go's proofbound.XptOf/xcross/xdot, the take-the-floats-
 // exactly discipline): the two planes coincide when their normals (U×V) are
 // exactly parallel and the displacement between their origins lies in that
 // plane. A tolerance here would refuse a legitimately thin loft, and the
 // existence claim S5 makes is a structural zero volume, not a small one.
 func loftPlanesCoincide(a, b PlaneRecord) bool {
-	na := xcross(proofbound.XptOf(a.U), proofbound.XptOf(a.V))
-	nb := xcross(proofbound.XptOf(b.U), proofbound.XptOf(b.V))
-	cr := xcross(na, nb)
+	na := meshbool.Xcross(proofbound.XptOf(a.U), proofbound.XptOf(a.V))
+	nb := meshbool.Xcross(proofbound.XptOf(b.U), proofbound.XptOf(b.V))
+	cr := meshbool.Xcross(na, nb)
 	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return false
 	}
 	d := proofbound.Xsub(proofbound.XptOf(b.Origin), proofbound.XptOf(a.Origin))
-	return xdotSign(na, d) == 0
+	return meshbool.XdotSign(na, d) == 0
 }
 
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered

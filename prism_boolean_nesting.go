@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -54,7 +56,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if !withinCap {
 		return prismPayload{}, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
-			ErrUnsupported, opIntersect, segments, prismMaxArrangementSegments)
+			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
 	}
 	reexpress, err := newPrismReexpression(pa, pb)
 	if err != nil {

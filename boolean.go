@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -91,7 +93,7 @@ const boolChordFactor = 2e-5
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
 func Union(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, opUnion, a, b)
+	return performBoolean(ctx, meshbool.OpUnion, a, b)
 }
 
 // Cut returns target minus tool, retiring both operands from their document
@@ -100,7 +102,7 @@ func Union(ctx context.Context, a, b *Body) (*Body, error) {
 // the other gates match Union's. It returns ctx.Err() unchanged when ctx is
 // canceled before the document commit.
 func Cut(ctx context.Context, target, tool *Body) (*Body, error) {
-	return performBoolean(ctx, opCut, target, tool)
+	return performBoolean(ctx, meshbool.OpCut, target, tool)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
@@ -108,68 +110,7 @@ func Cut(ctx context.Context, target, tool *Body) (*Body, error) {
 // empty result is ErrBooleanFailed; the other gates match Union's. It returns
 // ctx.Err() unchanged when ctx is canceled before the document commit.
 func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, opIntersect, a, b)
-}
-
-type booleanExpectedKind int
-
-const (
-	booleanExpectedEmpty booleanExpectedKind = iota
-	// booleanExpectedContact is a TRUE contact/proximity refusal of the boolean
-	// geometry itself: an unclassifiable tangent contact (errUnclassifiableContact
-	// / meshBoolean) or an undecidable near-miss (refuseUndecidableProximity). It
-	// maps to the public BooleanUnsupportedContact.
-	booleanExpectedContact
-	// booleanExpectedUnsupported is an in-pipeline reach of the boolean geometry
-	// on operands that DID tessellate — a collapsed or welded-away facet
-	// (prepBoolMesh / stitchFacets) or a trim amplification that outgrew the pair
-	// diameter (rimDelta). Like a contact refusal the model is real and the limit
-	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
-	booleanExpectedUnsupported
-	// booleanExpectedStaging is a capability/staging limit reached BEFORE any
-	// contact is examined: an operand whose mesh carries no occupied-volume proof
-	// (a cap-loop chamfer body whose band capBlendOccupiedVolumeAdmission does
-	// not admit), or a Faceted operand whose held bound is coarser
-	// than the pair tolerance. No contact was ever inspected, so it is NOT a
-	// contact refusal —
-	// it passes through the public boundary as a plain ErrUnsupported, never a
-	// BooleanError.
-	booleanExpectedStaging
-	booleanExpectedCoarseTessellation
-	// booleanExpectedVolumeProof is booleanExpectedStaging's sibling for the one
-	// staging cause that is NOT a tessellation limit: the operand meshes, but its
-	// mesh carries no proof of the volume it and the body it stands for differ by
-	// (docs/tessellation-design.md §11), so no boolean may compose it. It maps to
-	// the same public error as booleanExpectedStaging; it exists so Verify can say
-	// which of the two happened.
-	booleanExpectedVolumeProof
-)
-
-// booleanExpectedError identifies an ordinary geometric non-result for the
-// read-only evaluator. Public booleans still expose the wrapped sentinel;
-// Verify recognizes the private type and leaves the pair undecided. Invariant
-// failures remain ordinary errors and return from Verify.
-type booleanExpectedError struct {
-	kind    booleanExpectedKind
-	operand int
-	err     error
-}
-
-func (e *booleanExpectedError) Error() string { return e.err.Error() }
-func (e *booleanExpectedError) Unwrap() error { return e.err }
-
-func expectedBoolean(kind booleanExpectedKind, err error) error {
-	return expectedBooleanForOperand(kind, -1, err)
-}
-
-// expectedBooleanForOperand retains which operand hit a pre-contact staging
-// limit. Other expected outcomes concern the pair or the result and use -1.
-func expectedBooleanForOperand(kind booleanExpectedKind, operand int, err error) error {
-	var expected *booleanExpectedError
-	if errors.As(err, &expected) {
-		return err
-	}
-	return &booleanExpectedError{kind: kind, operand: operand, err: err}
+	return performBoolean(ctx, meshbool.OpIntersect, a, b)
 }
 
 // booleanOperandStaging restates a Faceted operand's held-bound refusal
@@ -179,7 +120,7 @@ func expectedBooleanForOperand(kind booleanExpectedKind, operand int, err error)
 // the Tessellate wording's "retry with a tolerance" names an argument this
 // caller does not have. Every other tessellation refusal passes through
 // unchanged.
-func booleanOperandStaging(op operationKind, operand int, err error) error {
+func booleanOperandStaging(op meshbool.OperationKind, operand int, err error) error {
 	var held *facetedBoundError
 	if !errors.As(err, &held) {
 		return err
@@ -190,11 +131,11 @@ func booleanOperandStaging(op operationKind, operand int, err error) error {
 
 // booleanOperandRole names an operand the way the public signatures do: Cut's
 // target and tool, otherwise first and second operand.
-func booleanOperandRole(op operationKind, operand int) string {
+func booleanOperandRole(op meshbool.OperationKind, operand int) string {
 	switch {
-	case op == opCut && operand == 0:
+	case op == meshbool.OpCut && operand == 0:
 		return "target"
-	case op == opCut:
+	case op == meshbool.OpCut:
 		return "tool"
 	case operand == 0:
 		return "first operand"
@@ -203,8 +144,8 @@ func booleanOperandRole(op operationKind, operand int) string {
 	}
 }
 
-func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
-	var expected *booleanExpectedError
+func asExpectedBoolean(err error) (*meshbool.BooleanExpectedError, bool) {
+	var expected *meshbool.BooleanExpectedError
 	return expected, errors.As(err, &expected)
 }
 
@@ -221,7 +162,7 @@ type booleanEvaluation struct {
 // performBoolean gates the operands, runs the read-only geometry evaluator,
 // then builds and commits the public result atomically. A failure before the
 // commit leaves the live-body set, and operands unchanged.
-func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, error) {
+func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
 	}
@@ -261,7 +202,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 	// unwrapped, keeping their own documented sentinels.
 	if pp, ok, err := tryPrismBoolean(ctx, op, a, b); err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 		}
 		return nil, err
 	} else if ok {
@@ -276,10 +217,10 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 		d.commit(body, a, b)
 		return body, nil
 	}
-	if op == opCut {
+	if op == meshbool.OpCut {
 		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {
-				return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
 			return nil, err
 		} else if ok {
@@ -296,7 +237,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 		}
 		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {
-				return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
 			return nil, err
 		} else if ok {
@@ -323,7 +264,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}
-	if op == opUnion {
+	if op == meshbool.OpUnion {
 		if err := certifyFacetedUnionLowerSupport(ctx, body, a, b); err != nil {
 			return nil, err
 		}
@@ -338,7 +279,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 // evaluateAnalyticIntersect is measuredInterference's read-only twin of
 // performBoolean's analytic dispatch (docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2, §12): it runs the same admission and
-// resolution an opIntersect performBoolean call would — tryPrismBoolean, then
+// resolution an meshbool.OpIntersect performBoolean call would — tryPrismBoolean, then
 // evalPrismContext over the admitted payload — under a producerID it mints for
 // itself, but it never calls Document.commit, so it writes nothing to the
 // document and consumes neither operand (docs/interference-design.md §5:
@@ -349,13 +290,13 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 // means the pair is not admitted by the analytic path (§3.1/§3.4): the
 // caller MUST fall back to evaluateBoolean unchanged, exactly as
 // tryPrismBoolean's own contract requires. A non-nil err is a genuine
-// analytic-resolution refusal, returned as a *booleanExpectedError so the
+// analytic-resolution refusal, returned as a *meshbool.BooleanExpectedError so the
 // caller can share evaluateBoolean's own expected-outcome classification.
 func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, error) {
-	pp, ok, err := tryPrismBoolean(ctx, opIntersect, a, b)
+	pp, ok, err := tryPrismBoolean(ctx, meshbool.OpIntersect, a, b)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			return nil, false, expectedBoolean(booleanExpectedUnsupported, err)
+			return nil, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return nil, false, err
 	}
@@ -389,14 +330,14 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // with no expected-outcome tag is an internal invariant break:
 // BooleanEvaluatorFailure. Anything else — a nil, self, or extent-less operand,
 // a cancelled context — passes through unchanged.
-func asBooleanError(op operationKind, err error) error {
+func asBooleanError(op meshbool.OperationKind, err error) error {
 	if expected, ok := asExpectedBoolean(err); ok {
-		switch expected.kind {
-		case booleanExpectedEmpty:
+		switch expected.Kind {
+		case meshbool.BooleanExpectedEmpty:
 			return newBooleanError(op, BooleanEmpty, ErrBooleanFailed, err)
-		case booleanExpectedContact, booleanExpectedUnsupported:
+		case meshbool.BooleanExpectedContact, meshbool.BooleanExpectedUnsupported:
 			return newBooleanError(op, BooleanUnsupportedContact, ErrUnsupported, err)
-		case booleanExpectedStaging, booleanExpectedVolumeProof, booleanExpectedCoarseTessellation:
+		case meshbool.BooleanExpectedStaging, meshbool.BooleanExpectedVolumeProof, meshbool.BooleanExpectedCoarseTessellation:
 			return err
 		}
 	}
@@ -409,7 +350,7 @@ func asBooleanError(op operationKind, err error) error {
 // newBooleanError builds a *BooleanError carrying the operation, branchable
 // Code, and the human text of the underlying error (its
 // "decad: " sentinel prefix trimmed so BooleanError.Error does not repeat it).
-func newBooleanError(op operationKind, code BooleanErrorCode, sentinel, orig error) error {
+func newBooleanError(op meshbool.OperationKind, code BooleanErrorCode, sentinel, orig error) error {
 	return &BooleanError{
 		op:   op,
 		Code: code,
@@ -421,7 +362,7 @@ func newBooleanError(op operationKind, code BooleanErrorCode, sentinel, orig err
 // evaluateBoolean runs the complete geometry pipeline without writing the
 // document. It deliberately does not gate liveness or mint a producerID: the
 // public wrapper owns those actions, while Verify already walks live bodies.
-func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (booleanEvaluation, error) {
+func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -453,12 +394,12 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
-			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
-			// contact refusal (see booleanExpectedStaging).
-			err = expectedBooleanForOperand(booleanExpectedStaging, 0, booleanOperandStaging(op, 0, err))
+			// contact refusal (see meshbool.BooleanExpectedStaging).
+			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 0, booleanOperandStaging(op, 0, err))
 		}
 		return booleanEvaluation{}, err
 	}
@@ -469,12 +410,12 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
-			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
-			// contact refusal (see booleanExpectedStaging).
-			err = expectedBooleanForOperand(booleanExpectedStaging, 1, booleanOperandStaging(op, 1, err))
+			// contact refusal (see meshbool.BooleanExpectedStaging).
+			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 1, booleanOperandStaging(op, 1, err))
 		}
 		return booleanEvaluation{}, err
 	}
@@ -513,14 +454,14 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	bmA, err := prepBoolMeshContext(ctx, ma, srcA)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return booleanEvaluation{}, err
 	}
 	bmB, err := prepBoolMeshContext(ctx, mb, srcB)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -529,32 +470,32 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	}
 	// One memo per call, over exactly the two prepared operand tessellations
 	// the gate and the mesh pass both walk; it is dropped when the call
-	// returns (boolean_mesh.go, contactMemo).
-	memo := newContactMemo(bmA, bmB)
+	// returns (boolean_mesh.go, meshbool.ContactMemo).
+	memo := meshbool.NewContactMemo(bmA, bmB)
 	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB, memo); err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedContact, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
 		}
 		return booleanEvaluation{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	kept, sinMin, err := meshBoolean(ctx, op, bmA, bmB, memo)
+	kept, sinMin, err := meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
 	if len(kept) == 0 {
-		return booleanEvaluation{}, expectedBoolean(booleanExpectedEmpty,
+		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty,
 			fmt.Errorf(`%w: the %s result is empty`, ErrBooleanFailed, op))
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	stitched, err := stitchFacetsContext(ctx, kept)
+	stitched, err := meshbool.StitchFacetsContext(ctx, kept)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -574,17 +515,17 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	rim, err := rimDelta(ma.bound, mb.bound, sinMin, dPair)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return booleanEvaluation{}, err
 	}
 	symA, err := operandSymDiff(ma)
 	if err != nil {
-		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedVolumeProof, 0, err)
+		return booleanEvaluation{}, meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, 0, err)
 	}
 	symB, err := operandSymDiff(mb)
 	if err != nil {
-		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedVolumeProof, 1, err)
+		return booleanEvaluation{}, meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, 1, err)
 	}
 	// The final rounding's own volume error is what its vertex displacement
 	// sweeps out over the surface it acted on — the stitched surface BEFORE the
@@ -593,15 +534,15 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	// missing from it, and its swept volume would go uncharged. The area the
 	// weld dropped is likewise missing from every area the result reports, so
 	// it joins the operands' own chord deficit in areaSlack.
-	roundVol := proofbound.SweptVolumeAllow(stitched.round, stitched.preArea)
+	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
 	meshBound, volSymDiff, areaSlack := booleanProofBounds(
-		rim, stitched.round, symA, symB, roundVol,
-		ma.areaSlack, mb.areaSlack, stitched.dropArea,
+		rim, stitched.Round, symA, symB, roundVol,
+		ma.areaSlack, mb.areaSlack, stitched.DropArea,
 	)
 	payload := facetedPayload{
-		verts:      stitched.verts,
-		tris:       stitched.tris,
-		src:        stitched.src,
+		verts:      stitched.Verts,
+		tris:       stitched.Tris,
+		src:        stitched.Src,
 		groups:     groups,
 		meshBound:  meshBound,
 		volSymDiff: volSymDiff,
@@ -668,7 +609,7 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // whose occupied-volume proof has not landed publishes symDiffOK false, and its
 // mesh serves export only: the boolean refuses the operand with ErrUnsupported,
 // a staging refusal reached before any contact is examined, so the caller routes
-// it through booleanExpectedVolumeProof, which reaches the same public error as
+// it through meshbool.BooleanExpectedVolumeProof, which reaches the same public error as
 // an untessellatable operand and a distinct Verify diagnostic message.
 // requireVolumeProvingPayload refuses an operand whose payload class publishes
 // no occupied-volume proof on its mesh, before that mesh is built.
@@ -735,7 +676,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			return nil
 		}
 	}
-	return expectedBooleanForOperand(booleanExpectedVolumeProof, index, err)
+	return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, index, err)
 }
 
 // An operand mesh built below VerifyBoundary is refused FIRST, and with its own
@@ -789,7 +730,7 @@ func operandSymDiff(m *Mesh) (float64, error) {
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
-func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boolMesh, memo *contactMemo) error {
+func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -843,112 +784,20 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 // left to that verdict rather than pre-empted here. That deferral is sound only
 // while that refusal happens: docs/interference-design.md §5.2 states what must
 // settle such a pair before the refusal is removed.
-func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64, memo *contactMemo) (bool, error) {
-	nc, deferred, err := gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
+func facesNearMiss(ctx context.Context, bmA *meshbool.BoolMesh, fis []int, bmB *meshbool.BoolMesh, fjs []int, slack float64, memo *meshbool.ContactMemo) (bool, error) {
+	nc, deferred, err := meshbool.GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
 	if err != nil || deferred {
 		return false, err
 	}
-	if len(nc.closeA) == 0 {
+	if len(nc.CloseA) == 0 {
 		return false, nil // the facets stay clear of each other: nothing hides
 	}
-	deep, err := provenDepthExceeds(ctx, bmA, nc.closeA, bmB, nc.closeB, nc.spans, slack)
+	deep, err := provenDepthExceeds(ctx, bmA, nc.CloseA, bmB, nc.CloseB, nc.Spans, slack)
 	if err != nil {
 		return false, err
 	}
 	return !deep, nil
 }
-
-// nearContacts is what gatherNearContacts collects for one face pair: the
-// facets of each side that meet or come within slack of the other side, and
-// every contact segment among those meets.
-type nearContacts struct {
-	closeA, closeB []int
-	spans          []contactSpan
-}
-
-// gatherNearContacts classifies every facet pair of two faces whose boxes come
-// within slack and collects the pairs that meet or stay within slack. deferred
-// reports a coplanar face-on-face overlap, which facesNearMiss leaves to the
-// mesh pass's own refusal.
-func gatherNearContacts(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64, memo *contactMemo) (nearContacts, bool, error) {
-	var nc nearContacts
-	seenA := map[int]bool{}
-	seenB := map[int]bool{}
-	work := 0
-	contacts := newContactBatchExecutor(ctx, bmA, bmB, memo, contactWorkers(ctx), func(pair contactPair, c triContact) error {
-		i, j := pair.i, pair.j
-		if c.kind == contactRegion {
-			return errContactBatchStop
-		}
-		if c.kind == contactNone && triTriDistance(triCorners(bmA, i), triCorners(bmB, j)) > slack {
-			return nil
-		}
-		if c.kind == contactSegment {
-			nc.spans = append(nc.spans, contactSpan{i: i, j: j, p0: c.p0, p1: c.p1})
-		}
-		if !seenA[i] {
-			seenA[i] = true
-			nc.closeA = append(nc.closeA, i)
-		}
-		if !seenB[j] {
-			seenB[j] = true
-			nc.closeB = append(nc.closeB, j)
-		}
-		return nil
-	})
-	for _, i := range fis {
-		for _, j := range fjs {
-			work++
-			if work%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nearContacts{}, false, err
-				}
-			}
-			if !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
-				continue
-			}
-			if err := contacts.add(i, j); err != nil {
-				if err == errContactBatchStop {
-					return nearContacts{}, true, nil
-				}
-				return nearContacts{}, false, err
-			}
-		}
-	}
-	if err := contacts.done(); err != nil {
-		if err == errContactBatchStop {
-			return nearContacts{}, true, nil
-		}
-		return nearContacts{}, false, err
-	}
-	return nc, false, nil
-}
-
-// contactSpan is one exact contact segment of a face pair the gate examines:
-// facet i of operand A and facet j of operand B meet along p0–p1, and every
-// point of that segment lies on both closed facets (triTriClassify).
-type contactSpan struct {
-	i, j   int
-	p0, p1 proofbound.Xpt
-}
-
-// maxDepthWitnessFacets caps how many contacting facets deepWitnessInside
-// probes at their fixed sample points on each side of a face pair, and
-// maxDepthWitnessSpans caps how many contact segments spanWitness walks from.
-// The fixed samples sit wherever the tessellation put the facet's corners, so a
-// LONG facet can cross the other operand deeply while all seven of its samples
-// lie outside it (two prism walls crossing near the middle of their length);
-// the segment walk finds that crossing's witness at the segment itself. The
-// caps only bound the work the reject-only refusal path spends confirming no
-// witness exists: capping over-refuses at worst, which is sound.
-const (
-	maxDepthWitnessFacets = 96
-	maxDepthWitnessSpans  = 96
-	// spanWalkSteps is how many halving steps spanWitness takes from a contact
-	// segment's midpoint toward one facet corner: the step lengths run from
-	// half the corner's distance down to 2^-spanWalkSteps of it.
-	spanWalkSteps = 24
-)
 
 // provenDepthExceeds is the reject-only depth discriminator behind the meet
 // admission (docs/evaluator-design.md §9, docs/tessellation-design.md §11 step
@@ -964,9 +813,9 @@ const (
 //
 // It looks for a witness in two places: the fixed sample points of every
 // contacting facet (deepWitnessInside), then points on each contact segment's
-// two facets walked inward from that segment (spanWitness). Both only nominate
-// candidates; deepWitnessAt alone certifies one.
-func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *boolMesh, closeB []int, spans []contactSpan, b float64) (bool, error) {
+// two facets walked inward from that segment (meshbool.SpanWitness). Both only nominate
+// candidates; meshbool.DeepWitnessAt alone certifies one.
+func provenDepthExceeds(ctx context.Context, bmA *meshbool.BoolMesh, closeA []int, bmB *meshbool.BoolMesh, closeB []int, spans []meshbool.ContactSpan, b float64) (bool, error) {
 	deep, err := deepWitnessInside(ctx, bmA, closeA, bmB, b)
 	if err != nil || deep {
 		return deep, err
@@ -975,7 +824,7 @@ func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *b
 	if err != nil || deep {
 		return deep, err
 	}
-	return spanWitness(ctx, bmA, bmB, spans, b)
+	return meshbool.SpanWitness(ctx, bmA, bmB, spans, b)
 }
 
 // deepWitnessInside reports whether any held-facet sample point of m's
@@ -985,124 +834,24 @@ func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *b
 // pierces a plate through the interior of its wall facets), so the midpoints and
 // centroid are sampled too. Reject-only: sampling and the facet cap can only
 // miss a witness and refuse, never admit a shallow meet.
-func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, other *boolMesh, b float64) (bool, error) {
-	all := allFacets(other)
+func deepWitnessInside(ctx context.Context, m *meshbool.BoolMesh, closeFacets []int, other *meshbool.BoolMesh, b float64) (bool, error) {
+	all := meshbool.AllFacets(other)
 	for n, i := range closeFacets {
-		if n >= maxDepthWitnessFacets {
+		if n >= meshbool.MaxDepthWitnessFacets {
 			break
 		}
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		tri := m.tris[i]
-		for _, p := range facetSamplePoints(m.xverts[tri[0]], m.xverts[tri[1]], m.xverts[tri[2]]) {
-			deep, err := deepWitnessAt(ctx, p, other, all, b)
+		tri := m.Tris[i]
+		for _, p := range facetSamplePoints(m.Xverts[tri[0]], m.Xverts[tri[1]], m.Xverts[tri[2]]) {
+			deep, err := meshbool.DeepWitnessAt(ctx, p, other, all, b)
 			if err != nil || deep {
 				return deep, err
 			}
 		}
 	}
 	return false, nil
-}
-
-// spanWitness walks each contact segment's two facets for a deep witness.
-// Where facet i of A crosses facet j of B, the points of facet i next to their
-// shared segment lie on the inner side of facet j's plane on one side of the
-// segment, and so inside B whenever the crossing is real and B's other facets
-// stay farther than b away. The walk starts at the segment's exact midpoint,
-// which lies on both facets, and steps toward each corner of facet i that lies
-// STRICTLY on the inner side of facet j's plane (its outward normal is the CCW
-// winding normal), halving the step each time. Every candidate is the exact
-// point mid + (c − mid)/2^k, which lies on facet i because the facet is convex.
-// The same walk then runs on facet j against A. Points toward a corner on the
-// outer side lie outside the other solid near the segment, so the walk skips
-// that corner rather than pay an exact parity test per step; a skipped
-// candidate can only refuse. The halving
-// stops once the step falls below b, because the midpoint lies on the other
-// operand's boundary and no point within b of it can be deeper than b.
-// Reject-only: the walk only nominates; deepWitnessAt certifies each witness.
-func spanWitness(ctx context.Context, bmA, bmB *boolMesh, spans []contactSpan, b float64) (bool, error) {
-	if len(spans) == 0 {
-		return false, nil
-	}
-	allA, allB := allFacets(bmA), allFacets(bmB)
-	one, two := big.NewInt(1), big.NewInt(2)
-	for n, s := range spans {
-		if n >= maxDepthWitnessSpans {
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		mid := xlerp(s.p0, s.p1, one, two)
-		deep, err := walkFacetFromSpan(ctx, mid, bmA, s.i, bmB, s.j, allB, b)
-		if err != nil || deep {
-			return deep, err
-		}
-		deep, err = walkFacetFromSpan(ctx, mid, bmB, s.j, bmA, s.i, allA, b)
-		if err != nil || deep {
-			return deep, err
-		}
-	}
-	return false, nil
-}
-
-// walkFacetFromSpan is one side of spanWitness: from mid, a point on facet fi
-// of m and on facet fj of other, it steps toward every corner of facet fi that
-// lies strictly on the inner side of facet fj's plane and asks deepWitnessAt
-// about each step.
-func walkFacetFromSpan(ctx context.Context, mid proofbound.Xpt, m *boolMesh, fi int, other *boolMesh, fj int, all []int, b float64) (bool, error) {
-	ot := other.tris[fj]
-	origin, normal := other.xverts[ot[0]], other.norms[fj]
-	midF := mid.Vec()
-	one := big.NewInt(1)
-	for _, vi := range m.tris[fi] {
-		c := m.xverts[vi]
-		if xdotSign(normal, proofbound.Xsub(c, origin)) >= 0 {
-			continue
-		}
-		// The float length only decides when to stop halving. Stopping early
-		// drops candidates, which can only refuse, so its rounding is harmless.
-		reach := m.verts[vi].Sub(midF).Len()
-		den := big.NewInt(1)
-		for range spanWalkSteps {
-			den = new(big.Int).Lsh(den, 1)
-			reach /= 2
-			if reach*(1+1e-6) <= b {
-				break
-			}
-			p := xlerp(mid, c, one, den)
-			deep, err := deepWitnessAt(ctx, p, other, all, b)
-			if err != nil || deep {
-				return deep, err
-			}
-		}
-	}
-	return false, nil
-}
-
-// deepWitnessAt reports whether the exact point p is PROVEN to lie strictly
-// inside other's solid, deeper than b: its certified LOWER-bound distance to the
-// other mesh's boundary exceeds b, and the exact ray-parity predicate places it
-// strictly inside (never on a boundary). This is the one certification every
-// witness search goes through. The cheap float depth runs before the costly
-// exact parity: a point no deeper than b is no witness however it classifies,
-// so the order changes which points are tested, never which become witnesses.
-func deepWitnessAt(ctx context.Context, p proofbound.Xpt, other *boolMesh, all []int, b float64) (bool, error) {
-	if certifiedInteriorDepth(p, other) <= b {
-		return false, nil
-	}
-	inside, onBoundary, err := meshParityPreparedContext(ctx, p, other.parity, all)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return false, ctxErr
-		}
-		// The only other error is an all-axes-ambiguous parity ray: this point
-		// cannot be PROVEN inside, so it is no witness — reject-only, never a
-		// failure of the whole boolean.
-		return false, nil
-	}
-	return inside && !onBoundary, nil
 }
 
 // facetSamplePoints returns the exact candidate interior witnesses of one held
@@ -1111,59 +860,8 @@ func deepWitnessAt(ctx context.Context, p proofbound.Xpt, other *boolMesh, all [
 // containment without rounding.
 func facetSamplePoints(a, b, c proofbound.Xpt) []proofbound.Xpt {
 	one, two := big.NewInt(1), big.NewInt(2)
-	mid := func(p, q proofbound.Xpt) proofbound.Xpt { return xlerp(p, q, one, two) }
-	return []proofbound.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), xCentroid(a, b, c)}
-}
-
-// certifiedInteriorDepth is a certified LOWER bound (mm) on the distance from the
-// exact interior point p to the boundary of the other operand's mesh: the float
-// point-to-facet distances, taken at their minimum and nudged DOWN for their own
-// float error, then reduced by an upper bound on p's exact→float rounding. It is
-// only ever read as "> b", so under-reporting is safe (it over-refuses, never
-// over-admits).
-func certifiedInteriorDepth(p proofbound.Xpt, other *boolMesh) float64 {
-	pf := p.Vec()
-	best := math.Inf(1)
-	for i := range other.tris {
-		// The facet lies inside its own containing box, so the point's distance
-		// to that box never exceeds its distance to the facet. A box already at or
-		// beyond the running minimum therefore cannot hold a nearer facet — skip
-		// it. This prunes on distance alone and cannot lower the minimum below the
-		// unpruned value; any float-boundary case where a skipped box rounds a hair
-		// past the true nearest is already covered by the 1e-12 down-nudge below,
-		// so the certified LOWER bound is preserved.
-		if pointBoxDist(pf, other.boxes[i]) >= best {
-			continue
-		}
-		best = math.Min(best, pointTriDistance(pf, triCorners(other, i)))
-	}
-	if best <= 0 || proofbound.IsNonFinite(best) {
-		return 0
-	}
-	// best is the float distance from the ROUNDED point pf; the true distance
-	// from the exact point p is at least (best, nudged down for the distance
-	// evaluation's own float error) minus how far pf sits from p.
-	return best*(1-1e-12) - pointRoundBound(p, pf)
-}
-
-// pointRoundBound upper-bounds the 3D displacement between the exact point p and
-// its float rounding pf: the largest per-coordinate rational gap, up-rounded and
-// read as a 3D distance (internal/proofbound/bounds.go, proofbound.Radius3D).
-func pointRoundBound(p proofbound.Xpt, pf r3.Vec) float64 {
-	px, py, pz := xhpRat(proofbound.Xhp(p))
-	worst := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{px, freeform.MustRatOf(pf.X)}, {py, freeform.MustRatOf(pf.Y)}, {pz, freeform.MustRatOf(pf.Z)}} {
-		d := new(big.Rat).Sub(pair[0], pair[1])
-		d.Abs(d)
-		if d.Cmp(worst) > 0 {
-			worst = d
-		}
-	}
-	if worst.Sign() == 0 {
-		return 0
-	}
-	w, _ := worst.Float64()
-	return proofbound.Radius3D(proofbound.ProvenUpRound(w))
+	mid := func(p, q proofbound.Xpt) proofbound.Xpt { return meshbool.Xlerp(p, q, one, two) }
+	return []proofbound.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), meshbool.XCentroid(a, b, c)}
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord
@@ -1223,123 +921,6 @@ func sectionDisplacementOf(b *Body) float64 {
 	default:
 		return 0
 	}
-}
-
-// boxesWithin reports whether the two boxes come within slack of each other.
-func boxesWithin(a, b [2]r3.Vec, slack float64) bool {
-	return a[0].X-slack <= b[1].X && b[0].X-slack <= a[1].X &&
-		a[0].Y-slack <= b[1].Y && b[0].Y-slack <= a[1].Y &&
-		a[0].Z-slack <= b[1].Z && b[0].Z-slack <= a[1].Z
-}
-
-// triTriDistance is the distance between two DISJOINT triangles: the smallest
-// of the nine edge-edge distances and the six vertex-to-triangle distances,
-// which is where the minimum of two disjoint convex sets is always attained.
-// The result is nudged DOWN so its own float rounding can only widen the
-// refusal, never narrow it.
-//
-// Disjointness is the CALLER's obligation, discharged by the exact classifier
-// before the call, never by this routine: an intersecting pair attains its
-// minimum where the two triangles' interiors meet, which this candidate set
-// does not contain, so the value returned for such a pair is neither the
-// distance nor a lower bound on it and must never gate an admission.
-func triTriDistance(ta, tb [3]r3.Vec) float64 {
-	best := math.Inf(1)
-	for i := range 3 {
-		for j := range 3 {
-			best = math.Min(best, segSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
-		}
-	}
-	for i := range 3 {
-		best = math.Min(best, pointTriDistance(ta[i], tb))
-		best = math.Min(best, pointTriDistance(tb[i], ta))
-	}
-	if best <= 0 || proofbound.IsNonFinite(best) {
-		return 0
-	}
-	return best * (1 - 1e-12)
-}
-
-// segSegDist3 is the distance between two closed 3D segments.
-func segSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
-	u := p1.Sub(p0)
-	v := q1.Sub(q0)
-	w := p0.Sub(q0)
-	a, b, c := u.Dot(u), u.Dot(v), v.Dot(v)
-	d, e := u.Dot(w), v.Dot(w)
-	den := a*c - b*b
-	var s, t float64
-	if den <= 0 {
-		// Parallel (or a collapsed segment): pin s and solve for t.
-		s, t = 0, clamp01(e, c)
-	} else {
-		s = clamp01(b*e-c*d, den)
-		t = clamp01(a*e-b*d, den)
-	}
-	// Re-clamp against the other segment's ends, the standard two-pass fix.
-	if tn := e + s*b; c > 0 {
-		t = clamp01(tn, c)
-	}
-	if sn := -d + t*b; a > 0 {
-		s = clamp01(sn, a)
-	}
-	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t))).Len()
-}
-
-func clamp01(num, den float64) float64 {
-	if den <= 0 {
-		return 0
-	}
-	return math.Max(0, math.Min(1, num/den))
-}
-
-// pointBoxDist is the Euclidean distance from a point to an axis-aligned box
-// (zero when the point is inside it). It lower-bounds the distance to anything
-// the box contains, so it is a sound distance prune for a nearest-facet scan.
-func pointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
-	axis := func(v, lo, hi float64) float64 {
-		switch {
-		case v < lo:
-			return lo - v
-		case v > hi:
-			return v - hi
-		default:
-			return 0
-		}
-	}
-	dx := axis(p.X, box[0].X, box[1].X)
-	dy := axis(p.Y, box[0].Y, box[1].Y)
-	dz := axis(p.Z, box[0].Z, box[1].Z)
-	return math.Sqrt(dx*dx + dy*dy + dz*dz)
-}
-
-// pointTriDistance is the distance from a point to a closed triangle: the
-// perpendicular foot when it lands inside, otherwise the nearest edge.
-func pointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
-	n := t[1].Sub(t[0]).Cross(t[2].Sub(t[0]))
-	if nn := n.Dot(n); nn > 0 {
-		h := n.Dot(p.Sub(t[0])) / nn
-		foot := p.Sub(n.Scale(h))
-		if pointInTriangle(foot, t, n) {
-			return p.Sub(foot).Len()
-		}
-	}
-	best := math.Inf(1)
-	for i := range 3 {
-		best = math.Min(best, segSegDist3(p, p, t[i], t[(i+1)%3]))
-	}
-	return best
-}
-
-// pointInTriangle reports whether a point already on the triangle's plane lies
-// inside it, by the three edge cross products against the facet normal.
-func pointInTriangle(p r3.Vec, t [3]r3.Vec, n r3.Vec) bool {
-	for i := range 3 {
-		if t[(i+1)%3].Sub(t[i]).Cross(p.Sub(t[i])).Dot(n) < 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // pairChordTolerance derives the evaluator-internal chord tolerance and the

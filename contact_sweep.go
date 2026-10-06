@@ -1225,7 +1225,7 @@ func (r *pairSweepRun) provesDeparture() bool {
 	return false
 }
 
-// contactSpan intersects six exact linear support inequalities. It returns
+// meshbool.ContactSpan intersects six exact linear support inequalities. It returns
 // the first and last fractions where the closed source boxes can meet.
 func (r *pairSweepRun) contactSpan() (*big.Rat, *big.Rat, bool) {
 	entry, exit := new(big.Rat), big.NewRat(1, 1)

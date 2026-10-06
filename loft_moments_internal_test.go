@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -278,7 +280,7 @@ func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
 func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
 	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
 	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
-	w := xcross(u, v)
+	w := meshbool.Xcross(u, v)
 	q := proofbound.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -15,69 +17,69 @@ import (
 
 func TestContactBatchMergesOutOfOrderCompletionsInInputOrder(t *testing.T) {
 	ctx := t.Context()
-	ma, mb := &boolMesh{}, &boolMesh{}
-	memo := newContactMemo(ma, mb)
-	var got []contactPair
-	e := newContactBatchExecutor(ctx, ma, mb, memo, 4, func(pair contactPair, _ triContact) error {
+	ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+	memo := meshbool.NewContactMemo(ma, mb)
+	var got []meshbool.ContactPair
+	e := meshbool.NewContactBatchExecutor(ctx, ma, mb, memo, 4, func(pair meshbool.ContactPair, _ meshbool.TriContact) error {
 		got = append(got, pair)
 		return nil
 	})
-	e.limit = 4
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+	e.Limit = 4
+	e.Run = func(_ context.Context, _ *meshbool.BoolMesh, _ *meshbool.BoolMesh, pairs []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
 		for i := range slices.Backward(pairs) {
 			// Completion order is reverse input order. Results retain their
 			// indexed slots, as production workers do.
-			results[i] = contactBatchResult{contact: triContact{kind: contactPoint, p0: proofbound.Xpt{}}}
+			results[i] = meshbool.ContactBatchResult{Contact: meshbool.TriContact{Kind: meshbool.ContactPoint, P0: proofbound.Xpt{}}}
 		}
 		return nil
 	}
 	for i := range 4 {
-		require.NoError(t, e.add(i, i+1))
+		require.NoError(t, e.Add(i, i+1))
 	}
-	require.NoError(t, e.done())
-	require.Equal(t, []contactPair{{0, 1}, {1, 2}, {2, 3}, {3, 4}}, got)
+	require.NoError(t, e.Done())
+	require.Equal(t, []meshbool.ContactPair{{I: 0, J: 1}, {I: 1, J: 2}, {I: 2, J: 3}, {I: 3, J: 4}}, got)
 }
 
 func TestContactBatchReturnsEarliestOrderedError(t *testing.T) {
 	ctx := t.Context()
-	ma, mb := &boolMesh{}, &boolMesh{}
-	memo := newContactMemo(ma, mb)
+	ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+	memo := meshbool.NewContactMemo(ma, mb)
 	first := errors.New("first ordered error")
 	later := errors.New("later ordered error")
-	e := newContactBatchExecutor(ctx, ma, mb, memo, 8, nil)
-	e.limit = 3
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, _ []contactPair, results []contactBatchResult, _ int) error {
-		results[2] = contactBatchResult{err: later}
-		results[1] = contactBatchResult{err: first}
+	e := meshbool.NewContactBatchExecutor(ctx, ma, mb, memo, 8, nil)
+	e.Limit = 3
+	e.Run = func(_ context.Context, _ *meshbool.BoolMesh, _ *meshbool.BoolMesh, _ []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
+		results[2] = meshbool.ContactBatchResult{Err: later}
+		results[1] = meshbool.ContactBatchResult{Err: first}
 		return nil
 	}
-	require.NoError(t, e.add(0, 0))
-	require.NoError(t, e.add(1, 1))
-	require.ErrorIs(t, e.add(2, 2), first)
+	require.NoError(t, e.Add(0, 0))
+	require.NoError(t, e.Add(1, 1))
+	require.ErrorIs(t, e.Add(2, 2), first)
 }
 
 func TestContactBatchSchedulesOnlyMemoMisses(t *testing.T) {
 	ctx := t.Context()
-	ma, mb := &boolMesh{}, &boolMesh{}
-	memo := newContactMemo(ma, mb)
-	cached := triContact{kind: contactSegment}
-	memo.store(1, 1, cached)
-	var scheduled []contactPair
-	e := newContactBatchExecutor(ctx, ma, mb, memo, 2, nil)
-	e.limit = 3
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+	ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+	memo := meshbool.NewContactMemo(ma, mb)
+	cached := meshbool.TriContact{Kind: meshbool.ContactSegment}
+	memo.Store(1, 1, cached)
+	var scheduled []meshbool.ContactPair
+	e := meshbool.NewContactBatchExecutor(ctx, ma, mb, memo, 2, nil)
+	e.Limit = 3
+	e.Run = func(_ context.Context, _ *meshbool.BoolMesh, _ *meshbool.BoolMesh, pairs []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
 		scheduled = append(scheduled, pairs...)
 		for i := range results {
-			results[i].contact = triContact{kind: contactPoint}
+			results[i].Contact = meshbool.TriContact{Kind: meshbool.ContactPoint}
 		}
 		return nil
 	}
-	require.NoError(t, e.add(0, 0))
-	require.NoError(t, e.add(1, 1))
-	require.NoError(t, e.add(2, 2))
-	require.NoError(t, e.done())
-	require.Equal(t, []contactPair{{0, 0}, {2, 2}}, scheduled)
-	got, ok := memo.lookup(1, 1)
+	require.NoError(t, e.Add(0, 0))
+	require.NoError(t, e.Add(1, 1))
+	require.NoError(t, e.Add(2, 2))
+	require.NoError(t, e.Done())
+	require.Equal(t, []meshbool.ContactPair{{I: 0, J: 0}, {I: 2, J: 2}}, scheduled)
+	got, ok := memo.Lookup(1, 1)
 	require.True(t, ok)
 	require.Equal(t, cached, got)
 }
@@ -85,112 +87,112 @@ func TestContactBatchSchedulesOnlyMemoMisses(t *testing.T) {
 func TestContactBatchStopsOnCancellationDuringMerge(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	ma, mb := &boolMesh{}, &boolMesh{}
-	memo := newContactMemo(ma, mb)
+	ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+	memo := meshbool.NewContactMemo(ma, mb)
 	merged := 0
-	e := newContactBatchExecutor(ctx, ma, mb, memo, 2, func(contactPair, triContact) error {
+	e := meshbool.NewContactBatchExecutor(ctx, ma, mb, memo, 2, func(meshbool.ContactPair, meshbool.TriContact) error {
 		merged++
 		cancel()
 		return nil
 	})
-	e.limit = 2
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, _ []contactPair, results []contactBatchResult, _ int) error {
+	e.Limit = 2
+	e.Run = func(_ context.Context, _ *meshbool.BoolMesh, _ *meshbool.BoolMesh, _ []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
 		for i := range results {
-			results[i].contact = triContact{kind: contactPoint}
+			results[i].Contact = meshbool.TriContact{Kind: meshbool.ContactPoint}
 		}
 		return nil
 	}
-	require.NoError(t, e.add(0, 0))
-	require.ErrorIs(t, e.add(1, 1), context.Canceled)
+	require.NoError(t, e.Add(0, 0))
+	require.ErrorIs(t, e.Add(1, 1), context.Canceled)
 	require.Equal(t, 1, merged)
 }
 
 func TestContactBatchAllocatesBuffersOnDemand(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
-		e := newContactBatchExecutor(ctx, &boolMesh{}, &boolMesh{}, nil, 1, nil)
-		require.NoError(t, e.done())
-		require.Nil(t, e.batch)
-		require.Nil(t, e.misses)
-		require.Nil(t, e.results)
+		e := meshbool.NewContactBatchExecutor(ctx, &meshbool.BoolMesh{}, &meshbool.BoolMesh{}, nil, 1, nil)
+		require.NoError(t, e.Done())
+		require.Nil(t, e.Batch)
+		require.Nil(t, e.Misses)
+		require.Nil(t, e.Results)
 		cancel()
-		require.ErrorIs(t, e.done(), context.Canceled)
-		require.Nil(t, e.batch)
-		require.Nil(t, e.misses)
-		require.Nil(t, e.results)
+		require.ErrorIs(t, e.Done(), context.Canceled)
+		require.Nil(t, e.Batch)
+		require.Nil(t, e.Misses)
+		require.Nil(t, e.Results)
 	})
 
 	t.Run("partial and repeated flushes", func(t *testing.T) {
-		ma, mb := &boolMesh{}, &boolMesh{}
-		var got []contactPair
-		e := newContactBatchExecutor(t.Context(), ma, mb, newContactMemo(ma, mb), 1,
-			func(pair contactPair, _ triContact) error {
+		ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+		var got []meshbool.ContactPair
+		e := meshbool.NewContactBatchExecutor(t.Context(), ma, mb, meshbool.NewContactMemo(ma, mb), 1,
+			func(pair meshbool.ContactPair, _ meshbool.TriContact) error {
 				got = append(got, pair)
 				return nil
 			})
-		e.limit = 2
-		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+		e.Limit = 2
+		e.Run = func(_ context.Context, _, _ *meshbool.BoolMesh, pairs []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
 			for i := range pairs {
-				results[i].contact = triContact{kind: contactPoint}
+				results[i].Contact = meshbool.TriContact{Kind: meshbool.ContactPoint}
 			}
 			return nil
 		}
-		require.NoError(t, e.add(0, 0))
-		require.Equal(t, contactBatchSize, cap(e.batch))
-		require.Nil(t, e.misses)
-		require.Nil(t, e.results)
-		require.NoError(t, e.add(1, 1))
-		require.Equal(t, contactBatchSize, cap(e.misses))
-		require.Equal(t, contactBatchSize, cap(e.results))
-		batchBuf := &e.batch[:1][0]
-		missBuf := &e.misses[:1][0]
-		resultBuf := &e.results[:1][0]
-		require.NoError(t, e.add(2, 2))
-		require.NoError(t, e.done())
-		require.Same(t, batchBuf, &e.batch[:1][0])
-		require.Same(t, missBuf, &e.misses[:1][0])
-		require.Same(t, resultBuf, &e.results[:1][0])
-		require.Equal(t, []contactPair{{0, 0}, {1, 1}, {2, 2}}, got)
+		require.NoError(t, e.Add(0, 0))
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Batch))
+		require.Nil(t, e.Misses)
+		require.Nil(t, e.Results)
+		require.NoError(t, e.Add(1, 1))
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Misses))
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Results))
+		batchBuf := &e.Batch[:1][0]
+		missBuf := &e.Misses[:1][0]
+		resultBuf := &e.Results[:1][0]
+		require.NoError(t, e.Add(2, 2))
+		require.NoError(t, e.Done())
+		require.Same(t, batchBuf, &e.Batch[:1][0])
+		require.Same(t, missBuf, &e.Misses[:1][0])
+		require.Same(t, resultBuf, &e.Results[:1][0])
+		require.Equal(t, []meshbool.ContactPair{{I: 0, J: 0}, {I: 1, J: 1}, {I: 2, J: 2}}, got)
 	})
 
 	t.Run("full batch", func(t *testing.T) {
-		ma, mb := &boolMesh{}, &boolMesh{}
-		var got []contactPair
-		e := newContactBatchExecutor(t.Context(), ma, mb, newContactMemo(ma, mb), 1,
-			func(pair contactPair, _ triContact) error {
+		ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+		var got []meshbool.ContactPair
+		e := meshbool.NewContactBatchExecutor(t.Context(), ma, mb, meshbool.NewContactMemo(ma, mb), 1,
+			func(pair meshbool.ContactPair, _ meshbool.TriContact) error {
 				got = append(got, pair)
 				return nil
 			})
-		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, _ []contactBatchResult, _ int) error {
-			require.Len(t, pairs, contactBatchSize)
+		e.Run = func(_ context.Context, _, _ *meshbool.BoolMesh, pairs []meshbool.ContactPair, _ []meshbool.ContactBatchResult, _ int) error {
+			require.Len(t, pairs, meshbool.ContactBatchSize)
 			return nil
 		}
-		for i := range contactBatchSize {
-			require.NoError(t, e.add(i, i))
+		for i := range meshbool.ContactBatchSize {
+			require.NoError(t, e.Add(i, i))
 		}
-		require.Len(t, got, contactBatchSize)
-		require.Equal(t, contactPair{0, 0}, got[0])
-		require.Equal(t, contactPair{contactBatchSize - 1, contactBatchSize - 1}, got[len(got)-1])
-		require.Equal(t, contactBatchSize, cap(e.batch))
-		require.Equal(t, contactBatchSize, cap(e.misses))
-		require.Equal(t, contactBatchSize, cap(e.results))
+		require.Len(t, got, meshbool.ContactBatchSize)
+		require.Equal(t, meshbool.ContactPair{I: 0, J: 0}, got[0])
+		require.Equal(t, meshbool.ContactPair{I: meshbool.ContactBatchSize - 1, J: meshbool.ContactBatchSize - 1}, got[len(got)-1])
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Batch))
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Misses))
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Results))
 	})
 
 	t.Run("memo hits", func(t *testing.T) {
-		ma, mb := &boolMesh{}, &boolMesh{}
-		memo := newContactMemo(ma, mb)
-		memo.store(0, 0, triContact{kind: contactPoint})
-		e := newContactBatchExecutor(t.Context(), ma, mb, memo, 1, nil)
-		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+		ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+		memo := meshbool.NewContactMemo(ma, mb)
+		memo.Store(0, 0, meshbool.TriContact{Kind: meshbool.ContactPoint})
+		e := meshbool.NewContactBatchExecutor(t.Context(), ma, mb, memo, 1, nil)
+		e.Run = func(_ context.Context, _, _ *meshbool.BoolMesh, pairs []meshbool.ContactPair, results []meshbool.ContactBatchResult, _ int) error {
 			require.Empty(t, pairs)
 			require.Empty(t, results)
 			return nil
 		}
-		require.NoError(t, e.add(0, 0))
-		require.NoError(t, e.done())
-		require.Equal(t, contactBatchSize, cap(e.batch))
-		require.Nil(t, e.misses)
-		require.Nil(t, e.results)
+		require.NoError(t, e.Add(0, 0))
+		require.NoError(t, e.Done())
+		require.Equal(t, meshbool.ContactBatchSize, cap(e.Batch))
+		require.Nil(t, e.Misses)
+		require.Nil(t, e.Results)
 	})
 }
 
@@ -203,10 +205,10 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 	placed, err := b.Placed(t.Context(), tr)
 	require.NoError(t, err)
 
-	serial, err := evaluateBoolean(withContactWorkers(t.Context(), 1), opUnion, a, placed)
+	serial, err := evaluateBoolean(meshbool.WithContactWorkers(t.Context(), 1), meshbool.OpUnion, a, placed)
 	require.NoError(t, err)
 	for _, workers := range []int{2, 4, 8, 12} {
-		parallel, err := evaluateBoolean(withContactWorkers(t.Context(), workers), opUnion, a, placed)
+		parallel, err := evaluateBoolean(meshbool.WithContactWorkers(t.Context(), workers), meshbool.OpUnion, a, placed)
 		require.NoError(t, err)
 		require.Equal(t, serial.payload, parallel.payload, "worker count %d changed held geometry", workers)
 		require.Equal(t, serial.volume, parallel.volume, "worker count %d changed volume", workers)
@@ -217,12 +219,12 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 // contributes no candidate facets after the box check.
 func BenchmarkContactBatchEmpty(b *testing.B) {
 	ctx := b.Context()
-	ma, mb := &boolMesh{}, &boolMesh{}
-	memo := newContactMemo(ma, mb)
+	ma, mb := &meshbool.BoolMesh{}, &meshbool.BoolMesh{}
+	memo := meshbool.NewContactMemo(ma, mb)
 	b.ReportAllocs()
 	for b.Loop() {
-		e := newContactBatchExecutor(ctx, ma, mb, memo, 1, nil)
-		if err := e.done(); err != nil {
+		e := meshbool.NewContactBatchExecutor(ctx, ma, mb, memo, 1, nil)
+		if err := e.Done(); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -244,13 +246,13 @@ func BenchmarkMeshBooleanWorkers(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			ctx := withContactWorkers(b.Context(), workers)
-			if _, err := evaluateBoolean(ctx, opUnion, a, placed); err != nil {
+			ctx := meshbool.WithContactWorkers(b.Context(), workers)
+			if _, err := evaluateBoolean(ctx, meshbool.OpUnion, a, placed); err != nil {
 				b.Fatal(err)
 			}
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := evaluateBoolean(ctx, opUnion, a, placed); err != nil {
+				if _, err := evaluateBoolean(ctx, meshbool.OpUnion, a, placed); err != nil {
 					b.Fatal(err)
 				}
 			}

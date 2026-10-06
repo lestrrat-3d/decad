@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -51,7 +53,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			// evaluateAnalyticIntersect wraps its own RB7, so
 			// measuredInterference reads it as interferenceUnsupportedPipeline
 			// and the report says Suspect.
-			return Measurement{}, false, expectedBoolean(booleanExpectedUnsupported, err)
+			return Measurement{}, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}
 		return Measurement{}, false, err
 	}
