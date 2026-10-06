@@ -25,8 +25,8 @@ case into nil, an empty list, or `Sound`.
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
-| `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; overlap through the mesh-boolean path; a requested clearance stays `Suspect` | `Unavailable` | `Unavailable` | `Unavailable` |
-| `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
+| `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
+| `facetedPayload` | bounded boundary proof (§6) | the exact planar arm (§7) against the same partners | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
 case. A free-form (Tier A NURBS) wall answers `Suspect` in all four instead —
@@ -62,9 +62,10 @@ Four payload classes require different treatment:
   rational vertices rounded once to the held table, every held vertex within
   `delta` of its rational. Its §16.3 construction and SM8 crossing audit prove
   validity and re-run on every placement; `Verify`'s gate diameter is the held
-  vertex set's, shrunk by twice `delta`. An overlapping pair reads through the
-  mesh-boolean path (Table DM row DM4); its clearance adapter and surveys stay
-  staged by that design's Table DM.
+  vertex set's, shrunk by twice `delta`. Its pair partition and clearance are
+  §7's exact planar arm over its held triangles at `delta`; an overlapping
+  pair's volume reads through the mesh-boolean path (Table DM row DM4); its
+  surveys stay staged by that design's Table DM.
 
 ## 2. Shared proof rules
 
@@ -445,9 +446,27 @@ Approximate does NOT imply `Suspect`; only failed bound gate does.
 
 ## 7. Faceted clearance
 
+**Landed as the exact planar arm** (`clearance_planar.go`,
+`docs/interference-design.md` §3.2), not as a `bodyGeom` carrier model: a
+`facetedPayload`, or a `mitredSweepPayload`, is read off its own held
+triangle set as an exact dyadic snapshot with its displacement `δ`
+(`planarFacetedSolid` and `planarHeldMeshSolid`, `contact_faceted_pair.go`),
+its partner — a prism, a stitched solid, or another of the two — the same
+way, and the pair is decided by the exact planar relation of
+`docs/multibody-dynamics-design.md` §9.1, over which §7.2's rules below hold
+unchanged: the held interval is widened once by `DeltaPair`, a held touch
+certifies only at `DeltaPair == 0`, and a held nesting or crossing routes to
+the interference path, with a positive displacement admitting it only
+through a vertex deeper than `DeltaPair` (`pair.PlanarDeepVertex`). The arm
+runs only after the analytic kernel leaves the pair undecided, so no pair
+that kernel decides changes. §7.1's `bodyGeom` adapter is the design this
+replaces for that pair shape; it is kept as the shape a carrier model would
+take if one were ever needed, and §7.3's extent and pair-diameter rules stand
+(the diameter is `interferencePairDiameter`'s reading).
+
 ### 7.1 `bodyGeom`
 
-Add `bodyGeom.addFacetedFaces(fp)`:
+A `bodyGeom.addFacetedFaces(fp)` would hold:
 
 - one `ckPlane` face per held triangle;
 - triangle-local orthonormal frame;
@@ -706,7 +725,7 @@ Each row leaves every later question staged as `Suspect`.
 | cup wall | morphology recheck + exact wall theorem |
 | faceted certificate | `boundaryCert` creation/composition, boolean `sourceBound`, `NormalAt` |
 | faceted validity | held audit, BVH feature scale, validity/presence integration |
-| faceted clearance | triangle boundary adapter + bounded clearance |
+| faceted clearance | landed: §7's exact planar arm over the held triangles, for faceted and mitred-sweep pairs against prisms, stitched solids and each other |
 | faceted shape surveys | undercut + min-radius certificates/surveys |
 | faceted wall | medial wall survey |
 | loft verification | construction validity + bounds-disjoint staging over each body's own bounds and the bound they carry; pairs that need the mesh path and requested surveys remain `Suspect` until their payload path lands; requested clearances remain `Suspect` until the analytic adapter lands |

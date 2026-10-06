@@ -116,8 +116,12 @@ a requested `WithClearances` gap remains `Suspect` until its analytic adapter
 lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
-Neither adapter has landed yet, per §8's increment table and payload
-verification §13's own stage list.
+The cup adapter has not landed, per §8's increment table and payload
+verification §13's own stage list. The faceted adapter is not a carrier model
+in this kernel at all: a faceted Boolean result, and a mitred sweep with it,
+is partitioned by the exact planar arm of `docs/interference-design.md`
+§3.2 (`clearance_planar.go`), which runs after this kernel leaves such a
+pair undecided and applies the same once-widened true interval.
 
 A surface-result prism's model holds its walls alone, since a cap face is
 geometry the body does not have (`docs/surface-design.md` §4.1), while a
@@ -579,9 +583,12 @@ reads `Suspect`, never an error, never a silent pass:
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
 
-Cup and faceted adapters land in payload verification §13. Until their stages
-land, an invoked pair containing that payload remains `Suspect`; the analytic
-kernel does not tessellate a cup or discard a faceted displacement bound. A
+The cup adapter lands in payload verification §13. Until its stage lands, an
+invoked pair containing a cup remains `Suspect`; the analytic kernel does not
+tessellate a cup. A faceted Boolean result, and a mitred sweep, reach no
+carrier model here either: `docs/interference-design.md` §3.2's exact planar
+arm partitions such a pair after this kernel leaves it undecided, carrying the
+held displacement into the published interval rather than discarding it. A
 `loftPayload` has no analytic adapter in these stages. A requested
 `WithClearances` gap involving it remains `Suspect` until that adapter lands.
 The staged test MUST prove a bounds-disjoint loft pair has no `Clearance` row

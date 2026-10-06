@@ -832,9 +832,10 @@ computed when `WithClearances()` (§2) asks for it.
 How that partition is proved is specified once in
 `docs/interference-design.md`: pairs have four internal outcomes — disjoint,
 touching, overlapping, undecided — and `Verify` may settle one through any proof
-path that document specifies: the analytic clearance kernel, a strict
-full-containment or analytic equality certificate, the read-only analytic
-intersection dispatch, or the read-only mesh intersection.
+path that document specifies: the analytic clearance kernel, its exact planar
+arm for a mitred sweep or a faceted result, a strict full-containment or
+analytic equality certificate, the read-only analytic intersection dispatch,
+or the read-only mesh intersection.
 `Verify` NEVER calls the consuming public `Intersect`; report construction does
 not advance provenance, retire an operand, or register a transient body.
 

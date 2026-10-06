@@ -1291,3 +1291,6 @@
 4	17.99	TestSweepMitredTreeUnionChain
 3	1.74	TestSweepMitredTaperedBranchesCross
 0	0.03	TestSweepMitredCrossingUnion
+5	0.50	TestVerifyMitredSweepUnderPrismArmIsDisjoint
+2	0.65	TestVerifyMitredBranchUnionUnderPrismArmIsDisjoint
+1	0.50	TestVerifyMitredSweepMeetingPrismArmIsNotSound
