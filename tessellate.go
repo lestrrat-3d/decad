@@ -47,6 +47,14 @@ type Mesh struct {
 	// invariant failure, never a zero: zero is the CLAIM that the held polygon
 	// is the true trimmed patch and that its stored coordinates add nothing.
 	faceBound map[*Face]float64
+	// vertexBound is docs/faceted-vertex-bounds-design.md §2's per-vertex
+	// record β(v), one entry per vertex in millimetres: a point of the true
+	// boundary lies within vertexBound[v] of vertices[v], and every facet's
+	// true piece lies within the largest of its three corners' entries of the
+	// facet. nil means the payload publishes no record; vertexBounds then
+	// derives one from faceBound (§2.1). When present, every faceBound entry
+	// is the corner maximum over that face's own triangles.
+	vertexBound []float64
 	// areaSlack is a proven bound (mm²) on how far the mesh's total facet
 	// area falls short of — or, over a hole, overshoots — the body's true
 	// boundary area: the chord-versus-arc deficit, closed form per walk, plus
@@ -115,6 +123,44 @@ func (m *Mesh) setFaceBound(f *Face, delta float64) {
 	if delta > m.bound {
 		m.bound = delta
 	}
+}
+
+// setVertexBounds publishes a per-vertex record (docs/faceted-vertex-bounds-
+// design.md §2.1) and, from it, every source face's bound as the largest
+// corner entry over that face's own triangles, lifting bound to match. The
+// caller's record carries exactly one entry per vertex, and source is
+// already set; the mesh keeps its own copy.
+func (m *Mesh) setVertexBounds(beta []float64) {
+	m.vertexBound = append([]float64(nil), beta...)
+	for t, tri := range m.triangles {
+		m.setFaceBound(m.source[t], max(beta[tri[0]], beta[tri[1]], beta[tri[2]]))
+	}
+}
+
+// vertexBounds reads β(v) for every vertex (docs/faceted-vertex-bounds-
+// design.md §2.1): the mesh's own record when its payload publishes one, and
+// otherwise the largest faceBound over the faces whose facets touch v. The
+// derived reading is a claim the mesh already made — v lies on a facet whose
+// face's true patch is within that face's bound of it — and taking the
+// maximum over every incident face keeps each facet's own displacement,
+// chord sagitta included, as its corner maximum. A source face missing from
+// faceBound is a broken evaluator (ErrBooleanFailed, as facesOfMesh reports
+// it), never a zero. The returned slice is the caller's own.
+func (m *Mesh) vertexBounds() ([]float64, error) {
+	if m.vertexBound != nil {
+		return append([]float64(nil), m.vertexBound...), nil
+	}
+	beta := make([]float64, len(m.vertices))
+	for t, tri := range m.triangles {
+		d, ok := m.sourceBound(m.source[t])
+		if !ok {
+			return nil, fmt.Errorf(`%w: a mesh facet's source face states no displacement bound`, ErrBooleanFailed)
+		}
+		for _, v := range tri {
+			beta[v] = max(beta[v], d)
+		}
+	}
+	return beta, nil
 }
 
 // Vertices returns the mesh vertex positions in millimetres (core §5.2).

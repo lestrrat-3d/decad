@@ -193,8 +193,9 @@ func sweepMitred(ctx context.Context, d *Document, profile ProfileRecord, plane 
 // placement re-runs §16.3 from — plus the build that record produced.
 //
 // exact holds every vertex as the rational the construction denotes, placed
-// exactly under xform; verts is each rounded once to the nearest float, and
-// delta is the largest 3D gap between the two. tris is the globally oriented
+// exactly under xform; verts is each rounded once to the nearest float,
+// vertexBound is each vertex's own 3D gap between the two, rounded up, and
+// delta is the largest of them. tris is the globally oriented
 // held triangle set, walls first in (span, loop, segment) order, then capStart
 // and capEnd; triFace names each triangle's face as an index into faceRoles.
 type mitredSweepPayload struct {
@@ -204,12 +205,13 @@ type mitredSweepPayload struct {
 	factors []float64
 	xform   r3.Transform
 
-	exact     []sweepRatVec
-	verts     []r3.Vec
-	tris      [][3]int
-	triFace   []int
-	faceRoles []string
-	delta     float64
+	exact       []sweepRatVec
+	verts       []r3.Vec
+	vertexBound []float64
+	tris        [][3]int
+	triFace     []int
+	faceRoles   []string
+	delta       float64
 }
 
 func (mp mitredSweepPayload) transform() r3.Transform { return mp.xform }
@@ -234,9 +236,14 @@ func (mp mitredSweepPayload) placed(ctx context.Context, d *Document, ref produc
 }
 
 // tessellateMitredSweep is Table DM row DM2's exact restatement: the held
-// triangles of Table BM, with every face's source bound delta. A tolerance
-// below delta asks for a mesh closer to the body than its held vertices are,
-// which no restatement can give (docs/tessellation-design.md §7's rule). The
+// triangles of Table BM, publishing each vertex's own rounding gap as its
+// per-vertex bound and every face's source bound as the largest corner gap
+// over that face's triangles (docs/faceted-vertex-bounds-design.md §2.1):
+// every true face is the exact polygon on the rationals, so each held
+// triangle's true piece is the affine triangle on its corners' rationals. A
+// tolerance below delta asks for a mesh closer to the body than its held
+// vertices are, which no restatement can give (docs/tessellation-design.md
+// §7's rule). The
 // occupied-volume proof is the swept-volume allowance at delta over the
 // perturbed area, because the held set is the exact body with every vertex
 // moved by at most delta; the boundary proof is the build's own crossing
@@ -270,9 +277,7 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 		triangles: append([][3]int(nil), mp.tris...),
 		source:    src,
 	}
-	for _, f := range src {
-		mesh.setFaceBound(f, mp.delta)
-	}
+	mesh.setVertexBounds(mp.vertexBound)
 	mesh.bound = mp.delta
 	slack := 0.0
 	for _, t := range mp.tris {

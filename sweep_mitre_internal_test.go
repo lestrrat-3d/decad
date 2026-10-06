@@ -250,8 +250,8 @@ func TestMitredSweepGateDiameterShrinks(t *testing.T) {
 
 // TestMitredSweepDeltaAndMeshProofs checks the single rounding: delta covers
 // every vertex's exact 3D gap and is within a factor two of the largest, the
-// mesh publishes it as every face's bound, and the mesh's held volume and
-// area sit within volSymDiff and areaSlack of the exact ones.
+// mesh publishes it as its Bound, and the mesh's held volume and area sit
+// within volSymDiff and areaSlack of the exact ones.
 func TestMitredSweepDeltaAndMeshProofs(t *testing.T) {
 	t.Parallel()
 	body, mp := mitredTreeBranch(t)
@@ -293,6 +293,70 @@ func TestMitredSweepDeltaAndMeshProofs(t *testing.T) {
 	}
 	require.Positive(t, mesh.areaSlack)
 	require.LessOrEqual(t, math.Abs(heldArea-body.area.Value.Base()), mesh.areaSlack+body.area.Bound.Base()+1e-12)
+}
+
+// TestMitredSweepPublishesPerVertexBounds is docs/faceted-vertex-bounds-
+// design.md §2.1's mitred row. The fixture's path starts at the origin with an
+// axis-aligned first span, so every start-cap vertex is the profile's own
+// float vertex and rounds with no gap: each publishes β = 0, and so does the
+// start cap's face. Every other vertex publishes its own gap, which covers
+// the exact distance to its rational, is at most delta, and reaches delta at
+// the vertex delta was read from. Every face bound is the largest corner β
+// over that face's own triangles.
+func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
+	t.Parallel()
+	body, mp := mitredTreeBranch(t)
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.01), VerifyAll)
+	require.NoError(t, err)
+	beta, err := mesh.vertexBounds()
+	require.NoError(t, err)
+	require.Len(t, beta, len(mp.exact))
+	require.Positive(t, mp.delta)
+
+	faceOfRole := map[string]*Face{}
+	for _, f := range body.Faces() {
+		for _, o := range f.Origins() {
+			faceOfRole[o.Role] = f
+		}
+	}
+	capCorners := 0
+	for k, tri := range mp.tris {
+		if mp.faceRoles[mp.triFace[k]] != roleCapStart {
+			continue
+		}
+		for _, v := range tri {
+			require.Zero(t, beta[v], `start-cap vertex %d rounds with no gap`, v)
+			capCorners++
+		}
+	}
+	require.Positive(t, capCorners)
+	capBound, ok := mesh.sourceBound(faceOfRole[roleCapStart])
+	require.True(t, ok)
+	require.Zero(t, capBound)
+
+	atDelta := 0
+	for v, p := range mp.exact {
+		gap := testRatSub(testRatOf(p), testRatVec(mp.verts[v]))
+		b := new(big.Rat).SetFloat64(beta[v])
+		require.LessOrEqual(t, testRatDot(gap, gap).Cmp(new(big.Rat).Mul(b, b)), 0, `vertex %d's β covers its exact gap`, v)
+		require.LessOrEqual(t, beta[v], mp.delta)
+		if beta[v] == mp.delta {
+			atDelta++
+		}
+	}
+	require.Positive(t, atDelta, `delta is some vertex's own β`)
+
+	want := map[*Face]float64{}
+	for k, tri := range mp.tris {
+		f := faceOfRole[mp.faceRoles[mp.triFace[k]]]
+		want[f] = max(want[f], beta[tri[0]], beta[tri[1]], beta[tri[2]])
+	}
+	for f, w := range want {
+		got, ok := mesh.sourceBound(f)
+		require.True(t, ok)
+		require.Equal(t, w, got)
+	}
+	require.Equal(t, mp.delta, mesh.Bound().Base())
 }
 
 // TestMitredSweepRequireWallsRefuses is Table SM row SM7 over hand-built

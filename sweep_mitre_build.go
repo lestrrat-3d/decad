@@ -261,12 +261,16 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	}
 	anchor := mitredPlace(mp.xform, c.anchor)
 
-	// Rounding, once: every vertex to its nearest float per coordinate, and
-	// delta the largest 3D gap, read exactly and rounded up.
+	// Rounding, once: every vertex to its nearest float per coordinate, with
+	// that vertex's own 3D gap read exactly from its largest coordinate gap and
+	// rounded up (docs/faceted-vertex-bounds-design.md §2.1), and delta the
+	// largest of them.
 	verts := make([]r3.Vec, len(exact))
-	worst := new(big.Rat)
+	vertexBound := make([]float64, len(exact))
+	delta := 0.0
 	for v, p := range exact {
 		var coords [3]float64
+		worst := new(big.Rat)
 		for axis := range 3 {
 			f, gap, ok := mitredRound(p[axis])
 			if !ok {
@@ -278,11 +282,11 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 			}
 		}
 		verts[v] = r3.NewVec(coords[0], coords[1], coords[2])
-	}
-	delta := 0.0
-	if worst.Sign() != 0 {
-		w, _ := worst.Float64()
-		delta = proofbound.Radius3D(proofbound.ProvenUpRound(w))
+		if worst.Sign() != 0 {
+			w, _ := worst.Float64()
+			vertexBound[v] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
+			delta = max(delta, vertexBound[v])
+		}
 	}
 
 	a := assembleMitredSweep(c, stride)
@@ -359,6 +363,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	}
 
 	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.tris, a.triFace, a.roles, delta
+	mp.vertexBound = vertexBound
 	body.payload = mp
 	return body, nil
 }
