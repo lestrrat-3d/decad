@@ -457,7 +457,7 @@ func (f SegFilter) TooFar(p r3.Vec) bool {
 // "outward-rounded float arithmetic, exact fallback for anything it cannot
 // prove" shape SegFilter uses for the conforming pass's own segment test. It
 // is float64's own enclosure, deliberately apart from proofbound.RatInterval
-// (moments.go) and capblend_contour.go's ivPoint/ivCarrier, which enclose in
+// (moments.go) and internal/capcontour's Point/Carrier, which enclose in
 // big.Rat and serve a different proof (a rational bound, not a float filter).
 //
 // Every method below returns EITHER a proper enclosure — lo and hi both

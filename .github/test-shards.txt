@@ -11,7 +11,7 @@
 #   shard 0:   35.60s over 60 tests
 #   shard 1:   35.59s over 59 tests
 #   shard 2:   35.60s over 64 tests
-#   shard 3:   35.60s over 650 tests
+#   shard 3:   35.60s over 647 tests
 #   shard 4:   35.60s over 63 tests
 #   shard 5:   35.12s over 62 tests
 #
@@ -316,7 +316,6 @@
 3	0.00	TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
 3	0.00	TestChordedBoundsNeverPublishAFlushedZero
 3	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
-3	0.00	TestCircleCircleLocusSpeedUpperRefusesNearParallelCorner
 3	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 3	0.00	TestClampedConversionCostIsQuadratic
 3	0.00	TestClearDenomsIsAPositiveRescaling
@@ -445,8 +444,6 @@
 3	0.00	TestLiftTessellationError
 3	0.00	TestLineCircleBracketsAcceptsFinitePolynomial
 3	0.00	TestLineCircleBracketsRejectsNonFinitePolynomial
-3	0.00	TestLineCircleLocusSpeedUpperExactAtPersistentTangency
-3	0.00	TestLineCircleLocusSpeedUpperRefusesMomentaryFold
 3	9.66	TestLineWalkBoundsDyadicMatchRational
 3	0.01	TestLinkageChainTravel
 3	0.00	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
