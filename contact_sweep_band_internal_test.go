@@ -2,8 +2,12 @@ package decad
 
 import (
 	"math/big"
+	"math/rand/v2"
+	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -97,4 +101,223 @@ func TestPlanarDepartureLowerGapIsBoundedByLateralClearance(t *testing.T) {
 		require.Negative(t, run.departure.lowerGap(early).Cmp(clearance))
 		require.Zero(t, run.departure.lowerGap(until).Cmp(clearance))
 	}
+}
+
+// planarSupportsScan is planarSupports as it read before the plane key and the
+// float pre-test: each plane compared against every plane tried so far, and
+// every new plane checked exactly. TestPlanarSupportsMatchScan holds the
+// shipped form to it.
+func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSupport, error) {
+	paths := [2]*rotationalSweepPath{&r.a, &r.b}
+	var motions [2]planarMotion
+	var spins [2][]*big.Rat
+	for i, path := range paths {
+		motion, ok := planarMotionOf(path)
+		if !ok {
+			return nil, nil
+		}
+		spin, ok := vertexSpins(path, motion)
+		if !ok {
+			return nil, nil
+		}
+		motions[i], spins[i] = motion, spin
+	}
+	rest := new(big.Rat)
+	if r.req.RestSpeed != (units.Value{}) {
+		speed, ok := exactBaseValue(r.req.RestSpeed)
+		if !ok {
+			return nil, nil
+		}
+		rest = speed
+	}
+	var out []planarSupport
+	for _, s := range []int{1, 0} {
+		m := 1 - s
+		S, M := paths[s], paths[m]
+		spinM := spins[m]
+		var tried []planarSupport
+		for t, tri := range S.solid.Tris {
+			if err := poll(); err != nil {
+				return nil, err
+			}
+			a := S.startPoints[tri[0]]
+			n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], a),
+				proofarith.DvSub(S.startPoints[tri[2]], a))
+			if proofarith.DvIsZero(n) || planarPlaneTried(tried, n, a) {
+				continue
+			}
+			tried = append(tried, planarSupport{normal: n, origin: a})
+			support, ok, err := planarSupportOf(S, M, n, a, r.req.ContactRequest, poll)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue
+			}
+			support.m, support.s, support.tri = m, s, t
+			support.motionM, support.motionS = motions[m], motions[s]
+			support.pathM, support.pathS = M, S
+			support.duration = r.a.path.duration
+			support.rates = make([]*big.Rat, len(M.startPoints))
+			relative := ratSub3(support.motionM.velocity, support.motionS.velocity)
+			normal := ratOfDyV3(n)
+			for i, v := range M.startPoints {
+				p := ratOfDyV3(v)
+				rate := ratAdd3(relative, ratCross3(support.motionM.omega, ratSub3(p, support.motionM.center)))
+				rate = ratSub3(rate, ratCross3(support.motionS.omega, ratSub3(p, support.motionS.center)))
+				support.rates[i] = ratDot3(normal, rate)
+			}
+			support.spin = spinM
+			support.rested = restedVertices(&support, rest)
+			out = append(out, support)
+		}
+	}
+	return out, nil
+}
+
+// supportFixture draws one body for TestPlanarSupportsMatchScan: lattice
+// points with z from zLow to zLow + 2 lattice steps, so many triangles share a plane, in both windings, with normals of
+// different lengths, and on parallel planes at other offsets. A random scale
+// and offset, applied exactly, give the coordinates long mantissas, so their
+// float bounds round, without moving any point off its plane. The shared
+// points put vertices of the other body exactly on these planes.
+func supportFixture(rng *rand.Rand, shared []proofarith.DyV3, scale proofarith.Dyadic,
+	offset proofarith.DyV3, zLow int) rotationalSweepPath {
+	lattice := func() proofarith.DyV3 {
+		var v proofarith.DyV3
+		for k := range 3 {
+			c := rng.IntN(5) - 2
+			if k == 2 {
+				c = zLow + rng.IntN(3)
+			}
+			v[k] = proofarith.DyAdd(proofarith.DyMul(proofarith.DyInt(int64(c)), scale), offset[k])
+		}
+		return v
+	}
+	var points []proofarith.DyV3
+	for range 4 + rng.IntN(8) {
+		switch rng.IntN(4) {
+		case 0:
+			if len(shared) > 0 {
+				points = append(points, shared[rng.IntN(len(shared))])
+				continue
+			}
+			points = append(points, lattice())
+		case 1:
+			// A point near the lattice, so float heights straddle zero.
+			v := lattice()
+			v[rng.IntN(3)] = proofarith.DyAdd(v[rng.IntN(3)], proofarith.DyShift(proofarith.DyInt(1), -40-rng.IntN(20)))
+			points = append(points, v)
+		default:
+			points = append(points, lattice())
+		}
+	}
+	// Half the triangles lie in one z level, so parallel planes at other
+	// offsets come before or after a support plane.
+	level := func(i int) []int {
+		var out []int
+		for j, v := range points {
+			if proofarith.DyCmp(v[2], points[i][2]) == 0 {
+				out = append(out, j)
+			}
+		}
+		return out
+	}
+	solid := &pair.PlanarSolid{Verts: points}
+	for range 6 + rng.IntN(30) {
+		i := rng.IntN(len(points))
+		pool := level(i)
+		if rng.IntN(2) == 0 {
+			pool = make([]int, len(points))
+			for j := range pool {
+				pool[j] = j
+			}
+		}
+		solid.Tris = append(solid.Tris, [3]int{i, pool[rng.IntN(len(pool))], pool[rng.IntN(len(pool))]})
+	}
+	return rotationalSweepPath{startPoints: points, solid: solid,
+		path: affinePairPath{duration: big.NewRat(1, 1)}}
+}
+
+// TestPlanarSupportsMatchScan holds planarSupports to planarSupportsScan, the
+// form it shortens, on random lattice bodies under no band, a narrow band and
+// a wide one. It also holds planarSupportRuledOut to its one-way claim, that
+// a ruled-out plane is one planarSupportOf rejects, and checks that the
+// pre-test rules out planes by both of its cases and that some planes reach
+// the exact test and pass.
+//
+// Legs shown to fail: a plane key without the offset, without the direction's
+// sign, or with the raw normal in place of its primitive direction each
+// changes the supports listed; a pre-test that rules out on a lower bound
+// below zero, or on every lower bound above zero under a positive band,
+// rejects planes the exact test accepts.
+func TestPlanarSupportsMatchScan(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(71, 73))
+	poll := func() error { return nil }
+	var behind, above, accepted, supports int
+	for range 1000 {
+		scale := proofarith.MustDyOf(1 + rng.Float64())
+		if rng.IntN(3) == 0 {
+			scale = proofarith.DyInt(1)
+		}
+		var offset proofarith.DyV3
+		for k := range 3 {
+			offset[k] = proofarith.MustDyOf(rng.Float64()*8 - 4)
+		}
+		// Stacked bodies, a below z = 0 and b above it, share support planes;
+		// overlapping ones mostly do not.
+		zA, zB := -2, -2
+		if rng.IntN(2) == 0 {
+			zB = 0
+		}
+		a := supportFixture(rng, nil, scale, offset, zA)
+		b := supportFixture(rng, a.startPoints, scale, offset, zB)
+		band := []units.Value{{}, units.Millimeters(1e-12), units.Millimeters(0.3), units.Millimeters(2.5)}[rng.IntN(4)]
+		run := &rotationalPairSweep{a: a, b: b}
+		run.req.SupportBand = band
+		got, err := run.planarSupports(poll)
+		require.NoError(t, err)
+		want, err := run.planarSupportsScan(poll)
+		require.NoError(t, err)
+		require.Equal(t, want, got)
+		supports += len(got)
+		for _, sides := range [][2]*rotationalSweepPath{{&run.b, &run.a}, {&run.a, &run.b}} {
+			S, M := sides[0], sides[1]
+			boxes := make([]proofarith.FloatBox3, len(M.startPoints))
+			for i, v := range M.startPoints {
+				boxes[i] = proofarith.DvFloatBox(v)
+			}
+			for _, tri := range S.solid.Tris {
+				origin := S.startPoints[tri[0]]
+				n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], origin),
+					proofarith.DvSub(S.startPoints[tri[2]], origin))
+				if proofarith.DvIsZero(n) {
+					continue
+				}
+				_, ok, err := planarSupportOf(S, M, n, origin, run.req.ContactRequest, poll)
+				require.NoError(t, err)
+				if !planarSupportRuledOut(boxes, n, origin, run.req.ContactRequest) {
+					if ok {
+						accepted++
+					}
+					continue
+				}
+				require.False(t, ok, "a ruled-out plane passes the exact test")
+				cLo, cHi := proofarith.FloatBounds(proofarith.DvDot(n, origin))
+				if slices.ContainsFunc(boxes, func(box proofarith.FloatBox3) bool {
+					_, hi := proofarith.DotSubEnclosure(proofarith.DvFloatBox(n), box, cLo, cHi)
+					return hi < 0
+				}) {
+					behind++
+					continue
+				}
+				above++
+			}
+		}
+	}
+	require.Positive(t, supports, "premise: some planes are supports")
+	require.Positive(t, accepted, "premise: some planes pass the exact test")
+	require.Positive(t, behind, "premise: the pre-test rules out a vertex behind a plane")
+	require.Positive(t, above, "premise: the pre-test rules out a plane every vertex stands clear of")
 }
