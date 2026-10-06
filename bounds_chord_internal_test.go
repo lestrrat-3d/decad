@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"testing"
@@ -171,7 +172,49 @@ func ratOfFloat(x float64) *big.Rat {
 // loftMassAccumulator measures (loft_moments.go) — as an exact rational, so
 // the "measured" gap this file's enclosure tests compare against is never
 // itself subject to float summation slop.
+//
+// Every coordinate is a float, so every denominator is a power of two and
+// the largest of them, 2^shift, is the common one: the sum runs over the
+// integers coordinate·2^shift and divides by 6·2^(3·shift) once at the end,
+// giving the same rational heldVolumeExactRat reduces term by term.
 func heldVolumeExact(verts []r3.Vec, tris [][3]int) float64 {
+	rats := make([][3]*big.Rat, len(verts))
+	shift := 0
+	for v, p := range verts {
+		rats[v] = [3]*big.Rat{ratOfFloat(p.X), ratOfFloat(p.Y), ratOfFloat(p.Z)}
+		for _, r := range rats[v] {
+			shift = max(shift, r.Denom().BitLen()-1)
+		}
+	}
+	ints := make([][3]*big.Int, len(verts))
+	for v, r := range rats {
+		for axis := range 3 {
+			ints[v][axis] = new(big.Int).Lsh(r[axis].Num(), uint(shift-(r[axis].Denom().BitLen()-1)))
+		}
+	}
+	var vol6N, term, tmp big.Int
+	var cross [3]big.Int
+	for _, tri := range tris {
+		a, b, c := ints[tri[0]], ints[tri[1]], ints[tri[2]]
+		for i := range 3 {
+			j, k := (i+1)%3, (i+2)%3
+			cross[i].Mul(b[j], c[k])
+			cross[i].Sub(&cross[i], tmp.Mul(b[k], c[j]))
+		}
+		term.Mul(a[0], &cross[0])
+		term.Add(&term, tmp.Mul(a[1], &cross[1]))
+		term.Add(&term, tmp.Mul(a[2], &cross[2]))
+		vol6N.Add(&vol6N, &term)
+	}
+	den := new(big.Int).Lsh(big.NewInt(6), uint(3*shift))
+	f, _ := new(big.Rat).SetFrac(&vol6N, den).Float64()
+	return f
+}
+
+// heldVolumeExactRat is heldVolumeExact as a term-by-term rational sum,
+// every partial sum reduced: the reference the common-denominator sum must
+// reproduce bit for bit.
+func heldVolumeExactRat(verts []r3.Vec, tris [][3]int) float64 {
 	vol6 := new(big.Rat)
 	for _, tri := range tris {
 		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
@@ -973,3 +1016,43 @@ func TestChordedBoundaryVolumeAllowSeamLegDeletionSearch(t *testing.T) {
 // quantity for an excess to add to. proofbound.CellChordCurveAreaUpper must publish an
 // ABSOLUTE bound instead, which encloses the patch's own area directly, at
 // every h.
+
+// TestHeldVolumeExactMatchesRationalSum pins heldVolumeExact to the
+// term-by-term rational sum, float bit for float bit, over a dozen
+// chordSweepTable parameter rows and over random meshes whose float
+// coordinates span many binary exponents.
+func TestHeldVolumeExactMatchesRationalSum(t *testing.T) {
+	t.Parallel()
+	rows := []struct {
+		r, sweepDeg, h, twistDeg float64
+		n                        int
+	}{
+		{1, 30, 0.1, 0, 8}, {1, 90, 10, 5, 32}, {1, 180, 100, 20, 64}, {1, 270, 0.1, 45, 128},
+		{5, 30, 10, 90, 256}, {5, 90, 100, 0, 8}, {5, 180, 0.1, 5, 32}, {5, 270, 10, 20, 64},
+		{50, 30, 100, 45, 128}, {50, 90, 0.1, 90, 256}, {50, 180, 10, 0, 8}, {50, 270, 100, 45, 32},
+	}
+	for _, row := range rows {
+		verts, tris := twistedPieSliceMesh(row.r, row.sweepDeg*math.Pi/180, row.twistDeg*math.Pi/180, row.h, row.n)
+		want, got := heldVolumeExactRat(verts, tris), heldVolumeExact(verts, tris)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), `row %+v: %v vs %v`, row, want, got)
+	}
+	rng := rand.New(rand.NewPCG(0x68656c64, 0x766f6c))
+	coord := func() float64 {
+		if rng.IntN(8) == 0 {
+			return 0
+		}
+		return math.Ldexp(rng.Float64()-0.5, rng.IntN(121)-60)
+	}
+	for trial := range 100 {
+		verts := make([]r3.Vec, 4+rng.IntN(12))
+		for v := range verts {
+			verts[v] = r3.NewVec(coord(), coord(), coord())
+		}
+		tris := make([][3]int, 1+rng.IntN(30))
+		for k := range tris {
+			tris[k] = [3]int{rng.IntN(len(verts)), rng.IntN(len(verts)), rng.IntN(len(verts))}
+		}
+		want, got := heldVolumeExactRat(verts, tris), heldVolumeExact(verts, tris)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), `trial %d: %v vs %v`, trial, want, got)
+	}
+}
