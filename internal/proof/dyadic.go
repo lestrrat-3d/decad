@@ -35,40 +35,36 @@ import (
 // Dyadic holds the same number big.Rat held, bit for bit, and every comparison
 // it answers is the comparison big.Rat answered.
 //
-// The mantissa is held INLINE, as a fixed-width magnitude of dyWords 64-bit
-// words and a sign, whenever it fits, and in a big.Int only when it does not.
-// A held float's mantissa has at most 53 bits and a product of two at most
-// 106, and most of the cross products and plane offsets the contact proofs
-// build from them stay within three words, so most operations run on machine
-// words and allocate nothing. A wider inline mantissa would hold more of them
-// but makes every Dyadic, and every array of them a caller copies, larger. Each inline operation detects the one way it can fail —
-// a carry, a product word or an aligning shift that leaves the fixed width —
-// with math/bits, and then redoes the operation in big.Int. The inline and
-// big.Int paths compute the same exact integer; they differ only in where it
-// is stored.
-
-// Indexed reads. A Dyadic is a 48-byte struct the compiler keeps on the
-// stack, not in registers, so arrays of them (DyV3, a box's corners) are
-// stack locals too. Go 1.26.0 to 1.26.5 merge stack slots by a liveness
-// analysis that ends a local's life at the instruction computing an address
-// into it, not at the copy that reads through that address; a variable-
-// indexed element passed as a call argument could then be overwritten by
-// another argument sharing its slot before it was copied (fixed in Go 1.26.6,
-// golang/go#80127). Code over Dyadic arrays therefore copies an element into
-// a named local before it reaches a call, or indexes by constant.
-
-// dyWords is the inline mantissa's width in 64-bit words.
-const dyWords = 3
+// The mantissa is held INLINE, as a 127-bit magnitude in two machine words
+// with the sign in the top bit of the high word, whenever it fits, and in a
+// big.Int only when it does not. A held float's mantissa has at most 53 bits
+// and a product of two at most 106, so lifts, products of lifts and most of
+// the sums built from them run on machine words and allocate nothing. Each
+// inline operation detects the one way it can fail — a carry, a product word
+// or an aligning shift that leaves the 127 bits — with math/bits, and then
+// redoes the operation in big.Int. The inline and big.Int paths compute the
+// same exact integer; they differ only in where it is stored.
+//
+// The struct is four word-sized fields, which is what lets the compiler keep a
+// Dyadic in registers rather than in a stack slot. That matters beyond speed:
+// Go 1.26.0 to 1.26.5 merge stack slots by a liveness analysis that ends a
+// local's life at the instruction computing an address into it, not at the
+// copy that reads through that address (fixed in Go 1.26.6, golang/go#80127),
+// and a Dyadic too large for registers turned every by-value argument and
+// inlined parameter into such a slot. A wider inline mantissa would need a
+// fifth field or an array and give that up. Arrays of Dyadic (DyV3) still
+// live on the stack, so code over them copies an element into a named local
+// before it reaches a call, or indexes by constant.
 
 // dyBits is the inline mantissa's width in bits.
-const dyBits = 64 * dyWords
+const dyBits = 127
 
-// dyMag is an inline mantissa magnitude, least significant word first.
-type dyMag [dyWords]uint64
+// dySign is the sign bit in an inline mantissa's high word.
+const dySign = 1 << 63
 
 // dyBuf is caller-owned storage for a big.Int view of an inline mantissa
 // (view), sized for the platform's big.Word.
-type dyBuf [dyBits / bits.UintSize]big.Word
+type dyBuf [128 / bits.UintSize]big.Word
 
 // Dyadic is an exact binary-scaled rational: mant × 2^exp, with mant an
 // arbitrary-precision integer and exp a binary exponent.
@@ -76,9 +72,9 @@ type dyBuf [dyBits / bits.UintSize]big.Word
 // The representation is kept REDUCED — a non-zero mant is odd — so that two
 // dyadics are equal exactly when their fields are (norm). Zero is the one value
 // with an even mantissa, held as mant 0 at exp 0. It is also CANONICAL in
-// where the mantissa lives: a mantissa of at most dyBits bits is always held
-// inline in mag and neg with big nil, and a wider one always in big, so the
-// two never describe the same value.
+// where the mantissa lives: a mantissa of at most 127 bits is always held
+// inline in lo and hi with big nil, and a wider one always in big, so the two
+// never describe the same value.
 //
 // A big mantissa is never mutated once the Dyadic holding it is built, so two
 // dyadics may share one.
@@ -87,9 +83,9 @@ type dyBuf [dyBits / bits.UintSize]big.Word
 // declared with var and filled in component by component the way its big.Rat
 // predecessor could be.
 type Dyadic struct {
-	big *big.Int // the mantissa when it is wider than dyBits; nil otherwise
-	mag dyMag    // |mantissa| when big is nil
-	neg bool     // the mantissa's sign when big is nil
+	big *big.Int // the mantissa when it is wider than 127 bits; nil otherwise
+	lo  uint64   // |mantissa|'s low word when big is nil
+	hi  uint64   // the sign (dySign) and |mantissa|'s high 63 bits when big is nil
 	exp int
 }
 
@@ -99,15 +95,15 @@ func DyZero() Dyadic { return Dyadic{} }
 // sign reports the value's sign, which is its mantissa's: the scale factor
 // 2^exp is positive for every exp.
 //
-// A non-zero inline mantissa is odd, so its lowest word alone tells it from
-// zero, here and in IsZero.
+// A non-zero inline mantissa is odd, so its low word alone tells it from zero,
+// here and in IsZero.
 func (d Dyadic) Sign() int {
 	switch {
 	case d.big != nil:
 		return d.big.Sign()
-	case d.neg:
+	case d.hi&dySign != 0:
 		return -1
-	case d.mag[0] == 0:
+	case d.lo == 0:
 		return 0
 	default:
 		return 1
@@ -115,29 +111,50 @@ func (d Dyadic) Sign() int {
 }
 
 // isZero reports whether the value is exactly zero.
-func (d Dyadic) IsZero() bool { return d.big == nil && d.mag[0] == 0 }
+func (d Dyadic) IsZero() bool { return d.big == nil && d.lo == 0 }
+
+// neg reports whether an inline mantissa is negative.
+func (d Dyadic) neg() bool { return d.hi&dySign != 0 }
 
 // bitLen is the bit length of the mantissa's magnitude.
 func (d Dyadic) bitLen() int {
 	if d.big != nil {
 		return d.big.BitLen()
 	}
-	return d.mag.bitLen()
+	return bitLen128(d.lo, d.hi&^dySign)
 }
 
-// fromMag builds the canonical Dyadic for ±m × 2^exp: a zero magnitude is the
-// zero value, and a non-zero one is made odd by shifting its trailing zero
-// bits into the exponent.
-func fromMag(m dyMag, neg bool, exp int) Dyadic {
-	tz := m.trailingZeros()
-	if tz < 0 {
+// bitLen128 is the bit length of the magnitude hi·2^64 + lo.
+func bitLen128(lo, hi uint64) int {
+	if hi != 0 {
+		return 64 + bits.Len64(hi)
+	}
+	return bits.Len64(lo)
+}
+
+// fromMag builds the canonical Dyadic for ±(hi·2^64 + lo) × 2^exp, a
+// magnitude of at most 127 bits: a zero magnitude is the zero value, and a
+// non-zero one is made odd by shifting its trailing zero bits into the
+// exponent.
+func fromMag(lo, hi uint64, neg bool, exp int) Dyadic {
+	switch {
+	case lo != 0:
+		if tz := bits.TrailingZeros64(lo); tz > 0 {
+			lo = lo>>tz | hi<<(64-tz)
+			hi >>= tz
+			exp += tz
+		}
+	case hi != 0:
+		tz := bits.TrailingZeros64(hi)
+		lo, hi = hi>>tz, 0
+		exp += 64 + tz
+	default:
 		return Dyadic{}
 	}
-	if tz > 0 {
-		m = m.shr(uint(tz))
-		exp += tz
+	if neg {
+		hi |= dySign
 	}
-	return Dyadic{mag: m, neg: neg, exp: exp}
+	return Dyadic{lo: lo, hi: hi, exp: exp}
 }
 
 // fromBig builds the canonical Dyadic for z × 2^exp, taking ownership of z: it
@@ -153,159 +170,48 @@ func fromBig(z *big.Int, exp int) Dyadic {
 	if z.BitLen() > dyBits {
 		return Dyadic{big: z, exp: exp}
 	}
-	var m dyMag
+	var lo, hi uint64
 	words := z.Bits()
 	if bits.UintSize == 64 {
-		for i, w := range words {
-			m[i] = uint64(w)
+		lo = uint64(words[0])
+		if len(words) > 1 {
+			hi = uint64(words[1])
 		}
 	} else {
-		for i, w := range words {
-			m[i/2] |= uint64(w) << (32 * (i % 2))
+		var w [4]uint64
+		for i, word := range words {
+			w[i] = uint64(word)
 		}
+		lo, hi = w[0]|w[1]<<32, w[2]|w[3]<<32
 	}
-	return Dyadic{mag: m, neg: z.Sign() < 0, exp: exp}
+	if z.Sign() < 0 {
+		hi |= dySign
+	}
+	return Dyadic{lo: lo, hi: hi, exp: exp}
 }
 
-// view returns d's mantissa as a big.Int without allocating where the
-// platform allows: a big mantissa is returned as it stands, and an inline one
-// is written into t over the caller's buf. The result is read-only.
+// view returns d's mantissa as a big.Int: a big mantissa as it stands, and an
+// inline one written into t over the caller's buf. The result is read-only.
 func (d *Dyadic) view(t *big.Int, buf *dyBuf) *big.Int {
 	if d.big != nil {
 		return d.big
 	}
-	n := 0
+	lo, hi := d.lo, d.hi&^dySign
+	words := buf[:]
 	if bits.UintSize == 64 {
-		for i, w := range d.mag {
-			buf[i] = big.Word(w)
-			if w != 0 {
-				n = i + 1
-			}
-		}
+		words[0], words[1] = big.Word(lo), big.Word(hi)
 	} else {
-		for i, w := range d.mag {
-			buf[2*i], buf[2*i+1] = big.Word(w), big.Word(w>>32)
-		}
-		n = len(buf)
-		for n > 0 && buf[n-1] == 0 {
-			n--
-		}
+		words[0], words[1], words[2], words[3] = big.Word(lo), big.Word(lo>>32), big.Word(hi), big.Word(hi>>32)
 	}
-	t.SetBits(buf[:n])
-	if d.neg {
+	n := len(words)
+	for n > 0 && words[n-1] == 0 {
+		n--
+	}
+	t.SetBits(words[:n])
+	if d.neg() {
 		t.Neg(t)
 	}
 	return t
-}
-
-// bitLen is m's bit length.
-func (m *dyMag) bitLen() int {
-	for i := dyWords - 1; i >= 0; i-- {
-		if m[i] != 0 {
-			return 64*i + bits.Len64(m[i])
-		}
-	}
-	return 0
-}
-
-// trailingZeros is the count of m's trailing zero bits, or -1 for zero.
-func (m *dyMag) trailingZeros() int {
-	for i, w := range m {
-		if w != 0 {
-			return 64*i + bits.TrailingZeros64(w)
-		}
-	}
-	return -1
-}
-
-// shr returns m >> s for s < dyBits.
-func (m dyMag) shr(s uint) dyMag {
-	var out dyMag
-	words, rem := int(s/64), s%64
-	for i := 0; i+words < dyWords; i++ {
-		out[i] = m[i+words] >> rem
-		if rem > 0 && i+words+1 < dyWords {
-			out[i] |= m[i+words+1] << (64 - rem)
-		}
-	}
-	return out
-}
-
-// shl returns m << s, reporting false when a set bit would leave the fixed
-// width. bitLen is m's own bit length, which the caller already holds.
-func (m dyMag) shl(s, bitLen int) (dyMag, bool) {
-	if s == 0 {
-		return m, true
-	}
-	if bitLen+s > dyBits {
-		return dyMag{}, false
-	}
-	var out dyMag
-	words, rem := s/64, uint(s%64)
-	for i := dyWords - 1; i >= words; i-- {
-		out[i] = m[i-words] << rem
-		if rem > 0 && i-words-1 >= 0 {
-			out[i] |= m[i-words-1] >> (64 - rem)
-		}
-	}
-	return out, true
-}
-
-// cmpMag compares two magnitudes.
-func cmpMag(a, b *dyMag) int {
-	for i := dyWords - 1; i >= 0; i-- {
-		if a[i] != b[i] {
-			if a[i] > b[i] {
-				return 1
-			}
-			return -1
-		}
-	}
-	return 0
-}
-
-// addMag returns a + b, reporting false on a carry out of the fixed width.
-func addMag(a, b *dyMag) (dyMag, bool) {
-	var out dyMag
-	var carry uint64
-	for i := range out {
-		out[i], carry = bits.Add64(a[i], b[i], carry)
-	}
-	return out, carry == 0
-}
-
-// subMag returns a − b for a ≥ b.
-func subMag(a, b *dyMag) dyMag {
-	var out dyMag
-	var borrow uint64
-	for i := range out {
-		out[i], borrow = bits.Sub64(a[i], b[i], borrow)
-	}
-	return out
-}
-
-// mulMag returns the full product a × b, least significant word first.
-// aLen and bLen are the operands' bit lengths, which bound the words the
-// schoolbook product visits.
-func mulMag(a, b *dyMag, aLen, bLen int) [2 * dyWords]uint64 {
-	na, nb := (aLen+63)/64, (bLen+63)/64
-	var p [2 * dyWords]uint64
-	for i := range na {
-		var carry uint64
-		ai := a[i]
-		for j := range nb {
-			hi, lo := bits.Mul64(ai, b[j])
-			var c uint64
-			lo, c = bits.Add64(lo, p[i+j], 0)
-			hi += c
-			lo, c = bits.Add64(lo, carry, 0)
-			hi += c
-			p[i+j] = lo
-			carry = hi
-		}
-		p[i+nb] = carry
-	}
-	return p
 }
 
 // bigOfWords returns the integer ±words, least significant word first, in a
@@ -360,7 +266,7 @@ func dyInt64(v int64, exp int) Dyadic {
 	if v < 0 {
 		mag = -mag
 	}
-	return fromMag(dyMag{mag}, v < 0, exp)
+	return fromMag(mag, 0, v < 0, exp)
 }
 
 // MustDyOf is DyOf for a value the caller has already proven finite
@@ -398,54 +304,75 @@ func dyAddSigned(a, b Dyadic, negB bool) Dyadic {
 		}
 		return b
 	case a.big == nil && b.big == nil:
-		if out, ok := addInline(&a, &b, b.neg != negB); ok {
+		if out, ok := addInline(a, b, b.neg() != negB); ok {
 			return out
 		}
 	}
 	return addBig(a, b, negB)
 }
 
+// shl128 returns (hi·2^64 + lo) << s, reporting false when a set bit would
+// pass bit 126. n is the magnitude's own bit length.
+func shl128(lo, hi uint64, s, n int) (uint64, uint64, bool) {
+	switch {
+	case s == 0:
+		return lo, hi, true
+	case n+s > dyBits:
+		return 0, 0, false
+	case s >= 64:
+		return 0, lo << (s - 64), true
+	default:
+		return lo << s, hi<<s | lo>>(64-s), true
+	}
+}
+
 // addInline returns a + b' for b' the magnitude of b with sign bNeg, over two
 // non-zero inline mantissas. The operand with the larger exponent is shifted
-// down to the smaller one, and false reports that the shift left the fixed
-// width. A carry out of it builds the big.Int sum from the words in hand.
-func addInline(a, b *Dyadic, bNeg bool) (Dyadic, bool) {
-	am, bm, exp := a.mag, b.mag, a.exp
+// down to the smaller one, and false reports that the shift left the 127
+// bits. A sum that carries past them builds its big.Int from the words in
+// hand.
+func addInline(a, b Dyadic, bNeg bool) (Dyadic, bool) {
+	alo, ahi := a.lo, a.hi&^dySign
+	blo, bhi := b.lo, b.hi&^dySign
+	aNeg, exp := a.neg(), a.exp
 	var ok bool
 	switch {
 	case a.exp > b.exp:
-		if am, ok = am.shl(a.exp-b.exp, am.bitLen()); !ok {
+		if alo, ahi, ok = shl128(alo, ahi, a.exp-b.exp, bitLen128(alo, ahi)); !ok {
 			return Dyadic{}, false
 		}
 		exp = b.exp
 	case b.exp > a.exp:
-		if bm, ok = bm.shl(b.exp-a.exp, bm.bitLen()); !ok {
+		if blo, bhi, ok = shl128(blo, bhi, b.exp-a.exp, bitLen128(blo, bhi)); !ok {
 			return Dyadic{}, false
 		}
 	}
-	if a.neg == bNeg {
-		sum, ok := addMag(&am, &bm)
-		if !ok {
-			// The carry is the one bit above the fixed width.
-			var words [dyWords + 1]uint64
-			copy(words[:], sum[:])
-			words[dyWords] = 1
-			return fromBig(bigOfWords(words[:], a.neg), exp), true
+	if aNeg == bNeg {
+		lo, carry := bits.Add64(alo, blo, 0)
+		hi, _ := bits.Add64(ahi, bhi, carry)
+		// Two magnitudes below 2^127 sum below 2^128, so the only overflow is
+		// into bit 127, the sign bit's position.
+		if hi&dySign != 0 {
+			return fromBig(bigOfWords([]uint64{lo, hi}, aNeg), exp), true
 		}
-		return fromMag(sum, a.neg, exp), true
+		return fromMag(lo, hi, aNeg, exp), true
 	}
-	switch cmpMag(&am, &bm) {
-	case 0:
+	switch {
+	case ahi > bhi || ahi == bhi && alo > blo:
+		lo, borrow := bits.Sub64(alo, blo, 0)
+		hi, _ := bits.Sub64(ahi, bhi, borrow)
+		return fromMag(lo, hi, aNeg, exp), true
+	case ahi == bhi && alo == blo:
 		return Dyadic{}, true
-	case 1:
-		return fromMag(subMag(&am, &bm), a.neg, exp), true
 	default:
-		return fromMag(subMag(&bm, &am), bNeg, exp), true
+		lo, borrow := bits.Sub64(blo, alo, 0)
+		hi, _ := bits.Sub64(bhi, ahi, borrow)
+		return fromMag(lo, hi, bNeg, exp), true
 	}
 }
 
 // addBig is dyAddSigned over big.Int, for an operand already held there or an
-// inline sum that left the fixed width.
+// inline sum whose aligning shift left the 127 bits.
 func addBig(a, b Dyadic, negB bool) Dyadic {
 	var ta, tb big.Int
 	var ba, bb dyBuf
@@ -477,18 +404,44 @@ func DyMul(a, b Dyadic) Dyadic {
 		return Dyadic{}
 	}
 	if a.big == nil && b.big == nil {
-		// Two inline mantissas have a product of at most twice the inline
-		// width, so it is computed in full and held inline when its high
-		// words are zero.
-		p := mulMag(&a.mag, &b.mag, a.mag.bitLen(), b.mag.bitLen())
-		if [dyWords]uint64(p[dyWords:]) == [dyWords]uint64{} {
-			return Dyadic{mag: dyMag(p[:dyWords]), neg: a.neg != b.neg, exp: a.exp + b.exp}
+		// Two inline mantissas have a product of at most 254 bits, computed in
+		// full and held inline when it fits in 127.
+		alo, ahi := a.lo, a.hi&^dySign
+		blo, bhi := b.lo, b.hi&^dySign
+		neg := a.neg() != b.neg()
+		h0, p0 := bits.Mul64(alo, blo)
+		if ahi == 0 && bhi == 0 {
+			if h0&dySign == 0 {
+				return fromMulWords(p0, h0, neg, a.exp+b.exp)
+			}
+			return Dyadic{big: bigOfWords([]uint64{p0, h0}, neg), exp: a.exp + b.exp}
 		}
-		return Dyadic{big: bigOfWords(p[:], a.neg != b.neg), exp: a.exp + b.exp}
+		h1, l1 := bits.Mul64(alo, bhi)
+		h2, l2 := bits.Mul64(ahi, blo)
+		h3, l3 := bits.Mul64(ahi, bhi)
+		p1, c := bits.Add64(h0, l1, 0)
+		p2, c2 := bits.Add64(h1, l3, c)
+		p3 := h3 + c2
+		p1, c = bits.Add64(p1, l2, 0)
+		p2, c2 = bits.Add64(p2, h2, c)
+		p3 += c2
+		if p2 == 0 && p3 == 0 && p1&dySign == 0 {
+			return fromMulWords(p0, p1, neg, a.exp+b.exp)
+		}
+		return Dyadic{big: bigOfWords([]uint64{p0, p1, p2, p3}, neg), exp: a.exp + b.exp}
 	}
 	var ta, tb big.Int
 	var ba, bb dyBuf
 	return fromBig(new(big.Int).Mul(a.view(&ta, &ba), b.view(&tb, &bb)), a.exp+b.exp)
+}
+
+// fromMulWords is the Dyadic for an inline product: odd, since both factors
+// are, and so already reduced.
+func fromMulWords(lo, hi uint64, neg bool, exp int) Dyadic {
+	if neg {
+		hi |= dySign
+	}
+	return Dyadic{lo: lo, hi: hi, exp: exp}
 }
 
 // DyCmp compares a against b, returning -1, 0 or +1 the way big.Rat.Cmp does.
@@ -510,8 +463,31 @@ func DyCmp(a, b Dyadic) int {
 	if sign == 0 {
 		return 0
 	}
-	if a.big == nil && b.big == nil && a.exp == b.exp {
-		return sign * cmpMag(&a.mag, &b.mag)
+	if a.big == nil && b.big == nil {
+		alo, ahi := a.lo, a.hi&^dySign
+		blo, bhi := b.lo, b.hi&^dySign
+		if a.exp != b.exp {
+			aLen, bLen := bitLen128(alo, ahi), bitLen128(blo, bhi)
+			if top, other := aLen+a.exp, bLen+b.exp; top != other {
+				if top > other {
+					return sign
+				}
+				return -sign
+			}
+			if a.exp > b.exp {
+				alo, ahi, _ = shl128(alo, ahi, a.exp-b.exp, aLen)
+			} else {
+				blo, bhi, _ = shl128(blo, bhi, b.exp-a.exp, bLen)
+			}
+		}
+		switch {
+		case ahi > bhi || ahi == bhi && alo > blo:
+			return sign
+		case ahi == bhi && alo == blo:
+			return 0
+		default:
+			return -sign
+		}
 	}
 	aLen, bLen := a.bitLen(), b.bitLen()
 	if top, other := aLen+a.exp, bLen+b.exp; top != other {
@@ -519,16 +495,6 @@ func DyCmp(a, b Dyadic) int {
 			return sign
 		}
 		return -sign
-	}
-	if a.big == nil && b.big == nil {
-		am, bm := a.mag, b.mag
-		switch {
-		case a.exp > b.exp:
-			am, _ = am.shl(a.exp-b.exp, aLen)
-		case b.exp > a.exp:
-			bm, _ = bm.shl(b.exp-a.exp, bLen)
-		}
-		return sign * cmpMag(&am, &bm)
 	}
 	var ta, tb big.Int
 	var ba, bb dyBuf
@@ -546,7 +512,7 @@ func DyCmp(a, b Dyadic) int {
 // DyAbs returns |d|.
 func DyAbs(d Dyadic) Dyadic {
 	if d.big == nil {
-		d.neg = false
+		d.hi &^= dySign
 		return d
 	}
 	if d.big.Sign() > 0 {
@@ -558,8 +524,8 @@ func DyAbs(d Dyadic) Dyadic {
 // DyNeg returns −d.
 func DyNeg(d Dyadic) Dyadic {
 	if d.big == nil {
-		if d.mag[0] != 0 {
-			d.neg = !d.neg
+		if d.lo != 0 {
+			d.hi ^= dySign
 		}
 		return d
 	}
@@ -625,17 +591,17 @@ func (d Dyadic) Float64() (float64, bool) {
 	}
 	n := d.bitLen()
 	if d.big == nil && n-1+d.exp >= -1022 && n+d.exp <= 1024 {
-		top, shift := d.mag, 0
-		if n > 64 {
+		top, shift := d.lo, 0
+		if hi := d.hi &^ dySign; hi != 0 {
 			shift = n - 64
-			sticky := shift > 0 && (d.mag.trailingZeros() < shift)
-			top = top.shr(uint(shift))
+			sticky := d.lo<<(64-shift) != 0
+			top = hi<<(64-shift) | d.lo>>shift
 			if sticky {
-				top[0] |= 1
+				top |= 1
 			}
 		}
-		f := math.Ldexp(float64(top[0]), shift+d.exp)
-		if d.neg {
+		f := math.Ldexp(float64(top), shift+d.exp)
+		if d.neg() {
 			f = -f
 		}
 		return f, n <= 53
@@ -922,21 +888,9 @@ func (d Dyadic) MantInto(z *big.Int) *big.Int {
 	if d.big != nil {
 		return z.Set(d.big)
 	}
-	var words dyBuf
-	if bits.UintSize == 64 {
-		for i, w := range d.mag {
-			words[i] = big.Word(w)
-		}
-	} else {
-		for i, w := range d.mag {
-			words[2*i], words[2*i+1] = big.Word(w), big.Word(w>>32)
-		}
-	}
-	z.SetBits(append(z.Bits()[:0], words[:]...))
-	if d.neg {
-		z.Neg(z)
-	}
-	return z
+	var t big.Int
+	var buf dyBuf
+	return z.Set(d.view(&t, &buf))
 }
 
 // Exp returns the binary exponent for internal proof consumers.

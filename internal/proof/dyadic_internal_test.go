@@ -191,10 +191,10 @@ func requireMatchesLegacy(t *testing.T, want legacyDyadic, got Dyadic, op string
 	switch {
 	case got.big != nil:
 		require.Greater(t, got.big.BitLen(), dyBits, "%s: a big mantissa that fits inline", op)
-	case got.mag == dyMag{}:
+	case got.lo == 0 && got.hi&^dySign == 0:
 		require.Equal(t, Dyadic{}, got, "%s: zero is the zero value", op)
 	default:
-		require.Equal(t, uint64(1), got.mag[0]&1, "%s: an even inline mantissa", op)
+		require.Equal(t, uint64(1), got.lo&1, "%s: an even inline mantissa", op)
 	}
 	if want.isZero() {
 		require.True(t, got.IsZero(), op)

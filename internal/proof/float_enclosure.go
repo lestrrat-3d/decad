@@ -146,11 +146,10 @@ func (d Dyadic) AppendKey(b []byte) []byte {
 		b = binary.AppendUvarint(b, uint64(len(words)))
 		return append(b, words...)
 	}
-	n := (d.mag.bitLen() + 7) / 8
+	n := (bitLen128(d.lo, d.hi&^dySign) + 7) / 8
 	b = binary.AppendUvarint(b, uint64(n))
-	var bytes [dyWords * 8]byte
-	for i, w := range d.mag {
-		binary.BigEndian.PutUint64(bytes[8*(dyWords-1-i):], w)
-	}
+	var bytes [16]byte
+	binary.BigEndian.PutUint64(bytes[:8], d.hi&^dySign)
+	binary.BigEndian.PutUint64(bytes[8:], d.lo)
 	return append(b, bytes[len(bytes)-n:]...)
 }

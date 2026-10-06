@@ -209,13 +209,14 @@ func requireDyadicIs(t *testing.T, want *big.Rat, d proof.Dyadic, msg string) {
 // each result against big.Rat.
 //
 // Legs shown to fail, each by breaking one inline path in dyadic.go: ignoring
-// the carry out of addMag; dropping the carry bit when building the wider
-// sum; letting shl drop bits shifted past the top word; subtracting the
-// magnitudes in the wrong order; skipping the product's high-word check;
-// flipping the inline product's sign rule; comparing two inline values
-// without the aligning shift; dropping Float64's sticky bit; admitting
-// magnitudes up to 2^1025 to its inline conversion; and reporting an inline
-// conversion exact up to 54 bits.
+// a sum's carry into bit 127; dropping that carry when building the wider
+// sum; letting shl128 drop bits shifted past the top or mis-shift by 64 or
+// more; subtracting the magnitudes in the wrong order; skipping either
+// product's high-bit check; flipping the product's sign rule; dropping a
+// product cross term; comparing two inline values without the aligning
+// shift; dropping Float64's sticky bit; admitting magnitudes up to 2^1025 to
+// its inline conversion; and reporting an inline conversion exact up to 54
+// bits.
 func TestDyadicInlineBoundariesMatchBigRat(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0xB7E151628AED2A6A, 0xBF7158809CF4F3C7))
