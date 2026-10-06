@@ -21,7 +21,7 @@ shows a box impact and computed rebound.
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses; against a signed-axis face of an exact planar solid, a touch, gap or `ContactBand` at any pose, and a rolling touch or band track from such a start | Rolling on a fixed floor in a scheduled world, with and without gravity |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
-| A planar solid and a positive-bound faceted Boolean or flat-faced cap-loop chamfer | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
+| A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -176,8 +176,12 @@ band track's depth over any prefix. [Band and departure tests](../contact_sweep_
 check the depth and the departure time against their closed forms.
 
 A positive-bound faceted Boolean, a placed or certificate-welded closed
-all-planar `Stitch` solid, and a cap-loop chamfer whose every face is flat
-are checked through their held triangle meshes. The true surface lies
+all-planar `Stitch` solid, and every other solid without an exact contact
+family of its own (a cap-loop chamfer, a cup, a loft, a sweep, a general
+revolve) are checked through their held triangle meshes. A source sphere or
+cylinder keeps its exact path. A body whose every face is flat is read
+unchorded; a body with a curved face is read at `ContactRequest.HeldChord`,
+and a zero chord leaves it undecided. The true surface lies
 within δ of the held one: the mesh's `Bound`, or for a stitched solid its
 largest vertex bound. A held gap wider than the two
 bodies' δ summed is a true gap with that δ added to its bound, and a corner

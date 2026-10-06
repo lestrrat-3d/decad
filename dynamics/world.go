@@ -238,6 +238,10 @@ func validateStepConfig(cfg StepConfig) error {
 		return fmt.Errorf("%w: support band must be a nonnegative Length within the penetration residual",
 			ErrInvalidInput)
 	}
+	// §10.4: the chord a curved held mesh is read at; zero admits none.
+	if cfg.Contact.HeldChord != (units.Value{}) && !validQuantity(cfg.Contact.HeldChord, units.Length, false) {
+		return fmt.Errorf("%w: held chord must be a nonnegative Length", ErrInvalidInput)
+	}
 	if cfg.MaxPoseEvaluations < 2 || cfg.MaxIterations <= 0 || cfg.MaxEvents <= 0 || cfg.MaxPairSweeps == 0 {
 		return fmt.Errorf("%w: work limits must be positive", ErrInvalidInput)
 	}

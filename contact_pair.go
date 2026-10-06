@@ -15,25 +15,44 @@ import (
 // above a support plane, and an exact planar pair apart by at most it is
 // ContactBand (docs/multibody-dynamics-design.md §10.5). The zero Value is a
 // zero band, which publishes the exact contact set alone.
+//
+// HeldChord is a nonnegative Length: the chord tolerance a solid with a curved
+// face and no exact contact family of its own (a general revolve, a curved
+// cap-loop chamfer, a cup or sweep over a curved section) is tessellated at
+// for its held mesh, whose Bound is then the displacement δ the pair charges
+// (§10.4). The zero Value admits no such body: it is left undecided rather
+// than chorded at a width the caller never stated.
 type ContactRequest struct {
 	PointResolution  units.Value
 	NormalResolution units.Value
 	SupportBand      units.Value
+	HeldChord        units.Value
 }
 
 // validateSupportBand admits the zero Value or a finite nonnegative Length.
 func validateSupportBand(v units.Value) error {
+	return validateNonnegativeLength(v, "support band")
+}
+
+// validateHeldChord admits the zero Value or a finite nonnegative Length.
+func validateHeldChord(v units.Value) error {
+	return validateNonnegativeLength(v, "held chord")
+}
+
+// validateNonnegativeLength admits the zero Value or a finite nonnegative
+// Length, naming the field in its error.
+func validateNonnegativeLength(v units.Value, name string) error {
 	if v == (units.Value{}) {
 		return nil
 	}
 	if v.Kind() != units.Length {
-		return fmt.Errorf("%w: support band must be a Length", ErrUnitKind)
+		return fmt.Errorf("%w: %s must be a Length", ErrUnitKind, name)
 	}
 	if !finiteMeasurementValues(v.Base()) {
-		return fmt.Errorf("%w: support band is non-finite", ErrNotFinite)
+		return fmt.Errorf("%w: %s is non-finite", ErrNotFinite, name)
 	}
 	if v.Base() < 0 {
-		return fmt.Errorf("%w: support band must be nonnegative", ErrDegenerate)
+		return fmt.Errorf("%w: %s must be nonnegative", ErrDegenerate, name)
 	}
 	return nil
 }
@@ -136,10 +155,14 @@ type ContactReport struct {
 // clipped face patches, edges and vertices inside a face, and edge
 // crossings, and two convex bodies that overlap slightly publish the patch
 // at depth. A touching or overlapping pair names ContactNonConvex when
-// neither body is convex. A positive-bound faceted Boolean and an all-planar
-// cap-loop chamfer are admitted through their held meshes with the mesh's
-// boundary displacement δ charged: a held touch, or a held gap or depth
-// within the summed δ, is ContactBand with Gap [−2δ, 2δ]. Under a positive
+// neither body is convex. A positive-bound faceted Boolean, a displaced
+// stitched solid, and every other solid without an exact contact family of
+// its own (a cap-loop chamfer, a cup, a loft, a sweep, a general revolve) are
+// admitted through their held meshes with the mesh's boundary displacement δ
+// charged: an all-planar body is read at a chord that chords nothing, and a
+// body with a curved face at the request's HeldChord, which must be positive.
+// A held touch, or a held gap or depth within the summed δ, is ContactBand
+// with Gap [−2δ, 2δ]. Under a positive
 // SupportBand an exact planar touch or shallow face overlap also publishes the
 // support set: every vertex of the resting body within the band above a face
 // plane of the other, its foot strictly inside that face, at its exact
@@ -181,6 +204,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		return nil, fmt.Errorf("%w: contact resolutions must be positive", ErrDegenerate)
 	}
 	if err := validateSupportBand(req.SupportBand); err != nil {
+		return nil, err
+	}
+	if err := validateHeldChord(req.HeldChord); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

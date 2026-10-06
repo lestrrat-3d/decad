@@ -133,11 +133,12 @@ func planarSupportBand(ctx context.Context, budget *workBudget, report *ContactR
 	if upper.Cmp(band.Rat()) > 0 {
 		return nil
 	}
-	convexA, err := planarConvexity(ctx, budget, report.A)
+	chord := heldChordOf(report.Request)
+	convexA, err := planarConvexity(ctx, budget, report.A, chord)
 	if err != nil {
 		return err
 	}
-	convexB, err := planarConvexity(ctx, budget, report.B)
+	convexB, err := planarConvexity(ctx, budget, report.B, chord)
 	if err != nil {
 		return err
 	}

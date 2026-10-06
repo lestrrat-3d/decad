@@ -457,7 +457,7 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 		return false, nil
 	}
 	budget := newWorkBudget(ctx)
-	solid, delta, ok, err := planarSolidAtPose(ctx, budget, bodyS, poseS)
+	solid, delta, ok, err := planarSolidAtPose(ctx, budget, bodyS, poseS, heldChordOf(report.Request))
 	if err != nil || !ok || delta.Sign() != 0 {
 		return false, err
 	}

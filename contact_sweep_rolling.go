@@ -101,7 +101,7 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	if pathM.drift == nil || pathM.screw != nil || pathS.drift != nil || pathS.screw != nil {
 		return nil, false, nil
 	}
-	solid, delta, ok, err := planarSolidAtPose(ctx, newWorkBudget(ctx), bodyS, r3.Identity())
+	solid, delta, ok, err := planarSolidAtPose(ctx, newWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
 	if err != nil {
 		return nil, true, err
 	}

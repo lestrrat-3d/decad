@@ -2181,3 +2181,5 @@
 1	0.00	TestPointDeviationMatchesRationalForm
 2	0.00	TestScaledRotationMatchesRotation
 3	0.00	TestOrientedVertexFaceFootMatchesRationalForm
+2	0.70	TestHeldMeshAdmitsEveryPayload
+1	0.01	TestHeldChordValidation

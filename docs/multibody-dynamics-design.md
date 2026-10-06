@@ -2783,6 +2783,13 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   in 512-bit arithmetic as `contact_analytic_manifold_test.go` evaluates a cylinder, lies below the held
   bottom by more than that gap. `.github/test-shards.txt` lists it.
 - Depends on: PR 18; PR 20a for the scene's sweep only.
+- Shipped. Every reader of the chord goes through `heldChordOf` (`contact_faceted_pair.go`). The
+  snapshot at the identity pose is cached on the body (`planarSnapshotOf`, `topology.go`), keyed by the
+  chord only for a curved held mesh, and the §9.2 certificate shares that key; each query still maps the
+  snapshot through its pose and audits it. `TestHeldMeshAdmitsEveryPayload` also reads the bottle at a
+  coarser chord between two fine ones (leg shown to fail: the chord key deleted, the coarse query
+  publishes the fine bound). `TestHeldChordValidation` and `dynamics/world_test.go`'s
+  `TestNewWorldRejectsHeldChord` hold the refusals.
 
 ### PR 20c (Phase 3) — the displaced pair's support set and penetration manifold
 
