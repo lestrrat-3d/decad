@@ -217,9 +217,10 @@ place, and then carries the result through every ancestor joint up to the ground
 `Node.World` composes the same way, `Local(t).Then(parent.World(t))`. The pose composes onto each body's
 own placement as `Body.Placed` composes, `placement.Then(Pose_k)`. `PoseAt` is the one place a pose is
 built, so a renderer above and the verifier below evaluate the same transform from the same inputs; a
-`TransformTrack` for `kinetograph` is one `PoseAt` call per frame. The `_gallery` module's `linkage`
-subcommand films §11's scene 1 that way, one driven node per link under the rig's root, and its test
-asserts each node's transform equals `PoseAt`'s bit for bit.
+`TransformTrack` for `kinetograph` is one `PoseAt` call per frame: `kinetograph.LinkageTrack`, which
+`Scene.AddLinkage` puts on one driven node per link under the rig's root, reading the drive fraction from a
+`Dimensionless` channel. The `_gallery` module's `linkage` subcommand films §11's scene 1 that way, and its
+test asserts each node's transform equals `PoseAt`'s bit for bit.
 
 `PoseAt` refuses a drive naming a link of another linkage or a link twice (`ErrDegenerate`), a sweep whose
 `From`, `To` or `Via` value has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite

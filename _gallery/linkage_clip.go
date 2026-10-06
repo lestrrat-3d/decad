@@ -122,15 +122,34 @@ func (s *linkageScene) verify(ctx context.Context) (*decad.LinkageReport, error)
 	return s.doc.VerifyLinkage(ctx, s.linkage, s.drive, decad.WithResolution(units.Scalar(linkageResolution)))
 }
 
+// linkageFraction is the drive fraction s as a function of the clip's time:
+// a linear channel from 0 at t = 0 to 1 at linkageDriveDuration, held at both
+// ends, so the clip holds the drive's end. Both times are whole nanoseconds
+// and frame i of 64 fps falls at exactly i·15625000 ns, so over the 256-frame
+// drive frame i reads the dyadic fraction i/256 exactly.
+func linkageFraction() (*kinetograph.Channel, error) {
+	return kinetograph.NewChannel(
+		kinetograph.Keyframe{At: 0, Value: units.Scalar(0)},
+		kinetograph.Keyframe{At: linkageDriveDuration, Value: units.Scalar(1)})
+}
+
 // firstFrameAt is the index of the clip's first frame whose drive fraction
 // is at or past s, or −1 when no frame reaches s.
-func firstFrameAt(clip *kinetograph.Clip, s float64) int {
+func firstFrameAt(clip *kinetograph.Clip, s float64) (int, error) {
+	fraction, err := linkageFraction()
+	if err != nil {
+		return 0, err
+	}
 	for i := range clip.FrameCount() {
-		if driveFraction(clip.FrameTime(i), linkageDriveDuration) >= s {
-			return i
+		at, err := fraction.At(clip.FrameTime(i))
+		if err != nil {
+			return 0, err
+		}
+		if at.Mag() >= s {
+			return i, nil
 		}
 	}
-	return -1
+	return -1, nil
 }
 
 // clip builds the kinetograph clip of the drive at linkageFPS over length:
@@ -144,17 +163,21 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 	width, height int) (*kinetograph.Clip, render.Style, error) {
 	rig := kinetograph.NewRig()
 	scene := kinetograph.NewScene(rig)
-	nodes := make(map[*decad.Link]*kinetograph.Node)
-	for _, link := range s.linkage.Links() {
-		track, err := newLinkageTrack(s.linkage, s.drive, link, linkageDriveDuration)
-		if err != nil {
-			return nil, render.Style{}, err
-		}
-		node, err := rig.Root().Driven(track)
-		if err != nil {
-			return nil, render.Style{}, err
-		}
-		nodes[link] = node
+	fraction, err := linkageFraction()
+	if err != nil {
+		return nil, render.Style{}, err
+	}
+	names := make(map[*decad.Body]string)
+	for _, part := range s.parts {
+		names[part.body] = part.name
+	}
+	linkNodes, err := scene.AddLinkage(s.linkage, s.drive, fraction, names)
+	if err != nil {
+		return nil, render.Style{}, err
+	}
+	nodes := make(map[*decad.Link]*kinetograph.Node, len(linkNodes))
+	for i, link := range s.linkage.Links() {
+		nodes[link] = linkNodes[i]
 	}
 	var hit *decad.LinkCollision
 	if report != nil && len(report.Collisions) > 0 {
@@ -174,8 +197,7 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 		node := rig.Root()
 		if part.link != nil {
 			node = nodes[part.link]
-		}
-		if err := scene.AddPart(part.name, node, part.body); err != nil {
+		} else if err := scene.AddPart(part.name, node, part.body); err != nil {
 			return nil, render.Style{}, err
 		}
 		style.Parts[part.name] = matte(part.color)
@@ -218,7 +240,10 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 // copy whole and the other not at all. A fraction no frame reaches keeps the
 // own colour throughout.
 func hitFades(clip *kinetograph.Clip, s float64) (*kinetograph.Channel, *kinetograph.Channel, error) {
-	frame := firstFrameAt(clip, s)
+	frame, err := firstFrameAt(clip, s)
+	if err != nil {
+		return nil, nil, err
+	}
 	switch frame {
 	case -1:
 		return kinetograph.Constant(units.Scalar(1)), kinetograph.Constant(units.Scalar(0)), nil
@@ -252,7 +277,7 @@ type linkageOptions struct {
 // runLinkage renders the folding arm of docs/linkage-check-design.md §11
 // scene 1 as a PNG sequence. It first runs VerifyLinkage over the drive at
 // a resolution of 1/256, then films the same drive at 64 frames per second
-// with one kinetograph driven node per link, each reading Linkage.PoseAt, so
+// with kinetograph's AddLinkage, one driven node per link reading Linkage.PoseAt, so
 // frame i of the drive shows the pose VerifyLinkage evaluates at s = i/256.
 // From the frame of the report's first collision on, the colliding body is
 // drawn in coral. The drive runs 4 s and the clip holds its end for 1 s more.
@@ -311,8 +336,12 @@ func runLinkage(ctx context.Context, args []string, stderr io.Writer) error {
 	fmt.Fprintf(stderr, "linkage: VerifyLinkage reads %s over %d poses\n", report.Status, len(report.Poses))
 	if len(report.Collisions) > 0 {
 		first := report.Collisions[0]
+		marked, err := firstFrameAt(clip, first.At.Mag())
+		if err != nil {
+			return err
+		}
 		fmt.Fprintf(stderr, "linkage: first collision %s/%s at s = %g, drawn from frame %d\n",
-			scene.partName(first.A), scene.partName(first.B), first.At.Mag(), firstFrameAt(clip, first.At.Mag()))
+			scene.partName(first.A), scene.partName(first.B), first.At.Mag(), marked)
 	}
 	renderer, err := render.New(ctx, clip, style)
 	if err != nil {
