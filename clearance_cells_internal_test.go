@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -39,9 +41,9 @@ func TestCellSinkPrunesOnlyStrictlyBeyondTheMargin(t *testing.T) {
 	withBest := func(margin float64) *cellSink {
 		s := newPruningSink(margin)
 		s.contribs = append(s.contribs,
-			gapContrib{lo: 4, hi: math.Inf(1)},
-			gapContrib{lo: 5, hi: 5, exact: true},
-			gapContrib{lo: 6, hi: 7},
+			clearance.GapContrib{Lo: 4, Hi: math.Inf(1)},
+			clearance.GapContrib{Lo: 5, Hi: 5, Exact: true},
+			clearance.GapContrib{Lo: 6, Hi: 7},
 		)
 		return s
 	}
@@ -64,11 +66,11 @@ func TestCellSinkPrunesOnlyStrictlyBeyondTheMargin(t *testing.T) {
 	})
 	t.Run("no finite upper bound prunes nothing", func(t *testing.T) {
 		s := newPruningSink(0)
-		s.contribs = append(s.contribs, gapContrib{lo: 4, hi: math.Inf(1)})
+		s.contribs = append(s.contribs, clearance.GapContrib{Lo: 4, Hi: math.Inf(1)})
 		require.False(t, s.pruned(1e300))
 	})
 	t.Run("a zero-value sink never prunes", func(t *testing.T) {
-		s := &cellSink{contribs: []gapContrib{{lo: 5, hi: 5, exact: true}}}
+		s := &cellSink{contribs: []clearance.GapContrib{{Lo: 5, Hi: 5, Exact: true}}}
 		require.False(t, s.pruned(100))
 	})
 }
@@ -113,12 +115,12 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 		for _, v := range side[0].verts {
 			at := [2]r3.Vec{v, v}
 			for _, f := range side[1].faces {
-				if clrBoxDist(at, f.box)-k.slack > fullHi {
+				if clearance.ClrBoxDist(at, f.Box)-k.slack > fullHi {
 					vertexBeyond++
 				}
 			}
 			for _, e := range side[1].edges {
-				if clrBoxDist(at, e.box)-k.slack > fullHi {
+				if clearance.ClrBoxDist(at, e.Box)-k.slack > fullHi {
 					vertexBeyond++
 				}
 			}
@@ -157,13 +159,13 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 // AT the best upper bound, not above it, so none may be pruned.
 func TestEnumerateNeverPrunesAtTheBestUpperBound(t *testing.T) {
 	t.Parallel()
-	seg := func(p, q r3.Vec) *cEdge {
-		return &cEdge{line: true, a: p, b: q, box: boxOf(p, q)}
+	seg := func(p, q r3.Vec) *clearance.CEdge {
+		return &clearance.CEdge{Line: true, A: p, B: q, Box: clearance.BoxOf(p, q)}
 	}
 	origin, foot := r3.NewVec(0, 0, 0), r3.NewVec(0, 5, 0)
 	k := &pairKernel{
-		a:   &bodyGeom{verts: []r3.Vec{origin}, edges: []*cEdge{seg(origin, r3.NewVec(10, 0, 0))}},
-		b:   &bodyGeom{verts: []r3.Vec{foot}, edges: []*cEdge{seg(foot, r3.NewVec(0, 5, 10))}},
+		a:   &bodyGeom{verts: []r3.Vec{origin}, edges: []*clearance.CEdge{seg(origin, r3.NewVec(10, 0, 0))}},
+		b:   &bodyGeom{verts: []r3.Vec{foot}, edges: []*clearance.CEdge{seg(foot, r3.NewVec(0, 5, 10))}},
 		ctx: t.Context(),
 		tol: 1e-9,
 	}

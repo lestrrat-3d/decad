@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -10,78 +12,32 @@ import (
 )
 
 // This file is the clearance kernel's degeneracy oracle — the one place every
-// cell asks whether a configuration is degenerate, and the one discipline that
-// keeps a certificate honest (docs/clearance-design.md §4/§5).
-//
-// A closed-form cell is exact only where the configuration it assumes actually
-// holds: a plateau needs EXACT parallelism, a constant-distance critical needs
-// EXACT coaxiality, the nested branch needs a supremum that is actually finite.
-// Deciding any of those with a tolerance mints an Exact reading the true answer
-// undercuts by up to the tolerance — a lie the report then certifies. So every
-// such question routes through here and comes back THREE-valued:
-//
-//   - degYes — proven degenerate by EXACT arithmetic on the payload's own
-//     floats (rational cross/dot products over math/big.Rat, the same
-//     take-the-floats-exactly discipline as internal/freeform/clearance_poly.go's Sturm
-//     brackets). The closed form IS the answer, and the candidate is Exact.
-//   - degNo — proven NOT degenerate, by a residual clearly above the kernel's
-//     own noise. The general (non-degenerate) closed form applies, and no
-//     constant candidate may be emitted.
-//   - degUnknown — neither: a residual too small to disprove degeneracy and too
-//     large to prove it. The caller owes an honest lower bound, a coarse
-//     enclosure or `unsure` — NEVER a certificate.
-//
-// A tolerance may therefore route a question to `unsure`; it may never route
-// one to a certificate. The cost is real and accepted (clearance §4): a rigid
-// motion can land a meant-to-be-coaxial pair a few ulps off true, and the
-// honest answer there is Suspect. Bodies built on a shared axis or sketch plane
-// produce bit-identical floats, so the common configurations still prove out.
-type degState int
-
-const (
-	// degUnknown: undecidable at the kernel's noise — never a certificate.
-	degUnknown degState = iota
-	// degYes: proven degenerate by exact arithmetic.
-	degYes
-	// degNo: proven not degenerate.
-	degNo
-)
-
-// degAnd is the conjunction of two oracle answers: a single degNo disproves
-// the conjunction, and any doubt keeps it undecided.
-func degAnd(a, b degState) degState {
-	switch {
-	case a == degNo || b == degNo:
-		return degNo
-	case a == degUnknown || b == degUnknown:
-		return degUnknown
-	default:
-		return degYes
-	}
-}
+// cell asks whether a configuration is degenerate. Every answer is a
+// clearance.DegState, whose doc comment states the discipline that keeps a
+// certificate honest (docs/clearance-design.md §4/§5).
 
 // parallelExact decides a ∥ b from the vectors taken exactly (ra, rb) with their
 // float forms (fa, fb) supplying the disproof threshold: an exactly zero cross
 // product proves parallelism outright, a cross clearly above the kernel's
 // angular noise disproves it, and the band between is undecided.
-func (k *pairKernel) parallelExact(ra, rb proofarith.DyV3, fa, fb r3.Vec) degState {
+func (k *pairKernel) parallelExact(ra, rb proofarith.DyV3, fa, fb r3.Vec) clearance.DegState {
 	la, lb := fa.Len(), fb.Len()
 	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) || la == 0 || lb == 0 {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	if proofarith.DvIsZero(proofarith.DvCross(ra, rb)) {
-		return degYes
+		return clearance.DegYes
 	}
-	if fa.Cross(fb).Len() > clrAngTol*la*lb {
-		return degNo
+	if fa.Cross(fb).Len() > clearance.ClrAngTol*la*lb {
+		return clearance.DegNo
 	}
-	return degUnknown
+	return clearance.DegUnknown
 }
 
 // parallel decides a ∥ b.
-func (k *pairKernel) parallel(a, b r3.Vec) degState {
+func (k *pairKernel) parallel(a, b r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	return k.parallelExact(proofarith.DyVec(a), proofarith.DyVec(b), a, b)
 }
@@ -89,17 +45,17 @@ func (k *pairKernel) parallel(a, b r3.Vec) degState {
 // parallelSeg decides (b − a) ∥ d, with the difference taken exactly (a float
 // subtraction of the endpoints would round away the very residual the proof
 // rests on).
-func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
+func (k *pairKernel) parallelSeg(a, b, d r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) || !proofbound.FiniteVec(d) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a)), proofarith.DyVec(d), b.Sub(a), d)
 }
 
 // parallelSegs decides (b1 − a1) ∥ (b2 − a2).
-func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
+func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(a1) || !proofbound.FiniteVec(b1) || !proofbound.FiniteVec(a2) || !proofbound.FiniteVec(b2) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b1), proofarith.DyVec(a1)), proofarith.DvSub(proofarith.DyVec(b2), proofarith.DyVec(a2)),
 		b1.Sub(a1), b2.Sub(a2))
@@ -107,23 +63,23 @@ func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
 
 // perpendicularSeg decides (b − a) ⟂ n — the plane-plateau question of the
 // curve tiers, taken exactly.
-func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
+func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(a) || !proofbound.FiniteVec(b) || !proofbound.FiniteVec(n) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	fRel := b.Sub(a)
 	lr, ln := fRel.Len(), n.Len()
 	if !proofbound.FiniteVec(fRel) || !proofbound.FiniteVec(n) || lr == 0 || ln == 0 {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	rel := proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a))
 	if proofarith.DvDot(rel, proofarith.DyVec(n)).Sign() == 0 {
-		return degYes
+		return clearance.DegYes
 	}
-	if math.Abs(fRel.Dot(n)) > clrAngTol*lr*ln {
-		return degNo
+	if math.Abs(fRel.Dot(n)) > clearance.ClrAngTol*lr*ln {
+		return clearance.DegNo
 	}
-	return degUnknown
+	return clearance.DegUnknown
 }
 
 // onAxis decides whether p lies on the line (anchor, unit axis): the offset is
@@ -131,38 +87,38 @@ func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
 // cell that needs a radial direction off that offset asks here first — an
 // offset in the undecided band normalizes to a garbage direction, and a garbage
 // direction decides a trim admission.
-func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) degState {
+func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(anchor) || !proofbound.FiniteVec(axis) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	rel := proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(anchor))
 	if proofarith.DvIsZero(rel) || proofarith.DvIsZero(proofarith.DvCross(rel, proofarith.DyVec(axis))) {
-		return degYes
+		return clearance.DegYes
 	}
 	fRel := p.Sub(anchor)
 	if fRel.Sub(axis.Scale(fRel.Dot(axis))).Len() > k.tol {
-		return degNo
+		return clearance.DegNo
 	}
-	return degUnknown
+	return clearance.DegUnknown
 }
 
 // coincident decides whether two points are the same point.
-func (k *pairKernel) coincident(p, q r3.Vec) degState {
+func (k *pairKernel) coincident(p, q r3.Vec) clearance.DegState {
 	if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(q) {
-		return degUnknown
+		return clearance.DegUnknown
 	}
 	if proofarith.DvIsZero(proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(q))) {
-		return degYes
+		return clearance.DegYes
 	}
 	if p.Sub(q).Len() > k.tol {
-		return degNo
+		return clearance.DegNo
 	}
-	return degUnknown
+	return clearance.DegUnknown
 }
 
 // coaxial decides whether two axis-symmetric carriers share an axis LINE.
-func (k *pairKernel) coaxial(f, g *cFace) degState {
-	return degAnd(k.parallel(f.axis, g.axis), k.onAxis(g.anchor, f.anchor, f.axis))
+func (k *pairKernel) coaxial(f, g *clearance.CFace) clearance.DegState {
+	return clearance.DegAnd(k.parallel(f.Axis, g.Axis), k.onAxis(g.Anchor, f.Anchor, f.Axis))
 }
 
 // ringFamily decides §4's coincident-spine configurations — the ones whose
@@ -170,35 +126,18 @@ func (k *pairKernel) coaxial(f, g *cFace) degState {
 // spines, a point spine ON a line spine, and coaxial line spines (the
 // peg-in-hole reading). A circle spine is never in the family, and a
 // near-coincidence the oracle cannot decide is not either.
-func (k *pairKernel) ringFamily(f, g *cFace) degState {
-	switch sf, sg := spineOf(f), spineOf(g); {
+func (k *pairKernel) ringFamily(f, g *clearance.CFace) clearance.DegState {
+	switch sf, sg := clearance.SpineOf(f), clearance.SpineOf(g); {
 	case sf == 0 && sg == 0:
-		return k.coincident(f.anchor, g.anchor)
+		return k.coincident(f.Anchor, g.Anchor)
 	case sf == 0 && sg == 1:
-		return k.onAxis(f.anchor, g.anchor, g.axis)
+		return k.onAxis(f.Anchor, g.Anchor, g.Axis)
 	case sf == 1 && sg == 0:
-		return k.onAxis(g.anchor, f.anchor, f.axis)
+		return k.onAxis(g.Anchor, f.Anchor, f.Axis)
 	case sf == 1 && sg == 1:
 		return k.coaxial(f, g)
 	default:
-		return degNo
-	}
-}
-
-// pointSpineDist is the distance from a point to a spine — closed form for all
-// three spine kinds, and finite by construction (a point's distance to a set is
-// a number, never a supremum over an unbounded carrier).
-func pointSpineDist(p r3.Vec, g *cFace) float64 {
-	rel := p.Sub(g.anchor)
-	switch spineOf(g) {
-	case 0:
-		return rel.Len()
-	case 1:
-		return rel.Sub(g.axis.Scale(rel.Dot(g.axis))).Len()
-	default:
-		z := rel.Dot(g.axis)
-		rho := rel.Sub(g.axis.Scale(z)).Len()
-		return math.Hypot(z, math.Abs(rho-g.major))
+		return clearance.DegNo
 	}
 }
 
@@ -214,32 +153,32 @@ func pointSpineDist(p r3.Vec, g *cFace) float64 {
 // exactly parallel line spines, and exactly coaxial spines, all of which have a
 // constant spine distance. ok is false for everything else: unbounded,
 // non-constant, or merely undecided.
-func (k *pairKernel) spineSup(f, g *cFace) (float64, bool) {
-	switch spineOf(f) {
+func (k *pairKernel) spineSup(f, g *clearance.CFace) (float64, bool) {
+	switch clearance.SpineOf(f) {
 	case 0:
-		return pointSpineDist(f.anchor, g), true
+		return clearance.PointSpineDist(f.Anchor, g), true
 	case 1:
 		// An infinite line: bounded only against an exactly parallel line.
-		if spineOf(g) != 1 || k.parallel(f.axis, g.axis) != degYes {
+		if clearance.SpineOf(g) != 1 || k.parallel(f.Axis, g.Axis) != clearance.DegYes {
 			return math.Inf(1), false
 		}
-		return pointSpineDist(f.anchor, g), true
+		return clearance.PointSpineDist(f.Anchor, g), true
 	default:
 		// A circle spine is bounded, but a constant supremum needs exact
 		// coaxiality — a non-coaxial circle inside another curved carrier has
 		// no constant supremum and never borrows this branch (§4).
-		switch spineOf(g) {
+		switch clearance.SpineOf(g) {
 		case 1:
-			if k.coaxial(g, f) != degYes {
+			if k.coaxial(g, f) != clearance.DegYes {
 				return math.Inf(1), false
 			}
-			return f.major, true // every spine point sits f.major off the shared axis
+			return f.Major, true // every spine point sits f.major off the shared axis
 		case 2:
-			if k.coaxial(f, g) != degYes {
+			if k.coaxial(f, g) != clearance.DegYes {
 				return math.Inf(1), false
 			}
-			rel := f.anchor.Sub(g.anchor)
-			return math.Hypot(rel.Dot(g.axis), f.major-g.major), true
+			rel := f.Anchor.Sub(g.Anchor)
+			return math.Hypot(rel.Dot(g.Axis), f.Major-g.Major), true
 		default:
 			return math.Inf(1), false
 		}
@@ -252,8 +191,8 @@ func (k *pairKernel) spineSup(f, g *cFace) (float64, bool) {
 // strictly, since equality is an internal tangency and routes to §6. Any
 // configuration whose supremum is not proven finite never borrows the branch,
 // which is what keeps a cylinder crossing a ball from certifying as nested.
-func (k *pairKernel) certifiedContainment(f, g *cFace) bool {
-	rf, rg := spineOffset(f), spineOffset(g)
+func (k *pairKernel) certifiedContainment(f, g *clearance.CFace) bool {
+	rf, rg := clearance.SpineOffset(f), clearance.SpineOffset(g)
 	if sup, ok := k.spineSup(f, g); ok && rg > sup+rf+k.tol {
 		return true
 	}

@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -96,7 +98,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 			normal = normal.Scale(-1)
 		}
 		normal = pose.ApplyDir(normal)
-		axis, side, ok := signedAxis(normal)
+		axis, side, ok := clearance.SignedAxis(normal)
 		if !ok || box.faces[axis][side] != nil {
 			return sourceBoxContactProof{}, false
 		}
@@ -144,25 +146,6 @@ func signedAxisTransform(t r3.Transform) bool {
 	}
 	b := t.Basis()
 	return cardinalBasis(b.EX, b.EY, b.EZ)
-}
-
-func signedAxis(v r3.Vec) (int, int, bool) {
-	switch v {
-	case r3.Vec{X: -1}:
-		return 0, 0, true
-	case r3.Vec{X: 1}:
-		return 0, 1, true
-	case r3.Vec{Y: -1}:
-		return 1, 0, true
-	case r3.Vec{Y: 1}:
-		return 1, 1, true
-	case r3.Vec{Z: -1}:
-		return 2, 0, true
-	case r3.Vec{Z: 1}:
-		return 2, 1, true
-	default:
-		return 0, 0, false
-	}
 }
 
 // The root package maps neutral pair readings to public units and topology.

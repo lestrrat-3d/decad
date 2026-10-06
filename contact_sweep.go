@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -413,7 +415,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 				return out, err
 			}
 			out.read = &screw
-			if _, _, ok := signedAxis(screw.Axis); ok && screw.Angle.Base() > 0 &&
+			if _, _, ok := clearance.SignedAxis(screw.Axis); ok && screw.Angle.Base() > 0 &&
 				finiteMeasurementValues(screw.Point.X, screw.Point.Y, screw.Point.Z, screw.Slide) {
 				out.screw, out.supported = &screw, true
 			}
@@ -875,7 +877,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		return nil
 	}
 	normal := first.Ideal.Manifold.Points[0].Normal
-	axis, side, ok := signedAxis(normal.Value)
+	axis, side, ok := clearance.SignedAxis(normal.Value)
 	if !ok || normal.Bound.Base() != 0 ||
 		first.Ideal.Manifold.Points[0].NormalAngle.Base() != 0 ||
 		proofarith.DyCmp(r.pa.delta[axis], r.pb.delta[axis]) != 0 {
@@ -936,7 +938,7 @@ func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
 		return nil
 	}
-	axis, _, ok := signedAxis(first.Ideal.Manifold.Points[0].Normal.Value)
+	axis, _, ok := clearance.SignedAxis(first.Ideal.Manifold.Points[0].Normal.Value)
 	if !ok {
 		return nil
 	}

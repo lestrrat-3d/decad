@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1045,7 +1047,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		return nil, false
 	}
 	point := first.Ideal.Manifold.Points[0]
-	axis, side, ok := signedAxis(point.Normal.Value)
+	axis, side, ok := clearance.SignedAxis(point.Normal.Value)
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}
@@ -1315,7 +1317,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 		return nil, false
 	}
 	point := first.Ideal.Manifold.Points[0]
-	axis, side, ok := signedAxis(point.Normal.Value)
+	axis, side, ok := clearance.SignedAxis(point.Normal.Value)
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}

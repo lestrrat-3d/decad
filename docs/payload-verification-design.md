@@ -165,7 +165,7 @@ Add `bodyGeom.addCupFaces(cp)` by refactoring prism helpers. Build exactly:
 
 Requirements:
 
-- Reuse `recordLoops`, `walkElem`, `region2`, `cFace`, `cEdge`, and `addTopology`.
+- Reuse `recordLoops`, `walkElem`, `clearance.Region2`, `clearance.CFace`, `clearance.CEdge`, and `addTopology`.
 - Build no temporary prism caps. They are not cup faces.
 - Keep one rim face per paired loop. Hole/post loop polarity follows
   `evalCup`'s existing topology.
@@ -470,10 +470,10 @@ A `bodyGeom.addFacetedFaces(fp)` would hold:
 
 - one `ckPlane` face per held triangle;
 - triangle-local orthonormal frame;
-- three-line `region2` trim;
+- three-line `clearance.Region2` trim;
 - outward normal from held winding;
 - exact held triangle box + centroid witness;
-- all triangle edges as line `cEdge`s, including internal tessellation edges;
+- all triangle edges as line `clearance.CEdge`s, including internal tessellation edges;
 - held vertices once each;
 - one live topology witness per shell.
 

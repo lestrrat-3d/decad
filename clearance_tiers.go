@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -23,56 +25,30 @@ import (
 //
 // Every constant-distance family in this file (a line parallel to a plane or
 // axis, a circle whose plane parallels the face's, a coaxial cap edge, a
-// parallel segment pair) is emitted only on the degeneracy oracle's degYes:
-// these objectives are affine along the carrier, so a degNo migrates the
+// parallel segment pair) is emitted only on the degeneracy oracle's clearance.DegYes:
+// these objectives are affine along the carrier, so a clearance.DegNo migrates the
 // minimum to the trim boundary, where the endpoint/vertex tiers hold it
-// exactly, and a degUnknown owes an honest lower bound, a coarse enclosure,
+// exactly, and a clearance.DegUnknown owes an honest lower bound, a coarse enclosure,
 // or unsure — never a plateau.
 
-// edgeWits returns on-edge sample points.
-func edgeWits(e *cEdge) []r3.Vec {
-	if e.line {
-		return []r3.Vec{e.a, e.b, e.a.Add(e.b).Scale(0.5)}
-	}
-	lo, hi := 0.0, 2*math.Pi
-	if !e.ang.full {
-		lo, hi = e.ang.lo, e.ang.hi
-	}
-	return []r3.Vec{e.at(lo), e.at((lo + hi) / 2)}
-}
-
-// lineParamAdmit classifies a point (assumed on the edge's carrier line)
-// against the segment's parameter range.
-func lineParamAdmit(e *cEdge, p r3.Vec, tol float64) int {
-	dir := e.b.Sub(e.a)
-	l := dir.Len()
-	u, _ := dir.Normalize()
-	return linWindow{lo: 0, hi: l}.classify(p.Sub(e.a).Dot(u), tol)
-}
-
-// circleAngleAdmit classifies a carrier angle against the arc's window.
-func circleAngleAdmit(e *cEdge, th, tol float64) int {
-	return e.ang.classify(th, tol/math.Max(e.radius, 1e-30))
-}
-
 // feCell dispatches one face × edge pair through §4's curve-tier table.
-func (k *pairKernel) feCell(f *cFace, e *cEdge, sink *cellSink) {
-	switch f.kind {
-	case ckPlane:
-		if e.line {
+func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+	switch f.Kind {
+	case clearance.CkPlane:
+		if e.Line {
 			k.linePlaneFE(f, e, sink)
 			return
 		}
 		k.circlePlaneFE(f, e, sink)
-	case ckCone:
+	case clearance.CkCone:
 		// Line3 × Cone and Circle3 × Cone take the coarse enclosure here.
-		sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+		sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 	default:
-		if f.kind == ckTorus && f.spindle {
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+		if f.Kind == clearance.CkTorus && f.Spindle {
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
-		if e.line {
+		if e.Line {
 			k.lineOffsetFE(f, e, sink)
 			return
 		}
@@ -86,20 +62,20 @@ func (k *pairKernel) feCell(f *cFace, e *cEdge, sink *cellSink) {
 // its distance is affine along the segment, so the minimum sits at an endpoint
 // and the vertex tier holds it exactly. A tilt the oracle cannot rule out gets
 // neither reading: the plateau would be an Exact the true minimum undercuts.
-func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
-	dir := e.b.Sub(e.a)
+func (k *pairKernel) linePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+	dir := e.B.Sub(e.A)
 	l := dir.Len()
 	u, ok := dir.Normalize()
 	if !ok {
 		return
 	}
-	s := f.n.Dot(u)
-	switch k.perpendicularSeg(e.a, e.b, f.n) {
-	case degYes:
-		h := e.a.Sub(f.o).Dot(f.n)
-		x0, y0 := f.planeCoords(e.a.Sub(f.n.Scale(h)))
-		x1, y1 := f.planeCoords(e.b.Sub(f.n.Scale(h)))
-		hit, w := f.region.segmentHits(x0, y0, x1, y1)
+	s := f.N.Dot(u)
+	switch k.perpendicularSeg(e.A, e.B, f.N) {
+	case clearance.DegYes:
+		h := e.A.Sub(f.O).Dot(f.N)
+		x0, y0 := f.PlaneCoords(e.A.Sub(f.N.Scale(h)))
+		x1, y1 := f.PlaneCoords(e.B.Sub(f.N.Scale(h)))
+		hit, w := f.Region.SegmentHits(x0, y0, x1, y1)
 		if hit == -1 {
 			return
 		}
@@ -107,24 +83,24 @@ func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 			sink.unsure = true // the edge meets the face's own plane inside the trim (or ambiguously)
 			return
 		}
-		pa := f.o.Add(f.u.Scale(w[0])).Add(f.v.Scale(w[1]))
-		sink.candidate(k, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.n.Scale(h)))
+		pa := f.O.Add(f.U.Scale(w[0])).Add(f.V.Scale(w[1]))
+		sink.candidate(k, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.N.Scale(h)))
 		return
-	case degUnknown:
-		if clrBoxDist(f.box, e.box) > k.tol {
+	case clearance.DegUnknown:
+		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
 			return
 		}
 		sink.unsure = true
 		return
 	}
 	// The crossing point of the carrier with the plane.
-	t := (f.planeOffset() - f.n.Dot(e.a)) / s
-	if (linWindow{lo: 0, hi: l}).classify(t, k.tol) == -1 {
+	t := (f.PlaneOffset() - f.N.Dot(e.A)) / s
+	if (clearance.LinWindow{Lo: 0, Hi: l}).Classify(t, k.tol) == -1 {
 		return
 	}
-	pt := e.a.Add(u.Scale(t))
-	x, y := f.planeCoords(pt)
-	if f.region.classify(x, y, k.tol) == -1 {
+	pt := e.A.Add(u.Scale(t))
+	x, y := f.PlaneCoords(pt)
+	if f.Region.Classify(x, y, k.tol) == -1 {
 		return
 	}
 	sink.unsure = true
@@ -136,65 +112,65 @@ func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 // face's (its axis parallel to the normal); decided on an amplitude epsilon it
 // would report abs(base) Exact where the true minimum is abs(base) − the
 // amplitude.
-func (k *pairKernel) circlePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
-	base := e.center.Sub(f.o).Dot(f.n)
-	hu := e.radius * f.n.Dot(e.refU)
-	hv := e.radius * f.n.Dot(e.refV)
+func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+	base := e.Center.Sub(f.O).Dot(f.N)
+	hu := e.Radius * f.N.Dot(e.RefU)
+	hv := e.Radius * f.N.Dot(e.RefV)
 	h := func(th float64) float64 { return base + hu*math.Cos(th) + hv*math.Sin(th) }
-	parallel := k.parallel(f.n, e.axis)
-	if parallel == degUnknown {
+	parallel := k.parallel(f.N, e.Axis)
+	if parallel == clearance.DegUnknown {
 		// A tilt too small to prove or disprove: the extremal azimuth the
 		// criticals below rest on is not resolvable, and the plateau is not
 		// certifiable. Undecided, never a guess.
-		if clrBoxDist(f.box, e.box) > k.tol {
+		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
 			return
 		}
 		sink.unsure = true
 		return
 	}
-	if parallel == degYes {
+	if parallel == clearance.DegYes {
 		// The circle parallels the plane: constant height.
 		if math.Abs(base) <= k.tol {
 			// In the carrier plane itself: a contact exactly when the circle
 			// meets the trim (the full circle is a sound superset of an arc).
-			cx, cy := f.planeCoords(e.center)
-			if circleRegionHits(f.region, cx, cy, e.radius) != -1 {
+			cx, cy := f.PlaneCoords(e.Center)
+			if clearance.CircleRegionHits(f.Region, cx, cy, e.Radius) != -1 {
 				sink.unsure = true
 			}
 			return
 		}
 		mid := 0.0
-		if !e.ang.full {
-			mid = (e.ang.lo + e.ang.hi) / 2
+		if !e.Ang.Full {
+			mid = (e.Ang.Lo + e.Ang.Hi) / 2
 		}
 		for _, th := range []float64{mid, mid + math.Pi/2, mid + math.Pi, mid + 3*math.Pi/2} {
-			admit := circleAngleAdmit(e, th, k.tol)
+			admit := clearance.CircleAngleAdmit(e, th, k.tol)
 			if admit == -1 {
 				continue
 			}
-			pe := e.at(th)
-			foot := pe.Sub(f.n.Scale(base))
-			x, y := f.planeCoords(foot)
-			sink.candidate(k, admitState(admit, f.region.classify(x, y, k.tol)), math.Abs(base), math.Abs(base), true, foot, pe)
+			pe := e.At(th)
+			foot := pe.Sub(f.N.Scale(base))
+			x, y := f.PlaneCoords(foot)
+			sink.candidate(k, clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol)), math.Abs(base), math.Abs(base), true, foot, pe)
 		}
 		return
 	}
 	star := math.Atan2(hv, hu)
 	for _, th := range []float64{star, star + math.Pi} {
-		admit := circleAngleAdmit(e, th, k.tol)
+		admit := clearance.CircleAngleAdmit(e, th, k.tol)
 		if admit == -1 {
 			continue
 		}
-		pe := e.at(th)
+		pe := e.At(th)
 		hh := h(th)
-		foot := pe.Sub(f.n.Scale(hh))
-		x, y := f.planeCoords(foot)
-		admit = admitState(admit, f.region.classify(x, y, k.tol))
+		foot := pe.Sub(f.N.Scale(hh))
+		x, y := f.PlaneCoords(foot)
+		admit = clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol))
 		sink.candidate(k, admit, math.Abs(hh), math.Abs(hh), true, foot, pe)
 	}
 	lo, hi := 0.0, 2*math.Pi
-	if !e.ang.full {
-		lo, hi = e.ang.lo, e.ang.hi
+	if !e.Ang.Full {
+		lo, hi = e.Ang.Lo, e.Ang.Hi
 	}
 	mn, mx := trigRange(hu, hv, lo, hi)
 	if base+mn > k.tol || base+mx < -k.tol {
@@ -208,12 +184,12 @@ func (k *pairKernel) circlePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 	}
 	dth := math.Acos(math.Max(-1, math.Min(1, -base/amp)))
 	for _, th := range []float64{star + dth, star - dth} {
-		if circleAngleAdmit(e, th, k.tol) == -1 {
+		if clearance.CircleAngleAdmit(e, th, k.tol) == -1 {
 			continue
 		}
-		pt := e.at(th)
-		x, y := f.planeCoords(pt)
-		if f.region.classify(x, y, k.tol) == -1 {
+		pt := e.At(th)
+		x, y := f.PlaneCoords(pt)
+		if f.Region.Classify(x, y, k.tol) == -1 {
 			continue
 		}
 		sink.unsure = true
@@ -223,7 +199,7 @@ func (k *pairKernel) circlePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 
 // feOffsetEmit emits the ± offset combinations of one curve-to-spine
 // critical against an offset face.
-func (k *pairKernel) feOffsetEmit(sink *cellSink, f *cFace, pe, spineFoot r3.Vec, dLo, dHi float64, exact bool, eAdmit int) {
+func (k *pairKernel) feOffsetEmit(sink *cellSink, f *clearance.CFace, pe, spineFoot r3.Vec, dLo, dHi float64, exact bool, eAdmit int) {
 	sep := pe.Sub(spineFoot)
 	d := sep.Len()
 	if d <= k.tol {
@@ -233,9 +209,9 @@ func (k *pairKernel) feOffsetEmit(sink *cellSink, f *cFace, pe, spineFoot r3.Vec
 	dir := sep.Scale(1 / d)
 	margin := k.tol + (dHi - dLo)
 	for _, sf := range []float64{1, -1} {
-		pf := spineFoot.Add(dir.Scale(sf * f.radius))
-		rawLo, rawHi := dLo-sf*f.radius, dHi-sf*f.radius
-		admit := admitState(eAdmit, f.admitPoint(pf, margin))
+		pf := spineFoot.Add(dir.Scale(sf * f.Radius))
+		rawLo, rawHi := dLo-sf*f.Radius, dHi-sf*f.Radius
+		admit := clearance.AdmitState(eAdmit, f.AdmitPoint(pf, margin))
 		if rawLo <= k.tol && rawHi >= -k.tol {
 			if admit != -1 {
 				sink.unsure = true
@@ -250,111 +226,90 @@ func (k *pairKernel) feOffsetEmit(sink *cellSink, f *cFace, pe, spineFoot r3.Vec
 	}
 }
 
-// spineDistOf is the distance from a point to an offset face's spine, with
-// the spine foot.
-func spineDistOf(f *cFace, p r3.Vec) (float64, r3.Vec) {
-	switch spineOf(f) {
-	case 0:
-		return p.Sub(f.anchor).Len(), f.anchor
-	case 1:
-		foot := linePoint(f.anchor, f.axis, p)
-		return p.Sub(foot).Len(), foot
-	default:
-		rel := p.Sub(f.anchor)
-		perp := rel.Sub(f.axis.Scale(rel.Dot(f.axis)))
-		dir, ok := perp.Normalize()
-		if !ok {
-			dir = f.refU
-		}
-		foot := f.anchor.Add(dir.Scale(f.major))
-		return p.Sub(foot).Len(), foot
-	}
-}
-
 // feCrossingExcluded proves the trimmed edge never meets the offset face's
 // carrier, from a superset range of the edge's spine distance (criticals
 // plus endpoints — conservative in the sound direction).
-func (k *pairKernel) feCrossingExcluded(f *cFace, e *cEdge, minLo, maxHi float64) bool {
+func (k *pairKernel) feCrossingExcluded(f *clearance.CFace, e *clearance.CEdge, minLo, maxHi float64) bool {
 	var pts []r3.Vec
-	if e.line {
-		pts = []r3.Vec{e.a, e.b}
-	} else if !e.ang.full {
-		pts = []r3.Vec{e.at(e.ang.lo), e.at(e.ang.hi)}
+	if e.Line {
+		pts = []r3.Vec{e.A, e.B}
+	} else if !e.Ang.Full {
+		pts = []r3.Vec{e.At(e.Ang.Lo), e.At(e.Ang.Hi)}
 	}
 	for _, p := range pts {
-		d, _ := spineDistOf(f, p)
+		d, _ := clearance.SpineDistOf(f, p)
 		minLo = math.Min(minLo, d)
 		maxHi = math.Max(maxHi, d)
 	}
-	if minLo > f.radius+k.tol || maxHi < f.radius-k.tol {
+	if minLo > f.Radius+k.tol || maxHi < f.Radius-k.tol {
 		return true
 	}
-	return clrBoxDist(f.box, e.box) > k.tol
+	return clearance.ClrBoxDist(f.Box, e.Box) > k.tol
 }
 
 // lineOffsetFE: a segment against a cylinder, sphere or torus face — the
 // line × spine criticals per §4's curve tiers (CF for line/point spines, P4
 // for the torus spine).
-func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
-	dir := e.b.Sub(e.a)
+func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+	dir := e.B.Sub(e.A)
 	u, ok := dir.Normalize()
 	if !ok {
 		return
 	}
-	var crits []spineCrit
-	switch spineOf(f) {
+	var crits []clearance.SpineCrit
+	switch clearance.SpineOf(f) {
 	case 0:
-		foot := linePoint(e.a, u, f.anchor)
-		crits = []spineCrit{exactCrit(foot, f.anchor)}
+		foot := clearance.LinePoint(e.A, u, f.Anchor)
+		crits = []clearance.SpineCrit{clearance.ExactCrit(foot, f.Anchor)}
 	case 1:
-		switch k.parallelSeg(e.a, e.b, f.axis) {
-		case degYes:
+		switch k.parallelSeg(e.A, e.B, f.Axis) {
+		case clearance.DegYes:
 			// EXACTLY parallel to the axis: constant distance, represented at
 			// the axial-overlap midpoint.
-			aOnF := e.a.Sub(f.anchor).Dot(f.axis)
-			bOnF := e.b.Sub(f.anchor).Dot(f.axis)
-			ew := newLinWindow(aOnF, bOnF)
-			lo := math.Max(ew.lo, f.zWin.lo)
-			hi := math.Min(ew.hi, f.zWin.hi)
+			aOnF := e.A.Sub(f.Anchor).Dot(f.Axis)
+			bOnF := e.B.Sub(f.Anchor).Dot(f.Axis)
+			ew := clearance.NewLinWindow(aOnF, bOnF)
+			lo := math.Max(ew.Lo, f.ZWin.Lo)
+			hi := math.Min(ew.Hi, f.ZWin.Hi)
 			z := (lo + hi) / 2
 			if lo > hi {
-				z = math.Max(ew.lo, math.Min(ew.hi, (f.zWin.lo+f.zWin.hi)/2))
+				z = math.Max(ew.Lo, math.Min(ew.Hi, (f.ZWin.Lo+f.ZWin.Hi)/2))
 			}
-			axPt := f.anchor.Add(f.axis.Scale(z))
-			pe := linePoint(e.a, u, axPt)
-			crits = []spineCrit{exactCrit(pe, linePoint(f.anchor, f.axis, pe))}
-		case degNo:
-			cs, okp := k.lineLinePerp(e.a, u, f.anchor, f.axis)
+			axPt := f.Anchor.Add(f.Axis.Scale(z))
+			pe := clearance.LinePoint(e.A, u, axPt)
+			crits = []clearance.SpineCrit{clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
+		case clearance.DegNo:
+			cs, okp := k.lineLinePerp(e.A, u, f.Anchor, f.Axis)
 			if !okp {
-				sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
-			crits = []spineCrit{cs}
+			crits = []clearance.SpineCrit{cs}
 		default:
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	default:
 		cp := freeform.CircleParam{
-			C: [3]float64{f.anchor.X, f.anchor.Y, f.anchor.Z},
-			U: [3]float64{f.refU.X, f.refU.Y, f.refU.Z},
-			V: [3]float64{f.refV.X, f.refV.Y, f.refV.Z},
-			R: f.major,
+			C: [3]float64{f.Anchor.X, f.Anchor.Y, f.Anchor.Z},
+			U: [3]float64{f.RefU.X, f.RefU.Y, f.RefU.Z},
+			V: [3]float64{f.RefV.X, f.RefV.Y, f.RefV.Z},
+			R: f.Major,
 		}
 		var okc bool
 		// The bracket feet come back as (line foot, spine point) — exactly
 		// the (edge point, spine foot) order the emit helper reads.
-		crits, okc = k.lineCircleBracketCrits(cp, f.anchor, f.refU, f.refV, e.a, u)
+		crits, okc = k.lineCircleBracketCrits(cp, f.Anchor, f.RefU, f.RefV, e.A, u)
 		if !okc {
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	}
 	minLo, maxHi := math.Inf(1), math.Inf(-1)
 	for _, c := range crits {
-		minLo = math.Min(minLo, c.lo)
-		maxHi = math.Max(maxHi, c.hi)
-		k.feOffsetEmit(sink, f, c.fa, c.fb, c.lo, c.hi, c.exact, lineParamAdmit(e, c.fa, k.tol))
+		minLo = math.Min(minLo, c.Lo)
+		maxHi = math.Max(maxHi, c.Hi)
+		k.feOffsetEmit(sink, f, c.Fa, c.Fb, c.Lo, c.Hi, c.Exact, clearance.LineParamAdmit(e, c.Fa, k.tol))
 	}
 	if !k.feCrossingExcluded(f, e, minLo, maxHi) {
 		sink.unsure = true
@@ -367,12 +322,12 @@ func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 // the feet to infinity) on a pair the oracle only just separated, and a
 // non-finite foot is no critical at all. ok is false there — the caller owes
 // an enclosure, never a fabricated critical.
-func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (spineCrit, bool) {
+func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (clearance.SpineCrit, bool) {
 	rel := b.Sub(a)
 	uv := u.Dot(v)
 	den := 1 - uv*uv
 	if !(den > 0) {
-		return spineCrit{}, false
+		return clearance.SpineCrit{}, false
 	}
 	ru := rel.Dot(u)
 	rv := rel.Dot(v)
@@ -381,113 +336,108 @@ func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (spineCrit, bool) {
 	fa := a.Add(u.Scale(s))
 	fb := b.Add(v.Scale(t))
 	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) {
-		return spineCrit{}, false
+		return clearance.SpineCrit{}, false
 	}
-	return exactCrit(fa, fb), true
+	return clearance.ExactCrit(fa, fb), true
 }
 
 // circleOffsetFE: a circular edge against a cylinder, sphere or torus face —
 // circle × point (CF), circle × axis (P4, with the perpendicular-plane and
 // coaxial cases closed form), circle × spine circle (P8).
-func (k *pairKernel) circleOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
-	var crits []spineCrit
-	switch spineOf(f) {
+func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+	var crits []clearance.SpineCrit
+	switch clearance.SpineOf(f) {
 	case 0:
-		cs, ok := k.pointCircleCrits(f.anchor, e.center, e.axis, e.refU, e.refV, e.radius, e.ang)
+		cs, ok := k.pointCircleCrits(f.Anchor, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)
 		if !ok {
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 		for i := range cs {
-			cs[i].fa, cs[i].fb = cs[i].fb, cs[i].fa // (edge point, spine foot)
+			cs[i].Fa, cs[i].Fb = cs[i].Fb, cs[i].Fa // (edge point, spine foot)
 		}
 		crits = cs
 	case 1:
-		switch k.parallel(e.axis, f.axis) {
-		case degYes:
+		switch k.parallel(e.Axis, f.Axis) {
+		case clearance.DegYes:
 			// The circle's plane is EXACTLY perpendicular to the axis:
 			// in-plane point-to-circle geometry, closed form.
-			switch k.onAxis(e.center, f.anchor, f.axis) {
-			case degYes:
+			switch k.onAxis(e.Center, f.Anchor, f.Axis) {
+			case clearance.DegYes:
 				// Coaxial: constant distance — the peg-in-hole cap edge.
 				th := 0.0
-				if !e.ang.full {
-					th = (e.ang.lo + e.ang.hi) / 2
+				if !e.Ang.Full {
+					th = (e.Ang.Lo + e.Ang.Hi) / 2
 				}
-				pe := e.at(th)
-				crits = []spineCrit{exactCrit(pe, linePoint(f.anchor, f.axis, pe))}
-			case degNo:
-				rel := e.center.Sub(f.anchor)
-				perp := rel.Sub(f.axis.Scale(rel.Dot(f.axis)))
+				pe := e.At(th)
+				crits = []clearance.SpineCrit{clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe))}
+			case clearance.DegNo:
+				rel := e.Center.Sub(f.Anchor)
+				perp := rel.Sub(f.Axis.Scale(rel.Dot(f.Axis)))
 				dir, okd := perp.Normalize()
 				if !okd {
-					sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+					sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 					return
 				}
-				near := angleOf(e, dir.Scale(-1))
-				far := angleOf(e, dir)
+				near := clearance.AngleOf(e, dir.Scale(-1))
+				far := clearance.AngleOf(e, dir)
 				for _, th := range []float64{near, far} {
-					pe := e.at(th)
-					crits = append(crits, exactCrit(pe, linePoint(f.anchor, f.axis, pe)))
+					pe := e.At(th)
+					crits = append(crits, clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe)))
 				}
 			default:
-				sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
-		case degNo:
+		case clearance.DegNo:
 			cp := freeform.CircleParam{
-				C: [3]float64{e.center.X, e.center.Y, e.center.Z},
-				U: [3]float64{e.refU.X, e.refU.Y, e.refU.Z},
-				V: [3]float64{e.refV.X, e.refV.Y, e.refV.Z},
-				R: e.radius,
+				C: [3]float64{e.Center.X, e.Center.Y, e.Center.Z},
+				U: [3]float64{e.RefU.X, e.RefU.Y, e.RefU.Z},
+				V: [3]float64{e.RefV.X, e.RefV.Y, e.RefV.Z},
+				R: e.Radius,
 			}
-			cs, ok := k.lineCircleBracketCrits(cp, e.center, e.refU, e.refV, f.anchor, f.axis)
+			cs, ok := k.lineCircleBracketCrits(cp, e.Center, e.RefU, e.RefV, f.Anchor, f.Axis)
 			if !ok {
-				sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
 			for i := range cs {
-				cs[i].fa, cs[i].fb = cs[i].fb, cs[i].fa // (edge point, axis foot)
+				cs[i].Fa, cs[i].Fb = cs[i].Fb, cs[i].Fa // (edge point, axis foot)
 			}
 			crits = cs
 		default:
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	default:
-		ef := &cFace{kind: ckTorus, anchor: e.center, axis: e.axis, refU: e.refU, refV: e.refV, major: e.radius}
+		ef := &clearance.CFace{Kind: clearance.CkTorus, Anchor: e.Center, Axis: e.Axis, RefU: e.RefU, RefV: e.RefV, Major: e.Radius}
 		cs, ok := k.circleCircleCrits(ef, f)
 		if !ok {
-			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 		crits = cs
 	}
 	minLo, maxHi := math.Inf(1), math.Inf(-1)
 	for _, c := range crits {
-		minLo = math.Min(minLo, c.lo)
-		maxHi = math.Max(maxHi, c.hi)
-		th := angleOf(e, c.fa.Sub(e.center))
-		k.feOffsetEmit(sink, f, c.fa, c.fb, c.lo, c.hi, c.exact, circleAngleAdmit(e, th, k.tol+(c.hi-c.lo)))
+		minLo = math.Min(minLo, c.Lo)
+		maxHi = math.Max(maxHi, c.Hi)
+		th := clearance.AngleOf(e, c.Fa.Sub(e.Center))
+		k.feOffsetEmit(sink, f, c.Fa, c.Fb, c.Lo, c.Hi, c.Exact, clearance.CircleAngleAdmit(e, th, k.tol+(c.Hi-c.Lo)))
 	}
 	if !k.feCrossingExcluded(f, e, minLo, maxHi) {
 		sink.unsure = true
 	}
 }
 
-// angleOf is the carrier angle of a direction in the edge's frame.
-func angleOf(e *cEdge, dir r3.Vec) float64 {
-	return math.Atan2(dir.Dot(e.refV), dir.Dot(e.refU))
-}
-
 // eeCell dispatches one edge pair through §4's curve tiers.
-func (k *pairKernel) eeCell(ea, eb *cEdge, sink *cellSink) {
+func (k *pairKernel) eeCell(ea, eb *clearance.CEdge, sink *cellSink) {
 	switch {
-	case ea.line && eb.line:
+	case ea.Line && eb.Line:
 		k.lineLineEE(ea, eb, sink)
-	case ea.line:
+	case ea.Line:
 		k.lineCircleEE(ea, eb, sink)
-	case eb.line:
+	case eb.Line:
 		k.lineCircleEE(eb, ea, sink)
 	default:
 		k.circleCircleEE(ea, eb, sink)
@@ -496,111 +446,111 @@ func (k *pairKernel) eeCell(ea, eb *cEdge, sink *cellSink) {
 
 // lineLineEE: parallel segments carry a constant family represented at the
 // overlap midpoint; otherwise the single common perpendicular.
-func (k *pairKernel) lineLineEE(ea, eb *cEdge, sink *cellSink) {
-	da := ea.b.Sub(ea.a)
-	db := eb.b.Sub(eb.a)
+func (k *pairKernel) lineLineEE(ea, eb *clearance.CEdge, sink *cellSink) {
+	da := ea.B.Sub(ea.A)
+	db := eb.B.Sub(eb.A)
 	ua, oka := da.Normalize()
 	ub, okb := db.Normalize()
 	if !oka || !okb {
 		return
 	}
-	switch k.parallelSegs(ea.a, ea.b, eb.a, eb.b) {
-	case degYes:
+	switch k.parallelSegs(ea.A, ea.B, eb.A, eb.B) {
+	case clearance.DegYes:
 		// EXACTLY parallel: the constant family over the overlap of eb's
 		// parameter range projected onto ea.
-		p0 := eb.a.Sub(ea.a).Dot(ua)
-		p1 := eb.b.Sub(ea.a).Dot(ua)
-		w := newLinWindow(p0, p1)
-		lo := math.Max(0, w.lo)
-		hi := math.Min(da.Len(), w.hi)
+		p0 := eb.A.Sub(ea.A).Dot(ua)
+		p1 := eb.B.Sub(ea.A).Dot(ua)
+		w := clearance.NewLinWindow(p0, p1)
+		lo := math.Max(0, w.Lo)
+		hi := math.Min(da.Len(), w.Hi)
 		if hi-lo <= k.tol {
 			return // endpoint tiers hold the minimum
 		}
 		t := (lo + hi) / 2
-		pa := ea.a.Add(ua.Scale(t))
-		pb := linePoint(eb.a, ub, pa)
+		pa := ea.A.Add(ua.Scale(t))
+		pb := clearance.LinePoint(eb.A, ub, pa)
 		d := pa.Sub(pb).Len()
 		sink.candidate(k, 1, d, d, true, pa, pb)
 		return
-	case degUnknown:
+	case clearance.DegUnknown:
 		// A tilt too small to prove or disprove: the constant family is not
 		// certifiable and the common perpendicular is not resolvable.
-		if clrBoxDist(ea.box, eb.box) > k.tol {
+		if clearance.ClrBoxDist(ea.Box, eb.Box) > k.tol {
 			return
 		}
 		sink.unsure = true
 		return
 	}
-	c, ok := k.lineLinePerp(ea.a, ua, eb.a, ub)
+	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub)
 	if !ok {
-		sink.coarse(ea.box, eb.box, edgeWits(ea), edgeWits(eb))
+		sink.coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
 		return
 	}
-	d := c.fa.Sub(c.fb).Len()
-	admit := admitState(lineParamAdmit(ea, c.fa, k.tol), lineParamAdmit(eb, c.fb, k.tol))
-	sink.candidate(k, admit, d, d, true, c.fa, c.fb)
+	d := c.Fa.Sub(c.Fb).Len()
+	admit := clearance.AdmitState(clearance.LineParamAdmit(ea, c.Fa, k.tol), clearance.LineParamAdmit(eb, c.Fb, k.tol))
+	sink.candidate(k, admit, d, d, true, c.Fa, c.Fb)
 }
 
 // lineCircleEE: the axis-parallel case is closed form; the general case is
 // the P4 bracket.
-func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
-	dir := el.b.Sub(el.a)
+func (k *pairKernel) lineCircleEE(el, ec *clearance.CEdge, sink *cellSink) {
+	dir := el.B.Sub(el.A)
 	u, ok := dir.Normalize()
 	if !ok {
 		return
 	}
-	switch k.parallelSeg(el.a, el.b, ec.axis) {
-	case degYes:
+	switch k.parallelSeg(el.A, el.B, ec.Axis) {
+	case clearance.DegYes:
 		// The segment is EXACTLY parallel to the circle's axis: in-plane
 		// point-to-circle geometry, closed form.
 		var ths []float64
-		switch k.onAxis(el.a, ec.center, ec.axis) {
-		case degYes:
+		switch k.onAxis(el.A, ec.Center, ec.Axis) {
+		case clearance.DegYes:
 			th := 0.0
-			if !ec.ang.full {
-				th = (ec.ang.lo + ec.ang.hi) / 2
+			if !ec.Ang.Full {
+				th = (ec.Ang.Lo + ec.Ang.Hi) / 2
 			}
 			ths = []float64{th}
-		case degNo:
-			rel := el.a.Sub(ec.center)
-			perp := rel.Sub(ec.axis.Scale(rel.Dot(ec.axis)))
+		case clearance.DegNo:
+			rel := el.A.Sub(ec.Center)
+			perp := rel.Sub(ec.Axis.Scale(rel.Dot(ec.Axis)))
 			dirP, okd := perp.Normalize()
 			if !okd {
-				sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+				sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 				return
 			}
-			ths = []float64{angleOf(ec, dirP), angleOf(ec, dirP.Scale(-1))}
+			ths = []float64{clearance.AngleOf(ec, dirP), clearance.AngleOf(ec, dirP.Scale(-1))}
 		default:
-			sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+			sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 			return
 		}
 		for _, th := range ths {
-			pc := ec.at(th)
-			pl := linePoint(el.a, u, pc)
+			pc := ec.At(th)
+			pl := clearance.LinePoint(el.A, u, pc)
 			d := pc.Sub(pl).Len()
-			admit := admitState(circleAngleAdmit(ec, th, k.tol), lineParamAdmit(el, pl, k.tol))
+			admit := clearance.AdmitState(clearance.CircleAngleAdmit(ec, th, k.tol), clearance.LineParamAdmit(el, pl, k.tol))
 			sink.candidate(k, admit, d, d, true, pl, pc)
 		}
 		return
-	case degUnknown:
-		sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+	case clearance.DegUnknown:
+		sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 		return
 	}
 	cp := freeform.CircleParam{
-		C: [3]float64{ec.center.X, ec.center.Y, ec.center.Z},
-		U: [3]float64{ec.refU.X, ec.refU.Y, ec.refU.Z},
-		V: [3]float64{ec.refV.X, ec.refV.Y, ec.refV.Z},
-		R: ec.radius,
+		C: [3]float64{ec.Center.X, ec.Center.Y, ec.Center.Z},
+		U: [3]float64{ec.RefU.X, ec.RefU.Y, ec.RefU.Z},
+		V: [3]float64{ec.RefV.X, ec.RefV.Y, ec.RefV.Z},
+		R: ec.Radius,
 	}
-	crits, ok := k.lineCircleBracketCrits(cp, ec.center, ec.refU, ec.refV, el.a, u)
+	crits, ok := k.lineCircleBracketCrits(cp, ec.Center, ec.RefU, ec.RefV, el.A, u)
 	if !ok {
-		sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+		sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 		return
 	}
 	for _, c := range crits {
-		th := angleOf(ec, c.fb.Sub(ec.center))
-		admit := admitState(lineParamAdmit(el, c.fa, k.tol), circleAngleAdmit(ec, th, k.tol+(c.hi-c.lo)))
-		sink.candidate(k, admit, c.lo, c.hi, c.exact, c.fa, c.fb)
+		th := clearance.AngleOf(ec, c.Fb.Sub(ec.Center))
+		admit := clearance.AdmitState(clearance.LineParamAdmit(el, c.Fa, k.tol), clearance.CircleAngleAdmit(ec, th, k.tol+(c.Hi-c.Lo)))
+		sink.candidate(k, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 	}
 }
 
@@ -609,40 +559,40 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 // principal axis. Their facing radial points attain the minimum. The points
 // returned for the candidate are rounded representatives; the exact rational
 // separation and directed square-root interval certify the distance.
-func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool {
-	if !ea.ang.full || !eb.ang.full || !proofbound.FiniteVec(ea.center) || !proofbound.FiniteVec(eb.center) ||
-		proofbound.IsNonFinite(ea.radius) || proofbound.IsNonFinite(eb.radius) || ea.radius <= 0 || eb.radius <= 0 ||
-		ea.axis.X != 0 || ea.axis.Y != 0 || math.Abs(ea.axis.Z) != 1 ||
-		eb.axis.X != 0 || eb.axis.Y != 0 || math.Abs(eb.axis.Z) != 1 {
+func (k *pairKernel) principalCircleEdgeGap(ea, eb *clearance.CEdge, sink *cellSink) bool {
+	if !ea.Ang.Full || !eb.Ang.Full || !proofbound.FiniteVec(ea.Center) || !proofbound.FiniteVec(eb.Center) ||
+		proofbound.IsNonFinite(ea.Radius) || proofbound.IsNonFinite(eb.Radius) || ea.Radius <= 0 || eb.Radius <= 0 ||
+		ea.Axis.X != 0 || ea.Axis.Y != 0 || math.Abs(ea.Axis.Z) != 1 ||
+		eb.Axis.X != 0 || eb.Axis.Y != 0 || math.Abs(eb.Axis.Z) != 1 {
 		return false
 	}
 	var offset big.Rat
 	var radial r3.Vec
 	switch {
-	case ea.center.Y == eb.center.Y && ea.center.X != eb.center.X:
-		offset.Sub(proofarith.FloatRat(eb.center.X), proofarith.FloatRat(ea.center.X))
+	case ea.Center.Y == eb.Center.Y && ea.Center.X != eb.Center.X:
+		offset.Sub(proofarith.FloatRat(eb.Center.X), proofarith.FloatRat(ea.Center.X))
 		radial = r3.NewVec(1, 0, 0)
-	case ea.center.X == eb.center.X && ea.center.Y != eb.center.Y:
-		offset.Sub(proofarith.FloatRat(eb.center.Y), proofarith.FloatRat(ea.center.Y))
+	case ea.Center.X == eb.Center.X && ea.Center.Y != eb.Center.Y:
+		offset.Sub(proofarith.FloatRat(eb.Center.Y), proofarith.FloatRat(ea.Center.Y))
 		radial = r3.NewVec(0, 1, 0)
 	default:
 		return false
 	}
 	sign := float64(offset.Sign())
 	offset.Abs(&offset)
-	gap := new(big.Rat).Sub(&offset, new(big.Rat).Add(proofarith.FloatRat(ea.radius), proofarith.FloatRat(eb.radius)))
+	gap := new(big.Rat).Sub(&offset, new(big.Rat).Add(proofarith.FloatRat(ea.Radius), proofarith.FloatRat(eb.Radius)))
 	if gap.Sign() <= 0 {
 		return false
 	}
-	dz := new(big.Rat).Sub(proofarith.FloatRat(ea.center.Z), proofarith.FloatRat(eb.center.Z))
+	dz := new(big.Rat).Sub(proofarith.FloatRat(ea.Center.Z), proofarith.FloatRat(eb.Center.Z))
 	square := new(big.Rat).Mul(gap, gap)
 	square.Add(square, new(big.Rat).Mul(dz, dz))
 	lo, hi := proofbound.RatSqrtDown(square), proofbound.RatSqrtUp(square)
 	if lo <= k.tol || proofbound.IsNonFinite(hi) {
 		return false
 	}
-	pa := ea.center.Add(radial.Scale(sign * ea.radius))
-	pb := eb.center.Sub(radial.Scale(sign * eb.radius))
+	pa := ea.Center.Add(radial.Scale(sign * ea.Radius))
+	pb := eb.Center.Sub(radial.Scale(sign * eb.Radius))
 	if !proofbound.FiniteVec(pa) || !proofbound.FiniteVec(pb) {
 		return false
 	}
@@ -652,22 +602,22 @@ func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool 
 
 // circleCircleEE: complete principal-axis exterior circles have a direct
 // minimum; coaxial circles use their constant closed form; the rest use P8.
-func (k *pairKernel) circleCircleEE(ea, eb *cEdge, sink *cellSink) {
+func (k *pairKernel) circleCircleEE(ea, eb *clearance.CEdge, sink *cellSink) {
 	if k.principalCircleEdgeGap(ea, eb, sink) {
 		return
 	}
-	fa := &cFace{kind: ckTorus, anchor: ea.center, axis: ea.axis, refU: ea.refU, refV: ea.refV, major: ea.radius}
-	fb := &cFace{kind: ckTorus, anchor: eb.center, axis: eb.axis, refU: eb.refU, refV: eb.refV, major: eb.radius}
+	fa := &clearance.CFace{Kind: clearance.CkTorus, Anchor: ea.Center, Axis: ea.Axis, RefU: ea.RefU, RefV: ea.RefV, Major: ea.Radius}
+	fb := &clearance.CFace{Kind: clearance.CkTorus, Anchor: eb.Center, Axis: eb.Axis, RefU: eb.RefU, RefV: eb.RefV, Major: eb.Radius}
 	crits, ok := k.circleCircleCrits(fa, fb)
 	if !ok {
-		sink.coarse(ea.box, eb.box, edgeWits(ea), edgeWits(eb))
+		sink.coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
 		return
 	}
 	for _, c := range crits {
-		tha := angleOf(ea, c.fa.Sub(ea.center))
-		thb := angleOf(eb, c.fb.Sub(eb.center))
-		admit := admitState(circleAngleAdmit(ea, tha, k.tol+(c.hi-c.lo)), circleAngleAdmit(eb, thb, k.tol+(c.hi-c.lo)))
-		sink.candidate(k, admit, c.lo, c.hi, c.exact, c.fa, c.fb)
+		tha := clearance.AngleOf(ea, c.Fa.Sub(ea.Center))
+		thb := clearance.AngleOf(eb, c.Fb.Sub(eb.Center))
+		admit := clearance.AdmitState(clearance.CircleAngleAdmit(ea, tha, k.tol+(c.Hi-c.Lo)), clearance.CircleAngleAdmit(eb, thb, k.tol+(c.Hi-c.Lo)))
+		sink.candidate(k, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 	}
 }
 
@@ -683,7 +633,7 @@ func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if sink.pruned(clrBoxDist(at, f.box)) {
+		if sink.pruned(clearance.ClrBoxDist(at, f.Box)) {
 			continue
 		}
 		if err := k.vertexFace(budget, v, f, sink); err != nil {
@@ -694,7 +644,7 @@ func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if sink.pruned(clrBoxDist(at, e.box)) {
+		if sink.pruned(clearance.ClrBoxDist(at, e.Box)) {
 			continue
 		}
 		k.vertexEdge(v, e, sink)
@@ -702,34 +652,34 @@ func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *
 	return nil
 }
 
-func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *cFace, sink *cellSink) error {
-	switch f.kind {
-	case ckPlane:
-		h := v.Sub(f.o).Dot(f.n)
-		foot := v.Sub(f.n.Scale(h))
-		x, y := f.planeCoords(foot)
-		admit, err := regionClassifyBudget(budget, f.region, x, y, k.tol)
+func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearance.CFace, sink *cellSink) error {
+	switch f.Kind {
+	case clearance.CkPlane:
+		h := v.Sub(f.O).Dot(f.N)
+		foot := v.Sub(f.N.Scale(h))
+		x, y := f.PlaneCoords(foot)
+		admit, err := clearance.RegionClassifyBudget(budget, f.Region, x, y, k.tol)
 		if err != nil {
 			return err
 		}
 		sink.candidate(k, admit, math.Abs(h), math.Abs(h), true, foot, v)
-	case ckCone:
-		rel := v.Sub(f.anchor)
-		z := rel.Dot(f.axis)
-		perp := rel.Sub(f.axis.Scale(z))
+	case clearance.CkCone:
+		rel := v.Sub(f.Anchor)
+		z := rel.Dot(f.Axis)
+		perp := rel.Sub(f.Axis.Scale(z))
 		rho := perp.Len()
-		sinA, cosA := math.Sincos(f.half)
+		sinA, cosA := math.Sincos(f.Half)
 		var radial r3.Vec
-		switch k.onAxis(v, f.anchor, f.axis) {
-		case degYes:
+		switch k.onAxis(v, f.Anchor, f.Axis) {
+		case clearance.DegYes:
 			// Provenly on the axis: every azimuth carries the same distance, so
 			// the sweep window's midpoint represents the family.
 			mid := 0.0
-			if !f.sweep.full {
-				mid = (f.sweep.lo + f.sweep.hi) / 2
+			if !f.Sweep.Full {
+				mid = (f.Sweep.Lo + f.Sweep.Hi) / 2
 			}
-			radial = f.refU.Scale(math.Cos(mid)).Add(f.refV.Scale(math.Sin(mid)))
-		case degNo:
+			radial = f.RefU.Scale(math.Cos(mid)).Add(f.RefV.Scale(math.Sin(mid)))
+		case clearance.DegNo:
 			radial, _ = perp.Normalize()
 		default:
 			// The distance is azimuth-free, the admission foot is not. The
@@ -741,78 +691,60 @@ func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *cFac
 		if t <= k.tol {
 			return nil // the apex holds the nearest point; the vertex tiers pair with it
 		}
-		pf := f.anchor.Add(f.axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
+		pf := f.Anchor.Add(f.Axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
 		d := math.Abs(rho*cosA - z*sinA)
-		sink.candidate(k, f.admitPoint(pf, k.tol), d, d, true, pf, v)
+		sink.candidate(k, f.AdmitPoint(pf, k.tol), d, d, true, pf, v)
 	default:
-		d, foot := spineDistOf(f, v)
+		d, foot := clearance.SpineDistOf(f, v)
 		if d <= k.tol {
 			sink.unsure = true
 			return nil
 		}
 		dir := v.Sub(foot).Scale(1 / d)
 		for _, sf := range []float64{1, -1} {
-			pf := foot.Add(dir.Scale(sf * f.radius))
-			raw := d - sf*f.radius
-			sink.candidate(k, f.admitPoint(pf, k.tol), math.Abs(raw), math.Abs(raw), true, pf, v)
+			pf := foot.Add(dir.Scale(sf * f.Radius))
+			raw := d - sf*f.Radius
+			sink.candidate(k, f.AdmitPoint(pf, k.tol), math.Abs(raw), math.Abs(raw), true, pf, v)
 		}
 	}
 	return nil
 }
 
-func (k *pairKernel) vertexEdge(v r3.Vec, e *cEdge, sink *cellSink) {
-	if e.line {
-		dir := e.b.Sub(e.a)
+func (k *pairKernel) vertexEdge(v r3.Vec, e *clearance.CEdge, sink *cellSink) {
+	if e.Line {
+		dir := e.B.Sub(e.A)
 		u, ok := dir.Normalize()
 		if !ok {
 			return
 		}
-		foot := linePoint(e.a, u, v)
+		foot := clearance.LinePoint(e.A, u, v)
 		d := v.Sub(foot).Len()
-		sink.candidate(k, lineParamAdmit(e, foot, k.tol), d, d, true, foot, v)
+		sink.candidate(k, clearance.LineParamAdmit(e, foot, k.tol), d, d, true, foot, v)
 		return
 	}
-	crits, ok := k.pointCircleCrits(v, e.center, e.axis, e.refU, e.refV, e.radius, e.ang)
+	crits, ok := k.pointCircleCrits(v, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)
 	if !ok {
 		// The radial direction is not resolvable, so the arc's own admission
 		// cannot be decided — but the distance to the WHOLE circle bounds the
 		// distance to any arc of it from below, and that is a proof.
-		rel := v.Sub(e.center)
-		z := rel.Dot(e.axis)
-		rho := rel.Sub(e.axis.Scale(z)).Len()
-		sink.loOnly(math.Hypot(z, math.Abs(rho-e.radius)))
+		rel := v.Sub(e.Center)
+		z := rel.Dot(e.Axis)
+		rho := rel.Sub(e.Axis.Scale(z)).Len()
+		sink.loOnly(math.Hypot(z, math.Abs(rho-e.Radius)))
 		return
 	}
 	for _, c := range crits {
-		th := angleOf(e, c.fb.Sub(e.center))
-		d := c.fa.Sub(c.fb).Len()
-		sink.candidate(k, circleAngleAdmit(e, th, k.tol), d, d, true, c.fb, v)
+		th := clearance.AngleOf(e, c.Fb.Sub(e.Center))
+		d := c.Fa.Sub(c.Fb).Len()
+		sink.candidate(k, clearance.CircleAngleAdmit(e, th, k.tol), d, d, true, c.Fb, v)
 	}
-}
-
-// rulingContact is one §6 tangential line contact the kernel certified:
-// Plane × Cylinder along the tangent ruling, or parallel external
-// Cylinder × Cylinder along the common ruling. The plane at offset along
-// normal separates the two bodies, and the ruling segment between ends lies
-// on both trimmed faces. The kernel keeps the faces and the exact
-// feet so the contact layer can publish the manifold of
-// docs/contact-geometry-design.md §4.5; Verify reads only the verdict.
-type rulingContact struct {
-	faceA, faceB *cFace
-	// normal is the exact unit A-to-B normal of the separating plane. An
-	// exactly unit vector with dyadic components is a signed coordinate
-	// axis, so this is one.
-	normal proofarith.DyV3
-	offset proofarith.Dyadic
-	// ends are the exact ruling ends in lexicographic coordinate order.
-	ends [2]proofarith.DyV3
 }
 
 // rulingContactCertified scans the plane-cylinder and cylinder-cylinder
 // face pairs for a §6 ruling certificate. The caller runs it only when both
 // bodies' bodyGeom.delta are exactly zero, so every carrier value is the
 // boundary it names and every comparison below is exact.
-func (k *pairKernel) rulingContactCertified(ctx context.Context) (*rulingContact, error) {
+func (k *pairKernel) rulingContactCertified(ctx context.Context) (*clearance.RulingContact, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -822,13 +754,13 @@ func (k *pairKernel) rulingContactCertified(ctx context.Context) (*rulingContact
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			var ruling *rulingContact
+			var ruling *clearance.RulingContact
 			switch {
-			case fa.kind == ckPlane && fb.kind == ckCylinder:
+			case fa.Kind == clearance.CkPlane && fb.Kind == clearance.CkCylinder:
 				ruling = k.planeCylinderRuling(ctx, fa, fb, k.a.body, k.b.body, false)
-			case fa.kind == ckCylinder && fb.kind == ckPlane:
+			case fa.Kind == clearance.CkCylinder && fb.Kind == clearance.CkPlane:
 				ruling = k.planeCylinderRuling(ctx, fb, fa, k.b.body, k.a.body, true)
-			case fa.kind == ckCylinder && fb.kind == ckCylinder:
+			case fa.Kind == clearance.CkCylinder && fb.Kind == clearance.CkCylinder:
 				ruling = k.cylinderPairRuling(ctx, fa, fb)
 			}
 			if ruling != nil {
@@ -845,15 +777,15 @@ func (k *pairKernel) rulingContactCertified(ctx context.Context) (*rulingContact
 // on the cylinder face, and the whole ruling must lie inside the plane trim.
 // The plane must separate the bodies' complete extents. cylinderFirst names
 // the cylinder's body as A.
-func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
-	planeBody, cylBody *Body, cylinderFirst bool) *rulingContact {
-	n, okN := exactSignedAxis(plane.n)
-	axis, okAxis := exactSignedAxis(cyl.axis)
-	o, okO := dyVecOf(plane.o)
-	anchor, okAnchor := dyVecOf(cyl.anchor)
-	radius, okR := proofarith.DyOf(cyl.radius)
-	lo, okLo := proofarith.DyOf(cyl.zWin.lo)
-	hi, okHi := proofarith.DyOf(cyl.zWin.hi)
+func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *clearance.CFace,
+	planeBody, cylBody *Body, cylinderFirst bool) *clearance.RulingContact {
+	n, okN := clearance.ExactSignedAxis(plane.N)
+	axis, okAxis := clearance.ExactSignedAxis(cyl.Axis)
+	o, okO := clearance.DyVecOf(plane.O)
+	anchor, okAnchor := clearance.DyVecOf(cyl.Anchor)
+	radius, okR := proofarith.DyOf(cyl.Radius)
+	lo, okLo := proofarith.DyOf(cyl.ZWin.Lo)
+	hi, okHi := proofarith.DyOf(cyl.ZWin.Hi)
 	if !okN || !okAxis || !okO || !okAnchor || !okR || !okLo || !okHi ||
 		radius.Sign() <= 0 || proofarith.DyCmp(lo, hi) >= 0 ||
 		!proofarith.DvDot(n, axis).IsZero() {
@@ -863,7 +795,7 @@ func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
 	if proofarith.DyCmp(proofarith.DySubScalar(proofarith.DvDot(n, anchor), offset), radius) != 0 {
 		return nil
 	}
-	if !k.tangentAzimuthAdmitted(cyl, plane.n.Scale(-1)) {
+	if !k.tangentAzimuthAdmitted(cyl, plane.N.Scale(-1)) {
 		return nil
 	}
 	base := proofarith.DvSub(anchor, dyScaleVec(n, radius))
@@ -874,8 +806,8 @@ func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
 	if !k.rulingInsidePlaneTrim(plane, ends) {
 		return nil
 	}
-	_, planeHi, okPlane := payloadExtent(ctx, planeBody, plane.n)
-	cylLo, _, okCyl := payloadExtent(ctx, cylBody, plane.n)
+	_, planeHi, okPlane := payloadExtent(ctx, planeBody, plane.N)
+	cylLo, _, okCyl := payloadExtent(ctx, cylBody, plane.N)
 	if !okPlane || !okCyl {
 		return nil
 	}
@@ -885,11 +817,11 @@ func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
 		proofarith.DyCmp(cylLoDy, offset) < 0 {
 		return nil
 	}
-	ruling := &rulingContact{faceA: plane, faceB: cyl, normal: n, offset: offset, ends: orderedRulingEnds(ends)}
+	ruling := &clearance.RulingContact{FaceA: plane, FaceB: cyl, Normal: n, Offset: offset, Ends: clearance.OrderedRulingEnds(ends)}
 	if cylinderFirst {
-		ruling.faceA, ruling.faceB = cyl, plane
-		ruling.normal = proofarith.DvSub(proofarith.DyV3{}, n)
-		ruling.offset = proofarith.DyNeg(offset)
+		ruling.FaceA, ruling.FaceB = cyl, plane
+		ruling.Normal = proofarith.DvSub(proofarith.DyV3{}, n)
+		ruling.Offset = proofarith.DyNeg(offset)
 	}
 	return ruling
 }
@@ -899,17 +831,17 @@ func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
 // the radius sum along one signed coordinate axis, both tangent azimuths must
 // be on their faces, and the axial windows must overlap with positive
 // length. The tangent plane between them must separate the complete extents.
-func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *cFace) *rulingContact {
-	axisA, okAxisA := exactSignedAxis(ca.axis)
-	axisB, okAxisB := exactSignedAxis(cb.axis)
-	anchorA, okAnchorA := dyVecOf(ca.anchor)
-	anchorB, okAnchorB := dyVecOf(cb.anchor)
-	rA, okRA := proofarith.DyOf(ca.radius)
-	rB, okRB := proofarith.DyOf(cb.radius)
-	loA, okLoA := proofarith.DyOf(ca.zWin.lo)
-	hiA, okHiA := proofarith.DyOf(ca.zWin.hi)
-	loB, okLoB := proofarith.DyOf(cb.zWin.lo)
-	hiB, okHiB := proofarith.DyOf(cb.zWin.hi)
+func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *clearance.CFace) *clearance.RulingContact {
+	axisA, okAxisA := clearance.ExactSignedAxis(ca.Axis)
+	axisB, okAxisB := clearance.ExactSignedAxis(cb.Axis)
+	anchorA, okAnchorA := clearance.DyVecOf(ca.Anchor)
+	anchorB, okAnchorB := clearance.DyVecOf(cb.Anchor)
+	rA, okRA := proofarith.DyOf(ca.Radius)
+	rB, okRB := proofarith.DyOf(cb.Radius)
+	loA, okLoA := proofarith.DyOf(ca.ZWin.Lo)
+	hiA, okHiA := proofarith.DyOf(ca.ZWin.Hi)
+	loB, okLoB := proofarith.DyOf(cb.ZWin.Lo)
+	hiB, okHiB := proofarith.DyOf(cb.ZWin.Hi)
 	if !okAxisA || !okAxisB || !okAnchorA || !okAnchorB || !okRA || !okRB ||
 		!okLoA || !okHiA || !okLoB || !okHiB || rA.Sign() <= 0 || rB.Sign() <= 0 ||
 		!proofarith.DvIsZero(proofarith.DvCross(axisA, axisB)) {
@@ -918,11 +850,11 @@ func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *cFace) *rul
 	delta := proofarith.DvSub(anchorB, anchorA)
 	along := proofarith.DvDot(delta, axisA)
 	perp := proofarith.DvSub(delta, dyScaleVec(axisA, along))
-	normal, ok := axisOfLength(perp, proofarith.DyAdd(rA, rB))
+	normal, ok := clearance.AxisOfLength(perp, proofarith.DyAdd(rA, rB))
 	if !ok {
 		return nil
 	}
-	normalVec := dyAxisVec(normal)
+	normalVec := clearance.DyAxisVec(normal)
 	if !k.tangentAzimuthAdmitted(ca, normalVec) || !k.tangentAzimuthAdmitted(cb, normalVec.Scale(-1)) {
 		return nil
 	}
@@ -951,99 +883,37 @@ func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *cFace) *rul
 		proofarith.DvAdd(base, dyScaleVec(axisA, lo)),
 		proofarith.DvAdd(base, dyScaleVec(axisA, hi)),
 	}
-	return &rulingContact{faceA: ca, faceB: cb, normal: normal, offset: offset, ends: orderedRulingEnds(ends)}
+	return &clearance.RulingContact{FaceA: ca, FaceB: cb, Normal: normal, Offset: offset, Ends: clearance.OrderedRulingEnds(ends)}
 }
 
 // tangentAzimuthAdmitted reports whether the cylinder face's angular trim
 // holds the ruling whose outward radial direction is dir, with margin.
-func (k *pairKernel) tangentAzimuthAdmitted(f *cFace, dir r3.Vec) bool {
-	phi := math.Atan2(dir.Dot(f.refV), dir.Dot(f.refU))
-	return f.sweep.classify(phi, k.tol/math.Max(f.radius, 1e-30)) == 1
+func (k *pairKernel) tangentAzimuthAdmitted(f *clearance.CFace, dir r3.Vec) bool {
+	phi := math.Atan2(dir.Dot(f.RefV), dir.Dot(f.RefU))
+	return f.Sweep.Classify(phi, k.tol/math.Max(f.Radius, 1e-30)) == 1
 }
 
 // rulingInsidePlaneTrim admits the whole segment into the plane face's trim:
 // one end strictly inside with margin and the segment clear of every trim
 // boundary element by more than the margin, so it never leaves the region.
-func (k *pairKernel) rulingInsidePlaneTrim(plane *cFace, ends [2]proofarith.DyV3) bool {
+func (k *pairKernel) rulingInsidePlaneTrim(plane *clearance.CFace, ends [2]proofarith.DyV3) bool {
 	var coords [2][2]float64
 	for i, end := range ends {
 		// The nearest float of each end is within an ulp; the trim margin
 		// below is many orders wider.
-		p := dyAxisVec(end)
+		p := clearance.DyAxisVec(end)
 		if !proofbound.FiniteVec(p) {
 			return false
 		}
-		coords[i][0], coords[i][1] = plane.planeCoords(p)
+		coords[i][0], coords[i][1] = plane.PlaneCoords(p)
 	}
-	if plane.region.classify(coords[0][0], coords[0][1], k.tol) != 1 {
+	if plane.Region.Classify(coords[0][0], coords[0][1], k.tol) != 1 {
 		return false
 	}
-	for _, e := range plane.region.elems {
-		if segElemDistLB(e, coords[0][0], coords[0][1], coords[1][0], coords[1][1]) <= k.tol {
+	for _, e := range plane.Region.Elems {
+		if clearance.SegElemDistLB(e, coords[0][0], coords[0][1], coords[1][0], coords[1][1]) <= k.tol {
 			return false
 		}
 	}
 	return true
-}
-
-// exactSignedAxis lifts a carrier direction that is exactly a signed
-// coordinate axis.
-func exactSignedAxis(v r3.Vec) (proofarith.DyV3, bool) {
-	if _, _, ok := signedAxis(v); !ok {
-		return proofarith.DyV3{}, false
-	}
-	return proofarith.DyVec(v), true
-}
-
-// axisOfLength returns v/length when v is exactly ±length along one
-// coordinate axis and zero on the other two.
-func axisOfLength(v proofarith.DyV3, length proofarith.Dyadic) (proofarith.DyV3, bool) {
-	var unit proofarith.DyV3
-	found := false
-	for i := range 3 {
-		switch {
-		case v[i].IsZero():
-			continue
-		case found:
-			return proofarith.DyV3{}, false
-		case proofarith.DyCmp(v[i], length) == 0:
-			unit[i] = proofarith.DyInt(1)
-		case proofarith.DyCmp(v[i], proofarith.DyNeg(length)) == 0:
-			unit[i] = proofarith.DyInt(-1)
-		default:
-			return proofarith.DyV3{}, false
-		}
-		found = true
-	}
-	return unit, found
-}
-
-// dyVecOf lifts a finite carrier vector exactly.
-func dyVecOf(v r3.Vec) (proofarith.DyV3, bool) {
-	if !proofbound.FiniteVec(v) {
-		return proofarith.DyV3{}, false
-	}
-	return proofarith.DyVec(v), true
-}
-
-// dyAxisVec converts an exact vector to its nearest float vector; a signed
-// coordinate axis converts exactly.
-func dyAxisVec(v proofarith.DyV3) r3.Vec {
-	var out r3.Vec
-	out.X, _ = v[0].Float64()
-	out.Y, _ = v[1].Float64()
-	out.Z, _ = v[2].Float64()
-	return out
-}
-
-func orderedRulingEnds(ends [2]proofarith.DyV3) [2]proofarith.DyV3 {
-	for i := range 3 {
-		switch proofarith.DyCmp(ends[0][i], ends[1][i]) {
-		case -1:
-			return ends
-		case 1:
-			return [2]proofarith.DyV3{ends[1], ends[0]}
-		}
-	}
-	return ends
 }
