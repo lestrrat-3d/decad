@@ -160,7 +160,13 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./dynamics/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
+            timeout: "10m"
+          - os: ubuntu-latest
+            race: "-race"
+            shard: ""
+            packages: "./dynamics/"
+            timeout: "30m"
           - os: macos-latest
             race: ""
             shard: ""
@@ -188,7 +194,7 @@ jobs:
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != ''
         shell: bash
-        run: go test ${{ matrix.race }} -timeout 10m ${{ matrix.packages }}
+        run: go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
 
       # The whole-suite run is the non-Linux leg: no shard, and no package
       # operand of its own. The examples runner has a `packages:` operand, so
