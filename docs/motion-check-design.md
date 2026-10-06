@@ -889,8 +889,8 @@ it land the corners tens of millimetres apart. The screw arm and test 19 cannot 
 `From` commutes with the screw — the identity in one, a rotation about the screw's own axis in the other —
 so both orders give the same end.
 
-`.github/test-shards.txt` is updated for every root-package test, fuzz target and example above, and
-`go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'` is run before the push.
+`.github/test-shards.txt` (root package) or `.github/test-shards-apitest.txt` (`apitest/`) is updated for every test, fuzz target
+and example above, and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 ## 10. Increments
 

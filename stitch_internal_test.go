@@ -216,7 +216,7 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 // shape, the same way TestStitchOrientationRefusesMobiusAssembly pins
 // deriveStitchOrientation from a hand-built face set. Unlike that Möbius
 // shape, this one IS reachable through the public seam: T76
-// (TestStitchRefusesTwoBoxesPinchedAtOneVertex, stitch_test.go) drives the
+// (TestStitchRefusesTwoBoxesPinchedAtOneVertex, apitest/stitch_test.go) drives the
 // identical combinatorial pinch — two disjoint boxes sharing one corner
 // vertex with no shared edge — through Stitch itself, on the all-planar
 // arm rather than a curved one. This fixture stays useful anyway: it
@@ -409,7 +409,7 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 // top comment, revolve_axis.go's axisFrame.walk). Driven directly with a
 // synthetic rim lengthBound far above ulp noise, so the leg is provably
 // exercised rather than left to a fixture where the true bound happens to
-// be zero (every public fixture in stitch_flux_test.go revolves about a
+// be zero (every public fixture in apitest/stitch_flux_test.go revolves about a
 // coordinate-aligned axis through the origin, where it genuinely is).
 func TestStitchCylinderMomentChargesRadiusBound(t *testing.T) {
 	t.Parallel()
@@ -668,7 +668,7 @@ func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
 // TestStitchCurvedMassCorrectsInwardOrientationForCone is the orientation
 // sign's own shown-to-fail leg for the Cone arm, the sibling of
 // TestStitchCurvedMassCorrectsInwardOrientation: neither public Cone
-// fixture (stitch_flux_test.go) ever reaches the actual global sign-flip
+// fixture (apitest/stitch_flux_test.go) ever reaches the actual global sign-flip
 // branch, because a revolve build's own outward-normal convention already
 // agrees with the flux formula's own. This test reverses every face of a
 // real frustum-shell sheet BEFORE handing it to stitchCurvedMass, so the
@@ -716,7 +716,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 
 // sphereRevolveFacesForInternalTest builds a semicircle of the given
 // diameter, revolved a full turn about the U axis, and returns its own
-// single, boundary-less Sphere face — stitch_flux_test.go's
+// single, boundary-less Sphere face — apitest/stitch_flux_test.go's
 // sphereRevolveSheet, duplicated here because this file's package (decad)
 // cannot import the exported test package (decad_test) that helper lives
 // in.
@@ -857,7 +857,7 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 // sign's own shown-to-fail leg for the Sphere arm, the sibling of
 // TestStitchCurvedMassCorrectsInwardOrientation and
 // TestStitchCurvedMassCorrectsInwardOrientationForCone: neither public
-// Sphere fixture (stitch_flux_test.go) ever reaches the actual global
+// Sphere fixture (apitest/stitch_flux_test.go) ever reaches the actual global
 // sign-flip branch, because a revolve build's own outward-normal convention
 // already agrees with the flux formula's own. This test reverses the real
 // T50 fixture's own Sphere face BEFORE handing it to stitchCurvedMass, so
@@ -925,7 +925,7 @@ func TestStitchCurvedMassSphereCoordUpperTracksRadius(t *testing.T) {
 		"the widening must reflect the sphere's own radius, not just delta")
 }
 
-// frustumShellAnalyticsForInternalTest is stitch_flux_test.go's
+// frustumShellAnalyticsForInternalTest is apitest/stitch_flux_test.go's
 // frustumShellAnalytics, duplicated here because this file's package
 // (decad) cannot import the exported test package (decad_test) that
 // function lives in.
@@ -1080,7 +1080,7 @@ func TestStitchTorusFluxAndMomentMatchClosedForm(t *testing.T) {
 	require.InDelta(t, wantMoment(center.Z, anchor.Z, 0), mz.Value, 1e-9)
 }
 
-// halfTorusAnalyticsForInternalTest is stitch_flux_test.go's
+// halfTorusAnalyticsForInternalTest is apitest/stitch_flux_test.go's
 // halfTorusAnalytics, duplicated here because this file's package (decad)
 // cannot import the exported test package (decad_test) that function lives
 // in.
@@ -1097,7 +1097,7 @@ func halfTorusAnalyticsForInternalTest(major, minor float64) (volume, area float
 // TestStitchCurvedMassCorrectsInwardOrientationForTorus is the orientation
 // sign's own shown-to-fail leg for the Torus arm, the sibling of
 // TestStitchCurvedMassCorrectsInwardOrientationForCone: no public Torus
-// fixture (stitch_flux_test.go) ever reaches the actual global sign-flip
+// fixture (apitest/stitch_flux_test.go) ever reaches the actual global sign-flip
 // branch, because a revolve build's own outward-normal convention already
 // agrees with the flux formula's own. This test reverses every face of a
 // real half-torus sheet BEFORE handing it to stitchCurvedMass, so the flux
@@ -1162,7 +1162,7 @@ func TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted(t *testing.T) {
 
 // stitchTestClosedBoxVerts returns one 10x10x10 box's own 8 corners,
 // anchored at base — the identical corner layout a real stitched box
-// fixture (stitchBoxSheets, stitch_test.go) produces, restated by hand so
+// fixture (stitchBoxSheets, apitest/stitch_test.go) produces, restated by hand so
 // this file can build two independent boxes that occupy the SAME world
 // region without sharing a single vertex object.
 func stitchTestClosedBoxVerts(base r3.Vec) [8]r3.Vec {
@@ -1219,7 +1219,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 // Body/stitchPayload. decad's public seam has no way to reach this: once
 // evalStitchContext's own lump-separation gate lands (stitch.go), Stitch
 // itself refuses this exact shape before a body this overlapped could ever
-// reach tessellation (TestStitchRefusesNestedBoxes, stitch_test.go). This
+// reach tessellation (TestStitchRefusesNestedBoxes, apitest/stitch_test.go). This
 // fixture is what proves tessellateStitch's own symDiffOK reading does not
 // merely inherit that earlier refusal: stitchZeroVertexBound alone holds
 // here (every one of the 16 vertices is zero-bound), so without this file's

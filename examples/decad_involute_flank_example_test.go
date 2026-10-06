@@ -18,7 +18,7 @@ import (
 // its chain clears that certificate and the section builds into a fully
 // measured solid — the same certificate that refuses a section whose
 // curvature changes sign partway along (see Example_decad_freeformExtrude's
-// neighbours in extrude_freeform_test.go for a refused case).
+// neighbours in apitest/extrude_freeform_test.go for a refused case).
 //
 // module 1, 17 teeth, 20 degree pressure angle are a gear dialog's own
 // defaults.

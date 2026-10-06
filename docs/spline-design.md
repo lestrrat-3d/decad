@@ -2090,5 +2090,5 @@ rules).
   `geom.NewFitInterpolant` would have solved.
 - Assert that `Extrude` of a `FitSplineSeg` section BUILDS — R6 is retired
   (§10 P4b) — with `Volume` equal to height times the section's own exact
-  rational `Area` (spline_fit_test.go's `TestExtrudeFitSplineProfileBuilds`
+  rational `Area` (apitest/spline_fit_test.go's `TestExtrudeFitSplineProfileBuilds`
   is this obligation's own test).

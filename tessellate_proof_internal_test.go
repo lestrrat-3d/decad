@@ -19,7 +19,7 @@ import (
 // geometry: a published bound against the closed form of the quantity it
 // bounds, never merely that a field is set.
 
-// internalHoledPlateBody is tessellate_test.go's holedPlateBody built inside
+// internalHoledPlateBody is apitest/tessellate_test.go's holedPlateBody built inside
 // the package, so a test can read the private proof record the public surface
 // does not expose: the 100×60 plate with a 10 mm-radius hole at (70, 30),
 // extruded 8 mm.
@@ -280,7 +280,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	}
 }
 
-// internalFreeformArchBody is extrude_freeform_test.go's fit-spline arch built
+// internalFreeformArchBody is apitest/extrude_freeform_test.go's fit-spline arch built
 // inside the package: the hump through (0,0), (4,3), (8,0) closed by a chord,
 // extruded by height, whose one free-form wall is the only chorded walk in the
 // section. The height is a parameter because the chording's own area loss

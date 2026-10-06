@@ -1296,7 +1296,7 @@ held vertices, which are exact rationals at the pose, and §10.4's charges follo
 widened by its body's `δ`, and `Separation` carrying the band instead of an exact zero, or the held depth
 widened by the summed `δ`. The clip itself is unchanged; only the published bounds differ.
 
-**Tests** (`contact_faceted_manifold_test.go`, PR 11), every one asserting computed coordinates:
+**Tests** (`apitest/contact_faceted_manifold_test.go`, PR 11), every one asserting computed coordinates:
 
 - A hexagonal prism face overhanging one corner of a rotated floor face publishes seven points, each
   compared against its hand-computed rational coordinate within the ball, with the patch's double area
@@ -2065,7 +2065,7 @@ global. `|p''(u)| = |R(ωu)·(ω×(ω×(p0 − c)))| = |ω|·|ω×(p0 − c)|` f
 `K_p <= K` because `|ω×(p − c)| <= |ω|·ρ`. `clearAt`, `depthAt`, the departure's horizon and
 `planarDepartureProof.lowerGap` read `K_p` in place of `K`; the replay still reads the held depth. A body
 whose contact vertices lie on its spin axis with `r = 0` now publishes an exact `SweepPersistentTouch` where
-the global bound published a band of depth `K·h²`: the edge box of `contact_sweep_band_test.go`, turning
+the global bound published a band of depth `K·h²`: the edge box of `apitest/contact_sweep_band_test.go`, turning
 about its resting edge, is one. The `60°` box, which the global bound ends every `46`–`62 µs` under the rested
 hold (`StepEventBudget` in its step `48`), spins on its corner through 256 steps under `K_p`.
 
@@ -2304,7 +2304,8 @@ interval runs from the last certified time to the end of the step.
 ## 13. Delivery order
 
 Each PR is one branch, one review, one merge, and carries the test that proves it. "Root tests" means
-`.github/test-shards.txt` must list every new root-package test name; `dynamics` tests are not sharded.
+`.github/test-shards.txt` must list every new root-package test name and `.github/test-shards-apitest.txt` every new `apitest`
+test name; `dynamics` tests are not sharded.
 Dependencies are listed; PRs with no edge between them may land in either order. Phase 1 is PRs 1–9,
 Phase 2 is PRs 10–15, Phase 3 is PRs 16–21. PR 9 waits on the upstream node of §11.1; PRs 1–8 do not.
 A PR that changes what ships — a body count `NewWorld` admits, a shape pair, a response, a refusal —
@@ -2324,7 +2325,7 @@ lines below do not repeat it.
 
 - Delivers §4.2: `SweptBox`, `StrictlyDisjoint`, `Box()`; the cylinder and bounded-faceted sweeps consume it.
 - Files: new `swept_box.go`, `contact_cylinder_sweep.go`, `contact_faceted_sweep.go`.
-- Test (root): `swept_box_test.go`: a rotating box's swept box contains its exact corners at fractions
+- Test (`apitest`): `apitest/swept_box_test.go`: a rotating box's swept box contains its exact corners at fractions
   `0`, `1/3` and `1`; dropping the travel term lets a corner escape (shown to fail); meeting boxes are
   not disjoint.
 - Depends on: nothing.
@@ -2405,7 +2406,7 @@ lines below do not repeat it.
 
 - Delivers §8.1 and §8.2.
 - Files: `mass_properties.go`, new `mass_properties_rotated.go`.
-- Test (root): `mass_properties_rotated_test.go`: a box rotated `30°` about `(1,1,1)` encloses
+- Test (`apitest`): `apitest/mass_properties_rotated_test.go`: a box rotated `30°` about `(1,1,1)` encloses
   `R I Rᵀ` in every component; the orthonormality-defect leg is shown to fail.
 - Depends on: nothing.
 
@@ -2443,7 +2444,7 @@ lines below do not repeat it.
 
 - Delivers §9.1 and §9.2.
 - Files: new `internal/pair/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
-- Test (root): `contact_faceted_pair_test.go`, with the snapshot-level cases in
+- Test (`apitest`): `apitest/contact_faceted_pair_test.go`, with the snapshot-level cases in
   `internal/pair/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
   `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow Boolean's
   wall is `Overlapping` and one in its cavity is `Separated`; the non-convex Booleans report
@@ -2455,7 +2456,7 @@ lines below do not repeat it.
 - Delivers §9.3, §9.4 and the shallow-penetration patch.
 - Files: new `internal/pair/planar_patch.go`, `internal/pair/planar_manifold.go`,
   `contact_faceted_manifold.go`, `contact_faceted_patch.go`; `contact_faceted_pair.go`.
-- Test (root): `contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
+- Test (`apitest`): `apitest/contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
   vertex touch, two at an edge touch, and the clipped hexagon's seven extremal vertices at a face
   touch, each at its exact coordinate; §9.4's parity, wall, reversed-loop, hole and
   `ContactPointTooCoarse` fixtures, with the wall and reversed-loop legs shown to fail.
@@ -2465,7 +2466,7 @@ lines below do not repeat it.
 
 - Delivers §10.1.
 - Files: new `contact_sweep_faceted.go`; `contact_sweep.go`, `contact_sweep_rotation.go`.
-- Test (root): `contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
+- Test (`apitest`): `apitest/contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
   vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
 - Depends on: PRs 10, 11.
 - Shipped, with the deep-vertex overlap witness in new `internal/pair/planar_depth.go`.
@@ -2478,10 +2479,10 @@ lines below do not repeat it.
   `contact_sweep_replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
   `internal/pair/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
-- Test (root): `contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
+- Test (`apitest`): `apitest/contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
   publishes a band track whose `Depth` equals `K·h²` for the computed `K`, and `BandAt` the same closed
   form over a prefix; `contact_sweep_band_internal_test.go` shows the rotating bracket replay's travel
-  and deviation charges; `contact_sweep_rotation_test.go` publishes a turned box's edge poking through a
+  and deviation charges; `apitest/contact_sweep_rotation_test.go` publishes a turned box's edge poking through a
   face, and `internal/pair/planar_patch_test.go` a wedge's, clipped to the face. `dynamics/tip_test.go`: a
   cube on its edge, turned `30°` with its center of mass beyond the edge, tips over in a few steps; each
   step lands the edge as a rotating impact, rides a band track to the band end, and lifts clear; every
@@ -2502,7 +2503,7 @@ lines below do not repeat it.
 
 - Delivers §8.3, §8.4 and §8.5.
 - Files: `mass_properties.go`, `mass_properties_faceted.go`, new `mass_properties_mesh.go`.
-- Test (root): `mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
+- Test (`apitest`): `apitest/mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
   form; a loft between two exact octagons, one a square with its edge midpoints pushed out (a loft
   pairs equal segment counts and its cap triangulator refuses collinear corners); a cup against its
   closed form. `mass_properties_mesh_internal_test.go`: the ladder narrows a sphere's tensor interval
@@ -2516,7 +2517,7 @@ lines below do not repeat it.
 - Files: `contact_pair.go`, `contact_faceted_pair.go`, `contact_faceted_manifold.go`,
   `internal/pair/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_band.go`, `contact_sweep_faceted.go`,
   `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
-- Test (root): new `contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
+- Test (`apitest`): new `apitest/contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
   `sin θ = 2⁻²⁴`, so its far edge stands exactly `2⁻²¹ mm` up and every height below is a float: at
   `SupportBand = 2⁻²⁰ mm` the touch publishes four points, the far edge's two with `Separation` exactly `2⁻²¹`
   and zero bound, in both body orders, and two points at a zero band; the cube lifted by `2⁻³⁰ mm` is
@@ -2525,7 +2526,7 @@ lines below do not repeat it.
   `−2⁻³⁰` and two at `2⁻²¹ − 2⁻³⁰`; the cube with its far edge past the floor's rim publishes two points (the
   foot test deleted, four: shown to fail); the cube against an L-shaped tray's floor and wall publishes the
   floor's two points and the wall's two exact and two lifted points, each with its own normal.
-  `contact_sweep_band_test.go` gains three tests over the tilted cube turning at `1 rad/s` about its near edge,
+  `apitest/contact_sweep_band_test.go` gains three tests over the tilted cube turning at `1 rad/s` about its near edge,
   which lowers the far edge, in a `2⁻²² s` sweep at a `2⁻³² s` resolution: `TestSweepPairSupportSetBand`,
   whose band track ends at the last grid fraction before the far edge's lower bound `2⁻²¹ − |h'(0)|·t − K·t²`
   reaches zero, within one grid step of that root, and whose `BandAt` encloses the far edge's exact height at
@@ -2533,7 +2534,7 @@ lines below do not repeat it.
   the lifted cube moving up, `DepartedClear` from a `ContactBand` start; and
   `TestSweepPairSupportSetArrivalEndsTrack`, whose track ends before the arrival and whose replay refuses
   every instant past its end (the lifted lower-bound leg deleted, the track runs to the duration: shown to
-  fail). `.github/test-shards.txt` lists them.
+  fail). `.github/test-shards-apitest.txt` lists them.
 - Test (`dynamics`): `dynamics/tip_test.go`'s `TestBoxTipsOverAndRestsFlat` with
   `SupportBand = PenetrationResidual/2`: the cube tips as under a zero band and lands its far edge; the
   landing step's last event carries four points with a positive impulse on each edge and `PostVelocityB` and
@@ -2560,10 +2561,10 @@ lines below do not repeat it.
   triangle set, an open sheet or a failed crossing audit, and returns the largest `vertBound`, at least
   `delta`, as the displacement, zero for the scene's tetrahedron.
 - Files: `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
-- Test (root): `contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
+- Test (`apitest`): `apitest/contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
   tetrahedron (four patches welded at the identity) `5 mm` above a source-box floor reads
   `Separated` with `Gap` exactly `5 mm`; resting on its `XY` face it reads `Touching`, and the pair's
-  reverse order the same; the tetrahedron carries the convexity certificate. `contact_faceted_manifold_test.go`
+  reverse order the same; the tetrahedron carries the convexity certificate. `apitest/contact_faceted_manifold_test.go`
   gains `TestPlanarManifoldStitchedVertexTouch`: the tetrahedron turned to stand on its apex publishes one
   point at the apex's exact staged coordinate with `Normal` `(0, 0, 1)` and `FeatureB.Vertex` the live
   apex, and on its `XY` face the three face corners at their exact coordinates. Legs shown to fail: the
@@ -2572,7 +2573,7 @@ lines below do not repeat it.
   requires a `ContactBand`. The `vertBound` widening has no identity-placed fixture: only a
   certificate-welded stitch (`docs/surface-design.md` §6.2) carries a positive class bound at the
   identity, and the test file records that the term is the same per-vertex bound `tessellate_stitch.go`
-  publishes per face, read back rather than proved twice. `.github/test-shards.txt` lists both tests.
+  publishes per face, read back rather than proved twice. `.github/test-shards-apitest.txt` lists both tests.
 - Depends on: PRs 10, 11. PR 14 for the scene's mass only.
 - Shipped. The tests also read the tetrahedron on the `Cut` tray's floor, whose manifold needs the
   tetrahedron's certificate since the tray has none, and assert the placed copy's band against twice its
@@ -2585,12 +2586,12 @@ lines below do not repeat it.
   `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
 - Files: `contact_sweep_band.go`, `contact_sweep_faceted.go`, `contact_sweep_replay.go`, new
   `internal/pair/planar_column.go`.
-- Test (root): `contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
-  of `contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
+- Test (`apitest`): `apitest/contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
+  of `apitest/contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
   cube rising from the tray's floor at `100 mm/s` with `ω = (0, 1, 0) rad/s`, `DepartedClear`, its
   `Departure.GapAtUntil` within its ball of the cube's lowest staged corner height at the horizon;
   `TestSweepPairBandTrackOnTrayFloor`, the cube on its edge on the tray's floor turning about that edge,
-  a `SweepPersistentBand` whose `Band()` equals the `K·h²` closed form `contact_sweep_band_test.go`
+  a `SweepPersistentBand` whose `Band()` equals the `K·h²` closed form `apitest/contact_sweep_band_test.go`
   already checks on a plain floor; and `TestSweepPairColumnEndsDepartureAtWall`, the cube rising while
   sliding at `200 mm/s` toward a wall `1 mm` away, whose departure horizon is the last grid fraction before
   the cube's path box reaches the wall's projection and whose later search brackets the wall impact within
@@ -2600,7 +2601,7 @@ lines below do not repeat it.
   `TestPlanarDepartureLowerGapIsBoundedByLateralClearance`, the cube rising `1 µm` from a wall, publishes a
   lower gap above `1 µm`. `internal/pair/planar_column_test.go` checks the projected gap of a triangle
   diagonal to a box against its closed form and that a triangle behind the plane is not read.
-  `.github/test-shards.txt` lists the root tests.
+  `.github/test-shards.txt` lists the root test and `.github/test-shards-apitest.txt` the `apitest` tests.
 - Depends on: PR 14a.
 - Shipped. The wall fixture spins the cube at `2⁻¹⁶ rad/s` about `Z`, since an axis-aligned source box
   that only translates against a faceted body takes the faceted-floor sweep; the band track's column
@@ -2614,7 +2615,7 @@ lines below do not repeat it.
   when §9.3's convex-convex path publishes nothing.
 - Files: `internal/pair/planar.go`, new `internal/pair/planar_face_penetration.go`,
   `contact_faceted_manifold.go`; `docs/collision-v1-support.md`.
-- Test (root): `contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
+- Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
   `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `(1, −1, 0)` and sunk so
   one corner stands exactly `2⁻²⁰ mm` below the floor, publishing one point whose `OnB` is the corner's
   exact staged coordinate, whose `OnA` is its foot on `z = 0`, whose `Separation` is exactly `−2⁻²⁰` with
@@ -2634,11 +2635,11 @@ lines below do not repeat it.
   publishes its sunk corner alone. `internal/pair/planar_test.go` gains
   `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles, its
   three edges with its faces' diagonals, and the floor's diagonal, and a box crossing floor and wall
-  names both faces; stopping the scan at the first crossing is shown to fail. `.github/test-shards.txt`
-  lists the root tests.
+  names both faces; stopping the scan at the first crossing is shown to fail. `.github/test-shards-apitest.txt`
+  lists the `apitest` tests.
 - Depends on: PRs 11, 14a, 14c.
 - Shipped. A pair of two certified bodies tries both orders as `M` (§9.6), and the hexagonal prism of
-  `contact_faceted_pair_test.go` sunk `0.5 mm` into the `Cut` tray's floor now publishes its corner.
+  `apitest/contact_faceted_pair_test.go` sunk `0.5 mm` into the `Cut` tray's floor now publishes its corner.
 
 ### PR 14e (Phase 2) — continuation inside the band
 
@@ -2675,9 +2676,9 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   of §5 step 7 and §6.6, and the §2 residuals of the `tumble` scene.
 - Files: `contact_sweep.go` (the field and its validation), `contact_sweep_band.go`, `dynamics/step.go`
   (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`, `carriedPenetration`), `dynamics/island.go`
-  (`solveIslands`), `.github/test-shards.txt`.
-- Test (root): `contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
-  `SupportBand`'s errors. `contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
+  (`solveIslands`), `.github/test-shards-apitest.txt`.
+- Test (`apitest`): `apitest/contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
+  `SupportBand`'s errors. `apitest/contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
   PR 14a tilted cube, its far edge `2⁻²¹ mm` up, turning about its near edge so the far edge descends at
   `8·cos θ mm/s`, swept under `ContinueCertifiedTouch` with `RestSpeed = 10 mm/s`: the track reaches the
   duration, the far corners' exact staged heights at its end are negative, `BandAt` encloses each far
@@ -2755,7 +2756,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §8.6.
 - Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, new `mass_properties_revolve.go`.
-- Test (root): `mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
+- Test (`apitest`): `apitest/mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
   the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components, and an off-axis
   triangle makes the `r²z` products nonzero; a full torus against the closed form; a rotated placement
   encloses `Q I Qᵀ`, with the orthonormality-defect leg shown to fail.
@@ -2774,7 +2775,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Files: `contact_faceted_pair.go`, `contact_sweep_faceted.go`, `contact_sweep_rotation.go`,
   `contact_sweep_band.go`, `contact_sweep_replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
-- Test (root): `contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
+- Test (`apitest`): `apitest/contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
   each refusal over a cap-loop chamfered block, whose `δ` read through `Tessellate` is its contour's
   rounding (about `1e-15 mm`), and a box `Union` a chorded disc, whose `δ` is the chord sagitta (about
   `4e-4 mm`) and places held gaps inside and outside the band. `dynamics/contact_band_test.go`: an
@@ -2790,7 +2791,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Delivers plane/cylinder ruling and cylinder/cylinder manifolds from clearance's certified feet with
   `Face.NormalAt` balls.
 - Files: new `contact_analytic_manifold.go`; `clearance_tiers.go`.
-- Test (root): `contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
+- Test (`apitest`): `apitest/contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
   the ruling's two endpoints with the computed normal ball.
 - Depends on: nothing.
 - Shipped, at identity query poses; PR 20 adds the plane/cylinder ruling at placed poses
@@ -2810,10 +2811,10 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   dispatched from `contact_sweep_faceted.go` and read through `contact_sweep.go` and
   `contact_sweep_replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
   `contact_analytic_manifold.go`, dispatched from `contact_pair.go`. Root tests:
-  `contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
+  `apitest/contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
   exact touch track whose contact point is at rest within its published ball, publishes the computed
   depths of sinking, orbiting and tilting drifts, and starts tracks from translated, long-rolled and
-  tipped poses; `contact_analytic_manifold_test.go` checks each placed band, ball and gap against the
+  tipped poses; `apitest/contact_analytic_manifold_test.go` checks each placed band, ball and gap against the
   float pose's true occupied set in 512-bit arithmetic. `dynamics/rolling_test.go` rolls the cylinder
   sixteen steps of `1/16 s` in a four-body world, with and without gravity, in both body orders.
 
@@ -2824,11 +2825,11 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   prefix `prefixSweepSpanZeroRole` minted (`side(0,i,j)`); `docs/sweep-design.md` D2 gains that exception.
   The reduction builds through `evalPrismContext`, so the prism's mesh and proofs are the sweep's.
 - Files: `tessellate.go`, `docs/sweep-design.md`.
-- Test (root): `sweep_tessellate_test.go`: the §2 hexagon sweep's mesh has the vertex set, triangle count,
+- Test (`apitest`): `apitest/sweep_tessellate_test.go`: the §2 hexagon sweep's mesh has the vertex set, triangle count,
   zero `Bound()`, `BoundaryVerified` and `VolumeVerified` of the same profile's `Extrude`, and every wall
   triangle's source face is the sweep's live wall `Face` under its prefixed role; an arc sweep and a
   two-span sweep stay refused with `ErrUnsupported`. Leg shown to fail: the role prefix deleted, the
-  sweep refuses with `ErrDegenerate` naming the missing role. `.github/test-shards.txt` lists it.
+  sweep refuses with `ErrDegenerate` naming the missing role. `.github/test-shards-apitest.txt` lists it.
 - Depends on: nothing.
 
 ### PR 20b (Phase 3) — `HeldChord` and the held-mesh admission of every solid payload
@@ -2839,7 +2840,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `HeldChord`, a zero chord refusing it), `δ` the mesh's `Bound`, the face map from the mesh's source
   faces; the snapshot cached per body and chord beside the §9.2 certificate.
 - Files: `contact_faceted_pair.go`, `contact_pair.go`, `contact_sweep.go`, `dynamics/world.go`.
-- Test (root): `contact_band_test.go` gains `TestHeldMeshAdmitsEveryPayload`: the §2 bottle `5 mm` above a
+- Test (`apitest`): `apitest/contact_band_test.go` gains `TestHeldMeshAdmitsEveryPayload`: the §2 bottle `5 mm` above a
   source-box floor at `HeldChord = 0.03 mm` reads `Separated` with `5 mm` inside its gap interval and a
   bound at least the `Bound()` of `Tessellate` at that chord and at most `0.05 mm`; at a zero chord it is
   `Undecided`; the §2 cup, loft and sweep each `5 mm` up read `Separated` with `Gap` exactly `5 mm`, and the
@@ -2848,8 +2849,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   request rejects a negative, non-finite or non-`Length` chord at `ContactPair`, `SweepPair` and `NewWorld`.
   Leg shown to fail: the `δ` reading deleted, the bottle with its held bottom `δ/2` above the floor reads
   an exact `Separated` whose gap interval excludes zero while the revolve's true lowest point, evaluated
-  in 512-bit arithmetic as `contact_analytic_manifold_test.go` evaluates a cylinder, lies below the held
-  bottom by more than that gap. `.github/test-shards.txt` lists it.
+  in 512-bit arithmetic as `apitest/contact_analytic_manifold_test.go` evaluates a cylinder, lies below the held
+  bottom by more than that gap. `.github/test-shards-apitest.txt` lists it.
 - Depends on: PR 18; PR 20a for the scene's sweep only.
 - Shipped. Every reader of the chord goes through `heldChordOf` (`contact_faceted_pair.go`). The
   snapshot at the identity pose is cached on the body (`planarSnapshotOf`, `topology.go`), keyed by the
@@ -2867,7 +2868,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
   §9.6's face-local one, read over `M`'s held vertices grown by `M`'s `δ`, charged the same way.
 - Files: `contact_faceted_pair.go`, `contact_faceted_manifold.go`, `internal/pair/planar_face_penetration.go`.
-- Test (root): `contact_band_test.go` gains, each in both body orders over the §2 tray: the `2.1 mm`
+- Test (`apitest`): `apitest/contact_band_test.go` gains, each in both body orders over the §2 tray: the `2.1 mm`
   chamfered block turned about `Y` by `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`,
   `ContactBand` with `Gap.Bound` the lowest corner's height plus `δ`, four points whose `M` balls and
   `Separation` bounds are each at least `δ` and whose `Normal` is `(0, 0, 1)`; the same block sunk
@@ -2916,7 +2917,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Delivers §10.5's hull rule: `planarLiftedSet` reads every guest, and a `Touching` non-convex guest whose
   §9.1 contacts all lie on one support plane publishes that plane's contact set then its lifted set.
 - Files: `contact_faceted_manifold.go`, `internal/pair/planar_manifold.go`.
-- Test (root): `contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
+- Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
   floor at a translation pose, `Touching` with its four bottom corners at their exact coordinates,
   `Normal` `(0, 0, 1)` and the cup's live vertices as features; the cup turned about `Y` by
   `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻¹⁹ mm`, `ContactBand` with four points at their
@@ -2943,14 +2944,14 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   when `m` exceeds its half-width; the rolling track's band search runs the column test over the corners'
   path box less `S`'s translation.
 - Files: `contact_analytic_manifold.go`, `contact_sweep_rolling.go`.
-- Test (root): `contact_analytic_manifold_test.go` gains, over the §2 tray: the `Ø20 × 30 mm` cylinder on
+- Test (`apitest`): `apitest/contact_analytic_manifold_test.go` gains, over the §2 tray: the `Ø20 × 30 mm` cylinder on
   its side on the floor at a signed-axis pose, `Touching` with the ruling's two ends and `Normal`
   `(0, 0, 1)`; turned `2⁻²⁰ rad` about `Z`, the band the plain-floor fixture publishes; `1 mm` above the
   floor with an end `0.5 mm` from a wall, `Separated` with lower end at most `0.5 mm`, upper end `1 mm`
   and the 512-bit true gap inside; an end over a wall's rim, `Undecided`; within `2⁻²⁰ mm` of the floor
   and `2⁻³⁰ mm` from a wall, `Undecided`. Legs shown to fail: the upper end clamped to `m`, the near-wall
   fixture's true gap lies above the published interval; the column test deleted, the rim fixture reads a
-  touch. `contact_sweep_rolling_test.go` gains one turn on the tray's floor publishing the plain floor's
+  touch. `apitest/contact_sweep_rolling_test.go` gains one turn on the tray's floor publishing the plain floor's
   depths, and a roll toward a wall `1 mm` away whose track ends at the last grid fraction before the
   corners' path box reaches the wall's projection; leg shown to fail: the column test deleted, the track
   reaches the duration through the wall. `dynamics/rolling_test.go` gains sixteen steps on the tray under
@@ -2981,7 +2982,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Depends on: PR 18.
 - Shipped. `rotationalSweepPath.transferCharge` in `contact_sweep_rotation.go` computes the charge and
   `replayDeviation` returns it, so replay (`contact_sweep_replay.go`) and the rotating bracket's
-  narrowing read the same figure. `contact_band_test.go`'s knob falling onto the floor replays its
+  narrowing read the same figure. `apitest/contact_band_test.go`'s knob falling onto the floor replays its
   bracket's left edge, whose proven gap is far under `δ`.
 
 ### PR 20g (Phase 3) — the witness torque
@@ -2999,7 +3000,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   resting within `32` steps with both velocities exactly zero, its `ContactPair` at rest a `ContactBand` whose
   `Gap.Bound` is at most `δ + SupportBand`; the landing island's `WitnessTorque` equals, within one rounding,
   `Σ_k b_k·|J_k|_1` recomputed in the test from the event's manifold balls and point impulses, its
-  `WitnessSpin` equals that over the bottle's certified lower eigenvalue (read through `export_test.go`) and
+  `WitnessSpin` equals that over the bottle's certified lower eigenvalue (read through `apitest/export_test.go`) and
   lies below `1 rad/s`, and each resting island's `WitnessSpin` lies below `0.05 rad/s`; at
   `PointResolution = 1e-6 mm` the landing step is `StepManifoldMissing` (`ContactPointTooCoarse` withholds the
   band's manifold at the rounded event poses); at `PenetrationResidual = 0.1 mm` the landing step is `StepTrackUnproved`, the band

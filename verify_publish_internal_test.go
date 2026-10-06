@@ -32,7 +32,7 @@ func publishBody(t *testing.T, body *Body, opts ...VerifyOption) *BodyReport {
 }
 
 // rectangularPrism extrudes a solved w x d rectangle by h, the same fixture
-// survey_test.go's rectPrism builds, returning the Body directly.
+// apitest/survey_test.go's rectPrism builds, returning the Body directly.
 func rectangularPrism(t *testing.T, w, d, h float64) *Body {
 	t.Helper()
 	ws := sketch.NewWorld()
@@ -198,7 +198,7 @@ func TestVerifyPublishAbsentConcaveRadius(t *testing.T) {
 }
 
 // holePlateBody extrudes a 100x60x8 plate with a diameter-20 through hole at
-// (70, 30), the same fixture survey_test.go's holePlate builds.
+// (70, 30), the same fixture apitest/survey_test.go's holePlate builds.
 func holePlateBody(t *testing.T) *Body {
 	t.Helper()
 	ws := sketch.NewWorld()
@@ -423,7 +423,7 @@ func TestVerifyPublishUndercutCompleteViolation(t *testing.T) {
 	require.Equal(t, AssessmentViolated, res.Undercut.Assessment)
 }
 
-// chamferedQuarterDiskBody replays capblend_survey_test.go's
+// chamferedQuarterDiskBody replays apitest/capblend_survey_test.go's
 // chamferedQuarterDiskPatch: a quarter disk (0,0)->(r,0), a CCW arc to
 // (0,r), and back to the origin, extruded by h and then chamfered by d on
 // its end cap loop — the same real cap-blend construction reached through
@@ -549,7 +549,7 @@ func TestVerifyPublishUndercutUnavailable(t *testing.T) {
 }
 
 // capBlendPlateBody extrudes a 100×60 plate by 20 mm and chamfers its whole
-// end-cap loop by 5 mm — the same cap-blend construction capblend_test.go's
+// end-cap loop by 5 mm — the same cap-blend construction apitest/capblend_test.go's
 // capBlendBox drives, reached here through the public Body API alone since
 // that helper lives in the external decad_test package.
 func capBlendPlateBody(t *testing.T) *Body {
@@ -615,7 +615,7 @@ func TestVerifyPublishCapBlendWallStaged(t *testing.T) {
 // TestVerifyPublishToleranceReferenceUnavailable is proposal §16's "Missing
 // reference" acceptance case: private-gate coverage of the tolerance verdict
 // itself, not an end-to-end public path, since every shipped payload class
-// forms a usable reference (requireDiagnosticInvariants, verify_test.go). A
+// forms a usable reference (requireDiagnosticInvariants, apitest/verify_test.go). A
 // nil body gives bodyGateDiameter no usable diameter, so a nonzero-bound
 // reading has no usable tolerance reference.
 func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
@@ -692,7 +692,7 @@ func TestVerifyPublishValidBodyRegion(t *testing.T) {
 }
 
 // TestVerifyPublishPlateWithHoleTopology replays the through-hole plate
-// behind TestVerifyPlateWithHole (verify_test.go): a through hole opens to
+// behind TestVerifyPlateWithHole (apitest/verify_test.go): a through hole opens to
 // the outside, so it walls off no cavity — one lump, no void (proposal §9).
 func TestVerifyPublishPlateWithHoleTopology(t *testing.T) {
 	t.Parallel()
@@ -703,7 +703,7 @@ func TestVerifyPublishPlateWithHoleTopology(t *testing.T) {
 }
 
 // TestVerifyPublishRevolveVoid replays TestRevolveFullTurnHoleIsVoidShell
-// (revolve_test.go): a full-turn revolve of an annular rectangle with a
+// (apitest/revolve_test.go): a full-turn revolve of an annular rectangle with a
 // circular hole closes the hole into a toroidal void shell — one void
 // (proposal §9).
 func TestVerifyPublishRevolveVoid(t *testing.T) {

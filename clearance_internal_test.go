@@ -974,7 +974,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 
 // TestAddStitchFacesBuildsExactPlanarCarriers is docs/clearance-design.md
 // §2's stitch arm (C2), computed-geometry coverage beside the public
-// stitch_test.go rows: every one of the box's 6 faces builds a ckPlane
+// apitest/stitch_test.go rows: every one of the box's 6 faces builds a ckPlane
 // carrier whose outward normal is an exact signed unit axis vector — the
 // same box T3 already proves closed and outward-wound — and whose own
 // region correctly admits an interior probe and rejects an exterior one.
@@ -1041,7 +1041,7 @@ func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
 // mesh boolean's own (pre-existing, unrelated) coplanar-contact gate
 // refuses a shared face plane as undecided, a genuine limit of the general
 // boolean rather than of the stitched operand's own volume proof.
-// stitch_test.go's TestStitchOverlappingSolidReportsRealInterference (T72)
+// apitest/stitch_test.go's TestStitchOverlappingSolidReportsRealInterference (T72)
 // is the public demonstration that the volume proof itself now lets a
 // stitched pair reach a real Interference row, over a fixture with no
 // shared face plane to trip that separate gate.

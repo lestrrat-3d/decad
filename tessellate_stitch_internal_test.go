@@ -31,7 +31,7 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 }
 
 // internalAnnularRevolveSheet is T31's own annular full-turn revolve sheet
-// (annularRevolveSheet, stitch_flux_test.go: 2 Cylinder walls, 2 Plane
+// (annularRevolveSheet, apitest/stitch_flux_test.go: 2 Cylinder walls, 2 Plane
 // annuli), duplicated here because this file's package (decad) cannot import
 // the exported test package that helper lives in — the same reach
 // stitchInternalOffAxisPlateSketch's own duplication above sets the
@@ -156,7 +156,7 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	}
 }
 
-// stitchInternalOffAxisPlateSketch is stitch_test.go's offAxisPlateSketch
+// stitchInternalOffAxisPlateSketch is apitest/stitch_test.go's offAxisPlateSketch
 // (package decad_test), duplicated here because this file's package (decad)
 // cannot import the exported test package that helper lives in — the same
 // reach stitch_internal_test.go's own sphereRevolveFacesForInternalTest
@@ -188,13 +188,13 @@ func stitchInternalOffAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Pro
 // TestStitchTessellateClassBoundIsIndependentOfPlacement is docs/surface-design.md's
 // T60: T42's bounded-rim stitched solid (a Symmetric surface-extruded wall
 // on an off-axis, non-origin sketch plane, Body.Patch-capped on both rims,
-// then stitched at IDENTITY — the same fixture stitch_test.go's
+// then stitched at IDENTITY — the same fixture apitest/stitch_test.go's
 // TestStitchClosesABoundedPatchedWallWithChargedVolumeBound builds). No
 // placement is in play at all, so a positive mesh Bound here can only be
 // read from the weld's own CLASS bound (stitchVertexTable.boundByClass),
 // never from a placement delta — the leg
 // TestStitchPlacedSolidTessellateBoundReadsVertexBound (T59,
-// tessellate_stitch_test.go) cannot distinguish on its own.
+// apitest/tessellate_stitch_test.go) cannot distinguish on its own.
 func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := stitchInternalOffAxisPlateSketch(t)
@@ -226,7 +226,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 }
 
 // internalStitchedBox builds T3's own worked box example (stitchBoxSheets,
-// stitch_test.go) inside package decad, since that helper lives in the
+// apitest/stitch_test.go) inside package decad, since that helper lives in the
 // external test package this file cannot import.
 func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	t.Helper()
@@ -272,7 +272,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 // zero-vertex-bound stitched body publishes volSymDiff == 0 with
 // symDiffOK == true. Shown-to-fail: forcing symDiffOK to false
 // unconditionally (this increment's own publication step) turns this red —
-// the leg boolean_test.go's own T71 exercises end to end through Union.
+// the leg apitest/boolean_test.go's own T71 exercises end to end through Union.
 func TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody(t *testing.T) {
 	t.Parallel()
 	box := internalStitchedBox(t, New())

@@ -409,7 +409,7 @@ func walkEndFromModel(w segmentWalk) Point2 {
 // straight chord back to its start. The construction — a LineSeg from the
 // first fit point to the last, followed by the FitSplineSeg walked in
 // REVERSE (TStart=1, TEnd=0) — is the same reversed pairing
-// spline_fit_test.go's own TestFitSplineTerminalDedupRefusesUnclosedLoopReversed
+// apitest/spline_fit_test.go's own TestFitSplineTerminalDedupRefusesUnclosedLoopReversed
 // uses to reproduce a real recorded record exactly, and it is what gives this
 // loop positive net area: the forward pairing (spline first, chord back)
 // winds the opposite way and evalPrismContext refuses it as ErrDegenerate.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// internalChainRibbonBody builds extrude_chain_test.go's own T132 fixture — a
+// internalChainRibbonBody builds apitest/extrude_chain_test.go's own T132 fixture — a
 // rectangle with one side erased, three straight walls — restated here since
 // an internal test cannot import the decad_test package that owns it. Three
 // walls is the smallest ribbon with more than one wall to attribute wrongly.

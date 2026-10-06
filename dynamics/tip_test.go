@@ -60,7 +60,7 @@ import (
 //   - the SupportBand validation of NewWorld: TestNewWorldRejectsSupportBand
 //     builds a world whose band exceeds the residual.
 //
-// The band's own depth legs are shown in contact_sweep_band_test.go.
+// The band's own depth legs are shown in apitest/contact_sweep_band_test.go.
 
 // tipScene is the floor, the cube and two far fixed boxes.
 type tipScene struct {

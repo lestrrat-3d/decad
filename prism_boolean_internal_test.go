@@ -21,7 +21,7 @@ import (
 // white-box test suite: each gate is isolated directly against
 // admitPrismPair/tryPrismBoolean so a miss is confirmed precisely, without
 // depending on whichever refusal the mesh path's own fallback happens to
-// produce for a given geometry (prism_boolean_test.go covers that richer,
+// produce for a given geometry (apitest/prism_boolean_test.go covers that richer,
 // public-API shape separately). A synthetic prismPayload is used where a gate
 // is easiest isolated from one built directly (G1, G4): a live prismPayload
 // can hold a free-form segment via Extrude since §10 P4b, but G4's own
@@ -659,7 +659,7 @@ func synthGapRectLoop(u0, v0, u1, v1, gap float64) LoopRecord {
 // before the merge ever sees them. That is fu157's class (#158): welding the
 // private scene's own recorded junctions closes exactly that fixture's loop,
 // so a test keyed on it would silently start asserting the wrong thing once
-// that PR lands (prism_boolean_test.go's
+// that PR lands (apitest/prism_boolean_test.go's
 // TestPrismUnionCutFragmentOperandRefusesNonClosingMerge is that fixture, and
 // carries the same risk explicitly).
 //
@@ -870,7 +870,7 @@ func prismExactLineOnlyArea(t *testing.T, p ProfileRecord) *big.Rat {
 // rounded UP into a float64 — differencing against a float64 conversion of
 // truth would fold half an ulp of the reported magnitude into the answer,
 // which could flatter a bound that failed to contain the true error
-// (prism_boolean_displacement_test.go's exactResidual documents the same
+// (apitest/prism_boolean_displacement_test.go's exactResidual documents the same
 // point for the external test suite; this is its internal-package twin).
 func prismExactResidual(t *testing.T, reported float64, truth *big.Rat) float64 {
 	t.Helper()
@@ -1764,7 +1764,7 @@ func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
 }
 
 // This file is prism_overlap.go's own white-box test suite: the admission and
-// decline mechanics prism_overlap_test.go's black-box Verify-level suite does
+// decline mechanics apitest/prism_overlap_test.go's black-box Verify-level suite does
 // not isolate on its own — the exactly-tangent decline, the arrangement cap,
 // mid-reading cancellation, and the G1-G4-style regression fallbacks. It
 // reuses prism_boolean_internal_test.go's canonicalPrismFrame/synthRectLoop
@@ -1772,7 +1772,7 @@ func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
 
 // internalPolyPrismBody extrudes a closed polygon (one outer loop, no holes)
 // from z=0 to z=h into a real Document, every vertex pinned at its authored
-// coordinate — the internal-package twin of prism_overlap_test.go's
+// coordinate — the internal-package twin of apitest/prism_overlap_test.go's
 // polyPrismBody, needed here because prismOverlapVolume's per-cell
 // measurement calls d.nextProducerID() and requires a live *Document.
 func internalPolyPrismBody(t *testing.T, doc *Document, pts [][2]float64, h float64) *Body {
@@ -1850,7 +1850,7 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 }
 
 // crossTeethPts and crossBarPts build the same two-disjoint-region U-and-bar
-// shape as prism_overlap_test.go's own fixture, restated here so this
+// shape as apitest/prism_overlap_test.go's own fixture, restated here so this
 // internal-package file needs no cross-package helper.
 var (
 	crossUPts = [][2]float64{

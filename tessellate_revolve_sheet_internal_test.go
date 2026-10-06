@@ -11,7 +11,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's internal legs of T10's revolve
-// row: the two claims tessellate_revolve_sheet_test.go cannot assert from
+// row: the two claims apitest/tessellate_revolve_sheet_test.go cannot assert from
 // outside the package because they read Mesh's own unexported proof fields
 // directly — that a revolve sheet publishes no occupied-volume proof at
 // all, and that its area slack is strictly below the same record's solid

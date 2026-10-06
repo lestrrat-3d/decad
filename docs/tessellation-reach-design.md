@@ -142,7 +142,7 @@ answering `+Inf` for an underivable enclosure is the same refusal.
 
 ### Tests (R0)
 
-- Plate with a circular hole (`holedPlateBody`, `tessellate_test.go`): every wall face of the hole publishes
+- Plate with a circular hole (`holedPlateBody`, `apitest/tessellate_test.go`): every wall face of the hole publishes
   `faceBound >= chordSagitta(r, 2π, n)`; each cap publishes at least that; every straight outer wall publishes
   exactly 0 under identity placement.
 - The same plate under a rotated placement: every `faceBound > 0`, and `Bound` exceeds the unplaced `Bound`
@@ -227,7 +227,7 @@ loft is an ordinary positive-bound all-planar operand via `rimDelta` (loft Table
 
 tess §14's loft bullet in full, plus:
 
-- `TestLoftTessellateStaged` (`loft_test.go`) becomes `TestLoftTessellate`: mesh non-nil; triangle count
+- `TestLoftTessellateStaged` (`apitest/loft_test.go`) becomes `TestLoftTessellate`: mesh non-nil; triangle count
   `== 2·Σstations + capTris`; `requireWatertight`; `meshVolume(mesh)` within `body.Volume().Bound()` of
   `body.Volume().Value`; every `SourceFaces()` entry is one of `b.Faces()`; the mesh vertex set equals the
   body's `Vertices()` positions exactly.
@@ -324,11 +324,11 @@ A rational (Tier B/C) walk never reaches the arm: spline R10 refuses it at `Extr
   before any vertex is allocated. Which of the two refusals binds is fixture-dependent and NOT asserted: the
   exact-rational work counter (spline R7) is charged per bisection and is reached long before one curve's
   chord cap (R8) is, on every fixture this package builds.
-- A 15-point involute `FitSplineSeg` prism (`extrude_test.go`'s `involuteFlankSketch`): byte-identical `STL`
+- A 15-point involute `FitSplineSeg` prism (`apitest/extrude_test.go`'s `involuteFlankSketch`): byte-identical `STL`
   and `OBJ` on two calls. On the fit-spline arch: `Cut(prism, box)` where the box lies strictly inside
   reports `Volume` within `Bound` of `prism.Volume − box.Volume`; two overlapping free-form prisms make
   `Verify` decide their pair with a proven `Interference` row.
-- `extrude_freeform_test.go`'s tessellation, export, boolean and interference refusal assertions flip to
+- `apitest/extrude_freeform_test.go`'s tessellation, export, boolean and interference refusal assertions flip to
   success; its clearance and survey refusals stand, since neither reads the mesh.
 
 ## 6. R3–R5 — revolve (tess T2/T3/T4)
@@ -445,7 +445,7 @@ sphere, spherical band, ring torus, concave torus wall, the radius-1 full-turn `
 narrow-bulge hole below and above the summed tubes, the inner-torus sign-changing `Ecell`; R5 — the interval
 integrator on fixed-sign and adversarial cells, revolve×prism and revolve×revolve booleans with a hidden
 tangency refusal and a shallow crossing whose rim amplification refuses, the property fuzz across tolerance
-scales. `revolve_property_test.go` already tessellates opportunistically; after R3 its watertightness
+scales. `apitest/revolve_property_test.go` already tessellates opportunistically; after R3 its watertightness
 invariant becomes mandatory for line-only fixtures, after R4 for all.
 
 ## 7. R6 — cap-loop chamfer (`capBlendPayload`), tess T7
@@ -706,7 +706,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of
    `walkEndBoundAllow(chordStationBound)` and `exactPrismPointRound` (`prism_payload.go`); per-face `faceBound`
    per §3's table; `perturbedTriangleAreaAllow` per triangle into `areaSlack`. **Depends on:** 1, 3.
-   **Tests:** `tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
+   **Tests:** `apitest/tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
    placement is unchanged from today's value for `holedPlateBody`.
 5. **Files:** `tessellate.go`. **What:** `volSymDiff` per §3's prism/cup formulas; `symDiffOK = true`.
    **Depends on:** 2, 4. **Tests:** the cylinder circular-segment example (§3).
@@ -714,7 +714,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `sectionDisplacementOf` if unreferenced; `operandSymDiff` returns `(float64, error)` reading
    `m.volSymDiff` under `m.symDiffOK`, else a staging `ErrUnsupported`. **Depends on:** 1, 4, 5.
    **Tests:** `boolean_internal_test.go` reconstructs a prism×prism result bound from the two `volSymDiff`s;
-   `prism_boolean_displacement_test.go`'s existing refusal fixtures still refuse.
+   `apitest/prism_boolean_displacement_test.go`'s existing refusal fixtures still refuse.
 
 ### R1 — loft
 
@@ -729,7 +729,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    with twist.
 9. **Files:** `tessellate.go`, `loft_build.go`, `internal/tessellation/loft.go`. **What:** `tessellateLoft` per §4; dispatch in
    `tessellateContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
-   **Depends on:** 6, 8. **Tests:** §4's list in `loft_test.go` and `export_test.go`.
+   **Depends on:** 6, 8. **Tests:** §4's list in `apitest/loft_test.go` and `apitest/export_test.go`.
 10. **Files:** `docs/loft-design.md` §9 Table D rows D1/D2 (status cells become current state), `doc.go`'s
     support map. **Depends on:** 9.
 
@@ -742,7 +742,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     (`spline_sagitta_metering_internal_test.go`) still passes.
 12. **Files:** `tessellate.go`. **What:** the `walkFreeform` arm of `chordLoop` per §5 (stations, reversal,
     rounding, `faceOf`, `areaSlack`, `volSymDiff` terms); remove the `requireAnalyticWalk` call there.
-    **Depends on:** 4, 5, 11. **Tests:** §5's list in `extrude_freeform_test.go` and `export_test.go`.
+    **Depends on:** 4, 5, 11. **Tests:** §5's list in `apitest/extrude_freeform_test.go` and `apitest/export_test.go`.
 13. **Files:** `docs/spline-design.md` Table C rows (`Tessellate`, booleans, interference read current
     state), `doc.go`. **Depends on:** 12.
 
@@ -754,7 +754,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 15. **Files:** new `tessellate_revolve.go`. **What:** `revolveMeridianSamples`, `requireRevolveAxisIncidence`,
     `revolveExtents`, `revolvePreflightFacets`, rings, poles, `emitRevolveCell`, `emitRevolveCaps`,
     orientation; dispatch; refuse circular walks. **Pattern:** `tessellateCup` for ring sharing and cap
-    emission. **Depends on:** 6, 14. **Tests:** R3's list in new `tessellate_revolve_test.go`; export byte
+    emission. **Depends on:** 6, 14. **Tests:** R3's list in new `apitest/tessellate_revolve_test.go`; export byte
     identity there too.
 16. **Files:** new `tessellate_revolve_proof.go`. **What:** `revolveAngularSequence` and its certified trig,
     `deltaC` (`revolveIdealBasis`/`revolveMeridianEnclosure`/`revolveIdealPoint`), `deltaR`
@@ -796,5 +796,5 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 24. **Files:** new `tessellate_capblend.go`. **What:** shared count `n(w)`, rings, cap contour rings, patch
     cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `tessellateCup` for
     rings, `tessellate_revolve.go` for cone cells and fans. **Depends on:** 9 (twist helper use), 15, 23.
-    **Tests:** §7's list in new `tessellate_capblend_test.go`.
+    **Tests:** §7's list in new `apitest/tessellate_capblend_test.go`.
 25. **Files:** `docs/modify-reach-design.md` §12 DX3/DX4 cells (§8's change), `doc.go`. **Depends on:** 24.
