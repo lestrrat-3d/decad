@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -33,7 +35,7 @@ import (
 // read off the record's own enclosures. A fixture that stated only a
 // hand-built walk could not exercise the arm at all, since no record stands
 // behind it.
-func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, segmentWalk) {
+func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, survey2d.SegmentWalk) {
 	t.Helper()
 	seg := ArcSeg{
 		Center: pt(0, 0),
@@ -53,7 +55,7 @@ func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, seg
 // states no angle at all. A real sketch authentication never produces it
 // (spline_fit.go's own dedup plays the analogous role for the free-form arm),
 // so S16's fixtures build it on the record directly.
-func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
+func degenerateArcFixture(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
 	t.Helper()
 	seg := ArcSeg{Center: pt(0, 0), Start: pt(0, 0), End: pt(0, 0), TStart: 0, TEnd: 1}
 	w, err := walkOf(seg, nil)
@@ -78,8 +80,8 @@ func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
 // trimmed-start fixture below asserts the same arm charging a positive term.
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	t.Parallel()
-	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
-	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
+	w0 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 1, StartV: 2}
+	w1 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 3, StartV: 4}
 	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
@@ -175,7 +177,7 @@ func trimmedStartSquareProfile() ProfileRecord {
 // held ends are the square's own corners exactly, so the fragment states the
 // same square its untrimmed neighbours do and the VALUE readings a loft over
 // it publishes are unchanged.
-func trimmedStartWalk(t *testing.T) segmentWalk {
+func trimmedStartWalk(t *testing.T) survey2d.SegmentWalk {
 	t.Helper()
 	seg := trimmedStartSegment()
 	w, err := walkOf(seg, nil)
@@ -200,10 +202,10 @@ func trimmedStartWalk(t *testing.T) segmentWalk {
 	}
 
 	lo, hi := trimmedSquareCentre-trimmedSquareHalf, trimmedSquareCentre+trimmedSquareHalf
-	require.Equal(t, lo, w.startU, "the denoted start rounds to the square's own bottom-left corner")
-	require.Equal(t, hi, w.endU, "the denoted end rounds to the square's own bottom-right corner")
-	require.Equal(t, lo, w.startV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
-	require.Equal(t, lo, w.endV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	require.Equal(t, lo, w.StartU, "the denoted start rounds to the square's own bottom-left corner")
+	require.Equal(t, hi, w.EndU, "the denoted end rounds to the square's own bottom-right corner")
+	require.Equal(t, lo, w.StartV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	require.Equal(t, lo, w.EndV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
 	return w
 }
 
@@ -230,8 +232,8 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 	seg := trimmedStartSegment()
 	w := trimmedStartWalk(t)
 
-	startDelta := walkEndPlaneDelta(w.startBound)
-	endDelta := walkEndPlaneDelta(w.endBound)
+	startDelta := walkEndPlaneDelta(w.StartBound)
+	endDelta := walkEndPlaneDelta(w.EndBound)
 	require.Positive(t, startDelta,
 		"a station the record denotes off the float64 grid must carry a positive gap")
 	require.Positive(t, endDelta,
@@ -272,7 +274,7 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 	t.Parallel()
 	p := trimmedStartSquareProfile()
-	stationRound := walkEndPlaneDelta(trimmedStartWalk(t).startBound)
+	stationRound := walkEndPlaneDelta(trimmedStartWalk(t).StartBound)
 
 	pl := loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
 	body := evalLoftFixture(t, pl)
@@ -460,7 +462,7 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 // assertion below: the larger of the two sides' own generated-station
 // displacements at count m, read from the SAME production generator the arm
 // itself reads it from.
-func requireStationDelta(t *testing.T, w0, w1 segmentWalk, seg0, seg1 CurveSegment, m int) float64 {
+func requireStationDelta(t *testing.T, w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, m int) float64 {
 	t.Helper()
 	_, d0 := circularStationChain(w0, seg0, m)
 	_, d1 := circularStationChain(w1, seg1, m)
@@ -542,7 +544,7 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 	require.Equal(t, requireStationDelta(t, w, w, seg, seg, m), stationUpper)
 	require.Greater(t, stationUpper, 0.0,
 		"the trimmed stations of this fixture carry a real displacement, so the cell publishes a positive station term beside the certified sagitta")
-	require.NotEqual(t, chordSagitta(w.radius, math.Abs(w.th1-w.th0), m), sagittaUpper,
+	require.NotEqual(t, chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m), sagittaUpper,
 		"the held chooser's own float and the certified enclosure are different readings; the arm publishes the certified one")
 }
 
@@ -560,7 +562,7 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 // fixture portable: WHICH rows cancel low depends on the host's rounding of
 // a0 + t*sweep, but that a sizeable share of them do is arithmetic, not
 // accuracy — the audit measured 200 of 800 rows over this family.
-func shortfallArc(t *testing.T, m int) (ArcSeg, segmentWalk, float64, float64) {
+func shortfallArc(t *testing.T, m int) (ArcSeg, survey2d.SegmentWalk, float64, float64) {
 	t.Helper()
 	scanned := 0
 	for _, sweep := range []float64{1e-5, 3e-5, 1e-4, 3e-4, 1e-3} {
@@ -568,7 +570,7 @@ func shortfallArc(t *testing.T, m int) (ArcSeg, segmentWalk, float64, float64) {
 			base := 3.0 + 0.05*float64(step)
 			seg, w := arcFixture(t, 5, base, sweep, 0.3, 0.9)
 			scanned++
-			held := chordSagitta(w.radius, math.Abs(w.th1-w.th0), m)
+			held := chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), m)
 			lower := certifiedSagittaLower(t, seg, m)
 			if lower > held {
 				t.Logf("shortfall row after %d scanned: base=%v sweep=%v held=%.17g certifiedLower=%.17g (relative shortfall %.5g)",
@@ -578,7 +580,7 @@ func shortfallArc(t *testing.T, m int) (ArcSeg, segmentWalk, float64, float64) {
 		}
 	}
 	t.Fatalf("no row of the audit's own arc family understated the sagitta at m=%d over %d fixtures; the fixture family no longer exercises the cancellation this test exists for", m, scanned)
-	return ArcSeg{}, segmentWalk{}, 0, 0
+	return ArcSeg{}, survey2d.SegmentWalk{}, 0, 0
 }
 
 // certifiedSagittaLower is loftCertifiedSagittaUpper's lower end, built here
@@ -744,7 +746,7 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 // own coordinate envelope decides that target, §5.1, so it does not move with
 // n), which is what lets a fixture drive P and C alone and read the per-segment
 // share loftStationShare allocates from them.
-func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]segmentWalk) {
+func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	segs := make([]CurveSegment, n)
 	for i := range n {
@@ -990,7 +992,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 // produces one. A repeated point makes a zero-length LineSeg, which
 // docs/loft-design.md §4 names as a recordable input rather than a
 // hypothetical one (record.go's validateSegment checks finiteness alone).
-func lineStationLoopFixture(t *testing.T, starts []Point2) (ProfileRecord, [][]segmentWalk) {
+func lineStationLoopFixture(t *testing.T, starts []Point2) (ProfileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	n := len(starts)
 	segs := make([]CurveSegment, n)
@@ -1103,9 +1105,9 @@ func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	t.Parallel()
 	seg, w := arcFixture(t, 5, 0.7, math.Pi/2, 0, 1)
-	require.Equal(t, seg.Start.U, w.startU, "walkOf must pin an untrimmed arc start to the recorded coordinate")
-	require.Equal(t, seg.Start.V, w.startV)
-	require.Equal(t, proofbound.WalkEndBound{}, w.startBound, "the pinned end carries a zero displacement reading")
+	require.Equal(t, seg.Start.U, w.StartU, "walkOf must pin an untrimmed arc start to the recorded coordinate")
+	require.Equal(t, seg.Start.V, w.StartV)
+	require.Equal(t, proofbound.WalkEndBound{}, w.StartBound, "the pinned end carries a zero displacement reading")
 
 	stations, _ := circularStationChain(w, seg, 8)
 	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, stations[0],
@@ -1115,8 +1117,8 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	// the recorded coordinate, and circularWalkEndBound reports a nonzero
 	// displacement for it, so a station placed there would carry the pinned
 	// end's zero reading while sitting off the coordinate it names.
-	sin, cos := math.Sincos(w.th0)
-	recomputedU, recomputedV := w.cU+w.radius*cos, w.cV+w.radius*sin
+	sin, cos := math.Sincos(w.Th0)
+	recomputedU, recomputedV := w.CU+w.Radius*cos, w.CV+w.Radius*sin
 	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, stations[0],
 		"the fixture must be one where the two readings differ, or it proves nothing")
 	recomputedBound := circularWalkEndBound(seg, 0, recomputedU, recomputedV)
@@ -1176,7 +1178,7 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 	tStart, dt, ok := circularSegmentRange(seg)
 	require.True(t, ok)
 
-	worst := math.Max(walkEndPlaneDelta(w.startBound), walkEndPlaneDelta(w.endBound))
+	worst := math.Max(walkEndPlaneDelta(w.StartBound), walkEndPlaneDelta(w.EndBound))
 	for k := 1; k < m; k++ {
 		tk := new(big.Rat).Add(tStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), dt))
 		uIv, vIv, ok := circularEndpointInterval(seg, tk)
@@ -1234,8 +1236,8 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
 
 	p := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{segA, segB}}}
-	walks0 := [][]segmentWalk{{wA, wB}}
-	walks1 := [][]segmentWalk{{wA, wB}}
+	walks0 := [][]survey2d.SegmentWalk{{wA, wB}}
+	walks1 := [][]survey2d.SegmentWalk{{wA, wB}}
 
 	pairs, sectionDelta, _, _, err := loftPairings(p, p, []int{0}, walks0, walks1, target, nil, nil)
 	require.NoError(t, err)
@@ -1269,8 +1271,8 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	require.Len(t, pairs[0].v, 4)
 	require.Len(t, pairs[0].w, 4)
 	for j := range 4 {
-		require.Equal(t, Point2{U: walks[0][j].startU, V: walks[0][j].startV}, pairs[0].v[j])
-		require.Equal(t, Point2{U: walks[0][j].startU, V: walks[0][j].startV}, pairs[0].w[j])
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].v[j])
+		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].w[j])
 	}
 	require.Zero(t, sectionDelta)
 	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
@@ -1292,13 +1294,13 @@ func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 	loop := LoopRecord{Segments: []CurveSegment{fit, fit, fit}}
 	p := ProfileRecord{Outer: loop}
 	work := newFreeformWork()
-	walks := make([]segmentWalk, 3)
+	walks := make([]survey2d.SegmentWalk, 3)
 	var err error
 	for i := range walks {
 		walks[i], err = walkOf(fit, work)
 		require.NoError(t, err)
 	}
-	walks0 := [][]segmentWalk{walks}
+	walks0 := [][]survey2d.SegmentWalk{walks}
 	pw := &profileWalks{profile: p, outer: walks0[0]}
 	envelope, err := profileCoordinateEnvelope(p, nil, pw)
 	require.NoError(t, err)

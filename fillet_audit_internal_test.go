@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -170,10 +172,10 @@ func (c *cancelOnFirstPollContext) Err() error {
 
 func TestRewriteLoopChargesEachWalkToBudget(t *testing.T) {
 	t.Parallel()
-	walks := make([]sideWalk, proofbound.WorkPollInterval)
+	walks := make([]survey2d.SideWalk, proofbound.WorkPollInterval)
 	for i := range walks {
-		walks[i] = sideWalk{segmentWalk: segmentWalk{
-			startU: float64(i), endU: float64(i + 1), length: 1,
+		walks[i] = survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+			StartU: float64(i), EndU: float64(i + 1), Length: 1,
 		}}
 	}
 	ctx := &cancelOnFirstPollContext{Context: t.Context()}
@@ -257,11 +259,11 @@ func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 	t.Helper()
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{prof.Outer}, prof.Holes...) {
-		raw := make([]sideWalk, len(loop.Segments))
+		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
 			w, err := walkOf(seg, newFreeformWork())
 			require.NoError(t, err)
-			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
 		out = append(out, cornerLoop{walks: coalesceWalks(raw)})
 	}
@@ -387,7 +389,7 @@ func TestCrossingAuditCancellationIsBounded(t *testing.T) {
 		segs[i] = segEntry{
 			loop: i,
 			n:    1,
-			w:    segmentWalk{startU: 0, startV: y, endU: 1, endV: y},
+			w:    survey2d.SegmentWalk{StartU: 0, StartV: y, EndU: 1, EndV: y},
 		}
 	}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 1}
@@ -408,18 +410,18 @@ func TestNestingAuditCancellationReachesBoundaryScan(t *testing.T) {
 			loop: 0,
 			idx:  i,
 			n:    300,
-			w: segmentWalk{
-				startU: -1000 - float64(i),
-				startV: y,
-				endU:   -999 - float64(i),
-				endV:   y,
+			w: survey2d.SegmentWalk{
+				StartU: -1000 - float64(i),
+				StartV: y,
+				EndU:   -999 - float64(i),
+				EndV:   y,
 			},
 		})
 	}
 	segs = append(segs, segEntry{
 		loop: 1,
 		n:    1,
-		w:    segmentWalk{startU: 0, startV: 0, endU: 1, endV: 0},
+		w:    survey2d.SegmentWalk{StartU: 0, StartV: 0, EndU: 1, EndV: 0},
 	})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "loopContains"}
 

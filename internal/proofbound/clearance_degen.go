@@ -6,8 +6,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Moved from the root package's clearance_degen.go.
-
 // FiniteVec guards exact rational lifts and every float result used by a
 // certificate.
 func FiniteVec(v r3.Vec) bool {

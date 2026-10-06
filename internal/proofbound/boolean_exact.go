@@ -8,8 +8,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Moved from the root package's boolean_exact.go.
-
 // Xpt is an exact 3D point carried in homogeneous integer form: the same
 // representation xhp documents below, and structurally identical to it — the
 // two convert for free — so xpt keeps its own name and every call site

@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -573,8 +575,8 @@ func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // either: it classifies an ArcSeg side as OPEN with m+1 station points and a
 // full-turn CircleSeg side as CLOSED with m cyclic stations.
 //
-// The fixture is deliberately the case a walkKind test CANNOT catch: both
-// sides resolve to walkCircular (extrude.go's own walkCircular covers a
+// The fixture is deliberately the case a survey2d.WalkKind test CANNOT catch: both
+// sides resolve to survey2d.WalkCircular (extrude.go's own survey2d.WalkCircular covers a
 // circle and an arc alike) and both walk CCW, so the CCW disagreement gate
 // says nothing and only the segment-type test refuses. Through the public
 // API the same pairing is reachable as a full-turn ArcSeg loop against a
@@ -598,14 +600,14 @@ func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 	err = validateLoftRecordsErr(p1, p0, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a CircleSeg against an ArcSeg refuses the same way")
 
-	// The premise the refusal rests on: a walkKind test could not have made
-	// this decision, because both sides resolve to the SAME walkCircular.
+	// The premise the refusal rests on: a survey2d.WalkKind test could not have made
+	// this decision, because both sides resolve to the SAME survey2d.WalkCircular.
 	w0, err := walkOf(ccwArc, newFreeformWork())
 	require.NoError(t, err)
 	w1, err := walkOf(ccwCircle, newFreeformWork())
 	require.NoError(t, err)
-	require.Equal(t, walkCircular, w0.kind)
-	require.Equal(t, w0.kind, w1.kind, "both sides resolve to one walk kind; only the recorded type separates them")
+	require.Equal(t, survey2d.WalkCircular, w0.Kind)
+	require.Equal(t, w0.Kind, w1.Kind, "both sides resolve to one walk kind; only the recorded type separates them")
 }
 
 // --- the m=1 edge case ---

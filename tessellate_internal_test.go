@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -277,7 +279,7 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 		{radius: 0.5, inside: 9.1917853530958284169e-09},
 	}
 	for _, row := range rows {
-		w := segmentWalk{radius: row.radius, th0: 0, th1: sweep, closed: true}
+		w := survey2d.SegmentWalk{Radius: row.radius, Th0: 0, Th1: sweep, Closed: true}
 		atCap := chordSagitta(row.radius, sweep, maxChordsPerWalk)
 
 		// The window has real width: the true sagitta at the cap sits
@@ -378,7 +380,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	// One face for every wall, so the two chordings' faceOf slices compare as
 	// the same pointers and the comparison below is about the geometry.
 	face := &Face{}
-	wall := func(sideWalk) (*Face, error) { return face, nil }
+	wall := func(survey2d.SideWalk) (*Face, error) { return face, nil }
 
 	direct := newFreeformWork()
 	want, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall)
@@ -412,7 +414,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	}}}
 	face := &Face{}
 	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, newFreeformWork(), pw, 0,
-		func(sideWalk) (*Face, error) { return face, nil })
+		func(survey2d.SideWalk) (*Face, error) { return face, nil })
 	require.ErrorIs(t, err, errResolvedWalksMismatch)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

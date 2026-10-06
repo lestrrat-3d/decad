@@ -7,8 +7,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// Moved from the root package's spline_length.go.
-
 // RatSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a
 // recorded coordinate can reach. It is only a seed: the exact rational
 // comparisons below decide each bound, so a better seed can only reduce false

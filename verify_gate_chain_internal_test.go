@@ -93,8 +93,8 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 			require.Positive(t, allow)
 			walk, err := walkOf(tc.segment, newFreeformWork())
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.startBound))
-			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.endBound))
+			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.StartBound))
+			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.EndBound))
 			require.GreaterOrEqual(t, allow, arcNaturalEndRadialUpper(tc.segment))
 		})
 	}

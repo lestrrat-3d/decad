@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,13 +44,13 @@ import (
 
 // polygonTurns is the retired rule's own quantity: the cross product at each
 // interior vertex of the control polygon, exactly.
-func polygonTurns(span bezierSpan) []*big.Rat {
+func polygonTurns(span survey2d.BezierSpan) []*big.Rat {
 	out := make([]*big.Rat, 0, len(span)-2)
 	for i := 1; i+1 < len(span); i++ {
-		ax := new(big.Rat).Sub(span[i].u, span[i-1].u)
-		ay := new(big.Rat).Sub(span[i].v, span[i-1].v)
-		bx := new(big.Rat).Sub(span[i+1].u, span[i].u)
-		by := new(big.Rat).Sub(span[i+1].v, span[i].v)
+		ax := new(big.Rat).Sub(span[i].U, span[i-1].U)
+		ay := new(big.Rat).Sub(span[i].V, span[i-1].V)
+		bx := new(big.Rat).Sub(span[i+1].U, span[i].U)
+		by := new(big.Rat).Sub(span[i+1].V, span[i].V)
 		cross := new(big.Rat).Sub(new(big.Rat).Mul(ax, by), new(big.Rat).Mul(ay, bx))
 		out = append(out, cross)
 	}
@@ -58,7 +60,7 @@ func polygonTurns(span bezierSpan) []*big.Rat {
 // squaredSpeed is §6.3's S = u'^2 + v'^2 for one polynomial span: the exact
 // rational polynomial §6.5's regularity precondition proves has no root on the
 // closed span before any curvature coefficient is read.
-func squaredSpeed(span bezierSpan) ratPoly {
+func squaredSpeed(span survey2d.BezierSpan) ratPoly {
 	u, v := spanCoordinatePolys(span)
 	du, dv := rpDeriv(u), rpDeriv(v)
 	return rpAdd(rpMul(du, du), rpMul(dv, dv))
@@ -119,22 +121,22 @@ func splitBernsteinAtMidpoint(b []*big.Rat) (left, right []*big.Rat) {
 // the SPAN itself rather than to K's coefficients. §6.5 states the subdivision
 // over the span, so the two routes to a child's coefficients are pinned against
 // each other below.
-func splitSpanAtMidpoint(span bezierSpan) (left, right bezierSpan) {
+func splitSpanAtMidpoint(span survey2d.BezierSpan) (left, right survey2d.BezierSpan) {
 	n := len(span)
 	half := big.NewRat(1, 2)
-	work := make([]ratPoint, n)
+	work := make([]survey2d.RatPoint, n)
 	for i, p := range span {
-		work[i] = ratPoint{u: new(big.Rat).Set(p.u), v: new(big.Rat).Set(p.v)}
+		work[i] = survey2d.RatPoint{U: new(big.Rat).Set(p.U), V: new(big.Rat).Set(p.V)}
 	}
-	left = make(bezierSpan, 0, n)
-	right = make(bezierSpan, n)
+	left = make(survey2d.BezierSpan, 0, n)
+	right = make(survey2d.BezierSpan, n)
 	for level := range n {
-		left = append(left, ratPoint{u: new(big.Rat).Set(work[0].u), v: new(big.Rat).Set(work[0].v)})
-		right[n-1-level] = ratPoint{u: new(big.Rat).Set(work[n-1-level].u), v: new(big.Rat).Set(work[n-1-level].v)}
+		left = append(left, survey2d.RatPoint{U: new(big.Rat).Set(work[0].U), V: new(big.Rat).Set(work[0].V)})
+		right[n-1-level] = survey2d.RatPoint{U: new(big.Rat).Set(work[n-1-level].U), V: new(big.Rat).Set(work[n-1-level].V)}
 		for i := 0; i+1 < n-level; i++ {
-			work[i] = ratPoint{
-				u: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].u, work[i+1].u)),
-				v: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].v, work[i+1].v)),
+			work[i] = survey2d.RatPoint{
+				U: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].U, work[i+1].U)),
+				V: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].V, work[i+1].V)),
 			}
 		}
 	}
@@ -144,8 +146,8 @@ func splitSpanAtMidpoint(span bezierSpan) (left, right bezierSpan) {
 // controlEdge is one control edge of a span as an exact rational vector: the
 // quantity §6.5's joint rule crosses, and the quantity a collapsed span has
 // none of.
-func controlEdge(from, to ratPoint) (u, v *big.Rat) {
-	return new(big.Rat).Sub(to.u, from.u), new(big.Rat).Sub(to.v, from.v)
+func controlEdge(from, to survey2d.RatPoint) (u, v *big.Rat) {
+	return new(big.Rat).Sub(to.U, from.U), new(big.Rat).Sub(to.V, from.V)
 }
 
 // crossOf is the exact cross product §6.5's joint verdict reads.
@@ -161,7 +163,7 @@ func dotOf(au, av, bu, bv *big.Rat) *big.Rat {
 
 // jointCross is §6.5's joint verdict between two spans of a chain: the incoming
 // span's LAST control edge crossed with the outgoing span's FIRST.
-func jointCross(incoming, outgoing bezierSpan) *big.Rat {
+func jointCross(incoming, outgoing survey2d.BezierSpan) *big.Rat {
 	inU, inV := controlEdge(incoming[len(incoming)-2], incoming[len(incoming)-1])
 	outU, outV := controlEdge(outgoing[0], outgoing[1])
 	return crossOf(inU, inV, outU, outV)
@@ -169,9 +171,9 @@ func jointCross(incoming, outgoing bezierSpan) *big.Rat {
 
 // spanIsCollapsed is §5.1's collapsed span: every control point of the span the
 // same point, so the span has no nonzero control edge and no direction.
-func spanIsCollapsed(span bezierSpan) bool {
+func spanIsCollapsed(span survey2d.BezierSpan) bool {
 	for i := 1; i < len(span); i++ {
-		if span[i].u.Cmp(span[0].u) != 0 || span[i].v.Cmp(span[0].v) != 0 {
+		if span[i].U.Cmp(span[0].U) != 0 || span[i].V.Cmp(span[0].V) != 0 {
 			return false
 		}
 	}
@@ -451,13 +453,13 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	// The two interior controls §5.1.2's closed form produces for the first
 	// span sit BELOW that floor: the -h^2*m/18 terms are what push them out.
 	for i := 1; i <= 2; i++ {
-		control, _ := spans[0][i].v.Float64()
+		control, _ := spans[0][i].V.Float64()
 		require.Less(t, control, floor, "converted control %d must leave the recorded hull", i)
 	}
 	// §6.5 marks these two interior controls approximate and quotes them to four
 	// decimals, so they are asserted at exactly that precision.
-	b1, _ := spans[0][1].v.Float64()
-	b2, _ := spans[0][2].v.Float64()
+	b1, _ := spans[0][1].V.Float64()
+	b2, _ := spans[0][2].V.Float64()
 	require.InDelta(t, -0.0790, b1, 1e-4, "the doc's approximate -0.0790, at the precision it states")
 	require.InDelta(t, -0.1580, b2, 1e-4, "the doc's approximate -0.1580, at the precision it states")
 
@@ -465,8 +467,8 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	// so they are exact zeros, and they are pinned exactly rather than through
 	// the sampled minimum: the minimum's own delta has enough slack that an
 	// endpoint drift of order 1e-4 would leave every other assertion here true.
-	require.Equal(t, "0", spans[0][0].v.RatString(), "the chain starts at the first fit point's own v")
-	require.Equal(t, "0", spans[0][3].v.RatString(), "the first span's joint control sits at v = 0 too")
+	require.Equal(t, "0", spans[0][0].V.RatString(), "the chain starts at the first fit point's own v")
+	require.Equal(t, "0", spans[0][3].V.RatString(), "the first span's joint control sits at v = 0 too")
 
 	// And so does the curve itself, sampled through the shipped evaluator over
 	// the first span's own third of the converted parameter.
@@ -774,7 +776,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 	t.Parallel()
 	spanA := ratSpan([][2]float64{{0, 0}, {1, 0}})
 	spanB := ratSpan([][2]float64{{1, 0}, {1, 1}})
-	spans := []bezierSpan{spanA, spanB}
+	spans := []survey2d.BezierSpan{spanA, spanB}
 
 	require.Equal(t, "1", jointCross(spanA, spanB).RatString(),
 		"the internal joint turns by exactly +1, the identical shape and figure degreeOneNURBS's own conversion carries")
@@ -794,7 +796,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 // own net: one degree-2 span whose K is the positive constant 4, reused here
 // because it is cheap enough to certify well inside the record work ceiling —
 // the point of the two tests below is the counter, not the geometry.
-func degreeTwoConvexityFixture(t *testing.T) ([]bezierSpan, bool) {
+func degreeTwoConvexityFixture(t *testing.T) ([]survey2d.BezierSpan, bool) {
 	seg := NURBSSeg{
 		Degree:  2,
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
@@ -852,10 +854,10 @@ func TestConvexityCertificateSpendIncreases(t *testing.T) {
 
 // spanStrings renders a span's control points exactly, so a conversion that
 // rounded anywhere fails the comparison rather than passing within a delta.
-func spanStrings(span bezierSpan) [][]string {
+func spanStrings(span survey2d.BezierSpan) [][]string {
 	out := make([][]string, len(span))
 	for i, p := range span {
-		out[i] = []string{p.u.RatString(), p.v.RatString()}
+		out[i] = []string{p.U.RatString(), p.V.RatString()}
 	}
 	return out
 }
@@ -1002,7 +1004,7 @@ func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
 	t.Parallel()
 	spanPos := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 1}})
 	spanNeg := ratSpan([][2]float64{{2, 1}, {3, 2}, {4, 2}})
-	spans := []bezierSpan{spanPos, spanNeg}
+	spans := []survey2d.BezierSpan{spanPos, spanNeg}
 
 	posSign, err := spanConvexitySignContext(t.Context(), spanPos, newFreeformWork())
 	require.NoError(t, err)
@@ -1168,8 +1170,8 @@ func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testi
 	require.Len(t, spans, 4, "4 active fit points convert to 4 spans")
 
 	start, end := spans[0][0], spans[len(spans)-1][len(spans[len(spans)-1])-1]
-	require.Equal(t, 0, start.u.Cmp(end.u), "the converted chain's own start and end coincide")
-	require.Equal(t, 0, start.v.Cmp(end.v))
+	require.Equal(t, 0, start.U.Cmp(end.U), "the converted chain's own start and end coincide")
+	require.Equal(t, 0, start.V.Cmp(end.V))
 
 	for i, span := range spans {
 		sign, err := spanConvexitySignContext(t.Context(), span, newFreeformWork())

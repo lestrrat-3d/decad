@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -128,14 +130,14 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 func TestLineCircleLocusSpeedUpperRefusesMomentaryFold(t *testing.T) {
 	t.Parallel()
 	const radius = 1000.0
-	line := sideWalk{segmentWalk: segmentWalk{
-		startU: 0, startV: 0, endU: 10, endV: 0,
-		tanInU: 1, tanInV: 0, tanOutU: 1, tanOutV: 0,
+	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		StartU: 0, StartV: 0, EndU: 10, EndV: 0,
+		TanInU: 1, TanInV: 0, TanOutU: 1, TanOutV: 0,
 	}}
-	circle := sideWalk{segmentWalk: segmentWalk{
-		kind: walkCircular,
-		cU:   0, cV: -radius, radius: radius,
-		th0: math.Pi / 2, th1: math.Pi/2 + 0.5,
+	circle := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind: survey2d.WalkCircular,
+		CU:   0, CV: -radius, Radius: radius,
+		Th0: math.Pi / 2, Th1: math.Pi/2 + 0.5,
 	}}
 
 	for _, d := range []float64{0.001, 0.1, 1, 3} {
@@ -159,14 +161,14 @@ func TestLineCircleLocusSpeedUpperRefusesMomentaryFold(t *testing.T) {
 func TestLineCircleLocusSpeedUpperExactAtPersistentTangency(t *testing.T) {
 	t.Parallel()
 	const radius = 1000.0
-	line := sideWalk{segmentWalk: segmentWalk{
-		startU: 0, startV: 0, endU: 10, endV: 0,
-		tanInU: 1, tanInV: 0, tanOutU: 1, tanOutV: 0,
+	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		StartU: 0, StartV: 0, EndU: 10, EndV: 0,
+		TanInU: 1, TanInV: 0, TanOutU: 1, TanOutV: 0,
 	}}
-	circle := sideWalk{segmentWalk: segmentWalk{
-		kind: walkCircular,
-		cU:   0, cV: -radius, radius: radius,
-		th0: math.Pi/2 + 0.5, th1: math.Pi / 2, // th1 < th0: material outside, radius grows
+	circle := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind: survey2d.WalkCircular,
+		CU:   0, CV: -radius, Radius: radius,
+		Th0: math.Pi/2 + 0.5, Th1: math.Pi / 2, // th1 < th0: material outside, radius grows
 	}}
 
 	for _, d := range []float64{0.001, 0.1, 1, 3} {
@@ -191,15 +193,15 @@ func TestLineCircleLocusSpeedUpperExactAtPersistentTangency(t *testing.T) {
 func TestCircleCircleLocusSpeedUpperRefusesNearParallelCorner(t *testing.T) {
 	t.Parallel()
 	const radius = 1000.0
-	prev := sideWalk{segmentWalk: segmentWalk{
-		kind: walkCircular,
-		cU:   0, cV: 0, radius: radius,
-		th0: -math.Pi / 2, th1: -math.Pi / 4,
+	prev := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind: survey2d.WalkCircular,
+		CU:   0, CV: 0, Radius: radius,
+		Th0: -math.Pi / 2, Th1: -math.Pi / 4,
 	}}
-	cur := sideWalk{segmentWalk: segmentWalk{
-		kind: walkCircular,
-		cU:   0, cV: -2 * radius, radius: radius,
-		th0: math.Pi / 2, th1: math.Pi/2 + 0.3,
+	cur := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		Kind: survey2d.WalkCircular,
+		CU:   0, CV: -2 * radius, Radius: radius,
+		Th0: math.Pi / 2, Th1: math.Pi/2 + 0.3,
 	}}
 
 	for _, d := range []float64{0.001, 0.1, 1, 3} {
@@ -1034,7 +1036,7 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)), tc.tightBelow)
 			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)), tc.tightBelow)
 
-			amp, okAmp := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
+			amp, okAmp := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
 			require.True(t, okAmp)
 			if tc.interior {
 				// The stationary points are reached, so both extremes are the
@@ -1062,7 +1064,7 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 					if at.Cmp(new(big.Rat)) < 0 || at.Cmp(width) > 0 {
 						continue
 					}
-					sin, cos, okT := radSinCosInterval(at)
+					sin, cos, okT := survey2d.RadSinCosInterval(at)
 					require.True(t, okT)
 					v := proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalScale(cos, tc.a), proofbound.IntervalScale(sin, tc.b)), proofbound.PointInterval(tc.c))
 					require.LessOrEqual(t, ext.minLo.Cmp(v.Hi), 0, "a reachable value sits below the reported minimum")

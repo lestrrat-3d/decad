@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -159,7 +161,7 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 // read out of circularWalkEnclosures, kept verbatim as the oracle below: the
 // radius bound from arcWalkRadiusBound's own bracket, and the length bound
 // from a second, separate circularLengthInterval.
-func ratArcWalk(seg ArcSeg) segmentWalk {
+func ratArcWalk(seg ArcSeg) survey2d.SegmentWalk {
 	radius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
 	a0 := math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
 	a1 := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U)
@@ -176,10 +178,10 @@ func ratArcWalk(seg ArcSeg) segmentWalk {
 		arcRadiusUpper(seg),
 		proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 	)
-	w.radiusBound = arcWalkRadiusBound(seg, radius)
+	w.RadiusBound = arcWalkRadiusBound(seg, radius)
 	pinArcWalkEnds(&w, seg)
 	if iv, ok := circularLengthInterval(seg); ok {
-		w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(iv, w.length))
+		w.LengthBound = math.Min(w.LengthBound, proofbound.IntervalFloatError(iv, w.Length))
 	}
 	return w
 }
@@ -204,8 +206,8 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 		got, err := walkOf(seg, nil)
 		require.NoError(t, err, "%+v", seg)
 		want := ratArcWalk(seg)
-		requireSameFloatBits(t, want.radiusBound, got.radiusBound, "radius bound of %+v", seg)
-		requireSameFloatBits(t, want.lengthBound, got.lengthBound, "length bound of %+v", seg)
+		requireSameFloatBits(t, want.RadiusBound, got.RadiusBound, "radius bound of %+v", seg)
+		requireSameFloatBits(t, want.LengthBound, got.LengthBound, "length bound of %+v", seg)
 	}
 	// 2000 arcs, not more: each walk builds two certified atan2 enclosures,
 	// and at 10000 the test alone cost about 25s of a race shard.
@@ -242,5 +244,5 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	check(t, overflow)
 	got, err := walkOf(overflow, nil)
 	require.NoError(t, err)
-	require.True(t, math.IsInf(got.radiusBound, 1), "an overflowed bracket refuses with +Inf")
+	require.True(t, math.IsInf(got.RadiusBound, 1), "an overflowed bracket refuses with +Inf")
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch"
@@ -906,35 +908,35 @@ func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (proofbound.Walk
 // no augmentation.
 func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
 	before, beforeRecon := workSpent(work)
-	walkCharged := func(seg CurveSegment) (segmentWalk, error) {
+	walkCharged := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
 		w, err := walkOf(seg, work)
 		if err != nil {
-			return segmentWalk{}, err
+			return survey2d.SegmentWalk{}, err
 		}
 		t0, t1, err := trimSegmentParamRange(seg)
 		if err != nil {
-			return segmentWalk{}, err
+			return survey2d.SegmentWalk{}, err
 		}
 		chargeU, chargeV, err := trimCutChargeUV(seg)
 		if err != nil {
-			return segmentWalk{}, err
+			return survey2d.SegmentWalk{}, err
 		}
 		if t0 != 0 && t0 != 1 {
-			w.startBound = proofbound.WalkEndBound{
-				U: proofbound.AbsSumUpper(w.startBound.U, chargeU),
-				V: proofbound.AbsSumUpper(w.startBound.V, chargeV),
+			w.StartBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.StartBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.StartBound.V, chargeV),
 			}
 		}
 		if t1 != 0 && t1 != 1 {
-			w.endBound = proofbound.WalkEndBound{
-				U: proofbound.AbsSumUpper(w.endBound.U, chargeU),
-				V: proofbound.AbsSumUpper(w.endBound.V, chargeV),
+			w.EndBound = proofbound.WalkEndBound{
+				U: proofbound.AbsSumUpper(w.EndBound.U, chargeU),
+				V: proofbound.AbsSumUpper(w.EndBound.V, chargeV),
 			}
 		}
 		return w, nil
 	}
 
-	outer := make([]segmentWalk, len(profile.Outer.Segments))
+	outer := make([]survey2d.SegmentWalk, len(profile.Outer.Segments))
 	for i, seg := range profile.Outer.Segments {
 		w, err := walkCharged(seg)
 		if err != nil {
@@ -942,9 +944,9 @@ func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, 
 		}
 		outer[i] = w
 	}
-	holes := make([][]segmentWalk, len(profile.Holes))
+	holes := make([][]survey2d.SegmentWalk, len(profile.Holes))
 	for hi, hole := range profile.Holes {
-		hw := make([]segmentWalk, len(hole.Segments))
+		hw := make([]survey2d.SegmentWalk, len(hole.Segments))
 		for i, seg := range hole.Segments {
 			w, err := walkCharged(seg)
 			if err != nil {
@@ -1814,7 +1816,7 @@ func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, e
 			return false, err
 		}
 		for _, w := range resolved.walks {
-			if w.startV == 0 || w.endV == 0 {
+			if w.StartV == 0 || w.EndV == 0 {
 				return false, nil
 			}
 		}
@@ -1835,7 +1837,7 @@ func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool,
 			return false, err
 		}
 		for _, w := range resolved.walks {
-			if w.startV == 0 || w.endV == 0 {
+			if w.StartV == 0 || w.EndV == 0 {
 				return false, nil
 			}
 		}

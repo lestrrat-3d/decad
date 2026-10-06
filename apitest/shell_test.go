@@ -168,7 +168,7 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 	doc := decad.New()
 	disk, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
+	ctx := &operationCancelContext{Context: t.Context(), target: "NewWallKernelBudget"}
 
 	body, err := disk.Shell(ctx, topCap(disk), units.Millimeters(5))
 

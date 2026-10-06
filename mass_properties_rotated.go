@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -54,7 +56,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	var central [3][3]proofbound.RatInterval
 	for i := range central {
 		for j := range central[i] {
-			shift, _ := intervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
+			shift, _ := survey2d.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
 			central[i][j] = proofbound.IntervalSub(second[i][j], shift)
 		}
 	}
@@ -87,7 +89,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	widen.Mul(widen, tensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
-			world[i][j] = intervalWiden(world[i][j], widen)
+			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
 		}
 	}
 
@@ -183,11 +185,11 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (volumeMoments, er
 		}
 		re := new(big.Rat).Mul(r, e)
 		r2e := new(big.Rat).Mul(r, re)
-		volume = intervalWiden(volume, e)
+		volume = survey2d.IntervalWiden(volume, e)
 		for i := range first {
-			first[i] = intervalWiden(first[i], re)
+			first[i] = survey2d.IntervalWiden(first[i], re)
 			for j := range second[i] {
-				second[i][j] = intervalWiden(second[i][j], r2e)
+				second[i][j] = survey2d.IntervalWiden(second[i][j], r2e)
 			}
 		}
 	}
@@ -252,7 +254,7 @@ func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
 		for k := range m.first {
 			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m.first[k], f[i][k]))
 		}
-		out.first[i] = intervalWiden(sum, firstWiden)
+		out.first[i] = survey2d.IntervalWiden(sum, firstWiden)
 	}
 	secondWiden := new(big.Rat).Mul(big.NewRat(3, 1), defect)
 	secondWiden.Mul(secondWiden, new(big.Rat).Add(big.NewRat(2, 1), defect))
@@ -260,7 +262,7 @@ func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
 	out.second = rotateTensorInterval(f, m.second)
 	for i := range out.second {
 		for j := range out.second[i] {
-			out.second[i][j] = intervalWiden(out.second[i][j], secondWiden)
+			out.second[i][j] = survey2d.IntervalWiden(out.second[i][j], secondWiden)
 		}
 	}
 	return out
@@ -341,10 +343,10 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	}
 	count := 0
 	perimeter := 0.0
-	for _, loop := range append([][]segmentWalk{walks.outer}, walks.holes...) {
+	for _, loop := range append([][]survey2d.SegmentWalk{walks.outer}, walks.holes...) {
 		for _, w := range loop {
 			count++
-			perimeter = proofbound.AbsSumUpper(perimeter, w.length, w.lengthBound)
+			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)
 		}
 	}
 	coordUpper, err := profileCoordinateEnvelope(pp.profile, work, walks)
@@ -362,8 +364,8 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 
 	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
 	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
-	alongAxis.Add(alongAxis, ratMax(d0, d1))
-	return e, ratMax(inPlane, alongAxis), nil
+	alongAxis.Add(alongAxis, survey2d.RatMax(d0, d1))
+	return e, survey2d.RatMax(inPlane, alongAxis), nil
 }
 
 // prismRotation is the exact rational matrix taking frame-local (u, v, n)
@@ -434,7 +436,7 @@ func tensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
 	largest := new(big.Rat)
 	for i := range t {
 		for j := range t[i] {
-			largest = ratMax(largest, intervalAbsUpper(t[i][j]))
+			largest = survey2d.RatMax(largest, intervalAbsUpper(t[i][j]))
 		}
 	}
 	return largest

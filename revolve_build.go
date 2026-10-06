@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -606,7 +608,7 @@ func junctionRadiusInterval(rho, rhoBound float64) (proofbound.RatInterval, bool
 	if r == nil || b == nil {
 		return proofbound.RatInterval{}, false
 	}
-	return intervalWiden(proofbound.PointInterval(r), b), true
+	return survey2d.IntervalWiden(proofbound.PointInterval(r), b), true
 }
 
 // revJunction is one junction between consecutive walks: the shared point in
@@ -633,9 +635,9 @@ type revJunction struct {
 // axial coordinate it computes and snaps a near-axis radial one to zero
 // outright (docs/tessellation-design.md §8's deltaC).
 type revolveWalks struct {
-	walks        []sideWalk
+	walks        []survey2d.SideWalk
 	kinds        []wallKind
-	plane        []segmentWalk
+	plane        []survey2d.SegmentWalk
 	singleClosed bool
 }
 
@@ -651,8 +653,8 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 	if len(loop.Segments) == 0 {
 		return revolveWalks{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
-	raw := make([]sideWalk, len(loop.Segments))
-	plane := make([]segmentWalk, len(loop.Segments))
+	raw := make([]survey2d.SideWalk, len(loop.Segments))
+	plane := make([]survey2d.SegmentWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return revolveWalks{}, err
@@ -669,7 +671,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		raw[i] = sideWalk{segmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), Segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
@@ -677,13 +679,13 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 	}
 	kinds := make([]wallKind, len(walks))
 	for i, w := range walks {
-		kinds[i] = rp.ax.classify(w.segmentWalk)
+		kinds[i] = rp.ax.classify(w.SegmentWalk)
 	}
 	return revolveWalks{
 		walks:        walks,
 		kinds:        kinds,
 		plane:        plane,
-		singleClosed: len(walks) == 1 && walks[0].closed,
+		singleClosed: len(walks) == 1 && walks[0].Closed,
 	}, nil
 }
 
@@ -719,16 +721,16 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			if err := ctx.Err(); err != nil {
 				return revLoopParts{}, err
 			}
-			j := revJunction{z: w.startU, rho: w.startV, onAxis: w.startV == 0}
+			j := revJunction{z: w.StartU, rho: w.StartV, onAxis: w.StartV == 0}
 			prev := walks[(i+n-1)%n]
-			turn := prev.tanOutU*w.tanInV - prev.tanOutV*w.tanInU
+			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 			center := rp.point(b, j.z, 0, 0)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
 				latitudeLength := 2 * math.Pi * j.rho
-				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.axisRadiusUpper, proofbound.TwoPiUpper()))
-				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
+				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.AxisRadiusUpper, proofbound.TwoPiUpper()))
+				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
 					enc := proofbound.IntervalMul(proofbound.TwoPiInterval(), rhoEnc)
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
@@ -747,14 +749,14 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
+					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
 					arcLength := j.rho * dphi
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
-					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.axisRadiusUpper, dphiUpper))
-					if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
+					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
+					if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
 						if widthEnc, ok := rp.den.widthInterval(); ok {
 							enc := proofbound.IntervalMul(rhoEnc, widthEnc)
 							arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
@@ -806,8 +808,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					start:       js[i].v0,
 					end:         js[(i+1)%n].v0,
 					convex:      dphi < math.Pi,
-					length:      w.length,
-					lengthBound: w.lengthBound,
+					length:      w.Length,
+					lengthBound: w.LengthBound,
 				}
 				cap0[i], cap1[i] = shared, shared
 				continue
@@ -817,8 +819,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				vs0, ve0 = js[i].v0, js[(i+1)%n].v0
 				vs1, ve1 = js[i].v1, js[(i+1)%n].v1
 			}
-			cap0[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs0, ve0, rp.phi0, rp.phi0Delta(), holeLoop)
-			cap1[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs1, ve1, rp.phi1, rp.phi1Delta(), holeLoop)
+			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, rp.phi0, rp.phi0Delta(), holeLoop)
+			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, rp.phi1, rp.phi1Delta(), holeLoop)
 		}
 	}
 
@@ -834,19 +836,19 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			}
 			continue
 		}
-		surf, reversed, err := rp.wallSurface(b, w.segmentWalk, kinds[i])
+		surf, reversed, err := rp.wallSurface(b, w.SegmentWalk, kinds[i])
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, li, w.segs)
+		origins, err := sideOriginsContext(ctx, ref, li, w.Segs)
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		segs := make([]CurveSegment, len(w.segs))
-		for j, si := range w.segs {
+		segs := make([]CurveSegment, len(w.Segs))
+		for j, si := range w.Segs {
 			segs[j] = loop.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(walkAxisMoment(w.SegmentWalk, kinds[i], segs, rp.ax), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -957,13 +959,13 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // displacement of THIS end (rp.phi0Delta() or rp.phi1Delta(), matching
 // whichever of phi0/phi1 phi is), charged into a closed walk's own seam
 // vertex the same way every other cap vertex is (docs/evaluator-design.md §6).
-func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
+func (rp revolvePayload) capEdge(b revolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
 	convex := !holeLoop
-	if w.isCircular() {
-		convex = w.th0 < w.th1
+	if w.IsCircular() {
+		convex = w.Th0 < w.Th1
 	}
-	e := &Edge{convex: convex, length: w.length, lengthBound: w.lengthBound}
-	if !w.isCircular() {
+	e := &Edge{convex: convex, length: w.Length, lengthBound: w.LengthBound}
+	if !w.IsCircular() {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
 		return e
@@ -975,17 +977,17 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 	sin, cos := math.Sincos(phi)
 	normal := b.e0.Scale(-sin).Add(b.e1.Scale(cos))
 	sign := 1.0
-	if w.th1 < w.th0 {
+	if w.Th1 < w.Th0 {
 		sign = -1
 	}
 	if rp.reflected() {
 		sign = -sign
 	}
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
-	center := rp.point(b, w.cU, w.cV, phi)
-	radius := units.Millimeters(w.radius)
+	center := rp.point(b, w.CU, w.CV, phi)
+	radius := units.Millimeters(w.Radius)
 	if closed {
-		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(w.startV, delta), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper)))}
+		seam := &Vertex{position: rp.point(b, w.StartU, w.StartV, phi), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(w.StartV, delta), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper)))}
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
 		e.start, e.end = seam, seam
 		return e
@@ -1007,28 +1009,28 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 // so those reverse exactly when the walk runs clockwise. Radial directions
 // are reflection-equivariant, so a reflected placement changes none of
 // this; only the plane frames (built from cross products) correct for it.
-func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKind) (Surface, bool, error) {
+func (rp revolvePayload) wallSurface(b revolveBasis, w survey2d.SegmentWalk, kind wallKind) (Surface, bool, error) {
 	place := func(z float64) r3.Vec { return rp.xform.Apply(b.a3.Add(b.w.Scale(z))) }
 	axis := rp.xform.ApplyDir(b.w)
 	switch kind {
 	case wallCylinder:
 		return Cylinder{
-			Origin: place(w.startU),
+			Origin: place(w.StartU),
 			Axis:   axis,
-			Radius: units.Millimeters((w.startV + w.endV) / 2),
-		}, w.tanInU > 0, nil
+			Radius: units.Millimeters((w.StartV + w.EndV) / 2),
+		}, w.TanInU > 0, nil
 	case wallPlane:
 		// The outward normal is ±axis by the walk's radial heading; the
 		// frame's axes are ordered so its normal is outward, swapped once
 		// more under a reflected placement.
 		u3, v3 := b.e0, b.e1
-		if w.tanInV < 0 {
+		if w.TanInV < 0 {
 			u3, v3 = v3, u3
 		}
 		if rp.reflected() {
 			u3, v3 = v3, u3
 		}
-		f, err := r3.NewFrame(place(w.startU), rp.xform.ApplyDir(u3), rp.xform.ApplyDir(v3))
+		f, err := r3.NewFrame(place(w.StartU), rp.xform.ApplyDir(u3), rp.xform.ApplyDir(v3))
 		if err != nil {
 			return nil, false, fmt.Errorf(`%w: the placed wall frame is degenerate: %s`, ErrDegenerate, err)
 		}
@@ -1036,8 +1038,8 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 	case wallCone:
 		// The apex is where the wall meets the axis; the cone's radius
 		// grows along its stored Axis direction.
-		dz, dr := w.endU-w.startU, w.endV-w.startV
-		apex := w.startU - w.startV*dz/dr
+		dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
+		apex := w.StartU - w.StartV*dz/dr
 		growth := 1.0
 		if dz*dr < 0 {
 			growth = -1
@@ -1047,19 +1049,19 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 			Axis:      axis.Scale(growth),
 			Radius:    units.Millimeters(0),
 			HalfAngle: units.Radians(math.Atan2(math.Abs(dr), math.Abs(dz))),
-		}, w.tanInU > 0, nil
+		}, w.TanInU > 0, nil
 	case wallSphere:
 		return Sphere{
-			Center: place(w.cU),
-			Radius: units.Millimeters(w.radius),
-		}, w.th1 < w.th0, nil
+			Center: place(w.CU),
+			Radius: units.Millimeters(w.Radius),
+		}, w.Th1 < w.Th0, nil
 	case wallTorus:
 		return Torus{
-			Center: place(w.cU),
+			Center: place(w.CU),
 			Axis:   axis,
-			Major:  units.Millimeters(w.cV),
-			Minor:  units.Millimeters(w.radius),
-		}, w.th1 < w.th0, nil
+			Major:  units.Millimeters(w.CV),
+			Minor:  units.Millimeters(w.Radius),
+		}, w.Th1 < w.Th0, nil
 	default:
 		return nil, false, fmt.Errorf(`%w: a wall on the axis sweeps no surface`, ErrDegenerate)
 	}
@@ -1089,30 +1091,30 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 // axis whose direction carries a non-finite bound) withholds the whole sum,
 // leaving the envelope as the only proof standing, exactly as before this
 // change.
-func walkAxisMoment(w segmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) proofbound.BoundedScalar {
+func walkAxisMoment(w survey2d.SegmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) proofbound.BoundedScalar {
 	if kind == wallAxis {
 		return proofbound.BoundedScalar{}
 	}
-	if !w.isCircular() {
+	if !w.IsCircular() {
 		meanRadius := proofbound.BoundedDiv(
-			proofbound.BoundedAdd(proofbound.MeasuredScalar(w.startV, w.startVBound), proofbound.MeasuredScalar(w.endV, w.endVBound)),
+			proofbound.BoundedAdd(proofbound.MeasuredScalar(w.StartV, w.StartVBound), proofbound.MeasuredScalar(w.EndV, w.EndVBound)),
 			proofbound.ExactScalar(2),
 		)
-		result := proofbound.BoundedMul(proofbound.MeasuredScalar(w.length, w.lengthBound), meanRadius)
-		result.Bound = math.Min(result.Bound, proofbound.ConservativeValueError(result.Value, w.axisMomentUpper))
+		result := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), meanRadius)
+		result.Bound = math.Min(result.Bound, proofbound.ConservativeValueError(result.Value, w.AxisMomentUpper))
 		return result
 	}
-	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+	lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 	dtheta := proofbound.BoundedSub(proofbound.ExactScalar(hi), proofbound.ExactScalar(lo))
 	cosDelta := proofbound.BoundedSub(proofbound.BoundedCos(proofbound.ExactScalar(lo)), proofbound.BoundedCos(proofbound.ExactScalar(hi)))
 	result := proofbound.BoundedMul(
-		proofbound.ExactScalar(w.radius),
+		proofbound.ExactScalar(w.Radius),
 		proofbound.BoundedAdd(
-			proofbound.BoundedMul(proofbound.ExactScalar(w.cV), dtheta),
-			proofbound.BoundedMul(proofbound.ExactScalar(w.radius), cosDelta),
+			proofbound.BoundedMul(proofbound.ExactScalar(w.CV), dtheta),
+			proofbound.BoundedMul(proofbound.ExactScalar(w.Radius), cosDelta),
 		),
 	)
-	result.Bound = proofbound.ConservativeValueError(result.Value, w.axisMomentUpper)
+	result.Bound = proofbound.ConservativeValueError(result.Value, w.AxisMomentUpper)
 	if enc, ok := circularAxisMomentTotal(segs, ax); ok {
 		result.Bound = math.Min(result.Bound, proofbound.IntervalFloatError(enc, result.Value))
 	}
@@ -1225,7 +1227,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 func requireChainAxisIncidence(resolved revolveWalks) error {
 	walks, kinds := resolved.walks, resolved.kinds
 	n := len(walks)
-	startPole, endPole := walks[0].startV == 0, walks[n-1].endV == 0
+	startPole, endPole := walks[0].StartV == 0, walks[n-1].EndV == 0
 	if startPole && endPole {
 		return fmt.Errorf(`%w: a chain with both free ends on the revolve axis needs closed-sheet pole topology`, ErrUnsupported)
 	}
@@ -1235,22 +1237,22 @@ func requireChainAxisIncidence(resolved revolveWalks) error {
 
 	seen := map[float64]struct{}{}
 	for i, w := range walks {
-		if w.startV != 0 {
+		if w.StartV != 0 {
 			continue
 		}
-		if _, duplicate := seen[w.startU]; duplicate {
+		if _, duplicate := seen[w.StartU]; duplicate {
 			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
 		}
-		seen[w.startU] = struct{}{}
+		seen[w.StartU] = struct{}{}
 		if i == 0 {
 			continue // the free pole has no incoming walk
 		}
-		if walks[i-1].endV != 0 || (kinds[i-1] == wallAxis) == (kinds[i] == wallAxis) {
+		if walks[i-1].EndV != 0 || (kinds[i-1] == wallAxis) == (kinds[i] == wallAxis) {
 			return fmt.Errorf(`%w: a chain interior axis junction needs one swept wall and one axis line`, ErrDegenerate)
 		}
 	}
 	if endPole {
-		if _, duplicate := seen[walks[n-1].endU]; duplicate {
+		if _, duplicate := seen[walks[n-1].EndU]; duplicate {
 			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
 		}
 	}
@@ -1267,8 +1269,8 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 	if len(chain.Segments) == 0 {
 		return revolveWalks{}, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
 	}
-	raw := make([]sideWalk, len(chain.Segments))
-	plane := make([]segmentWalk, len(chain.Segments))
+	raw := make([]survey2d.SideWalk, len(chain.Segments))
+	plane := make([]survey2d.SegmentWalk, len(chain.Segments))
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
 			return revolveWalks{}, err
@@ -1285,7 +1287,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 		if err != nil {
 			return revolveWalks{}, err
 		}
-		raw[i] = sideWalk{segmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), segs: []int{i}}
+		raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), Segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {
@@ -1293,7 +1295,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 	}
 	kinds := make([]wallKind, len(walks))
 	for i, w := range walks {
-		kinds[i] = rp.ax.classify(w.segmentWalk)
+		kinds[i] = rp.ax.classify(w.SegmentWalk)
 	}
 	return revolveWalks{walks: walks, kinds: kinds, plane: plane, singleClosed: false}, nil
 }
@@ -1327,10 +1329,10 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64) {
 		if i < n {
 			w := walks[i]
-			return w.startU, w.startV, w.startVBound, w.axisRadiusUpper
+			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper
 		}
 		w := walks[n-1]
-		return w.endU, w.endV, w.endVBound, w.axisRadiusUpper
+		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper
 	}
 
 	js := make([]revJunction, n+1)
@@ -1343,7 +1345,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		var turn float64
 		if i > 0 && i < n {
 			prev, w := walks[i-1], walks[i]
-			turn = prev.tanOutU*w.tanInV - prev.tanOutV*w.tanInU
+			turn = prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 		}
 		center := rp.point(b, j.z, 0, 0)
 		switch {
@@ -1417,19 +1419,19 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// gap either side of it, a chain mints nothing at all for it.
 			continue
 		}
-		surf, reversed, err := rp.wallSurface(b, w.segmentWalk, kinds[i])
+		surf, reversed, err := rp.wallSurface(b, w.SegmentWalk, kinds[i])
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, loopIdx, w.segs)
+		origins, err := sideOriginsContext(ctx, ref, loopIdx, w.Segs)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		segs := make([]CurveSegment, len(w.segs))
-		for oi, si := range w.segs {
+		segs := make([]CurveSegment, len(w.Segs))
+		for oi, si := range w.Segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
+		faceArea := proofbound.BoundedMul(walkAxisMoment(w.SegmentWalk, kinds[i], segs, rp.ax), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1444,8 +1446,8 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
 			// (docs/surface-design.md §13.4).
-			cap0 := rp.capEdge(b, w.segmentWalk, false, js[i].v0, js[i+1].v0, rp.phi0, rp.phi0Delta(), false)
-			cap1 := rp.capEdge(b, w.segmentWalk, false, js[i].v1, js[i+1].v1, rp.phi1, rp.phi1Delta(), false)
+			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, rp.phi0, rp.phi0Delta(), false)
+			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, rp.phi1, rp.phi1Delta(), false)
 			co := []coedge{{edge: cap0, forward: true}}
 			if a := js[i+1].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: true})

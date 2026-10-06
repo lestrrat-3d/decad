@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -14,7 +16,7 @@ import (
 // sourceBound(face), which docs/tessellation-reach-design.md §3 names deltaStore.
 //
 // A walk's own two endpoints already state what they are worth
-// (segmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN them is a
+// (survey2d.SegmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN them is a
 // point this package computed: chordLoop evaluates math.Cos/math.Sin at an angle
 // it formed itself, from a centre, a radius and a sweep the walk had already
 // rounded. None of that arithmetic is a quantity the record states, so the
@@ -103,7 +105,7 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 // material inside) shrinks and a clockwise one (a hole rim) grows — the same
 // sign offsetRadius and ivExactOffsetRadius take. A setback that is not finite
 // answers nil, which capOffsetStationBound refuses on.
-func capWallRadiusOffset(w sideWalk, d float64) *big.Rat {
+func capWallRadiusOffset(w survey2d.SideWalk, d float64) *big.Rat {
 	rd := proofarith.FloatRat(d)
 	if rd == nil {
 		return nil

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
@@ -31,7 +33,7 @@ import (
 // region — disjoint from every outer segment, yet OUTSIDE the rounded material.
 // So S9 (nestingAuditBudget) is COMPUTED, not discharged by construction: it
 // classifies one point of each hole against the outer loop and each other hole,
-// using the same ray-parity walk with direction retries that survey2d.go runs
+// using the same ray-parity walk with direction retries that internal/survey2d/survey2d.go runs
 // (loopContains). An undecidable containment is S9 ErrUnsupported — the
 // evaluator declines rather than guess; a hole PROVEN outside the outer loop, or
 // nested inside another hole, is nesting decidably broken — the fillet consumed
@@ -137,7 +139,7 @@ func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten ProfileRe
 	// S6: no walk consumed by its own corners — reported for the loops S8 did not
 	// already resolve (an overrun that did not flip the loop's signed area).
 	for li := range loops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		if overrun[li] {
@@ -179,7 +181,7 @@ func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten ProfileRe
 func loopOverrunBudget(budget *proofbound.WorkBudget, cl cornerLoop, blends map[int]*cornerBlend) (int, bool, error) {
 	n := len(cl.walks)
 	for i, w := range cl.walks {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, false, err
 		}
 		cut := 0.0
@@ -189,7 +191,7 @@ func loopOverrunBudget(budget *proofbound.WorkBudget, cl cornerLoop, blends map[
 		if cb := blends[(i+1)%n]; cb != nil {
 			cut += cb.cutbackA
 		}
-		if cut >= w.length-1e-9*math.Max(1, w.length) {
+		if cut >= w.Length-1e-9*math.Max(1, w.Length) {
 			return i, true, nil
 		}
 	}
@@ -205,8 +207,8 @@ func errCutbackOverrun(loop, walk int, cl cornerLoop) error {
 	next := (walk + 1) % len(cl.walks)
 	legacy := fmt.Errorf(`%w: a corner's setback reaches the far end of an adjacent wall; merging the rewrites there is not supported`, ErrUnsupported)
 	detailed := fmt.Sprintf(`%v: loop %d walk %d from corner %d at (u, v) = (%s, %s) to corner %d at (u, v) = (%s, %s) is consumed by its corner setbacks; merging the rewrites there is not supported`,
-		ErrUnsupported, loop, walk, walk, renderCoord(w.startU), renderCoord(w.startV),
-		next, renderCoord(w.endU), renderCoord(w.endV))
+		ErrUnsupported, loop, walk, walk, renderCoord(w.StartU), renderCoord(w.StartV),
+		next, renderCoord(w.EndU), renderCoord(w.EndV))
 	return auditError(legacy, detailed)
 }
 
@@ -224,7 +226,7 @@ func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([
 	for li, loop := range loops {
 		n := len(loop.Segments)
 		for i, seg := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
 			w, err := walkOf(seg, work)
@@ -245,7 +247,7 @@ func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([
 func loopSignedAreaBudget(budget *proofbound.WorkBudget, loop LoopRecord) (float64, error) {
 	var area float64
 	for _, seg := range loop.Segments {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, err
 		}
 		term, err := analyticSignedArea(seg)
@@ -318,7 +320,7 @@ type segEntry struct {
 	loop int
 	idx  int
 	n    int // segments in this loop
-	w    segmentWalk
+	w    survey2d.SegmentWalk
 }
 
 // crossingAuditBudget tests every pair of segments for an interior crossing OR a
@@ -340,7 +342,7 @@ func crossingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry) error {
 	}
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return err
 			}
 			if adjacent(segs[i], segs[j]) {
@@ -403,24 +405,24 @@ func sectionBBoxBudget(budget *proofbound.WorkBudget, segs []segEntry) (minU, mi
 		minV, maxV = math.Min(minV, y), math.Max(maxV, y)
 	}
 	for _, s := range segs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, 0, 0, 0, false, err
 		}
 		w := s.w
-		fold(w.startU, w.startV)
-		fold(w.endU, w.endV)
-		if !w.isCircular() {
+		fold(w.StartU, w.StartV)
+		fold(w.EndU, w.EndV)
+		if !w.IsCircular() {
 			continue
 		}
-		lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+		lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 		for q := range 4 { // the four cardinal bearings 0, π/2, π, 3π/2
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return 0, 0, 0, 0, false, err
 			}
 			base := float64(q) * (math.Pi / 2)
 			th := base + 2*math.Pi*math.Ceil((lo-base)/(2*math.Pi))
 			for ; th <= hi+1e-12; th += 2 * math.Pi {
-				fold(w.cU+w.radius*math.Cos(th), w.cV+w.radius*math.Sin(th))
+				fold(w.CU+w.Radius*math.Cos(th), w.CV+w.Radius*math.Sin(th))
 			}
 		}
 	}
@@ -434,8 +436,8 @@ func sectionBBoxBudget(budget *proofbound.WorkBudget, segs []segEntry) (minU, mi
 // the rewritten loops strictly disjoint, each hole lies wholly inside or wholly
 // outside the outer loop and every other hole. It classifies one point of each
 // hole against the outer loop's boundary and against every other hole's, using
-// the ray-parity walk with direction retries survey2d.go already runs
-// (loopContains, over rayCrossings). The audit passes only when the outer loop
+// the ray-parity walk with direction retries internal/survey2d/survey2d.go already runs
+// (loopContains, over survey2d.RayCrossings). The audit passes only when the outer loop
 // is PROVEN to contain each hole and the holes are proven mutually exterior.
 //
 // An undecided classification is S9 ErrUnsupported — a build-time audit has no
@@ -449,18 +451,18 @@ func nestingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry, nLoops i
 	if nLoops <= 1 { // no holes: nothing to contain
 		return nil
 	}
-	bounds := make([][]surveyElem, nLoops)
+	bounds := make([][]survey2d.SurveyElem, nLoops)
 	pts := make([][2]float64, nLoops)
 	hasPt := make([]bool, nLoops)
 	for _, s := range segs {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		if e, ok := elemOf(s.w); ok {
 			bounds[s.loop] = append(bounds[s.loop], e)
 		}
 		if !hasPt[s.loop] {
-			pts[s.loop] = [2]float64{s.w.startU, s.w.startV}
+			pts[s.loop] = [2]float64{s.w.StartU, s.w.StartV}
 			hasPt[s.loop] = true
 		}
 	}
@@ -482,7 +484,7 @@ func nestingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry, nLoops i
 	}
 	// Every hole must sit inside the rewritten outer loop.
 	for h := 1; h < nLoops; h++ {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
 		}
 		if !hasPt[h] {
@@ -505,7 +507,7 @@ func nestingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry, nLoops i
 	// Holes must stay mutually exterior — neither nested in the other.
 	for a := 1; a < nLoops; a++ {
 		for b := a + 1; b < nLoops; b++ {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return err
 			}
 			if !hasPt[a] || !hasPt[b] {
@@ -545,11 +547,11 @@ func nestingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry, nLoops i
 // elemOf converts a segment walk into a survey2d boundary element. It is
 // walkElem under this file's own name; the conversion lives in one place so a
 // new walk kind is decided once (survey.go).
-func elemOf(w segmentWalk) (surveyElem, bool) { return walkElem(w) }
+func elemOf(w survey2d.SegmentWalk) (survey2d.SurveyElem, bool) { return walkElem(w) }
 
 // loopContains is the named boundary-scan phase used by cancellation probes.
-func loopContains(budget *proofbound.WorkBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
-	if err := wallBudgetErr(budget); err != nil {
+func loopContains(budget *proofbound.WorkBudget, boundary []survey2d.SurveyElem, px, py, tol float64) (inside, decided bool, err error) {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return false, false, err
 	}
 	return loopContainsBudget(budget, boundary, px, py, tol)
@@ -557,24 +559,24 @@ func loopContains(budget *proofbound.WorkBudget, boundary []surveyElem, px, py, 
 
 // loopContainsBudget classifies (px, py) against a loop's boundary by crossing parity
 // of a ray, retried across the golden-angle direction sequence when a crossing
-// is ambiguous — the same walk wallKernel.contains runs. decided is false when
+// is ambiguous — the same walk survey2d.WallKernel.contains runs. decided is false when
 // every direction is ambiguous; the answer is never guessed.
-func loopContainsBudget(budget *proofbound.WorkBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
-	if err := wallBudgetErr(budget); err != nil {
+func loopContainsBudget(budget *proofbound.WorkBudget, boundary []survey2d.SurveyElem, px, py, tol float64) (inside, decided bool, err error) {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return false, false, err
 	}
 	for i := range 16 {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return false, false, err
 		}
 		th := 0.5 + float64(i)*2.399963229728653 // golden-angle sequence
 		dx, dy := math.Cos(th), math.Sin(th)
 		crossings, good := 0, true
 		for _, e := range boundary {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return false, false, err
 			}
-			n, ok := rayCrossings(e, px, py, dx, dy, tol)
+			n, ok := survey2d.RayCrossings(e, px, py, dx, dy, tol)
 			if !ok {
 				good = false
 				break
@@ -606,13 +608,13 @@ func adjacent(a, b segEntry) bool {
 const segCrossEps = 1e-7
 
 // segCross reports whether two segment primitives meet in both their interiors.
-func segCross(a, b segmentWalk) bool {
+func segCross(a, b survey2d.SegmentWalk) bool {
 	switch {
-	case a.isLine() && b.isLine():
+	case a.IsLine() && b.IsLine():
 		return lineLineSegCross(a, b)
-	case a.isCircular() && b.isCircular():
+	case a.IsCircular() && b.IsCircular():
 		return arcArcSegCross(a, b)
-	case a.isCircular():
+	case a.IsCircular():
 		return lineArcSegCross(b, a)
 	default:
 		return lineArcSegCross(a, b)
@@ -620,37 +622,37 @@ func segCross(a, b segmentWalk) bool {
 }
 
 // lineLineSegCross reports an interior crossing of two line segments.
-func lineLineSegCross(a, b segmentWalk) bool {
-	rx, ry := a.endU-a.startU, a.endV-a.startV
-	sx, sy := b.endU-b.startU, b.endV-b.startV
+func lineLineSegCross(a, b survey2d.SegmentWalk) bool {
+	rx, ry := a.EndU-a.StartU, a.EndV-a.StartV
+	sx, sy := b.EndU-b.StartU, b.EndV-b.StartV
 	den := rx*sy - ry*sx
 	if math.Abs(den) <= filletTol {
 		return false // parallel: no transversal crossing
 	}
-	qpx, qpy := b.startU-a.startU, b.startV-a.startV
+	qpx, qpy := b.StartU-a.StartU, b.StartV-a.StartV
 	t := (qpx*sy - qpy*sx) / den
 	u := (qpx*ry - qpy*rx) / den
 	return interior(t) && interior(u)
 }
 
 // lineArcSegCross reports an interior crossing of a line segment and an arc.
-func lineArcSegCross(line, arc segmentWalk) bool {
-	dx, dy := line.endU-line.startU, line.endV-line.startV
+func lineArcSegCross(line, arc survey2d.SegmentWalk) bool {
+	dx, dy := line.EndU-line.StartU, line.EndV-line.StartV
 	dl := math.Hypot(dx, dy)
 	if dl <= filletTol {
 		return false
 	}
 	ux, uy := dx/dl, dy/dl
-	fx, fy := line.startU-arc.cU, line.startV-arc.cV
+	fx, fy := line.StartU-arc.CU, line.StartV-arc.CV
 	bb := fx*ux + fy*uy
-	cc := fx*fx + fy*fy - arc.radius*arc.radius
+	cc := fx*fx + fy*fy - arc.Radius*arc.Radius
 	disc := bb*bb - cc
 	if disc < 0 {
 		return false
 	}
 	sq := math.Sqrt(disc)
 	for _, s := range []float64{-bb + sq, -bb - sq} {
-		x, y := line.startU+s*ux, line.startV+s*uy
+		x, y := line.StartU+s*ux, line.StartV+s*uy
 		t := s / dl
 		if !interior(t) {
 			continue
@@ -663,8 +665,8 @@ func lineArcSegCross(line, arc segmentWalk) bool {
 }
 
 // arcArcSegCross reports an interior crossing of two arcs.
-func arcArcSegCross(a, b segmentWalk) bool {
-	pts := circleCircle(a.cU, a.cV, a.radius, b.cU, b.cV, b.radius)
+func arcArcSegCross(a, b survey2d.SegmentWalk) bool {
+	pts := circleCircle(a.CU, a.CV, a.Radius, b.CU, b.CV, b.Radius)
 	for _, p := range pts {
 		if angleInterior(a, p[0], p[1]) && angleInterior(b, p[0], p[1]) {
 			return true
@@ -678,9 +680,9 @@ func interior(t float64) bool { return t > segCrossEps && t < 1-segCrossEps }
 
 // angleInterior reports whether the point (x, y) lies strictly inside the arc's
 // angular walk range.
-func angleInterior(arc segmentWalk, x, y float64) bool {
-	lo, hi := math.Min(arc.th0, arc.th1), math.Max(arc.th0, arc.th1)
-	a := math.Atan2(y-arc.cV, x-arc.cU)
+func angleInterior(arc survey2d.SegmentWalk, x, y float64) bool {
+	lo, hi := math.Min(arc.Th0, arc.Th1), math.Max(arc.Th0, arc.Th1)
+	a := math.Atan2(y-arc.CV, x-arc.CU)
 	for k := math.Floor((lo-a)/(2*math.Pi)) * 2 * math.Pi; a+k <= hi+segCrossEps; k += 2 * math.Pi {
 		th := a + k
 		if th > lo+segCrossEps && th < hi-segCrossEps {
@@ -693,9 +695,9 @@ func angleInterior(arc segmentWalk, x, y float64) bool {
 // angleWithin reports whether (x, y) lies within the arc's angular walk range,
 // inclusive of its endpoints — the membership the minimum-distance candidates
 // need (a nearest point may sit at an arc's own end).
-func angleWithin(arc segmentWalk, x, y float64) bool {
-	lo, hi := math.Min(arc.th0, arc.th1), math.Max(arc.th0, arc.th1)
-	a := math.Atan2(y-arc.cV, x-arc.cU)
+func angleWithin(arc survey2d.SegmentWalk, x, y float64) bool {
+	lo, hi := math.Min(arc.Th0, arc.Th1), math.Max(arc.Th0, arc.Th1)
+	a := math.Atan2(y-arc.CV, x-arc.CU)
 	for k := math.Floor((lo-a)/(2*math.Pi)) * 2 * math.Pi; a+k <= hi+segCrossEps; k += 2 * math.Pi {
 		th := a + k
 		if th >= lo-segCrossEps && th <= hi+segCrossEps {
@@ -712,13 +714,13 @@ func angleWithin(arc segmentWalk, x, y float64) bool {
 // interior-only crossing test misses. The candidate set is complete for the attained infimum over line/arc
 // boundaries — the four endpoint-against-the-other distances, the interior
 // radial/aligned criticals, and zero at any interior intersection.
-func segMinDist(a, b segmentWalk) float64 {
+func segMinDist(a, b survey2d.SegmentWalk) float64 {
 	switch {
-	case a.isLine() && b.isLine():
+	case a.IsLine() && b.IsLine():
 		return lineLineMinDist(a, b)
-	case a.isCircular() && b.isCircular():
+	case a.IsCircular() && b.IsCircular():
 		return arcArcMinDist(a, b)
-	case a.isCircular():
+	case a.IsCircular():
 		return lineArcMinDist(b, a)
 	default:
 		return lineArcMinDist(a, b)
@@ -726,64 +728,64 @@ func segMinDist(a, b segmentWalk) float64 {
 }
 
 // pointLineSegDist is the distance from (px, py) to the closed line segment.
-func pointLineSegDist(px, py float64, l segmentWalk) float64 {
-	dx, dy := l.endU-l.startU, l.endV-l.startV
+func pointLineSegDist(px, py float64, l survey2d.SegmentWalk) float64 {
+	dx, dy := l.EndU-l.StartU, l.EndV-l.StartV
 	l2 := dx*dx + dy*dy
 	if l2 <= filletTol*filletTol {
-		return math.Hypot(px-l.startU, py-l.startV)
+		return math.Hypot(px-l.StartU, py-l.StartV)
 	}
-	t := ((px-l.startU)*dx + (py-l.startV)*dy) / l2
+	t := ((px-l.StartU)*dx + (py-l.StartV)*dy) / l2
 	t = math.Max(0, math.Min(1, t))
-	return math.Hypot(px-(l.startU+t*dx), py-(l.startV+t*dy))
+	return math.Hypot(px-(l.StartU+t*dx), py-(l.StartV+t*dy))
 }
 
 // pointArcDist is the distance from (px, py) to the closed arc: the radial gap
 // when the point's bearing falls within the walk range, else the nearer of the
 // two arc endpoints.
-func pointArcDist(px, py float64, a segmentWalk) float64 {
-	best := math.Min(math.Hypot(px-a.startU, py-a.startV), math.Hypot(px-a.endU, py-a.endV))
-	dc := math.Hypot(px-a.cU, py-a.cV)
+func pointArcDist(px, py float64, a survey2d.SegmentWalk) float64 {
+	best := math.Min(math.Hypot(px-a.StartU, py-a.StartV), math.Hypot(px-a.EndU, py-a.EndV))
+	dc := math.Hypot(px-a.CU, py-a.CV)
 	if dc > filletTol && angleWithin(a, px, py) {
-		best = math.Min(best, math.Abs(dc-a.radius))
+		best = math.Min(best, math.Abs(dc-a.Radius))
 	}
 	return best
 }
 
 // lineLineMinDist is the minimum distance between two closed line segments:
 // zero where their interiors cross, else the nearest endpoint-to-segment reach.
-func lineLineMinDist(a, b segmentWalk) float64 {
+func lineLineMinDist(a, b survey2d.SegmentWalk) float64 {
 	if lineLineSegCross(a, b) {
 		return 0
 	}
 	return math.Min(
-		math.Min(pointLineSegDist(a.startU, a.startV, b), pointLineSegDist(a.endU, a.endV, b)),
-		math.Min(pointLineSegDist(b.startU, b.startV, a), pointLineSegDist(b.endU, b.endV, a)),
+		math.Min(pointLineSegDist(a.StartU, a.StartV, b), pointLineSegDist(a.EndU, a.EndV, b)),
+		math.Min(pointLineSegDist(b.StartU, b.StartV, a), pointLineSegDist(b.EndU, b.EndV, a)),
 	)
 }
 
 // lineArcMinDist is the minimum distance between a closed line segment and a
 // closed arc.
-func lineArcMinDist(line, arc segmentWalk) float64 {
+func lineArcMinDist(line, arc survey2d.SegmentWalk) float64 {
 	if lineArcSegCross(line, arc) {
 		return 0
 	}
 	best := math.Min(
-		math.Min(pointArcDist(line.startU, line.startV, arc), pointArcDist(line.endU, line.endV, arc)),
-		math.Min(pointLineSegDist(arc.startU, arc.startV, line), pointLineSegDist(arc.endU, arc.endV, line)),
+		math.Min(pointArcDist(line.StartU, line.StartV, arc), pointArcDist(line.EndU, line.EndV, arc)),
+		math.Min(pointLineSegDist(arc.StartU, arc.StartV, line), pointLineSegDist(arc.EndU, arc.EndV, line)),
 	)
 	// Interior critical: the arc point along the perpendicular from the centre
 	// to the line, when its foot is interior to the segment and its bearing is
 	// within the walk — the tangency/near-approach the endpoints miss.
-	dx, dy := line.endU-line.startU, line.endV-line.startV
+	dx, dy := line.EndU-line.StartU, line.EndV-line.StartV
 	l2 := dx*dx + dy*dy
 	if l2 > filletTol*filletTol {
-		s := ((arc.cU-line.startU)*dx + (arc.cV-line.startV)*dy) / l2
+		s := ((arc.CU-line.StartU)*dx + (arc.CV-line.StartV)*dy) / l2
 		if s > 0 && s < 1 {
-			fx, fy := line.startU+s*dx, line.startV+s*dy
-			ux, uy := fx-arc.cU, fy-arc.cV
+			fx, fy := line.StartU+s*dx, line.StartV+s*dy
+			ux, uy := fx-arc.CU, fy-arc.CV
 			ul := math.Hypot(ux, uy)
 			if ul > filletTol {
-				cpx, cpy := arc.cU+arc.radius*ux/ul, arc.cV+arc.radius*uy/ul
+				cpx, cpy := arc.CU+arc.Radius*ux/ul, arc.CV+arc.Radius*uy/ul
 				if angleWithin(arc, cpx, cpy) {
 					best = math.Min(best, pointLineSegDist(cpx, cpy, line))
 				}
@@ -794,15 +796,15 @@ func lineArcMinDist(line, arc segmentWalk) float64 {
 }
 
 // arcArcMinDist is the minimum distance between two closed arcs.
-func arcArcMinDist(a, b segmentWalk) float64 {
+func arcArcMinDist(a, b survey2d.SegmentWalk) float64 {
 	if arcArcSegCross(a, b) {
 		return 0
 	}
 	best := math.Min(
-		math.Min(pointArcDist(a.startU, a.startV, b), pointArcDist(a.endU, a.endV, b)),
-		math.Min(pointArcDist(b.startU, b.startV, a), pointArcDist(b.endU, b.endV, a)),
+		math.Min(pointArcDist(a.StartU, a.StartV, b), pointArcDist(a.EndU, a.EndV, b)),
+		math.Min(pointArcDist(b.StartU, b.StartV, a), pointArcDist(b.EndU, b.EndV, a)),
 	)
-	dcx, dcy := b.cU-a.cU, b.cV-a.cV
+	dcx, dcy := b.CU-a.CU, b.CV-a.CV
 	d := math.Hypot(dcx, dcy)
 	if d > filletTol {
 		ux, uy := dcx/d, dcy/d
@@ -810,25 +812,25 @@ func arcArcMinDist(a, b segmentWalk) float64 {
 		// centre line; test each circle's two axis points against the other arc,
 		// which captures external and internal tangency alike.
 		for _, s := range []float64{1, -1} {
-			pax, pay := a.cU+s*a.radius*ux, a.cV+s*a.radius*uy
+			pax, pay := a.CU+s*a.Radius*ux, a.CV+s*a.Radius*uy
 			if angleWithin(a, pax, pay) {
 				best = math.Min(best, pointArcDist(pax, pay, b))
 			}
-			pbx, pby := b.cU+s*b.radius*ux, b.cV+s*b.radius*uy
+			pbx, pby := b.CU+s*b.Radius*ux, b.CV+s*b.Radius*uy
 			if angleWithin(b, pbx, pby) {
 				best = math.Min(best, pointArcDist(pbx, pby, a))
 			}
 		}
 	} else if arcSpansOverlap(a, b) {
 		// Concentric arcs whose walks overlap in bearing: the radial gap.
-		best = math.Min(best, math.Abs(a.radius-b.radius))
+		best = math.Min(best, math.Abs(a.Radius-b.Radius))
 	}
 	return best
 }
 
 // arcSpansOverlap reports whether two concentric arcs' walk ranges share any
 // bearing — an endpoint of one falling within the other's range.
-func arcSpansOverlap(a, b segmentWalk) bool {
-	return angleWithin(b, a.startU, a.startV) || angleWithin(b, a.endU, a.endV) ||
-		angleWithin(a, b.startU, b.startV) || angleWithin(a, b.endU, b.endV)
+func arcSpansOverlap(a, b survey2d.SegmentWalk) bool {
+	return angleWithin(b, a.StartU, a.StartV) || angleWithin(b, a.EndU, a.EndV) ||
+		angleWithin(a, b.StartU, b.StartV) || angleWithin(a, b.EndU, b.EndV)
 }

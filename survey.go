@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -82,7 +84,7 @@ type undercutOutcome struct {
 // radiusOutcome is one body's tightest concave radius: ok=false is
 // undecided and reason distinguishes its cause; reading == nil (with ok) is
 // the proven all-convex answer. reading and bound (millimetres) are the
-// midpoint and half-width of the interval the §9.2 extremeAggregate proves over EVERY
+// midpoint and half-width of the interval the §9.2 survey2d.ExtremeAggregate proves over EVERY
 // candidate the survey admitted, never one winning walk's own figures; the
 // bound is zero, and the reading therefore Exact, only where every one of
 // those candidates was itself exactly representable — a recorded CircleSeg's
@@ -111,19 +113,19 @@ var errFreeformSection = fmt.Errorf(`%w: the wall survey does not support a free
 // recordLoops resolves the recorded profile into coalesced walk loops,
 // exactly as the prism evaluator builds its side faces — the surveys must
 // see the same face decomposition the topology carries.
-func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]sideWalk, error) {
+func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]survey2d.SideWalk, error) {
 	// One free-form counter for the whole record: the surveys read a built body's
 	// own section with no preflight counter in hand, so the ceiling starts here
 	// and spans every loop below.
 	work := newFreeformWork()
-	var out [][]sideWalk
+	var out [][]survey2d.SideWalk
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		raw := make([]sideWalk, len(loop.Segments))
+		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
 			w, err := walkOf(seg, work)
@@ -137,7 +139,7 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]side
 			if err := requireAnalyticWalk(w, "the wall survey"); err != nil {
 				return nil, errFreeformSection
 			}
-			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
 		if err != nil {
@@ -150,8 +152,8 @@ func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]side
 
 // recordLoopsBudget names the operation-budget form used by cancellation
 // probes and by callers that distinguish profile scanning from other surveys.
-func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]sideWalk, error) {
-	if err := wallBudgetErr(budget); err != nil {
+func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]survey2d.SideWalk, error) {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return nil, err
 	}
 	return recordLoops(budget, profile)
@@ -159,18 +161,18 @@ func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([]
 
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
-func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]sideWalk, error) {
+func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, error) {
 	// One free-form counter for the whole record, as recordLoops opens.
 	work := newFreeformWork()
-	var out [][]sideWalk
+	var out [][]survey2d.SideWalk
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	for _, loop := range loops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		raw := make([]sideWalk, len(loop.Segments))
+		raw := make([]survey2d.SideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return nil, err
 			}
 			w, err := walkOf(seg, work)
@@ -180,7 +182,7 @@ func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]sideWal
 			if err := requireAnalyticWalk(w, "the survey boundary walk"); err != nil {
 				return nil, err
 			}
-			raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
+			raw[i] = survey2d.SideWalk{SegmentWalk: rp.ax.walk(w), Segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
 		if err != nil {
@@ -196,40 +198,40 @@ func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]sideWal
 // modify section audit and the clearance kernel's planar trims. The material
 // side is irrelevant to ray parity, so an arc's walk sense is not consulted.
 //
-// The switch is total over walkKind on purpose: a free-form walk has no
-// surveyElem to become, and answering false is what keeps it from silently
+// The switch is total over survey2d.WalkKind on purpose: a free-form walk has no
+// survey2d.SurveyElem to become, and answering false is what keeps it from silently
 // converting into the straight line between its endpoints. Its element awaits
 // docs/spline-design.md §8's free-form kernels.
-func walkElem(w segmentWalk) (surveyElem, bool) {
-	switch w.kind {
-	case walkCircular:
-		e, ok := arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
+func walkElem(w survey2d.SegmentWalk) (survey2d.SurveyElem, bool) {
+	switch w.Kind {
+	case survey2d.WalkCircular:
+		e, ok := survey2d.ArcElem(w.CU, w.CV, w.Radius, w.Th0, w.Th1, w.Closed)
 		if !ok {
 			return e, false
 		}
 		// The walk's radius is not always a recorded number, so the element
 		// takes the walk's own proven bound on it rather than reading it as an
 		// exact leaf (extrude.go's arcWalkRadiusBound).
-		e.rrBound = w.radiusBound
+		e.RrBound = w.RadiusBound
 		return e, true
-	case walkLine:
-		return lineElem(w.startU, w.startV, w.endU, w.endV)
+	case survey2d.WalkLine:
+		return survey2d.LineElem(w.StartU, w.StartV, w.EndU, w.EndV)
 	default:
-		return surveyElem{}, false
+		return survey2d.SurveyElem{}, false
 	}
 }
 
 // mirrorElem reflects an element across the axis (y → −y), reversing the
 // walk so the material stays on its left.
-func mirrorElem(e surveyElem) surveyElem {
-	if e.kind == surveyLine {
-		m, _ := lineElem(e.bx, -e.by, e.ax, -e.ay)
+func mirrorElem(e survey2d.SurveyElem) survey2d.SurveyElem {
+	if e.Kind == survey2d.SurveyLine {
+		m, _ := survey2d.LineElem(e.Bx, -e.By, e.Ax, -e.Ay)
 		return m
 	}
-	m, _ := arcElem(e.qx, -e.qy, e.rr, -e.th1, -e.th0, e.closed)
+	m, _ := survey2d.ArcElem(e.Qx, -e.Qy, e.Rr, -e.Th1, -e.Th0, e.Closed)
 	// A reflection moves no radius, so the mirrored element states the same
 	// radius under the same proven bound.
-	m.rrBound = e.rrBound
+	m.RrBound = e.RrBound
 	return m
 }
 
@@ -243,7 +245,7 @@ func junctionPinch(inU, inV, outU, outV, alpha float64) bool {
 	dot := inU*outU + inV*outV
 	turn := math.Atan2(cross, dot) // left turn positive, (−π, π]
 	delta := math.Pi - turn        // interior material angle; reflex > π
-	return delta <= alpha+survAngTol
+	return delta <= alpha+survey2d.SurvAngTol
 }
 
 // prismWall is the spanning-ball reading of a prism: the profile's spanning
@@ -251,7 +253,7 @@ func junctionPinch(inU, inV, outU, outV, alpha float64) bool {
 // span whenever a disk of half the height fits the section, and a profile
 // corner within the allowance pinches to zero.
 func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (wallOutcome, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
 	if pp.sectionDelta != 0 {
@@ -275,7 +277,7 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 			// A review read this nil return as swallowing a cancellation that
 			// arrives after the poll above, so that the caller never learns of
 			// it. The caller does learn: runSurveys is prismWall's only
-			// production call site, and it polls wallBudgetErr again on the
+			// production call site, and it polls survey2d.WallBudgetErr again on the
 			// next unconditional line after the diagnostics, with no return
 			// between; that budget's errFn is the Verify context's own Err,
 			// which Verify then propagates. Checked in an isolated copy with a
@@ -286,19 +288,19 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 		}
 		return wallOutcome{}, err
 	}
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
-	var elems []surveyElem
+	var elems []survey2d.SurveyElem
 	var verts [][2]float64
 	pinch := false
 	for _, loop := range loops {
-		single := len(loop) == 1 && loop[0].closed
+		single := len(loop) == 1 && loop[0].Closed
 		for i, w := range loop {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return wallOutcome{}, err
 			}
-			el, ok := walkElem(w.segmentWalk)
+			el, ok := walkElem(w.SegmentWalk)
 			if !ok {
 				return wallOutcome{}, nil
 			}
@@ -306,23 +308,23 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 			if single {
 				continue
 			}
-			verts = append(verts, [2]float64{w.startU, w.startV})
+			verts = append(verts, [2]float64{w.StartU, w.StartV})
 			prev := loop[(i+len(loop)-1)%len(loop)]
-			if junctionPinch(prev.tanOutU, prev.tanOutV, w.tanInU, w.tanInV, alpha) {
+			if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
 				pinch = true
 			}
 		}
 	}
 	h := pp.z1 - pp.z0
-	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, proofbound.ExactScalar(0), false, h)
+	k, err := survey2d.NewWallKernelBudget(budget, elems, nil, verts, alpha, proofbound.ExactScalar(0), false, h)
 	if err != nil {
 		return wallOutcome{}, err
 	}
-	out, err := k.runBudget(budget)
+	out, err := k.RunBudget(budget)
 	if err != nil {
 		return wallOutcome{}, err
 	}
-	if !out.ok {
+	if !out.Ok {
 		return wallOutcome{}, nil
 	}
 	// The three arms are candidates of ONE minimum, so they reduce through the
@@ -334,18 +336,18 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 	// winner-only reduction publishes the section's interval while the true
 	// minimum is the height's, sitting below it. The aggregate reaches down to
 	// whichever arm's interval reaches lowest.
-	agg := minAggregate()
+	agg := survey2d.MinAggregate()
 	if pinch {
-		agg.take(0, 0)
+		agg.Take(0, 0)
 	}
-	if out.subTolFar && !pinch {
+	if out.SubTolFar && !pinch {
 		// Same rule as the revolve path: a dropped off-junction
 		// sub-tolerance disk could be a real web thinner than the kernel
 		// resolves — only an exact zero still decides.
 		return wallOutcome{}, nil
 	}
-	if out.hasSpan {
-		agg.take(out.span, out.spanBound)
+	if out.HasSpan {
+		agg.Take(out.Span, out.SpanBound)
 	}
 	// The height arm's ADMISSION is a separate question from its value: the
 	// cap-to-cap ball exists only where the section's own largest inscribed
@@ -363,16 +365,16 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 	// coordinates rather than by an angle-limit division. The boundary case
 	// the gate exists for is the cube, whose inradius equals h/2 exactly and
 	// clears by the whole of k.tol.
-	switch proofbound.AdmitAbove(proofbound.MeasuredScalar(out.inradius, out.inradiusBound), h/2-k.tol) {
+	switch proofbound.AdmitAbove(proofbound.MeasuredScalar(out.Inradius, out.InradiusBound), h/2-k.Tol) {
 	case proofbound.SurvAdmit:
-		agg.take(h, heightArmBound(pp))
+		agg.Take(h, heightArmBound(pp))
 	case proofbound.SurvStraddle:
 		return wallOutcome{}, nil
 	}
-	if agg.empty() && !agg.unbounded {
+	if agg.Empty() && !agg.Unbounded {
 		return wallOutcome{ok: true}, nil
 	}
-	best, bestBound, ok := agg.resolve()
+	best, bestBound, ok := agg.Resolve()
 	if !ok {
 		// A candidate this reading relied on could not be bounded: the answer
 		// is not one this evaluator can stand behind (see runBudget's own doc
@@ -396,7 +398,7 @@ func heightArmBound(pp prismPayload) float64 {
 		return math.Inf(1)
 	}
 	h := pp.z1 - pp.z0
-	subErr := ratAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
+	subErr := survey2d.RatAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
 	return proofbound.AbsSumUpper(pp.z0Delta, pp.z1Delta, subErr)
 }
 
@@ -408,14 +410,14 @@ func heightArmBound(pp prismPayload) float64 {
 // whose own two contacts span exactly when the sweep is within the
 // allowance, the on-axis cap edge (dihedral = the sweep itself) included.
 func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64) (wallOutcome, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {
 		return wallOutcome{}, err
 	}
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
 	// The sweep, with the subtraction's OWN rounding plus the proven angular
@@ -428,34 +430,34 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 	dphiBS := proofbound.BoundedSub(proofbound.ExactScalar(rp.phi1), proofbound.ExactScalar(rp.phi0))
 	dphiBS.Bound = proofbound.AbsSumUpper(dphiBS.Bound, rp.angularDelta())
 	dphi := dphiBS.Value
-	var elems, containOnly []surveyElem
+	var elems, containOnly []survey2d.SurveyElem
 	var verts [][2]float64
 	pinch := false
 	axisTouch := false
 	for _, loop := range loops {
 		n := len(loop)
-		single := n == 1 && loop[0].closed
+		single := n == 1 && loop[0].Closed
 		kinds := make([]wallKind, n)
 		for i, w := range loop {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return wallOutcome{}, err
 			}
-			kinds[i] = rp.ax.classify(w.segmentWalk)
+			kinds[i] = rp.ax.classify(w.SegmentWalk)
 		}
 		for i, w := range loop {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return wallOutcome{}, err
 			}
 			if kinds[i] == wallAxis {
 				axisTouch = true
 				if !rp.full {
-					if el, ok := walkElem(w.segmentWalk); ok {
+					if el, ok := walkElem(w.SegmentWalk); ok {
 						containOnly = append(containOnly, el)
 					}
 				}
 				continue
 			}
-			el, ok := walkElem(w.segmentWalk)
+			el, ok := walkElem(w.SegmentWalk)
 			if !ok {
 				return wallOutcome{}, nil
 			}
@@ -466,31 +468,31 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 			if single {
 				continue
 			}
-			if w.startV == 0 || w.endV == 0 {
+			if w.StartV == 0 || w.EndV == 0 {
 				axisTouch = true
 			}
-			verts = append(verts, [2]float64{w.startU, w.startV})
-			if rp.full && w.startV > 0 {
-				verts = append(verts, [2]float64{w.startU, -w.startV})
+			verts = append(verts, [2]float64{w.StartU, w.StartV})
+			if rp.full && w.StartV > 0 {
+				verts = append(verts, [2]float64{w.StartU, -w.StartV})
 			}
 			prev := loop[(i+n-1)%n]
 			prevAxis := kinds[(i+n-1)%n] == wallAxis
 			nextAxis := kinds[(i+1)%n] == wallAxis
 			switch {
 			case !prevAxis:
-				if junctionPinch(prev.tanOutU, prev.tanOutV, w.tanInU, w.tanInV, alpha) {
+				if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
 					pinch = true
 				}
 			case rp.full:
 				// The walk continues as its own mirror image across the axis:
 				// the dihedral there is the corner the symmetrized section
 				// shows (a cone's apex reads its full apex angle).
-				if junctionPinch(-w.tanInU, w.tanInV, w.tanInU, w.tanInV, alpha) {
+				if junctionPinch(-w.TanInU, w.TanInV, w.TanInU, w.TanInV, alpha) {
 					pinch = true
 				}
 			}
 			if nextAxis && rp.full {
-				if junctionPinch(w.tanOutU, w.tanOutV, -w.tanOutU, w.tanOutV, alpha) {
+				if junctionPinch(w.TanOutU, w.TanOutV, -w.TanOutU, w.TanOutV, alpha) {
 					pinch = true
 				}
 			}
@@ -508,13 +510,13 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 		// (TestWallReflexSweep pins the hand-checked case).
 		//
 		// The factor is a SINE, the one kernel input that is not an exact
-		// leaf, so it is proven rather than trusted: radianTrigBounds encloses
+		// leaf, so it is proven rather than trusted: survey2d.RadianTrigBounds encloses
 		// sin of the held half-angle from the same rational bracket a Cone's
 		// normal reads (never math.Sin's own accuracy), and the sweep's own
 		// subtraction rounding rides in on top because θ ↦ sin(min(θ, π/2)) is
 		// 1-Lipschitz — halving is exact, so half the subtraction's bound is
 		// the whole displacement the half-angle can carry.
-		sinBS, _ := radianTrigBounds(math.Min(dphi/2, math.Pi/2))
+		sinBS, _ := survey2d.RadianTrigBounds(math.Min(dphi/2, math.Pi/2))
 		wedgeS = proofbound.MeasuredScalar(sinBS.Value, proofbound.AbsSumUpper(sinBS.Bound, dphiBS.Bound/2))
 		if proofbound.IsNonFinite(wedgeS.Bound) {
 			// No proven enclosure of the cap half-angle's sine: every
@@ -530,17 +532,17 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 			// Undecided, which reads Suspect — never a silent pass.
 			return wallOutcome{}, nil
 		}
-		wedgeSpans = dphi <= alpha+survAngTol
+		wedgeSpans = dphi <= alpha+survey2d.SurvAngTol
 	}
-	k, err := newWallKernelBudget(budget, elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
+	k, err := survey2d.NewWallKernelBudget(budget, elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
 	if err != nil {
 		return wallOutcome{}, err
 	}
-	out, err := k.runBudget(budget)
+	out, err := k.RunBudget(budget)
 	if err != nil {
 		return wallOutcome{}, err
 	}
-	if !out.ok {
+	if !out.Ok {
 		return wallOutcome{}, nil
 	}
 	// The arms reduce through the same §9.2 aggregate prismWall uses. Here the
@@ -551,26 +553,26 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 	// reduction owning the reading is what keeps the two wall arms from
 	// drifting apart.
 	zeroArm := pinch || (wedgeSpans && axisTouch)
-	agg := minAggregate()
+	agg := survey2d.MinAggregate()
 	if zeroArm {
 		// A pinch, or a partial sweep whose caps meet along the axis at the
 		// sweep angle itself: a dihedral within the allowance, ground to zero.
-		agg.take(0, 0)
+		agg.Take(0, 0)
 	}
-	if out.subTolFar && !zeroArm {
+	if out.SubTolFar && !zeroArm {
 		// A dropped off-junction sub-tolerance disk could be a real web
 		// thinner than the kernel resolves: only an exact zero (which
 		// nothing can undercut) still decides; any other reading — or an
 		// absence — is undecided.
 		return wallOutcome{}, nil
 	}
-	if out.hasSpan {
-		agg.take(out.span, out.spanBound)
+	if out.HasSpan {
+		agg.Take(out.Span, out.SpanBound)
 	}
-	if agg.empty() && !agg.unbounded {
+	if agg.Empty() && !agg.Unbounded {
 		return wallOutcome{ok: true}, nil
 	}
-	best, bestBound, ok := agg.resolve()
+	best, bestBound, ok := agg.Resolve()
 	if !ok {
 		return wallOutcome{}, nil
 	}
@@ -604,7 +606,7 @@ func facesByRole(b *Body) map[string]*Face {
 //
 // revolveUndercuts is this function's only remaining caller: prismUndercuts,
 // cupUndercuts and capBlendUndercuts's receiver-wall loop instead read
-// through decidePull's exact-rational sibling (survey_undercut.go), which
+// through survey2d.DecidePull's exact-rational sibling (survey_undercut.go), which
 // this function's own zero-allowance behaviour matches exactly
 // (TestDecidePullMatchesOpposesPullAtZeroAllowance).
 func opposesPull(m, M float64) bool {
@@ -671,11 +673,11 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	undecided := false
 	for li, loop := range loops {
 		for _, w := range loop {
-			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
+			f := roles[fmt.Sprintf("side(%d,%d)", li, w.Segs[0])]
 			if f == nil {
 				return undercutOutcome{}
 			}
-			verdict, ok := wallNormalDecision(w, m, pull)
+			verdict, ok := survey2d.WallNormalDecision(w, m, pull)
 			if !listVerdict(&faces, &undecided, f, verdict, ok) {
 				return undercutOutcome{}
 			}
@@ -690,7 +692,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 			if f == nil {
 				return undercutOutcome{}
 			}
-			verdict, ok := capNormalDecision(m, pull, cap.sign)
+			verdict, ok := survey2d.CapNormalDecision(m, pull, cap.sign)
 			if !listVerdict(&faces, &undecided, f, verdict, ok) {
 				return undercutOutcome{}
 			}
@@ -724,20 +726,20 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	faces := []*Face{}
 	for li, loop := range loops {
 		for _, w := range loop {
-			if rp.ax.classify(w.segmentWalk) == wallAxis {
+			if rp.ax.classify(w.SegmentWalk) == wallAxis {
 				continue
 			}
-			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
+			f := roles[fmt.Sprintf("side(%d,%d)", li, w.Segs[0])]
 			if f == nil {
 				return undercutOutcome{}
 			}
 			mn, mx := math.Inf(1), math.Inf(-1)
-			if w.isCircular() {
+			if w.IsCircular() {
 				sigma := 1.0
-				if w.th1 < w.th0 {
+				if w.Th1 < w.Th0 {
 					sigma = -1
 				}
-				lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+				lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 				for _, g := range []float64{glo, ghi} {
 					// n·p = σ(cosθ·pw + sinθ·g) over the meridian range.
 					a, bb := trigRange(pw, g, lo, hi)
@@ -745,9 +747,9 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 					mx = math.Max(mx, math.Max(sigma*a, sigma*bb))
 				}
 			} else {
-				l := math.Hypot(w.tanInU, w.tanInV)
-				nz := w.tanInV / l
-				nr := -w.tanInU / l
+				l := math.Hypot(w.TanInU, w.TanInV)
+				nz := w.TanInV / l
+				nr := -w.TanInU / l
 				for _, g := range []float64{glo, ghi} {
 					v := nz*pw + nr*g
 					mn = math.Min(mn, v)
@@ -784,104 +786,14 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	return undercutOutcome{faces: faces, ok: true}
 }
 
-// extremeAggregate reduces a population of candidates, each holding a value
-// under its OWN proven bound, to the single interval
-// docs/payload-verification-design.md §9.2 specifies for the faceted twin of
-// the minimum-radius survey. It is the one owner of that reduction: every
-// survey reading that is an extremum over candidates — the concave radius, the
-// wall reading's arms, and the 2D kernel's own spanning diameter and inradius —
-// takes its interval from here rather than from whichever candidate won a
-// comparison of held values.
-//
-// For a MINIMUM, lo is the least of the candidates' lower endpoints
-// (value − bound) and hi the least of their upper endpoints (value + bound).
-// Every true value is at least its own candidate's lower endpoint, so the true
-// minimum is at least the least of them; and the candidate achieving the least
-// upper endpoint has a true value no greater than that endpoint, so the true
-// minimum is at most hi. For a MAXIMUM the same argument runs the other way,
-// with both ends taken as maxima instead.
-//
-// Both endpoints are needed because each candidate's bound is its own.
-// Reducing winner-only instead — keeping the winning held value together with
-// that one candidate's bound — publishes an interval a RIVAL candidate's truth
-// can sit outside whenever the rival carries the wider bound, and nothing the
-// winner's own arithmetic knows can detect it.
-//
-// The reduction never widens an exact reading: when the candidates that decide
-// both ends have a zero bound, lo and hi coincide, so the midpoint is that
-// value and the half-width is zero. An inexact rival that does not reach the
-// extremum changes neither end, so it cannot make an exact reading
-// approximate.
-//
-// Every arm feeds one sink, so the refusal on an underivable bound lives here
-// rather than on a winner: a candidate the arithmetic could not bound leaves
-// the whole reading undecided however its held value ranks.
-type extremeAggregate struct {
-	lo, hi    *big.Rat
-	maximum   bool // reduce toward the greatest candidate rather than the least
-	unbounded bool
-}
-
-// minAggregate and maxAggregate name the two directions the reduction runs in.
-func minAggregate() extremeAggregate { return extremeAggregate{} }
-func maxAggregate() extremeAggregate { return extremeAggregate{maximum: true} }
-
-// take admits one candidate under its own proven bound, read as the magnitude
-// it is. A candidate whose value or bound is not finite has no enclosure at
-// all, so it refuses the aggregate rather than dropping silently out of the
-// comparison.
-func (ra *extremeAggregate) take(value, bound float64) {
-	v, b := proofarith.FloatRat(value), proofarith.FloatRat(math.Abs(bound))
-	if v == nil || b == nil {
-		ra.unbounded = true
-		return
-	}
-	keep := func(cur, cand *big.Rat) *big.Rat {
-		if cur == nil {
-			return cand
-		}
-		cmp := cand.Cmp(cur)
-		if (ra.maximum && cmp > 0) || (!ra.maximum && cmp < 0) {
-			return cand
-		}
-		return cur
-	}
-	ra.lo = keep(ra.lo, new(big.Rat).Sub(v, b))
-	ra.hi = keep(ra.hi, new(big.Rat).Add(v, b))
-}
-
-// empty reports that no candidate was admitted at all — the proven absence its
-// caller turns into whichever answer absence means for that reading.
-func (ra extremeAggregate) empty() bool { return ra.lo == nil }
-
-// resolve publishes the aggregate's midpoint under a half-width measured from
-// the RATIONAL endpoints, so the float midpoint's own rounding is already
-// inside the bound it publishes. It answers ok=false when a candidate could
-// not be bounded, or when the interval itself cannot be stated in float64.
-func (ra extremeAggregate) resolve() (float64, float64, bool) {
-	if ra.unbounded || ra.lo == nil {
-		return 0, 0, false
-	}
-	sum := new(big.Rat).Add(ra.lo, ra.hi)
-	mid, _ := new(big.Rat).Mul(sum, big.NewRat(1, 2)).Float64()
-	if proofbound.IsNonFinite(mid) {
-		return 0, 0, false
-	}
-	bound := math.Max(ratAbsDiff(ra.lo, mid), ratAbsDiff(ra.hi, mid))
-	if proofbound.IsNonFinite(bound) {
-		return 0, 0, false
-	}
-	return mid, bound, true
-}
-
 // radiusOutcomeOf is the concave-radius arms' wrapper over the same reduction:
 // no candidate is the proven all-convex answer, an unresolvable interval is an
 // undecided survey, and anything else is the aggregate's own reading.
-func radiusOutcomeOf(ra extremeAggregate) (radiusOutcome, bool) {
-	if ra.empty() && !ra.unbounded {
+func radiusOutcomeOf(ra survey2d.ExtremeAggregate) (radiusOutcome, bool) {
+	if ra.Empty() && !ra.Unbounded {
 		return radiusOutcome{ok: true}, true
 	}
-	mid, bound, ok := ra.resolve()
+	mid, bound, ok := ra.Resolve()
 	if !ok {
 		return radiusOutcome{}, false
 	}
@@ -891,7 +803,7 @@ func radiusOutcomeOf(ra extremeAggregate) (radiusOutcome, bool) {
 // prismMinRadius is the tightest concave radius over a prism's faces: only
 // a side swept from an arc walked against the section's orientation — a
 // hole wall, a notch — curves away from the material, and its radius is the
-// walk's own. Every such walk is a candidate the §9.2 extremeAggregate reduces; the
+// walk's own. Every such walk is a candidate the §9.2 survey2d.ExtremeAggregate reduces; the
 // reading is that aggregate's interval, never one walk's own figures.
 func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if pp.sectionDelta != 0 {
@@ -907,14 +819,14 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if err != nil {
 		return radiusOutcome{}, false
 	}
-	agg := minAggregate()
+	agg := survey2d.MinAggregate()
 	for _, loop := range loops {
 		for _, w := range loop {
-			if w.isCircular() && w.th1 < w.th0 {
+			if w.IsCircular() && w.Th1 < w.Th0 {
 				// Each concave arc enters under its OWN proven radius bound
 				// (extrude.go's arcWalkRadiusBound), and the aggregate — not
 				// this loop — decides what the reading says.
-				agg.take(w.radius, w.radiusBound)
+				agg.Take(w.Radius, w.RadiusBound)
 			}
 		}
 	}
@@ -927,20 +839,20 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 // groove's tube), and the parallel circle's, whose radius is ρ/|n_ρ|
 // wherever the meridian normal points toward the axis (a hole wall, a
 // waist). Both are closed-form over each walk's extent, and both arms feed the
-// same extremeAggregate: the reading is the interval it proves over every
+// same survey2d.ExtremeAggregate: the reading is the interval it proves over every
 // candidate, never the figures of whichever arm held the smallest value.
 func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return radiusOutcome{}, false
 	}
-	agg := minAggregate()
+	agg := survey2d.MinAggregate()
 	for _, loop := range loops {
 		for _, w := range loop {
-			if rp.ax.classify(w.segmentWalk) == wallAxis {
+			if rp.ax.classify(w.SegmentWalk) == wallAxis {
 				continue
 			}
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				// The walk tangent is NOT a recorded coordinate: it is the
 				// difference of two of them, which the evaluator computed and
 				// which extrude.go's lineWalkTangentBound proved a bound on.
@@ -957,11 +869,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// exactly zero. Both are zero only where the walk's own
 				// arithmetic committed neither, which is what leaves an
 				// axis-aligned frame's untouched end reading Exact.
-				tanU := proofbound.MeasuredScalar(w.tanInU, w.tanInBound)
-				tanV := proofbound.MeasuredScalar(w.tanInV, w.tanInBound)
+				tanU := proofbound.MeasuredScalar(w.TanInU, w.TanInBound)
+				tanV := proofbound.MeasuredScalar(w.TanInV, w.TanInBound)
 				lBS := proofbound.BoundedNorm2(tanU, tanV)
-				nrBS := proofbound.BoundedQuotient(-w.tanInU, w.tanInBound, lBS.Value, lBS.Bound)
-				// survAngTol is the line this survey DECLARES, not a
+				nrBS := proofbound.BoundedQuotient(-w.TanInU, w.TanInBound, lBS.Value, lBS.Bound)
+				// survey2d.SurvAngTol is the line this survey DECLARES, not a
 				// measurement: a wall within 1e-9 radians of parallel to the
 				// axis has a parallel-circle radius of at least 1e9·ρ, which is
 				// no concave feature. The reading is taken on the component's
@@ -971,32 +883,32 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// become the aggregate's minimum beside a candidate of ordinary
 				// size, and its denominator's clearance at the threshold keeps
 				// its bound finite rather than leaving the survey undecided.
-				if proofbound.AdmitBelow(nrBS, -survAngTol) != proofbound.SurvReject {
+				if proofbound.AdmitBelow(nrBS, -survey2d.SurvAngTol) != proofbound.SurvReject {
 					// The nearer end of the wall is the INTERVAL minimum of the
 					// two ends' proven radial coordinates (proofbound.BoundedMin), never
 					// the interval of whichever held value compared smaller:
 					// the two ends carry their own independent bounds, so the
 					// end that holds larger can still be the truly nearer one.
 					minSV := proofbound.BoundedMin(
-						proofbound.MeasuredScalar(w.startV, w.startVBound),
-						proofbound.MeasuredScalar(w.endV, w.endVBound),
+						proofbound.MeasuredScalar(w.StartV, w.StartVBound),
+						proofbound.MeasuredScalar(w.EndV, w.EndVBound),
 					)
 					vBS := proofbound.BoundedQuotient(minSV.Value, minSV.Bound, -nrBS.Value, nrBS.Bound)
-					agg.take(vBS.Value, vBS.Bound)
+					agg.Take(vBS.Value, vBS.Bound)
 				}
 				continue
 			}
 			sigma := 1.0
-			if w.th1 < w.th0 {
+			if w.Th1 < w.Th0 {
 				sigma = -1
 			}
 			if sigma < 0 {
 				// The meridian's own radius, with the walk's own proven bound
 				// on it (extrude.go's arcWalkRadiusBound): zero for a recorded
 				// CircleSeg radius, positive for an ArcSeg's math.Hypot.
-				agg.take(w.radius, w.radiusBound)
+				agg.Take(w.Radius, w.RadiusBound)
 			}
-			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+			lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 			cands := []float64{lo, hi}
 			for _, star := range []float64{math.Pi / 2, -math.Pi / 2} {
 				for kk := math.Floor((lo-star)/(2*math.Pi)) * 2 * math.Pi; star+kk <= hi+1e-12; kk += 2 * math.Pi {
@@ -1006,25 +918,25 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				}
 			}
 			for _, th := range cands {
-				// The sine's own certified enclosure (radianTrigBounds), not
+				// The sine's own certified enclosure (survey2d.RadianTrigBounds), not
 				// math.Sin's undocumented accuracy — the same rational
 				// bracket a Cone's own normal reads (normal_bound.go).
-				sinBS, _ := radianTrigBounds(th)
+				sinBS, _ := survey2d.RadianTrigBounds(th)
 				nrBS := proofbound.BoundedMul(proofbound.ExactScalar(sigma), sinBS)
 				// The same declared line, read the same way: a straddling
 				// meridian normal admits its candidate rather than dropping it,
 				// and that candidate's own size keeps it out of the minimum.
-				if proofbound.AdmitBelow(nrBS, -survAngTol) == proofbound.SurvReject {
+				if proofbound.AdmitBelow(nrBS, -survey2d.SurvAngTol) == proofbound.SurvReject {
 					continue
 				}
 				// w.cV is the axis frame's own re-expression of the circular
 				// walk's recorded center, so it takes cVBound beside it rather
 				// than reading as an exact leaf — the same account startV/endV
 				// take above.
-				rhoBS := proofbound.BoundedAdd(proofbound.MeasuredScalar(w.cV, w.cVBound), proofbound.BoundedMul(proofbound.MeasuredScalar(w.radius, w.radiusBound), sinBS))
+				rhoBS := proofbound.BoundedAdd(proofbound.MeasuredScalar(w.CV, w.CVBound), proofbound.BoundedMul(proofbound.MeasuredScalar(w.Radius, w.RadiusBound), sinBS))
 				negNrBS := proofbound.MeasuredScalar(-nrBS.Value, nrBS.Bound)
 				resultBS := proofbound.BoundedQuotient(rhoBS.Value, rhoBS.Bound, negNrBS.Value, negNrBS.Bound)
-				agg.take(resultBS.Value, resultBS.Bound)
+				agg.Take(resultBS.Value, resultBS.Bound)
 			}
 		}
 	}
@@ -1033,11 +945,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 
 // cupWalks resolves one cup region loop into its coalesced walks — the same
 // decomposition evalCup's wall build uses.
-func cupWalks(loop LoopRecord) ([]sideWalk, error) {
+func cupWalks(loop LoopRecord) ([]survey2d.SideWalk, error) {
 	return cupWalksBudget(nil, loop)
 }
 
-func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]sideWalk, error) {
+func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]survey2d.SideWalk, error) {
 	loops, err := recordLoopsBudget(budget, ProfileRecord{Outer: loop})
 	if err != nil {
 		return nil, err
@@ -1059,7 +971,7 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 	isCancellation := func(err error) bool {
 		return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 	}
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
 	t := cp.thickness
@@ -1148,23 +1060,23 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 		return wallOutcome{}, nil
 	}
 
-	hasPinch := func(loops [][]sideWalk) (bool, bool, error) {
+	hasPinch := func(loops [][]survey2d.SideWalk) (bool, bool, error) {
 		for _, loop := range loops {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return false, false, err
 			}
 			if len(loop) == 0 {
 				return false, false, nil
 			}
-			if len(loop) == 1 && loop[0].closed {
+			if len(loop) == 1 && loop[0].Closed {
 				continue
 			}
 			for i, w := range loop {
-				if err := wallBudgetStep(budget); err != nil {
+				if err := survey2d.WallBudgetStep(budget); err != nil {
 					return false, false, err
 				}
 				prev := loop[(i+len(loop)-1)%len(loop)]
-				if junctionPinch(prev.tanOutU, prev.tanOutV, w.tanInU, w.tanInV, alpha) {
+				if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
 					return true, true, nil
 				}
 			}
@@ -1189,7 +1101,7 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 
 	// The cavity boundary is a void skin, so reverse every recorded loop to
 	// restore the same material-left walk convention junctionPinch expects.
-	var cavityWalks [][]sideWalk
+	var cavityWalks [][]survey2d.SideWalk
 	for _, loop := range cLoops {
 		reversed, err := reverseLoopRecordBudget(budget, loop)
 		if err != nil {
@@ -1243,11 +1155,11 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 			return false
 		}
 		for _, w := range walks {
-			f := roles[fmt.Sprintf(role, w.segs[0])]
+			f := roles[fmt.Sprintf(role, w.Segs[0])]
 			if f == nil {
 				return false
 			}
-			verdict, ok := wallNormalDecision(w, m, pull)
+			verdict, ok := survey2d.WallNormalDecision(w, m, pull)
 			if !listVerdict(&faces, &undecided, f, verdict, ok) {
 				return false
 			}
@@ -1296,7 +1208,7 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 		if f == nil {
 			return undercutOutcome{}
 		}
-		verdict, ok := capNormalDecision(m, pull, c.sign)
+		verdict, ok := survey2d.CapNormalDecision(m, pull, c.sign)
 		if !listVerdict(&faces, &undecided, f, verdict, ok) {
 			return undercutOutcome{}
 		}
@@ -1385,7 +1297,7 @@ type surveyResults struct {
 // the private result vocabulary; this function never builds that vocabulary
 // itself.
 func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return surveyResults{}, nil, err
 	}
 	var diags []Diagnostic
@@ -1464,7 +1376,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 		results.WallDiagnostics = wallDiags
 		diags = append(diags, wallDiags...)
-		if err := wallBudgetErr(budget); err != nil {
+		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
 	}
@@ -1516,7 +1428,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 		results.UndercutDiagnostics = undercutDiags
 		diags = append(diags, undercutDiags...)
-		if err := wallBudgetErr(budget); err != nil {
+		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
 	}
@@ -1554,7 +1466,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 		results.RadiusDiagnostics = radiusDiags
 		diags = append(diags, radiusDiags...)
-		if err := wallBudgetErr(budget); err != nil {
+		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
 	}

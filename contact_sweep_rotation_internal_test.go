@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -243,7 +245,7 @@ func TestCornerSpanMatchesRationalForm(t *testing.T) {
 				}
 				low, high := want[0][axis].Lo, want[0][axis].Hi
 				for _, point := range want[1:] {
-					low, high = ratMin(low, point[axis].Lo), ratMax(high, point[axis].Hi)
+					low, high = survey2d.RatMin(low, point[axis].Lo), survey2d.RatMax(high, point[axis].Hi)
 				}
 				gotLow, gotHigh := got.hull(axis)
 				require.Zero(t, gotLow.Cmp(low), "%s %v axis %d", name, span, axis)

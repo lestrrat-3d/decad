@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -152,8 +154,8 @@ import (
 //     either side with ErrDegenerate before any cell is walked, so the
 //     dead-ended guard's own 0 answer is no longer reachable from this walk.
 //   - B2: the final station's own append reverted from a fresh
-//     ratPoint{u: new(big.Rat).Set(...), v: new(big.Rat).Set(...)} copy back
-//     to appending the caller's own last control point ratPoint directly:
+//     survey2d.RatPoint{u: new(big.Rat).Set(...), v: new(big.Rat).Set(...)} copy back
+//     to appending the caller's own last control point survey2d.RatPoint directly:
 //     TestPairStationsFinalStationDoesNotAliasTheInputSpan went red —
 //     mutating the returned station's own *big.Rat in place changed the
 //     caller's input span, violating ratPointAt's own non-aliasing contract
@@ -230,7 +232,7 @@ import (
 //     whole chord-to-curve leg on matchedDelta > 0.
 //
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
-// builds a bezierSpan directly from plane-local float coordinates, for tests
+// builds a survey2d.BezierSpan directly from plane-local float coordinates, for tests
 // that exercise this file's machinery without going through a recorded
 // segment.
 
@@ -239,7 +241,7 @@ import (
 // wedgeFitSpline builds via sketch (k*pi/8 for k = 0..4) — built directly on
 // the record here, with no sketch dependency, since fitSplineBezierSpans
 // (spline_fit.go) takes a FitSplineSeg's Fit points on their own.
-func quarterCircleFitSpans(t *testing.T) []bezierSpan {
+func quarterCircleFitSpans(t *testing.T) []survey2d.BezierSpan {
 	t.Helper()
 	const radius = 5.0
 	fit := make([]Point2, 5)
@@ -258,13 +260,13 @@ func quarterCircleFitSpans(t *testing.T) []bezierSpan {
 // genuinely different absolute sagitta from the same shape, over exact
 // rationals so the relationship pairStations must preserve (station1 = factor
 // * station0 at every shared dyadic parameter) is checkable bit-for-bit.
-func scaleSpans(spans []bezierSpan, factor int64) []bezierSpan {
+func scaleSpans(spans []survey2d.BezierSpan, factor int64) []survey2d.BezierSpan {
 	f := big.NewRat(factor, 1)
-	out := make([]bezierSpan, len(spans))
+	out := make([]survey2d.BezierSpan, len(spans))
 	for i, span := range spans {
-		s := make(bezierSpan, len(span))
+		s := make(survey2d.BezierSpan, len(span))
 		for j, p := range span {
-			s[j] = ratPoint{u: new(big.Rat).Mul(p.u, f), v: new(big.Rat).Mul(p.v, f)}
+			s[j] = survey2d.RatPoint{U: new(big.Rat).Mul(p.U, f), V: new(big.Rat).Mul(p.V, f)}
 		}
 		out[i] = s
 	}
@@ -288,7 +290,7 @@ func maxSagittaAtDepth(t *testing.T, s dyadicSpan, depth int) float64 {
 	return math.Max(maxSagittaAtDepth(t, left, depth-1), maxSagittaAtDepth(t, right, depth-1))
 }
 
-func levelSagitta(t *testing.T, span bezierSpan, depth int) float64 {
+func levelSagitta(t *testing.T, span survey2d.BezierSpan, depth int) float64 {
 	t.Helper()
 	s, err := dyadicSpanOf(nil, span)
 	require.NoError(t, err)
@@ -300,28 +302,28 @@ func levelSagitta(t *testing.T, span bezierSpan, depth int) float64 {
 // own refusal (spline_sagitta.go's header); a nil counter never refuses, so a
 // fixture measuring a BOUND rather than a CHARGE reads it here and asserts the
 // error away once instead of at every call.
-func sagittaOf(t *testing.T, span bezierSpan) float64 {
+func sagittaOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
 	bound, err := spanSagittaUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
-func hodographGapOf(t *testing.T, span bezierSpan) float64 {
+func hodographGapOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
 	bound, err := spanHodographGapUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
-func matchedDeltaOf(t *testing.T, span bezierSpan) float64 {
+func matchedDeltaOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
 	bound, err := spanMatchedDeltaUpper(nil, span)
 	require.NoError(t, err)
 	return bound
 }
 
-func speedOf(t *testing.T, span bezierSpan) float64 {
+func speedOf(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
 	bound, err := spanSpeedUpper(nil, span)
 	require.NoError(t, err)
@@ -335,7 +337,7 @@ func speedOf(t *testing.T, span bezierSpan) float64 {
 // |C(t) - L(t)|, cannot survive. The cached float de Casteljau oracle is the
 // independent evaluator used for this large sample count; the exact-rational
 // oracle remains the conversion check in spline_bezier_internal_test.go.
-func denseChordSegmentDeviation(t *testing.T, span bezierSpan, samples int) float64 {
+func denseChordSegmentDeviation(t *testing.T, span survey2d.BezierSpan, samples int) float64 {
 	t.Helper()
 	floatSpan := floatBezierSpanOf(span)
 	ax, ay := evalFloatBezierSpan(floatSpan, 0)
@@ -365,7 +367,7 @@ func denseChordSegmentDeviation(t *testing.T, span bezierSpan, samples int) floa
 // infinite CARRIER LINE, with no [0,1] clamp at all. It exists only so
 // TestSpanSagittaUpperEnclosesOvershootingChordSegment can show it fails to
 // enclose the true deviation — never used as a bound anywhere in production.
-func carrierLineDistanceUpper(t *testing.T, span bezierSpan) float64 {
+func carrierLineDistanceUpper(t *testing.T, span survey2d.BezierSpan) float64 {
 	t.Helper()
 	ax, ay := floatOfRatPoint(t, span[0])
 	bx, by := floatOfRatPoint(t, span[len(span)-1])
@@ -381,7 +383,7 @@ func carrierLineDistanceUpper(t *testing.T, span bezierSpan) float64 {
 	return maxDist
 }
 
-func floatOfRatPoint(t *testing.T, p ratPoint) (float64, float64) {
+func floatOfRatPoint(t *testing.T, p survey2d.RatPoint) (float64, float64) {
 	t.Helper()
 	pt, ok := point2Of(p)
 	require.True(t, ok, "a test fixture's control point must be representable")
@@ -433,7 +435,7 @@ func TestSpanSagittaUpperDistinguishesFromParametricDeviation(t *testing.T) {
 	bound := sagittaOf(t, span)
 	require.Zero(t, bound, "every control point already sits on the chord segment, so the sagitta is exactly 0")
 
-	cx, cy := evalSpans(t, []bezierSpan{span}, 0.5)
+	cx, cy := evalSpans(t, []survey2d.BezierSpan{span}, 0.5)
 	require.Zero(t, cy, "the curve never leaves the line v=0")
 	lx := 0.5 // L(0.5) on the naive uniform-rate interpolant between (0,0) and (1,0)
 	require.Greater(t, math.Abs(cx-lx), 0.2,
@@ -464,10 +466,10 @@ func TestPairStationsStationDeterminism(t *testing.T) {
 	require.Len(t, s0b, len(s0a))
 	require.Len(t, s1b, len(s1a))
 	for i := range s0a {
-		require.Zero(t, s0a[i].u.Cmp(s0b[i].u), "station %d side0 U must be bit-identical", i)
-		require.Zero(t, s0a[i].v.Cmp(s0b[i].v), "station %d side0 V must be bit-identical", i)
-		require.Zero(t, s1a[i].u.Cmp(s1b[i].u), "station %d side1 U must be bit-identical", i)
-		require.Zero(t, s1a[i].v.Cmp(s1b[i].v), "station %d side1 V must be bit-identical", i)
+		require.Zero(t, s0a[i].U.Cmp(s0b[i].U), "station %d side0 U must be bit-identical", i)
+		require.Zero(t, s0a[i].V.Cmp(s0b[i].V), "station %d side0 V must be bit-identical", i)
+		require.Zero(t, s1a[i].U.Cmp(s1b[i].U), "station %d side1 U must be bit-identical", i)
+		require.Zero(t, s1a[i].V.Cmp(s1b[i].V), "station %d side1 V must be bit-identical", i)
 	}
 }
 
@@ -516,7 +518,7 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 	targetCoarse := levelSagitta(t, span, d-1) * (1 + 1e-9)
 	require.Greater(t, targetCoarse, targetFine, "level d-1's own target must be strictly laxer than level d's")
 
-	single := []bezierSpan{span}
+	single := []survey2d.BezierSpan{span}
 
 	s0Fine, _, _, sagFine, err := pairStations(single, single, targetFine, nil, nil)
 	require.NoError(t, err)
@@ -540,7 +542,7 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 
 func TestPairStationsOverCapRefuses(t *testing.T) {
 	t.Parallel()
-	spans := []bezierSpan{parabolaSpan()}
+	spans := []survey2d.BezierSpan{parabolaSpan()}
 	_, _, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, errTooManyChords)
@@ -555,7 +557,7 @@ func TestPairStationsOverCapRefuses(t *testing.T) {
 // That is what lets the two cap fixtures below name an exact chord count
 // instead of approaching one, and the small integer net keeps every rational
 // the walk builds cheap enough for a 2^14-chord walk to stay fast.
-func parabolaSpan() bezierSpan {
+func parabolaSpan() survey2d.BezierSpan {
 	return ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 }
 
@@ -563,7 +565,7 @@ func parabolaSpan() bezierSpan {
 // point lies ON its own chord segment, so its sagitta is exactly 0, and it is
 // accepted whole as ONE chord at depth 0 against any target. It contributes a
 // chord to a chain without contributing a bisection.
-func straightSpanFrom(u float64) bezierSpan {
+func straightSpanFrom(u float64) survey2d.BezierSpan {
 	return ratSpan([][2]float64{{u, 0}, {u + 1, 0}, {u + 2, 0}})
 }
 
@@ -594,7 +596,7 @@ func capDepth(t *testing.T) int {
 func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 	t.Parallel()
 	span := parabolaSpan()
-	chain := []bezierSpan{span}
+	chain := []survey2d.BezierSpan{span}
 	target := levelSagitta(t, span, capDepth(t))
 
 	s0, s1, _, sag, err := pairStations(chain, chain, target, nil, nil)
@@ -612,7 +614,7 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 	t.Parallel()
 	span := parabolaSpan()
-	chain := []bezierSpan{span, straightSpanFrom(2)}
+	chain := []survey2d.BezierSpan{span, straightSpanFrom(2)}
 	target := levelSagitta(t, span, capDepth(t))
 
 	_, _, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
@@ -627,7 +629,7 @@ func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 // is deliberately lax enough that every span would otherwise be accepted whole.
 func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 	t.Parallel()
-	chain := make([]bezierSpan, maxChordsPerWalk+1)
+	chain := make([]survey2d.BezierSpan, maxChordsPerWalk+1)
 	for i := range chain {
 		chain[i] = straightSpanFrom(float64(2 * i))
 	}
@@ -674,10 +676,10 @@ func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
 
 	five := big.NewRat(5, 1)
 	for k := range s0 {
-		wantU := new(big.Rat).Mul(s0[k].u, five)
-		wantV := new(big.Rat).Mul(s0[k].v, five)
-		require.Zero(t, wantU.Cmp(s1[k].u), "station %d: side1 must be the exact 5x scaling of side0 at the same dyadic parameter fraction", k)
-		require.Zero(t, wantV.Cmp(s1[k].v), "station %d: side1 must be the exact 5x scaling of side0 at the same dyadic parameter fraction", k)
+		wantU := new(big.Rat).Mul(s0[k].U, five)
+		wantV := new(big.Rat).Mul(s0[k].V, five)
+		require.Zero(t, wantU.Cmp(s1[k].U), "station %d: side1 must be the exact 5x scaling of side0 at the same dyadic parameter fraction", k)
+		require.Zero(t, wantV.Cmp(s1[k].V), "station %d: side1 must be the exact 5x scaling of side0 at the same dyadic parameter fraction", k)
 	}
 }
 
@@ -700,7 +702,7 @@ func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
 
 	target := math.Min(levelSagitta(t, small, 2), levelSagitta(t, big8, 2))
 	work0, work1 := newFreeformWork(), newFreeformWork()
-	_, _, _, _, err := pairStations([]bezierSpan{small}, []bezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
+	_, _, _, _, err := pairStations([]survey2d.BezierSpan{small}, []survey2d.BezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
 	require.NoError(t, err)
 
 	require.Positive(t, work0.spent, "side 0's own counter must be charged")
@@ -727,8 +729,8 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 	require.Greater(t, bulgeSag, flatSag*100, "the fixture needs a large gap between the two spans' own readings")
 
 	target := bulgeSag * (1 + 1e-9)
-	spans0 := []bezierSpan{bulge, flat}
-	spans1 := []bezierSpan{bulge, flat}
+	spans0 := []survey2d.BezierSpan{bulge, flat}
+	spans1 := []survey2d.BezierSpan{bulge, flat}
 	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, bulgeSag, sagUp, 1e-9, "sagittaUpper must be the running MAXIMUM (the first, bulging cell), never the last cell's own tiny reading")
@@ -790,17 +792,17 @@ func TestSpanSagittaUpperRoundsOutward(t *testing.T) {
 // written clamped-projection formula (Cramer-style, no shared helper with
 // spline_sagitta.go), so agreement between the two is the §1 falsifier
 // working rather than one call site echoing the other's arithmetic.
-func independentMaxChordSquaredDistance(t *testing.T, span bezierSpan) *big.Rat {
+func independentMaxChordSquaredDistance(t *testing.T, span survey2d.BezierSpan) *big.Rat {
 	t.Helper()
 	a, b := span[0], span[len(span)-1]
-	abx := new(big.Rat).Sub(b.u, a.u)
-	aby := new(big.Rat).Sub(b.v, a.v)
+	abx := new(big.Rat).Sub(b.U, a.U)
+	aby := new(big.Rat).Sub(b.V, a.V)
 	abLenSq := new(big.Rat).Add(new(big.Rat).Mul(abx, abx), new(big.Rat).Mul(aby, aby))
 
 	var maxSq *big.Rat
 	for _, p := range span {
-		apx := new(big.Rat).Sub(p.u, a.u)
-		apy := new(big.Rat).Sub(p.v, a.v)
+		apx := new(big.Rat).Sub(p.U, a.U)
+		apy := new(big.Rat).Sub(p.V, a.V)
 		var sq *big.Rat
 		if abLenSq.Sign() == 0 {
 			// The chord's own two ends coincide (a == b), so the segment
@@ -820,10 +822,10 @@ func independentMaxChordSquaredDistance(t *testing.T, span bezierSpan) *big.Rat 
 			} else if s.Cmp(big.NewRat(1, 1)) > 0 {
 				s = big.NewRat(1, 1)
 			}
-			qx := new(big.Rat).Add(a.u, new(big.Rat).Mul(s, abx))
-			qy := new(big.Rat).Add(a.v, new(big.Rat).Mul(s, aby))
-			ex := new(big.Rat).Sub(p.u, qx)
-			ey := new(big.Rat).Sub(p.v, qy)
+			qx := new(big.Rat).Add(a.U, new(big.Rat).Mul(s, abx))
+			qy := new(big.Rat).Add(a.V, new(big.Rat).Mul(s, aby))
+			ex := new(big.Rat).Sub(p.U, qx)
+			ey := new(big.Rat).Sub(p.V, qy)
 			sq = new(big.Rat).Add(new(big.Rat).Mul(ex, ex), new(big.Rat).Mul(ey, ey))
 		}
 		if maxSq == nil || sq.Cmp(maxSq) > 0 {
@@ -883,8 +885,8 @@ func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
 	require.Greater(t, sagittaOf(t, large), target,
 		"side 1 alone must sit outside the target, forcing real subdivision under a correct accept test")
 
-	spans0 := []bezierSpan{small}
-	spans1 := []bezierSpan{large}
+	spans0 := []survey2d.BezierSpan{small}
+	spans1 := []survey2d.BezierSpan{large}
 	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagUp, target,
@@ -914,8 +916,8 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 	// whole with no bisection at all — the returned value is then a direct
 	// readout of whatever the fold computed, not an artifact of subdivision.
 	target := largeSag * (1 + 1e-9)
-	spans0 := []bezierSpan{small}
-	spans1 := []bezierSpan{large}
+	spans0 := []survey2d.BezierSpan{small}
+	spans1 := []survey2d.BezierSpan{large}
 	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, largeSag, sagUp, 1e-9,
@@ -976,10 +978,10 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 	require.NoError(t, err)
 	require.Greater(t, len(s0), len(spans)+1, "the target must force genuine subdivision for this test to exercise anything")
 
-	requireExactRatPoint := func(t *testing.T, want, got ratPoint, msg string) {
+	requireExactRatPoint := func(t *testing.T, want, got survey2d.RatPoint, msg string) {
 		t.Helper()
-		require.Zero(t, want.u.Cmp(got.u), "%s: U", msg)
-		require.Zero(t, want.v.Cmp(got.v), "%s: V", msg)
+		require.Zero(t, want.U.Cmp(got.U), "%s: U", msg)
+		require.Zero(t, want.V.Cmp(got.V), "%s: V", msg)
 	}
 
 	requireExactRatPoint(t, spans[0][0], s0[0], "first station side0 must be the chain's own start control point")
@@ -1127,9 +1129,9 @@ func TestChargesScaleWithOperandWidth(t *testing.T) {
 
 	narrow := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 	huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 4096), big.NewInt(3))
-	wide := make(bezierSpan, len(narrow))
+	wide := make(survey2d.BezierSpan, len(narrow))
 	for i, p := range narrow {
-		wide[i] = ratPoint{u: new(big.Rat).Mul(p.u, huge), v: new(big.Rat).Mul(p.v, huge)}
+		wide[i] = survey2d.RatPoint{U: new(big.Rat).Mul(p.U, huge), V: new(big.Rat).Mul(p.V, huge)}
 	}
 
 	narrowWork, wideWork := newFreeformWork(), newFreeformWork()
@@ -1251,11 +1253,11 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 	t.Parallel()
 	// Two sides of deliberately different control counts, so a charge reading
 	// the wrong side's count is visible as well.
-	side0 := []bezierSpan{
+	side0 := []survey2d.BezierSpan{
 		ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}}),
 		ratSpan([][2]float64{{2, 0}, {3, -1}, {4, 0}}),
 	}
-	side1 := []bezierSpan{
+	side1 := []survey2d.BezierSpan{
 		ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}),
 		ratSpan([][2]float64{{3, 0}, {4, -2}, {5, -2}, {6, 0}}),
 	}
@@ -1298,12 +1300,12 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 	total := neverSplittingSpanCharge(3) + 2 // the one span, plus the final-station copy
 
 	exact := &freeformWork{spent: freeformWorkLimit - total}
-	_, _, _, _, err := pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), exact, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	_, _, _, _, err := pairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), exact, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
 	require.NoError(t, err, "a counter holding exactly the charged total must finish")
 	require.Equal(t, freeformWorkLimit, exact.spent)
 
 	short := &freeformWork{spent: freeformWorkLimit - total + 1}
-	_, _, _, _, err = pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), short, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	_, _, _, _, err = pairStations([]survey2d.BezierSpan{span}, []survey2d.BezierSpan{span}, math.Inf(1), short, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
 	require.Error(t, err, "one unit short of the charged total must refuse")
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -1319,16 +1321,16 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 // cleanly, on either side, before any cell is ever walked.
 func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 	t.Parallel()
-	empty := bezierSpan{}
+	empty := survey2d.BezierSpan{}
 	line := ratSpan([][2]float64{{0, 0}, {1, 0}})
 
 	t.Run("side0", func(t *testing.T) {
-		_, _, _, _, err := pairStations([]bezierSpan{empty}, []bezierSpan{line}, 1, nil, nil)
+		_, _, _, _, err := pairStations([]survey2d.BezierSpan{empty}, []survey2d.BezierSpan{line}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("side1", func(t *testing.T) {
-		_, _, _, _, err := pairStations([]bezierSpan{line}, []bezierSpan{empty}, 1, nil, nil)
+		_, _, _, _, err := pairStations([]survey2d.BezierSpan{line}, []survey2d.BezierSpan{empty}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
@@ -1345,7 +1347,7 @@ func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 0}})
-	spans := []bezierSpan{span}
+	spans := []survey2d.BezierSpan{span}
 
 	// target=1 is far above this straight span's own (zero) sagitta, so the
 	// single cell accepts whole with no bisection — the final station is
@@ -1353,11 +1355,11 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 	s0, _, _, _, err := pairStations(spans, spans, 1, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
 
-	wantU := new(big.Rat).Set(span[len(span)-1].u) // the input's own value, before any mutation
+	wantU := new(big.Rat).Set(span[len(span)-1].U) // the input's own value, before any mutation
 	last := s0[len(s0)-1]
-	last.u.Add(last.u, big.NewRat(1, 1)) // mutate the RETURNED station in place
+	last.U.Add(last.U, big.NewRat(1, 1)) // mutate the RETURNED station in place
 
-	require.Zero(t, wantU.Cmp(span[len(span)-1].u),
+	require.Zero(t, wantU.Cmp(span[len(span)-1].U),
 		"mutating a returned station must never change the caller's own input span")
 }
 
@@ -1370,7 +1372,7 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 // t — the parameter-matched deviation spanMatchedDeltaUpper bounds, sampled
 // through the same independent de Casteljau oracle (evalSpans) the sagitta
 // tests already use, never through any of spline_sagitta.go's own machinery.
-func denseMatchedDeviation(t *testing.T, span bezierSpan, samples int) float64 {
+func denseMatchedDeviation(t *testing.T, span survey2d.BezierSpan, samples int) float64 {
 	t.Helper()
 	floatSpan := floatBezierSpanOf(span)
 	ax, ay := evalFloatBezierSpan(floatSpan, 0)
@@ -1389,7 +1391,7 @@ func denseMatchedDeviation(t *testing.T, span bezierSpan, samples int) float64 {
 // denseSpeedSample samples ||C'(t)|| densely via a central finite difference
 // over evalSpans — an INDEPENDENT numerical estimate, never a reuse of
 // spanHodographGapUpper's own exact-rational hodograph.
-func denseSpeedSample(t *testing.T, span bezierSpan, samples int) float64 {
+func denseSpeedSample(t *testing.T, span survey2d.BezierSpan, samples int) float64 {
 	t.Helper()
 	const h = 1e-5
 	floatSpan := floatBezierSpanOf(span)
@@ -1420,7 +1422,7 @@ func denseSpeedSample(t *testing.T, span bezierSpan, samples int) float64 {
 // the SAME mechanism TestSpanSagittaUpperDistinguishesFromParametricDeviation
 // already demonstrates for a milder clustering, pushed here into a decisive
 // numeric gap between the sagitta and the true parameter-matched deviation.
-func zigzagHuggingSpan() bezierSpan {
+func zigzagHuggingSpan() survey2d.BezierSpan {
 	return ratSpan([][2]float64{{0, 0}, {0.001, 0}, {0.001, 0}, {1, 0}})
 }
 
@@ -1479,12 +1481,12 @@ func negativePowerOfTwo(k uint) *big.Rat {
 // midpoint (P_0 + 2*P_1 + P_2)/4 = 1/2 + eps/2 while the chord's own midpoint
 // is 1/2. Every control point is collinear, so the span's sagitta is exactly 0
 // and only the parameter-matched reading sees the deviation at all.
-func nearMidpointQuadraticSpan(eps *big.Rat) bezierSpan {
+func nearMidpointQuadraticSpan(eps *big.Rat) survey2d.BezierSpan {
 	half := big.NewRat(1, 2)
-	return bezierSpan{
-		{u: new(big.Rat), v: new(big.Rat)},
-		{u: new(big.Rat).Add(half, eps), v: new(big.Rat)},
-		{u: big.NewRat(1, 1), v: new(big.Rat)},
+	return survey2d.BezierSpan{
+		{U: new(big.Rat), V: new(big.Rat)},
+		{U: new(big.Rat).Add(half, eps), V: new(big.Rat)},
+		{U: big.NewRat(1, 1), V: new(big.Rat)},
 	}
 }
 
@@ -1629,12 +1631,12 @@ func TestChainStationsIsOneSideOfThePairWalk(t *testing.T) {
 	require.Len(t, chain.stations, len(paired)-1,
 		"the chain carries one station per CELL; the pair carries one per cell BOUNDARY, which is one more")
 	for i := range chain.stations {
-		require.Zero(t, paired[i].u.Cmp(chain.stations[i].u), "station %d U must be the pair walk's own", i)
-		require.Zero(t, paired[i].v.Cmp(chain.stations[i].v), "station %d V must be the pair walk's own", i)
+		require.Zero(t, paired[i].U.Cmp(chain.stations[i].U), "station %d U must be the pair walk's own", i)
+		require.Zero(t, paired[i].V.Cmp(chain.stations[i].V), "station %d V must be the pair walk's own", i)
 	}
 	last := paired[len(paired)-1]
-	require.Zero(t, last.u.Cmp(chain.end.u), "the chain's end must be the pair walk's own final station")
-	require.Zero(t, last.v.Cmp(chain.end.v))
+	require.Zero(t, last.U.Cmp(chain.end.U), "the chain's end must be the pair walk's own final station")
+	require.Zero(t, last.V.Cmp(chain.end.V))
 }
 
 // TestChainStationsHonorsItsTargetAndLoosensWithIt asserts the measured sagitta
@@ -1689,7 +1691,7 @@ func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
 	// represents. That is what makes the two roundings distinguishable — each
 	// must land on its OWN side of the exact value, one ulp apart.
 	diagonal := ratSpan([][2]float64{{0, 0}, {0.5, 0.5}, {1, 1}})
-	straight, err := chainStations([]bezierSpan{diagonal}, 1, nil)
+	straight, err := chainStations([]survey2d.BezierSpan{diagonal}, 1, nil)
 	require.NoError(t, err)
 	require.Len(t, straight.stations, 1, "a collinear span carries sagitta 0 and is accepted whole")
 	require.Zero(t, straight.sagitta)
@@ -1713,11 +1715,11 @@ func TestChainStationsRefusals(t *testing.T) {
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("a span with no control point", func(t *testing.T) {
-		_, err := chainStations([]bezierSpan{{}}, 1, nil)
+		_, err := chainStations([]survey2d.BezierSpan{{}}, 1, nil)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("more spans than the cap admits", func(t *testing.T) {
-		spans := make([]bezierSpan, maxChordsPerWalk+1)
+		spans := make([]survey2d.BezierSpan, maxChordsPerWalk+1)
 		for i := range spans {
 			spans[i] = straightSpanFrom(float64(2 * i))
 		}
@@ -1726,7 +1728,7 @@ func TestChainStationsRefusals(t *testing.T) {
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("a target past the cap's reach", func(t *testing.T) {
-		_, err := chainStations([]bezierSpan{parabolaSpan()}, 1e-20, nil)
+		_, err := chainStations([]survey2d.BezierSpan{parabolaSpan()}, 1e-20, nil)
 		require.ErrorIs(t, err, errTooManyChords)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})

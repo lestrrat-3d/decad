@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -32,13 +34,13 @@ func TestWallKernelFlagsOffJunctionSubTolerance(t *testing.T) {
 	// under the candidate floor (4·1e-9·10) and no junction vertex is
 	// supplied, so the kernel must flag it rather than silently treat the
 	// boundary as web-free.
-	outer, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	outer, ok := survey2d.ArcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	inner, ok := arcElem(0, 0, 10-2e-8, 2*math.Pi, 0, true)
+	inner, ok := survey2d.ArcElem(0, 0, 10-2e-8, 2*math.Pi, 0, true)
 	require.True(t, ok)
-	k := newWallKernel([]surveyElem{outer, inner}, nil, math.Inf(1))
-	out := k.run()
-	require.True(t, out.subTolFar, `an off-junction sub-tolerance candidate must be flagged`)
+	k := survey2d.NewWallKernel([]survey2d.SurveyElem{outer, inner}, nil, math.Inf(1))
+	out := k.Run()
+	require.True(t, out.SubTolFar, `an off-junction sub-tolerance candidate must be flagged`)
 }
 
 func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
@@ -46,29 +48,29 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 	// A plain 100×60 rectangle produces no off-junction sub-tolerance
 	// candidates: the flag stays clear and the reading is decided.
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-	elems := make([]surveyElem, 0, 4)
+	elems := make([]survey2d.SurveyElem, 0, 4)
 	for i := range pts {
-		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%4][0], pts[(i+1)%4][1])
+		e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%4][0], pts[(i+1)%4][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, math.Inf(1))
-	out := k.run()
-	require.True(t, out.ok)
-	require.False(t, out.subTolFar)
-	require.True(t, out.hasSpan)
-	require.InDelta(t, 60.0, out.span, 1e-9)
+	k := survey2d.NewWallKernel(elems, pts, math.Inf(1))
+	out := k.Run()
+	require.True(t, out.Ok)
+	require.False(t, out.SubTolFar)
+	require.True(t, out.HasSpan)
+	require.InDelta(t, 60.0, out.Span, 1e-9)
 }
 
 func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
 	t.Parallel()
-	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	arc, ok := survey2d.ArcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	k := newWallKernel([]surveyElem{arc}, nil, math.Inf(1))
+	k := survey2d.NewWallKernel([]survey2d.SurveyElem{arc}, nil, math.Inf(1))
 	stop := errors.New("stop after the first candidate")
 	seen := 0
 
-	err := k.generate(nil, func(diskCand) error {
+	err := k.Generate(nil, func(survey2d.DiskCand) error {
 		seen++
 		return stop
 	})
@@ -79,9 +81,9 @@ func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
 
 func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	arc, ok := survey2d.ArcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
+	elems := make([]survey2d.SurveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		elems[i] = arc
 	}
@@ -89,8 +91,8 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 	cancel()
 	seen := 0
 
-	err := newWallKernel(elems, nil, math.Inf(1)).
-		generate(proofbound.NewWorkBudget(ctx), func(diskCand) error {
+	err := survey2d.NewWallKernel(elems, nil, math.Inf(1)).
+		Generate(proofbound.NewWorkBudget(ctx), func(survey2d.DiskCand) error {
 			seen++
 			return nil
 		})
@@ -101,15 +103,15 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 
 func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	arc, ok := survey2d.ArcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
+	elems := make([]survey2d.SurveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
 		elems[i] = arc
 	}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "NewWallKernelBudget"}
 
-	_, err := newWallKernelBudget(proofbound.NewWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
+	_, err := survey2d.NewWallKernelBudget(proofbound.NewWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `wall-kernel boundary sizing must poll inside its scan`)
@@ -117,16 +119,16 @@ func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 
 func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
+	elems := make([]survey2d.SurveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
-		e, ok := lineElem(100, float64(i+1), 101, float64(i+1))
+		e, ok := survey2d.LineElem(100, float64(i+1), 101, float64(i+1))
 		require.True(t, ok)
 		elems[i] = e
 	}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validate"}
-	k := newWallKernel(elems, nil, math.Inf(1))
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "Validate"}
+	k := survey2d.NewWallKernel(elems, nil, math.Inf(1))
 
-	spanning, empty, valid, err := k.validate(diskCand{x: 0, y: 0, r: 1}, proofbound.NewWorkBudget(ctx))
+	spanning, empty, valid, err := k.Validate(survey2d.DiskCand{X: 0, Y: 0, R: 1}, proofbound.NewWorkBudget(ctx))
 	_ = spanning
 	_ = empty
 	_ = valid
@@ -137,16 +139,16 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 
 func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	elems := make([]surveyElem, proofbound.WorkPollInterval+64)
+	elems := make([]survey2d.SurveyElem, proofbound.WorkPollInterval+64)
 	for i := range elems {
-		e, ok := arcElem(1000+float64(i), 1000, 1, 0, 2*math.Pi, true)
+		e, ok := survey2d.ArcElem(1000+float64(i), 1000, 1, 0, 2*math.Pi, true)
 		require.True(t, ok)
 		elems[i] = e
 	}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "contains"}
-	k := newWallKernel(elems, nil, math.Inf(1))
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "Contains"}
+	k := survey2d.NewWallKernel(elems, nil, math.Inf(1))
 
-	_, _, err := k.contains(0, 0, proofbound.NewWorkBudget(ctx))
+	_, _, err := k.Contains(0, 0, proofbound.NewWorkBudget(ctx))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -155,20 +157,20 @@ func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 	t.Parallel()
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-	elems := make([]surveyElem, 0, len(pts))
+	elems := make([]survey2d.SurveyElem, 0, len(pts))
 	for i := range pts {
-		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, math.Inf(1))
+	k := survey2d.NewWallKernel(elems, pts, math.Inf(1))
 
-	out, err := k.runBudget(proofbound.NewWorkBudget(t.Context()))
+	out, err := k.RunBudget(proofbound.NewWorkBudget(t.Context()))
 
 	require.NoError(t, err)
-	require.True(t, out.ok)
-	require.True(t, out.hasSpan)
-	require.InDelta(t, 60.0, out.span, 1e-9)
+	require.True(t, out.Ok)
+	require.True(t, out.HasSpan)
+	require.InDelta(t, 60.0, out.Span, 1e-9)
 }
 
 // TestWallKernelPublishesDiameterBounds pins the unit relation both wall-survey
@@ -184,11 +186,11 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	// The diagonal pair's web wins by held diameter. The horizontal pair's
 	// slightly wider web has a 1 µm radius bound, so its lower endpoint reaches
 	// below the held winner's interval.
-	elems := func() []surveyElem {
+	elems := func() []survey2d.SurveyElem {
 		pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-		out := make([]surveyElem, 0, len(pts)+4)
+		out := make([]survey2d.SurveyElem, 0, len(pts)+4)
 		for i := range pts {
-			e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+			e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 			require.True(t, ok)
 			out = append(out, e)
 		}
@@ -198,45 +200,45 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 			{48.5, 28.5}, {51.5, 31.5},
 		} {
 			// Reversed angle order: a hole keeps the material on its left.
-			e, ok := arcElem(c[0], c[1], 1, 2*math.Pi, 0, true)
+			e, ok := survey2d.ArcElem(c[0], c[1], 1, 2*math.Pi, 0, true)
 			require.True(t, ok)
 			if i == 1 {
-				e.rrBound = 1e-3
+				e.RrBound = 1e-3
 			}
 			out = append(out, e)
 		}
 		return out
 	}
 
-	out := newWallKernel(elems(), nil, math.Inf(1)).run()
-	require.True(t, out.ok)
-	require.True(t, out.hasSpan)
-	require.Greater(t, out.spanBound, 0.0)
+	out := survey2d.NewWallKernel(elems(), nil, math.Inf(1)).Run()
+	require.True(t, out.Ok)
+	require.True(t, out.HasSpan)
+	require.Greater(t, out.SpanBound, 0.0)
 
-	// Re-derive the same population from the generators, whose diskCand.rBound
+	// Re-derive the same population from the generators, whose survey2d.DiskCand.rBound
 	// speaks for the RADIUS. A fresh kernel keeps the streamed run above from
 	// colouring this pass.
-	k := newWallKernel(elems(), nil, math.Inf(1))
-	agg := minAggregate()
+	k := survey2d.NewWallKernel(elems(), nil, math.Inf(1))
+	agg := survey2d.MinAggregate()
 	winnerValue, winnerBound := math.Inf(1), 0.0
 	sawBounded := false
-	require.NoError(t, k.generate(nil, func(c diskCand) error {
-		spanning, empty, ok, err := k.validate(c, nil)
+	require.NoError(t, k.Generate(nil, func(c survey2d.DiskCand) error {
+		spanning, empty, ok, err := k.Validate(c, nil)
 		require.NoError(t, err)
 		require.True(t, ok)
 		if !spanning || !empty {
 			return nil
 		}
-		if c.rBound > 0 {
+		if c.RBound > 0 {
 			sawBounded = true
 		}
 		// The doubling is the production one, so the assertion below is about
 		// the aggregate and not about a re-spelling of proofbound.BoundedMul's own
 		// outward rounding.
-		diam := proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.MeasuredScalar(c.r, c.rBound))
-		require.Equal(t, 2*c.r, diam.Value, `the answer is a diameter, not a radius`)
-		require.GreaterOrEqual(t, diam.Bound, 2*c.rBound, `the bound doubles with the value`)
-		agg.take(diam.Value, diam.Bound)
+		diam := proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.MeasuredScalar(c.R, c.RBound))
+		require.Equal(t, 2*c.R, diam.Value, `the answer is a diameter, not a radius`)
+		require.GreaterOrEqual(t, diam.Bound, 2*c.RBound, `the bound doubles with the value`)
+		agg.Take(diam.Value, diam.Bound)
 		if diam.Value < winnerValue {
 			winnerValue, winnerBound = diam.Value, diam.Bound
 		}
@@ -244,17 +246,17 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	}))
 	require.True(t, sawBounded, `the web candidate's own division must carry a nonzero bound`)
 
-	wantSpan, wantBound, ok := agg.resolve()
+	wantSpan, wantBound, ok := agg.Resolve()
 	require.True(t, ok)
-	require.Equal(t, wantSpan, out.span)
-	require.Equal(t, wantBound, out.spanBound)
+	require.Equal(t, wantSpan, out.Span)
+	require.Equal(t, wantBound, out.SpanBound)
 
 	// The rival changes the lower endpoint, so a winner-only reduction must
 	// publish a different interval, not merely round the same interval wider.
 	winnerLo := new(big.Rat).Sub(proofarith.FloatRat(winnerValue), proofarith.FloatRat(winnerBound))
-	require.Less(t, agg.lo.Cmp(winnerLo), 0,
+	require.Less(t, agg.Lo.Cmp(winnerLo), 0,
 		`the rival's lower endpoint must reach below the held winner's interval`)
-	require.NotEqual(t, winnerBound, out.spanBound,
+	require.NotEqual(t, winnerBound, out.SpanBound,
 		`the population must contain a rival whose bound the winner's own does not cover`)
 }
 
@@ -266,19 +268,19 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 // zero there published a zero-width interval that excluded its own answer.
 func TestWallKernelConcentricSpanBoundsRadiusDifference(t *testing.T) {
 	t.Parallel()
-	outer, ok := arcElem(0, 0, 1e16, 0, 2*math.Pi, true)
+	outer, ok := survey2d.ArcElem(0, 0, 1e16, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	inner, ok := arcElem(0, 0, 1, 2*math.Pi, 0, true)
+	inner, ok := survey2d.ArcElem(0, 0, 1, 2*math.Pi, 0, true)
 	require.True(t, ok)
 
-	out := newWallKernel([]surveyElem{outer, inner}, nil, math.Inf(1)).run()
+	out := survey2d.NewWallKernel([]survey2d.SurveyElem{outer, inner}, nil, math.Inf(1)).Run()
 
-	require.True(t, out.ok)
-	require.True(t, out.hasSpan)
+	require.True(t, out.Ok)
+	require.True(t, out.HasSpan)
 	truth := new(big.Rat).SetInt64(9999999999999999)
-	require.NotEqual(t, 0, new(big.Rat).SetFloat64(out.span).Cmp(truth),
+	require.NotEqual(t, 0, new(big.Rat).SetFloat64(out.Span).Cmp(truth),
 		`the held span must miss the truth, or this fixture proves nothing`)
-	requireRatInInterval(t, truth, out.span, out.spanBound)
+	requireRatInInterval(t, truth, out.Span, out.SpanBound)
 }
 
 // requireRatInInterval asserts that truth lies in [value − bound,
@@ -314,17 +316,17 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 	}
 	w, err := walkOf(seg, newFreeformWork())
 	require.NoError(t, err)
-	require.Greater(t, w.radiusBound, 0.0, `a hypot radius is never exact`)
+	require.Greater(t, w.RadiusBound, 0.0, `a hypot radius is never exact`)
 	e, ok := walkElem(w)
 	require.True(t, ok)
-	require.Equal(t, w.radiusBound, e.rrBound, `the element must take the walk's own bound`)
-	require.True(t, e.matInside, `the fixture must walk counter-clockwise, or no whole-arc disk is emitted`)
+	require.Equal(t, w.RadiusBound, e.RrBound, `the element must take the walk's own bound`)
+	require.True(t, e.MatInside, `the fixture must walk counter-clockwise, or no whole-arc disk is emitted`)
 
 	// generate opens with the whole-arc disks, so the first candidate is the
 	// one under test (TestWallKernelGenerateStreamsCandidates pins the order).
-	k := newWallKernel([]surveyElem{e}, nil, math.Inf(1))
-	var first *diskCand
-	require.NoError(t, k.generate(nil, func(c diskCand) error {
+	k := survey2d.NewWallKernel([]survey2d.SurveyElem{e}, nil, math.Inf(1))
+	var first *survey2d.DiskCand
+	require.NoError(t, k.Generate(nil, func(c survey2d.DiskCand) error {
 		if first == nil {
 			cand := c
 			first = &cand
@@ -332,14 +334,14 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 		return nil
 	}))
 	require.NotNil(t, first)
-	require.Equal(t, e.rr, first.r)
-	require.Equal(t, e.rrBound, first.rBound)
+	require.Equal(t, e.Rr, first.R)
+	require.Equal(t, e.RrBound, first.RBound)
 
 	// √2 to 200 bits: the published interval must reach it.
 	const prec = 200
 	sqrt2 := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetInt64(2))
 	truth, _ := sqrt2.Rat(nil)
-	requireRatInInterval(t, truth, first.r, first.rBound)
+	requireRatInInterval(t, truth, first.R, first.RBound)
 }
 
 // TestWedgeCandidateCarriesCapSineBound pins the cap sine, one of the two
@@ -355,29 +357,29 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 	t.Parallel()
 	sweep, err := units.Degrees(60).In(units.Radian)
 	require.NoError(t, err)
-	sinBS, _ := radianTrigBounds(sweep / 2)
+	sinBS, _ := survey2d.RadianTrigBounds(sweep / 2)
 	require.NotEqual(t, 0.5, sinBS.Value, `the held sine is not the true sin(30°)`)
 	require.Greater(t, sinBS.Bound, 0.0)
 	require.LessOrEqual(t, math.Abs(sinBS.Value-0.5), sinBS.Bound,
 		`the certified trig interval must contain the true sine`)
 
-	el, ok := lineElem(0, 10, 1, 10)
+	el, ok := survey2d.LineElem(0, 10, 1, 10)
 	require.True(t, ok)
-	k, kerr := newWallKernelBudget(nil, []surveyElem{el}, nil, [][2]float64{{0, 10}},
+	k, kerr := survey2d.NewWallKernelBudget(nil, []survey2d.SurveyElem{el}, nil, [][2]float64{{0, 10}},
 		15*math.Pi/180, sinBS, false, math.Inf(1))
 	require.NoError(t, kerr)
 
-	var near *diskCand
-	require.NoError(t, k.wedgeCands(nil, func(c diskCand) error {
-		if math.Abs(c.r-10) < 1e-6 {
+	var near *survey2d.DiskCand
+	require.NoError(t, k.WedgeCands(nil, func(c survey2d.DiskCand) error {
+		if math.Abs(c.R-10) < 1e-6 {
 			cand := c
 			near = &cand
 		}
 		return nil
 	}))
 	require.NotNil(t, near, `the y = 10 vertex must produce the r ≈ 10 wedge candidate`)
-	require.Greater(t, near.rBound, 0.0, `a sine-derived radius is never exact`)
-	require.LessOrEqual(t, math.Abs(near.r-10), near.rBound,
+	require.Greater(t, near.RBound, 0.0, `a sine-derived radius is never exact`)
+	require.LessOrEqual(t, math.Abs(near.R-10), near.RBound,
 		`the published radius interval must contain the exact s·y/(1−s) = 10`)
 }
 
@@ -388,18 +390,18 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 // bound. Neither can be pinned through a published READING: each family also
 // emits its angle-limit siblings, whose radii come from the draft
 // allowance's own certified trig enclosure, and the reading's bound is the
-// largest over every spanning candidate (wallSurveyOut.maxCandBound), so an
+// largest over every spanning candidate (survey2d.WallSurveyOut.maxCandBound), so an
 // arc anywhere in the section keeps the reading Approximate.
 func TestWallCandidateExactChainsStayExact(t *testing.T) {
 	t.Parallel()
 	// Two r=1 hole walls whose centres sit a 3-4-5 distance apart: the web
 	// between them is 5 − 1 − 1 = 3, so the centreline candidate's radius is
 	// exactly 1.5. Reversed angle order keeps the material on each hole's left.
-	holeA, ok := arcElem(48.5, 28.5, 1, 2*math.Pi, 0, true)
+	holeA, ok := survey2d.ArcElem(48.5, 28.5, 1, 2*math.Pi, 0, true)
 	require.True(t, ok)
-	holeB, ok := arcElem(51.5, 32.5, 1, 2*math.Pi, 0, true)
+	holeB, ok := survey2d.ArcElem(51.5, 32.5, 1, 2*math.Pi, 0, true)
 	require.True(t, ok)
-	k := newWallKernel([]surveyElem{holeA, holeB}, nil, math.Inf(1))
+	k := survey2d.NewWallKernel([]survey2d.SurveyElem{holeA, holeB}, nil, math.Inf(1))
 
 	collect := func(gen func(add func(x, y, r, rBound float64))) map[float64]float64 {
 		out := map[float64]float64{}
@@ -412,7 +414,7 @@ func TestWallCandidateExactChainsStayExact(t *testing.T) {
 	}
 
 	arcArc := collect(func(add func(x, y, r, rBound float64)) {
-		k.arcArcCands(holeA, holeB, add)
+		k.ArcArcCands(holeA, holeB, add)
 	})
 	arcArcBound, found := arcArc[1.5]
 	require.True(t, found, `the 3-4-5 web must produce the r = 1.5 centreline candidate`)
@@ -421,7 +423,7 @@ func TestWallCandidateExactChainsStayExact(t *testing.T) {
 	// The same separation from a junction vertex to a hole centre: the neck is
 	// 5 − 1 = 4, so the vertex-arc centreline candidate's radius is exactly 2.
 	vertexArc := collect(func(add func(x, y, r, rBound float64)) {
-		k.vertexElemCands([2]float64{40, 30}, holeAt(t, 37, 26), add)
+		k.VertexElemCands([2]float64{40, 30}, holeAt(t, 37, 26), add)
 	})
 	vertexArcBound, found := vertexArc[2]
 	require.True(t, found, `the 3-4-5 neck must produce the r = 2 centreline candidate`)
@@ -430,9 +432,9 @@ func TestWallCandidateExactChainsStayExact(t *testing.T) {
 
 // holeAt is a unit-radius hole wall centred at (qx, qy), walked so the
 // material stays on its left.
-func holeAt(t *testing.T, qx, qy float64) surveyElem {
+func holeAt(t *testing.T, qx, qy float64) survey2d.SurveyElem {
 	t.Helper()
-	e, ok := arcElem(qx, qy, 1, 2*math.Pi, 0, true)
+	e, ok := survey2d.ArcElem(qx, qy, 1, 2*math.Pi, 0, true)
 	require.True(t, ok)
 	return e
 }
@@ -445,20 +447,20 @@ func holeAt(t *testing.T, qx, qy float64) surveyElem {
 func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 	t.Parallel()
 	// A non-axis-aligned trapezoid: four line elements, so every triple of
-	// their tangency equations is three linears and lands in solve3Linear.
+	// their tangency equations is three linears and lands in survey2d.Solve3Linear.
 	pts := [][2]float64{{0, 0}, {20.3, 1.7}, {16.1, 9.4}, {3.7, 7.9}}
-	elems := make([]surveyElem, 0, len(pts))
+	elems := make([]survey2d.SurveyElem, 0, len(pts))
 	for i := range pts {
-		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, math.Inf(1))
-	eqs, err := k.tripleEquations(nil)
+	k := survey2d.NewWallKernel(elems, pts, math.Inf(1))
+	eqs, err := k.TripleEquations(nil)
 	require.NoError(t, err)
-	lins := make([]circEq, 0, len(elems))
+	lins := make([]survey2d.CircEq, 0, len(elems))
 	for _, e := range eqs {
-		if !e.quad {
+		if !e.Quad {
 			lins = append(lins, e)
 		}
 	}
@@ -468,12 +470,12 @@ func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 	for i := range lins {
 		for j := i + 1; j < len(lins); j++ {
 			for l := j + 1; l < len(lins); l++ {
-				triple := []circEq{lins[i], lins[j], lins[l]}
-				solve3Linear(triple, func(_, _, r, rBound float64) {
+				triple := []survey2d.CircEq{lins[i], lins[j], lins[l]}
+				survey2d.Solve3Linear(triple, func(_, _, r, rBound float64) {
 					seen++
 					exact := exactCramerRadius(triple)
 					require.NotNil(t, exact)
-					gap := ratAbsDiff(exact, r)
+					gap := survey2d.RatAbsDiff(exact, r)
 					require.LessOrEqual(t, gap, rBound,
 						`the published radius interval must contain the exact Cramer answer`)
 					if gap > divisionOnlyRadiusBound(triple) {
@@ -489,18 +491,18 @@ func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 }
 
 // exactCramerRadius evaluates dr/det over big.Rat from the SAME held
-// coefficients solve3Linear reads, so the comparison is against the exact
+// coefficients survey2d.Solve3Linear reads, so the comparison is against the exact
 // answer to the very system the kernel solved, never against another float64
 // evaluation of it.
-func exactCramerRadius(l []circEq) *big.Rat {
+func exactCramerRadius(l []survey2d.CircEq) *big.Rat {
 	r := func(v proofbound.BoundedScalar) *big.Rat { return proofarith.FloatRat(v.Value) }
 	minor := func(p, q, s, t *big.Rat) *big.Rat {
 		return new(big.Rat).Sub(new(big.Rat).Mul(p, t), new(big.Rat).Mul(s, q))
 	}
-	a := [3]*big.Rat{r(l[0].a), r(l[1].a), r(l[2].a)}
-	b := [3]*big.Rat{r(l[0].b), r(l[1].b), r(l[2].b)}
-	e := [3]*big.Rat{r(l[0].e), r(l[1].e), r(l[2].e)}
-	f := [3]*big.Rat{r(l[0].f), r(l[1].f), r(l[2].f)}
+	a := [3]*big.Rat{r(l[0].A), r(l[1].A), r(l[2].A)}
+	b := [3]*big.Rat{r(l[0].B), r(l[1].B), r(l[2].B)}
+	e := [3]*big.Rat{r(l[0].E), r(l[1].E), r(l[2].E)}
+	f := [3]*big.Rat{r(l[0].F), r(l[1].F), r(l[2].F)}
 	for _, col := range [][3]*big.Rat{a, b, e, f} {
 		for _, v := range col {
 			if v == nil {
@@ -531,15 +533,15 @@ func exactCramerRadius(l []circEq) *big.Rat {
 // determinant as an exact leaf would publish: the final division's own
 // rounding and nothing above it. The test uses it only to prove the fixture
 // discriminates — never as an assertion about the shipped rule.
-func divisionOnlyRadiusBound(l []circEq) float64 {
+func divisionOnlyRadiusBound(l []survey2d.CircEq) float64 {
 	minor := func(p, q, s, t float64) float64 { return p*t - s*q }
-	be := minor(l[1].b.Value, l[1].e.Value, l[2].b.Value, l[2].e.Value)
-	ae := minor(l[1].a.Value, l[1].e.Value, l[2].a.Value, l[2].e.Value)
-	ab := minor(l[1].a.Value, l[1].b.Value, l[2].a.Value, l[2].b.Value)
-	af := minor(l[1].a.Value, l[1].f.Value, l[2].a.Value, l[2].f.Value)
-	bf := minor(l[1].b.Value, l[1].f.Value, l[2].b.Value, l[2].f.Value)
-	det := l[0].a.Value*be - l[0].b.Value*ae + l[0].e.Value*ab
-	dr := -l[0].a.Value*bf + l[0].b.Value*af - l[0].f.Value*ab
+	be := minor(l[1].B.Value, l[1].E.Value, l[2].B.Value, l[2].E.Value)
+	ae := minor(l[1].A.Value, l[1].E.Value, l[2].A.Value, l[2].E.Value)
+	ab := minor(l[1].A.Value, l[1].B.Value, l[2].A.Value, l[2].B.Value)
+	af := minor(l[1].A.Value, l[1].F.Value, l[2].A.Value, l[2].F.Value)
+	bf := minor(l[1].B.Value, l[1].F.Value, l[2].B.Value, l[2].F.Value)
+	det := l[0].A.Value*be - l[0].B.Value*ae + l[0].E.Value*ab
+	dr := -l[0].A.Value*bf + l[0].B.Value*af - l[0].F.Value*ab
 	return proofbound.BoundedQuotient(dr, 0, det, 0).Bound
 }
 
@@ -774,18 +776,18 @@ func TestWallKernelValidateReadsTheCandidateInterval(t *testing.T) {
 	// A 40×10 rectangle walked counter-clockwise: material inside, the disk at
 	// its centre reaching 5 mm to the two long skins and 20 mm to the ends.
 	pts := [][2]float64{{0, 0}, {40, 0}, {40, 10}, {0, 10}}
-	elems := make([]surveyElem, 0, len(pts))
+	elems := make([]survey2d.SurveyElem, 0, len(pts))
 	for i := range pts {
-		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, math.Inf(1))
-	require.Less(t, k.tol, 1e-6, `the crafted bound must sit above the kernel's declared slack`)
+	k := survey2d.NewWallKernel(elems, pts, math.Inf(1))
+	require.Less(t, k.Tol, 1e-6, `the crafted bound must sit above the kernel's declared slack`)
 
-	check := func(name string, c diskCand, wantSpanning, wantEmpty bool) {
+	check := func(name string, c survey2d.DiskCand, wantSpanning, wantEmpty bool) {
 		t.Helper()
-		spanning, empty, ok, err := k.validate(c, nil)
+		spanning, empty, ok, err := k.Validate(c, nil)
 		require.NoError(t, err, name)
 		require.True(t, ok, name)
 		require.Equal(t, wantEmpty, empty, "%s: emptiness", name)
@@ -795,16 +797,16 @@ func TestWallKernelValidateReadsTheCandidateInterval(t *testing.T) {
 	// Held blocked by 2 µm, but the candidate's own 3 µm bound reaches back
 	// past the two skins: an empty disk really does sit at this centre.
 	check("held blocked, interval straddles",
-		diskCand{x: 20, y: 5, r: 5 + 2e-6, rBound: 3e-6}, true, true)
+		survey2d.DiskCand{X: 20, Y: 5, R: 5 + 2e-6, RBound: 3e-6}, true, true)
 	// Held clear of contact by 2 µm under the same bound: the two skins really
 	// can touch a disk in this interval, which is what makes it span.
 	check("held clear of contact, interval straddles",
-		diskCand{x: 20, y: 5, r: 5 - 2e-6, rBound: 3e-6}, true, true)
+		survey2d.DiskCand{X: 20, Y: 5, R: 5 - 2e-6, RBound: 3e-6}, true, true)
 
 	// The controls: a candidate PROVEN to cut into the skins is still dropped,
 	// and one PROVEN clear of them still spans nothing.
-	check("proven blocked", diskCand{x: 20, y: 5, r: 6, rBound: 1e-12}, false, false)
-	check("proven clear of every skin", diskCand{x: 20, y: 5, r: 1, rBound: 1e-12}, false, true)
+	check("proven blocked", survey2d.DiskCand{X: 20, Y: 5, R: 6, RBound: 1e-12}, false, false)
+	check("proven clear of every skin", survey2d.DiskCand{X: 20, Y: 5, R: 1, RBound: 1e-12}, false, true)
 }
 
 // TestWallKernelInradiusAggregatesRivalCandidates pins the kernel's OTHER
@@ -818,9 +820,9 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 	// radius is 0.1 µm larger and carries a 1 µm bound, so a rival's upper
 	// endpoint exceeds the held winner's interval.
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-	elems := make([]surveyElem, 0, len(pts)+2)
+	elems := make([]survey2d.SurveyElem, 0, len(pts)+2)
 	for i := range pts {
-		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		e, ok := survey2d.LineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
@@ -829,46 +831,46 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 		if i == 0 {
 			radius += 1e-4
 		}
-		hole, ok := arcElem(x, 30, radius, 2*math.Pi, 0, true)
+		hole, ok := survey2d.ArcElem(x, 30, radius, 2*math.Pi, 0, true)
 		require.True(t, ok)
 		if i == 0 {
-			hole.rrBound = 1e-3
+			hole.RrBound = 1e-3
 		}
 		elems = append(elems, hole)
 	}
 
-	out := newWallKernel(elems, pts, math.Inf(1)).run()
-	require.True(t, out.ok)
+	out := survey2d.NewWallKernel(elems, pts, math.Inf(1)).Run()
+	require.True(t, out.Ok)
 
-	k := newWallKernel(elems, pts, math.Inf(1))
-	agg := maxAggregate()
+	k := survey2d.NewWallKernel(elems, pts, math.Inf(1))
+	agg := survey2d.MaxAggregate()
 	heldMax, heldMaxBound := math.Inf(-1), 0.0
-	require.NoError(t, k.generate(nil, func(c diskCand) error {
-		_, empty, ok, err := k.validate(c, nil)
+	require.NoError(t, k.Generate(nil, func(c survey2d.DiskCand) error {
+		_, empty, ok, err := k.Validate(c, nil)
 		require.NoError(t, err)
 		require.True(t, ok)
 		if !empty {
 			return nil
 		}
-		agg.take(c.r, c.rBound)
-		if c.r > heldMax {
-			heldMax, heldMaxBound = c.r, c.rBound
+		agg.Take(c.R, c.RBound)
+		if c.R > heldMax {
+			heldMax, heldMaxBound = c.R, c.RBound
 		}
 		return nil
 	}))
-	wantValue, wantBound, resolved := agg.resolve()
+	wantValue, wantBound, resolved := agg.Resolve()
 	require.True(t, resolved)
-	require.Equal(t, wantValue, out.inradius)
-	require.Equal(t, wantBound, out.inradiusBound)
+	require.Equal(t, wantValue, out.Inradius)
+	require.Equal(t, wantBound, out.InradiusBound)
 
 	// The rival changes the upper endpoint, so reducing by held value alone
 	// publishes a different interval rather than merely rounding it wider.
 	winnerHi := new(big.Rat).Add(proofarith.FloatRat(heldMax), proofarith.FloatRat(heldMaxBound))
-	require.Greater(t, agg.hi.Cmp(winnerHi), 0,
+	require.Greater(t, agg.Hi.Cmp(winnerHi), 0,
 		`the rival's upper endpoint must reach above the held winner's interval`)
-	require.NotEqual(t, heldMaxBound, out.inradiusBound,
+	require.NotEqual(t, heldMaxBound, out.InradiusBound,
 		`the population must contain a rival the winner's own bound does not cover`)
-	require.Greater(t, out.inradiusBound, 0.0)
+	require.Greater(t, out.InradiusBound, 0.0)
 }
 
 // TestWallKernelFitGateReadsTheCandidateInterval pins the third of runBudget's
@@ -884,24 +886,24 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 // wide and reports the body wall-free.
 func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 	t.Parallel()
-	outer, ok := arcElem(0, 0, 20, 0, 2*math.Pi, true)
+	outer, ok := survey2d.ArcElem(0, 0, 20, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	outer.rrBound = 2e-3
-	inner, ok := arcElem(0, 0, 10, 2*math.Pi, 0, true)
+	outer.RrBound = 2e-3
+	inner, ok := survey2d.ArcElem(0, 0, 10, 2*math.Pi, 0, true)
 	require.True(t, ok)
 
 	fitMax := 10 - 1e-3
-	k, err := newWallKernelBudget(nil, []surveyElem{outer, inner}, nil, nil,
+	k, err := survey2d.NewWallKernelBudget(nil, []survey2d.SurveyElem{outer, inner}, nil, nil,
 		15*math.Pi/180, proofbound.ExactScalar(0), false, fitMax)
 	require.NoError(t, err)
-	out, err := k.runBudget(nil)
+	out, err := k.RunBudget(nil)
 	require.NoError(t, err)
 
-	require.True(t, out.ok)
-	require.True(t, out.hasSpan,
+	require.True(t, out.Ok)
+	require.True(t, out.HasSpan,
 		`the only spanning disk's interval still reaches under the sweep, so it is a wall`)
-	require.Greater(t, out.span, fitMax, `the held diameter must exceed the sweep, or the gate is untested`)
-	require.Less(t, out.span-out.spanBound, fitMax,
+	require.Greater(t, out.Span, fitMax, `the held diameter must exceed the sweep, or the gate is untested`)
+	require.Less(t, out.Span-out.SpanBound, fitMax,
 		`the interval must reach under the sweep, or the gate has nothing to straddle`)
 }
 
@@ -909,7 +911,7 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 // that can silence a whole survey: an Apollonius triple whose 2A the arithmetic
 // cannot separate from zero. proofbound.BoundedQuotient answers +Inf there, the aggregate
 // refuses an unbounded candidate, and the survey that would have published a
-// number reads undecided instead. quadRootsBounded answers such a triple with
+// number reads undecided instead. survey2d.QuadRootsBounded answers such a triple with
 // the degenerate linear root −C/B, whose own denominator is well separated, so
 // the root a straddling A is meant to recover arrives bounded.
 //
@@ -924,50 +926,50 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 // exactly that state.
 func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 	t.Parallel()
-	elems := func() []surveyElem {
-		out := make([]surveyElem, 0, 3)
+	elems := func() []survey2d.SurveyElem {
+		out := make([]survey2d.SurveyElem, 0, 3)
 		for _, c := range [][3]float64{
 			{8255.0884454771622, 4195.7682375914947, 149.98644153683318},
 			{2475.9000902096891, -11681.738286473166, 131.34705082306061},
 			{-959.14779827151824, -21119.048840666175, 104.09453452133486},
 		} {
-			e, ok := arcElem(c[0], c[1], c[2], 0, 2*math.Pi, true)
+			e, ok := survey2d.ArcElem(c[0], c[1], c[2], 0, 2*math.Pi, true)
 			require.True(t, ok)
 			out = append(out, e)
 		}
 		return out
 	}
 
-	k, err := newWallKernelBudget(nil, elems(), nil, nil,
+	k, err := survey2d.NewWallKernelBudget(nil, elems(), nil, nil,
 		15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 	require.NoError(t, err)
-	out, err := k.runBudget(nil)
+	out, err := k.RunBudget(nil)
 	require.NoError(t, err)
 
-	require.True(t, out.ok, `a straddling leading coefficient must not silence the survey`)
-	require.True(t, out.hasSpan)
+	require.True(t, out.Ok, `a straddling leading coefficient must not silence the survey`)
+	require.True(t, out.HasSpan)
 	// Each circle's own concentric disk is the reading: the smallest circle's
 	// diameter is the least spanning one, the largest circle's radius the
 	// greatest empty one. Both are stated radii, so both readings are exact.
-	require.Equal(t, 2*104.09453452133486, out.span)
-	require.Equal(t, 0.0, out.spanBound)
-	require.Equal(t, 149.98644153683318, out.inradius)
-	require.Equal(t, 0.0, out.inradiusBound)
+	require.Equal(t, 2*104.09453452133486, out.Span)
+	require.Equal(t, 0.0, out.SpanBound)
+	require.Equal(t, 149.98644153683318, out.Inradius)
+	require.Equal(t, 0.0, out.InradiusBound)
 
 	// The discriminating half: the defect is an admitted candidate carrying no
 	// finite bound, which is what the aggregate refuses. Every candidate this
 	// boundary admits must now arrive with one.
-	k2, err := newWallKernelBudget(nil, elems(), nil, nil,
+	k2, err := survey2d.NewWallKernelBudget(nil, elems(), nil, nil,
 		15*math.Pi/180, proofbound.ExactScalar(0), false, math.Inf(1))
 	require.NoError(t, err)
-	require.NoError(t, k2.generate(nil, func(c diskCand) error {
-		_, empty, ok, err := k2.validate(c, nil)
+	require.NoError(t, k2.Generate(nil, func(c survey2d.DiskCand) error {
+		_, empty, ok, err := k2.Validate(c, nil)
 		require.NoError(t, err)
 		require.True(t, ok)
 		if !empty {
 			return nil
 		}
-		require.False(t, math.IsInf(c.rBound, 1),
+		require.False(t, math.IsInf(c.RBound, 1),
 			`an admitted candidate with no finite bound leaves the whole survey undecided`)
 		return nil
 	}))
@@ -984,33 +986,33 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 //
 // The fixture is two facing lines 10 mm apart, the second a hair off parallel
 // under a bound its own arithmetic cannot resolve, plus a circular hole between
-// them. solveParallelPair's reading of the same triple — the 5 mm disk — must
+// them. survey2d.SolveParallelPair's reading of the same triple — the 5 mm disk — must
 // still arrive, which is what makes this a local refusal rather than a missing
 // wall.
 func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
 	t.Parallel()
-	l1 := circEq{a: proofbound.ExactScalar(1), b: proofbound.ExactScalar(0), e: proofbound.ExactScalar(-1), f: proofbound.ExactScalar(0)}
-	l2 := circEq{
-		a: proofbound.ExactScalar(-1),
-		b: proofbound.MeasuredScalar(1e-13, 1e-9),
-		e: proofbound.ExactScalar(-1),
-		f: proofbound.ExactScalar(10),
+	l1 := survey2d.CircEq{A: proofbound.ExactScalar(1), B: proofbound.ExactScalar(0), E: proofbound.ExactScalar(-1), F: proofbound.ExactScalar(0)}
+	l2 := survey2d.CircEq{
+		A: proofbound.ExactScalar(-1),
+		B: proofbound.MeasuredScalar(1e-13, 1e-9),
+		E: proofbound.ExactScalar(-1),
+		F: proofbound.ExactScalar(10),
 	}
 	// A hole of radius 2 centred at (5, 5): cx² + cy² − r² − 10cx − 10cy − 4r + 46 = 0.
-	hole := circEq{
-		quad: true,
-		g:    proofbound.ExactScalar(-10),
-		h:    proofbound.ExactScalar(-10),
-		kk:   proofbound.ExactScalar(-4),
-		m:    proofbound.ExactScalar(46),
+	hole := survey2d.CircEq{
+		Quad: true,
+		G:    proofbound.ExactScalar(-10),
+		H:    proofbound.ExactScalar(-10),
+		Kk:   proofbound.ExactScalar(-4),
+		M:    proofbound.ExactScalar(46),
 	}
 
 	require.Equal(t, proofbound.SurvStraddle,
-		proofbound.AdmitMagnitudeAbove(proofbound.BoundedSub(proofbound.BoundedMul(l1.a, l2.b), proofbound.BoundedMul(l2.a, l1.b)), 1e-12),
+		proofbound.AdmitMagnitudeAbove(proofbound.BoundedSub(proofbound.BoundedMul(l1.A, l2.B), proofbound.BoundedMul(l2.A, l1.B)), 1e-12),
 		`the pair's determinant must straddle, or the fall-through is untested`)
 
 	var radii []float64
-	solveTriple([3]circEq{l1, l2, hole}, 1, func(_, _, r, rBound float64) {
+	survey2d.SolveTriple([3]survey2d.CircEq{l1, l2, hole}, 1, func(_, _, r, rBound float64) {
 		require.False(t, math.IsInf(rBound, 1),
 			`a candidate divided out of a straddled determinant carries no bound and must not be emitted`)
 		radii = append(radii, r)
@@ -1023,7 +1025,7 @@ func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
 }
 
 // TestArcWalkRadiusBoundStaysUnderTheKernelSlack pins the headroom the
-// surveyElem.rrBound doc comment's derivation rests on, so that derivation
+// survey2d.SurveyElem.rrBound doc comment's derivation rests on, so that derivation
 // cannot silently rot. An ArcSeg records Start and Center, never the radius, so
 // the walk's radius is a math.Hypot of coordinate differences and
 // arcWalkRadiusBound brackets its error; the kernel's positions, ray casts and
@@ -1056,15 +1058,15 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 				require.NoError(t, err)
 				e, ok := walkElem(w)
 				require.True(t, ok)
-				require.Equal(t, w.radiusBound, e.rrBound)
+				require.Equal(t, w.RadiusBound, e.RrBound)
 
-				require.LessOrEqual(t, e.rrBound, math.Ldexp(e.rr, -50),
+				require.LessOrEqual(t, e.RrBound, math.Ldexp(e.Rr, -50),
 					`the hypot bracket must stay within a few ulp of the radius it brackets`)
 
-				k := newWallKernel([]surveyElem{e}, nil, math.Inf(1))
-				require.GreaterOrEqual(t, k.scale, e.rr,
+				k := survey2d.NewWallKernel([]survey2d.SurveyElem{e}, nil, math.Inf(1))
+				require.GreaterOrEqual(t, k.Scale, e.Rr,
 					`the kernel's scale reaches every element radius, which is what carries the bound over`)
-				require.Less(t, e.rrBound*1e6, k.tol,
+				require.Less(t, e.RrBound*1e6, k.Tol,
 					`the bound must stay decades under the slack every predicate concedes`)
 			})
 		}
@@ -1113,9 +1115,9 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	aw := ax.walk(w)
-	require.Equal(t, aw.startV, aw.endV, `the two ends must hold the SAME radial coordinate for the tie to bite`)
-	require.Equal(t, 0.0, aw.startVBound)
-	require.Greater(t, aw.endVBound, 0.0)
+	require.Equal(t, aw.StartV, aw.EndV, `the two ends must hold the SAME radial coordinate for the tie to bite`)
+	require.Equal(t, 0.0, aw.StartVBound)
+	require.Greater(t, aw.EndVBound, 0.0)
 
 	// The truth is the exact radial coordinate of the nearer end, computed
 	// over the rationals: rounding it to a float64 would round it straight
@@ -1134,8 +1136,8 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 		hi := new(big.Rat).Add(toRat(q.Value), toRat(q.Bound))
 		return lo.Cmp(truth) <= 0 && hi.Cmp(truth) >= 0
 	}
-	start := proofbound.MeasuredScalar(aw.startV, aw.startVBound)
-	end := proofbound.MeasuredScalar(aw.endV, aw.endVBound)
+	start := proofbound.MeasuredScalar(aw.StartV, aw.StartVBound)
+	end := proofbound.MeasuredScalar(aw.EndV, aw.EndVBound)
 	require.False(t, encloses(start),
 		`the assertion below is vacuous unless the held-selected end's own interval misses the truth`)
 	require.True(t, encloses(proofbound.BoundedMin(start, end)),
@@ -1297,15 +1299,15 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 	require.Equal(t, 0.0, out.bound, `an all-analytic square's spanning diameter is Exact`)
 }
 
-// This file is survey_undercut.go's own internal coverage: decidePull's
-// equivalence with opposesPull at zero allowance, and wallNormalDecision's
+// This file is survey_undercut.go's own internal coverage: survey2d.DecidePull's
+// equivalence with opposesPull at zero allowance, and survey2d.WallNormalDecision's
 // soundness against an exact-rational ground truth computed independently
 // from the walk's own held tangent and the placed frame's own held
 // directions.
 
-// TestDecidePullMatchesOpposesPullAtZeroAllowance proves decidePull(mn, mx, 0)
-// reduces to exactly opposesPull(mn, mx)'s own answer — pullOpposes where
-// opposesPull is true, pullClear everywhere else, never pullUndecided — over
+// TestDecidePullMatchesOpposesPullAtZeroAllowance proves survey2d.DecidePull(mn, mx, 0)
+// reduces to exactly opposesPull(mn, mx)'s own answer — survey2d.PullOpposes where
+// opposesPull is true, survey2d.PullClear everywhere else, never survey2d.PullUndecided — over
 // a table that includes both exact carve-outs (0 and -1) and the float
 // readings fu155's own repro produced.
 func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
@@ -1345,30 +1347,30 @@ func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
 	}
 	for _, p := range pairs {
 		mn, mx := p[0], p[1]
-		want := pullClear
+		want := survey2d.PullClear
 		if opposesPull(mn, mx) {
-			want = pullOpposes
+			want = survey2d.PullOpposes
 		}
-		got := decidePull(mn, mx, 0)
+		got := survey2d.DecidePull(mn, mx, 0)
 		require.Equalf(t, want, got, "mn=%v mx=%v", mn, mx)
-		require.NotEqualf(t, pullUndecided, got, "mn=%v mx=%v", mn, mx)
+		require.NotEqualf(t, survey2d.PullUndecided, got, "mn=%v mx=%v", mn, mx)
 	}
 }
 
 // wallNormalDecisionFixture is one placed prism body ready for
-// wallNormalDecision soundness checks: its own placedFrameMap and the
+// survey2d.WallNormalDecision soundness checks: its own survey2d.PlacedFrameMap and the
 // coalesced side walks of its recorded profile.
 type wallNormalDecisionFixture struct {
 	name  string
 	pp    prismPayload
-	m     placedFrameMap
-	walks []sideWalk
+	m     survey2d.PlacedFrameMap
+	walks []survey2d.SideWalk
 }
 
 // wallNormalDecisionFixtures builds identity, translated and rotated-by-one-
 // radian placements of the same round-cornered rectangle prism (straight AND
-// circular walls both), each read back into its placedFrameMap and side
-// walks — everything wallNormalDecision needs, and everything this test
+// circular walls both), each read back into its survey2d.PlacedFrameMap and side
+// walks — everything survey2d.WallNormalDecision needs, and everything this test
 // needs to build its own exact-rational ground truth independently.
 func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 	t.Helper()
@@ -1414,7 +1416,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 		require.True(t, ok)
 		loops, err := recordLoops(nil, pp.profile)
 		require.NoError(t, err)
-		var walks []sideWalk
+		var walks []survey2d.SideWalk
 		for _, loop := range loops {
 			walks = append(walks, loop...)
 		}
@@ -1425,31 +1427,31 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 }
 
 // exactWallComponentSquared computes, from the SAME held numbers
-// wallNormalDecision itself reads (the walk's own tangent or its held
+// survey2d.WallNormalDecision itself reads (the walk's own tangent or its held
 // circular sweep angles, and the placed frame's held directions), a
 // ground-truth answer over big.Rat: whether the wall's exact
 // normal-component (against the pull, at the walk's own start for a straight
 // walk) is >= 0, <= -1, or strictly between — built independently of
-// circularNormalRange/decideRationalComponent so it does not share their own
+// survey2d.CircularNormalRange/survey2d.DecideRationalComponent so it does not share their own
 // bugs. ok is false for a circular walk, where this test instead samples
 // float64 endpoints only (see the caller).
-func exactWallComponentSquared(w sideWalk, m placedFrameMap, pull r3.Vec) (num, scale2, pull2 *big.Rat, ok bool) {
-	if w.isCircular() {
+func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, pull r3.Vec) (num, scale2, pull2 *big.Rat, ok bool) {
+	if w.IsCircular() {
 		return nil, nil, nil, false
 	}
-	pv, okP := ivVec3Of(pull)
+	pv, okP := survey2d.IvVec3Of(pull)
 	if !okP {
 		return nil, nil, nil, false
 	}
-	tu, tv := proofarith.FloatRat(w.tanInU), proofarith.FloatRat(w.tanInV)
+	tu, tv := proofarith.FloatRat(w.TanInU), proofarith.FloatRat(w.TanInV)
 	if tu == nil || tv == nil {
 		return nil, nil, nil, false
 	}
-	du := ivVec3Dot(m.du, pv).Lo
-	dv := ivVec3Dot(m.dv, pv).Lo
+	du := survey2d.IvVec3Dot(m.Du, pv).Lo
+	dv := survey2d.IvVec3Dot(m.Dv, pv).Lo
 	num = new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
 	scale2 = proofbound.RatAdd(proofbound.RatMul(tu, tu), proofbound.RatMul(tv, tv))
-	pull2 = ivVec3NormSq(pv).Lo
+	pull2 = survey2d.IvVec3NormSq(pv).Lo
 	return num, scale2, pull2, true
 }
 
@@ -1457,8 +1459,8 @@ func exactWallComponentSquared(w sideWalk, m placedFrameMap, pull r3.Vec) (num, 
 // over a spread of placed prism payloads (identity, a translation, a
 // rotation by 1 radian none of whose held direction components are
 // "nice"), every side walk and a spread of pull directions, the reader
-// never answers pullOpposes when the exact component is provably >= 0 or
-// <= -1, and never answers pullClear when the exact component is provably
+// never answers survey2d.PullOpposes when the exact component is provably >= 0 or
+// <= -1, and never answers survey2d.PullClear when the exact component is provably
 // strictly inside (-1, 0) — asserted on the computed exact-rational ground
 // truth, not on which code path ran.
 func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
@@ -1480,7 +1482,7 @@ func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 	for _, fix := range fixtures {
 		for _, w := range fix.walks {
 			for _, pull := range pulls {
-				verdict, ok := wallNormalDecision(w, fix.m, pull)
+				verdict, ok := survey2d.WallNormalDecision(w, fix.m, pull)
 				if !ok {
 					continue
 				}
@@ -1498,11 +1500,11 @@ func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 	require.Positive(t, checked, "the fixtures must exercise at least one walk/pull pair")
 }
 
-// requireSoundVerdict asserts wallNormalDecision's verdict against the exact
-// rational component num/sqrt(scale2*pull2): pullOpposes only where that
-// component is provably in the open interval (-1, 0), and pullClear only
+// requireSoundVerdict asserts survey2d.WallNormalDecision's verdict against the exact
+// rational component num/sqrt(scale2*pull2): survey2d.PullOpposes only where that
+// component is provably in the open interval (-1, 0), and survey2d.PullClear only
 // where it is provably at or above 0 or at or below -1.
-func requireSoundVerdict(t *testing.T, fixture string, verdict pullVerdict, num, scale2, pull2 *big.Rat) {
+func requireSoundVerdict(t *testing.T, fixture string, verdict survey2d.PullVerdict, num, scale2, pull2 *big.Rat) {
 	t.Helper()
 	nonNegative := num.Sign() >= 0
 	lhs := new(big.Rat).Mul(num, num)
@@ -1510,9 +1512,9 @@ func requireSoundVerdict(t *testing.T, fixture string, verdict pullVerdict, num,
 	atOrBeyondAntiparallel := num.Sign() <= 0 && lhs.Cmp(rhs) >= 0
 	strictlyBetween := !nonNegative && !atOrBeyondAntiparallel
 	switch verdict {
-	case pullOpposes:
+	case survey2d.PullOpposes:
 		require.Truef(t, strictlyBetween, "%s: pullOpposes but exact component is not strictly in (-1, 0)", fixture)
-	case pullClear:
+	case survey2d.PullClear:
 		require.Falsef(t, strictlyBetween, "%s: pullClear but exact component is strictly in (-1, 0)", fixture)
 	}
 }
@@ -1522,13 +1524,13 @@ func requireSoundVerdict(t *testing.T, fixture string, verdict pullVerdict, num,
 // its window, so there is no single exact rational to compare against;
 // instead this densely samples sigma*(du*cosθ + dv*sinθ)/|pull| in float64
 // across [th0, th1] — an independent evaluation of the same closed form
-// wallNormalDecision encloses, never calling circularNormalRange or any of
+// survey2d.WallNormalDecision encloses, never calling survey2d.CircularNormalRange or any of
 // its helpers — and checks the verdict against what that dense sample
 // (with a healthy float64 margin around the 0 and -1 boundaries, so an
 // ordinary rounding difference between the two evaluations never trips it)
-// can support: pullOpposes only where a sampled point reads clearly inside
-// (-1, 0), and pullClear only where no sampled point does.
-func requireSoundCircularVerdict(t *testing.T, fixture string, verdict pullVerdict, pp prismPayload, w sideWalk, pull r3.Vec) {
+// can support: survey2d.PullOpposes only where a sampled point reads clearly inside
+// (-1, 0), and survey2d.PullClear only where no sampled point does.
+func requireSoundCircularVerdict(t *testing.T, fixture string, verdict survey2d.PullVerdict, pp prismPayload, w survey2d.SideWalk, pull r3.Vec) {
 	t.Helper()
 	unit, ok := pull.Normalize()
 	if !ok {
@@ -1537,10 +1539,10 @@ func requireSoundCircularVerdict(t *testing.T, fixture string, verdict pullVerdi
 	du := pp.dir(1, 0, 0).Dot(unit)
 	dv := pp.dir(0, 1, 0).Dot(unit)
 	sigma := 1.0
-	if w.th1 < w.th0 {
+	if w.Th1 < w.Th0 {
 		sigma = -1
 	}
-	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+	lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
 
 	const margin = 1e-9
 	sawStrictlyBetween := false
@@ -1557,9 +1559,9 @@ func requireSoundCircularVerdict(t *testing.T, fixture string, verdict pullVerdi
 		}
 	}
 	switch verdict {
-	case pullOpposes:
+	case survey2d.PullOpposes:
 		require.Truef(t, sawStrictlyBetween, "%s: pullOpposes but no sampled point reads inside (-1, 0)", fixture)
-	case pullClear:
+	case survey2d.PullClear:
 		require.Truef(t, allClear, "%s: pullClear but a sampled point reads inside (-1, 0)", fixture)
 	}
 }

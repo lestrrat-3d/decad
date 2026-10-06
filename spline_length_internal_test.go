@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -73,8 +75,8 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 
 	// Compare the complete fixed-depth bracket, including its outward sums,
 	// with the former rational leaf calculation.
-	var rationalBracket func(bezierSpan, int) (float64, float64)
-	rationalBracket = func(span bezierSpan, depth int) (float64, float64) {
+	var rationalBracket func(survey2d.BezierSpan, int) (float64, float64)
+	rationalBracket = func(span survey2d.BezierSpan, depth int) (float64, float64) {
 		if depth == 0 {
 			lo := proofbound.RatSqrtDown(ratSquaredDistance(span[0], span[len(span)-1]))
 			hi := 0.0
@@ -96,14 +98,14 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 
 func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 	t.Parallel()
-	makeSpan := func(coords [][4]int64) bezierSpan {
-		span := make(bezierSpan, len(coords))
+	makeSpan := func(coords [][4]int64) survey2d.BezierSpan {
+		span := make(survey2d.BezierSpan, len(coords))
 		for i, c := range coords {
-			span[i] = ratPoint{u: big.NewRat(c[0], c[1]), v: big.NewRat(c[2], c[3])}
+			span[i] = survey2d.RatPoint{U: big.NewRat(c[0], c[1]), V: big.NewRat(c[2], c[3])}
 		}
 		return span
 	}
-	cases := map[string]bezierSpan{
+	cases := map[string]survey2d.BezierSpan{
 		"degree one":       makeSpan([][4]int64{{0, 1, 0, 1}, {7, 11, -4, 7}}),
 		"degree two":       makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}}),
 		"odd denominators": makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}, {3, 1, 0, 1}}),
@@ -197,7 +199,7 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 			}
 			cost := freeformBracketCost(len(span))
 			work := &freeformWork{spent: freeformWorkLimit - cost + 1}
-			_, _, err = freeformArcLength([]bezierSpan{span}, work)
+			_, _, err = freeformArcLength([]survey2d.BezierSpan{span}, work)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, freeformWorkLimit, work.spent)
 		})
@@ -360,8 +362,8 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 // below it and the upper at or above.
 func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	t.Parallel()
-	a := ratPoint{u: mustRatOf(0), v: mustRatOf(0)}
-	b := ratPoint{u: mustRatOf(1), v: mustRatOf(1)}
+	a := survey2d.RatPoint{U: mustRatOf(0), V: mustRatOf(0)}
+	b := survey2d.RatPoint{U: mustRatOf(1), V: mustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
 
 	lo := proofbound.RatSqrtDown(squared)
@@ -394,8 +396,8 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 	} {
 		t.Run(strconv.FormatFloat(leg, 'g', -1, 64), func(t *testing.T) {
 			q := ratSquaredDistance(
-				ratPoint{u: mustRatOf(0), v: mustRatOf(0)},
-				ratPoint{u: mustRatOf(leg), v: mustRatOf(0)},
+				survey2d.RatPoint{U: mustRatOf(0), V: mustRatOf(0)},
+				survey2d.RatPoint{U: mustRatOf(leg), V: mustRatOf(0)},
 			)
 
 			lo := proofbound.RatSqrtDown(q)
@@ -513,9 +515,9 @@ func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
-	require.Equal(t, walkFreeform, walk.kind)
-	require.False(t, walk.isLine(), "a free-form walk is not a line")
-	require.False(t, walk.isCircular(), "a free-form walk is not circular")
+	require.Equal(t, survey2d.WalkFreeform, walk.Kind)
+	require.False(t, walk.IsLine(), "a free-form walk is not a line")
+	require.False(t, walk.IsCircular(), "a free-form walk is not circular")
 
 	_, ok := walkElem(walk)
 	require.False(t, ok, "there is no 2D boundary element for a free-form walk yet")
@@ -745,9 +747,9 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			exp := rng.IntN(2098) - 1074
 			return math.Ldexp((rng.Float64()*2)-1, exp)
 		}
-		span := bezierSpan{
-			{u: proofarith.FloatRat(coord()), v: proofarith.FloatRat(coord())},
-			{u: proofarith.FloatRat(coord()), v: proofarith.FloatRat(coord())},
+		span := survey2d.BezierSpan{
+			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
+			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
 		}
 		s, err := dyadicSpanOf(nil, span)
 		require.NoError(t, err)
@@ -802,10 +804,10 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 // requireSubdivisionStaysDyadic walks the whole subdivision tree to the given
 // depth, checking every level of both computations against each other and every
 // reference denominator against the span's odd part.
-func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference bezierSpan, odd *big.Int, depth int) {
+func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference survey2d.BezierSpan, odd *big.Int, depth int) {
 	t.Helper()
 	for _, point := range reference {
-		for _, coord := range []*big.Rat{point.u, point.v} {
+		for _, coord := range []*big.Rat{point.U, point.V} {
 			require.Zero(t, new(big.Int).Mod(odd, oddPart(coord.Denom())).Sign(),
 				"a subdivided coordinate's odd denominator is the span's own, so only powers of two were introduced")
 		}
@@ -822,12 +824,12 @@ func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference be
 	requireSubdivisionStaysDyadic(t, dyadicRight, referenceRight, odd, depth-1)
 }
 
-func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference bezierSpan, msgAndArgs ...any) {
+func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference survey2d.BezierSpan, msgAndArgs ...any) {
 	t.Helper()
 	require.Len(t, dyadic.points, len(reference), msgAndArgs...)
 	for i, point := range dyadic.points {
-		require.Zero(t, dyadicRat(dyadic.den, point.u, point.exp).Cmp(reference[i].u), msgAndArgs...)
-		require.Zero(t, dyadicRat(dyadic.den, point.v, point.exp).Cmp(reference[i].v), msgAndArgs...)
+		require.Zero(t, dyadicRat(dyadic.den, point.u, point.exp).Cmp(reference[i].U), msgAndArgs...)
+		require.Zero(t, dyadicRat(dyadic.den, point.v, point.exp).Cmp(reference[i].V), msgAndArgs...)
 	}
 	// The leaf reading is where the split form hands the bracket back a
 	// rational, so it is checked against the plain one every leg of the way.
@@ -857,9 +859,9 @@ func oddPart(n *big.Int) *big.Int {
 // ratSquaredDistance is |b−a|² taken straight over normalising rationals — the
 // plain reading dyadicSpan.squaredDistance must reproduce exactly, and the exact
 // value the directed square-root bounds are proven against.
-func ratSquaredDistance(a, b ratPoint) *big.Rat {
-	du := new(big.Rat).Sub(b.u, a.u)
-	dv := new(big.Rat).Sub(b.v, a.v)
+func ratSquaredDistance(a, b survey2d.RatPoint) *big.Rat {
+	du := new(big.Rat).Sub(b.U, a.U)
+	dv := new(big.Rat).Sub(b.V, a.V)
 	du.Mul(du, du)
 	dv.Mul(dv, dv)
 	return du.Add(du, dv)
@@ -868,24 +870,24 @@ func ratSquaredDistance(a, b ratPoint) *big.Rat {
 // referenceSplit is the defining de Casteljau bisection over normalising
 // rationals: each blend an Add and a halving, each result reduced to lowest
 // terms. It is the yardstick the split form is measured against.
-func referenceSplit(span bezierSpan) (bezierSpan, bezierSpan) {
+func referenceSplit(span survey2d.BezierSpan) (survey2d.BezierSpan, survey2d.BezierSpan) {
 	half := big.NewRat(1, 2)
 	midpoint := func(a, b *big.Rat) *big.Rat {
 		out := new(big.Rat).Add(a, b)
 		return out.Mul(out, half)
 	}
 	n := len(span)
-	work := make(bezierSpan, n)
+	work := make(survey2d.BezierSpan, n)
 	copy(work, span)
-	left := make(bezierSpan, 0, n)
-	right := make(bezierSpan, n)
+	left := make(survey2d.BezierSpan, 0, n)
+	right := make(survey2d.BezierSpan, n)
 	left = append(left, work[0])
 	right[n-1] = work[n-1]
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			work[i] = ratPoint{
-				u: midpoint(work[i].u, work[i+1].u),
-				v: midpoint(work[i].v, work[i+1].v),
+			work[i] = survey2d.RatPoint{
+				U: midpoint(work[i].U, work[i+1].U),
+				V: midpoint(work[i].V, work[i+1].V),
 			}
 		}
 		left = append(left, work[0])

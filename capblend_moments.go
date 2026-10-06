@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -820,31 +822,31 @@ func sincHalf(x float64) float64 {
 
 // sincHalfInterval encloses sin(x/2)/(x/2) for an exact rational x: exactly 1
 // at x == 0 (no enclosure needed), otherwise the certified sine of h = x/2
-// divided by the exact nonzero point h. intervalQuo never refuses here: the
+// divided by the exact nonzero point h. survey2d.IntervalQuo never refuses here: the
 // divisor is a nonzero point interval.
 func sincHalfInterval(x *big.Rat) (proofbound.RatInterval, bool) {
 	if x.Sign() == 0 {
 		return proofbound.PointInterval(big.NewRat(1, 1)), true
 	}
 	h := new(big.Rat).Mul(x, big.NewRat(1, 2))
-	sin, _, ok := radSinCosInterval(h)
+	sin, _, ok := survey2d.RadSinCosInterval(h)
 	if !ok {
 		return proofbound.RatInterval{}, false
 	}
-	return intervalQuo(sin, proofbound.PointInterval(h))
+	return survey2d.IntervalQuo(sin, proofbound.PointInterval(h))
 }
 
 // phaseIntegralInterval encloses ∫₀¹ cos(a0 + u·(a1−a0)) du and the sine
 // analogue for exact rational a0, a1, via the product-to-sum form
 // cos(mid)·sinc(width/2), sin(mid)·sinc(width/2) that ruledAngleCos and
 // phaseSumInterval already state (mid = (a0+a1)/2, width = a1−a0). Both
-// factors are certified enclosures (radSinCosInterval, sincHalfInterval) and
+// factors are certified enclosures (survey2d.RadSinCosInterval, sincHalfInterval) and
 // proofbound.IntervalMul is inclusion-monotonic, so each output contains the true
 // integral whatever the platform's math package returns.
 func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval, ok bool) {
 	mid := new(big.Rat).Mul(new(big.Rat).Add(a0, a1), big.NewRat(1, 2))
 	width := new(big.Rat).Sub(a1, a0)
-	s, c, okMid := radSinCosInterval(mid)
+	s, c, okMid := survey2d.RadSinCosInterval(mid)
 	if !okMid {
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
@@ -866,7 +868,7 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval
 //   - every non-trigonometric input is a float64 field, hence an exact
 //     rational, and H, dS, dC, dR, dSC are formed exactly, so no subtraction
 //     rounds;
-//   - the four endpoint sines/cosines (radSinCosInterval) and the ruled-angle
+//   - the four endpoint sines/cosines (survey2d.RadSinCosInterval) and the ruled-angle
 //     integral (phaseIntegralInterval) are enclosed, and interval arithmetic
 //     is inclusion-monotonic, so the result contains the exact closed form at
 //     the held parameters whatever the platform's math package does;
@@ -876,8 +878,8 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval
 //
 // Nothing here grows with the arc centre's distance from the plane-local
 // origin beyond the enclosure's own width, which is set by the radian-to-turn
-// grid (turnGridShift), not by a magnitude envelope. The width is never zero
-// for a non-whole-turn patch: radSinCosInterval answers a non-point interval
+// grid (survey2d.TurnGridShift), not by a magnitude envelope. The width is never zero
+// for a non-whole-turn patch: survey2d.RadSinCosInterval answers a non-point interval
 // for every nonzero rational, so a Cone patch stays Approximate.
 func conePatchFluxInterval(g capPatchGeom) (proofbound.RatInterval, bool) {
 	R0, R1 := proofarith.FloatRat(g.sideRadius), proofarith.FloatRat(g.capRadius)
@@ -897,10 +899,10 @@ func conePatchFluxInterval(g capPatchGeom) (proofbound.RatInterval, bool) {
 	dR := new(big.Rat).Sub(R1, R0)
 	dSC := new(big.Rat).Sub(dS, dC)
 
-	sS0, cS0, okS0 := radSinCosInterval(thS0)
-	sS1, cS1, okS1 := radSinCosInterval(thS1)
-	sC0, cC0, okC0 := radSinCosInterval(thC0)
-	sC1, cC1, okC1 := radSinCosInterval(thC1)
+	sS0, cS0, okS0 := survey2d.RadSinCosInterval(thS0)
+	sS1, cS1, okS1 := survey2d.RadSinCosInterval(thS1)
+	sC0, cC0, okC0 := survey2d.RadSinCosInterval(thC0)
+	sC1, cC1, okC1 := survey2d.RadSinCosInterval(thC1)
 	if !okS0 || !okS1 || !okC0 || !okC1 {
 		return proofbound.RatInterval{}, false
 	}
@@ -1184,7 +1186,7 @@ func chordUpper2(a, b Point2) float64 {
 // capThAllow's own proven enclosure of the true window (an proofbound.Atan2Interval
 // bracket on the patch's own offset feet, or proofbound.PiLower/proofbound.PiUpper for the
 // structurally whole-turn circle; capblend_contour.go/capblend_geom.go) — and
-// the square root, rounded outward by intervalSqrt. Interval arithmetic is
+// the square root, rounded outward by survey2d.IntervalSqrt. Interval arithmetic is
 // inclusion-monotonic, so the composed product [dth−dthAllow, dth+dthAllow] ×
 // [R0+R1] × [slant] encloses the true A whatever the platform's Hypot, Atan2
 // or Sincos returned: nowhere here is an ulp contract on any of them assumed.
@@ -1210,7 +1212,7 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 		return math.Inf(1)
 	}
 	rdR := new(big.Rat).Sub(rR1, rR0)
-	slantIv, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(proofbound.PointInterval(rdR)), intervalSquare(proofbound.PointInterval(rH))))
+	slantIv, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.PointInterval(rdR)), survey2d.IntervalSquare(proofbound.PointInterval(rH))))
 	if !ok {
 		return math.Inf(1)
 	}

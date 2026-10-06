@@ -192,8 +192,8 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 			wantU, wantV := recordPointAt(t, tc.seg, tc.bound)
 			walk, err := walkOf(widened, newFreeformWork())
 			require.NoError(t, err)
-			movedU, movedV := walk.endU, walk.endV
-			stillU, stillV := walk.startU, walk.startV
+			movedU, movedV := walk.EndU, walk.EndV
+			stillU, stillV := walk.StartU, walk.StartV
 			if tc.atStart {
 				movedU, movedV, stillU, stillV = stillU, stillV, movedU, movedV
 			}

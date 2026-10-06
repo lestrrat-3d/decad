@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -572,7 +574,7 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, d 
 	orig := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	out := make([]LoopRecord, len(orig))
 	for li := range orig {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return ProfileRecord{}, err
 		}
 		if !startLoops[li] && !endLoops[li] {

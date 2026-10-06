@@ -5,6 +5,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -71,7 +73,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 // profileRecordsEqual reports exact structural equality of two recorded
 // profiles, stepping the budget once per segment compared.
 func profileRecordsEqual(budget *proofbound.WorkBudget, a, b ProfileRecord) (bool, error) {
-	if err := wallBudgetStep(budget); err != nil {
+	if err := survey2d.WallBudgetStep(budget); err != nil {
 		return false, err
 	}
 	if len(a.Holes) != len(b.Holes) || (a.Holes == nil) != (b.Holes == nil) {
@@ -98,7 +100,7 @@ func loopRecordsEqual(budget *proofbound.WorkBudget, a, b LoopRecord) (bool, err
 		return false, nil
 	}
 	for i := range a.Segments {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return false, err
 		}
 		if !reflect.DeepEqual(a.Segments[i], b.Segments[i]) {

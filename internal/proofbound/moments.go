@@ -4,8 +4,6 @@ import (
 	"math/big"
 )
 
-// Moved from the root package's moments.go.
-
 func RatAdd(values ...*big.Rat) *big.Rat {
 	out := new(big.Rat)
 	for _, value := range values {

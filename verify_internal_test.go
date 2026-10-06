@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -290,14 +292,14 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 		for _, seg := range loop.Segments {
 			w, err := walkOf(seg, work)
 			require.NoError(t, err)
-			if w.kind != walkFreeform {
+			if w.Kind != survey2d.WalkFreeform {
 				pts = append(pts,
-					pp.point(w.startU, w.startV, pp.z0), pp.point(w.startU, w.startV, pp.z1),
-					pp.point(w.endU, w.endV, pp.z0), pp.point(w.endU, w.endV, pp.z1),
+					pp.point(w.StartU, w.StartV, pp.z0), pp.point(w.StartU, w.StartV, pp.z1),
+					pp.point(w.EndU, w.EndV, pp.z0), pp.point(w.EndU, w.EndV, pp.z1),
 				)
 				continue
 			}
-			floatSpans := floatBezierSpansOf(w.spans)
+			floatSpans := floatBezierSpansOf(w.Spans)
 			for i := 0; i <= samples; i++ {
 				at := float64(i) / float64(samples)
 				u, v := evalFloatBezierSpans(floatSpans, at)

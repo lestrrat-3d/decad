@@ -1362,7 +1362,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 		name string
 		seg  LineSeg
 		// endpointOnlyUnderCharges says the walked-endpoint envelope alone
-		// (segmentWalk.coordUpper, which is what the answer must NOT be
+		// (survey2d.SegmentWalk.coordUpper, which is what the answer must NOT be
 		// charged at) fails to contain this row's own residual.
 		endpointOnlyUnderCharges bool
 	}{
@@ -1432,7 +1432,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			require.False(t, math.IsInf(charge, 0))
 
 			chargeSq := new(big.Rat).Mul(prismRatOf(t, charge), prismRatOf(t, charge))
-			endpointOnly := proofbound.WalkEndpointAllow(w.coordUpper)
+			endpointOnly := proofbound.WalkEndpointAllow(w.CoordUpper)
 			endpointOnlySq := new(big.Rat).Mul(prismRatOf(t, endpointOnly), prismRatOf(t, endpointOnly))
 
 			// The three evaluations every row is judged at: the walk this
@@ -1451,8 +1451,8 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 				u, v float64
 				at   float64
 			}{
-				{"start", w.startU, w.startV, tc.seg.TStart},
-				{"end", w.endU, w.endV, tc.seg.TEnd},
+				{"start", w.StartU, w.StartV, tc.seg.TStart},
+				{"end", w.EndU, w.EndV, tc.seg.TEnd},
 			} {
 				fused := prismLerpFused(tc.seg.Start, tc.seg.End, end.at)
 				split := prismLerpSplit(tc.seg.Start, tc.seg.End, end.at)
@@ -1553,7 +1553,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 	for _, seg := range []CircleSeg{circle(0, math.Nextafter(1, 0)), circle(math.Nextafter(0, 1), 1)} {
 		w, err := walkOf(seg, nil)
 		require.NoError(t, err)
-		require.True(t, w.closed,
+		require.True(t, w.Closed,
 			"fixture [%v, %v] must be one circularWalk's own tolerance calls closed", seg.TStart, seg.TEnd)
 	}
 

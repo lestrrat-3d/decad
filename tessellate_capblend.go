@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -53,7 +55,7 @@ import (
 type capBlendLoopMesh struct {
 	li    int
 	loop  LoopRecord
-	walks []sideWalk
+	walks []survey2d.SideWalk
 	// joins is the per-corner offset join capOffsetJoins resolves, nil for an
 	// unchamfered loop and for the one cornerless closed circle (whole).
 	joins          []cornerJoin
@@ -171,12 +173,12 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", lm.li, w.segs[0]))
+			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", lm.li, w.Segs[0]))
 			if err != nil {
 				return nil, err
 			}
 			bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.segmentWalk, lm.count[i], height))
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, walkWallSlack(w.SegmentWalk, lm.count[i], height))
 			for k := range lm.count[i] {
 				g0 := lm.sideStart[i] + k
 				g1 := lm.sideStart[i] + k + 1
@@ -365,10 +367,10 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 		return nil
 	}
 	n := len(lm.walks)
-	offset := func(w sideWalk) *big.Rat { return capWallRadiusOffset(w, cbp.d) }
+	offset := func(w survey2d.SideWalk) *big.Rat { return capWallRadiusOffset(w, cbp.d) }
 	if lm.whole {
 		w := lm.walks[0]
-		seg := lm.loop.Segments[w.segs[0]]
+		seg := lm.loop.Segments[w.Segs[0]]
 		off := offset(w)
 		for k := range lm.count[0] {
 			if err := budget.Step(); err != nil {
@@ -399,9 +401,9 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 			return err
 		}
 		base := lm.capWallStart[i]
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			prev := lm.walks[(i+n-1)%n]
-			if !prev.isCircular() {
+			if !prev.IsCircular() {
 				lm.capMotion[base] = miter
 				continue
 			}
@@ -409,12 +411,12 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 			// on its exact offset circle.
 			p := lm.capPts[base]
 			prevIdx := (i + n - 1) % n
-			prevSeg := lm.loop.Segments[prev.segs[0]]
+			prevSeg := lm.loop.Segments[prev.Segs[0]]
 			cnt := lm.count[prevIdx]
 			lm.capMotion[base] = proofbound.WalkEndBoundAllow(capOffsetStationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
 			continue
 		}
-		seg := lm.loop.Segments[w.segs[0]]
+		seg := lm.loop.Segments[w.Segs[0]]
 		off := offset(w)
 		for k := range lm.count[i] {
 			if err := budget.Step(); err != nil {
@@ -449,16 +451,16 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 		hTrimUpper := proofbound.AbsSumUpper(math.Abs(trim.Value), trim.Bound)
 		sideSegs, bandSegs := 0.0, 0.0
 		for i, w := range lm.walks {
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				continue
 			}
-			sideSegs = proofbound.AbsSumUpper(sideSegs, walkSegmentArea(w.segmentWalk, lm.count[i]))
+			sideSegs = proofbound.AbsSumUpper(sideSegs, walkSegmentArea(w.SegmentWalk, lm.count[i]))
 			if !lm.chamfered {
 				continue
 			}
-			bandSegs = proofbound.AbsSumUpper(bandSegs, walkSegmentArea(segmentWalk{
-				kind: walkCircular, radius: math.Max(w.radius, lm.capRadius[i]),
-				th0: w.th0, th1: w.th1, closed: w.closed,
+			bandSegs = proofbound.AbsSumUpper(bandSegs, walkSegmentArea(survey2d.SegmentWalk{
+				Kind: survey2d.WalkCircular, Radius: math.Max(w.Radius, lm.capRadius[i]),
+				Th0: w.Th0, Th1: w.Th1, Closed: w.Closed,
 			}, lm.count[i]))
 		}
 		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(hTrimUpper, sideSegs))
@@ -496,7 +498,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		li:      li,
 		loop:    loop,
 		walks:   walks,
-		whole:   n == 1 && walks[0].closed,
+		whole:   n == 1 && walks[0].Closed,
 		onStart: cbp.startLoops[li],
 		onEnd:   cbp.endLoops[li],
 	}
@@ -529,9 +531,9 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		if err := budget.Step(); err != nil {
 			return capBlendLoopMesh{}, err
 		}
-		if !w.isCircular() {
-			if !w.isLine() {
-				return capBlendLoopMesh{}, fmt.Errorf(`%w: chording a cap-loop chamfer does not support walk kind %d`, ErrUnsupported, w.kind)
+		if !w.IsCircular() {
+			if !w.IsLine() {
+				return capBlendLoopMesh{}, fmt.Errorf(`%w: chording a cap-loop chamfer does not support walk kind %d`, ErrUnsupported, w.Kind)
 			}
 			lm.count[i] = 1
 			continue
@@ -540,7 +542,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		// case — so it takes chordWalkMin's own minimum rather than a fixed
 		// one: three chords for a whole circle, which is what keeps its
 		// polygon bounded, and one otherwise.
-		nSide, _, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
+		nSide, _, err := chordCount(w.SegmentWalk, chord, chordWalkMin(w.SegmentWalk))
 		if err != nil {
 			return capBlendLoopMesh{}, err
 		}
@@ -551,12 +553,12 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 				return capBlendLoopMesh{}, err
 			}
 			lm.capRadius[i] = r
-			lm.capTh0[i], lm.capTh1[i] = w.th0, w.th1
+			lm.capTh0[i], lm.capTh1[i] = w.Th0, w.Th1
 			if !lm.whole {
 				start, end := capWallFoot(lm.joins, i, n)
-				lm.capTh0[i], lm.capTh1[i], _ = capWallSweep(w.cU, w.cV, start, end, w.th1-w.th0)
+				lm.capTh0[i], lm.capTh1[i], _ = capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 			}
-			capWalk := segmentWalk{kind: walkCircular, radius: r, th0: lm.capTh0[i], th1: lm.capTh1[i], closed: w.closed}
+			capWalk := survey2d.SegmentWalk{Kind: survey2d.WalkCircular, Radius: r, Th0: lm.capTh0[i], Th1: lm.capTh1[i], Closed: w.Closed}
 			// capWalk carries the wall walk's own closed bit, so its minimum
 			// is the wall's: a whole closed wall's cap contour is a whole
 			// closed circle too. Both counts are read at their own minimum
@@ -569,7 +571,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 			count = max(nSide, nCap)
 		}
 		lm.count[i] = count
-		lm.sideSag[i] = chordSagitta(w.radius, math.Abs(w.th1-w.th0), count)
+		lm.sideSag[i] = chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), count)
 		if lm.chamfered {
 			lm.capSag[i] = chordSagitta(lm.capRadius[i], math.Abs(lm.capTh1[i]-lm.capTh0[i]), count)
 		}
@@ -610,7 +612,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		// it is never a whole closed curve and never reaches the three-chord
 		// minimum a closed walk needs. Its sweep is the corner's own reflex
 		// turn, which is strictly less than a full turn by construction.
-		connector := segmentWalk{kind: walkCircular, radius: cbp.d, th0: th0, th1: th1}
+		connector := survey2d.SegmentWalk{Kind: survey2d.WalkCircular, Radius: cbp.d, Th0: th0, Th1: th1}
 		cnt, _, err := chordCount(connector, chord, 1)
 		if err != nil {
 			return capBlendLoopMesh{}, err
@@ -635,23 +637,23 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 	lm.sideStart = make([]int, n)
 	for i, w := range lm.walks {
 		lm.sideStart[i] = len(lm.sidePts)
-		if !w.isCircular() {
-			lm.sidePts = append(lm.sidePts, Point2{U: w.startU, V: w.startV})
-			lm.sideBound = append(lm.sideBound, w.startBound)
+		if !w.IsCircular() {
+			lm.sidePts = append(lm.sidePts, Point2{U: w.StartU, V: w.StartV})
+			lm.sideBound = append(lm.sideBound, w.StartBound)
 			continue
 		}
-		seg := lm.loop.Segments[w.segs[0]]
+		seg := lm.loop.Segments[w.Segs[0]]
 		count := lm.count[i]
-		dth := (w.th1 - w.th0) / float64(count)
+		dth := (w.Th1 - w.Th0) / float64(count)
 		for k := range count {
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			p := Point2{U: w.startU, V: w.startV}
-			bound := w.startBound
+			p := Point2{U: w.StartU, V: w.StartV}
+			bound := w.StartBound
 			if k > 0 {
-				th := w.th0 + float64(k)*dth
-				p = Point2{U: w.cU + w.radius*math.Cos(th), V: w.cV + w.radius*math.Sin(th)}
+				th := w.Th0 + float64(k)*dth
+				p = Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
 				bound = chordStationBound(seg, k, count, p.U, p.V)
 			}
 			lm.sidePts = append(lm.sidePts, p)
@@ -681,8 +683,8 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 				return err
 			}
 			th := lm.capTh0[0] + float64(k)*dth
-			p := Point2{U: w.cU + lm.capRadius[0]*math.Cos(th), V: w.cV + lm.capRadius[0]*math.Sin(th)}
-			addCap(p, capStationBound(w.cU, w.cV, lm.capRadius[0], th, p.U, p.V))
+			p := Point2{U: w.CU + lm.capRadius[0]*math.Cos(th), V: w.CV + lm.capRadius[0]*math.Sin(th)}
+			addCap(p, capStationBound(w.CU, w.CV, lm.capRadius[0], th, p.U, p.V))
 		}
 		return nil
 	}
@@ -690,7 +692,7 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 	for i, w := range lm.walks {
 		lm.capWallStart[i] = len(lm.capPts)
 		start, _ := capWallFoot(lm.joins, i, n)
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			// A straight wall's cap directrix is the offset SEGMENT between two
 			// corner feet, so it holds one station and chords nothing. The foot
 			// itself is the point the offset denotes, within the band's own
@@ -704,14 +706,14 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 					return err
 				}
 				th := lm.capTh0[i] + float64(k)*dth
-				p := Point2{U: w.cU + lm.capRadius[i]*math.Cos(th), V: w.cV + lm.capRadius[i]*math.Sin(th)}
+				p := Point2{U: w.CU + lm.capRadius[i]*math.Cos(th), V: w.CV + lm.capRadius[i]*math.Sin(th)}
 				if k == 0 {
 					// Station 0 is the corner foot VERBATIM, so the wall patch and
 					// the piece before it close on one vertex. Its own gap from the
 					// station it stands for is measured, never assumed zero.
 					p = start
 				}
-				addCap(p, capStationBound(w.cU, w.cV, lm.capRadius[i], th, p.U, p.V))
+				addCap(p, capStationBound(w.CU, w.CV, lm.capRadius[i], th, p.U, p.V))
 			}
 		}
 		ni := (i + 1) % n
@@ -740,7 +742,7 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 // capStationBound is the certified plane-local gap between a cap-contour sample
 // the build HOLDS and the point that sample's own station denotes on the held
 // offset circle: centre plus radius times the sine and cosine of one exact
-// float angle, each enclosed through normal_bound.go's radSinCosInterval.
+// float angle, each enclosed through normal_bound.go's survey2d.RadSinCosInterval.
 //
 // It is chordStationBound's cap-level twin, and it answers a different question
 // only because the curve is different: a cap contour is a curve this evaluator
@@ -759,7 +761,7 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.Wal
 	if rt == nil || rr == nil || ru == nil || rv == nil {
 		return underivable
 	}
-	sin, cos, ok := radSinCosInterval(rt)
+	sin, cos, ok := survey2d.RadSinCosInterval(rt)
 	if !ok {
 		return underivable
 	}
@@ -785,10 +787,10 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.Wal
 // every G1 join (modify §7), whose foot is v + s·d·n̂ — and it is the SAME number at either cap, since the two differ only in the
 // sign of an axial span both readings take the magnitude of. A sub-range whose
 // speed cannot be enclosed answers +Inf, which refuses.
-func capBlendCornerLocusGap(budget *proofbound.WorkBudget, cbp capBlendPayload, walks []sideWalk, i int, j cornerJoin) (float64, error) {
+func capBlendCornerLocusGap(budget *proofbound.WorkBudget, cbp capBlendPayload, walks []survey2d.SideWalk, i int, j cornerJoin) (float64, error) {
 	n := len(walks)
 	prev, cur := walks[(i+n-1)%n], walks[i]
-	if j.g1 || (!prev.isCircular() && !cur.isCircular()) {
+	if j.g1 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return 0, nil
 	}
 	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, cbp.d, cbp.d)
@@ -908,7 +910,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 		if err != nil {
 			return err
 		}
-		if g.circular != w.isCircular() {
+		if g.circular != w.IsCircular() {
 			return fmt.Errorf(`%w: patch %d of the chamfer band on loop %d does not state the geometry of the wall it descends from`, ErrDegenerate, next+i, lm.li)
 		}
 		count := lm.count[i]
@@ -951,13 +953,13 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 		if lm.joins != nil {
 			locus = math.Max(lm.locusGap[i], lm.locusGap[(i+1)%n])
 		}
-		if w.isCircular() {
+		if w.IsCircular() {
 			sagitta = math.Max(lm.sideSag[i], lm.capSag[i])
 			inside := 1.0
-			if w.th1 < w.th0 {
+			if w.Th1 < w.Th0 {
 				inside = -1
 			}
-			radiusRound = proofarith.AddRoundError(w.radius, -inside*cbp.d, lm.capRadius[i])
+			radiusRound = proofarith.AddRoundError(w.Radius, -inside*cbp.d, lm.capRadius[i])
 		}
 		patchDelta := proofbound.AbsSumUpper(twist, sagitta, proofbound.ProductUpper(g.capRadius, skew), locus, radiusRound)
 		bump(face, proofbound.AbsSumUpper(patchDelta, delta, levelDelta, axial))
@@ -1111,16 +1113,16 @@ func capBlendRingSagitta(lm *capBlendLoopMesh, contour bool) float64 {
 func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) float64 {
 	total := 0.0
 	for i, w := range lm.walks {
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			continue
 		}
 		if !contour {
-			total = proofbound.AbsSumUpper(total, walkSegmentArea(w.segmentWalk, lm.count[i]))
+			total = proofbound.AbsSumUpper(total, walkSegmentArea(w.SegmentWalk, lm.count[i]))
 			continue
 		}
-		total = proofbound.AbsSumUpper(total, walkSegmentArea(segmentWalk{
-			kind: walkCircular, radius: lm.capRadius[i],
-			th0: lm.capTh0[i], th1: lm.capTh1[i], closed: w.closed,
+		total = proofbound.AbsSumUpper(total, walkSegmentArea(survey2d.SegmentWalk{
+			Kind: survey2d.WalkCircular, Radius: lm.capRadius[i],
+			Th0: lm.capTh0[i], Th1: lm.capTh1[i], Closed: w.Closed,
 		}, lm.count[i]))
 	}
 	if !contour {
@@ -1130,8 +1132,8 @@ func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) floa
 		if count == 0 {
 			continue
 		}
-		total = proofbound.AbsSumUpper(total, walkSegmentArea(segmentWalk{
-			kind: walkCircular, radius: d, th0: lm.arcTh0[i], th1: lm.arcTh1[i],
+		total = proofbound.AbsSumUpper(total, walkSegmentArea(survey2d.SegmentWalk{
+			Kind: survey2d.WalkCircular, Radius: d, Th0: lm.arcTh0[i], Th1: lm.arcTh1[i],
 		}, count))
 	}
 	return total

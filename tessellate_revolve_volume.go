@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -159,8 +161,8 @@ func revolveAngularHomotopyFactor(step proofbound.RatInterval) (*big.Rat, error)
 	total := new(big.Rat)
 	width := big.NewRat(1, n)
 	for i := range n {
-		piece := new(big.Rat).Add(ratMax(pAt[i], pAt[i+1]), bulgeP)
-		piece.Add(piece, new(big.Rat).Add(ratMax(qAt[i], qAt[i+1]), bulgeQ))
+		piece := new(big.Rat).Add(survey2d.RatMax(pAt[i], pAt[i+1]), bulgeP)
+		piece.Add(piece, new(big.Rat).Add(survey2d.RatMax(qAt[i], qAt[i+1]), bulgeQ))
 		total.Add(total, new(big.Rat).Mul(piece, width))
 	}
 	return total.Mul(total, big.NewRat(1, 2)), nil
@@ -191,8 +193,8 @@ func revolveAngularHomotopyFactor(step proofbound.RatInterval) (*big.Rat, error)
 func angularHomotopyBulges(d proofbound.RatInterval, n int64) (*big.Rat, *big.Rat) {
 	dh := new(big.Rat).Set(d.Hi)
 	sq := new(big.Rat).Mul(dh, dh)
-	sinB := ratMin(big.NewRat(1, 1), dh)
-	versB := ratMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
+	sinB := survey2d.RatMin(big.NewRat(1, 1), dh)
+	versB := survey2d.RatMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
 
 	p := new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), new(big.Rat).Add(
 		new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), sinB),
@@ -229,7 +231,7 @@ var errRevolveAngularHomotopy = fmt.Errorf(`%w: a revolve cell's angular homotop
 func revolveCellSweptVolume(lo, hi revMeridian, angular *big.Rat) *big.Rat {
 	third := big.NewRat(1, 3)
 	quad := proofbound.IntervalScale(proofbound.IntervalAdd(
-		proofbound.IntervalAdd(intervalSquare(lo.rhoIv), intervalSquare(hi.rhoIv)),
+		proofbound.IntervalAdd(survey2d.IntervalSquare(lo.rhoIv), survey2d.IntervalSquare(hi.rhoIv)),
 		proofbound.IntervalMul(lo.rhoIv, hi.rhoIv),
 	), third)
 	axial := intervalAbsUpper(proofbound.IntervalSub(hi.zIv, lo.zIv))
@@ -259,12 +261,12 @@ func revolveMeridianMoment(p *revolvePlan) float64 {
 	total := 0.0
 	for li, r := range p.resolved {
 		for k, w := range r.walks {
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				continue
 			}
-			area := chordSegmentArea(w.radius, math.Abs(w.th1-w.th0), p.counts[li][k])
+			area := chordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k])
 			rho := 0.0
-			for _, pt := range revolveWalkExtremes(w.segmentWalk) {
+			for _, pt := range revolveWalkExtremes(w.SegmentWalk) {
 				rho = math.Max(rho, pt[1])
 			}
 			total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(area, rho))

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -940,7 +942,7 @@ func wholeSegmentRange(tStart, tEnd float64) bool {
 // kind passes is the kind's own: a line passes lineWalkOperandUpper, because
 // lerp2's b−a cancels and leaves the walked endpoint no witness at all to the
 // carrier magnitude that rounding happened at; a circular walk passes
-// segmentWalk.coordUpper, whose |cu|+|cv|+r+r L1 form (circularWalk) already
+// survey2d.SegmentWalk.coordUpper, whose |cu|+|cv|+r+r L1 form (circularWalk) already
 // bounds the centre and radius its cos/sin arithmetic works on, so it IS the
 // source envelope for that kind rather than an answer standing in for one.
 //
@@ -961,7 +963,7 @@ func wholeSegmentRange(tStart, tEnd float64) bool {
 // walk's tolerance-decided closed-ness, so that this charge and
 // prismProfileHasTrimmedCircularSource's refusal answer one question the same
 // way.
-func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
+func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
 		return 0, err
@@ -983,7 +985,7 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 	default:
 		return 0, fmt.Errorf(`%w: a %T segment has no walk charge this evaluator states`, ErrUnsupported, seg)
 	}
-	return proofbound.WalkEndpointAllow(w.coordUpper), nil
+	return proofbound.WalkEndpointAllow(w.CoordUpper), nil
 }
 
 // lineWalkOperandUpper is the envelope proofbound.WalkEndpointAllow requires for a
@@ -1003,8 +1005,8 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 // A NaN coordinate propagates through math.Max, and an infinite one arrives as
 // +Inf, so an absent envelope reaches proofbound.WalkEndpointAllow as the non-finite it
 // is rather than as a small number.
-func lineWalkOperandUpper(s LineSeg, w segmentWalk) float64 {
-	upper := w.coordUpper
+func lineWalkOperandUpper(s LineSeg, w survey2d.SegmentWalk) float64 {
+	upper := w.CoordUpper
 	for _, c := range [...]float64{s.Start.U, s.Start.V, s.End.U, s.End.V} {
 		upper = math.Max(upper, math.Abs(c))
 	}
@@ -1134,35 +1136,35 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 				// already computes for its own lo/hi ordering, read once here
 				// for any circular kind, whole or arc alike, since w.th0/w.th1
 				// are populated either way.
-				authoredReversed := w.isCircular() && w.th1 < w.th0
+				authoredReversed := w.IsCircular() && w.Th1 < w.Th0
 				switch {
-				case w.isLine():
-					start := reexpressPt(Point2{U: w.startU, V: w.startV})
-					end := reexpressPt(Point2{U: w.endU, V: w.endV})
+				case w.IsLine():
+					start := reexpressPt(Point2{U: w.StartU, V: w.StartV})
+					end := reexpressPt(Point2{U: w.EndU, V: w.EndV})
 					key := entityKey{kind: 1, a: start, b: end}
 					if _, ok := entities[key]; !ok {
 						tag(s.CreateLine(point(start), point(end)), authoredReversed)
 						entities[key] = struct{}{}
 					}
-				case w.isCircular() && w.closed:
-					center := reexpressPt(Point2{U: w.cU, V: w.cV})
-					key := entityKey{kind: 2, a: center, radius: w.radius}
+				case w.IsCircular() && w.Closed:
+					center := reexpressPt(Point2{U: w.CU, V: w.CV})
+					key := entityKey{kind: 2, a: center, radius: w.Radius}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateCircle(point(center), w.radius), authoredReversed)
+						tag(s.CreateCircle(point(center), w.Radius), authoredReversed)
 						entities[key] = struct{}{}
 					}
-				case w.isCircular():
+				case w.IsCircular():
 					// sketch.CreateArc sweeps CCW from its second point to its
 					// third; the walk's own OWN direction may run either way, so
 					// the two candidate endpoints are passed in ascending-angle
 					// order — the physical set of points between th0 and th1 is
 					// the same set either way, since a walked arc never spans a
 					// full turn.
-					loU, loV, hiU, hiV := w.startU, w.startV, w.endU, w.endV
-					if w.th1 < w.th0 {
+					loU, loV, hiU, hiV := w.StartU, w.StartV, w.EndU, w.EndV
+					if w.Th1 < w.Th0 {
 						loU, loV, hiU, hiV = hiU, hiV, loU, loV
 					}
-					center := reexpressPt(Point2{U: w.cU, V: w.cV})
+					center := reexpressPt(Point2{U: w.CU, V: w.CV})
 					lo := reexpressPt(Point2{U: loU, V: loV})
 					hi := reexpressPt(Point2{U: hiU, V: hiV})
 					key := entityKey{kind: 3, a: center, b: lo, c: hi}

@@ -73,15 +73,15 @@ func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 	require.Equal(t, 8, n)
 	for i := range n {
 		prev, cur := outer.walks[(i+n-1)%n], outer.walks[i]
-		prevSeg := loops[0].Segments[prev.segs[len(prev.segs)-1]]
-		curSeg := loops[0].Segments[cur.segs[0]]
+		prevSeg := loops[0].Segments[prev.Segs[len(prev.Segs)-1]]
+		curSeg := loops[0].Segments[cur.Segs[0]]
 		require.True(t, capJoinIsG1(prevSeg, curSeg), `corner %d is an exactly tangent join`, i)
 	}
 
 	bore, err := oneLoopCornerLoop(budget, loops[1], newFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, bore.walks, 1)
-	require.True(t, bore.walks[0].closed, `the bore takes the whole-turn branch`)
+	require.True(t, bore.walks[0].Closed, `the bore takes the whole-turn branch`)
 }
 
 // TestCapBlendAdmissionRefusesAMiteredArc is the predicate's refusing case: a

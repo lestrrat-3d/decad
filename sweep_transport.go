@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -21,10 +23,10 @@ import (
 type sweepTransportFrame struct {
 	frame r3.Frame
 
-	originExact ivVec3
-	uExact      ivVec3
-	vExact      ivVec3
-	nExact      ivVec3
+	originExact survey2d.IvVec3
+	uExact      survey2d.IvVec3
+	vExact      survey2d.IvVec3
+	nExact      survey2d.IvVec3
 
 	originBound float64
 	uBound      float64
@@ -83,10 +85,10 @@ func transportSweepFramesContext(
 }
 
 func initialSweepTransportFrame(frame r3.Frame) (sweepTransportFrame, error) {
-	origin, okO := ivVec3Of(frame.Origin())
-	u, okU := ivVec3Of(frame.U())
-	v, okV := ivVec3Of(frame.V())
-	n, okN := ivVec3Of(frame.N())
+	origin, okO := survey2d.IvVec3Of(frame.Origin())
+	u, okU := survey2d.IvVec3Of(frame.U())
+	v, okV := survey2d.IvVec3Of(frame.V())
+	n, okN := survey2d.IvVec3Of(frame.N())
 	if !okO || !okU || !okV || !okN {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: the source sweep frame is not finite`, ErrUnsupported)
 	}
@@ -95,7 +97,7 @@ func initialSweepTransportFrame(frame r3.Frame) (sweepTransportFrame, error) {
 
 func transportSweepLine(current sweepTransportFrame, record pathSegmentRecord) (sweepTransportFrame, error) {
 	deltaExact := ivVec3Sub(mustIVVec3Of(record.end), mustIVVec3Of(record.start))
-	originExact := ivVec3Add(current.originExact, deltaExact)
+	originExact := survey2d.IvVec3Add(current.originExact, deltaExact)
 	if exact, ok := exactSweepTransportFrame(
 		originExact,
 		current.uExact,
@@ -142,18 +144,18 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified sine and cosine`, ErrUnsupported)
 	}
 
-	rotateDirection := func(vector ivVec3) ivVec3 {
+	rotateDirection := func(vector survey2d.IvVec3) survey2d.IvVec3 {
 		oneMinusCos := proofbound.IntervalSub(proofbound.PointInterval(big.NewRat(1, 1)), cos)
-		return ivVec3Add(
-			ivVec3Mul(vector, cos),
-			ivVec3Add(
-				ivVec3Mul(ivVec3Cross(axisExact, vector), sin),
-				ivVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, ivVec3Dot(axisExact, vector))),
+		return survey2d.IvVec3Add(
+			survey2d.IvVec3Mul(vector, cos),
+			survey2d.IvVec3Add(
+				survey2d.IvVec3Mul(ivVec3Cross(axisExact, vector), sin),
+				survey2d.IvVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, survey2d.IvVec3Dot(axisExact, vector))),
 			),
 		)
 	}
-	rotatePoint := func(point ivVec3) ivVec3 {
-		return ivVec3Add(centerExact, rotateDirection(ivVec3Sub(point, centerExact)))
+	rotatePoint := func(point survey2d.IvVec3) survey2d.IvVec3 {
+		return survey2d.IvVec3Add(centerExact, rotateDirection(ivVec3Sub(point, centerExact)))
 	}
 
 	originExact := rotatePoint(current.originExact)
@@ -196,7 +198,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 // any rounded coordinate or any normalization movement falls back to the
 // bounded general transport.
 func exactSweepTransportFrame(
-	originExact, uExact, vExact, nExact ivVec3,
+	originExact, uExact, vExact, nExact survey2d.IvVec3,
 ) (sweepTransportFrame, bool) {
 	origin, okO := exactSweepIVVec(originExact)
 	u, okU := exactSweepIVVec(uExact)
@@ -215,7 +217,7 @@ func exactSweepTransportFrame(
 	return out, true
 }
 
-func exactSweepIVVec(vector ivVec3) (r3.Vec, bool) {
+func exactSweepIVVec(vector survey2d.IvVec3) (r3.Vec, bool) {
 	components := [3]float64{}
 	for i, coordinate := range vector {
 		if coordinate.Lo.Cmp(coordinate.Hi) != 0 {
@@ -232,7 +234,7 @@ func exactSweepIVVec(vector ivVec3) (r3.Vec, bool) {
 
 func newSweepTransportFrame(
 	frame r3.Frame,
-	originExact, uExact, vExact, nExact ivVec3,
+	originExact, uExact, vExact, nExact survey2d.IvVec3,
 ) (sweepTransportFrame, error) {
 	originBound, okO := sweepIVVecError(originExact, frame.Origin())
 	uBound, okU := sweepIVVecError(uExact, frame.U())
@@ -256,7 +258,7 @@ func newSweepTransportFrame(
 	}, nil
 }
 
-func sweepIVVecError(exact ivVec3, held r3.Vec) (float64, bool) {
+func sweepIVVecError(exact survey2d.IvVec3, held r3.Vec) (float64, bool) {
 	ex := proofbound.IntervalFloatError(exact[0], held.X)
 	ey := proofbound.IntervalFloatError(exact[1], held.Y)
 	ez := proofbound.IntervalFloatError(exact[2], held.Z)
@@ -268,16 +270,16 @@ func sweepIVVecError(exact ivVec3, held r3.Vec) (float64, bool) {
 	return bound, !math.IsNaN(bound) && !math.IsInf(bound, 0)
 }
 
-func sweepRatIntervalVec(vector sweepRatVec) ivVec3 {
-	return ivVec3{
+func sweepRatIntervalVec(vector sweepRatVec) survey2d.IvVec3 {
+	return survey2d.IvVec3{
 		proofbound.PointInterval(vector[0]),
 		proofbound.PointInterval(vector[1]),
 		proofbound.PointInterval(vector[2]),
 	}
 }
 
-func mustIVVec3Of(vector r3.Vec) ivVec3 {
-	out, ok := ivVec3Of(vector)
+func mustIVVec3Of(vector r3.Vec) survey2d.IvVec3 {
+	out, ok := survey2d.IvVec3Of(vector)
 	if !ok {
 		panic("decad: a recorded Sweep path point must be finite")
 	}
@@ -291,7 +293,7 @@ func heldSweepRatVec(vector sweepRatVec) (r3.Vec, bool) {
 	return r3.NewVec(x, y, z), okX && okY && okZ
 }
 
-func heldSweepUnitVector(unit ivVec3) (r3.Vec, bool) {
+func heldSweepUnitVector(unit survey2d.IvVec3) (r3.Vec, bool) {
 	component := func(value proofbound.RatInterval) float64 {
 		midpoint := new(big.Rat).Add(value.Lo, value.Hi)
 		midpoint.Quo(midpoint, big.NewRat(2, 1))

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -70,7 +72,7 @@ func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
 	for _, p := range stations {
 		pts = append(pts, [2]float64{p.U, p.V})
 	}
-	pts = append(pts, [2]float64{w.endU, w.endV})
+	pts = append(pts, [2]float64{w.EndU, w.EndV})
 
 	sd := chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m), stationDelta)
 	require.False(t, proofbound.IsNonFinite(sd), "the shipped generator must state a chord bound at m=%d", m)
@@ -1070,13 +1072,13 @@ func wedgePinStations(t *testing.T) int {
 // walk, the certified sagitta off the record — so the pin is measured on the
 // pair a real build hands it, never on a hand-built walk with no record behind
 // it.
-func wedgeArcRecord(t *testing.T) (ArcSeg, segmentWalk) {
+func wedgeArcRecord(t *testing.T) (ArcSeg, survey2d.SegmentWalk) {
 	t.Helper()
 	seg := ArcSeg{Center: pt(0, 0), Start: pt(wedgeRadius, 0), End: pt(0, wedgeRadius), TStart: 0, TEnd: 1}
 	w, err := walkOf(seg, nil)
 	require.NoError(t, err)
-	require.Equal(t, wedgeRadius, w.radius, "the recorded arc must resolve to the fixture's own radius")
-	require.Equal(t, wedgeSweep, w.th1-w.th0, "the recorded arc must resolve to the fixture's own sweep")
+	require.Equal(t, wedgeRadius, w.Radius, "the recorded arc must resolve to the fixture's own radius")
+	require.Equal(t, wedgeSweep, w.Th1-w.Th0, "the recorded arc must resolve to the fixture's own sweep")
 	return seg, w
 }
 

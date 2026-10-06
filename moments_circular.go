@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -422,7 +424,7 @@ func axisComponentInterval(value, bound float64) (proofbound.RatInterval, bool) 
 	if v == nil || b == nil {
 		return proofbound.RatInterval{}, false
 	}
-	return intervalWiden(proofbound.PointInterval(v), b), true
+	return survey2d.IntervalWiden(proofbound.PointInterval(v), b), true
 }
 
 // circularAxisMomentInterval brackets one recorded circular segment's exact

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -50,7 +52,7 @@ func offsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, s, t fl
 }
 
 func offsetProfileBudget(budget *proofbound.WorkBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return ProfileRecord{}, err
 	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
@@ -59,7 +61,7 @@ func offsetProfileBudget(budget *proofbound.WorkBudget, profile ProfileRecord, s
 	}
 	out := make([]LoopRecord, len(loops))
 	for i, loop := range loops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return ProfileRecord{}, err
 		}
 		segs, err := offsetLoopBudget(budget, loop, s, t)
@@ -93,10 +95,10 @@ func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float
 	// Every circular walk's offset radius must stay positive; a non-positive one
 	// is a dropped segment (S11a), caught before any join is computed.
 	for _, w := range walks {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		if w.isCircular() {
+		if w.IsCircular() {
 			if _, ok := offsetRadius(w, s, t); !ok {
 				return nil, errOffsetDrop
 			}
@@ -104,13 +106,13 @@ func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float
 	}
 
 	// A single closed circle offsets to a concentric circle — no corners.
-	if n == 1 && walks[0].closed {
+	if n == 1 && walks[0].Closed {
 		w := walks[0]
 		rr, ok := offsetRadius(w, s, t)
 		if !ok {
 			return nil, errOffsetDrop
 		}
-		return []CurveSegment{circleSegConcentric(w.cU, w.cV, rr, w.th1 > w.th0)}, nil
+		return []CurveSegment{circleSegConcentric(w.CU, w.CV, rr, w.Th1 > w.Th0)}, nil
 	}
 
 	joins, err := offsetJoinsBudget(budget, walks, s, t)
@@ -122,7 +124,7 @@ func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float
 	// the arc that closes the following corner.
 	var segs []CurveSegment
 	for i := range n {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		w := walks[i]
@@ -165,18 +167,18 @@ func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float
 // end). It is the one place the corner rule of docs/modify-design.md §7 is
 // decided, so the offset build (offsetLoopBudget) and its displacement proof
 // (offsetSectionDelta) always read the same joins.
-func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []sideWalk, s, t float64) ([]cornerJoin, error) {
+func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t float64) ([]cornerJoin, error) {
 	n := len(walks)
 	joins := make([]cornerJoin, n)
 	for i := range n {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		prev := walks[(i+n-1)%n]
 		cur := walks[i]
-		vU, vV := cur.startU, cur.startV
-		aox, aoy, la := normalize2(prev.tanOutU, prev.tanOutV)
-		bix, biy, lb := normalize2(cur.tanInU, cur.tanInV)
+		vU, vV := cur.StartU, cur.StartV
+		aox, aoy, la := normalize2(prev.TanOutU, prev.TanOutV)
+		bix, biy, lb := normalize2(cur.TanInU, cur.TanInV)
 		if la == 0 || lb == 0 {
 			return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 		}
@@ -232,13 +234,13 @@ type cornerJoin struct {
 // outside (a CW walk — a hole wall, a concave round), inward; the signs move the
 // other way outward. ok is false when the radius reaches zero or goes negative —
 // the segment drops (S11a).
-func offsetRadius(w sideWalk, s, t float64) (float64, bool) {
+func offsetRadius(w survey2d.SideWalk, s, t float64) (float64, bool) {
 	inside := 1.0
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		inside = -1.0
 	}
-	rr := w.radius - s*inside*t
-	if rr <= shellTol*math.Max(1, w.radius) {
+	rr := w.Radius - s*inside*t
+	if rr <= shellTol*math.Max(1, w.Radius) {
 		return 0, false
 	}
 	return rr, true
@@ -248,27 +250,27 @@ func offsetRadius(w sideWalk, s, t float64) (float64, bool) {
 // offset line (a point on it plus the walk's unit tangent) or a concentric
 // circle. It reuses the fillet's offCurve so the closed-form intersectOffsets
 // serves both ops.
-func offsetCarrier(w sideWalk, s, t float64) offCurve {
-	if !w.isCircular() {
-		tx, ty, _ := normalize2(w.tanInU, w.tanInV)
-		return offCurve{isLine: true, px: w.startU + s*t*(-ty), py: w.startV + s*t*tx, dx: tx, dy: ty}
+func offsetCarrier(w survey2d.SideWalk, s, t float64) offCurve {
+	if !w.IsCircular() {
+		tx, ty, _ := normalize2(w.TanInU, w.TanInV)
+		return offCurve{isLine: true, px: w.StartU + s*t*(-ty), py: w.StartV + s*t*tx, dx: tx, dy: ty}
 	}
 	rr, _ := offsetRadius(w, s, t) // positivity already gated in offsetLoop
-	return offCurve{cx: w.cU, cy: w.cV, rr: rr}
+	return offCurve{cx: w.CU, cy: w.CV, rr: rr}
 }
 
 // offsetWalkSegment re-emits a walk's offset curve trimmed to (start, end): a
 // LineSeg for a straight walk, a concentric ArcSeg in the walk's own sense for a
 // circular one. start and end lie on the offset curve by construction, so the
 // emitted radius is the offset radius exactly.
-func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegment, error) {
-	if !w.isCircular() {
+func offsetWalkSegment(w survey2d.SideWalk, s, t float64, start, end Point2) (CurveSegment, error) {
+	if !w.IsCircular() {
 		return LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil
 	}
 	if _, ok := offsetRadius(w, s, t); !ok {
 		return nil, errOffsetDrop
 	}
-	return arcSegment(Point2{U: w.cU, V: w.cV}, start, end, w.th1 > w.th0), nil
+	return arcSegment(Point2{U: w.CU, V: w.CV}, start, end, w.Th1 > w.Th0), nil
 }
 
 // walkOffsetConsumed reports whether the offset dropped this walk (S11a): its
@@ -282,10 +284,10 @@ func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegmen
 // arc's overshoot past its own span is read as a length on the offset circle,
 // against shellTol scaled by the walk's coordinate magnitude, so the rounding
 // of feet held far from the origin never reads as a sweep past the span.
-func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
+func walkOffsetConsumed(w survey2d.SideWalk, start, end Point2) bool {
 	du, dv := end.U-start.U, end.V-start.V
-	if !w.isCircular() {
-		tx, ty, l := normalize2(w.tanInU, w.tanInV)
+	if !w.IsCircular() {
+		tx, ty, l := normalize2(w.TanInU, w.TanInV)
 		if l == 0 {
 			return false // no direction to compare against; left to other gates
 		}
@@ -295,10 +297,10 @@ func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
 	// An arc's offset must not sweep further than the arc it descends from: a
 	// consumed arc's trimmed feet swap sides, so its walk-sense sweep wraps the
 	// long way round, exceeding the original span.
-	a0 := math.Atan2(start.V-w.cV, start.U-w.cU)
-	a1 := math.Atan2(end.V-w.cV, end.U-w.cU)
+	a0 := math.Atan2(start.V-w.CV, start.U-w.CU)
+	a1 := math.Atan2(end.V-w.CV, end.U-w.CU)
 	span := a1 - a0
-	if w.th1 > w.th0 { // CCW walk
+	if w.Th1 > w.Th0 { // CCW walk
 		for span < 0 {
 			span += 2 * math.Pi
 		}
@@ -315,9 +317,9 @@ func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
 	// gate's reject side is untouched; only a G1-joined arc far from the origin,
 	// whose feet differ from its own endpoints' radials by ulp(coordinate)/radius,
 	// stops reading as consumed.
-	overshoot := span - math.Abs(w.th1-w.th0)
-	rr := math.Hypot(start.U-w.cU, start.V-w.cV)
-	return rr*overshoot > shellTol*math.Max(1, math.Abs(w.cU)+math.Abs(w.cV)+2*w.radius)
+	overshoot := span - math.Abs(w.Th1-w.Th0)
+	rr := math.Hypot(start.U-w.CU, start.V-w.CV)
+	return rr*overshoot > shellTol*math.Max(1, math.Abs(w.CU)+math.Abs(w.CV)+2*w.Radius)
 }
 
 // circleSegConcentric records a full-circle walk as a CircleSeg of radius rr in
@@ -338,7 +340,7 @@ func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
 }
 
 func reverseLoopRecordBudget(budget *proofbound.WorkBudget, l LoopRecord) (LoopRecord, error) {
-	return reverseLoopRecordWithPoll(func() error { return wallBudgetStep(budget) }, l)
+	return reverseLoopRecordWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, l)
 }
 
 func reverseLoopRecordContext(ctx context.Context, l LoopRecord) (LoopRecord, error) {
@@ -351,7 +353,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 	// counter for the loop it hands over.
 	work := newFreeformWork()
 	n := len(l.Segments)
-	walks := make([]segmentWalk, n)
+	walks := make([]survey2d.SegmentWalk, n)
 	for i, seg := range l.Segments {
 		if poll != nil {
 			if err := poll(); err != nil {
@@ -376,12 +378,12 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 		}
 		w := walks[i]
 		switch {
-		case w.closed:
-			segs = append(segs, circleSegConcentric(w.cU, w.cV, w.radius, !(w.th1 > w.th0)))
-		case w.isCircular():
-			segs = append(segs, arcSegment(Point2{U: w.cU, V: w.cV}, Point2{U: w.endU, V: w.endV}, Point2{U: w.startU, V: w.startV}, !(w.th1 > w.th0)))
+		case w.Closed:
+			segs = append(segs, circleSegConcentric(w.CU, w.CV, w.Radius, !(w.Th1 > w.Th0)))
+		case w.IsCircular():
+			segs = append(segs, arcSegment(Point2{U: w.CU, V: w.CV}, Point2{U: w.EndU, V: w.EndV}, Point2{U: w.StartU, V: w.StartV}, !(w.Th1 > w.Th0)))
 		default:
-			segs = append(segs, LineSeg{Start: Point2{U: w.endU, V: w.endV}, End: Point2{U: w.startU, V: w.startV}, TStart: 0, TEnd: 1})
+			segs = append(segs, LineSeg{Start: Point2{U: w.EndU, V: w.EndV}, End: Point2{U: w.StartU, V: w.StartV}, TStart: 0, TEnd: 1})
 		}
 	}
 	return LoopRecord{Segments: segs}, nil
@@ -443,7 +445,7 @@ var errOffsetUnbounded = fmt.Errorf(`%w: this evaluator cannot prove how far the
 // denoted boundary, and every denoted point within it of the record, which is
 // the reading prismPayload.sectionDelta states for a whole section.
 func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s, t, tDelta float64) (float64, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, err
 	}
 	rt, rd := proofarith.FloatRat(t), proofarith.FloatRat(tDelta)
@@ -462,7 +464,7 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s,
 	}
 	reach := 0.0
 	for _, loop := range loops {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, err
 		}
 		r, err := offsetLoopReach(budget, loop.walks, s, t, amount)
@@ -480,12 +482,12 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s,
 
 // offsetLoopReach is the largest reach of one loop's recorded offset points
 // from their enclosures (offsetSectionDelta).
-func offsetLoopReach(budget *proofbound.WorkBudget, walks []sideWalk, s, t float64, amount proofbound.RatInterval) (float64, error) {
+func offsetLoopReach(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t float64, amount proofbound.RatInterval) (float64, error) {
 	n := len(walks)
 	if n == 0 {
 		return 0, fmt.Errorf(`%w: an offset loop holds no walks`, ErrDegenerate)
 	}
-	if n == 1 && walks[0].closed {
+	if n == 1 && walks[0].Closed {
 		// A concentric circle: every recorded point sits at the held radius
 		// about the exact centre, so the radial gap is the whole displacement.
 		w := walks[0]
@@ -512,7 +514,7 @@ func offsetLoopReach(budget *proofbound.WorkBudget, walks []sideWalk, s, t float
 		// A recorded arc's end is pinned to its record and may sit off the
 		// circle its start fixes; that radial gap moves the denoted foot off
 		// the denoted carrier, so it joins the reach the arc argument reads.
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			continue
 		}
 		gap, ok := circularWalkEndGap(w)
@@ -522,12 +524,12 @@ func offsetLoopReach(budget *proofbound.WorkBudget, walks []sideWalk, s, t float
 		reach = math.Max(reach, gap)
 	}
 	for i, j := range joins {
-		if err := wallBudgetStep(budget); err != nil {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, err
 		}
 		prev, cur := walks[(i+n-1)%n], walks[i]
-		end, okE := walkPointEnclosure(prev.endU, prev.endV, prev.endBound)
-		start, okS := walkPointEnclosure(cur.startU, cur.startV, cur.startBound)
+		end, okE := walkPointEnclosure(prev.EndU, prev.EndV, prev.EndBound)
+		start, okS := walkPointEnclosure(cur.StartU, cur.StartV, cur.StartBound)
 		if !okE || !okS {
 			return 0, errOffsetUnbounded
 		}
@@ -582,29 +584,29 @@ func walkPointEnclosure(u, v float64, bound proofbound.WalkEndBound) (ivPoint, b
 
 // ivUnitOf encloses the unit vector of every vector its argument encloses.
 func ivUnitOf(p ivPoint) (ivPoint, bool) {
-	l, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(p.u), intervalSquare(p.v)))
+	l, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(p.u), survey2d.IntervalSquare(p.v)))
 	if !ok || l.Lo.Sign() <= 0 {
 		return ivPoint{}, false
 	}
-	u, okU := intervalQuo(p.u, l)
-	v, okV := intervalQuo(p.v, l)
+	u, okU := survey2d.IntervalQuo(p.u, l)
+	v, okV := survey2d.IntervalQuo(p.v, l)
 	return ivPoint{u: u, v: v}, okU && okV
 }
 
 // walkTangentEnclosure encloses a walk's unit travel tangent at one end: a
 // line's chord direction, or a circle's radius at that end turned a quarter in
 // the walk's sense.
-func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
-	start, okS := walkPointEnclosure(w.startU, w.startV, w.startBound)
-	end, okE := walkPointEnclosure(w.endU, w.endV, w.endBound)
+func walkTangentEnclosure(w survey2d.SideWalk, atEnd bool) (ivPoint, bool) {
+	start, okS := walkPointEnclosure(w.StartU, w.StartV, w.StartBound)
+	end, okE := walkPointEnclosure(w.EndU, w.EndV, w.EndBound)
 	if !okS || !okE {
 		return ivPoint{}, false
 	}
 	switch {
-	case w.isLine():
+	case w.IsLine():
 		return ivUnitOf(ivPoint{u: proofbound.IntervalSub(end.u, start.u), v: proofbound.IntervalSub(end.v, start.v)})
-	case w.isCircular():
-		c, ok := ivExactPoint(w.cU, w.cV)
+	case w.IsCircular():
+		c, ok := ivExactPoint(w.CU, w.CV)
 		if !ok {
 			return ivPoint{}, false
 		}
@@ -613,7 +615,7 @@ func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
 			p = end
 		}
 		ru, rv := proofbound.IntervalSub(p.u, c.u), proofbound.IntervalSub(p.v, c.v)
-		if w.th1 > w.th0 {
+		if w.Th1 > w.Th0 {
 			return ivUnitOf(ivPoint{u: proofbound.IntervalNeg(rv), v: ru})
 		}
 		return ivUnitOf(ivPoint{u: rv, v: proofbound.IntervalNeg(ru)})
@@ -624,7 +626,7 @@ func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
 
 // offsetFootEnclosure encloses corner + amount·n̂, n̂ the walk's left unit
 // normal at that end — the point the float build spells v + s·t·(−ty, tx).
-func offsetFootEnclosure(corner ivPoint, w sideWalk, atEnd bool, amount proofbound.RatInterval) (ivPoint, bool) {
+func offsetFootEnclosure(corner ivPoint, w survey2d.SideWalk, atEnd bool, amount proofbound.RatInterval) (ivPoint, bool) {
 	tan, ok := walkTangentEnclosure(w, atEnd)
 	if !ok {
 		return ivPoint{}, false
@@ -638,16 +640,16 @@ func offsetFootEnclosure(corner ivPoint, w sideWalk, atEnd bool, amount proofbou
 // offsetCarrierEnclosure encloses a walk's offset carrier over every signed
 // offset in amount: the line through the start moved along the left normal,
 // or the concentric circle (offsetCarrier's two shapes).
-func offsetCarrierEnclosure(w sideWalk, amount proofbound.RatInterval) (ivCarrier, bool) {
-	if w.isCircular() {
+func offsetCarrierEnclosure(w survey2d.SideWalk, amount proofbound.RatInterval) (ivCarrier, bool) {
+	if w.IsCircular() {
 		r, ok := offsetCircleRadius(w, amount)
-		c, okC := ivExactPoint(w.cU, w.cV)
+		c, okC := ivExactPoint(w.CU, w.CV)
 		return ivCarrier{c: c, r: r}, ok && okC
 	}
-	if !w.isLine() {
+	if !w.IsLine() {
 		return ivCarrier{}, false
 	}
-	start, okS := walkPointEnclosure(w.startU, w.startV, w.startBound)
+	start, okS := walkPointEnclosure(w.StartU, w.StartV, w.StartBound)
 	dir, okD := walkTangentEnclosure(w, false)
 	if !okS || !okD {
 		return ivCarrier{}, false
@@ -661,13 +663,13 @@ func offsetCarrierEnclosure(w sideWalk, amount proofbound.RatInterval) (ivCarrie
 
 // offsetCircleRadius encloses offsetRadius's R − insideSign·(s·t) over every
 // signed offset in amount, R the walk's radius widened by its own bracket.
-func offsetCircleRadius(w sideWalk, amount proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	rr, rb := proofarith.FloatRat(w.radius), proofarith.FloatRat(w.radiusBound)
+func offsetCircleRadius(w survey2d.SideWalk, amount proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	rr, rb := proofarith.FloatRat(w.Radius), proofarith.FloatRat(w.RadiusBound)
 	if rr == nil || rb == nil || rb.Sign() < 0 {
 		return proofbound.RatInterval{}, false
 	}
 	inside := big.NewRat(1, 1)
-	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
 		inside = big.NewRat(-1, 1)
 	}
 	base := proofbound.Interval(new(big.Rat).Sub(rr, rb), new(big.Rat).Add(rr, rb))
@@ -680,8 +682,8 @@ func offsetCircleRadius(w sideWalk, amount proofbound.RatInterval) (proofbound.R
 
 // circularWalkEndGap bounds how far either end of a circular walk sits off
 // the circle its walk radius brackets, measured radially.
-func circularWalkEndGap(w sideWalk) (float64, bool) {
-	c, okC := ivExactPoint(w.cU, w.cV)
+func circularWalkEndGap(w survey2d.SideWalk) (float64, bool) {
+	c, okC := ivExactPoint(w.CU, w.CV)
 	r, okR := offsetCircleRadius(w, proofbound.PointInterval(new(big.Rat)))
 	if !okC || !okR {
 		return 0, false
@@ -692,7 +694,7 @@ func circularWalkEndGap(w sideWalk) (float64, bool) {
 		if !ok {
 			return false
 		}
-		d, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(proofbound.IntervalSub(p.u, c.u)), intervalSquare(proofbound.IntervalSub(p.v, c.v))))
+		d, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.IntervalSub(p.u, c.u)), survey2d.IntervalSquare(proofbound.IntervalSub(p.v, c.v))))
 		if !ok {
 			return false
 		}
@@ -703,7 +705,7 @@ func circularWalkEndGap(w sideWalk) (float64, bool) {
 		}
 		return true
 	}
-	if !reach(w.startU, w.startV, w.startBound) || !reach(w.endU, w.endV, w.endBound) {
+	if !reach(w.StartU, w.StartV, w.StartBound) || !reach(w.EndU, w.EndV, w.EndBound) {
 		return 0, false
 	}
 	return proofbound.RatFloatUp(gap), true

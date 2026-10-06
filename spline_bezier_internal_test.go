@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -18,7 +20,7 @@ import (
 // agreement to machine precision. Any indexing, knot or basis mistake shows up
 // here rather than as a quietly wrong area.
 
-func evalSpans(t *testing.T, spans []bezierSpan, at float64) (float64, float64) {
+func evalSpans(t *testing.T, spans []survey2d.BezierSpan, at float64) (float64, float64) {
 	t.Helper()
 	require.NotEmpty(t, spans)
 	// Spans partition [0, 1] evenly in the converted parameter.
@@ -34,8 +36,8 @@ func evalSpans(t *testing.T, spans []bezierSpan, at float64) (float64, float64) 
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {
-		us[i] = new(big.Rat).Set(point.u)
-		vs[i] = new(big.Rat).Set(point.v)
+		us[i] = new(big.Rat).Set(point.U)
+		vs[i] = new(big.Rat).Set(point.V)
 	}
 	tr := new(big.Rat).SetFloat64(local)
 	oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), tr)
@@ -59,16 +61,16 @@ type floatBezierSpan [][2]float64
 
 type floatBezierSpans []floatBezierSpan
 
-func floatBezierSpanOf(span bezierSpan) floatBezierSpan {
+func floatBezierSpanOf(span survey2d.BezierSpan) floatBezierSpan {
 	got := make(floatBezierSpan, len(span))
 	for i, point := range span {
-		got[i][0], _ = point.u.Float64()
-		got[i][1], _ = point.v.Float64()
+		got[i][0], _ = point.U.Float64()
+		got[i][1], _ = point.V.Float64()
 	}
 	return got
 }
 
-func floatBezierSpansOf(spans []bezierSpan) floatBezierSpans {
+func floatBezierSpansOf(spans []survey2d.BezierSpan) floatBezierSpans {
 	got := make(floatBezierSpans, len(spans))
 	for i, span := range spans {
 		got[i] = floatBezierSpanOf(span)
@@ -128,12 +130,12 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 
 // evalSpanExact is de Casteljau over exact rationals on ONE span, at a rational
 // local parameter. It rounds nothing, so its result is comparable by Cmp.
-func evalSpanExact(span bezierSpan, at *big.Rat) (*big.Rat, *big.Rat) {
+func evalSpanExact(span survey2d.BezierSpan, at *big.Rat) (*big.Rat, *big.Rat) {
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {
-		us[i] = new(big.Rat).Set(point.u)
-		vs[i] = new(big.Rat).Set(point.v)
+		us[i] = new(big.Rat).Set(point.U)
+		vs[i] = new(big.Rat).Set(point.V)
 	}
 	oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), at)
 	for round := len(span) - 1; round > 0; round-- {

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -238,7 +240,7 @@ func sweepArcAngle(r0, r1, axis sweepRatVec) (float64, angleDenotation, error) {
 		}
 		return math.Pi, angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 2)}, nil
 	}
-	sinMagnitude, ok := intervalSqrt(proofbound.PointInterval(crossSquared))
+	sinMagnitude, ok := survey2d.IntervalSqrt(proofbound.PointInterval(crossSquared))
 	if !ok || sinMagnitude.Lo.Sign() <= 0 {
 		return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc angle has no finite enclosure`, ErrUnsupported)
 	}

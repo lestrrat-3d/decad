@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -121,13 +123,13 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos proofbound.RatInterva
 	case d.span != nil:
 		return radSinCosSpan(*d.span)
 	case d.valid() && d.turn.Sign() == 0:
-		// Pure radian, the exact angle zero included: radSinCosInterval
+		// Pure radian, the exact angle zero included: survey2d.RadSinCosInterval
 		// already answers sin=0, cos=1 exactly at zero, with no series
 		// margin — the fast path a zero-turn end must take, since
 		// proofbound.TurnSinCosInterval's own series carries a fixed per-call margin
 		// even at t=0 and would turn an exact zero into a straddling
 		// interval no tighter than any other angle.
-		sin, cos, ok = radSinCosInterval(d.rad)
+		sin, cos, ok = survey2d.RadSinCosInterval(d.rad)
 		return sin, cos, ok
 	case d.valid() && d.rad.Sign() == 0:
 		// quarterTurnSinCos (moments_circular.go) is zero-width at every
@@ -142,7 +144,7 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos proofbound.RatInterva
 		if r == nil {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		sin, cos, ok = radSinCosInterval(r)
+		sin, cos, ok = survey2d.RadSinCosInterval(r)
 		return sin, cos, ok
 	}
 }

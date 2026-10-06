@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -453,8 +455,8 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	for axis := range 3 {
 		lo[axis], hi[axis] = spans.hull(axis)
 		shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
-		lo[axis] = new(big.Rat).Sub(lo[axis], ratMax(shift, new(big.Rat)))
-		hi[axis] = new(big.Rat).Sub(hi[axis], ratMin(shift, new(big.Rat)))
+		lo[axis] = new(big.Rat).Sub(lo[axis], survey2d.RatMax(shift, new(big.Rat)))
+		hi[axis] = new(big.Rat).Sub(hi[axis], survey2d.RatMin(shift, new(big.Rat)))
 	}
 	solid := pair.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
 	return pair.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
@@ -930,7 +932,7 @@ func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func(
 		var lo, hi [2]*big.Rat
 		for slot, axis := range [2]int{i, j} {
 			shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
-			shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
+			shiftLo, shiftHi := survey2d.RatMin(shift, new(big.Rat)), survey2d.RatMax(shift, new(big.Rat))
 			span := spans.span(index, axis)
 			lo[slot] = proofbound.RatAdd(span.Lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
 			hi[slot] = proofbound.RatAdd(span.Hi, new(big.Rat).Neg(shiftLo), depth)
@@ -978,7 +980,7 @@ func planarPointInTriangle(p [2]*big.Rat, tri [3][2]*big.Rat) bool {
 // axis-aligned box: the two box axes and the segment's normal.
 func planarSegmentMeetsBox(a, b, lo, hi [2]*big.Rat) bool {
 	for axis := range 2 {
-		if ratMax(a[axis], b[axis]).Cmp(lo[axis]) < 0 || ratMin(a[axis], b[axis]).Cmp(hi[axis]) > 0 {
+		if survey2d.RatMax(a[axis], b[axis]).Cmp(lo[axis]) < 0 || survey2d.RatMin(a[axis], b[axis]).Cmp(hi[axis]) > 0 {
 			return false
 		}
 	}

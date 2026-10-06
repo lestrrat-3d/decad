@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -713,7 +715,7 @@ func (k *pairKernel) coplanarRelation(budget *proofbound.WorkBudget, f, g *cFace
 	if err := budget.Err(); err != nil {
 		return 0, [2]float64{}, err
 	}
-	ge := make([]surveyElem, 0, len(g.region.elems))
+	ge := make([]survey2d.SurveyElem, 0, len(g.region.elems))
 	for _, e := range g.region.elems {
 		if err := budget.Step(); err != nil {
 			return 0, [2]float64{}, err
@@ -840,52 +842,52 @@ func regionSampleOutsideBudget(budget *proofbound.WorkBudget, src, dst region2, 
 // transformElem maps a boundary element from one plane face's 2D frame into
 // another parallel face's frame (projection along the shared normal — a
 // planar rigid motion, possibly reflected).
-func transformElem(e surveyElem, from, to *cFace) surveyElem {
+func transformElem(e survey2d.SurveyElem, from, to *cFace) survey2d.SurveyElem {
 	mapPt := func(x, y float64) (float64, float64) {
 		w := from.o.Add(from.u.Scale(x)).Add(from.v.Scale(y))
 		return to.planeCoords(w)
 	}
-	if e.kind == surveyLine {
-		ax, ay := mapPt(e.ax, e.ay)
-		bx, by := mapPt(e.bx, e.by)
-		out, _ := lineElem(ax, ay, bx, by)
+	if e.Kind == survey2d.SurveyLine {
+		ax, ay := mapPt(e.Ax, e.Ay)
+		bx, by := mapPt(e.Bx, e.By)
+		out, _ := survey2d.LineElem(ax, ay, bx, by)
 		return out
 	}
-	cx, cy := mapPt(e.qx, e.qy)
+	cx, cy := mapPt(e.Qx, e.Qy)
 	delta := math.Atan2(from.u.Dot(to.v), from.u.Dot(to.u))
 	det := from.u.Cross(from.v).Dot(to.u.Cross(to.v))
 	var th0, th1 float64
 	if det >= 0 {
-		th0, th1 = e.th0+delta, e.th1+delta
+		th0, th1 = e.Th0+delta, e.Th1+delta
 	} else {
-		th0, th1 = delta-e.th1, delta-e.th0
+		th0, th1 = delta-e.Th1, delta-e.Th0
 	}
-	out, _ := arcElem(cx, cy, e.rr, math.Min(th0, th1), math.Max(th0, th1), e.closed)
+	out, _ := survey2d.ArcElem(cx, cy, e.Rr, math.Min(th0, th1), math.Max(th0, th1), e.Closed)
 	// A rigid motion moves no radius, so the mapped element keeps the source
 	// element's radius under the source's own bound on it.
-	out.rrBound = e.rrBound
+	out.RrBound = e.RrBound
 	return out
 }
 
 // elemElemDistLB is a lower bound on the distance between two 2D boundary
 // elements (arcs bounded through their full circles — an underestimate, the
 // sound direction for exclusion proofs).
-func elemElemDistLB(a, b surveyElem) float64 {
-	if a.kind == surveyLine && b.kind == surveyLine {
-		return segSegDist(a.ax, a.ay, a.bx, a.by, b.ax, b.ay, b.bx, b.by)
+func elemElemDistLB(a, b survey2d.SurveyElem) float64 {
+	if a.Kind == survey2d.SurveyLine && b.Kind == survey2d.SurveyLine {
+		return segSegDist(a.Ax, a.Ay, a.Bx, a.By, b.Ax, b.Ay, b.Bx, b.By)
 	}
-	if a.kind == surveyLine {
-		return segElemDistLB(b, a.ax, a.ay, a.bx, a.by)
+	if a.Kind == survey2d.SurveyLine {
+		return segElemDistLB(b, a.Ax, a.Ay, a.Bx, a.By)
 	}
-	if b.kind == surveyLine {
-		return segElemDistLB(a, b.ax, b.ay, b.bx, b.by)
+	if b.Kind == survey2d.SurveyLine {
+		return segElemDistLB(a, b.Ax, b.Ay, b.Bx, b.By)
 	}
-	d := math.Hypot(b.qx-a.qx, b.qy-a.qy)
-	if d >= a.rr+b.rr {
-		return d - a.rr - b.rr
+	d := math.Hypot(b.Qx-a.Qx, b.Qy-a.Qy)
+	if d >= a.Rr+b.Rr {
+		return d - a.Rr - b.Rr
 	}
-	if d <= math.Abs(a.rr-b.rr) {
-		return math.Abs(a.rr-b.rr) - d
+	if d <= math.Abs(a.Rr-b.Rr) {
+		return math.Abs(a.Rr-b.Rr) - d
 	}
 	return 0
 }
@@ -901,7 +903,7 @@ func circleRegionHits(r region2, cx, cy, rad float64) int {
 		}
 	}
 	clearing := math.Inf(1)
-	probe := surveyElem{kind: surveyArc, qx: cx, qy: cy, rr: rad, th0: 0, th1: 2 * math.Pi, closed: true}
+	probe := survey2d.SurveyElem{Kind: survey2d.SurveyArc, Qx: cx, Qy: cy, Rr: rad, Th0: 0, Th1: 2 * math.Pi, Closed: true}
 	for _, e := range r.elems {
 		if d := elemElemDistLB(e, probe); d < clearing {
 			clearing = d

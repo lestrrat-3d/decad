@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -50,7 +52,7 @@ import (
 // LineSeg-only form did) is unavoidable once the admitted set has three
 // types, and it does not relax PRECEDENCE: the first (i, j) whose pair fails
 // is still the first refusal reported, in the same walk order as before.
-func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]segmentWalk, [][]segmentWalk, error) {
+func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
 			ErrUnsupported, len(p0.Holes), len(p1.Holes))
@@ -82,13 +84,13 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 		}
 	}
 
-	walks0 := make([][]segmentWalk, loopCount)
-	walks1 := make([][]segmentWalk, loopCount)
+	walks0 := make([][]survey2d.SegmentWalk, loopCount)
+	walks1 := make([][]survey2d.SegmentWalk, loopCount)
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
-		walks0[i] = make([]segmentWalk, n)
-		walks1[i] = make([]segmentWalk, n)
+		walks0[i] = make([]survey2d.SegmentWalk, n)
+		walks1[i] = make([]survey2d.SegmentWalk, n)
 		for j := range n {
 			w0, err := walkOf(loops0[i].Segments[j], work0)
 			if err != nil {
@@ -138,8 +140,8 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // mixed-kind or free-form pair still refuses under today's sentinel.
 //
 // The test is on the CONCRETE recorded type, never on the resolved walk's
-// own walkKind. walkCircular is one kind for a circle and an arc alike
-// (extrude.go), so a walkKind test would admit an ArcSeg paired against a
+// own survey2d.WalkKind. survey2d.WalkCircular is one kind for a circle and an arc alike
+// (extrude.go), so a survey2d.WalkKind test would admit an ArcSeg paired against a
 // CircleSeg — a pairing §1 names mixed-kind and refuses, and one §5.1 has no
 // station correspondence for, since it classifies an ArcSeg side as OPEN
 // with m+1 station points and a full-turn CircleSeg side as CLOSED with m
@@ -190,7 +192,7 @@ func loftSameKindGate(seg0, seg1 CurveSegment, loop, j, k int) error {
 // loftPairType is the three-way enumeration docs/loft-design.md §1 and Table
 // P row P5 admit a loft pairing over, plus loftPairUnadmitted for every other
 // recorded type. It reads the CONCRETE recorded segment type — the walk kind
-// resolved from it is coarser (walkCircular covers a circle and an arc alike,
+// resolved from it is coarser (survey2d.WalkCircular covers a circle and an arc alike,
 // extrude.go) and cannot state this contract.
 type loftPairType uint8
 
@@ -356,7 +358,7 @@ type loftLoopPair struct {
 // the RECORDED segment behind each side's walk (loftCellStations' own doc
 // comment), so each side's segment is handed to the generator alongside its
 // walk, under the same alignment offset the walk itself is read at.
-func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, float64, error) {
+func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))

@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -208,7 +210,7 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 		return nil
 	}
 	w := p.resolved[r.loop].walks[r.walk]
-	if !w.isCircular() {
+	if !w.IsCircular() {
 		return fmt.Errorf(`%w: a straight revolve generator carries no meridian chording to refine`, ErrUnsupported)
 	}
 	n := p.counts[r.loop][r.walk] + 1
@@ -216,7 +218,7 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 		return errTooManyChords
 	}
 	p.counts[r.loop][r.walk] = n
-	p.sags[r.loop][r.walk] = chordSagitta(w.radius, math.Abs(w.th1-w.th0), n)
+	p.sags[r.loop][r.walk] = chordSagitta(w.Radius, math.Abs(w.Th1-w.Th0), n)
 	p.deltaM = 0
 	for li := range p.sags {
 		for _, s := range p.sags[li] {
@@ -352,10 +354,10 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 		sags[li] = make([]float64, len(r.walks))
 		for k, w := range r.walks {
 			counts[li][k] = 1
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				continue
 			}
-			n, sag, err := chordCount(w.segmentWalk, meridian, revolveMeridianMin(w.segmentWalk))
+			n, sag, err := chordCount(w.SegmentWalk, meridian, revolveMeridianMin(w.SegmentWalk))
 			if err != nil {
 				return nil, err
 			}
@@ -370,7 +372,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	if angular <= 0 || proofbound.IsNonFinite(angular) {
 		return nil, fmt.Errorf(`%w: this revolve's meridian chording spends the whole chord budget its tolerance left, so no angular count remains; retry with a coarser tolerance`, ErrUnsupported)
 	}
-	angularWalk := segmentWalk{radius: rhoMax, th1: sweep, closed: rp.full}
+	angularWalk := survey2d.SegmentWalk{Radius: rhoMax, Th1: sweep, Closed: rp.full}
 	nPhi, deltaPhi, err := chordCount(angularWalk, angular, chordWalkMin(angularWalk))
 	if err != nil {
 		return nil, err
@@ -391,11 +393,11 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 // three chords for a whole closed generator, so it bounds a polygon; TWO for a
 // circular generator whose two ends both sit on the axis — a sphere meridian —
 // so it cannot chord to a single on-axis segment; and one otherwise.
-func revolveMeridianMin(w segmentWalk) int {
-	if w.closed {
+func revolveMeridianMin(w survey2d.SegmentWalk) int {
+	if w.Closed {
 		return 3
 	}
-	if w.startV == 0 && w.endV == 0 {
+	if w.StartV == 0 && w.EndV == 0 {
 		return 2
 	}
 	return 1
@@ -467,12 +469,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// radials[l] is the ideal radial direction at angular index l, the term
 	// of revolveIdealPoint's sum that every ring shares; the pole's covers
 	// every angle at once.
-	radials := make([]ivVec3, angular.samples)
+	radials := make([]survey2d.IvVec3, angular.samples)
 	for l := range angular.samples {
-		radials[l] = ivVec3Add(ivVec3Mul(p.ideal.e0, angular.cosIv[l]), ivVec3Mul(p.ideal.e1, angular.sinIv[l]))
+		radials[l] = survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.e0, angular.cosIv[l]), survey2d.IvVec3Mul(p.ideal.e1, angular.sinIv[l]))
 	}
 	poleIv := proofbound.Interval(minusOneRat(), oneRat())
-	poleRadial := ivVec3Add(ivVec3Mul(p.ideal.e0, poleIv), ivVec3Mul(p.ideal.e1, poleIv))
+	poleRadial := survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.e0, poleIv), survey2d.IvVec3Mul(p.ideal.e1, poleIv))
 	for li := range loopMesh {
 		for si := range loopMesh[li].samples {
 			s := &loopMesh[li].samples[si]
@@ -481,7 +483,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				count = 1
 			}
 			s.ring = make([]int, count)
-			axial := ivVec3Mul(p.ideal.w, s.zIv)
+			axial := survey2d.IvVec3Mul(p.ideal.w, s.zIv)
 			// docs/tessellation-design.md §9's ring-collapse detection, run
 			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
 			// vertices coincide is not an axis sample, and §12 forbids merging
@@ -505,7 +507,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 					// EVERY angle, so its enclosure must cover them all.
 					radial = poleRadial
 				}
-				ideal := ivVec3Add(p.ideal.a3, ivVec3Add(axial, ivVec3Mul(radial, s.rhoIv)))
+				ideal := survey2d.IvVec3Add(p.ideal.a3, survey2d.IvVec3Add(axial, survey2d.IvVec3Mul(radial, s.rhoIv)))
 				gapC := proofbound.Radius3D(max(
 					proofbound.IntervalFloatError(ideal[0], local.X),
 					proofbound.IntervalFloatError(ideal[1], local.Y),
@@ -577,7 +579,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			if lo.onAxis && hi.onAxis {
 				return nil, fmt.Errorf(`%w: a revolve generator with both ends on the axis sweeps no face, yet the recorded walk is not an axis line`, ErrUnsupported)
 			}
-			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.walks[k].segs[0]))
+			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.walks[k].Segs[0]))
 			if err != nil {
 				return nil, err
 			}
@@ -736,20 +738,20 @@ func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revMeridian, float64
 	out := make([]revMeridian, len(r.walks))
 	worst := 0.0
 	for k, w := range r.walks {
-		plane := r.plane[w.segs[0]]
-		zIv, rhoIv, ok := revolveMeridianEnclosure(rp.ax, plane.startU, plane.startV, plane.startBound)
+		plane := r.plane[w.Segs[0]]
+		zIv, rhoIv, ok := revolveMeridianEnclosure(rp.ax, plane.StartU, plane.StartV, plane.StartBound)
 		if !ok {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
 		}
-		gap := math.Max(proofbound.IntervalFloatError(zIv, w.startU), proofbound.IntervalFloatError(rhoIv, w.startV))
+		gap := math.Max(proofbound.IntervalFloatError(zIv, w.StartU), proofbound.IntervalFloatError(rhoIv, w.StartV))
 		if proofbound.IsNonFinite(gap) {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no bound on its own axis coordinates`, ErrUnsupported)
 		}
 		worst = math.Max(worst, gap)
-		if w.startV < 0 {
+		if w.StartV < 0 {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample sits on the negative side of the axis`, ErrDegenerate)
 		}
-		out[k] = revMeridian{z: w.startU, rho: w.startV, zIv: zIv, rhoIv: rhoIv, onAxis: w.startV == 0, walk: k}
+		out[k] = revMeridian{z: w.StartU, rho: w.StartV, zIv: zIv, rhoIv: rhoIv, onAxis: w.StartV == 0, walk: k}
 	}
 	return out, worst, nil
 }
@@ -772,22 +774,22 @@ func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, 
 		}
 		start := junctions[k]
 		start.sag, start.walk = sags[k], k
-		if !w.isCircular() {
+		if !w.IsCircular() {
 			out = append(out, start)
 			continue
 		}
-		cell, ok := revolveArcChordCell(w.segmentWalk, 0, n)
+		cell, ok := revolveArcChordCell(w.SegmentWalk, 0, n)
 		if !ok {
 			return nil, 0, errRevolveArcCellSlack
 		}
 		start.arc = cell
 		out = append(out, start)
 		for i := 1; i < n; i++ {
-			station, gap, err := revolveArcStation(rp.ax, loop.Segments[w.segs[0]], i, n)
+			station, gap, err := revolveArcStation(rp.ax, loop.Segments[w.Segs[0]], i, n)
 			if err != nil {
 				return nil, 0, err
 			}
-			cell, ok := revolveArcChordCell(w.segmentWalk, i, n)
+			cell, ok := revolveArcChordCell(w.SegmentWalk, i, n)
 			if !ok {
 				return nil, 0, errRevolveArcCellSlack
 			}
@@ -813,7 +815,7 @@ func requireRevolveMeridianOffAxis(loops []revLoopMesh) error {
 			}
 		}
 		for k, w := range lm.resolved.walks {
-			if !w.isCircular() || lm.resolved.kinds[k] == wallAxis || offAxis[k] {
+			if !w.IsCircular() || lm.resolved.kinds[k] == wallAxis || offAxis[k] {
 				continue
 			}
 			return &revolveRefineError{
@@ -849,14 +851,14 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 				continue
 			}
 			k := lm.samples[j].walk
-			if lm.resolved.walks[k].isCircular() {
+			if lm.resolved.walks[k].IsCircular() {
 				return &revolveRefineError{err: err, retry: revolveRefine{loop: named.loop, walk: k}}
 			}
 		}
 	}
 	for li, lm := range loops {
 		for k, w := range lm.resolved.walks {
-			if w.isCircular() {
+			if w.IsCircular() {
 				return &revolveRefineError{err: err, retry: revolveRefine{loop: li, walk: k}}
 			}
 		}
@@ -926,7 +928,7 @@ func revolveExtents(loops []revolveWalks) (float64, float64, error) {
 	}
 	for _, r := range loops {
 		for _, w := range r.walks {
-			for _, p := range revolveWalkExtremes(w.segmentWalk) {
+			for _, p := range revolveWalkExtremes(w.SegmentWalk) {
 				if err := see(p[0], p[1]); err != nil {
 					return 0, 0, err
 				}
@@ -942,18 +944,18 @@ func revolveExtents(loops []revolveWalks) (float64, float64, error) {
 // revolveWalkExtremes lists the (z, ρ) points where one walk can attain either
 // envelope: its two endpoints, plus, for a circular walk, each cardinal point
 // its own angular interval contains.
-func revolveWalkExtremes(w segmentWalk) [][2]float64 {
-	out := [][2]float64{{w.startU, w.startV}, {w.endU, w.endV}}
-	if !w.isCircular() {
+func revolveWalkExtremes(w survey2d.SegmentWalk) [][2]float64 {
+	out := [][2]float64{{w.StartU, w.StartV}, {w.EndU, w.EndV}}
+	if !w.IsCircular() {
 		return out
 	}
-	span := math.Abs(w.th1 - w.th0)
-	lo := math.Min(w.th0, w.th1)
+	span := math.Abs(w.Th1 - w.Th0)
+	lo := math.Min(w.Th0, w.Th1)
 	cardinals := [4][2]float64{
-		{w.cU + w.radius, w.cV},
-		{w.cU, w.cV + w.radius},
-		{w.cU - w.radius, w.cV},
-		{w.cU, w.cV - w.radius},
+		{w.CU + w.Radius, w.CV},
+		{w.CU, w.CV + w.Radius},
+		{w.CU - w.Radius, w.CV},
+		{w.CU, w.CV - w.Radius},
 	}
 	for q, p := range cardinals {
 		// The cardinal's own angle is q·π/2; shift it into [lo, lo+2π) and keep
@@ -978,10 +980,10 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 	total := 0.0
 	for li, r := range p.resolved {
 		for k, w := range r.walks {
-			if !w.isCircular() {
+			if !w.IsCircular() {
 				continue
 			}
-			total = proofbound.AbsSumUpper(total, chordSegmentArea(w.radius, math.Abs(w.th1-w.th0), p.counts[li][k]))
+			total = proofbound.AbsSumUpper(total, chordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k]))
 		}
 	}
 	return total
@@ -1200,7 +1202,7 @@ func loopMaxSagitta(sag [][]float64) []float64 {
 // (revolveArcCellSlack, tess §15's T3 choice). coord is the composed coordinate
 // displacement, which the circular arms widen their meridian model by.
 func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMeridian, coord float64) (float64, error) {
-	corner := func(s revMeridian, l int) ivVec3 {
+	corner := func(s revMeridian, l int) survey2d.IvVec3 {
 		return revolveIdealPoint(b, s.zIv, s.rhoIv, angular.cosIv[l], angular.sinIv[l])
 	}
 	p00, p01 := corner(lo, 0), corner(lo, 1)
@@ -1233,8 +1235,8 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 	if dz == nil || drho == nil {
 		return 0, errRevolveCellSlack
 	}
-	lenSq := proofbound.IntervalAdd(intervalSquare(proofbound.PointInterval(dz)), intervalSquare(proofbound.PointInterval(drho)))
-	meridian, ok := intervalSqrt(lenSq)
+	lenSq := proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.PointInterval(dz)), survey2d.IntervalSquare(proofbound.PointInterval(drho)))
+	meridian, ok := survey2d.IntervalSqrt(lenSq)
 	if !ok {
 		return 0, errRevolveCellSlack
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -325,8 +327,8 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 // proofbound.WalkEndBoundAllow measures, so a vertex it touches must carry that rounding
 // too (topology.go's Vertex.Position contract). An analytic walk's own
 // endpoint bound is a separate question buildLoopSidesAs does not answer here.
-func freeformVertexAllow(w segmentWalk, bound proofbound.WalkEndBound) float64 {
-	if w.kind != walkFreeform {
+func freeformVertexAllow(w survey2d.SegmentWalk, bound proofbound.WalkEndBound) float64 {
+	if w.Kind != survey2d.WalkFreeform {
 		return 0
 	}
 	return proofbound.WalkEndBoundAllow(bound)
@@ -341,16 +343,16 @@ func freeformVertexAllow(w segmentWalk, bound proofbound.WalkEndBound) float64 {
 // turn — circular or genuinely curved free-form — decides convexity from its
 // own turn instead, exactly as buildLoopSidesAs's per-kind switch did before
 // this was pulled out of it.
-func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeformWork) (bool, error) {
-	switch w.kind {
-	case walkCircular:
+func rimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work *freeformWork) (bool, error) {
+	switch w.Kind {
+	case survey2d.WalkCircular:
 		// A clockwise walk's material lies outside its circle, so the
 		// boundary turns into the metal there and the rim is concave — a
 		// hole's rim (clockwise) and a concave outer bite's (also
 		// clockwise) alike, while a counter-clockwise round keeps its
 		// convex rim. The loop's role decides nothing here.
-		return w.th1 >= w.th0, nil
-	case walkFreeform:
+		return w.Th1 >= w.Th0, nil
+	case survey2d.WalkFreeform:
 		// §6.5's wall-edge convexity certificate (docs/spline-design.md
 		// §6.5, Table R R19). It applies the one reversal negation
 		// internally and states its verdict in the LOOP'S OWN WALK
@@ -359,7 +361,7 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 		// convention the circular case above fixes. NEVER negate again for
 		// a hole loop: a hole rim's concavity falls out of the clockwise
 		// walk itself, exactly as it does for a circular hole wall.
-		verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, w.fitInterpolated, work)
+		verdict, err := freeformWallConvexityContext(ctx, w.Spans, w.Closed, w.Reversed, w.FitInterpolated, work)
 		if err != nil {
 			return false, err
 		}
@@ -400,9 +402,9 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 // (buildChainSides, extrude.go) share; the two differ only in the TOPOLOGY
 // around it — wraparound junctions and cap coedges for a loop, neither for a
 // chain (docs/surface-design.md §13.4).
-func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, Surface, bool, error) {
-	switch w.kind {
-	case walkCircular:
+func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, Surface, bool, error) {
+	switch w.Kind {
+	case survey2d.WalkCircular:
 		axis := pp.dir(0, 0, 1)
 		// The material's side of a circular wall is decided by the WALK, not
 		// by the loop's role: the outward normal is the walk tangent turned a
@@ -412,7 +414,7 @@ func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart,
 		// which is why its wall reverses — but so is a CONCAVE round on an
 		// outer loop (a rounded bite out of the boundary), whose material
 		// also lies outside the cylinder.
-		clockwise := w.th1 < w.th0
+		clockwise := w.Th1 < w.Th0
 		// An Arc3/Circle3 is CCW from start to end about its axis. A
 		// clockwise walk, and a reflected placement (which flips
 		// handedness), each invert that sense, so the EDGE axis carries
@@ -426,9 +428,9 @@ func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart,
 			edgeSign = -edgeSign
 		}
 		edgeAxis := axis.Scale(edgeSign)
-		center0 := pp.point(w.cU, w.cV, pp.z0)
-		center1 := pp.point(w.cU, w.cV, pp.z1)
-		radius := units.Millimeters(w.radius)
+		center0 := pp.point(w.CU, w.CV, pp.z0)
+		center1 := pp.point(w.CU, w.CV, pp.z1)
+		radius := units.Millimeters(w.Radius)
 		var curve0, curve1 Curve
 		if closed {
 			// A full circle's edge closes on itself: one vertex per cap
@@ -445,13 +447,13 @@ func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart,
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is rimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
 		return bottomEdge, topEdge, surf, clockwise, nil
-	case walkFreeform:
+	case survey2d.WalkFreeform:
 		// §6.5's wall-edge convexity certificate, wired here for the first
 		// time (docs/spline-design.md §6.5, Table R R19). It applies the
 		// one reversal negation internally and states its verdict in the
@@ -462,8 +464,8 @@ func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart,
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from rimConvexity, before this switch ever ran.
-		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// Face.reversed — "the outward normal is the surface's geometric
@@ -474,13 +476,13 @@ func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart,
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-		mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
+		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		mid := pp.point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
 		// tangent is negated to keep the frame's normal outward.
-		tu, tv := w.tanInU, w.tanInV
+		tu, tv := w.TanInU, w.TanInV
 		if pp.reflected() {
 			tu, tv = -tu, -tv
 		}
@@ -560,7 +562,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	if len(loop.Segments) == 0 {
 		return nil, nil, nil, proofbound.BoundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
-	var loopWalks []segmentWalk
+	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
 		if !resolved.loopMatches(roleLoop, loop) {
 			return nil, nil, nil, proofbound.BoundedScalar{}, errResolvedWalksMismatch
@@ -574,7 +576,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// draws, and the arithmetic below is then the unchanged one.
 	delta := pp.sectionDelta
 	walkLenAllow := proofbound.SectionDisplacementLength(delta, 1)
-	raw := make([]sideWalk, len(loop.Segments))
+	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	total := proofbound.BoundedScalar{}
 	maxCoordUpper := 0.0
 	for i, seg := range loop.Segments {
@@ -591,7 +593,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		// gate of its own ahead of it any more (§10 P4b retires R6). A
 		// resolved walk was already through walkOf once (resolveProfileWalks),
 		// so it carries the same refusal already surfaced there.
-		var w segmentWalk
+		var w survey2d.SegmentWalk
 		if loopWalks != nil {
 			w = loopWalks[i]
 		} else {
@@ -600,10 +602,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 		}
-		w.lengthBound = proofbound.AbsSumUpper(w.lengthBound, walkLenAllow)
-		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
-		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.length, w.lengthBound))
-		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
+		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
+		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.Length, w.LengthBound))
+		maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
 	}
 	// frameLiftAllow is the ONE proven bound this whole loop's rim vertices
 	// share for the payload's own frame lift and accumulated placement
@@ -622,7 +624,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 
 	// Junction vertices, shared between neighbors: junction i sits at walk
 	// i's start (== walk i−1's end). A single whole closed curve has none.
-	singleClosed := n == 1 && walks[0].closed
+	singleClosed := n == 1 && walks[0].Closed
 	// The sweep height is read from the two BOUNDED levels, so a level the
 	// evaluator computed carries its own displacement into the vertical edge
 	// lengths and the side face areas built from it below — a ToFace or
@@ -655,13 +657,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// free-form twin of a whole CircleSeg's own seam vertex. Hoisted out of the
 	// per-kind switch below (§10 P4b): a closed free-form walk reaches
 	// singleClosed on the same terms a whole circle does, and the switch's
-	// walkFreeform arm needs the SAME seam pair the walkCircular arm builds.
+	// survey2d.WalkFreeform arm needs the SAME seam pair the survey2d.WalkCircular arm builds.
 	var seamBottom, seamTop *Vertex
 	if singleClosed {
 		w := walks[0]
-		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
-		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
-		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
+		extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(w.SegmentWalk, w.EndBound))
+		seamBottom = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
+		seamTop = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -670,9 +672,9 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
-			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
+			extra := math.Max(freeformVertexAllow(w.SegmentWalk, w.StartBound), freeformVertexAllow(prev.SegmentWalk, prev.EndBound))
+			bottomV[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
+			topV[i] = &Vertex{position: pp.point(w.StartU, w.StartV, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
 		}
 	}
 
@@ -684,7 +686,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// hodograph's own exact-rational leg (§5.1), rounded once into float64
 	// with its own stated bound (tanInBound/tanOutBound) — at least as well
 	// founded as the circular walk's own tangent, whose bound is +Inf by
-	// segmentWalk's convention because it comes from trig at a computed
+	// survey2d.SegmentWalk's convention because it comes from trig at a computed
 	// angle. This cross needs no change for either kind.
 	var vertical []*Edge
 	if !singleClosed {
@@ -694,7 +696,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
-			cross := prev.tanOutU*walks[i].tanInV - prev.tanOutV*walks[i].tanInU
+			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
 			vertical[i] = &Edge{
 				curve:       Line3{},
 				start:       bottomV[i],
@@ -741,11 +743,11 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		bottomEdge.denot = mintCurve()
 		topEdge.denot = mintCurve()
 
-		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.segs)
+		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.Segs)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.length, w.lengthBound), height)
+		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,

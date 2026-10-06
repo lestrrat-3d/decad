@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -190,7 +192,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if s > 0 {
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius. A contained disk can certify success;
-		// otherwise survey2d.go computes the same reading Wall.Minimum answers.
+		// otherwise internal/survey2d/survey2d.go computes the same reading Wall.Minimum answers.
 		inradius, enough, err := sectionInradius(offsetBudget, pp.profile, tmm, tDelta)
 		if err != nil {
 			return nil, err
@@ -338,20 +340,20 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 }
 
 // sectionInradius proves the requested thickness fits, or returns the largest
-// inscribed disk of a recorded section from survey2d.go
+// inscribed disk of a recorded section from internal/survey2d/survey2d.go
 // (docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
 // checks the candidate-family count before entering the kernel and shares one
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no
 // Suspect result to fall back on.
 //
-// The kernel publishes that inradius as an interval (wallSurveyOut), and this
+// The kernel publishes that inradius as an interval (survey2d.WallSurveyOut), and this
 // gate reads its midpoint: the caller's own accept boundary already sits a
 // scale-relative shellTol below the limit — 1e-9 of the section's own size,
 // decades above the aggregate's own half-width — so the interval cannot reach
 // across a decision the margin has not already made.
 func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thickness, thicknessDelta float64) (float64, bool, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
 	loops, err := recordLoopsBudget(budget, profile)
@@ -361,15 +363,15 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 		}
 		return 0, false, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
 	}
-	var elems []surveyElem
+	var elems []survey2d.SurveyElem
 	var verts [][2]float64
 	for _, loop := range loops {
-		single := len(loop) == 1 && loop[0].closed
+		single := len(loop) == 1 && loop[0].Closed
 		for _, w := range loop {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return 0, false, err
 			}
-			el, ok := walkElem(w.segmentWalk)
+			el, ok := walkElem(w.SegmentWalk)
 			if !ok {
 				return 0, false, fmt.Errorf(`%w: this evaluator cannot survey the shell section's curve type`, ErrUnsupported)
 			}
@@ -377,14 +379,14 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 			if single {
 				continue
 			}
-			verts = append(verts, [2]float64{w.startU, w.startV})
+			verts = append(verts, [2]float64{w.StartU, w.StartV})
 		}
 	}
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
 	candidateWork, ok := proofbound.WallCandidateWork(len(elems), len(verts), false)
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
 	if !ok {
@@ -406,11 +408,11 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, proofbound.ExactScalar(0), false, math.Inf(1))
+	k, err := survey2d.NewWallKernelBudget(budget, elems, nil, verts, 0, proofbound.ExactScalar(0), false, math.Inf(1))
 	if err != nil {
 		return 0, false, err
 	}
-	out, err := k.runBudget(proofbound.NewWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
+	out, err := k.RunBudget(proofbound.NewWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return 0, false, err
 	}
@@ -420,10 +422,10 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 	if err != nil {
 		return 0, false, fmt.Errorf(`%w: inward shell section survey failed: %v`, ErrUnsupported, err)
 	}
-	if !out.ok {
+	if !out.Ok {
 		return 0, false, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
 	}
-	return out.inradius, false, nil
+	return out.Inradius, false, nil
 }
 
 // shellRectCircleWitness proves a disk larger than the requested wall fits a
@@ -431,22 +433,22 @@ func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thick
 // centers. A failed search says nothing: sectionInradius then runs its usual
 // complete survey. Only recorded line endpoints with zero displacement and
 // whole circles with bounded converted radii enter this proof.
-func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord, loops [][]sideWalk, thickness, thicknessDelta float64) (bool, error) {
+func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord, loops [][]survey2d.SideWalk, thickness, thicknessDelta float64) (bool, error) {
 	if len(loops) == 0 || len(loops[0]) != 4 {
 		return false, nil
 	}
 	outer := loops[0]
-	minX, maxX := outer[0].startU, outer[0].startU
-	minY, maxY := outer[0].startV, outer[0].startV
+	minX, maxX := outer[0].StartU, outer[0].StartU
+	minY, maxY := outer[0].StartV, outer[0].StartV
 	for _, side := range outer {
-		w := side.segmentWalk
-		if w.kind != walkLine || w.startBound != (proofbound.WalkEndBound{}) || w.endBound != (proofbound.WalkEndBound{}) {
+		w := side.SegmentWalk
+		if w.Kind != survey2d.WalkLine || w.StartBound != (proofbound.WalkEndBound{}) || w.EndBound != (proofbound.WalkEndBound{}) {
 			return false, nil
 		}
-		minX = math.Min(minX, w.startU)
-		maxX = math.Max(maxX, w.startU)
-		minY = math.Min(minY, w.startV)
-		maxY = math.Max(maxY, w.startV)
+		minX = math.Min(minX, w.StartU)
+		maxX = math.Max(maxX, w.StartU)
+		minY = math.Min(minY, w.StartV)
+		maxY = math.Max(maxY, w.StartV)
 	}
 	if !(minX < maxX && minY < maxY) ||
 		proofbound.IsNonFinite(minX) || proofbound.IsNonFinite(maxX) || proofbound.IsNonFinite(minY) || proofbound.IsNonFinite(maxY) {
@@ -454,20 +456,20 @@ func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord
 	}
 	var sides uint8
 	for _, side := range outer {
-		w := side.segmentWalk
+		w := side.SegmentWalk
 		var bit uint8
 		switch {
-		case w.startU == minX && w.endU == minX &&
-			((w.startV == minY && w.endV == maxY) || (w.startV == maxY && w.endV == minY)):
+		case w.StartU == minX && w.EndU == minX &&
+			((w.StartV == minY && w.EndV == maxY) || (w.StartV == maxY && w.EndV == minY)):
 			bit = 1
-		case w.startU == maxX && w.endU == maxX &&
-			((w.startV == minY && w.endV == maxY) || (w.startV == maxY && w.endV == minY)):
+		case w.StartU == maxX && w.EndU == maxX &&
+			((w.StartV == minY && w.EndV == maxY) || (w.StartV == maxY && w.EndV == minY)):
 			bit = 2
-		case w.startV == minY && w.endV == minY &&
-			((w.startU == minX && w.endU == maxX) || (w.startU == maxX && w.endU == minX)):
+		case w.StartV == minY && w.EndV == minY &&
+			((w.StartU == minX && w.EndU == maxX) || (w.StartU == maxX && w.EndU == minX)):
 			bit = 4
-		case w.startV == maxY && w.endV == maxY &&
-			((w.startU == minX && w.endU == maxX) || (w.startU == maxX && w.endU == minX)):
+		case w.StartV == maxY && w.EndV == maxY &&
+			((w.StartU == minX && w.EndU == maxX) || (w.StartU == maxX && w.EndU == minX)):
 			bit = 8
 		default:
 			return false, nil
@@ -490,20 +492,20 @@ func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord
 		if !ok || segment.CCW {
 			return false, nil
 		}
-		w := loop[0].segmentWalk
-		if w.kind != walkCircular || !w.closed || w.radiusBound != 0 ||
-			proofbound.IsNonFinite(w.cU) || proofbound.IsNonFinite(w.cV) || proofbound.IsNonFinite(w.radius) || w.radius <= 0 {
+		w := loop[0].SegmentWalk
+		if w.Kind != survey2d.WalkCircular || !w.Closed || w.RadiusBound != 0 ||
+			proofbound.IsNonFinite(w.CU) || proofbound.IsNonFinite(w.CV) || proofbound.IsNonFinite(w.Radius) || w.Radius <= 0 {
 			return false, nil
 		}
 		radius, radiusDelta, err := magnitudeInBounded(segment.Radius, units.Length, units.Millimeter, "the hole radius")
 		if err != nil {
 			return false, err
 		}
-		if radius != w.radius || proofbound.IsNonFinite(radiusDelta) {
+		if radius != w.Radius || proofbound.IsNonFinite(radiusDelta) {
 			return false, nil
 		}
 		radiusUpper := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(radiusDelta))
-		holes = append(holes, circle{proofarith.FloatRat(w.cU), proofarith.FloatRat(w.cV), radiusUpper})
+		holes = append(holes, circle{proofarith.FloatRat(w.CU), proofarith.FloatRat(w.CV), radiusUpper})
 	}
 	xlo, xhi, ylo, yhi := proofarith.FloatRat(minX), proofarith.FloatRat(maxX), proofarith.FloatRat(minY), proofarith.FloatRat(maxY)
 	width := new(big.Rat).Sub(xhi, xlo)
@@ -525,7 +527,7 @@ func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord
 	for _, u := range quarters {
 		x := new(big.Rat).Add(xlo, new(big.Rat).Mul(width, u))
 		for _, v := range quarters {
-			if err := wallBudgetStep(budget); err != nil {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return false, err
 			}
 			y := new(big.Rat).Add(ylo, new(big.Rat).Mul(height, v))
@@ -543,7 +545,7 @@ func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord
 				continue
 			}
 			for _, hole := range holes {
-				if err := wallBudgetStep(budget); err != nil {
+				if err := survey2d.WallBudgetStep(budget); err != nil {
 					return false, err
 				}
 				dx, dy := new(big.Rat).Sub(x, hole.x), new(big.Rat).Sub(y, hole.y)
@@ -555,11 +557,11 @@ func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord
 				}
 			}
 			if fits {
-				return true, wallBudgetErr(budget)
+				return true, survey2d.WallBudgetErr(budget)
 			}
 		}
 	}
-	return false, wallBudgetErr(budget)
+	return false, survey2d.WallBudgetErr(budget)
 }
 
 // evalTube builds the both-caps hole-free shell (Table B, B2/B3): a plain prism

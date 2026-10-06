@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -305,7 +307,7 @@ func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
 }
 
 func (r ProfileRecord) integralsBudget(budget *proofbound.WorkBudget) (regionIntegrals, error) {
-	if err := wallBudgetErr(budget); err != nil {
+	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return regionIntegrals{}, err
 	}
 	pre, err := validateMomentFieldsBudget(budget, r)
@@ -364,7 +366,7 @@ func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder,
 }
 
 func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *proofbound.WorkBudget) (regionIntegrals, error) {
-	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, pre, order, checkFinite)
+	return integrateMomentRecordWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, pre, order, checkFinite)
 }
 
 func integrateMomentRecordUncheckedContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
