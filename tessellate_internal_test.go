@@ -472,3 +472,56 @@ func TestLiftTessellationError(t *testing.T) {
 	require.ErrorIs(t, unsupported, ErrUnsupported)
 	require.Equal(t, "decad: not supported by the current evaluator: the detail", unsupported.Error())
 }
+
+// TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace is docs/faceted-
+// vertex-bounds-design.md §2.1's reading for a mesh that publishes no per-
+// vertex record. A quarter revolve of a rectangle clear of the axis carries
+// planar end caps, whose bounds are their coordinate rounding alone, beside
+// chorded walls and arc-trimmed annuli, whose bounds add a sagitta. Every
+// vertex reads the largest bound over the faces its facets touch, and an end
+// cap's corner, shared with a chorded face, reads that face's larger bound
+// rather than its cap's.
+func TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	sk, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := sk.CreateRectangle(0, 5, 10, 15)
+	sk.Fix(rect.A)
+	_, err = sk.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Revolve(sk, sk.Profiles()[0],
+		SketchLine{Start: Point2{}, End: Point2{U: 1}},
+		AngleExtent{A: units.Degrees(90), Dir: Along})
+	require.NoError(t, err)
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
+	require.NoError(t, err)
+	require.Nil(t, mesh.vertexBound, `a revolve publishes no per-vertex record`)
+
+	beta, err := mesh.vertexBounds()
+	require.NoError(t, err)
+	require.Len(t, beta, len(mesh.vertices))
+	incident := make([]map[*Face]struct{}, len(mesh.vertices))
+	for k, tri := range mesh.triangles {
+		for _, v := range tri {
+			if incident[v] == nil {
+				incident[v] = map[*Face]struct{}{}
+			}
+			incident[v][mesh.source[k]] = struct{}{}
+		}
+	}
+	mixedCorners := 0
+	for v, faces := range incident {
+		lo, hi := math.Inf(1), 0.0
+		for f := range faces {
+			d, ok := mesh.sourceBound(f)
+			require.True(t, ok)
+			lo, hi = math.Min(lo, d), math.Max(hi, d)
+		}
+		require.Equal(t, hi, beta[v], `vertex %d reads its largest incident face bound`, v)
+		if lo < hi {
+			mixedCorners++
+		}
+	}
+	require.Positive(t, mixedCorners, `some corner sits between a finer and a coarser face`)
+}

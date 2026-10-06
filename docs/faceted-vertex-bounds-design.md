@@ -110,29 +110,30 @@ part of this design.
 
 ## 3. Composition through one boolean
 
-The mesh boolean (evaluator §9; today `boolean_mesh.go`, `boolean_cut.go`,
-`boolean.go`'s `evaluateBoolean`) produces three kinds of result vertex. Each
+The mesh boolean (evaluator §9; `internal/meshbool`'s `MeshBoolean`,
+`CutTriangle` and `StitchFacetsContext`, driven by `boolean.go`'s
+`evaluateBoolean`) produces three kinds of result vertex. Each
 gets its bound from one rule, and no rule reads a global figure.
 
 ### 3.1 An operand vertex keeps its own bound
 
 A kept vertex that was a vertex of operand A lifts to the exact rational of
-its float (`prepBoolMesh`) and rounds back to the identical float at the
-final weld (`stitchFacets`), so its weld displacement is exactly zero and
+its float (`prepBoolMeshContext`) and rounds back to the identical float at the
+final weld (`StitchFacetsContext`), so its weld displacement is exactly zero and
 `β_result(v) = β_A(v)`. The same holds for operand B.
 
 ### 3.2 A rim vertex takes the pair's own trim amplification
 
 A rim vertex `r` is an exact point of the contact segment of ONE facet pair
-`(t_A, t_B)` (`triContact.p0`/`p1`). Its bound before the weld is
+`(t_A, t_B)` (`TriContact.P0`/`P1`). Its bound before the weld is
 
 ```text
 β_pre(r) = upRound( (δ(t_A) + δ(t_B)) / sin θ(t_A, t_B) )
 ```
 
-with `sin θ(t_A, t_B)` the proven lower bound `sinLowerBound(c.sin2)` of THAT
-pair's crossing angle, read from the contact's own exact `sin2` rather than
-from the pair-wide minimum `meshBoolean` returns today. The argument is
+with `sin θ(t_A, t_B)` the proven lower bound `SinLowerBound(c.Sin2)` of THAT
+pair's crossing angle, read from the contact's own exact `Sin2` rather than
+from the pair-wide minimum `MeshBoolean` returns today. The argument is
 `rimDelta`'s, applied per pair: the true piece of `t_A` lies within `δ(t_A)`
 of `t_A`'s plane and `t_B`'s within `δ(t_B)` of `t_B`'s, the intersection of
 two slabs of those half-widths crossing at `θ` is a tube of half-width
@@ -143,14 +144,14 @@ stays per vertex: a `β_pre(r)` at or above the pair diameter `dPair`, or a
 non-finite one, refuses the operation with the same `ErrUnsupported`.
 
 Both operand facets of a contact are known exactly where the contact is
-classified, so the pair's `sin2`, `δ(t_A)` and `δ(t_B)` are recorded on the
-`xseg` the cutter receives and on the `cutVert` it creates for each chain
-endpoint; a kept facet corner carries that provenance out of `cutTriangle`
-(a `keptFacet` corner names either an operand vertex index or a rim record).
+classified, so the pair's `Sin2`, `δ(t_A)` and `δ(t_B)` are recorded on the
+`Xseg` the cutter receives and on the `CutVert` it creates for each chain
+endpoint; a kept facet corner carries that provenance out of `CutTriangle`
+(a `KeptFacet` corner names either an operand vertex index or a rim record).
 
 ### 3.3 A new vertex on an operand facet that is not a rim point
 
-The conforming pass and the artificial split line of `cutTriangle` create
+The conforming pass and the artificial split line of `CutTriangle` create
 vertices on a facet's own edges that no contact segment ends at. Such a vertex
 lies on the held facet, so by §2's facet claim it takes that facet's bound:
 `β_pre(x) = δ(t)`. Where the point lies on an edge two facets share, both
@@ -159,7 +160,7 @@ rule is unambiguous.
 
 ### 3.4 The weld, per vertex
 
-`stitchFacets` already measures every stitched vertex's per-coordinate
+`StitchFacetsContext` already measures every stitched vertex's per-coordinate
 rounding gap before taking the maximum as `round`. The per-vertex figure is
 kept: `weld(v) = Radius3D(ProvenUpRound(gap_v))`, zero exactly for every
 operand vertex (§3.1), and
@@ -246,9 +247,9 @@ boolean's own request changes (§5).
 
 ### 4.5 The prepared operand
 
-`boolMesh` carries the operand mesh's per-vertex bounds (or §2.1's derived
+`meshbool.BoolMesh` carries the operand mesh's per-vertex bounds (or §2.1's derived
 reading when the mesh publishes none) and exposes `δ(t)` per facet, which is
-what the contact classifier records on each `xseg` (§3.2) and what §5's gate
+what the contact classifier records on each `Xseg` (§3.2) and what §5's gate
 reads.
 
 ## 5. The chain-depth comparison
@@ -282,9 +283,9 @@ is the one the boolean needs and the request never refuses. The request for a
 chorded analytic operand stays `tol`, unchanged, so raising one operand's
 request never coarsens the other. After the contact classification has run
 and before any facet is cut, the gate walks every operand facet the
-classification reports as meeting the other operand (`contactPoint`,
-`contactSegment`, or within the pre-pass slack) and refuses with
-`ErrUnsupported`, through `booleanExpectedStaging`, when any such facet of a
+classification reports as meeting the other operand (`ContactPoint`,
+`ContactSegment`, or within the pre-pass slack) and refuses with
+`ErrUnsupported`, through `meshbool.BooleanExpectedStaging`, when any such facet of a
 RESTATING operand has `δ(t) > tol`. The message names the operand (`Cut`'s
 target or tool, else first or second), the bound of the touched facet, the
 pair's chord tolerance, and says that a boolean takes no tolerance. A chorded
@@ -370,14 +371,14 @@ hand-off's curved chain continues.
 
 ## 8. Increments
 
-Files are named by role; the mesh-boolean files (`boolean_exact.go`,
-`boolean_mesh.go`, `boolean_cut.go`) are moving to `internal/meshbool` and
-the plan refers to them as "the mesh-boolean pipeline".
+Files are named by role. "The mesh-boolean pipeline" is `internal/meshbool`
+(the contact gather, the facet cutter and the stitch) together with the
+root's `boolean_mesh.go`, which prepares each operand for it.
 
 | PR | Lands | Files | Tests and the red leg each must show |
 |---|---|---|---|
 | **1** | `Mesh.vertexBound` and its setter in the mesh proof record (`tessellate.go`); the mitred sweep build keeps each vertex's own rounding gap and publishes it, with `faceBound[f]` the corner maximum over `f`'s triangles and `delta`/`bound` the overall maximum (`sweep_mitre_build.go`, `sweep_mitre.go`); §2.1's derived reading for a mesh with no record, as one reader the pipeline will call | mesh record, mitred build, mitred restatement | A mitred sweep with its path start at the origin and an axis-aligned first span publishes `β = 0` at every start-cap vertex and `β ≤ delta` everywhere, with equality at one vertex; red leg: publish `delta` at every vertex and the zero assertion fails. The derived reading on a revolve mesh equals the largest incident `faceBound` at a cap-wall corner; red leg: read the vertex's own face alone and the corner assertion fails |
-| **2** | the composition of §3: facet bounds on the prepared operand, `sin2`/`δ` recorded on each contact segment, corner provenance on kept facets, per-vertex weld in the stitch, `facetedPayload.vertexBound`, `meshBound` as the facet maximum; measurements still read `meshBound` | mesh-boolean pipeline, `boolean.go`'s composition, `boolean_body.go`'s payload | Union of two crossing mitred branches (the existing `apitest` fixture): every surviving operand vertex keeps its operand `β` to the bit; every rim vertex's `β` equals `upRound((δ(t_A)+δ(t_B))/sinLowerBound(sin2)) + weld` recomputed from the fixture's own facet pair; `meshBound` is at most today's. Red legs: divide by the pair-wide `sinMin` and the rim equality fails at a rim whose own crossing is not the shallowest; drop the per-vertex weld and tessellation §14's "rational intersection vertices round inexactly" fixture reports a rim `β` below the measured rounding gap |
+| **2** | the composition of §3: facet bounds on the prepared operand, `Sin2`/`δ` recorded on each contact segment, corner provenance on kept facets, per-vertex weld in the stitch, `facetedPayload.vertexBound`, `meshBound` as the facet maximum; measurements still read `meshBound` | mesh-boolean pipeline, `boolean.go`'s composition, `boolean_body.go`'s payload | Union of two crossing mitred branches (the existing `apitest` fixture): every surviving operand vertex keeps its operand `β` to the bit; every rim vertex's `β` equals `upRound((δ(t_A)+δ(t_B))/SinLowerBound(Sin2)) + weld` recomputed from the fixture's own facet pair; `meshBound` is at most today's. Red legs: divide by the pair-wide `sinMin` and the rim equality fails at a rim whose own crossing is not the shallowest; drop the per-vertex weld and tessellation §14's "rational intersection vertices round inexactly" fixture reports a rim `β` below the measured rounding gap |
 | **3** | §4's readings: `Vertex.Bound`, edge bounds, `Faceted.Bound`, area, box; `Placed` per vertex; `tessellateFaceted` publishes the record and per-face `faceBound`; the pre-pass reads per-face slack | `boolean_body.go`, `tessellate.go` | A three-union chain: an untouched trunk vertex reports the trunk's own `delta` as its `Vertex.Bound`, an untouched trunk face reports it as `Faceted.Bound`, and the box bound equals `Radius3D(e)` recomputed from the published vertices; red leg: publish `meshBound` to every vertex and the untouched-vertex equality fails. A fixture whose largest-`β` vertex sits inside the held box but within `β` of one face of it: the box bound covers `m − (v.x − B(v))`; red leg: drop that term and the fixture's exact source box (the exact rationals) escapes the published bound. `Placed` of a boolean result: each vertex's bound grows by `RigidRoundAllow` at its own magnitude; red leg: charge the body-wide magnitude and the near-origin vertex's bound is strictly looser than the assertion allows |
 | **4** | §5: `heldFloorOf`, the per-operand request tolerance, the post-classification gate and its message; companion edits to core §8 "The chain depth", evaluator §9's rim bullet, tessellation §7 (the boolean's request) and §11 steps 7–8 and the result-payload paragraph; `booleanOperandStaging` rewritten | `boolean.go`, the mesh-boolean pipeline's contact gather, the three design docs | Twenty unions of §6's fixture succeed with every union's rim `β` at most `2·tol/sin θ` of its own pair. A fixture whose operand carries one rim with `β > tol` away from the new contact succeeds, and the same operand with the new contact placed ON that rim refuses with the new message; red leg: compare the operand's `meshBound` and the first fixture refuses. A cone-to-cone-to-cone chain (the hand-off's request 1 shape) builds three segments; red leg: the global comparison refuses the third |
 | **5** (optional, not scheduled) | the interpolated rim rule of §6 | mesh-boolean pipeline | only if a measured chain needs it |
