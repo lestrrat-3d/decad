@@ -19,13 +19,8 @@ func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, 
 		if part.definition.Role != Dynamic {
 			continue
 		}
-		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
-		if mass == nil || bound == nil {
-			return State{}, false
-		}
-		massLow := new(big.Rat).Sub(mass, bound)
-		massHigh := new(big.Rat).Add(mass, bound)
-		if massLow.Sign() <= 0 {
+		massLow, massHigh := part.exact.low, part.exact.high
+		if massLow == nil || massLow.Sign() <= 0 {
 			return State{}, false
 		}
 		for axis := range 3 {
@@ -61,7 +56,7 @@ func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, 
 			high := new(big.Rat).Add(velocityValue,
 				new(big.Rat).Mul(new(big.Rat).Add(gravityValue, forceHigh), duration))
 			published := v.Base() + float64((g.Base()+force.Base()/part.mass.Mass.Value.Base())*dt.Base())
-			read := new(big.Rat).SetFloat64(published)
+			read := ratFloat(published)
 			if !finite(published) || read == nil ||
 				intervalDeviation(read, low, high).Cmp(limit) > 0 {
 				return State{}, false
@@ -171,8 +166,9 @@ func angularKickWithin(inertia decad.InertiaReading, pose r3.Transform, before, 
 		delta.value[axis], delta.low[axis], delta.high[axis] =
 			new(big.Rat), new(big.Rat), new(big.Rat)
 	}
-	for _, component := range inertiaComponents(inertia) {
-		quantity, uncertainty := exactBase(component.reading.Value), exactBase(component.reading.Bound)
+	components := exactInertia(inertia)
+	for _, component := range components {
+		quantity, uncertainty := component.value, component.bound
 		if quantity == nil || uncertainty == nil || uncertainty.Sign() < 0 {
 			return false
 		}
@@ -186,7 +182,7 @@ func angularKickWithin(inertia decad.InertiaReading, pose r3.Transform, before, 
 				quantity, uncertainty, coefficient)
 		}
 	}
-	spin, ok := spinReadings(inertia, pose, before)
+	spin, ok := spinReadings(&components, pose, before)
 	if !ok {
 		return false
 	}

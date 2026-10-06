@@ -64,97 +64,129 @@ func (w *World) torqueImpulse(loads []*BodyLoad, dt units.Value) (MomentumReadin
 }
 
 func (w *World) conservationState(state State) (ConservationState, bool) {
-	energy := new(big.Rat)
-	energyLow := new(big.Rat)
-	energyHigh := new(big.Rat)
-	var momentum, low, high, angularValue, angularLow, angularHigh [3]*big.Rat
-	for axis := range momentum {
-		momentum[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
-		angularValue[axis], angularLow[axis], angularHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
-	}
+	sums := newConservationSums()
 	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
-		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
-		if mass == nil || bound == nil {
+		exact := part.exact
+		if exact.low == nil || exact.low.Sign() <= 0 {
 			return ConservationState{}, false
 		}
-		massLow := new(big.Rat).Sub(mass, bound)
-		massHigh := new(big.Rat).Add(mass, bound)
-		if massLow.Sign() <= 0 {
-			return ConservationState{}, false
-		}
-		center, centerError, ok := worldCenterReading(state.entries[i].Pose, part.mass.Center)
+		velocity, ok := quantityRats(state.entries[i].LinearVelocity)
 		if !ok {
 			return ConservationState{}, false
 		}
-		speedSquared := new(big.Rat)
-		var velocity [3]*big.Rat
-		for axis := range momentum {
-			v := exactBase(velocityComponent(state.entries[i].LinearVelocity, axis))
-			if v == nil {
+		if zeroRats(velocity) {
+			// A body at rest adds nothing to the linear readings, and its
+			// mass center enters them only through c×v; the center must
+			// still read.
+			if !centerReadable(state.entries[i].Pose, exact) {
 				return ConservationState{}, false
 			}
-			velocity[axis] = v
-			momentum[axis].Add(momentum[axis], new(big.Rat).Mul(mass, v))
-			if v.Sign() < 0 {
-				low[axis].Add(low[axis], new(big.Rat).Mul(massHigh, v))
-				high[axis].Add(high[axis], new(big.Rat).Mul(massLow, v))
-			} else {
-				low[axis].Add(low[axis], new(big.Rat).Mul(massLow, v))
-				high[axis].Add(high[axis], new(big.Rat).Mul(massHigh, v))
-			}
-			speedSquared.Add(speedSquared, new(big.Rat).Mul(v, v))
+		} else if !sums.addLinear(state.entries[i].Pose, exact, velocity) {
+			return ConservationState{}, false
 		}
-		for axis := range angularValue {
-			j, k := (axis+1)%3, (axis+2)%3
-			coefficient := new(big.Rat).Sub(new(big.Rat).Mul(center[j], velocity[k]),
-				new(big.Rat).Mul(center[k], velocity[j]))
-			uncertainty := new(big.Rat).Add(
-				new(big.Rat).Mul(centerError[j], absRat(new(big.Rat).Set(velocity[k]))),
-				new(big.Rat).Mul(centerError[k], absRat(new(big.Rat).Set(velocity[j]))))
-			addMassProduct(angularValue[axis], angularLow[axis], angularHigh[axis],
-				mass, massLow, massHigh, coefficient,
-				new(big.Rat).Sub(coefficient, uncertainty), new(big.Rat).Add(coefficient, uncertainty))
-		}
-		energy.Add(energy, new(big.Rat).Mul(mass, speedSquared))
-		energyLow.Add(energyLow, new(big.Rat).Mul(massLow, speedSquared))
-		energyHigh.Add(energyHigh, new(big.Rat).Mul(massHigh, speedSquared))
-		spin, ok := spinReadings(part.mass.Inertia, state.entries[i].Pose,
+		spin, ok := spinReadings(&exact.components, state.entries[i].Pose,
 			state.entries[i].AngularVelocity)
 		if !ok {
 			return ConservationState{}, false
 		}
-		for axis := range angularValue {
-			angularValue[axis].Add(angularValue[axis], spin.value[axis])
-			angularLow[axis].Add(angularLow[axis], spin.low[axis])
-			angularHigh[axis].Add(angularHigh[axis], spin.high[axis])
+		for axis := range sums.angular {
+			sums.angular[axis].Add(sums.angular[axis], spin.value[axis])
+			sums.angularLow[axis].Add(sums.angularLow[axis], spin.low[axis])
+			sums.angularHigh[axis].Add(sums.angularHigh[axis], spin.high[axis])
 		}
-		energy.Add(energy, spin.energy)
-		energyLow.Add(energyLow, spin.energyLow)
-		energyHigh.Add(energyHigh, spin.energyHigh)
+		sums.energy.Add(sums.energy, spin.energy)
+		sums.energyLow.Add(sums.energyLow, spin.energyLow)
+		sums.energyHigh.Add(sums.energyHigh, spin.energyHigh)
 	}
+	return sums.readings()
+}
+
+// conservationSums accumulates conservationState's exact readings: twice
+// the kinetic energy, the linear momentum and the angular momentum about the
+// world origin, each with its enclosure.
+type conservationSums struct {
+	energy, energyLow, energyHigh    *big.Rat
+	momentum, low, high              [3]*big.Rat
+	angular, angularLow, angularHigh [3]*big.Rat
+}
+
+func newConservationSums() *conservationSums {
+	sums := &conservationSums{energy: new(big.Rat), energyLow: new(big.Rat), energyHigh: new(big.Rat)}
+	for axis := range sums.momentum {
+		sums.momentum[axis], sums.low[axis], sums.high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
+		sums.angular[axis], sums.angularLow[axis], sums.angularHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
+	}
+	return sums
+}
+
+// addLinear adds one moving body's linear momentum, its moment c×m·v about
+// the world origin and its m·v², each over its mass interval, the moment
+// over its mass center reading too.
+func (sums *conservationSums) addLinear(pose r3.Transform, exact *exactMass, velocity [3]*big.Rat) bool {
+	mass, massLow, massHigh := exact.mass, exact.low, exact.high
+	center, centerError, ok := worldCenterReading(pose, exact)
+	if !ok {
+		return false
+	}
+	speedSquared := new(big.Rat)
+	for axis, v := range velocity {
+		sums.momentum[axis].Add(sums.momentum[axis], new(big.Rat).Mul(mass, v))
+		if v.Sign() < 0 {
+			sums.low[axis].Add(sums.low[axis], new(big.Rat).Mul(massHigh, v))
+			sums.high[axis].Add(sums.high[axis], new(big.Rat).Mul(massLow, v))
+		} else {
+			sums.low[axis].Add(sums.low[axis], new(big.Rat).Mul(massLow, v))
+			sums.high[axis].Add(sums.high[axis], new(big.Rat).Mul(massHigh, v))
+		}
+		speedSquared.Add(speedSquared, new(big.Rat).Mul(v, v))
+	}
+	for axis := range sums.angular {
+		j, k := (axis+1)%3, (axis+2)%3
+		coefficient := new(big.Rat).Sub(new(big.Rat).Mul(center[j], velocity[k]),
+			new(big.Rat).Mul(center[k], velocity[j]))
+		uncertainty := new(big.Rat).Add(
+			new(big.Rat).Mul(centerError[j], absRat(new(big.Rat).Set(velocity[k]))),
+			new(big.Rat).Mul(centerError[k], absRat(new(big.Rat).Set(velocity[j]))))
+		addMassProduct(sums.angular[axis], sums.angularLow[axis], sums.angularHigh[axis],
+			mass, massLow, massHigh, coefficient,
+			new(big.Rat).Sub(coefficient, uncertainty), new(big.Rat).Add(coefficient, uncertainty))
+	}
+	sums.energy.Add(sums.energy, new(big.Rat).Mul(mass, speedSquared))
+	sums.energyLow.Add(sums.energyLow, new(big.Rat).Mul(massLow, speedSquared))
+	sums.energyHigh.Add(sums.energyHigh, new(big.Rat).Mul(massHigh, speedSquared))
+	return true
+}
+
+// readings halves the energy sums and publishes every reading.
+func (sums *conservationSums) readings() (ConservationState, bool) {
 	half := big.NewRat(1, 2)
-	energy.Mul(energy, half)
-	energyLow.Mul(energyLow, half)
-	energyHigh.Mul(energyHigh, half)
-	kinetic, ok := boundedReading(energy, energyLow, energyHigh,
+	sums.energy.Mul(sums.energy, half)
+	sums.energyLow.Mul(sums.energyLow, half)
+	sums.energyHigh.Mul(sums.energyHigh, half)
+	kinetic, ok := boundedReading(sums.energy, sums.energyLow, sums.energyHigh,
 		units.KilogramSquareMillimeterPerSecondSquared)
 	if !ok {
 		return ConservationState{}, false
 	}
-	linear, ok := boundedMomentum(momentum, low, high)
+	linear, ok := boundedMomentum(sums.momentum, sums.low, sums.high)
 	if !ok {
 		return ConservationState{}, false
 	}
-	angularReading, ok := boundedVector(angularValue, angularLow, angularHigh,
+	angularReading, ok := boundedVector(sums.angular, sums.angularLow, sums.angularHigh,
 		units.KilogramSquareMillimeterPerSecond)
 	if !ok {
 		return ConservationState{}, false
 	}
 	return ConservationState{KineticEnergy: kinetic, LinearMomentum: linear,
 		AngularMomentum: angularReading}, true
+}
+
+// zeroRats reports whether every component is zero.
+func zeroRats(x [3]*big.Rat) bool {
+	return x[0].Sign() == 0 && x[1].Sign() == 0 && x[2].Sign() == 0
 }
 
 type spinReading struct {
@@ -165,18 +197,37 @@ type spinReading struct {
 // spinReadings evaluates I in the source axes. The held pose basis and angular
 // velocity are exact rational inputs here; only the six inertia readings carry
 // intervals. Rotating the result back to world axes preserves their signs.
-func spinReadings(inertia decad.InertiaReading, pose r3.Transform, omega QuantityVec) (spinReading, bool) {
+func spinReadings(components *[6]exactComponent, pose r3.Transform, omega QuantityVec) (spinReading, bool) {
 	reading := spinReading{energy: new(big.Rat), energyLow: new(big.Rat), energyHigh: new(big.Rat)}
 	for axis := range reading.value {
 		reading.value[axis], reading.low[axis], reading.high[axis] =
 			new(big.Rat), new(big.Rat), new(big.Rat)
 	}
-	rotation, local, ok := spinBasis(pose, omega)
+	velocity, ok := quantityRats(omega)
 	if !ok {
 		return spinReading{}, false
 	}
-	for _, component := range inertiaComponents(inertia) {
-		quantity, errorBound := exactBase(component.reading.Value), exactBase(component.reading.Bound)
+	if zeroRats(velocity) {
+		// Every coefficient is zero, so every reading is: the basis and the
+		// components must still read.
+		basis := pose.Basis()
+		if !finite(basis.EX.X, basis.EX.Y, basis.EX.Z, basis.EY.X, basis.EY.Y, basis.EY.Z,
+			basis.EZ.X, basis.EZ.Y, basis.EZ.Z) {
+			return spinReading{}, false
+		}
+		for _, component := range components {
+			if component.value == nil || component.bound == nil || component.bound.Sign() < 0 {
+				return spinReading{}, false
+			}
+		}
+		return reading, true
+	}
+	rotation, local, ok := basisSpin(pose, velocity)
+	if !ok {
+		return spinReading{}, false
+	}
+	for _, component := range components {
+		quantity, errorBound := component.value, component.bound
 		if quantity == nil || errorBound == nil || errorBound.Sign() < 0 {
 			return spinReading{}, false
 		}
@@ -211,20 +262,23 @@ func inertiaComponents(inertia decad.InertiaReading) [6]inertiaComponent {
 
 // spinEnergyChange keeps each source inertia interval shared across the
 // before/after squared-speed difference of one impulse. It returns the upper
-// end of ωᵀIω's change, twice the rotational energy change.
-func spinEnergyChange(inertia decad.InertiaReading, pose r3.Transform,
-	before, after QuantityVec) (*big.Rat, bool) {
-	_, initial, ok := spinBasis(pose, before)
+// end of ωᵀIω's change, twice the rotational energy change. rotation is the
+// pose basis as exact rationals, rotation[row][column]; before and after are
+// exact angular velocities, each component read at its nearest float64 as a
+// rad/s quantity would hold it.
+func spinEnergyChange(components *[6]exactComponent, rotation [3][3]*big.Rat,
+	before, after [3]*big.Rat) (*big.Rat, bool) {
+	initial, ok := localSpin(rotation, before)
 	if !ok {
 		return nil, false
 	}
-	_, final, ok := spinBasis(pose, after)
+	final, ok := localSpin(rotation, after)
 	if !ok {
 		return nil, false
 	}
 	upper := new(big.Rat)
-	for _, component := range inertiaComponents(inertia) {
-		quantity, bound := exactBase(component.reading.Value), exactBase(component.reading.Bound)
+	for _, component := range components {
+		quantity, bound := component.value, component.bound
 		if quantity == nil || bound == nil || bound.Sign() < 0 {
 			return nil, false
 		}
@@ -241,7 +295,43 @@ func spinEnergyChange(inertia decad.InertiaReading, pose r3.Transform,
 	return upper, true
 }
 
+// localSpin is Rᵀω for an exact basis and an angular velocity read through
+// float64, as a rad/s QuantityVec of its components would hold it: each
+// component is rounded to its nearest float64 and fails when that is not
+// finite.
+func localSpin(rotation [3][3]*big.Rat, omega [3]*big.Rat) ([3]*big.Rat, bool) {
+	var velocity, local [3]*big.Rat
+	for axis, value := range omega {
+		f, _ := value.Float64()
+		velocity[axis] = ratFloat(f)
+		if velocity[axis] == nil {
+			return local, false
+		}
+	}
+	for i := range local {
+		local[i] = new(big.Rat)
+		for axis := range 3 {
+			if velocity[axis].Sign() == 0 {
+				continue
+			}
+			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity[axis]))
+		}
+	}
+	return local, true
+}
+
+// spinBasis reads a pose basis as exact rationals, rotation[row][column],
+// and the angular velocity in its axes, Rᵀω.
 func spinBasis(pose r3.Transform, omega QuantityVec) ([3][3]*big.Rat, [3]*big.Rat, bool) {
+	velocity, ok := quantityRats(omega)
+	if !ok {
+		return [3][3]*big.Rat{}, [3]*big.Rat{}, false
+	}
+	return basisSpin(pose, velocity)
+}
+
+// basisSpin is spinBasis for an exact angular velocity.
+func basisSpin(pose r3.Transform, velocity [3]*big.Rat) ([3][3]*big.Rat, [3]*big.Rat, bool) {
 	var rotation [3][3]*big.Rat
 	var local [3]*big.Rat
 	basis := pose.Basis()
@@ -249,69 +339,125 @@ func spinBasis(pose r3.Transform, omega QuantityVec) ([3][3]*big.Rat, [3]*big.Ra
 	for i, column := range columns {
 		local[i] = new(big.Rat)
 		for axis, coordinate := range [3]float64{column.X, column.Y, column.Z} {
-			rotation[axis][i] = new(big.Rat).SetFloat64(coordinate)
-			velocity := exactBase(velocityComponent(omega, axis))
-			if rotation[axis][i] == nil || velocity == nil {
+			rotation[axis][i] = ratFloat(coordinate)
+			if rotation[axis][i] == nil {
 				return rotation, local, false
 			}
-			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity))
+			if velocity[axis].Sign() == 0 {
+				continue
+			}
+			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity[axis]))
 		}
 	}
 	return rotation, local, true
 }
 
+// addIntervalProduct adds nominal·coefficient to value, and its enclosure
+// over nominal ± uncertainty to low and high. A zero coefficient, or a zero
+// nominal with no uncertainty, adds nothing.
 func addIntervalProduct(value, low, high, nominal, uncertainty, coefficient *big.Rat) {
-	value.Add(value, new(big.Rat).Mul(nominal, coefficient))
-	width := new(big.Rat).Mul(uncertainty, absRat(new(big.Rat).Set(coefficient)))
+	if coefficient.Sign() == 0 || (nominal.Sign() == 0 && uncertainty.Sign() == 0) {
+		return
+	}
 	contribution := new(big.Rat).Mul(nominal, coefficient)
+	value.Add(value, contribution)
+	if uncertainty.Sign() == 0 {
+		low.Add(low, contribution)
+		high.Add(high, contribution)
+		return
+	}
+	width := new(big.Rat).Mul(uncertainty, absRat(new(big.Rat).Set(coefficient)))
 	low.Add(low, new(big.Rat).Sub(contribution, width))
-	high.Add(high, new(big.Rat).Add(contribution, width))
+	high.Add(high, contribution.Add(contribution, width))
 }
 
 // worldCenterReading uses r3 for the point transform, then encloses both its
 // floating-point evaluation and the source mass center's ball uncertainty.
-func worldCenterReading(pose r3.Transform, source decad.VecMeasurement) ([3]*big.Rat, [3]*big.Rat, bool) {
+func worldCenterReading(pose r3.Transform, exact *exactMass) ([3]*big.Rat, [3]*big.Rat, bool) {
 	var nominal, errorBound [3]*big.Rat
-	center := source.Value
-	world := pose.Apply(center)
+	world := pose.Apply(exact.center)
 	basis := pose.Basis()
 	translation := pose.Translation()
-	radius := exactBase(source.Bound)
+	radius := exact.radius
 	if radius == nil || radius.Sign() < 0 {
 		return nominal, errorBound, false
 	}
+	for _, term := range exact.local {
+		if term == nil {
+			return nominal, errorBound, false
+		}
+	}
 	columns := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
-	local := [3]float64{center.X, center.Y, center.Z}
 	for axis, output := range [3]float64{world.X, world.Y, world.Z} {
-		nominal[axis] = new(big.Rat).SetFloat64(output)
+		nominal[axis] = ratFloat(output)
 		if nominal[axis] == nil {
 			return nominal, errorBound, false
 		}
 		coordinate := [3]float64{translation.X, translation.Y, translation.Z}[axis]
-		exact := new(big.Rat).SetFloat64(coordinate)
-		if exact == nil {
+		exactValue := ratFloat(coordinate)
+		if exactValue == nil {
 			return nominal, errorBound, false
 		}
 		rowSum := new(big.Rat)
 		for j, column := range columns {
 			basisComponent := [3]float64{column.X, column.Y, column.Z}[axis]
-			factor := new(big.Rat).SetFloat64(basisComponent)
-			term := new(big.Rat).SetFloat64(local[j])
-			if factor == nil || term == nil {
+			factor := ratFloat(basisComponent)
+			if factor == nil {
 				return nominal, errorBound, false
 			}
-			exact.Add(exact, new(big.Rat).Mul(factor, term))
-			rowSum.Add(rowSum, absRat(new(big.Rat).Set(factor)))
+			if factor.Sign() == 0 {
+				continue
+			}
+			exactValue.Add(exactValue, new(big.Rat).Mul(factor, exact.local[j]))
+			rowSum.Add(rowSum, absRat(factor))
 		}
-		errorBound[axis] = new(big.Rat).Add(absRat(new(big.Rat).Sub(exact, nominal[axis])),
-			new(big.Rat).Mul(radius, rowSum))
+		errorBound[axis] = absRat(exactValue.Sub(exactValue, nominal[axis]))
+		if radius.Sign() != 0 {
+			errorBound[axis].Add(errorBound[axis], rowSum.Mul(radius, rowSum))
+		}
 	}
 	return nominal, errorBound, true
 }
 
+// centerReadable reports whether worldCenterReading reads a pose's mass
+// center, without its arithmetic: it fails exactly when the center's bound
+// does not convert or is negative, a source coordinate is not finite, or the
+// transformed center, the translation or the basis is not finite.
+func centerReadable(pose r3.Transform, exact *exactMass) bool {
+	if exact.radius == nil || exact.radius.Sign() < 0 {
+		return false
+	}
+	for _, term := range exact.local {
+		if term == nil {
+			return false
+		}
+	}
+	world, translation, basis := pose.Apply(exact.center), pose.Translation(), pose.Basis()
+	return finite(world.X, world.Y, world.Z, translation.X, translation.Y, translation.Z,
+		basis.EX.X, basis.EX.Y, basis.EX.Z, basis.EY.X, basis.EY.Y, basis.EY.Z, basis.EZ.X, basis.EZ.Y, basis.EZ.Z)
+}
+
+// addMassProduct adds mass·coefficient to sum, and the smallest and largest
+// corner products of the mass and coefficient intervals to low and high. An
+// ordered positive mass interval against an ordered coefficient interval
+// picks its two extreme corners by the coefficient's endpoint signs; every
+// other input compares all four.
 func addMassProduct(sum, low, high, mass, massLow, massHigh, coefficient, coefficientLow,
 	coefficientHigh *big.Rat) {
 	sum.Add(sum, new(big.Rat).Mul(mass, coefficient))
+	if massLow.Sign() > 0 && massLow.Cmp(massHigh) <= 0 && coefficientLow.Cmp(coefficientHigh) <= 0 {
+		if coefficientLow.Sign() < 0 {
+			low.Add(low, new(big.Rat).Mul(massHigh, coefficientLow))
+		} else {
+			low.Add(low, new(big.Rat).Mul(massLow, coefficientLow))
+		}
+		if coefficientHigh.Sign() > 0 {
+			high.Add(high, new(big.Rat).Mul(massHigh, coefficientHigh))
+		} else {
+			high.Add(high, new(big.Rat).Mul(massLow, coefficientHigh))
+		}
+		return
+	}
 	products := [4]*big.Rat{
 		new(big.Rat).Mul(massLow, coefficientLow),
 		new(big.Rat).Mul(massLow, coefficientHigh),
@@ -348,12 +494,8 @@ func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, b
 		if part.definition.Role != Dynamic {
 			continue
 		}
-		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
-		if mass == nil || bound == nil {
-			return ConservationState{}, false
-		}
-		massLow, massHigh := new(big.Rat).Sub(mass, bound), new(big.Rat).Add(mass, bound)
-		if massLow.Sign() <= 0 {
+		mass, massLow, massHigh := part.exact.mass, part.exact.low, part.exact.high
+		if massLow == nil || massLow.Sign() <= 0 {
 			return ConservationState{}, false
 		}
 		var coefficient [3]*big.Rat
@@ -371,8 +513,8 @@ func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, b
 			end := [3]float64{to.X, to.Y, to.Z}
 			var displacement, velocity [3]*big.Rat
 			for axis := range displacement {
-				startValue, endValue := new(big.Rat).SetFloat64(start[axis]),
-					new(big.Rat).SetFloat64(end[axis])
+				startValue, endValue := ratFloat(start[axis]),
+					ratFloat(end[axis])
 				velocity[axis] = exactBase(velocityComponent(before.LinearVelocity, axis))
 				if startValue == nil || endValue == nil || velocity[axis] == nil {
 					return ConservationState{}, false
@@ -498,12 +640,10 @@ func (w *World) forceImpulses(gravity QuantityVec, loads []*BodyLoad,
 		if part.definition.Role != Dynamic {
 			continue
 		}
-		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
-		if mass == nil || bound == nil {
+		mass, massLow, massHigh := part.exact.mass, part.exact.low, part.exact.high
+		if massLow == nil {
 			return MomentumReading{}, MomentumReading{}, false
 		}
-		massLow := new(big.Rat).Sub(mass, bound)
-		massHigh := new(big.Rat).Add(mass, bound)
 		for axis := range gValue {
 			acceleration := exactBase(velocityComponent(gravity, axis))
 			if acceleration == nil {
@@ -560,13 +700,13 @@ func boundedReading(nominal, low, high *big.Rat, unit units.Unit) (decad.Measure
 	if !finite(value) {
 		return decad.Measurement{}, false
 	}
-	actual := new(big.Rat).SetFloat64(value)
+	actual := ratFloat(value)
 	deviation := intervalDeviation(actual, low, high)
 	bound, _ := deviation.Float64()
 	if !finite(bound) || bound < 0 {
 		return decad.Measurement{}, false
 	}
-	if new(big.Rat).SetFloat64(bound).Cmp(deviation) < 0 {
+	if ratFloat(bound).Cmp(deviation) < 0 {
 		bound = math.Nextafter(bound, math.Inf(1))
 	}
 	if !finite(bound) {

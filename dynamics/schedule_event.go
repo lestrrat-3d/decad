@@ -516,8 +516,8 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 // manifold point and requires each enclosure within VelocityResidual of
 // zero.
 func (w *World) grazeSpeedWithin(pair islandPair, state State, drive map[int]driverMotion) bool {
-	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a], drive)
-	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b], drive)
+	a, okA := w.certMotion(pair.a, state.entries[pair.a], drive)
+	b, okB := w.certMotion(pair.b, state.entries[pair.b], drive)
 	if !okA || !okB {
 		return false
 	}
