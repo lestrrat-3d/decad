@@ -99,13 +99,14 @@ func (w *World) contactBandWithin(gap *decad.Measurement) bool {
 
 // continuesTrack reports whether a slice's final sweep keeps its pair in the
 // contact set through the end of the step: a persistent touch track, or a
-// band track that spans the slice within PenetrationResidual.
-func (w *World) continuesTrack(sweep *decad.SweepReport) bool {
+// band track that spans the slice within PenetrationResidual. It reads the
+// band through the step's work, which reuses classify's reading.
+func continuesTrack(work *stepWork, sweep *decad.SweepReport) bool {
 	switch sweep.Outcome {
 	case decad.SweepPersistentTouch:
 		return true
 	case decad.SweepPersistentBand:
-		_, full, ok := w.bandEnd(sweep)
+		_, full, ok := work.bandEnd(sweep)
 		return ok && full
 	default:
 		return false

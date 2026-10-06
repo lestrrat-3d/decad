@@ -227,7 +227,7 @@ func (r *scheduleRun) classify(sweeps sliceSweeps) (slicePlan, []StepDiagnostic)
 			// §10.3: a band track continues the pair while its depth stays
 			// within PenetrationResidual; the slice ends where it no longer
 			// does, or at the track's end, and the pair enters an island there.
-			cut, full, ok := r.w.bandEnd(sweep)
+			cut, full, ok := r.work.bandEnd(sweep)
 			if policy != decad.ContinueCertifiedTouch || !ok {
 				d := r.diagnostic(StepTrackUnproved, pair,
 					"band track does not stay within the penetration residual for any positive time")
@@ -416,7 +416,7 @@ func (r *scheduleRun) restingContacts(last *sliceSweeps) []int {
 		}
 		if last != nil {
 			sweep, ok := last.swept[key]
-			if !ok || !r.w.continuesTrack(sweep) {
+			if !ok || !continuesTrack(r.work, sweep) {
 				continue
 			}
 		}
