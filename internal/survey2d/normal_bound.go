@@ -1,7 +1,9 @@
 package survey2d
 
 import (
+	"encoding/binary"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -61,11 +63,89 @@ const TurnGridShift = 96
 // 2π·w with w the whole remaining gap — sound because |sin(2πt) − sin(2πt₀)|
 // ≤ 2π|t − t₀| and the same for the cosine, so no monotonicity over the gap
 // need be argued.
+//
+// The enclosure is a pure function of x, and tessellation asks for the same
+// angle many times over (every revolve on one angular plan reads the same
+// samples), so nonzero readings are memoised process-wide on x's exact value
+// (radSinCosMemo). Every call returns freshly allocated endpoints the caller
+// may mutate; the memo never hands out the values it holds.
 func RadSinCosInterval(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	if x.Sign() == 0 {
 		zero, one := new(big.Rat), big.NewRat(1, 1)
 		return proofbound.Interval(zero, zero), proofbound.Interval(one, one), true
 	}
+	key := radSinCosKey(x)
+	if e, ok := radSinCosMemo.get(key); ok {
+		return e.sin, e.cos, e.ok
+	}
+	sin, cos, ok := radSinCosIntervalUncached(x)
+	radSinCosMemo.put(key, radSinCosEntry{sin: sin, cos: cos, ok: ok})
+	return sin, cos, ok
+}
+
+// radSinCosMemoCap bounds the memo. The whole apitest suite reads about nine
+// thousand distinct angles, each entry four rationals of a few hundred bits;
+// a full memo is cleared before the next insert.
+const radSinCosMemoCap = 16384
+
+type radSinCosEntry struct {
+	sin, cos proofbound.RatInterval
+	ok       bool
+}
+
+// clone returns the entry with every endpoint freshly allocated.
+func (e radSinCosEntry) clone() radSinCosEntry {
+	if !e.ok {
+		return e
+	}
+	return radSinCosEntry{sin: proofbound.Interval(e.sin.Lo, e.sin.Hi), cos: proofbound.Interval(e.cos.Lo, e.cos.Hi), ok: true}
+}
+
+type radSinCosMemoMap struct {
+	mu      sync.Mutex
+	entries map[string]radSinCosEntry
+}
+
+var radSinCosMemo = &radSinCosMemoMap{entries: map[string]radSinCosEntry{}}
+
+// get returns a fresh copy of the reading memoised for key, or ok false when
+// none is held.
+func (m *radSinCosMemoMap) get(key string) (radSinCosEntry, bool) {
+	m.mu.Lock()
+	e, ok := m.entries[key]
+	m.mu.Unlock()
+	if !ok {
+		return e, false
+	}
+	return e.clone(), true
+}
+
+// put records a copy of e, so the caller keeps sole ownership of e itself.
+func (m *radSinCosMemoMap) put(key string, e radSinCosEntry) {
+	held := e.clone()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.entries) >= radSinCosMemoCap {
+		clear(m.entries)
+	}
+	m.entries[key] = held
+}
+
+// radSinCosKey encodes x's exact value: its sign, then its reduced numerator's
+// magnitude length-prefixed, then its denominator.
+func radSinCosKey(x *big.Rat) string {
+	num, den := x.Num().Bytes(), x.Denom().Bytes()
+	buf := make([]byte, 0, 1+binary.MaxVarintLen64+len(num)+len(den))
+	buf = append(buf, byte(x.Sign()+1))
+	buf = binary.AppendUvarint(buf, uint64(len(num)))
+	buf = append(buf, num...)
+	buf = append(buf, den...)
+	return string(buf)
+}
+
+// radSinCosIntervalUncached is RadSinCosInterval's reading for a nonzero x
+// without the memo; RadSinCosInterval's doc comment states the argument.
+func radSinCosIntervalUncached(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	twoPi := proofbound.TwoPiInterval()
 	turn, ok := IntervalQuo(proofbound.PointInterval(x), twoPi)
 	if !ok {

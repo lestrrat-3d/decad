@@ -3,6 +3,7 @@ package tessellation
 import (
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -83,7 +84,76 @@ const RevolveAngularIntegralSteps = 64
 //
 // Nothing here calls math.Sin or math.Cos, and nothing here compares against π:
 // RadSinCosSpan reduces through internal/proofbound/moments_trig.go's own certified series.
+//
+// The reading is a pure function of the exact step, and a suite that
+// tessellates many revolves on one angular plan asks for the same step again
+// and again, so readings are memoised process-wide on the step's exact
+// endpoints (revolveHomotopyMemo). Every call returns a fresh *big.Rat the
+// caller may mutate; the memo never hands out the value it holds.
 func RevolveAngularHomotopyFactor(step proofbound.RatInterval) (*big.Rat, error) {
+	key := step.Lo.RatString() + "|" + step.Hi.RatString()
+	if e, ok := revolveHomotopyMemo.get(key); ok {
+		if e.err != nil {
+			return nil, e.err
+		}
+		return e.val, nil
+	}
+	v, err := revolveAngularHomotopyFactorUncached(step)
+	revolveHomotopyMemo.put(key, v, err)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Rat).Set(v), nil
+}
+
+// revolveHomotopyMemoCap bounds the memo. A process sees one step per angular
+// plan (nPhi and sweep) in use — the whole apitest suite asks for about 80
+// distinct ones — so the cap is not reached in practice; it exists only so an
+// unusual workload cannot grow the map without limit. An entry holds a reading
+// of under a kilobyte.
+const revolveHomotopyMemoCap = 256
+
+// homotopyMemo is RevolveAngularHomotopyFactor's bounded process-wide memo.
+// A full map is cleared before the next insert: plain eviction, since the
+// working set is far below the cap.
+type homotopyMemo struct {
+	mu      sync.Mutex
+	entries map[string]homotopyMemoEntry
+}
+
+type homotopyMemoEntry struct {
+	val *big.Rat
+	err error
+}
+
+var revolveHomotopyMemo = &homotopyMemo{entries: map[string]homotopyMemoEntry{}}
+
+// get returns the memoised reading for key, its value a fresh copy the caller
+// owns, or ok false when none is held.
+func (m *homotopyMemo) get(key string) (homotopyMemoEntry, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.entries[key]
+	if !ok || e.err != nil {
+		return e, ok
+	}
+	return homotopyMemoEntry{val: new(big.Rat).Set(e.val)}, true
+}
+
+// put records the reading for key. It takes ownership of val: the caller must
+// not hand val itself to anyone afterwards.
+func (m *homotopyMemo) put(key string, val *big.Rat, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.entries) >= revolveHomotopyMemoCap {
+		clear(m.entries)
+	}
+	m.entries[key] = homotopyMemoEntry{val: val, err: err}
+}
+
+// revolveAngularHomotopyFactorUncached is RevolveAngularHomotopyFactor's
+// reading without the memo; its doc comment states the argument.
+func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat, error) {
 	d := IntervalAbsSpan(step)
 	if d.Lo.Sign() < 0 || d.Hi.Cmp(d.Lo) < 0 {
 		return nil, ErrRevolveAngularHomotopy
