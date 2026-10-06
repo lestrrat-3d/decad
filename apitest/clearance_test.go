@@ -166,6 +166,38 @@ func TestClearanceParallelCirclePlacementBound(t *testing.T) {
 	requireBoundedGapContains(t, report, 16.1)
 }
 
+// TestClearancePrunedRodsContainTruth places three radius-2, 20 mm rods so
+// that most rim and cap cells of each pair lie far beyond its gap by box and
+// are pruned (docs/clearance-design.md §5). Rods A at (0, 0) and C at (12, 0)
+// stand on z = 0, so their gap is the 8 mm wall plateau. Rod B at (6, 8)
+// stands on z = 28: its bottom rim faces A's and C's top rims across a 6 mm
+// horizontal and 8 mm vertical offset, a 10 mm gap held by a rim × rim cell.
+// Every row must enclose its closed-form gap.
+func TestClearancePrunedRodsContainTruth(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	a := diskBody(t, doc, 0, 0, 2)
+	b := translated(t, diskBody(t, doc, 6, 8, 2), 0, 0, 28)
+	c := diskBody(t, doc, 12, 0, 2)
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Interferences)
+	require.Len(t, report.Clearances, 3)
+	want := map[[2]*decad.Body]float64{{a, b}: 10, {a, c}: 8, {b, c}: 10}
+	for _, row := range report.Clearances {
+		gap, ok := want[[2]*decad.Body{row.A, row.B}]
+		if !ok {
+			gap, ok = want[[2]*decad.Body{row.B, row.A}]
+		}
+		require.True(t, ok)
+		value, bound := row.Gap.Value.Mag(), row.Gap.Bound.Mag()
+		require.LessOrEqual(t, value-bound, gap, `the interval's low end must not exclude the truth`)
+		require.GreaterOrEqual(t, value+bound, gap, `the interval's high end must not exclude the truth`)
+		require.Less(t, bound, 1e-6)
+	}
+}
+
 // TestClearanceTiltedPlanePairIntervalContainsTruth is this file's flagship
 // widening regression, and the single assertion bodyGeom.delta exists for.
 //

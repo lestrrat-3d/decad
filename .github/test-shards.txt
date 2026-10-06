@@ -96,6 +96,7 @@
 0	0.00	TestCellChordCurveAreaUpperRefusesOnBrokenClaims
 0	0.00	TestCellChordCurveAreaUpperRefusesTheSagittaZigzag
 0	0.00	TestCellChordPatchNormalLowerRefusesADegenerateCell
+0	0.00	TestCellSinkPrunesOnlyStrictlyBeyondTheMargin
 0	0.02	TestCellTwistAreaAllowEnclosesTheBilinearGap
 0	0.10	TestCellTwistAreaLinearArmDominatesTheExactProduct
 0	0.00	TestCellTwistAreaLinearArmEnclosesTheExactProduct
@@ -200,6 +201,8 @@
 0	0.00	TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns
 0	0.00	TestDyadicSqrtBracketsMatchTheRationalOnes
 0	0.00	TestEndpointCuspEscapesAHalfOpenRootCount
+0	0.00	TestEnumerateNeverPrunesAtTheBestUpperBound
+0	0.01	TestEnumeratePrunedRodsMatchTheFullWalk
 0	0.00	TestEvalCupIgnoresUnusedOverflowedSecondMoments
 0	0.00	TestEvalCupRejectsOverflowedMeasurements
 0	0.00	TestEvalLoftCancellation

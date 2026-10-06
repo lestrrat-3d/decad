@@ -674,11 +674,17 @@ func (k *pairKernel) circleCircleEE(ea, eb *cEdge, sink *cellSink) {
 // vertexTier runs one vertex (a topological vertex, a synthesized cone apex
 // or a spindle axis-collapse point) against the other body's faces and
 // edges — every cell closed form (§3's vertex tiers). It continues the
-// enumerator's budget through every face, edge, and planar trim scan.
+// enumerator's budget through every face, edge, and planar trim scan. A
+// face or edge whose box lies beyond the sink's best upper bound is pruned
+// (cellSink.pruned).
 func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
+	at := [2]r3.Vec{v, v}
 	for _, f := range other.faces {
 		if err := budget.Step(); err != nil {
 			return err
+		}
+		if sink.pruned(clrBoxDist(at, f.box)) {
+			continue
 		}
 		if err := k.vertexFace(budget, v, f, sink); err != nil {
 			return err
@@ -687,6 +693,9 @@ func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *
 	for _, e := range other.edges {
 		if err := budget.Step(); err != nil {
 			return err
+		}
+		if sink.pruned(clrBoxDist(at, e.box)) {
+			continue
 		}
 		k.vertexEdge(v, e, sink)
 	}

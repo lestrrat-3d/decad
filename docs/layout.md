@@ -197,7 +197,7 @@ to the byte budget.
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Cached affine and rotating sweep replay. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |
-| `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
+| `clearance_cells.go` | Face-interior candidates and the pruned, box-sorted cell walk. See `docs/clearance-design.md` §3–§5. |
 | `clearance_tiers.go` | The §3 curve and vertex tiers and the §6 ruling certificates. See `docs/clearance-design.md` §3/§4/§6. |
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
