@@ -27,6 +27,14 @@ type BoolMesh struct {
 	FnormsReady []bool
 	Boxes       [][2]r3.Vec
 	Src         []int
+	// VertexBound is β(v) per vertex and FacetBound δ(t) per facet, the
+	// largest of its three corners' β (docs/faceted-vertex-bounds-design.md
+	// §2): a true boundary point lies within VertexBound[v] of vertex v, and
+	// facet t's true piece within FacetBound[t] of the facet. The rim, the
+	// cutter and the stitch compose every result vertex's own bound from them
+	// (§3).
+	VertexBound []float64
+	FacetBound  []float64
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses
@@ -83,6 +91,11 @@ func BoxesOverlap(a, b [2]r3.Vec) bool {
 type KeptFacet struct {
 	V   [3]proofbound.Xpt
 	Src int
+	// Beta is each corner's pre-weld bound (docs/faceted-vertex-bounds-
+	// design.md §3.1–§3.3): an operand vertex's own β, a rim vertex's
+	// RimBound, or, for a point the cutter placed on the operand facet, that
+	// facet's δ. Each is a two-sided claim the corner carries into the stitch.
+	Beta [3]float64
 }
 
 // ErrUnclassifiableContact signals a VALID-but-unclassifiable contact the exact
@@ -134,9 +147,8 @@ type TriContact struct {
 	// reports the fact and the mesh pass decides (docs/evaluator-design.md §9).
 	EdgeA, EdgeB int
 	// sin2 is the exact squared sine of the two facet planes' crossing angle,
-	// nil for a coplanar or empty pair. The boolean's own rim vertices are
-	// displaced by (δA + δB)/sin θ, so the smallest one over the pair's
-	// contacts is what bounds the result (internal/proofbound/bounds.go, rimDelta).
+	// nil for a coplanar or empty pair. A rim vertex this pair's segment ends
+	// at is displaced by (δA + δB)/sin θ of THIS pair (RimBound).
 	Sin2 *big.Rat
 }
 
@@ -783,10 +795,30 @@ type PairContact struct {
 	C      TriContact
 }
 
+// RimBound is docs/faceted-vertex-bounds-design.md §3.2's pre-weld bound of
+// a rim vertex one facet pair creates: the true pieces of the two facets lie
+// within deltaA and deltaB of their planes, the two slabs meet in a tube of
+// half-width (deltaA + deltaB)/sin θ about the exact crossing line, and the
+// true rim point lies in that tube. sin2 is THIS pair's exact squared sine.
+// Two exactly held facets amplify nothing and answer 0 at any angle; a
+// crossing with no proven positive sine answers +Inf, which the caller
+// refuses.
+func RimBound(deltaA, deltaB float64, sin2 *big.Rat) float64 {
+	d := proofbound.AbsSumUpper(deltaA, deltaB)
+	if d <= 0 {
+		return 0
+	}
+	if sin2 == nil {
+		return math.Inf(1)
+	}
+	return proofbound.DivUpper(d, SinLowerBound(sin2))
+}
+
 // MeshBoolean runs the exact-predicate boolean over two prepared operand
-// tessellations. It returns the kept, still-exact facets and a proven LOWER
-// bound on the sine of the crossing angle of every contact it used — the
-// number the rim's displacement bound divides by (internal/proofbound/bounds.go, rimDelta).
+// tessellations. It returns the kept, still-exact facets, each corner carrying
+// its pre-weld bound, and the largest RimBound any contact segment it used
+// gives a rim vertex — the figure the caller refuses at the pair diameter
+// (docs/faceted-vertex-bounds-design.md §3.2).
 func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo) ([]KeptFacet, float64, error) {
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
@@ -799,7 +831,10 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	var pointTouches []proofbound.Xpt
 	var segEnds []proofbound.Xpt
 	var inPlane []PairContact
-	var minSin2 *big.Rat
+	// rims maps each rim vertex (a contact segment's endpoint, by exact key)
+	// to the largest RimBound over the facet pairs whose segment ends there.
+	rims := map[string]float64{}
+	maxRim := 0.0
 	work := 0
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
@@ -811,14 +846,19 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		if c.Kind == ContactNone {
 			return nil
 		}
-		if c.Sin2 != nil && (minSin2 == nil || c.Sin2.Cmp(minSin2) < 0) {
-			minSin2 = c.Sin2
-		}
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
 			return nil
 		}
 		segEnds = append(segEnds, c.P0, c.P1)
+		rim := RimBound(ma.FacetBound[i], mb.FacetBound[j], c.Sin2)
+		maxRim = max(maxRim, rim)
+		for _, p := range []proofbound.Xpt{c.P0, c.P1} {
+			k := p.Key()
+			if prev, ok := rims[k]; !ok || rim > prev {
+				rims[k] = rim
+			}
+		}
 		if c.EdgeA >= 0 || c.EdgeB >= 0 {
 			// The segment runs ALONG a facet edge. Graze or crossing is not
 			// decidable here — hold it for the mesh-level call below.
@@ -933,20 +973,16 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
-	keep, err := KeepSide(ctx, ma, mb, cutsA, blockedA, wantA, false)
+	keep, err := KeepSide(ctx, ma, mb, cutsA, blockedA, rims, wantA, false)
 	if err != nil {
 		return nil, 0, err
 	}
 	kept = append(kept, keep...)
-	keep, err = KeepSide(ctx, mb, ma, cutsB, blockedB, wantB, flipB)
+	keep, err = KeepSide(ctx, mb, ma, cutsB, blockedB, rims, wantB, flipB)
 	if err != nil {
 		return nil, 0, err
 	}
-	sinMin := 1.0
-	if minSin2 != nil {
-		sinMin = SinLowerBound(minSin2)
-	}
-	return append(kept, keep...), sinMin, nil
+	return append(kept, keep...), maxRim, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the
@@ -1020,14 +1056,17 @@ func XtriCorners(m *BoolMesh, i int) [3]proofbound.Xpt {
 // returns the kept facets: subdivided pieces for the cut facets, whole
 // facets for the uncut regions (classified per connected component by exact
 // ray parity — the classification is constant on a component that crosses
-// nothing).
-func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, wantInside, flip bool) ([]KeptFacet, error) {
+// nothing). Every kept corner carries its pre-weld bound (KeptFacet.Beta):
+// an operand vertex keeps its own β, and a subdivision vertex takes rims'
+// bound when it is a rim vertex and its facet's δ otherwise (CutCornerBound).
+func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool) ([]KeptFacet, error) {
 	var kept []KeptFacet
-	emit := func(tri [3]proofbound.Xpt, src int) {
+	emit := func(tri [3]proofbound.Xpt, beta [3]float64, src int) {
 		if flip {
 			tri[1], tri[2] = tri[2], tri[1]
+			beta[1], beta[2] = beta[2], beta[1]
 		}
-		kept = append(kept, KeptFacet{V: tri, Src: src})
+		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta})
 	}
 
 	// The cut facets: exact subdivision along the contact chains, then the
@@ -1046,6 +1085,8 @@ func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 		if err != nil {
 			return nil, err
 		}
+		corners := m.Tris[i]
+		cornerKeys := [3]string{m.Xverts[corners[0]].Key(), m.Xverts[corners[1]].Key(), m.Xverts[corners[2]].Key()}
 		for _, reg := range regions {
 			inside, err := ClassifyRegion(ctx, reg, other)
 			if err != nil {
@@ -1055,7 +1096,11 @@ func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 				continue
 			}
 			for _, tri := range reg.Tris {
-				emit(tri, m.Src[i])
+				var beta [3]float64
+				for k, p := range tri {
+					beta[k] = CutCornerBound(m, i, cornerKeys, p.Key(), rims)
+				}
+				emit(tri, beta, m.Src[i])
 			}
 		}
 	}
@@ -1123,10 +1168,34 @@ func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			continue
 		}
 		for _, f := range members {
-			emit(XtriCorners(m, f), m.Src[f])
+			t := m.Tris[f]
+			emit(XtriCorners(m, f), [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]}, m.Src[f])
 		}
 	}
 	return kept, nil
+}
+
+// CutCornerBound is the pre-weld bound of one corner of a piece CutTriangle
+// cut from facet i (docs/faceted-vertex-bounds-design.md §3.1–§3.3), the
+// corner named by its exact key: one of the facet's own corners keeps that
+// vertex's β, a rim vertex takes the largest RimBound recorded for it, a
+// point that is both takes the larger, and any other point — a split-line or
+// edge point the cutter placed on the held facet — lies on the facet and
+// takes its δ.
+func CutCornerBound(m *BoolMesh, i int, cornerKeys [3]string, key string, rims map[string]float64) float64 {
+	beta, known := 0.0, false
+	for k, ck := range cornerKeys {
+		if ck == key {
+			beta, known = max(beta, m.VertexBound[m.Tris[i][k]]), true
+		}
+	}
+	if rim, ok := rims[key]; ok {
+		beta, known = max(beta, rim), true
+	}
+	if !known {
+		return m.FacetBound[i]
+	}
+	return beta
 }
 
 // ClassifyRegion decides whether a subdivision region lies inside the other
@@ -1240,6 +1309,12 @@ type StitchedMesh struct {
 	// the held mesh no longer carries. The reported surface area is short by
 	// exactly this much, so the area bound must cover it.
 	DropArea float64
+	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// §3.4): the largest, over the exact vertices the held one stands for, of
+	// that exact vertex's pre-weld bound plus its own rounding distance to the
+	// held float, rounded up. An exact vertex held at its own float adds
+	// nothing, so an operand vertex keeps its operand β to the bit.
+	VertexBound []float64
 }
 
 // stitchFacets welds the kept facets by shared exact vertices, makes the
@@ -1252,6 +1327,10 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, decaderr.ErrBooleanFailed)
 	}
 	var xverts []proofbound.Xpt
+	// xbeta is each exact vertex's pre-weld bound: the largest claim any kept
+	// facet corner makes for it, raised below by every conforming split that
+	// inserts it into another facet's edge.
+	var xbeta []float64
 	index := map[string]int{}
 	// Exact vertices are immutable after construction. Reuse the canonical key
 	// when another incident facet carries the same four integer pointers.
@@ -1268,10 +1347,15 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		}
 		index[k] = len(xverts)
 		xverts = append(xverts, p)
+		xbeta = append(xbeta, 0)
 		return len(xverts) - 1
 	}
 	var tris [][3]int
 	var src []int
+	// facetBound is each stitched triangle's δ: the largest corner claim of
+	// the kept facet it descends from. A conforming split keeps its parent's
+	// figure, since every sub-triangle lies on that held facet.
+	var facetBound []float64
 	for i, f := range kept {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -1284,6 +1368,10 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		}
 		tris = append(tris, [3]int{a, b, c})
 		src = append(src, f.Src)
+		for k, vi := range [3]int{a, b, c} {
+			xbeta[vi] = max(xbeta[vi], f.Beta[k])
+		}
+		facetBound = append(facetBound, max(f.Beta[0], f.Beta[1], f.Beta[2]))
 	}
 
 	for round := 0; ; round++ {
@@ -1293,7 +1381,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		split, err := ConformOnce(ctx, &xverts, &tris, &src)
+		split, err := ConformOnce(ctx, xverts, &tris, &src, &facetBound, xbeta)
 		if err != nil {
 			return nil, err
 		}
@@ -1391,6 +1479,11 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		w, _ := worst.Float64()
 		out.Round = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 	}
+	vertexBound, err := HeldVertexBounds(ctx, xverts, xbeta, remap, out.Verts)
+	if err != nil {
+		return nil, err
+	}
+	out.VertexBound = vertexBound
 	// The pre-round surface: every facet the exact stitch produced, dropped
 	// ones included, measured on the held vertices and inflated by the
 	// rounding they may each have travelled (internal/proofbound/bounds.go, proofbound.PerturbedAreaUpper).
@@ -1413,6 +1506,34 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		if n != 1 || directed[[2]int{e[1], e[0]}] != 1 {
 			return nil, fmt.Errorf(`%w: the rounded boundary does not close`, decaderr.ErrBooleanFailed)
 		}
+	}
+	return out, nil
+}
+
+// HeldVertexBounds is docs/faceted-vertex-bounds-design.md §3.4's weld, per
+// vertex: each exact vertex's own rounding distance to the held float that
+// stands for it, read exactly and widened to a 3D radius, is added to that
+// exact vertex's pre-weld bound, and a held vertex takes the largest sum over
+// the exact vertices welded into it. An exact vertex its float holds exactly
+// adds nothing and is not rounded up, so its bound passes through unchanged.
+func HeldVertexBounds(ctx context.Context, xverts []proofbound.Xpt, xbeta []float64, remap []int, held []r3.Vec) ([]float64, error) {
+	out := make([]float64, len(held))
+	for i, p := range xverts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		fi := remap[i]
+		beta := xbeta[i]
+		if gap := CoordDistance(p, held[fi]); gap.Sign() > 0 {
+			g, _ := gap.Float64()
+			beta = proofbound.AbsSumUpper(beta, proofbound.Radius3D(proofbound.ProvenUpRound(g)))
+		}
+		if proofbound.IsNonFinite(beta) {
+			return nil, fmt.Errorf(`%w: a result vertex's displacement bound is not finite`, decaderr.ErrUnsupported)
+		}
+		out[fi] = max(out[fi], beta)
 	}
 	return out, nil
 }
@@ -1529,8 +1650,12 @@ func RefuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []boo
 // ConformOnce inserts, into every facet edge, the mesh vertices that lie
 // exactly in that edge's interior, re-triangulating the facet so the
 // subdivision conforms. Returns whether anything split.
-func ConformOnce(ctx context.Context, xverts *[]proofbound.Xpt, tris *[][3]int, src *[]int) (bool, error) {
-	verts := *xverts
+//
+// bounds runs parallel to tris and each sub-triangle inherits its parent's
+// entry. xbeta is per exact vertex: a vertex inserted into a facet's edge
+// lies on that held facet, so it is raised to the facet's bound
+// (docs/faceted-vertex-bounds-design.md §3.3).
+func ConformOnce(ctx context.Context, verts []proofbound.Xpt, tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
 	// One counter spans the facet walk, the grid-cell candidate scan nested
 	// under it, and the along-edge ordering: the candidate vertices a single
 	// facet edge sweeps are the candidate operations §7.2 counts, not the
@@ -1546,6 +1671,7 @@ func ConformOnce(ctx context.Context, xverts *[]proofbound.Xpt, tris *[][3]int, 
 
 	var outTris [][3]int
 	var outSrc []int
+	var outBounds []float64
 	splitAny := false
 	for ti, tri := range *tris {
 		if err := budget.Step(); err != nil {
@@ -1568,9 +1694,15 @@ func ConformOnce(ctx context.Context, xverts *[]proofbound.Xpt, tris *[][3]int, 
 		if inserted[0] == nil && inserted[1] == nil && inserted[2] == nil {
 			outTris = append(outTris, tri)
 			outSrc = append(outSrc, (*src)[ti])
+			outBounds = append(outBounds, (*bounds)[ti])
 			continue
 		}
 		splitAny = true
+		for _, hits := range inserted {
+			for _, h := range hits {
+				xbeta[h] = max(xbeta[h], (*bounds)[ti])
+			}
+		}
 		poly := []int{tri[0]}
 		poly = append(poly, inserted[0]...)
 		poly = append(poly, tri[1])
@@ -1584,10 +1716,12 @@ func ConformOnce(ctx context.Context, xverts *[]proofbound.Xpt, tris *[][3]int, 
 		for _, nt := range newTris {
 			outTris = append(outTris, nt)
 			outSrc = append(outSrc, (*src)[ti])
+			outBounds = append(outBounds, (*bounds)[ti])
 		}
 	}
 	*tris = outTris
 	*src = outSrc
+	*bounds = outBounds
 	return splitAny, nil
 }
 

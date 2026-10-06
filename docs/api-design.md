@@ -949,10 +949,13 @@ that a boolean takes no tolerance: there is nothing to retry with. Where the
 held bound stays under that tolerance the result is an ordinary operand and the
 chain continues, so the comparison at each step is what limits a chain, not the
 fact that an operand came out of a boolean. At every step, the result's held
-bound recomposes both operand bounds through `rimDelta`, then adds the final
-rounding displacement. A chained boolean whose first operand carries a bound
-and whose second operand also carries a nonzero bound therefore raises the held
-bound for the next pair; successive booleans do not keep that bound flat. Where
+bound is composed per vertex (`docs/faceted-vertex-bounds-design.md` §3): a
+surviving operand vertex keeps its operand's bound, a vertex the boolean
+creates carries its own facet pair's trim amplification, each adds its own
+final rounding displacement, and the held bound is the largest of them. A rim
+cut through geometry that already carries a bound therefore raises the held
+bound for the next pair; successive booleans whose contacts land on bounded
+geometry do not keep that bound flat. Where
 the comparison does refuse, it is geometry rather than an argument the caller got
 wrong. The booleans take no tolerance parameter (§9), by the same decision that
 puts the tolerance's whole effect on the result's proven `Bound`. The bound is readable rather than

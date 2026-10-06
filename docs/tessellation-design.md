@@ -342,8 +342,8 @@ loft whose published `matchedDelta` and `maxTwistOffsetUpper` are both exactly
 zero under loft §5.2's conditions is admitted
 to the mesh boolean as an all-planar zero-bound operand; every other loft's
 mesh is admitted as an ordinary positive-bound all-planar operand instead,
-through the same `rimDelta` composition every other nonzero-bound operand
-already uses. Loft §5.2 owns when each published term is zero; admission
+through the same per-pair rim composition every other nonzero-bound operand
+already uses (§11 step 7). Loft §5.2 owns when each published term is zero; admission
 follows those two values for a solid. A sheet runs §1.2's two audits in the
 closed-mesh and signed-volume audits' place; the source-face audit applies to
 both kinds.
@@ -1112,11 +1112,15 @@ Boolean composition then stays evaluator §9's:
 5. Run the exact-predicate mesh boolean.
 6. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
    rounding.
-7. Bound new rim vertices by `(deltaA + deltaB)/sin(theta)`, using each mesh's
-   global boundary bound; this remains separate from volume error.
+7. Bound each new rim vertex by `(δ(t_A) + δ(t_B))/sin θ` of the facet pair
+   whose contact segment ends there, `δ(t)` the largest per-vertex bound over
+   that facet's corners and `θ` that pair's own crossing angle
+   (`docs/faceted-vertex-bounds-design.md` §3.2); this remains separate from
+   volume error. A rim bound that is not finite, or reaches the pair diameter,
+   refuses the operation.
 8. Measure the final weld displacement from every exact stitched result vertex
-   to its stored binary64 vertex. Upward-round its addition to every incident
-   result face's boundary displacement.
+   to its stored binary64 vertex and upward-round its addition to that
+   vertex's own pre-weld bound (§3.4 there).
 9. Compose `areaSlackA + areaSlackB` plus area dropped by the final weld.
 
 A faceted operand contributes its payload's already composed `volSymDiff`.
@@ -1129,19 +1133,17 @@ true faceted patch cannot touch another operand. Every boolean generation MUST
 therefore preserve both the faceted boundary certificate used by `sourceBound`
 and the composed `volSymDiff`.
 
-When building the result `facetedPayload`, first assign each result face a
-pre-weld displacement covering every inherited `sourceBound` and every new-rim
-displacement that can reach it. Let `deltaW(face)` be the upward-rounded maximum
-exact-stitched-to-stored coordinate displacement of the welded vertices
-incident to that face; zero is allowed only when every such coordinate is exact.
-Set the face's complete displacement to
-`upRound(preWeld(face) + deltaW(face))`. Set `boundaryCert.Delta` to the
-upward-rounded maximum of those complete result-face values. If per-face
-composition is incomplete, use `upRound(conservativePreWeldDelta + deltaW)`,
-where `deltaW` is the global maximum weld displacement, for every result face
-before taking that maximum. Thus every faceted operand `sourceBound`, including
-a global-`Delta` fallback, and every final weld displacement flow into the next
-result's `boundaryCert.Delta`. This makes the next boolean's hidden-tangency
+When building the result `facetedPayload`, assign each result vertex its
+pre-weld bound (`docs/faceted-vertex-bounds-design.md` §3): a surviving operand
+vertex keeps its operand's per-vertex bound (§2.1 there, derived from
+`sourceBound` when the operand mesh publishes no record), a rim vertex takes
+step 7's bound, and a vertex the cutter or the conforming pass places on an
+operand facet takes that facet's bound. Add each vertex's own weld (step 8);
+zero is allowed only when its coordinates are exact. The payload records the
+result per vertex, and its global `meshBound` is the largest facet bound, the
+largest of each facet's corners. Thus every faceted operand `sourceBound`,
+including a global-`Delta` fallback, and every final weld displacement flow
+into the next result's bounds. This makes the next boolean's hidden-tangency
 pre-pass sound without reconstructing analytic identity.
 
 ## 12. Refusals

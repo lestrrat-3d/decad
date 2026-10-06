@@ -19,12 +19,13 @@ import (
 // The mechanisms, and the helper that owns each:
 //
 //   - the chord displacement δ of a point on an OPERAND's surface → carried in
-//     the payload, composed by rimDelta;
+//     the payload per vertex, composed by the mesh boolean
+//     (docs/faceted-vertex-bounds-design.md §3);
 //   - the TRIM AMPLIFICATION of a point on the boolean's OWN rim: a rim vertex
 //     is the crossing of two chord PLANES, so it is displaced not by δ but by
-//     (δA + δB)/sin θ, θ the crossing angle — unbounded as the surfaces
-//     approach tangency → rimDelta, which refuses when the inflated bound
-//     stops meaning anything;
+//     (δA + δB)/sin θ of its own facet pair, θ that pair's crossing angle —
+//     unbounded as the surfaces approach tangency → meshbool.RimBound, which
+//     the root refuses once the inflated bound stops meaning anything;
 //   - float SUMMATION of the reported value itself → SumSlop, a proven bound
 //     for a NAIVE loop (never zero for a float-computed value, which is what
 //     keeps exactnessOf honest);

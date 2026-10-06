@@ -643,14 +643,16 @@ func TestBooleanBoundComposition(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, secondMesh.Bound().Mag())
 
-	// Both operands carry a held bound. The final union must compose both
-	// rather than treating the first result's bound as effectively flat.
+	// Both operands carry a held bound, and the union keeps each one where
+	// that operand's vertices are (docs/faceted-vertex-bounds-design.md §3.1).
+	// The operands are disjoint, so no rim forms and no vertex moves: the
+	// result's bound is the larger operand bound exactly, never one operand's
+	// alone and never their sum.
 	both, err := decad.Union(t.Context(), first, second)
 	require.NoError(t, err)
 	bothMesh, err := both.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
-	require.Greater(t, bothMesh.Bound().Mag(), firstMesh.Bound().Mag())
-	require.Greater(t, bothMesh.Bound().Mag(), secondMesh.Bound().Mag())
+	require.Equal(t, max(firstMesh.Bound().Mag(), secondMesh.Bound().Mag()), bothMesh.Bound().Mag())
 	bothVol, err := both.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, bothVol.Exactness)

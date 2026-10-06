@@ -220,7 +220,7 @@ payload displacement, which tess §1's Tolerance row lets ride above `tol` (the 
 ### Boolean effect
 
 Through R0, a loft whose `facetDeparture == 0` enters the existing all-planar zero-bound path; every other
-loft is an ordinary positive-bound all-planar operand via `rimDelta` (loft Table D D2). `Verify`'s read-only
+loft is an ordinary positive-bound all-planar operand via the per-pair rim bound (loft Table D D2). `Verify`'s read-only
 `OpIntersect` follows.
 
 ### Tests (R1)

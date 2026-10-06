@@ -481,7 +481,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	kept, sinMin, err := meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
+	kept, maxRim, err := meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -509,15 +509,13 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// |1_B − 1_B'| for all three ops, so it is the sum of the operands' own
 	// symmetric-difference bounds — each δ · (that operand's held area) — plus
 	// what the final float rounding can move. The BOUNDARY bound is a different
-	// question: a vertex the boolean itself creates sits at the crossing of two
-	// chord PLANES, so it is displaced by the trim-amplified (δA + δB)/sin θ,
-	// not by δ.
-	rim, err := rimDelta(ma.bound, mb.bound, sinMin, dPair)
-	if err != nil {
-		if errors.Is(err, ErrUnsupported) {
-			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
-		}
-		return booleanEvaluation{}, err
+	// question, answered per vertex (docs/faceted-vertex-bounds-design.md §3):
+	// a vertex the boolean itself creates sits at the crossing of two chord
+	// PLANES, so it is displaced by its own facet pair's trim-amplified
+	// (δ(t_A) + δ(t_B))/sin θ, not by δ, and the stitch adds each vertex's own
+	// weld. The amplification is refused where it reaches the pair diameter.
+	if err := refuseRimPastPair(maxRim, dPair); err != nil {
+		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 	}
 	symA, err := operandSymDiff(ma)
 	if err != nil {
@@ -535,20 +533,21 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// weld dropped is likewise missing from every area the result reports, so
 	// it joins the operands' own chord deficit in areaSlack.
 	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
-	meshBound, volSymDiff, areaSlack := booleanProofBounds(
-		rim, stitched.Round, symA, symB, roundVol,
+	volSymDiff, areaSlack := booleanProofBounds(
+		symA, symB, roundVol,
 		ma.areaSlack, mb.areaSlack, stitched.DropArea,
 	)
 	payload := facetedPayload{
-		verts:      stitched.Verts,
-		tris:       stitched.Tris,
-		src:        stitched.Src,
-		groups:     groups,
-		meshBound:  meshBound,
-		volSymDiff: volSymDiff,
-		areaSlack:  areaSlack,
-		dPair:      dPair,
-		xform:      r3.Identity(),
+		verts:       stitched.Verts,
+		vertexBound: stitched.VertexBound,
+		tris:        stitched.Tris,
+		src:         stitched.Src,
+		groups:      groups,
+		meshBound:   facetBoundMax(stitched.Tris, stitched.VertexBound),
+		volSymDiff:  volSymDiff,
+		areaSlack:   areaSlack,
+		dPair:       dPair,
+		xform:       r3.Identity(),
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
@@ -567,14 +566,23 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	return booleanEvaluation{payload: payload, volume: volume, volumeRat: volumeRat, audit: audit}, nil
 }
 
-// booleanProofBounds composes the independent, non-negative proof terms that
-// survive the mesh boolean into its faceted result.
-func booleanProofBounds(rim, weldDelta, symA, symB, roundVol, slackA, slackB, dropArea float64) (
-	meshBound, volSymDiff, areaSlack float64,
+// booleanProofBounds composes the independent, non-negative volume and area
+// proof terms that survive the mesh boolean into its faceted result.
+func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) (
+	volSymDiff, areaSlack float64,
 ) {
-	return proofbound.AbsSumUpper(rim, weldDelta),
-		proofbound.AbsSumUpper(symA, symB, roundVol),
+	return proofbound.AbsSumUpper(symA, symB, roundVol),
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
+}
+
+// facetBoundMax is a held mesh's largest facet bound δ(t), the largest of
+// each facet's three corners' β (docs/faceted-vertex-bounds-design.md §4.1).
+func facetBoundMax(tris [][3]int, beta []float64) float64 {
+	out := 0.0
+	for _, t := range tris {
+		out = max(out, beta[t[0]], beta[t[1]], beta[t[2]])
+	}
+	return out
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global

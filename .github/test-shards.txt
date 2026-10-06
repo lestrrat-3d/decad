@@ -52,6 +52,8 @@
 0	0.00	TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch
 0	0.00	TestBodyPatchRejectsAReceiverWithNoPayload
 0	0.00	TestBooleanProofBoundsEncloseExactTermSums
+0	0.02	TestBooleanVertexBoundsChargeEachRimItsWeld
+0	0.41	TestBooleanVertexBoundsComposePerPair
 0	0.00	TestBoundaryExtremesBoundedContextCancellation
 0	0.02	TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly
 0	0.00	TestBoundaryExtremesBoundedNonFiniteDirectionRefuses
