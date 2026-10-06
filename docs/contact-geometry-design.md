@@ -590,9 +590,12 @@ exact float map, whose section is the disk's image under `B`. With `gram`
 the largest absolute row sum of `BᵀB − I`, every unit `m` has `|Bᵀm|²` in
 `[1 − gram, 1 + gram]`; `gram` must be at most `1/16`, which every valid
 `r3.Transform` meets. The support plane is the face plane of `S` whose
-outward normal `n̂` is a signed axis, with every vertex of `S` on or behind
-it, `|α| <= 1/4` for `α = n̂·Bâ`, and its triangles in one face, whose larger
-`|H±|` is least, `H± = n̂·c± − d − r`; the first in triangle order wins a tie.
+outward normal `n̂` is a signed axis, with `|α| <= 1/4` for `α = n̂·Bâ` and
+its triangles in one face, whose larger `|H±|` is least,
+`H± = n̂·c± − d − r`; the first in triangle order wins a tie. A plane with a
+vertex of `S` strictly in front of it, a tray's floor, is face-local and must
+pass multibody §10.6's column test over the coordinate box of `M`'s eight
+staged identity-box corners, which records its lateral clearance `m`.
 Height is affine along the axis, so `M`'s least height above the plane is the
 lesser of its end disks', each `n̂·c± − d − r·ρ` with `ρ = |P·Bᵀn̂|`, `P`
 removing `â`. A signed-axis pose has `ρ = 1` and `α = 0` exactly, so the
@@ -611,7 +614,10 @@ least height. The manifold publishes the two points in exact coordinate
 order, each with that drift as its ball and its foot on the plane as the `S`
 witness; the normal is `S`'s exact face normal, which is `M`'s own normal at
 its true lowest point, and `Separation` is the band, or an exact zero for a
-touch. Reversing body order swaps witnesses and reverses the normal.
+touch. Reversing body order swaps witnesses and reverses the normal. On a
+face-local plane a gap's lower end is the lesser of the least height's and
+`m`, its upper end unchanged, and a touch or band publishes only when `m`
+exceeds its half-width; a cylinder nearer a wall than that is `Undecided`.
 
 ## 5. Contact cases and ordering
 

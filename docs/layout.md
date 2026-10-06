@@ -212,7 +212,7 @@ to the byte budget.
 | `motion_bound.go` | Exact motion bounds. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
-| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.5, §10.8. |
+| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.6, §10.8. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
 ### Booleans

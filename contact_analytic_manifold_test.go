@@ -578,3 +578,211 @@ func TestContactPairPlacedRuling(t *testing.T) {
 		})
 	}
 }
+
+// The face-local ruling plane of docs/multibody-dynamics-design.md §10.6: the
+// radius-10 cylinder of TestContactPairPlacedRuling against the §2 tray, posed
+// so its floor's top face is z = −10 and its inner walls stand at x, y = ±80
+// up to z = 30. The floor holds the tray's walls and rim in front of it, so
+// the placed ruling admits it only under the column test over the coordinate
+// box of the cylinder's eight staged corners, and reads that box's lateral
+// clearance m.
+//
+// Legs shown to fail (each deleted or changed in turn, fixture red, then
+// restored):
+//   - the column test: "over a wall" reads Touching;
+//   - the lower end min(σ_lo, m): "near wall" publishes the floor gap alone,
+//     whose interval lies above the true gap to the wall;
+//   - the upper end left at σ_hi, clamped to m instead: "near wall" publishes
+//     an interval the true gap lies above;
+//   - the m-exceeds-half-width gate: "band near wall" reads ContactBand.
+func TestContactPairPlacedRulingOnTray(t *testing.T) {
+	type scene struct {
+		doc         *decad.Document
+		tray, plain *decad.Body
+		cylinder    *decad.Body
+	}
+	build := func(t *testing.T, axisY float64) scene {
+		doc := decad.New()
+		return scene{doc: doc, tray: sceneTrayBody(t, doc),
+			plain:    boxBodyAtZ(t, doc, -100, -200, 100, 200, -20, 10),
+			cylinder: revolvedCylinder(t, doc, -15, 15, axisY, 10)}
+	}
+	trayPose := contactPose(t, r3.Vec{Z: -10})
+	pair := func(t *testing.T, s scene, floor *decad.Body, pose r3.Transform, floorFirst bool) *decad.ContactReport {
+		t.Helper()
+		floorPose := r3.Identity()
+		if floor == s.tray {
+			floorPose = trayPose
+		}
+		a, b, poseA, poseB := floor, s.cylinder, floorPose, pose
+		if !floorFirst {
+			a, b, poseA, poseB = s.cylinder, floor, pose, floorPose
+		}
+		report, err := s.doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
+		require.NoError(t, err)
+		return report
+	}
+	// withoutFaces drops the face identities, which name each floor's own
+	// faces, so two floors' manifolds compare by their geometry.
+	withoutFaces := func(points []decad.ContactPoint) []decad.ContactPoint {
+		out := make([]decad.ContactPoint, len(points))
+		for i, point := range points {
+			point.FaceA, point.FaceB = nil, nil
+			point.FeatureA, point.FeatureB = decad.ContactFeature{}, decad.ContactFeature{}
+			out[i] = point
+		}
+		return out
+	}
+	// basisPose builds a pose from basis columns and a translation; the
+	// fixtures read the pose's own entries back, never the ones passed in.
+	basisPose := func(t *testing.T, ex, ey, ez, at r3.Vec) r3.Transform {
+		t.Helper()
+		pose, err := r3.FromBasis(r3.Basis{EX: ex, EY: ey, EZ: ez}, at)
+		require.NoError(t, err)
+		return pose
+	}
+
+	for _, floorFirst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "floor first", false: "cylinder first"}[floorFirst], func(t *testing.T) {
+			t.Run("signed axis", func(t *testing.T) {
+				s := build(t, rollingAxisY)
+				report := pair(t, s, s.tray, contactPose(t, r3.Vec{X: 1, Y: 2}), floorFirst)
+				require.Equal(t, decad.ContactTouching, report.Relation, "reason=%v", report.Reason)
+				require.Equal(t, decad.Exact, report.Gap.Exactness)
+				require.Zero(t, report.Gap.Value.Base())
+				require.NotNil(t, report.Manifold)
+				require.Len(t, report.Manifold.Points, 2)
+				normal := r3.Vec{Z: 1}
+				if !floorFirst {
+					normal = normal.Scale(-1)
+				}
+				for i, end := range []r3.Vec{{X: -14, Y: 5.375, Z: -10}, {X: 16, Y: 5.375, Z: -10}} {
+					point := report.Manifold.Points[i]
+					require.Equal(t, end, point.OnA.Value)
+					require.Equal(t, end, point.OnB.Value)
+					require.Zero(t, point.OnA.Bound.Base())
+					require.Zero(t, point.OnB.Bound.Base())
+					require.Equal(t, normal, point.Normal.Value)
+					onTray := point.FaceA
+					if !floorFirst {
+						onTray = point.FaceB
+					}
+					// The floor is the tray's one face of area 160², the inside
+					// [-80, 80]².
+					area, err := onTray.Area()
+					require.NoError(t, err)
+					require.InDelta(t, 160*160, area.Value.Base(), area.Bound.Base())
+					require.Same(t, report.Manifold.Points[0].FaceA, point.FaceA)
+					require.Same(t, report.Manifold.Points[0].FaceB, point.FaceB)
+				}
+			})
+			t.Run("turned", func(t *testing.T) {
+				// Turned 2⁻²⁰ rad about Z, away from every wall: the basis rounds
+				// the section, and the tray publishes the plain floor's band.
+				s := build(t, rollingAxisY)
+				angle := math.Ldexp(1, -20)
+				pose := basisPose(t, r3.Vec{X: math.Cos(angle), Y: math.Sin(angle)},
+					r3.Vec{X: -math.Sin(angle), Y: math.Cos(angle)}, r3.Vec{Z: 1}, r3.Vec{X: 1, Y: 2})
+				report := pair(t, s, s.tray, pose, floorFirst)
+				requirePlacedBand(t, report, pose, rollingAxisY, floorFirst)
+				plain := pair(t, s, s.plain, pose, floorFirst)
+				require.Equal(t, plain.Relation, report.Relation)
+				require.Equal(t, *plain.Gap, *report.Gap)
+				require.Equal(t, withoutFaces(plain.Manifold.Points), withoutFaces(report.Manifold.Points))
+			})
+			t.Run("near wall", func(t *testing.T) {
+				// Rolled 2⁻⁶ rad about its axis and lifted 1 mm, with its staged
+				// corners' box 0.5 mm from the wall at y = 80. The corners bulge
+				// past the round side by about 10·(cos + sin − 1), so the true gap
+				// to the wall, about 0.655 mm, lies strictly between m and the
+				// 1 mm floor gap: the published interval reaches down to m and up
+				// to the least height, and holds the true gap.
+				s := build(t, 0)
+				angle := math.Ldexp(1, -6)
+				c, sn := math.Cos(angle), math.Sin(angle)
+				ey, ez := r3.Vec{Y: c, Z: sn}, r3.Vec{Y: -sn, Z: c}
+				basis := basisPose(t, r3.Vec{X: 1}, ey, ez, r3.Vec{}).Basis()
+				ty := 79.5 - 10*(math.Abs(basis.EY.Y)+math.Abs(basis.EZ.Y))
+				pose := basisPose(t, basis.EX, basis.EY, basis.EZ, r3.Vec{Y: ty, Z: 1})
+				report := pair(t, s, s.tray, pose, floorFirst)
+				require.Equal(t, decad.ContactSeparated, report.Relation, "reason=%v", report.Reason)
+				require.Nil(t, report.Manifold)
+				lower := new(big.Float).Sub(bigOf(report.Gap.Value.Base()), bigOf(report.Gap.Bound.Base()))
+				upper := new(big.Float).Add(bigOf(report.Gap.Value.Base()), bigOf(report.Gap.Bound.Base()))
+
+				// m: the wall's distance from the staged corners' box, exactly.
+				b := pose.Basis()
+				at := pose.Translation()
+				top := new(big.Float).SetPrec(bigPrecision).SetInf(true)
+				for _, x := range []float64{-15, 15} {
+					for _, y := range []float64{-10, 10} {
+						for _, z := range []float64{-10, 10} {
+							corner := bigOf(at.Y)
+							corner.Add(corner, new(big.Float).Mul(bigOf(x), bigOf(b.EX.Y)))
+							corner.Add(corner, new(big.Float).Mul(bigOf(y), bigOf(b.EY.Y)))
+							corner.Add(corner, new(big.Float).Mul(bigOf(z), bigOf(b.EZ.Y)))
+							if top.IsInf() || corner.Cmp(top) > 0 {
+								top = corner
+							}
+						}
+					}
+				}
+				m := new(big.Float).Sub(bigOf(80), top)
+				require.InDelta(t, .5, func() float64 { v, _ := m.Float64(); return v }(), 1e-9)
+				require.LessOrEqual(t, lower.Cmp(m), 0, "lower end %v above m %v", lower, m)
+
+				// The true gap is the lesser of the floor's and the wall's. The
+				// section's reach along y is 10·|(B_yy, B_yz)|.
+				floorGap, _ := trueRim(pose, 15, 0)
+				reach := new(big.Float).Add(new(big.Float).Mul(bigOf(b.EY.Y), bigOf(b.EY.Y)),
+					new(big.Float).Mul(bigOf(b.EZ.Y), bigOf(b.EZ.Y)))
+				reach.Sqrt(reach)
+				wallGap := new(big.Float).Sub(bigOf(80), bigOf(at.Y))
+				wallGap.Sub(wallGap, reach.Mul(reach, bigOf(10)))
+				require.Less(t, wallGap.Cmp(floorGap), 0, "the wall must be the nearer")
+				require.Greater(t, wallGap.Cmp(m), 0, "the corners must bulge past the side")
+				require.LessOrEqual(t, lower.Cmp(wallGap), 0, "true gap %v below %v", wallGap, lower)
+				require.GreaterOrEqual(t, upper.Cmp(wallGap), 0, "true gap %v above %v", wallGap, upper)
+				// The upper end is the least height above the floor.
+				require.GreaterOrEqual(t, upper.Cmp(floorGap), 0)
+				require.InDelta(t, 1, report.Gap.Value.Base()+report.Gap.Bound.Base(), 1e-9)
+			})
+			t.Run("over a wall", func(t *testing.T) {
+				// The ruling lies on the floor at y = 79, inside the floor's face,
+				// but the cylinder's side reaches y = 89, through the wall and
+				// under its rim: the rim's and the wall's triangles project into
+				// the corners' box, so the floor is no support.
+				s := build(t, 0)
+				report := pair(t, s, s.tray, contactPose(t, r3.Vec{Y: 79}), floorFirst)
+				require.Equal(t, decad.ContactUndecided, report.Relation)
+				require.Nil(t, report.Manifold)
+			})
+			t.Run("band near wall", func(t *testing.T) {
+				// Tipped 2⁻²⁵ rad about Y with its +X end center on the floor's
+				// plane: the −X end rises 30·sin, so the band's half-width lies
+				// within 2⁻²⁰ mm. Away from the walls the tray publishes that band;
+				// with the corners' box 2⁻³⁰ mm from the wall at y = 80 the
+				// clearance does not exceed it, so the pair is Undecided.
+				s := build(t, 0)
+				angle := math.Ldexp(1, -25)
+				c, sn := math.Cos(angle), math.Sin(angle)
+				basis := basisPose(t, r3.Vec{X: c, Z: -sn}, r3.Vec{Y: 1}, r3.Vec{X: sn, Z: c}, r3.Vec{}).Basis()
+				// The orthonormalized columns keep y exactly zero off EY, so the
+				// box's y extent is the translation ± 10 exactly.
+				require.Equal(t, r3.Vec{Y: 1}, basis.EY)
+				require.Zero(t, basis.EX.Y)
+				require.Zero(t, basis.EZ.Y)
+				lift := -15 * basis.EX.Z
+				away := basisPose(t, basis.EX, basis.EY, basis.EZ, r3.Vec{Z: lift})
+				report := pair(t, s, s.tray, away, floorFirst)
+				requirePlacedBand(t, report, away, 0, floorFirst)
+				require.LessOrEqual(t, report.Gap.Bound.Base(), math.Ldexp(1, -20))
+				require.Greater(t, report.Gap.Bound.Base(), math.Ldexp(1, -30))
+				near := basisPose(t, basis.EX, basis.EY, basis.EZ, r3.Vec{Y: 70 - math.Ldexp(1, -30), Z: lift})
+				report = pair(t, s, s.tray, near, floorFirst)
+				require.Equal(t, decad.ContactUndecided, report.Relation)
+				require.Nil(t, report.Manifold)
+			})
+		})
+	}
+}

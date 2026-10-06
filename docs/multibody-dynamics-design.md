@@ -1860,9 +1860,13 @@ material under the cylinder at that height), while the clearance only bounds it 
 lower bound on the in-plane distance to the material in front, not that distance). A touch or band on a
 face-local plane is published only when `m` exceeds the band's half-width, so the ruling is the pair's
 only contact within the band; a cylinder nearer than that to a wall is `Undecided`, since it has no ruling
-against the wall. The rolling track (§10.4) runs the column test over the corners' path box over
-`[0, f]`, less `S`'s translation, at every grid fraction of its band search, as the planar band track
-does; it publishes no lower gap, so `m(f)` is not read there.
+against the wall. The rolling track (§10.4) runs the column test at every grid fraction of its band
+search, as the planar band track does, over the corners' path box over `[0, f]` intersected with the
+hull of the end centers' path boxes grown by `r·√(1 + gram)`, less `S`'s translation. Both boxes hold
+the cylinder at every instant: every cylinder point lies within `r·√(1 + gram)` of the axis point in its
+section, a convex combination of the end centers. The corners' interval enclosure loosens past a
+quarter turn, while the end centers of a cylinder turning about its own axis only translate, so the
+second box carries a whole turn. The track publishes no lower gap, so `m(f)` is not read there.
 
 ### 10.7 Continuation inside the band
 
@@ -2862,6 +2866,16 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   reaches the duration through the wall. `dynamics/rolling_test.go` gains sixteen steps on the tray under
   gravity in both orders with the contact-point speed within `VelocityResidual` of zero.
 - Depends on: PRs 14c, 20.
+- Shipped. The root tests are `TestContactPairPlacedRulingOnTray`, `TestSweepPairRollingOnTrayFloor` and
+  `TestSweepPairRollingTowardTrayWall`. An end disk faces a wall flat, so its true gap equals `m` and
+  cannot show the clamp leg; the near-wall fixture instead rolls the cylinder `2⁻⁶ rad` about its axis
+  with its corner box `0.5 mm` from a wall, where the corners bulge past the round side and the true gap,
+  about `0.655 mm`, lies strictly between `m` and the `1 mm` floor gap, so deleting the lower end's `m`
+  turns it red as well. The §2 tray's walls stand above the cylinder, so the rim fixture lays the ruling
+  `1 mm` inside the floor with the side through the wall. The band fixture near a wall is a `2⁻²⁵ rad`
+  tilt, whose band lies within `2⁻²⁰ mm`; deleting the half-width gate publishes its band. The roll
+  toward a wall ends where the end centers' grown box, not the corners', reaches the wall, and with the
+  axis box deleted the whole turn on the tray's floor ends a third of the way round.
 
 ### PR 20f (Phase 3) — the transfer charge
 

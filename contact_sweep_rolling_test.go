@@ -595,3 +595,156 @@ func TestSweepPairRollingPlacedStart(t *testing.T) {
 }
 
 func pathDurationOf(path decad.RigidDriftSegment) float64 { return path.Duration.Base() }
+
+// The rolling track on the §2 tray's floor, a face-local plane
+// (docs/multibody-dynamics-design.md §10.6): the track runs the column test
+// over the coordinate box of the cylinder's eight staged corners' ideal paths
+// at every grid fraction of its band search. The tray is posed so its floor's
+// top face is z = −10, the plain floor's of rollingScene.
+//
+// Legs shown to fail (each deleted or zeroed in turn, fixture red, then
+// restored):
+//   - the column test in the band search: TestSweepPairRollingTowardTrayWall's
+//     track reaches the duration with the cylinder's side through the wall;
+//   - the radius reach of the end centers' box: the same track reaches the
+//     duration, its box shrunk to the axis.
+//
+// The reach's gram term, r·(√(1 + gram) − 1), is about 1e-12·r at the most
+// rounded valid pose and has no red fixture; it follows the bound
+// |B·w|² <= (1 + gram)·|w|². With the end centers' box deleted, the corners'
+// box alone ends TestSweepPairRollingOnTrayFloor's whole turn a third of the
+// way round: a capability, not a soundness, leg.
+
+// trayRollingScene is rollingScene's cylinder with the §2 tray in place of the
+// floor, and the tray's path, at rest at the given translation.
+func trayRollingScene(t *testing.T, doc *decad.Document, half float64, at r3.Vec,
+	seconds float64) (*decad.Body, *decad.Body, decad.RigidDriftSegment) {
+	t.Helper()
+	tray := sceneTrayBody(t, doc)
+	cylinder := revolvedCylinder(t, doc, -half, half, rollingAxisY, 10)
+	path := sweepDrift(r3.Vec{}, seconds)
+	path.From = contactPose(t, at)
+	return tray, cylinder, path
+}
+
+func TestSweepPairRollingOnTrayFloor(t *testing.T) {
+	// One turn of the roll, closing and orbit drifts of
+	// TestSweepPairRollingCylinder, on the tray's floor with the walls at
+	// y = −110 and y = 50: every corner path stays more than 30 mm from them,
+	// and the track publishes the plain floor's outcome, depths and manifold.
+	omega := 2 * math.Pi
+	axis := r3.Vec{Y: rollingAxisY}
+	roll := r3.Vec{Y: -omega * 10}
+	for _, tc := range []struct {
+		name  string
+		touch bool // an exact touch track, with no band
+		rollingCase
+	}{
+		{name: "without slip", touch: true,
+			rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll, center: axis, seconds: 1, half: 15}},
+		{name: "sinking", rollingCase: rollingCase{omega: r3.Vec{X: omega},
+			v: r3.Vec{Y: roll.Y, Z: -.25}, center: axis, seconds: 1, half: 15}},
+		{name: "off-axis pivot", rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll,
+			center: r3.Vec{Y: rollingAxisY, Z: .125}, seconds: 1, half: 15}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			floor, plainCylinder := rollingScene(t, doc, tc.half, -100)
+			tray, cylinder, trayPath := trayRollingScene(t, doc, tc.half, r3.Vec{Y: -30, Z: -10}, tc.seconds)
+			for order := range 2 {
+				sweep := func(s *decad.Body, sPath decad.RigidDriftSegment, m *decad.Body) *decad.SweepReport {
+					a, b := s, m
+					pathA, pathB := decad.PairPath(sPath), decad.PairPath(tc.path())
+					if order == 1 {
+						a, b, pathA, pathB = m, s, pathB, pathA
+					}
+					report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+					require.NoError(t, err)
+					return report
+				}
+				plain := sweep(floor, sweepDrift(r3.Vec{}, tc.seconds), plainCylinder)
+				report := sweep(tray, trayPath, cylinder)
+				require.Equal(t, plain.Outcome, report.Outcome, "order %d cause=%v", order, report.Cause)
+				want := decad.SweepPersistentBand
+				if tc.touch {
+					want = decad.SweepPersistentTouch
+				}
+				require.Equal(t, want, report.Outcome)
+				track, plainTrack := report.ContactTrack, plain.ContactTrack
+				require.Equal(t, 1.0, track.End().Fraction.Base())
+				require.Equal(t, plainTrack.Band(), track.Band())
+				for _, fraction := range []float64{.25, .5, 1} {
+					band, err := track.BandAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					plainBand, err := plainTrack.BandAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					require.Equal(t, plainBand, band, "fraction %v", fraction)
+					manifold, err := track.ManifoldAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					plainManifold, err := plainTrack.ManifoldAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					require.Len(t, manifold.Points, 2)
+					for i, point := range manifold.Points {
+						want := plainManifold.Points[i]
+						require.Equal(t, want.OnA, point.OnA, "fraction %v end %d", fraction, i)
+						require.Equal(t, want.OnB, point.OnB, "fraction %v end %d", fraction, i)
+						require.Equal(t, want.Separation, point.Separation)
+						require.Equal(t, want.Normal, point.Normal)
+					}
+				}
+				if tc.touch {
+					require.Nil(t, track.Band())
+				} else {
+					require.NotNil(t, track.Band())
+					require.InDelta(t, tc.depth(1), track.Band().Value.Base(), track.Band().Bound.Base()+1e-9)
+				}
+			}
+		})
+	}
+}
+
+func TestSweepPairRollingTowardTrayWall(t *testing.T) {
+	// The roll drift of TestSweepPairRollingCylinder over a sixteenth of a
+	// second, toward the tray's wall at y = −7.625, 1 mm from the cylinder's
+	// side at the start. The cylinder turns about its own axis, so its end
+	// centers only translate and the column box is their path box grown by
+	// the radius: its −y side is 3.375 − 10 − |v|·t, which reaches the wall's
+	// projection at |v|·t = 1. The track ends at the last grid fraction
+	// before that. The corners' own path box, which turns with them, reaches
+	// the wall far sooner and never decides.
+	const seconds = 1.0 / 16
+	// The grid step of a 2⁻⁴ s sweep at the 2⁻²⁰ s resolution.
+	const step = 1.0 / (1 << 16)
+	omega := 2 * math.Pi
+	c := rollingCase{omega: r3.Vec{X: omega}, v: r3.Vec{Y: -omega * 10}, center: r3.Vec{Y: rollingAxisY},
+		seconds: seconds, half: 15}
+	doc := decad.New()
+	tray, cylinder, trayPath := trayRollingScene(t, doc, 15, r3.Vec{Y: 72.375, Z: -10}, seconds)
+	const wall = -7.625
+	speed := math.Abs(c.v.Y)
+	// 1/(|v|·T) lies far from every grid point, so its float floor is exact.
+	want := gridFloor(1/(speed*seconds), step)
+	for order := range 2 {
+		a, b := tray, cylinder
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(c.path())
+		if order == 1 {
+			a, b, pathA, pathB = cylinder, tray, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
+		track := report.ContactTrack
+		require.Equal(t, want, track.End().Fraction.Base())
+		elapsed := track.End().Elapsed.Value.Base()
+		// The true side stays clear of the wall through the track.
+		require.Greater(t, rollingAxisY-10-speed*elapsed, wall)
+		// The exact roll keeps a zero depth through the track's end.
+		require.NotNil(t, track.Band())
+		require.Zero(t, track.Band().Value.Base())
+		_, _, err = report.CertifiedPosesAt(units.Seconds(elapsed))
+		require.NoError(t, err)
+		_, _, err = report.CertifiedPosesAt(units.Seconds(seconds))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	}
+}
