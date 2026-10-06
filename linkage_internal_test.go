@@ -154,6 +154,67 @@ func TestLinkageChainTravel(t *testing.T) {
 	require.Zero(t, chainTravel(spec, bounds[1], below, a, b).Sign())
 }
 
+// TestLinkageChainTravelAcrossWaypoints pins |Δq_i| of
+// docs/linkage-check-design.md §5.2 on a three-segment drive: a blade
+// x ∈ [0, 50], y ∈ [−0.5, 0.5], z ∈ [0, 10] turning about Z through
+// 0° → 60° → 10° → 20°, and a block on it sliding along +Z through
+// 0 → 20 → 20 → 0 mm. The waypoints sit at s = 1/3 and 2/3.
+//
+//   - [0, 1/4] lies inside the first segment: the blade turns 45°.
+//   - [1/4, 3/8] holds the 60° corner: 45° → 60° → 53.75°, 21.25° of travel
+//     for ends 8.75° apart.
+//   - [1/4, 3/4] holds both waypoints: 45° → 60° → 10° → 12.5°, 67.5°; the
+//     block runs 15 → 20 → 20 → 15 mm, exactly 10 mm for ends that agree.
+//
+// At s = 1/3 the exact joint value is the waypoint itself, and the reach m
+// is the farthest waypoint, 60°, not either end.
+//
+// Legs seen to fail when deleted: the waypoints inside an interval (the
+// travel is the ends' difference, 8.75° and 32.5°, and 0 mm for the block),
+// and the Via values in the reach (it reads 20°).
+func TestLinkageChainTravelAcrossWaypoints(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	l := NewLinkage()
+	turn, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{internalBoxBody(t, doc, 0, -0.5, 50, 0.5, 10)})
+	require.NoError(t, err)
+	lift, err := turn.Prismatic(r3.NewVec(0, 0, 1), []*Body{internalBoxBodyAtZ(t, doc, 40, -2, 44, 2, 10, 4)})
+	require.NoError(t, err)
+	spec, err := l.resolveDrive(Drive{
+		{Link: turn, From: units.Degrees(0), Via: []units.Value{units.Degrees(60), units.Degrees(10)}, To: units.Degrees(20)},
+		{Link: lift, From: units.Millimeters(0), Via: []units.Value{units.Millimeters(20), units.Millimeters(20)}, To: units.Millimeters(0)},
+	})
+	require.NoError(t, err)
+	frames, ok := linkageFrames(spec)
+	require.True(t, ok)
+	bounds, ok := readLinkBounds(spec, frames)
+	require.True(t, ok)
+
+	rho := linkRatFloat(t, bounds[0].rho[0])
+	require.InDelta(t, math.Sqrt(50*50+0.5*0.5), rho, 1e-9)
+	deg := math.Pi / 180
+	for _, tc := range []struct {
+		a, b    *big.Rat
+		degrees float64
+	}{
+		{new(big.Rat), big.NewRat(1, 4), 45},
+		{big.NewRat(1, 4), big.NewRat(3, 8), 21.25},
+		{big.NewRat(1, 4), big.NewRat(3, 4), 67.5},
+	} {
+		got := linkRatFloat(t, chainTravel(spec, bounds[0], 0, tc.a, tc.b))
+		require.InDelta(t, rho*tc.degrees*deg, got, 1e-9, "[%s, %s]", tc.a, tc.b)
+	}
+	below := commonDepth(bounds[1].path, bounds[0].path)
+	require.Equal(t, 1, below)
+	require.Zero(t, chainTravel(spec, bounds[1], below, big.NewRat(1, 4), big.NewRat(3, 4)).Cmp(big.NewRat(10, 1)))
+
+	corner := jointParam(spec.joints[0], big.NewRat(1, 3))
+	require.Zero(t, corner.Turn.Cmp(big.NewRat(1, 6)), `60° is the exact turn 1/6`)
+	require.Zero(t, corner.Base.Sign())
+	require.InDelta(t, 60*deg, linkRatFloat(t, jointReach(spec.joints[0])), 1e-12)
+	require.Zero(t, jointReach(spec.joints[1]).Cmp(big.NewRat(20, 1)))
+}
+
 // foldingArmRun is scene 1 of docs/linkage-check-design.md §11 as
 // VerifyLinkage's own run state, with the arms and the wall.
 func foldingArmRun(t *testing.T) (*motionRun, *Body, *Body) {

@@ -67,22 +67,53 @@ func linkageFrames(spec *linkageSpec) ([]motionbound.MotionFrame, bool) {
 }
 
 // jointReach is m_i of docs/linkage-check-design.md §5.2: the farthest joint
-// i's value reaches from 0 over the drive, max(|From|, |To|) — radians with π
-// at its upper enclosure for an angle, millimetres exactly for a length, and
-// 0 for an unlisted joint. q(s) is linear in s, so every value the drive
-// visits lies within it.
+// i's value reaches from 0 over the drive, the largest |w| over its
+// waypoints — radians with π at its upper enclosure for an angle, millimetres
+// exactly for a length, and 0 for an unlisted joint. q(s) is linear within
+// each segment, so every value the drive visits lies within it.
 func jointReach(jt linkJoint) *big.Rat {
 	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
-	from, to := zero.SpanUpper(jt.dom.fromP), zero.SpanUpper(jt.dom.toP)
-	if from.Cmp(to) >= 0 {
-		return from
+	var out *big.Rat
+	for _, p := range jt.points {
+		if m := zero.SpanUpper(p); out == nil || m.Cmp(out) > 0 {
+			out = m
+		}
 	}
-	return to
+	return out
 }
 
-// jointParam is joint jt's exact value at the fraction s.
+// jointParam is joint jt's exact value at the fraction s: its segment's
+// exact interpolation at the local fraction.
 func jointParam(jt linkJoint, s *big.Rat) motionbound.MotionParam {
-	return jt.dom.fromP.Lerp(jt.dom.toP, s)
+	seg, t := jt.segment(s)
+	return seg.fromP.Lerp(seg.toP, t)
+}
+
+// jointSpan is |Δq_i| of docs/linkage-check-design.md §5.2 while the
+// fraction runs between sa and sb: a proven upper bound on the joint's total
+// variation, the sum of motionbound.MotionParam.SpanUpper over the pieces
+// that every waypoint strictly inside the interval cuts it into. A joint that
+// turns back at a waypoint travels farther than its two ends differ, and the
+// sum is additive over any split of the interval, which is what the interval
+// certificate's two one-sided bounds need. With no waypoint inside it is the
+// span of the two ends.
+func jointSpan(jt linkJoint, sa, sb *big.Rat) *big.Rat {
+	lo, hi := sa, sb
+	if lo.Cmp(hi) > 0 {
+		lo, hi = hi, lo
+	}
+	n := len(jt.points) - 1
+	sum := new(big.Rat)
+	prev := jointParam(jt, lo)
+	for j := 1; j < n; j++ {
+		w := big.NewRat(int64(j), int64(n))
+		if w.Cmp(lo) <= 0 || w.Cmp(hi) >= 0 {
+			continue
+		}
+		sum.Add(sum, prev.SpanUpper(jt.points[j]))
+		prev = jt.points[j]
+	}
+	return sum.Add(sum, prev.SpanUpper(jointParam(jt, hi)))
 }
 
 // sqrtUpRat is proofbound.RatSqrtUp read back as an exact rational; nil when
@@ -261,14 +292,12 @@ func ownJointBall(jt linkJoint, f motionbound.MotionFrame, lo, hi motionbound.Ra
 // bound on how far any point of link k moves, relative to the links at and
 // above its ancestor L, while the fraction runs from a to b — the telescoping
 // sum over the joints on its path strictly below L of ρ_{ik}·|Δq_i| for a
-// revolute and |Δq_i| for a prismatic, |Δq_i| taken by
-// motionbound.MotionParam.SpanUpper. below is the position on the path of the
+// revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan. below is the position on the path of the
 // first joint below L: 0 when L is the ground.
 func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *big.Rat {
 	sum := new(big.Rat)
 	for n := below; n < len(b.path); n++ {
-		jt := spec.joints[b.path[n]]
-		span := jointParam(jt, sa).SpanUpper(jointParam(jt, sb))
+		span := jointSpan(spec.joints[b.path[n]], sa, sb)
 		if b.rho[n] != nil {
 			span.Mul(span, b.rho[n])
 		}
@@ -325,10 +354,15 @@ const (
 	linkConstant
 )
 
-// heldAtZeroJoint reports whether a joint's value is exactly 0 at every s.
+// heldAtZeroJoint reports whether a joint's value is exactly 0 at every s:
+// every waypoint is 0.
 func heldAtZeroJoint(jt linkJoint) bool {
-	return jt.dom.fromP.Turn.Sign() == 0 && jt.dom.fromP.Base.Sign() == 0 &&
-		jt.dom.toP.Turn.Sign() == 0 && jt.dom.toP.Base.Sign() == 0
+	for _, p := range jt.points {
+		if p.Turn.Sign() != 0 || p.Base.Sign() != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // linkStandings reads every link's standing from the joints on its path.
@@ -341,7 +375,7 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 			if !heldAtZeroJoint(jt) {
 				zero = false
 			}
-			if jt.listed && !sameMotionValue(jt.dom.from, jt.dom.to) {
+			if jt.listed && jt.moves() {
 				held = false
 			}
 		}

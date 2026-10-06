@@ -446,6 +446,7 @@
 3	0.00	TestLineCircleBracketsRejectsNonFinitePolynomial
 3	9.66	TestLineWalkBoundsDyadicMatchRational
 3	0.01	TestLinkageChainTravel
+3	0.01	TestLinkageChainTravelAcrossWaypoints
 3	0.00	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
 3	0.00	TestLoftArcSegAgainstCircleSegRefusesS3
 3	0.00	TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit

@@ -139,23 +139,51 @@ are checked at `VerifyLinkage`.
 
 ```go
 // Drive is a one-parameter motion of the linkage, parameterised by the
-// Dimensionless fraction s ∈ [0, 1]: each listed joint runs linearly from
-// From to To as s runs from 0 to 1, and an unlisted joint holds 0.
+// Dimensionless fraction s ∈ [0, 1]: each listed joint passes through its
+// waypoints From, Via…, To in order, linearly between consecutive ones, and
+// an unlisted joint holds 0.
 type Drive []JointSweep
 
 type JointSweep struct {
-    Link     *Link       // the link whose joint this moves
-    From, To units.Value // the joint's Kind: Angle for a revolute, Length for a prismatic
+    Link     *Link         // the link whose joint this moves
+    From, To units.Value   // the joint's Kind: Angle for a revolute, Length for a prismatic
+    Via      []units.Value // the joint's value at each interior waypoint, in order; the same Kind
 }
 ```
 
-A joint's value at `s` is `q(s) = From + s·(To − From)`, exactly as a `Between`'s parameter is a fraction
-of its path (motion §2): the parameter every report record carries is `units.Scalar(s)`, a dyadic
-fraction, exact in float, and each joint's value is a label computed as `motionSpec.label` computes a
-`Between` pose's parameter, while every bound reads the exact rational `From + s·(To − From)` through
-`motionbound.MotionParam.Lerp`. `From == To` is legal for one sweep and holds the joint at that value for
-the whole drive; a drive in which every listed sweep holds is `ErrDegenerate`, as `From == To` is for a
-`Motion`. `From > To` is legal and runs the joint the other way.
+**Waypoints and segments.** A drive whose sweeps carry `n − 1` `Via` values each has `n + 1` waypoints and
+`n` segments; every listed sweep of one drive MUST carry the same number. Write a joint's waypoints
+`w_0 = From`, `w_j = Via[j − 1]`, `w_n = To`. Segment `j` covers `s ∈ [j/n, (j+1)/n]`, an equal share each,
+and in it the joint's value is
+
+```text
+q(s) = w_j + t·(w_{j+1} − w_j),    t = n·s − j
+```
+
+The two segments that meet at a waypoint give it the same value, so `q` is continuous; the fraction `j/n`
+takes segment `j`, and `s = 1` the last. A drive with no `Via` is one segment, and `q(s) = From + s·(To −
+From)`, exactly as a `Between`'s parameter is a fraction of its path (motion §2). A lift, then a swing, then
+a lowering is one drive of three segments: the lifting joint's sweep is `0 → 20 → 20 → 0` mm and the
+swinging joint's `0° → 0° → 90° → 90°`. A sweep whose `Via` values lie, in order and in `From`'s unit,
+exactly on the line from `From` to `To` passes the same path as the plain sweep: every label, exact value
+and bound of §2.4 and §5 is the same, and so is the report but for its `Drive` (§11 scene 5).
+
+The share is equal, not weighted, because `s` orders poses and sets where the resolution floor samples, and
+no claim depends on it: the report speaks for the path, not for time. A weight per segment would only move
+the floor's sample budget between segments. A caller who wants one stretch of the motion sampled finer
+splits it with more waypoints on the same line.
+
+The parameter every report record carries is `units.Scalar(s)`, a dyadic fraction, exact in float. Each
+joint's value is a label, computed as `motionSpec.label` computes a `Between` pose's parameter on the segment
+from `w_j` to `w_{j+1}` at `t`, and carried in `w_j`'s unit. Every bound reads the exact rational `w_j + t·(w_{j+1} −
+w_j)` through `motionbound.MotionParam.Lerp`. A waypoint fraction `j/n` is in general not dyadic (`n = 3`
+puts the waypoints at `1/3` and `2/3`), so §6's grid need not land on one, and §5.2 does not need it to.
+A report locates a pose by `s` and the pose's `Values`: its segment is `⌊n·s⌋`, `n − 1` at `s = 1`, and its
+local fraction `n·s − j`. No report field carries the segment.
+
+A sweep whose waypoints are all equal holds its joint at that value for the whole drive; a drive in which
+every listed sweep holds is `ErrDegenerate`, as `From == To` is for a `Motion`. `From > To` is legal and
+runs the joint the other way, and `From == To` with a different `Via` value takes the joint out and back.
 
 This is option (a) of the two the design weighed: one scalar drives every joint through a stated schedule.
 It is the natural extension of `VerifyMotion`, whose `Between` already proves a path over a dimensionless
@@ -194,12 +222,13 @@ subcommand films §11's scene 1 that way, one driven node per link under the rig
 asserts each node's transform equals `PoseAt`'s bit for bit.
 
 `PoseAt` refuses a drive naming a link of another linkage or a link twice (`ErrDegenerate`), a sweep whose
-`From` or `To` has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite (`ErrNotFinite`), a
-value outside declared limits — `q(s)` is monotone in `s`, so `From` and `To` inside the limits put every
-`q(s)` inside them, and either endpoint outside, or an unlisted joint whose limits exclude the `0` it
-holds, is `ErrDegenerate` with a message naming the link — and an
-`at` that is not a finite `Dimensionless` value (`ErrUnitKind`, `ErrNotFinite`). An `at` outside `[0, 1]`
-is legal for `PoseAt`, which takes no range, and is never evaluated by `VerifyLinkage`.
+`From`, `To` or `Via` value has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite
+(`ErrNotFinite`), sweeps carrying different numbers of `Via` values (`ErrDegenerate`), a value outside
+declared limits — `q(s)` is linear within each segment, so every waypoint inside the limits puts every
+`q(s)` inside them, and any waypoint outside, or an unlisted joint whose limits exclude the `0` it holds,
+is `ErrDegenerate` with a message naming the link — and an `at` that is not a finite `Dimensionless` value
+(`ErrUnitKind`, `ErrNotFinite`). An `at` outside `[0, 1]` is legal for `PoseAt`, which takes no range: the
+first segment's line extends below `0` and the last's above `1`. `VerifyLinkage` never evaluates one.
 
 ## 3. The entry point
 
@@ -351,7 +380,19 @@ where `ρ_{ik}` bounds `dist(y, axis_i)` over every point `y` of link `k` after 
 `i` on its path have moved to ANY value in the drive's range. The `y` above sits at the `s_a`
 configuration, but `ρ_{ik}` is taken over every configuration so that one reading serves every interval.
 `|Δq_i|` is `MotionParam.SpanUpper` of the two exact joint values — `2π·|Δturn| + |Δbase|` with `π` at its
-upper enclosure for an angle, exact for a length.
+upper enclosure for an angle, exact for a length — when no waypoint lies strictly inside the interval.
+
+**A waypoint inside the interval.** The certificate below needs, for every `s` in `[s_a, s_b]`, the travel
+from `s_a` to `s` plus the travel from `s` to `s_b` to stay within `τ`. Within one segment `q_i` is
+monotone, the two travels sum to the span of the ends, and the span above serves. Across a waypoint it
+does not: a joint that turns `0° → 60° → 10°` with the corner inside the interval moves `110°` for ends
+`10°` apart. The interval is therefore cut at every waypoint `j/n` strictly inside it, and `|Δq_i|` is the
+sum of `SpanUpper` over the pieces `[s_a, j/n], …, [j'/n, s_b]`, the exact values at each cut being the
+waypoints themselves. The sum bounds the joint's total variation over the interval, which is additive over
+any split at `s`, and the telescoping step above holds between any two configurations, so each one-sided
+travel is bounded by its share and the two shares by the sum. §6's grid is not forced onto a waypoint: an
+interval holding one is bounded on both sides of it and certifies when its gaps cover that sum (§11
+scene 5).
 
 **Reading `ρ_{ik}`.** Each link's rest box is the per-axis union of its bodies' `Bounds()` boxes, each
 inflated outward by its own `Bound`, read as exact rationals (`boxCornersExact`). The reading walks DOWN the
@@ -360,7 +401,7 @@ path from link `k` toward joint `i`, carrying a ball that encloses link `k` unde
 | step | enclosure carried |
 |---|---|
 | start, `i = k` | `ρ_{kk}` is `moverAxisRadius`'s reading: the largest exact distance of a rest-box corner from axis `k`, rooted upward. Distance from a line is convex, so the maximum over the box sits at a corner. No ball is needed. |
-| ball under joint `k` | revolute: centre `c_k` (the joint's `Center`), radius the largest corner distance from `c_k`, rooted upward — a rotation about any axis through `c_k` preserves distance to `c_k`. Prismatic: centre the box centre, radius the box's half-diagonal plus `m_k = max(|From_k|, |To_k|)`, the farthest the joint slides over the drive (`0` for an unlisted joint). |
+| ball under joint `k` | revolute: centre `c_k` (the joint's `Center`), radius the largest corner distance from `c_k`, rooted upward — a rotation about any axis through `c_k` preserves distance to `c_k`. Prismatic: centre the box centre, radius the box's half-diagonal plus `m_k`, the largest `|w|` over the joint's waypoints, the farthest the joint slides over the drive (`0` for an unlisted joint); `q_k` is linear within each segment, so its extremes sit at waypoints. |
 | ball under joint `m`, given the ball `(c, R)` under joints `m+1..k` | revolute: `(c_m, |c − c_m| + R)` — every point within `R` of `c` stays within `|c − c_m| + R` of `c_m` under any rotation about an axis through `c_m`. Prismatic: `(c, R + m_m)`. |
 | `ρ_{ik}` for `i < k` | `dist(c, axis_i) + R`, where `(c, R)` is the ball under joints `i+1..k` and the distance from the exact centre to the exact axis line is `|(c − c_i) × a_i| / |a_i|`, squared exactly and rooted upward. |
 
@@ -377,8 +418,8 @@ on each branch only. The joints at and above `L` move both bodies by one rigid m
 distance by nothing, which is the argument motion §3 makes for two movers under one `Motion`; dropping them
 is what keeps an elbow pair's certificate as cheap as a one-joint `VerifyMotion`. For a (link body, static)
 pair, `L` is the ground and the sum runs over every joint on the path. A joint whose sweep holds
-(`From == To`) has `|Δq_i| = 0` and contributes nothing to any `τ`; its `m_i = |From_i|` still enters the
-balls, because the link sits displaced by it.
+(every waypoint equal) has `|Δq_i| = 0` and contributes nothing to any `τ`; its `m_i = |From_i|` still
+enters the balls, because the link sits displaced by it.
 
 **The certificate.** With `τ` so formed, the interval is `IntervalClear` for a pair exactly when
 `lo_a + lo_b > τ(s_b − s_a)` over exact rationals, with `lo` the proven lower ends of the two endpoint gap
@@ -451,7 +492,7 @@ pays for at every step (§10).
 
 **The rule.** A pair's relative path is the joints strictly below the two links' lowest common ancestor on
 each branch, and every joint on the body's path for a (link body, static) pair (§5.2). A joint that holds
-`0` — unlisted, or `From == To == 0` — moves nothing and is passed over. The pair is **layer-separated
+`0` — unlisted, or every waypoint `0` — moves nothing and is passed over. The pair is **layer-separated
 along `a`** when every other joint on its relative path is a revolute whose `Axis` is parallel to `a` or a
 prismatic whose `Dir` is perpendicular to `a`, and the two bodies' `a`-extents are separated by `w > 0`.
 It is then settled for the whole drive as a swept-box exclusion is (motion §6 step 3): never evaluated at
@@ -494,7 +535,7 @@ several moving groups (§12 PR 1). The steps that differ:
 
 1. **Validate** (§2, §3, §8) before reading `ctx`.
 2. **Resolve each link's standing.** A link whose path joints all hold `0` — every sweep on its path
-   absent or `From == To == 0` — moves nothing: its bodies are evaluated as static bodies, with no
+   absent or with every waypoint `0` — moves nothing: its bodies are evaluated as static bodies, with no
    transient placement and no `η`, and its pairs against the ground's statics are not formed (they are
    `Verify`'s); its pairs against a moving link are evaluated with its bodies as they stand. A link whose
    path joints all hold, at least one at a nonzero value, is a constant placement: each body's transient
@@ -533,12 +574,12 @@ pose, as motion §7 states for a mover.
 
 | Condition | Error |
 |---|---|
-| nil `ctx`, nil document, nil linkage; a linkage with no link; a drive in which every sweep holds; a drive naming a link twice or a link of another linkage | `ErrDegenerate` |
+| nil `ctx`, nil document, nil linkage; a linkage with no link; a drive in which every sweep holds; a drive naming a link twice or a link of another linkage; sweeps carrying different numbers of `Via` values | `ErrDegenerate` |
 | a link body retired, foreign, or not built by this evaluator | `ErrRetiredBody`, `ErrForeignBody`, `ErrUnsupported` |
 | a declared joint contact naming a retired or foreign body | `ErrRetiredBody`, `ErrForeignBody` |
-| a sweep's `From` or `To` of the wrong `Kind` for its joint; a wrong-`Kind` resolution, tolerance or minimum | `ErrUnitKind` |
+| a sweep's `From`, `To` or `Via` value of the wrong `Kind` for its joint; a wrong-`Kind` resolution, tolerance or minimum | `ErrUnitKind` |
 | a non-finite sweep value, option, box or axis read | `ErrNotFinite` |
-| a sweep endpoint outside the joint's declared limits | `ErrDegenerate`, message naming the link |
+| a sweep waypoint outside the joint's declared limits | `ErrDegenerate`, message naming the link |
 | a negative or zero resolution, a negative tolerance or minimum; a zero minimum | `ErrNegativeMagnitude`; `ErrDegenerate` |
 | `ctx` cancelled after validation | `ctx.Err()` |
 | an invariant failure inside a kernel | that error, no report |
@@ -734,6 +775,45 @@ in two chains:
 Measured: 4a's first collision lands at `s = 0.4707`, 4b's at `0.4805`, against `31/64 = 0.4844`, each
 inside its window.
 
+**Scene 5 — waypoints.** A hub `x, y ∈ [−5, 5], z ∈ [−20, −12]` on a revolute joint about `Z` through the
+origin carries an arm `x ∈ [0, 50], y ∈ [−5, 5], z ∈ [0, 10]` on a prismatic joint along `+Z`. The drive has
+three segments: the lift runs `0 → 20 → 20 → 0` mm and the swing `0° → 0° → 90° → 90°`, so the arm lifts
+over `s ∈ [0, 1/3]`, swings over `[1/3, 2/3]` and lowers over `[2/3, 1]`. A post `x, y ∈ [17, 25],
+z ∈ [−10, 15]` stands in the swing's path `5` mm below the lifted arm; a landing block `x ∈ [−20, 20],
+y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
+
+- The lowering arm's underside stands at `z = 60·(1 − s)` and reaches the block's top `z = 5` at
+  `s* = 11/12`, in closed form; the overlap is then `100·(5 − 60·(1 − s))` mm³. At
+  `WithResolution(Scalar(1.0/256))` assert `Interfering`, the first `LinkCollision` on `(arm, landing
+  block)` at the grid point `235/256` with the overlap `7.8125` mm³ within `1e-6`, every collision past
+  `s*` and every `IntervalClear` interval ending at or before it, no collision on the post, every pose's `Values` the closed-form schedule, and the intervals
+  holding `1/3` and `2/3` each `IntervalClear`. The same swing with the lift unlisted strikes the post.
+- The same folding arm as scene 1, its sweeps given collinear `Via` values (`45°` and `−45°`; then `30°, 60°`
+  and `−30°, −60°`), reports exactly what the one-segment drive reports but for `Drive`.
+- **A joint turning back.** A blade `x ∈ [0, 50], y ∈ [−0.5, 0.5], z ∈ [0, 10]` turns about `Z` through
+  `0° → 60° → 10° → 20°`, and a `0.8` mm pin at radius `49` and polar angle `59.5°`, `z ∈ [4.6, 5.4]`,
+  sits in its path only near the `60°` corner at the non-dyadic `s = 1/3`. Contact needs
+  `|q − 59.5°| < 1.25°`, so every collision lies in `[58.25/180, 1/3 + 1.75/150]`. At
+  `WithResolution(Scalar(1.0/128))` assert `Interfering`, every collision on the pin inside that window,
+  and no `IntervalClear` interval holding `1/3`. At `WithResolution(Scalar(1.0/2))` assert `Suspect`,
+  three poses, `[0, 1/2]` undecided and `[1/2, 1]` clear. This is the leg that goes red when `|Δq_i|` is
+  the span of the interval's ends: the ends are `20°` apart, `[0, 1]` certifies from them, and the report
+  reads `Sound` with two poses.
+- The motion arm on a revolute joint about `Z`, a wall `x ∈ [−20, 20], y ∈ [30, 40], z ∈ [−10, 20]` where
+  it points at `90°`, at `WithResolution(Scalar(1.0/2))`: `0° → 90° → 10°` strikes the wall at `s = 1/2`
+  with the overlap `2800` mm³, red when `m_i` ignores `Via` (the swept box grows by `10°`'s reach and
+  excludes the wall); `0° → 90° → 0°` strikes it, red when a link is read as held at `0` from its ends,
+  and when the drive is read as a hold from them; `20° → 90° → 20°` strikes it, red when the link is read
+  as one constant placement from its ends.
+- Limits: a `Via` value past `Max` or below `Min` with both ends inside is `ErrDegenerate` naming the link
+  and the value, red when only the ends are checked; a drive whose every waypoint is inside poses, and its
+  value at the waypoint's fraction is the waypoint as stated. `PoseAt` on a four-segment drive, whose
+  waypoints sit at dyadic fractions, returns each waypoint exactly at its fraction, the segment's line
+  inside it, and the first and last segments' lines outside `[0, 1]`. An internal test pins `|Δq_i|`
+  against the hand sum across one and two waypoints, exactly for a prismatic joint whose ends agree.
+- `examples/` gains `Example_decad_linkageWaypoints` on the lift-swing-lower scene, printing `Status`, the
+  first collision at `s = 0.918`, and its segment and local fraction: the lowering, `75%` through it.
+
 **Agreement with `VerifyMotion`.** A one-link linkage on a revolute joint and the same body under the
 equivalent `Revolute`: equal `Status`, equal interval outcomes in order, each `Collision.At` equal under
 `s ↦ From + s·(To − From)` within `1e-9°`, path `Clearance.Value` within `1e-9` mm, on motion §9's
@@ -788,6 +868,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | a clear drive's whole-drive reading at the default floor (§10) |
 | 3 | §6 step 2's held links — a link holding `0` stands where it is and forms no pair with a static body, a link held elsewhere is one constant placement; link-link swept-box exclusion; the layer exclusion (§5.7); their tests | a clear drive's whole-drive reading at the default floor where its minimum is reached at one parameter (§10) |
 | 4 | the reading floor (§3): `ReadingResolution`, the reading's refinement past the verdict floor at the defaults, the margin held to the verdict floor; its tests | a stated `WithResolution` too coarse for the reading, and a constant gap the layer exclusion cannot settle whose gate needs a step under `1/16384` |
+| 5 | waypoints (§2.3): `JointSweep.Via`, equal-share segments, `PoseAt` per segment, limits at every waypoint, `m_i`, holds and standings over every waypoint, `|Δq_i|` cut at every waypoint inside an interval (§5.2); scene 5 and its example | as after PR 4 |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
 one report, with the closed-form answer of scene 1 as its acceptance. This design document ships in PR 1.
@@ -799,12 +880,14 @@ and a public multi-body primitive carrying rational-interval ideal poses is not 
 (§1). Links are sets of bodies and joints attach a link to its parent; the zero pose is the document as
 it stands; joint frames are world coordinates at the zero pose (§2.1). v1's joints are revolute and
 prismatic; there is no fixed joint, because a rigidly attached part is listed in its link (§2.1). The
-drive is one dimensionless fraction with a linear schedule per joint; a box sweep is a later entry point
+drive is one dimensionless fraction with a piecewise-linear schedule per joint; a box sweep is a later entry point
 (§2.3, §9.2). Closed loops wait on a certified solve from `sketch`; decad never admits an uncertified one
 (§9.1). Joint contacts are declared by the caller per pair, listed in the report, and still checked for
 overlap at every pose (§2.2, §5.4). The travel bound is the telescoping joint-by-joint sum with ball
 enclosures read down the chain, over exact rationals (§5.2); a pair's bound sums only the joints below the
 two links' lowest common ancestor (§5.2). A pair whose relative path turns about axes parallel to one
 direction and slides perpendicular to it, with the two bodies' extents along that direction strictly
-separated, is settled before any pose by an exact layer exclusion (§5.7). The options and the report vocabulary are `VerifyMotion`'s (§3,
-§4).
+separated, is settled before any pose by an exact layer exclusion (§5.7). A drive passes
+through waypoints stated per joint as `Via` values, each segment an equal share of `s`, and an interval
+holding a waypoint takes each joint's travel on both sides of it (§2.3, §5.2). The options and the report
+vocabulary are `VerifyMotion`'s (§3, §4).
