@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -123,9 +125,9 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		return capPatchModel{}, false
 	}
 	perp := func(v survey2d.IvVec3) survey2d.IvVec3 {
-		return ivVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
+		return tessellation.IvVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
 	}
-	offset := perp(ivVec3Sub(world.Point(cU, cV, capZ), originIv))
+	offset := perp(tessellation.IvVec3Sub(world.Point(cU, cV, capZ), originIv))
 	qu := survey2d.IvVec3Mul(perp(world.Du), proofbound.PointInterval(radius))
 	qv := survey2d.IvVec3Mul(perp(world.Dv), proofbound.PointInterval(radius))
 
@@ -166,8 +168,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		b: proofbound.IntervalMul(scale, anchoredV),
 		c: proofbound.IntervalSub(proofbound.IntervalMul(scale, offComp), axial),
 		slop: proofbound.RatMul(
-			intervalAbsUpper(cosH),
-			proofbound.RatAdd(intervalAbsUpper(uComp), intervalAbsUpper(vComp), intervalAbsUpper(offComp)),
+			tessellation.IntervalAbsUpper(cosH),
+			proofbound.RatAdd(tessellation.IntervalAbsUpper(uComp), tessellation.IntervalAbsUpper(vComp), tessellation.IntervalAbsUpper(offComp)),
 			gap,
 		),
 	}, true
@@ -366,9 +368,4 @@ func newPlacedFrameMap(pp prismPayload) (survey2d.PlacedFrameMap, bool) {
 // measured from either end is smallest against.
 func intervalMid(a proofbound.RatInterval) *big.Rat {
 	return new(big.Rat).Mul(new(big.Rat).Add(a.Lo, a.Hi), big.NewRat(1, 2))
-}
-
-// intervalAbsUpper is the largest magnitude an enclosure allows.
-func intervalAbsUpper(a proofbound.RatInterval) *big.Rat {
-	return survey2d.RatMax(new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi))
 }

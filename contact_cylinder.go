@@ -141,7 +141,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
 	low := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zlo))))
 	high := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zhi))))
-	axis, _, ok := signedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().w)))
+	axis, _, ok := signedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}

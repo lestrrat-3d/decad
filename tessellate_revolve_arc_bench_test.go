@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -23,7 +25,7 @@ func BenchmarkRevolveArcCellSlack(b *testing.B) {
 	var result float64
 	for b.Loop() {
 		var err error
-		result, err = revolveArcCellSlack(cell, step, twoArea, 0)
+		result, err = tessellation.RevolveArcCellSlack(cell, step, twoArea, 0)
 		if err != nil {
 			b.Fatal(err)
 		}

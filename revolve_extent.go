@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -132,10 +134,10 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 	ctx context.Context, g r3.Vec, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, float64, float64, error) {
 	b := rp.basis()
-	base := rp.xform.Apply(b.a3).Dot(g)
-	wg := rp.xform.ApplyDir(b.w).Dot(g)
-	c0 := rp.xform.ApplyDir(b.e0).Dot(g)
-	c1 := rp.xform.ApplyDir(b.e1).Dot(g)
+	base := rp.xform.Apply(b.A3).Dot(g)
+	wg := rp.xform.ApplyDir(b.W).Dot(g)
+	c0 := rp.xform.ApplyDir(b.E0).Dot(g)
+	c1 := rp.xform.ApplyDir(b.E1).Dot(g)
 	mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work, profile)
 	if err != nil {
@@ -267,7 +269,7 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
 func (rp revolvePayload) frameRoundAllow(
-	g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
+	g r3.Vec, b tessellation.RevolveBasis, base, wg, c0, c1 float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, error) {
 	coordUpper := 0.0
 	if profile != nil {
@@ -290,10 +292,10 @@ func (rp revolvePayload) frameRoundAllow(
 		proofbound.ProductUpper(envUpper, proofbound.AbsSumUpper(dirAllow, e1Allow)),
 	)
 
-	baseRound := proofbound.ExactIsometryDotRound(rp.xform, b.a3, g, true, base)
-	wgRound := proofbound.ExactIsometryDotRound(rp.xform, b.w, g, false, wg)
-	c0Round := proofbound.ExactIsometryDotRound(rp.xform, b.e0, g, false, c0)
-	c1Round := proofbound.ExactIsometryDotRound(rp.xform, b.e1, g, false, c1)
+	baseRound := proofbound.ExactIsometryDotRound(rp.xform, b.A3, g, true, base)
+	wgRound := proofbound.ExactIsometryDotRound(rp.xform, b.W, g, false, wg)
+	c0Round := proofbound.ExactIsometryDotRound(rp.xform, b.E0, g, false, c0)
+	c1Round := proofbound.ExactIsometryDotRound(rp.xform, b.E1, g, false, c1)
 	placeAllow := proofbound.AbsSumUpper(
 		baseRound,
 		proofbound.ProductUpper(wgRound, envUpper),

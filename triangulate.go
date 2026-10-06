@@ -6,6 +6,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -264,7 +266,7 @@ func earClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 				// A zero-area corner is removed only when it is a bridge stub, and
 				// never emits a triangle — so the reflex-blocking scan, whose
 				// result is discarded for such a corner, is skipped entirely.
-				if !isBridgeStub(ia, ib, ic) {
+				if !tessellation.IsBridgeStub(ia, ib, ic) {
 					continue
 				}
 			} else {
@@ -294,19 +296,6 @@ func earClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 		}
 	}
 	return tris, nil
-}
-
-// isBridgeStub reports whether the zero-area corner (ia, ib, ic) is a bridge
-// stub safe to collapse — the tip or residue of a bridge's zero-width channel,
-// where an index coincides among the three corner vertices. The spike apex M
-// carries the SAME bridge anchor index P on both sides (ia == ic); collapsing it
-// drops the reverse edges P→M and M→P and nothing else. The doubled anchor left
-// behind carries an adjacent identical index (ia == ib or ib == ic); collapsing
-// it drops only a zero-length self edge. A collinear corner whose three vertices
-// are DISTINCT indices is NOT a stub — it is a genuine boundary corner whose two
-// edges (one possibly from another hole sharing this v-line) must be kept.
-func isBridgeStub(ia, ib, ic int) bool {
-	return ia == ic || ia == ib || ib == ic
 }
 
 // earBlocked reports whether the candidate ear at position i is cut off from

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -247,7 +249,7 @@ func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
 	defect := orthonormalityDefect(f)
 	firstNorm := new(big.Rat)
 	for _, component := range m.first {
-		firstNorm.Add(firstNorm, intervalAbsUpper(component))
+		firstNorm.Add(firstNorm, tessellation.IntervalAbsUpper(component))
 	}
 	firstWiden := new(big.Rat).Mul(defect, firstNorm)
 	out := volumeMoments{volume: m.volume}
@@ -362,7 +364,7 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	d0, d1, delta := proofarith.FloatRat(pp.z0Delta), proofarith.FloatRat(pp.z1Delta), proofarith.FloatRat(pp.sectionDelta)
 	axial := new(big.Rat).Add(d0, d1)
 	e := new(big.Rat).Mul(proofarith.FloatRat(displaced), new(big.Rat).Add(h, axial))
-	e.Add(e, new(big.Rat).Mul(intervalAbsUpper(area), axial))
+	e.Add(e, new(big.Rat).Mul(tessellation.IntervalAbsUpper(area), axial))
 
 	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
 	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
@@ -382,8 +384,8 @@ func prismRotation(pp prismPayload) ([3][3]*big.Rat, error) {
 		for k := range out[i] {
 			sum := new(big.Rat)
 			for l := range placement {
-				entry := proofarith.FloatRat(vecComponent(placement[l], i))
-				axis := proofarith.FloatRat(vecComponent(frame[k], l))
+				entry := proofarith.FloatRat(tessellation.VecComponent(placement[l], i))
+				axis := proofarith.FloatRat(tessellation.VecComponent(frame[k], l))
 				if entry == nil || axis == nil {
 					return out, fmt.Errorf("%w: prism orientation is not finite", ErrNotFinite)
 				}
@@ -438,7 +440,7 @@ func tensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
 	largest := new(big.Rat)
 	for i := range t {
 		for j := range t[i] {
-			largest = survey2d.RatMax(largest, intervalAbsUpper(t[i][j]))
+			largest = survey2d.RatMax(largest, tessellation.IntervalAbsUpper(t[i][j]))
 		}
 	}
 	return largest
@@ -453,7 +455,7 @@ func gershgorinLower(t [3][3]proofbound.RatInterval) *big.Rat {
 		row := new(big.Rat).Set(t[i][i].Lo)
 		for j := range t[i] {
 			if i != j {
-				row.Sub(row, intervalAbsUpper(t[i][j]))
+				row.Sub(row, tessellation.IntervalAbsUpper(t[i][j]))
 			}
 		}
 		if lower == nil || row.Cmp(lower) < 0 {

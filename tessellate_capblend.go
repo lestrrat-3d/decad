@@ -369,7 +369,7 @@ func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *c
 		return nil
 	}
 	n := len(lm.walks)
-	offset := func(w survey2d.SideWalk) *big.Rat { return capWallRadiusOffset(w, cbp.d) }
+	offset := func(w survey2d.SideWalk) *big.Rat { return tessellation.CapWallRadiusOffset(w, cbp.d) }
 	if lm.whole {
 		w := lm.walks[0]
 		seg := lm.loop.Segments[w.Segs[0]]

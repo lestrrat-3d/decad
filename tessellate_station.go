@@ -4,11 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file owns the proven bound on ONE interior chord station of a circular
@@ -38,7 +34,7 @@ import (
 // this chording never named.
 //
 // The mechanism per kind is circularEndpointInterval's own: proofbound.TurnSinCosInterval
-// for a CircleSeg's exactly-rational turn, radSinCosSpan over proofbound.Atan2Interval for
+// for a CircleSeg's exactly-rational turn, tessellation.RadSinCosSpan over proofbound.Atan2Interval for
 // an ArcSeg's enclosed angle. Neither ever compares against π.
 //
 // An enclosure the recorded data cannot state, a parameter that is not
@@ -98,17 +94,4 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 		return underivable
 	}
 	return proofbound.WalkEndBound{U: proofbound.IntervalFloatError(uIv, heldU), V: proofbound.IntervalFloatError(vIv, heldV)}
-}
-
-// capWallRadiusOffset is the exact rational a circular wall's cap contour adds
-// to the wall's own radius: −insideSign·d, so a counter-clockwise wall (its
-// material inside) shrinks and a clockwise one (a hole rim) grows — the same
-// sign offsetRadius and ivExactOffsetRadius take. A setback that is not finite
-// answers nil, which capOffsetStationBound refuses on.
-func capWallRadiusOffset(w survey2d.SideWalk, d float64) *big.Rat {
-	rd := proofarith.FloatRat(d)
-	if rd == nil {
-		return nil
-	}
-	return new(big.Rat).Neg(new(big.Rat).Mul(insideSignOf(w), rd))
 }

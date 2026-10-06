@@ -66,45 +66,11 @@ const (
 // independent ceilings and whichever binds first ends the call.
 const maxRevolveRefinements = 6
 
-// revMeridian is one meridian sample: either a junction between two
-// consecutive walks of one recorded loop or an interior chord station of a
-// circular walk, in the axis coordinates the payload's own axisFrame
-// re-expressed it into, beside the certified enclosure of the (z, ρ) pair the
-// RECORD denotes there and the mesh vertices it owns.
-//
-// A sample on the axis owns exactly ONE vertex, interned by construction: it is
-// the same junction for every angular index and for both partial caps, which is
-// how an on-axis line's single geometric edge ends up shared by the two caps
-// (docs/tessellation-design.md §9).
-type revMeridian struct {
-	z, rho     float64
-	zIv, rhoIv proofbound.RatInterval
-	onAxis     bool
-	ring       []int
-	// walk is the index, into its loop's resolved walks, of the walk whose
-	// OUTGOING chord starts at this sample; sag is that chord's proven meridian
-	// sagitta, zero for a straight walk, which chords nothing. arc is the
-	// circular chord's own meridian model, nil for a straight one.
-	walk int
-	sag  float64
-	arc  *revArcCell
-}
-
-// at is the mesh vertex this sample contributes at angular index l. A pole has
-// one vertex and answers it for every angle; an off-axis ring of a full turn
-// wraps, so index n is index 0 and the seam needs no duplicate.
-func (s revMeridian) at(l int) int {
-	if s.onAxis {
-		return s.ring[0]
-	}
-	return s.ring[l%len(s.ring)]
-}
-
 // revLoopMesh is one recorded loop's meridian polyline plus the resolution it
 // came from, held together because the cells read both.
 type revLoopMesh struct {
 	resolved revolveWalks
-	samples  []revMeridian
+	samples  []tessellation.RevMeridian
 }
 
 // revolveWork is the pair of cumulative ceilings docs/tessellation-design.md §3
@@ -141,11 +107,11 @@ func (e *revolveRefineError) Unwrap() error { return e.err }
 type revolvePlan struct {
 	body      *Body
 	rp        revolvePayload
-	basis     revolveBasis
-	ideal     revolveBasis3Iv
+	basis     tessellation.RevolveBasis
+	ideal     tessellation.RevolveBasis3Iv
 	loops     []LoopRecord
 	resolved  []revolveWalks
-	junctions [][]revMeridian
+	junctions [][]tessellation.RevMeridian
 	faceOf    func(string) (*Face, error)
 	work      *revolveWork
 
@@ -241,11 +207,11 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 // spend, exactly as it must not hand a prism one under its section displacement
 // (docs/tessellation-reach-design.md §6, R5).
 type revolveResolution struct {
-	basis       revolveBasis
-	ideal       revolveBasis3Iv
+	basis       tessellation.RevolveBasis
+	ideal       tessellation.RevolveBasis3Iv
 	loops       []LoopRecord
 	resolved    []revolveWalks
-	junctions   [][]revMeridian
+	junctions   [][]tessellation.RevMeridian
 	rhoMax      float64
 	coordMax    float64
 	samplePrior float64
@@ -267,7 +233,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 	work := freeform.NewFreeformWork()
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	resolved := make([]revolveWalks, len(loops))
-	junctions := make([][]revMeridian, len(loops))
+	junctions := make([][]tessellation.RevMeridian, len(loops))
 	junctionGap := 0.0
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
@@ -293,16 +259,16 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 		return nil, err
 	}
 	basis := rp.basis()
-	coordMax := revolveCoordMax(basis, zAbsMax, rhoMax)
+	coordMax := tessellation.RevolveCoordMax(basis, zAbsMax, rhoMax)
 	// A chorded meridian station is stored as the float nearest its own
 	// certified enclosure, so its gap is bounded before any count exists; a
 	// junction's gap is already count-independent and is measured outright.
-	stationPrior := proofbound.ProductUpper(revolveStationRoundUlps, proofbound.UlpOf(math.Max(math.Max(zAbsMax, rhoMax), 1)))
+	stationPrior := proofbound.ProductUpper(tessellation.RevolveStationRoundUlps, proofbound.UlpOf(math.Max(math.Max(zAbsMax, rhoMax), 1)))
 	samplePrior := math.Max(junctionGap, stationPrior)
 	if proofbound.IsNonFinite(coordMax) || proofbound.IsNonFinite(samplePrior) {
 		return nil, fmt.Errorf(`%w: this revolve's coordinate envelope is not finite, so no chord budget can be reserved against it`, ErrUnsupported)
 	}
-	deltaCPrior := revolveConstructionPrior(basis, samplePrior, rhoMax, coordMax)
+	deltaCPrior := tessellation.RevolveConstructionPrior(basis, samplePrior, rhoMax, coordMax)
 	deltaRPrior := proofbound.RigidRoundAllow(proofbound.AbsSumUpper(coordMax, deltaCPrior), proofbound.VecMaxAbs(rp.xform.Translation()))
 	return &revolveResolution{
 		basis: basis, ideal: ideal, loops: loops, resolved: resolved, junctions: junctions,
@@ -340,7 +306,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	ideal, loops, resolved := res.ideal, res.loops, res.resolved
 	basis, rhoMax, coordMax := res.basis, res.rhoMax, res.coordMax
 	deltaCPrior, deltaRPrior := res.deltaCPrior, res.deltaRPrior
-	available, err := revolveBudget(chord, deltaCPrior, deltaRPrior)
+	available, err := tessellation.RevolveBudget(chord, deltaCPrior, deltaRPrior)
 	if err != nil {
 		return nil, err
 	}
@@ -469,23 +435,23 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	deltaC, deltaR := 0.0, 0.0
 	// radials[l] is the ideal radial direction at angular index l, the term
-	// of revolveIdealPoint's sum that every ring shares; the pole's covers
+	// of tessellation.RevolveIdealPoint's sum that every ring shares; the pole's covers
 	// every angle at once.
-	radials := make([]survey2d.IvVec3, angular.samples)
-	for l := range angular.samples {
-		radials[l] = survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.e0, angular.cosIv[l]), survey2d.IvVec3Mul(p.ideal.e1, angular.sinIv[l]))
+	radials := make([]survey2d.IvVec3, angular.Samples)
+	for l := range angular.Samples {
+		radials[l] = survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.E0, angular.CosIv[l]), survey2d.IvVec3Mul(p.ideal.E1, angular.SinIv[l]))
 	}
 	poleIv := proofbound.Interval(minusOneRat(), oneRat())
-	poleRadial := survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.e0, poleIv), survey2d.IvVec3Mul(p.ideal.e1, poleIv))
+	poleRadial := survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.E0, poleIv), survey2d.IvVec3Mul(p.ideal.E1, poleIv))
 	for li := range loopMesh {
 		for si := range loopMesh[li].samples {
 			s := &loopMesh[li].samples[si]
-			count := angular.samples
-			if s.onAxis {
+			count := angular.Samples
+			if s.OnAxis {
 				count = 1
 			}
-			s.ring = make([]int, count)
-			axial := survey2d.IvVec3Mul(p.ideal.w, s.zIv)
+			s.Ring = make([]int, count)
+			axial := survey2d.IvVec3Mul(p.ideal.W, s.ZIv)
 			// docs/tessellation-design.md §9's ring-collapse detection, run
 			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
 			// vertices coincide is not an axis sample, and §12 forbids merging
@@ -497,25 +463,25 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				if err := budget.Step(); err != nil {
 					return nil, err
 				}
-				cos, sin := angular.cos[l], angular.sin[l]
-				local := p.basis.a3.Add(p.basis.w.Scale(s.z)).Add(p.basis.e0.Scale(cos).Add(p.basis.e1.Scale(sin)).Scale(s.rho))
+				cos, sin := angular.Cos[l], angular.Sin[l]
+				local := p.basis.A3.Add(p.basis.W.Scale(s.Z)).Add(p.basis.E0.Scale(cos).Add(p.basis.E1.Scale(sin)).Scale(s.Rho))
 				placed := rp.xform.Apply(local)
 				if !proofbound.FiniteVec(local) || !proofbound.FiniteVec(placed) {
 					return nil, fmt.Errorf(`%w: a revolve mesh vertex is not finite`, ErrUnsupported)
 				}
 				radial := radials[l]
-				if s.onAxis {
+				if s.OnAxis {
 					// A pole's single vertex stands for the ideal sample at
 					// EVERY angle, so its enclosure must cover them all.
 					radial = poleRadial
 				}
-				ideal := survey2d.IvVec3Add(p.ideal.a3, survey2d.IvVec3Add(axial, survey2d.IvVec3Mul(radial, s.rhoIv)))
+				ideal := survey2d.IvVec3Add(p.ideal.A3, survey2d.IvVec3Add(axial, survey2d.IvVec3Mul(radial, s.RhoIv)))
 				gapC := proofbound.Radius3D(max(
 					proofbound.IntervalFloatError(ideal[0], local.X),
 					proofbound.IntervalFloatError(ideal[1], local.Y),
 					proofbound.IntervalFloatError(ideal[2], local.Z),
 				))
-				gapR := exactRigidPointRound(rp.xform, local, placed)
+				gapR := tessellation.ExactRigidPointRound(rp.xform, local, placed)
 				if proofbound.IsNonFinite(gapC) || proofbound.IsNonFinite(gapR) {
 					return nil, fmt.Errorf(`%w: a revolve mesh vertex states no bound on the rounding its own construction committed`, ErrUnsupported)
 				}
@@ -523,16 +489,16 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				deltaR = math.Max(deltaR, gapR)
 				if l == 0 {
 					firstLocal, firstPlaced = local, placed
-				} else if !s.onAxis && (local == prevLocal || placed == prevPlaced) {
+				} else if !s.OnAxis && (local == prevLocal || placed == prevPlaced) {
 					return nil, errRevolveRingCollapse
 				}
 				prevLocal, prevPlaced = local, placed
-				s.ring[l] = len(mesh.vertices)
+				s.Ring[l] = len(mesh.vertices)
 				mesh.vertices = append(mesh.vertices, placed)
 			}
 			// A full turn closes onto its own first vertex, so the wrap is the
 			// one adjacent pair the walk above never compared.
-			if rp.full && !s.onAxis && count > 1 && (prevLocal == firstLocal || prevPlaced == firstPlaced) {
+			if rp.full && !s.OnAxis && count > 1 && (prevLocal == firstLocal || prevPlaced == firstPlaced) {
 				return nil, errRevolveRingCollapse
 			}
 		}
@@ -558,7 +524,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	var angularHomotopy *big.Rat
 	if proofs && !sheet {
 		var err error
-		angularHomotopy, err = revolveAngularHomotopyFactor(angular.step)
+		angularHomotopy, err = tessellation.RevolveAngularHomotopyFactor(angular.Step)
 		if err != nil {
 			return nil, err
 		}
@@ -574,11 +540,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				return nil, err
 			}
 			lo, hi := lm.samples[j], lm.samples[(j+1)%n]
-			k := lo.walk
+			k := lo.Walk
 			if lm.resolved.kinds[k] == wallAxis {
 				continue
 			}
-			if lo.onAxis && hi.onAxis {
+			if lo.OnAxis && hi.OnAxis {
 				return nil, fmt.Errorf(`%w: a revolve generator with both ends on the axis sweeps no face, yet the recorded walk is not an axis line`, ErrUnsupported)
 			}
 			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.walks[k].Segs[0]))
@@ -587,8 +553,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			}
 			emitRevolveCell(mesh, lo, hi, p.nPhi, face)
 			cur := faceCells[face]
-			cur.rho = math.Max(cur.rho, math.Max(lo.rho, hi.rho))
-			cur.sag = math.Max(cur.sag, lo.sag)
+			cur.rho = math.Max(cur.rho, math.Max(lo.Rho, hi.Rho))
+			cur.sag = math.Max(cur.sag, lo.Sag)
 			faceCells[face] = cur
 			if !proofs {
 				continue
@@ -599,7 +565,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			}
 			cellSlack = proofbound.AbsSumUpper(cellSlack, proofbound.ProductUpper(float64(p.nPhi), slack))
 			if !sheet {
-				cellVolume.Add(cellVolume, revolveCellSweptVolume(lo, hi, angularHomotopy))
+				cellVolume.Add(cellVolume, tessellation.RevolveCellSweptVolume(lo, hi, angularHomotopy))
 			}
 		}
 	}
@@ -634,7 +600,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, ErrDegenerate)
 		}
 	default:
-		if err := emitRevolveCaps(ctx, mesh, loopMesh, sectionPts, sectionLoops, angular.samples-1, p.faceOf); err != nil {
+		if err := emitRevolveCaps(ctx, mesh, loopMesh, sectionPts, sectionLoops, angular.Samples-1, p.faceOf); err != nil {
 			return nil, err
 		}
 		if proofs {
@@ -680,12 +646,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// facets. It also builds the audit triangles the facet-pair audit below
 	// consumes, so the two share one pass and one work budget.
 	auditBudget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := requireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coord)
+	auditTris, err := tessellation.RequireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coord)
 	if err != nil {
 		return nil, err
 	}
 	if p.verify >= VerifyBoundary {
-		if err := revolveContactAudit(auditBudget, auditTris, mesh.triangles, coord); err != nil {
+		if err := tessellation.RevolveContactAudit(auditBudget, auditTris, mesh.triangles, coord); err != nil {
 			// A crossing or an undecided contact is the one failure a finer
 			// angular sequence can still answer, and §3 makes the global count the
 			// thing an angular failure increments. A canceled context or an
@@ -702,7 +668,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// partial-sweep sheet is open and skips it; a solid, or a full-turn
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.full {
-		anchor := rp.xform.Apply(p.basis.a3)
+		anchor := rp.xform.Apply(p.basis.A3)
 		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
 			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 		}
@@ -736,12 +702,12 @@ type revFaceExtent struct {
 // largest distance any junction's stored pair sits from its own enclosure — the
 // count-independent half of deltaC the tolerance split spends before any count
 // exists.
-func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revMeridian, float64, error) {
-	out := make([]revMeridian, len(r.walks))
+func revolveJunctions(rp revolvePayload, r revolveWalks) ([]tessellation.RevMeridian, float64, error) {
+	out := make([]tessellation.RevMeridian, len(r.walks))
 	worst := 0.0
 	for k, w := range r.walks {
 		plane := r.plane[w.Segs[0]]
-		zIv, rhoIv, ok := revolveMeridianEnclosure(rp.ax, plane.StartU, plane.StartV, plane.StartBound)
+		zIv, rhoIv, ok := tessellation.RevolveMeridianEnclosure(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, plane.StartU, plane.StartV, plane.StartBound)
 		if !ok {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
 		}
@@ -753,7 +719,7 @@ func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revMeridian, float64
 		if w.StartV < 0 {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample sits on the negative side of the axis`, ErrDegenerate)
 		}
-		out[k] = revMeridian{z: w.StartU, rho: w.StartV, zIv: zIv, rhoIv: rhoIv, onAxis: w.StartV == 0, walk: k}
+		out[k] = tessellation.RevMeridian{Z: w.StartU, Rho: w.StartV, ZIv: zIv, RhoIv: rhoIv, OnAxis: w.StartV == 0, Walk: k}
 	}
 	return out, worst, nil
 }
@@ -766,8 +732,8 @@ func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revMeridian, float64
 // The returned gap is the largest distance any sample's stored pair sits from
 // its own enclosure, junctions and stations alike; the caller holds it against
 // what the tolerance split reserved.
-func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, junctions []revMeridian, counts []int, sags []float64) ([]revMeridian, float64, error) {
-	out := make([]revMeridian, 0, len(junctions))
+func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, junctions []tessellation.RevMeridian, counts []int, sags []float64) ([]tessellation.RevMeridian, float64, error) {
+	out := make([]tessellation.RevMeridian, 0, len(junctions))
 	worst := 0.0
 	for k, w := range r.walks {
 		n := counts[k]
@@ -775,27 +741,27 @@ func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, 
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian walk carries no chord`, ErrUnsupported)
 		}
 		start := junctions[k]
-		start.sag, start.walk = sags[k], k
+		start.Sag, start.Walk = sags[k], k
 		if !w.IsCircular() {
 			out = append(out, start)
 			continue
 		}
-		cell, ok := revolveArcChordCell(w.SegmentWalk, 0, n)
+		cell, ok := tessellation.RevolveArcChordCell(w.SegmentWalk, 0, n)
 		if !ok {
-			return nil, 0, errRevolveArcCellSlack
+			return nil, 0, tessellation.ErrRevolveArcCellSlack
 		}
-		start.arc = cell
+		start.Arc = cell
 		out = append(out, start)
 		for i := 1; i < n; i++ {
 			station, gap, err := revolveArcStation(rp.ax, loop.Segments[w.Segs[0]], i, n)
 			if err != nil {
 				return nil, 0, err
 			}
-			cell, ok := revolveArcChordCell(w.SegmentWalk, i, n)
+			cell, ok := tessellation.RevolveArcChordCell(w.SegmentWalk, i, n)
 			if !ok {
-				return nil, 0, errRevolveArcCellSlack
+				return nil, 0, tessellation.ErrRevolveArcCellSlack
 			}
-			station.walk, station.sag, station.arc = k, sags[k], cell
+			station.Walk, station.Sag, station.Arc = k, sags[k], cell
 			worst = math.Max(worst, gap)
 			out = append(out, station)
 		}
@@ -812,8 +778,8 @@ func requireRevolveMeridianOffAxis(loops []revLoopMesh) error {
 	for li, lm := range loops {
 		offAxis := map[int]bool{}
 		for _, s := range lm.samples {
-			if !s.onAxis {
-				offAxis[s.walk] = true
+			if !s.OnAxis {
+				offAxis[s.Walk] = true
 			}
 		}
 		for k, w := range lm.resolved.walks {
@@ -852,7 +818,7 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 			if j < 0 || j >= len(lm.samples) {
 				continue
 			}
-			k := lm.samples[j].walk
+			k := lm.samples[j].Walk
 			if lm.resolved.walks[k].IsCircular() {
 				return &revolveRefineError{err: err, retry: revolveRefine{loop: named.loop, walk: k}}
 			}
@@ -880,18 +846,18 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 // It reads the JUNCTIONS alone. An interior chord station never sits on the
 // axis (revolveArcStation refuses one that does), so a chorded meridian adds no
 // incidence this audit could miss.
-func requireRevolveAxisIncidence(resolved []revolveWalks, junctions [][]revMeridian) error {
+func requireRevolveAxisIncidence(resolved []revolveWalks, junctions [][]tessellation.RevMeridian) error {
 	seen := map[float64]struct{}{}
 	for li, js := range junctions {
 		n := len(js)
 		for k, s := range js {
-			if !s.onAxis {
+			if !s.OnAxis {
 				continue
 			}
-			if _, dup := seen[s.z]; dup {
+			if _, dup := seen[s.Z]; dup {
 				return fmt.Errorf(`%w: two recorded boundary junctions meet the revolve axis at the same point, so the swept solid pinches there`, ErrDegenerate)
 			}
-			seen[s.z] = struct{}{}
+			seen[s.Z] = struct{}{}
 			incoming := resolved[li].kinds[(k+n-1)%n]
 			outgoing := resolved[li].kinds[k]
 			if (incoming == wallAxis) == (outgoing == wallAxis) {
@@ -985,7 +951,7 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 			if !w.IsCircular() {
 				continue
 			}
-			total = proofbound.AbsSumUpper(total, chordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k]))
+			total = proofbound.AbsSumUpper(total, tessellation.ChordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k]))
 		}
 	}
 	return total
@@ -1019,11 +985,11 @@ func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bo
 	for _, lm := range loops {
 		n := len(lm.samples)
 		for j, s := range lm.samples {
-			if lm.resolved.kinds[s.walk] == wallAxis {
+			if lm.resolved.kinds[s.Walk] == wallAxis {
 				continue
 			}
 			per := uint64(2)
-			if s.onAxis || lm.samples[(j+1)%n].onAxis {
+			if s.OnAxis || lm.samples[(j+1)%n].OnAxis {
 				per = 1
 			}
 			step, ok := mulChecked(per, uint64(nPhi))
@@ -1100,14 +1066,14 @@ func mulChecked(a, b uint64) (uint64, bool) {
 // (u, v) → (z, ρ) map is a rotation either way, so the recorded loop's own
 // sense survives it — and the reflection correction is applied once, over the
 // whole assembled mesh, by the caller.
-func emitRevolveCell(m *Mesh, lo, hi revMeridian, nPhi int, face *Face) {
+func emitRevolveCell(m *Mesh, lo, hi tessellation.RevMeridian, nPhi int, face *Face) {
 	for l := range nPhi {
-		a, d := lo.at(l), lo.at(l+1)
-		bb, c := hi.at(l), hi.at(l+1)
+		a, d := lo.At(l), lo.At(l+1)
+		bb, c := hi.At(l), hi.At(l+1)
 		switch {
-		case lo.onAxis:
+		case lo.OnAxis:
 			m.addTriangle([3]int{a, bb, c}, face)
-		case hi.onAxis:
+		case hi.OnAxis:
 			m.addTriangle([3]int{a, bb, d}, face)
 		default:
 			m.addTriangle([3]int{a, bb, c}, face)
@@ -1135,8 +1101,8 @@ func emitRevolveCaps(ctx context.Context, m *Mesh, loops []revLoopMesh, pts []Po
 	var startV, endV []int
 	for _, lm := range loops {
 		for _, s := range lm.samples {
-			startV = append(startV, s.at(0))
-			endV = append(endV, s.at(last))
+			startV = append(startV, s.At(0))
+			endV = append(endV, s.At(last))
 		}
 	}
 	tris, err := triangulate2DContext(ctx, pts, loopIdx)
@@ -1165,9 +1131,9 @@ func revolveSectionPoints(loops []revLoopMesh) ([]Point2, [][]int, [][]float64) 
 		idx := make([]int, len(lm.samples))
 		sag := make([]float64, len(lm.samples))
 		for k, s := range lm.samples {
-			pts = append(pts, Point2{U: s.z, V: s.rho})
+			pts = append(pts, Point2{U: s.Z, V: s.Rho})
 			idx[k] = base + k
-			sag[k] = s.sag
+			sag[k] = s.Sag
 		}
 		loopIdx = append(loopIdx, idx)
 		loopSag = append(loopSag, sag)
@@ -1199,41 +1165,41 @@ func loopMaxSagitta(sag [][]float64) []float64 {
 //
 // A STRAIGHT generator's densities collapse to a difference that is linear in
 // the meridian parameter, so its cell is decomposed in closed form
-// (revolveCellAreaSlack, tess §15's T2 choice). A CIRCULAR generator's does
+// (tessellation.RevolveCellAreaSlack, tess §15's T2 choice). A CIRCULAR generator's does
 // not, so its cell takes certified interval subdivision instead
-// (revolveArcCellSlack, tess §15's T3 choice). coord is the composed coordinate
+// (tessellation.RevolveArcCellSlack, tess §15's T3 choice). coord is the composed coordinate
 // displacement, which the circular arms widen their meridian model by.
-func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMeridian, coord float64) (float64, error) {
-	corner := func(s revMeridian, l int) survey2d.IvVec3 {
-		return revolveIdealPoint(b, s.zIv, s.rhoIv, angular.cosIv[l], angular.sinIv[l])
+func revolveCellSlack(b tessellation.RevolveBasis3Iv, angular tessellation.RevolveAngular, lo, hi tessellation.RevMeridian, coord float64) (float64, error) {
+	corner := func(s tessellation.RevMeridian, l int) survey2d.IvVec3 {
+		return tessellation.RevolveIdealPoint(b, s.ZIv, s.RhoIv, angular.CosIv[l], angular.SinIv[l])
 	}
 	p00, p01 := corner(lo, 0), corner(lo, 1)
 	p10, p11 := corner(hi, 0), corner(hi, 1)
-	if lo.arc != nil {
+	if lo.Arc != nil {
 		switch {
-		case lo.onAxis:
-			area, ok := ivTwoTriangleArea(p00, p10, p11)
+		case lo.OnAxis:
+			area, ok := tessellation.IvTwoTriangleArea(p00, p10, p11)
 			if !ok {
-				return 0, errRevolveArcCellSlack
+				return 0, tessellation.ErrRevolveArcCellSlack
 			}
-			return revolveArcFanSlack(*lo.arc, true, angular.step, area, coord)
-		case hi.onAxis:
-			area, ok := ivTwoTriangleArea(p00, p10, p01)
+			return tessellation.RevolveArcFanSlack(*lo.Arc, true, angular.Step, area, coord)
+		case hi.OnAxis:
+			area, ok := tessellation.IvTwoTriangleArea(p00, p10, p01)
 			if !ok {
-				return 0, errRevolveArcCellSlack
+				return 0, tessellation.ErrRevolveArcCellSlack
 			}
-			return revolveArcFanSlack(*lo.arc, false, angular.step, area, coord)
+			return tessellation.RevolveArcFanSlack(*lo.Arc, false, angular.Step, area, coord)
 		default:
-			lowHalf, ok0 := ivTwoTriangleArea(p00, p10, p11)
-			highHalf, ok1 := ivTwoTriangleArea(p00, p11, p01)
+			lowHalf, ok0 := tessellation.IvTwoTriangleArea(p00, p10, p11)
+			highHalf, ok1 := tessellation.IvTwoTriangleArea(p00, p11, p01)
 			if !ok0 || !ok1 {
-				return 0, errRevolveArcCellSlack
+				return 0, tessellation.ErrRevolveArcCellSlack
 			}
-			return revolveArcCellSlack(*lo.arc, angular.step, [2]proofbound.RatInterval{lowHalf, highHalf}, coord)
+			return tessellation.RevolveArcCellSlack(*lo.Arc, angular.Step, [2]proofbound.RatInterval{lowHalf, highHalf}, coord)
 		}
 	}
 
-	dz, drho := proofarith.FloatRat(hi.z-lo.z), proofarith.FloatRat(hi.rho-lo.rho)
+	dz, drho := proofarith.FloatRat(hi.Z-lo.Z), proofarith.FloatRat(hi.Rho-lo.Rho)
 	if dz == nil || drho == nil {
 		return 0, errRevolveCellSlack
 	}
@@ -1243,25 +1209,25 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 		return 0, errRevolveCellSlack
 	}
 	switch {
-	case lo.onAxis:
-		area, ok := ivTwoTriangleArea(p00, p10, p11)
+	case lo.OnAxis:
+		area, ok := tessellation.IvTwoTriangleArea(p00, p10, p11)
 		if !ok {
 			return 0, errRevolveCellSlack
 		}
-		return revolveFanAreaSlack(hi.rho, true, meridian, angular.step, area), nil
-	case hi.onAxis:
-		area, ok := ivTwoTriangleArea(p00, p10, p01)
+		return tessellation.RevolveFanAreaSlack(hi.Rho, true, meridian, angular.Step, area), nil
+	case hi.OnAxis:
+		area, ok := tessellation.IvTwoTriangleArea(p00, p10, p01)
 		if !ok {
 			return 0, errRevolveCellSlack
 		}
-		return revolveFanAreaSlack(lo.rho, false, meridian, angular.step, area), nil
+		return tessellation.RevolveFanAreaSlack(lo.Rho, false, meridian, angular.Step, area), nil
 	default:
-		lowHalf, ok0 := ivTwoTriangleArea(p00, p10, p11)
-		highHalf, ok1 := ivTwoTriangleArea(p00, p11, p01)
+		lowHalf, ok0 := tessellation.IvTwoTriangleArea(p00, p10, p11)
+		highHalf, ok1 := tessellation.IvTwoTriangleArea(p00, p11, p01)
 		if !ok0 || !ok1 {
 			return 0, errRevolveCellSlack
 		}
-		return revolveCellAreaSlack(lo.rho, hi.rho, meridian, angular.step, [2]proofbound.RatInterval{lowHalf, highHalf}), nil
+		return tessellation.RevolveCellAreaSlack(lo.Rho, hi.Rho, meridian, angular.Step, [2]proofbound.RatInterval{lowHalf, highHalf}), nil
 	}
 }
 
@@ -1290,7 +1256,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 	if proofbound.UpRound(proofbound.AbsSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
 		// The chording component must stay inside the requested tolerance, and
-		// revolveBudget already reserved both coordinate stages out of it
+		// tessellation.RevolveBudget already reserved both coordinate stages out of it
 		// before the counts were chosen. Reaching here would mean the
 		// reservation did not hold, which is a proof failure rather than a
 		// coarser mesh (docs/tessellation-design.md §8).

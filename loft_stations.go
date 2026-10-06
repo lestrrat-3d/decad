@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -889,7 +891,7 @@ func circularSegmentRange(seg CurveSegment) (*big.Rat, *big.Rat, bool) {
 // its proofbound.Atan2Interval swept angle, a CircleSeg's recorded radius and exact
 // rational turn — never from the walk's held math.Hypot radius and math.Atan2
 // angles, neither of which the walk can enclose (extrude.go's circularWalk).
-// radSinCosSpan supplies the sine of the enclosed cell half-angle, and the
+// tessellation.RadSinCosSpan supplies the sine of the enclosed cell half-angle, and the
 // squaring goes through proofbound.IntervalMul, whose four-corner upper end dominates
 // max x² over the span whatever the span's sign.
 //
@@ -908,7 +910,7 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 		return math.Inf(1)
 	}
 	half := proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m)))
-	sin, _, ok := radSinCosSpan(half)
+	sin, _, ok := tessellation.RadSinCosSpan(half)
 	if !ok {
 		return math.Inf(1)
 	}
@@ -951,7 +953,7 @@ func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
 		return 0
 	}
 	half := proofbound.IntervalScale(sweep, big.NewRat(1, 2*int64(m)))
-	sin, _, ok := radSinCosSpan(half)
+	sin, _, ok := tessellation.RadSinCosSpan(half)
 	if !ok {
 		return 0
 	}

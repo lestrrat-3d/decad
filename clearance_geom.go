@@ -1314,10 +1314,10 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		return false, err
 	}
 	b := rp.basis()
-	a3p := rp.xform.Apply(b.a3)
-	wp := rp.xform.ApplyDir(b.w)
-	e0p := rp.xform.ApplyDir(b.e0)
-	e1p := rp.xform.ApplyDir(b.e1)
+	a3p := rp.xform.Apply(b.A3)
+	wp := rp.xform.ApplyDir(b.W)
+	e0p := rp.xform.ApplyDir(b.E0)
+	e1p := rp.xform.ApplyDir(b.E1)
 	sweep := angWindow{full: rp.full}
 	if !rp.full {
 		sweep = newAngWindow(rp.phi0, rp.phi1)

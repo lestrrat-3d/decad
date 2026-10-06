@@ -716,9 +716,9 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 		return undercutOutcome{}
 	}
 	bas := rp.basis()
-	pw := rp.xform.ApplyDir(bas.w).Dot(p)
-	c0 := rp.xform.ApplyDir(bas.e0).Dot(p)
-	c1 := rp.xform.ApplyDir(bas.e1).Dot(p)
+	pw := rp.xform.ApplyDir(bas.W).Dot(p)
+	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
+	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
 	glo, ghi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	roles := facesByRole(b)
 	loops, err := revolveLoops(nil, rp)

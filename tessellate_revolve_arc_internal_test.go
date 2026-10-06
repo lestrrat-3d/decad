@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -17,33 +19,33 @@ import (
 )
 
 // arcCellFixture builds the meridian model of one circular chord from plain
-// floats, the way revolveArcChordCell builds it from an axis walk.
-func arcCellFixture(cV, radius, th0, dth float64) revArcCell {
-	return revArcCell{
-		cV:     big.NewRat(0, 1).SetFloat64(cV),
-		radius: big.NewRat(0, 1).SetFloat64(radius),
-		th0:    big.NewRat(0, 1).SetFloat64(th0),
-		dth:    big.NewRat(0, 1).SetFloat64(dth),
+// floats, the way tessellation.RevolveArcChordCell builds it from an axis walk.
+func arcCellFixture(cV, radius, th0, dth float64) tessellation.RevArcCell {
+	return tessellation.RevArcCell{
+		CV:     big.NewRat(0, 1).SetFloat64(cV),
+		Radius: big.NewRat(0, 1).SetFloat64(radius),
+		Th0:    big.NewRat(0, 1).SetFloat64(th0),
+		Dth:    big.NewRat(0, 1).SetFloat64(dth),
 	}
 }
 
 // arcCellReference is a dense numeric reading of ∫₀¹|scale·ρ(t) − held|·w(t) dt
 // for one half domain — a reference the certified bound must sit ABOVE, never a
 // substitute for it.
-func arcCellReference(cell revArcCell, scale, held float64, weight int) float64 {
-	cV, _ := cell.cV.Float64()
-	radius, _ := cell.radius.Float64()
-	th0, _ := cell.th0.Float64()
-	dth, _ := cell.dth.Float64()
+func arcCellReference(cell tessellation.RevArcCell, scale, held float64, weight int) float64 {
+	cV, _ := cell.CV.Float64()
+	radius, _ := cell.Radius.Float64()
+	th0, _ := cell.Th0.Float64()
+	dth, _ := cell.Dth.Float64()
 	const n = 200000
 	total := 0.0
 	for i := range n {
 		t := (float64(i) + 0.5) / n
 		w := 1.0
 		switch weight {
-		case revolveWeightT:
+		case tessellation.RevolveWeightT:
 			w = t
-		case revolveWeightOneMinusT:
+		case tessellation.RevolveWeightOneMinusT:
 			w = 1 - t
 		}
 		rho := cV + radius*math.Sin(th0+t*dth)
@@ -56,25 +58,25 @@ func arcCellReference(cell revArcCell, scale, held float64, weight int) float64 
 // the common-denominator implementation. Both must return the same rational,
 // including its endpoints before conversion to the public float bound.
 type oldRevolveArcGridData struct {
-	t       [revolveArcIntegralSteps + 1]*big.Rat
-	weights [3][revolveArcIntegralSteps]*big.Rat
+	t       [tessellation.RevolveArcIntegralSteps + 1]*big.Rat
+	weights [3][tessellation.RevolveArcIntegralSteps]*big.Rat
 }
 
 var revolveArcGrid = func() oldRevolveArcGridData {
 	var grid oldRevolveArcGridData
 	for i := range grid.t {
-		grid.t[i] = big.NewRat(int64(i), revolveArcIntegralSteps)
+		grid.t[i] = big.NewRat(int64(i), tessellation.RevolveArcIntegralSteps)
 	}
-	for i := range revolveArcIntegralSteps {
+	for i := range tessellation.RevolveArcIntegralSteps {
 		a, b := grid.t[i], grid.t[i+1]
 		width := new(big.Rat).Sub(b, a)
 		half := new(big.Rat).Mul(
 			new(big.Rat).Sub(new(big.Rat).Mul(b, b), new(big.Rat).Mul(a, a)),
 			big.NewRat(1, 2),
 		)
-		grid.weights[revolveWeightOne][i] = width
-		grid.weights[revolveWeightT][i] = half
-		grid.weights[revolveWeightOneMinusT][i] = new(big.Rat).Sub(width, half)
+		grid.weights[tessellation.RevolveWeightOne][i] = width
+		grid.weights[tessellation.RevolveWeightT][i] = half
+		grid.weights[tessellation.RevolveWeightOneMinusT][i] = new(big.Rat).Sub(width, half)
 	}
 	return grid
 }()
@@ -82,18 +84,18 @@ var revolveArcGrid = func() oldRevolveArcGridData {
 func oldRevolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope proofbound.RatInterval, extra *big.Rat, weight int) *big.Rat {
 	at := func(i int) *big.Rat {
 		f := proofbound.IntervalSub(scaledRho[i], proofbound.IntervalAdd(held, proofbound.IntervalScale(slope, revolveArcGrid.t[i])))
-		return intervalAbsUpper(f)
+		return tessellation.IntervalAbsUpper(f)
 	}
-	weights := &revolveArcGrid.weights[revolveWeightOne]
+	weights := &revolveArcGrid.weights[tessellation.RevolveWeightOne]
 	switch weight {
-	case revolveWeightT:
-		weights = &revolveArcGrid.weights[revolveWeightT]
-	case revolveWeightOneMinusT:
-		weights = &revolveArcGrid.weights[revolveWeightOneMinusT]
+	case tessellation.RevolveWeightT:
+		weights = &revolveArcGrid.weights[tessellation.RevolveWeightT]
+	case tessellation.RevolveWeightOneMinusT:
+		weights = &revolveArcGrid.weights[tessellation.RevolveWeightOneMinusT]
 	}
 	total := new(big.Rat)
 	prev := at(0)
-	for i := range revolveArcIntegralSteps {
+	for i := range tessellation.RevolveArcIntegralSteps {
 		next := at(i + 1)
 		piece := new(big.Rat).Add(survey2d.RatMax(prev, next), extra)
 		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
@@ -128,11 +130,11 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	cell := arcCellFixture(cV, radius, th0, dth)
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
 	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(held))
-	got, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
+	got, err := tessellation.RevolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
 
-	want := arcCellReference(cell, scale, held, revolveWeightT) +
-		arcCellReference(cell, scale, held, revolveWeightOneMinusT)
+	want := arcCellReference(cell, scale, held, tessellation.RevolveWeightT) +
+		arcCellReference(cell, scale, held, tessellation.RevolveWeightOneMinusT)
 	require.Positive(t, want, `the fixture's own error must be nonzero for the bound to bound anything`)
 	require.GreaterOrEqual(t, got, want, `Ecell must bound the absolute local density error`)
 	require.LessOrEqual(t, got, 1.25*want, `certified subdivision must stay a bound, not a blow-up`)
@@ -162,21 +164,21 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cell := arcCellFixture(cV, radius, tc.start, tc.span)
-			_, rho, extra, ok := revolveArcScale(cell, step, 1e-3)
+			_, rho, extra, ok := tessellation.RevolveArcScale(cell, step, 1e-3)
 			require.True(t, ok)
-			den := revolveArcIntegralDenominator(rho, tc.held, tc.slope, extra)
-			heldLo := revolveArcScaledNumerator(tc.held.Lo, den, 1)
-			heldHi := revolveArcScaledNumerator(tc.held.Hi, den, 1)
-			slopeLo := revolveArcScaledNumerator(tc.slope.Lo, den, revolveArcIntegralSteps)
-			slopeHi := revolveArcScaledNumerator(tc.slope.Hi, den, revolveArcIntegralSteps)
+			den := tessellation.RevolveArcIntegralDenominator(rho, tc.held, tc.slope, extra)
+			heldLo := tessellation.RevolveArcScaledNumerator(tc.held.Lo, den, 1)
+			heldHi := tessellation.RevolveArcScaledNumerator(tc.held.Hi, den, 1)
+			slopeLo := tessellation.RevolveArcScaledNumerator(tc.slope.Lo, den, tessellation.RevolveArcIntegralSteps)
+			slopeHi := tessellation.RevolveArcScaledNumerator(tc.slope.Hi, den, tessellation.RevolveArcIntegralSteps)
 			for i, node := range rho {
-				lo, hi := revolveArcNodeNumerators(node, den, heldLo, heldHi, slopeLo, slopeHi, i)
+				lo, hi := tessellation.RevolveArcNodeNumerators(node, den, heldLo, heldHi, slopeLo, slopeHi, i)
 				old := proofbound.IntervalSub(node, proofbound.IntervalAdd(tc.held, proofbound.IntervalScale(tc.slope, revolveArcGrid.t[i])))
 				require.Zero(t, new(big.Rat).SetFrac(lo, den).Cmp(old.Lo), "node %d lower endpoint", i)
 				require.Zero(t, new(big.Rat).SetFrac(hi, den).Cmp(old.Hi), "node %d upper endpoint", i)
 			}
-			for _, weight := range []int{revolveWeightOne, revolveWeightT, revolveWeightOneMinusT} {
-				got := revolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
+			for _, weight := range []int{tessellation.RevolveWeightOne, tessellation.RevolveWeightT, tessellation.RevolveWeightOneMinusT} {
+				got := tessellation.RevolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
 				old := oldRevolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
 				require.Zero(t, got.Cmp(old), "weight %d changed the exact bound", weight)
 			}
@@ -199,14 +201,14 @@ func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {
 	cell := arcCellFixture(cV, radius, th0, dth)
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
 	area := proofbound.PointInterval(new(big.Rat))
-	got, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
+	got, err := tessellation.RevolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
-	want := arcCellReference(cell, scale, held, revolveWeightT) +
-		arcCellReference(cell, scale, held, revolveWeightOneMinusT)
+	want := arcCellReference(cell, scale, held, tessellation.RevolveWeightT) +
+		arcCellReference(cell, scale, held, tessellation.RevolveWeightOneMinusT)
 	require.GreaterOrEqual(t, got, want)
 	require.InDelta(t, want, got, 0.01*want)
 	reversed := arcCellFixture(cV, radius, dth, -dth)
-	gotReversed, err := revolveArcCellSlack(reversed, step, [2]proofbound.RatInterval{area, area}, 0)
+	gotReversed, err := tessellation.RevolveArcCellSlack(reversed, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, gotReversed, want)
 	require.InDelta(t, got, gotReversed, 0.01*want)
@@ -227,7 +229,7 @@ func TestRevolveArcFanSlackBoundsAPoleCell(t *testing.T) {
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
 	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
 	for _, poleFirst := range []bool{true, false} {
-		got, err := revolveArcFanSlack(cell, poleFirst, step, area, 0)
+		got, err := tessellation.RevolveArcFanSlack(cell, poleFirst, step, area, 0)
 		require.NoError(t, err)
 		const n = 200000
 		want := 0.0
@@ -252,13 +254,13 @@ func TestRevolveArcCellSlackWidensWithTheModelSlack(t *testing.T) {
 	cell := arcCellFixture(10, 3, 0.2, 0.3)
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, 24))
 	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(0.5))
-	tight, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
+	tight, err := tessellation.RevolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
-	loose, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 1e-3)
+	loose, err := tessellation.RevolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 1e-3)
 	require.NoError(t, err)
 	require.Greater(t, loose, tight)
 
-	_, err = revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, math.Inf(1))
+	_, err = tessellation.RevolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, math.Inf(1))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -277,13 +279,13 @@ func TestChordSegmentAreaBoundsTheTrueCircularSegments(t *testing.T) {
 	} {
 		phi := tc.sweep / float64(tc.n)
 		want := float64(tc.n) * tc.radius * tc.radius / 2 * (phi - math.Sin(phi))
-		got := chordSegmentArea(tc.radius, tc.sweep, tc.n)
+		got := tessellation.ChordSegmentArea(tc.radius, tc.sweep, tc.n)
 		require.GreaterOrEqual(t, got, want, `r=%v sweep=%v n=%d`, tc.radius, tc.sweep, tc.n)
 		require.LessOrEqual(t, got, 1.3*want, `r=%v sweep=%v n=%d`, tc.radius, tc.sweep, tc.n)
 	}
-	require.Equal(t, 0.0, chordSegmentArea(0, math.Pi, 4))
-	require.True(t, math.IsInf(chordSegmentArea(1, math.Pi, 0), 1))
-	require.True(t, math.IsInf(chordSegmentArea(1, math.Inf(1), 4), 1))
+	require.Equal(t, 0.0, tessellation.ChordSegmentArea(0, math.Pi, 4))
+	require.True(t, math.IsInf(tessellation.ChordSegmentArea(1, math.Pi, 0), 1))
+	require.True(t, math.IsInf(tessellation.ChordSegmentArea(1, math.Inf(1), 4), 1))
 }
 
 func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
@@ -296,8 +298,8 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 
 	station, gap, err := revolveArcStation(ax, seg, 1, 4)
 	require.NoError(t, err)
-	require.InDelta(t, 0.0, station.z, 1e-12)
-	require.InDelta(t, 13.0, station.rho, 1e-12)
+	require.InDelta(t, 0.0, station.Z, 1e-12)
+	require.InDelta(t, 13.0, station.Rho, 1e-12)
 	require.LessOrEqual(t, gap, 8*math.Nextafter(13, math.Inf(1))-8*13)
 
 	// Every quarter turn of a recorded circle is exact, so a station on one
