@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -17,15 +19,15 @@ import (
 )
 
 // cornerSpan and pointDeviation evaluate their interval expressions in the
-// common-denominator form (motion_bound.go's scaledIvMat). These tests hold
+// common-denominator form (motion_bound.go's motionbound.ScaledIvMat). These tests hold
 // that form to the big.Rat evaluation of the same expressions, kept below as
 // cornerSpanRational and pointDeviationRational: every endpoint, hull and bound
 // must be the identical rational, not merely an enclosing one.
 
 // cornerSpanRational is cornerSpan's expression evaluated one big.Rat
 // operation at a time.
-func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
-	output := make([]ivVec, len(p.startPoints))
+func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []motionbound.IvVec {
+	output := make([]motionbound.IvVec, len(p.startPoints))
 	if p.path.drift == nil {
 		for index, corner := range p.startPoints {
 			for axis := range 3 {
@@ -45,26 +47,26 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
 	lowAngle := new(big.Rat).Mul(p.omegaLow, lowTime)
 	highAngle := new(big.Rat).Mul(p.omegaHigh, highTime)
 	sin, cos := rotationalSinCosSpan(lowAngle, highAngle)
-	rotationSpan := p.frame.rotation(sin, cos)
+	rotationSpan := p.frame.Rotation(sin, cos)
 	midTime := new(big.Rat).Quo(new(big.Rat).Add(lowTime, highTime), big.NewRat(2, 1))
 	angleAtMidLow := new(big.Rat).Mul(p.omegaLow, midTime)
 	angleAtMidHigh := new(big.Rat).Mul(p.omegaHigh, midTime)
 	midSin, midCos := rotationalSinCosSpan(angleAtMidLow, angleAtMidHigh)
-	rotationMid := p.frame.rotation(midSin, midCos)
+	rotationMid := p.frame.Rotation(midSin, midCos)
 	halfDuration := new(big.Rat).Quo(new(big.Rat).Sub(highTime, lowTime), big.NewRat(2, 1))
-	pivot := pointVec(p.frame.center)
+	pivot := motionbound.PointVec(p.frame.Center)
 	for index, corner := range p.startPoints {
-		start := ratVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()}
-		relative := ivVecSub(pointVec(start), pivot)
-		spanRelative := rotationSpan.apply(relative)
-		point := ivVecAdd(rotationMid.apply(relative), pivot)
+		start := motionbound.RatVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()}
+		relative := motionbound.IvVecSub(motionbound.PointVec(start), pivot)
+		spanRelative := rotationSpan.Apply(relative)
+		point := motionbound.IvVecAdd(rotationMid.Apply(relative), pivot)
 		for axis := range 3 {
 			point[axis] = proofbound.IntervalAdd(point[axis],
 				proofbound.PointInterval(new(big.Rat).Mul(p.velocity[axis], midTime)))
 			following, preceding := (axis+1)%3, (axis+2)%3
 			derivative := proofbound.IntervalAdd(proofbound.PointInterval(p.velocity[axis]), proofbound.IntervalSub(
-				proofbound.IntervalScale(spanRelative[preceding], p.frame.axis[following]),
-				proofbound.IntervalScale(spanRelative[following], p.frame.axis[preceding])))
+				proofbound.IntervalScale(spanRelative[preceding], p.frame.Axis[following]),
+				proofbound.IntervalScale(spanRelative[following], p.frame.Axis[preceding])))
 			maximum := new(big.Rat).Abs(derivative.Lo)
 			if other := new(big.Rat).Abs(derivative.Hi); other.Cmp(maximum) > 0 {
 				maximum = other
@@ -79,31 +81,31 @@ func cornerSpanRational(p rotationalSweepPath, from, to *big.Rat) []ivVec {
 
 // idealAtRational is idealAt's ideal pose evaluated one big.Rat operation at
 // a time.
-func idealAtRational(p rotationalSweepPath, f *big.Rat) idealPose {
+func idealAtRational(p rotationalSweepPath, f *big.Rat) motionbound.IdealPose {
 	zero := proofbound.PointInterval(new(big.Rat))
 	if p.path.drift == nil {
-		shift := pointVec(p.fromT)
+		shift := motionbound.PointVec(p.fromT)
 		for axis := range 3 {
 			shift[axis] = proofbound.IntervalAdd(shift[axis],
 				proofbound.PointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
 		}
-		return idealPose{rot: p.fromRot, pivot: ivVec{zero, zero, zero}, shift: shift}
+		return motionbound.IdealPose{Rot: p.fromRot, Pivot: motionbound.IvVec{zero, zero, zero}, Shift: shift}
 	}
 	elapsed := new(big.Rat).Mul(p.path.duration, f)
 	angleLow := new(big.Rat).Mul(p.omegaLow, elapsed)
 	angleHigh := new(big.Rat).Mul(p.omegaHigh, elapsed)
-	sin, cos := radianSinCos(angleLow)
+	sin, cos := motionbound.RadianSinCos(angleLow)
 	width := new(big.Rat).Sub(angleHigh, angleLow)
 	sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
 	cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
-	rot := p.frame.rotation(sin, cos)
-	center := pointVec(p.frame.center)
-	shift := ivVecAdd(rot.apply(ivVecSub(pointVec(p.fromT), center)), center)
+	rot := p.frame.Rotation(sin, cos)
+	center := motionbound.PointVec(p.frame.Center)
+	shift := motionbound.IvVecAdd(rot.Apply(motionbound.IvVecSub(motionbound.PointVec(p.fromT), center)), center)
 	for axis := range 3 {
 		shift[axis] = proofbound.IntervalAdd(shift[axis],
 			proofbound.PointInterval(new(big.Rat).Mul(p.velocity[axis], elapsed)))
 	}
-	return idealPose{rot: rot.mul(p.fromRot), pivot: ivVec{zero, zero, zero}, shift: shift}
+	return motionbound.IdealPose{Rot: rot.Mul(p.fromRot), Pivot: motionbound.IvVec{zero, zero, zero}, Shift: shift}
 }
 
 // transferChargeRational is transferCharge evaluated one big.Rat operation at
@@ -113,17 +115,17 @@ func transferChargeRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 		return new(big.Rat), true
 	}
 	ideal := idealAtRational(p, f)
-	rounded, _, ok := exactTransform(pose)
+	rounded, _, ok := motionbound.ExactTransform(pose)
 	if !ok {
 		return nil, false
 	}
 	entries := make([]proofbound.RatInterval, 0, 9)
 	for i := range 3 {
 		for k := range 3 {
-			entries = append(entries, proofbound.IntervalSub(rounded[i][k], ideal.rot[i][k]))
+			entries = append(entries, proofbound.IntervalSub(rounded[i][k], ideal.Rot[i][k]))
 		}
 	}
-	norm := proofbound.RatSqrtUp(magnitudeSquaredUpper(entries...))
+	norm := proofbound.RatSqrtUp(motionbound.MagnitudeSquaredUpper(entries...))
 	if !finiteMeasurementValues(norm) {
 		return nil, false
 	}
@@ -132,11 +134,11 @@ func transferChargeRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 
 // requireScaledMatrix asserts that a common-denominator matrix holds exactly
 // the rational intervals of want.
-func requireScaledMatrix(t *testing.T, want ivMat, got scaledIvMat, msg string) {
+func requireScaledMatrix(t *testing.T, want motionbound.IvMat, got motionbound.ScaledIvMat, msg string) {
 	t.Helper()
 	for i := range 3 {
 		for j := range 3 {
-			lo, hi := new(big.Rat).SetFrac(got.lo[i][j], got.den), new(big.Rat).SetFrac(got.hi[i][j], got.den)
+			lo, hi := new(big.Rat).SetFrac(got.Lo[i][j], got.Den), new(big.Rat).SetFrac(got.Hi[i][j], got.Den)
 			require.Zero(t, lo.Cmp(want[i][j].Lo), "%s entry (%d, %d)", msg, i, j)
 			require.Zero(t, hi.Cmp(want[i][j].Hi), "%s entry (%d, %d)", msg, i, j)
 		}
@@ -150,11 +152,11 @@ func pointDeviationRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 	maxSquared := new(big.Rat)
 	for _, source := range p.sourcePoints {
 		actual := exactContactTransform(pose, source)
-		point := pointVec(ratVec{source[0].Rat(), source[1].Rat(), source[2].Rat()})
-		idealPoint := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(point, ideal.pivot)), ideal.pivot), ideal.shift)
-		observed := pointVec(ratVec{actual[0].Rat(), actual[1].Rat(), actual[2].Rat()})
-		difference := ivVecSub(observed, idealPoint)
-		squared := magnitudeSquaredUpper(difference[:]...)
+		point := motionbound.PointVec(motionbound.RatVec{source[0].Rat(), source[1].Rat(), source[2].Rat()})
+		idealPoint := motionbound.IvVecAdd(motionbound.IvVecAdd(ideal.Rot.Apply(motionbound.IvVecSub(point, ideal.Pivot)), ideal.Pivot), ideal.Shift)
+		observed := motionbound.PointVec(motionbound.RatVec{actual[0].Rat(), actual[1].Rat(), actual[2].Rat()})
+		difference := motionbound.IvVecSub(observed, idealPoint)
+		squared := motionbound.MagnitudeSquaredUpper(difference[:]...)
 		if squared.Cmp(maxSquared) > 0 {
 			maxSquared = squared
 		}
@@ -286,10 +288,10 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 			ideal, ok := path.idealAt(f)
 			require.True(t, ok, name)
 			want := idealAtRational(path, f)
-			requireScaledMatrix(t, want.rot, ideal.rot, name)
+			requireScaledMatrix(t, want.Rot, ideal.rot, name)
 			for axis := range 3 {
-				require.Zero(t, ideal.shift[axis].Lo.Cmp(want.shift[axis].Lo), "%s axis %d", name, axis)
-				require.Zero(t, ideal.shift[axis].Hi.Cmp(want.shift[axis].Hi), "%s axis %d", name, axis)
+				require.Zero(t, ideal.shift[axis].Lo.Cmp(want.Shift[axis].Lo), "%s axis %d", name, axis)
+				require.Zero(t, ideal.shift[axis].Hi.Cmp(want.Shift[axis].Hi), "%s axis %d", name, axis)
 			}
 		}
 	}
@@ -299,7 +301,7 @@ func TestScaledRotationMatchesRotation(t *testing.T) {
 	t.Parallel()
 	// Axes with every sign pattern and zero components, at turns whose sine
 	// interval lies above zero, below it, and across it.
-	axes := []ratVec{
+	axes := []motionbound.RatVec{
 		{big.NewRat(2, 1), big.NewRat(-1, 1), big.NewRat(3, 4)},
 		{big.NewRat(0, 1), big.NewRat(0, 1), big.NewRat(1, 1)},
 		{big.NewRat(-5, 8), big.NewRat(0, 1), big.NewRat(-3, 16)},
@@ -307,15 +309,15 @@ func TestScaledRotationMatchesRotation(t *testing.T) {
 	}
 	angles := []*big.Rat{big.NewRat(1, 1000), big.NewRat(-3, 7), big.NewRat(0, 1), big.NewRat(22, 7)}
 	for _, axis := range axes {
-		unit, ok := unitScaleInterval(axis)
+		unit, ok := motionbound.UnitScaleInterval(axis)
 		require.True(t, ok)
-		frame := motionFrame{kind: motionRevolute, axis: axis, unit: unit, center: ratVec{new(big.Rat), new(big.Rat), new(big.Rat)}}
+		frame := motionbound.MotionFrame{Kind: motionbound.MotionRevolute, Axis: axis, Unit: unit, Center: motionbound.RatVec{new(big.Rat), new(big.Rat), new(big.Rat)}}
 		for _, angle := range angles {
-			sin, cos := radianSinCos(angle)
+			sin, cos := motionbound.RadianSinCos(angle)
 			width := big.NewRat(1, 1<<20)
 			sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
 			cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
-			requireScaledMatrix(t, frame.rotation(sin, cos), frame.scaledRotation(sin, cos), angle.String())
+			requireScaledMatrix(t, frame.Rotation(sin, cos), frame.ScaledRotation(sin, cos), angle.String())
 		}
 	}
 }
@@ -337,7 +339,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 	}
 	q := proofarith.CommonDenom(coordinates...)
 	rot := ideal.rot
-	rotDen := new(big.Int).Mul(rot.den, q)
+	rotDen := new(big.Int).Mul(rot.Den, q)
 	var den, rotMultiplier, observedMultiplier, shiftLo, shiftHi, toWhole [3]*big.Int
 	whole := big.NewInt(1)
 	for axis := range 3 {
@@ -357,7 +359,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 		for axis := range 3 {
 			point[axis] = proofarith.ScaledNum(coordinates[6*i+2*axis], q)
 		}
-		lo, hi := rot.applyScaled(point)
+		lo, hi := rot.ApplyScaled(point)
 		squared := new(big.Int)
 		for axis := range 3 {
 			observed := proofarith.ScaledNum(coordinates[6*i+2*axis+1], q)

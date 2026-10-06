@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -355,7 +357,7 @@ func WithMinClearance(minimum units.Value) MotionOption {
 type motionConfig struct {
 	rel         float64
 	resolution  units.Value
-	resolutionP motionParam
+	resolutionP motionbound.MotionParam
 	minimum     *units.Value
 	minimumMM   *big.Rat
 }
@@ -410,21 +412,21 @@ func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, e
 		cfg.resolution, clamped = spec.defaultResolution()
 		cfg.resolutionP = spec.defaultResolutionParam()
 		if clamped {
-			cfg.resolutionP, _ = exactMotionParam(cfg.resolution)
+			cfg.resolutionP, _ = motionbound.ExactMotionParam(cfg.resolution)
 		}
 	} else {
 		cfg.resolution = *resolution
 		var ok bool
-		if cfg.resolutionP, ok = exactMotionParam(cfg.resolution); !ok {
+		if cfg.resolutionP, ok = motionbound.ExactMotionParam(cfg.resolution); !ok {
 			return motionConfig{}, fmt.Errorf(`%w: the resolution is not representable`, ErrNotFinite)
 		}
 	}
 	if cfg.minimum != nil {
-		p, ok := exactMotionParam(*cfg.minimum)
+		p, ok := motionbound.ExactMotionParam(*cfg.minimum)
 		if !ok {
 			return motionConfig{}, fmt.Errorf(`%w: the minimum clearance is not representable`, ErrNotFinite)
 		}
-		cfg.minimumMM = p.base
+		cfg.minimumMM = p.Base
 	}
 	return cfg, nil
 }
@@ -543,10 +545,10 @@ type Collision struct {
 }
 
 // sameMotionValue reports exact equality of two quantities of one Kind,
-// compared as the exact rationals they denote (motionParam), so 0.5 m and
+// compared as the exact rationals they denote (motionbound.MotionParam), so 0.5 m and
 // 500 mm are one value and a degree is never mistaken for a radian.
 func sameMotionValue(a, b units.Value) bool {
-	pa, okA := exactMotionParam(a)
-	pb, okB := exactMotionParam(b)
-	return okA && okB && pa.turn.Cmp(pb.turn) == 0 && pa.base.Cmp(pb.base) == 0
+	pa, okA := motionbound.ExactMotionParam(a)
+	pb, okB := motionbound.ExactMotionParam(b)
+	return okA && okB && pa.Turn.Cmp(pb.Turn) == 0 && pa.Base.Cmp(pb.Base) == 0
 }

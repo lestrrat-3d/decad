@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -35,39 +37,30 @@ import (
 // never committed, never published, and its provenance is never read back.
 const transientProducer producerID = -1
 
-// motionKind names which Motion variant a motionSpec was read from.
-type motionKind int
-
-const (
-	motionRevolute motionKind = iota + 1
-	motionPrismatic
-	motionBetween
-)
-
 // motionSpec is a validated Motion read into the fields every pose and bound
 // is built from. A Between's parameter runs over the dimensionless fraction
 // [0, 1], so its from and to are units.Scalar(0) and units.Scalar(1), and
 // between and screw carry its poses and the screw r3 reads off them.
 type motionSpec struct {
 	motion     Motion
-	kind       motionKind
+	kind       motionbound.MotionKind
 	center     r3.Vec
 	axis       r3.Vec
 	dir        r3.Vec
 	between    Between
 	screw      r3.Screw
 	from, to   units.Value
-	fromP, toP motionParam
-	frame      motionFrame
+	fromP, toP motionbound.MotionParam
+	frame      motionbound.MotionFrame
 }
 
 // paramKind is the Kind the motion's parameter, and so its resolution, is
 // stated in.
 func (s motionSpec) paramKind() units.Kind {
 	switch s.kind {
-	case motionRevolute:
+	case motionbound.MotionRevolute:
 		return units.Angle
-	case motionBetween:
+	case motionbound.MotionBetween:
 		return units.Dimensionless
 	default:
 		return units.Length
@@ -84,7 +77,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionRevolute, center: mv.Center, axis: mv.Axis, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionbound.MotionRevolute, center: mv.Center, axis: mv.Axis, from: mv.From, to: mv.To}
 	case *Revolute:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -94,7 +87,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionPrismatic, dir: mv.Dir, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionbound.MotionPrismatic, dir: mv.Dir, from: mv.From, to: mv.To}
 	case *Prismatic:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -105,7 +98,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{kind: motionBetween, between: mv, screw: sc, from: units.Scalar(0), to: units.Scalar(1)}
+		spec = motionSpec{kind: motionbound.MotionBetween, between: mv, screw: sc, from: units.Scalar(0), to: units.Scalar(1)}
 	case *Between:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -118,8 +111,8 @@ func resolveMotion(m Motion) (motionSpec, error) {
 	}
 	spec.motion = m
 	var okF, okT bool
-	spec.fromP, okF = exactMotionParam(spec.from)
-	spec.toP, okT = exactMotionParam(spec.to)
+	spec.fromP, okF = motionbound.ExactMotionParam(spec.from)
+	spec.toP, okT = motionbound.ExactMotionParam(spec.to)
 	if !okF || !okT {
 		return motionSpec{}, fmt.Errorf(`%w: a motion endpoint is not representable`, ErrNotFinite)
 	}
@@ -145,10 +138,10 @@ func resolveMotion(m Motion) (motionSpec, error) {
 // accepted by WithResolution and reports clamped so the check uses that floor.
 func (s motionSpec) defaultResolution() (units.Value, bool) {
 	var d *big.Rat
-	if s.kind == motionPrismatic {
+	if s.kind == motionbound.MotionPrismatic {
 		// The exact base-unit difference survives conversion that could round
 		// two distinct endpoints to the same float in From's unit.
-		d = new(big.Rat).Sub(s.toP.base, s.fromP.base)
+		d = new(big.Rat).Sub(s.toP.Base, s.fromP.Base)
 		d.Abs(d)
 		d.Quo(d, proofarith.FloatRat(s.from.Unit().Factor()))
 	} else {
@@ -188,13 +181,13 @@ func (s motionSpec) defaultResolution() (units.Value, bool) {
 // defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
 // exact rationals: never zero for a validated motion, and exactly one
 // dyadic step of depth ten whatever units From and To were stated in.
-func (s motionSpec) defaultResolutionParam() motionParam {
+func (s motionSpec) defaultResolutionParam() motionbound.MotionParam {
 	part := func(a, b *big.Rat) *big.Rat {
 		d := new(big.Rat).Sub(b, a)
 		d.Abs(d)
 		return d.Quo(d, big.NewRat(1024, 1))
 	}
-	return motionParam{turn: part(s.fromP.turn, s.toP.turn), base: part(s.fromP.base, s.toP.base)}
+	return motionbound.MotionParam{Turn: part(s.fromP.Turn, s.toP.Turn), Base: part(s.fromP.Base, s.toP.Base)}
 }
 
 // label is the published parameter of the pose at fraction f of the path:
@@ -202,7 +195,7 @@ func (s motionSpec) defaultResolutionParam() motionParam {
 // interpolation carried in From's unit — exact itself whenever From and To
 // share a unit and the dyadic step is representable. It is a label: every
 // bound is built from the exact parameter fromP.lerp(toP, f), and
-// poseDeviation charges whatever separates the pose PoseAt builds from this
+// motionbound.PoseDeviation charges whatever separates the pose PoseAt builds from this
 // label and the ideal pose at f.
 func (s motionSpec) label(f *big.Rat) units.Value {
 	switch {
@@ -336,9 +329,9 @@ type motionRun struct {
 	movers    []motionMover
 	statics   []motionStatic
 	pairs     [][]motionPair // [mover][static]
-	// stretch and stretchEnd are pathAreaUpper's stretch base (§5.1) for a
+	// stretch and stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
 	// pose before the end and for the end itself: exactly 1 for a Revolute
-	// and a Prismatic; basisSigmaUpper of From, and at s = 1 the larger of
+	// and a Prismatic; motionbound.BasisSigmaUpper of From, and at s = 1 the larger of
 	// From's and To's, for a Between.
 	stretch, stretchEnd float64
 }
@@ -347,7 +340,7 @@ type motionMover struct {
 	body     *Body
 	validity ValidityResult
 	rho      float64 // ρ_max; revolute and between only
-	r0       float64 // the record radius poseDeviation charges at
+	r0       float64 // the record radius motionbound.PoseDeviation charges at
 	area     float64 // a proven upper bound on the mover's surface area at rest
 	sigma    float64 // a proven lower bound on its placement's smallest singular value
 }
@@ -386,7 +379,7 @@ type motionPairPose struct {
 // motionPose is one evaluated pose.
 type motionPose struct {
 	f          *big.Rat
-	param      motionParam
+	param      motionbound.MotionParam
 	violated   bool // some pair's gap here is proven below the requested minimum
 	result     PoseResult
 	pairs      [][]motionPairPose
@@ -413,18 +406,18 @@ func (r *motionRun) setup(moving []*Body) {
 		r.statics = append(r.statics, motionStatic{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
 	}
 	r.stretch, r.stretchEnd = 1, 1
-	if r.spec.kind == motionBetween {
-		r.stretch = basisSigmaUpper(r.spec.between.From)
-		r.stretchEnd = math.Max(r.stretch, basisSigmaUpper(r.spec.between.To))
+	if r.spec.kind == motionbound.MotionBetween {
+		r.stretch = motionbound.BasisSigmaUpper(r.spec.between.From)
+		r.stretchEnd = math.Max(r.stretch, motionbound.BasisSigmaUpper(r.spec.between.To))
 	}
-	zero := motionParam{turn: new(big.Rat), base: new(big.Rat)}
+	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
 	r.pairs = make([][]motionPair, len(r.movers))
 	for i := range r.movers {
 		mv := &r.movers[i]
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
 		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
-		mv.sigma = basisSigmaLower(mv.body.payload.transform())
-		if r.spec.kind != motionPrismatic {
+		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
+		if r.spec.kind != motionbound.MotionPrismatic {
 			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
 		}
 		// The swept box covers every pose from where the path's box was read:
@@ -433,8 +426,8 @@ func (r *motionRun) setup(moving []*Body) {
 		// never merely across [From, To]; for a Between it is the From-placed
 		// box at s = 0, From itself, so the travel is the whole path's.
 		travel := maxRat(
-			moverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
-			moverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
+			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
+			motionbound.MoverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
 		)
 		sweptLo, sweptHi, sweptOK := moverSweptBox(mv.body.bounds, r.spec.frame, travel)
 		r.pairs[i] = make([]motionPair, len(r.statics))
@@ -553,7 +546,7 @@ func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int 
 // wide reports whether the interval between two poses is wider than the
 // resolution.
 func (r *motionRun) wide(a, b *motionPose) bool {
-	return exceedsResolution(a.param, b.param, r.cfg.resolutionP)
+	return motionbound.ExceedsResolution(a.param, b.param, r.cfg.resolutionP)
 }
 
 // meetsMinimum reports whether a certified interval lower bound proves the
@@ -571,24 +564,24 @@ func anyViolated(poses []*motionPose) bool {
 
 // evaluatePose builds every mover's transient placement at fraction f of the
 // path, published as the parameter at, and runs every evaluated pair at it.
-// Every bound is built from the exact parameter at f; poseDeviation charges
+// Every bound is built from the exact parameter at f; motionbound.PoseDeviation charges
 // whatever separates the pose PoseAt builds from at and the ideal pose at f.
 func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error) {
 	if err := r.ctx.Err(); err != nil {
 		return nil, err
 	}
-	param := r.spec.fromP.lerp(r.spec.toP, f)
+	param := r.spec.fromP.Lerp(r.spec.toP, f)
 	pose, err := r.spec.motion.PoseAt(at)
 	if err != nil {
 		return nil, err
 	}
-	ideals := []idealPose{r.spec.frame.at(param)}
+	ideals := []motionbound.IdealPose{r.spec.frame.At(param)}
 	stretch := r.stretch
-	if r.spec.kind == motionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
+	if r.spec.kind == motionbound.MotionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
 		// PoseAt(1) returns the stated To, which the exact screw of the read
 		// parameters rebuilds only to rounding: the pose is charged against
 		// both the ideal end and To itself (§5.1, η_1 = max(η_ideal, η_To)).
-		ideals = append(ideals, r.spec.frame.statedEnd())
+		ideals = append(ideals, r.spec.frame.StatedEnd())
 		stretch = r.stretchEnd
 	}
 	mp := &motionPose{
@@ -637,10 +630,10 @@ func withAt(diag Diagnostic, at units.Value) Diagnostic {
 }
 
 // evaluateMover places mover i at the pose as a transient body and runs its
-// evaluated pairs. η is the largest poseDeviation against every ideal pose
+// evaluated pairs. η is the largest motionbound.PoseDeviation against every ideal pose
 // the claim at this parameter speaks for, and the swept-volume allowance is
 // charged at the largest linear factor among them and the pose's stretch base.
-func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, ideals []idealPose, stretch float64) error {
+func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, ideals []motionbound.IdealPose, stretch float64) error {
 	mv := r.movers[i]
 	need := false
 	for j := range r.statics {
@@ -668,14 +661,14 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	defer delete(r.cache.entries, transient)
 	var eta, linear float64
 	for _, ideal := range ideals {
-		e, l := poseDeviation(composed, placement, ideal, mv.r0)
+		e, l := motionbound.PoseDeviation(composed, placement, ideal, mv.r0)
 		eta, linear = math.Max(eta, e), math.Max(linear, l)
 	}
 	// The volume an overlap can lose between the float pose and the ideal one
 	// (§5.1): every boundary point moves at most η along the straight path
 	// between the two images, and the area that path carries is the mover's
 	// own, scaled by the path's largest linear stretch.
-	allowance := proofbound.SweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma, stretch))
+	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(mv.area, linear, mv.sigma, stretch))
 	for j := range r.statics {
 		if !r.pairs[i][j].evaluated() {
 			continue
@@ -888,7 +881,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 			if !pair.evaluated() || !pa.hasGap || !pb.hasGap {
 				return IntervalUndecided, nil
 			}
-			tau := moverTravel(r.spec.frame, mv.rho, a.param, b.param)
+			tau := motionbound.MoverTravel(r.spec.frame, mv.rho, a.param, b.param)
 			if tau == nil {
 				return IntervalUndecided, nil
 			}

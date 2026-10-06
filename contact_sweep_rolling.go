@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -600,7 +602,7 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*Contact
 		for k := range 3 {
 			rim[k] = new(big.Rat).Sub(center[k], new(big.Rat).Mul(p.radius, n[k]))
 		}
-		height := ratDot3(n, ratSub3(ratVec(rim), q))
+		height := ratDot3(n, ratSub3(motionbound.RatVec(rim), q))
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
 		}

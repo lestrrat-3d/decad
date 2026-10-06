@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -141,7 +143,7 @@ func driftTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
 	drift := p.drift
 	linear := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
 	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
-	var omega ratVec
+	var omega motionbound.RatVec
 	vSquared, omegaSquared := new(big.Rat), new(big.Rat)
 	for axis := range 3 {
 		v, okV := exactBaseValue(linear[axis])
@@ -179,7 +181,7 @@ func screwTravel(b *Body, p affinePairPath) (*big.Rat, bool) {
 	if angle.Sign() == 0 {
 		return travel, true
 	}
-	axis, ok := ratVecOf(screw.Axis)
+	axis, ok := motionbound.RatVecOf(screw.Axis)
 	if !ok {
 		return nil, false
 	}

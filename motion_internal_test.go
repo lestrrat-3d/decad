@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -64,7 +66,7 @@ func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pairDisjoint, res.verdict)
 
-		eta, _ := poseDeviation(composed, placement, run.spec.frame.at(pose.param), run.movers[0].r0)
+		eta, _ := motionbound.PoseDeviation(composed, placement, run.spec.frame.At(pose.param), run.movers[0].r0)
 		require.Greater(t, eta, 0.0)
 		require.Less(t, got.lo, res.lo, `η lowers the proven lower end`)
 		require.Greater(t, got.hi, res.hi, `η raises the proven upper end`)
@@ -105,12 +107,12 @@ func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
 			require.NoError(t, err)
 			pose, err := tc.m.PoseAt(tc.at)
 			require.NoError(t, err)
-			param, ok := exactMotionParam(tc.at)
+			param, ok := motionbound.ExactMotionParam(tc.at)
 			require.True(t, ok)
 			placement := arm.payload.transform()
 			composed, err := placement.Then(pose)
 			require.NoError(t, err)
-			eta, linear := poseDeviation(composed, placement, spec.frame.at(param), math.Inf(1))
+			eta, linear := motionbound.PoseDeviation(composed, placement, spec.frame.At(param), math.Inf(1))
 			require.Zero(t, eta)
 			require.Zero(t, linear)
 		})
@@ -136,34 +138,34 @@ func TestMotionParamSinCosEnclosesTheAngle(t *testing.T) {
 		{units.Radians(0), 0, 1},
 	}
 	for _, tc := range exact {
-		p, ok := exactMotionParam(tc.at)
+		p, ok := motionbound.ExactMotionParam(tc.at)
 		require.True(t, ok)
-		sin, cos := paramSinCos(p)
+		sin, cos := motionbound.ParamSinCos(p)
 		require.Zero(t, sin.Lo.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
 		require.Zero(t, sin.Hi.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
 		require.Zero(t, cos.Lo.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
 		require.Zero(t, cos.Hi.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
 	}
 
-	fromDeg, ok := exactMotionParam(units.Degrees(10))
+	fromDeg, ok := motionbound.ExactMotionParam(units.Degrees(10))
 	require.True(t, ok)
-	toRad, ok := exactMotionParam(units.Radians(1))
+	toRad, ok := motionbound.ExactMotionParam(units.Radians(1))
 	require.True(t, ok)
 	approx := []struct {
 		name  string
-		p     motionParam
+		p     motionbound.MotionParam
 		angle float64
 	}{
 		{"degrees", fromDeg, 10 * math.Pi / 180},
 		{"negative degrees", mustMotionParam(t, units.Degrees(-450.25)), -450.25 * math.Pi / 180},
 		{"radians", toRad, 1},
 		{"negative radians", mustMotionParam(t, units.Radians(-2.5)), -2.5},
-		{"degrees to radians halfway", fromDeg.lerp(toRad, big.NewRat(1, 2)), 5*math.Pi/180 + 0.5},
+		{"degrees to radians halfway", fromDeg.Lerp(toRad, big.NewRat(1, 2)), 5*math.Pi/180 + 0.5},
 	}
 	tiny := big.NewRat(1, 1)
 	tiny.SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 150))
 	for _, tc := range approx {
-		sin, cos := paramSinCos(tc.p)
+		sin, cos := motionbound.ParamSinCos(tc.p)
 		for _, iv := range []struct {
 			got  proofbound.RatInterval
 			want float64
@@ -176,9 +178,9 @@ func TestMotionParamSinCosEnclosesTheAngle(t *testing.T) {
 	}
 }
 
-func mustMotionParam(t *testing.T, v units.Value) motionParam {
+func mustMotionParam(t *testing.T, v units.Value) motionbound.MotionParam {
 	t.Helper()
-	p, ok := exactMotionParam(v)
+	p, ok := motionbound.ExactMotionParam(v)
 	require.True(t, ok)
 	return p
 }
@@ -324,9 +326,9 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	require.NoError(t, err)
 	transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
 	require.NoError(t, err)
-	eta, linear := poseDeviation(composed, placement, run.spec.frame.at(run.spec.toP), run.movers[0].r0)
+	eta, linear := motionbound.PoseDeviation(composed, placement, run.spec.frame.At(run.spec.toP), run.movers[0].r0)
 	require.Greater(t, eta, 0.0)
-	allowance := proofbound.SweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
+	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
 	res, err := clearancePair(t.Context(), transient, block, false)
 	require.NoError(t, err)
 	volume, outcome, err := measuredInterference(t.Context(), transient, block, res)
@@ -426,18 +428,18 @@ func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
 // equals the rest area).
 func TestMotionPathAreaUpper(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, 1.0, basisSigmaLower(r3.Identity()))
+	require.Equal(t, 1.0, motionbound.BasisSigmaLower(r3.Identity()))
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	sigma := basisSigmaLower(rot)
+	sigma := motionbound.BasisSigmaLower(rot)
 	require.LessOrEqual(t, sigma, 1.0)
 	require.Greater(t, sigma, 1-1e-12)
 
-	require.Equal(t, 100.0, pathAreaUpper(100, 0, sigma, 1))
-	stretched := pathAreaUpper(100, 1e-3, 0.5, 1)
+	require.Equal(t, 100.0, motionbound.PathAreaUpper(100, 0, sigma, 1))
+	stretched := motionbound.PathAreaUpper(100, 1e-3, 0.5, 1)
 	require.GreaterOrEqual(t, stretched, 100*(1+2e-3)*(1+2e-3))
 	require.InDelta(t, 100*(1+2e-3)*(1+2e-3), stretched, 1e-9)
-	require.True(t, math.IsInf(pathAreaUpper(100, 1e-3, 0, 1), 1), `an unbounded σ refuses`)
+	require.True(t, math.IsInf(motionbound.PathAreaUpper(100, 1e-3, 0, 1), 1), `an unbounded σ refuses`)
 }
 
 // TestMotionExceedsResolution checks the resolution floor's comparison: an
@@ -446,12 +448,12 @@ func TestMotionPathAreaUpper(t *testing.T) {
 // stopping early.
 func TestMotionExceedsResolution(t *testing.T) {
 	t.Parallel()
-	at := func(v units.Value) motionParam { return mustMotionParam(t, v) }
-	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/1024)), at(units.Degrees(90.0/1024))))
-	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/512)), at(units.Degrees(90.0/1024))))
-	require.False(t, exceedsResolution(at(units.Millimeters(30)), at(units.Millimeters(0)), at(units.Centimeters(3))))
-	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.017))))
-	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
+	at := func(v units.Value) motionbound.MotionParam { return mustMotionParam(t, v) }
+	require.False(t, motionbound.ExceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/1024)), at(units.Degrees(90.0/1024))))
+	require.True(t, motionbound.ExceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/512)), at(units.Degrees(90.0/1024))))
+	require.False(t, motionbound.ExceedsResolution(at(units.Millimeters(30)), at(units.Millimeters(0)), at(units.Centimeters(3))))
+	require.True(t, motionbound.ExceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.017))))
+	require.False(t, motionbound.ExceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
 }
 
 // A one-subnormal-millimetre path is valid, but one 1024th of it cannot be
@@ -471,9 +473,9 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	cfg, err := resolveMotionOptions(nil, spec)
 	require.NoError(t, err)
 	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.resolution)
-	reported, ok := exactMotionParam(cfg.resolution)
+	reported, ok := motionbound.ExactMotionParam(cfg.resolution)
 	require.True(t, ok)
-	require.Zero(t, reported.base.Cmp(cfg.resolutionP.base))
+	require.Zero(t, reported.Base.Cmp(cfg.resolutionP.Base))
 
 	report, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion)
 	require.NoError(t, err)
@@ -494,9 +496,9 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	swingCfg, err := resolveMotionOptions(nil, swingSpec)
 	require.NoError(t, err)
 	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
-	swingReported, ok := exactMotionParam(swingCfg.resolution)
+	swingReported, ok := motionbound.ExactMotionParam(swingCfg.resolution)
 	require.True(t, ok)
-	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	require.Zero(t, swingReported.Turn.Cmp(swingCfg.resolutionP.Turn))
 	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.resolution)}, swingSpec)
 	require.NoError(t, err)
 
@@ -508,9 +510,9 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	swingCfg, err = resolveMotionOptions(nil, swingSpec)
 	require.NoError(t, err)
 	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
-	swingReported, ok = exactMotionParam(swingCfg.resolution)
+	swingReported, ok = motionbound.ExactMotionParam(swingCfg.resolution)
 	require.True(t, ok)
-	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	require.Zero(t, swingReported.Turn.Cmp(swingCfg.resolutionP.Turn))
 	swingReport, err := doc.VerifyMotion(t.Context(), []*Body{mover}, swing)
 	require.NoError(t, err)
 	require.Equal(t, swingCfg.resolution, swingReport.Request.Resolution)
@@ -518,7 +520,7 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestMotionPathAreaUpperStretchBase pins pathAreaUpper's stretch base
+// TestMotionPathAreaUpperStretchBase pins motionbound.PathAreaUpper's stretch base
 // (docs/motion-check-design.md §5.1): the base 1 a Revolute and a Prismatic
 // pass reproduces their allowance exactly, and a base above 1 — a Between
 // whose From is not exactly orthonormal — scales both the unscaled shortcut,
@@ -532,14 +534,14 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 func TestMotionPathAreaUpperStretchBase(t *testing.T) {
 	t.Parallel()
 	stretch := proofbound.AbsSumUpper(1, proofbound.DivUpper(1e-3, 0.5))
-	require.Equal(t, proofbound.ProductUpper(100, proofbound.ProductUpper(stretch, stretch)), pathAreaUpper(100, 1e-3, 0.5, 1),
+	require.Equal(t, proofbound.ProductUpper(100, proofbound.ProductUpper(stretch, stretch)), motionbound.PathAreaUpper(100, 1e-3, 0.5, 1),
 		`the base 1 is the Revolute and Prismatic allowance unchanged`)
-	require.Equal(t, 100.0, pathAreaUpper(100, 0, 0.5, 1))
+	require.Equal(t, 100.0, motionbound.PathAreaUpper(100, 0, 0.5, 1))
 
-	unscaled := pathAreaUpper(100, 0, 0.5, 1.5)
+	unscaled := motionbound.PathAreaUpper(100, 0, 0.5, 1.5)
 	require.GreaterOrEqual(t, unscaled, 100*1.5*1.5)
 	require.InDelta(t, 225, unscaled, 1e-9)
-	stretched := pathAreaUpper(100, 1e-3, 0.5, 1.5)
+	stretched := motionbound.PathAreaUpper(100, 1e-3, 0.5, 1.5)
 	require.GreaterOrEqual(t, stretched, 100*(1.5+2e-3)*(1.5+2e-3))
 	require.InDelta(t, 100*(1.5+2e-3)*(1.5+2e-3), stretched, 1e-9)
 
@@ -547,25 +549,25 @@ func TestMotionPathAreaUpperStretchBase(t *testing.T) {
 	// so its stretch base sits strictly above 1 and still scales the area.
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	base := basisSigmaUpper(rot)
-	require.Greater(t, pathAreaUpper(100, 0, 1, base), 100.0)
-	require.Greater(t, pathAreaUpper(100, 1e-3, 0.5, base), pathAreaUpper(100, 1e-3, 0.5, 1))
+	base := motionbound.BasisSigmaUpper(rot)
+	require.Greater(t, motionbound.PathAreaUpper(100, 0, 1, base), 100.0)
+	require.Greater(t, motionbound.PathAreaUpper(100, 1e-3, 0.5, base), motionbound.PathAreaUpper(100, 1e-3, 0.5, 1))
 }
 
 // TestMotionBasisSigmaUpper checks the stretch base's own bound: exactly 1
 // for an exactly orthonormal basis, and strictly above 1 — while still an
 // ulp-scale excess — for a float rotation whose columns are orthonormal only
-// to rounding, where basisSigmaLower sits strictly below 1.
+// to rounding, where motionbound.BasisSigmaLower sits strictly below 1.
 func TestMotionBasisSigmaUpper(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, 1.0, basisSigmaUpper(r3.Identity()))
+	require.Equal(t, 1.0, motionbound.BasisSigmaUpper(r3.Identity()))
 	quarter, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(90))
 	require.NoError(t, err)
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
 	for _, tr := range []r3.Transform{quarter, rot} {
-		require.Less(t, basisSigmaLower(tr), 1.0, `the fixture's columns are not exactly orthonormal`)
-		upper := basisSigmaUpper(tr)
+		require.Less(t, motionbound.BasisSigmaLower(tr), 1.0, `the fixture's columns are not exactly orthonormal`)
+		upper := motionbound.BasisSigmaUpper(tr)
 		require.Greater(t, upper, 1.0)
 		require.Less(t, upper, 1+1e-12)
 	}
@@ -606,15 +608,15 @@ func TestMotionBetweenFrameReachesTo(t *testing.T) {
 			t.Parallel()
 			spec, err := resolveMotion(tc.m)
 			require.NoError(t, err)
-			end := spec.frame.at(spec.toP)
+			end := spec.frame.At(spec.toP)
 			tol := 1e-9 * (1 + tc.m.To.Translation().Len())
 			for _, corner := range []r3.Vec{
 				r3.NewVec(0, -14, 0), r3.NewVec(48, -14, 0), r3.NewVec(0, 14, 0), r3.NewVec(48, 14, 0),
 				r3.NewVec(0, -14, 10), r3.NewVec(48, -14, 10), r3.NewVec(0, 14, 10), r3.NewVec(48, 14, 10),
 			} {
-				x, ok := ratVecOf(corner)
+				x, ok := motionbound.RatVecOf(corner)
 				require.True(t, ok)
-				image := ivVecAdd(end.rot.apply(pointVec(x)), end.shift)
+				image := motionbound.IvVecAdd(end.Rot.Apply(motionbound.PointVec(x)), end.Shift)
 				want := tc.m.To.Apply(corner)
 				for i, w := range []float64{want.X, want.Y, want.Z} {
 					lo, _ := image[i].Lo.Float64()

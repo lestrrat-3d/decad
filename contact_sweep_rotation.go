@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -29,10 +31,10 @@ type rotationalSweepPath struct {
 	sourcePoints []proofarith.DyV3 // exact source points at the identity query pose
 	solid        *pair.PlanarSolid // the identity-pose planar snapshot, planar paths only
 	delta        proofarith.Dyadic // the snapshot's held displacement δ (§10.4), planar paths only
-	frame        motionFrame
-	fromRot      ivMat
-	fromT        ratVec
-	velocity     ratVec
+	frame        motionbound.MotionFrame
+	fromRot      motionbound.IvMat
+	fromT        motionbound.RatVec
+	velocity     motionbound.RatVec
 	omegaLow     *big.Rat
 	omegaHigh    *big.Rat
 }
@@ -81,7 +83,7 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 				Z: units.RadiansPerSecond(axis.Z * omega)},
 			Duration: units.Seconds(ratFloatNearest(path.duration))}
 	}
-	fromRot, fromT, ok := exactTransform(path.from)
+	fromRot, fromT, ok := motionbound.ExactTransform(path.from)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
@@ -102,8 +104,8 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	drift := path.drift
 	velocity := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
 	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
-	prepared.velocity = ratVec{}
-	omega := ratVec{}
+	prepared.velocity = motionbound.RatVec{}
+	omega := motionbound.RatVec{}
 	vSquared, omegaSquared := new(big.Rat), new(big.Rat)
 	for axis := range 3 {
 		prepared.velocity[axis], _ = exactBaseValue(velocity[axis])
@@ -119,15 +121,15 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 	if prepared.omegaLow == nil || prepared.omegaHigh == nil || prepared.omegaHigh.Sign() <= 0 {
 		return rotationalSweepPath{}, false
 	}
-	center, ok := ratVecOf(drift.Center)
+	center, ok := motionbound.RatVecOf(drift.Center)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	unit, ok := unitScaleInterval(omega)
+	unit, ok := motionbound.UnitScaleInterval(omega)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared.frame = motionFrame{kind: motionRevolute, axis: omega, unit: unit, center: center}
+	prepared.frame = motionbound.MotionFrame{Kind: motionbound.MotionRevolute, Axis: omega, Unit: unit, Center: center}
 	radius, ok := rotationalSweepRadius(body, path.from, drift.Center, omega)
 	if !ok {
 		return rotationalSweepPath{}, false
@@ -153,7 +155,7 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 }
 
 func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
-	axis ratVec) (*big.Rat, bool) {
+	axis motionbound.RatVec) (*big.Rat, bool) {
 	corners, ok := inflatedBoundsCorners(body)
 	if !ok {
 		return nil, false
@@ -236,43 +238,43 @@ func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
 }
 
 // sweepIdealPose is a sweep path's ideal pose x ↦ rot·x + shift, its linear
-// part in the common-denominator form (scaledIvMat).
+// part in the common-denominator form (motionbound.ScaledIvMat).
 type sweepIdealPose struct {
-	rot   scaledIvMat
-	shift ivVec
+	rot   motionbound.ScaledIvMat
+	shift motionbound.IvVec
 }
 
 // idealAt is the ideal pose at fraction f. A rotating path's rotation
 // encloses the turn ω·t over both rate bounds, and its shift is the pivot's
 // image R·(t(From) − c) + c + v·t. ok is false only when the From basis does
-// not read as points, which exactTransform never produces.
+// not read as points, which motionbound.ExactTransform never produces.
 func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 	if p.path.drift == nil {
-		shift := pointVec(p.fromT)
+		shift := motionbound.PointVec(p.fromT)
 		for axis := range 3 {
 			shift[axis] = proofbound.IntervalAdd(shift[axis],
 				proofbound.PointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
 		}
-		return sweepIdealPose{rot: newScaledIvMat(p.fromRot), shift: shift}, true
+		return sweepIdealPose{rot: motionbound.NewScaledIvMat(p.fromRot), shift: shift}, true
 	}
 	elapsed := new(big.Rat).Mul(p.path.duration, f)
 	angleLow := new(big.Rat).Mul(p.omegaLow, elapsed)
 	angleHigh := new(big.Rat).Mul(p.omegaHigh, elapsed)
-	sin, cos := radianSinCos(angleLow)
+	sin, cos := motionbound.RadianSinCos(angleLow)
 	width := new(big.Rat).Sub(angleHigh, angleLow)
 	sin = proofbound.IntervalOwned(new(big.Rat).Sub(sin.Lo, width), new(big.Rat).Add(sin.Hi, width))
 	cos = proofbound.IntervalOwned(new(big.Rat).Sub(cos.Lo, width), new(big.Rat).Add(cos.Hi, width))
-	rot := p.frame.scaledRotation(sin, cos)
+	rot := p.frame.ScaledRotation(sin, cos)
 	offset := make([]*big.Rat, 3)
 	for axis := range 3 {
-		offset[axis] = new(big.Rat).Sub(p.fromT[axis], p.frame.center[axis])
+		offset[axis] = new(big.Rat).Sub(p.fromT[axis], p.frame.Center[axis])
 	}
 	q := proofarith.CommonDenom(offset...)
-	lo, hi := rot.applyScaled([3]*big.Int{proofarith.ScaledNum(offset[0], q), proofarith.ScaledNum(offset[1], q), proofarith.ScaledNum(offset[2], q)})
-	rotDen := new(big.Int).Mul(rot.den, q)
-	var shift ivVec
+	lo, hi := rot.ApplyScaled([3]*big.Int{proofarith.ScaledNum(offset[0], q), proofarith.ScaledNum(offset[1], q), proofarith.ScaledNum(offset[2], q)})
+	rotDen := new(big.Int).Mul(rot.Den, q)
+	var shift motionbound.IvVec
 	for axis := range 3 {
-		pivot := new(big.Rat).Add(p.frame.center[axis], new(big.Rat).Mul(p.velocity[axis], elapsed))
+		pivot := new(big.Rat).Add(p.frame.Center[axis], new(big.Rat).Mul(p.velocity[axis], elapsed))
 		den := proofarith.LcmInt(rotDen, pivot.Denom())
 		multiplier := new(big.Int).Quo(den, rotDen)
 		pivotN := proofarith.ScaledNum(pivot, den)
@@ -281,7 +283,7 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
 		shift[axis] = proofbound.IntervalOwned(new(big.Rat).SetFrac(low.Add(low, pivotN), den),
 			new(big.Rat).SetFrac(high.Add(high, pivotN), den))
 	}
-	linear, ok := rot.mulPoints(p.fromRot)
+	linear, ok := rot.MulPoints(p.fromRot)
 	return sweepIdealPose{rot: linear, shift: shift}, ok
 }
 
@@ -334,34 +336,34 @@ func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*bi
 // body's frame, so its rounded image differs from its ideal one by the held
 // deviation plus (R_r − R_i)·e, whose length is at most the Frobenius norm of
 // R_r − R_i times δ. The norm is the upper bound over every member of the
-// enclosure (magnitudeSquaredUpper). A translating path's enclosure is its
+// enclosure (motionbound.MagnitudeSquaredUpper). A translating path's enclosure is its
 // From basis exactly, which the rounded pose keeps, so it charges zero.
 func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealPose) (*big.Rat, bool) {
 	if p.delta.Sign() == 0 {
 		return new(big.Rat), true
 	}
-	rounded, _, ok := exactTransform(pose)
+	rounded, _, ok := motionbound.ExactTransform(pose)
 	if !ok {
 		return nil, false
 	}
 	// Each entry of R_r − R_i is [r − hi, r − lo] for the point r and the
 	// enclosure [lo, hi]; its farther endpoint, squared and summed, is
-	// magnitudeSquaredUpper's bound, here over one denominator.
+	// motionbound.MagnitudeSquaredUpper's bound, here over one denominator.
 	values := make([]*big.Rat, 0, 9)
 	for i := range 3 {
 		for k := range 3 {
 			values = append(values, rounded[i][k].Lo)
 		}
 	}
-	den := proofarith.LcmInt(proofarith.CommonDenom(values...), ideal.rot.den)
-	scale := new(big.Int).Quo(den, ideal.rot.den)
+	den := proofarith.LcmInt(proofarith.CommonDenom(values...), ideal.rot.Den)
+	scale := new(big.Int).Quo(den, ideal.rot.Den)
 	squared := new(big.Int)
 	for i := range 3 {
 		for k := range 3 {
 			r := proofarith.ScaledNum(values[3*i+k], den)
-			below := new(big.Int).Mul(ideal.rot.hi[i][k], scale)
+			below := new(big.Int).Mul(ideal.rot.Hi[i][k], scale)
 			below.Sub(r, below)
-			above := new(big.Int).Mul(ideal.rot.lo[i][k], scale)
+			above := new(big.Int).Mul(ideal.rot.Lo[i][k], scale)
 			above.Sub(r, above)
 			farther := below.Abs(below)
 			if above.Abs(above).Cmp(farther) > 0 {
@@ -388,7 +390,7 @@ func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealP
 // Each point's squared distance bound is Σ max(|o − hi|, |o − lo|)² over the
 // axes, o the staged coordinate and [lo, hi] the ideal one,
 // rot·p + shift, evaluated exactly in the common-denominator form (see
-// scaledIvMat): the source and staged points share one q, and every point's
+// motionbound.ScaledIvMat): the source and staged points share one q, and every point's
 // sum shares one denominator, so points compare by numerator.
 func (p rotationalSweepPath) pointDeviation(pose r3.Transform, f *big.Rat,
 	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
@@ -440,7 +442,7 @@ func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal swee
 	}
 	q := new(big.Int).Lsh(big.NewInt(1), uint(shift))
 	rot := ideal.rot
-	rotDen := new(big.Int).Mul(rot.den, q)
+	rotDen := new(big.Int).Mul(rot.Den, q)
 	// Axis i's interval endpoints over den[i]; the squared sum over whole².
 	var den, rotMultiplier, observedMultiplier, shiftLo, shiftHi, toWhole [3]*big.Int
 	whole := big.NewInt(1)
@@ -461,7 +463,7 @@ func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal swee
 		for axis := range 3 {
 			point[axis] = dyScaledNum(p.sourcePoints[i][axis], shift)
 		}
-		lo, hi := rot.applyScaled(point)
+		lo, hi := rot.ApplyScaled(point)
 		squared := new(big.Int)
 		for axis := range 3 {
 			observed := dyScaledNum(actual[i][axis], shift)
@@ -683,8 +685,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
-		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
-			path.frame.axis[1].Sign() == 0 && path.frame.axis[2].Sign() != 0 &&
+		if path.path.drift != nil && path.frame.Axis[0].Sign() == 0 &&
+			path.frame.Axis[1].Sign() == 0 && path.frame.Axis[2].Sign() != 0 &&
 			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
 			spinning = i
 		}
@@ -1056,10 +1058,10 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	}
 	var omega, difference, velocity [3]*big.Rat
 	for i := range 3 {
-		if r.a.frame.axis[i].Cmp(r.b.frame.axis[i]) != 0 {
+		if r.a.frame.Axis[i].Cmp(r.b.frame.Axis[i]) != 0 {
 			return nil, false
 		}
-		omega[i] = r.a.frame.axis[i]
+		omega[i] = r.a.frame.Axis[i]
 		centers := [2]float64{r.a.path.drift.Center.X, r.b.path.drift.Center.X}
 		switch i {
 		case 1:
@@ -1176,8 +1178,8 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
-		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
-			path.frame.axis[1].Sign() == 0 && path.frame.axis[2].Sign() != 0 &&
+		if path.path.drift != nil && path.frame.Axis[0].Sign() == 0 &&
+			path.frame.Axis[1].Sign() == 0 && path.frame.Axis[2].Sign() != 0 &&
 			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
 			spinning = i
 		}
@@ -1236,8 +1238,8 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 			stationary = i
 		}
 		if path.path.drift != nil && path.path.screw == nil &&
-			path.frame.axis[0].Sign() == 0 && path.frame.axis[1].Sign() != 0 &&
-			path.frame.axis[2].Sign() == 0 {
+			path.frame.Axis[0].Sign() == 0 && path.frame.Axis[1].Sign() != 0 &&
+			path.frame.Axis[2].Sign() == 0 {
 			spinning = i
 		}
 	}
@@ -1273,13 +1275,13 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 		}
 	}
 	path := paths[spinning]
-	omega := path.frame.axis[1]
+	omega := path.frame.Axis[1]
 	omegaSquared := new(big.Rat).Mul(omega, omega)
 	minimum, curvature := new(big.Rat), new(big.Rat)
 	for i := range moving.corner {
 		corner := &moving.corner[i]
-		dx := new(big.Rat).Sub(corner[0].Rat(), path.frame.center[0])
-		dz := new(big.Rat).Sub(corner[2].Rat(), path.frame.center[2])
+		dx := new(big.Rat).Sub(corner[0].Rat(), path.frame.Center[0])
+		dz := new(big.Rat).Sub(corner[2].Rat(), path.frame.Center[2])
 		derivative := new(big.Rat).Sub(path.velocity[2], new(big.Rat).Mul(omega, dx))
 		derivative.Mul(derivative, big.NewRat(sign, 1))
 		if i == 0 || derivative.Cmp(minimum) < 0 {
@@ -1332,7 +1334,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 			return new(big.Rat).Quo(path.path.delta[axis].Rat(), path.path.duration), true
 		}
 		for other := range 3 {
-			if other != axis && path.frame.axis[other].Sign() != 0 {
+			if other != axis && path.frame.Axis[other].Sign() != 0 {
 				return nil, false
 			}
 		}
@@ -1569,7 +1571,7 @@ func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
 // cornerSpans is cornerSpan's enclosure of every source point's ideal path,
 // one coordinate interval per point and axis. Each axis's endpoints are held
 // as integer numerators over that axis's one shared positive denominator (the
-// common-denominator form beside scaledIvMat); hull and span convert them back
+// common-denominator form beside motionbound.ScaledIvMat); hull and span convert them back
 // to the exact rationals.
 type cornerSpans struct {
 	den    [3]*big.Int
@@ -1636,19 +1638,19 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 	lowAngle := new(big.Rat).Mul(p.omegaLow, lowTime)
 	highAngle := new(big.Rat).Mul(p.omegaHigh, highTime)
 	sin, cos := rotationalSinCosSpan(lowAngle, highAngle)
-	rotationSpan := p.frame.scaledRotation(sin, cos)
+	rotationSpan := p.frame.ScaledRotation(sin, cos)
 	midTime := new(big.Rat).Quo(new(big.Rat).Add(lowTime, highTime), big.NewRat(2, 1))
 	angleAtMidLow := new(big.Rat).Mul(p.omegaLow, midTime)
 	angleAtMidHigh := new(big.Rat).Mul(p.omegaHigh, midTime)
 	midSin, midCos := rotationalSinCosSpan(angleAtMidLow, angleAtMidHigh)
-	rotationMid := p.frame.scaledRotation(midSin, midCos)
+	rotationMid := p.frame.ScaledRotation(midSin, midCos)
 	halfDuration := new(big.Rat).Quo(new(big.Rat).Sub(highTime, lowTime), big.NewRat(2, 1))
 
 	// Every point's offset p − c from the pivot, over one shared q.
 	relative := make([]*big.Rat, 0, 3*count)
 	for _, corner := range p.startPoints {
 		for axis := range 3 {
-			relative = append(relative, new(big.Rat).Sub(corner[axis].Rat(), p.frame.center[axis]))
+			relative = append(relative, new(big.Rat).Sub(corner[axis].Rat(), p.frame.Center[axis]))
 		}
 	}
 	q := proofarith.CommonDenom(relative...)
@@ -1659,11 +1661,11 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 		for axis := range 3 {
 			offset[axis] = proofarith.ScaledNum(relative[3*index+axis], q)
 		}
-		spanLo[index], spanHi[index] = rotationSpan.applyScaled(offset)
-		midLo[index], midHi[index] = rotationMid.applyScaled(offset)
+		spanLo[index], spanHi[index] = rotationSpan.ApplyScaled(offset)
+		midLo[index], midHi[index] = rotationMid.ApplyScaled(offset)
 	}
-	spanDen := new(big.Int).Mul(rotationSpan.den, q)
-	midDen := new(big.Int).Mul(rotationMid.den, q)
+	spanDen := new(big.Int).Mul(rotationSpan.Den, q)
+	midDen := new(big.Int).Mul(rotationMid.Den, q)
 	for axis := range 3 {
 		following, preceding := (axis+1)%3, (axis+2)%3
 		velocity := p.velocity[axis]
@@ -1671,7 +1673,7 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 		// rotationSpan·(p − c)[following]·ω[preceding] over derivativeDen; each
 		// scale carries its axis component's sign, which decides the endpoint
 		// order exactly as proofbound.IntervalScale's does.
-		scaleF, scaleP := p.frame.axis[following], p.frame.axis[preceding]
+		scaleF, scaleP := p.frame.Axis[following], p.frame.Axis[preceding]
 		scaleDen := proofarith.LcmInt(new(big.Int).Set(scaleF.Denom()), scaleP.Denom())
 		derivativeDen := proofarith.LcmInt(new(big.Int).Mul(spanDen, scaleDen), velocity.Denom())
 		multiplierF := new(big.Int).Quo(derivativeDen, new(big.Int).Mul(spanDen, scaleF.Denom()))
@@ -1681,7 +1683,7 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 		velocityN := proofarith.ScaledNum(velocity, derivativeDen)
 		// The midpoint rotationMid·(p − c) + (c + v·t_mid), less and plus the
 		// travel max(|derivative|)·halfDuration, over den.
-		shift := new(big.Rat).Add(p.frame.center[axis], new(big.Rat).Mul(velocity, midTime))
+		shift := new(big.Rat).Add(p.frame.Center[axis], new(big.Rat).Mul(velocity, midTime))
 		travelDen := new(big.Int).Mul(derivativeDen, halfDuration.Denom())
 		den := proofarith.LcmInt(proofarith.LcmInt(midDen, shift.Denom()), travelDen)
 		output.den[axis] = den
@@ -1721,8 +1723,8 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
 }
 
 func rotationalSinCosSpan(low, high *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
-	loSin, loCos := radianSinCos(low)
-	hiSin, hiCos := radianSinCos(high)
+	loSin, loCos := motionbound.RadianSinCos(low)
+	hiSin, hiCos := motionbound.RadianSinCos(high)
 	if low.Sign() >= 0 && high.Cmp(proofbound.HalfPiInterval().Lo) <= 0 {
 		return proofbound.Interval(loSin.Lo, hiSin.Hi), proofbound.Interval(hiCos.Lo, loCos.Hi)
 	}
