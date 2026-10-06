@@ -284,15 +284,49 @@ func noSweepPoll() error { return nil }
 
 // replayDeviation is what replay charges one rounded pose at f: the staged
 // points' distance bound from the ideal path (pointDeviation), and for a
-// positive-displacement planar body (§10.4) the displacement (s + 1)·δ, s the
-// rounded pose's stretch (planarPoseScale). A source-box path holds δ zero.
+// positive-displacement planar body the §10.4 transfer charge (transferCharge).
+// A source-box path holds δ zero and charges nothing.
 func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*big.Rat, *big.Rat, bool) {
-	_, bound, ok, _ := p.pointDeviation(pose, f, noSweepPoll)
+	ideal := p.idealAt(f)
+	_, bound, ok, _ := p.pointDeviationFrom(pose, ideal, noSweepPoll)
 	if !ok {
 		return nil, nil, false
 	}
-	stretch := proofarith.DyAdd(planarPoseScale(pose), proofarith.DyInt(1))
-	return proofarith.FloatRat(bound), proofarith.DyMul(p.delta, stretch).Rat(), true
+	charge, ok := p.transferCharge(pose, ideal)
+	if !ok {
+		return nil, nil, false
+	}
+	return proofarith.FloatRat(bound), charge, true
+}
+
+// transferCharge is the §10.4 transfer charge ‖R_r − R_i‖_F·δ of one rounded
+// pose: R_r is the pose's float basis, the linear part exactContactTransform
+// stages a point through, and R_i the ideal rotation's interval enclosure at
+// the pose's fraction (idealAt). A true point is x + e with |e| <= δ in the
+// body's frame, so its rounded image differs from its ideal one by the held
+// deviation plus (R_r − R_i)·e, whose length is at most the Frobenius norm of
+// R_r − R_i times δ. The norm is the upper bound over every member of the
+// enclosure (magnitudeSquaredUpper). A translating path's enclosure is its
+// From basis exactly, which the rounded pose keeps, so it charges zero.
+func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal idealPose) (*big.Rat, bool) {
+	if p.delta.Sign() == 0 {
+		return new(big.Rat), true
+	}
+	rounded, _, ok := exactTransform(pose)
+	if !ok {
+		return nil, false
+	}
+	entries := make([]ratInterval, 0, 9)
+	for i := range 3 {
+		for k := range 3 {
+			entries = append(entries, intervalSub(rounded[i][k], ideal.rot[i][k]))
+		}
+	}
+	norm := ratSqrtUp(magnitudeSquaredUpper(entries...))
+	if !finiteMeasurementValues(norm) {
+		return nil, false
+	}
+	return new(big.Rat).Mul(proofarith.FloatRat(norm), p.delta.Rat()), true
 }
 
 // pointDeviation maps the exact source points through the read query pose,
@@ -307,7 +341,15 @@ func (p rotationalSweepPath) pointDeviation(pose r3.Transform, f *big.Rat,
 	if !pose.IsValid() {
 		return nil, 0, false, nil
 	}
-	ideal := p.idealAt(f)
+	return p.pointDeviationFrom(pose, p.idealAt(f), poll)
+}
+
+// pointDeviationFrom is pointDeviation against an already enclosed ideal pose.
+func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal idealPose,
+	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
+	if !pose.IsValid() {
+		return nil, 0, false, nil
+	}
 	actual := make([]proofarith.DyV3, len(p.sourcePoints))
 	maxSquared := new(big.Rat)
 	for i, source := range p.sourcePoints {
