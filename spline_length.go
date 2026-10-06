@@ -513,7 +513,8 @@ func spanSquareCmp(f float64, d spanSquaredDistance) int {
 	if square.IsZero() {
 		return -d.num.Sign()
 	}
-	lhs := new(big.Int).Mul(square.Mant(), square.Mant())
+	mant := square.Mant()
+	lhs := new(big.Int).Mul(mant, mant)
 	lhs.Mul(lhs, d.denSq)
 	shift := 2 * (square.Exp() + int(d.exp))
 	if shift >= 0 {
@@ -529,8 +530,9 @@ func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDista
 	if f == 0 {
 		return -d.num.Sign()
 	}
-	square := proofarith.DyOfFiniteInto(f, &scratch.squareMant)
-	scratch.lhs.Mul(square.Mant(), square.Mant())
+	square := proofarith.DyOfFinite(f)
+	mant := square.MantInto(&scratch.squareMant)
+	scratch.lhs.Mul(mant, mant)
 	scratch.lhs.Mul(&scratch.lhs, d.denSq)
 	shift := 2 * (square.Exp() + int(d.exp))
 	if shift >= 0 {

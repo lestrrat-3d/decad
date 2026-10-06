@@ -212,16 +212,20 @@ type xhp struct{ x, y, z, w *big.Int }
 func xhpOf(v r3.Vec) xhp {
 	dx, dy, dz := proofarith.MustDyOf(v.X), proofarith.MustDyOf(v.Y), proofarith.MustDyOf(v.Z)
 	base := 0
-	for _, d := range [3]proofarith.Dyadic{dx, dy, dz} {
+	lower := func(d proofarith.Dyadic) {
 		if !d.IsZero() && d.Exp() < base {
 			base = d.Exp()
 		}
 	}
+	lower(dx)
+	lower(dy)
+	lower(dz)
 	coord := func(d proofarith.Dyadic) *big.Int {
 		if d.IsZero() {
 			return new(big.Int)
 		}
-		return new(big.Int).Lsh(d.Mant(), uint(d.Exp()-base))
+		mant := d.MantInto(new(big.Int))
+		return mant.Lsh(mant, uint(d.Exp()-base))
 	}
 	return xhp{
 		x: coord(dx),

@@ -501,7 +501,8 @@ func dyScaledNum(d proofarith.Dyadic, shift int) *big.Int {
 	if d.Sign() == 0 {
 		return new(big.Int)
 	}
-	return new(big.Int).Lsh(d.Mant(), uint(d.Exp()+shift))
+	mant := d.MantInto(new(big.Int))
+	return mant.Lsh(mant, uint(d.Exp()+shift))
 }
 
 type rotationalPairSweep struct {

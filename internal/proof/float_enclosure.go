@@ -40,7 +40,10 @@ type FloatBox3 struct {
 func DvFloatBox(v DyV3) FloatBox3 {
 	var out FloatBox3
 	for axis := range 3 {
-		out.Lo[axis], out.Hi[axis] = FloatBounds(v[axis])
+		// A named copy, never v[axis] as the call's argument (dyadic.go,
+		// "Indexed reads").
+		c := v[axis]
+		out.Lo[axis], out.Hi[axis] = FloatBounds(c)
 	}
 	return out
 }
@@ -92,52 +95,61 @@ func DvPrimitive(v DyV3) DyV3 {
 	if !found {
 		return DyV3{}
 	}
-	var ints [3]*big.Int
+	// The components are named locals, never elements of a local array indexed
+	// by a loop variable around a call (dyadic.go, "Indexed reads").
+	v0, v1, v2 := v[0], v[1], v[2]
 	gcd := new(big.Int)
-	for i, c := range v {
+	scaled := func(c Dyadic) *big.Int {
 		if c.IsZero() {
-			continue
+			return nil
 		}
-		ints[i] = new(big.Int).Lsh(c.mant, uint(c.exp-exp))
+		k := c.MantInto(new(big.Int))
+		k.Lsh(k, uint(c.exp-exp))
 		if gcd.Sign() == 0 {
-			gcd.Abs(ints[i])
-			continue
+			gcd.Abs(k)
+			return k
 		}
-		gcd.GCD(nil, nil, gcd, new(big.Int).Abs(ints[i]))
+		gcd.GCD(nil, nil, gcd, new(big.Int).Abs(k))
+		return k
 	}
-	var out DyV3
-	for i, k := range ints {
+	k0, k1, k2 := scaled(v0), scaled(v1), scaled(v2)
+	primitive := func(k *big.Int) Dyadic {
 		if k == nil {
-			continue
+			return Dyadic{}
 		}
 		if gcd.BitLen() > 1 {
 			k.Quo(k, gcd)
 		}
-		out[i] = Dyadic{mant: k}.norm()
+		return fromBig(k, 0)
 	}
-	return out
+	return DyV3{primitive(k0), primitive(k1), primitive(k2)}
 }
 
 // AppendKey appends a byte encoding of d to b. Two encodings are equal exactly
-// when the values are: the encoding reads the reduced form (norm), whose
+// when the values are: the encoding reads the reduced, canonical form, whose
 // fields are equal exactly when the values are, and it prefixes the
-// mantissa's length so no two encodings run together.
+// mantissa's length so no two encodings run together. The magnitude is
+// written big-endian without leading zero bytes, the form big.Int.Bytes
+// gives, wherever the mantissa is held.
 func (d Dyadic) AppendKey(b []byte) []byte {
 	if d.IsZero() {
 		return append(b, 0)
 	}
-	mant, exp := d.mant, d.exp
-	if shift := mant.TrailingZeroBits(); shift > 0 {
-		mant = new(big.Int).Rsh(mant, shift)
-		exp += int(shift)
-	}
 	sign := byte(1)
-	if mant.Sign() < 0 {
+	if d.Sign() < 0 {
 		sign = 2
 	}
 	b = append(b, sign)
-	b = binary.AppendVarint(b, int64(exp))
-	words := mant.Bytes()
-	b = binary.AppendUvarint(b, uint64(len(words)))
-	return append(b, words...)
+	b = binary.AppendVarint(b, int64(d.exp))
+	if d.big != nil {
+		words := d.big.Bytes()
+		b = binary.AppendUvarint(b, uint64(len(words)))
+		return append(b, words...)
+	}
+	n := (bitLen128(d.lo, d.hi&^dySign) + 7) / 8
+	b = binary.AppendUvarint(b, uint64(n))
+	var bytes [16]byte
+	binary.BigEndian.PutUint64(bytes[:8], d.hi&^dySign)
+	binary.BigEndian.PutUint64(bytes[8:], d.lo)
+	return append(b, bytes[len(bytes)-n:]...)
 }
