@@ -472,8 +472,11 @@ func edgeSide(normal, u, w proof.DyV3, x hpoint) int {
 // crossings records every certified transversal crossing in both directions
 // and every matching coplanar facet overlap in k.crossed, and every coplanar
 // edge-in-facet chord and opposed coplanar facet pair as a contact site. Any
-// recorded crossing proves an overlap.
+// recorded crossing proves an overlap. A float box pair apart skips a pair
+// as its exact boxes would (planar_prune.go).
 func (k *planarKernel) crossings() error {
+	k.a.floatBoxes()
+	k.b.floatBoxes()
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		edges, tris := side[0], side[1]
 		for e, edge := range edges.edges {
@@ -482,7 +485,8 @@ func (k *planarKernel) crossings() error {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if boxesApart(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]) {
+				if floatApart(edges.edgeBox[e], tris.triBox[t]) ||
+					boxesApart(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]) {
 					continue
 				}
 				sp, sq := orientSign(tris, t, p), orientSign(tris, t, q)
@@ -507,7 +511,8 @@ func (k *planarKernel) crossings() error {
 			if err := k.poll(); err != nil {
 				return err
 			}
-			if boxesApart(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]) {
+			if floatApart(k.a.triBox[ta], k.b.triBox[tb]) ||
+				boxesApart(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]) {
 				continue
 			}
 			coplanar := true
@@ -850,56 +855,89 @@ const (
 // facets a ray crosses strictly inside. A ray that meets a facet's boundary
 // ahead of p moves to the next direction; p on a facet is reported as such.
 func (k *planarKernel) cast(p proof.DyV3, solid *planarPrep) (castResult, error) {
+	boxed := solid.triBox != nil
+	var pb floatBox
+	if boxed {
+		pb = pointFloatBox(p)
+	}
 	for _, dir := range rayLadder {
-		d := proof.DyV3{proof.DyInt(dir[0]), proof.DyInt(dir[1]), proof.DyInt(dir[2])}
-		crossings := 0
-		ambiguous := false
-		for t, tri := range solid.s.Tris {
-			if err := k.poll(); err != nil {
-				return castAmbiguous, err
-			}
-			var signs [3]int
-			for i := range 3 {
-				u, w := solid.s.Verts[tri[i]], solid.s.Verts[tri[(i+1)%3]]
-				signs[i] = proof.DvDot(d, proof.DvCross(proof.DvSub(u, p), proof.DvSub(w, p))).Sign()
-			}
-			if hasSign(signs, 1) && hasSign(signs, -1) {
-				continue
-			}
-			normal := solid.normal[t]
-			along := proof.DvDot(normal, d).Sign()
-			ahead := proof.DvDot(normal, proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
-			if along == 0 {
-				if ahead != 0 {
-					continue
-				}
-				if pointInFacet(solid, t, dyPoint(p)) {
-					return castOnBoundary, nil
-				}
-				ambiguous = true
-				break
-			}
-			if ahead == 0 {
-				return castOnBoundary, nil
-			}
-			if ahead != along {
-				continue
-			}
-			if signs[0] == 0 || signs[1] == 0 || signs[2] == 0 {
-				ambiguous = true
-				break
-			}
-			crossings++
+		result, err := k.castAlong(p, pb, boxed, dir, solid)
+		if err != nil {
+			return castAmbiguous, err
 		}
-		if ambiguous {
-			continue
+		if result != castAmbiguous {
+			return result, nil
 		}
-		if crossings%2 == 1 {
-			return castInside, nil
-		}
-		return castOutside, nil
 	}
 	return castAmbiguous, nil
+}
+
+// castAlong is one ray of cast, ambiguous when the ray meets a facet's
+// boundary. When boxed, pb is p's outward float box and solid carries its
+// float boxes: an axis ray then skips a triangle the float pre-test proves it
+// passes beside (planar_prune.go).
+func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]int64, solid *planarPrep) (castResult, error) {
+	d := proof.DyV3{proof.DyInt(dir[0]), proof.DyInt(dir[1]), proof.DyInt(dir[2])}
+	axis := rayAxis(dir)
+	crossings := 0
+	for t, tri := range solid.s.Tris {
+		if err := k.poll(); err != nil {
+			return castAmbiguous, err
+		}
+		if boxed && axis >= 0 && solid.normal[t][axis].Sign() != 0 && floatApartOff(pb, solid.triBox[t], axis) {
+			continue
+		}
+		var signs [3]int
+		for i := range 3 {
+			u, w := solid.s.Verts[tri[i]], solid.s.Verts[tri[(i+1)%3]]
+			signs[i] = proof.DvDot(d, proof.DvCross(proof.DvSub(u, p), proof.DvSub(w, p))).Sign()
+		}
+		if hasSign(signs, 1) && hasSign(signs, -1) {
+			continue
+		}
+		normal := solid.normal[t]
+		along := proof.DvDot(normal, d).Sign()
+		ahead := proof.DvDot(normal, proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+		if along == 0 {
+			if ahead != 0 {
+				continue
+			}
+			if pointInFacetBoxed(solid, t, dyPoint(p), pb, boxed) {
+				return castOnBoundary, nil
+			}
+			return castAmbiguous, nil
+		}
+		if ahead == 0 {
+			return castOnBoundary, nil
+		}
+		if ahead != along {
+			continue
+		}
+		if signs[0] == 0 || signs[1] == 0 || signs[2] == 0 {
+			return castAmbiguous, nil
+		}
+		crossings++
+	}
+	if crossings%2 == 1 {
+		return castInside, nil
+	}
+	return castOutside, nil
+}
+
+// rayAxis returns the coordinate axis a ray direction runs along, or -1 when
+// it has more than one nonzero component.
+func rayAxis(dir [3]int64) int {
+	axis := -1
+	for i, c := range dir {
+		if c == 0 {
+			continue
+		}
+		if axis >= 0 {
+			return -1
+		}
+		axis = i
+	}
+	return axis
 }
 
 func hasSign(signs [3]int, sign int) bool {
@@ -935,8 +973,16 @@ func (h hpoint) inBox(lo, hi [3]proof.Dyadic) bool {
 // comparisons, is outside the triangle. The box decides only for a triangle
 // with a nonzero normal, the one the plane and edge tests below bound: on a
 // zero normal every test reads zero and accepts any point.
+//
+// xb, when boxed, is x's outward float box (hpoint.floatBox), and p carries
+// its float boxes: a float box apart from the triangle's proves x outside the
+// exact box before the exact comparisons run (planar_prune.go).
 func pointInFacet(p *planarPrep, t int, x hpoint) bool {
-	if !proof.DvIsZero(p.normal[t]) && !x.inBox(p.triLo[t], p.triHi[t]) {
+	return pointInFacetBoxed(p, t, x, floatBox{}, false)
+}
+
+func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) bool {
+	if !proof.DvIsZero(p.normal[t]) && ((boxed && floatApart(xb, p.triBox[t])) || !x.inBox(p.triLo[t], p.triHi[t])) {
 		return false
 	}
 	tri := p.s.Tris[t]

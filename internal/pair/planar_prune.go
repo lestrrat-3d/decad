@@ -6,10 +6,26 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file holds two shortcuts for the distance scan (planarKernel.distances).
-// Neither changes an answer. Each one stands in for an exact computation only
-// where it yields the same answer as that computation.
+// This file holds the float shortcuts of the planar relation (planar.go). None
+// changes an answer. Each one stands in for an exact computation only where it
+// yields the same answer as that computation.
 //
+//   - A float pre-test of every box test. A pair of outward float boxes
+//     strictly apart on some axis proves the exact boxes apart (floatApart),
+//     so the crossing scan skips the pair as the exact box test would, and a
+//     point x/w whose outward float box (hpoint.floatBox) misses a triangle's
+//     float box is outside the triangle's exact box, which pointInFacet
+//     rejects.
+//   - A float pre-test of the axis parity cast (planarKernel.cast). A ray
+//     along a coordinate axis from p stays at p's two other coordinates. A
+//     triangle whose float box misses p's on one of those axes lies wholly to
+//     one side of the ray, so p's projection along the axis lies strictly
+//     outside the triangle's projection. When that projection has nonzero
+//     area (the triangle's normal has a nonzero component on the axis), the
+//     three edge orientations around p then hold both signs, and the cast
+//     skips the triangle as its exact signs would. A triangle seen edge-on
+//     falls through to the exact test: when p lies in its plane, the exact
+//     test reports an ambiguous ray.
 //   - A float pre-test of the box prune. Each box carries an outward-rounded
 //     float copy, and the running minimum carries a float upper bound. Each
 //     float step rounds toward a weaker claim. When the float lower bound on
@@ -33,29 +49,15 @@ type floatBox struct {
 	lo, hi [3]float64
 }
 
-// floatBounds returns floats lo ≤ d ≤ hi. A float conversion that is not exact
-// rounds to the nearest float, so the exact value lies strictly between that
-// float's neighbours. That also holds when the conversion overflows to an
-// infinity: the infinity's neighbour toward zero is MaxFloat64.
-func floatBounds(d proof.Dyadic) (float64, float64) {
-	f, exact := d.Float64()
-	if exact {
-		return f, f
-	}
-	return math.Nextafter(f, math.Inf(-1)), math.Nextafter(f, math.Inf(1))
-}
-
 // floatBoxes fills the outward float boxes of every vertex, triangle and edge
-// of p. ClassifyPlanar fills them only when it reaches the distance scan.
+// of p. ClassifyPlanar fills them before its crossing scan.
 func (p *planarPrep) floatBoxes() {
 	if p.vertBox != nil {
 		return
 	}
 	p.vertBox = make([]floatBox, len(p.s.Verts))
 	for v, point := range p.s.Verts {
-		for axis := range 3 {
-			p.vertBox[v].lo[axis], p.vertBox[v].hi[axis] = floatBounds(point[axis])
-		}
+		p.vertBox[v] = pointFloatBox(point)
 	}
 	p.triBox = make([]floatBox, len(p.s.Tris))
 	for t, tri := range p.s.Tris {
@@ -80,6 +82,66 @@ func (p *planarPrep) unionBox(indices []int) floatBox {
 	return out
 }
 
+// pointFloatBox is the outward float box of the exact point v.
+func pointFloatBox(v proof.DyV3) floatBox {
+	var out floatBox
+	for axis := range 3 {
+		out.lo[axis], out.hi[axis] = proof.FloatBounds(v[axis])
+	}
+	return out
+}
+
+// floatApart reports whether two float boxes are strictly apart along some
+// axis. Each float box holds its exact box, so float boxes apart prove the
+// exact boxes apart.
+func floatApart(a, b floatBox) bool {
+	for axis := range 3 {
+		if a.hi[axis] < b.lo[axis] || b.hi[axis] < a.lo[axis] {
+			return true
+		}
+	}
+	return false
+}
+
+// floatApartOff reports whether two float boxes are strictly apart along an
+// axis other than skip.
+func floatApartOff(a, b floatBox, skip int) bool {
+	for axis := range 3 {
+		if axis != skip && (a.hi[axis] < b.lo[axis] || b.hi[axis] < a.lo[axis]) {
+			return true
+		}
+	}
+	return false
+}
+
+// floatBox returns an outward float box holding x/w, and false when the floats
+// cannot bound it: w's float bounds hold zero, or a quotient is NaN.
+func (h hpoint) floatBox() (floatBox, bool) {
+	wlo, whi := proof.FloatBounds(h.w)
+	if !(wlo > 0) && !(whi < 0) {
+		return floatBox{}, false
+	}
+	var out floatBox
+	for axis := range 3 {
+		xlo, xhi := proof.FloatBounds(h.x[axis])
+		lo, hi := divEnclosure(xlo, xhi, wlo, whi)
+		if math.IsNaN(lo) || math.IsNaN(hi) {
+			return floatBox{}, false
+		}
+		out.lo[axis], out.hi[axis] = lo, hi
+	}
+	return out, true
+}
+
+// divEnclosure encloses every quotient of a value in [a, b] by one in [c, d],
+// an interval that excludes zero: the quotients lie between the least and
+// greatest corner quotient. An infinity over an infinity makes both ends NaN.
+func divEnclosure(a, b, c, d float64) (float64, float64) {
+	lo := math.Min(math.Min(divDown(a, c), divDown(a, d)), math.Min(divDown(b, c), divDown(b, d)))
+	hi := math.Max(math.Max(divUp(a, c), divUp(a, d)), math.Max(divUp(b, c), divUp(b, d)))
+	return lo, hi
+}
+
 // The directed operations below each round one float operation to nearest
 // and then step the result one ulp outward. The exact result lies within half
 // an ulp of the rounded one, so the step lands on the far side of it. An
@@ -95,6 +157,7 @@ func subDown(a, b float64) float64  { return down(a - b) }
 func subUp(a, b float64) float64    { return up(a - b) }
 func mulDown(a, b float64) float64  { return down(float64(a * b)) }
 func mulUp(a, b float64) float64    { return up(float64(a * b)) }
+func divDown(a, b float64) float64  { return down(a / b) }
 func divUp(a, b float64) float64    { return up(a / b) }
 func nonnegative(x float64) float64 { return math.Max(x, 0) }
 
@@ -121,8 +184,8 @@ func gapSquaredBelow(a, b floatBox) float64 {
 // fracAbove is a float at or above x = num/den, or +Inf when no finite bound
 // follows from the floats. num is nonnegative and den positive.
 func fracAbove(x frac) float64 {
-	_, num := floatBounds(x.num)
-	den, _ := floatBounds(x.den)
+	_, num := proof.FloatBounds(x.num)
+	den, _ := proof.FloatBounds(x.den)
 	if !(den > 0) {
 		return math.Inf(1)
 	}
@@ -145,7 +208,7 @@ func (p *planarPrep) sidePlanes(t int) (*[3]proof.DyV3, *[3]floatBox) {
 			plane := proof.DvCross(p.normal[t], proof.DvSub(w, u))
 			p.sides[t][i] = plane
 			for axis := range 3 {
-				p.sideBoxes[t][i].lo[axis], p.sideBoxes[t][i].hi[axis] = floatBounds(plane[axis])
+				p.sideBoxes[t][i].lo[axis], p.sideBoxes[t][i].hi[axis] = proof.FloatBounds(plane[axis])
 			}
 		}
 		p.sidesSet[t] = true

@@ -24,11 +24,13 @@ func (k *planarKernel) fanAt(p *planarPrep, x hpoint) (fan, error) {
 	var tris []int
 	seenVert := make(map[int]struct{})
 	seenEdge := make(map[[2]int]struct{})
+	p.floatBoxes()
+	xb, boxed := x.floatBox()
 	for t, tri := range p.s.Tris {
 		if err := k.poll(); err != nil {
 			return fan{}, err
 		}
-		if !pointInFacet(p, t, x) {
+		if !pointInFacetBoxed(p, t, x, xb, boxed) {
 			continue
 		}
 		tris = append(tris, t)
