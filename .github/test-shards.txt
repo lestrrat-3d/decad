@@ -2177,3 +2177,7 @@
 4	0.01	TestSweepStraightTessellatesAsItsPrism
 4	0.00	TestSweepTessellationStagesEveryOtherReduction
 4	0.01	TestSweepStraightIsABooleanOperand
+0	0.00	TestCornerSpanMatchesRationalForm
+1	0.00	TestPointDeviationMatchesRationalForm
+2	0.00	TestScaledRotationMatchesRotation
+3	0.00	TestOrientedVertexFaceFootMatchesRationalForm

@@ -572,11 +572,49 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) 
 }
 
 func orientedVertexFaceDistanceSquared(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) *big.Rat {
-	_, distance := orientedVertexFaceFoot(vertex, box, axis, side)
-	return distance
+	foot, ok := orientedVertexFaceProjection(vertex, box, axis, side)
+	if !ok {
+		return nil
+	}
+	return foot.distanceSquared()
 }
 
 func orientedVertexFaceFoot(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) ([3]*big.Rat, *big.Rat) {
+	foot, ok := orientedVertexFaceProjection(vertex, box, axis, side)
+	if !ok {
+		return [3]*big.Rat{}, nil
+	}
+	var at [3]*big.Rat
+	normSquared := foot.normSquared.Rat()
+	for k := range 3 {
+		at[k] = new(big.Rat).Quo(foot.scaled[k].Rat(), normSquared)
+	}
+	return at, foot.distanceSquared()
+}
+
+// orientedFaceProjection is a vertex's orthogonal projection onto a box face's
+// plane, held exactly as Dyadic numerators over the face normal's squared
+// length: the foot is scaled/normSquared and the squared distance to it
+// distance²/normSquared.
+type orientedFaceProjection struct {
+	scaled      proofarith.DyV3
+	distance    proofarith.Dyadic
+	normSquared proofarith.Dyadic
+}
+
+func (f orientedFaceProjection) distanceSquared() *big.Rat {
+	return new(big.Rat).Quo(proofarith.DyMul(f.distance, f.distance).Rat(), f.normSquared.Rat())
+}
+
+// orientedVertexFaceProjection projects vertex onto the face of box on the
+// given axis and side, ok only when the foot lies in the closed face. With
+// a, b the face's edges, n = a × b, N = n·n and w the vertex less the face
+// origin, the foot is the origin plus P/N, P = N·w − (w·n)·n, and its face
+// coordinates are u = U/(N·det) and v = V/(N·det), det = (a·a)(b·b) − (a·b)²,
+// U = (P·a)(b·b) − (P·b)(a·b), V = (P·b)(a·a) − (P·a)(a·b). Every quantity is
+// a polynomial in held coordinates, so it is Dyadic, and the face test
+// 0 ≤ u, v ≤ 1 compares U and V against 0 and N·det exactly.
+func orientedVertexFaceProjection(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) (orientedFaceProjection, bool) {
 	i, j := (axis+1)%3, (axis+2)%3
 	face := box.corner[0]
 	if side == 1 {
@@ -584,44 +622,33 @@ func orientedVertexFaceFoot(vertex proofarith.DyV3, box orientedSourceBox, axis,
 	}
 	a, b := box.edge[i], box.edge[j]
 	normal := proofarith.DvCross(a, b)
-	normSquared := proofarith.DvDot(normal, normal).Rat()
+	normSquared := proofarith.DvDot(normal, normal)
 	if normSquared.Sign() == 0 {
-		return [3]*big.Rat{}, nil
+		return orientedFaceProjection{}, false
 	}
 	w := proofarith.DvSub(vertex, face)
-	distanceNumerator := proofarith.DvDot(w, normal).Rat()
-	point := [3]*big.Rat{}
+	distance := proofarith.DvDot(w, normal)
+	var point proofarith.DyV3
 	for k := range 3 {
-		point[k] = new(big.Rat).Sub(w[k].Rat(),
-			new(big.Rat).Quo(new(big.Rat).Mul(normal[k].Rat(), distanceNumerator), normSquared))
+		point[k] = proofarith.DySubScalar(proofarith.DyMul(w[k], normSquared), proofarith.DyMul(normal[k], distance))
 	}
-	dot := func(u, v [3]*big.Rat) *big.Rat {
-		result := new(big.Rat)
-		for k := range 3 {
-			result.Add(result, new(big.Rat).Mul(u[k], v[k]))
-		}
-		return result
-	}
-	ar, br := [3]*big.Rat{a[0].Rat(), a[1].Rat(), a[2].Rat()},
-		[3]*big.Rat{b[0].Rat(), b[1].Rat(), b[2].Rat()}
-	aa, bb, ab := dot(ar, ar), dot(br, br), dot(ar, br)
-	det := new(big.Rat).Sub(new(big.Rat).Mul(aa, bb), new(big.Rat).Mul(ab, ab))
+	aa, bb, ab := proofarith.DvDot(a, a), proofarith.DvDot(b, b), proofarith.DvDot(a, b)
+	det := proofarith.DySubScalar(proofarith.DyMul(aa, bb), proofarith.DyMul(ab, ab))
 	if det.Sign() <= 0 {
-		return [3]*big.Rat{}, nil
+		return orientedFaceProjection{}, false
 	}
-	pa, pb := dot(point, ar), dot(point, br)
-	u := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(pa, bb),
-		new(big.Rat).Mul(pb, ab)), det)
-	v := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(pb, aa),
-		new(big.Rat).Mul(pa, ab)), det)
-	if u.Sign() < 0 || v.Sign() < 0 || u.Cmp(big.NewRat(1, 1)) > 0 || v.Cmp(big.NewRat(1, 1)) > 0 {
-		return [3]*big.Rat{}, nil
+	pa, pb := proofarith.DvDot(point, a), proofarith.DvDot(point, b)
+	u := proofarith.DySubScalar(proofarith.DyMul(pa, bb), proofarith.DyMul(pb, ab))
+	v := proofarith.DySubScalar(proofarith.DyMul(pb, aa), proofarith.DyMul(pa, ab))
+	whole := proofarith.DyMul(normSquared, det)
+	if u.Sign() < 0 || v.Sign() < 0 || proofarith.DyCmp(u, whole) > 0 || proofarith.DyCmp(v, whole) > 0 {
+		return orientedFaceProjection{}, false
 	}
-	var foot [3]*big.Rat
+	var foot proofarith.DyV3
 	for k := range 3 {
-		foot[k] = new(big.Rat).Add(face[k].Rat(), point[k])
+		foot[k] = proofarith.DyAdd(proofarith.DyMul(face[k], normSquared), point[k])
 	}
-	return foot, new(big.Rat).Quo(new(big.Rat).Mul(distanceNumerator, distanceNumerator), normSquared)
+	return orientedFaceProjection{scaled: foot, distance: distance, normSquared: normSquared}, true
 }
 
 // An actual point strictly inside both η-eroded read boxes is also inside

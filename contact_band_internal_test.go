@@ -278,12 +278,13 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 	for k := 1; k <= samples; k++ {
 		f := big.NewRat(int64(k), samples)
 		pose, _, charge := replayAt(turn, k)
-		ideal := turn.replay.rotation[1].idealAt(f)
+		ideal, ok := turn.replay.rotation[1].idealAt(f)
+		require.True(t, ok)
 		sin, cos := ratSinCosTaylor(f)
 		for _, entry := range []struct {
 			got  ratInterval
 			want *big.Rat
-		}{{ideal.rot[0][0], cos}, {ideal.rot[1][0], sin}, {ideal.rot[0][1], new(big.Rat).Neg(sin)}, {ideal.rot[1][1], cos}} {
+		}{{ideal.rot.entry(0, 0), cos}, {ideal.rot.entry(1, 0), sin}, {ideal.rot.entry(0, 1), new(big.Rat).Neg(sin)}, {ideal.rot.entry(1, 1), cos}} {
 			require.True(t, entry.got.lo.Cmp(entry.want) <= 0 && entry.want.Cmp(entry.got.hi) <= 0,
 				"the enclosure holds the true rotation at %d/%d", k, samples)
 		}
@@ -294,8 +295,9 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 		for i := range 3 {
 			for j := range 3 {
 				rounded := proofarith.FloatRat(columns[j][i])
-				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, ideal.rot[i][j].lo))
-				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, ideal.rot[i][j].hi)); other.Cmp(far) > 0 {
+				enclosure := ideal.rot.entry(i, j)
+				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.lo))
+				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.hi)); other.Cmp(far) > 0 {
 					far = other
 				}
 				squared.Add(squared, far.Mul(far, far))

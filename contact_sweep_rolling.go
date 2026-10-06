@@ -396,7 +396,7 @@ func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) b
 	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
 	var lo, hi [2]*big.Rat
 	for slot, axis := range [2]int{(support.axis + 1) % 3, (support.axis + 2) % 3} {
-		low, high := spanHull(spans, axis)
+		low, high := spans.hull(axis)
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
 		shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
 		lo[slot] = ratAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))

@@ -47,6 +47,26 @@ func TestDyadicFastPathsRandomizedMatchesBigRat(t *testing.T) {
 	require.Zero(t, independentDyadicRat(proof.DySubScalar(large, small)).Cmp(new(big.Rat).Sub(largeRat, smallRat)))
 }
 
+// TestDyadicCompareAcrossExponents compares every pair of a grid of values
+// whose mantissas and exponents differ, so their leading bits fall at the same
+// binary position as often as at different ones, against big.Rat.
+func TestDyadicCompareAcrossExponents(t *testing.T) {
+	t.Parallel()
+	var values []proof.Dyadic
+	for _, mant := range []int64{1, 3, 5, 7, 11, 13, 255, 257, -1, -3, -7, -11, -255} {
+		for exp := -4; exp <= 4; exp++ {
+			values = append(values, proof.DyShift(proof.DyInt(mant), exp))
+		}
+	}
+	values = append(values, proof.DyZero())
+	for _, a := range values {
+		for _, b := range values {
+			want := independentDyadicRat(a).Cmp(independentDyadicRat(b))
+			require.Equal(t, want, proof.DyCmp(a, b), "cmp(%v, %v)", independentDyadicRat(a), independentDyadicRat(b))
+		}
+	}
+}
+
 // TestDyadicFastPathsPreserveInputs ensures each result owns the only mutable
 // big.Int touched by the operation.
 func TestDyadicFastPathsPreserveInputs(t *testing.T) {

@@ -2676,9 +2676,9 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   the linear momentum balance of every step, a one-, a two- and a four-or-more-point impact, each box's first
   impact within `TimeResolution` after the band entry of its lowest corner's drift (a zero band in its place
   is red, the exact touch lying `7 µs` later), and every body at rest face down inside the walls with a
-  track or a box exclusion in its last slice. The whole scene takes about six minutes on an amd64
-  workstation, nearly all of it in its first `80` steps in the rotating sweeps' exact interval arithmetic,
-  beyond the `dynamics` package's ten-minute budget on the CI runners: `TestTumbleScene` runs it under
+  track or a box exclusion in its last slice. The whole scene spends nearly all of its time in its first
+  `80` steps, in the rotating sweeps, and runs beyond the `dynamics` package's ten-minute budget on the CI
+  runners: `TestTumbleScene` runs it under
   `DECAD_TUMBLE_FULL`, `TestTumbleSceneSubset` runs the `30°` box, the prism, the wedge and the tetrahedron
   for `0.5 s` through the same assertions on the legs without the race detector, and the `_gallery` job
   runs the whole scene in its tests and its smoke render.

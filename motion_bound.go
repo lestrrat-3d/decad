@@ -167,6 +167,107 @@ func (m ivMat) apply(v ivVec) ivVec {
 	return out
 }
 
+// The common-denominator form below (internal/proof's CommonDenom) evaluates
+// an interval expression over many exact points with integer arithmetic.
+// big.Rat reduces to lowest terms after every operation, a Lehmer GCD over
+// operands whose denominators carry π's enclosure and a rotation axis's 1/|a|,
+// hundreds of bits wide. Written over one shared denominator, the same
+// expression needs only integer multiply-adds, and a result converted back
+// (SetFrac) reduces to the same lowest terms: each one is the exact rational,
+// bit for bit, the big.Rat evaluation produces.
+
+// scaledIvMat is an interval matrix with its 18 endpoints written as integer
+// numerators over one shared positive denominator: entry (i, j) is
+// [lo[i][j]/den, hi[i][j]/den] exactly.
+type scaledIvMat struct {
+	den    *big.Int
+	lo, hi [3][3]*big.Int
+}
+
+// entry is entry (i, j) as its exact rational interval.
+func (s scaledIvMat) entry(i, j int) ratInterval {
+	return intervalOwned(new(big.Rat).SetFrac(s.lo[i][j], s.den), new(big.Rat).SetFrac(s.hi[i][j], s.den))
+}
+
+func newScaledIvMat(m ivMat) scaledIvMat {
+	den := big.NewInt(1)
+	for i := range 3 {
+		for j := range 3 {
+			den = proofarith.LcmInt(proofarith.LcmInt(den, m[i][j].lo.Denom()), m[i][j].hi.Denom())
+		}
+	}
+	s := scaledIvMat{den: den}
+	for i := range 3 {
+		for j := range 3 {
+			s.lo[i][j], s.hi[i][j] = proofarith.ScaledNum(m[i][j].lo, den), proofarith.ScaledNum(m[i][j].hi, den)
+		}
+	}
+	return s
+}
+
+// applyScaled is ivMat.apply on the exact point whose coordinates are n/q,
+// for integer numerators n over a positive q: the endpoint numerators of each
+// row over den·q. The interval product of an entry with a point coordinate v
+// is [lo·v, hi·v] for v ≥ 0 and [hi·v, lo·v] for v < 0 (MulInterval), and a
+// row sums them, so each endpoint is one integer dot product.
+func (s scaledIvMat) applyScaled(n [3]*big.Int) ([3]*big.Int, [3]*big.Int) {
+	var lo, hi [3]*big.Int
+	term := new(big.Int)
+	for i := range 3 {
+		lo[i], hi[i] = new(big.Int), new(big.Int)
+		for j := range 3 {
+			low, high := s.lo[i][j], s.hi[i][j]
+			if n[j].Sign() < 0 {
+				low, high = high, low
+			}
+			lo[i].Add(lo[i], term.Mul(low, n[j]))
+			hi[i].Add(hi[i], term.Mul(high, n[j]))
+		}
+	}
+	return lo, hi
+}
+
+// mulPoints is ivMat.mul with a right factor o whose entries are all points,
+// as exactTransform's are: the interval product of an entry with a point v is
+// [lo·v, hi·v] for v ≥ 0 and [hi·v, lo·v] for v < 0 (MulInterval), so each
+// result endpoint is one integer dot product over den times o's own shared
+// denominator. ok is false when an entry of o is not a point.
+func (s scaledIvMat) mulPoints(o ivMat) (scaledIvMat, bool) {
+	values := make([]*big.Rat, 0, 9)
+	for k := range 3 {
+		for j := range 3 {
+			if o[k][j].lo.Cmp(o[k][j].hi) != 0 {
+				return scaledIvMat{}, false
+			}
+			values = append(values, o[k][j].lo)
+		}
+	}
+	pointDen := proofarith.CommonDenom(values...)
+	var point [3][3]*big.Int
+	for k := range 3 {
+		for j := range 3 {
+			point[k][j] = proofarith.ScaledNum(values[3*k+j], pointDen)
+		}
+	}
+	out := scaledIvMat{den: new(big.Int).Mul(s.den, pointDen)}
+	term := new(big.Int)
+	for i := range 3 {
+		for j := range 3 {
+			lo, hi := new(big.Int), new(big.Int)
+			for k := range 3 {
+				low, high := s.lo[i][k], s.hi[i][k]
+				if point[k][j].Sign() < 0 {
+					low, high = high, low
+				}
+				lo.Add(lo, term.Mul(low, point[k][j]))
+				hi.Add(hi, term.Mul(high, point[k][j]))
+			}
+			out.lo[i][j], out.hi[i][j] = lo, hi
+		}
+	}
+	return out, true
+}
+
 func ivVecAdd(a, b ivVec) ivVec {
 	return ivVec{intervalAdd(a[0], b[0]), intervalAdd(a[1], b[1]), intervalAdd(a[2], b[2])}
 }
@@ -326,6 +427,77 @@ func (mf motionFrame) rotation(sin, cos ratInterval) ivMat {
 		}
 	}
 	return rot
+}
+
+// scaledRotation is rotation's matrix in the common-denominator form, each
+// entry the same exact interval rotation builds. With a = A/d for integers A
+// over the axis's shared denominator d, k kᵀ = A Aᵀ/|A|² and [k]× =
+// [A]×·(1/(d·|a|)), so every entry is sinUnit·C + (1 − cos)·O (+ cos on the
+// diagonal) for integer C = [A]× and O = A Aᵀ, and intervalScale's endpoint
+// order follows the sign of C or O as it follows the sign of the scale.
+func (mf motionFrame) scaledRotation(sin, cos ratInterval) scaledIvMat {
+	a := mf.axis
+	axisDen := proofarith.CommonDenom(a[0], a[1], a[2])
+	var axis [3]*big.Int
+	for k := range 3 {
+		axis[k] = proofarith.ScaledNum(a[k], axisDen)
+	}
+	squared := new(big.Int)
+	for k := range 3 {
+		squared.Add(squared, new(big.Int).Mul(axis[k], axis[k]))
+	}
+	sinUnit := intervalMul(sin, mf.unit)
+	sinDen := proofarith.LcmInt(new(big.Int).Set(sinUnit.lo.Denom()), sinUnit.hi.Denom())
+	cosDen := proofarith.LcmInt(new(big.Int).Set(cos.lo.Denom()), cos.hi.Denom())
+	sinScale := new(big.Int).Mul(sinDen, axisDen)
+	cosScale := new(big.Int).Mul(cosDen, squared)
+	den := proofarith.LcmInt(sinScale, cosScale)
+	// The three intervals' endpoints over den once C, O and 1 multiply them.
+	sinMultiplier := new(big.Int).Quo(den, sinScale)
+	cosMultiplier := new(big.Int).Quo(den, cosScale)
+	diagonalMultiplier := new(big.Int).Quo(den, cosDen)
+	sinLo := proofarith.ScaledNum(sinUnit.lo, sinDen)
+	sinLo.Mul(sinLo, sinMultiplier)
+	sinHi := proofarith.ScaledNum(sinUnit.hi, sinDen)
+	sinHi.Mul(sinHi, sinMultiplier)
+	cosLo, cosHi := proofarith.ScaledNum(cos.lo, cosDen), proofarith.ScaledNum(cos.hi, cosDen)
+	// 1 − cos is [1 − hi, 1 − lo].
+	oneMinusLo := new(big.Int).Sub(cosDen, cosHi)
+	oneMinusLo.Mul(oneMinusLo, cosMultiplier)
+	oneMinusHi := new(big.Int).Sub(cosDen, cosLo)
+	oneMinusHi.Mul(oneMinusHi, cosMultiplier)
+	cosLo.Mul(cosLo, diagonalMultiplier)
+	cosHi.Mul(cosHi, diagonalMultiplier)
+	zero := new(big.Int)
+	cross := [3][3]*big.Int{
+		{zero, new(big.Int).Neg(axis[2]), axis[1]},
+		{axis[2], zero, new(big.Int).Neg(axis[0])},
+		{new(big.Int).Neg(axis[1]), axis[0], zero},
+	}
+	s := scaledIvMat{den: den}
+	for i := range 3 {
+		for j := range 3 {
+			c, o := cross[i][j], new(big.Int).Mul(axis[i], axis[j])
+			sinLow, sinHigh := sinLo, sinHi
+			if c.Sign() < 0 {
+				sinLow, sinHigh = sinHi, sinLo
+			}
+			cosLow, cosHigh := oneMinusLo, oneMinusHi
+			if o.Sign() < 0 {
+				cosLow, cosHigh = oneMinusHi, oneMinusLo
+			}
+			lo := new(big.Int).Mul(sinLow, c)
+			lo.Add(lo, new(big.Int).Mul(cosLow, o))
+			hi := new(big.Int).Mul(sinHigh, c)
+			hi.Add(hi, o.Mul(cosHigh, o))
+			if i == j {
+				lo.Add(lo, cosLo)
+				hi.Add(hi, cosHi)
+			}
+			s.lo[i][j], s.hi[i][j] = lo, hi
+		}
+	}
+	return s
 }
 
 // at builds the ideal pose for the exact parameter p.
