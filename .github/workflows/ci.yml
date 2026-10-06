@@ -150,8 +150,13 @@ jobs:
             exit 1
           fi
 
-  # The packages outside the root run on their own Ubuntu runner. macOS and
-  # Windows run the whole suite without the race detector.
+  # The packages outside the root run on two Ubuntu runners. macOS and Windows
+  # run the whole suite without the race detector.
+  #
+  # ./dynamics/ has a runner of its own. Its scenes run one after another and
+  # take about 6 minutes under -race on a fast runner and about 10 on a slow
+  # one, so the hardware a job lands on decides whether a 10m budget holds.
+  # The 30m budget covers the slow runner with room for more scenes.
   test:
     strategy:
       fail-fast: false
@@ -160,7 +165,13 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./dynamics/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
+            timeout: "10m"
+          - os: ubuntu-latest
+            race: "-race"
+            shard: ""
+            packages: "./dynamics/"
+            timeout: "30m"
           - os: macos-latest
             race: ""
             shard: ""
@@ -185,10 +196,11 @@ jobs:
       # Every package outside the root runs UNFILTERED on one shard, so the
       # shards together cover what an unsharded `go test ./...` covers.
       # ci_workflow_test.go fails when a package on disk is named by no shard.
+      # -v prints each test's duration, so a slow run shows which tests grew.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != ''
         shell: bash
-        run: go test ${{ matrix.race }} -timeout 10m ${{ matrix.packages }}
+        run: go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
 
       # The whole-suite run is the non-Linux leg: no shard, and no package
       # operand of its own. The examples runner has a `packages:` operand, so
