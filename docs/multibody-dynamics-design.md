@@ -42,9 +42,9 @@ arithmetic every certificate below
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
-shipped code. §5, §6.1–§6.6, §7, §3.3, §3.4 and §12 ship as well, for every world. §9.1–§9.4 ship for prisms over whole `LineSeg` sections, for zero-bound
-Booleans, directly or through a translation-only placement, and for closed all-planar stitched solids; lofts
-are not admitted yet.
+shipped code. §5, §6.1–§6.6, §7, §3.3, §3.4 and §12 ship as well, for every world. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
+Booleans, directly or through a translation-only placement, and for closed all-planar stitched solids; lofts,
+sweeps, cups and general revolves wait on §10.4's held-mesh admission (§13 PR 20b).
 §10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
 all-planar cap-loop chamfers. §10.5 ships for the same exact bodies: under a positive `SupportBand` a box
 tipped over from its edge comes to rest flat. §10.4's rolling band track ships for a full source cylinder
@@ -157,13 +157,23 @@ one with four or more (face impact); each box's first impact time matches, withi
 at which the exact drift of its lowest corner enters the `SupportBand`, which is where a falling pair's
 first `ContactBand` sample lies (§10.5).
 
-**Phase 3 — `parts-bin`.** The tray plus: a shelled box (`cupPayload`), a `12 mm` cap-loop chamfered
-block (positive displacement), a square-to-octagon loft, a straight sweep of a hexagon, a revolved
-bottle (full revolve of a line-and-arc half-profile), and a source cylinder released on its side so it
-rolls. `4 s`. Exit criterion: `Body.MassProperties` publishes for every body; the timeline reaches `4 s`;
-the rolling cylinder's trace carries a rotating band track with its contact-point speed within
-`VelocityResidual` of zero (rolling without slip under friction `0.4`); the chamfered block rests on a
-`ContactBand` track whose published depth is at most its boundary displacement plus `PenetrationResidual`.
+**Phase 3 — `parts-bin`.** The tray plus: a `24×16×16 mm` box shelled `2 mm` through its top
+(`cupPayload`, non-convex, exact); a `12 mm` cube whose top loop is chamfered `2.1 mm`, so its feet are
+not dyadic and its displacement is its contour's rounding (about `1e-15 mm`, §10.4); a loft from a pushed-out
+square to an octagon (exact); a straight `14 mm` sweep of a hexagon (exact, read as its prism); a revolved
+bottle, the full revolve of a line-and-arc half-profile (`Ø16 mm` base, a quarter-circle shoulder to a
+`Ø8 mm` neck), read as a held mesh at the request's `HeldChord` (§10.4); and a `Ø20 × 30 mm` source
+cylinder released on its side on the tray floor with `ω = (−1.5, 0, 0) rad/s` and `v = (0, 15, 0) mm/s`, so
+it rolls without slip from its first step. Every other body is released `8 mm` above the floor at a
+translation pose, at least `20 mm` inside the walls, as PR 15 places its bodies. Material as above, with
+`PenetrationResidual = 0.1 mm`, `SupportBand = 0.05 mm`, `HeldChord = 0.03 mm` (the bottle's `δ` is then
+about `0.03 mm`, so `2δ` fits the residual) and `PointResolution = 0.1 mm`, since a displaced body's witness
+balls carry its `δ` (§10.4). `4 s`. Exit criterion: `Body.MassProperties` publishes for every body; the
+timeline reaches `4 s`; the rolling cylinder's trace carries a rotating band track on the tray's floor with
+its contact-point speed within `VelocityResidual` of zero (rolling without slip under friction `0.4`); the
+chamfered block and the bottle each rest on a `ContactBand` whose published `Gap.Bound` is at most the
+body's boundary displacement plus `SupportBand`; the cup rests on four lifted points; every body's final
+velocity is within `VelocityResidual` of zero.
 
 ## 3. N-body data model
 
@@ -1471,29 +1481,61 @@ that relation `Undecided`. §10.3's band is the honest replacement, with `δ` ch
 
 **Admission.** Two held meshes are admitted, each exact (§9's dyadic vertices) and standing for its true
 boundary within `δ`: a positive-bound faceted Boolean that the exact-source path of §9 does not cover,
-read off its payload with `δ` its mesh bound, and a cap-loop chamfer whose every face is planar, read off
-its own tessellation with `δ` that mesh's `Bound` (zero when nothing rounds, which admits it to §9 as an
-exact body). A held mesh moves through the exact float query pose, whose linear part is orthonormal only
-to rounding, so `δ` at a pose is the body's figure times `s = max(1, (1 + g)/2)`, `g` the largest
-absolute row sum of the basis's exact Gram matrix, an upper bound on the pose's stretch. Prisms with a
-positive section or level displacement and lofts are not admitted yet.
+read off its payload with `δ` its mesh bound, and any other solid payload without an exact contact
+family of its own (a cap-loop chamfer, a cup, a loft, a sweep, a general revolve; a source sphere or
+cylinder keeps its exact path), read off its own `VerifyAll` tessellation with `δ` that mesh's `Bound`,
+which is the two-sided displacement between the mesh and the true boundary (`tessellate.go`), zero when
+nothing rounds, which admits the body to §9 as an exact body. A body whose every face is planar is read at
+a chord of `1 mm`, which chords nothing; a body with a curved face is read at the request's `HeldChord`:
+
+```go
+HeldChord units.Value // nonnegative Length; zero admits no body with a curved face
+```
+
+`SweepRequest` reads it through `ContactRequest`; a negative, non-finite or non-`Length` value is an
+input error at both entry points. The chord is the caller's, as `SupportBand` is (§10.5): it fixes `δ`,
+and with it which residual admits the body, and a zero chord leaves a curved body `Undecided` rather than
+chording it at a width the caller never stated. The held snapshot is computed once per body and chord
+and cached on the body beside its §9.2 certificate; the cache changes no outcome. A held mesh moves
+through the exact float query pose, whose linear part is orthonormal only to rounding, so `δ` at a pose is
+the body's figure times `s = max(1, (1 + g)/2)`, `g` the largest absolute row sum of the basis's exact
+Gram matrix, an upper bound on the pose's stretch. A held vertex is a point of the held mesh and nothing
+more: `Bound` does not place it on the true surface, so every witness read off a held vertex carries its
+body's `δ` in its ball, below and in §10.5.
 
 **Relation.** With `δ` the two bodies' displacements summed at the query poses, every true boundary
 point lies within `δ` of the held pair's. `ContactPair` reads §9.1's exact held relation:
 
 | Held relation | Published |
 |---|---|
-| `Separated`, gap lower end above `δ` | `Separated`, the held gap with `δ` added to its bound |
-| `Touching`, or `Separated` with gap upper end at most `δ` | `ContactBand`, `Gap = [−2δ, 2δ]` |
-| `Overlapping` with a vertex deeper than `δ` inside the other body (`pair.PlanarDeepVertex`) | `Overlapping`, no manifold |
+| `Separated`, gap lower end above `δ`, and no support plane with a lifted set | `Separated`, the held gap with `δ` added to its bound |
+| `Separated`, gap upper end at most `b = max(SupportBand, δ)`, and some support plane of the zero-`δ` body has a nonempty lifted set within `b` | `ContactBand`, `Gap = [0 ± (g + δ)]`, `g` the held gap's upper float, with the lifted sets as the manifold (§10.5) |
+| `Touching`, or `Separated` with gap upper end at most `δ` and no lifted set | `ContactBand`, `Gap = [−2δ, 2δ]` |
+| `Overlapping` with a vertex deeper than `δ` inside the other body (`pair.PlanarDeepVertex`) | `Overlapping`, with the held penetration manifold charged, when one publishes |
 | `Overlapping` of two convex bodies whose §9.3 shallow patch has depth at most `δ` | `ContactBand`, `Gap = [−2δ, 2δ]` |
 | anything else | `Undecided` |
 
+The lifted band `b` reads `δ` from below: a resting displaced pair is placed with its held gap at most `δ`
+(§6.6), and a held vertex within `δ` of the plane is as near to touching as the body's own precision can
+tell, so the lifted set is never empty at a rest the band admits, however small `SupportBand` is. The
+width is a selection of which vertices are published, not a claim: each lifted point's claims are the
+exact ones of §10.5 charged with `δ`, so the published set is sound at any `b`. The true gap lies in
+`[g_lo − δ, g_hi + δ]`, inside `[−(g + δ), g + δ]`.
+
 A band from a held touch or shallow patch carries that held manifold charged afterwards (§9.4): each
-witness ball grows by its own body's `δ`, and every `Separation` is the band. The normal is published only
+witness ball grows by its own body's `δ`, and every `Separation` is the band. A lifted point of a displaced
+pair carries the same charges: its `M` witness ball grows by `M`'s `δ`, its `S` witness ball by `S`'s, and
+its `Separation` is the vertex's exact height widened by the summed `δ`, since the true `M` boundary lies
+within `M`'s `δ` of the held vertex and the true `S` face within `S`'s `δ` of the held plane. A held overlap
+deeper than `δ` is a true overlap, and its manifold is the held one §9.3's convex-convex path or §9.6's
+face-local path publishes, charged the same way, with §9.6's conditions read over `M`'s held vertices
+grown by `M`'s `δ`, so that a true `M` poking a second face within `δ` is refused as the held one would
+be; a landing bracket places a body of `δ` near `1e-15 mm` deeper than `δ` at every rounded event pose, so
+without that manifold no such body could land. The normal is published only
 when, at every point, it is the exact face normal of a body with zero `δ` read at a face that holds the
 point; a held face of a displaced body only approximates its true face's direction, so otherwise the
-manifold is withheld with `ContactNoNormalProof`, as it is for a band from a held gap.
+manifold is withheld with `ContactNoNormalProof`, as it is for a band from a held gap, and a support plane
+hosted by a displaced body publishes no lifted set.
 
 **Sweep.** §10.1's samples transfer as there, over the held vertices: a band widens by both pose
 deviations and drops its manifold, as a touch would; an overlap needs a vertex deeper than both
@@ -1505,9 +1547,16 @@ and `ContinueCertifiedTouch` takes §10.3's track over the held touch with three
 plane's owner must carry zero `δ`, since the track publishes its face normal; each contact foot's box grows
 by the touching body's `δ` before the face-containment check; and `SweepPersistentBand`'s `Depth` is the
 held depth widened by `2δ`, so a band pair never publishes an exact touch track. `ManifoldAt` grows both
-balls of each point by that `δ`. Replay of a clear span needs the proven lower gap to exceed the summed
-pose deviation plus `(s + 1)·δ` for each body, `s` the rounded pose's stretch: a true point lies within `δ`
-of its held body, and the rounded and ideal linear parts move that offset by at most `s` and one. A track
+balls of each point by that `δ`. Replay of a clear span needs the proven lower gap, which every clear
+sample and hull gap already states for the true bodies with `δ` subtracted (`intervalAxisGap`,
+`separatedIdealGap`), to exceed the summed pose deviation plus the TRANSFER CHARGE `‖R_r − R_i‖_F·δ` for
+each body, `R_r` the rounded pose's float basis and `R_i` the ideal rotation's interval enclosure at the
+fraction: a true point is `x + e` with `|e| <= δ` in the body's frame, its rounded image differs from its
+ideal one by the held deviation plus `(R_r − R_i)·e`, and `|(R_r − R_i)·e| <= ‖R_r − R_i‖_F·δ`. A path that
+only translates has `R_r = R_i` exactly and charges nothing; a rotating path charges a few ulps of `δ`.
+The triangle-inequality bound `(s + 1)·δ` would refuse every rest of a displaced body at a held gap near
+`δ`, so the charge is the tight form. A departure's lower gap reads held heights and needs no `δ`, since only a
+zero-`δ` pair departs (`ContinueSeparatingTouch` is refused to a displaced pair). A track
 replay keeps reading the held depth against the held vertices.
 
 **Dynamics.** `dynamics` treats `ContactBand` as a touching relation whose penetration bound is
@@ -1607,7 +1656,7 @@ residual. The field is not derived from the residual: a positive band changes wh
 pair publishes, and the caller chooses that. Every shipped fixture keeps a zero band and its published numbers.
 
 **The support set.** For a face plane of `S` with every `M` vertex on or in front of it, read with its exact
-unnormalized normal `n` through an `S` vertex `q`, the support set of convex `M` (§9.2) is every `M` vertex `p`
+unnormalized normal `n` through an `S` vertex `q`, the support set of `M`, convex or not, is every `M` vertex `p`
 whose exact height `h_p = n·(p − q)` lies within the band, `h_p² <= SupportBand²·(n·n)`, and whose exact foot on
 the plane lies strictly inside `S`'s face there (the `locate` test of §9.3's support row, holes included). A
 foot on the rim or outside is not published, so a face overhanging `S` publishes only the vertices over `S`.
@@ -1616,7 +1665,17 @@ comparison is exact, through squares, and admits a vertex only when its true hei
 band. `ContactPair` reads any such face plane, so a tray's floor and wall each publish theirs even though
 neither holds the whole tray behind it. The sweep reads only a support plane of §10.2, which also has every
 `S` vertex on or behind it: `M` lies in its vertices' hull, so the lowest vertex height then bounds the pair's
-separation below, whatever the support set holds.
+separation below, whatever the support set holds. Convexity of `M` is not needed anywhere in the set: every
+point of `M` is a convex combination of `M`'s vertices, so a point of `M` within the band over the plane has
+a vertex of `M` within the band, and each lifted point's claims (an exact vertex of `M`, its exact foot
+inside the host face, its exact height) hold for any `M`; `planarLiftedSet` reads every guest. The §2 cup
+is non-convex and rests on its lifted set. A non-convex guest at a `Touching` relation, which §9.3 withholds
+with `ContactNonConvex`, publishes a manifold when every zero-distance feature pair §9.1 recorded lies on one
+support plane of `S`, every `M` vertex on or in front of it and each contact's foot inside the host face:
+that plane's contact set (its `M` vertices at zero height) followed by its lifted set, with the plane's face
+normal, each contact vertex an exact touching vertex with an exact foot, which needs no convexity either.
+§9.4's clipped patch, which would add the crossing points of a face overhanging `S`, needs §9.3's
+certificate and is not attempted; a contact feature off that plane keeps `ContactNonConvex` with no manifold.
 
 **`ContactPair`.** With a positive `SupportBand` the exact planar path (§9.1, `contact_faceted_pair.go`)
 publishes:
@@ -1790,6 +1849,20 @@ Limits, stated rather than solved: a body that overhangs a wall's top rim while 
 fails the column test, because the rim's triangles lie in front of the floor's plane and project under
 the body; a box in a tray corner touches two faces and has no single plane (§10.2). Both stay
 `SweepUndecided`. PR 15 keeps every release at least `20 mm` inside the walls.
+
+The placed ruling of contact-geometry §4.5 (`rulingSupport`, `contact_analytic_manifold.go`) reads a
+face-local plane the same way: a signed-axis face plane of `S` with an `S` vertex strictly in front is
+admitted when the column test holds at `f = 0` over the coordinate box of the eight staged corners of the
+cylinder's identity box, whose hull holds the cylinder, and it records that box's lateral clearance `m`. A
+separated ruling publishes its gap with lower end `min(σ_lo, m)` and upper end `σ_hi` unchanged: the
+least height bounds the true gap from above, because the ruling's feet lie inside the face (so `S` has
+material under the cylinder at that height), while the clearance only bounds it from below (`m` is a
+lower bound on the in-plane distance to the material in front, not that distance). A touch or band on a
+face-local plane is published only when `m` exceeds the band's half-width, so the ruling is the pair's
+only contact within the band; a cylinder nearer than that to a wall is `Undecided`, since it has no ruling
+against the wall. The rolling track (§10.4) runs the column test over the corners' path box over
+`[0, f]`, less `S`'s translation, at every grid fraction of its band search, as the planar band track
+does; it publishes no lower gap, so `m(f)` is not read there.
 
 ### 10.7 Continuation inside the band
 
@@ -2676,12 +2749,137 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   float pose's true occupied set in 512-bit arithmetic. `dynamics/rolling_test.go` rolls the cylinder
   sixteen steps of `1/16 s` in a four-body world, with and without gravity, in both body orders.
 
+### PR 20a (Phase 3) — one-span straight sweep tessellation
+
+- Delivers `Body.Tessellate` of a one-span straight sweep (a `sweepPayload` with no spans, no arc and no
+  surface result) as the prism it reduced to (`sweepPayload.prism`), its wall roles read through the span
+  prefix `prefixSweepSpanZeroRole` minted (`side(0,i,j)`); `docs/sweep-design.md` D2 gains that exception.
+  The reduction builds through `evalPrismContext`, so the prism's mesh and proofs are the sweep's.
+- Files: `tessellate.go`, `docs/sweep-design.md`.
+- Test (root): `sweep_tessellate_test.go`: the §2 hexagon sweep's mesh has the vertex set, triangle count,
+  zero `Bound()`, `BoundaryVerified` and `VolumeVerified` of the same profile's `Extrude`, and every wall
+  triangle's source face is the sweep's live wall `Face` under its prefixed role; an arc sweep and a
+  two-span sweep stay refused with `ErrUnsupported`. Leg shown to fail: the role prefix deleted, the
+  sweep refuses with `ErrDegenerate` naming the missing role. `.github/test-shards.txt` lists it.
+- Depends on: nothing.
+
+### PR 20b (Phase 3) — `HeldChord` and the held-mesh admission of every solid payload
+
+- Delivers §10.4's admission: `ContactRequest.HeldChord` with `SupportBand`'s validation at both entry
+  points and in `validateStepConfig`; `planarSolidAtPose`'s default arm reads any solid payload without
+  an exact contact family off its `VerifyAll` tessellation (all-planar at `1 mm`, a curved face at
+  `HeldChord`, a zero chord refusing it), `δ` the mesh's `Bound`, the face map from the mesh's source
+  faces; the snapshot cached per body and chord beside the §9.2 certificate.
+- Files: `contact_faceted_pair.go`, `contact_pair.go`, `contact_sweep.go`, `dynamics/world.go`.
+- Test (root): `contact_band_test.go` gains `TestHeldMeshAdmitsEveryPayload`: the §2 bottle `5 mm` above a
+  source-box floor at `HeldChord = 0.03 mm` reads `Separated` with `5 mm` inside its gap interval and a
+  bound at least the `Bound()` of `Tessellate` at that chord and at most `0.05 mm`; at a zero chord it is
+  `Undecided`; the §2 cup, loft and sweep each `5 mm` up read `Separated` with `Gap` exactly `5 mm`, and the
+  cup on the floor at a translation pose reads `Touching`; the `2.1 mm` chamfered block `5 mm` up reads a
+  positive bound below `1e-12 mm`; a second call at the same chord returns a bit-identical report; the
+  request rejects a negative, non-finite or non-`Length` chord at `ContactPair`, `SweepPair` and `NewWorld`.
+  Leg shown to fail: the `δ` reading deleted, the bottle with its held bottom `δ/2` above the floor reads
+  an exact `Separated` whose gap interval excludes zero while the revolve's true lowest point, evaluated
+  in 512-bit arithmetic as `contact_analytic_manifold_test.go` evaluates a cylinder, lies below the held
+  bottom by more than that gap. `.github/test-shards.txt` lists it.
+- Depends on: PR 18; PR 20a for the scene's sweep only.
+
+### PR 20c (Phase 3) — the displaced pair's support set and penetration manifold
+
+- Delivers §10.4's relation rows for a lifted set and a deep overlap: `planarBandPair.classify` routes a
+  held `Separated` pair within `b = max(SupportBand, δ)` through §10.5's support band over the zero-`δ`
+  host's planes alone, charges `g + δ` on the gap, `δ` on each lifted point's `Separation` and each body's
+  `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
+  §9.6's face-local one, read over `M`'s held vertices grown by `M`'s `δ`, charged the same way.
+- Files: `contact_faceted_pair.go`, `contact_faceted_manifold.go`, `internal/pair/planar_face_penetration.go`.
+- Test (root): `contact_band_test.go` gains, each in both body orders over the §2 tray: the `2.1 mm`
+  chamfered block turned about `Y` by `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`,
+  `ContactBand` with `Gap.Bound` the lowest corner's height plus `δ`, four points whose `M` balls and
+  `Separation` bounds are each at least `δ` and whose `Normal` is `(0, 0, 1)`; the same block sunk
+  `2⁻²⁰ mm`, `Overlapping` with the sunk corners at `−2⁻²⁰ ± δ` and the lifted corners after them; the
+  bottle at `HeldChord = 0.03 mm` with its held bottom `0.8·δ` up at `SupportBand = 0.01 mm`, `ContactBand`
+  with every bottom vertex (`b = δ`); the bottle `0.8·δ` above PR 18's chorded knob, `ContactBand` with no
+  manifold and `ContactNoNormalProof`. Legs shown to fail: the gap charge deleted, the bottle on its side,
+  turned about its axis by half a chord step so a chord of its base is lowest at a held height `δ/10`,
+  publishes a `Gap` interval that excludes the true base's lowest point in 512-bit arithmetic, which hangs
+  a sagitta below the chord; the host gate deleted, the knob fixture publishes a normal read from the
+  chorded disc; the §9.6 margin deleted, a block whose held corner clears a wall by `δ/2` while sunk in
+  the floor publishes one face. The ball and `Separation` charges have no red fixture: every shipped
+  tessellation samples its vertices on the true surface within rounding, and the test file records that
+  the charges follow `Bound`'s contract rather than any producer's behavior, as PR 14b records its
+  `vertBound` term.
+- Test (`dynamics`): `dynamics/contact_band_test.go` gains the `2.1 mm` block dropped `8 mm` onto the §2 tray
+  at §2's Phase 3 residuals, landing through an `Overlapping` initial contact with a charged manifold and
+  resting within `32` steps on a four-point `ContactBand` whose `Gap.Bound` is at most `δ + SupportBand`,
+  both velocities exactly zero; and the bottle dropped the same at `HeldChord = 0.03 mm` and
+  `PointResolution = 0.1 mm`, landing, bouncing at restitution `0.3` and resting at a held gap at most `δ`;
+  at `PointResolution = 1e-6 mm` its landing step is `StepPairUndecided` (`ContactPointTooCoarse` withholds
+  the track's manifold). Legs shown to fail: the overlap manifold deleted, the block's landing is
+  `StepManifoldMissing`; `b` read as `SupportBand` alone at `SupportBand = 0.01 mm`, the bottle's rest is
+  `StepManifoldMissing` on a band with no lifted set.
+- Depends on: PRs 14d, 18, 20b.
+
+### PR 20d (Phase 3) — the support set of a non-convex guest
+
+- Delivers §10.5's hull rule: `planarLiftedSet` reads every guest, and a `Touching` non-convex guest whose
+  §9.1 contacts all lie on one support plane publishes that plane's contact set then its lifted set.
+- Files: `contact_faceted_manifold.go`, `internal/pair/planar_manifold.go`.
+- Test (root): `contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
+  floor at a translation pose, `Touching` with its four bottom corners at their exact coordinates,
+  `Normal` `(0, 0, 1)` and the cup's live vertices as features; the cup turned about `Y` by
+  `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`, `ContactBand` with four points at their
+  exact heights; the cup with two corners past the floor's rim publishing the two over it; the cup
+  standing on the floor with its rim against a wall, `ContactNonConvex` with no manifold (a contact off
+  the floor's plane). Leg shown to fail: the convexity gate restored, the first three fixtures publish no
+  manifold.
+- Depends on: PR 20b.
+
+### PR 20e (Phase 3) — the face-local ruling plane
+
+- Delivers §10.6 for the placed ruling and the rolling track: `rulingSupport` admits a face-local plane
+  under the column test at `f = 0` over the cylinder's staged corner box and records `m`;
+  `classifyPlacedRuling` publishes a separated gap with lower end `min(σ_lo, m)` and a touch or band only
+  when `m` exceeds its half-width; the rolling track's band search runs the column test over the corners'
+  path box less `S`'s translation.
+- Files: `contact_analytic_manifold.go`, `contact_sweep_rolling.go`.
+- Test (root): `contact_analytic_manifold_test.go` gains, over the §2 tray: the `Ø20 × 30 mm` cylinder on
+  its side on the floor at a signed-axis pose, `Touching` with the ruling's two ends and `Normal`
+  `(0, 0, 1)`; turned `2⁻²⁰ rad` about `Z`, the band the plain-floor fixture publishes; `1 mm` above the
+  floor with an end `0.5 mm` from a wall, `Separated` with lower end at most `0.5 mm`, upper end `1 mm`
+  and the 512-bit true gap inside; an end over a wall's rim, `Undecided`; within `2⁻²⁰ mm` of the floor
+  and `2⁻³⁰ mm` from a wall, `Undecided`. Legs shown to fail: the upper end clamped to `m`, the near-wall
+  fixture's true gap lies above the published interval; the column test deleted, the rim fixture reads a
+  touch. `contact_sweep_rolling_test.go` gains one turn on the tray's floor publishing the plain floor's
+  depths, and a roll toward a wall `1 mm` away whose track ends at the last grid fraction before the
+  corners' path box reaches the wall's projection; leg shown to fail: the column test deleted, the track
+  reaches the duration through the wall. `dynamics/rolling_test.go` gains sixteen steps on the tray under
+  gravity in both orders with the contact-point speed within `VelocityResidual` of zero.
+- Depends on: PRs 14c, 20.
+
+### PR 20f (Phase 3) — the transfer charge
+
+- Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `replayDeviation`.
+- Files: `contact_sweep_rotation.go`, `contact_sweep_replay.go`.
+- Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
+  knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
+  fraction, where the `(s + 1)·δ` form refuses each (recorded in the test); on a rotating path the charge
+  at every sampled fraction equals the Frobenius norm of the rounded basis less the ideal enclosure's
+  nearest entries times `δ`, computed independently in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to
+  fail: the charge zeroed, the rotating fixture's charge reads zero.
+- Depends on: PR 18.
+
+PRs 20a, 20e and 20f touch disjoint files and may land in any order; PR 20b follows 20a only for the
+scene's sweep; PRs 20c and 20d follow 20b.
+
 ### PR 21 (Phase 3) — `parts-bin`
 
 - Delivers the Phase 3 exit scene of §2.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
-- Test: the Phase 3 exit criteria.
-- Depends on: PRs 15, 17, 18, 20.
+- Test: the Phase 3 exit criteria. The exploration run (`dynamics/partsbin_explore_test.go`, kept out of
+  the tree) of 48 steps with the six bodies took `63 s` with every held snapshot rebuilt at each call; the
+  scene test records its cost after PR 20b's cache, and a scene that exceeds the `dynamics` package's race
+  budget shortens by a change to §2.
+- Depends on: PRs 15, 17, 18, 20, 20a–20f.
 
 ## 14. Test and fixture strategy
 
