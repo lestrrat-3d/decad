@@ -11,18 +11,11 @@ in one or two sentences and names where the detail lives, within 300
 characters. NEVER grow a row to record an invariant, a derivation, a sign
 convention or a refusal — that belongs in the owning design doc or the
 function's own doc comment, and a row that restates it drifts from the code.
-`claude_md_layout_test.go` enforces every mechanical rule above, over this
-file and `CLAUDE.md` both, and, because a guard measures only the text it
-reads, it classifies the WHOLE of each file rather than the Layout section
-alone: a line it reads as a heading or as part of a table, without being the
-one spelling declared for it, fails the test rather than being skipped, since
-a skipped line escapes the cap and the path check both. So headings here are
-ATX (`## Heading`), this file carries exactly one `## Layout` heading,
-`CLAUDE.md` carries none, and a table outside that section exists only if the
-guard declares it — adding one to either file means declaring it there first.
-That guard's `parseAgentDoc` doc comment owns the complete rule list, and the
-file-level comment above it owns the two things the rules deliberately leave
-to the byte budget.
+`claude_md_layout_test.go` enforces these rules over every line of this file
+and `CLAUDE.md`, refusing any line it cannot classify. Its `parseAgentDoc`
+doc comment owns the complete rule list — heading spellings, the one
+`## Layout` heading, declared tables — and its file-level comment owns what
+the rules leave to the byte budget.
 
 ## Layout
 
@@ -50,7 +43,7 @@ to the byte budget.
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
-| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, the chain travel bound. |
+| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, joint contacts, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |

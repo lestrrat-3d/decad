@@ -364,6 +364,9 @@ type motionRun struct {
 	// pairs is, per mover, its row of pairs in pair order: every static body
 	// in order, then every body of every later group in order.
 	pairs [][]motionPair
+	// declared names the pairs a linkage declares as joint contacts, each in
+	// both orders; nil for VerifyMotion.
+	declared map[[2]*Body]struct{}
 
 	// VerifyMotion's own motion. spec is the validated Motion; stretch and
 	// stretchEnd are motionbound.PathAreaUpper's stretch base (§5.1) for a
@@ -427,6 +430,12 @@ type motionPair struct {
 	// sheet: an operand is a sheet; the pair reads DiagUnsupportedPairSheet
 	// at every pose and leaves every interval undecided.
 	sheet bool
+	// declared: a linkage's declared joint contact
+	// (docs/linkage-check-design.md §5.4). It is evaluated at every pose and
+	// publishes a transferred collision and a measured gap row, but no
+	// undecided, touching or tolerance finding, and it enters no interval
+	// certificate and no whole-path reading.
+	declared bool
 }
 
 func (p motionPair) evaluated() bool { return !p.excluded && !p.invalid && !p.sheet }
@@ -550,14 +559,16 @@ func (r *motionRun) formPairs(swept []motionSweptBox) {
 	for i, mv := range r.movers {
 		row := make([]motionPair, 0, len(r.statics))
 		for _, st := range r.statics {
-			row = append(row, staticPair(mv, st, swept[i]))
+			pair := staticPair(mv, st, swept[i])
+			pair.declared = r.isDeclared(mv.body, st.body)
+			row = append(row, pair)
 		}
 		for o := i + 1; o < len(r.movers); o++ {
 			other := r.movers[o]
 			if other.group == mv.group {
 				continue
 			}
-			pair := motionPair{other: o}
+			pair := motionPair{other: o, declared: r.isDeclared(mv.body, other.body)}
 			switch {
 			case mv.validity.Outcome != ValidityValid || other.validity.Outcome != ValidityValid:
 				pair.invalid = true
@@ -568,6 +579,12 @@ func (r *motionRun) formPairs(swept []motionSweptBox) {
 		}
 		r.pairs[i] = row
 	}
+}
+
+// isDeclared reports whether a and b form a declared joint contact.
+func (r *motionRun) isDeclared(a, b *Body) bool {
+	_, ok := r.declared[[2]*Body{a, b}]
+	return ok
 }
 
 // staticPair settles a (mover, static) pair: invalid when an operand is not
@@ -813,7 +830,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced)
 	mv := r.movers[i]
 	need := false
 	for k, pair := range r.pairs[i] {
-		if pair.sheet {
+		if pair.sheet && !pair.declared {
 			diag := withAt(pairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
 				"a sheet operand has no clearance the motion check can certify, so this pair is undecided at every pose"), mp.result.At)
 			mp.result.Diagnostics = append(mp.result.Diagnostics, diag)
@@ -908,9 +925,12 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.recordGap(mp, i, k, res, a.eta, etaB)
 		return nil
 	}
+	declared := r.pairs[i][k].declared
 	if boxProven {
-		r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedClearance,
-			"the pair is proven disjoint at this pose but its gap is unmeasured"), at))
+		if !declared {
+			r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedClearance,
+				"the pair is proven disjoint at this pose but its gap is unmeasured"), at))
+		}
 		return nil
 	}
 	volume, outcome, err := measuredInterference(r.ctx, a.body, target, res, pairMeshes{})
@@ -918,12 +938,18 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		return err
 	}
 	if outcome != interferenceMeasured && res.verdict != pairOverlapping {
+		if declared {
+			return nil
+		}
 		diag := undecidedPairDiag(a.body, target, res.verdict, outcome)
 		diag.Pair = &DiagnosticPair{A: mover, B: partner}
 		r.poseDiag(mp, withAt(diag, at))
 		return nil
 	}
 	published, ok := transferredOverlap(volume, outcome == interferenceMeasured, allowance)
+	if !ok && declared {
+		return nil
+	}
 	if !ok {
 		msg := "the pair is proven to overlap at the evaluated float pose, but the overlap volume is unmeasured, so it cannot be carried to the ideal pose and no collision is proven at this parameter"
 		if outcome == interferenceMeasured {
@@ -1014,6 +1040,10 @@ func (r *motionRun) poseDiag(mp *motionPose, diag Diagnostic) {
 func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, etaB float64) {
 	mover, partner := r.movers[i].body, r.partner(i, k)
 	at := mp.result.At
+	if r.pairs[i][k].declared {
+		r.recordDeclaredGap(mp, mover, partner, res, etaA, etaB)
+		return
+	}
 	if proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
 		r.poseDiag(mp, withAt(pairDiagNone(mover, partner, DiagUndecidedClearance,
 			"the pair is proven disjoint at this pose, but the pose's departure from the ideal motion is unbounded for this payload, so its gap is unmeasured"), at))
@@ -1057,6 +1087,20 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 	mp.findings = append(mp.findings, withAt(beyond, at))
 }
 
+// recordDeclaredGap publishes a declared joint contact's measured gap as a
+// Clearance row and nothing else (docs/linkage-check-design.md §5.4): a
+// touching pair or an unbounded η publishes nothing, no finding is raised,
+// and the gap feeds neither an interval certificate nor the whole-path
+// reading.
+func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res pairResult, etaA, etaB float64) {
+	if res.verdict != pairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
+		return
+	}
+	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, etaA, etaB)
+	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
+	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
+}
+
 // intervalVerdict decides one interval between adjacent poses a and b
 // (docs/motion-check-design.md §5.2). A proven collision at either end makes
 // it IntervalColliding. Otherwise it is IntervalClear only when EVERY pair
@@ -1081,6 +1125,9 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 	var lowest *big.Rat
 	for i := range r.movers {
 		for k, pair := range r.pairs[i] {
+			if pair.declared {
+				continue
+			}
 			if pair.excluded {
 				lowest = minRat(lowest, proofarith.FloatRat(pair.lower))
 				continue

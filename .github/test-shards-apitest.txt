@@ -1311,3 +1311,8 @@
 4	0.01	TestLinkagePoseAt
 5	0.42	TestVerifyLinkageNonMutationAndDeterminism
 5	0.08	TestVerifyLinkageSweptBoxCoversAncestorTravel
+2	2.26	TestVerifyLinkageDeclaredJointContact
+3	0.21	TestVerifyLinkageCrane
+4	0.51	TestVerifyLinkageNearMissBetweenSamples
+5	0.01	TestLinkageJointLimits
+1	0.01	TestLinkageDeclareJointContactRefusals

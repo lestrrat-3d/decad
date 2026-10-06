@@ -102,8 +102,10 @@ does not already show.
 A `Revolute` or `Prismatic` call refuses, in this order: a nil parent or a parent of another linkage
 (`ErrDegenerate`); an empty `bodies`, a nil body, or a body already listed in a link of this linkage
 (`ErrDegenerate`); a non-finite `center`, `axis` or `dir` component (`ErrNotFinite`); a zero `axis` or
-`dir` (`ErrDegenerate`); limits of the wrong `Kind` (`ErrUnitKind`), non-finite (`ErrNotFinite`) or with
-`Min >= Max` (`ErrDegenerate`). Liveness and document membership are not checked here; `VerifyLinkage`
+`dir` (`ErrDegenerate`); a nil option (`ErrDegenerate`), limits of the wrong `Kind` (`ErrUnitKind`),
+non-finite (`ErrNotFinite`) or with `Min >= Max` (`ErrDegenerate`). Limits and joint values compare as the
+exact quantities they denote (`motionbound.MotionParam`): a degree limit against a radian sweep end is
+signed through `π`'s enclosure, and a difference that enclosure cannot sign is refused. Liveness and document membership are not checked here; `VerifyLinkage`
 checks them against the document it is called on (§3). Limits that exclude `0` are legal: the zero pose
 then lies outside the joint's working range, and only a drive that visits it is refused (§2.4).
 
@@ -128,8 +130,9 @@ touch at the zero pose and were not declared are evaluated like any other pair, 
 `Interfering` as the kernel finds them. A declared pair is never exempt from the overlap proof: a pin whose
 head reaches the bore's flange at some pose is a `Collision` there.
 
-`DeclareJointContact` refuses two bodies of one link, two bodies that both belong to no link, a pair
-declared twice in either order, and `a == b`, each with `ErrDegenerate`. Liveness and document membership
+`DeclareJointContact` refuses a nil body, two bodies of one link, two bodies that both belong to no link,
+a pair declared twice in either order, and `a == b`, each with `ErrDegenerate`; `Linkage.JointContacts`
+returns the declared pairs in declaration order. Liveness and document membership
 are checked at `VerifyLinkage`.
 
 ### 2.3 The drive
@@ -191,7 +194,8 @@ built, so a renderer above and the verifier below evaluate the same transform fr
 `PoseAt` refuses a drive naming a link of another linkage or a link twice (`ErrDegenerate`), a sweep whose
 `From` or `To` has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite (`ErrNotFinite`), a
 value outside declared limits — `q(s)` is monotone in `s`, so `From` and `To` inside the limits put every
-`q(s)` inside them, and either endpoint outside is `ErrDegenerate` with a message naming the link — and an
+`q(s)` inside them, and either endpoint outside, or an unlisted joint whose limits exclude the `0` it
+holds, is `ErrDegenerate` with a message naming the link — and an
 `at` that is not a finite `Dimensionless` value (`ErrUnitKind`, `ErrNotFinite`). An `at` outside `[0, 1]`
 is legal for `PoseAt`, which takes no range, and is never evaluated by `VerifyLinkage`.
 
@@ -382,9 +386,12 @@ A declared pair (§2.2) runs the pair procedure at every evaluated pose like any
 outcome is published asymmetrically:
 
 - a proven overlap that transfers through `η` is a `LinkCollision`, an `Interference` row and a
-  `DiagMotionCollision`, and drives §6's onset bisection — a jammed or over-rotated joint is found;
-- a measured gap publishes its `Clearance` row and nothing else;
-- a touching, undecided or unsupported outcome publishes nothing — no diagnostic and no `Suspect`.
+  `DiagMotionCollision` (with the volume reading's own tolerance finding when its bound fails the gate),
+  and drives §6's onset bisection — a jammed or over-rotated joint is found;
+- a measured gap publishes its `Clearance` row and nothing else: no margin finding, no tolerance finding,
+  and no part in the whole-drive reading or the `Assessment`;
+- a touching, undecided, unsupported or sheet outcome, and an overlap that does not transfer, publishes
+  nothing — no row, no diagnostic and no `Suspect`.
 
 A declared pair contributes to no interval certificate. `IntervalClear` therefore claims, for a report
 with declared pairs: every undeclared pair has a proven positive gap at every parameter of the interval,
@@ -512,7 +519,25 @@ turn sweeps has `τ ≈ 471·Δs` mm, so a `10` mm gap certifies at `Δs ≲ 1/3
 about `33` poses plus the reading refinement's `log₂(1/Resolution)` extra poses around the minimum. For a
 three-joint arm of one body per link, two fixtures and two declared elbow contacts, that is `9` pairs per
 pose — `6` against the fixtures, one undeclared link-link pair, two declared — about `400` pair evaluations
-for a clear sweep, and `10`–`20` onset poses per contact found. §12 PR 2 records the measured figure.
+for a clear sweep, and `10`–`20` onset poses per contact found.
+
+Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
+the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
+publish nothing, and five pairs are evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict
+settles in `12` poses, about `35` ms; at the default floor `53` poses, about `160` ms, both every interval
+`IntervalClear`.
+
+**The whole-drive reading at the default floor.** The verdict is cheap; the reading is not. A certified
+interval's lower bound sits up to `τ/2` below the true gap, so the reading's half-width near the minimum
+is about `τ_rate·Δs/4`, and the gate (verification §2) admits `rel·gap`. A chain's `τ_rate` is the sum of
+its `ρ_{ik}·|To_i − From_i|` — hundreds of millimetres per unit `s` for an arm of a few links — so at
+`rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, well under the default floor `1/1024`. A clear
+drive at the defaults therefore reads `Suspect` with a `DiagMeasurementBeyondTolerance` on the reading
+(the three-joint arm above), and a finer `WithResolution` buys the reading at logarithmic cost around an
+isolated minimum (the same arm at `1/16384`: `254` poses, `Sound`). A minimum that holds along the drive —
+a pair whose gap does not change, as scene 1's arms at `2` mm — is the exception: every interval ties for
+the smallest bound, step 6 refines all of them, and the cost is linear in `1/Δs` (scene 1 without the wall:
+`1025` poses and `Suspect` at the default floor, `16385` poses and `Sound` at `1/16384`).
 
 ## 11. Required tests
 
@@ -563,10 +588,18 @@ the fence's face `x = 10`, which is `38` mm behind the elbow, when `cos(φ + ata
 `φ* = acos(−19/25) − atan(7/24) ≈ 123.20°`, `s* = φ*/180° ≈ 0.6844`, at `y = 50·sin(φ* + atan(7/24))
 ≈ 32.5`, inside the fence. Every other point of `B`'s leading side reaches `x = 10` later (its radius is
 smaller and its polar angle larger), and the trailing corner `(96, −14)` reaches it at `≈ 155.7°`.
-Assert: `Interfering`, the first `LinkCollision` on `(B, fence)` with `At` strictly above `s*` and within
-`2/256` of it at `WithResolution(Scalar(1.0/256))`; `JointContacts` lists `(A, B)`; no diagnostic names
-`(A, B)`; the same scene without the declaration reads `Suspect` with every interval touching `(A, B)`
-`IntervalUndecided`. The leg that a declared pair is still proven for overlap is pinned separately: a
+Assert: `Interfering`, the first `LinkCollision` on `(fence, B)` — the fence's link comes first in pair
+order — with `At` strictly above `s*` and within `2/256` of it at `WithResolution(Scalar(1.0/256))`: the
+grid point `176/256`, where `B`'s leading corner pokes depth `d` past `x = 10` and the overlap is the
+triangular prism `9.5·d²/(2·(−cos φ)·sin φ)` mm³, asserted within `1e-6`; some interval `IntervalClear`;
+`JointContacts` lists `(A, B)`; no diagnostic names `(A, B)`. The same scene without the declaration holds
+no interval clear and raises a finding naming `(A, B)`. A declared pair's other outcomes are pinned on
+their own fixtures: scene 1's arms declared publish their `2` mm gap row at every pose and nothing else, so
+a `3` mm `WithMinClearance` raises no finding and reads `AssessmentMet`; a block resting on a slab, and a
+block sunk `1` mm into one across a shared face plane, each sliding along that plane, publish no row and
+no finding; a block sliding inside a declared sheet raises no `DiagUnsupportedPairSheet`, which the
+undeclared pair raises at every pose. The leg that a declared pair is still proven for overlap is pinned
+separately: a
 `10` mm cube on a prismatic joint sliding `0 → 5` mm along `X`, sunk `1` mm into a static slab
 `x ∈ [−20, 40], y ∈ [−20, 20], z ∈ [−10, 0]` (cube `z ∈ [−1, 9]`, sharing no plane with the slab), the
 pair declared: assert a `LinkCollision` on it at `s = 0` and `s = 1` with `Volume` within `1e-6` of `100`
@@ -578,13 +611,16 @@ above the mast, on a prismatic joint along `+X`, extending `0 → 30` mm; a wall
 y ∈ [60, 80], z ∈ [30, 100]`. The boom's tip corners sit at `(60 + 30s, ±5)` in the boom's own frame,
 turned by `θ = 90°·s`, so the `+5` corner's height is `y = (60 + 30s)·sin θ + 5·cos θ`, increasing in
 `s`, and it reaches the wall's face `y = 60` at `s* ≈ 0.535`, the one root of that equation in `[0, 1]`,
-which the test brackets to `1e-9` by bisection of the closed form; the `−5` corner follows later. Assert
-`Interfering` with the first collision on `(boom, wall)` within `2/256` above `s*`, and that the
-`(mast, boom)` pair — relative motion joint 2 alone, gaps `2 + 2 > 30·Δs` — reads `Clearance` rows within
-`1e-6` of `2` mm. The prismatic term is pinned with the mast unlisted: a `2 × 2 × 2` mm pin `4` mm ahead
-of the boom's tip, `14` mm behind it at the end, with the endpoints alone (`WithResolution(Scalar(1))`):
-no `Collision`, `IntervalUndecided`, `Suspect` — exactly motion §9 test 5's pin, which goes red when the
-`|Δq|` term of a prismatic joint is dropped.
+which the test brackets to `1e-12` by bisection of the closed form (`s* ≈ 0.535155`); the `−5` corner
+follows later. Assert `Interfering` with the first collision on `(boom, wall)` within `2/256` above `s*` —
+the grid point `137/256` — with the overlap the triangular prism `10·d²/(2·sin θ·cos θ)` mm³ for the
+corner's depth `d` past `y = 60`, within `1e-6`. The mast's top edge `(5, z = 38)` and the boom's lower
+edge `(10 + 30s, z = 40)` run parallel, so the `(mast, boom)` pair's rows read `√((5 + 30s)² + 2²)` within
+`1e-6`. The prismatic term is pinned with the mast unlisted and a `10` mm block `x ∈ [10, 20]` in the
+boom's place (the `50` mm boom covers any pin it passes at the end): a `2 × 2 × 2` mm pin at
+`x ∈ [24, 26]`, `4` mm ahead of the block at rest and `14` mm behind it at the end, with the endpoints
+alone (`WithResolution(Scalar(1))`): no `Collision`, `IntervalUndecided`, `Suspect` — exactly motion §9
+test 5's pin, which goes red when the `|Δq|` term of a prismatic joint is dropped.
 
 **Scene 4 — a near miss between samples.** Motion §9 test 3's blade (`x ∈ [0, 50], y ∈ [−0.5, 0.5]`,
 `z ∈ [0, 10]`) and pin (a `0.8` mm cube at radius `49`, polar angle `α = 90·31/64°`, `z ∈ [4.6, 5.4]`),
@@ -607,6 +643,10 @@ in two chains:
   the width-`1/32` interval around `31/64` has travel `≈ 7.4` mm against a gap sum of `5.18`, undecided, while
   `ρ = 100` gives `4.9` and certifies it falsely. Assert the undecided outcome, and `Interfering` at
   `WithResolution(Scalar(1.0/900))` with the first `Collision.At` within `[31/64 − 0.41/90, 31/64 + 0.41/90]`.
+  This is the fixture that goes red when the revolute ball's radius is dropped from `ρ_{ik}`.
+
+Measured: 4a's first collision lands at `s = 0.4707`, 4b's at `0.4805`, against `31/64 = 0.4844`, each
+inside its window.
 
 **Agreement with `VerifyMotion`.** A one-link linkage on a revolute joint and the same body under the
 equivalent `Revolute`: equal `Status`, equal interval outcomes in order, each `Collision.At` equal under
@@ -636,7 +676,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | PR | lands | still `Suspect` after it |
 |---|---|---|
 | 1 (`linkage.go`, `linkage_verify.go`, `linkage_bound.go`; `motion_verify.go` generalised to several moving groups with per-group poses, ideal frames and group-group pairs, `VerifyMotion` bit-identical as the one-group case, every motion test unchanged) | §2's vocabulary, `PoseAt`, §5's bounds and certificate, `VerifyLinkage` with every option, both bisection steps, swept-box exclusion against statics, scene 1 and its example, the agreement tests, the errors, non-mutation and cancellation tests | every pair that touches at a joint: declarations are PR 2 |
-| 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | — |
+| 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | a clear drive's whole-drive reading at the default floor (§10) |
 | 3 | §6 step 2's held-link promotion to static and constant placement; link-link swept-box exclusion; the cylinder enclosure for parallel axes where measured cost justifies it | — |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
