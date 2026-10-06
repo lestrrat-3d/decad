@@ -20,7 +20,12 @@ import (
 // internal/proof's RatInterval provides included (oldAddInterval and its
 // siblings at the end of the file), is big.Rat's own Add, Sub and Mul, with
 // its reduction to lowest terms after each one, rather than the
-// common-denominator AddRat, SubRat and MulRat the current forms use.
+// common-denominator AddRat, SubRat and MulRat the current readings use or
+// the shared-denominator SInterval arithmetic (internal/proof's
+// shared_interval.go) the current certificate runs in: oldCertifyIsland,
+// oldCertifyFriction and the helpers they call (oldRaise, the old square
+// root and Euclidean bounds, oldInertiaApply, oldBodyWitnessTorque,
+// oldRestitutionTarget) hold every value as a reduced big.Rat.
 // exact_mass_internal_test.go feeds them and the current forms
 // the same inputs and requires exactly equal rationals and decisions. A
 // deliberate change to what the certificate or a reading computes changes
@@ -172,10 +177,10 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 	rho := new(big.Rat)
 	for _, p := range points {
 		if bodies[p.a].dynamic {
-			raise(&rho, oldEuclideanUpper(p.rA))
+			oldRaise(&rho, oldEuclideanUpper(p.rA))
 		}
 		if bodies[p.b].dynamic {
-			raise(&rho, oldEuclideanUpper(p.rB))
+			oldRaise(&rho, oldEuclideanUpper(p.rB))
 		}
 	}
 	// Each point's impulse on B, λ·n + λt; A receives its negation.
@@ -190,7 +195,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		if !body.dynamic {
 			continue
 		}
-		raise(&cert.spin, oldEuclideanUpper(pointIVec(body.wPost)))
+		oldRaise(&cert.spin, oldEuclideanUpper(pointIVec(body.wPost)))
 		var dv, dw [3]*big.Rat
 		for axis := range 3 {
 			dv[axis] = new(big.Rat).Sub(body.vPost[axis], body.v[axis])
@@ -213,7 +218,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		for axis := range 3 {
 			momentumChange[axis] = oldMulInterval(body.mass, proof.PointInterval(dv[axis]))
 			residual := magnitude(oldSubInterval(momentumChange[axis], force[axis]))
-			raise(&cert.linear, residual)
+			oldRaise(&cert.linear, residual)
 			if residual.Cmp(linearLimit) > 0 {
 				cert.fail(gateLinearLaw, residual, linearLimit)
 			}
@@ -224,14 +229,14 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		// the residual alone.
 		spinChange := oldInertiaApply(body, dw)
 		witnessTorque := oldBodyWitnessTorque(slot, points, impulses)
-		raise(&cert.witnessTorque, witnessTorque)
-		raise(&cert.witnessSpin, new(big.Rat).Quo(witnessTorque, body.inertiaLower))
+		oldRaise(&cert.witnessTorque, witnessTorque)
+		oldRaise(&cert.witnessSpin, new(big.Rat).Quo(witnessTorque, body.inertiaLower))
 		angularBodyLimit := new(big.Rat).Add(new(big.Rat).Mul(impulseLimit, rho),
 			new(big.Rat).Mul(body.inertiaLower, angularLimit))
 		angularBodyLimit.Add(angularBodyLimit, witnessTorque)
 		for axis := range 3 {
 			residual := magnitude(oldSubInterval(spinChange[axis], torque[axis]))
-			raise(&cert.angular, residual)
+			oldRaise(&cert.angular, residual)
 			if residual.Cmp(angularBodyLimit) > 0 {
 				cert.fail(gateAngularLaw, residual, angularBodyLimit)
 			}
@@ -288,7 +293,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		}
 		// Restitution target from the enclosed pre-solve normal speed.
 		c := oldPreNormalSpeed(p, bodies)
-		e, ok := restitutionTarget(c, p.restitution, impactSpeed)
+		e, ok := oldRestitutionTarget(c, p.restitution, impactSpeed)
 		if !ok {
 			cert.fail(gateRestitutionTarget, magnitude(c), impactSpeed)
 			continue
@@ -308,12 +313,12 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 		}
 		if p.lambda.Sign() > 0 {
 			residual := magnitude(q)
-			raise(&cert.normal, residual)
+			oldRaise(&cert.normal, residual)
 			if residual.Cmp(velocityLimit) > 0 {
 				cert.fail(gateComplementarity, residual, velocityLimit)
 			}
 		} else if q.Lo.Sign() < 0 {
-			raise(&cert.normal, new(big.Rat).Neg(q.Lo))
+			oldRaise(&cert.normal, new(big.Rat).Neg(q.Lo))
 		}
 		oldCertifyFriction(&cert, p, bodies, impulseLimit, velocityLimit)
 		// Kinematic work: a driver on side A delivers J·V to the island, one
@@ -364,19 +369,24 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 	if energyUpper.Cmp(energyAllowance) > 0 {
 		cert.fail(gateEnergy, energyUpper, energyAllowance)
 	}
+	oldCheckMomentum(&cert, linearMomentum, angularMomentum, linearMomentumLimit, angularMomentumLimit)
+	return cert
+}
+
+func oldCheckMomentum(cert *islandCertificate, linearMomentum, angularMomentum ivec,
+	linearMomentumLimit, angularMomentumLimit *big.Rat) {
 	for axis := range 3 {
 		residual := magnitude(linearMomentum[axis])
-		raise(&cert.momentum, residual)
+		oldRaise(&cert.momentum, residual)
 		if residual.Cmp(linearMomentumLimit) > 0 {
 			cert.fail(gateLinearMomentum, residual, linearMomentumLimit)
 		}
 		residual = magnitude(angularMomentum[axis])
-		raise(&cert.angularMomentum, residual)
+		oldRaise(&cert.angularMomentum, residual)
 		if residual.Cmp(angularMomentumLimit) > 0 {
 			cert.fail(gateAngularMomentum, residual, angularMomentumLimit)
 		}
 	}
-	return cert
 }
 
 func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
@@ -387,9 +397,9 @@ func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
 	}
 	coneLower := new(big.Rat).Mul(p.mu, p.lambda)
 	allowed := new(big.Rat).Add(coneLower, impulseLimit)
-	norm := ratSqrtUpper(square)
+	norm := oldRatSqrtUpper(square)
 	if excess := new(big.Rat).Sub(norm, coneLower); excess.Sign() > 0 {
-		raise(&cert.cone, excess)
+		oldRaise(&cert.cone, excess)
 	}
 	if allowed.Sign() < 0 || square.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
 		cert.fail(gateCone, new(big.Rat).Sub(norm, coneLower), impulseLimit)
@@ -404,7 +414,7 @@ func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
 	speedUpper := oldEuclideanUpper(slide)
 	threshold := new(big.Rat).Sub(coneLower, impulseLimit)
 	if threshold.Sign() > 0 && square.Cmp(new(big.Rat).Mul(threshold, threshold)) < 0 {
-		raise(&cert.tangent, speedUpper)
+		oldRaise(&cert.tangent, speedUpper)
 		if speedUpper.Cmp(velocityLimit) > 0 {
 			cert.fail(gateStick, speedUpper, velocityLimit)
 		}
@@ -412,8 +422,8 @@ func oldCertifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
 	}
 	opposed := oldDotInterval3(pointIVec(p.tangent), slide).Hi
 	opposed = new(big.Rat).Add(opposed, new(big.Rat).Mul(norm, speedUpper))
-	limit := new(big.Rat).Mul(impulseLimit, euclideanLower(slide))
-	limit.Add(limit, new(big.Rat).Mul(velocityLimit, ratSqrtLower(square)))
+	limit := new(big.Rat).Mul(impulseLimit, oldEuclideanLower(slide))
+	limit.Add(limit, new(big.Rat).Mul(velocityLimit, oldRatSqrtLower(square)))
 	if opposed.Cmp(limit) > 0 {
 		cert.fail(gateSlip, opposed, limit)
 	}
@@ -918,4 +928,70 @@ func oldNewCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody
 		p.rB = oldSubIVec(onB, bodies[b].center)
 	}
 	return p, true
+}
+
+// oldRaise keeps the larger of a held maximum and a new attained value.
+func oldRaise(held **big.Rat, value *big.Rat) {
+	if *held == nil || value.Cmp(*held) > 0 {
+		*held = new(big.Rat).Set(value)
+	}
+}
+
+func oldRestitutionTarget(c proof.RatInterval, e, impactSpeed *big.Rat) (*big.Rat, bool) {
+	threshold := new(big.Rat).Neg(impactSpeed)
+	switch {
+	case e.Sign() == 0 || c.Lo.Cmp(threshold) >= 0:
+		return new(big.Rat), true
+	case c.Hi.Cmp(threshold) < 0:
+		return e, true
+	default:
+		return nil, false
+	}
+}
+
+func oldRatSqrtUpper(square *big.Rat) *big.Rat {
+	if square.Sign() <= 0 {
+		return new(big.Rat)
+	}
+	approx, _ := square.Float64()
+	root := math.Sqrt(approx)
+	switch {
+	case !finite(root):
+		return new(big.Rat).Add(square, big.NewRat(1, 1))
+	case approx == 0:
+		return oldRatFloat(0x1p-537)
+	}
+	for new(big.Rat).Mul(oldRatFloat(root), oldRatFloat(root)).Cmp(square) < 0 {
+		root = math.Nextafter(root, math.Inf(1))
+	}
+	return oldRatFloat(root)
+}
+
+func oldRatSqrtLower(square *big.Rat) *big.Rat {
+	if square.Sign() <= 0 {
+		return new(big.Rat)
+	}
+	approx, _ := square.Float64()
+	root := math.Sqrt(approx)
+	for root > 0 && new(big.Rat).Mul(oldRatFloat(root), oldRatFloat(root)).Cmp(square) > 0 {
+		root = math.Nextafter(root, 0)
+	}
+	return oldRatFloat(root)
+}
+
+func oldEuclideanLower(v ivec) *big.Rat {
+	sum := new(big.Rat)
+	for axis := range v {
+		var least *big.Rat
+		switch {
+		case v[axis].Lo.Sign() > 0:
+			least = v[axis].Lo
+		case v[axis].Hi.Sign() < 0:
+			least = new(big.Rat).Neg(v[axis].Hi)
+		default:
+			continue
+		}
+		sum.Add(sum, new(big.Rat).Mul(least, least))
+	}
+	return oldRatSqrtLower(sum)
 }
