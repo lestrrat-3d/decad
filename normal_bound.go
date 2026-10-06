@@ -73,7 +73,7 @@ const (
 )
 
 // ivVec3Unit encloses the exact unit vector of an enclosed direction. It is
-// the 3D sibling of capblend_contour.go's ivUnitVec, and like it the only
+// the 3D sibling of internal/capcontour's UnitVec, and like it the only
 // widening a held-float input suffers is the length's own outward-rounded
 // square root.
 func ivVec3Unit(a survey2d.IvVec3) (survey2d.IvVec3, normalStatus) {

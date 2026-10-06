@@ -848,10 +848,10 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // locus's own upper bound, and the excess over the held chord is charged
 // once, at the end. Splitting matters most for miterLocusSpeedUpper's own
 // circle-circle case, whose enclosure of the two carriers' own offset ranges
-// is decorrelated (circleCircleLocusSpeedUpper's own doc comment) and can
+// is decorrelated (capcontour.CircleCircleLocusSpeedUpper's doc comment) and can
 // inflate the published bound past the held chord itself on a sizeable
 // setback over one wide range, where the narrower per-sub-range boxes stay
-// tight enough not to; the line-circle case (lineCircleLocusSpeedUpper) has
+// tight enough not to; the line-circle case (capcontour.LineCircleLocusSpeedUpper) has
 // no such looseness but still subdivides the same way, harmlessly. Where any
 // sub-range's enclosure cannot be built, the edge refuses through
 // lengthUnbounded rather than publish an understated bound. An AFFINE corner

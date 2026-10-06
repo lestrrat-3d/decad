@@ -543,9 +543,9 @@ func offsetLoopReach(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s
 		}
 		switch {
 		case j.arc:
-			reach = math.Max(reach, math.Max(a.reach(j.pA), b.reach(j.pB)))
+			reach = math.Max(reach, math.Max(a.Reach(j.pA.U, j.pA.V), b.Reach(j.pB.U, j.pB.V)))
 		case j.g1:
-			reach = math.Max(reach, ivUnion(a, b).reach(j.m))
+			reach = math.Max(reach, ivUnion(a, b).Reach(j.m.U, j.m.V))
 		default:
 			ca, okA := offsetCarrierEnclosure(prev, amount)
 			cb, okB := offsetCarrierEnclosure(cur, amount)
@@ -560,7 +560,7 @@ func offsetLoopReach(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s
 			if !ok {
 				return 0, errOffsetUnbounded
 			}
-			reach = math.Max(reach, m.reach(j.m))
+			reach = math.Max(reach, m.Reach(j.m.U, j.m.V))
 		}
 	}
 	return reach, nil
@@ -581,18 +581,18 @@ func walkPointEnclosure(u, v float64, bound proofbound.WalkEndBound) (ivPoint, b
 	widen := func(c proofbound.RatInterval) proofbound.RatInterval {
 		return proofbound.Interval(new(big.Rat).Sub(c.Lo, ra), new(big.Rat).Add(c.Hi, ra))
 	}
-	return ivPoint{u: widen(p.u), v: widen(p.v)}, true
+	return ivPoint{U: widen(p.U), V: widen(p.V)}, true
 }
 
 // ivUnitOf encloses the unit vector of every vector its argument encloses.
 func ivUnitOf(p ivPoint) (ivPoint, bool) {
-	l, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(p.u), survey2d.IntervalSquare(p.v)))
+	l, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(p.U), survey2d.IntervalSquare(p.V)))
 	if !ok || l.Lo.Sign() <= 0 {
 		return ivPoint{}, false
 	}
-	u, okU := survey2d.IntervalQuo(p.u, l)
-	v, okV := survey2d.IntervalQuo(p.v, l)
-	return ivPoint{u: u, v: v}, okU && okV
+	u, okU := survey2d.IntervalQuo(p.U, l)
+	v, okV := survey2d.IntervalQuo(p.V, l)
+	return ivPoint{U: u, V: v}, okU && okV
 }
 
 // walkTangentEnclosure encloses a walk's unit travel tangent at one end: a
@@ -606,7 +606,7 @@ func walkTangentEnclosure(w survey2d.SideWalk, atEnd bool) (ivPoint, bool) {
 	}
 	switch {
 	case w.IsLine():
-		return ivUnitOf(ivPoint{u: proofbound.IntervalSub(end.u, start.u), v: proofbound.IntervalSub(end.v, start.v)})
+		return ivUnitOf(ivPoint{U: proofbound.IntervalSub(end.U, start.U), V: proofbound.IntervalSub(end.V, start.V)})
 	case w.IsCircular():
 		c, ok := ivExactPoint(w.CU, w.CV)
 		if !ok {
@@ -616,11 +616,11 @@ func walkTangentEnclosure(w survey2d.SideWalk, atEnd bool) (ivPoint, bool) {
 		if atEnd {
 			p = end
 		}
-		ru, rv := proofbound.IntervalSub(p.u, c.u), proofbound.IntervalSub(p.v, c.v)
+		ru, rv := proofbound.IntervalSub(p.U, c.U), proofbound.IntervalSub(p.V, c.V)
 		if w.Th1 > w.Th0 {
-			return ivUnitOf(ivPoint{u: proofbound.IntervalNeg(rv), v: ru})
+			return ivUnitOf(ivPoint{U: proofbound.IntervalNeg(rv), V: ru})
 		}
-		return ivUnitOf(ivPoint{u: rv, v: proofbound.IntervalNeg(ru)})
+		return ivUnitOf(ivPoint{U: rv, V: proofbound.IntervalNeg(ru)})
 	default:
 		return ivPoint{}, false
 	}
@@ -634,8 +634,8 @@ func offsetFootEnclosure(corner ivPoint, w survey2d.SideWalk, atEnd bool, amount
 		return ivPoint{}, false
 	}
 	return ivPoint{
-		u: proofbound.IntervalAdd(corner.u, proofbound.IntervalMul(amount, proofbound.IntervalNeg(tan.v))),
-		v: proofbound.IntervalAdd(corner.v, proofbound.IntervalMul(amount, tan.u)),
+		U: proofbound.IntervalAdd(corner.U, proofbound.IntervalMul(amount, proofbound.IntervalNeg(tan.V))),
+		V: proofbound.IntervalAdd(corner.V, proofbound.IntervalMul(amount, tan.U)),
 	}, true
 }
 
@@ -646,7 +646,7 @@ func offsetCarrierEnclosure(w survey2d.SideWalk, amount proofbound.RatInterval) 
 	if w.IsCircular() {
 		r, ok := offsetCircleRadius(w, amount)
 		c, okC := ivExactPoint(w.CU, w.CV)
-		return ivCarrier{c: c, r: r}, ok && okC
+		return ivCarrier{C: c, R: r}, ok && okC
 	}
 	if !w.IsLine() {
 		return ivCarrier{}, false
@@ -657,10 +657,10 @@ func offsetCarrierEnclosure(w survey2d.SideWalk, amount proofbound.RatInterval) 
 		return ivCarrier{}, false
 	}
 	p := ivPoint{
-		u: proofbound.IntervalAdd(start.u, proofbound.IntervalMul(amount, proofbound.IntervalNeg(dir.v))),
-		v: proofbound.IntervalAdd(start.v, proofbound.IntervalMul(amount, dir.u)),
+		U: proofbound.IntervalAdd(start.U, proofbound.IntervalMul(amount, proofbound.IntervalNeg(dir.V))),
+		V: proofbound.IntervalAdd(start.V, proofbound.IntervalMul(amount, dir.U)),
 	}
-	return ivCarrier{isLine: true, p: p, dir: dir}, true
+	return ivCarrier{IsLine: true, P: p, Dir: dir}, true
 }
 
 // offsetCircleRadius encloses offsetRadius's R − insideSign·(s·t) over every
@@ -696,7 +696,7 @@ func circularWalkEndGap(w survey2d.SideWalk) (float64, bool) {
 		if !ok {
 			return false
 		}
-		d, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.IntervalSub(p.u, c.u)), survey2d.IntervalSquare(proofbound.IntervalSub(p.v, c.v))))
+		d, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.IntervalSub(p.U, c.U)), survey2d.IntervalSquare(proofbound.IntervalSub(p.V, c.V))))
 		if !ok {
 			return false
 		}
