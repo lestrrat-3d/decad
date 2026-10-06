@@ -5,8 +5,8 @@ go 1.26.8
 replace github.com/lestrrat-3d/decad => ..
 
 require (
-	github.com/lestrrat-3d/decad v0.0.0-20260930143515-7dde3ae229fd
-	github.com/lestrrat-3d/kinetograph v0.0.0-20261005132215-a4ebd15c6487
+	github.com/lestrrat-3d/decad v0.0.0-20261006233447-0070f0b2031c
+	github.com/lestrrat-3d/kinetograph v0.0.0-20261006234612-34128f2dcddc
 	github.com/lestrrat-3d/r3 v0.0.0-20261005214828-6011e4189399
 	github.com/lestrrat-3d/sketch v0.0.0-20261006223614-e6740d028b5c
 	github.com/lestrrat-3d/solidlens v0.0.0-20261005044356-f626e847eb51

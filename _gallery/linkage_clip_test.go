@@ -5,7 +5,6 @@ import (
 	"math"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -16,13 +15,12 @@ import (
 )
 
 // These tests run the folding arm through the real producers and the real
-// viewer: decad's VerifyLinkage and Linkage.PoseAt, the linkageTrack bridge,
-// kinetograph's driven nodes and one rendered frame.
+// viewer: decad's VerifyLinkage and Linkage.PoseAt, kinetograph's AddLinkage
+// and its driven nodes, and one rendered frame.
 //
-// Each leg was seen red by breaking what it guards: driveFraction dividing by
-// one nanosecond more than the duration, driveFraction without its upper
-// clamp, and a track returning the first link's pose for every link each fail
-// the bit-identical pose leg; firstFrameAt testing > instead of >= fails the
+// Each leg was seen red by breaking what it guards: a drive fraction channel
+// ending one frame late (4 s plus 1/64 s) fails the bit-identical pose leg;
+// firstFrameAt testing > instead of >= fails the
 // marked-frame leg (frame 87); hitFades switching one frame late fails the
 // fade leg at frame 86; and a hit colour of gold fails the pixel leg at
 // frame 86.
@@ -41,54 +39,66 @@ func transformBits(tr r3.Transform) [12]uint64 {
 	return out
 }
 
-// TestLinkageTrackMatchesPoseAt asserts that every link's driven node takes
-// exactly the transform PoseAt returns at the frame's drive fraction: frame i
-// of the drive at 64 fps reads s = i/256 exactly, and a time past the drive
-// holds s = 1.
-func TestLinkageTrackMatchesPoseAt(t *testing.T) {
+// TestLinkageClipMatchesPoseAt asserts that every link's part in the clip
+// takes exactly the transform PoseAt returns at the frame's drive fraction:
+// frame i of the drive at 64 fps reads s = i/256 exactly, and a frame past the
+// drive holds s = 1.
+func TestLinkageClipMatchesPoseAt(t *testing.T) {
 	t.Parallel()
 	scene, err := foldingArmScene(t.Context())
 	require.NoError(t, err)
+	clip, _, err := scene.clip(nil, linkageClipLength, smokeWidth, smokeHeight)
+	require.NoError(t, err)
 
-	frame := time.Second / linkageFPS
-	for _, link := range scene.linkage.Links() {
-		track, err := newLinkageTrack(scene.linkage, scene.drive, link, linkageDriveDuration)
+	byName := map[string]*decad.Link{"upper-arm": scene.shoulder, "forearm": scene.elbow}
+	index := func(link *decad.Link) int { return slices.Index(scene.linkage.Links(), link) }
+	for _, c := range []struct {
+		frame int
+		s     float64
+	}{
+		{0, 0},
+		{1, 1.0 / 256},
+		{85, 85.0 / 256},
+		{86, 86.0 / 256},
+		{171, 171.0 / 256},
+		{256, 1},
+		{300, 1}, // the hold after the drive
+	} {
+		frame, err := clip.Frame(t.Context(), c.frame)
 		require.NoError(t, err)
-		index := track.index
-		require.Same(t, link, scene.linkage.Links()[index])
-		for _, c := range []struct {
-			at time.Duration
-			s  float64
-		}{
-			{0, 0},
-			{frame, 1.0 / 256},
-			{85 * frame, 85.0 / 256},
-			{86 * frame, 86.0 / 256},
-			{171 * frame, 171.0 / 256},
-			{256 * frame, 1},
-			{300 * frame, 1}, // the hold after the drive
-			{-frame, 0},
-		} {
-			got, err := track.At(c.at)
-			require.NoError(t, err)
-			want, err := scene.linkage.PoseAt(scene.drive, units.Scalar(c.s))
-			require.NoError(t, err)
-			require.Equal(t, transformBits(want.Poses[index]), transformBits(got), "link %d at %s", index, c.at)
+		want, err := scene.linkage.PoseAt(scene.drive, units.Scalar(c.s))
+		require.NoError(t, err)
+		found := 0
+		for _, pose := range frame.Poses {
+			link, ok := byName[pose.Name]
+			if !ok {
+				continue
+			}
+			found++
+			require.Equal(t, transformBits(want.Poses[index(link)]), transformBits(pose.Transform),
+				"part %s at frame %d", pose.Name, c.frame)
 		}
+		require.Equal(t, len(byName), found, "frame %d", c.frame)
 	}
 
 	// The forearm keeps its orientation and rides the elbow's circle: at
 	// s = 86/256 its corner (96, 14, 22) sits at (48·cos θ + 48,
 	// 48·sin θ + 14, 22) with θ = 90°·86/256.
-	elbow, err := newLinkageTrack(scene.linkage, scene.drive, scene.elbow, linkageDriveDuration)
-	require.NoError(t, err)
-	pose, err := elbow.At(86 * frame)
+	frame, err := clip.Frame(t.Context(), 86)
 	require.NoError(t, err)
 	theta := math.Pi / 2 * 86 / 256
-	corner := pose.Apply(r3.NewVec(2*linkageElbow, linkageHalfWidth, 22))
-	require.InDelta(t, linkageElbow*math.Cos(theta)+linkageElbow, corner.X, 1e-9)
-	require.InDelta(t, linkageElbow*math.Sin(theta)+linkageHalfWidth, corner.Y, 1e-9)
-	require.InDelta(t, 22, corner.Z, 1e-9)
+	checked := false
+	for _, pose := range frame.Poses {
+		if pose.Name != "forearm" {
+			continue
+		}
+		checked = true
+		corner := pose.Transform.Apply(r3.NewVec(2*linkageElbow, linkageHalfWidth, 22))
+		require.InDelta(t, linkageElbow*math.Cos(theta)+linkageElbow, corner.X, 1e-9)
+		require.InDelta(t, linkageElbow*math.Sin(theta)+linkageHalfWidth, corner.Y, 1e-9)
+		require.InDelta(t, 22, corner.Z, 1e-9)
+	}
+	require.True(t, checked)
 }
 
 // TestLinkageClipMarksFirstCollision asserts the scene's verdict against its
@@ -126,9 +136,14 @@ func TestLinkageClipMarksFirstCollision(t *testing.T) {
 	clip, style, err := scene.clip(report, linkageClipLength, smokeWidth, smokeHeight)
 	require.NoError(t, err)
 	require.Equal(t, 320, clip.FrameCount())
-	marked := firstFrameAt(clip, first.At.Mag())
+	marked, err := firstFrameAt(clip, first.At.Mag())
+	require.NoError(t, err)
 	require.Equal(t, 86, marked)
-	require.Equal(t, first.At.Mag(), driveFraction(clip.FrameTime(marked), linkageDriveDuration))
+	fraction, err := linkageFraction()
+	require.NoError(t, err)
+	at, err := fraction.At(clip.FrameTime(marked))
+	require.NoError(t, err)
+	require.Equal(t, first.At.Mag(), at.Mag())
 
 	// Every frame draws exactly one copy of the forearm: its own colour
 	// before the marked frame, the hit colour from it on. The upper arm and
