@@ -2,6 +2,7 @@ package dynamics
 
 import (
 	"context"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
@@ -111,6 +112,16 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		}
 	}
 	return names, nil
+}
+
+// CertifiedInertiaFloor is the certified lower inertia eigenvalue λ_lo the
+// island certificate reads for body, exact; nil when body is not in w.
+func CertifiedInertiaFloor(w *World, body *decad.Body) *big.Rat {
+	index, ok := w.index[body]
+	if !ok {
+		return nil
+	}
+	return certifiedInertiaFloor(w.bodies[index].mass)
 }
 
 // TracePairCalls is the number of SweptBox and SweepPair calls the step that

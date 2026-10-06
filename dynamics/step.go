@@ -136,6 +136,17 @@ type ContactSolverReport struct {
 	EnergyResidual          units.Value
 	MomentumResidual        units.Value
 	AngularMomentumResidual units.Value
+	// WitnessTorque is the largest, over the island's dynamic bodies, of the
+	// body's witness torque T_β = Σ b_k·|J_k|_1: the torque by which its
+	// published impulses, applied anywhere within its witness balls, can
+	// differ from their published torque. Each body's angular-law limit,
+	// and through it the angular-momentum limit, carries its T_β (§6.3).
+	// WitnessSpin is the largest T_β / λ_lo(I_β), with λ_lo the body's
+	// certified lower inertia eigenvalue: the spin uncertainty the admitted
+	// contact points leave in the published angular velocity. Both are
+	// rounded up.
+	WitnessTorque units.Value
+	WitnessSpin   units.Value
 }
 
 func zeroImpulseVec() QuantityVec {

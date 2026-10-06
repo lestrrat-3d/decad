@@ -21,7 +21,7 @@ shows a box impact and computed rebound.
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses; against a signed-axis face of an exact planar solid, a tray's floor included, a touch, gap or `ContactBand` at any pose, and a rolling touch or band track from such a start | Rolling on a fixed floor or tray floor in a scheduled world, with and without gravity |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
-| A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement, the lifted set within `max(SupportBand, δ)`, and a deep overlap's face-local patch; a clear path, first impact onto the band, or band track | A chamfered block lands and rests on its lifted corners |
+| A planar solid and a held-mesh solid: a positive-bound faceted Boolean, a cap-loop chamfer, cup, loft, sweep or general revolve, a curved one at the request's `HeldChord` | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement, the lifted set within `max(SupportBand, δ)`, and a deep overlap's face-local patch; a clear path, first impact onto the band, or band track | A chamfered block lands and rests on its lifted corners; a revolved bottle lands and rests on its lifted base, its solve publishing the witness torque its δ leaves |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -342,7 +342,9 @@ step absorbs its kick on all four corners.
 [Band rest tests](../dynamics/contact_band_test.go) rest a body on a
 displaced one within `PenetrationResidual` and stop below its band, and drop
 a chamfered block onto the tray, where it bounces and rests on its four
-lifted corners.
+lifted corners. They also drop a revolved bottle, read as a held mesh,
+which bounces twice and rests on its lifted base; each landing's published
+witness torque matches the one recomputed from its contact points.
 The [stack-and-drop scene test](../dynamics/scene_test.go) runs 2 s of a
 box pyramid resting under friction while three spheres land on the floor and
 on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module

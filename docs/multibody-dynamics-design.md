@@ -2985,8 +2985,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `Σ_k b_k·|J_k|_1` recomputed in the test from the event's manifold balls and point impulses, its
   `WitnessSpin` equals that over the bottle's certified lower eigenvalue (read through `export_test.go`) and
   lies below `1 rad/s`, and each resting island's `WitnessSpin` lies below `0.05 rad/s`; at
-  `PointResolution = 1e-6 mm` the landing step is `StepPairUndecided` (`ContactPointTooCoarse` withholds the
-  track's manifold); at `PenetrationResidual = 0.1 mm` the landing step is `StepTrackUnproved`, the band
+  `PointResolution = 1e-6 mm` the landing step is `StepManifoldMissing` (`ContactPointTooCoarse` withholds the
+  band's manifold at the rounded event poses); at `PenetrationResidual = 0.1 mm` the landing step is `StepTrackUnproved`, the band
   track after the bounce holding the lifted base at `SupportBand + 2δ` (§10.4). `dynamics/island_test.go`
   gains the tamper leg of the bottle's landing proposal (`IslandProposalGates`): its spin about `Z` raised
   by four times `WitnessSpin + AngularVelocityResidual` is refused at the angular law and the angular
@@ -2997,12 +2997,21 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   angular-momentum sum alone, the same landing is refused at the angular momentum row; the mass-center
   ball added to `b_k`, `TestFacetedFloorImpactRefusesUncertifiedResponse`'s "mass center uncertainty"
   advances; `WitnessTorque` published from `PointResolution` in place of the attained balls, the
-  recomputation leg reads a torque about `3.4` times the published one. Every shipped `dynamics` fixture
-  keeps its numbers: an exact body's `T_β` is the rounding of its witnesses times the impulse, and every
-  refusal fixture at the angular law stands by more than that.
+  recomputation leg reads a published torque about `3.4` times the recomputed one. Every shipped `dynamics`
+  fixture keeps its numbers: an exact body's `T_β` is the rounding of its witnesses times the impulse, and
+  every refusal fixture at the angular law stands by more than that.
 - Depends on: PR 20c.
 - Rejected alternatives, each recorded in §6.3: a scene-wide `AngularVelocityResidual` of `0.5 rad/s`, and a
   `HeldChord` small enough for the spread to fit the old limit.
+- Shipped. `bodyWitnessTorque` (`dynamics/island_certify.go`) sums `T_β` per body. The bottle's held base
+  lifts `49` vertices; it lands at step `9` (`WitnessSpin` about `0.5 rad/s`), rebounds at `0.3` again at
+  step `15`, meets the floor below `ImpactSpeed` and rests at step `17` (`WitnessSpin` about `0.04 rad/s`).
+  `IslandProposalGates` solves a step's initial contacts and the drop's landing is an interior impact, so
+  the tamper fixture (`TestIslandWitnessTorqueGates`) starts the bottle `1/32 mm` above the floor, inside
+  the lifted band, closing at the landing's `383.203125 mm/s`; with `T_β` zeroed its landing is refused at the drop's
+  angular residual.
+  The drop costs about `33 s` locally: each of its three impact steps about `5.5 s`, the
+  `PointResolution = 1e-6 mm` landing step about `4 s` and the `0.1 mm` one about `5 s`.
 
 PRs 20a, 20e and 20f touch disjoint files and may land in any order; PR 20b follows 20a only for the
 scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
