@@ -946,3 +946,5 @@
 5	0.02	TestVerifyPublishUndercutUndecided
 5	0.25	TestWalkSpendsTheRecordsRemainingCeiling
 5	0.01	TestWideSpanBracketRefusesBeforeSubdividing
+1	0.30	TestPlanarPairVerdictDisplacementBand
+2	0.25	TestPlanarPairVerdictTouchNeedsZeroDisplacement

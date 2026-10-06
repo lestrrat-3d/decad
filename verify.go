@@ -426,6 +426,20 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 					return nil, pairErr
 				}
 			}
+			if res.verdict == pairUndecided {
+				// The exact planar relation (clearance_planar.go) answers
+				// what the analytic kernel left open — a pair an operand
+				// has no carrier model in, or one its enumeration could
+				// not settle — and only ever adds a verdict, never
+				// replaces one (interference design §3.2).
+				planar, ok, planarErr := planarPairVerdict(ctx, a, b)
+				if planarErr != nil {
+					return nil, planarErr
+				}
+				if ok {
+					res = planar
+				}
+			}
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
