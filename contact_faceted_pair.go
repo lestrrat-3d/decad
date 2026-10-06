@@ -84,9 +84,13 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 	if err != nil || !okB {
 		return false, err
 	}
-	result, err := pair.ClassifyPlanar(&a, &b, budget.step)
+	hint := planarHintOf(report.A, report.B)
+	result, err := pair.ClassifyPlanarHinted(&a, &b, hint, budget.step)
 	if err != nil {
 		return false, err
+	}
+	if result.Nearest != (pair.PlanarHint{}) && result.Nearest != hint {
+		report.A.planarHints.Store(report.B, result.Nearest)
 	}
 	report.Relation, report.Gap, report.Overlap, report.Manifold = ContactUndecided, nil, nil, nil
 	report.Reason = sourceBoxReason(result.Reason)
@@ -138,6 +142,16 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 		}
 	}
 	return true, budget.err()
+}
+
+// planarHintOf returns the nearest candidate pair the last exact planar
+// relation of a, as the first solid, against b found, or the zero hint. A
+// hint never changes a relation (pair.ClassifyPlanarHinted), so one left by a
+// pose far from this one, or by a snapshot at another chord, only costs time.
+func planarHintOf(a, b *Body) pair.PlanarHint {
+	stored, _ := a.planarHints.Load(b)
+	hint, _ := stored.(pair.PlanarHint)
+	return hint
 }
 
 // planarConvexity returns the body's cached §9.2 certificate, computing it at

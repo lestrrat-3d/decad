@@ -100,6 +100,10 @@ type PlanarResult struct {
 	Gap       *ScalarReading
 	Contacts  []PlanarContact
 	Crossings []PlanarCrossing
+	// Nearest names the candidate pair that set the distance scan's
+	// minimum, the hint for a later call (ClassifyPlanarHinted). It is the
+	// zero hint when the scan did not run.
+	Nearest PlanarHint
 
 	// preps is the derived data ClassifyPlanar built for its two solids,
 	// which PlanarSupportSets reuses (preparedFor).
@@ -191,17 +195,28 @@ func PlanarConvex(s *PlanarSolid, poll func() error) (bool, error) {
 // derived data for PlanarSupportSets, so neither solid may change while the
 // result is in use.
 func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) {
+	return ClassifyPlanarHinted(a, b, PlanarHint{}, poll)
+}
+
+// ClassifyPlanarHinted is ClassifyPlanar with a guess at the nearest
+// candidate pair, usually the Nearest of an earlier result for the same two
+// solids at a nearby pose. The guess only speeds the distance scan: the result
+// is the same for every hint, including one that names no candidate of these
+// solids (planar_prune.go).
+func ClassifyPlanarHinted(a, b *PlanarSolid, hint PlanarHint, poll func() error) (PlanarResult, error) {
 	pa, pb := preparePlanar(a), preparePlanar(b)
-	result, err := classifyPrepared(pa, pb, poll)
+	k := &planarKernel{a: pa, b: pb, poll: poll, hint: hint}
+	result, err := k.classify()
 	if err != nil {
 		return PlanarResult{}, err
 	}
 	result.preps = [2]*planarPrep{pa, pb}
+	result.Nearest = k.nearest
 	return result, nil
 }
 
-func classifyPrepared(pa, pb *planarPrep, poll func() error) (PlanarResult, error) {
-	k := &planarKernel{a: pa, b: pb, poll: poll}
+func (k *planarKernel) classify() (PlanarResult, error) {
+	pa, pb, poll := k.a, k.b, k.poll
 	if err := k.crossings(); err != nil {
 		return PlanarResult{}, err
 	}
@@ -273,6 +288,7 @@ type planarPrep struct {
 
 	// The distance scan's shortcuts (planar_prune.go), filled on first use.
 	vertBox, triBox, edgeBox []floatBox
+	triBlock, edgeBlock      []floatBox
 	sides                    [][3]proof.DyV3
 	sideBoxes                [][3]floatBox
 	sidesSet                 []bool
@@ -417,9 +433,17 @@ type planarKernel struct {
 	best    frac
 	bestUp  float64 // a float at or above best (fracAbove)
 	hasBest bool
-	sites   []contactSite
-	seen    map[PlanarContact]struct{}
-	crossed []PlanarCrossing
+	// cap is a squared distance at or above the exact minimum, known before
+	// the scan, that prunes as best does but is never offered (hint).
+	cap    frac
+	capUp  float64 // a float at or above cap (fracAbove)
+	hasCap bool
+	// hint is the caller's guess at the nearest candidate pair, cur names
+	// the candidate pair being offered, and nearest the one that set best.
+	hint, cur, nearest PlanarHint
+	sites              []contactSite
+	seen               map[PlanarContact]struct{}
+	crossed            []PlanarCrossing
 }
 
 func orientSign(p *planarPrep, t int, v proof.DyV3) int {
@@ -612,61 +636,114 @@ func (k *planarKernel) addSite(site contactSite) {
 func (k *planarKernel) offer(d frac) {
 	if !k.hasBest || fracCmp(d, k.best) < 0 {
 		k.best, k.bestUp, k.hasBest = d, fracAbove(d), true
+		k.nearest = k.cur
 	}
 }
 
 // pruned reports whether a box pair is provably farther than the current
-// minimum, so no candidate inside it can lower the minimum or touch. Every
-// offered candidate has a nonnegative numerator, so boxes that are not apart
-// (gap zero) are never pruned, and against a zero minimum over a positive
-// denominator any boxes apart are. fa and fb are the boxes' outward float
-// copies. A float gap already past the minimum's float upper bound prunes
-// without an exact test (planar_prune.go): that bound is at least zero, so a
-// float gap past it also proves the boxes apart.
+// minimum, or than the cap, so no candidate inside it can lower the minimum or
+// touch. Every offered candidate has a nonnegative numerator, so boxes that
+// are not apart (gap zero) are never pruned, and against a zero minimum over a
+// positive denominator any boxes apart are. fa and fb are the boxes' outward
+// float copies. A float gap already past a bound's float copy prunes without
+// an exact test (planar_prune.go): that bound is at least zero, so a float gap
+// past it also proves the boxes apart.
 func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBox) bool {
-	if !k.hasBest {
+	up, bounded := k.boundUp()
+	if !bounded {
 		return false
 	}
-	if gapSquaredBelow(fa, fb) > k.bestUp {
+	if gapSquaredBelow(fa, fb) > up {
 		return true
 	}
 	if !boxesApart(alo, ahi, blo, bhi) {
 		return false
 	}
-	if k.best.num.Sign() == 0 && k.best.den.Sign() > 0 {
-		return true
+	var gap *frac
+	beyond := func(bound frac) bool {
+		if bound.num.Sign() == 0 && bound.den.Sign() > 0 {
+			return true
+		}
+		if gap == nil {
+			gap = &frac{num: boxGapSquared(alo, ahi, blo, bhi), den: proof.DyInt(1)}
+		}
+		return fracCmp(*gap, bound) > 0
 	}
-	return fracCmp(frac{num: boxGapSquared(alo, ahi, blo, bhi), den: proof.DyInt(1)}, k.best) > 0
+	return (k.hasBest && beyond(k.best)) || (k.hasCap && beyond(k.cap))
+}
+
+// boundUp returns the least float upper bound among the running minimum's and
+// the cap's, and false when neither is set.
+func (k *planarKernel) boundUp() (float64, bool) {
+	switch {
+	case k.hasBest && k.hasCap:
+		return math.Min(k.bestUp, k.capUp), true
+	case k.hasBest:
+		return k.bestUp, true
+	case k.hasCap:
+		return k.capUp, true
+	}
+	return 0, false
 }
 
 // distances computes the exact minimum squared distance over vertex-facet
-// and edge-edge candidates and records every zero-distance site.
+// and edge-edge candidates and records every zero-distance site. The scan
+// visits each vertex against blocks of consecutive facets, and each edge of
+// a against blocks of consecutive edges of b, in index order; a block whose
+// float box is past the bound skips every pair in it (planar_prune.go).
 func (k *planarKernel) distances() error {
 	k.a.floatBoxes()
 	k.b.floatBoxes()
+	k.applyHint()
+	return k.scan()
+}
+
+func (k *planarKernel) scan() error {
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		verts, tris := side[0], side[1]
 		for v, point := range verts.s.Verts {
-			for t := range tris.s.Tris {
-				if err := k.poll(); err != nil {
+			for block, box := range tris.triBlock {
+				t0, t1 := block*scanBlock, min((block+1)*scanBlock, len(tris.s.Tris))
+				skip, err := k.blockPruned(verts.vertBox[v], box, t1-t0)
+				if err != nil {
 					return err
 				}
-				if k.pruned(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
+				if skip {
 					continue
 				}
-				k.vertexFacet(verts, v, tris, t)
+				for t := t0; t < t1; t++ {
+					if err := k.poll(); err != nil {
+						return err
+					}
+					if k.pruned(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
+						continue
+					}
+					k.cur = vertexFacetHint(verts == k.b, v, t)
+					k.vertexFacet(verts, v, tris, t)
+				}
 			}
 		}
 	}
 	for ea, edgeA := range k.a.edges {
-		for eb, edgeB := range k.b.edges {
-			if err := k.poll(); err != nil {
+		for block, box := range k.b.edgeBlock {
+			e0, e1 := block*scanBlock, min((block+1)*scanBlock, len(k.b.edges))
+			skip, err := k.blockPruned(k.a.edgeBox[ea], box, e1-e0)
+			if err != nil {
 				return err
 			}
-			if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
+			if skip {
 				continue
 			}
-			k.edgeEdge(edgeA, edgeB)
+			for eb := e0; eb < e1; eb++ {
+				if err := k.poll(); err != nil {
+					return err
+				}
+				if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
+					continue
+				}
+				k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
+				k.edgeEdge(edgeA, k.b.edges[eb])
+			}
 		}
 	}
 	return nil

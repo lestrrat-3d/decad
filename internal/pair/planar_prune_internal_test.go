@@ -1,6 +1,7 @@
 package pair
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -627,5 +628,354 @@ func TestRayAxisNamesAxisRays(t *testing.T) {
 			continue
 		}
 		require.Equal(t, -1, rayAxis(dir), "dir %v", dir)
+	}
+}
+
+// prunedPlain is pruned before the cap: the running minimum alone.
+func (k *planarKernel) prunedPlain(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBox) bool {
+	if !k.hasBest {
+		return false
+	}
+	if gapSquaredBelow(fa, fb) > k.bestUp {
+		return true
+	}
+	if !boxesApart(alo, ahi, blo, bhi) {
+		return false
+	}
+	if k.best.num.Sign() == 0 && k.best.den.Sign() > 0 {
+		return true
+	}
+	return fracCmp(frac{num: boxGapSquared(alo, ahi, blo, bhi), den: proof.DyInt(1)}, k.best) > 0
+}
+
+// scanPlain is the distance scan before its hint and block boxes: every
+// vertex against every facet, then every edge pair, each behind prunedPlain.
+func (k *planarKernel) scanPlain() error {
+	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
+		verts, tris := side[0], side[1]
+		for v, point := range verts.s.Verts {
+			for t := range tris.s.Tris {
+				if err := k.poll(); err != nil {
+					return err
+				}
+				if k.prunedPlain(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
+					continue
+				}
+				k.cur = vertexFacetHint(verts == k.b, v, t)
+				k.vertexFacet(verts, v, tris, t)
+			}
+		}
+	}
+	for ea, edgeA := range k.a.edges {
+		for eb, edgeB := range k.b.edges {
+			if err := k.poll(); err != nil {
+				return err
+			}
+			if k.prunedPlain(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
+				continue
+			}
+			k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
+			k.edgeEdge(edgeA, edgeB)
+		}
+	}
+	return nil
+}
+
+// requireSameScan holds two finished distance scans to the same minimum, as
+// the same fraction, the same nearest pair and the same sites in order.
+func requireSameScan(t *testing.T, want, got *planarKernel, msg string) {
+	t.Helper()
+	require.Equal(t, want.hasBest, got.hasBest, msg)
+	if want.hasBest {
+		require.Zero(t, proof.DyCmp(want.best.num, got.best.num), "%s: numerator", msg)
+		require.Zero(t, proof.DyCmp(want.best.den, got.best.den), "%s: denominator", msg)
+	}
+	require.Equal(t, want.nearest, got.nearest, msg)
+	require.Len(t, got.sites, len(want.sites), msg)
+	for i := range want.sites {
+		w, g := want.sites[i], got.sites[i]
+		require.Equal(t, w.contact, g.contact, "%s: site %d", msg, i)
+		require.Equal(t, w.cell, g.cell, "%s: site %d", msg, i)
+		require.Equal(t, w.skipLocal, g.skipLocal, "%s: site %d", msg, i)
+		require.Zero(t, proof.DyCmp(w.at.w, g.at.w), "%s: site %d", msg, i)
+		for axis := range 3 {
+			require.Zero(t, proof.DyCmp(w.at.x[axis], g.at.x[axis]), "%s: site %d", msg, i)
+			require.Zero(t, proof.DyCmp(w.dir[axis], g.dir[axis]), "%s: site %d", msg, i)
+		}
+	}
+}
+
+// scanSoups draws two triangle sets for the distance scan: rngTris triangles
+// each, corners on a half grid with some axis-aligned triangles, the second
+// set lifted by lift, so equal distances, exact box gaps at the minimum and
+// zero-distance sites are common. Corners that round appear now and then.
+func scanSoups(rng *rand.Rand, tris int, lift proof.Dyadic) (*planarPrep, *planarPrep) {
+	coordinate := func() proof.Dyadic {
+		d := proof.DyShift(proof.DyInt(int64(rng.IntN(17)-8)), -1)
+		if rng.IntN(16) == 0 {
+			d = proof.DyAdd(d, proof.DyMul(proof.MustDyOf(rng.Float64()), proof.MustDyOf(rng.Float64())))
+		}
+		return d
+	}
+	soup := func(lift proof.Dyadic) *planarPrep {
+		var s PlanarSolid
+		for len(s.Tris) < tris {
+			v := len(s.Verts)
+			for range 3 {
+				s.Verts = append(s.Verts, proof.DyV3{coordinate(), coordinate(), proof.DyAdd(coordinate(), lift)})
+			}
+			if rng.IntN(2) == 0 {
+				axis := rng.IntN(3)
+				s.Verts[v+1][axis], s.Verts[v+2][axis] = s.Verts[v][axis], s.Verts[v][axis]
+			}
+			if proof.DvIsZero(proof.DvCross(proof.DvSub(s.Verts[v+1], s.Verts[v]), proof.DvSub(s.Verts[v+2], s.Verts[v]))) {
+				s.Verts = s.Verts[:v]
+				continue
+			}
+			s.Tris = append(s.Tris, [3]int{v, v + 1, v + 2})
+		}
+		prep := preparePlanar(&s)
+		prep.floatBoxes()
+		return prep
+	}
+	return soup(proof.DyZero()), soup(lift)
+}
+
+// countingPoll returns a poll that counts its calls in count.
+func countingPoll(count *int) func() error {
+	return func() error {
+		*count++
+		return nil
+	}
+}
+
+// TestDistanceScanBlocksKeepAnswers holds the distance scan with its block
+// boxes to the scan without them, over triangle sets several blocks long:
+// the same minimum as the same fraction, the same nearest pair, the same
+// sites in order, and the same polls.
+//
+// Legs shown to fail: blockBoxes keeping only each block's first box skips
+// blocks that hold nearer pairs, and blockPruned skipping a block without
+// its polls charges fewer polls.
+func TestDistanceScanBlocksKeepAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(139, 149))
+	skippable, sited := 0, 0
+	for trial := range 30 {
+		lift := proof.DyShift(proof.DyInt(int64(rng.IntN(13))), -1)
+		a, b := scanSoups(rng, 17+rng.IntN(32), lift)
+		var wantPolls, gotPolls int
+		want := &planarKernel{a: a, b: b, poll: countingPoll(&wantPolls)}
+		require.NoError(t, want.scanPlain())
+		got := &planarKernel{a: a, b: b, poll: countingPoll(&gotPolls)}
+		require.NoError(t, got.scan())
+		msg := fmt.Sprintf("trial %d", trial)
+		requireSameScan(t, want, got, msg)
+		require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+		if len(want.sites) > 0 {
+			sited++
+		}
+		// The final bound skips some block, so the scan met skippable blocks.
+		for _, vb := range a.vertBox {
+			for _, block := range b.triBlock {
+				if skip, _ := got.blockPruned(vb, block, 0); skip {
+					skippable++
+				}
+			}
+		}
+	}
+	require.Positive(t, skippable, "premise: some blocks lie past the minimum")
+	require.Positive(t, sited, "premise: some scans record sites")
+}
+
+// lastAtMinimum returns the last candidate pair in scan order whose own
+// squared distance equals best, and the number of such pairs.
+func lastAtMinimum(a, b *planarPrep, best frac) (PlanarHint, int) {
+	var last PlanarHint
+	count := 0
+	try := func(h PlanarHint) {
+		s := &planarKernel{a: a, b: b, poll: func() error { return nil }, hint: h}
+		s.applyHint()
+		if s.hasCap && fracCmp(s.cap, best) == 0 {
+			last = h
+			count++
+		}
+	}
+	for _, side := range [][2]*planarPrep{{a, b}, {b, a}} {
+		for v := range side[0].s.Verts {
+			for t := range side[1].s.Tris {
+				try(vertexFacetHint(side[0] == b, v, t))
+			}
+		}
+	}
+	for ea := range a.edges {
+		for eb := range b.edges {
+			try(PlanarHint{kind: hintEdgeEdge, i: ea, j: eb})
+		}
+	}
+	return last, count
+}
+
+// TestDistanceScanHintKeepsAnswers holds the distance scan under every kind
+// of hint to the scan without one: no hint, a vertex-facet pair each way, an
+// edge pair, the plain scan's own nearest pair, on some draws the last pair
+// at the minimum, and indices out of range.
+//
+// Leg shown to fail: applyHint offering the hinted distance as the minimum
+// records the last pair at the minimum instead of the first.
+func TestDistanceScanHintKeepsAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(151, 157))
+	capped, tied := 0, 0
+	for trial := range 60 {
+		lift := proof.DyShift(proof.DyInt(int64(rng.IntN(13))), -1)
+		a, b := scanSoups(rng, 4+rng.IntN(20), lift)
+		var wantPolls int
+		want := &planarKernel{a: a, b: b, poll: countingPoll(&wantPolls)}
+		require.NoError(t, want.scanPlain())
+		hints := []PlanarHint{{},
+			{kind: hintVertexFacet, i: rng.IntN(len(a.s.Verts)), j: rng.IntN(len(b.s.Tris))},
+			{kind: hintFacetVertex, i: rng.IntN(len(b.s.Verts)), j: rng.IntN(len(a.s.Tris))},
+			{kind: hintEdgeEdge, i: rng.IntN(len(a.edges)), j: rng.IntN(len(b.edges))},
+			want.nearest,
+			{kind: hintVertexFacet, i: len(a.s.Verts), j: 0},
+			{kind: hintFacetVertex, i: 0, j: -1},
+			{kind: hintEdgeEdge, i: 0, j: len(b.edges)},
+		}
+		if trial%3 == 0 && want.hasBest {
+			last, count := lastAtMinimum(a, b, want.best)
+			hints = append(hints, last)
+			if count > 1 {
+				tied++
+			}
+		}
+		for h, hint := range hints {
+			var gotPolls int
+			got := &planarKernel{a: a, b: b, poll: countingPoll(&gotPolls), hint: hint}
+			got.applyHint()
+			if got.hasCap {
+				capped++
+			}
+			require.NoError(t, got.scan())
+			msg := fmt.Sprintf("trial %d hint %d", trial, h)
+			requireSameScan(t, want, got, msg)
+			require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+		}
+	}
+	require.Positive(t, capped, "premise: some hints set a cap")
+	require.Positive(t, tied, "premise: some minima are reached by more than one pair")
+}
+
+// fineBox is the closed box [lo, lo+size] with each face cut into an n×n grid
+// of squares, two triangles each, wound outward, sheared by x += sx·z.
+func fineBox(lo, size [3]proof.Dyadic, n int, sx proof.Dyadic) PlanarSolid {
+	var s PlanarSolid
+	index := map[[3]int]int{}
+	vertex := func(g [3]int) int {
+		if v, ok := index[g]; ok {
+			return v
+		}
+		var p proof.DyV3
+		for axis := range 3 {
+			p[axis] = proof.DyAdd(lo[axis], proof.DyMul(size[axis], ratioDyadic(g[axis], n)))
+		}
+		p[0] = proof.DyAdd(p[0], proof.DyMul(sx, p[2]))
+		index[g] = len(s.Verts)
+		s.Verts = append(s.Verts, p)
+		return index[g]
+	}
+	for axis := range 3 {
+		u, w := (axis+1)%3, (axis+2)%3
+		for _, side := range []int{0, n} {
+			for i := range n {
+				for j := range n {
+					var q [4]int
+					for c, d := range [4][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
+						var g [3]int
+						g[axis], g[u], g[w] = side, i+d[0], j+d[1]
+						q[c] = vertex(g)
+					}
+					// (u, w, axis) is right-handed, so q runs counterclockwise
+					// seen from +axis: outward on the far side.
+					if side == 0 {
+						q[1], q[3] = q[3], q[1]
+					}
+					s.Tris = append(s.Tris, [3]int{q[0], q[1], q[2]}, [3]int{q[0], q[2], q[3]})
+				}
+			}
+		}
+	}
+	return s
+}
+
+// ratioDyadic is i/n for n a power of two.
+func ratioDyadic(i, n int) proof.Dyadic {
+	shift := 0
+	for 1<<shift < n {
+		shift++
+	}
+	return proof.DyShift(proof.DyInt(int64(i)), -shift)
+}
+
+// TestClassifyPlanarHintKeepsAnswers holds ClassifyPlanarHinted to
+// ClassifyPlanar on finely cut boxes resting on, hovering over and sinking
+// into a finely cut floor, some sheared, under hints of every kind, the
+// result's own Nearest among them: the same relation, reason, gap, contacts,
+// crossings, nearest pair and polls.
+//
+// Leg shown to fail: the cap pruning a box pair whose squared gap equals it
+// drops the first pair at the minimum of a box resting flat.
+func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(163, 167))
+	quarter := func(lo, hi int) proof.Dyadic {
+		return proof.DyShift(proof.DyInt(int64(lo+rng.IntN(hi-lo+1))), -2)
+	}
+	relations := map[Relation]int{}
+	for trial := range 40 {
+		floor := fineBox([3]proof.Dyadic{proof.DyZero(), proof.DyZero(), proof.DyInt(-2)},
+			[3]proof.Dyadic{proof.DyInt(4), proof.DyInt(4), proof.DyInt(2)}, 4, proof.DyZero())
+		sx := proof.DyZero()
+		if trial%3 == 1 {
+			sx = quarter(-1, 1)
+		}
+		guest := fineBox([3]proof.Dyadic{quarter(-2, 12), quarter(-2, 12), quarter(-1, 2)},
+			[3]proof.Dyadic{quarter(2, 6), quarter(2, 6), quarter(2, 6)}, 2, sx)
+		a, b := &guest, &floor
+		if trial%2 == 1 {
+			a, b = b, a
+		}
+		for _, s := range []*PlanarSolid{a, b} {
+			ok, err := CheckPlanarSolid(s, noPollInternal)
+			require.NoError(t, err)
+			require.True(t, ok, "trial %d: premise: an audited solid", trial)
+		}
+		var wantPolls int
+		want, err := ClassifyPlanar(a, b, countingPoll(&wantPolls))
+		require.NoError(t, err)
+		relations[want.Relation]++
+		edgesA, edgesB := len(want.preps[0].edges), len(want.preps[1].edges)
+		hints := []PlanarHint{want.Nearest,
+			{kind: hintVertexFacet, i: rng.IntN(len(a.Verts)), j: rng.IntN(len(b.Tris))},
+			{kind: hintFacetVertex, i: rng.IntN(len(b.Verts)), j: rng.IntN(len(a.Tris))},
+			{kind: hintEdgeEdge, i: rng.IntN(edgesA), j: rng.IntN(edgesB)},
+			{kind: hintEdgeEdge, i: edgesA, j: 0},
+		}
+		for h, hint := range hints {
+			var gotPolls int
+			got, err := ClassifyPlanarHinted(a, b, hint, countingPoll(&gotPolls))
+			require.NoError(t, err)
+			msg := fmt.Sprintf("trial %d hint %d", trial, h)
+			require.Equal(t, want.Relation, got.Relation, msg)
+			require.Equal(t, want.Reason, got.Reason, msg)
+			require.Equal(t, want.Gap, got.Gap, msg)
+			require.Equal(t, want.Contacts, got.Contacts, msg)
+			require.Equal(t, want.Crossings, got.Crossings, msg)
+			require.Equal(t, want.Nearest, got.Nearest, msg)
+			require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+		}
+	}
+	for _, relation := range []Relation{Separated, Touching, Overlapping} {
+		require.Positive(t, relations[relation], "premise: relation %v occurs", relation)
 	}
 }

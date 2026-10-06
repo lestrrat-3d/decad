@@ -1141,6 +1141,12 @@ exactly. The tests are:
   enclosed between two floats whose squares are compared exactly against it, or zero, proving `Touching`
   when every zero-distance feature pair has opposed material sides.
 
+The distance scan visits its candidates in a fixed index order and records the first one that reaches
+the minimum. Each body caches, per partner body, the candidate pair that set the last minimum of their
+relation. The next relation of the pair reads that pair's exact distance first and uses it only to
+prune box pairs farther than it, never as the minimum, so the recorded candidate and every outcome are
+the same with or without the cache (`internal/pair/planar_prune.go`).
+
 Two coplanar facets with matching outward normals and a positive-area overlap also prove `Overlapping`.
 A shell whose every vertex lies on the other body's boundary needs no cast: it meets the contact set.
 "Opposed material sides" is a local proof at each zero-distance site (a vertex on a facet, two crossing

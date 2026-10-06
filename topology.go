@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 
 	"github.com/lestrrat-3d/r3"
@@ -713,6 +714,11 @@ type Body struct {
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (contact_pair_memo.go); it changes no outcome either.
 	pairReports pairReportMemo
+	// planarHints maps each partner body to the nearest candidate pair the
+	// last exact planar relation with this body first found
+	// (contact_faceted_pair.go). It only speeds the next relation's
+	// distance scan, never changes its result.
+	planarHints sync.Map
 }
 
 // Document returns the document that owns (or owned) this body.
