@@ -2180,3 +2180,4 @@
 0	0.00	TestCornerSpanMatchesRationalForm
 1	0.00	TestPointDeviationMatchesRationalForm
 2	0.00	TestScaledRotationMatchesRotation
+3	0.00	TestOrientedVertexFaceFootMatchesRationalForm
