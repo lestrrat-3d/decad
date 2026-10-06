@@ -14,7 +14,7 @@ Companion contracts remain authoritative for their existing areas:
 - `docs/verification-design.md` owns report meaning and tolerance gates;
 - `docs/spline-design.md` owns free-form profile-segment reach.
 
-Five tables are normative:
+Eight tables are normative:
 
 | Table | States | Section |
 |---|---|---|
@@ -23,6 +23,9 @@ Five tables are normative:
 | **B** | payload, topology, faces, and roles | §8 |
 | **D** | downstream coverage and staging | §10 |
 | **SC** | what refuses a chain sweep | §15.4 |
+| **SM** | what refuses a mitred polyline sweep | §16.4 |
+| **BM** | a mitred polyline sweep's topology, faces, and roles | §16.5 |
+| **DM** | downstream coverage of a mitred polyline sweep | §16.7 |
 
 ## 1. Scope
 
@@ -49,11 +52,22 @@ The design also fixes these later increments:
 - a future constrained 3D sketch may be recorded into the same `Path` without
   changing `Document.Sweep`.
 
+**§16 owns the one corner mode and the one scale this document admits**: a
+`LineTo`-only path whose joins are cut on a stated join plane
+(`WithMitredJoins()`), and a dimensionless factor per span end that scales the
+section about the span's own axis (`WithSectionScale`), over a `LineSeg`-only
+profile. Everything §1 through §14 states about tangent joins, transport and
+the analytic span builders is what that section replaces for its own case and
+leaves unchanged for every other path.
+
 The following remain outside this design:
 
-- scale or taper along the path;
+- a scale along a path that is not §16's: a scale on an arc span, a scale
+  whose section is not `LineSeg`-only, or a scale that varies within a span
+  other than linearly;
 - guide surfaces, guide rails, and a second profile;
-- a corner mode for non-tangent path joins;
+- a corner mode other than §16's join plane: a rounded corner, or a corner
+  on an arc span;
 - closed paths and their frame holonomy;
 - a sweep that lets the section leave the path-normal plane.
 
@@ -114,6 +128,16 @@ func WithSweepTwist(angle units.Value) SweepOption
 // SweepOption, a repeated WithSurfaceResult() is idempotent rather than S12's
 // stated ErrDegenerate: it carries no payload for a repeat to disagree with.
 func WithSurfaceResult() SurfaceResultOption
+
+// WithMitredJoins admits a LineTo-only path whose internal joins are corners:
+// the two spans meeting at a join are each cut on the join plane §16.3
+// states and share the section polygon on it. §16 owns it.
+func WithMitredJoins() SweepOption
+
+// WithSectionScale states one dimensionless factor per path segment, in path
+// order: factors[k] is the ratio of the section at the END of span k to the
+// authored profile. §16 owns it.
+func WithSectionScale(factors ...units.Value) SweepOption
 ```
 
 ```go
@@ -250,7 +274,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S3** | non-finite path point, or arc construction overflows before it can state a finite carrier | `ErrNotFinite` for caller input; `ErrUnsupported` for derived range overflow | input rule is permanent; range ceiling is not |
 | **S4** | zero-length line; repeated or collinear `ArcThrough` points | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
-| **S6** | an internal path join is not tangent | `ErrUnsupported` | no; a future corner-mode option may define it |
+| **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
 | **S7** | path is closed | `ErrUnsupported` | no; closed-frame holonomy is staged |
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
@@ -449,8 +473,9 @@ separation audit closes. Other composite paths remain staged as
 | **4** | composite tangent line/arc transport, internal-section topology, global contact audit, D1 and D7 | D2–D6, nonzero twist |
 | **5** | shared-grid tessellation and complete proof record; D2 and D3 | analytic clearance and surveys |
 | **6** | Tier A free-form profile reach supported by each span builder | Tier B/C profile kinds follow spline staging |
-| **7** | nonzero distributed twist as a certified faceted sweep | closed paths, corner modes, scale/taper |
+| **7** | nonzero distributed twist as a certified faceted sweep | closed paths, a corner mode or scale other than §16's |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
+| **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
 
 Each published feature increment lands its four measurements and structural
 verification together. An increment never returns a body whose cached reading
@@ -699,3 +724,281 @@ Each row asserts on computed geometry, and each bound assertion is shown to
 fail before it is trusted. `docs/surface-design.md` §15 carries the rows
 themselves, as T190 onward, so the obligations sit beside every other
 chain-fed obligation rather than in two places.
+
+## 16. Mitred polyline sweep with a per-span section scale
+
+A branch of a 3D-print tree support is one straight segment after another,
+each leaning a different way, thick at the build plate and thin at the tip.
+The consumer that states this case (`mtilt`, its tree-support generator)
+needs one such branch to be ONE solid body, built without a boolean per
+segment, and needs two branches to union where they merge. This section
+admits that body: a `LineSeg`-only profile moved along a `LineTo`-only path
+whose joins are corners, cut on a join plane at every corner, with the
+section scaled by a stated factor across every span. Every vertex the build
+holds is an exact rational, rounded once for publication, so every wall is an
+exactly planar quad and the body's volume is `Exact`.
+
+### 16.1 Scope
+
+The build admits:
+
+- a path of one or more `LineTo` segments, with `WithMitredJoins()` when it
+  has more than one; the joins may be corners or straight continuations;
+- a profile whose every segment, on the outer loop and on every hole, is a
+  `LineSeg`;
+- `WithSectionScale` with one positive factor per segment, or no scale;
+- zero twist, and a solid result.
+
+It refuses, with Table SM's rows, an `ArcThrough` segment, a curved or
+free-form profile segment, `WithSurfaceResult()`, a nonzero twist and a closed
+path. A curved profile segment's image under a span's wall lines is a conic
+section, which no admitted surface variant holds exactly; an arc span has no
+join plane this construction can state. Neither is permanent.
+
+### 16.2 The options
+
+```go
+func WithMitredJoins() SweepOption
+func WithSectionScale(factors ...units.Value) SweepOption
+```
+
+Each is accepted at most once (S12). `WithSectionScale` takes exactly
+`len(path.Segments())` factors, in path order; `factors[k]` is the ratio of
+the section at the end of span `k` to the AUTHORED profile, so a tree branch
+with radius `r_k` at path point `k` passes `r_k / r_0`. A factor is a
+`units.Value` of kind `Dimensionless` (`units.Scalar`): another kind is
+`ErrUnitKind`, a non-finite value is `ErrNotFinite`, a factor at or below zero
+is `ErrDegenerate`, and a count other than the segment count is
+`ErrDegenerate`. An omitted `WithSectionScale` means every factor is `1`.
+`WithSectionScale` on a one-span path needs no `WithMitredJoins()`: it builds
+a polygonal frustum. On a path of two or more spans it requires
+`WithMitredJoins()` (SM4), because the tangent-join composite builder of §6
+transports a rigid section and has no scale.
+
+### 16.3 Construction
+
+Write the path points `V_0 … V_N` (`N` spans), `d_k = V_{k+1} − V_k` for
+span `k`, the factors `f_1 … f_N` with `f_0 = 1`, and the span ratio
+`ρ_k = f_{k+1} / f_k`. Every quantity below is an exact rational over the
+recorded floats; nothing is normalised and no square root is taken.
+
+**Section planes.** Every section lies on a plane through its path point:
+
+| Plane | Through | Normal |
+|---|---|---|
+| `Π_0` | `V_0` | the recorded profile plane's own (P6: `V_0` lies on it, `d_0` is codirectional with its positive normal) |
+| `Σ_k`, `0 < k < N` | `V_k` | `m_k = λ_k · d_{k−1} + λ_{k−1} · d_k`, where `λ_j` is the lower endpoint of the certified dyadic enclosure of `‖d_j‖` that `internal/proof` returns at a fixed precision the implementing constant owns |
+| `Π_N` | `V_N` | `d_{N−1}` |
+
+`m_k` is a rational vector that the two span directions, weighted by near
+lengths, add to: it is the bisector direction up to the enclosure's width,
+and the body DENOTES the plane with normal `m_k`, not the exact bisector. No
+reading depends on the join plane being the exact bisector; what every
+reading depends on is that both spans meeting at `V_k` are cut on the SAME
+plane, which they are by construction. Two consecutive spans that are
+exactly reversed (`d_{k−1} × d_k = 0` and `d_{k−1} · d_k < 0`, both decided
+exactly) have no join plane and are SM5.
+
+**Sections.** `P_0` is the recorded profile: each recorded point `(u, v)` lifts
+to `O + u·U + v·V` over the plane record's floats, held as the exact rational
+that sum is. For `k ≥ 1`, `P_k` is the image of `P_{k−1}` under span `k−1`'s
+wall lines, below. The hole loops map the same way as the outer loop, so a
+holed profile sweeps to a tube with void passages.
+
+**Wall lines.** For a vertex `p` of `P_k`, span `k`'s wall line through `p`
+runs along
+
+```text
+w_k(p) = d_k + (ρ_k − 1) · (p − V_k)
+```
+
+and `p`'s image on the next plane (`Σ_{k+1}`, or `Π_N` on the last span) is
+`p' = p + s · w_k(p)` with `s` the unique solution of that plane's equation.
+`w_k(p) · n = 0` for the next plane's normal `n`, `s ≤ 0`, or, when
+`ρ_k < 1`, `s · (1 − ρ_k) ≥ 1` is SM6: the wall line misses the join plane,
+meets it behind the section, or meets it at or past the span's apex.
+
+**Why every wall is one exact plane.** For `ρ_k ≠ 1`, every wall line of span
+`k` passes through one point, the apex `F_k = V_k + d_k / (1 − ρ_k)`; for
+`ρ_k = 1`, every wall line is parallel to `d_k`. Two lines through one point,
+or two parallel lines, span one plane, so the quad `p, q, q', p'` over
+profile segment `p → q` is exactly planar, whatever planes its two ends lie
+on. That is what lets a join plane tilt freely: the mitre changes where the
+quad ends, never whether it is flat. The SM6 bound `s · (1 − ρ_k) < 1` keeps
+every image on the near side of the plane through `F_k` parallel to the next
+section plane, so the map from `P_k` to `P_{k+1}` is a projective map
+restricted to one half-space, which carries a simple polygon to a simple
+polygon and preserves its vertex order.
+
+**Watertightness.** `P_k`'s vertices are span `k−1`'s end and span `k`'s
+start, by identity rather than by weld; the two caps are `P_0`'s and `P_N`'s
+regions. Every edge therefore bounds exactly two faces (Table BM), and the
+assembled shell is closed by construction. What construction does not prove
+is that no two remote faces cross — a path that bends back through its own
+earlier span, or a wide section on a tight corner, can make two walls
+intersect while every local gate passes — so SM8's crossing audit runs over
+the assembled triangle set before commit, exactly as `docs/loft-design.md`
+§6 runs it over a loft (`loftCrossingAudit`, with its broad-phase box filter
+and its `F·(F−1)/2` preflight against `maxFacetPairTestsPerCall`).
+
+**Rounding, once.** Every held vertex is the exact rational rounded to the
+nearest `float64` per coordinate. `delta` is the largest 3D distance, over
+every vertex, between the rational and its rounding, read exactly and
+rounded up (the `pointRoundBound` reading `boolean.go` already performs for
+an exact point). `delta` is what every vertex `Position()`, every face area
+and the box carry; the four body measurements read the rationals and carry
+nothing from it (§16.6). The rational vertices stay in the payload: a
+placement re-reads them (DM7), and a later exact consumer may read them
+without rounding.
+
+**Orientation.** Seed each cap's winding from the recorded loop sense as
+`docs/loft-design.md` §5 does, then orient the whole shell once by the sign
+of the exact tetrahedron sum over the rational vertices; a negative sum
+reverses every triangle. Never orient a wall or a cap on its own.
+
+### 16.4 Table SM — what refuses a mitred polyline sweep
+
+Every row lands on `docs/api-design.md` §12's vocabulary. Gate order is
+§5's, with step 5 running SM5 through SM7 per span in path order and step 7
+running SM8 in place of §7's separation audit.
+
+| SM | Condition | Sentinel |
+|---|---|---|
+| **SM1** | `WithMitredJoins()` or `WithSectionScale` with an `ArcThrough` segment | `ErrUnsupported` |
+| **SM2** | a profile segment, on any loop, that is not a `LineSeg`, under either option | `ErrUnsupported` |
+| **SM3** | a factor of the wrong kind; a non-finite factor; a factor at or below zero; a factor count other than the segment count | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate`; `ErrDegenerate` |
+| **SM4** | `WithSectionScale` on a path of two or more spans without `WithMitredJoins()` | `ErrUnsupported` |
+| **SM5** | two consecutive spans exactly reversed | `ErrDegenerate` |
+| **SM6** | a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
+| **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
+| **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
+| **SM9** | `WithSurfaceResult()`, a nonzero `WithSweepTwist`, or a closed path, with either option | `ErrUnsupported` |
+| **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `maxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
+
+SM6 names the requested solid's own failure: a join plane that a section's
+wall line cannot reach before the apex asks for a frustum cut past its own
+point, which is no solid. A caller meets it with a wide section on a sharp
+bend and a strong taper; the repair is a longer span, a smaller section, or a
+weaker taper, and the error names the span and the section vertex.
+
+### 16.5 Table BM — the result
+
+For loop `i` (`0` the outer loop, `1 + h` for hole `h`), profile segment `j`
+of that loop, and span `k`:
+
+| Entity | Count | Surface | Role |
+|---|---|---|---|
+| start cap | 1 | `Plane` over `P_0`'s region | `capStart` |
+| end cap | 1 | `Plane` over `P_N`'s region | `capEnd` |
+| wall | one per `(k, i, j)` | `Plane`, a four-vertex loop `p, q, q', p'` | `side(k,i,j)` |
+| longitudinal edge | one per span per profile vertex | — | through its two walls' origins |
+| section edge | one per profile segment per section `P_0 … P_N` | — | through its incident faces' origins |
+
+The roles are §8's own grammar, with `k` the span, unchanged: a mitred sweep
+adds no index. With `S` the profile's total segment count over every loop,
+the body has `2 + N·S` faces, `(N + 1)·S` vertices and `(2N + 1)·S` edges,
+and `F = 2·N·S + capTriangles` held triangles, each wall split along the
+fixed diagonal `tessellate.go` uses for a prism's lateral quad and each cap
+triangulated by `triangulate.go`. One lump, one outer shell; a hole loop is a
+void passage and never a second lump.
+
+A wall is ONE face, not a loft's two triangles: `docs/loft-design.md` §5
+splits a loft wall because its quad is not planar in general, and §16.3
+proves every quad here planar exactly. The wall's `Plane` is the exact plane
+through its rational quad; the `Frame` it publishes is that plane's float
+rounding, within `delta`, which is the standing loft §5 already states for a
+`Plane` whose vertices carry `delta`.
+
+`Edge.IsConvex` keeps evaluator §3's meanings: a longitudinal or section edge
+is a junction edge decided by `orient3d` over its two incident walls' apex
+vertices, exactly as loft §5 decides a rung; a cap rim takes the rim rule —
+outer convex, hole concave.
+
+### 16.6 Measurements and bounds
+
+All four readings are taken over the exact rational vertex set, never the
+rounded one.
+
+| Reading | Value | Exactness and bound |
+|---|---|---|
+| `Volume` | the exact tetrahedron sum over every held triangle, anchored at `V_0`, published as that rational's nearest float | `Exact`, bound zero: the same standing an all-planar boolean whose contacts round exactly already publishes (evaluator §9) |
+| `Centroid` | the exact first-moment sum divided by the exact volume, each coordinate published as its nearest float | the published float's own rounding, read exactly; zero when every coordinate is already a float |
+| `Area` | each triangle's area is the square root of an exact rational, enclosed by `ratSqrtUp` and its lower twin; the sum of the enclosures | `Approximate`, the enclosure's width rounded up |
+| `Bounds` | per-axis minimum and maximum over the rational vertices, rounded outward | `Approximate`, bound `delta`: the box encloses the exact body and exceeds its extremes by at most one rounding |
+
+The tolerance-gate diameter is §9's: the held vertex set's own diameter less
+twice `delta`, rounded down.
+
+### 16.7 Table DM — downstream
+
+| DM | Consumer | Status |
+|---|---|---|
+| **DM1** | structural `Verify` + tolerance gate | lands with M1. The construction, SM6/SM7 per span and SM8's audit prove validity, and all four readings are judged |
+| **DM2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with M1 as an exact restatement: the held triangles of Table BM at any tolerance at or above `delta` (below it, `ErrUnsupported`, `docs/tessellation-design.md` §7's rule), `sourceBound(face) = delta` for every face, `areaSlack` the per-triangle perturbation at `delta` (`perturbedTriangleAreaAllow`, the `stitchPayload` row's term), `volSymDiff = sweptVolumeAllow(delta, area upper)` with `symDiffOK == true`, and the boundary proof the build's own SM8 certificate. The implementing PR adds this payload's row to `docs/tessellation-design.md` §2's table |
+| **DM3** | mesh booleans | an operand on `docs/tessellation-design.md` §11's terms once DM2 lands. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness; `boolean.go`'s witness search must sample along each contact segment, not only a facet's corners, midpoints and centroid, for a wall passing through another wall to expose one. That change is the gate's own fix and lands before M2 |
+| **DM4** | interference | through DM3 |
+| **DM5** | clearance | box separation at once; `WithClearances` stays `Suspect` until a planar-body adapter admits the payload |
+| **DM6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`, as D6 |
+| **DM7** | `Placed`, `Duplicate`, `PlacedCopy` | re-runs §16.3 from the record under the composed motion, applied to the rational vertices exactly (a transform's entries are floats, hence rationals), rounds once, recomputes `delta`, re-decides the shell orientation and re-runs SM8; `delta` never accumulates across placements |
+| **DM8** | modify operations | `ErrUnsupported`, as D8 |
+
+### 16.8 Determinism, cancellation, and budgets
+
+Equal profile record, path record, factors and placement produce the same
+rational vertices, roles, measurements and triangle order; the `λ_j`
+enclosures are read at one fixed precision, so no step depends on a
+transcendental library or on FMA contraction. The build polls `ctx` per span
+and inside SM8's pair loop, and returns `ctx.Err()` unchanged. §11's span cap
+bounds `N`, and SM10's preflight bounds `F` before any pair test runs; the
+rational vertices' bit length grows with the span index, since each section
+is a rational image of the one before it, and the span cap is what bounds
+that growth.
+
+### 16.9 Increments
+
+| PR | Lands | Still staged |
+|---|---|---|
+| **M1** | `WithMitredJoins()` and `WithSectionScale` over `LineTo`-only paths and `LineSeg`-only profiles: §16.3's construction, Table SM, Table BM, §16.6's four readings, DM1, DM2, DM7, the executable example, and the `docs/tessellation-design.md` payload row | DM3 and DM4 until the witness fix lands; `WithSurfaceResult()`, arc spans, curved profile segments |
+| **M2** | DM3 and DM4 after `boolean.go`'s segment-anchored witness search lands: the union-of-two-branches test row | `WithSurfaceResult()`, arc spans, curved profile segments |
+
+### 16.10 Required tests
+
+Every row asserts computed geometry or a proof bound, and every bound leg is
+deleted once and watched fail before it is trusted.
+
+- A square profile of side `a` centred on the path, swept along an L path of
+  spans `L1` and `L2` meeting at a right angle, no scale: `Volume` is `Exact`
+  and equals `a²·(L1 + L2)`; the join section's four rational vertices lie
+  on the join plane and span a rectangle of sides `a` and `a·√2` within the
+  published bounds; the body has `2 + 8` faces, `12` vertices and `20` edges,
+  and every edge has two incident faces.
+- A one-span square sweep with factor `f`: `Volume` is `Exact` and equals
+  `L·a²·(1 + f + f²)/3`; every `capEnd` vertex sits at `f` times its start
+  vertex's in-plane offset.
+- A three-span zigzag with a regular 16-gon and factors `r_k / r_0`: every
+  wall's four rational vertices are coplanar exactly (the exact `orient3d`
+  over them is zero); `Tessellate` at `0.01 mm` with `VerifyBoundary` returns
+  a verified mesh whose `Bound` equals `delta`; the STL round trip is
+  watertight; `Placed` under a rotation reproduces `Volume` exactly.
+- A hole loop sweeps to a void passage and subtracts from `Volume` exactly.
+- Each Table SM row refuses with its sentinel before any commit: the
+  document's live set, order and next producer identity are unchanged.
+- A sharp bend with a strong taper and a wide section reaches SM6 and the
+  error names the span and the vertex.
+- A path that returns through an earlier span reaches SM8 with
+  `ErrDegenerate`, and the audit names the two faces.
+- M2: the union of two branches that cross is one lump whose `Volume` lies
+  within its published bound of an independently computed
+  `V1 + V2 − overlap`.
+
+### 16.11 Companion edits
+
+- §1 names §16 as the owner of the corner mode and the scale, §2 lists the
+  two options, Table S's row S6 points here, and §12 lists M1 and M2.
+- `docs/layout.md`'s row for this document names §16; the implementing PR
+  adds rows for the files that build the mitred sweep.
+- The implementing PR adds the payload's row to `docs/tessellation-design.md`
+  §2's table and to `docs/payload-verification-design.md`, and changes
+  `doc.go`'s support map.
+- `docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
+  already names this document as the owner of its options and reach.

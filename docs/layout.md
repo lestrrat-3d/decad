@@ -42,7 +42,7 @@ to the byte budget.
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
-| `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, 3D-sketch boundary, `SweepChain` pairing, and reach. |
+| `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
 | `docs/prism-boolean-design.md` | The analytic `Union`/`Cut`/`Intersect` reduction over co-directional coplanar or offset-plane prisms: reject-only entry gate, private `sketch` scene, displacement bounds. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
