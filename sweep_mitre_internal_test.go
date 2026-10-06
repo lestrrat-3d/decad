@@ -1,8 +1,10 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -394,4 +396,101 @@ func TestMitredSweepSpanLengthLower(t *testing.T) {
 	lambda, err = mitredSpanLengthLower(r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0))
 	require.NoError(t, err)
 	require.Equal(t, big.NewRat(5, 1), lambda)
+}
+
+// mitredVolumeMomentsRat is mitredVolumeMoments as a term-by-term rational
+// sum, every partial sum reduced: the reference the common-denominator sum
+// must reproduce exactly.
+func mitredVolumeMomentsRat(exact []sweepRatVec, tris [][3]int, anchor sweepRatVec) (*big.Rat, [3]*big.Rat) {
+	vol6 := new(big.Rat)
+	moments := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	for _, t := range tris {
+		a := sweepRatSub(exact[t[0]], anchor)
+		b := sweepRatSub(exact[t[1]], anchor)
+		c := sweepRatSub(exact[t[2]], anchor)
+		term := sweepRatDot(a, sweepRatCross(b, c))
+		vol6.Add(vol6, term)
+		for axis := range 3 {
+			sum := new(big.Rat).Add(a[axis], b[axis])
+			sum.Add(sum, c[axis])
+			moments[axis].Add(moments[axis], sum.Mul(sum, term))
+		}
+	}
+	return vol6, moments
+}
+
+// requireMitredSumsMatch asserts that the common-denominator sum and the
+// rational reference agree on six times the volume and every moment, both
+// as values and as canonical strings.
+func requireMitredSumsMatch(t *testing.T, exact []sweepRatVec, tris [][3]int, anchor sweepRatVec, label string) {
+	t.Helper()
+	wantVol, wantMom := mitredVolumeMomentsRat(exact, tris, anchor)
+	gotVol, gotMom := mitredVolumeMoments(exact, tris, anchor)
+	require.Zero(t, wantVol.Cmp(gotVol), `%s: vol6`, label)
+	require.Equal(t, wantVol.RatString(), gotVol.RatString(), `%s: vol6`, label)
+	for axis := range 3 {
+		require.Zero(t, wantMom[axis].Cmp(gotMom[axis]), `%s: moment %d`, label, axis)
+		require.Equal(t, wantMom[axis].RatString(), gotMom[axis].RatString(), `%s: moment %d`, label, axis)
+	}
+}
+
+// TestMitredSweepMomentsMatchRationalSum pins mitredVolumeMoments to the
+// term-by-term rational sum over the built mitred fixtures (the tree branch,
+// the clustered trunk and three placed branches, each with the anchor its
+// own build uses) and over random triangle sets whose coordinates carry
+// random int64 numerators and denominators, some shared and most not.
+func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
+	t.Parallel()
+	t.Run("fixtures", func(t *testing.T) {
+		t.Parallel()
+		_, branch := mitredTreeBranch(t)
+		cluster := newClusteredTree(t, 25, 1.1)
+		bodies := map[string]*Body{"trunk": cluster.trunk}
+		for k := range 3 {
+			bodies[fmt.Sprintf("placed branch %d", k)] = cluster.branch(t, k)
+		}
+		payloads := map[string]mitredSweepPayload{"tree branch": branch}
+		for name, body := range bodies {
+			mp, ok := body.payload.(mitredSweepPayload)
+			require.True(t, ok, name)
+			payloads[name] = mp
+		}
+		for name, mp := range payloads {
+			c, err := constructMitredSweep(t.Context(), mp)
+			require.NoError(t, err, name)
+			anchor := mitredPlace(mp.xform, c.anchor)
+			requireMitredSumsMatch(t, mp.exact, mp.tris, anchor, name)
+		}
+	})
+	t.Run("random", func(t *testing.T) {
+		t.Parallel()
+		rng := rand.New(rand.NewPCG(0x6d697472, 0x65640a))
+		denominator := func() int64 {
+			d := rng.Int64N(math.MaxInt64-2) + 3
+			if d&(d-1) == 0 {
+				d++
+			}
+			return d
+		}
+		for trial := range 200 {
+			pool := []int64{denominator(), denominator(), denominator()}
+			coord := func() *big.Rat {
+				d := denominator()
+				if rng.IntN(3) == 0 {
+					d = pool[rng.IntN(len(pool))]
+				}
+				return big.NewRat(int64(rng.Uint64()), d)
+			}
+			vertex := func() sweepRatVec { return sweepRatVec{coord(), coord(), coord()} }
+			exact := make([]sweepRatVec, 4+rng.IntN(8))
+			for v := range exact {
+				exact[v] = vertex()
+			}
+			tris := make([][3]int, 1+rng.IntN(20))
+			for k := range tris {
+				tris[k] = [3]int{rng.IntN(len(exact)), rng.IntN(len(exact)), rng.IntN(len(exact))}
+			}
+			requireMitredSumsMatch(t, exact, tris, vertex(), fmt.Sprintf("trial %d", trial))
+		}
+	})
 }

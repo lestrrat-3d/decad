@@ -698,6 +698,7 @@
 1	1.44	TestExactSumRoundDyadicMatchesRational
 1	0.02	TestFacetedAxisSupportProvesRealUnionFloorFace
 1	0.72	TestFreeformPrismProofRecordCoversItsOwnChording
+1	0.07	TestHeldVolumeExactMatchesRationalSum
 1	0.06	TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans
 1	0.01	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
 1	0.26	TestLoftArcWedgeBoxSoundness
@@ -710,6 +711,7 @@
 1	0.01	TestLoftStationCapAdmitsAPairInsideItsShare
 1	2.51	TestMeshMassLadderRefinesUntilPositive
 1	0.46	TestMitredSweepGateDiameterShrinks
+1	1.59	TestMitredSweepMomentsMatchRationalSum
 1	0.03	TestMotionCollisionTransferWidensTheBound
 1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
 1	0.01	TestOrientRatAgreesWithOrientSignExact

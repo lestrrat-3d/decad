@@ -85,23 +85,82 @@ func assembleMitredSweep(c mitredConstruction, stride int) mitredAssembly {
 	return a
 }
 
+// scaleMitredVertices lifts the rational vertices, relative to the anchor,
+// onto one common denominator: it returns den, the least common multiple of
+// every coordinate's own denominator, and each vertex's (p − anchor)·den,
+// an integer vector.
+func scaleMitredVertices(exact []sweepRatVec, anchor sweepRatVec) (*big.Int, [][3]*big.Int) {
+	den := big.NewInt(1)
+	var rem, g big.Int
+	widen := func(r *big.Rat) {
+		d := r.Denom()
+		if rem.Rem(den, d).Sign() == 0 {
+			return
+		}
+		g.GCD(nil, nil, den, d)
+		den.Mul(den, rem.Quo(d, &g))
+	}
+	for _, p := range exact {
+		for axis := range 3 {
+			widen(p[axis])
+		}
+	}
+	for axis := range 3 {
+		widen(anchor[axis])
+	}
+	lift := func(r *big.Rat) *big.Int {
+		n := new(big.Int).Quo(den, r.Denom())
+		return n.Mul(n, r.Num())
+	}
+	origin := [3]*big.Int{lift(anchor[0]), lift(anchor[1]), lift(anchor[2])}
+	rel := make([][3]*big.Int, len(exact))
+	for v, p := range exact {
+		for axis := range 3 {
+			n := lift(p[axis])
+			rel[v][axis] = n.Sub(n, origin[axis])
+		}
+	}
+	return den, rel
+}
+
 // mitredVolumeMoments is the exact tetrahedron sum over every held triangle
 // anchored at the placed V_0: six times the signed volume, and the signed
 // first moment relative to the anchor times twenty-four.
+//
+// The sums run over the vertices lifted onto one common denominator den:
+// each tetrahedron's term is then an integer over den³ and its moment
+// contribution an integer over den⁴, so the sums are integers and each is
+// divided by its power of den once at the end. No partial sum is reduced on
+// the way, and SetFrac's single normalisation yields the same canonical
+// rational a term-by-term rational sum does.
 func mitredVolumeMoments(exact []sweepRatVec, tris [][3]int, anchor sweepRatVec) (*big.Rat, [3]*big.Rat) {
-	vol6 := new(big.Rat)
-	moments := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	den, rel := scaleMitredVertices(exact, anchor)
+	var vol6N, term, sum, tmp big.Int
+	var momN, cross [3]big.Int
 	for _, t := range tris {
-		a := sweepRatSub(exact[t[0]], anchor)
-		b := sweepRatSub(exact[t[1]], anchor)
-		c := sweepRatSub(exact[t[2]], anchor)
-		term := sweepRatDot(a, sweepRatCross(b, c))
-		vol6.Add(vol6, term)
-		for axis := range 3 {
-			sum := new(big.Rat).Add(a[axis], b[axis])
-			sum.Add(sum, c[axis])
-			moments[axis].Add(moments[axis], sum.Mul(sum, term))
+		a, b, c := rel[t[0]], rel[t[1]], rel[t[2]]
+		for i := range 3 {
+			j, k := (i+1)%3, (i+2)%3
+			cross[i].Mul(b[j], c[k])
+			cross[i].Sub(&cross[i], tmp.Mul(b[k], c[j]))
 		}
+		term.Mul(a[0], &cross[0])
+		term.Add(&term, tmp.Mul(a[1], &cross[1]))
+		term.Add(&term, tmp.Mul(a[2], &cross[2]))
+		vol6N.Add(&vol6N, &term)
+		for axis := range 3 {
+			sum.Add(a[axis], b[axis])
+			sum.Add(&sum, c[axis])
+			momN[axis].Add(&momN[axis], tmp.Mul(&sum, &term))
+		}
+	}
+	den3 := new(big.Int).Mul(den, den)
+	den3.Mul(den3, den)
+	den4 := new(big.Int).Mul(den3, den)
+	vol6 := new(big.Rat).SetFrac(&vol6N, den3)
+	var moments [3]*big.Rat
+	for axis := range 3 {
+		moments[axis] = new(big.Rat).SetFrac(&momN[axis], den4)
 	}
 	return vol6, moments
 }
