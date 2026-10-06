@@ -361,8 +361,7 @@ loft, a straight hexagon sweep and a revolved bottle onto the same tray while
 a cylinder rolls across its floor without slipping. The block and the bottle,
 read as displaced held meshes, rest on their lifted bands; the bottle's
 landing publishes its witness spin; the cup rests on its four bottom corners.
-The whole 4 s runs when `DECAD_PARTSBIN_FULL` is set, `dynamics` runs every
-body but the bottle for an eighth of a second otherwise, and the `_gallery`
+The whole 4 s runs in the `dynamics` tests, and the `_gallery`
 module runs and renders all of it.
 
 Two- and three-body worlds take the same step as larger ones.

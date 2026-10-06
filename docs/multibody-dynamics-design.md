@@ -34,8 +34,8 @@ point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it. A source cylinder that lands on its end disk rests on contact-sweep §4.6's persistent
 disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's three
-exit scenes run their full length in `_gallery` and in `dynamics/scene_test.go`, the last two there only
-under `DECAD_TUMBLE_FULL` and `DECAD_PARTSBIN_FULL` (§13 PRs 15 and 21): the Phase 1 scene,
+exit scenes run their full length in `_gallery` and in `dynamics/scene_test.go`, the second there only
+under `DECAD_TUMBLE_FULL` (§13 PRs 15 and 21): the Phase 1 scene,
 `stack-and-drop`, its `2 s`; the Phase 2 scene, `tumble`, its `3 s` with every body resting face down;
 and the Phase 3 scene, `parts-bin`, its `4 s` with the five dropped bodies resting on a `ContactBand` and
 the cylinder rolling without slip.
@@ -3074,11 +3074,9 @@ scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
   islands' at most about `0.042 rad/s`. The cylinder rides a rolling band track in every step after its first,
   its ruling ends at rest within `VelocityResidual`. `dynamics/scene_test.go`'s `requirePartsBinExit` asserts
   §2's criteria plus every step's linear momentum balance and every event on the floor's `+Z`. The whole scene
-  takes about four minutes on an amd64 workstation, nearly all of it in the bottle (each of its three impact
-  steps about `5 s`, each resting step about `0.2 s`): `TestPartsBinScene` runs it under
-  `DECAD_PARTSBIN_FULL`, `TestPartsBinSceneSubset` runs every body but the bottle for `0.125 s` (about `3 s`,
-  `10 s` under the race detector), and the `_gallery` job runs the whole scene in its tests, which also
-  render its first frame.
+  takes about `5.6 s` on an amd64 workstation and about `33 s` under the race detector, nearly all of it in
+  the bottle: `TestPartsBinScene` runs it in every `dynamics` test run, and the `_gallery` job runs it again
+  in its tests, which also render its first frame.
 
 ## 14. Test and fixture strategy
 
