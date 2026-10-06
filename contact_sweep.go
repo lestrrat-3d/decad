@@ -589,6 +589,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if err := validateSupportBand(req.SupportBand); err != nil {
 		return nil, err
 	}
+	if err := validateHeldChord(req.HeldChord); err != nil {
+		return nil, err
+	}
 	if err := validateRestSpeed(req.RestSpeed); err != nil {
 		return nil, err
 	}

@@ -97,7 +97,7 @@ func bandRun(t *testing.T, doc *Document, a, b *Body, pathA, pathB PairPath) *ro
 	}{{a, pathA}, {b, pathB}} {
 		path, err := validatePairPath(side.path)
 		require.NoError(t, err)
-		solid, delta, ok, err := planarSolidAtPose(t.Context(), budget, side.body, r3.Identity())
+		solid, delta, ok, err := planarSolidAtPose(t.Context(), budget, side.body, r3.Identity(), 0)
 		require.NoError(t, err)
 		require.True(t, ok)
 		paths[i], ok = preparePlanarSweepPath(side.body, path, &solid, delta)

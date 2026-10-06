@@ -559,6 +559,44 @@ func TestNewWorldInertiaPositivityProof(t *testing.T) {
 	}
 }
 
+// TestNewWorldRejectsHeldChord is docs/multibody-dynamics-design.md §10.4's
+// admission: a HeldChord must be a finite nonnegative Length, zero admitting
+// no curved held mesh.
+func TestNewWorldRejectsHeldChord(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	bodies := []dynamics.RigidBody{
+		{Body: floor, Role: dynamics.Fixed},
+		{Body: box, Role: dynamics.Dynamic, Density: &density},
+		{Body: farBox(t, doc, 1000), Role: dynamics.Fixed},
+		{Body: farBox(t, doc, 2000), Role: dynamics.Fixed},
+	}
+	for name, tc := range map[string]struct {
+		chord units.Value
+		ok    bool
+	}{
+		"zero value":   {chord: units.Value{}, ok: true},
+		"positive":     {chord: units.Millimeters(.03), ok: true},
+		"negative":     {chord: units.Millimeters(-.03)},
+		"non-finite":   {chord: units.Millimeters(math.Inf(1))},
+		"not a number": {chord: units.Millimeters(math.NaN())},
+		"not a length": {chord: units.Radians(.03)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := pairMaterialStepConfig()
+			config.Contact.HeldChord = tc.chord
+			_, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: bodies, Step: config})
+			if tc.ok {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, dynamics.ErrInvalidInput)
+		})
+	}
+}
+
 // TestNewWorldRejectsSupportBand is docs/multibody-dynamics-design.md §10.5's
 // admission: a SupportBand must be a nonnegative Length within
 // PenetrationResidual, since every band it publishes must pass the residual.

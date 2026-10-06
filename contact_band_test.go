@@ -3,10 +3,13 @@ package decad_test
 import (
 	"context"
 	"math"
+	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -395,4 +398,252 @@ func TestSweepPairBandReplaysBracketLeftEdge(t *testing.T) {
 	// rounding, and the edge replays.
 	_, _, err = report.CertifiedPosesAt(report.Bracket.From.Elapsed.Value)
 	require.NoError(t, err)
+}
+
+// partsBinBottle is §2's revolved bottle: the full revolve about Z of a
+// line-and-arc half-profile with a Ø16 mm base from z = 0 to 14, a
+// quarter-circle shoulder to a Ø8 mm neck, and its top at z = 24.
+func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(8, 0)
+	c := s.CreatePoint(8, 14)
+	center := s.CreatePoint(4, 14)
+	d := s.CreatePoint(4, 18)
+	e := s.CreatePoint(4, 24)
+	f := s.CreatePoint(0, 24)
+	for _, p := range []*sketch.Point{a, b, c, center, d, e, f} {
+		s.Fix(p)
+	}
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateArc(center, c, d)
+	s.CreateLine(d, e)
+	s.CreateLine(e, f)
+	s.CreateLine(f, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := doc.Revolve(s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// partsBinCup is §2's 24×16×16 mm box shelled 2 mm through its top.
+func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	box := boxBody(t, doc, -12, -8, 12, 8, 16)
+	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(2))
+	require.NoError(t, err)
+	return cup
+}
+
+// partsBinLoft is §2's loft from a square with its edge midpoints pushed out
+// at z = 0 to an octagon at z = 16.
+func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 16)
+	require.NoError(t, err)
+	s0, p0 := meshPolygonSketch(t, w, w.XY(), [][2]float64{
+		{8.5, 0}, {8, 8}, {0, 8.5}, {-8, 8}, {-8.5, 0}, {-8, -8}, {0, -8.5}, {8, -8}})
+	s1, p1 := meshPolygonSketch(t, w, top, [][2]float64{
+		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6}})
+	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	return loft
+}
+
+// partsBinSweep is §2's straight 14 mm sweep of the parts-bin hexagon, which
+// tessellates as the prism it reduced to.
+func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, profile := meshPolygonSketch(t, w, w.XY(), sweepHexagonCorners)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
+	require.NoError(t, err)
+	body, err := doc.Sweep(t.Context(), s, profile, path)
+	require.NoError(t, err)
+	return body
+}
+
+// requireGapHolds asserts that the true signed separation lies inside the
+// report's published gap interval, compared exactly.
+func requireGapHolds(t *testing.T, report *decad.ContactReport, truth *big.Float) {
+	t.Helper()
+	require.NotNil(t, report.Gap, "relation=%v reason=%v", report.Relation, report.Reason)
+	value := new(big.Float).SetPrec(512).SetFloat64(report.Gap.Value.Base())
+	bound := new(big.Float).SetPrec(512).SetFloat64(report.Gap.Bound.Base())
+	low := new(big.Float).SetPrec(512).Sub(value, bound)
+	high := new(big.Float).SetPrec(512).Add(value, bound)
+	require.LessOrEqual(t, low.Cmp(truth), 0, "true separation %s below the gap [%s, %s]",
+		truth.Text('g', 20), low.Text('g', 20), high.Text('g', 20))
+	require.LessOrEqual(t, truth.Cmp(high), 0, "true separation %s above the gap [%s, %s]",
+		truth.Text('g', 20), low.Text('g', 20), high.Text('g', 20))
+}
+
+// TestHeldMeshAdmitsEveryPayload is docs/multibody-dynamics-design.md §13
+// PR 20b: every solid payload without an exact contact family is read off its
+// VerifyAll tessellation, an all-planar body at a chord that chords nothing
+// and a body with a curved face at the request's HeldChord, with δ the mesh's
+// Bound charged on the relation (§10.4).
+//
+// Legs shown to fail (each deleted, fixture red, then restored):
+//   - the δ reading: with the mesh's Bound replaced by zero, the bottle on its
+//     side with a held facet δ/2 above the floor reads an exact Separated gap
+//     of about δ/2, while the true base cylinder, evaluated in 512-bit
+//     arithmetic, hangs its chord sagitta below that facet and pokes into the
+//     floor (and the upright bottle's bound falls below the mesh's Bound);
+//   - the snapshot cache's chord key: with every cached snapshot serving every
+//     chord, the coarse query publishes the fine mesh's bound.
+func TestHeldMeshAdmitsEveryPayload(t *testing.T) {
+	const chord = .03
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -100, -100, 100, 100, -10, 10)
+	bottle := partsBinBottle(t, doc)
+	mesh, err := bottle.Tessellate(t.Context(), units.Millimeters(chord))
+	require.NoError(t, err)
+	delta := mesh.Bound().Base()
+	require.Positive(t, delta, "the bottle's base and shoulder are chorded")
+	req := contactRequest()
+	req.HeldChord = units.Millimeters(chord)
+
+	up := contactPose(t, r3.Vec{Z: 5})
+	upright, err := doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), up, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, upright.Relation, "reason=%v", upright.Reason)
+	requireGapHolds(t, upright, big.NewFloat(5))
+	// The translation pose stretches δ by a hair over one, if at all.
+	require.GreaterOrEqual(t, upright.Gap.Bound.Base(), delta)
+	require.LessOrEqual(t, upright.Gap.Bound.Base(), .05)
+
+	// The snapshot is cached per body and chord: a second query reads it and
+	// publishes the same report bit for bit.
+	again, err := doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), up, req)
+	require.NoError(t, err)
+	require.Equal(t, upright, again)
+	// A coarser chord reads its own, coarser mesh, and the finer chord then
+	// reads the same report again.
+	coarseMesh, err := bottle.Tessellate(t.Context(), units.Millimeters(.1))
+	require.NoError(t, err)
+	require.Greater(t, coarseMesh.Bound().Base(), .05)
+	coarseReq := req
+	coarseReq.HeldChord = units.Millimeters(.1)
+	coarse, err := doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), up, coarseReq)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, coarse.Relation, "reason=%v", coarse.Reason)
+	require.GreaterOrEqual(t, coarse.Gap.Bound.Base(), coarseMesh.Bound().Base())
+	again, err = doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), up, req)
+	require.NoError(t, err)
+	require.Equal(t, upright, again)
+
+	// A zero chord admits no curved body.
+	unchorded, err := doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), up, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactUndecided, unchorded.Relation)
+	require.Nil(t, unchorded.Gap)
+
+	// The bottle on its side, turned about its axis so the facet between two
+	// adjacent base-rim vertices is lowest. The pose sends the body's Z axis
+	// to −Y exactly and its row for world Z is (sin φ, cos φ, 0).
+	var rim []float64
+	for _, v := range mesh.Vertices() {
+		if v.Z == 0 && math.Abs(math.Hypot(v.X, v.Y)-8) < 1e-9 {
+			rim = append(rim, math.Atan2(v.Y, v.X))
+		}
+	}
+	require.Greater(t, len(rim), 8)
+	slices.Sort(rim)
+	mid := (rim[0] + rim[1]) / 2
+	sinPhi, cosPhi := -math.Cos(mid), -math.Sin(mid)
+	basis := r3.Basis{EX: r3.Vec{X: cosPhi, Z: sinPhi}, EY: r3.Vec{X: -sinPhi, Z: cosPhi}, EZ: r3.Vec{Y: -1}}
+	turned, err := r3.FromBasis(basis, r3.Vec{})
+	require.NoError(t, err)
+	held := math.Inf(1)
+	for _, v := range mesh.Vertices() {
+		held = math.Min(held, turned.Apply(v).Z)
+	}
+	side, err := r3.FromBasis(basis, r3.Vec{Z: delta/2 - held})
+	require.NoError(t, err)
+	// The true body's lowest point: the base cylinder's radius 8 against the
+	// pose's world-Z row, whose Z entry is exactly zero.
+	b := side.Basis()
+	require.Zero(t, b.EZ.Z)
+	row := new(big.Float).SetPrec(512).Mul(big.NewFloat(b.EX.Z), big.NewFloat(b.EX.Z))
+	row.Add(row, new(big.Float).SetPrec(512).Mul(big.NewFloat(b.EY.Z), big.NewFloat(b.EY.Z)))
+	row.Sqrt(row)
+	truth := new(big.Float).SetPrec(512).SetFloat64(side.Translation().Z)
+	truth.Sub(truth, row.Mul(row, big.NewFloat(8)))
+	require.Negative(t, truth.Sign(), "the true base hangs its sagitta below the held facet into the floor")
+	lying, err := doc.ContactPair(t.Context(), floor, bottle, r3.Identity(), side, req)
+	require.NoError(t, err)
+	requireGapHolds(t, lying, truth)
+	require.Equal(t, decad.ContactBand, lying.Relation, "reason=%v", lying.Reason)
+
+	// Every exact payload reads exactly through its own mesh.
+	exact := map[string]*decad.Body{"cup": partsBinCup(t, doc), "loft": partsBinLoft(t, doc),
+		"sweep": partsBinSweep(t, doc)}
+	for name, body := range exact {
+		report, err := doc.ContactPair(t.Context(), floor, body, r3.Identity(), up, req)
+		require.NoError(t, err, name)
+		require.Equal(t, decad.ContactSeparated, report.Relation, "%s reason=%v", name, report.Reason)
+		require.Equal(t, 5.0, report.Gap.Value.Base(), name)
+		require.Zero(t, report.Gap.Bound.Base(), name)
+	}
+	onFloor, err := doc.ContactPair(t.Context(), floor, exact["cup"], r3.Identity(),
+		contactPose(t, r3.Vec{X: 3, Y: -2}), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, onFloor.Relation, "reason=%v", onFloor.Reason)
+
+	// The 2.1 mm chamfer's feet are not dyadic: its δ is the rounding of its
+	// offset contour.
+	box := boxBody(t, doc, -6, -6, 6, 6, 12)
+	block, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(2.1))
+	require.NoError(t, err)
+	chamfered, err := doc.ContactPair(t.Context(), floor, block, r3.Identity(), up, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, chamfered.Relation, "reason=%v", chamfered.Reason)
+	requireGapHolds(t, chamfered, big.NewFloat(5))
+	require.Positive(t, chamfered.Gap.Bound.Base())
+	require.Less(t, chamfered.Gap.Bound.Base(), 1e-12)
+}
+
+// TestHeldChordValidation rejects a negative, non-finite or non-Length
+// HeldChord at both entry points. The sweep turns the block about a skew
+// axis, a path SweepPair reports undecided before any ContactPair call, so
+// its own check is the one that refuses. Each entry point's check was shown
+// to fail: deleted, its cases return no error.
+func TestHeldChordValidation(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -100, -100, 100, 100, -10, 10)
+	block := boxBody(t, doc, -6, -6, 6, 6, 12)
+	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
+	skew := decad.PoseSegment{From: contactPose(t, r3.Vec{Z: 20}),
+		To: rotationPose(t, r3.Vec{X: 1, Y: 1, Z: 1}, 30, r3.Vec{Z: 20}), Duration: units.Seconds(1)}
+	sweep := tumbleRequest()
+	unsupported, err := doc.SweepPair(t.Context(), floor, block, still, skew, sweep)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactUnsupported, unsupported.Cause)
+	for _, tc := range []struct {
+		name  string
+		chord units.Value
+		want  error
+	}{
+		{"negative", units.Millimeters(-.03), decad.ErrDegenerate},
+		{"non-finite", units.Millimeters(math.Inf(1)), decad.ErrNotFinite},
+		{"NaN", units.Millimeters(math.NaN()), decad.ErrNotFinite},
+		{"not a Length", units.Degrees(1), decad.ErrUnitKind},
+	} {
+		req := contactRequest()
+		req.HeldChord = tc.chord
+		_, err := doc.ContactPair(t.Context(), floor, block, r3.Identity(), contactPose(t, r3.Vec{Z: 5}), req)
+		require.ErrorIs(t, err, tc.want, tc.name)
+		sweep.HeldChord = tc.chord
+		_, err = doc.SweepPair(t.Context(), floor, block, still, skew, sweep)
+		require.ErrorIs(t, err, tc.want, tc.name)
+	}
 }
