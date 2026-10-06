@@ -41,10 +41,10 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 		t.Helper()
 		require.Len(t, got, len(want), `%s: term count`, label)
 		for i := range want {
-			require.Equal(t, want[i].k, got[i].k, `%s: term %d k`, label, i)
-			require.Equal(t, want[i].m, got[i].m, `%s: term %d m`, label, i)
-			ac, _ := got[i].ac.Float64()
-			as, _ := got[i].as.Float64()
+			require.Equal(t, want[i].k, got[i].K(), `%s: term %d k`, label, i)
+			require.Equal(t, want[i].m, got[i].M(), `%s: term %d m`, label, i)
+			ac, _ := got[i].Ac().Float64()
+			as, _ := got[i].As().Float64()
 			require.LessOrEqual(t, math.Abs(ac-want[i].ac), 1e-12*math.Max(1, math.Abs(want[i].ac)),
 				`%s: term %d (%d, %d) ac %v, reference %v`, label, i, want[i].k, want[i].m, ac, want[i].ac)
 			require.LessOrEqual(t, math.Abs(as-want[i].as), 1e-12*math.Max(1, math.Abs(want[i].as)),

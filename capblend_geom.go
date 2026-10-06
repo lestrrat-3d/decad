@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/cappatch"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -292,6 +293,23 @@ type capPatchGeom struct {
 	// feet. patchAreaOf's Cone arm reads it to bracket the frustum-sector
 	// formula's Δθ factor; nothing else does.
 	capThAllow float64
+}
+
+func (g capPatchGeom) patch() cappatch.Patch {
+	point := func(p Point2) cappatch.Point { return cappatch.Point{U: p.U, V: p.V} }
+	return cappatch.Patch{
+		Circular: g.circular,
+		SideA:    point(g.sideA), SideB: point(g.sideB),
+		CapA: point(g.capA), CapB: point(g.capB),
+		CU: g.cU, CV: g.cV,
+		SideRadius: g.sideRadius, CapRadius: g.capRadius,
+		Th0: g.th0, Th1: g.th1,
+		SweepCCW: g.sweepCCW, WholeTurn: g.wholeTurn,
+		CapTh0: g.capTh0, CapTh1: g.capTh1,
+		SideZ: g.sideZ, CapZ: g.capZ,
+		ContourAllow: g.contourAllow,
+		LevelDelta:   g.levelDelta, CapThAllow: g.capThAllow,
+	}
 }
 
 // buildCapBand builds the chamfer band for one loop selected on one cap: the

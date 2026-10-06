@@ -154,8 +154,8 @@ the rules leave to the byte budget.
 | `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. See `docs/modify-reach-design.md` §8.3/§4. |
 | `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone band patches. See `docs/modify-reach-design.md` §8.3. |
 | `capblend_contour.go` | Maps cap-blend joins and shell offsets to `internal/capcontour/`'s interval bounds. See `docs/modify-reach-design.md` §8.3-§8.4. |
-| `capblend_centroid.go` | Closed-form cap-blend centroid moments: exact Plane patches, a Fourier sum for Cone patches, a bounding-box ceiling. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid by closed-form per-patch integrals. See `docs/modify-reach-design.md` §8.4. |
+| `capblend_centroid.go` | Assembles cap-blend first moments and bounds from slab, disk and `internal/cappatch/` patch terms. See `docs/modify-reach-design.md` §8.4. |
+| `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and assembles bounded area/volume readings over `internal/cappatch/`. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: a band patch's own exact normal-component model, enclosed over rational intervals. See the file's doc comment. |
 | `capblend_departure.go` | Bounds built band-patch departure from its published surface. See its doc comment. |
@@ -254,6 +254,7 @@ the rules leave to the byte budget.
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
 | `internal/capcontour/` | Interval enclosures for cap contour points, offset carrier intersections and miter locus speed. See `docs/modify-reach-design.md` §8.3-§8.4. |
+| `internal/cappatch/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
