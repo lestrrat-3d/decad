@@ -13,6 +13,14 @@ permissions:
 jobs:
   # Lint and test jobs run independently. The root race shards share one test
   # binary built by race-binary.
+  #
+  # Each Linux job that compiles keeps its own Go build cache through
+  # .github/actions/go-build-cache-restore and go-build-cache-save, so it
+  # restores what it built itself; those actions explain the key and the
+  # save policy. setup-go's own cache is off in those jobs. It keys on the OS
+  # and go.sum alone, so every Linux job would share one entry, saved by
+  # whichever job finished first. verify, gallery, macOS and Windows each
+  # still use setup-go's cache, since each is the only job with its key.
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
@@ -24,6 +32,15 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
+
+      # The linted packages change in nearly every pull request, so this key
+      # covers go.mod and go.sum alone, and the snapshot is reused for the
+      # standard library and the dependencies.
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: lint
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -33,6 +50,9 @@ jobs:
 
       - name: Run go vet
         run: go vet ./...
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
 
   race-binary:
     name: Build root race test binary
@@ -45,6 +65,21 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
+
+      # The sources are every package the root test binary compiles: the root
+      # package and everything outside dynamics/ and examples/. A pull request
+      # that changes none of them restores the whole binary, link included.
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: race-binary
+          sources: |
+            :(glob)**/*.go
+            :(exclude)dynamics
+            :(exclude)examples
+            :(exclude)_gallery
+            :(exclude)_shardgen
 
       - name: Download dependencies
         run: go mod download
@@ -59,6 +94,9 @@ jobs:
           path: decad.race.test
           if-no-files-found: error
           retention-days: 1
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
 
   # The root package uses one compiled race binary across its shards.
   test-root-race:
@@ -188,10 +226,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # macOS and Windows keep setup-go's cache: each is the only job with its
+      # key, so the entry it saves holds its own build.
       - name: Install Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: ${{ runner.os != 'Linux' }}
+
+      # Both Linux runners compile the root package, which changes in nearly
+      # every pull request, so their keys cover go.mod and go.sum alone. The
+      # cache name comes from the existing matrix fields, so the job names stay
+      # as they are.
+      - name: Restore Go build cache
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: race-${{ matrix.packages == './dynamics/' && 'dynamics' || 'packages' }}
 
       - name: Download dependencies
         run: go mod download
@@ -210,12 +261,16 @@ jobs:
       # -v prints each test's duration, so a slow run shows which tests grew.
       # A runner with a `budget:` fails once the run takes longer than that
       # many seconds, far below its -timeout; see the comment above the matrix.
+      # The restored build cache also holds test results, and go test replays
+      # a stored result instead of running the test when nothing it depends on
+      # changed. -count=1 makes every test run, so the cache saves compile
+      # time only.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != ''
         shell: bash
         run: |
           start=$SECONDS
-          go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
+          go test ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
           elapsed=$(( SECONDS - start ))
           echo "${{ matrix.packages }} finished in ${elapsed}s"
           budget='${{ matrix.budget }}'
@@ -230,6 +285,10 @@ jobs:
       - name: Run tests
         if: matrix.shard == '' && matrix.packages == ''
         run: go test ${{ matrix.race }} -timeout 10m ./...
+
+      - name: Save Go build cache
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/go-build-cache-save
 
   # Verify the tree is tidy.
   verify:
@@ -300,6 +359,8 @@ jobs:
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:
     runs-on: ubuntu-latest
+    env:
+      GOVULNCHECK_VERSION: v1.4.0
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -308,6 +369,14 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
+
+      # The cache name carries the govulncheck version, so a version bump saves
+      # a snapshot holding the new build of the tool.
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: govulncheck-${{ env.GOVULNCHECK_VERSION }}
 
       # govulncheck requires a newer Go than this module's `go` directive, but
       # setup-go pins GOTOOLCHAIN=local. Allow an on-demand toolchain fetch so
@@ -315,4 +384,7 @@ jobs:
       - name: Run govulncheck
         env:
           GOTOOLCHAIN: auto
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.4.0 ./...
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save

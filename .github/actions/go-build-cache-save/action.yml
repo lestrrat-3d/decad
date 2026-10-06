@@ -1,0 +1,46 @@
+name: Save Go build cache
+description: >-
+  Saves the GOCACHE snapshot that go-build-cache-restore keyed, holding only
+  the entries this run used.
+
+# Only a push to main saves. A pull request reads main's snapshots, and the
+# snapshots it would save itself are visible to that pull request alone, so
+# they would mostly fill the repository's 10 GB cache budget and push main's
+# snapshots out. A run that restored an exact match saves nothing either: a
+# cache key cannot be overwritten.
+#
+# Before saving, every file older than the restore action's marker is
+# deleted. Those are the restored entries this run never used, so a snapshot
+# restored from an older key does not carry them forward and grow with every
+# save.
+
+runs:
+  using: composite
+  steps:
+    - name: Decide whether to save the Go build cache
+      id: decide
+      shell: bash
+      run: |
+        save=false
+        if [ "$GO_BUILD_CACHE_HIT" != "true" ] &&
+          [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+          save=true
+        fi
+        echo "save=${save}" >> "$GITHUB_OUTPUT"
+        echo "exact match restored: ${GO_BUILD_CACHE_HIT}; event: ${GITHUB_EVENT_NAME}; ref: ${GITHUB_REF}; save: ${save}"
+
+    - name: Drop the restored entries this run did not use
+      if: steps.decide.outputs.save == 'true'
+      shell: bash
+      run: |
+        before="$(du -sh "$GO_BUILD_CACHE_DIR" | cut -f1)"
+        unused="$(find "$GO_BUILD_CACHE_DIR" -type f ! -newer "$GO_BUILD_CACHE_MARKER" | wc -l)"
+        find "$GO_BUILD_CACHE_DIR" -type f ! -newer "$GO_BUILD_CACHE_MARKER" -delete
+        echo "dropped ${unused} unused files; ${before} before, $(du -sh "$GO_BUILD_CACHE_DIR" | cut -f1) after"
+
+    - name: Save the Go build cache
+      if: steps.decide.outputs.save == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.GO_BUILD_CACHE_DIR }}
+        key: ${{ env.GO_BUILD_CACHE_KEY }}
