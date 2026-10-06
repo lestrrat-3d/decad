@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -325,6 +326,37 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 	return tessellateContext(ctx, b, tol, verify)
 }
 
+type tessellationCountKey struct{}
+
+// tessellationCount is an internal test hook: it counts, per body, the
+// tessellations tessellateContext builds under a context carrying it — every
+// build, never a cache hit. It is safe for concurrent use.
+type tessellationCount struct {
+	mu    sync.Mutex
+	built map[*Body]int
+}
+
+// withTessellationCount returns ctx carrying count.
+func withTessellationCount(ctx context.Context, count *tessellationCount) context.Context {
+	return context.WithValue(ctx, tessellationCountKey{}, count)
+}
+
+func (c *tessellationCount) note(b *Body) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.built == nil {
+		c.built = map[*Body]int{}
+	}
+	c.built[b]++
+}
+
+// of returns how many tessellations of b were built.
+func (c *tessellationCount) of(b *Body) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.built[b]
+}
+
 // tessellateContext is the read-only evaluator's cancellable tessellation
 // entry. It builds only an unowned Mesh and never touches document state.
 //
@@ -363,6 +395,9 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 			return nil, err
 		}
 		return cached.mesh, nil
+	}
+	if count, ok := ctx.Value(tessellationCountKey{}).(*tessellationCount); ok {
+		count.note(b)
 	}
 	mesh, err := tessellateBodyContext(ctx, b, chord, verify)
 	if err != nil {

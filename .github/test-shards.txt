@@ -513,6 +513,7 @@
 0	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 0	0.60	TestRunVerifyPairsKeepsJobOrder
 0	0.10	TestRunVerifyPairsReturnsLowestFailingError
+0	0.10	TestRunVerifyPairsRunsContactBatchesOnTheirWorker
 0	0.00	TestRvLenUpperEnclosesTheExactNorm
 0	0.00	TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths
 0	0.00	TestSagittaCostTermsMatchTheOperationsTheyName
@@ -624,8 +625,11 @@
 0	0.00	TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile
 0	0.00	TestValidateLoftRecordsSameKindCircularPairIsAdmitted
 0	0.00	TestValidateLoftRecordsSegmentCountMismatch
+0	0.90	TestVerifyMeshCacheBuildsOnceUnderContention
+0	2.50	TestVerifyMeshesEachBodyOnce
 0	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
 0	1.33	TestVerifyMotionRevolveKeepsLiveDenotationIdentities
+0	2.50	TestVerifyOverlapEnclosesBicylinderVolume
 0	6.00	TestVerifyPairWorkersMatchOneWorker
 0	0.00	TestVerifyPublishAbsentConcaveRadius
 0	0.00	TestVerifyPublishAbsentWall

@@ -554,8 +554,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   restates a held mesh (a boolean result or a mitred sweep) is asked at that
   tolerance raised to its own held floor, which its restatement always meets,
   so the request never refuses; which of its facets the pair may cut is the
-  rim bullet's gate below (`docs/faceted-vertex-bounds-design.md` §5). The
-  booleans of core §8 expose no tolerance parameter, on purpose. What IS caller-visible
+  rim bullet's gate below (`docs/faceted-vertex-bounds-design.md` §5).
+  `Verify`'s read-only intersection instead meshes each other body once per
+  call, at the least tolerance any of its candidate pairs derives
+  (`docs/interference-design.md` §5.3). The booleans of core §8 expose no
+  tolerance parameter, on purpose. What IS caller-visible
   is the proven bound the output carries: the tolerance's whole effect
   surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
   Verify. The machinery and its payload staging are

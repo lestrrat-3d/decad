@@ -335,7 +335,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 	want, err := evaluateBoolean(t.Context(), meshbool.OpIntersect, a, b)
 	require.NoError(t, err)
 
-	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{})
+	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{}, pairMeshes{})
 	require.NoError(t, err)
 	require.Equal(t, interferenceMeasured, outcome, `the mesh fallback must still measure a genuine overlap`)
 	require.Equal(t, want.volume, volume, `measuredInterference must report the same read-only mesh result evaluateBoolean itself would`)

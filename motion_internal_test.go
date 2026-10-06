@@ -331,7 +331,7 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	allowance := proofbound.SweptVolumeAllow(eta, motionbound.PathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
 	res, err := clearancePair(t.Context(), transient, block, false)
 	require.NoError(t, err)
-	volume, outcome, err := measuredInterference(t.Context(), transient, block, res)
+	volume, outcome, err := measuredInterference(t.Context(), transient, block, res, pairMeshes{})
 	require.NoError(t, err)
 	return volume, outcome, allowance
 }

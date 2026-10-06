@@ -129,6 +129,12 @@ and a cached mesh remains read-only through the public API. `Placed`,
 `Duplicate`, and `PlacedCopy` construct new bodies with independent cache state;
 their face pointers differ, so they never inherit the source body's entry.
 
+`Verify` also holds a cache of its own for the length of one call. It meshes
+each body once, at one chord, for every pair that reaches the read-only mesh
+intersection (`docs/interference-design.md` §5.3). That call-scoped cache fills
+this one as a side effect, through the same entry, so its key rule applies to
+those meshes too.
+
 Validation of context, body, tolerance, and payload precedes cache lookup. A
 cache hit still checks cancellation immediately before returning. Errors,
 refusals, cancellation, and partial work never populate or evict an entry. A

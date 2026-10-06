@@ -172,7 +172,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `verify.go` | `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and folds the pair outcomes `verify_pairs.go` proves into the report in pair order. See `docs/verification-design.md` §1-§3 and the file's doc comment. |
-| `verify_pairs.go` | `Verify`'s pair walk: lists the pairs box separation does not finish, proves each one, and runs them on a bounded worker pool that returns outcomes and the first error in pair order. See `docs/interference-design.md` §2 and §7.2. |
+| `verify_pairs.go` | `Verify`'s pair walk: lists the pairs box separation does not finish and proves them on a bounded worker pool, one layer of workers deep, returning outcomes and the first error in pair order. Meshes each body once per call. See `docs/interference-design.md` §2, §5.3 and §7.2. |
 | `report.go` | `Verify`'s report vocabulary: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Proves the reference diameter the tolerance gate is anchored on, per payload. With no provable diameter it withholds the gate rather than guess. See `docs/verification-design.md` §3. |

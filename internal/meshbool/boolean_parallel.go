@@ -11,9 +11,11 @@ var ErrContactBatchStop = errors.New("decad: contact batch stopped")
 
 type ContactWorkerContextKey struct{}
 
-// WithContactWorkers is an internal test/benchmark hook. Keeping the worker
-// count in the call context lets concurrent boolean calls choose different
-// caps without mutating package state.
+// WithContactWorkers sets how many workers each contact batch under ctx
+// runs on. Keeping the worker count in the call context lets concurrent
+// boolean calls choose different caps without mutating package state: tests
+// and benchmarks pick a cap, and Verify's parallel pair pool runs every
+// boolean inside its pairs on one worker. The count never changes a result.
 func WithContactWorkers(ctx context.Context, workers int) context.Context {
 	if workers < 1 {
 		workers = 1
@@ -208,8 +210,8 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 	if workers > len(pairs) {
 		workers = len(pairs)
 	}
-	if workers < 1 {
-		workers = 1
+	if workers <= 1 {
+		return runContactBatchSerial(ctx, ma, mb, pairs, results)
 	}
 	type job struct {
 		slot int
@@ -232,15 +234,7 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 					if err := ctx.Err(); err != nil {
 						return
 					}
-					contact, err := TriTriClassifyPrepared(
-						TriCorners(ma, next.pair.I),
-						TriCorners(mb, next.pair.J),
-						XtriCorners(ma, next.pair.I),
-						XtriCorners(mb, next.pair.J),
-						ma.Norms[next.pair.I], mb.Norms[next.pair.J],
-						ma.Fnorms[next.pair.I], mb.Fnorms[next.pair.J],
-					)
-					results[next.slot] = ContactBatchResult{Contact: contact, Err: err}
+					results[next.slot] = classifyContactPair(ma, mb, next.pair)
 				}
 			}
 		}()
@@ -260,4 +254,31 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 		return err
 	}
 	return nil
+}
+
+// runContactBatchSerial is RunContactBatch on the calling goroutine alone,
+// filling the same slots with the same classifications.
+func runContactBatchSerial(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair, results []ContactBatchResult) error {
+	for slot, pair := range pairs {
+		if slot%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		results[slot] = classifyContactPair(ma, mb, pair)
+	}
+	return ctx.Err()
+}
+
+// classifyContactPair classifies one prepared facet pair.
+func classifyContactPair(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult {
+	contact, err := TriTriClassifyPrepared(
+		TriCorners(ma, pair.I),
+		TriCorners(mb, pair.J),
+		XtriCorners(ma, pair.I),
+		XtriCorners(mb, pair.J),
+		ma.Norms[pair.I], mb.Norms[pair.J],
+		ma.Fnorms[pair.I], mb.Fnorms[pair.J],
+	)
+	return ContactBatchResult{Contact: contact, Err: err}
 }

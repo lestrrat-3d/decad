@@ -394,7 +394,36 @@ func newBooleanError(op meshbool.OperationKind, code BooleanErrorCode, sentinel,
 // evaluateBoolean runs the complete geometry pipeline without writing the
 // document. It deliberately does not gate liveness or mint a producerID: the
 // public wrapper owns those actions, while Verify already walks live bodies.
+// Both operands are meshed at the pair's own chord tolerance (pairMeshes).
 func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (booleanEvaluation, error) {
+	return evaluateBooleanMeshes(ctx, op, a, b, pairMeshes{})
+}
+
+// operandMeshes supplies the VerifyAll mesh evaluateBooleanMeshes composes for
+// one operand, and whether the operand restates a held mesh (heldFloorOf),
+// which arms the local chain-depth gate at the pair tolerance. pairTol is the
+// pair's own chord tolerance (pairChordTolerance). Every implementation
+// returns a mesh tessellateContext built at VerifyAll, so the mesh carries its
+// own proven bounds whatever tolerance it was asked for; the composition below
+// reads only those bounds, never the request.
+type operandMeshes interface {
+	operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error)
+}
+
+// pairMeshes meshes each operand at the pair's own chord tolerance, raised to
+// a restating operand's held floor: the public booleans' rule
+// (docs/evaluator-design.md §9, tessellateBooleanOperand).
+type pairMeshes struct{}
+
+func (pairMeshes) operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error) {
+	return tessellateBooleanOperand(ctx, b, pairTol)
+}
+
+// evaluateBooleanMeshes is evaluateBoolean with the operand meshes drawn from
+// meshes. Verify passes its per-call cache (verifyMeshCache,
+// verify_pairs.go), which meshes each body once at one chord for every pair
+// it takes part in (docs/interference-design.md §5.3).
+func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b *Body, meshes operandMeshes) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -418,11 +447,12 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		return booleanEvaluation{}, err
 	}
 	// VerifyAll, passed explicitly rather than taken from Tessellate's default
-	// (docs/tessellation-design.md §11 step 1): the composition below reads
-	// every proof a mesh can carry, and the one-entry cache keys on the level,
-	// so a caller's own earlier unverified mesh at this same internal tolerance
-	// is a different entry and is never handed back here.
-	ma, restatingA, err := tessellateBooleanOperand(ctx, a, tolMM)
+	// (docs/tessellation-design.md §11 step 1) by every operandMeshes: the
+	// composition below reads every proof a mesh can carry, and the one-entry
+	// cache keys on the level, so a caller's own earlier unverified mesh at
+	// this same internal tolerance is a different entry and is never handed
+	// back here.
+	ma, restatingA, err := meshes.operandMesh(ctx, a, tolMM)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -438,7 +468,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	mb, restatingB, err := tessellateBooleanOperand(ctx, b, tolMM)
+	mb, restatingB, err := meshes.operandMesh(ctx, b, tolMM)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -987,52 +1017,78 @@ func sectionDisplacementOf(b *Body) float64 {
 // proven bounds). All-planar operands chord nothing regardless, so the
 // tolerance only shapes curved boundaries.
 func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, error) {
-	boxA, err := a.Bounds()
+	ca, err := chordOperandOf(ctx, a)
 	if err != nil {
 		return 0, 0, err
 	}
-	boxB, err := b.Bounds()
+	cb, err := chordOperandOf(ctx, b)
 	if err != nil {
 		return 0, 0, err
 	}
-	infA := boxA.Bound.Base()
-	infB := boxB.Bound.Base()
+	return pairChordFrom(ca, cb)
+}
+
+// chordOperand is one operand's share of pairChordTolerance: its bounds box
+// inflated by its proven bound, and the floor its own tessellation reserves
+// before it chords anything. Verify reads it once per body and combines it
+// for every pair (verifyMeshCache, verify_pairs.go).
+type chordOperand struct {
+	lo, hi r3.Vec
+	floor  float64
+}
+
+// chordOperandOf reads b's share of pairChordTolerance.
+//
+// The floor raises the pair's tolerance past the operand's own reservations.
+// An operand holding its section within a displacement of the one it denotes
+// cannot be meshed within that displacement — tessellation reserves it from
+// the requested tolerance (docs/tessellation-design.md §5) — and this mesh
+// path is the designated fallback for exactly those operands
+// (docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under the
+// displacement would refuse them. A revolve likewise reserves both of its
+// coordinate stages out of the tolerance before it chords anything
+// (docs/tessellation-design.md §8), so a diameter-derived tolerance under
+// that reservation refuses a body whose own geometry is perfectly ordinary —
+// a small part modelled at a large coordinate is the case that reaches it.
+// Nothing is lost by the coarser chording: each mesh reports the sagitta it
+// actually took, and the reserved figure already dominates the bound it
+// publishes.
+func chordOperandOf(ctx context.Context, b *Body) (chordOperand, error) {
+	box, err := b.Bounds()
+	if err != nil {
+		return chordOperand{}, err
+	}
+	inf := box.Bound.Base()
+	pad := r3.NewVec(inf, inf, inf)
+	return chordOperand{
+		lo: box.Min.Sub(pad),
+		hi: box.Max.Add(pad),
+		floor: math.Max(
+			proofbound.ProductUpper(2, sectionDisplacementOf(b)),
+			proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)),
+		),
+	}, nil
+}
+
+// pairChordFrom combines two operands' shares into the pair's chord tolerance
+// and diameter: the diameter of the union of the two inflated boxes times
+// boolChordFactor, raised past both operands' floors.
+func pairChordFrom(a, b chordOperand) (float64, float64, error) {
 	lo := r3.Vec{
-		X: math.Min(boxA.Min.X-infA, boxB.Min.X-infB),
-		Y: math.Min(boxA.Min.Y-infA, boxB.Min.Y-infB),
-		Z: math.Min(boxA.Min.Z-infA, boxB.Min.Z-infB),
+		X: math.Min(a.lo.X, b.lo.X),
+		Y: math.Min(a.lo.Y, b.lo.Y),
+		Z: math.Min(a.lo.Z, b.lo.Z),
 	}
 	hi := r3.Vec{
-		X: math.Max(boxA.Max.X+infA, boxB.Max.X+infB),
-		Y: math.Max(boxA.Max.Y+infA, boxB.Max.Y+infB),
-		Z: math.Max(boxA.Max.Z+infA, boxB.Max.Z+infB),
+		X: math.Max(a.hi.X, b.hi.X),
+		Y: math.Max(a.hi.Y, b.hi.Y),
+		Z: math.Max(a.hi.Z, b.hi.Z),
 	}
 	diag := hi.Sub(lo).Len()
 	if diag <= 0 || proofbound.IsNonFinite(diag) {
 		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
 	}
-	// An operand holding its section within a displacement of the one it
-	// denotes cannot be meshed within that displacement — tessellation reserves
-	// it from the requested tolerance (docs/tessellation-design.md §5) — and
-	// this mesh path is the designated fallback for exactly those operands
-	// (docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under
-	// the displacement would refuse them, so raise it past both operands' own.
-	// Nothing is lost by the coarser chording: each mesh reports the sagitta it
-	// actually took, and the displacement already dominates the bound it
-	// publishes.
-	tol := diag * boolChordFactor
-	tol = math.Max(tol, proofbound.ProductUpper(2, sectionDisplacementOf(a)))
-	tol = math.Max(tol, proofbound.ProductUpper(2, sectionDisplacementOf(b)))
-	// A revolve reserves both of its coordinate stages out of the tolerance
-	// before it chords anything (docs/tessellation-design.md §8), so a
-	// diameter-derived tolerance under that reservation refuses a body whose
-	// own geometry is perfectly ordinary — a small part modelled at a large
-	// coordinate is the case that reaches it. Raise past it for the same reason
-	// a section displacement raises it: the mesh reports the chording it
-	// actually took, and the reserved figure already dominates the bound it
-	// publishes.
-	tol = math.Max(tol, proofbound.ProductUpper(2, coordDisplacementOf(ctx, a)))
-	tol = math.Max(tol, proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)))
+	tol := math.Max(diag*boolChordFactor, math.Max(a.floor, b.floor))
 	return tol, diag, nil
 }
 

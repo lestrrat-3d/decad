@@ -5,9 +5,11 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -88,6 +90,30 @@ func TestRunVerifyPairsReturnsLowestFailingError(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
+// TestRunVerifyPairsRunsContactBatchesOnTheirWorker requires every pair a
+// parallel pool proves to see one contact worker, so the boolean inside the
+// pair adds no goroutines beside the pool's own. The one-worker walk must
+// leave the caller's contact worker count as it was.
+func TestRunVerifyPairsRunsContactBatchesOnTheirWorker(t *testing.T) {
+	t.Parallel()
+	const n, caller = 12, 7
+	for _, tc := range []struct {
+		workers, want int
+	}{{workers: 1, want: caller}, {workers: 4, want: 1}} {
+		jobs, index := pairJobsByIndex(n)
+		seen := make([]int, n)
+		prove := func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
+			seen[index[job.a]] = meshbool.ContactWorkers(ctx)
+			return verifyPairOutcome{}, nil
+		}
+		_, err := runVerifyPairs(meshbool.WithContactWorkers(t.Context(), caller), jobs, tc.workers, prove)
+		require.NoError(t, err)
+		for i, got := range seen {
+			require.Equal(t, tc.want, got, `%d pool workers, job %d`, tc.workers, i)
+		}
+	}
+}
+
 // internalFrustumBody revolves the outline (0,0) (0,ra) (L,rb) (L,0) about
 // the sketch's U axis and places U along a → b.
 func internalFrustumBody(t *testing.T, doc *Document, a, b r3.Vec, ra, rb float64) *Body {
@@ -148,4 +174,150 @@ func TestVerifyPairWorkersMatchOneWorker(t *testing.T) {
 		require.NotEmpty(t, one.Interferences)
 		require.Equal(t, one, many)
 	}
+}
+
+// meshOnceCylinders places three cylinders on the three axes through the
+// origin. Their radii differ, so no two surfaces touch tangentially, and
+// their lengths differ, so each body's two pairs ask for different chord
+// tolerances: the shared mesh of every body is finer than at least one of
+// its pairs would have chorded it alone. Every pair crosses transversally and
+// reaches the read-only mesh intersection.
+func meshOnceCylinders(t *testing.T) (*Document, [3]*Body, [3]float64) {
+	t.Helper()
+	doc := New()
+	radii := [3]float64{3, 2, 1.5}
+	half := [3]float64{20, 12, 6}
+	var bodies [3]*Body
+	for i := range bodies {
+		var axis r3.Vec
+		switch i {
+		case 0:
+			axis = r3.NewVec(1, 0, 0)
+		case 1:
+			axis = r3.NewVec(0, 1, 0)
+		default:
+			axis = r3.NewVec(0, 0, 1)
+		}
+		bodies[i] = internalFrustumBody(t, doc, axis.Scale(-half[i]), axis.Scale(half[i]), radii[i], radii[i])
+	}
+	return doc, bodies, radii
+}
+
+// bicylinderVolume is the volume two cylinders of radii big ≥ small share
+// when their axes cross at right angles: integrating the big cylinder's chord
+// length 2·√(big² − z²) over the small one's disc gives
+// 4·small²·∫ cos²t·√(big² − small²·sin²t) dt over t in [−π/2, π/2]. The
+// integrand is smooth, and composite Simpson over 4096 panels is accurate far
+// below any bound the mesh path publishes.
+func bicylinderVolume(big, small float64) float64 {
+	const n = 4096
+	lo, hi := -math.Pi/2, math.Pi/2
+	h := (hi - lo) / n
+	g := func(t float64) float64 {
+		c, s := math.Cos(t), math.Sin(t)
+		return c * c * math.Sqrt(big*big-small*small*s*s)
+	}
+	sum := g(lo) + g(hi)
+	for k := 1; k < n; k++ {
+		w := 2.0
+		if k%2 == 1 {
+			w = 4
+		}
+		sum += w * g(lo+float64(k)*h)
+	}
+	return 4 * small * small * sum * h / 3
+}
+
+// TestVerifyMeshesEachBodyOnce verifies three mutually crossing cylinders and
+// requires every body tessellated exactly once, although each one takes part
+// in two mesh-path pairs whose own chord tolerances differ. It also requires
+// the chord each body is meshed at to be the least of its pairs' tolerances.
+func TestVerifyMeshesEachBodyOnce(t *testing.T) {
+	t.Parallel()
+	doc, bodies, _ := meshOnceCylinders(t)
+
+	jobs := []verifyPairJob{{a: bodies[0], b: bodies[1]}, {a: bodies[0], b: bodies[2]}, {a: bodies[1], b: bodies[2]}}
+	cache, err := newVerifyMeshCache(t.Context(), jobs)
+	require.NoError(t, err)
+	finer := 0
+	for _, b := range bodies {
+		entry, ok := cache.entries[b]
+		require.True(t, ok)
+		least := math.Inf(1)
+		for _, job := range jobs {
+			if job.a != b && job.b != b {
+				continue
+			}
+			tol, _, err := pairChordTolerance(t.Context(), job.a, job.b)
+			require.NoError(t, err)
+			if tol > entry.chord {
+				finer++
+			}
+			least = math.Min(least, tol)
+		}
+		require.Equal(t, least, entry.chord)
+	}
+	require.Positive(t, finer, `the fixture must give some body a chord finer than one of its pairs' own`)
+
+	count := &tessellationCount{}
+	report, err := doc.Verify(withTessellationCount(withVerifyWorkers(t.Context(), 3), count))
+	require.NoError(t, err)
+	require.Len(t, report.Interferences, 3)
+	for i, b := range bodies {
+		require.Equal(t, 1, count.of(b), `body %d`, i)
+	}
+}
+
+// TestVerifyOverlapEnclosesBicylinderVolume requires every overlap volume
+// Verify measures through shared meshes to enclose the pair's true volume,
+// computed independently by bicylinderVolume, and to prove it positive.
+func TestVerifyOverlapEnclosesBicylinderVolume(t *testing.T) {
+	t.Parallel()
+	doc, bodies, radii := meshOnceCylinders(t)
+	index := map[*Body]int{}
+	for i, b := range bodies {
+		index[b] = i
+	}
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Len(t, report.Interferences, 3)
+	for _, row := range report.Interferences {
+		ra, rb := radii[index[row.A]], radii[index[row.B]]
+		want := bicylinderVolume(math.Max(ra, rb), math.Min(ra, rb))
+		v, e := row.Volume.Value.Base(), row.Volume.Bound.Base()
+		require.Positive(t, v-e, `radii %g and %g`, ra, rb)
+		require.LessOrEqual(t, math.Abs(v-want), e, `radii %g and %g: %g ± %g against %g`, ra, rb, v, e, want)
+	}
+}
+
+// TestVerifyMeshCacheBuildsOnceUnderContention asks the cache for one body
+// from many goroutines at once and requires a single build whose mesh every
+// caller receives. Run under -race, it also guards the cache's own memory
+// safety.
+func TestVerifyMeshCacheBuildsOnceUnderContention(t *testing.T) {
+	t.Parallel()
+	_, bodies, _ := meshOnceCylinders(t)
+	jobs := []verifyPairJob{{a: bodies[0], b: bodies[1]}, {a: bodies[0], b: bodies[2]}}
+	cache, err := newVerifyMeshCache(t.Context(), jobs)
+	require.NoError(t, err)
+	count := &tessellationCount{}
+	ctx := withTessellationCount(t.Context(), count)
+	const callers = 8
+	meshes := make([]*Mesh, callers)
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range callers {
+		wg.Go(func() {
+			<-start
+			meshes[i], _, errs[i] = cache.operandMesh(ctx, bodies[0], 1)
+		})
+	}
+	close(start)
+	wg.Wait()
+	for i := range callers {
+		require.NoError(t, errs[i])
+		require.Same(t, meshes[0], meshes[i])
+	}
+	require.Equal(t, 1, count.of(bodies[0]))
 }

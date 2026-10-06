@@ -712,7 +712,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta,
 			"the pair is proven disjoint at this pose but its gap is unmeasured"), at))
 		return nil
 	}
-	volume, outcome, err := measuredInterference(r.ctx, transient, static, res)
+	volume, outcome, err := measuredInterference(r.ctx, transient, static, res, pairMeshes{})
 	if err != nil {
 		return err
 	}

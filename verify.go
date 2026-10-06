@@ -344,8 +344,14 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if cfg.clearances {
 		geomCache = &bodyGeomCache{}
 	}
+	// Each body is meshed once, at one chord, for every pair that reaches the
+	// read-only mesh intersection (interference design §5.3).
+	meshes, err := newVerifyMeshCache(ctx, jobs)
+	if err != nil {
+		return nil, err
+	}
 	outcomes, err := runVerifyPairs(ctx, jobs, verifyWorkers(ctx), func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
-		return proveVerifyPair(ctx, job, cfg, geomCache)
+		return proveVerifyPair(ctx, job, cfg, geomCache, meshes)
 	})
 	if err != nil {
 		return nil, err

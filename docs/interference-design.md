@@ -88,9 +88,19 @@ For each pair:
 
 Steps 2–7 run on a bounded worker pool, one pair per task, sized like the
 boolean's contact batches (`GOMAXPROCS`, at most 12). A pair's proof reads only
-its two operands and per-body caches that every caller fills with the same
-value, so its outcome does not depend on the other pairs. Each task writes its
-outcome to its own slot, and `Verify` appends the slots in pair order. When a
+its two operands, per-body caches that every caller fills with the same value,
+and the chord §5.3 fixes for each body before the pool starts, so its outcome
+does not depend on which pairs run before it or beside it. Each task writes its
+outcome to its own slot, and `Verify` appends the slots in pair order. A pool
+of more than one worker runs the contact batches of every boolean inside its
+pairs on that pair's worker alone, so the pair proofs never run more
+goroutines than the pool has workers. Letting each pair's batches start their
+own workers beside the pool's put two layers of goroutines on the same cores:
+on a 24-core machine the 20-segment revolved star took 40 s that way and 19 s
+this way. No measured document got slower, down to a three-body star whose
+three pairs leave most cores idle. One worker proving the pairs alone leaves the
+batches their own workers. The worker count never changes a batch's result,
+because each batch merges its slots in input order. When a
 pair fails, no pair after it starts, every pair before it still runs, and
 `Verify` returns the failure at the lowest pair index: the error a walk of the
 pairs one at a time would stop on.
@@ -303,7 +313,9 @@ Names are illustrative; the split is normative.
 `evaluateBoolean` performs only geometry work:
 
 1. derive pair chord tolerance and pair diameter;
-2. tessellate operands;
+2. tessellate operands — at the pair's chord tolerance for a public boolean
+   (raised to a restating operand's held floor), at each body's own §5.3
+   chord under `Verify`;
 3. map source faces;
 4. prepare exact-predicate meshes;
 5. run the hidden-tangency refusal;
@@ -447,6 +459,82 @@ The patch relation does not decide the whole pair by itself. Opposing cells are
 `pairTouching` only when the analytic/contact pass proves no overlap elsewhere.
 Matching cells may bound a positive-volume intersection only after the complete
 stitched result passes §5 and its volume clears §6.
+
+### 5.3 One mesh per body in `Verify`
+
+A public boolean meshes both operands at the pair's own chord tolerance:
+`boolChordFactor` times the diameter of the union of the two operands'
+bounds-inflated boxes, raised past each operand's own reserved floor (its
+section displacement, a revolve's coordinate stages). `Verify` does not. Each
+body is meshed **once per `Verify` call**, at one chord, and that one mesh — its
+facet-contact audit included — serves every pair of the body that reaches the
+mesh path. Meshing per pair would mesh and audit a body in a 20-body star 19
+times, at 19 slightly different tolerances.
+
+**The rule.** A body's chord is the least pair tolerance over its
+*candidate pairs*: the solid pairs, in §2's job list, whose bounds-inflated
+boxes are not separated. Those are the only pairs that can reach the mesh path,
+and the set is known before any pair runs; the pairs that actually reach it are
+known only after the analytic kernel has run on them, too late to fix a chord
+that pairs running beside them share. The chord is computed once, before the
+worker pool starts, from the same per-operand shares the pair tolerance is
+built from. In a two-body document each body's chord is therefore the pair's
+own tolerance, the one a public boolean meshes both operands at.
+
+**Restatements keep the public booleans' rule.** A body whose tessellation
+restates a held mesh instead of chording — a faceted Boolean result, a mitred
+sweep — has nothing to share: it returns the same held facets at any tolerance
+at or above its held floor. Such a body is meshed per pair exactly as a public
+boolean meshes it, at the pair's tolerance raised to its held floor, and each
+pair gates the held facets it touches against that pair's own tolerance
+(`docs/api-design.md` §8 "The chain depth",
+`docs/faceted-vertex-bounds-design.md` §5). A shared body is never gated: it
+restates nothing.
+
+**The bound stays sound.** The requested tolerance only steers how finely a
+body is chorded. §5.1's allowance `E` reads each operand's symmetric-difference
+bound from the mesh that was actually built, never from the tolerance asked
+for: each operand's own proven `volSymDiff`, the rounding of the stitched
+result, and the conversion of `Vheld`. The symmetric-difference identity
+`|1_{A∩B} − 1_{A'∩B'}| ≤ |1_A − 1_A'| + |1_B − 1_B'|` holds for any two held
+operands A' and B', whatever tolerances they were chorded at, so the interval
+`[V − E, V + E]` encloses the true overlap whether or not the two meshes share
+a tolerance. The hidden-tangency gate and `rimDelta` likewise read each mesh's
+own boundary bound, and `rimDelta` keeps the pair's own diameter. Nothing in
+the pipeline assumes the two operands were chorded alike.
+
+**What the reading becomes.** A body's chord is never coarser than the
+tolerance any of its pairs would have derived alone, because the least of a set
+is at most each member. Each operand mesh of a pair is therefore at least as
+fine as the pair would have asked for, and the published `Volume` and `Bound`
+of an overlap can differ from the reading at the pair's own tolerance. Both
+intervals enclose the true overlap, so the two values differ by at most the
+sum of the two bounds. The bound composes each operand's own allowance at its
+body chord, which is usually the smaller of the two.
+
+The §8 tolerance gate reads no chord: its reference is the pair's diameter and
+the operands' areas. A body's chord does depend on which other
+bodies' boxes meet its own, so adding a body that touches it can change the
+reading of its other pairs. For one document the reading is fixed, whatever
+the worker count or the order the pairs finish in.
+
+**The cache.** The per-call cache holds one entry per sharing body: the chord,
+and the outcome of the one tessellation that builds the mesh, run under a
+once-only guard. The entries are created before the pool starts and only read
+afterwards, so workers that ask for the same body at once wait on one build
+rather than each building their own. A failed build is kept like a mesh: the
+build is deterministic, so every pair of the body would fail the same way, and
+each pair still maps the error to its own operand index for §7.1's
+diagnostics. The cache lives for one `Verify` call and is then dropped. The
+body's own one-entry tessellation cache (`docs/tessellation-design.md` §1.1)
+also holds the mesh, keyed by the chord, so a later `Verify` of the same
+document finds it there.
+
+A pair whose chord share cannot be read — a body with no bounds, a pair with
+no extent — contributes nothing to any chord. If it reaches the mesh path, it
+derives its own pair tolerance there and fails exactly as it would without the
+cache. The motion check (`docs/motion-check-design.md`) measures one transient
+pose against one static body at a time and keeps the pair's own tolerance.
 
 ## 6. Positive-volume gate
 
@@ -623,6 +711,9 @@ Every increment asserts geometry and report state, not only successful return.
   document pair order, independent of proof path.
 - Call `Verify` repeatedly; assert byte-stable report ordering and identical
   measurements.
+- Verify one document with one pool worker and with several; assert the two
+  reports equal field for field. Assert every pair a parallel pool proves sees
+  one contact worker, and the one-worker walk sees the caller's count.
 
 ### 10.2 Relation
 
@@ -662,7 +753,19 @@ Every increment asserts geometry and report state, not only successful return.
   stitching, and containment returns `context.Canceled` or
   `context.DeadlineExceeded` and leaves the document unchanged.
 
-### 10.4 Gate
+### 10.4 One mesh per body
+
+- three mutually crossing cylinders whose pairs derive different tolerances:
+  each body is tessellated exactly once per `Verify` call, counted by an
+  internal hook on every build, and each body's chord is the least of its
+  pairs' tolerances;
+- the same document's three overlap volumes each enclose the pair's true
+  volume, computed independently by quadrature of the crossed-cylinder
+  integral, and each proves positive;
+- many goroutines asking the cache for one body at once receive one mesh from
+  one build, under `-race`.
+
+### 10.5 Gate
 
 - judge `Interference.Volume` against pair diameter and summed operand areas;
 - never use document size or transient intersection area;
@@ -697,6 +800,11 @@ Each row is a PR-sized stage. An unanswered verification question reads
   asymmetry between what `Verify` proves and what a public boolean returns is
   accepted rather than resolved by widening `prismPayload`.
 - Reuse the boolean's exact rational volume and symmetric-difference bounds.
+- Mesh each body once per `Verify` call, at the least tolerance any of its
+  candidate pairs derives (§5.3). Restatements keep the public booleans' rule.
+  Public booleans keep the pair's tolerance for both operands.
+- Run the contact batches inside a parallel pair pool on the pair's own worker
+  (§2): one layer of parallel workers, never two.
 - Require strict positive lower overlap volume except under a certified
   containment or equality set identity.
 - Treat empty, contact, unsupported, and coarse results as undecided; propagate
