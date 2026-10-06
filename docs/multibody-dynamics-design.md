@@ -1118,8 +1118,9 @@ signed volumes, and its mesh passes the solid audits of `docs/tessellation-desig
 is computed once per body at its placement and cached on the body (it is invariant under any affine
 pose with a positive determinant, which is every pose §9 admits). A dynamic body without it publishes
 relations only, with the appended reason `ContactNonConvex` on an absent manifold. A Fixed or Kinematic
-body needs no certificate. `ContactPair` does not know motion types: it names `ContactNonConvex` on a
-touching or overlapping pair when neither body carries the certificate, since §9.3 needs one convex side.
+body needs no certificate. `ContactPair` does not know motion types: it names `ContactNonConvex` on an
+overlapping pair when neither body carries the certificate, since §9.3 and §9.6 need one convex side, and on a
+touching pair of two such bodies that §10.5's non-convex guest rule does not cover.
 
 ### 9.3 Manifold
 
@@ -1672,8 +1673,11 @@ inside the host face, its exact height) hold for any `M`; `planarLiftedSet` read
 is non-convex and rests on its lifted set. A non-convex guest at a `Touching` relation, which §9.3 withholds
 with `ContactNonConvex`, publishes a manifold when every zero-distance feature pair §9.1 recorded lies on one
 support plane of `S`, every `M` vertex on or in front of it and each contact's foot inside the host face:
-that plane's contact set (its `M` vertices at zero height) followed by its lifted set, with the plane's face
-normal, each contact vertex an exact touching vertex with an exact foot, which needs no convexity either.
+that plane's contact set (its `M` vertices at zero height, each strictly inside the face) followed by its
+lifted set, with the plane's face normal, each contact vertex an exact touching vertex with an exact foot,
+which needs no convexity either. A contact lies on the face when its `S` feature is a facet of the face, or
+an edge or vertex one of whose faces it is; `PlanarGuestTouch` (`internal/pair/planar_manifold.go`) tries
+every such face of each body in turn as the host and publishes every one whose contact set is nonempty.
 §9.4's clipped patch, which would add the crossing points of a face overhanging `S`, needs §9.3's
 certificate and is not attempted; a contact feature off that plane keeps `ContactNonConvex` with no manifold.
 
@@ -2834,12 +2838,21 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Test (root): `contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
   floor at a translation pose, `Touching` with its four bottom corners at their exact coordinates,
   `Normal` `(0, 0, 1)` and the cup's live vertices as features; the cup turned about `Y` by
-  `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`, `ContactBand` with four points at their
-  exact heights; the cup with two corners past the floor's rim publishing the two over it; the cup
-  standing on the floor with its rim against a wall, `ContactNonConvex` with no manifold (a contact off
-  the floor's plane). Leg shown to fail: the convexity gate restored, the first three fixtures publish no
-  manifold.
+  `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻¹⁹ mm`, `ContactBand` with four points at their
+  exact heights; the cup on the tray's rim with two corners past its outer edge publishing the two over
+  it; the cup standing on the floor with its rim against a wall, `ContactNonConvex` with no manifold (a
+  contact off the floor's plane). Leg shown to fail: the convexity gate restored, the first three fixtures
+  publish no manifold.
 - Depends on: PR 20b.
+- Shipped as `TestPlanarManifoldNonConvexGuest`. The tilted cup's band is `2⁻¹⁹ mm` because its far
+  corners stand `24·sin θ = 1.5·2⁻²⁰ mm` above its near ones. The rim fixture rests the cup on the tray's
+  wall top at `z = 40`. `contact_faceted_pair.go` sends a touch of two non-convex bodies to the rule, and
+  `contact_pair.go`'s reason and entry-point comments follow it. Further legs shown to fail: the
+  host-face test on every contact deleted, the wall fixture publishes corners under two normals; the foot
+  test deleted, the rim fixture withholds with `ContactAmbiguousFeature`; the guest-in-front test deleted,
+  `TestPlanarManifoldNonConvexGuestBehind`'s inverted L, whose leg hangs below the step face its arm lies
+  on, publishes the arm's corners. PR 10's hollow shell on the tray's floor publishes its four corners,
+  and that test's `ContactNonConvex` fixture is the shell in the tray's corner.
 
 ### PR 20e (Phase 3) — the face-local ruling plane
 

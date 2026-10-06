@@ -100,7 +100,7 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 		report.Relation = ContactSeparated
 		gap := sourceBoxScalar(*result.Gap)
 		report.Gap = &gap
-		if err := planarSupportBand(ctx, budget, report, &a, &b, result, band); err != nil {
+		if err := planarSupportBand(budget, report, &a, &b, result, band); err != nil {
 			return false, err
 		}
 	case pair.Touching, pair.Overlapping:
@@ -110,8 +110,9 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 			gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
 			report.Gap = &gap
 		}
-		// §9.3 needs one convex side for a manifold; without one the reason
-		// names the missing certificate.
+		// §9.3 and §9.6 need one convex side for a manifold; without one an
+		// overlap's reason names the missing certificate, and a touch takes
+		// §10.5's non-convex guest path inside publishPlanarManifold.
 		convexA, err := planarConvexity(ctx, budget, report.A, chord)
 		if err != nil {
 			return false, err
@@ -120,7 +121,7 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 		if err != nil {
 			return false, err
 		}
-		if !convexA && !convexB {
+		if !convexA && !convexB && result.Relation == pair.Overlapping {
 			report.Reason = ContactNonConvex
 			break
 		}

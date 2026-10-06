@@ -1,7 +1,6 @@
 package decad
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"slices"
@@ -20,10 +19,13 @@ import (
 // shallow-penetration patch of an Overlapping pair, and publishes it on
 // report. An Overlapping pair of two convex bodies tries §9.3's patch first;
 // when that publishes nothing, a convex body poking through one face of the
-// other takes §9.6's face-local patch. A withheld manifold leaves
-// report.Manifold nil with its reason: AmbiguousFeature for a contact set
-// outside §9.3's table or an overlap through two faces, PointTooCoarse or
-// NoNormalProof for a witness or normal over the request. A penetration that
+// other takes §9.6's face-local patch. A Touching pair with no convex body
+// publishes the contact set of a host face that holds every contact
+// (pair.PlanarGuestTouch, §10.5). A withheld manifold leaves report.Manifold
+// nil with its reason: AmbiguousFeature for a contact set outside §9.3's
+// table or an overlap through two faces, NonConvex for a touch of two
+// non-convex bodies that no host face covers, PointTooCoarse or NoNormalProof
+// for a witness or normal over the request. A penetration that
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (docs/multibody-dynamics-design.md §10.5).
@@ -34,6 +36,19 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 	overlap := false
 	switch result.Relation {
 	case pair.Touching:
+		if !convexA && !convexB {
+			// §10.5: a non-convex guest whose contacts all lie on one host face.
+			manifold, err := pair.PlanarGuestTouch(a, b, result.Contacts, budget.step)
+			if err != nil {
+				return err
+			}
+			if manifold.Points == nil {
+				report.Reason = ContactNonConvex
+				return nil
+			}
+			points, planes = manifold.Points, manifold.Supports
+			break
+		}
 		manifold, err := pair.PlanarTouchManifold(a, b, result.Contacts, convexA, convexB, budget.step)
 		if err != nil {
 			return err
@@ -82,7 +97,7 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 		return nil
 	}
 	if band.Sign() > 0 {
-		lifted, err := planarLiftedSet(budget, a, b, planes, convexA, convexB, band, overlap)
+		lifted, err := planarLiftedSet(budget, a, b, planes, band, overlap)
 		if err != nil {
 			return err
 		}
@@ -100,15 +115,15 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 }
 
 // planarLiftedSet gathers the lifted points of each support plane in order.
-// A plane's guest must carry the convexity certificate: §10.5's support set
-// is a convex body's.
+// Every guest is read, convex or not (docs/multibody-dynamics-design.md
+// §10.5): every point of the guest is a convex combination of its vertices,
+// so a point within the band over the plane has a vertex within it, and each
+// lifted point's claims (an exact vertex, its exact foot inside the host
+// face, its exact height) hold for any guest.
 func planarLiftedSet(budget *workBudget, a, b *pair.PlanarSolid, planes []pair.SupportPlane,
-	convexA, convexB bool, band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
+	band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
 	var out []pair.PatchPoint
 	for _, plane := range planes {
-		if plane.HostIsA && !convexB || !plane.HostIsA && !convexA {
-			continue
-		}
 		points, err := pair.PlanarSupportSet(a, b, plane, band, overlap, budget.step)
 		if err != nil {
 			return nil, err
@@ -124,7 +139,7 @@ func planarLiftedSet(budget *workBudget, a, b *pair.PlanarSolid, planes []pair.S
 // The planes are read with the B body's faces first, then A's, each in face
 // order. The gap becomes [0 ± g], g its upper end, and the manifold is every
 // such plane's lifted set. A pair that meets neither stays Separated.
-func planarSupportBand(ctx context.Context, budget *workBudget, report *ContactReport, a, b *pair.PlanarSolid,
+func planarSupportBand(budget *workBudget, report *ContactReport, a, b *pair.PlanarSolid,
 	result pair.PlanarResult, band proofarith.Dyadic) error {
 	if band.Sign() <= 0 || result.Gap == nil {
 		return nil
@@ -132,15 +147,6 @@ func planarSupportBand(ctx context.Context, budget *workBudget, report *ContactR
 	upper := new(big.Rat).Add(proofarith.FloatRat(result.Gap.ValueMM), proofarith.FloatRat(result.Gap.BoundMM))
 	if upper.Cmp(band.Rat()) > 0 {
 		return nil
-	}
-	chord := heldChordOf(report.Request)
-	convexA, err := planarConvexity(ctx, budget, report.A, chord)
-	if err != nil {
-		return err
-	}
-	convexB, err := planarConvexity(ctx, budget, report.B, chord)
-	if err != nil {
-		return err
 	}
 	var planes []pair.SupportPlane
 	for _, host := range []struct {
@@ -153,7 +159,7 @@ func planarSupportBand(ctx context.Context, budget *workBudget, report *ContactR
 			planes = append(planes, pair.SupportPlane{HostIsA: host.isA, Face: face})
 		}
 	}
-	lifted, err := planarLiftedSet(budget, a, b, planes, convexA, convexB, band, false)
+	lifted, err := planarLiftedSet(budget, a, b, planes, band, false)
 	if err != nil || len(lifted) == 0 {
 		return err
 	}

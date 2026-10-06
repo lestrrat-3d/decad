@@ -309,6 +309,105 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 	return PlanarManifold{Points: k.points, Supports: k.supports}, nil
 }
 
+// PlanarGuestTouch builds the manifold of a Touching pair neither of whose
+// solids is convex (docs/multibody-dynamics-design.md §10.5). Each solid in
+// turn, B first, is the HOST and the other the GUEST. A flat host face h
+// supports the guest when every guest vertex lies on or in front of its plane
+// and every recorded contact's host feature lies in h (a facet of h, or an
+// edge or vertex one of whose faces is h), which puts the whole contact set
+// on h's closed region. Its contact set is every guest vertex at zero height
+// whose point lies strictly inside h, holes excluded: an exact touching
+// vertex whose one admissible normal is h's, since the guest lies in its
+// vertices' hull and so wholly in front of the plane. Neither step reads
+// convexity. A guest face overhanging h publishes only its vertices over h;
+// the clipped crossing points §9.4 would add need a convex side and are not
+// attempted. The manifold is every supporting face's contact set, each with
+// its face's outward normal oriented A to B, and Supports names those faces.
+// A nil Points result withholds it: no host face holds every contact, or none
+// holds a guest vertex strictly inside it. poll is charged once per guest
+// vertex per candidate face.
+func PlanarGuestTouch(a, b *PlanarSolid, contacts []PlanarContact, poll func() error) (PlanarManifold, error) {
+	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || len(contacts) == 0 {
+		return PlanarManifold{Reason: AmbiguousFeature}, nil
+	}
+	sa, sb := newPatchSide(a, false, true), newPatchSide(b, false, false)
+	var out PlanarManifold
+	for _, sides := range [][2]*patchSide{{sb, sa}, {sa, sb}} {
+		host, guest := sides[0], sides[1]
+		// The candidate faces hold every contact's host feature.
+		var common []int
+		for i, contact := range contacts {
+			feature := contact.B
+			if host.isA {
+				feature = contact.A
+			}
+			faces := host.facesOf(feature)
+			if i == 0 {
+				common = faces
+				continue
+			}
+			common = slices.DeleteFunc(common, func(f int) bool { return !slices.Contains(faces, f) })
+		}
+		for _, h := range common {
+			points, err := guestContactSet(host, h, guest, poll)
+			if err != nil {
+				return PlanarManifold{}, err
+			}
+			if len(points) == 0 {
+				continue
+			}
+			out.Points = append(out.Points, points...)
+			out.Supports = append(out.Supports, SupportPlane{HostIsA: host.isA, Face: h})
+		}
+	}
+	if out.Points == nil {
+		return PlanarManifold{Reason: AmbiguousFeature}, nil
+	}
+	return out, nil
+}
+
+// guestContactSet returns the guest vertices on host face h's plane whose
+// points lie strictly inside h, or nil when h is not flat or some guest vertex
+// lies behind its plane.
+func guestContactSet(host *patchSide, h int, guest *patchSide, poll func() error) ([]PatchPoint, error) {
+	if !host.isFlat(h) {
+		return nil, nil
+	}
+	n, o := host.faceNormal(h), host.faceOrigin(h)
+	var on []int
+	for v, at := range guest.prep.s.Verts {
+		if err := poll(); err != nil {
+			return nil, err
+		}
+		switch proof.DvDot(n, proof.DvSub(at, o)).Sign() {
+		case -1:
+			return nil, nil
+		case 0:
+			on = append(on, v)
+		}
+	}
+	if len(on) == 0 {
+		return nil, nil
+	}
+	frame := NewPlaneFrame(n, o)
+	outer, holes, ok := host.frameLoops(h, frame, Point3{})
+	if !ok {
+		return nil, nil
+	}
+	region := append([][]Point2{outer}, holes...)
+	hostFeature := PatchFeature{Kind: FeatureFacet, Faces: []int{h}}
+	var points []PatchPoint
+	for _, v := range on {
+		at := ratPoint3(guest.prep.s.Verts[v])
+		if locate(frame.Project(at), region) <= 0 {
+			continue
+		}
+		feature := PatchFeature{Kind: FeatureVertex, Faces: guest.faceIDs(guest.vertTris[v])}
+		points = append(points, entry(at, host, hostFeature, feature, n))
+	}
+	return points, nil
+}
+
 // cover finds an accepted piece holding the contact, computing candidates in
 // a fixed order: a coplanar face pair, a face of Y supporting X, a face of X
 // supporting a convex Y, a crease crossing.
