@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -41,6 +42,11 @@ import (
 // foot check and ManifoldAt charge that drift. A signed-axis start with α = 0
 // has gram = c₀ = 0, and its drift r·√(2·(1 − s)) <= (3/2)·r·β·u, s the cosine
 // of the axis tilt, holds with no gate.
+//
+// S's plane may be face-local (§10.6), a tray's floor with walls in front of
+// it: the band search then runs the column test at every grid fraction, so no
+// material of S in front of the plane comes near the cylinder inside the
+// track.
 
 // rollingTrackProof is the private certificate of a rolling band or exact
 // rolling touch track. It owns copies of both prepared paths. M's source
@@ -360,7 +366,8 @@ func (c rollingCoefficients) driftAdmitted(t *big.Rat) bool {
 // grown by the depth and the rim drift, hold every rim point near the plane,
 // and their union holds the ruling between the ends. Projected along the
 // normal's axis, the union must meet no bounding edge of the face and have a
-// corner inside one of its triangles.
+// corner inside one of its triangles. On a face-local plane the column test
+// (column) must hold through f as well.
 func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
 	budget := newWorkBudget(ctx)
 	support, ok, err := r.support(budget.step)
@@ -372,6 +379,10 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 		return nil, false, nil
 	}
 	duration := r.paths[r.m].path.duration
+	box, ok := r.columnBox()
+	if !ok {
+		return nil, false, nil
+	}
 	holds := func(f *big.Rat) (bool, error) {
 		if err := budget.step(); err != nil {
 			return false, err
@@ -381,7 +392,10 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 			return false, nil
 		}
 		depth, lateral := coefficients.at(t)
-		return r.footInside(support, f, ratAdd(depth, lateral)), nil
+		if !r.footInside(support, f, ratAdd(depth, lateral)) {
+			return false, nil
+		}
+		return r.column(support, box, f, budget.step)
 	}
 	end, ok, err := sweepGridHorizon(r.resolution, duration, holds)
 	if err != nil || !ok {
@@ -389,6 +403,62 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 	}
 	depth, _ := coefficients.at(new(big.Rat).Mul(end, duration))
 	return r.track(first, support, coefficients, end, depth)
+}
+
+// rollingColumnBox holds what the column test reads of the cylinder: its
+// eight staged corners at the start, whose hull holds it, and reach, an upper
+// bound on r·√(1 + gram), the farthest any cylinder point lies from the point
+// of its axis segment in the same section: that offset is B·w with |w| <= r,
+// and |B·w|² <= (1 + gram)·|w|².
+type rollingColumnBox struct {
+	corners []proofarith.DyV3
+	reach   *big.Rat
+}
+
+func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
+	corners := r.cylinder.stagedCorners()
+	stretch, ok := ratSqrtUpRat(ratAdd(big.NewRat(1, 1), r.cylinder.gram.Rat()))
+	if !ok {
+		return rollingColumnBox{}, false
+	}
+	return rollingColumnBox{corners: corners[:], reach: ratMul(r.cylinder.radius.Rat(), stretch)}, true
+}
+
+// column is §10.6's column test through fraction f on a face-local plane.
+// Two boxes hold the cylinder at every instant of [0, f]: the coordinate box
+// of its staged corners' ideal paths, and the hull of its end centers' ideal
+// path boxes grown by box.reach, since every cylinder point lies within reach
+// of a point between the end centers. Their intersection, less S's own
+// translation over the span, holds the cylinder in S's start frame, and every
+// S triangle with a vertex strictly in front of the plane must project apart
+// from it. The corners' interval enclosure loosens past a quarter turn while
+// the end centers of a cylinder turning about its own axis barely move, so
+// the second box carries a whole turn. Both grow with f, so the test is
+// monotone. A plane with all of S behind it needs no test.
+func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *big.Rat,
+	poll func() error) (bool, error) {
+	if !support.local {
+		return true, nil
+	}
+	zero := new(big.Rat)
+	path := r.paths[r.m]
+	centers := path.cornerSpan(zero, f)
+	path.startPoints = box.corners
+	corners := path.cornerSpan(zero, f)
+	S := &r.paths[r.s]
+	var lo, hi [3]*big.Rat
+	for axis := range 3 {
+		low, high := corners.hull(axis)
+		axisLow, axisHigh := centers.hull(axis)
+		low = ratMax(low, new(big.Rat).Sub(axisLow, box.reach))
+		high = ratMin(high, new(big.Rat).Add(axisHigh, box.reach))
+		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
+		lo[axis] = new(big.Rat).Sub(low, ratMax(shift, zero))
+		hi[axis] = new(big.Rat).Sub(high, ratMin(shift, zero))
+	}
+	solid := pair.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
+	_, apart, err := pair.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
+	return apart, err
 }
 
 func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) bool {

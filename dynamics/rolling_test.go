@@ -43,6 +43,12 @@ func sideCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 // on the ruling's two ends, whose normal impulse stops the kick's g·dt and
 // whose friction rows keep the contact point at rest. Without gravity the
 // contact set carries the pair from step to step with no event.
+//
+// On §2's tray the floor is a face-local plane (docs/multibody-dynamics-design.md
+// §10.6): the walls and rim stand in front of it, so every placed ruling and
+// rolling track also runs the column test against them. The cylinder starts
+// at y = 30 so its whole turn keeps clear of the walls, and it rolls under
+// gravity as on the plain floor.
 func TestScheduledStepCylinderRolls(t *testing.T) {
 	const (
 		omega = 2 * math.Pi
@@ -53,13 +59,23 @@ func TestScheduledStepCylinderRolls(t *testing.T) {
 		// every pose is a float composition of sixteen turns.
 		slack = 1e-9
 	)
+	scenes := []struct {
+		name    string
+		tray    bool
+		gravity float64
+	}{{name: "gravity", gravity: -g}, {name: "no gravity"}, {name: "tray, gravity", tray: true, gravity: -g}}
 	for _, cylinderFirst := range []bool{false, true} {
-		for _, gravity := range []float64{-g, 0} {
+		for _, scene := range scenes {
+			gravity := scene.gravity
 			name := map[bool]string{false: "floor then cylinder", true: "cylinder then floor"}[cylinderFirst] +
-				map[bool]string{false: ", gravity", true: ", no gravity"}[gravity == 0]
+				", " + scene.name
 			t.Run(name, func(t *testing.T) {
 				doc := decad.New()
 				floor := makeBox(t, doc, -40, -100, 40, 40, -10, 10)
+				startY := 0.0
+				if scene.tray {
+					floor, startY = tumbleTray(t, doc), 30
+				}
 				cylinder := sideCylinder(t, doc)
 				material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(.5)}
 				density := units.KilogramsPerCubicMillimeter(.001)
@@ -80,7 +96,7 @@ func TestScheduledStepCylinderRolls(t *testing.T) {
 				config.MaxEvents = 16
 				world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: bodies, Step: config})
 				require.NoError(t, err)
-				start, err := r3.Translation(r3.Vec{Z: 10})
+				start, err := r3.Translation(r3.Vec{Y: startY, Z: 10})
 				require.NoError(t, err)
 				entries := make([]dynamics.BodyState, 0, len(bodies))
 				for _, body := range bodies {
@@ -120,7 +136,7 @@ func TestScheduledStepCylinderRolls(t *testing.T) {
 					at := entry.Pose.Translation()
 					require.Zero(t, at.X, "step %d", step)
 					require.InDelta(t, 10, at.Z, slack, "step %d", step)
-					require.InDelta(t, -omega*10*dt*float64(step+1), at.Y, slack, "step %d", step)
+					require.InDelta(t, startY-omega*10*dt*float64(step+1), at.Y, slack, "step %d", step)
 					require.InDelta(t, 0, entry.Pose.Basis().EX.Sub(r3.Vec{X: 1}).Len(), slack, "step %d", step)
 					require.InDelta(t, -omega*10, entry.LinearVelocity.Y.Base(), velocityResidual, "step %d", step)
 					require.InDelta(t, 0, entry.LinearVelocity.Z.Base(), velocityResidual, "step %d", step)
@@ -185,7 +201,7 @@ func TestScheduledStepCylinderRolls(t *testing.T) {
 					require.NoError(t, err)
 					mid, ok := sample.Body(cylinder)
 					require.True(t, ok)
-					require.InDelta(t, -omega*10*middle, mid.Pose.Translation().Y, slack, "step %d", step)
+					require.InDelta(t, startY-omega*10*middle, mid.Pose.Translation().Y, slack, "step %d", step)
 					manifold, err := track.ManifoldAt(units.Scalar(.5))
 					require.NoError(t, err, "step %d", step)
 					require.Len(t, manifold.Points, 2, "step %d", step)
@@ -207,7 +223,7 @@ func TestScheduledStepCylinderRolls(t *testing.T) {
 				require.NoError(t, err)
 				entry, ok := final.Body(cylinder)
 				require.True(t, ok)
-				require.InDelta(t, -math.Pi*20, entry.Pose.Translation().Y, slack)
+				require.InDelta(t, startY-math.Pi*20, entry.Pose.Translation().Y, slack)
 				basis := entry.Pose.Basis()
 				require.InDelta(t, 1, basis.EY.Y, slack)
 				require.InDelta(t, 0, basis.EY.Z, slack)

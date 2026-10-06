@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -331,16 +332,48 @@ func (c *placedCylinder) rimDrift(alpha *big.Rat) *big.Rat {
 		ratMul(big.NewRat(3, 2), new(big.Rat).Abs(alpha))))
 }
 
+// stagedCorners are the eight corners of the cylinder's identity
+// disk-by-interval box under the pose, whose hull holds the staged cylinder.
+// The box's center maps to the midpoint of the staged end centers and each
+// half extent along a basis column, so every corner is exact.
+func (c *placedCylinder) stagedCorners() [8]proofarith.DyV3 {
+	var mid proofarith.DyV3
+	var extent [3]proofarith.Dyadic
+	for k := range 3 {
+		mid[k] = proofarith.DyShift(proofarith.DyAdd(c.centers[0][k], c.centers[1][k]), -1)
+		extent[k] = proofarith.DyShift(proofarith.DySubScalar(c.box.hi[k], c.box.lo[k]), -1)
+	}
+	var out [8]proofarith.DyV3
+	for i := range out {
+		corner := mid
+		for k := range 3 {
+			step := extent[k]
+			if i&(1<<k) == 0 {
+				step = proofarith.DyNeg(step)
+			}
+			corner = proofarith.DvAdd(corner, dyScaleVec(c.columns[k], step))
+		}
+		out[i] = corner
+	}
+	return out
+}
+
 // rulingPlane is the face plane of an exact planar body S that a placed
-// cylinder rests on.
+// cylinder rests on. A face-local plane (docs/multibody-dynamics-design.md
+// §10.6) has S material in front of it; clearance is then the lateral
+// clearance m of the staged corner box at f = 0, a lower bound on the
+// distance from the cylinder to that material, and nil for a plane with all
+// of S behind it.
 type rulingPlane struct {
-	normal  proofarith.DyV3   // n̂, S's unit outward normal there, a signed axis
-	axis    int               // n̂'s axis
-	origin  int               // an S vertex on the plane
-	offset  proofarith.Dyadic // the plane's coordinate on n̂'s axis
-	face    planarFace
-	alpha   proofarith.Dyadic    // α = n̂·Bâ, the staged axis column's normal component
-	heights [2]proofarith.Dyadic // H± = n̂·(c± − q) − r, each end center's height less r
+	normal    proofarith.DyV3   // n̂, S's unit outward normal there, a signed axis
+	axis      int               // n̂'s axis
+	origin    int               // an S vertex on the plane
+	offset    proofarith.Dyadic // the plane's coordinate on n̂'s axis
+	face      planarFace
+	alpha     proofarith.Dyadic    // α = n̂·Bâ, the staged axis column's normal component
+	heights   [2]proofarith.Dyadic // H± = n̂·(c± − q) − r, each end center's height less r
+	local     bool                 // an S vertex lies strictly in front of the plane
+	clearance *big.Rat
 }
 
 // rulingPlaneLimits are the gates every placed ruling reads: gram at most
@@ -351,10 +384,13 @@ var (
 )
 
 // rulingSupport picks the plane a placed cylinder rests on: among S's face
-// planes whose outward normal is a signed axis, with every S vertex on or
-// behind the plane, |α| <= 1/4 and S's triangles on it belonging to one face,
-// the one whose larger |H±| is least, the first in S's triangle order on a
-// tie. S is a path whose startPoints are its staged vertices.
+// planes whose outward normal is a signed axis, with |α| <= 1/4 and S's
+// triangles on it belonging to one face, the one whose larger |H±| is least,
+// the first in S's triangle order on a tie. A plane with an S vertex strictly
+// in front of it is face-local (§10.6): it is admitted only when the column
+// test holds at f = 0 over the coordinate box of the staged corners, and it
+// records that box's lateral clearance. S is a path whose startPoints are its
+// staged vertices.
 func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error) (rulingPlane, bool, error) {
 	var best rulingPlane
 	var bestScore proofarith.Dyadic
@@ -376,16 +412,6 @@ func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error)
 		if proofarith.DyCmp(proofarith.DyAbs(alpha), rulingAlphaLimit) > 0 {
 			continue
 		}
-		behind := true
-		for _, v := range S.startPoints {
-			if proofarith.DvDot(unit, proofarith.DvSub(v, origin)).Sign() > 0 {
-				behind = false
-				break
-			}
-		}
-		if !behind {
-			continue
-		}
 		plane := rulingPlane{normal: unit, axis: axis, origin: tri[0], offset: origin[axis], alpha: alpha}
 		score := proofarith.DyZero()
 		for i, center := range c.centers {
@@ -400,9 +426,48 @@ func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error)
 			continue
 		}
 		plane.face = face
+		for _, v := range S.startPoints {
+			if proofarith.DvDot(unit, proofarith.DvSub(v, origin)).Sign() > 0 {
+				plane.local = true
+				break
+			}
+		}
+		if plane.local {
+			clearance, apart, err := rulingColumn(c, S, unit, origin, poll)
+			if err != nil {
+				return rulingPlane{}, false, err
+			}
+			if !apart {
+				continue
+			}
+			plane.clearance = clearance
+		}
 		best, bestScore, found = plane, score, true
 	}
 	return best, found, nil
+}
+
+// rulingColumn is §10.6's column test at f = 0 for a placed cylinder: every
+// S triangle with a vertex strictly in front of the plane through origin
+// must project apart from the coordinate box of the staged corners, whose
+// hull holds the cylinder. clearance is that box's lateral clearance, nil for
+// an unbounded one (pair.PlanarColumnClear).
+func rulingColumn(c *placedCylinder, S *rotationalSweepPath, unit, origin proofarith.DyV3,
+	poll func() error) (*big.Rat, bool, error) {
+	var lo, hi [3]*big.Rat
+	for i, corner := range c.stagedCorners() {
+		for k := range 3 {
+			v := corner[k].Rat()
+			if i == 0 || v.Cmp(lo[k]) < 0 {
+				lo[k] = v
+			}
+			if i == 0 || v.Cmp(hi[k]) > 0 {
+				hi[k] = v
+			}
+		}
+	}
+	solid := pair.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
+	return pair.PlanarColumnClear(&solid, unit, origin, lo, hi, poll)
 }
 
 // holdsBox reports whether a closed box in the face's projected coordinates
@@ -427,22 +492,37 @@ func (face *planarFace) holdsBox(lo, hi [2]*big.Rat) bool {
 	return true
 }
 
+// clearsBand reports whether a touch or band of half-width w on the plane is
+// the pair's only contact: on a face-local plane the lateral clearance must
+// exceed w, so no material of S in front of the plane lies within the band; a
+// plane with all of S behind it, or an unbounded clearance, always clears.
+func (p *rulingPlane) clearsBand(w *big.Rat) bool {
+	return p.clearance == nil || p.clearance.Cmp(w) > 0
+}
+
 // classifyPlacedRuling is docs/contact-geometry-design.md §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
 // determinant, against an exact planar body S with zero held displacement,
 // at its own pose. It reports false, leaving report untouched, when the pair
 // is not admitted or no relation is proven.
 //
-// S lies behind the support plane, in its vertices' hull. M's least height
-// above it is the lesser of its end disks', since height is affine along the
-// axis, and each disk's is its center's height less r·|P·Bᵀn̂|: exactly the
-// lesser H± when the pose is a signed-axis permutation, which proves a touch
-// or a gap; otherwise within sectionDrift of it. With δ = r·gram + r·α² +
-// |α|·L, L the axial length, a least height above δ is a gap and one within
-// δ of zero is a ContactBand of half-width c₀ = max|H±| + sectionDrift. The
-// lowest rim points lie within rimDrift of c± − r·n̂, whose feet must stay
-// inside S's face with that margin: the support plane then holds the whole
-// contact ruling, and the gap is the least height.
+// On a plane with all of S behind it, S lies in its vertices' hull behind the
+// plane. M's least height above it is the lesser of its end disks', since
+// height is affine along the axis, and each disk's is its center's height
+// less r·|P·Bᵀn̂|: exactly the lesser H± when the pose is a signed-axis
+// permutation, which proves a touch or a gap; otherwise within sectionDrift
+// of it. With δ = r·gram + r·α² + |α|·L, L the axial length, a least height
+// above δ is a gap and one within δ of zero is a ContactBand of half-width
+// c₀ = max|H±| + sectionDrift. The lowest rim points lie within rimDrift of
+// c± − r·n̂, whose feet must stay inside S's face with that margin: the
+// support plane then holds the whole contact ruling, and the gap is the least
+// height.
+//
+// On a face-local plane (docs/multibody-dynamics-design.md §10.6) S's
+// material in front of the plane lies at least the lateral clearance m away
+// from the cylinder, so a gap's lower end is the lesser of the least height's
+// and m, its upper end unchanged; a touch or band publishes only when m
+// exceeds its half-width (clearsBand), and otherwise the pair is Undecided.
 func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, error) {
 	cylinderFirst := true
 	bodyM, bodyS, poseS := report.A, report.B, report.PoseB
@@ -501,6 +581,13 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 		Request: report.Request}
 	switch {
 	case sigmaLo.Cmp(slack) > 0:
+		// On a face-local plane the material in front lies at least the
+		// clearance away, so the gap's lower end is the lesser of the two;
+		// its upper end stays the least height, since the ruling's feet lie
+		// inside the face and S has material under the cylinder there.
+		if plane.clearance != nil {
+			sigmaLo = ratMin(sigmaLo, plane.clearance)
+		}
 		gap, ok := ratIntervalMeasurement(sigmaLo, sigmaHi)
 		if !ok {
 			return false, nil
@@ -509,6 +596,9 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 	case sigmaHi.Cmp(new(big.Rat).Neg(slack)) < 0:
 		return false, nil
 	case exact:
+		if !plane.clearsBand(new(big.Rat)) {
+			return false, nil
+		}
 		trial.Relation = ContactTouching
 		trial.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
 		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst, lateral, new(big.Rat))
@@ -516,7 +606,7 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 		band := ratAdd(dyMax(proofarith.DyAbs(plane.heights[0]), proofarith.DyAbs(plane.heights[1])).Rat(),
 			cylinder.sectionDrift(plane.alpha).Rat())
 		width := ratFloatUp(band)
-		if !finiteMeasurementValues(width) {
+		if !finiteMeasurementValues(width) || !plane.clearsBand(proofarith.FloatRat(width)) {
 			return false, nil
 		}
 		trial.Relation = ContactBand
