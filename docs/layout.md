@@ -207,6 +207,7 @@ to the byte budget.
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
+| `contact_sweep_memo.go` | A sweep run's per-path memos of ideal poses, point deviations and point spans, closed when the run returns, and each body's sweep radius memo. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.6, §10.8. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
@@ -257,7 +258,7 @@ to the byte budget.
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
-| `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`. See `docs/motion-check-design.md`. |
+| `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`, the process-wide `RadianSinCos` memo and the memos' test switch. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
 | `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit, the rounding that keeps a held mesh embedded, and near-contact witnesses. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | The clearance face model: face and edge carriers, angle and line windows, 2D trim regions, ray crossings, boxes, and spine and ruling helpers. See `docs/clearance-design.md`. |

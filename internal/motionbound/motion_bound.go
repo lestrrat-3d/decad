@@ -81,7 +81,24 @@ func ExactTurnSinCos(t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval
 // lower turn and widened by the turn interval's own angular width, since sine
 // and cosine are 1-Lipschitz in the angle: |sin(2πt) − sin(2πt_lo)| ≤
 // 2π·(t_hi − t_lo) ≤ 2·πhi·(t_hi − t_lo).
+//
+// A nonzero angle's pair is read through the process-wide memo
+// (sin_cos_memo.go); the caller owns the endpoints it gets either way.
 func RadianSinCos(r *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
+	if r.Sign() == 0 || !MemosOn() {
+		return radianSinCos(r)
+	}
+	key := string(AppendRatKey(nil, r))
+	if entry, ok := sinCosMemo.load(key); ok {
+		return entry.sin, entry.cos
+	}
+	sin, cos := radianSinCos(r)
+	sinCosMemo.store(key, sinCosEntry{sin: sin, cos: cos})
+	return sin, cos
+}
+
+// radianSinCos is RadianSinCos computed afresh.
+func radianSinCos(r *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	if r.Sign() == 0 {
 		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1))
 	}

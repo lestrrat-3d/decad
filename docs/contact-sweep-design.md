@@ -284,6 +284,14 @@ trigonometric factors, and final travel are rounded outward, never merely
 evaluated in float and compared as though exact. If a finite bound cannot be
 formed, the result is `SweepUndecided`, not a clear certificate.
 
+The mapped corners, the pivot and the axis are all dyadic, so every corner's
+squared cross product with the axis is exact dyadic arithmetic over the one
+denominator `|axis|²`; the largest is chosen by that numerator and divided
+once before the upward root, which is the rational the per-corner quotients'
+maximum is. A step reads a path's radius for its swept box and again for its
+sweep, so each body keeps its last 256 radii, keyed by the `From` and pivot
+bits and the exact axis (`contact_sweep_memo.go`).
+
 ### 4.2 Swept boxes
 
 Build one conservative box per body from the exact `From`-mapped inflated
@@ -912,6 +920,17 @@ result per pair time; use the existing bounded kernel work counter and
 `ctx` checks within each pose. A caller controls expensive kernel work with
 the context deadline, as interference §7.2 does. Do not claim that a pose
 budget caps each pose's geometric cost.
+
+A rotating run re-reads the same fractions and poses as it refines, samples
+and tracks: each prepared path keeps a memo of its ideal pose by fraction,
+its staged points' deviation by pose and fraction, and its point spans by
+fraction span (`contact_sweep_memo.go`). A served deviation still charges
+the poll once per point. The run closes both memos before it returns, so the
+path copies a proof keeps compute afresh and hold no memory. The radian
+sine and cosine enclosures behind them are a pure function of the exact
+angle, read through one process-wide memo of 4096 entries guarded by a mutex
+(`internal/motionbound/`). Every memo hands out copies, so no caller can
+change what another reads, and none changes a value.
 
 After validation, check `ctx` before each pose and at each subdivision;
 pass it into the contact kernel. Cancellation returns `ctx.Err()` and a nil

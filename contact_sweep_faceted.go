@@ -50,6 +50,8 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, true, nil
 	}
+	attachSweepMemos(&aPath, &bPath)
+	defer closeSweepMemos(&aPath, &bPath)
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report, planar: true}
 	result, err := run.execute(ctx)

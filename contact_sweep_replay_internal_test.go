@@ -111,16 +111,6 @@ func requireSameReplay(t *testing.T, wantA, wantB r3.Transform, wantErr error,
 	require.Equal(t, poseBits(wantB), poseBits(gotB), msg)
 }
 
-// poseBits reads a pose's basis and translation as bits, so −0 and +0 differ.
-func poseBits(pose r3.Transform) [12]uint64 {
-	var out [12]uint64
-	basis := pose.Basis()
-	for i, v := range [4]r3.Vec{basis.EX, basis.EY, basis.EZ, pose.Translation()} {
-		out[3*i], out[3*i+1], out[3*i+2] = math.Float64bits(v.X), math.Float64bits(v.Y), math.Float64bits(v.Z)
-	}
-	return out
-}
-
 // TestReplayPoseMemoMatchesUncachedReplay replays each sweep at every
 // fraction through the memo three times, the second read right after the
 // first and the third after every other fraction, each from a fresh copy of
