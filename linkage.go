@@ -328,15 +328,25 @@ func (lim *JointLimits) within(v units.Value) bool {
 func (PrismaticJoint) joint() {}
 
 // Drive is a one-parameter motion of a linkage, parameterised by the
-// Dimensionless fraction s ∈ [0, 1]: each listed joint runs linearly from
-// From to To as s runs from 0 to 1, and an unlisted joint holds 0.
+// Dimensionless fraction s ∈ [0, 1]: each listed joint passes through its
+// waypoints From, Via…, To in order, linearly between consecutive ones, and
+// an unlisted joint holds 0 (docs/linkage-check-design.md §2.3). A drive
+// whose sweeps carry n − 1 Via values each has n segments, and segment j
+// covers s ∈ [j/n, (j+1)/n], an equal share each; with no Via the drive is
+// one segment and each joint runs from From to To as s runs from 0 to 1.
 type Drive []JointSweep
 
-// JointSweep moves one link's joint. From == To holds the joint at that value
-// for the whole drive; From > To runs it the other way.
+// JointSweep moves one link's joint. A sweep whose waypoints are all equal
+// holds the joint at that value for the whole drive; From > To runs it the
+// other way, and From == To with a different Via value goes out and comes
+// back.
 type JointSweep struct {
 	Link     *Link       // the link whose joint this moves
 	From, To units.Value // the joint's Kind: Angle for a revolute, Length for a prismatic
+	// Via is the joint's value at each interior waypoint of the drive, in
+	// order and in the joint's Kind. Every listed sweep of one drive carries
+	// the same number of Via values.
+	Via []units.Value
 }
 
 // LinkagePose is every link's pose at one parameter value.
@@ -347,9 +357,11 @@ type LinkagePose struct {
 }
 
 // PoseAt returns every link's joint value and world pose at the fraction at
-// of drive (docs/linkage-check-design.md §2.4). A joint's value is
-// From + at·(To − From), carried in From's unit, and 0 in its Kind's base unit
-// for an unlisted joint. A link's pose is its own joint's motion, then its
+// of drive (docs/linkage-check-design.md §2.4). In segment j of n, between
+// waypoints w_j and w_{j+1}, a joint's value is w_j + t·(w_{j+1} − w_j) with
+// t = n·at − j, carried in w_j's unit — From + at·(To − From) for a drive
+// with no Via — and 0 in its Kind's base unit for an unlisted joint. A
+// waypoint's fraction j/n takes segment j, and 1 the last segment. A link's pose is its own joint's motion, then its
 // parent's pose: J_k(q_k).Then(Pose_parent), with J_k the rotation a Revolute
 // and the translation a Prismatic of the same axis or direction build, and
 // the ground's pose the identity; it composes onto each body's own placement
@@ -357,13 +369,15 @@ type LinkagePose struct {
 // renderer above and VerifyLinkage below evaluate the same transform.
 //
 // It refuses a nil linkage, a sweep naming no link, the ground, a link of
-// another linkage or a link twice (ErrDegenerate); a sweep From or To of the
-// wrong Kind for its joint (ErrUnitKind) or non-finite (ErrNotFinite); an at
-// that is not a finite Dimensionless value (ErrUnitKind, ErrNotFinite); a
-// sweep, or an unlisted joint's 0, outside the joint's declared limits
+// another linkage or a link twice, and two sweeps carrying different numbers
+// of Via values (ErrDegenerate); a sweep From, To or Via value of the wrong
+// Kind for its joint (ErrUnitKind) or non-finite (ErrNotFinite); an at that is
+// not a finite Dimensionless value (ErrUnitKind, ErrNotFinite); a waypoint,
+// or an unlisted joint's 0, outside the joint's declared limits
 // (ErrDegenerate, naming the link); and a pose r3 cannot represent
-// (ErrNotFinite). An at outside [0, 1] is legal: PoseAt
-// takes no range, and a drive whose every sweep holds is legal here.
+// (ErrNotFinite). An at outside [0, 1] is legal: PoseAt takes no range, the
+// first segment's line extends below 0 and the last's above 1, and a drive
+// whose every sweep holds is legal here.
 func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	spec, err := l.resolveDrive(d)
 	if err != nil {
@@ -450,8 +464,8 @@ type linkageSpec struct {
 }
 
 // linkJoint is one link's joint under a drive: its axis or direction, and
-// its value's domain — the sweep as stated, or, for an unlisted joint, a
-// hold at 0 in its Kind's base unit.
+// its schedule — the waypoints as stated, or, for an unlisted joint, a hold
+// at 0 in its Kind's base unit.
 type linkJoint struct {
 	link     *Link
 	parent   int // the parent's position in Linkage.Links(); −1 for the ground
@@ -460,7 +474,11 @@ type linkJoint struct {
 	center   r3.Vec
 	axis     r3.Vec // the revolute's axis, or the prismatic's direction
 	listed   bool
-	dom      motionDomain
+	kind     units.Kind
+	// values are the joint's waypoints as stated — From, Via…, To — and
+	// points their exact denotations; an unlisted joint holds 0 at two.
+	values []units.Value
+	points []motionbound.MotionParam
 }
 
 // resolveDrive validates d against l (docs/linkage-check-design.md §2.4).
@@ -474,13 +492,14 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		switch j := link.joint.(type) {
 		case RevoluteJoint:
 			jt.revolute, jt.center, jt.axis, jt.limits = true, j.Center, j.Axis, j.Limits
-			jt.dom = heldAtZero(units.Angle, units.Radian)
+			jt.holdAtZero(units.Angle, units.Radian)
 		case PrismaticJoint:
 			jt.axis, jt.limits = j.Dir, j.Limits
-			jt.dom = heldAtZero(units.Length, units.Millimeter)
+			jt.holdAtZero(units.Length, units.Millimeter)
 		}
 		spec.joints[k] = jt
 	}
+	segments := 0
 	for _, sw := range d {
 		link := sw.Link
 		if link == nil || link.linkage != l || link.joint == nil {
@@ -490,45 +509,115 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		if jt.listed {
 			return nil, fmt.Errorf(`%w: a drive names link %d twice`, ErrDegenerate, link.index)
 		}
-		if err := motionKinds(jt.dom.quantity, sw.From, sw.To); err != nil {
+		if segments == 0 {
+			segments = len(sw.Via) + 1
+		}
+		if len(sw.Via)+1 != segments {
+			return nil, fmt.Errorf(`%w: every sweep of a drive passes the same waypoints, but link %d's sweep has %d Via values and an earlier one %d`,
+				ErrDegenerate, link.index, len(sw.Via), segments-1)
+		}
+		if err := motionKinds(jt.kind, sw.From, sw.To); err != nil {
 			return nil, err
 		}
-		if err := motionFinite(sw.From, sw.To); err != nil {
+		for _, v := range sw.Via {
+			if v.Kind() != jt.kind {
+				return nil, fmt.Errorf(`%w: a sweep's Via value must be a %s, got %s`, ErrUnitKind, jt.kind, v.Kind())
+			}
+		}
+		values := make([]units.Value, 0, segments+1)
+		values = append(append(append(values, sw.From), sw.Via...), sw.To)
+		if err := motionFinite(values...); err != nil {
 			return nil, err
 		}
-		fromP, okF := motionbound.ExactMotionParam(sw.From)
-		toP, okT := motionbound.ExactMotionParam(sw.To)
-		if !okF || !okT {
-			return nil, fmt.Errorf(`%w: a sweep endpoint is not representable`, ErrNotFinite)
+		points := make([]motionbound.MotionParam, len(values))
+		for w, v := range values {
+			p, ok := motionbound.ExactMotionParam(v)
+			if !ok {
+				return nil, fmt.Errorf(`%w: a sweep's waypoint is not representable`, ErrNotFinite)
+			}
+			points[w] = p
 		}
-		jt.listed = true
-		jt.dom = motionDomain{quantity: jt.dom.quantity, from: sw.From, to: sw.To, fromP: fromP, toP: toP}
+		jt.listed, jt.values, jt.points = true, values, points
 	}
-	// q(s) is linear in s, so a drive keeps a joint inside its limits exactly
-	// when both ends of its sweep lie inside them; an unlisted joint holds 0.
+	// q(s) is linear within each segment, so a drive keeps a joint inside its
+	// limits exactly when every waypoint lies inside them; an unlisted joint
+	// holds 0.
 	for k, jt := range spec.joints {
 		if jt.limits == nil {
 			continue
 		}
-		if !jt.limits.within(jt.dom.from) || !jt.limits.within(jt.dom.to) {
-			return nil, fmt.Errorf(`%w: the drive takes link %d's joint from %s to %s, outside its limits [%s, %s]`,
-				ErrDegenerate, k, jt.dom.from, jt.dom.to, jt.limits.Min, jt.limits.Max)
+		for w, v := range jt.values {
+			if jt.limits.within(v) {
+				continue
+			}
+			if len(jt.values) == 2 {
+				return nil, fmt.Errorf(`%w: the drive takes link %d's joint from %s to %s, outside its limits [%s, %s]`,
+					ErrDegenerate, k, jt.values[0], jt.values[1], jt.limits.Min, jt.limits.Max)
+			}
+			return nil, fmt.Errorf(`%w: the drive takes link %d's joint to %s at waypoint %d, outside its limits [%s, %s]`,
+				ErrDegenerate, k, v, w, jt.limits.Min, jt.limits.Max)
 		}
 	}
 	return spec, nil
 }
 
-// heldAtZero is the domain of a joint the drive does not list.
-func heldAtZero(kind units.Kind, unit units.Unit) motionDomain {
-	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
-	return motionDomain{quantity: kind, from: units.New(0, unit), to: units.New(0, unit), fromP: zero, toP: zero}
+// holdAtZero sets the schedule of a joint the drive does not list.
+func (jt *linkJoint) holdAtZero(kind units.Kind, unit units.Unit) {
+	zero := func() motionbound.MotionParam {
+		return motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
+	}
+	jt.kind = kind
+	jt.values = []units.Value{units.New(0, unit), units.New(0, unit)}
+	jt.points = []motionbound.MotionParam{zero(), zero()}
+}
+
+// moves reports whether the joint's schedule changes its value anywhere: some
+// waypoint differs from the first.
+func (jt linkJoint) moves() bool {
+	for _, v := range jt.values[1:] {
+		if !sameMotionValue(jt.values[0], v) {
+			return true
+		}
+	}
+	return false
+}
+
+// segment is the segment of jt's schedule that holds the exact fraction s,
+// as a domain from its starting waypoint to its ending one, and s's local
+// fraction t = n·s − j in it (docs/linkage-check-design.md §2.3). Segment j of
+// n covers [j/n, (j+1)/n]: a waypoint's fraction j/n takes segment j, 1 takes
+// the last segment, and an s outside [0, 1] extends the first or the last.
+// With one segment t is s itself.
+func (jt linkJoint) segment(s *big.Rat) (motionDomain, *big.Rat) {
+	n := len(jt.points) - 1
+	j, t := 0, s
+	if n > 1 {
+		ns := new(big.Rat).Mul(s, big.NewRat(int64(n), 1))
+		floor := new(big.Int).Div(ns.Num(), ns.Denom()) // Euclidean: the denominator is positive
+		switch {
+		case floor.Sign() < 0:
+		case !floor.IsInt64() || floor.Int64() >= int64(n):
+			j = n - 1
+		default:
+			j = int(floor.Int64())
+		}
+		t = ns.Sub(ns, big.NewRat(int64(j), 1))
+	}
+	return motionDomain{quantity: jt.kind, from: jt.values[j], to: jt.values[j+1], fromP: jt.points[j], toP: jt.points[j+1]}, t
+}
+
+// label is the joint's published value at the exact fraction s: its
+// segment's label at the local fraction (motionDomain.label).
+func (jt linkJoint) label(s *big.Rat) units.Value {
+	seg, t := jt.segment(s)
+	return seg.label(t)
 }
 
 // holds reports whether every listed sweep of the drive holds its joint, so
 // that the drive names no motion.
 func (s *linkageSpec) holds() bool {
 	for _, jt := range s.joints {
-		if jt.listed && !sameMotionValue(jt.dom.from, jt.dom.to) {
+		if jt.listed && jt.moves() {
 			return false
 		}
 	}
@@ -550,7 +639,7 @@ func (s *linkageSpec) posesAt(f *big.Rat) ([]units.Value, []r3.Transform, error)
 	values := make([]units.Value, len(s.joints))
 	poses := make([]r3.Transform, len(s.joints))
 	for k, jt := range s.joints {
-		values[k] = jt.dom.label(f)
+		values[k] = jt.label(f)
 		pose, err := jt.pose(values[k])
 		if err != nil {
 			return nil, nil, err

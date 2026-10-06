@@ -31,7 +31,8 @@ import (
 // Verify's own row or diagnostic. Between two adjacent poses the interval
 // certificate proves the drive clear only when every pair's two proven lower
 // bounds together exceed the chain travel bound τ (§5.2), summed over the
-// joints below the pair's lowest common ancestor; an interval it cannot
+// joints below the pair's lowest common ancestor, each joint's travel taken on
+// both sides of every waypoint inside the interval; an interval it cannot
 // certify down to the resolution is IntervalUndecided and the report reads
 // Suspect, never Sound. A pose publishes a LinkCollision only for an overlap
 // that survives the pose's own deviation from the ideal poses (§5.1).
@@ -42,8 +43,9 @@ import (
 //
 // Every body of every link, and every body a declared joint contact names,
 // MUST be a live body of d. A nil context, document or linkage, a linkage
-// with no link, a drive in which every sweep holds, and a drive that takes a
-// joint outside its declared limits are ErrDegenerate. Validation precedes
+// with no link, a drive in which every sweep holds, a drive whose sweeps carry
+// different numbers of Via values, and a drive with a waypoint outside a
+// joint's declared limits are ErrDegenerate. Validation precedes
 // cancellation; after it a canceled context returns ctx.Err() and no report.
 func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, opts ...MotionOption) (*LinkageReport, error) {
 	if ctx == nil {

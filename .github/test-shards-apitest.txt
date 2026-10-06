@@ -486,6 +486,7 @@
 2	0.00	TestLinkageConstructorRefusals
 2	0.00	TestLinkageJointLimits
 2	0.01	TestLinkagePoseAt
+2	0.01	TestLinkagePoseAtWaypoints
 2	0.00	TestLoftBuildsCongruentSquares
 2	0.00	TestLoftChainCrossingCorrespondenceIsRefused
 2	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
@@ -1014,6 +1015,8 @@
 3	0.11	TestVerifyDiagnosticsProximityRefusalIsContact
 3	0.01	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	12.76	TestVerifyGearScaleOverArrangementCapStaysSuspect
+3	0.05	TestVerifyLinkageWaypointReach
+3	0.18	TestVerifyLinkageWaypoints
 3	0.60	TestVerifyMitredSweepUnderPrismArmIsDisjoint
 3	0.02	TestVerifyMotionBetweenCoversTheStatedTo
 3	2.43	TestVerifyMotionClearSwingBisected

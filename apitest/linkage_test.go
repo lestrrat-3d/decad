@@ -308,6 +308,12 @@ func TestLinkagePoseAt(t *testing.T) {
 		{"a non-finite sweep", a.linkage, decad.Drive{{Link: a.shoulder, From: units.Degrees(0), To: units.Degrees(math.NaN())}}, units.Scalar(0), decad.ErrNotFinite},
 		{"an angle as the fraction", a.linkage, a.drive(), units.Degrees(1), decad.ErrUnitKind},
 		{"a non-finite fraction", a.linkage, a.drive(), units.Scalar(math.Inf(1)), decad.ErrNotFinite},
+		{"sweeps with different numbers of Via values", a.linkage, decad.Drive{
+			{Link: a.shoulder, From: units.Degrees(0), Via: []units.Value{units.Degrees(45)}, To: units.Degrees(90)},
+			{Link: a.elbow, From: units.Degrees(0), To: units.Degrees(-90)},
+		}, units.Scalar(0), decad.ErrDegenerate},
+		{"a length as a Via value on a revolute", a.linkage, decad.Drive{{Link: a.shoulder, From: units.Degrees(0), Via: []units.Value{units.Millimeters(1)}, To: units.Degrees(1)}}, units.Scalar(0), decad.ErrUnitKind},
+		{"a non-finite Via value", a.linkage, decad.Drive{{Link: a.shoulder, From: units.Degrees(0), Via: []units.Value{units.Degrees(math.NaN())}, To: units.Degrees(1)}}, units.Scalar(0), decad.ErrNotFinite},
 	}
 	for _, tc := range refusals {
 		t.Run(tc.name, func(t *testing.T) {
@@ -699,12 +705,21 @@ func TestLinkageJointLimits(t *testing.T) {
 	require.Equal(t, &decad.JointLimits{Min: units.Degrees(-90), Max: units.Degrees(90)}, swing.Joint().(decad.RevoluteJoint).Limits)
 	require.Equal(t, &decad.JointLimits{Min: units.Millimeters(5), Max: units.Millimeters(20)}, slide.Joint().(decad.PrismaticJoint).Limits)
 	inside := decad.JointSweep{Link: slide, From: units.Millimeters(5), To: units.Centimeters(2)}
+	insideVia := decad.JointSweep{Link: slide, From: units.Millimeters(5), Via: []units.Value{units.Millimeters(20)}, To: units.Millimeters(5)}
 
 	t.Run("a drive inside every limit poses", func(t *testing.T) {
 		t.Parallel()
 		pose, err := l.PoseAt(decad.Drive{{Link: swing, From: units.Degrees(-90), To: units.Radians(1.5)}, inside}, units.Scalar(1))
 		require.NoError(t, err)
 		require.Equal(t, units.Radians(1.5), pose.Values[0])
+	})
+	t.Run("a drive whose every waypoint is inside every limit poses", func(t *testing.T) {
+		t.Parallel()
+		drive := decad.Drive{{Link: swing, From: units.Degrees(-90), Via: []units.Value{units.Degrees(80)}, To: units.Degrees(0)}, insideVia}
+		pose, err := l.PoseAt(drive, units.Scalar(0.5))
+		require.NoError(t, err)
+		require.Equal(t, units.Degrees(80), pose.Values[0], `the fraction 1/2 is the drive's one interior waypoint`)
+		require.Equal(t, units.Millimeters(20), pose.Values[1])
 	})
 	refused := []struct {
 		name  string
@@ -714,6 +729,10 @@ func TestLinkageJointLimits(t *testing.T) {
 		{"a sweep end past Max", decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Radians(1.6)}, inside}, "link 0"},
 		{"a sweep end below Min", decad.Drive{{Link: swing, From: units.Degrees(-91), To: units.Degrees(0)}, inside}, "link 0"},
 		{"an unlisted joint held at an excluded 0", decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(10)}}, "link 1"},
+		// Both ends sit inside the limits; only the interior waypoint leaves
+		// them, and the joint's value there is the waypoint itself.
+		{"a Via waypoint past Max", decad.Drive{{Link: swing, From: units.Degrees(0), Via: []units.Value{units.Degrees(100)}, To: units.Degrees(0)}, insideVia}, "link 0's joint to 100"},
+		{"a Via waypoint below Min", decad.Drive{{Link: swing, From: units.Degrees(0), Via: []units.Value{units.Degrees(10)}, To: units.Degrees(10)}, {Link: slide, From: units.Millimeters(5), Via: []units.Value{units.Millimeters(4)}, To: units.Millimeters(5)}}, "link 1's joint to 4"},
 	}
 	for _, tc := range refused {
 		t.Run(tc.name, func(t *testing.T) {
