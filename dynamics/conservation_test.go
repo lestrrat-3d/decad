@@ -13,6 +13,7 @@ import (
 )
 
 func TestConservationBoundsEncloseSuppliedMassInterval(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -101,6 +102,7 @@ func TestConservationBoundsEncloseSuppliedMassInterval(t *testing.T) {
 }
 
 func TestKinematicImpactCorrectionIsExcludedFromDriftChange(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 20, -0.125, 30, 9.875, 0, 10)

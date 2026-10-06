@@ -11,6 +11,7 @@ import (
 )
 
 func TestExcludedPairCrossesAfterForceKick(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	b := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -53,6 +54,7 @@ func TestExcludedPairCrossesAfterForceKick(t *testing.T) {
 }
 
 func TestExcludedKinematicPairCrossesWithoutContact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	b := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -91,6 +93,7 @@ func TestExcludedKinematicPairCrossesWithoutContact(t *testing.T) {
 }
 
 func TestExcludedPairRejectsInvalidNamesAndOverride(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	b := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -124,6 +127,7 @@ func TestExcludedPairRejectsInvalidNamesAndOverride(t *testing.T) {
 }
 
 func TestExcludedOverlappingPairDriftsAndReports(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	b := makeBox(t, doc, 0, 0, 10, 10, 0, 10)

@@ -48,6 +48,7 @@ import (
 // 1e-6 mm allowance, ContactPair proves the pair touching, and the
 // pair stays in the contact set. Both body orders.
 func TestSettleRestingDiskIntoTouch(t *testing.T) {
+	t.Parallel()
 	for _, cylinderFirst := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor then cylinder", true: "cylinder then floor"}[cylinderFirst], func(t *testing.T) {
 			doc := decad.New()
@@ -120,6 +121,7 @@ func TestSettleRestingDiskIntoTouch(t *testing.T) {
 // and leaves the contact set, while a pair on a persistent track, whose
 // track needs exact touch, is refused.
 func TestSettleRestingTiltedFace(t *testing.T) {
+	t.Parallel()
 	scene := newPushScene(t, 0, pairMaterialStepConfig())
 	sunk, err := r3.Translation(scene.normal.Scale(15 - 0x1p-40))
 	require.NoError(t, err)
@@ -164,6 +166,7 @@ func TestSettleRestingTiltedFace(t *testing.T) {
 // more than PenetrationResidual at a step end, and the lower sphere never
 // sinks into the floor.
 func TestIslandSphereLandsOnRestingSphere(t *testing.T) {
+	t.Parallel()
 	scene := newSphereColumn(t, [3]float64{0, 2, -2})
 	advanceColumn(t, scene, 64)
 }
@@ -178,6 +181,7 @@ func TestIslandSphereLandsOnRestingSphere(t *testing.T) {
 // other neighbor, from reaching that pair. The first 64 steps advance with
 // the same overlap and floor checks.
 func TestIslandSphereRestsOnSphere(t *testing.T) {
+	t.Parallel()
 	scene := newSphereColumn(t, [3]float64{0, 0.5, 0})
 	advanceColumn(t, scene, 64)
 }

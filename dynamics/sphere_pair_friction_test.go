@@ -45,6 +45,7 @@ func spherePairFrictionFixture(t *testing.T, coefficient, restitution, tangentAY
 }
 
 func TestSpherePairInitialFrictionImpactReplaysRotatingDeparture(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                 string
 		mu, tangent, speedAY float64
@@ -123,6 +124,7 @@ func TestSpherePairInitialFrictionImpactReplaysRotatingDeparture(t *testing.T) {
 }
 
 func TestSpherePairInitialZeroFrictionZeroRestitutionKeepsPersistentTouch(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	doc, world, a, b, state, cfg := spherePairFrictionFixture(t, 0, 0, 0, false,
 		mass, mass, zeroAngular(t))
@@ -156,6 +158,7 @@ func TestSpherePairInitialZeroFrictionZeroRestitutionKeepsPersistentTouch(t *tes
 }
 
 func TestSpherePairInitialZeroFrictionKeepsDensityMassResponse(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	density := units.KilogramsPerCubicMillimeter(.001)
@@ -207,6 +210,7 @@ func TestSpherePairInitialZeroFrictionKeepsDensityMassResponse(t *testing.T) {
 }
 
 func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		mu   float64
@@ -307,6 +311,7 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 }
 
 func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	poseA, err := r3.Translation(r3.Vec{X: -10})

@@ -11,6 +11,7 @@ import (
 )
 
 func TestCylinderLateralFloorImpactUsesProductionSweep(t *testing.T) {
+	t.Parallel()
 	for _, revolved := range []bool{false, true} {
 		for _, reverse := range []bool{false, true} {
 			name := "extruded"

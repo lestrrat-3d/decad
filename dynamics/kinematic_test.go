@@ -50,6 +50,7 @@ func kinematicBoxWorldWithLimit(t *testing.T, doc *decad.Document, driver, box *
 }
 
 func TestKinematicPushRespectsEventLimit(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -79,6 +80,7 @@ func TestKinematicPushRespectsEventLimit(t *testing.T) {
 }
 
 func TestKinematicDriverPushesDynamicBodyInReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	driver := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -113,6 +115,7 @@ func TestKinematicDriverPushesDynamicBodyInReverseWorldOrder(t *testing.T) {
 }
 
 func TestKinematicDriverMovesClearPair(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 100, 0, 110, 10, 0, 10)
@@ -153,6 +156,7 @@ func TestKinematicDriverMovesClearPair(t *testing.T) {
 }
 
 func TestKinematicDriverDepartsInitiallyTouchingBox(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -231,6 +235,7 @@ func TestKinematicDriverDepartsInitiallyTouchingBox(t *testing.T) {
 }
 
 func TestKinematicDriverDepartureSupportsReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	driver := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -265,6 +270,7 @@ func TestKinematicDriverDepartureSupportsReverseWorldOrder(t *testing.T) {
 }
 
 func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)

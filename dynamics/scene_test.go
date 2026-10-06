@@ -176,6 +176,7 @@ func pairImpulse(report *dynamics.StepReport, a, b *decad.Body) (float64, bool) 
 // TestStackAndDropScene asserts §2's Phase 1 exit criteria on the computed
 // trace.
 func TestStackAndDropScene(t *testing.T) {
+	t.Parallel()
 	scene := newStackAndDrop(t)
 	timeline := stackAndDropTimeline(t, scene)
 	require.Nil(t, timeline.Stopped())
@@ -774,6 +775,7 @@ const tumbleSteps = 768
 // exit criteria. It runs when DECAD_TUMBLE_FULL is set; see the comment at
 // the top of this section.
 func TestTumbleScene(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("DECAD_TUMBLE_FULL") == "" {
 		t.Skip("set DECAD_TUMBLE_FULL to run the whole tumble scene")
 	}
@@ -790,6 +792,7 @@ func TestTumbleScene(t *testing.T) {
 // rests (the run records the box at rest from its step 45 and the others
 // from steps 29 to 32), and asserts the same criteria.
 func TestTumbleSceneSubset(t *testing.T) {
+	t.Parallel()
 	if raceDetector {
 		t.Skip("the race detector takes this run past the package's test budget")
 	}
@@ -1226,6 +1229,7 @@ func requirePartsBinRolls(t *testing.T, scene partsBinScene, report *dynamics.St
 // exit criteria. It runs when DECAD_PARTSBIN_FULL is set; see the comment at
 // the top of this section.
 func TestPartsBinScene(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("DECAD_PARTSBIN_FULL") == "" {
 		t.Skip("set DECAD_PARTSBIN_FULL to run the whole parts-bin scene")
 	}
@@ -1242,6 +1246,7 @@ func TestPartsBinScene(t *testing.T) {
 // 0.125 s, by which each dropped body rests (the run records all four at
 // rest from step 17), and asserts the same criteria.
 func TestPartsBinSceneSubset(t *testing.T) {
+	t.Parallel()
 	scene := newPartsBin(t, true, "cup", "block", "loft", "sweep")
 	requirePartsBinExit(t, scene, partsBinTimeline(t, scene, 32), 32)
 }

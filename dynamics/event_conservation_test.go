@@ -27,6 +27,7 @@ func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.B
 }
 
 func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := conservationBox(t, doc, -5, 5)
 	initial := conservationBox(t, doc, -5, 5)
@@ -90,6 +91,7 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 }
 
 func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	scene := sketch.NewWorld()
 	plane, err := scene.CreateOffsetPlane(scene.XY(), -10)
@@ -153,6 +155,7 @@ func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
 }
 
 func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := conservationBox(t, doc, 0, 10)
 	b := conservationBox(t, doc, 35, 45)
@@ -202,6 +205,7 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 }
 
 func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := conservationBox(t, doc, 0, 10)
 	box := conservationBox(t, doc, 20, 30)
@@ -252,6 +256,7 @@ func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
 }
 
 func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := conservationBox(t, doc, 0, 10)
 	driver := conservationBox(t, doc, 20, 30)

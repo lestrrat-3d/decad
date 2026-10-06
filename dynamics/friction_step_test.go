@@ -11,6 +11,7 @@ import (
 )
 
 func TestFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
@@ -160,6 +161,7 @@ func TestFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 }
 
 func TestReverseFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
@@ -232,6 +234,7 @@ func TestReverseFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 }
 
 func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor-first", true: "box-first"}[reverse], func(t *testing.T) {
 			doc := decad.New()
@@ -317,6 +320,7 @@ func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
 // four patch corners, and the island certifies that the corners' witness
 // uncertainty leaves its spin within AngularVelocityResidual.
 func TestTranslatedStaticSupportBoundsCornerUncertainty(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
@@ -342,6 +346,7 @@ func TestTranslatedStaticSupportBoundsCornerUncertainty(t *testing.T) {
 }
 
 func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -2, -5, 2, 5, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)

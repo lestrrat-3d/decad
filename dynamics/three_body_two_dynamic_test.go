@@ -11,6 +11,7 @@ import (
 )
 
 func TestThreeBodyTwoDynamicSphereImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	remote := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
@@ -160,6 +161,7 @@ func TestThreeBodyTwoDynamicSphereImpact(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicSphereZeroRestitutionImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	remote := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
@@ -244,6 +246,7 @@ func TestThreeBodyTwoDynamicSphereZeroRestitutionImpact(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicOffAxisSphereZeroRestitutionImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	remote := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
@@ -292,6 +295,7 @@ func TestThreeBodyTwoDynamicOffAxisSphereZeroRestitutionImpact(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicLoadsKickBothBodiesOnce(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	floor := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
@@ -362,6 +366,7 @@ func TestThreeBodyTwoDynamicLoadsKickBothBodiesOnce(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicFixedImpactKeepsOtherBodyMoving(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -426,6 +431,7 @@ func TestThreeBodyTwoDynamicFixedImpactKeepsOtherBodyMoving(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicAllExcludedDriftsIndependently(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	fixed := makeBox(t, doc, -5, -5, 5, 5, -5, 10)
@@ -479,6 +485,7 @@ func TestThreeBodyTwoDynamicAllExcludedDriftsIndependently(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	floor := makeBox(t, doc, -100, -100, 100, 100, -100, 100)
@@ -556,6 +563,7 @@ func TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided(t *testing.T) {
 }
 
 func TestThreeBodyTwoDynamicSequentialFloorImpacts(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)

@@ -243,6 +243,7 @@ func requireTumbleRest(t *testing.T, scene tumbleRestScene, body *decad.Body, la
 }
 
 func TestHexagonalPrismRestsFromVertex(t *testing.T) {
+	t.Parallel()
 	// The §2 prism, 20 mm across flats and 12 mm tall, released on a vertex:
 	// turned 37° about −Y, its lowest vertex about 7 mm above the floor.
 	hex := func(doc *decad.Document) *decad.Body {
@@ -351,6 +352,7 @@ func requirePublishedHeights(t *testing.T, scene tumbleRestScene, body *decad.Bo
 // point.
 
 func TestWedgeRestsFromVertex(t *testing.T) {
+	t.Parallel()
 	// The §2 wedge, released beside the §2 prism, at the shipped residuals.
 	// It lands on one vertex and comes to rest on its triangular cap, which a
 	// rested vertex reaches without the band-end chain of §10.7.
@@ -384,6 +386,7 @@ func TestWedgeRestsFromVertex(t *testing.T) {
 }
 
 func TestBoxSpinsOnCornerInsideBand(t *testing.T) {
+	t.Parallel()
 	// The §2 60° box, released spinning at (2, 1, 0) rad/s, at the shipped
 	// residuals. It lands on a corner and spins on it with that corner's band
 	// track continued over many band ends; a corner the solve rested may sink
@@ -410,6 +413,7 @@ func TestBoxSpinsOnCornerInsideBand(t *testing.T) {
 }
 
 func TestBoxBouncesOnEdgeAndRestsFlat(t *testing.T) {
+	t.Parallel()
 	// The §2 30° box, released spinning at (2, 1, 0) rad/s, at the §2 scene's
 	// PenetrationResidual = 10 µm and SupportBand = 5 µm. It lands on a
 	// corner, bounces onto an edge, and once a kick lands it on all four lower

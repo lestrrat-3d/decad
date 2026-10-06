@@ -17,6 +17,7 @@ import (
 // also at (π/2)·0.01 mm/s across it: the island reads the field at each
 // contact point, not one velocity for the whole driver.
 func TestDriverMotionReadsFieldOffTheAxis(t *testing.T) {
+	t.Parallel()
 	turn, err := r3.RotationAround(r3.Vec{X: 5, Y: 5, Z: 5}, r3.Vec{X: 1}, units.Degrees(90))
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 20})

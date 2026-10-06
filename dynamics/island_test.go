@@ -138,6 +138,7 @@ func supportImpulse(t *testing.T, report *dynamics.StepReport, lower, upper *dec
 // law limit ImpulseResidual + m_hi·VelocityResidual (9e-6 kg·mm/s here, so
 // 1e-5 is the slack per body).
 func TestIslandPyramidRestsUnderGravity(t *testing.T) {
+	t.Parallel()
 	scene := newPyramid(t, [7]int{-1, 0, 1, 2, 3, 4, 5}, islandStepConfig())
 	report := scene.step(t)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
@@ -252,6 +253,7 @@ func TestIslandPyramidRestsUnderGravity(t *testing.T) {
 // patches leave the split statically indeterminate and the solve order
 // follows world order.
 func TestIslandPyramidIgnoresInsertionOrder(t *testing.T) {
+	t.Parallel()
 	for _, order := range [][7]int{{5, 4, 3, 2, 1, 0, -1}, {3, -1, 5, 0, 4, 2, 1}} {
 		scene := newPyramid(t, order, islandStepConfig())
 		report := scene.step(t)
@@ -341,6 +343,7 @@ func (s twoSphereIslandScene) step(t *testing.T) *dynamics.StepReport {
 // here produced by the island solver: the 37.5 kg·mm/s impulse, the post
 // velocities, the momentum, and the replayed positions.
 func TestIslandTwoSphereImpactThroughGeneralPath(t *testing.T) {
+	t.Parallel()
 	scene := newTwoSphereIsland(t, exactSphereMass(), pairMaterialStepConfig())
 	report := scene.step(t)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
@@ -452,6 +455,7 @@ func TestIslandTwoSphereImpactThroughGeneralPath(t *testing.T) {
 // two-sphere island and requires the named gate among the refusals. The
 // untampered proposal passes every gate.
 func TestIslandCertificateGates(t *testing.T) {
+	t.Parallel()
 	scene := newTwoSphereIsland(t, exactSphereMass(), pairMaterialStepConfig())
 	gates := func(tamper func(*dynamics.IslandProposal)) []string {
 		t.Helper()
@@ -504,6 +508,7 @@ func TestIslandCertificateGates(t *testing.T) {
 // certificate leaves the published spin, so the angular law and the angular
 // momentum refuse it.
 func TestIslandWitnessTorqueGates(t *testing.T) {
+	t.Parallel()
 	scene := newBottleScene(t)
 	config := partsBinConfig()
 	world, state := scene.world(t, config, translation(t, r3.Vec{Z: 1.0 / 32}), -383.203125)
@@ -535,6 +540,7 @@ func TestIslandWitnessTorqueGates(t *testing.T) {
 // times a mass anywhere in that interval, about 0.03 kg·mm/s wide, far past
 // the linear law's 2e-6 kg·mm/s limit, so the island is refused.
 func TestIslandUncertainMassRefuses(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	mass.Mass.Bound = units.Kilograms(1.0 / 1024)
 	mass.Mass.Exactness = decad.Approximate
@@ -552,6 +558,7 @@ func TestIslandUncertainMassRefuses(t *testing.T) {
 // makes the enclosed speed straddle −ImpactSpeed, so neither the restitution
 // target nor the zero target can be selected for every admitted normal.
 func TestIslandImpactSpeedStraddleRefuses(t *testing.T) {
+	t.Parallel()
 	config := pairMaterialStepConfig()
 	config.ImpactSpeed = units.MillimetersPerSecond(50)
 	scene := newTwoSphereIsland(t, exactSphereMass(), config)
@@ -572,6 +579,7 @@ func TestIslandImpactSpeedStraddleRefuses(t *testing.T) {
 // sweeps cannot certify its 36 coupled points, and its nine events exceed
 // a MaxEvents of eight. Neither refusal changes the document.
 func TestIslandBudgets(t *testing.T) {
+	t.Parallel()
 	config := islandStepConfig()
 	config.MaxIterations = 2
 	scene := newPyramid(t, [7]int{-1, 0, 1, 2, 3, 4, 5}, config)
@@ -596,6 +604,7 @@ func TestIslandBudgets(t *testing.T) {
 // before the kick, in either slice's box and sweep loops, and between the
 // island solves. Each returns the context error and no report.
 func TestIslandCancellation(t *testing.T) {
+	t.Parallel()
 	scene := newPyramid(t, [7]int{-1, 0, 1, 2, 3, 4, 5}, islandStepConfig())
 	input := dynamics.StepInput{Gravity: gravityZ(-9810)}
 	var calls atomic.Int64
@@ -702,6 +711,7 @@ const correctionDepth = 1.0 / (1 << 21)
 // The bracket-travel leg is zero at an initial contact and the geometry leg
 // is zero for exact boxes; neither can be observed here.
 func TestIslandCorrectsInitialPenetration(t *testing.T) {
+	t.Parallel()
 	scene := newCorrectionScene(t, correctionDepth, -1, false, islandStepConfig())
 	report := scene.step(t)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
@@ -735,6 +745,7 @@ func TestIslandCorrectsInitialPenetration(t *testing.T) {
 // lifts it onto a fixed ceiling exactly the correction depth above it are
 // all StepCorrectionFailed.
 func TestIslandCorrectionRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		depth   float64

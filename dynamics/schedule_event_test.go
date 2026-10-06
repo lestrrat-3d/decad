@@ -164,6 +164,7 @@ func floorCeilingHeight(at float64) float64 {
 // inside the slices carry that delay times the speed: below 256 mm/s ·
 // 5e-9 s ≈ 1.3e-6 mm, so the slack is 2e-6 mm.
 func TestScheduledStepBounces(t *testing.T) {
+	t.Parallel()
 	for name, config := range map[string]dynamics.StepConfig{
 		"slop": bounceStepConfig(), "bracket travel": bracketTravelConfig()} {
 		t.Run(name, func(t *testing.T) {
@@ -237,6 +238,7 @@ func TestScheduledStepBounces(t *testing.T) {
 // keeps the three published events and islands, and its Trace replays the
 // certified prefix up to the third impact.
 func TestScheduledStepEventBudget(t *testing.T) {
+	t.Parallel()
 	config := bounceStepConfig()
 	config.MaxEvents = 3
 	scene := newBounceScene(t, 12, 6, -256, config)
@@ -282,6 +284,7 @@ func TestScheduledStepEventBudget(t *testing.T) {
 // same velocity (the common-velocity rule), are corrected together, and the
 // upper pair continues in persistent touch.
 func TestScheduledStepBouncesAStack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	parked := makeBox(t, doc, 500, 0, 510, 10, 0, 10)
@@ -356,6 +359,7 @@ func TestScheduledStepBouncesAStack(t *testing.T) {
 // impulse of 48 kg·mm/s, and the driver delivers 48·32 = 1536 kg·mm²/s² of
 // work while the sphere gains ½·48² = 1152.
 func TestScheduledStepKinematicIsland(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	platform := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	parkedA := makeBox(t, doc, 500, 0, 510, 10, 0, 10)
@@ -424,6 +428,7 @@ func TestScheduledStepKinematicIsland(t *testing.T) {
 // graze publishes a zero-impulse ContactGraze without ending the slice,
 // since the pair's sweep replays the whole step.
 func TestScheduledStepGraze(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed, moving := makeBall(t, doc), makeBall(t, doc)
 	parkedA := makeBox(t, doc, 500, 0, 510, 10, 0, 10)
@@ -478,6 +483,7 @@ func TestScheduledStepGraze(t *testing.T) {
 // continues on a persistent track, and its transition bracket at 2 s publishes a
 // zero-impulse ContactTransition; the box then drifts clear to x = 15.
 func TestScheduledStepEdgeTransition(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	base := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -586,6 +592,7 @@ func boxExclusionScene(t *testing.T, moving bool) (*dynamics.World, dynamics.Sta
 // of box-excluded pairs at both places a rounded pose is published: the
 // slice end, and a replay sample inside the slice.
 func TestScheduledStepBoxExclusionAtRoundedPoses(t *testing.T) {
+	t.Parallel()
 	u := math.Ldexp(1, -22)
 	t.Run("fixed", func(t *testing.T) {
 		// B stays put, so A's rounded end pose meets it: the step refuses to
@@ -638,6 +645,7 @@ func TestScheduledStepBoxExclusionAtRoundedPoses(t *testing.T) {
 // = 1e-6 + (1 + 2^-10)·1e-6 kg·mm/s, rounded up to a float; the trace holds
 // the certified prefix, the start state at time zero.
 func TestScheduledStepDiagnosticsNameTheIsland(t *testing.T) {
+	t.Parallel()
 	mass := exactSphereMass()
 	mass.Mass.Bound = units.Kilograms(1.0 / 1024)
 	mass.Mass.Exactness = decad.Approximate
@@ -666,6 +674,7 @@ func TestScheduledStepDiagnosticsNameTheIsland(t *testing.T) {
 // step start, and a rotating driver has no single contact-point velocity, so
 // the step stops with StepUnsupported and names the pair.
 func TestScheduledStepTurntableTouchRefuses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	platform := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	parkedA := makeBox(t, doc, 500, 0, 510, 10, 0, 10)

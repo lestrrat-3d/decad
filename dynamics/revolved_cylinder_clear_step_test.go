@@ -44,6 +44,7 @@ func makeTorus(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 func TestRevolvedCylinderClearStepUsesProductionSweep(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
 			runRevolvedCylinderClearStep(t, reverse)
@@ -142,6 +143,7 @@ func runRevolvedCylinderClearStep(t *testing.T, reverse bool) {
 }
 
 func TestRevolvedCylinderAxialFloorImpact(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "interior floor first", true: "interior cylinder first"}[reverse], func(t *testing.T) {
 			revolvedCylinderAxialFloorImpact(t, reverse, .2, 10)
@@ -150,6 +152,7 @@ func TestRevolvedCylinderAxialFloorImpact(t *testing.T) {
 }
 
 func TestRevolvedCylinderAxialEndpointImpact(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "endpoint floor first", true: "endpoint cylinder first"}[reverse], func(t *testing.T) {
 			revolvedCylinderAxialFloorImpact(t, reverse, .125, 8)
@@ -269,6 +272,7 @@ func revolvedCylinderAxialFloorImpact(t *testing.T, reverse bool, duration, spee
 }
 
 func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -10, -20, 0, 20, -20, 40)
 	full := makeRevolvedCylinder(t, doc, decad.FullRevolution{}, 0)

@@ -23,6 +23,7 @@ func rotatingNormalDriver(t *testing.T, translation float64) decad.PoseSegment {
 }
 
 func TestKinematicRotatingDriverInteriorImpactUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 19, 0, 29, 10, 0, 10)
@@ -101,6 +102,7 @@ func TestKinematicRotatingDriverInteriorImpactUsesProductionGeometry(t *testing.
 }
 
 func TestKinematicRotatingDriverMovesClearPair(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 100, 0, 110, 10, 0, 10)
@@ -126,6 +128,7 @@ func TestKinematicRotatingDriverMovesClearPair(t *testing.T) {
 }
 
 func TestKinematicRotatingDriverInteriorImpactReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 19, 0, 29, 10, 0, 10)
@@ -188,6 +191,7 @@ func TestKinematicRotatingDriverInteriorImpactReverseWorldOrder(t *testing.T) {
 // warm-start cache only refuses a restart, and a restarted proposal is
 // certified again.
 func TestKinematicHingedPaddleStrikesWithItsField(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	paddle := makeBox(t, doc, 0, 0, 10, 40, 0, 10)
 	box := makeBox(t, doc, 10.1, 30, 20.1, 50, 0, 10)

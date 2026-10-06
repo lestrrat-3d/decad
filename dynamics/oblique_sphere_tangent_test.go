@@ -12,6 +12,7 @@ import (
 )
 
 func TestRotatedSphereFrictionlessTangentialImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 20)
 	ball := makeBall(t, doc)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestKinematicDriverInteriorImpactUsesProductionGeometry(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -184,6 +185,7 @@ func kinematicImpactConfig(maxEvents int) dynamics.StepConfig {
 }
 
 func TestKinematicInteriorImpactRespectsEventLimit(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 20, 0, 30, 10, 0, 10)
@@ -212,6 +214,7 @@ func TestKinematicInteriorImpactRespectsEventLimit(t *testing.T) {
 }
 
 func TestKinematicInteriorImpactSupportsReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	driver := makeBox(t, doc, 20, 0, 30, 10, 0, 10)

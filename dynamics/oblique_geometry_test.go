@@ -12,6 +12,7 @@ import (
 )
 
 func TestObliqueBoxGeometryIntegration(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	moving := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -191,6 +192,7 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 }
 
 func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	moving := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -283,6 +285,7 @@ func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
 }
 
 func TestObliqueCenteredReboundAndNextStep(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	moving := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
@@ -323,6 +326,7 @@ func TestObliqueCenteredReboundAndNextStep(t *testing.T) {
 }
 
 func TestObliqueSupportReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	dynamic := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	fixed := makeBox(t, doc, 10, 0, 20, 10, 0, 10)

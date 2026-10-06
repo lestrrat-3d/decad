@@ -50,6 +50,7 @@ func sideCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 // at y = 30 so its whole turn keeps clear of the walls, and it rolls under
 // gravity as on the plain floor.
 func TestScheduledStepCylinderRolls(t *testing.T) {
+	t.Parallel()
 	const (
 		omega = 2 * math.Pi
 		steps = 16

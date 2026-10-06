@@ -31,6 +31,7 @@ func testTorque(z float64) dynamics.QuantityVec {
 }
 
 func TestStepValidatesCenterLoadsBeforeCancellation(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -76,6 +77,7 @@ func TestStepValidatesCenterLoadsBeforeCancellation(t *testing.T) {
 }
 
 func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -139,6 +141,7 @@ func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
 }
 
 func TestTorqueTraceReplaysClearRotationInReverseWorldOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -191,6 +194,7 @@ func TestTorqueTraceReplaysClearRotationInReverseWorldOrder(t *testing.T) {
 }
 
 func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -287,6 +291,7 @@ func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
 }
 
 func TestTorqueDrivenRotatingBoxRestingContactNeedsTrack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -320,6 +325,7 @@ func TestTorqueDrivenRotatingBoxRestingContactNeedsTrack(t *testing.T) {
 }
 
 func TestTorqueDrivenRotatingImpactUsesCertifiedNonHalfPose(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -348,6 +354,7 @@ func TestTorqueDrivenRotatingImpactUsesCertifiedNonHalfPose(t *testing.T) {
 }
 
 func TestTorqueKickRejectsWideInertiaInterval(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -385,6 +392,7 @@ func TestTorqueKickRejectsWideInertiaInterval(t *testing.T) {
 }
 
 func TestTorqueKickUsesWorldFrameInertia(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -10, 5, 10, 0, 30)
@@ -422,6 +430,7 @@ func TestTorqueKickUsesWorldFrameInertia(t *testing.T) {
 }
 
 func TestFreeAsymmetricSpinIncludesGyroscopicKick(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -10, 5, 10, 0, 30)
@@ -446,6 +455,7 @@ func TestFreeAsymmetricSpinIncludesGyroscopicKick(t *testing.T) {
 }
 
 func TestUnderflowedAngularDriftIsNotCertifiedClear(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -469,6 +479,7 @@ func TestUnderflowedAngularDriftIsNotCertifiedClear(t *testing.T) {
 }
 
 func TestCenterForceUsesMassIntervalForKick(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -514,6 +525,7 @@ func TestCenterForceUsesMassIntervalForKick(t *testing.T) {
 }
 
 func TestUnderflowedForceAndGravityStillCheckKick(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -561,6 +573,7 @@ func TestUnderflowedForceAndGravityStillCheckKick(t *testing.T) {
 }
 
 func TestCenterForceClearDriftAndGravityCancellation(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)

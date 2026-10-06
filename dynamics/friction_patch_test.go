@@ -71,6 +71,7 @@ func stepPatch(t *testing.T, doc *decad.Document, a, b RigidBody, poseA, poseB r
 // difference rounds, so the lever the island reads must be the exact
 // producer lever: the certified spin stays within AngularVelocityResidual.
 func TestFixedFloorFrictionPatchKeepsExactProducerLever(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -4.9, -5, 5.3, 5, 0)
@@ -106,6 +107,7 @@ func TestFixedFloorFrictionPatchKeepsExactProducerLever(t *testing.T) {
 // and its friction takes 50 kg·mm/s of the slide, at the cone, leaving
 // (50, 0, 0) mm/s and no spin.
 func TestFixedFloorFrictionPatchUsesRealManifoldAndMass(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)

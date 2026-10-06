@@ -195,6 +195,7 @@ func requireBandCuts(t *testing.T, trace dynamics.Trace, residual float64) int {
 func rat(v float64) *big.Rat { return new(big.Rat).SetFloat64(v) }
 
 func TestBoxTipsOverOnBandTracks(t *testing.T) {
+	t.Parallel()
 	scene := newTipScene(t, units.Value{})
 	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
 	require.NoError(t, err)
@@ -295,6 +296,7 @@ func tipCornerHeights(pose r3.Transform) []*big.Rat {
 }
 
 func TestBoxTipsOverAndRestsFlat(t *testing.T) {
+	t.Parallel()
 	scene := newTipScene(t, units.Millimeters(newTipResidual/2))
 	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
 	require.NoError(t, err)

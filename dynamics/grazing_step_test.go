@@ -28,6 +28,7 @@ func grazingSphere(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 func TestGrazingSpherePassesWithZeroImpulse(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	fixed, moving := grazingSphere(t, doc), grazingSphere(t, doc)
 	density := units.KilogramsPerCubicMillimeter(.001)

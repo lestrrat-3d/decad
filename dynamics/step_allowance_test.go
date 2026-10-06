@@ -10,6 +10,7 @@ import (
 
 // This proof gate is private, so the regression exercises it inside the package.
 func TestCorrectionAllowanceUsesElapsedBounds(t *testing.T) {
+	t.Parallel()
 	// The published elapsed centers coincide, yet their certified time balls
 	// permit a nonzero bracket. A difference of the rounded centers would be zero.
 	bracket := decad.SweepInterval{

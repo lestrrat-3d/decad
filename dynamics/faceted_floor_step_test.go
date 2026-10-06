@@ -45,6 +45,7 @@ func positiveBoundFacetedStepConfig() dynamics.StepConfig {
 }
 
 func TestPositiveBoundFacetedFloorDensityImpactAndTrace(t *testing.T) {
+	t.Parallel()
 	doc, floor, body := positiveBoundFacetedFloorFixture(t)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	mass, err := body.MassProperties(t.Context(), density)
@@ -99,6 +100,7 @@ func TestPositiveBoundFacetedFloorDensityImpactAndTrace(t *testing.T) {
 }
 
 func TestPositiveBoundFacetedFloorDensityRestAndTrace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		density float64
@@ -191,6 +193,7 @@ func facetedFloorStepConfig() dynamics.StepConfig {
 }
 
 func TestBoundedFacetedMassAdmitsDynamicWorld(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
 	upper := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
@@ -223,6 +226,7 @@ func TestBoundedFacetedMassAdmitsDynamicWorld(t *testing.T) {
 }
 
 func TestBoundedFacetedMassClearStepAndTrace(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
 	upper := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
@@ -302,6 +306,7 @@ func facetedFloorWorld(t *testing.T, doc *decad.Document, floor, faceted *decad.
 }
 
 func TestFacetedFloorImpactUsesRealUnionSweepAndTrace(t *testing.T) {
+	t.Parallel()
 	for _, reversed := range []bool{false, true} {
 		for _, restitution := range []float64{0, .5} {
 			t.Run(map[bool]string{false: "fixed floor before union", true: "union before fixed floor"}[reversed]+
@@ -400,6 +405,7 @@ func TestFacetedFloorImpactUsesRealUnionSweepAndTrace(t *testing.T) {
 }
 
 func TestFacetedFloorImpactUsesDensityMass(t *testing.T) {
+	t.Parallel()
 	doc, floor, faceted, _ := facetedFloorStepFixture(t)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	mass, err := faceted.MassProperties(t.Context(), density)
@@ -433,6 +439,7 @@ func TestFacetedFloorImpactUsesDensityMass(t *testing.T) {
 }
 
 func TestPlacedFacetedFloorDensityImpactAndTrace(t *testing.T) {
+	t.Parallel()
 	doc, floor, source, _ := facetedFloorStepFixture(t)
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)
@@ -514,6 +521,7 @@ func TestPlacedFacetedFloorDensityImpactAndTrace(t *testing.T) {
 }
 
 func TestFacetedFloorImpactRefusesUncertifiedResponse(t *testing.T) {
+	t.Parallel()
 	doc, floor, faceted, mass := facetedFloorStepFixture(t)
 	for _, tc := range []struct {
 		name, reason    string

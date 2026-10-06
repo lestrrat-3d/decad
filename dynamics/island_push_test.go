@@ -90,6 +90,7 @@ func (s pushScene) step(t *testing.T) *dynamics.StepReport {
 // about an ulp; the push leaves it just separated, by less than its
 // correction allowance, and the pair then drifts clear.
 func TestIslandPushSeparatesACurvedBounce(t *testing.T) {
+	t.Parallel()
 	scene := newPushScene(t, .5, pairMaterialStepConfig())
 	report := scene.step(t)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
@@ -137,6 +138,7 @@ func TestIslandPushSeparatesACurvedBounce(t *testing.T) {
 // needs about that much travel: an allowance of 1e-11 mm admits it and
 // leaves the pair apart, one of 1e-13 mm refuses it.
 func TestCorrectedRelationPushRespectsAllowance(t *testing.T) {
+	t.Parallel()
 	scene := newPushScene(t, .5, pairMaterialStepConfig())
 	sunk, err := r3.Translation(scene.normal.Scale(15 - 0x1p-40))
 	require.NoError(t, err)
@@ -177,6 +179,7 @@ func TestCorrectedRelationPushRespectsAllowance(t *testing.T) {
 // leaves the contact set: the step advances with the sphere at rest just
 // off the face, where it stays.
 func TestIslandPushRestsACurvedPairApart(t *testing.T) {
+	t.Parallel()
 	scene := newPushScene(t, 0, pairMaterialStepConfig())
 	report := scene.step(t)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)

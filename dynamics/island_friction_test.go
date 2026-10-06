@@ -86,6 +86,7 @@ func (s frictionSlideScene) step(t *testing.T, slip float64) *dynamics.StepRepor
 // speed, every corner slips on the cone, and the box then slides 5 mm on a
 // persistent track.
 func TestIslandFrictionSlideThroughGeneralPath(t *testing.T) {
+	t.Parallel()
 	scene := newFrictionSlide(t, false, pairMaterialStepConfig())
 	report := scene.step(t, 100)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
@@ -169,6 +170,7 @@ func TestIslandFrictionSlideThroughGeneralPath(t *testing.T) {
 // pair's normal points down from the box and the floor receives the
 // friction: TestReverseFixedFloorFrictionStepUsesRealGeometry's numbers.
 func TestIslandFrictionSlideBoxFirst(t *testing.T) {
+	t.Parallel()
 	scene := newFrictionSlide(t, true, pairMaterialStepConfig())
 	for _, slip := range []float64{100, 0} {
 		report := scene.step(t, slip)
@@ -256,6 +258,7 @@ func newFrictionStack(t *testing.T) frictionStackScene {
 // cone while the floor pair holds the lower box at rest against the upper
 // box's friction.
 func TestIslandFrictionStackSlipsOverASticker(t *testing.T) {
+	t.Parallel()
 	scene := newFrictionStack(t)
 	config := pairMaterialStepConfig()
 	report, err := scene.world.Step(t.Context(), scene.state, dynamics.StepInput{Gravity: gravityZ(-1000)},
@@ -331,6 +334,7 @@ func TestIslandFrictionStackSlipsOverASticker(t *testing.T) {
 // the sliding and the resting box and requires the named gate among the
 // refusals. Both untampered proposals pass every gate.
 func TestIslandFrictionCertificateGates(t *testing.T) {
+	t.Parallel()
 	scene := newFrictionSlide(t, false, pairMaterialStepConfig())
 	gates := func(slip float64, tamper func(*dynamics.IslandProposal)) []string {
 		t.Helper()

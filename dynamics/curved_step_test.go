@@ -48,6 +48,7 @@ func makeBall(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 func TestSourceSphereRotatedBoxFace(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 20)
 	ball := makeBall(t, doc)
@@ -221,6 +222,7 @@ func TestSourceSphereRotatedBoxFace(t *testing.T) {
 }
 
 func TestRotatedSphereBoxOffCenterMassNeedsPointMotionProof(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 20)
 	ball := makeBall(t, doc)
@@ -273,6 +275,7 @@ func TestRotatedSphereBoxOffCenterMassNeedsPointMotionProof(t *testing.T) {
 }
 
 func TestSphereDensityMassRebound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	ball := makeBall(t, doc)
@@ -319,6 +322,7 @@ func TestSphereDensityMassRebound(t *testing.T) {
 }
 
 func TestSourceSpherePairDensityImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	density := units.KilogramsPerCubicMillimeter(0.001)
@@ -370,6 +374,7 @@ func TestSourceSpherePairDensityImpact(t *testing.T) {
 }
 
 func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	ball := makeBall(t, doc)
@@ -453,6 +458,7 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 }
 
 func TestSourceSpherePairCenteredImpact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
 	mass := exactSphereMass()
