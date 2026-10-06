@@ -2833,6 +2833,27 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `StepManifoldMissing`; `b` read as `SupportBand` alone at `SupportBand = 0.01 mm`, the bottle's rest is
   `StepManifoldMissing` on a band with no lifted set.
 - Depends on: PRs 14d, 18, 20b.
+- Shipped. `planarBandPair.liftedBand` publishes the lifted set and `overlapManifold` the deep overlap's
+  patch, both charged by `chargedManifold`; `pair.PlanarFacePenetrationGrown` reads §9.6's conditions 3
+  and 4 over M grown by its δ. `planarLiftedSet` reads every guest, as PR 20d states. The §9.6 path needs
+  M's §9.2 certificate, which the `2.1 mm` block's held mesh does not carry (a rounded foot leaves a vertex
+  an ulp in front of a facet plane), so that block sunk in the floor reads `Overlapping` with
+  `ContactNonConvex` and the overlap fixtures use a `2.3 mm` block, whose held mesh is certified; the
+  `2.1 mm` block's landing in the scene does not take the overlap path. The §9.6 margin fixture moves the
+  tray so its wall is the plane `y = 0`, where `δ/2` is a float, and both growths must be deleted for it
+  to go red, since either alone refuses it. The host-gate fixture sets the bottle on the `2.1 mm` block
+  instead of the knob, whose held pair with the bottle costs `14 s` of exact classification; its red reads
+  `Gap.Bound` below `2δ`, since `chargedManifold`'s exact-face check withholds a displaced host's normal
+  on its own. `TestContactPairBandChargesHeldGap`'s `2⁻¹⁴ mm` gap now publishes the knob's four lower
+  corners under the octagon's face. In `dynamics`, the block's held gap enters the lifted band at about
+  `SupportBand` above the floor, so it lands on a four-point `ContactBand` rather than an overlap and
+  rests at step `17` (leg shown to fail: the lifted band deleted, the landing's right sample is an
+  overlap of the block's flat face and the step stops with `StepManifoldMissing`). The bottle's dynamics
+  fixtures are not shipped: its landing solve stops with `StepIslandResidual` at §6.3's angular law
+  gate, whose residual carries each lever's witness ball, `δ` about `0.03 mm`, times the landing impulse
+  (about `55 kg·mm²/s` against a limit of `1.2e-4`), while the limit charges no lever uncertainty; the
+  bottle's rest waits on that charge. Its refusal at `PointResolution = 1e-6 mm` reads
+  `StepPairUndecided` as stated, but its exact classification against the tray costs about `2 s` a step.
 
 ### PR 20d (Phase 3) — the support set of a non-convex guest
 
