@@ -246,7 +246,11 @@ relation is a persistent track through the end of the step (§5 step 8), and §5
 on `State`, not in the cache and not in the `Trace`: a step reads only its input state, the next step
 needs it, and it decides a pair's start policy rather than repeating a computation. `World` stays
 immutable configuration and every per-step datum stays in the run, the published state or the report,
-so concurrent steps from one state share nothing mutable.
+so concurrent steps from one state share nothing mutable that can change an outcome. The one exception
+is a memo (`dynamics/world_inertia.go`): each `World` keeps its last 1024 world-axis inertia tensors
+and their inverses, keyed by body index and the bits of the pose basis. A body's admitted mass reading
+never changes and `r3`'s rotation reads only the basis, so a repeat returns the bits `r3` computes. Only
+a successful rotation and inversion enters it, and a mutex guards it for concurrent steps.
 
 One rule keeps a resting or continuing contact silent: it publishes an event only when a solve changes
 something. A pair the contact set carries (§5 step 2) continues on its track from the step start with no

@@ -83,20 +83,12 @@ func (w *World) nominalBodies(isl island, pre State, drive map[int]driverMotion)
 			continue
 		}
 		entry, mass := pre.entries[index], w.bodies[index].mass
-		inertia := mass.Inertia
-		local, err := r3.NewSymmetricTensor(inertia.XX.Value.Base(), inertia.YY.Value.Base(),
-			inertia.ZZ.Value.Base(), inertia.XY.Value.Base(), inertia.XZ.Value.Base(), inertia.YZ.Value.Base())
-		if err == nil {
-			local, err = local.Rotate(entry.Pose)
-		}
-		if err == nil {
-			local, err = local.Inverse()
-		}
+		inertia, err := w.worldInertia(index, entry.Pose)
 		invMass := 1 / mass.Mass.Value.Base()
 		if err != nil || !finite(invMass) || invMass <= 0 {
 			return nil, &islandFailure{code: StepIslandDegenerate, reason: fmt.Sprintf("body %d has no finite inverse mass or inertia", index)}
 		}
-		out[slot] = nominalBody{dynamic: true, invMass: invMass, invInertia: local,
+		out[slot] = nominalBody{dynamic: true, invMass: invMass, invInertia: inertia.inverse,
 			center: entry.Pose.Apply(mass.Center.Value),
 			v:      vecOf(entry.LinearVelocity), w: vecOf(entry.AngularVelocity)}
 	}
