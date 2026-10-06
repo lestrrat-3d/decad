@@ -9,11 +9,11 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:   35.60s over 60 tests
-#   shard 1:   35.60s over 60 tests
+#   shard 1:   35.59s over 59 tests
 #   shard 2:   35.60s over 64 tests
-#   shard 3:   35.60s over 660 tests
+#   shard 3:   35.60s over 650 tests
 #   shard 4:   35.60s over 63 tests
-#   shard 5:   35.60s over 63 tests
+#   shard 5:   35.12s over 62 tests
 #
 0	1.44	TestAtanSmallIntervalContainsExactSeries
 0	0.01	TestBlindStackedAdmissionLeavesOtherCutsToMesh
@@ -88,7 +88,6 @@
 1	0.03	TestCapPolygonAreaRatNetsEveryLoop
 1	0.02	TestCellTwistMomentsMatchRefinedBilinearSurface
 1	0.15	TestChainStationsHonorsItsTargetAndLoosensWithIt
-1	0.01	TestCircularMonomialsAgreeWithClosedForms
 1	0.36	TestCornerSpanMatchesRationalForm
 1	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
 1	0.02	TestCupProofRecordCoversEveryPatchItHolds
@@ -200,7 +199,6 @@
 2	0.19	TestWallNormalDecisionEnclosesExactComponent
 2	0.01	TestWideSpanBracketRefusesBeforeSubdividing
 3	0.00	Example_decad_quickstart
-3	0.00	FuzzTriangulate2D
 3	0.00	TestAddBlendRolesContextPollsNestedMetadata
 3	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 3	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
@@ -210,7 +208,6 @@
 3	0.00	TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity
 3	0.00	TestAnalyticCircularEdgesCarryLengthBounds
 3	0.00	TestAngularHomotopyBulgesBoundTheSecondDerivatives
-3	0.00	TestArcEndRadialRatioBracketsTheRatio
 3	0.01	TestArcMatchedDeltaEqualsSagitta
 3	0.00	TestAtanSmallIntervalDegenerateArguments
 3	0.00	TestAuditRewriteSingleCornerOverrunIsUnsupported
@@ -320,11 +317,7 @@
 3	0.00	TestChordedBoundsNeverPublishAFlushedZero
 3	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
 3	0.00	TestCircleCircleLocusSpeedUpperRefusesNearParallelCorner
-3	0.00	TestCircularFirstMomentIntervalChargesEndpointRadiusDrift
-3	0.00	TestCircularMomentIntervalsExactArcKeepPointRadialRatio
-3	0.00	TestCircularSecondMomentIntervalChargesEndpointRadiusDrift
 3	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
-3	0.00	TestCircularThirdMomentWholeCircle
 3	0.00	TestClampedConversionCostIsQuadratic
 3	0.00	TestClearDenomsIsAPositiveRescaling
 3	0.00	TestClearanceEnumerationCountsVertexTierFaces
@@ -792,10 +785,6 @@
 3	0.00	TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle
 3	0.00	TestTriTriClassifyIsSymmetric
 3	0.00	TestTriTriClassifyNamesTheInPlaneEdge
-3	0.00	TestTriangulate2DBridgeCollinear
-3	0.00	TestTriangulate2DBridgeCollinearFamily
-3	0.00	TestTriangulate2DHoleHoleCollinear
-3	0.00	TestTriangulate2DHolesSharingOneBridgeAnchor
 3	0.00	TestTriangulateStitchFacesTilesAHoledFaceExactly
 3	0.00	TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission
 3	0.00	TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect
@@ -976,7 +965,6 @@
 5	0.01	TestTessellateChargesSectionDisplacementToEveryProof
 5	0.62	TestTessellatePrismReusesPublishedWalks
 5	0.20	TestTriTriIntervalEnclosesExact
-5	0.48	TestTriangulate2DProperty
 5	3.10	TestUnionKeepsTheHeldMeshEmbedded
 5	1.24	TestVerifyOverlapEnclosesBicylinderVolume
 5	0.01	TestVerifyPublishCoarseReadingKeepsGeometry
