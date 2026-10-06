@@ -383,6 +383,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// than a second one keyed on the wrapper type.
 		return tessellateChain(ctx, b, sp.chain)
 	}
+	if mp, ok := b.payload.(mitredSweepPayload); ok {
+		// docs/sweep-design.md Table DM row DM2: an exact restatement of the
+		// held triangles, refused below the payload's own delta.
+		return tessellateMitredSweep(ctx, b, mp, chord)
+	}
 	if sp, ok := b.payload.(sweepPayload); ok {
 		// docs/sweep-design.md Table D row D2's one exception: a one-span
 		// straight solid sweep builds through the identical evalPrismContext
@@ -399,7 +404,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, chain-fed prism, one-span straight sweep, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, chain-fed prism, one-span straight sweep, mitred sweep, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }

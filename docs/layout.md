@@ -124,6 +124,9 @@ to the byte budget.
 | `sweep_composite.go` | Composite Sweep shared join topology, its manifold-with-boundary audit, and the outer-cap omission a surface result takes. See `docs/sweep-design.md` PR 4, `docs/surface-design.md` §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
+| `sweep_mitre.go` | `WithMitredJoins`/`WithSectionScale`, Table SM's entry gates, the mitred payload, placement and restatement. See `docs/sweep-design.md` §16. |
+| `sweep_mitre_build.go` | §16.3's exact mitred construction, rounding, orientation and SM8 audit. See `docs/sweep-design.md` §16.3–§16.4. |
+| `sweep_mitre_body.go` | Table BM's triangles and topology, and §16.6's readings. See `docs/sweep-design.md` §16.5–§16.6. |
 | `sweep_transport.go` | Rotation-minimizing endpoint-frame transport over exact path records, with rational enclosures of each held frame. See `docs/sweep-design.md` §3.2. |
 | `prism_payload.go` | `prismPayload` and its coordinate readings: a world point, its proven bound, and the coordinate envelopes later bounds charge against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |

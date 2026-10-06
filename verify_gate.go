@@ -139,6 +139,17 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = lowerDiameterForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if payload, ok := body.payload.(mitredSweepPayload); ok {
+		// A mitred sweep's boundary is a polyhedron over its held vertex
+		// table, each vertex within delta of the exact one, so the loft arm's
+		// reading and shrink apply unchanged (docs/sweep-design.md §16.6).
+		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		return d, ok, nil
+	}
 	if payload, ok := body.payload.(stitchPayload); ok {
 		// Modelled on the loft arm immediately above: a stitched body's
 		// boundary is a polyhedron over its own shared vertex table exactly

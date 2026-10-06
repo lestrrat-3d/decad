@@ -787,7 +787,7 @@ recorded floats; nothing is normalised and no square root is taken.
 | Plane | Through | Normal |
 |---|---|---|
 | `Π_0` | `V_0` | the recorded profile plane's own (P6: `V_0` lies on it, `d_0` is codirectional with its positive normal) |
-| `Σ_k`, `0 < k < N` | `V_k` | `m_k = λ_k · d_{k−1} + λ_{k−1} · d_k`, where `λ_j` is the lower endpoint of the certified dyadic enclosure of `‖d_j‖` that `internal/proof` returns at a fixed precision the implementing constant owns |
+| `Σ_k`, `0 < k < N` | `V_k` | `m_k = λ_k · d_{k−1} + λ_{k−1} · d_k`, where `λ_j` is the largest `float64` whose square does not exceed the exact `‖d_j‖²` (`internal/proof`'s `DySqrtDown`): the lower end of a certified enclosure at `float64`'s fixed precision |
 | `Π_N` | `V_N` | `d_{N−1}` |
 
 `m_k` is a rational vector that the two span directions, weighted by near
@@ -816,7 +816,12 @@ and `p`'s image on the next plane (`Σ_{k+1}`, or `Π_N` on the last span) is
 `p' = p + s · w_k(p)` with `s` the unique solution of that plane's equation.
 `w_k(p) · n = 0` for the next plane's normal `n`, `s ≤ 0`, or, when
 `ρ_k < 1`, `s · (1 − ρ_k) ≥ 1` is SM6: the wall line misses the join plane,
-meets it behind the section, or meets it at or past the span's apex.
+meets it behind the section, or meets it at or past the span's apex. SM6's
+span-level arm runs first: `d_k` must have a positive dot product with both
+its start and its end plane normals. The first sign is every wall line's
+own, since `w_k(p)` differs from `d_k` by a vector in the start plane; the
+second puts the apex beyond the end plane, so a wall line that would meet
+that plane coming back is exactly one that meets it past the apex.
 
 **Why every wall is one exact plane.** For `ρ_k ≠ 1`, every wall line of span
 `k` passes through one point, the apex `F_k = V_k + d_k / (1 − ρ_k)`; for
@@ -845,8 +850,9 @@ and its `F·(F−1)/2` preflight against `maxFacetPairTestsPerCall`).
 nearest `float64` per coordinate. `delta` is the largest 3D distance, over
 every vertex, between the rational and its rounding, read exactly and
 rounded up (the `pointRoundBound` reading `boolean.go` already performs for
-an exact point). `delta` is what every vertex `Position()`, every face area
-and the box carry; the four body measurements read the rationals and carry
+an exact point). A rounding that collapses a held triangle the rationals keep
+is S15, `ErrUnsupported`. `delta` is what every vertex `Position()` and the
+mesh carry; the four body measurements read the rationals and carry
 nothing from it (§16.6). The rational vertices stay in the payload: a
 placement re-reads them (DM7), and a later exact consumer may read them
 without rounding.
@@ -865,15 +871,21 @@ running SM8 in place of §7's separation audit.
 | SM | Condition | Sentinel |
 |---|---|---|
 | **SM1** | `WithMitredJoins()` or `WithSectionScale` with an `ArcThrough` segment | `ErrUnsupported` |
-| **SM2** | a profile segment, on any loop, that is not a `LineSeg`, under either option | `ErrUnsupported` |
+| **SM2** | a profile segment, on any loop, that is not a `LineSeg`, or a `LineSeg` trimmed at a cut parameter, under either option | `ErrUnsupported` |
 | **SM3** | a factor of the wrong kind; a non-finite factor; a factor at or below zero; a factor count other than the segment count | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate`; `ErrDegenerate` |
 | **SM4** | `WithSectionScale` on a path of two or more spans without `WithMitredJoins()` | `ErrUnsupported` |
 | **SM5** | two consecutive spans exactly reversed | `ErrDegenerate` |
-| **SM6** | a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
+| **SM6** | a span that does not leave its start plane or reach its end plane forward; a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
 | **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
 | **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
 | **SM9** | `WithSurfaceResult()`, a nonzero `WithSweepTwist`, or a closed path, with either option | `ErrUnsupported` |
 | **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `maxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
+
+SM2's trimmed-line arm keeps every section vertex a recorded point: a cut
+parameter's point is a computed one, and the polygon through it is not the
+recorded region exactly. SM7 is unreachable once SM6 passes, because §16.3's
+map is a projective map on a convex region holding the section, which keeps
+every vertex distinct and every wall quad simple; the build keeps the check.
 
 SM6 names the requested solid's own failure: a join plane that a section's
 wall line cannot reach before the apex asks for a frustum cut past its own
@@ -898,8 +910,10 @@ The roles are §8's own grammar, with `k` the span, unchanged: a mitred sweep
 adds no index. With `S` the profile's total segment count over every loop,
 the body has `2 + N·S` faces, `(N + 1)·S` vertices and `(2N + 1)·S` edges,
 and `F = 2·N·S + capTriangles` held triangles, each wall split along the
-fixed diagonal `tessellate.go` uses for a prism's lateral quad and each cap
-triangulated by `triangulate.go`. One lump, one outer shell; a hole loop is a
+fixed diagonal `tessellate.go` uses for a prism's lateral quad. `capStart` is
+triangulated by `triangulate.go`, and `capEnd` carries the same index triples
+on `P_N`: §16.3's projective map carries a triangulation of `P_0` to one of
+`P_N`. One lump, one outer shell; a hole loop is a
 void passage and never a second lump.
 
 A wall is ONE face, not a loft's two triangles: `docs/loft-design.md` §5
@@ -921,10 +935,10 @@ rounded one.
 
 | Reading | Value | Exactness and bound |
 |---|---|---|
-| `Volume` | the exact tetrahedron sum over every held triangle, anchored at `V_0`, published as that rational's nearest float | `Exact`, bound zero: the same standing an all-planar boolean whose contacts round exactly already publishes (evaluator §9) |
+| `Volume` | the exact tetrahedron sum over every held triangle, anchored at `V_0`, published as that rational's nearest float | `Exact` when that float is the rational; otherwise `Approximate` with that one rounding, read exactly, as its bound. No other term enters it |
 | `Centroid` | the exact first-moment sum divided by the exact volume, each coordinate published as its nearest float | the published float's own rounding, read exactly; zero when every coordinate is already a float |
-| `Area` | each triangle's area is the square root of an exact rational, enclosed by `ratSqrtUp` and its lower twin; the sum of the enclosures | `Approximate`, the enclosure's width rounded up |
-| `Bounds` | per-axis minimum and maximum over the rational vertices, rounded outward | `Approximate`, bound `delta`: the box encloses the exact body and exceeds its extremes by at most one rounding |
+| `Area` | each triangle's area is the square root of an exact rational, enclosed by `ratSqrtUp` and its lower twin; the nearest float to the midpoint of the summed enclosure | `Approximate`, the larger exact gap to either end of the enclosure, rounded up; `Exact` only when the enclosure closes on a float |
+| `Bounds` | per-axis minimum and maximum over the rational vertices, rounded outward | the largest outward rounding, read exactly: the box encloses the exact body and exceeds its extremes by at most one rounding; `Exact` when every extreme is a float |
 
 The tolerance-gate diameter is §9's: the held vertex set's own diameter less
 twice `delta`, rounded down.

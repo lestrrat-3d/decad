@@ -78,10 +78,11 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, err
 	}
 
-	surfaceResult, err := validateSweepOptions(opts)
+	cfg, err := validateSweepOptions(opts, len(path.segments))
 	if err != nil {
 		return nil, err
 	}
+	surfaceResult := cfg.surfaceResult
 
 	profile, plane, profileArea, err := recordProfile(s, p)
 	if err != nil {
@@ -101,6 +102,19 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	}
+	if cfg.mitred || cfg.scaled {
+		// docs/sweep-design.md §16: either option selects the mitred
+		// polyline builder, whose Table SM gates replace S6 and S10.
+		body, err := sweepMitred(ctx, d, profile, plane, path, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		d.commit(body)
+		return body, nil
 	}
 	if err := validateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
@@ -158,78 +172,111 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	return body, nil
 }
 
-// validateSweepOptions resolves opts into the WithSweepTwist gate and the
-// WithSurfaceResult flag. A surfaceResultOption is not a sweepOption, so it is
-// matched and consumed before the sweepOption assertion below runs — falling
-// through to that assertion would wrongly answer ErrDegenerate instead of
-// setting the flag (docs/surface-design.md §4). A repeated WithSurfaceResult()
-// is idempotent (surface.go's own doc comment), unlike WithSweepTwist's own
-// repeat-is-ErrDegenerate rule below.
-func validateSweepOptions(opts []SweepOption) (bool, error) {
+// validateSweepOptions resolves opts into a sweepConfig: the WithSweepTwist
+// gate, the WithSurfaceResult flag, and docs/sweep-design.md §16's two
+// options. A surfaceResultOption is not a sweepOption, so it is matched and
+// consumed before the sweepOption assertion below runs — falling through to
+// that assertion would wrongly answer ErrDegenerate instead of setting the
+// flag (docs/surface-design.md §4). A repeated WithSurfaceResult() is
+// idempotent (surface.go's own doc comment), unlike every sweepOption's
+// repeat-is-ErrDegenerate rule below. segments is the path's segment count,
+// which WithSectionScale's factor count must match (Table SM row SM3).
+func validateSweepOptions(opts []SweepOption, segments int) (sweepConfig, error) {
+	var cfg sweepConfig
 	haveTwist := false
-	surfaceResult := false
 	var twist sweepOption
+	var scale []units.Value
 	for _, raw := range opts {
 		if raw == nil {
-			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return sweepConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 		if _, ok := raw.(surfaceResultOption); ok {
-			surfaceResult = true
+			cfg.surfaceResult = true
 			continue
 		}
 		o, ok := raw.(sweepOption)
 		if !ok {
-			return false, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
+			return sweepConfig{}, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
 		}
 		switch ident := o.Ident().(type) {
 		case identSweepTwist:
 			if haveTwist {
-				return false, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
+				return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
 			}
 			twist = o
 			haveTwist = true
+		case identMitredJoins:
+			if cfg.mitred {
+				return sweepConfig{}, fmt.Errorf(`%w: WithMitredJoins was passed more than once`, ErrDegenerate)
+			}
+			cfg.mitred = true
+		case identSectionScale:
+			if cfg.scaled {
+				return sweepConfig{}, fmt.Errorf(`%w: WithSectionScale was passed more than once`, ErrDegenerate)
+			}
+			factors, ok := option.Get[[]units.Value](o)
+			if !ok {
+				return sweepConfig{}, fmt.Errorf(`%w: WithSectionScale carries no factors`, ErrDegenerate)
+			}
+			scale = factors
+			cfg.scaled = true
 		default:
-			return false, fmt.Errorf(`%w: unknown sweep option identifier %T`, ErrDegenerate, ident)
+			return sweepConfig{}, fmt.Errorf(`%w: unknown sweep option identifier %T`, ErrDegenerate, ident)
 		}
 	}
-	if !haveTwist {
-		return surfaceResult, nil
+	if cfg.scaled {
+		factors, err := validateSectionScale(scale, segments)
+		if err != nil {
+			return sweepConfig{}, err
+		}
+		cfg.factors = factors
 	}
-	angle, ok := option.Get[units.Value](twist)
-	if !ok {
-		return false, fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
+	if haveTwist {
+		angle, ok := option.Get[units.Value](twist)
+		if !ok {
+			return sweepConfig{}, fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
+		}
+		if angle.Kind() != units.Angle {
+			return sweepConfig{}, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
+		}
+		if _, err := angle.In(units.Radian); err != nil {
+			return sweepConfig{}, fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
+		}
+		if angle.Mag() != 0 {
+			return sweepConfig{}, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
+		}
 	}
-	if angle.Kind() != units.Angle {
-		return false, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
+	if cfg.surfaceResult && (cfg.mitred || cfg.scaled) {
+		return sweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (docs/sweep-design.md Table SM row SM9)`, ErrUnsupported)
 	}
-	if _, err := angle.In(units.Radian); err != nil {
-		return false, fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
-	}
-	if angle.Mag() != 0 {
-		return false, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
-	}
-	return surfaceResult, nil
+	return cfg, nil
 }
 
-func validateSweepPathGeometry(path *Path, plane PlaneRecord) error {
-	start := path.Start()
+// validateSweepPathStart is Table S row S5: the path starts in the profile
+// plane and its first tangent follows the plane's positive normal. It reads
+// no internal join.
+func validateSweepPathStart(path *Path, plane PlaneRecord) error {
 	normal := sweepRatFromDyadic(proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V)))
-	relStart := sweepRatSub(sweepRatVecOf(start), sweepRatVecOf(plane.Origin))
+	relStart := sweepRatSub(sweepRatVecOf(path.Start()), sweepRatVecOf(plane.Origin))
 	if sweepRatDot(relStart, normal).Sign() != 0 {
 		return fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
 	}
+	tangent := path.records[0].tangentIn
+	if !sweepRatIsZero(sweepRatCross(tangent, normal)) || sweepRatDot(tangent, normal).Sign() <= 0 {
+		return fmt.Errorf(`%w: the sweep path's initial tangent must follow the profile plane's positive normal`, ErrDegenerate)
+	}
+	return nil
+}
 
-	var previousOut sweepRatVec
-	for i, record := range path.records {
-		tangentIn, tangentOut := record.tangentIn, record.tangentOut
-		if i == 0 {
-			if !sweepRatIsZero(sweepRatCross(tangentIn, normal)) || sweepRatDot(tangentIn, normal).Sign() <= 0 {
-				return fmt.Errorf(`%w: the sweep path's initial tangent must follow the profile plane's positive normal`, ErrDegenerate)
-			}
-		} else if !sweepRatIsZero(sweepRatCross(previousOut, tangentIn)) || sweepRatDot(previousOut, tangentIn).Sign() <= 0 {
-			return fmt.Errorf(`%w: sweep path join %d is not tangent`, ErrUnsupported, i)
+func validateSweepPathGeometry(path *Path, plane PlaneRecord) error {
+	if err := validateSweepPathStart(path, plane); err != nil {
+		return err
+	}
+	for i := 1; i < len(path.records); i++ {
+		previousOut, tangentIn := path.records[i-1].tangentOut, path.records[i].tangentIn
+		if !sweepRatIsZero(sweepRatCross(previousOut, tangentIn)) || sweepRatDot(previousOut, tangentIn).Sign() <= 0 {
+			return fmt.Errorf(`%w: sweep path join %d is not tangent; WithMitredJoins admits a corner on a LineTo-only path`, ErrUnsupported, i)
 		}
-		previousOut = tangentOut
 	}
 	return nil
 }

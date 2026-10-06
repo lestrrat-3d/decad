@@ -155,9 +155,25 @@ func sharedVertexIndices(a, b [3]int) ([3]int, int) {
 // is not the one its recorded adjacency expects, so the assembled shell
 // self-touches or self-crosses away from — or instead of — its recorded
 // vertex or edge. No such solid exists.
+//
+// The error is a *loftContactError so a builder that numbers its triangles by
+// face (sweep_mitre_build.go) can name the two faces instead of the indices.
 func errLoftContact(i, j int, reason string) error {
-	return fmt.Errorf(`%w: loft triangles %d and %d %s`, ErrDegenerate, i, j, reason)
+	return &loftContactError{i: i, j: j, reason: reason}
 }
+
+// loftContactError is errLoftContact's ErrDegenerate, carrying the two
+// triangle indices the audit classified.
+type loftContactError struct {
+	i, j   int
+	reason string
+}
+
+func (e *loftContactError) Error() string {
+	return fmt.Sprintf(`%s: loft triangles %d and %d %s`, ErrDegenerate, e.i, e.j, e.reason)
+}
+
+func (e *loftContactError) Unwrap() error { return ErrDegenerate }
 
 // triTriCoplanarSharedEdge is docs/loft-design.md §6's audit-only helper for
 // an edge-adjacent coplanar pair that triTriClassify reports as
