@@ -94,9 +94,8 @@
 //	  WithSweepTwist nonzero twist                            ErrUnsupported
 //	  WithMitredJoins / WithSectionScale over a LineTo path
 //	    and a whole-line profile                              builds
-//	  mitred or scaled sweep as a boolean operand             ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
-//	Union/Cut/Intersect  prism/revolve/loft/faceted,
+//	Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep,
 //	                     crossings                            builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered

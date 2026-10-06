@@ -25,7 +25,7 @@ case into nil, an empty list, or `Sound`.
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
-| `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; overlap through the mesh-boolean path; a requested clearance stays `Suspect` | `Unavailable` | `Unavailable` | `Unavailable` |
 | `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
@@ -62,7 +62,8 @@ Four payload classes require different treatment:
   rational vertices rounded once to the held table, every held vertex within
   `delta` of its rational. Its §16.3 construction and SM8 crossing audit prove
   validity and re-run on every placement; `Verify`'s gate diameter is the held
-  vertex set's, shrunk by twice `delta`. Its pair adapters and surveys stay
+  vertex set's, shrunk by twice `delta`. An overlapping pair reads through the
+  mesh-boolean path (Table DM row DM4); its clearance adapter and surveys stay
   staged by that design's Table DM.
 
 ## 2. Shared proof rules
