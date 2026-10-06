@@ -670,6 +670,7 @@
 1	0.01	TestCellChordPatchNormalLowerBoundsTheAreaElement
 1	0.05	TestChainStationsBracketsEveryCellArcByItsChord
 1	0.04	TestChainStationsChargesTheCounterItIsHanded
+1	0.01	TestClusteredUnionChainSurvey
 1	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 1	0.40	TestContactPairMemoMatchesUncachedProof
 1	0.02	TestContactPairPlacedFacetedFloorExactTouch
@@ -821,6 +822,7 @@
 3	0.01	TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody
 3	6.63	TestTriTriClassifyFilterAgreesWithTheExactPath
 3	0.54	TestTriangulate2DProperty
+3	8.94	TestUnionKeepsTheHeldMeshEmbedded
 3	0.26	TestUnmeteredWalksAreNeverReused
 3	0.04	TestUnstitchPlacedCopyOfNonzeroNormalBoundFaceRefuses
 3	0.02	TestVerifyMotionKeepsTheNextProducerIdentity
@@ -916,6 +918,7 @@
 5	0.05	TestPairStationsSharedStationSetAcrossDifferentScale
 5	0.70	TestParityBoxFilterOnlySkipsStrictlyOutsideFacets
 5	0.01	TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors
+5	6.17	TestPlacedFacetedBodyStaysEmbedded
 5	3.13	TestPositiveBoundFacetedUnionRetainsExactLowerFace
 5	0.17	TestPrismBoundsFreeformEndpointHeldExtremesStayExact
 5	0.34	TestPrismBuildPublishesItsOwnResolution

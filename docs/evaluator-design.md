@@ -692,6 +692,63 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     close. It is refused (`ErrUnsupported`). Every other collapse is an edge
     contraction inside a component that survives, and the two bounds above
     cover it.
+- **The final rounding to float64 keeps the held mesh EMBEDDED.** The exact
+  stitched mesh is embedded: its operands are, and exact subdivision and
+  stitching meet facets only along shared exact vertices and edges. Rounding
+  can break that. A result vertex closer than an ulp to an edge or facet it does
+  not touch — a new rim vertex beside a line of earlier rim vertices is the
+  common case — can round to the far side of it, turning a sliver facet inside
+  out or pushing its neighbours through another facet. The fold is ulp-sized,
+  but a later boolean whose contact crosses it sees a self-crossing contact
+  chain and cannot subdivide the facet, and a held mesh that is not embedded
+  would publish `BoundaryVerified()` falsely (`docs/tessellation-design.md` §1,
+  the Embedding row). So the rounding runs in three steps
+  (`internal/meshbool/held_embedding.go`):
+  - **Round to nearest, then check.** Each exact vertex rounds to its nearest
+    float, and coincident roundings weld as above. A held vertex is MOVED when
+    it differs from an exact vertex it stands for, and only a facet with a
+    moved vertex can meet anything differently from the exact mesh. Each such
+    facet is checked against every held facet near it, found through a uniform
+    grid over the facet boxes, with the exact predicates over the held
+    binary64 values: no shared vertex means no contact, one shared vertex means
+    contact only there, one shared edge means contact only along it.
+  - **Move a failing vertex within its float box.** Each movable vertex of a
+    failing pair — one that stands for exactly one exact vertex — may take
+    another corner of its exact point's float box: per coordinate the float at
+    or below the exact value and the float at or above it, so every corner is
+    within an ulp of the exact point per coordinate. The search visits the
+    movable vertices of failing pairs in ascending held index; each vertex
+    tries its corners in fixed order (x before y before z, the lower float
+    before the upper) and moves to the one that leaves the fewest failing
+    pairs among its own facets, when that is fewer than where it sits; ties go
+    to the earlier corner. A corner another held vertex occupies is skipped,
+    so the search never welds. Passes repeat, over the facets that failed or
+    that a move touched, until a pass moves nothing. Every move strictly
+    lowers the mesh's count of failing pairs, so the search cannot cycle, and
+    its order is fixed, so equal inputs give equal held meshes. A welded
+    vertex is never moved: no single float box belongs to it.
+  - **Refuse what no corner clears.** A mesh still failing — a cluster of
+    exact vertices closer together than floats can tell apart — is refused
+    (`ErrUnsupported`, `BooleanExpectedUnsupported`). The exact result has
+    detail below binary64 resolution, and no held mesh at this precision can
+    stand for it while staying embedded.
+
+  The bounds stay honest without new terms, because the rounding displacement
+  is MEASURED: the per-coordinate distance from every exact vertex to the float
+  that finally holds it is taken exactly after the search, and that maximum is
+  the rounding bound every consumer composes (`StitchedMesh.Round`, then the
+  swept-volume and perturbed-area terms above). A vertex the search moved is
+  charged where it sits. The search moves no vertex farther than an ulp per
+  coordinate from its exact point.
+
+  A rigid placement of a faceted body (`Placed`) rounds the same way. The exact
+  image of an embedded mesh under the motion's float matrix and translation is
+  embedded, and each held vertex is the motion's float evaluation of its exact
+  image. The same check runs over the vertices that differ from their exact
+  images, a failing vertex may take a corner of its exact image's float box,
+  and the measured displacement of every vertex the check moved joins the
+  motion's own rounding allowance. So every `Faceted` body is embedded when it
+  is created, which is what its tessellation's `BoundaryVerified()` reports.
 - **Output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
   face. Each patch keeps that face's origins, so provenance (`FaceCreatedBy`)
   and face-level selection survive the boolean — but the operand face is not the
@@ -737,8 +794,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   (`internal/proofbound/bounds.go`); no measurement site computes one inline.
 - Rejected alternatives: a third-party kernel (dependency rule; also the
   supply-chain surface); float-only BSP classification (the flipped-sign
-  nonsense solid of core §2.1); snapping/welding heuristics (silently moves
-  geometry — decad never repairs).
+  nonsense solid of core §2.1); snapping/welding heuristics that move geometry
+  by distance and charge nothing for it (decad never repairs). The embedding
+  search above is not one: it chooses only among the floats bracketing each
+  exact vertex, and the displacement it causes is measured and charged like any
+  other rounding.
 
 ## 10. Verify — how each answer is computed
 

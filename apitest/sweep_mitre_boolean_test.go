@@ -614,3 +614,66 @@ func TestSweepMitredHollowTrunkBranch(t *testing.T) {
 	require.Equal(t, decad.ValidityValid, r.Validity.Outcome)
 	require.Equal(t, decad.HeldTopology{Lumps: 1, Voids: 1}, r.Topology)
 }
+
+// TestSweepMitredClusteredBranchUnionChain unions overlapping tilted branches
+// onto a mitred trunk, each turned 25° from the last and rooted 1.1 mm higher,
+// as mtilt's tree supports cluster them. The chain crosses union 14, where a
+// rim vertex that rounding had folded through the trunk wall once broke the
+// mesh boolean's facet cutter (docs/evaluator-design.md §9, the rounding that
+// keeps the held mesh embedded). Each union stays one lump whose volume lies
+// within its bound of the operands' union, and the final tree's mesh proves
+// its boundary at 0.01 mm.
+func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	trunkSketch, trunkProfile := polygonSweepSketch(t, 16, 5)
+	trunk, err := doc.Sweep(t.Context(), trunkSketch, trunkProfile,
+		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
+		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1, 0.9)...))
+	require.NoError(t, err)
+	branchSketch, branchProfile := polygonSweepSketch(t, 16, 1.5)
+	branchPath := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5))
+
+	const branches = 15
+	tilt := 40 * math.Pi / 180
+	tree := trunk
+	for k := range branches {
+		phi := 25 * math.Pi / 180 * float64(k)
+		u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
+		d := u.Scale(math.Sin(tilt)).Add(r3.NewVec(0, 0, math.Cos(tilt)))
+		fu := r3.NewVec(0, 0, 1).Cross(d)
+		fu = fu.Scale(1 / fu.Len())
+		frame, err := r3.NewFrame(u.Scale(2.6).Add(r3.NewVec(0, 0, 4+1.1*float64(k))), fu, d.Cross(fu))
+		require.NoError(t, err)
+		xf, err := r3.FromFrame(frame)
+		require.NoError(t, err)
+		unit, err := doc.Sweep(t.Context(), branchSketch, branchProfile, branchPath,
+			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
+		require.NoError(t, err)
+		branch, err := unit.Placed(t.Context(), xf)
+		require.NoError(t, err)
+
+		treeVol, err := tree.Volume()
+		require.NoError(t, err)
+		branchVol, err := branch.Volume()
+		require.NoError(t, err)
+		start := time.Now()
+		tree, err = decad.Union(t.Context(), tree, branch)
+		require.NoError(t, err, `union %d`, k+1)
+		t.Logf("union %2d: %v, %d faces", k+1, time.Since(start), len(tree.Faces()))
+		require.Len(t, tree.Lumps(), 1, `union %d is one lump`, k+1)
+
+		// The union holds the larger operand and no more than both.
+		got, err := tree.Volume()
+		require.NoError(t, err)
+		slack := got.Bound.Base() + treeVol.Bound.Base() + branchVol.Bound.Base()
+		require.GreaterOrEqual(t, got.Value.Base()+slack, math.Max(treeVol.Value.Base(), branchVol.Value.Base()), `union %d`, k+1)
+		require.LessOrEqual(t, got.Value.Base()-slack, treeVol.Value.Base()+branchVol.Value.Base(), `union %d`, k+1)
+		require.Greater(t, got.Value.Base()+slack, treeVol.Value.Base(), `union %d adds the branch's exposed part`, k+1)
+	}
+
+	mesh, err := tree.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	requireWatertight(t, mesh)
+}
