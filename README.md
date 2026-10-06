@@ -25,20 +25,21 @@ to mesh with its mate. A fresh request to the agent may also produce different
 geometry. Variation may be fine for a one-off model; it makes a dimensioned
 part hard to reproduce.
 
-With [decad](https://github.com/lestrrat-3d/decad), a Go program defines
-dimensioned sketches and ordered modeling operations, then builds 3D bodies
-without a CAD app. decad can tessellate those bodies for rendering. The program
-can measure volume and centroid, check whether bodies interfere or have enough
-clearance, and ask whether a wall is too thin for a cutting tool. An agent can
-change a dimension or feature, run the program again, and inspect the new body
-and verification report. With the program and inputs held fixed, **the same
-model can be rebuilt** without a fresh request to the agent.
+With [decad](https://github.com/lestrrat-3d/decad), a Go program builds and
+checks a CAD model without a CAD app. It defines dimensioned sketches and
+ordered modeling operations, then builds 3D bodies from them. decad can
+tessellate those bodies for rendering. The program can measure volume and
+centroid, check whether bodies interfere or have enough clearance, and ask
+whether a wall is too thin for a cutting tool. An agent can change a dimension
+or feature, run the program again, and inspect the new body and verification
+report. With the program and inputs held fixed, **the same model can be rebuilt**
+without a fresh request to the agent.
 
-That Go program can be the CAD workflow in its own right. decad's performance
-still needs work, but matching the speed of Autodesk Fusion or other CAD apps is
-not its primary goal. If a workflow needs the speed of one of those apps, an
-agent can develop and verify the construction in decad before implementing it
-as an add-in there. The agent checks the part in the app too, because it may
+An agent can also use decad to verify a construction before writing an add-in
+that builds it in Autodesk Fusion or another CAD app. That route may be more
+practical when rebuilding the model in decad is too slow for the intended use.
+decad's performance may improve, but matching those apps' speed is not its
+primary goal. The agent checks the part in the app too, because it may
 interpret the steps differently.
 
 For certified shape and motion paths, decad can detect a collision and compute
