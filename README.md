@@ -4,7 +4,7 @@
   <img src="docs/images/hero.gif" alt="DECAD letters assemble on a navy plate, a light sweeps across them, the logo holds, and the letters lift away" width="900">
 </p>
 
-A **headless CAD engine** for Go: the 3D modeling layer above the
+A **headless CAD system** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
@@ -25,31 +25,25 @@ to mesh with its mate. A fresh request to the agent may also produce different
 geometry. Variation may be fine for a one-off model; it makes a dimensioned
 part hard to reproduce.
 
-An agent can also write a CAD add-in that creates dimensioned sketches and
-ordered features. The add-in can rebuild the part from the same inputs. The
-agent still has to run it in the CAD app to learn whether a sweep failed,
-whether the body is watertight, or whether two components collide. A change to
-the construction means another run in the app.
-
-With [decad](https://github.com/lestrrat-3d/decad), the agent writes and runs
-that construction in Go before building the CAD add-in. decad builds 3D bodies
-from solved sketches and ordered modeling operations, and can tessellate them
-for rendering. The agent can measure volume and centroid, check whether bodies
-interfere or have enough clearance, and ask whether a wall is too thin for a
-cutting tool. It can change a dimension or feature, run the program again, and
-inspect the new body and verification report. With the program and inputs held
-fixed, **the same model can be rebuilt** without a fresh request to the agent.
+With [decad](https://github.com/lestrrat-3d/decad), a Go program defines
+dimensioned sketches and ordered modeling operations, then builds 3D bodies
+without a CAD app. decad can tessellate those bodies for rendering. The program
+can measure volume and centroid, check whether bodies interfere or have enough
+clearance, and ask whether a wall is too thin for a cutting tool. An agent can
+change a dimension or feature, run the program again, and inspect the new body
+and verification report. With the program and inputs held fixed, **the same
+model can be rebuilt** without a fresh request to the agent.
 
 For certified shape and motion paths, decad can detect a collision and compute
 the resulting rigid-body motion. The [current support guide](docs/collision-v1-support.md)
 names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
 runs an impact and reports the rebound.
 
-Those modeling operations correspond to steps a CAD add-in can use. Once the
-decad construction meets the checks the agent has asked for, the agent can
-carry the steps into the CAD app to make an **editable, parametric part**. The CAD
-app may interpret those steps differently, so the agent checks the part it
-builds.
+That Go program can be the CAD workflow in its own right. decad's modeling
+performance is still developing, so an Autodesk Fusion add-in or another CAD
+app may be more practical for performance-sensitive work. An agent can check
+the construction in decad before writing that add-in. The app may interpret
+the steps differently, so the agent checks the part it builds there.
 
 ## What it builds
 
