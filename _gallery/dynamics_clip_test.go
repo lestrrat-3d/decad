@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"slices"
@@ -27,15 +28,41 @@ import (
 // stackAndDropFPS is the frame rate §2 films the scene at.
 const stackAndDropFPS = 60
 
-// stackAndDropRun is the scene and its timeline advanced to the clip length,
-// computed once for every test here, since the 512 steps dominate their time.
-// The first test to ask computes it under its own context, which outlives
-// the computation.
-var stackAndDropRun struct {
+// sceneRun is one scene of dynamicsScenes, built through the map the dynamics
+// subcommand reads and advanced to its clip length once for every test that
+// films it, since the steps dominate their time. The first test to ask
+// computes it under its own context, which outlives the computation. The
+// scenes' tests run in parallel, so each scene's timeline advances beside the
+// others'.
+type sceneRun struct {
 	once     sync.Once
 	scene    *dynamicsScene
 	timeline *dynamics.Timeline
 	err      error
+}
+
+var stackAndDropRun, tumbleRun, partsBinRun sceneRun
+
+// get builds the scene registered as name and advances it, the first time.
+func (r *sceneRun) get(t *testing.T, name string) (*dynamicsScene, *dynamics.Timeline) {
+	t.Helper()
+	r.once.Do(func() {
+		build, ok := dynamicsScenes[name]
+		if !ok {
+			r.err = fmt.Errorf("no scene %q", name)
+			return
+		}
+		r.scene, r.err = build(t.Context())
+		if r.err == nil && r.scene.name != name {
+			r.err = fmt.Errorf("scene %q is registered as %q", r.scene.name, name)
+		}
+		if r.err == nil {
+			r.timeline, r.err = r.scene.advance(t.Context())
+		}
+	})
+	require.NoError(t, r.err)
+	require.NoError(t, r.scene.stopError(r.timeline))
+	return r.scene, r.timeline
 }
 
 type stackAndDropResult struct {
@@ -57,16 +84,31 @@ func (r *stackAndDropResult) part(t *testing.T, name string) *decad.Body {
 
 func stackAndDrop(t *testing.T) *stackAndDropResult {
 	t.Helper()
-	run := &stackAndDropRun
-	run.once.Do(func() {
-		run.scene, run.err = stackAndDropScene(t.Context())
-		if run.err == nil {
-			run.timeline, run.err = run.scene.advance(t.Context())
+	scene, timeline := stackAndDropRun.get(t, "stack-and-drop")
+	return &stackAndDropResult{scene: scene, timeline: timeline}
+}
+
+// requireFirstFrameDrawn renders clip's first frame at the smoke size, as
+// `go run . dynamics -smoke` does: the frame has that size and some pixels
+// differ from the background.
+func requireFirstFrameDrawn(t *testing.T, clip *kinetograph.Clip, scene *dynamicsScene) {
+	t.Helper()
+	renderer, err := render.New(t.Context(), clip, scene.style(smokeWidth, smokeHeight))
+	require.NoError(t, err)
+	img, err := renderer.Frame(t.Context(), 0)
+	require.NoError(t, err)
+	require.Equal(t, smokeWidth, img.Bounds().Dx())
+	require.Equal(t, smokeHeight, img.Bounds().Dy())
+	background := img.RGBAAt(0, 0)
+	drawn := 0
+	for y := range smokeHeight {
+		for x := range smokeWidth {
+			if img.RGBAAt(x, y) != background {
+				drawn++
+			}
 		}
-	})
-	require.NoError(t, run.err)
-	require.NoError(t, run.scene.stopError(run.timeline))
-	return &stackAndDropResult{scene: run.scene, timeline: run.timeline}
+	}
+	require.Positive(t, drawn, "scene %s", scene.name)
 }
 
 // stepImpulse sums one step's published normal impulses between a and b.
@@ -84,6 +126,7 @@ func stepImpulse(report *dynamics.StepReport, a, b *decad.Body) (float64, bool) 
 
 // TestStackAndDropTimeline asserts §2's Phase 1 exit criteria on the trace.
 func TestStackAndDropTimeline(t *testing.T) {
+	t.Parallel()
 	run := stackAndDrop(t)
 	timeline, config := run.timeline, run.scene.config.Step
 	require.Nil(t, timeline.Stopped())
@@ -185,6 +228,7 @@ func freeFallAfterKicks(drop float64) *big.Rat {
 // the frame time, concurrent evaluation returns the same frames, and the
 // first frame renders.
 func TestStackAndDropClip(t *testing.T) {
+	t.Parallel()
 	run := stackAndDrop(t)
 	scene, err := run.scene.clipScene(run.timeline)
 	require.NoError(t, err)
@@ -242,24 +286,8 @@ func TestStackAndDropClip(t *testing.T) {
 		}
 	}
 
-	// A smoke render of the first frame draws the scene: some pixels differ
-	// from the background.
-	renderer, err := render.New(t.Context(), clip, run.scene.style(smokeWidth, smokeHeight))
-	require.NoError(t, err)
-	img, err := renderer.Frame(t.Context(), 0)
-	require.NoError(t, err)
-	require.Equal(t, smokeWidth, img.Bounds().Dx())
-	require.Equal(t, smokeHeight, img.Bounds().Dy())
-	background := img.RGBAAt(0, 0)
-	drawn := 0
-	for y := range smokeHeight {
-		for x := range smokeWidth {
-			if img.RGBAAt(x, y) != background {
-				drawn++
-			}
-		}
-	}
-	require.Positive(t, drawn)
+	// A smoke render of the first frame draws the scene.
+	requireFirstFrameDrawn(t, clip, run.scene)
 }
 
 // TestTimelineTrackStopsAtCertifiedEnd films a timeline advanced only four
@@ -267,6 +295,7 @@ func TestStackAndDropClip(t *testing.T) {
 // sampled poses, the first frame past it fails with the timeline's
 // ErrUnsupported, and the track never holds the last pose.
 func TestTimelineTrackStopsAtCertifiedEnd(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	scene, err := stackAndDropScene(ctx)
 	require.NoError(t, err)
@@ -314,33 +343,15 @@ func decadBodyOutsideWorld(t *testing.T) *decad.Body {
 
 // These tests run the tumble exit scene of docs/multibody-dynamics-design.md
 // §2 through the real producers and the real viewer (§11.3): the scene's
-// dynamics.Timeline, the timelineTrack bridge and kinetograph's driven nodes.
-// dynamics' scene_test.go asserts every exit criterion inside the decad
-// module, on four of the bodies in CI and on the whole scene when
-// DECAD_TUMBLE_FULL is set; CI runs the whole scene here, and these check
-// its end, its events and its clip.
-
-// tumbleRun is the scene and its timeline advanced to the clip length,
-// computed once for every test here.
-var tumbleRun struct {
-	once     sync.Once
-	scene    *dynamicsScene
-	timeline *dynamics.Timeline
-	err      error
-}
+// dynamics.Timeline, the timelineTrack bridge, kinetograph's driven nodes and
+// one rendered frame. dynamics' scene_test.go asserts every exit criterion
+// inside the decad module, on four of the bodies in CI and on the whole scene
+// when DECAD_TUMBLE_FULL is set; CI runs the whole scene here, and these check
+// its end, its events, its clip and its first frame.
 
 func tumble(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
 	t.Helper()
-	run := &tumbleRun
-	run.once.Do(func() {
-		run.scene, run.err = tumbleScene(t.Context())
-		if run.err == nil {
-			run.timeline, run.err = run.scene.advance(t.Context())
-		}
-	})
-	require.NoError(t, run.err)
-	require.NoError(t, run.scene.stopError(run.timeline))
-	return run.scene, run.timeline
+	return tumbleRun.get(t, "tumble")
 }
 
 // TestTumbleTimeline checks the gallery's scene reaches its 3 s with every
@@ -350,6 +361,7 @@ func tumble(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
 // vertices within PenetrationResidual of the floor's top face z = 0, none
 // below it by more.
 func TestTumbleTimeline(t *testing.T) {
+	t.Parallel()
 	scene, timeline := tumble(t)
 	require.Nil(t, timeline.Stopped())
 	require.Equal(t, units.Seconds(3), timeline.End())
@@ -411,10 +423,11 @@ func stagedHeights(body *decad.Body, entry dynamics.BodyState) []*big.Rat {
 	return out
 }
 
-// TestTumbleClip films the timeline: the 60 fps clip holds 180 frames, and
-// every frame's part transforms are exactly the timeline's certified poses
-// at the frame time.
+// TestTumbleClip films the timeline: the 60 fps clip holds 180 frames, every
+// frame's part transforms are exactly the timeline's certified poses at the
+// frame time, and the first frame renders.
 func TestTumbleClip(t *testing.T) {
+	t.Parallel()
 	scene, timeline := tumble(t)
 	clipScene, err := scene.clipScene(timeline)
 	require.NoError(t, err)
@@ -434,6 +447,7 @@ func TestTumbleClip(t *testing.T) {
 			require.Equal(t, entry.Pose, frame.Poses[k].Transform, "frame %d part %s", i, part.name)
 		}
 	}
+	requireFirstFrameDrawn(t, clip, scene)
 }
 
 // These tests run the parts-bin exit scene of
@@ -442,29 +456,11 @@ func TestTumbleClip(t *testing.T) {
 // scene_test.go asserts every exit criterion inside the decad module, on two
 // of the bodies in CI and on the whole scene when DECAD_PARTSBIN_FULL is set;
 // CI runs the whole scene here, and these check its end, its events, its
-// rests and rolls, and its clip.
-
-// partsBinRun is the scene and its timeline advanced to the clip length,
-// computed once for every test here.
-var partsBinRun struct {
-	once     sync.Once
-	scene    *dynamicsScene
-	timeline *dynamics.Timeline
-	err      error
-}
+// rests and rolls, its clip and its first frame.
 
 func partsBin(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
 	t.Helper()
-	run := &partsBinRun
-	run.once.Do(func() {
-		run.scene, run.err = partsBinScene(t.Context())
-		if run.err == nil {
-			run.timeline, run.err = run.scene.advance(t.Context())
-		}
-	})
-	require.NoError(t, run.err)
-	require.NoError(t, run.scene.stopError(run.timeline))
-	return run.scene, run.timeline
+	return partsBinRun.get(t, "parts-bin")
 }
 
 // TestPartsBinTimeline checks the gallery's scene reaches its 4 s with every
@@ -476,6 +472,7 @@ func partsBin(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
 // lifted points; and the cylinder ends still rolling without slip, its
 // contact point's speed within VelocityResidual.
 func TestPartsBinTimeline(t *testing.T) {
+	t.Parallel()
 	scene, timeline := partsBin(t)
 	require.Nil(t, timeline.Stopped())
 	require.Equal(t, units.Seconds(4), timeline.End())
@@ -556,10 +553,11 @@ func TestPartsBinTimeline(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(slip), config.VelocityResidual.Base())
 }
 
-// TestPartsBinClip films the timeline: the 60 fps clip holds 240 frames, and
-// every frame's part transforms are exactly the timeline's certified poses
-// at the frame time.
+// TestPartsBinClip films the timeline: the 60 fps clip holds 240 frames, every
+// frame's part transforms are exactly the timeline's certified poses at the
+// frame time, and the first frame renders.
 func TestPartsBinClip(t *testing.T) {
+	t.Parallel()
 	scene, timeline := partsBin(t)
 	clipScene, err := scene.clipScene(timeline)
 	require.NoError(t, err)
@@ -579,4 +577,5 @@ func TestPartsBinClip(t *testing.T) {
 			require.Equal(t, entry.Pose, frame.Poses[k].Transform, "frame %d part %s", i, part.name)
 		}
 	}
+	requireFirstFrameDrawn(t, clip, scene)
 }

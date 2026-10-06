@@ -19,8 +19,8 @@ jobs:
   # restores what it built itself; those actions explain the key and the
   # save policy. setup-go's own cache is off in those jobs. It keys on the OS
   # and go.sum alone, so every Linux job would share one entry, saved by
-  # whichever job finished first. verify, gallery, macOS and Windows each
-  # still use setup-go's cache, since each is the only job with its key.
+  # whichever job finished first. verify, macOS and Windows each still use
+  # setup-go's cache, since each is the only job with its key.
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
@@ -346,7 +346,27 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: _gallery/go.mod
-          cache-dependency-path: _gallery/go.sum
+          cache: false
+
+      # setup-go's cache would key this job on _gallery/go.sum alone, so its
+      # one entry would keep the decad packages as they were when that file
+      # last changed. The sources are every package the gallery compiles:
+      # the root package, dynamics/, internal/ and _gallery/ itself. The
+      # restore action runs from the repository root, so the paths start
+      # there.
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: gallery
+          sources: |
+            :(glob)**/*.go
+            :(exclude)apitest
+            :(exclude)decadtest
+            :(exclude)examples
+            :(exclude)export
+            :(exclude)_shardgen
+            _gallery/go.mod
+            _gallery/go.sum
 
       - name: Tidy dependencies
         run: |
@@ -358,6 +378,8 @@ jobs:
       # The tumble scene's 768 steps and the parts-bin scene's 1024 take
       # about six and four minutes on a fast machine, together past go test's
       # default ten-minute budget, and about twice that on a slow runner.
+      # The scenes' tests run in parallel, one timeline per core, so the
+      # step takes about as long as the slowest scene.
       - name: Vet and test
         run: |
           go vet ./...
@@ -366,14 +388,23 @@ jobs:
       # -smoke renders the first frame of every shot. -probe builds and
       # tessellates the bodies of every frame, so it also catches decad
       # refusing a value partway through a parameter ramp.
+      #
+      # The dynamics subcommand runs one scene, stack-and-drop, the shortest.
+      # Its path through flag parsing, the scene map, the clip and the PNG
+      # sequence is the same for every scene. The tests above advance every
+      # scene's whole timeline once, built through the same scene map, and
+      # render its first frame at the smoke size, so a smoke render of the
+      # tumble or parts-bin scene would advance its timeline a second time
+      # and check nothing more.
       - name: Smoke-render hero and dynamics scenes and probe the landing clip
         run: |
           go run . hero -smoke -out "$RUNNER_TEMP/hero"
           go run . clip -smoke -out "$RUNNER_TEMP/frames"
           go run . clip -probe
           go run . dynamics -scene stack-and-drop -smoke -out "$RUNNER_TEMP/dynamics"
-          go run . dynamics -scene tumble -smoke -out "$RUNNER_TEMP/dynamics"
-          go run . dynamics -scene parts-bin -smoke -out "$RUNNER_TEMP/dynamics"
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
 
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:
