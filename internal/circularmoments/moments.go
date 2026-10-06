@@ -1254,11 +1254,6 @@ func circularThirdMomentInterval(seg CurveSegment) ([4]proofbound.RatInterval, b
 // ExactCoordinateDelta preserves the rational difference of two held coordinates.
 func ExactCoordinateDelta(a, b float64) *big.Rat { return exactCoordinateDelta(a, b) }
 
-// ArcEndRadialRatio brackets an arc's start-to-end radial ratio.
-func ArcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
-	return arcEndRadialRatio(r2, endR2)
-}
-
 // AreaInterval encloses a circular walk's area contribution.
 func AreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, bool) {
 	return circularAreaInterval(seg, anchor)
@@ -1307,20 +1302,4 @@ func SecondMomentInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterv
 // ThirdMomentInterval encloses a circular walk's third moments.
 func ThirdMomentInterval(seg CurveSegment) ([4]proofbound.RatInterval, bool) {
 	return circularThirdMomentInterval(seg)
-}
-
-// MomentWalk is the complete circular path used by the generic moment sum.
-type MomentWalk = circularMomentWalk
-
-// MomentWalkOf constructs a circular path from a recorded segment.
-func MomentWalkOf(seg CurveSegment) (MomentWalk, bool) { return circularMomentWalkOf(seg) }
-
-// Monomials encloses the boundary monomials through the requested degree.
-func Monomials(walk MomentWalk, degree int) [][]proofbound.RatInterval {
-	return circularMonomials(walk, degree)
-}
-
-// GreenMoment encloses one Green's-theorem area moment.
-func GreenMoment(walk MomentWalk, j [][]proofbound.RatInterval, p, q int) proofbound.RatInterval {
-	return circularGreenMoment(walk, j, p, q)
 }

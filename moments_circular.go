@@ -33,10 +33,6 @@ func exactCoordinateDelta(a, b float64) *big.Rat {
 	return circularmoments.ExactCoordinateDelta(a, b)
 }
 
-func arcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
-	return circularmoments.ArcEndRadialRatio(r2, endR2)
-}
-
 func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, bool) {
 	return circularmoments.AreaInterval(circularSegment(seg), circularPoint(anchor))
 }
@@ -76,18 +72,4 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (proofbound.R
 
 func circularThirdMomentInterval(seg CurveSegment) ([4]proofbound.RatInterval, bool) {
 	return circularmoments.ThirdMomentInterval(circularSegment(seg))
-}
-
-type circularMomentWalk = circularmoments.MomentWalk
-
-func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
-	return circularmoments.MomentWalkOf(circularSegment(seg))
-}
-
-func circularMonomials(walk circularMomentWalk, degree int) [][]proofbound.RatInterval {
-	return circularmoments.Monomials(walk, degree)
-}
-
-func circularGreenMoment(walk circularMomentWalk, j [][]proofbound.RatInterval, p, q int) proofbound.RatInterval {
-	return circularmoments.GreenMoment(walk, j, p, q)
 }
