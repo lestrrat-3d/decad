@@ -198,11 +198,21 @@ func (g *equivalenceInputs) drive(w *World) map[int]driverMotion {
 		if body.definition.Role != Kinematic || g.r.IntN(4) == 0 {
 			continue
 		}
+		// An exact driver velocity divides by a duration, so some components
+		// carry an odd factor in their denominators, and the certificate's
+		// shared denominator is then not 1.
+		value := func() *big.Rat {
+			r := ratFloat(g.float())
+			if g.r.IntN(3) == 0 {
+				r.Quo(r, big.NewRat(int64(3+2*g.r.IntN(4)), 1))
+			}
+			return r
+		}
 		var motion driverMotion
 		for axis := range 3 {
-			motion.linear[axis], motion.angular[axis] = ratFloat(g.float()), new(big.Rat)
+			motion.linear[axis], motion.angular[axis] = value(), new(big.Rat)
 			if g.r.IntN(2) == 0 {
-				motion.angular[axis] = ratFloat(g.float())
+				motion.angular[axis] = value()
 			}
 		}
 		drive[i] = motion
@@ -691,6 +701,44 @@ func TestStepWorkConservationReuse(t *testing.T) {
 	}
 }
 
+// island draws a certificate's input: two to four bodies, read before and
+// after with random drivers, and one to six points between them, some of
+// whose normal or tangent impulses are exactly zero. ok is false when a body
+// does not read as exact intervals.
+func (g *equivalenceInputs) island() (*World, []certBody, []certPoint, bool) {
+	w := g.world(2 + g.r.IntN(3))
+	pre, post, drive := g.state(w), g.state(w), g.drive(w)
+	bodies := make([]certBody, len(w.bodies))
+	for i := range bodies {
+		var ok bool
+		if bodies[i], ok = w.newCertBody(i, pre.entries[i], post.entries[i], drive); !ok {
+			return nil, nil, nil, false
+		}
+	}
+	var points []certPoint
+	for range 1 + g.r.IntN(6) {
+		a := g.r.IntN(len(bodies) - 1)
+		b := a + 1 + g.r.IntN(len(bodies)-1-a)
+		p, ok := newCertPoint(0, a, b, g.contactPoint(), bodies, ratFloat(float64(g.r.IntN(3))*0.3))
+		require.True(g.t, ok)
+		p.mu, p.lambda = ratFloat(float64(g.r.IntN(3))*0.2), ratFloat(math.Abs(g.float()))
+		if g.r.IntN(8) == 0 {
+			p.lambda = ratFloat(-1)
+		}
+		p.tangent = [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+		switch g.r.IntN(3) {
+		case 0:
+			p.lambda = new(big.Rat)
+		case 1:
+			for axis := range 3 {
+				p.tangent[axis] = ratFloat(g.float() * 1e-3)
+			}
+		}
+		points = append(points, p)
+	}
+	return w, bodies, points, true
+}
+
 func requireSameCertificate(t *testing.T, want, got islandCertificate, msgAndArgs ...any) {
 	t.Helper()
 	for i, pair := range [][2]*big.Rat{{want.linear, got.linear}, {want.angular, got.angular},
@@ -705,46 +753,18 @@ func requireSameCertificate(t *testing.T, want, got islandCertificate, msgAndArg
 }
 
 // TestCertifyIslandMatchesOldForm certifies random islands, some of whose
-// points carry an exactly zero normal or tangent impulse and some of whose
-// bodies do not spin, with the old and the current certificate.
+// points carry an exactly zero normal or tangent impulse, some of whose
+// bodies do not spin and some of whose drivers move at velocities with odd
+// denominators, with the old and the current certificate.
 func TestCertifyIslandMatchesOldForm(t *testing.T) {
 	t.Parallel()
 	g := newEquivalenceInputs(t, 13)
-	passed, refused := 0, 0
-	for k := 0; passed+refused < 120; k++ {
-		w := g.world(2 + g.r.IntN(3))
-		pre, post, drive := g.state(w), g.state(w), g.drive(w)
-		bodies := make([]certBody, len(w.bodies))
-		ok := true
-		for i := range bodies {
-			bodies[i], ok = w.newCertBody(i, pre.entries[i], post.entries[i], drive)
-			if !ok {
-				break
-			}
-		}
+	passed, refused, shared := 0, 0, 0
+	gates := map[islandGate]int{}
+	for k := 0; passed+refused < 600; k++ {
+		w, bodies, points, ok := g.island()
 		if !ok {
 			continue
-		}
-		var points []certPoint
-		for range 1 + g.r.IntN(6) {
-			a := g.r.IntN(len(bodies) - 1)
-			b := a + 1 + g.r.IntN(len(bodies)-1-a)
-			p, ok := newCertPoint(0, a, b, g.contactPoint(), bodies, ratFloat(float64(g.r.IntN(3))*0.3))
-			require.True(t, ok)
-			p.mu, p.lambda = ratFloat(float64(g.r.IntN(3))*0.2), ratFloat(math.Abs(g.float()))
-			if g.r.IntN(8) == 0 {
-				p.lambda = ratFloat(-1)
-			}
-			p.tangent = [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
-			switch g.r.IntN(3) {
-			case 0:
-				p.lambda = new(big.Rat)
-			case 1:
-				for axis := range 3 {
-					p.tangent[axis] = ratFloat(g.float() * 1e-3)
-				}
-			}
-			points = append(points, p)
 		}
 		want := oldCertifyIsland(w, bodies, points)
 		got := w.certifyIsland(bodies, points)
@@ -753,8 +773,189 @@ func TestCertifyIslandMatchesOldForm(t *testing.T) {
 			passed++
 		} else {
 			refused++
+			gates[want.failed]++
+		}
+		if oddDenominator(bodies, points) {
+			shared++
 		}
 	}
 	require.Positive(t, refused, "premise: some islands are refused")
-	t.Logf("%d islands passed, %d refused", passed, refused)
+	require.Positive(t, shared, "premise: some islands read a driver velocity whose denominator is not a power of two")
+	t.Logf("%d islands passed, %d refused (first refused gate: %v), %d over an odd shared denominator",
+		passed, refused, gates, shared)
+}
+
+// oddDenominator reports whether an island certificate reads a kinematic
+// participant's velocity whose denominator is not a power of two, so that
+// its shared denominator is not 1.
+func oddDenominator(bodies []certBody, points []certPoint) bool {
+	for _, p := range points {
+		for _, slot := range [2]int{p.a, p.b} {
+			if !bodies[slot].kinematic {
+				continue
+			}
+			for _, value := range append(bodies[slot].v[:], bodies[slot].w[:]...) {
+				if _, ok := proof.DyOfRat(value); !ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// sharedIVec converts a shared-denominator interval vector back to
+// RatIntervals for comparison.
+func sharedIVec(s *proof.SharedDenom, v proof.SIVec3) ivec {
+	var out ivec
+	for axis := range out {
+		component := v[axis]
+		out[axis] = proof.OwnedInterval(s.Rat(component.Lo), s.Rat(component.Hi))
+	}
+	return out
+}
+
+func zeroCertificate() islandCertificate {
+	return islandCertificate{linear: new(big.Rat), angular: new(big.Rat), normal: new(big.Rat),
+		energy: new(big.Rat), momentum: new(big.Rat), angularMomentum: new(big.Rat),
+		cone: new(big.Rat), tangent: new(big.Rat), spin: new(big.Rat),
+		witnessTorque: new(big.Rat), witnessSpin: new(big.Rat)}
+}
+
+// TestCertificateRowsMatchOldForm holds the parts of the shared-denominator
+// certificate to their old forms one at a time, where a whole-island draw
+// rarely reaches them first: the friction rows of each point over a fresh
+// certificate, so a stick or slip refusal publishes its own value and limit;
+// the Euclidean bounds of each point's interval vectors; each dynamic body's
+// inertia product and witness torque.
+func TestCertificateRowsMatchOldForm(t *testing.T) {
+	t.Parallel()
+	g := newEquivalenceInputs(t, 17)
+	rows := map[islandGate]int{}
+	for k := range 400 {
+		w, bodies, points, ok := g.island()
+		if !ok {
+			continue
+		}
+		// A slipping point lies within ImpulseResidual of its cone's surface,
+		// which a random impulse rarely does: place some there.
+		for i := range points {
+			p := &points[i]
+			mu, _ := p.mu.Float64()
+			if mu == 0 || g.r.IntN(2) == 0 {
+				continue
+			}
+			var square float64
+			for _, component := range p.tangent {
+				f, _ := component.Float64()
+				square += f * f
+			}
+			p.lambda = ratFloat(math.Sqrt(square) / mu)
+		}
+		impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
+		oldImpulses := make([]ivec, len(points))
+		for i, p := range points {
+			oldImpulses[i] = oldAddIVec(oldScaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
+			want := zeroCertificate()
+			oldCertifyFriction(&want, p, bodies, impulseLimit, velocityLimit)
+			run := w.readIsland(bodies, points)
+			run.certifyFriction(&run.points[i], run.bodies)
+			requireSameCertificate(t, want, run.publish(), "draw %d point %d", k, i)
+			rows[want.failed]++
+		}
+		run := w.readIsland(bodies, points)
+		s := run.s
+		impulses := make([]proof.SIVec3, len(points))
+		for i, p := range points {
+			read := &run.points[i]
+			impulses[i] = s.AddI3(s.ScaleI3(read.normal, read.lambda), proof.SPoint3(read.tangent))
+			requireSameIVec(t, oldImpulses[i], sharedIVec(s, impulses[i]), "draw %d point %d", k, i)
+			for _, v := range [][2]any{{p.rA, read.rA}, {p.rB, read.rB}, {p.normal, read.normal},
+				{oldImpulses[i], impulses[i]}} {
+				old, shared := v[0].(ivec), v[1].(proof.SIVec3)
+				requireSameRat(t, oldEuclideanUpper(old), s.Rat(run.euclideanUpper(shared)), "draw %d point %d", k, i)
+				requireSameRat(t, oldEuclideanLower(old), s.Rat(run.euclideanLower(shared)), "draw %d point %d", k, i)
+			}
+		}
+		for slot, body := range bodies {
+			if !body.dynamic {
+				continue
+			}
+			x := [3]*big.Rat{ratFloat(g.float()), ratFloat(g.float()), ratFloat(g.float())}
+			requireSameIVec(t, oldInertiaApply(body, x), sharedIVec(s, run.inertiaApply(&run.bodies[slot], liftRats(s, x))),
+				"draw %d body %d", k, slot)
+			requireSameRat(t, oldBodyWitnessTorque(slot, points, oldImpulses),
+				s.Rat(run.bodyWitnessTorque(slot, run.points, impulses)), "draw %d body %d", k, slot)
+		}
+	}
+	for _, gate := range []islandGate{0, gateCone, gateStick, gateSlip} {
+		require.Positive(t, rows[gate], "premise: some friction rows end at %v", gate)
+	}
+	t.Logf("friction rows: %v", rows)
+}
+
+// TestCertificateSquareRootsMatchOldForm holds the certificate's square root
+// bounds to their old forms on squares of every scale, the two ends whose
+// float leaves the normal range among them, over a shared denominator that
+// is not 1.
+func TestCertificateSquareRootsMatchOldForm(t *testing.T) {
+	t.Parallel()
+	g := newEquivalenceInputs(t, 19)
+	odd := []int64{1, 3, 5, 7, 15, 21}
+	squares := []*big.Rat{new(big.Rat), big.NewRat(-1, 3),
+		new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(3), 1100)),
+		new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(5), 1100), big.NewInt(7))}
+	for range 2000 {
+		r := new(big.Rat).Abs(ratFloat(g.float()))
+		r.Mul(r, ratFloat(math.Ldexp(1, g.r.IntN(200)-100)))
+		r.Quo(r, big.NewRat(odd[g.r.IntN(len(odd))], 1))
+		squares = append(squares, r)
+	}
+	run := &islandRun{s: proof.NewSharedDenom(nil)}
+	for _, square := range squares {
+		run.s.Lift(square)
+	}
+	run.s, _ = run.s.Widen()
+	for i, square := range squares {
+		x := run.s.Lift(square)
+		requireSameRat(t, oldRatSqrtUpper(square), run.s.Rat(run.sqrtUpper(x)), "square %d %s", i, square.RatString())
+		// The old lower bound fails on a square whose float rounds to
+		// infinity; the certificate's squares never do.
+		if approx, _ := square.Float64(); !math.IsInf(approx, 0) {
+			requireSameRat(t, oldRatSqrtLower(square), run.s.Rat(run.sqrtLower(x)), "square %d %s", i, square.RatString())
+		}
+	}
+}
+
+// TestMomentumRowsMatchOldForm runs the momentum rows alone over a fresh
+// certificate, with residual vectors whose linear and angular rows fail on
+// different axes, so the first refusal depends on the rows' order.
+func TestMomentumRowsMatchOldForm(t *testing.T) {
+	t.Parallel()
+	g := newEquivalenceInputs(t, 23)
+	firsts := map[islandGate]int{}
+	vector := func() ivec {
+		var out ivec
+		for axis := range out {
+			lo, hi := g.float(), g.float()
+			if lo > hi {
+				lo, hi = hi, lo
+			}
+			out[axis] = proof.OwnedInterval(ratFloat(lo), ratFloat(hi))
+		}
+		return out
+	}
+	for k := range 2000 {
+		linear, angular := vector(), vector()
+		linearLimit, angularLimit := ratFloat(math.Abs(g.float())), ratFloat(math.Abs(g.float()))
+		want := zeroCertificate()
+		oldCheckMomentum(&want, linear, angular, linearLimit, angularLimit)
+		run := &islandRun{s: proof.NewSharedDenom(nil)}
+		s := run.s
+		run.checkMomentum(s.LiftIVec3(linear), s.LiftIVec3(angular), s.Lift(linearLimit), s.Lift(angularLimit))
+		requireSameCertificate(t, want, run.publish(), "draw %d", k)
+		firsts[want.failed]++
+	}
+	require.Positive(t, firsts[gateLinearMomentum], "premise: the linear row refuses first")
+	require.Positive(t, firsts[gateAngularMomentum], "premise: the angular row refuses first")
 }

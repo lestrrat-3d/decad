@@ -669,7 +669,13 @@ it never inverts an interval tensor. The interval vocabulary is `internal/proof/
 `PointInterval`; `dynamics` imports that package directly. The two vector forms this section needs and
 that file lacks, a three-component interval dot product and cross product, are added to the same file
 (§13 PR 4) so the root package and `dynamics` share one implementation; no interval code lives in
-`dynamics`.
+`dynamics`. The certificate reads its `RatInterval` inputs once into `internal/proof/shared_interval.go`'s
+`SInterval`, which writes every input over one odd denominator `D` shared by the island, as a `Dyadic`
+numerator over a power of `D`, and runs every row in it: each operation chooses the endpoints its
+`RatInterval` twin chooses, sums and products need no GCD, and a value becomes a `big.Rat` only where
+`ContactSolverReport` or a refusal publishes it. `D` is `1` unless a kinematic driver's exact velocity has
+an odd factor in its denominator; an input whose odd factor `D` lacks widens `D`, and the certificate
+reads every input again before any row runs.
 
 Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated into
 world axes with the pose basis read as exact rationals and widened by the basis's orthonormality defect
