@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -296,7 +297,14 @@ func TestExactBaseMatchesUnitProduct(t *testing.T) {
 	for _, unit := range unitsUnderTest {
 		for _, magnitude := range magnitudes {
 			value := units.New(magnitude, unit)
-			requireSameRat(t, oldExactBase(value), exactBase(value), "exactBase(%v)", value)
+			want := oldExactBase(value)
+			requireSameRat(t, want, exactBase(value), "exactBase(%v)", value)
+			s := proof.NewSharedDenom(nil)
+			shared, ok := sharedBase(s, value)
+			require.Equal(t, want != nil, ok, "sharedBase(%v)", value)
+			if ok {
+				requireSameRat(t, want, s.Rat(shared), "sharedBase(%v)", value)
+			}
 		}
 	}
 }
@@ -348,75 +356,124 @@ func TestExactMassMatchesReadings(t *testing.T) {
 		center, _ := oldRatVec(m.Center.Value)
 		requireSameRats(t, center, exact.local, "draw %d center", k)
 		requireSameRat(t, oldExactBase(m.Center.Bound), exact.radius, "draw %d radius", k)
+		// The certificate's shared copies hold the same rationals where valid.
+		s, shared := proof.NewSharedDenom(nil), &exact.shared
+		if exact.mass != nil && exact.bound != nil {
+			requireSameInterval(t, exact.interval, sharedInterval(s, shared.interval), "draw %d shared interval", k)
+		}
+		if exact.radius != nil {
+			requireSameRat(t, exact.radius, s.Rat(shared.radius), "draw %d shared radius", k)
+		}
+		if exact.local[0] != nil && exact.local[1] != nil && exact.local[2] != nil {
+			requireSameRats(t, exact.local, sharedRats(s, shared.local), "draw %d shared center", k)
+		}
+		if valid {
+			requireSameRat(t, exact.largest, s.Rat(shared.largest), "draw %d shared largest", k)
+			for i := range 3 {
+				requireSameIVec(t, exact.tensor[i], sharedIVec(s, shared.tensor[i]), "draw %d shared tensor", k)
+			}
+			for i, component := range exact.components {
+				got := shared.components[i]
+				require.Equal(t, [2]int{component.i, component.j}, [2]int{got.i, got.j})
+				requireSameRat(t, component.value, s.Rat(got.value), "draw %d shared component %d", k, i)
+				requireSameRat(t, component.bound, s.Rat(got.bound), "draw %d shared component %d", k, i)
+			}
+		}
 	}
 }
 
-func requireSameCertBody(t *testing.T, want, got certBody, msgAndArgs ...any) {
+// sharedInterval converts a shared-denominator interval back to a
+// RatInterval for comparison.
+func sharedInterval(s *proof.SharedDenom, iv proof.SInterval) proof.RatInterval {
+	return proof.OwnedInterval(s.Rat(iv.Lo), s.Rat(iv.Hi))
+}
+
+// sharedRats converts a shared-denominator vector back to rationals.
+func sharedRats(s *proof.SharedDenom, x [3]proof.SRat) [3]*big.Rat {
+	return [3]*big.Rat{s.Rat(x[0]), s.Rat(x[1]), s.Rat(x[2])}
+}
+
+// requireSameMotion holds the part of a participant reading the pre-solve
+// relative velocity needs to its old form.
+func requireSameMotion(t *testing.T, s *proof.SharedDenom, want certBody, got *sharedBody, msgAndArgs ...any) {
 	t.Helper()
 	require.Equal(t, [3]any{want.index, want.dynamic, want.kinematic}, [3]any{got.index, got.dynamic, got.kinematic},
 		msgAndArgs...)
-	requireSameRats(t, want.v, got.v, msgAndArgs...)
-	requireSameRats(t, want.w, got.w, msgAndArgs...)
-	requireSameRats(t, want.vPost, got.vPost, msgAndArgs...)
-	requireSameRats(t, want.wPost, got.wPost, msgAndArgs...)
-	if !want.dynamic && !want.kinematic {
-		return
+	requireSameRats(t, want.v, sharedRats(s, got.v), msgAndArgs...)
+	requireSameRats(t, want.w, sharedRats(s, got.w), msgAndArgs...)
+	requireSameRats(t, want.vPost, sharedRats(s, got.vPost), msgAndArgs...)
+	requireSameRats(t, want.wPost, sharedRats(s, got.wPost), msgAndArgs...)
+	if want.dynamic || want.kinematic {
+		requireSameIVec(t, want.center, sharedIVec(s, got.center), msgAndArgs...)
 	}
-	requireSameIVec(t, want.center, got.center, msgAndArgs...)
+}
+
+// requireSameSharedBody holds a whole participant reading to its old form,
+// the spin energy change oldCertifyIsland computes from it included.
+func requireSameSharedBody(t *testing.T, w *World, s *proof.SharedDenom, want certBody, got *sharedBody,
+	msgAndArgs ...any) {
+	t.Helper()
+	requireSameMotion(t, s, want, got, msgAndArgs...)
 	if !want.dynamic {
 		return
 	}
-	requireSameInterval(t, want.mass, got.mass, msgAndArgs...)
+	requireSameInterval(t, want.mass, sharedInterval(s, got.mass), msgAndArgs...)
 	for i := range 3 {
-		requireSameIVec(t, want.inertia[i], got.inertia[i], msgAndArgs...)
-		requireSameRats(t, want.rotation[i], got.rotation[i], msgAndArgs...)
+		requireSameIVec(t, want.inertia[i], sharedIVec(s, got.inertia[i]), msgAndArgs...)
+		requireSameRats(t, want.rotation[i], sharedRats(s, got.rotation[i]), msgAndArgs...)
 	}
-	requireSameRat(t, want.defect, got.defect, msgAndArgs...)
-	requireSameRat(t, want.inertiaLower, got.inertiaLower, msgAndArgs...)
-	requireSameRat(t, want.rowCeiling, got.rowCeiling, msgAndArgs...)
-	requireSameRat(t, want.centerL1, got.centerL1, msgAndArgs...)
+	requireSameRat(t, want.defect, s.Rat(got.defect), msgAndArgs...)
+	requireSameRat(t, want.inertiaLower, s.Rat(got.inertiaLower), msgAndArgs...)
+	requireSameRat(t, want.rowCeiling, s.Rat(got.rowCeiling), msgAndArgs...)
+	requireSameRat(t, want.centerL1, s.Rat(got.centerL1), msgAndArgs...)
+	spin, ok := oldSpinEnergyChange(w.bodies[want.index].mass.Inertia, want.pose, oldRatQuantity(want.w),
+		oldRatQuantity(want.wPost))
+	require.Equal(t, ok, got.spinOK, msgAndArgs...)
+	if ok {
+		requireSameRat(t, spin, s.Rat(got.spinUpper), msgAndArgs...)
+	}
 }
 
-// TestCertBodyMatchesOldForm compares newCertBody, and certMotion against
-// newCertBody with an unchanged post velocity, as pairActive called it.
+// TestCertBodyMatchesOldForm compares the certificate's participant reading,
+// and the pre-solve reading readPair takes, against the old form, the latter
+// with an unchanged post velocity, as pairActive read it.
 func TestCertBodyMatchesOldForm(t *testing.T) {
 	t.Parallel()
 	g := newEquivalenceInputs(t, 4)
 	seen := map[bool]int{}
+	shared := 0
 	for k := range 100 {
 		w := g.world(4)
 		pre, post, drive := g.state(w), g.state(w), g.drive(w)
 		for i := range w.bodies {
 			want, okWant := oldNewCertBody(w, i, pre.entries[i], post.entries[i], drive)
-			got, okGot := w.newCertBody(i, pre.entries[i], post.entries[i], drive)
-			require.Equal(t, okWant, okGot, "draw %d body %d", k, i)
+			run, failure := w.readIsland(certInput{bodies: []certBodyInput{{index: i, entry: pre.entries[i],
+				vPost: post.entries[i].LinearVelocity, wPost: post.entries[i].AngularVelocity}}, drive: drive})
+			require.Equal(t, okWant, failure == nil, "draw %d body %d", k, i)
 			seen[okWant]++
 			if okWant {
-				requireSameCertBody(t, want, got, "draw %d body %d", k, i)
+				requireSameSharedBody(t, w, run.s, want, &run.bodies[0], "draw %d body %d", k, i)
+				if oddBody(want) {
+					shared++
+				}
 			}
 			want, okWant = oldNewCertBody(w, i, pre.entries[i], pre.entries[i], drive)
-			got, okGot = w.certMotion(i, pre.entries[i], drive)
+			var motion [2]sharedBody
+			s, okGot := w.readPair(&motion, islandPair{a: i, b: i}, pre, drive)
 			require.Equal(t, okWant, okGot, "draw %d body %d motion", k, i)
-			if !okWant {
-				continue
-			}
-			require.Equal(t, [3]any{want.index, want.dynamic, want.kinematic},
-				[3]any{got.index, got.dynamic, got.kinematic})
-			requireSameRats(t, want.v, got.v, "draw %d body %d motion", k, i)
-			requireSameRats(t, want.w, got.w, "draw %d body %d motion", k, i)
-			requireSameRats(t, want.vPost, got.vPost, "draw %d body %d motion", k, i)
-			requireSameRats(t, want.wPost, got.wPost, "draw %d body %d motion", k, i)
-			if want.dynamic || want.kinematic {
-				requireSameIVec(t, want.center, got.center, "draw %d body %d motion", k, i)
+			if okWant {
+				requireSameMotion(t, s, want, &motion[0], "draw %d body %d motion", k, i)
 			}
 		}
 	}
 	require.Positive(t, seen[true], "premise: some bodies read")
 	require.Positive(t, seen[false], "premise: some bodies fail to read")
+	require.Positive(t, shared, "premise: some drivers read over a shared denominator that is not 1")
 }
 
-// TestCertPointMatchesOldForm compares newCertPoint's balls and levers with
-// the old form's over bodies with and without a mass center.
+// TestCertPointMatchesOldForm compares the certificate's point reading, its
+// balls and levers, with the old form's over bodies with and without a mass
+// center.
 func TestCertPointMatchesOldForm(t *testing.T) {
 	t.Parallel()
 	g := newEquivalenceInputs(t, 14)
@@ -424,33 +481,34 @@ func TestCertPointMatchesOldForm(t *testing.T) {
 	for k := 0; read < 200; k++ {
 		w := g.world(3)
 		state, drive := g.state(w), g.drive(w)
-		bodies := make([]certBody, len(w.bodies))
-		ok := true
-		for i := range bodies {
-			bodies[i], ok = w.newCertBody(i, state.entries[i], state.entries[i], drive)
-			if !ok {
-				break
-			}
+		in := certInput{drive: drive}
+		for i := range w.bodies {
+			entry := state.entries[i]
+			in.bodies = append(in.bodies, certBodyInput{index: i, entry: entry, vPost: entry.LinearVelocity,
+				wPost: entry.AngularVelocity})
 		}
-		if !ok {
+		a := g.r.IntN(len(w.bodies) - 1)
+		b := a + 1 + g.r.IntN(len(w.bodies)-1-a)
+		point := g.contactPoint()
+		if g.r.IntN(10) == 0 {
+			point.OnB.Bound = units.Millimeters(-1)
+		}
+		in.points = []certPointInput{{a: a, b: b, point: &point, restitution: units.Scalar(0), mu: new(big.Rat)}}
+		_, points, failureWant := oldReadIsland(w, in)
+		run, failureGot := w.readIsland(in)
+		require.Equal(t, failureWant, failureGot, "draw %d", k)
+		if failureWant != nil {
 			continue
 		}
 		read++
-		a := g.r.IntN(len(bodies) - 1)
-		b := a + 1 + g.r.IntN(len(bodies)-1-a)
-		point := g.contactPoint()
-		want, okWant := oldNewCertPoint(0, a, b, point, bodies, new(big.Rat))
-		got, okGot := newCertPoint(0, a, b, point, bodies, new(big.Rat))
-		require.Equal(t, okWant, okGot, "draw %d", k)
-		if !okWant {
-			continue
-		}
-		for _, pair := range [][2]ivec{{want.normal, got.normal}, {want.onA, got.onA}, {want.onB, got.onB},
+		want, got := points[0], &run.points[0]
+		require.Equal(t, [2]int{want.a, want.b}, [2]int{got.a, got.b})
+		for _, pair := range [][2]any{{want.normal, got.normal}, {want.onA, got.onA}, {want.onB, got.onB},
 			{want.rA, got.rA}, {want.rB, got.rB}} {
-			requireSameIVec(t, pair[0], pair[1], "draw %d", k)
+			requireSameIVec(t, pair[0].(ivec), sharedIVec(run.s, pair[1].(proof.SIVec3)), "draw %d", k)
 		}
-		requireSameRat(t, want.ballA, got.ballA, "draw %d", k)
-		requireSameRat(t, want.ballB, got.ballB, "draw %d", k)
+		requireSameRat(t, want.ballA, run.s.Rat(got.ballA), "draw %d", k)
+		requireSameRat(t, want.ballB, run.s.Rat(got.ballB), "draw %d", k)
 	}
 }
 
@@ -462,24 +520,37 @@ func TestPointVelocityMatchesOldForm(t *testing.T) {
 		var v, omega [3]*big.Rat
 		for axis := range 3 {
 			v[axis], omega[axis] = ratFloat(g.float()), ratFloat(g.float())
+			if g.r.IntN(4) == 0 {
+				v[axis].Quo(v[axis], big.NewRat(3, 1))
+			}
 		}
 		if g.r.IntN(2) == 0 {
 			omega = [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 		}
-		lever, ok := ballIVec(g.vec(), ratFloat(g.nonnegative()))
+		lever, ok := oldBallIVec(g.vec(), ratFloat(g.nonnegative()))
 		require.True(t, ok)
-		requireSameIVec(t, oldPointVelocity(body, v, omega, lever), pointVelocity(body, v, omega, lever), "draw %d", k)
+		run := &islandRun{s: proof.NewSharedDenom(big.NewInt(3))}
+		s := run.s
+		read := &sharedBody{dynamic: body.dynamic, kinematic: body.kinematic}
+		sv, sOmega := liftRats(s, v), liftRats(s, omega)
+		got := run.pointVelocity(read, &sv, &sOmega, s.LiftIVec3(lever))
+		requireSameIVec(t, oldPointVelocity(body, v, omega, lever), sharedIVec(s, got), "draw %d", k)
 	}
 }
 
 // pairInputs draws a world, a state, a driver field and a gathered pair of
-// two of its bodies with one to four manifold points.
+// two of its bodies with one to four manifold points, a few of which do not
+// read.
 func (g *equivalenceInputs) pairInputs() (*World, State, map[int]driverMotion, islandPair) {
 	w := g.world(3)
 	pair := islandPair{a: g.r.IntN(2)}
 	pair.b = pair.a + 1 + g.r.IntN(2-pair.a)
 	for range 1 + g.r.IntN(4) {
-		pair.manifold.Points = append(pair.manifold.Points, g.contactPoint())
+		point := g.contactPoint()
+		if g.r.IntN(6) == 0 {
+			point.OnB.Bound = units.Millimeters(-1)
+		}
+		pair.manifold.Points = append(pair.manifold.Points, point)
 	}
 	state := g.state(w)
 	// A slow pre-solve speed lets some points close within VelocityResidual.
@@ -497,18 +568,25 @@ func TestPairActiveMatchesOldForm(t *testing.T) {
 	g := newEquivalenceInputs(t, 6)
 	seen := map[[2]bool]int{}
 	grazes := map[bool]int{}
+	closingFirst := 0
 	for k := range 400 {
 		w, state, drive, pair := g.pairInputs()
 		activeWant, validWant := oldPairActive(w, pair, state, drive)
 		activeGot, validGot := w.pairActive(pair, state, drive)
 		require.Equal(t, [2]bool{activeWant, validWant}, [2]bool{activeGot, validGot}, "draw %d", k)
 		seen[[2]bool{activeWant, validWant}]++
+		if activeWant && slices.ContainsFunc(pair.manifold.Points, func(p decad.ContactPoint) bool {
+			return p.OnB.Bound.Base() < 0
+		}) {
+			closingFirst++
+		}
 		graze := oldGrazeSpeedWithin(w, pair, state, drive)
 		require.Equal(t, graze, w.grazeSpeedWithin(pair, state, drive), "draw %d graze", k)
 		grazes[graze]++
 	}
 	require.Len(t, seen, 3, "premise: active, separating and unreadable pairs all occur: %v", seen)
 	require.Len(t, grazes, 2, "premise: grazes within and beyond the residual both occur")
+	require.Positive(t, closingFirst, "premise: a closing point decides before a later point that does not read")
 }
 
 func TestSpinReadingMatchesOldForm(t *testing.T) {
@@ -547,6 +625,7 @@ func TestSpinReadingMatchesOldForm(t *testing.T) {
 func TestSpinEnergyChangeMatchesOldForm(t *testing.T) {
 	t.Parallel()
 	g := newEquivalenceInputs(t, 8)
+	seen := map[bool]int{}
 	for k := range 400 {
 		m, pose := g.mass(), g.pose()
 		before, okBefore := oldQuantityRats(g.angular())
@@ -554,23 +633,27 @@ func TestSpinEnergyChangeMatchesOldForm(t *testing.T) {
 		if !okBefore || !okAfter {
 			continue
 		}
-		var rotation [3][3]*big.Rat
+		s := proof.NewSharedDenom(nil)
+		var rotation [3][3]proof.SRat
 		basis := pose.Basis()
 		for column, axis := range [3]r3.Vec{basis.EX, basis.EY, basis.EZ} {
 			values, ok := oldRatVec(axis)
 			require.True(t, ok)
 			for row := range 3 {
-				rotation[row][column] = values[row]
+				rotation[row][column] = s.Lift(values[row])
 			}
 		}
-		components := exactInertia(m.Inertia)
+		exact := newExactMass(m)
 		want, okWant := oldSpinEnergyChange(m.Inertia, pose, oldRatQuantity(before), oldRatQuantity(after))
-		got, okGot := spinEnergyChange(&components, rotation, before, after)
+		sBefore, sAfter := liftRats(s, before), liftRats(s, after)
+		got, okGot := spinEnergyChange(s, exact, &rotation, &sBefore, &sAfter)
 		require.Equal(t, okWant, okGot, "draw %d", k)
+		seen[okWant]++
 		if okWant {
-			requireSameRat(t, want, got, "draw %d", k)
+			requireSameRat(t, want, s.Rat(got), "draw %d", k)
 		}
 	}
+	require.Len(t, seen, 2, "premise: readings that convert and that fail both occur")
 }
 
 func TestAddIntervalProductMatchesOldForm(t *testing.T) {
@@ -703,40 +786,45 @@ func TestStepWorkConservationReuse(t *testing.T) {
 
 // island draws a certificate's input: two to four bodies, read before and
 // after with random drivers, and one to six points between them, some of
-// whose normal or tangent impulses are exactly zero. ok is false when a body
-// does not read as exact intervals.
-func (g *equivalenceInputs) island() (*World, []certBody, []certPoint, bool) {
+// whose normal or tangent impulses are exactly zero. A few inputs do not
+// read: a body's reading, a point's ball, a pair's friction coefficient or a
+// published impulse does not convert.
+func (g *equivalenceInputs) island() (*World, certInput) {
 	w := g.world(2 + g.r.IntN(3))
 	pre, post, drive := g.state(w), g.state(w), g.drive(w)
-	bodies := make([]certBody, len(w.bodies))
-	for i := range bodies {
-		var ok bool
-		if bodies[i], ok = w.newCertBody(i, pre.entries[i], post.entries[i], drive); !ok {
-			return nil, nil, nil, false
-		}
+	in := certInput{drive: drive}
+	for i := range w.bodies {
+		in.bodies = append(in.bodies, certBodyInput{index: i, entry: pre.entries[i],
+			vPost: post.entries[i].LinearVelocity, wPost: post.entries[i].AngularVelocity})
 	}
-	var points []certPoint
 	for range 1 + g.r.IntN(6) {
-		a := g.r.IntN(len(bodies) - 1)
-		b := a + 1 + g.r.IntN(len(bodies)-1-a)
-		p, ok := newCertPoint(0, a, b, g.contactPoint(), bodies, ratFloat(float64(g.r.IntN(3))*0.3))
-		require.True(g.t, ok)
-		p.mu, p.lambda = ratFloat(float64(g.r.IntN(3))*0.2), ratFloat(math.Abs(g.float()))
+		a := g.r.IntN(len(w.bodies) - 1)
+		b := a + 1 + g.r.IntN(len(w.bodies)-1-a)
+		point := g.contactPoint()
+		p := certPointInput{a: a, b: b, point: &point, restitution: units.Scalar(float64(g.r.IntN(3)) * 0.3),
+			mu: ratFloat(float64(g.r.IntN(3)) * 0.2), lambda: math.Abs(g.float())}
 		if g.r.IntN(8) == 0 {
-			p.lambda = ratFloat(-1)
+			p.lambda = -1
 		}
-		p.tangent = [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 		switch g.r.IntN(3) {
 		case 0:
-			p.lambda = new(big.Rat)
+			p.lambda = 0
 		case 1:
-			for axis := range 3 {
-				p.tangent[axis] = ratFloat(g.float() * 1e-3)
-			}
+			p.tangent = r3.Vec{X: g.float() * 1e-3, Y: g.float() * 1e-3, Z: g.float() * 1e-3}
 		}
-		points = append(points, p)
+		switch g.r.IntN(80) {
+		case 0:
+			point.Normal.Bound = units.Scalar(math.Inf(1))
+		case 1:
+			p.mu = nil
+		case 2:
+			p.lambda = math.NaN()
+		case 3:
+			p.tangent.Y = math.Inf(-1)
+		}
+		in.points = append(in.points, p)
 	}
-	return w, bodies, points, true
+	return w, in
 }
 
 func requireSameCertificate(t *testing.T, want, got islandCertificate, msgAndArgs ...any) {
@@ -755,19 +843,31 @@ func requireSameCertificate(t *testing.T, want, got islandCertificate, msgAndArg
 // TestCertifyIslandMatchesOldForm certifies random islands, some of whose
 // points carry an exactly zero normal or tangent impulse, some of whose
 // bodies do not spin and some of whose drivers move at velocities with odd
-// denominators, with the old and the current certificate.
+// denominators, with the old and the current certificate. An island that
+// does not read must fail with the old form's reason.
 func TestCertifyIslandMatchesOldForm(t *testing.T) {
 	t.Parallel()
 	g := newEquivalenceInputs(t, 13)
 	passed, refused, shared := 0, 0, 0
 	gates := map[islandGate]int{}
+	failures := map[string]int{}
+	unread := 0
 	for k := 0; passed+refused < 600; k++ {
-		w, bodies, points, ok := g.island()
-		if !ok {
+		w, in := g.island()
+		got, failureGot := w.certifyIsland(in)
+		// Most draws do not read; past the first 400 of them, the old form
+		// runs only on the draws the current one reads.
+		if failureGot != nil && unread >= 400 {
+			continue
+		}
+		bodies, points, failureWant := oldReadIsland(w, in)
+		require.Equal(t, failureWant, failureGot, "draw %d", k)
+		if failureWant != nil {
+			unread++
+			failures[strings.Fields(failureWant.reason)[0]]++
 			continue
 		}
 		want := oldCertifyIsland(w, bodies, points)
-		got := w.certifyIsland(bodies, points)
 		requireSameCertificate(t, want, got, "draw %d", k)
 		if want.failed == 0 {
 			passed++
@@ -781,8 +881,9 @@ func TestCertifyIslandMatchesOldForm(t *testing.T) {
 	}
 	require.Positive(t, refused, "premise: some islands are refused")
 	require.Positive(t, shared, "premise: some islands read a driver velocity whose denominator is not a power of two")
-	t.Logf("%d islands passed, %d refused (first refused gate: %v), %d over an odd shared denominator",
-		passed, refused, gates, shared)
+	require.Len(t, failures, 3, "premise: bodies, points and impulses each fail to read: %v", failures)
+	t.Logf("%d islands passed, %d refused (first refused gate: %v), %d over an odd shared denominator; unread: %v",
+		passed, refused, gates, shared, failures)
 }
 
 // oddDenominator reports whether an island certificate reads a kinematic
@@ -790,15 +891,22 @@ func TestCertifyIslandMatchesOldForm(t *testing.T) {
 // its shared denominator is not 1.
 func oddDenominator(bodies []certBody, points []certPoint) bool {
 	for _, p := range points {
-		for _, slot := range [2]int{p.a, p.b} {
-			if !bodies[slot].kinematic {
-				continue
-			}
-			for _, value := range append(bodies[slot].v[:], bodies[slot].w[:]...) {
-				if _, ok := proof.DyOfRat(value); !ok {
-					return true
-				}
-			}
+		if oddBody(bodies[p.a]) || oddBody(bodies[p.b]) {
+			return true
+		}
+	}
+	return false
+}
+
+// oddBody reports whether a kinematic participant's velocity has a
+// denominator that is not a power of two.
+func oddBody(body certBody) bool {
+	if !body.kinematic {
+		return false
+	}
+	for _, value := range append(body.v[:], body.w[:]...) {
+		if _, ok := proof.DyOfRat(value); !ok {
+			return true
 		}
 	}
 	return false
@@ -833,24 +941,23 @@ func TestCertificateRowsMatchOldForm(t *testing.T) {
 	g := newEquivalenceInputs(t, 17)
 	rows := map[islandGate]int{}
 	for k := range 400 {
-		w, bodies, points, ok := g.island()
-		if !ok {
-			continue
-		}
+		w, in := g.island()
 		// A slipping point lies within ImpulseResidual of its cone's surface,
 		// which a random impulse rarely does: place some there.
-		for i := range points {
-			p := &points[i]
+		for i := range in.points {
+			p := &in.points[i]
+			if p.mu == nil {
+				continue
+			}
 			mu, _ := p.mu.Float64()
 			if mu == 0 || g.r.IntN(2) == 0 {
 				continue
 			}
-			var square float64
-			for _, component := range p.tangent {
-				f, _ := component.Float64()
-				square += f * f
-			}
-			p.lambda = ratFloat(math.Sqrt(square) / mu)
+			p.lambda = math.Sqrt(p.tangent.X*p.tangent.X+p.tangent.Y*p.tangent.Y+p.tangent.Z*p.tangent.Z) / mu
+		}
+		bodies, points, failure := oldReadIsland(w, in)
+		if failure != nil {
+			continue
 		}
 		impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
 		oldImpulses := make([]ivec, len(points))
@@ -858,12 +965,14 @@ func TestCertificateRowsMatchOldForm(t *testing.T) {
 			oldImpulses[i] = oldAddIVec(oldScaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
 			want := zeroCertificate()
 			oldCertifyFriction(&want, p, bodies, impulseLimit, velocityLimit)
-			run := w.readIsland(bodies, points)
+			run, failure := w.readIsland(in)
+			require.Nil(t, failure)
 			run.certifyFriction(&run.points[i], run.bodies)
 			requireSameCertificate(t, want, run.publish(), "draw %d point %d", k, i)
 			rows[want.failed]++
 		}
-		run := w.readIsland(bodies, points)
+		run, failure := w.readIsland(in)
+		require.Nil(t, failure)
 		s := run.s
 		impulses := make([]proof.SIVec3, len(points))
 		for i, p := range points {

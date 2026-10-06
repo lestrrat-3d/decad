@@ -1,6 +1,7 @@
 package dynamics
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 
@@ -13,9 +14,13 @@ import (
 // The functions in this file are the forms the island certificate, the
 // conservation readings and the pre-solve classification computed before
 // each dynamic body's mass reading was converted once per World
-// (exact_mass.go) and before the zero shortcuts of the certificate and the
-// readings. They convert every reading where they read it, through
-// SetFloat64 and an unconditional unit-factor product, and take no
+// (exact_mass.go), before the zero shortcuts of the certificate and the
+// readings, and before the certificate and the pre-solve classification read
+// their inputs straight into shared-denominator arithmetic
+// (island_certify_input.go): the old forms read each participant and point
+// into big.Rat intervals first (certBody, certPoint, oldNewCertBody,
+// oldNewCertPoint, oldReadIsland). They convert every reading where they read
+// it, through SetFloat64 and an unconditional unit-factor product, and take no
 // shortcut. Every sum and product in them, the interval operations
 // internal/proof's RatInterval provides included (oldAddInterval and its
 // siblings at the end of the file), is big.Rat's own Add, Sub and Mul, with
@@ -30,6 +35,80 @@ import (
 // the same inputs and requires exactly equal rationals and decisions. A
 // deliberate change to what the certificate or a reading computes changes
 // the matching form here with it.
+
+// certBody is one island participant read as exact big.Rat intervals. A
+// Fixed participant has zero velocity and no mass reading; a kinematic one
+// moves with its driver's exact velocity field before and after the event.
+type certBody struct {
+	index     int
+	dynamic   bool
+	kinematic bool
+	mass      proof.RatInterval
+	inertia   [3][3]proof.RatInterval
+	rotation  [3][3]*big.Rat // pose basis, rotation[row][column]
+	// defect widens every world inertia component by 3·d·(2+d)·m (§8.1).
+	defect       *big.Rat
+	inertiaLower *big.Rat
+	rowCeiling   *big.Rat
+	center       ivec
+	centerL1     *big.Rat // upper bound on |center|_1
+	pose         r3.Transform
+	v, w         [3]*big.Rat // pre-solve
+	vPost, wPost [3]*big.Rat // published
+}
+
+// certPoint is one manifold point of an island pair read as exact big.Rat
+// intervals. Its lever intervals run from each dynamic or kinematic body's
+// center to that body's witness.
+type certPoint struct {
+	a, b        int // island body slots
+	normal      ivec
+	onA, onB    ivec
+	rA, rB      ivec
+	ballA       *big.Rat
+	ballB       *big.Rat
+	lambda      *big.Rat
+	tangent     [3]*big.Rat
+	mu          *big.Rat
+	restitution *big.Rat
+}
+
+func oldZeroIVec() ivec {
+	return pointIVec([3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)})
+}
+
+// oldReadIsland reads a certificate input into big.Rat intervals: every
+// participant in slot order, then every point in order, failing on the first
+// that does not read, with certifyIsland's reasons.
+func oldReadIsland(w *World, in certInput) ([]certBody, []certPoint, *islandFailure) {
+	bodies := make([]certBody, len(in.bodies))
+	for slot, input := range in.bodies {
+		post := input.entry
+		post.LinearVelocity, post.AngularVelocity = input.vPost, input.wPost
+		body, ok := oldNewCertBody(w, input.index, input.entry, post, in.drive)
+		if !ok {
+			return nil, nil, &islandFailure{code: StepIslandDegenerate,
+				reason: fmt.Sprintf("body %d cannot be read as exact intervals", input.index)}
+		}
+		bodies[slot] = body
+	}
+	points := make([]certPoint, 0, len(in.points))
+	for _, input := range in.points {
+		restitution := oldExactBase(input.restitution)
+		p, ok := oldNewCertPoint(input.a, input.b, *input.point, bodies, restitution)
+		if !ok || restitution == nil || input.mu == nil {
+			return nil, nil, &islandFailure{code: StepIslandDegenerate,
+				reason: "manifold point cannot be read as exact intervals"}
+		}
+		tangent, okTangent := oldRatVec(input.tangent)
+		p.lambda, p.mu, p.tangent = oldRatFloat(input.lambda), input.mu, tangent
+		if p.lambda == nil || !okTangent {
+			return nil, nil, &islandFailure{code: StepIslandDegenerate, reason: "island impulse is not finite"}
+		}
+		points = append(points, p)
+	}
+	return bodies, points, nil
+}
 
 func oldRatFloat(value float64) *big.Rat { return new(big.Rat).SetFloat64(value) }
 
@@ -72,7 +151,7 @@ func oldNewCertBody(w *World, index int, entry BodyState, post BodyState,
 	if motion, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
 		body.kinematic = true
 		body.v, body.vPost, body.w, body.wPost = motion.linear, motion.linear, motion.angular, motion.angular
-		body.center = zeroIVec()
+		body.center = oldZeroIVec()
 	}
 	if !body.dynamic {
 		return body, true
@@ -188,7 +267,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 	for k, p := range points {
 		impulses[k] = oldAddIVec(oldScaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
 	}
-	linearMomentum, angularMomentum := zeroIVec(), zeroIVec()
+	linearMomentum, angularMomentum := oldZeroIVec(), oldZeroIVec()
 	linearMomentumLimit, angularMomentumLimit := new(big.Rat), new(big.Rat)
 	energyUpper, energyAllowance, kinematicWork := new(big.Rat), new(big.Rat), new(big.Rat)
 	for slot, body := range bodies {
@@ -201,7 +280,7 @@ func oldCertifyIsland(w *World, bodies []certBody, points []certPoint) islandCer
 			dv[axis] = new(big.Rat).Sub(body.vPost[axis], body.v[axis])
 			dw[axis] = new(big.Rat).Sub(body.wPost[axis], body.w[axis])
 		}
-		force, torque := zeroIVec(), zeroIVec()
+		force, torque := oldZeroIVec(), oldZeroIVec()
 		for k, p := range points {
 			switch slot {
 			case p.b:
@@ -692,7 +771,7 @@ func oldPairActive(w *World, pair islandPair, state State, drive map[int]driverM
 	bodies := []certBody{a, b}
 	limit := oldExactBase(w.step.VelocityResidual)
 	for _, point := range pair.manifold.Points {
-		p, ok := oldNewCertPoint(0, 0, 1, point, bodies, new(big.Rat))
+		p, ok := oldNewCertPoint(0, 1, point, bodies, new(big.Rat))
 		if !ok {
 			return false, false
 		}
@@ -712,7 +791,7 @@ func oldGrazeSpeedWithin(w *World, pair islandPair, state State, drive map[int]d
 	bodies := []certBody{a, b}
 	limit := oldExactBase(w.step.VelocityResidual)
 	for _, point := range pair.manifold.Points {
-		p, ok := oldNewCertPoint(0, 0, 1, point, bodies, new(big.Rat))
+		p, ok := oldNewCertPoint(0, 1, point, bodies, new(big.Rat))
 		if !ok || magnitude(oldPreNormalSpeed(p, bodies)).Cmp(limit) > 0 {
 			return false
 		}
@@ -905,7 +984,7 @@ func oldBodyWitnessTorque(slot int, points []certPoint, impulses []ivec) *big.Ra
 	return torque
 }
 
-func oldNewCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
+func oldNewCertPoint(a, b int, point decad.ContactPoint, bodies []certBody,
 	restitution *big.Rat) (certPoint, bool) {
 	normalBound, angle := oldExactBase(point.Normal.Bound), oldExactBase(point.NormalAngle)
 	boundA, boundB := oldExactBase(point.OnA.Bound), oldExactBase(point.OnB.Bound)
@@ -918,9 +997,9 @@ func oldNewCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody
 	if !okN || !okA || !okB {
 		return certPoint{}, false
 	}
-	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution,
+	p := certPoint{a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution,
 		ballA: boundA, ballB: boundB}
-	p.rA, p.rB = zeroIVec(), zeroIVec()
+	p.rA, p.rB = oldZeroIVec(), oldZeroIVec()
 	if bodies[a].dynamic || bodies[a].kinematic {
 		p.rA = oldSubIVec(onA, bodies[a].center)
 	}

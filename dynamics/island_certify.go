@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -19,46 +18,6 @@ import (
 // float64 values denote. The certificate never inverts an interval tensor.
 
 type ivec = [3]proof.RatInterval
-
-// certBody is one island participant read as exact intervals. A Fixed
-// participant has zero velocity and no mass reading; a kinematic one moves
-// with its driver's exact velocity field (driverMotion) before and after the
-// event.
-type certBody struct {
-	index     int
-	dynamic   bool
-	kinematic bool
-	mass      proof.RatInterval
-	inertia   [3][3]proof.RatInterval
-	rotation  [3][3]*big.Rat // pose basis, rotation[row][column]
-	// defect widens every world inertia component by 3·d·(2+d)·m, with d the
-	// entrywise absolute sum of RᵀR − I and m the local tensor's largest
-	// magnitude (§8.1's orthonormality-defect bound).
-	defect       *big.Rat
-	inertiaLower *big.Rat // certified lower eigenvalue, rotation invariant
-	rowCeiling   *big.Rat
-	center       ivec
-	centerL1     *big.Rat // upper bound on |center|_1
-	pose         r3.Transform
-	v, w         [3]*big.Rat // pre-solve
-	vPost, wPost [3]*big.Rat // published
-}
-
-// certPoint is one manifold point of an island pair. Its lever intervals run
-// from each dynamic body's world mass center to that body's witness.
-type certPoint struct {
-	pair        int // index into island.pairs
-	a, b        int // island body slots
-	normal      ivec
-	onA, onB    ivec
-	rA, rB      ivec
-	ballA       *big.Rat // the witness ball radius on A (OnA.Bound)
-	ballB       *big.Rat // the witness ball radius on B (OnB.Bound)
-	lambda      *big.Rat
-	tangent     [3]*big.Rat // published world tangent impulse on B; zero without friction
-	mu          *big.Rat    // the pair's lower friction coefficient μ_lo
-	restitution *big.Rat
-}
 
 // islandGate names one row of §6.3's certificate table.
 type islandGate int
@@ -191,40 +150,6 @@ func pointIVec(x [3]*big.Rat) ivec {
 	return out
 }
 
-// ballIVec encloses every point within radius of v in each coordinate.
-func ballIVec(v r3.Vec, radius *big.Rat) (ivec, bool) {
-	center, ok := ratVec(v)
-	if !ok || radius == nil || radius.Sign() < 0 {
-		return ivec{}, false
-	}
-	var out ivec
-	for axis := range out {
-		out[axis] = proof.OwnedInterval(proof.SubRat(new(big.Rat), center[axis], radius),
-			proof.AddRat(new(big.Rat), center[axis], radius))
-	}
-	return out, true
-}
-
-func addIVec(a, b ivec) ivec {
-	var out ivec
-	for axis := range out {
-		out[axis] = proof.AddInterval(a[axis], b[axis])
-	}
-	return out
-}
-
-func subIVec(a, b ivec) ivec {
-	var out ivec
-	for axis := range out {
-		out[axis] = proof.SubInterval(a[axis], b[axis])
-	}
-	return out
-}
-
-func zeroIVec() ivec {
-	return pointIVec([3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)})
-}
-
 // magnitude is the largest absolute value an interval admits.
 func magnitude(iv proof.RatInterval) *big.Rat {
 	lo, hi := absRat(new(big.Rat).Set(iv.Lo)), absRat(new(big.Rat).Set(iv.Hi))
@@ -232,175 +157,6 @@ func magnitude(iv proof.RatInterval) *big.Rat {
 		return lo
 	}
 	return hi
-}
-
-// newCertBody reads one island participant at its event pose. A kinematic
-// participant reads its driver's exact velocity field from drive: v about
-// the world origin, which is its center, and the angular part w, both
-// unchanged by the event.
-func (w *World) newCertBody(index int, entry BodyState, post BodyState,
-	drive map[int]driverMotion) (certBody, bool) {
-	body, ok := w.certMotion(index, entry, drive)
-	if !ok || !body.dynamic {
-		return body, ok
-	}
-	exact := w.bodies[index].exact
-	body.mass = exact.interval
-	body.inertia = exact.tensor
-	basis := body.pose.Basis()
-	for column, axis := range [3]r3.Vec{basis.EX, basis.EY, basis.EZ} {
-		values, _ := ratVec(axis) // certMotion read the basis as finite
-		for row := range 3 {
-			body.rotation[row][column] = values[row]
-		}
-	}
-	d := new(big.Rat)
-	for i := range 3 {
-		for j := range 3 {
-			entry := new(big.Rat)
-			for k := range 3 {
-				proof.AddRat(entry, entry, proof.MulRat(new(big.Rat), body.rotation[k][i], body.rotation[k][j]))
-			}
-			if i == j {
-				proof.SubRat(entry, entry, big.NewRat(1, 1))
-			}
-			proof.AddRat(d, d, absRat(entry))
-		}
-	}
-	body.defect = proof.MulRat(new(big.Rat), big.NewRat(3, 1), d)
-	proof.MulRat(body.defect, body.defect, proof.AddRat(new(big.Rat), big.NewRat(2, 1), d))
-	proof.MulRat(body.defect, body.defect, exact.largest)
-	body.inertiaLower = exact.floor
-	body.rowCeiling = exact.rowCeiling
-	body.centerL1 = new(big.Rat)
-	for axis := range 3 {
-		proof.AddRat(body.centerL1, body.centerL1, magnitude(body.center[axis]))
-	}
-	body.vPost, ok = quantityRats(post.LinearVelocity)
-	if !ok {
-		return certBody{}, false
-	}
-	body.wPost, ok = quantityRats(post.AngularVelocity)
-	return body, ok
-}
-
-// certMotion reads the part of an island participant that its pre-solve
-// relative velocity needs: its role, its pre-solve velocities (the post
-// ones set equal to them), and the center its levers run from. It fails
-// exactly when newCertBody fails on the same entry and an unchanged post
-// velocity: a dynamic body needs an exact mass reading with a positive mass
-// interval, inertia intervals with a positive certified floor and a row
-// ceiling, a finite pose basis, a mass center reading and exact velocities.
-// Everything newCertBody adds to it derives from those.
-func (w *World) certMotion(index int, entry BodyState, drive map[int]driverMotion) (certBody, bool) {
-	body := certBody{index: index, dynamic: w.bodies[index].definition.Role == Dynamic, pose: entry.Pose}
-	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
-	body.v, body.w, body.vPost, body.wPost = zero, zero, zero, zero
-	if motion, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
-		body.kinematic = true
-		body.v, body.vPost, body.w, body.wPost = motion.linear, motion.linear, motion.angular, motion.angular
-		body.center = zeroIVec()
-	}
-	if !body.dynamic {
-		return body, true
-	}
-	exact := w.bodies[index].exact
-	if exact.mass == nil || exact.bound == nil || exact.bound.Sign() < 0 || exact.interval.Lo.Sign() <= 0 ||
-		!exact.tensorOK || exact.floor == nil || exact.floor.Sign() <= 0 || exact.rowCeiling == nil {
-		return certBody{}, false
-	}
-	basis := entry.Pose.Basis()
-	if !finite(basis.EX.X, basis.EX.Y, basis.EX.Z, basis.EY.X, basis.EY.Y, basis.EY.Z,
-		basis.EZ.X, basis.EZ.Y, basis.EZ.Z) {
-		return certBody{}, false
-	}
-	center, centerError, ok := worldCenterReading(entry.Pose, exact)
-	if !ok {
-		return certBody{}, false
-	}
-	for axis := range 3 {
-		body.center[axis] = proof.OwnedInterval(proof.SubRat(new(big.Rat), center[axis], centerError[axis]),
-			proof.AddRat(new(big.Rat), center[axis], centerError[axis]))
-	}
-	var valid [2]bool
-	body.v, valid[0] = quantityRats(entry.LinearVelocity)
-	body.w, valid[1] = quantityRats(entry.AngularVelocity)
-	if !valid[0] || !valid[1] {
-		return certBody{}, false
-	}
-	body.vPost, body.wPost = body.v, body.w
-	return body, true
-}
-
-// pointVelocity encloses v + ω×r for a dynamic body slot (r from its mass
-// center) and for a kinematic one (r from the world origin, its driver's
-// field); a Fixed body, whose v is zero, stands still. With ω exactly zero
-// the cross product is exactly zero and the enclosure is v itself.
-func pointVelocity(body certBody, v, omega [3]*big.Rat, lever ivec) ivec {
-	if (!body.dynamic && !body.kinematic) || zeroRats(omega) {
-		return pointIVec(v)
-	}
-	return addIVec(pointIVec(v), proof.CrossInterval3(pointIVec(omega), lever))
-}
-
-// newCertPoint reads one manifold point. The normal ball is the published
-// normal bound plus its angle; each witness ball is its own bound.
-func newCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
-	restitution *big.Rat) (certPoint, bool) {
-	normalBound, angle := exactBase(point.Normal.Bound), exactBase(point.NormalAngle)
-	boundA, boundB := exactBase(point.OnA.Bound), exactBase(point.OnB.Bound)
-	if normalBound == nil || angle == nil || boundA == nil || boundB == nil {
-		return certPoint{}, false
-	}
-	normal, okN := ballIVec(point.Normal.Value, proof.AddRat(new(big.Rat), normalBound, angle))
-	onA, okA := ballIVec(point.OnA.Value, boundA)
-	onB, okB := ballIVec(point.OnB.Value, boundB)
-	if !okN || !okA || !okB {
-		return certPoint{}, false
-	}
-	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution,
-		ballA: boundA, ballB: boundB}
-	p.rA, p.rB = zeroIVec(), zeroIVec()
-	if bodies[a].dynamic || bodies[a].kinematic {
-		p.rA = subIVec(onA, bodies[a].center)
-	}
-	if bodies[b].dynamic || bodies[b].kinematic {
-		p.rB = subIVec(onB, bodies[b].center)
-	}
-	return p, true
-}
-
-// preNormalSpeed encloses the pre-solve relative normal speed at a point.
-func preNormalSpeed(p certPoint, bodies []certBody) proof.RatInterval {
-	relative := subIVec(pointVelocity(bodies[p.b], bodies[p.b].v, bodies[p.b].w, p.rB),
-		pointVelocity(bodies[p.a], bodies[p.a].v, bodies[p.a].w, p.rA))
-	return proof.DotInterval3(relative, p.normal)
-}
-
-// sharedBody is a certBody written over the certificate's SharedDenom
-// (internal/proof/shared_interval.go). Only a dynamic body carries its mass,
-// inertia, pose and energy readings, and only a dynamic or kinematic one its
-// center.
-type sharedBody struct {
-	index                                      int
-	dynamic, kinematic                         bool
-	mass                                       proof.SInterval
-	inertia                                    [3][3]proof.SInterval
-	rotation                                   [3][3]proof.SRat
-	defect, inertiaLower, rowCeiling, centerL1 proof.SRat
-	center                                     proof.SIVec3
-	v, w, vPost, wPost                         [3]proof.SRat
-	// spinUpper is spinEnergyChange's reading, valid when spinOK.
-	spinUpper proof.SRat
-	spinOK    bool
-}
-
-// sharedPoint is a certPoint written over the certificate's SharedDenom.
-type sharedPoint struct {
-	a, b                                  int
-	normal, onA, onB, rA, rB              proof.SIVec3
-	ballA, ballB, lambda, mu, restitution proof.SRat
-	tangent                               [3]proof.SRat
 }
 
 // islandRun is one certificate's evaluation over a SharedDenom: the island's
@@ -422,72 +178,15 @@ type islandRun struct {
 	spinTorque, spinFloor proof.SRat
 }
 
-// certifyIsland runs §6.3's rows over one island.
-func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCertificate {
-	return w.readIsland(bodies, points).certify()
-}
-
-// readIsland reads every input of an island's certificate over one
-// SharedDenom before any row runs: a denominator the first reading cannot
-// write over D widens D, and the inputs are read again.
-func (w *World) readIsland(bodies []certBody, points []certPoint) *islandRun {
-	s := proof.NewSharedDenom(nil)
-	for {
-		run := &islandRun{s: s}
-		w.readShared(run, bodies, points)
-		next, widen := s.Widen()
-		if !widen {
-			return run
-		}
-		s = next
+// certifyIsland reads an island's certificate inputs and runs §6.3's rows
+// over them. A participant or a point that does not read as exact intervals
+// fails the island before any row runs.
+func (w *World) certifyIsland(in certInput) (islandCertificate, *islandFailure) {
+	run, failure := w.readIsland(in)
+	if failure != nil {
+		return islandCertificate{}, failure
 	}
-}
-
-// readShared writes the island's bodies, points and gate limits over the
-// run's SharedDenom.
-func (w *World) readShared(run *islandRun, bodies []certBody, points []certPoint) {
-	s := run.s
-	run.impulseLimit, run.velocityLimit = s.Lift(exactBase(w.step.ImpulseResidual)), s.Lift(exactBase(w.step.VelocityResidual))
-	run.angularLimit, run.impactSpeed = s.Lift(exactBase(w.step.AngularVelocityResidual)), s.Lift(exactBase(w.step.ImpactSpeed))
-	out := make([]sharedBody, len(bodies))
-	for slot := range bodies {
-		body, read := &bodies[slot], &out[slot]
-		read.index, read.dynamic, read.kinematic = body.index, body.dynamic, body.kinematic
-		read.v, read.w = liftRats(s, body.v), liftRats(s, body.w)
-		read.vPost, read.wPost = liftRats(s, body.vPost), liftRats(s, body.wPost)
-		if body.dynamic || body.kinematic {
-			read.center = s.LiftIVec3(body.center)
-		}
-		if !body.dynamic {
-			continue
-		}
-		read.mass = s.LiftInterval(body.mass)
-		for i := range 3 {
-			read.inertia[i] = s.LiftIVec3(body.inertia[i])
-			read.rotation[i] = liftRats(s, body.rotation[i])
-		}
-		read.defect, read.inertiaLower = s.Lift(body.defect), s.Lift(body.inertiaLower)
-		read.rowCeiling, read.centerL1 = s.Lift(body.rowCeiling), s.Lift(body.centerL1)
-		spinUpper, ok := spinEnergyChange(&w.bodies[body.index].exact.components, body.rotation, body.w, body.wPost)
-		if ok {
-			read.spinUpper, read.spinOK = s.Lift(spinUpper), true
-		}
-	}
-	readPoints := make([]sharedPoint, len(points))
-	for k := range points {
-		p, read := &points[k], &readPoints[k]
-		read.a, read.b = p.a, p.b
-		read.normal, read.onA, read.onB = s.LiftIVec3(p.normal), s.LiftIVec3(p.onA), s.LiftIVec3(p.onB)
-		read.rA, read.rB = s.LiftIVec3(p.rA), s.LiftIVec3(p.rB)
-		read.ballA, read.ballB, read.lambda = s.Lift(p.ballA), s.Lift(p.ballB), s.Lift(p.lambda)
-		read.mu, read.restitution = s.Lift(p.mu), s.Lift(p.restitution)
-		read.tangent = liftRats(s, p.tangent)
-	}
-	run.bodies, run.points = out, readPoints
-}
-
-func liftRats(s *proof.SharedDenom, x [3]*big.Rat) [3]proof.SRat {
-	return [3]proof.SRat{s.Lift(x[0]), s.Lift(x[1]), s.Lift(x[2])}
+	return run.certify(), nil
 }
 
 // raise keeps the larger of a held maximum and a new attained value.

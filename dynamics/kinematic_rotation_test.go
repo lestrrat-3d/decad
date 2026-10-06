@@ -174,7 +174,7 @@ func TestKinematicRotatingDriverInteriorImpactReverseWorldOrder(t *testing.T) {
 //     the proposal or the certificate reads the field at the world origin,
 //     where the paddle moves at 0.5 mm/s along y only, and no impact is
 //     published.
-//   - newCertBody's angular part of the field, and the certificate's
+//   - the certificate's reading of the field's angular part (liftDriver), and its
 //     kinematic work at the contact point: the certificate refuses the
 //     proposal and no impact is published.
 //   - islandKinematicWork's field at the contact point: the work reading

@@ -669,13 +669,18 @@ it never inverts an interval tensor. The interval vocabulary is `internal/proof/
 `PointInterval`; `dynamics` imports that package directly. The two vector forms this section needs and
 that file lacks, a three-component interval dot product and cross product, are added to the same file
 (§13 PR 4) so the root package and `dynamics` share one implementation; no interval code lives in
-`dynamics`. The certificate reads its `RatInterval` inputs once into `internal/proof/shared_interval.go`'s
-`SInterval`, which writes every input over one odd denominator `D` shared by the island, as a `Dyadic`
-numerator over a power of `D`, and runs every row in it: each operation chooses the endpoints its
-`RatInterval` twin chooses, sums and products need no GCD, and a value becomes a `big.Rat` only where
-`ContactSolverReport` or a refusal publishes it. `D` is `1` unless a kinematic driver's exact velocity has
-an odd factor in its denominator; an input whose odd factor `D` lacks widens `D`, and the certificate
-reads every input again before any row runs.
+`dynamics`. The certificate runs every row in `internal/proof/shared_interval.go`'s `SInterval`, which
+writes every input over one odd denominator `D` shared by the island, as a `Dyadic` numerator over a power
+of `D`: each operation chooses the endpoints its `RatInterval` twin chooses, sums and products need no GCD,
+and a value becomes a `big.Rat` only where `ContactSolverReport` or a refusal publishes it. It reads its
+inputs straight from the held float readings into that form (`dynamics/island_certify_input.go`), with no
+`big.Rat` between: a float, and every sum and product of floats the reading forms (a mass-center ball, an
+orthonormality defect, a witness ball), is a `Dyadic` over `D^0`, the same rational under every `D`. Only
+the inputs `dynamics` holds as `big.Rat` are lifted over `D`: a kinematic driver's exact velocity, a body's
+certified inertia floor and row ceiling, and a pair's `μ_lo`. `D` is `1` unless one of
+them has an odd factor in its denominator; one whose odd factor `D` lacks widens `D`, and those inputs are
+lifted again before any row runs. The pre-solve classification of a gathered pair, which encloses its
+relative normal speed at every manifold point, reads its two participants and its points the same way.
 
 Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated into
 world axes with the pose basis read as exact rationals and widened by the basis's orthonormality defect

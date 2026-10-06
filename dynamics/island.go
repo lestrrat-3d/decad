@@ -108,21 +108,22 @@ func (w *World) manifoldWithin(manifold *decad.ContactManifold) bool {
 // pairActive reports whether any point of a gathered pair may be closing:
 // its enclosed relative normal speed reaches down to VelocityResidual or
 // below. Only a pair whose every point certainly separates by more than that
-// stays out of the solve.
+// stays out of the solve. The points read in order, so the first closing one
+// decides before any later one reads.
 func (w *World) pairActive(pair islandPair, state State, drive map[int]driverMotion) (bool, bool) {
-	a, okA := w.certMotion(pair.a, state.entries[pair.a], drive)
-	b, okB := w.certMotion(pair.b, state.entries[pair.b], drive)
-	if !okA || !okB {
+	var bodies [2]sharedBody
+	s, ok := w.readPair(&bodies, pair, state, drive)
+	if !ok {
 		return false, false
 	}
-	bodies := []certBody{a, b}
-	limit := exactBase(w.step.VelocityResidual)
-	for _, point := range pair.manifold.Points {
-		p, ok := newCertPoint(0, 0, 1, point, bodies, new(big.Rat))
-		if !ok {
+	run := islandRun{s: s}
+	run.velocityLimit, _ = sharedBase(s, w.step.VelocityResidual)
+	var point sharedPoint
+	for k := range pair.manifold.Points {
+		if !readPoint(s, &point, 0, 1, &pair.manifold.Points[k], bodies[:]) {
 			return false, false
 		}
-		if preNormalSpeed(p, bodies).Lo.Cmp(limit) <= 0 {
+		if s.Cmp(run.preNormalSpeed(&point, bodies[:]).Lo, run.velocityLimit) <= 0 {
 			return true, true
 		}
 	}

@@ -516,16 +516,17 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 // manifold point and requires each enclosure within VelocityResidual of
 // zero.
 func (w *World) grazeSpeedWithin(pair islandPair, state State, drive map[int]driverMotion) bool {
-	a, okA := w.certMotion(pair.a, state.entries[pair.a], drive)
-	b, okB := w.certMotion(pair.b, state.entries[pair.b], drive)
-	if !okA || !okB {
+	var bodies [2]sharedBody
+	s, ok := w.readPair(&bodies, pair, state, drive)
+	if !ok {
 		return false
 	}
-	bodies := []certBody{a, b}
-	limit := exactBase(w.step.VelocityResidual)
-	for _, point := range pair.manifold.Points {
-		p, ok := newCertPoint(0, 0, 1, point, bodies, new(big.Rat))
-		if !ok || magnitude(preNormalSpeed(p, bodies)).Cmp(limit) > 0 {
+	run := islandRun{s: s}
+	run.velocityLimit, _ = sharedBase(s, w.step.VelocityResidual)
+	var point sharedPoint
+	for k := range pair.manifold.Points {
+		if !readPoint(s, &point, 0, 1, &pair.manifold.Points[k], bodies[:]) ||
+			s.Cmp(s.Magnitude(run.preNormalSpeed(&point, bodies[:])), run.velocityLimit) > 0 {
 			return false
 		}
 	}
