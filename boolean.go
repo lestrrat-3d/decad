@@ -718,11 +718,6 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 				return nil
 			}
 			err = refusal
-		case mitredSweepPayload:
-			// docs/sweep-design.md Table DM rows DM3/DM4: the mesh publishes its
-			// occupied-volume proof, but admitting the operand waits on §16.9's
-			// increment M2, so this arm refuses ahead of operandSymDiff.
-			err = fmt.Errorf(`%w: a mitred sweep is not yet a boolean operand (docs/sweep-design.md §16.9, increment M2)`, ErrUnsupported)
 		case stitchPayload:
 			if pl.tris != nil {
 				zeroBound, zErr := stitchZeroVertexBound(proofbound.NewWorkBudget(ctx), b)

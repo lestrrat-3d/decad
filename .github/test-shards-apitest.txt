@@ -760,7 +760,6 @@
 2	0.00	TestSweepLineBuildsVerifiesAndReevaluatesPlacement
 2	0.00	TestSweepLineStagesModify
 2	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
-2	0.01	TestSweepMitredBooleanStaged
 2	0.00	TestSweepMitredOneSpanFrustum
 2	0.00	TestSweepMitredRefusals
 2	0.00	TestSweepMitredSelfCrossingNamesFaces
@@ -1287,3 +1286,6 @@
 5	0.01	TestWallConeNoWall
 5	0.01	TestWallNarrowConeTaperZero
 5	0.01	TestWallSolidCylinder
+4	17.99	TestSweepMitredTreeUnionChain
+3	1.74	TestSweepMitredTaperedBranchesCross
+0	0.03	TestSweepMitredCrossingUnion

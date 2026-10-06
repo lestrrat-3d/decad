@@ -440,21 +440,6 @@ func TestSweepMitredTessellationTolerance(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a tolerance finer than the held vertices is refused`)
 }
 
-func TestSweepMitredBooleanStaged(t *testing.T) {
-	t.Parallel()
-	s, profile := squareSweepSketch(t, 2)
-	doc := decad.New()
-	a, err := doc.Sweep(t.Context(), s, profile,
-		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 10), r3.NewVec(6, 0, 10)), decad.WithMitredJoins())
-	require.NoError(t, err)
-	b := decadtest.NewBlock(t, doc, -5, -5, 5, 5, units.Millimeters(3))
-	before := doc.Bodies()
-	_, err = decad.Union(t.Context(), a, b)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "increment M2")
-	require.Equal(t, before, doc.Bodies())
-}
-
 // TestSweepMitredRefusals covers every row of docs/sweep-design.md Table SM
 // a public call can reach, plus S12's repeated options. Each refusal leaves
 // the document's live set and next producer identity unchanged.
