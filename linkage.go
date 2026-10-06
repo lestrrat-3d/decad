@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the linkage vocabulary of docs/linkage-check-design.md §2 and
@@ -28,14 +29,15 @@ import (
 // at that pose. Building a linkage is not safe for concurrent use; a built
 // linkage is only read, by PoseAt and VerifyLinkage.
 type Linkage struct {
-	ground *Link
-	links  []*Link
-	member map[*Body]struct{} // every body already listed in a link
+	ground   *Link
+	links    []*Link
+	member   map[*Body]*Link // the link every listed body belongs to
+	contacts []DiagnosticPair
 }
 
 // NewLinkage returns a linkage holding the ground link alone.
 func NewLinkage() *Linkage {
-	l := &Linkage{member: make(map[*Body]struct{})}
+	l := &Linkage{member: make(map[*Body]*Link)}
 	l.ground = &Link{linkage: l, index: -1}
 	return l
 }
@@ -49,6 +51,48 @@ func (l *Linkage) Ground() *Link {
 // always precedes it.
 func (l *Linkage) Links() []*Link {
 	return slices.Clone(l.links)
+}
+
+// DeclareJointContact names a pair of bodies that meet at a joint by
+// construction — a pin in its bore, a slider on its rail, an arm resting on
+// its pivot's cap (docs/linkage-check-design.md §2.2). VerifyLinkage checks
+// the pair for proven overlap at every evaluated pose and publishes a gap it
+// measures, but the pair publishes no undecided or touching finding and
+// enters no interval certificate and no whole-drive reading (§5.4).
+//
+// a and b MUST belong to different links, or one to a link and the other to
+// no link. A nil body, a == b, two bodies of one link, two bodies of no link,
+// and a pair declared twice in either order are ErrDegenerate. Liveness and
+// document membership are checked by VerifyLinkage.
+func (l *Linkage) DeclareJointContact(a, b *Body) error {
+	if l == nil {
+		return fmt.Errorf(`%w: a nil linkage holds no joint`, ErrDegenerate)
+	}
+	if a == nil || b == nil {
+		return fmt.Errorf(`%w: a joint contact names two bodies`, ErrDegenerate)
+	}
+	if a == b {
+		return fmt.Errorf(`%w: a body cannot meet itself at a joint`, ErrDegenerate)
+	}
+	la, lb := l.member[a], l.member[b]
+	switch {
+	case la == nil && lb == nil:
+		return fmt.Errorf(`%w: a joint contact needs a body of a link`, ErrDegenerate)
+	case la == lb:
+		return fmt.Errorf(`%w: two bodies of one link never move apart`, ErrDegenerate)
+	}
+	for _, c := range l.contacts {
+		if (c.A == a && c.B == b) || (c.A == b && c.B == a) {
+			return fmt.Errorf(`%w: a joint contact is declared twice`, ErrDegenerate)
+		}
+	}
+	l.contacts = append(l.contacts, DiagnosticPair{A: a, B: b})
+	return nil
+}
+
+// JointContacts returns every declared joint contact, in declaration order.
+func (l *Linkage) JointContacts() []DiagnosticPair {
+	return slices.Clone(l.contacts)
 }
 
 // Link is one rigid set of bodies and the joint that attaches it to its
@@ -66,9 +110,10 @@ type Link struct {
 // zero pose). It refuses, in this order: a nil p or a Link no linkage built
 // (ErrDegenerate); an empty bodies, a nil body, or a body listed twice or
 // already listed in a link of this linkage (ErrDegenerate); a non-finite
-// center or axis component (ErrNotFinite); the zero axis (ErrDegenerate).
-// Liveness and document membership are checked by VerifyLinkage.
-func (p *Link) Revolute(center, axis r3.Vec, bodies []*Body) (*Link, error) {
+// center or axis component (ErrNotFinite); the zero axis (ErrDegenerate);
+// then the options' own refusals (WithJointLimits). Liveness and document
+// membership are checked by VerifyLinkage.
+func (p *Link) Revolute(center, axis r3.Vec, bodies []*Body, opts ...JointOption) (*Link, error) {
 	if err := p.admit(bodies); err != nil {
 		return nil, err
 	}
@@ -78,7 +123,11 @@ func (p *Link) Revolute(center, axis r3.Vec, bodies []*Body) (*Link, error) {
 	if zeroVec(axis) {
 		return nil, fmt.Errorf(`%w: a zero rotation axis names no direction`, ErrDegenerate)
 	}
-	return p.attach(RevoluteJoint{Center: center, Axis: axis}, bodies), nil
+	limits, err := resolveJointOptions(opts, units.Angle)
+	if err != nil {
+		return nil, err
+	}
+	return p.attach(RevoluteJoint{Center: center, Axis: axis, Limits: limits}, bodies), nil
 }
 
 // Prismatic attaches a new child link of p, holding bodies, on a prismatic
@@ -87,9 +136,9 @@ func (p *Link) Revolute(center, axis r3.Vec, bodies []*Body) (*Link, error) {
 // built (ErrDegenerate); an empty bodies, a nil body, or a body listed twice
 // or already listed in a link of this linkage (ErrDegenerate); a non-finite
 // dir component (ErrNotFinite); a dir r3.Vec.Normalize reports no direction
-// for (ErrDegenerate). Liveness and document membership are checked by
-// VerifyLinkage.
-func (p *Link) Prismatic(dir r3.Vec, bodies []*Body) (*Link, error) {
+// for (ErrDegenerate); then the options' own refusals (WithJointLimits).
+// Liveness and document membership are checked by VerifyLinkage.
+func (p *Link) Prismatic(dir r3.Vec, bodies []*Body, opts ...JointOption) (*Link, error) {
 	if err := p.admit(bodies); err != nil {
 		return nil, err
 	}
@@ -99,7 +148,11 @@ func (p *Link) Prismatic(dir r3.Vec, bodies []*Body) (*Link, error) {
 	if _, ok := dir.Normalize(); !ok {
 		return nil, fmt.Errorf(`%w: the prismatic direction %v names no direction`, ErrDegenerate, dir)
 	}
-	return p.attach(PrismaticJoint{Dir: dir}, bodies), nil
+	limits, err := resolveJointOptions(opts, units.Length)
+	if err != nil {
+		return nil, err
+	}
+	return p.attach(PrismaticJoint{Dir: dir, Limits: limits}, bodies), nil
 }
 
 // admit applies a child link's parent and body refusals.
@@ -130,7 +183,7 @@ func (p *Link) attach(j Joint, bodies []*Body) *Link {
 	l := p.linkage
 	child := &Link{linkage: l, parent: p, joint: j, bodies: slices.Clone(bodies), index: len(l.links)}
 	for _, b := range bodies {
-		l.member[b] = struct{}{}
+		l.member[b] = child
 	}
 	l.links = append(l.links, child)
 	return child
@@ -160,8 +213,9 @@ type Joint interface{ joint() }
 // right-handed, by the joint's value, an Angle. Center and Axis are world
 // coordinates at the zero pose.
 type RevoluteJoint struct {
-	Center r3.Vec // a position, millimetres (core §5.2)
-	Axis   r3.Vec // a direction; only its direction is used
+	Center r3.Vec       // a position, millimetres (core §5.2)
+	Axis   r3.Vec       // a direction; only its direction is used
+	Limits *JointLimits // nil when none were declared
 }
 
 func (RevoluteJoint) joint() {}
@@ -169,7 +223,106 @@ func (RevoluteJoint) joint() {}
 // PrismaticJoint slides its link along Dir by the joint's value, a Length.
 // Dir is a world direction at the zero pose; only its direction is used.
 type PrismaticJoint struct {
-	Dir r3.Vec
+	Dir    r3.Vec
+	Limits *JointLimits // nil when none were declared
+}
+
+// JointLimits is a joint's declared working range, in the joint's Kind:
+// Min < Max. A drive whose sweep reaches outside it, or that holds an
+// unlisted joint at a 0 outside it, is refused (docs/linkage-check-design.md
+// §2.4).
+type JointLimits struct {
+	Min, Max units.Value
+}
+
+// JointOption configures a joint built by Link.Revolute or Link.Prismatic.
+type JointOption interface {
+	option.Interface
+	jointOption()
+}
+
+type jointOption struct{ option.Interface }
+
+func (jointOption) jointOption() {}
+
+type identJointLimits struct{}
+
+// WithJointLimits declares the joint's working range [minimum, maximum], in
+// the joint's Kind: an Angle for a revolute, a Length for a prismatic. A
+// wrong Kind is ErrUnitKind, a non-finite bound ErrNotFinite, and
+// minimum >= maximum ErrDegenerate. Limits that exclude 0 are legal: the zero
+// pose then lies outside the working range, and only a drive that visits it is
+// refused.
+func WithJointLimits(minimum, maximum units.Value) JointOption {
+	return jointOption{option.New(identJointLimits{}, JointLimits{Min: minimum, Max: maximum})}
+}
+
+// resolveJointOptions folds a joint's options; the last WithJointLimits wins.
+func resolveJointOptions(opts []JointOption, kind units.Kind) (*JointLimits, error) {
+	var limits *JointLimits
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		v, ok := option.Get[JointLimits](o)
+		if !ok {
+			return nil, fmt.Errorf(`%w: a joint option carries no value`, ErrDegenerate)
+		}
+		if err := motionKinds(kind, v.Min, v.Max); err != nil {
+			return nil, err
+		}
+		if err := motionFinite(v.Min, v.Max); err != nil {
+			return nil, err
+		}
+		if c, ok := paramCompare(v.Min, v.Max); !ok || c >= 0 {
+			return nil, fmt.Errorf(`%w: a joint's limits need Min < Max, got %s and %s`, ErrDegenerate, v.Min, v.Max)
+		}
+		limits = &v
+	}
+	return limits, nil
+}
+
+// paramCompare orders two finite values of one Kind by the exact quantities
+// they denote (motionbound.MotionParam): −1, 0 or +1. An angle mixing whole
+// turns and radians is compared through π's enclosure; ok is false when that
+// enclosure cannot sign the difference, and every caller refuses then.
+func paramCompare(a, b units.Value) (int, bool) {
+	pa, okA := motionbound.ExactMotionParam(a)
+	pb, okB := motionbound.ExactMotionParam(b)
+	if !okA || !okB {
+		return 0, false
+	}
+	dTurn := new(big.Rat).Sub(pa.Turn, pb.Turn)
+	dBase := new(big.Rat).Sub(pa.Base, pb.Base)
+	switch {
+	case dTurn.Sign() == 0:
+		return dBase.Sign(), true
+	case dBase.Sign() == 0:
+		return dTurn.Sign(), true
+	}
+	twoPi := proofbound.TwoPiInterval()
+	lo := new(big.Rat).Mul(dTurn, twoPi.Lo)
+	hi := new(big.Rat).Mul(dTurn, twoPi.Hi)
+	if lo.Cmp(hi) > 0 {
+		lo, hi = hi, lo
+	}
+	lo.Add(lo, dBase)
+	hi.Add(hi, dBase)
+	switch {
+	case lo.Sign() > 0:
+		return 1, true
+	case hi.Sign() < 0:
+		return -1, true
+	}
+	return 0, false
+}
+
+// within reports whether v lies in the closed range the limits declare, as
+// far as paramCompare can decide; an undecided comparison is outside.
+func (lim *JointLimits) within(v units.Value) bool {
+	lo, okLo := paramCompare(lim.Min, v)
+	hi, okHi := paramCompare(v, lim.Max)
+	return okLo && okHi && lo <= 0 && hi <= 0
 }
 
 func (PrismaticJoint) joint() {}
@@ -206,8 +359,10 @@ type LinkagePose struct {
 // It refuses a nil linkage, a sweep naming no link, the ground, a link of
 // another linkage or a link twice (ErrDegenerate); a sweep From or To of the
 // wrong Kind for its joint (ErrUnitKind) or non-finite (ErrNotFinite); an at
-// that is not a finite Dimensionless value (ErrUnitKind, ErrNotFinite); and a
-// pose r3 cannot represent (ErrNotFinite). An at outside [0, 1] is legal: PoseAt
+// that is not a finite Dimensionless value (ErrUnitKind, ErrNotFinite); a
+// sweep, or an unlisted joint's 0, outside the joint's declared limits
+// (ErrDegenerate, naming the link); and a pose r3 cannot represent
+// (ErrNotFinite). An at outside [0, 1] is legal: PoseAt
 // takes no range, and a drive whose every sweep holds is legal here.
 func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	spec, err := l.resolveDrive(d)
@@ -236,18 +391,19 @@ func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 // Diagnostic.Status in it. Every At, From and To is the Dimensionless
 // fraction s.
 type LinkageReport struct {
-	Request     MotionRequest       // the validated effective settings, including defaults
-	Linkage     *Linkage            // the linkage as given
-	Drive       Drive               // the drive as stated
-	Links       []*Link             // Linkage.Links() order
-	Against     []*Body             // every static body, in Document.Bodies() order
-	Poses       []LinkagePoseResult // every pose evaluated, from s = 0 to s = 1
-	Intervals   []MotionInterval    // between adjacent Poses, in the same order
-	Collisions  []LinkCollision     // every proven collision, in traversal order then pair order
-	Clearance   *ScalarReading      // the minimum gap over the whole drive; nil unless every interval is IntervalClear
-	Assessment  Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
-	Diagnostics []Diagnostic        // interval findings, then pose findings, then the whole-drive reading's
-	Status      Status              // Unverified on a zero value; VerifyLinkage always returns a decided status
+	Request       MotionRequest       // the validated effective settings, including defaults
+	Linkage       *Linkage            // the linkage as given
+	Drive         Drive               // the drive as stated
+	Links         []*Link             // Linkage.Links() order
+	JointContacts []DiagnosticPair    // every declared joint contact, in declaration order
+	Against       []*Body             // every static body, in Document.Bodies() order
+	Poses         []LinkagePoseResult // every pose evaluated, from s = 0 to s = 1
+	Intervals     []MotionInterval    // between adjacent Poses, in the same order
+	Collisions    []LinkCollision     // every proven collision, in traversal order then pair order
+	Clearance     *ScalarReading      // the minimum gap over the whole drive; nil unless every interval is IntervalClear
+	Assessment    Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
+	Diagnostics   []Diagnostic        // interval findings, then pose findings, then the whole-drive reading's
+	Status        Status              // Unverified on a zero value; VerifyLinkage always returns a decided status
 }
 
 // Passed reports whether the report is Sound. It returns false for a nil
@@ -295,6 +451,7 @@ type linkJoint struct {
 	link     *Link
 	parent   int // the parent's position in Linkage.Links(); −1 for the ground
 	revolute bool
+	limits   *JointLimits
 	center   r3.Vec
 	axis     r3.Vec // the revolute's axis, or the prismatic's direction
 	listed   bool
@@ -311,10 +468,10 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		jt := linkJoint{link: link, parent: link.parent.index}
 		switch j := link.joint.(type) {
 		case RevoluteJoint:
-			jt.revolute, jt.center, jt.axis = true, j.Center, j.Axis
+			jt.revolute, jt.center, jt.axis, jt.limits = true, j.Center, j.Axis, j.Limits
 			jt.dom = heldAtZero(units.Angle, units.Radian)
 		case PrismaticJoint:
-			jt.axis = j.Dir
+			jt.axis, jt.limits = j.Dir, j.Limits
 			jt.dom = heldAtZero(units.Length, units.Millimeter)
 		}
 		spec.joints[k] = jt
@@ -341,6 +498,17 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		}
 		jt.listed = true
 		jt.dom = motionDomain{quantity: jt.dom.quantity, from: sw.From, to: sw.To, fromP: fromP, toP: toP}
+	}
+	// q(s) is linear in s, so a drive keeps a joint inside its limits exactly
+	// when both ends of its sweep lie inside them; an unlisted joint holds 0.
+	for k, jt := range spec.joints {
+		if jt.limits == nil {
+			continue
+		}
+		if !jt.limits.within(jt.dom.from) || !jt.limits.within(jt.dom.to) {
+			return nil, fmt.Errorf(`%w: the drive takes link %d's joint from %s to %s, outside its limits [%s, %s]`,
+				ErrDegenerate, k, jt.dom.from, jt.dom.to, jt.limits.Min, jt.limits.Max)
+		}
 	}
 	return spec, nil
 }

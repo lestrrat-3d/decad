@@ -36,10 +36,15 @@ import (
 // Suspect, never Sound. A pose publishes a LinkCollision only for an overlap
 // that survives the pose's own deviation from the ideal poses (§5.1).
 //
-// Every body of every link MUST be a live body of d. A nil context, document
-// or linkage, a linkage with no link, and a drive in which every sweep holds
-// are ErrDegenerate. Validation precedes cancellation; after it a canceled
-// context returns ctx.Err() and no report.
+// Declared joint contacts (Linkage.DeclareJointContact) are checked for
+// proven overlap at every pose but enter no interval certificate; the report
+// lists them in JointContacts.
+//
+// Every body of every link, and every body a declared joint contact names,
+// MUST be a live body of d. A nil context, document or linkage, a linkage
+// with no link, a drive in which every sweep holds, and a drive that takes a
+// joint outside its declared limits are ErrDegenerate. Validation precedes
+// cancellation; after it a canceled context returns ctx.Err() and no report.
 func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, opts ...MotionOption) (*LinkageReport, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control linkage verification`, ErrDegenerate)
@@ -60,6 +65,13 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 			}
 			if b.payload == nil {
 				return nil, fmt.Errorf(`%w: this evaluator cannot move a body it did not build`, ErrUnsupported)
+			}
+		}
+	}
+	for _, c := range l.contacts {
+		for _, b := range []*Body{c.A, c.B} {
+			if err := d.requireLive(b); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -105,6 +117,11 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames []motionbound.MotionFrame, bounds []linkBound, cfg motionConfig) *motionRun {
 	run := &motionRun{ctx: ctx, d: d, dom: fractionDomain(), cfg: cfg, cache: &bodyGeomCache{}}
 	run.drive = &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds}
+	run.declared = make(map[[2]*Body]struct{}, 2*len(spec.linkage.contacts))
+	for _, c := range spec.linkage.contacts {
+		run.declared[[2]*Body{c.A, c.B}] = struct{}{}
+		run.declared[[2]*Body{c.B, c.A}] = struct{}{}
+	}
 	groups := make([][]*Body, len(spec.joints))
 	for k, jt := range spec.joints {
 		groups[k] = jt.link.bodies
@@ -171,17 +188,18 @@ func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, spans []motionSpan) *LinkageReport {
 	c := r.conclude(poses, spans)
 	report := &LinkageReport{
-		Request:     c.request,
-		Linkage:     l,
-		Drive:       slices.Clone(drive),
-		Links:       l.Links(),
-		Against:     c.against,
-		Intervals:   c.intervals,
-		Collisions:  []LinkCollision{},
-		Clearance:   c.clearance,
-		Assessment:  c.assessment,
-		Diagnostics: c.diagnostics,
-		Status:      c.status,
+		Request:       c.request,
+		Linkage:       l,
+		Drive:         slices.Clone(drive),
+		Links:         l.Links(),
+		JointContacts: l.JointContacts(),
+		Against:       c.against,
+		Intervals:     c.intervals,
+		Collisions:    []LinkCollision{},
+		Clearance:     c.clearance,
+		Assessment:    c.assessment,
+		Diagnostics:   c.diagnostics,
+		Status:        c.status,
 	}
 	for _, pose := range poses {
 		lp := LinkagePose{At: pose.result.At, Values: make([]units.Value, len(pose.groups)), Poses: make([]r3.Transform, len(pose.groups))}

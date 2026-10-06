@@ -496,6 +496,14 @@ func TestVerifyLinkageErrors(t *testing.T) {
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	held := decad.Drive{{Link: a.shoulder, From: units.Degrees(30), To: units.Degrees(30)}}
+	contactWith := func(b *decad.Body) *decad.Linkage {
+		l := decad.NewLinkage()
+		_, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{a.upper})
+		require.NoError(t, err)
+		require.NoError(t, l.DeclareJointContact(a.upper, b))
+		return l
+	}
+	retiredContact, foreignContact := contactWith(retired), contactWith(foreign)
 	opt := func(o decad.MotionOption) []decad.MotionOption { return []decad.MotionOption{o} }
 
 	cases := []struct {
@@ -515,6 +523,8 @@ func TestVerifyLinkageErrors(t *testing.T) {
 		{name: "a link of another linkage", l: a.linkage, drive: decad.Drive{{Link: other.elbow, From: units.Degrees(0), To: units.Degrees(1)}}, want: decad.ErrDegenerate},
 		{name: "a retired link body", l: retiredLinkage, drive: slide(retiredLinkage), want: decad.ErrRetiredBody},
 		{name: "a foreign link body", l: foreignLinkage, drive: slide(foreignLinkage), want: decad.ErrForeignBody},
+		{name: "a retired declared contact", l: retiredContact, drive: decad.Drive{{Link: retiredContact.Links()[0], From: units.Degrees(0), To: units.Degrees(1)}}, want: decad.ErrRetiredBody},
+		{name: "a foreign declared contact", l: foreignContact, drive: decad.Drive{{Link: foreignContact.Links()[0], From: units.Degrees(0), To: units.Degrees(1)}}, want: decad.ErrForeignBody},
 		{name: "a wrong-kind sweep", l: a.linkage, drive: decad.Drive{{Link: a.shoulder, From: units.Millimeters(0), To: units.Millimeters(1)}}, want: decad.ErrUnitKind},
 		{name: "a wrong-kind resolution", l: a.linkage, drive: a.drive(), opts: opt(decad.WithResolution(units.Degrees(1))), want: decad.ErrUnitKind},
 		{name: "a wrong-kind tolerance", l: a.linkage, drive: a.drive(), opts: opt(decad.WithMotionTolerance(units.Millimeters(1))), want: decad.ErrUnitKind},
@@ -650,4 +660,118 @@ func TestVerifyLinkageSweptBoxCoversAncestorTravel(t *testing.T) {
 	}
 	require.Equal(t, units.Scalar(0), report.Collisions[0].At)
 	require.Equal(t, units.Scalar(1), report.Collisions[1].At)
+}
+
+// TestLinkageJointLimits covers WithJointLimits (docs/linkage-check-design.md
+// §2.1, §2.4): a joint reports its limits, the constructor refuses
+// ill-formed ones, and a drive that takes a joint outside them — at either
+// end of its sweep, or holding an unlisted joint at a 0 the limits exclude —
+// is refused by PoseAt and VerifyLinkage alike, with the link named.
+// Comparisons are exact, across units: a radian sweep end is judged against
+// degree limits through π's enclosure.
+func TestLinkageJointLimits(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	arm := boxBody(t, doc, 0, -14, 48, 14, 10)
+	block := boxBodyAtZ(t, doc, 60, -5, 70, 5, 0, 10)
+	l := decad.NewLinkage()
+	swing, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{arm}, decad.WithJointLimits(units.Degrees(-90), units.Degrees(90)))
+	require.NoError(t, err)
+	slide, err := swing.Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{block}, decad.WithJointLimits(units.Millimeters(5), units.Millimeters(20)))
+	require.NoError(t, err)
+	require.Equal(t, &decad.JointLimits{Min: units.Degrees(-90), Max: units.Degrees(90)}, swing.Joint().(decad.RevoluteJoint).Limits)
+	require.Equal(t, &decad.JointLimits{Min: units.Millimeters(5), Max: units.Millimeters(20)}, slide.Joint().(decad.PrismaticJoint).Limits)
+	inside := decad.JointSweep{Link: slide, From: units.Millimeters(5), To: units.Centimeters(2)}
+
+	t.Run("a drive inside every limit poses", func(t *testing.T) {
+		t.Parallel()
+		pose, err := l.PoseAt(decad.Drive{{Link: swing, From: units.Degrees(-90), To: units.Radians(1.5)}, inside}, units.Scalar(1))
+		require.NoError(t, err)
+		require.Equal(t, units.Radians(1.5), pose.Values[0])
+	})
+	refused := []struct {
+		name  string
+		drive decad.Drive
+		link  string
+	}{
+		{"a sweep end past Max", decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Radians(1.6)}, inside}, "link 0"},
+		{"a sweep end below Min", decad.Drive{{Link: swing, From: units.Degrees(-91), To: units.Degrees(0)}, inside}, "link 0"},
+		{"an unlisted joint held at an excluded 0", decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(10)}}, "link 1"},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := l.PoseAt(tc.drive, units.Scalar(0))
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.ErrorContains(t, err, tc.link)
+			report, err := doc.VerifyLinkage(t.Context(), l, tc.drive)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Nil(t, report)
+		})
+	}
+	free := boxBody(t, doc, 200, 0, 210, 10, 10)
+	constructor := []struct {
+		name string
+		opt  decad.JointOption
+		want error
+	}{
+		{"a length on a revolute", decad.WithJointLimits(units.Millimeters(0), units.Degrees(1)), decad.ErrUnitKind},
+		{"a non-finite bound", decad.WithJointLimits(units.Degrees(0), units.Degrees(math.Inf(1))), decad.ErrNotFinite},
+		{"Min equal to Max", decad.WithJointLimits(units.Degrees(180), units.Degrees(180)), decad.ErrDegenerate},
+		{"Min above Max across units", decad.WithJointLimits(units.Degrees(180), units.Radians(3)), decad.ErrDegenerate},
+		{"a nil option", nil, decad.ErrDegenerate},
+	}
+	for _, tc := range constructor {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			other := decad.NewLinkage()
+			link, err := other.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{free}, tc.opt)
+			require.ErrorIs(t, err, tc.want)
+			require.Nil(t, link)
+			require.Empty(t, other.Links())
+		})
+	}
+}
+
+// TestLinkageDeclareJointContactRefusals is one subtest per refusal of
+// docs/linkage-check-design.md §2.2, and the declaration order JointContacts
+// keeps.
+func TestLinkageDeclareJointContactRefusals(t *testing.T) {
+	t.Parallel()
+	a := buildFoldingArm(t, true)
+	pin := boxBody(t, a.doc, 100, 0, 104, 4, 4)
+	_, err := a.elbow.Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{pin})
+	require.NoError(t, err)
+	free := boxBody(t, a.doc, 300, 0, 310, 10, 10)
+	require.NoError(t, a.linkage.DeclareJointContact(a.upper, a.forearm))
+	require.NoError(t, a.linkage.DeclareJointContact(a.wall, a.upper))
+	require.NoError(t, a.linkage.DeclareJointContact(a.forearm, pin))
+	require.Equal(t, []decad.DiagnosticPair{{A: a.upper, B: a.forearm}, {A: a.wall, B: a.upper}, {A: a.forearm, B: pin}}, a.linkage.JointContacts())
+	var nilLinkage *decad.Linkage
+	cases := []struct {
+		name string
+		l    *decad.Linkage
+		x, y *decad.Body
+	}{
+		{"nil linkage", nilLinkage, a.upper, a.forearm},
+		{"a nil body", a.linkage, a.upper, nil},
+		{"a body with itself", a.linkage, a.upper, a.upper},
+		{"two bodies of no link", a.linkage, a.wall, free},
+		{"declared twice", a.linkage, a.upper, a.forearm},
+		{"declared twice in the other order", a.linkage, a.forearm, a.upper},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.ErrorIs(t, tc.l.DeclareJointContact(tc.x, tc.y), decad.ErrDegenerate)
+			require.Len(t, a.linkage.JointContacts(), 3)
+		})
+	}
+	t.Run("two bodies of one link", func(t *testing.T) {
+		doc := decad.New()
+		one, two := boxBody(t, doc, 0, 0, 10, 10, 10), boxBody(t, doc, 20, 0, 30, 10, 10)
+		l := decad.NewLinkage()
+		_, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{one, two})
+		require.NoError(t, err)
+		require.ErrorIs(t, l.DeclareJointContact(one, two), decad.ErrDegenerate)
+	})
 }
