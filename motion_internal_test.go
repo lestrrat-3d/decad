@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -137,10 +139,10 @@ func TestMotionParamSinCosEnclosesTheAngle(t *testing.T) {
 		p, ok := exactMotionParam(tc.at)
 		require.True(t, ok)
 		sin, cos := paramSinCos(p)
-		require.Zero(t, sin.lo.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
-		require.Zero(t, sin.hi.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
-		require.Zero(t, cos.lo.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
-		require.Zero(t, cos.hi.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
+		require.Zero(t, sin.Lo.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
+		require.Zero(t, sin.Hi.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
+		require.Zero(t, cos.Lo.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
+		require.Zero(t, cos.Hi.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
 	}
 
 	fromDeg, ok := exactMotionParam(units.Degrees(10))
@@ -163,12 +165,12 @@ func TestMotionParamSinCosEnclosesTheAngle(t *testing.T) {
 	for _, tc := range approx {
 		sin, cos := paramSinCos(tc.p)
 		for _, iv := range []struct {
-			got  ratInterval
+			got  proofbound.RatInterval
 			want float64
 		}{{sin, math.Sin(tc.angle)}, {cos, math.Cos(tc.angle)}} {
-			width := new(big.Rat).Sub(iv.got.hi, iv.got.lo)
+			width := new(big.Rat).Sub(iv.got.Hi, iv.got.Lo)
 			require.Equal(t, 1, tiny.Cmp(width), `%s: enclosure width`, tc.name)
-			mid, _ := new(big.Rat).Add(iv.got.lo, iv.got.hi).Float64()
+			mid, _ := new(big.Rat).Add(iv.got.Lo, iv.got.Hi).Float64()
 			require.InDelta(t, iv.want, mid/2, 4e-16, tc.name)
 		}
 	}
@@ -324,7 +326,7 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	require.NoError(t, err)
 	eta, linear := poseDeviation(composed, placement, run.spec.frame.at(run.spec.toP), run.movers[0].r0)
 	require.Greater(t, eta, 0.0)
-	allowance := sweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
+	allowance := proofbound.SweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
 	res, err := clearancePair(t.Context(), transient, block, false)
 	require.NoError(t, err)
 	volume, outcome, err := measuredInterference(t.Context(), transient, block, res)
@@ -356,7 +358,7 @@ func TestMotionCollisionTransferWidensTheBound(t *testing.T) {
 	require.Equal(t, units.Degrees(45), collision.At)
 	require.Equal(t, volume.Value, collision.Volume.Value)
 	require.Equal(t, Approximate, collision.Volume.Exactness)
-	require.Equal(t, absSumUpper(volume.Bound.Base(), allowance), collision.Volume.Bound.Base())
+	require.Equal(t, proofbound.AbsSumUpper(volume.Bound.Base(), allowance), collision.Volume.Bound.Base())
 	require.Greater(t, collision.Volume.Bound.Base(), volume.Bound.Base())
 	require.Greater(t, collision.Volume.Value.Base()-collision.Volume.Bound.Base(), 0.0)
 	end := report.Poses[len(report.Poses)-1]
@@ -529,8 +531,8 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 // area).
 func TestMotionPathAreaUpperStretchBase(t *testing.T) {
 	t.Parallel()
-	stretch := absSumUpper(1, divUpper(1e-3, 0.5))
-	require.Equal(t, productUpper(100, productUpper(stretch, stretch)), pathAreaUpper(100, 1e-3, 0.5, 1),
+	stretch := proofbound.AbsSumUpper(1, proofbound.DivUpper(1e-3, 0.5))
+	require.Equal(t, proofbound.ProductUpper(100, proofbound.ProductUpper(stretch, stretch)), pathAreaUpper(100, 1e-3, 0.5, 1),
 		`the base 1 is the Revolute and Prismatic allowance unchanged`)
 	require.Equal(t, 100.0, pathAreaUpper(100, 0, 0.5, 1))
 
@@ -615,8 +617,8 @@ func TestMotionBetweenFrameReachesTo(t *testing.T) {
 				image := ivVecAdd(end.rot.apply(pointVec(x)), end.shift)
 				want := tc.m.To.Apply(corner)
 				for i, w := range []float64{want.X, want.Y, want.Z} {
-					lo, _ := image[i].lo.Float64()
-					hi, _ := image[i].hi.Float64()
+					lo, _ := image[i].Lo.Float64()
+					hi, _ := image[i].Hi.Float64()
 					require.InDelta(t, w, lo, tol, `corner %v axis %d`, corner, i)
 					require.InDelta(t, w, hi, tol, `corner %v axis %d`, corner, i)
 				}

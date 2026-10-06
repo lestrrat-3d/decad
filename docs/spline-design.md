@@ -537,7 +537,7 @@ representable there.
 The exact rational is the only result. NEVER fall back to quadrature on a Tier A
 kind — a float sum of Gauss nodes has no exact value to round from, so it can
 never reach the zero bound a representable rational does, and `exactnessOf`'s
-zero bound is a CLAIM that the value is exactly representable (`bounds.go`).
+zero bound is a CLAIM that the value is exactly representable (`internal/proofbound/bounds.go`).
 
 The held float MUST be the exact rational rounded once, never a separate float
 evaluation of the same formula: a second evaluation would add its own error to a

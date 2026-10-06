@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -44,7 +46,7 @@ import (
 //     a facet, or rounds a near-axis ring onto the axis (§12).
 
 // maxFacetsPerMesh, maxFacetWorkPerCall are docs/tessellation-design.md §3's
-// two per-call facet ceilings, beside budget.go's maxFacetPairTestsPerCall.
+// two per-call facet ceilings, beside internal/proofbound/budget.go's proofbound.MaxFacetPairTestsPerCall.
 // Every one of them is checked with unsigned integer arithmetic BEFORE the
 // allocation or audit it governs, so an over-budget request refuses rather
 // than building the thing that would have blown the budget.
@@ -72,7 +74,7 @@ const maxRevolveRefinements = 6
 // (docs/tessellation-design.md §9).
 type revMeridian struct {
 	z, rho     float64
-	zIv, rhoIv ratInterval
+	zIv, rhoIv proofbound.RatInterval
 	onAxis     bool
 	ring       []int
 	// walk is the index, into its loop's resolved walks, of the walk whose
@@ -291,13 +293,13 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 	// A chorded meridian station is stored as the float nearest its own
 	// certified enclosure, so its gap is bounded before any count exists; a
 	// junction's gap is already count-independent and is measured outright.
-	stationPrior := productUpper(revolveStationRoundUlps, ulpOf(math.Max(math.Max(zAbsMax, rhoMax), 1)))
+	stationPrior := proofbound.ProductUpper(revolveStationRoundUlps, proofbound.UlpOf(math.Max(math.Max(zAbsMax, rhoMax), 1)))
 	samplePrior := math.Max(junctionGap, stationPrior)
-	if isNonFinite(coordMax) || isNonFinite(samplePrior) {
+	if proofbound.IsNonFinite(coordMax) || proofbound.IsNonFinite(samplePrior) {
 		return nil, fmt.Errorf(`%w: this revolve's coordinate envelope is not finite, so no chord budget can be reserved against it`, ErrUnsupported)
 	}
 	deltaCPrior := revolveConstructionPrior(basis, samplePrior, rhoMax, coordMax)
-	deltaRPrior := rigidRoundAllow(absSumUpper(coordMax, deltaCPrior), vecMaxAbs(rp.xform.Translation()))
+	deltaRPrior := proofbound.RigidRoundAllow(proofbound.AbsSumUpper(coordMax, deltaCPrior), proofbound.VecMaxAbs(rp.xform.Translation()))
 	return &revolveResolution{
 		basis: basis, ideal: ideal, loops: loops, resolved: resolved, junctions: junctions,
 		rhoMax: rhoMax, coordMax: coordMax, samplePrior: samplePrior,
@@ -365,7 +367,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64,
 	// §8 steps 4-5: the angular sequence takes what the meridian left.
 	sweep := math.Abs(rp.phi1 - rp.phi0)
 	angular := downRound(available - deltaM)
-	if angular <= 0 || isNonFinite(angular) {
+	if angular <= 0 || proofbound.IsNonFinite(angular) {
 		return nil, fmt.Errorf(`%w: this revolve's meridian chording spends the whole chord budget its tolerance left, so no angular count remains; retry with a coarser tolerance`, ErrUnsupported)
 	}
 	angularWalk := segmentWalk{radius: rhoMax, th1: sweep, closed: rp.full}
@@ -460,7 +462,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// Rings. Every sample's vertices are evaluated UNPLACED, measured against
 	// the ideal enclosure, then placed once and measured again — §8's two
 	// stages, apart.
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	deltaC, deltaR := 0.0, 0.0
 	// radials[l] is the ideal radial direction at angular index l, the term
 	// of revolveIdealPoint's sum that every ring shares; the pole's covers
@@ -469,7 +471,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	for l := range angular.samples {
 		radials[l] = ivVec3Add(ivVec3Mul(p.ideal.e0, angular.cosIv[l]), ivVec3Mul(p.ideal.e1, angular.sinIv[l]))
 	}
-	poleIv := interval(minusOneRat(), oneRat())
+	poleIv := proofbound.Interval(minusOneRat(), oneRat())
 	poleRadial := ivVec3Add(ivVec3Mul(p.ideal.e0, poleIv), ivVec3Mul(p.ideal.e1, poleIv))
 	for li := range loopMesh {
 		for si := range loopMesh[li].samples {
@@ -488,13 +490,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			var prevLocal, prevPlaced r3.Vec
 			var firstLocal, firstPlaced r3.Vec
 			for l := range count {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				cos, sin := angular.cos[l], angular.sin[l]
 				local := p.basis.a3.Add(p.basis.w.Scale(s.z)).Add(p.basis.e0.Scale(cos).Add(p.basis.e1.Scale(sin)).Scale(s.rho))
 				placed := rp.xform.Apply(local)
-				if !finiteVec(local) || !finiteVec(placed) {
+				if !proofbound.FiniteVec(local) || !proofbound.FiniteVec(placed) {
 					return nil, fmt.Errorf(`%w: a revolve mesh vertex is not finite`, ErrUnsupported)
 				}
 				radial := radials[l]
@@ -504,13 +506,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 					radial = poleRadial
 				}
 				ideal := ivVec3Add(p.ideal.a3, ivVec3Add(axial, ivVec3Mul(radial, s.rhoIv)))
-				gapC := radius3D(max(
-					intervalFloatError(ideal[0], local.X),
-					intervalFloatError(ideal[1], local.Y),
-					intervalFloatError(ideal[2], local.Z),
+				gapC := proofbound.Radius3D(max(
+					proofbound.IntervalFloatError(ideal[0], local.X),
+					proofbound.IntervalFloatError(ideal[1], local.Y),
+					proofbound.IntervalFloatError(ideal[2], local.Z),
 				))
 				gapR := exactRigidPointRound(rp.xform, local, placed)
-				if isNonFinite(gapC) || isNonFinite(gapR) {
+				if proofbound.IsNonFinite(gapC) || proofbound.IsNonFinite(gapR) {
 					return nil, fmt.Errorf(`%w: a revolve mesh vertex states no bound on the rounding its own construction committed`, ErrUnsupported)
 				}
 				deltaC = math.Max(deltaC, gapC)
@@ -534,8 +536,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if deltaC > p.deltaCPrior || deltaR > p.deltaRPrior {
 		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, ErrUnsupported)
 	}
-	deltaR = math.Min(deltaR, rigidRoundAllow(absSumUpper(p.coordMax, deltaC), vecMaxAbs(rp.xform.Translation())))
-	coord := absSumUpper(deltaC, deltaR)
+	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.xform.Translation())))
+	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is
@@ -564,7 +566,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		lm := loopMesh[li]
 		n := len(lm.samples)
 		for j := range lm.samples {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			lo, hi := lm.samples[j], lm.samples[(j+1)%n]
@@ -591,7 +593,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			if err != nil {
 				return nil, err
 			}
-			cellSlack = absSumUpper(cellSlack, productUpper(float64(p.nPhi), slack))
+			cellSlack = proofbound.AbsSumUpper(cellSlack, proofbound.ProductUpper(float64(p.nPhi), slack))
 			if !sheet {
 				cellVolume.Add(cellVolume, revolveCellSweptVolume(lo, hi, angularHomotopy))
 			}
@@ -632,7 +634,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, err
 		}
 		if proofs {
-			cellSlack = absSumUpper(cellSlack, productUpper(2, revolveCapSegmentArea(p)))
+			cellSlack = proofbound.AbsSumUpper(cellSlack, proofbound.ProductUpper(2, revolveCapSegmentArea(p)))
 		}
 	}
 	if len(mesh.triangles) == 0 {
@@ -673,7 +675,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// renderer and the boolean both need the check, and it is linear in the
 	// facets. It also builds the audit triangles the facet-pair audit below
 	// consumes, so the two share one pass and one work budget.
-	auditBudget := newWorkBudget(ctx)
+	auditBudget := proofbound.NewWorkBudget(ctx)
 	auditTris, err := requireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coord)
 	if err != nil {
 		return nil, err
@@ -697,7 +699,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.full {
 		anchor := rp.xform.Apply(p.basis.a3)
-		if !finiteVec(anchor) || tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
 			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 		}
 	}
@@ -739,8 +741,8 @@ func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revMeridian, float64
 		if !ok {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
 		}
-		gap := math.Max(intervalFloatError(zIv, w.startU), intervalFloatError(rhoIv, w.startV))
-		if isNonFinite(gap) {
+		gap := math.Max(proofbound.IntervalFloatError(zIv, w.startU), proofbound.IntervalFloatError(rhoIv, w.startV))
+		if proofbound.IsNonFinite(gap) {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no bound on its own axis coordinates`, ErrUnsupported)
 		}
 		worst = math.Max(worst, gap)
@@ -915,7 +917,7 @@ func axisIncidenceReason(bothAxis bool) string {
 func revolveExtents(loops []revolveWalks) (float64, float64, error) {
 	rhoMax, zAbsMax := 0.0, 0.0
 	see := func(z, rho float64) error {
-		if isNonFinite(rho) || isNonFinite(z) {
+		if proofbound.IsNonFinite(rho) || proofbound.IsNonFinite(z) {
 			return fmt.Errorf(`%w: a revolve meridian sample is not finite`, ErrUnsupported)
 		}
 		rhoMax = math.Max(rhoMax, rho)
@@ -979,7 +981,7 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 			if !w.isCircular() {
 				continue
 			}
-			total = absSumUpper(total, chordSegmentArea(w.radius, math.Abs(w.th1-w.th0), p.counts[li][k]))
+			total = proofbound.AbsSumUpper(total, chordSegmentArea(w.radius, math.Abs(w.th1-w.th0), p.counts[li][k]))
 		}
 	}
 	return total
@@ -1002,7 +1004,7 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 // there.
 //
 // audit says whether this build will run the facet-contact audit. §3 charges
-// maxFacetPairTestsPerCall only when it will: that ceiling bounds the work one
+// proofbound.MaxFacetPairTestsPerCall only when it will: that ceiling bounds the work one
 // all-pairs audit may do, and a build that runs no pair predicate does none of
 // that work. The facet and facet-work ceilings bound ALLOCATION instead and are
 // charged either way. This is why the tolerance a VerifyAll revolve refuses for
@@ -1055,13 +1057,13 @@ func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bo
 		// audit: §3 requires the conservative F·(F−1)/2 to be checked before
 		// the audit starts, and checking it before the ALLOCATION is strictly
 		// earlier.
-		pairs, ok := wallChoose2(total)
+		pairs, ok := proofbound.WallChoose2(total)
 		if !ok {
 			return errRevolveFacetCeiling
 		}
 		charged, ok = addChecked(work.pairs, pairs)
-		if !ok || charged > maxFacetPairTestsPerCall {
-			return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, ErrUnsupported, total, maxFacetPairTestsPerCall)
+		if !ok || charged > proofbound.MaxFacetPairTestsPerCall {
+			return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, ErrUnsupported, total, proofbound.MaxFacetPairTestsPerCall)
 		}
 	}
 	work.facets, work.pairs = spent, charged
@@ -1223,7 +1225,7 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 			if !ok0 || !ok1 {
 				return 0, errRevolveArcCellSlack
 			}
-			return revolveArcCellSlack(*lo.arc, angular.step, [2]ratInterval{lowHalf, highHalf}, coord)
+			return revolveArcCellSlack(*lo.arc, angular.step, [2]proofbound.RatInterval{lowHalf, highHalf}, coord)
 		}
 	}
 
@@ -1231,7 +1233,7 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 	if dz == nil || drho == nil {
 		return 0, errRevolveCellSlack
 	}
-	lenSq := intervalAdd(intervalSquare(pointInterval(dz)), intervalSquare(pointInterval(drho)))
+	lenSq := proofbound.IntervalAdd(intervalSquare(proofbound.PointInterval(dz)), intervalSquare(proofbound.PointInterval(drho)))
 	meridian, ok := intervalSqrt(lenSq)
 	if !ok {
 		return 0, errRevolveCellSlack
@@ -1255,7 +1257,7 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 		if !ok0 || !ok1 {
 			return 0, errRevolveCellSlack
 		}
-		return revolveCellAreaSlack(lo.rho, hi.rho, meridian, angular.step, [2]ratInterval{lowHalf, highHalf}), nil
+		return revolveCellAreaSlack(lo.rho, hi.rho, meridian, angular.step, [2]proofbound.RatInterval{lowHalf, highHalf}), nil
 	}
 }
 
@@ -1281,8 +1283,8 @@ var errRevolveCellSlack = fmt.Errorf(`%w: a revolve cell states no enclosure of 
 // cellVolume stays whatever buildRevolveMesh left it at, the zero *big.Rat
 // it never added a term to, and is never read.
 func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
-	coord := absSumUpper(deltaC, deltaR)
-	if upRound(absSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
+	coord := proofbound.AbsSumUpper(deltaC, deltaR)
+	if proofbound.UpRound(proofbound.AbsSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
 		// The chording component must stay inside the requested tolerance, and
 		// revolveBudget already reserved both coordinate stages out of it
 		// before the counts were chosen. Reaching here would mean the
@@ -1291,19 +1293,19 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, ErrUnsupported)
 	}
 	for f, ext := range faceCells {
-		bound := upRound(absSumUpper(ext.sag, chordSagitta(ext.rho, p.sweep, p.nPhi), coord))
-		if isNonFinite(bound) {
+		bound := proofbound.UpRound(proofbound.AbsSumUpper(ext.sag, chordSagitta(ext.rho, p.sweep, p.nPhi), coord))
+		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
 		}
 		m.setFaceBound(f, bound)
 	}
-	capBound := upRound(absSumUpper(p.deltaM, coord))
+	capBound := proofbound.UpRound(proofbound.AbsSumUpper(p.deltaM, coord))
 	for _, f := range m.source {
 		if _, ok := m.faceBound[f]; !ok {
 			m.setFaceBound(f, capBound)
 		}
 	}
-	if isNonFinite(m.bound) {
+	if proofbound.IsNonFinite(m.bound) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite displacement bound`, ErrUnsupported)
 	}
 	if p.verify < VerifyAll {
@@ -1313,8 +1315,8 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		// would otherwise leave behind).
 		return nil
 	}
-	slack := absSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
-	if isNonFinite(slack) {
+	slack := proofbound.AbsSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
+	if proofbound.IsNonFinite(slack) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
 	m.areaSlack = slack
@@ -1342,7 +1344,7 @@ func meshCoordAreaAllow(m *Mesh, delta float64) float64 {
 	total := 0.0
 	for _, tri := range m.triangles {
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		total = absSumUpper(total, perturbedTriangleAreaAllow(a, b, c, delta))
+		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return total
 }

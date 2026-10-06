@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -102,22 +104,22 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments
 		return volumeMoments{}, err
 	}
 
-	volume := intervalMul(angular.width, r1)
-	if volume.lo.Sign() <= 0 {
+	volume := proofbound.IntervalMul(angular.width, r1)
+	if volume.Lo.Sign() <= 0 {
 		return volumeMoments{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
 	}
-	first := [3]ratInterval{
-		intervalMul(angular.width, zr),
-		intervalMul(angular.cos, r2),
-		intervalMul(angular.sin, r2),
+	first := [3]proofbound.RatInterval{
+		proofbound.IntervalMul(angular.width, zr),
+		proofbound.IntervalMul(angular.cos, r2),
+		proofbound.IntervalMul(angular.sin, r2),
 	}
-	var second [3][3]ratInterval
-	second[0][0] = intervalMul(angular.width, z2r)
-	second[0][1] = intervalMul(angular.cos, zr2)
-	second[0][2] = intervalMul(angular.sin, zr2)
-	second[1][1] = intervalMul(angular.cos2, r3m)
-	second[1][2] = intervalMul(angular.sinCos, r3m)
-	second[2][2] = intervalMul(angular.sin2, r3m)
+	var second [3][3]proofbound.RatInterval
+	second[0][0] = proofbound.IntervalMul(angular.width, z2r)
+	second[0][1] = proofbound.IntervalMul(angular.cos, zr2)
+	second[0][2] = proofbound.IntervalMul(angular.sin, zr2)
+	second[1][1] = proofbound.IntervalMul(angular.cos2, r3m)
+	second[1][2] = proofbound.IntervalMul(angular.sinCos, r3m)
+	second[2][2] = proofbound.IntervalMul(angular.sin2, r3m)
 	second[1][0], second[2][0], second[2][1] = second[0][1], second[0][2], second[1][2]
 	return volumeMoments{volume: volume, first: first, second: second}, nil
 }
@@ -138,7 +140,7 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 		if o == nil || ui == nil || vi == nil {
 			return [3]*big.Rat{}, fmt.Errorf("%w: revolve frame is not finite", ErrNotFinite)
 		}
-		out[i] = ratAdd(o, ratMul(aU, ui), ratMul(aV, vi))
+		out[i] = proofbound.RatAdd(o, proofbound.RatMul(aU, ui), proofbound.RatMul(aV, vi))
 	}
 	return out, nil
 }
@@ -153,31 +155,31 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 // bounded world centroid of the same solid.
 func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMoments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
 	volume, first, second := m.volume, m.first, m.second
-	if volume.lo.Sign() <= 0 {
+	if volume.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 	}
-	var centroidal [3][3]ratInterval
+	var centroidal [3][3]proofbound.RatInterval
 	for i := range 3 {
 		for j := i; j < 3; j++ {
-			shift, ok := intervalQuo(intervalMul(first[i], first[j]), volume)
+			shift, ok := intervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
 			if !ok {
 				return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 			}
-			centroidal[i][j] = intervalSub(second[i][j], shift)
+			centroidal[i][j] = proofbound.IntervalSub(second[i][j], shift)
 			centroidal[j][i] = centroidal[i][j]
 		}
 	}
 
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
-	trace := intervalAdd(intervalAdd(centroidal[0][0], centroidal[1][1]), centroidal[2][2])
-	var local [3][3]ratInterval
+	trace := proofbound.IntervalAdd(proofbound.IntervalAdd(centroidal[0][0], centroidal[1][1]), centroidal[2][2])
+	var local [3][3]proofbound.RatInterval
 	for i := range 3 {
 		for j := range 3 {
 			if i == j {
-				local[i][j] = intervalScale(intervalSub(trace, centroidal[i][i]), rho)
+				local[i][j] = proofbound.IntervalScale(proofbound.IntervalSub(trace, centroidal[i][i]), rho)
 				continue
 			}
-			local[i][j] = intervalScale(centroidal[i][j], new(big.Rat).Neg(rho))
+			local[i][j] = proofbound.IntervalScale(centroidal[i][j], new(big.Rat).Neg(rho))
 		}
 	}
 	world := rotateTensorInterval(rotation, local)
@@ -196,7 +198,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 
 	result := MassProperties{Center: center}
 	var err error
-	result.Mass, err = massIntervalReading(intervalScale(volume, rho), units.Kilogram)
+	result.Mass, err = massIntervalReading(proofbound.IntervalScale(volume, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -204,7 +206,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 		return MassProperties{}, fmt.Errorf("%w: mass reading is not positive", ErrUnsupported)
 	}
 	entries := []struct {
-		iv      ratInterval
+		iv      proofbound.RatInterval
 		reading *Measurement
 	}{
 		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
@@ -231,12 +233,12 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 
 // publishedTensor is the interval tensor the six readings state: each held
 // value widened by its own bound, both read as exact rationals.
-func publishedTensor(reading InertiaReading) [3][3]ratInterval {
-	entry := func(m Measurement) ratInterval {
-		return intervalWiden(pointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
+func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
+	entry := func(m Measurement) proofbound.RatInterval {
+		return intervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
 	}
 	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
-	return [3][3]ratInterval{
+	return [3][3]proofbound.RatInterval{
 		{entry(reading.XX), xy, xz},
 		{xy, entry(reading.YY), yz},
 		{xz, yz, entry(reading.ZZ)},
@@ -266,12 +268,12 @@ func revolveRotation(rp revolvePayload) ([3][3]*big.Rat, error) {
 	}
 	var w, e0, e1 [3]*big.Rat
 	for i := range 3 {
-		w[i] = ratAdd(ratMul(u[i], dU), ratMul(v[i], dV))
-		e0[i] = new(big.Rat).Sub(ratMul(v[i], dU), ratMul(u[i], dV))
+		w[i] = proofbound.RatAdd(proofbound.RatMul(u[i], dU), proofbound.RatMul(v[i], dV))
+		e0[i] = new(big.Rat).Sub(proofbound.RatMul(v[i], dU), proofbound.RatMul(u[i], dV))
 	}
 	for i := range 3 {
 		j, k := (i+1)%3, (i+2)%3
-		e1[i] = new(big.Rat).Sub(ratMul(w[j], e0[k]), ratMul(w[k], e0[j]))
+		e1[i] = new(big.Rat).Sub(proofbound.RatMul(w[j], e0[k]), proofbound.RatMul(w[k], e0[j]))
 	}
 	placement := [3][3]*big.Rat{ex, ey, ez}
 	var out [3][3]*big.Rat
@@ -279,7 +281,7 @@ func revolveRotation(rp revolvePayload) ([3][3]*big.Rat, error) {
 		for k, local := range [3][3]*big.Rat{w, e0, e1} {
 			sum := new(big.Rat)
 			for l := range 3 {
-				sum.Add(sum, ratMul(placement[l][i], local[l]))
+				sum.Add(sum, proofbound.RatMul(placement[l][i], local[l]))
 			}
 			out[i][k] = sum
 		}
@@ -292,17 +294,17 @@ func revolveRotation(rp revolvePayload) ([3][3]*big.Rat, error) {
 // two are the region's exact rationals where it has them and otherwise its
 // published values widened by their proven bounds, as prismMassProperties
 // reads them; the third order is the engine's own enclosure.
-func revolveSectionMoments(ig regionIntegrals) ([4][4]ratInterval, error) {
-	var m [4][4]ratInterval
-	slots := [6]*ratInterval{&m[0][0], &m[1][0], &m[0][1], &m[2][0], &m[1][1], &m[0][2]}
+func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, error) {
+	var m [4][4]proofbound.RatInterval
+	slots := [6]*proofbound.RatInterval{&m[0][0], &m[1][0], &m[0][1], &m[2][0], &m[1][1], &m[0][2]}
 	if !ig.exactDead && ig.exact.complete() {
 		for i, value := range ig.exact.fields() {
-			*slots[i] = pointInterval(value)
+			*slots[i] = proofbound.PointInterval(value)
 		}
 	} else {
-		values := [6]boundedScalar{
-			{ig.area, ig.areaBound}, {ig.mu, ig.muBound}, {ig.mv, ig.mvBound},
-			{ig.muu, ig.muuBound}, {ig.muv, ig.muvBound}, {ig.mvv, ig.mvvBound},
+		values := [6]proofbound.BoundedScalar{
+			{Value: ig.area, Bound: ig.areaBound}, {Value: ig.mu, Bound: ig.muBound}, {Value: ig.mv, Bound: ig.mvBound},
+			{Value: ig.muu, Bound: ig.muuBound}, {Value: ig.muv, Bound: ig.muvBound}, {Value: ig.mvv, Bound: ig.mvvBound},
 		}
 		for i, value := range values {
 			iv, err := massMomentInterval(value)
@@ -325,12 +327,12 @@ func revolveSectionMoments(ig regionIntegrals) ([4][4]ratInterval, error) {
 // z = dU·(u − aU) + dV·(v − aV) and ρ = dU·(v − aV) − dV·(u − aU). Each is an
 // affine form in (u, v) with exact rational coefficients, so z^a·ρ^b expands
 // into a polynomial whose coefficients weight the plane-origin moments.
-func revolveAxisMoments(m [4][4]ratInterval, ax axisFrame) func(a, b int) ratInterval {
+func revolveAxisMoments(m [4][4]proofbound.RatInterval, ax axisFrame) func(a, b int) proofbound.RatInterval {
 	aU, aV := proofarith.FloatRat(ax.aU), proofarith.FloatRat(ax.aV)
 	dU, dV := proofarith.FloatRat(ax.dU), proofarith.FloatRat(ax.dV)
-	zForm := [3]*big.Rat{dU, dV, new(big.Rat).Neg(ratAdd(ratMul(dU, aU), ratMul(dV, aV)))}
-	rhoForm := [3]*big.Rat{new(big.Rat).Neg(dV), dU, new(big.Rat).Sub(ratMul(dV, aU), ratMul(dU, aV))}
-	return func(a, b int) ratInterval {
+	zForm := [3]*big.Rat{dU, dV, new(big.Rat).Neg(proofbound.RatAdd(proofbound.RatMul(dU, aU), proofbound.RatMul(dV, aV)))}
+	rhoForm := [3]*big.Rat{new(big.Rat).Neg(dV), dU, new(big.Rat).Sub(proofbound.RatMul(dV, aU), proofbound.RatMul(dU, aV))}
+	return func(a, b int) proofbound.RatInterval {
 		var poly [4][4]*big.Rat
 		poly[0][0] = big.NewRat(1, 1)
 		for k := range a + b {
@@ -351,18 +353,18 @@ func revolveAxisMoments(m [4][4]ratInterval, ax axisFrame) func(a, b int) ratInt
 					if c == nil {
 						continue
 					}
-					add(i+1, j, ratMul(form[0], c))
-					add(i, j+1, ratMul(form[1], c))
-					add(i, j, ratMul(form[2], c))
+					add(i+1, j, proofbound.RatMul(form[0], c))
+					add(i, j+1, proofbound.RatMul(form[1], c))
+					add(i, j, proofbound.RatMul(form[2], c))
 				}
 			}
 			poly = next
 		}
-		sum := pointInterval(new(big.Rat))
+		sum := proofbound.PointInterval(new(big.Rat))
 		for i := range 4 {
 			for j := range 4 - i {
 				if poly[i][j] != nil && poly[i][j].Sign() != 0 {
-					sum = intervalAdd(sum, intervalScale(m[i][j], poly[i][j]))
+					sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m[i][j], poly[i][j]))
 				}
 			}
 		}
@@ -373,8 +375,8 @@ func revolveAxisMoments(m [4][4]ratInterval, ax axisFrame) func(a, b int) ratInt
 // revolveMassAngular is the sweep's angular factors over [φ0, φ1]: its width
 // ∫dφ, cos ∫cos φ, sin ∫sin φ, and the three quadratic factors.
 type revolveMassAngular struct {
-	width, cos, sin    ratInterval
-	cos2, sinCos, sin2 ratInterval
+	width, cos, sin    proofbound.RatInterval
+	cos2, sinCos, sin2 proofbound.RatInterval
 }
 
 // revolveAngularFactors encloses the factors from the payload's own sweep
@@ -398,15 +400,15 @@ func revolveAngularFactors(rp revolvePayload) (revolveMassAngular, bool) {
 		return revolveMassAngular{}, false
 	}
 	half := big.NewRat(1, 2)
-	halfWidth := intervalScale(width, half)
-	doubleAngle := intervalScale(intervalSub(intervalMul(s1, c1), intervalMul(s0, c0)), half)
+	halfWidth := proofbound.IntervalScale(width, half)
+	doubleAngle := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, c1), proofbound.IntervalMul(s0, c0)), half)
 	return revolveMassAngular{
 		width:  width,
-		cos:    intervalSub(s1, s0),
-		sin:    intervalSub(c0, c1),
-		cos2:   intervalAdd(halfWidth, doubleAngle),
-		sin2:   intervalSub(halfWidth, doubleAngle),
-		sinCos: intervalScale(intervalSub(intervalMul(s1, s1), intervalMul(s0, s0)), half),
+		cos:    proofbound.IntervalSub(s1, s0),
+		sin:    proofbound.IntervalSub(c0, c1),
+		cos2:   proofbound.IntervalAdd(halfWidth, doubleAngle),
+		sin2:   proofbound.IntervalSub(halfWidth, doubleAngle),
+		sinCos: proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, s1), proofbound.IntervalMul(s0, s0)), half),
 	}, true
 }
 
@@ -416,23 +418,23 @@ func revolveAngularFactors(rp revolvePayload) (revolveMassAngular, bool) {
 // The minors are polynomials in the entries, so their interval evaluation
 // encloses the minor of every member; a positive lower end then holds for
 // every member at once.
-func intervalPositiveDefinite(m [3][3]ratInterval) bool {
-	if m[0][0].lo.Sign() <= 0 {
+func intervalPositiveDefinite(m [3][3]proofbound.RatInterval) bool {
+	if m[0][0].Lo.Sign() <= 0 {
 		return false
 	}
-	minor2 := intervalSub(intervalMul(m[0][0], m[1][1]), intervalMul(m[0][1], m[1][0]))
-	if minor2.lo.Sign() <= 0 {
+	minor2 := proofbound.IntervalSub(proofbound.IntervalMul(m[0][0], m[1][1]), proofbound.IntervalMul(m[0][1], m[1][0]))
+	if minor2.Lo.Sign() <= 0 {
 		return false
 	}
-	cofactor := func(a, b, c, d ratInterval) ratInterval {
-		return intervalSub(intervalMul(a, b), intervalMul(c, d))
+	cofactor := func(a, b, c, d proofbound.RatInterval) proofbound.RatInterval {
+		return proofbound.IntervalSub(proofbound.IntervalMul(a, b), proofbound.IntervalMul(c, d))
 	}
-	det := intervalAdd(
-		intervalSub(
-			intervalMul(m[0][0], cofactor(m[1][1], m[2][2], m[1][2], m[2][1])),
-			intervalMul(m[0][1], cofactor(m[1][0], m[2][2], m[1][2], m[2][0])),
+	det := proofbound.IntervalAdd(
+		proofbound.IntervalSub(
+			proofbound.IntervalMul(m[0][0], cofactor(m[1][1], m[2][2], m[1][2], m[2][1])),
+			proofbound.IntervalMul(m[0][1], cofactor(m[1][0], m[2][2], m[1][2], m[2][0])),
 		),
-		intervalMul(m[0][2], cofactor(m[1][0], m[2][1], m[1][1], m[2][0])),
+		proofbound.IntervalMul(m[0][2], cofactor(m[1][0], m[2][1], m[1][1], m[2][0])),
 	)
-	return det.lo.Sign() > 0
+	return det.Lo.Sign() > 0
 }

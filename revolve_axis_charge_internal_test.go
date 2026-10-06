@@ -3,12 +3,14 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/stretchr/testify/require"
 )
 
 // This file pins docs/surface-intersection-design.md §7.1's one operational
 // requirement on the fold: an ABSENT charge must leave every field the fold
-// touches exactly as the uncharged walk left it. absSumUpper up-rounds every
+// touches exactly as the uncharged walk left it. proofbound.AbsSumUpper up-rounds every
 // term it folds, so a fold taken unconditionally would widen an untrimmed
 // revolve's every published bound by an ulp per term — and an untrimmed
 // revolve has to read exactly as it read before the fold existed.
@@ -37,7 +39,7 @@ func TestAxisFrameWalkChargeIsAbsentAtZero(t *testing.T) {
 	ax := chargeProbeAxis()
 	w := chargeProbeWalk(t)
 
-	charged := ax.walkCharged(w, walkEndBound{}, walkEndBound{})
+	charged := ax.walkCharged(w, proofbound.WalkEndBound{}, proofbound.WalkEndBound{})
 
 	// Every field the fold touches keeps the value the UNCHARGED derivation
 	// gives it, with no up-round nudge of its own. The right-hand sides are
@@ -50,7 +52,7 @@ func TestAxisFrameWalkChargeIsAbsentAtZero(t *testing.T) {
 	require.Equal(t, w.lengthUpper, charged.lengthUpper)
 	require.Equal(t, w.coordUpper, charged.coordUpper)
 	require.Equal(t, ax.radialUpper(w.coordUpper), charged.axisRadiusUpper)
-	require.Equal(t, productUpper(w.lengthUpper, ax.radialUpper(w.coordUpper)), charged.axisMomentUpper)
+	require.Equal(t, proofbound.ProductUpper(w.lengthUpper, ax.radialUpper(w.coordUpper)), charged.axisMomentUpper)
 
 	// axisFrame.walk IS walkCharged with both charges absent, so an ordinary
 	// revolve reaches exactly the values above and no other.
@@ -65,15 +67,15 @@ func TestAxisFrameWalkChargeWidensEveryFieldItTouches(t *testing.T) {
 	// A charge at the START end alone: the design's own per-endpoint rule, so
 	// the other end's radial bound must not move while the shared length and
 	// envelope figures must.
-	charge := walkEndBound{u: 1e-9, v: 1e-9}
-	startOnly := ax.walkCharged(w, charge, walkEndBound{})
+	charge := proofbound.WalkEndBound{U: 1e-9, V: 1e-9}
+	startOnly := ax.walkCharged(w, charge, proofbound.WalkEndBound{})
 	require.Greater(t, startOnly.startVBound, plain.startVBound)
 	require.Equal(t, plain.endVBound, startOnly.endVBound, "a charge at one end never moves the other end's own radial bound")
 	require.Greater(t, startOnly.lengthBound, plain.lengthBound)
 	require.Greater(t, startOnly.lengthUpper, plain.lengthUpper)
 	require.Greater(t, startOnly.coordUpper, plain.coordUpper)
 	// The envelope has to widen with it, or walkAxisMoment's own math.Min
-	// against conservativeValueError(value, axisMomentUpper) would clamp the
+	// against proofbound.ConservativeValueError(value, axisMomentUpper) would clamp the
 	// charge straight back off (§7.1).
 	require.Greater(t, startOnly.axisMomentUpper, plain.axisMomentUpper)
 	require.Greater(t, startOnly.axisRadiusUpper, plain.axisRadiusUpper)

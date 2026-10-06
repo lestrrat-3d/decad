@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 	"math"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file decides WHICH segment of the from-profile a loft walls to which
@@ -252,19 +254,19 @@ func loftCircularSegmentCCW(seg CurveSegment) (bool, bool) {
 }
 
 // loftPlanesCoincide decides S5 over exact rationals on the recorded U/V/
-// Origin floats (boolean_exact.go's xptOf/xcross/xdot, the take-the-floats-
+// Origin floats (boolean_exact.go's proofbound.XptOf/xcross/xdot, the take-the-floats-
 // exactly discipline): the two planes coincide when their normals (U×V) are
 // exactly parallel and the displacement between their origins lies in that
 // plane. A tolerance here would refuse a legitimately thin loft, and the
 // existence claim S5 makes is a structural zero volume, not a small one.
 func loftPlanesCoincide(a, b PlaneRecord) bool {
-	na := xcross(xptOf(a.U), xptOf(a.V))
-	nb := xcross(xptOf(b.U), xptOf(b.V))
+	na := xcross(proofbound.XptOf(a.U), proofbound.XptOf(a.V))
+	nb := xcross(proofbound.XptOf(b.U), proofbound.XptOf(b.V))
 	cr := xcross(na, nb)
-	if cr.x.Sign() != 0 || cr.y.Sign() != 0 || cr.z.Sign() != 0 {
+	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return false
 	}
-	d := xsub(xptOf(b.Origin), xptOf(a.Origin))
+	d := proofbound.Xsub(proofbound.XptOf(b.Origin), proofbound.XptOf(a.Origin))
 	return xdotSign(na, d) == 0
 }
 
@@ -285,7 +287,7 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // same s: the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta
 // row, stated for the ideal chord joining the two points the record denotes.
 // The consumer composes it with the build's own delta through
-// chordCellDeltaUpper to reach the bound bounds.go's cellChordCurveAreaUpper
+// chordCellDeltaUpper to reach the bound internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
 // obligates for the chord the build actually DREW (computeLoftChordedAllow,
 // loft_moments.go); this field is never that composed bound on its own, and
 // never the SET-distance sagitta sectionDelta names either.
@@ -311,7 +313,7 @@ type loftLoopPair struct {
 	matchedDelta         []float64
 	// tangentEnergyV/tangentEnergyW are parallel to v/w too:
 	// perCellTangentEnergy's own per-side reading for that station's OUTGOING
-	// cell, bounds.go's cellChordCurveAreaAllow tangentEnergyUpper obligation.
+	// cell, internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow tangentEnergyUpper obligation.
 	// +Inf where the arm that placed the stations proves no such bound, which
 	// costs that helper its sharper arm and never its soundness.
 	tangentEnergyV, tangentEnergyW []float64
@@ -337,9 +339,9 @@ type loftLoopPair struct {
 // rule) — a DIFFERENT quantity, never interchangeable with sectionDelta. It
 // is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta row
 // and never that whole row: evalLoft composes it with the build's own delta
-// (chordCellDeltaUpper) before any caller of bounds.go's
-// chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow/
-// chordedBoundarySeamAllow (each of whose own doc comments name a
+// (chordCellDeltaUpper) before any caller of internal/proofbound/bounds.go's
+// proofbound.ChordedBoundaryVolumeAllow/proofbound.ChordedBoundaryMomentAllow/
+// proofbound.ChordedBoundarySeamAllow (each of whose own doc comments name a
 // parameter-matched matchedDelta obligation, never "the sagitta alone")
 // reads it. The two accumulators here coincide bit-for-bit
 // on a circular-only build (every circular cell's own departure equals

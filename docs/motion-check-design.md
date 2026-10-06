@@ -333,8 +333,8 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   with `|p| ≤ R0`, the two images differ by at most `η_k = ‖B(C_k) − B(T*(s_k))·B(P0)‖_F · R0 + |t(C_k) −
   (B(T*(s_k))·t(P0) + t*(s_k))|`, every term a rational interval: the float matrices are read exactly off
   `Basis()`/`Translation()`, the ideal rotation's sine and cosine are enclosed by `turnSinCosInterval`
-  (`moments_trig.go`) for a degree-stated angle, which is an exact rational turn, and through
-  `rat_interval.go`'s `π` enclosures for a radian-stated one; `R0` is the mover's record-coordinate radius
+  (`internal/proofbound/moments_trig.go`) for a degree-stated angle, which is an exact rational turn, and through
+  `internal/proofbound/rat_interval.go`'s `π` enclosures for a radian-stated one; `R0` is the mover's record-coordinate radius
   read off its payload envelope (`prism_payload.go`'s profile envelopes and the axial extent for a prism, the
   revolve's generator envelope and radius for a revolve). `η_k` is then subtracted from `lo_k` exactly as
   `clearanceDeltaWiden` subtracts a delta, by `downRound`, and `exact` collapses to false whenever it is
@@ -349,7 +349,7 @@ rationals of its float entries: `T*(s) = S*(s) ∘ From`, where `S*(s)` rotates 
 line through `c = Point` along `n = Axis/|Axis|` and slides `s·d` along `n`. In `idealPose`'s form
 `x ↦ rot·x + shift` that is `rot = R(s·θ, n)·B(From)` and `shift = R(s·θ, n)·(t(From) − c) + c + s·d·n`,
 every entry a rational interval: `R`'s sine and cosine come from `radianSinCos` — `s·θ` is a radian value,
-never a turn fraction, so it is enclosed through `rat_interval.go`'s π enclosures exactly as a radian-stated
+never a turn fraction, so it is enclosed through `internal/proofbound/rat_interval.go`'s π enclosures exactly as a radian-stated
 `Revolute` angle is — and `n` carries `unitScaleInterval`'s enclosure of `1/|Axis|`, a point for an
 axis-aligned `Axis`. `S*(0)` is the identity exactly (the enclosure of `sin 0, cos 0` is the point pair
 `(0, 1)`), so `T*(0)` is `From` itself and the `s = 0` pose of an unplaced mover under `From = Identity()`
@@ -377,7 +377,7 @@ overlap proof runs on the float pose, so a proven overlap there is, by itself, a
 differs from the ideal one by up to `η_k`; publishing it as a collision on the stated path would be a false
 falsification whenever the true overlap is thinner than `η_k`. The transfer uses the volume: moving every
 boundary point of the mover by at most `η_k` changes the overlap volume by at most the volume its boundary
-sweeps, `sweptVolumeAllow(η_k, A)` (`bounds.go`), where `A` bounds the mover's surface area at EVERY point of
+sweeps, `sweptVolumeAllow(η_k, A)` (`internal/proofbound/bounds.go`), where `A` bounds the mover's surface area at EVERY point of
 the straight path between the float pose's image and the ideal pose's, which is what that helper's contract
 asks for. Relative to the mover at rest, a point of that path is `M_t·x + c` with
 `M_t = R + (1 − t)·(B(C_k) − R·B(P0))·B(P0)⁻¹` and `R` exactly orthogonal, so `‖M_t‖₂ ≤ 1 + linear/σ` and an
@@ -430,7 +430,7 @@ a bound and the comparison it feeds. A motion parameter denotes `θ = 2π·turn 
 is the exact rational turn `deg/360` (the degree count is what the caller stated; `units.Degree`'s factor is
 a rounded `π/180` and is never used), any other angle unit is `magnitude × factor` radians read exactly, and
 a length is `base` millimetres, and a `Between` fraction is `base`, dimensionless. The span of an interval is
-`2π·|Δturn| + |Δbase|` with `π` at its upper enclosure (`rat_interval.go`), exact for a length and for a
+`2π·|Δturn| + |Δbase|` with `π` at its upper enclosure (`internal/proofbound/rat_interval.go`), exact for a length and for a
 fraction. For a `Prismatic`, every point travels exactly the span along the unit direction, so `τ(Δ)` is the
 span. For a `Revolute`, a point at distance `ρ` from the axis travels an arc of length `ρ·|Δθ|`, which
 bounds its chord, so `τ(Δθ) = ρ_max × span`, where `ρ_max` bounds the distance from the axis of every point

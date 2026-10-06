@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is docs/tessellation-design.md §13's increment T4
@@ -114,27 +116,27 @@ const revolveAngularIntegralSteps = 64
 // term is what keeps a fixed budget worth spending.
 //
 // Nothing here calls math.Sin or math.Cos, and nothing here compares against π:
-// radSinCosSpan reduces through moments_trig.go's own certified series.
-func revolveAngularHomotopyFactor(step ratInterval) (*big.Rat, error) {
+// radSinCosSpan reduces through internal/proofbound/moments_trig.go's own certified series.
+func revolveAngularHomotopyFactor(step proofbound.RatInterval) (*big.Rat, error) {
 	d := intervalAbsSpan(step)
-	if d.lo.Sign() < 0 || d.hi.Cmp(d.lo) < 0 {
+	if d.Lo.Sign() < 0 || d.Hi.Cmp(d.Lo) < 0 {
 		return nil, errRevolveAngularHomotopy
 	}
-	one := pointInterval(big.NewRat(1, 1))
+	one := proofbound.PointInterval(big.NewRat(1, 1))
 	sinD, cosD, ok := radSinCosSpan(d)
 	if !ok {
 		return nil, errRevolveAngularHomotopy
 	}
-	versD := intervalSub(one, cosD)
+	versD := proofbound.IntervalSub(one, cosD)
 
 	n := int64(revolveAngularIntegralSteps)
 	pAt := make([]*big.Rat, n+1)
 	qAt := make([]*big.Rat, n+1)
-	sinAt := make([]ratInterval, n+1)
-	cosAt := make([]ratInterval, n+1)
+	sinAt := make([]proofbound.RatInterval, n+1)
+	cosAt := make([]proofbound.RatInterval, n+1)
 	for i := int64(0); i <= n; i++ {
 		u := big.NewRat(i, n)
-		sin, cos, ok := radSinCosSpan(intervalScale(d, u))
+		sin, cos, ok := radSinCosSpan(proofbound.IntervalScale(d, u))
 		if !ok {
 			return nil, errRevolveAngularHomotopy
 		}
@@ -144,12 +146,12 @@ func revolveAngularHomotopyFactor(step ratInterval) (*big.Rat, error) {
 		u := big.NewRat(i, n)
 		co := new(big.Rat).Sub(big.NewRat(1, 1), u)
 		sinA, cosA, cosB := sinAt[i], cosAt[i], cosAt[n-i]
-		versA := intervalSub(one, cosA)
-		p := intervalMul(d, intervalAdd(
-			intervalScale(versA, co),
-			intervalScale(intervalSub(one, cosB), u),
+		versA := proofbound.IntervalSub(one, cosA)
+		p := proofbound.IntervalMul(d, proofbound.IntervalAdd(
+			proofbound.IntervalScale(versA, co),
+			proofbound.IntervalScale(proofbound.IntervalSub(one, cosB), u),
 		))
-		q := intervalSub(intervalMul(sinA, versD), intervalMul(sinD, versA))
+		q := proofbound.IntervalSub(proofbound.IntervalMul(sinA, versD), proofbound.IntervalMul(sinD, versA))
 		pAt[i], qAt[i] = intervalAbsUpper(p), intervalAbsUpper(q)
 	}
 
@@ -186,8 +188,8 @@ func revolveAngularHomotopyFactor(step ratInterval) (*big.Rat, error) {
 // for S = min(1, dφ) and V = min(2, dφ²/2). Both S bounds matter: taking S = 1
 // alone would charge dφ² where the truth is dφ³, and the allowance would stop
 // falling with the step while everything it sits beside kept falling.
-func angularHomotopyBulges(d ratInterval, n int64) (*big.Rat, *big.Rat) {
-	dh := new(big.Rat).Set(d.hi)
+func angularHomotopyBulges(d proofbound.RatInterval, n int64) (*big.Rat, *big.Rat) {
+	dh := new(big.Rat).Set(d.Hi)
 	sq := new(big.Rat).Mul(dh, dh)
 	sinB := ratMin(big.NewRat(1, 1), dh)
 	versB := ratMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
@@ -226,11 +228,11 @@ var errRevolveAngularHomotopy = fmt.Errorf(`%w: a revolve cell's angular homotop
 // Mconstruct's and Mround's business, one stage later.
 func revolveCellSweptVolume(lo, hi revMeridian, angular *big.Rat) *big.Rat {
 	third := big.NewRat(1, 3)
-	quad := intervalScale(intervalAdd(
-		intervalAdd(intervalSquare(lo.rhoIv), intervalSquare(hi.rhoIv)),
-		intervalMul(lo.rhoIv, hi.rhoIv),
+	quad := proofbound.IntervalScale(proofbound.IntervalAdd(
+		proofbound.IntervalAdd(intervalSquare(lo.rhoIv), intervalSquare(hi.rhoIv)),
+		proofbound.IntervalMul(lo.rhoIv, hi.rhoIv),
 	), third)
-	axial := intervalAbsUpper(intervalSub(hi.zIv, lo.zIv))
+	axial := intervalAbsUpper(proofbound.IntervalSub(hi.zIv, lo.zIv))
 	return new(big.Rat).Mul(new(big.Rat).Mul(axial, intervalAbsUpper(quad)), angular)
 }
 
@@ -265,13 +267,13 @@ func revolveMeridianMoment(p *revolvePlan) float64 {
 			for _, pt := range revolveWalkExtremes(w.segmentWalk) {
 				rho = math.Max(rho, pt[1])
 			}
-			total = absSumUpper(total, productUpper(area, rho))
+			total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(area, rho))
 		}
 	}
 	if total == 0 {
 		return 0
 	}
-	return productUpper(revolveSweepUpper(p), total)
+	return proofbound.ProductUpper(revolveSweepUpper(p), total)
 }
 
 // revolveSweepUpper is an upward-rounded bound on the swept angle Mmeridian
@@ -281,43 +283,43 @@ func revolveMeridianMoment(p *revolvePlan) float64 {
 // subtraction up by one ulp, which covers that subtraction's whole rounding.
 func revolveSweepUpper(p *revolvePlan) float64 {
 	if p.rp.full {
-		return ratFloatUp(new(big.Rat).Mul(big.NewRat(2, 1), piUpper))
+		return proofbound.RatFloatUp(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper))
 	}
-	return upRound(p.sweep)
+	return proofbound.UpRound(p.sweep)
 }
 
 // revolveSymDiff composes docs/tessellation-design.md §11's four stages into the
 // mesh's volSymDiff.
 //
-//	volSymDiff = upRound(Mmeridian + Σ_cells Icell + Mconstruct + Mround)
+//	volSymDiff = proofbound.UpRound(Mmeridian + Σ_cells Icell + Mconstruct + Mround)
 //
 // angular is the already-summed Σ_cells Icell, in exact rationals, so the one
 // float rounding it takes is the conversion here. The two coordinate stages are
 // swept-volume allowances in the shape §11 names: a boundary point moving at
 // speed at most delta can displace volume no faster than the area it sweeps
-// allows, and perturbedAreaUpper covers every surface on the stage's path, not
+// allows, and proofbound.PerturbedAreaUpper covers every surface on the stage's path, not
 // only its two ends. Both stages read the composed displacement as their area
 // argument because BH sits within deltaC + deltaR of the returned mesh and BC
 // within deltaR of it, so one area bound at the composed figure covers every
 // intermediate surface of both paths.
 //
 // Every leg is an absolute occupied-volume charge; none of them may cancel
-// another, which is why they compose through absSumUpper rather than a signed
+// another, which is why they compose through proofbound.AbsSumUpper rather than a signed
 // sum.
 func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
 	if angular == nil || angular.Sign() < 0 {
 		return 0, errRevolveAngularHomotopy
 	}
-	coord := absSumUpper(deltaC, deltaR)
-	area := perturbedAreaUpper(m.vertices, m.triangles, coord)
-	sym := absSumUpper(
+	coord := proofbound.AbsSumUpper(deltaC, deltaR)
+	area := proofbound.PerturbedAreaUpper(m.vertices, m.triangles, coord)
+	sym := proofbound.AbsSumUpper(
 		revolveMeridianMoment(p),
-		ratFloatUp(angular),
-		sweptVolumeAllow(deltaC, area),
-		sweptVolumeAllow(deltaR, area),
+		proofbound.RatFloatUp(angular),
+		proofbound.SweptVolumeAllow(deltaC, area),
+		proofbound.SweptVolumeAllow(deltaR, area),
 	)
-	if isNonFinite(sym) || sym < 0 {
+	if proofbound.IsNonFinite(sym) || sym < 0 {
 		return 0, fmt.Errorf(`%w: this revolve mesh states no finite bound on the volume it and the body it stands for differ by`, ErrUnsupported)
 	}
-	return upRound(sym), nil
+	return proofbound.UpRound(sym), nil
 }

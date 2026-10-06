@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/units"
 )
 
@@ -84,7 +86,7 @@ func renderAuditCoordinates(err error) error {
 // shared by every modify op (Fillet, Chamfer): its only op-specific input is the
 // per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
 // cornerBlend, so the audit itself forks nothing.
-func auditRewriteBudget(budget *workBudget, orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
+func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
 
@@ -174,7 +176,7 @@ func auditRewriteBudget(budget *workBudget, orig, rewritten ProfileRecord, loops
 // genuinely inside-out section (ErrDegenerate). The sum folds both Table S
 // shapes: a lone corner leaves one end's cutback zero, so its own cutback alone
 // must clear the walk; two corners of a short wall claim it from both ends.
-func loopOverrunBudget(budget *workBudget, cl cornerLoop, blends map[int]*cornerBlend) (int, bool, error) {
+func loopOverrunBudget(budget *proofbound.WorkBudget, cl cornerLoop, blends map[int]*cornerBlend) (int, bool, error) {
 	n := len(cl.walks)
 	for i, w := range cl.walks {
 		if err := wallBudgetStep(budget); err != nil {
@@ -214,7 +216,7 @@ func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
 	return buildSegEntriesBudget(nil, loops)
 }
 
-func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, error) {
+func buildSegEntriesBudget(budget *proofbound.WorkBudget, loops []LoopRecord) ([]segEntry, error) {
 	// One free-form counter for the whole audited section: the loops handed here
 	// are one record, and no preflight has run on them.
 	work := newFreeformWork()
@@ -240,7 +242,7 @@ func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, 
 
 // loopSignedAreaBudget is one loop's signed area (positive counter-clockwise): the
 // Green's-theorem boundary integral of its own segments.
-func loopSignedAreaBudget(budget *workBudget, loop LoopRecord) (float64, error) {
+func loopSignedAreaBudget(budget *proofbound.WorkBudget, loop LoopRecord) (float64, error) {
 	var area float64
 	for _, seg := range loop.Segments {
 		if err := wallBudgetStep(budget); err != nil {
@@ -331,7 +333,7 @@ type segEntry struct {
 // boundary case of a crossing, a body a resolving/trimmed-offset kernel could
 // build but this evaluator cannot (§1 existence test — the body exists; §4
 // Table S, S7).
-func crossingAuditBudget(budget *workBudget, segs []segEntry) error {
+func crossingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry) error {
 	touchFloor, err := contactFloorBudget(budget, segs)
 	if err != nil {
 		return err
@@ -376,7 +378,7 @@ const contactEps = 1e-9
 // a real positive gap that builds. The threshold is reject-only and SCALES with
 // the section — a fixed absolute band mis-scales, rejecting a macroscopic gap
 // on a sub-millimetre section and accepting a real pinch on a huge one.
-func contactFloorBudget(budget *workBudget, segs []segEntry) (float64, error) {
+func contactFloorBudget(budget *proofbound.WorkBudget, segs []segEntry) (float64, error) {
 	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
 	if err != nil {
 		return 0, err
@@ -393,7 +395,7 @@ func contactFloorBudget(budget *workBudget, segs []segEntry) (float64, error) {
 // point), so a line contributes its two endpoints and an arc its endpoints AND
 // every cardinal extremum (cU±R, cV±R) its own angular walk actually reaches —
 // never the endpoint box alone, which understates D.
-func sectionBBoxBudget(budget *workBudget, segs []segEntry) (minU, minV, maxU, maxV float64, ok bool, err error) {
+func sectionBBoxBudget(budget *proofbound.WorkBudget, segs []segEntry) (minU, minV, maxU, maxV float64, ok bool, err error) {
 	minU, minV = math.Inf(1), math.Inf(1)
 	maxU, maxV = math.Inf(-1), math.Inf(-1)
 	fold := func(x, y float64) {
@@ -443,7 +445,7 @@ func sectionBBoxBudget(budget *workBudget, segs []segEntry) (minU, minV, maxU, m
 // lived in, so no such body exists (§1 existence test) — an S8-family
 // ErrDegenerate, the same "modification consumed the region" verdict S8 gives an
 // inverted loop.
-func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
+func nestingAuditBudget(budget *proofbound.WorkBudget, segs []segEntry, nLoops int) error {
 	if nLoops <= 1 { // no holes: nothing to contain
 		return nil
 	}
@@ -546,7 +548,7 @@ func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 func elemOf(w segmentWalk) (surveyElem, bool) { return walkElem(w) }
 
 // loopContains is the named boundary-scan phase used by cancellation probes.
-func loopContains(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
+func loopContains(budget *proofbound.WorkBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return false, false, err
 	}
@@ -557,7 +559,7 @@ func loopContains(budget *workBudget, boundary []surveyElem, px, py, tol float64
 // of a ray, retried across the golden-angle direction sequence when a crossing
 // is ambiguous — the same walk wallKernel.contains runs. decided is false when
 // every direction is ambiguous; the answer is never guessed.
-func loopContainsBudget(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
+func loopContainsBudget(budget *proofbound.WorkBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return false, false, err
 	}

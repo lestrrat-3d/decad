@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -118,19 +120,19 @@ import (
 // torusFaceFluxAndMoment's own doc comment.
 //
 // BOUNDS. Every operation between a bound's origin and its use is charged
-// through boundedAdd/boundedSub/boundedMul/boundedQuotient — never a bare
+// through proofbound.BoundedAdd/proofbound.BoundedSub/proofbound.BoundedMul/proofbound.BoundedQuotient — never a bare
 // float composed by hand — so a mistake here shows up as a bound the
 // shown-to-fail tests can watch go red, not as a silent understatement.
 // Every term that carries π (every area- and fourth-moment-of-a-disk term,
 // every Cylinder moment term) reads it from piScalar(): Go's math.Pi is the
 // correctly rounded float64 nearest true π, so its own representation error
 // is one ulp, and every subsequent multiply charges its own rounding
-// through boundedMul on top of that — a tight bound, not
-// conservativeValueError's structural "assume no cancellation at all"
+// through proofbound.BoundedMul on top of that — a tight bound, not
+// proofbound.ConservativeValueError's structural "assume no cancellation at all"
 // fallback, which is sized for a quantity this evaluator has no other way
 // to bound and would overstate π's own error by many orders of magnitude —
 // wide enough, on a thin annulus, to starve stitchCurvedMass's own
-// boundedQuotient calls of clearance and refuse a perfectly sound fixture.
+// proofbound.BoundedQuotient calls of clearance and refuse a perfectly sound fixture.
 // Nothing here ever claims Exact: every admitting arm's own K_F or moment
 // carries π, so exactnessOf's zero-bound test can never fire for a curved
 // stitched solid.
@@ -139,7 +141,7 @@ import (
 // (boundedCircleRadius's own doc comment): a revolve about an axis that is
 // not coordinate-aligned through the origin hands back a Radius that is
 // itself a rounded re-expression of a recorded point, and every use of it
-// here goes through boundedMul against that proven bound rather than
+// here goes through proofbound.BoundedMul against that proven bound rather than
 // assuming the bare units.Value is exact. Every PUBLIC fixture this PR
 // tests (stitch_flux_test.go) revolves about a coordinate-aligned axis
 // through the origin, where that bound is proven exactly zero, so the
@@ -168,9 +170,9 @@ import (
 // Axis·(Radius/tan(HalfAngle)), needs tan(HalfAngle)'s own rounding charged
 // before that division could be trusted, and this evaluator has no sound
 // way to do that: Go gives Sin/Cos/Atan2/Hypot (and so Tan) no public ulp
-// contract, and composing tan from boundedSin/boundedCos and running it
-// through boundedQuotient — the natural-looking fix — fails
-// boundedQuotient's own clearance check unconditionally, for every angle,
+// contract, and composing tan from boundedSin/proofbound.BoundedCos and running it
+// through proofbound.BoundedQuotient — the natural-looking fix — fails
+// proofbound.BoundedQuotient's own clearance check unconditionally, for every angle,
 // not only the degenerate ones (coneApex's own doc comment walks through
 // why). So a nonzero Radius refuses (ErrUnsupported, R8) rather than
 // publish an apex this evaluator cannot bound — pinned directly on a
@@ -306,12 +308,12 @@ func faceIsTetrahedronEligible(f *Face) bool {
 // auditVertexLinks' own budget-polling return, never wrapped in
 // [ErrUnsupported] — passes through unchanged.
 func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	uses := map[*Edge][]compositeCoedgeUse{}
 	for _, face := range faces {
 		for _, loop := range face.loops {
 			for _, ce := range loop.coedges {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				uses[ce.edge] = append(uses[ce.edge], compositeCoedgeUse{face: face, forward: ce.forward})
@@ -327,22 +329,22 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	return nil
 }
 
-// piScalar returns math.Pi as a boundedScalar. Go's math.Pi is the correctly
+// piScalar returns math.Pi as a proofbound.BoundedScalar. Go's math.Pi is the correctly
 // rounded float64 nearest true pi, so its own representation error is at
-// most one ulp — tiny, and nothing like conservativeValueError's structural
+// most one ulp — tiny, and nothing like proofbound.ConservativeValueError's structural
 // "assume no cancellation at all" fallback, which is sized for a quantity
 // this evaluator cannot otherwise bound and would overstate a well-known
 // constant's own error by many orders of magnitude: wide enough, on a thin
-// annulus, to starve stitchCurvedMass's own boundedQuotient calls of the
+// annulus, to starve stitchCurvedMass's own proofbound.BoundedQuotient calls of the
 // clearance they need and refuse a perfectly sound thin fixture. Every
-// multiply that follows charges its OWN rounding through boundedMul, so
+// multiply that follows charges its OWN rounding through proofbound.BoundedMul, so
 // this is the one place pi's own representation error is spent.
-func piScalar() boundedScalar {
+func piScalar() proofbound.BoundedScalar {
 	ulp := math.Nextafter(math.Pi, math.Inf(1)) - math.Pi
-	return measuredScalar(math.Pi, ulp)
+	return proofbound.MeasuredScalar(math.Pi, ulp)
 }
 
-// boundedCircleRadius reads a full circle's own radius as a boundedScalar,
+// boundedCircleRadius reads a full circle's own radius as a proofbound.BoundedScalar,
 // derived from the edge's already-proven length/lengthBound (circumference
 // = 2·pi·R) rather than from Circle3.Radius/Cylinder.Radius directly.
 //
@@ -364,31 +366,31 @@ func piScalar() boundedScalar {
 // public contract already states a sound enclosure of the true circumference
 // for ANY Circle3 edge, from whichever builder made it, and R = length/2·pi
 // inverts that same closed form.
-func boundedCircleRadius(e *Edge) (boundedScalar, error) {
+func boundedCircleRadius(e *Edge) (proofbound.BoundedScalar, error) {
 	if e.lengthUnbounded {
-		return boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a circle whose circumference this evaluator can bound (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
-	twoPi := boundedMul(measuredScalar(2, 0), piScalar())
-	return boundedQuotient(e.length, e.lengthBound, twoPi.value, twoPi.bound), nil
+	twoPi := proofbound.BoundedMul(proofbound.MeasuredScalar(2, 0), piScalar())
+	return proofbound.BoundedQuotient(e.length, e.lengthBound, twoPi.Value, twoPi.Bound), nil
 }
 
-// boundedDot returns a·b as a boundedScalar, charging every multiply and add
-// this dot product's own arithmetic commits (boundedMul/boundedAdd) —
+// boundedDot returns a·b as a proofbound.BoundedScalar, charging every multiply and add
+// this dot product's own arithmetic commits (proofbound.BoundedMul/proofbound.BoundedAdd) —
 // never the operands' own uncertainty, which every caller here supplies as
 // zero: every vector boundedDot is asked about (a placed face's Frame
 // origin/axis/normal, a placed Circle3's own center) is treated the same way
 // the rest of this evaluator treats a placed coordinate outside a delta > 0
 // placement term — authoritative for this file's own arithmetic, with the
 // placement's own rounding charged separately, once, through
-// sweptVolumeAllow/sweptMomentAllow.
-func boundedDot(a, b r3.Vec) boundedScalar {
-	x := boundedMul(measuredScalar(a.X, 0), measuredScalar(b.X, 0))
-	y := boundedMul(measuredScalar(a.Y, 0), measuredScalar(b.Y, 0))
-	z := boundedMul(measuredScalar(a.Z, 0), measuredScalar(b.Z, 0))
-	return boundedAdd(boundedAdd(x, y), z)
+// proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow.
+func boundedDot(a, b r3.Vec) proofbound.BoundedScalar {
+	x := proofbound.BoundedMul(proofbound.MeasuredScalar(a.X, 0), proofbound.MeasuredScalar(b.X, 0))
+	y := proofbound.BoundedMul(proofbound.MeasuredScalar(a.Y, 0), proofbound.MeasuredScalar(b.Y, 0))
+	z := proofbound.BoundedMul(proofbound.MeasuredScalar(a.Z, 0), proofbound.MeasuredScalar(b.Z, 0))
+	return proofbound.BoundedAdd(proofbound.BoundedAdd(x, y), z)
 }
 
 // stitchFaceFluxAndMoment dispatches on the face's own tagged surface,
@@ -400,9 +402,9 @@ func boundedDot(a, b r3.Vec) boundedScalar {
 // actually built, and integrating a closed form over the tag would be
 // unsound for such a face). The sealed switch's default is Table R row R8,
 // unchanged for every surface this increment does not land an arm for.
-func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedScalar, err error) {
+func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	if f.normalBound != 0 {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a face whose published surface only approximates the geometry actually built (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -423,7 +425,7 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 	case Torus:
 		return torusFaceFluxAndMoment(f, s, anchor, sign)
 	default:
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported, s,
 		)
@@ -446,7 +448,7 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 //	              + U_i²·Iuu + 2·U_i·V_i·Iuv + V_i²·Ivv
 //
 // and mx/my/mz = (sign·n_i/2)·that, for i = x, y, z.
-func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	origin := pl.Frame.Origin()
 	u, v, n := pl.Frame.U(), pl.Frame.V(), pl.Frame.N()
 	// A world-axis normal has no in-plane component on its active moment
@@ -456,30 +458,30 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 		(n.Y != 0 && (u.Y != 0 || v.Y != 0)) ||
 		(n.Z != 0 && (u.Z != 0 || v.Z != 0))
 
-	area := boundedScalar{}
-	iu, iv := boundedScalar{}, boundedScalar{}
-	iuu, ivv, iuv := boundedScalar{}, boundedScalar{}, boundedScalar{}
+	area := proofbound.BoundedScalar{}
+	iu, iv := proofbound.BoundedScalar{}, proofbound.BoundedScalar{}
+	iuu, ivv, iuv := proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}
 
 	for _, l := range f.loops {
 		if len(l.coedges) != 1 {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Plane loop bounded by a single full circle (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
 			)
 		}
 		c3, ok := l.coedges[0].edge.curve.(Circle3)
 		if !ok {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Plane loop bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported, l.coedges[0].edge.curve,
 			)
 		}
 		rB, err := boundedCircleRadius(l.coedges[0].edge)
 		if err != nil {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 		}
-		if !(rB.value > 0) {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		if !(rB.Value > 0) {
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a positive circle radius (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
 			)
@@ -489,63 +491,63 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 			loopSign = -1.0
 		}
 
-		rr := boundedMul(rB, rB)
-		diskArea := boundedMul(piScalar(), rr)
+		rr := proofbound.BoundedMul(rB, rB)
+		diskArea := proofbound.BoundedMul(piScalar(), rr)
 		if loopSign < 0 {
-			diskArea = boundedNeg(diskArea)
+			diskArea = proofbound.BoundedNeg(diskArea)
 		}
-		area = boundedAdd(area, diskArea)
+		area = proofbound.BoundedAdd(area, diskArea)
 		if !needDiskMoments {
 			continue
 		}
 
 		local := pl.Frame.ToLocal(c3.Center)
-		projScale := absSumUpper(vecMaxAbs(c3.Center), vecMaxAbs(origin))
-		projBound := analyticRoundBound(projScale)
-		cu := measuredScalar(local.X, projBound)
-		cv := measuredScalar(local.Y, projBound)
+		projScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(c3.Center), proofbound.VecMaxAbs(origin))
+		projBound := proofbound.AnalyticRoundBound(projScale)
+		cu := proofbound.MeasuredScalar(local.X, projBound)
+		cv := proofbound.MeasuredScalar(local.Y, projBound)
 
-		fourth := boundedMul(measuredScalar(0.25, 0), boundedMul(piScalar(), boundedMul(rr, rr)))
+		fourth := proofbound.BoundedMul(proofbound.MeasuredScalar(0.25, 0), proofbound.BoundedMul(piScalar(), proofbound.BoundedMul(rr, rr)))
 		if loopSign < 0 {
-			fourth = boundedNeg(fourth)
+			fourth = proofbound.BoundedNeg(fourth)
 		}
 
-		iu = boundedAdd(iu, boundedMul(cu, diskArea))
-		iv = boundedAdd(iv, boundedMul(cv, diskArea))
-		iuu = boundedAdd(iuu, boundedAdd(boundedMul(boundedMul(cu, cu), diskArea), fourth))
-		ivv = boundedAdd(ivv, boundedAdd(boundedMul(boundedMul(cv, cv), diskArea), fourth))
-		iuv = boundedAdd(iuv, boundedMul(boundedMul(cu, cv), diskArea))
+		iu = proofbound.BoundedAdd(iu, proofbound.BoundedMul(cu, diskArea))
+		iv = proofbound.BoundedAdd(iv, proofbound.BoundedMul(cv, diskArea))
+		iuu = proofbound.BoundedAdd(iuu, proofbound.BoundedAdd(proofbound.BoundedMul(proofbound.BoundedMul(cu, cu), diskArea), fourth))
+		ivv = proofbound.BoundedAdd(ivv, proofbound.BoundedAdd(proofbound.BoundedMul(proofbound.BoundedMul(cv, cv), diskArea), fourth))
+		iuv = proofbound.BoundedAdd(iuv, proofbound.BoundedMul(proofbound.BoundedMul(cu, cv), diskArea))
 	}
 
-	cx := boundedSub(measuredScalar(origin.X, 0), measuredScalar(anchor.X, 0))
-	cy := boundedSub(measuredScalar(origin.Y, 0), measuredScalar(anchor.Y, 0))
-	cz := boundedSub(measuredScalar(origin.Z, 0), measuredScalar(anchor.Z, 0))
+	cx := proofbound.BoundedSub(proofbound.MeasuredScalar(origin.X, 0), proofbound.MeasuredScalar(anchor.X, 0))
+	cy := proofbound.BoundedSub(proofbound.MeasuredScalar(origin.Y, 0), proofbound.MeasuredScalar(anchor.Y, 0))
+	cz := proofbound.BoundedSub(proofbound.MeasuredScalar(origin.Z, 0), proofbound.MeasuredScalar(anchor.Z, 0))
 
-	dot := boundedAdd(boundedAdd(
-		boundedMul(cx, measuredScalar(n.X, 0)),
-		boundedMul(cy, measuredScalar(n.Y, 0))),
-		boundedMul(cz, measuredScalar(n.Z, 0)),
+	dot := proofbound.BoundedAdd(proofbound.BoundedAdd(
+		proofbound.BoundedMul(cx, proofbound.MeasuredScalar(n.X, 0)),
+		proofbound.BoundedMul(cy, proofbound.MeasuredScalar(n.Y, 0))),
+		proofbound.BoundedMul(cz, proofbound.MeasuredScalar(n.Z, 0)),
 	)
-	flux = boundedMul(measuredScalar(sign, 0), boundedMul(area, dot))
+	flux = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), proofbound.BoundedMul(area, dot))
 
-	half := measuredScalar(0.5, 0)
-	moment := func(ci boundedScalar, ni, ui, vi float64) boundedScalar {
+	half := proofbound.MeasuredScalar(0.5, 0)
+	moment := func(ci proofbound.BoundedScalar, ni, ui, vi float64) proofbound.BoundedScalar {
 		if ni == 0 {
-			return boundedScalar{}
+			return proofbound.BoundedScalar{}
 		}
-		uiB, viB := measuredScalar(ui, 0), measuredScalar(vi, 0)
-		term := boundedMul(ci, ci)
-		term = boundedMul(term, area)
+		uiB, viB := proofbound.MeasuredScalar(ui, 0), proofbound.MeasuredScalar(vi, 0)
+		term := proofbound.BoundedMul(ci, ci)
+		term = proofbound.BoundedMul(term, area)
 		if ui != 0 || vi != 0 {
-			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, uiB)), iu))
-			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, viB)), iv))
-			term = boundedAdd(term, boundedMul(boundedMul(uiB, uiB), iuu))
-			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(uiB, viB)), iuv))
-			term = boundedAdd(term, boundedMul(boundedMul(viB, viB), ivv))
+			term = proofbound.BoundedAdd(term, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.MeasuredScalar(2, 0), proofbound.BoundedMul(ci, uiB)), iu))
+			term = proofbound.BoundedAdd(term, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.MeasuredScalar(2, 0), proofbound.BoundedMul(ci, viB)), iv))
+			term = proofbound.BoundedAdd(term, proofbound.BoundedMul(proofbound.BoundedMul(uiB, uiB), iuu))
+			term = proofbound.BoundedAdd(term, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.MeasuredScalar(2, 0), proofbound.BoundedMul(uiB, viB)), iuv))
+			term = proofbound.BoundedAdd(term, proofbound.BoundedMul(proofbound.BoundedMul(viB, viB), ivv))
 		}
-		term = boundedMul(measuredScalar(sign, 0), term)
-		term = boundedMul(half, term)
-		return boundedMul(measuredScalar(ni, 0), term)
+		term = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), term)
+		term = proofbound.BoundedMul(half, term)
+		return proofbound.BoundedMul(proofbound.MeasuredScalar(ni, 0), term)
 	}
 	mx = moment(cx, n.X, u.X, v.X)
 	my = moment(cy, n.Y, u.Y, v.Y)
@@ -591,9 +593,9 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 // +t·Axis_i and zMid by −t, and Axis_i·(A_i + Axis_i·zMid) is unchanged by
 // that shift for any t, so which point of the axis Origin happens to be
 // never matters — the same invariance the plane's own A_F choice needs.
-func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float64) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	if len(f.loops) != 2 {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cylinder face bounded by exactly two full circles (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -602,14 +604,14 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 	var rimEdges [2]*Edge
 	for i, l := range f.loops {
 		if len(l.coedges) != 1 {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Cylinder rim bounded by a single full circle (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
 			)
 		}
 		c3, ok := l.coedges[0].edge.curve.(Circle3)
 		if !ok {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Cylinder rim bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported, l.coedges[0].edge.curve,
 			)
@@ -624,10 +626,10 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 	// either rim's own proof covers the whole face.
 	rB, err := boundedCircleRadius(rimEdges[0])
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
-	if !(rB.value > 0) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+	if !(rB.Value > 0) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a positive cylinder radius (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -635,27 +637,27 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 
 	z0 := boundedDot(cyl.Axis, centers[0].Sub(cyl.Origin))
 	z1 := boundedDot(cyl.Axis, centers[1].Sub(cyl.Origin))
-	dz := boundedAbs(boundedSub(z1, z0))
-	if !(dz.value > 0) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+	dz := proofbound.BoundedAbs(proofbound.BoundedSub(z1, z0))
+	if !(dz.Value > 0) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cylinder face whose two rims sit at different axial positions (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
-	zMid := boundedMul(measuredScalar(0.5, 0), boundedAdd(z0, z1))
+	zMid := proofbound.BoundedMul(proofbound.MeasuredScalar(0.5, 0), proofbound.BoundedAdd(z0, z1))
 
-	flux = boundedMul(measuredScalar(sign, 0), boundedMul(rB, measuredScalar(f.area, f.areaBound)))
+	flux = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), proofbound.BoundedMul(rB, proofbound.MeasuredScalar(f.area, f.areaBound)))
 
-	piR2 := boundedMul(piScalar(), boundedMul(rB, rB))
-	piR2Dz := boundedMul(piR2, dz)
+	piR2 := proofbound.BoundedMul(piScalar(), proofbound.BoundedMul(rB, rB))
+	piR2Dz := proofbound.BoundedMul(piR2, dz)
 
-	moment := func(oi, ai, axisI float64) boundedScalar {
-		aTerm := boundedSub(measuredScalar(oi, 0), measuredScalar(ai, 0))
-		axisZMid := boundedMul(measuredScalar(axisI, 0), zMid)
-		sumTerm := boundedAdd(aTerm, axisZMid)
-		oneMinusAxis2 := boundedSub(measuredScalar(1, 0), boundedMul(measuredScalar(axisI, 0), measuredScalar(axisI, 0)))
-		term := boundedMul(piR2Dz, boundedMul(oneMinusAxis2, sumTerm))
-		return boundedMul(measuredScalar(sign, 0), term)
+	moment := func(oi, ai, axisI float64) proofbound.BoundedScalar {
+		aTerm := proofbound.BoundedSub(proofbound.MeasuredScalar(oi, 0), proofbound.MeasuredScalar(ai, 0))
+		axisZMid := proofbound.BoundedMul(proofbound.MeasuredScalar(axisI, 0), zMid)
+		sumTerm := proofbound.BoundedAdd(aTerm, axisZMid)
+		oneMinusAxis2 := proofbound.BoundedSub(proofbound.MeasuredScalar(1, 0), proofbound.BoundedMul(proofbound.MeasuredScalar(axisI, 0), proofbound.MeasuredScalar(axisI, 0)))
+		term := proofbound.BoundedMul(piR2Dz, proofbound.BoundedMul(oneMinusAxis2, sumTerm))
+		return proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), term)
 	}
 	mx = moment(cyl.Origin.X, anchor.X, cyl.Axis.X)
 	my = moment(cyl.Origin.Y, anchor.Y, cyl.Axis.Y)
@@ -681,17 +683,17 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 // WHY THE GENERAL DIVISION IS NOT SOUNDLY BOUNDABLE HERE, so a future
 // change does not silently reintroduce it. tan(HalfAngle) would need its
 // own rounding charged before Radius/tan(HalfAngle) could be trusted, and
-// this codebase has no tool for that: analyticRoundBound's own doc comment
+// this codebase has no tool for that: proofbound.AnalyticRoundBound's own doc comment
 // states "Go deliberately gives Sin, Cos, Atan2 and Hypot no public ulp
 // contract, so a result computed through them never trusts this helper's
 // roundoff budget on its own" — the same posture capblend_moments.go and
-// survey2d.go state independently, and boundedSqrt honors even for
+// survey2d.go state independently, and proofbound.BoundedSqrt honors even for
 // math.Sqrt, which IEEE 754 DOES guarantee correctly rounded. The
-// natural-looking fix — compose tan from boundedSin/boundedCos and run it
-// through boundedQuotient — was tried and fails outright:
-// conservativeValueError's own structural bound on a Sin/Cos result
+// natural-looking fix — compose tan from boundedSin/proofbound.BoundedCos and run it
+// through proofbound.BoundedQuotient — was tried and fails outright:
+// proofbound.ConservativeValueError's own structural bound on a Sin/Cos result
 // (|value|+1) is wider than either function's own value, so it fails
-// boundedQuotient's clearance check for EVERY angle, not only the
+// proofbound.BoundedQuotient's clearance check for EVERY angle, not only the
 // degenerate ones, refusing the whole arm rather than only the cases a
 // tangent gate should catch. Charging only "a few ulps" of math.Tan's own
 // result instead would be a NEW error model this codebase does not have
@@ -705,7 +707,7 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 // exactly-zero tangent, a degenerate needle no reachable wallCone ever
 // carries (revolve_axis.go's own analytic-walk requirement keeps HalfAngle
 // finite and strictly between 0 and π/2 — docs/surface-design.md's own
-// record of that requirement). The `isNonFinite(tanValue)` half of this
+// record of that requirement). The `proofbound.IsNonFinite(tanValue)` half of this
 // check is a defensive backstop, not independently exercised: a NaN or Inf
 // HalfAngle is refused one layer up, by units.Value.In's own ErrNotFinite,
 // before this function's own tan(HalfAngle) call ever runs, and a
@@ -714,10 +716,10 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 // TestStitchConeHalfAngleRefusesDegenerateTangent
 // (stitch_internal_test.go) shows the exactly-zero case failing red and
 // records why the non-finite half of the guard is not similarly shown.
-func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
+func coneApex(c Cone) (apexX, apexY, apexZ proofbound.BoundedScalar, err error) {
 	half, herr := c.HalfAngle.In(units.Radian)
 	if herr != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, herr)
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, herr)
 	}
 	// tan(HalfAngle) is read through a single math.Tan call purely to
 	// validate the angle is non-degenerate — a HalfAngle of 0 gives an
@@ -727,15 +729,15 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 	// why), so the apex formula below never divides by it. That is also why
 	// this check alone cannot admit a nonzero Radius — see the gate below.
 	tanValue := math.Tan(half)
-	if !(tanValue > 0) || isNonFinite(tanValue) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+	if !(tanValue > 0) || proofbound.IsNonFinite(tanValue) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone whose half-angle has a positive, finite tangent (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
 	radiusValue, rerr := c.Radius.In(units.Millimeter)
 	if rerr != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's radius is not a length: %w`, rerr)
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(`decad: a cone's radius is not a length: %w`, rerr)
 	}
 	if radiusValue != 0 {
 		// The general apex formula is Origin − Axis·(Radius/tan(HalfAngle)),
@@ -744,12 +746,12 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 		// explains why no such bound exists in this codebase: Go gives
 		// Sin/Cos/Atan2/Hypot (and so Tan, composed from them) no public
 		// ulp contract, and every other place this evaluator reads one of
-		// those functions falls back to conservativeValueError's
+		// those functions falls back to proofbound.ConservativeValueError's
 		// deliberately wide structural bound rather than assume tighter
 		// accuracy — which, as boundedCircleRadius's own history in this
-		// file already showed, fails boundedQuotient's clearance check
+		// file already showed, fails proofbound.BoundedQuotient's clearance check
 		// outright rather than merely widen the result. Composing tan from
-		// boundedSin/boundedCos and running it through boundedQuotient hits
+		// boundedSin/proofbound.BoundedCos and running it through proofbound.BoundedQuotient hits
 		// exactly that failure. So a nonzero Radius refuses rather than
 		// publish an apex whose own bound this evaluator cannot prove:
 		// Radius is EXACTLY zero at every construction site in this
@@ -757,7 +759,7 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 		// coneSurface — Origin is already the apex), so refusing what
 		// nothing builds costs no reachable fixture
 		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone whose Origin is already its own apex (Radius exactly 0); this evaluator has no sound bound for tan(HalfAngle)'s own rounding, which a nonzero Radius would need to divide by (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -766,25 +768,25 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 	// division by tan(HalfAngle) is skipped entirely rather than computed
 	// and discarded: Origin is already the apex, Exact, with no dependency
 	// on tan(HalfAngle)'s own accuracy at all.
-	apexX = measuredScalar(c.Origin.X, 0)
-	apexY = measuredScalar(c.Origin.Y, 0)
-	apexZ = measuredScalar(c.Origin.Z, 0)
+	apexX = proofbound.MeasuredScalar(c.Origin.X, 0)
+	apexY = proofbound.MeasuredScalar(c.Origin.Y, 0)
+	apexZ = proofbound.MeasuredScalar(c.Origin.Z, 0)
 	return apexX, apexY, apexZ, nil
 }
 
-// axisDistanceFromApex returns Axis·(point − apex) as a boundedScalar,
+// axisDistanceFromApex returns Axis·(point − apex) as a proofbound.BoundedScalar,
 // where apex carries its own per-coordinate bound (coneApex's own doc
 // comment) and point/Axis are treated as exact placed coordinates, the same
 // convention boundedDot's own doc comment states for every other vector
 // this file asks about.
-func axisDistanceFromApex(apexX, apexY, apexZ boundedScalar, axis, point r3.Vec) boundedScalar {
-	dx := boundedSub(measuredScalar(point.X, 0), apexX)
-	dy := boundedSub(measuredScalar(point.Y, 0), apexY)
-	dz := boundedSub(measuredScalar(point.Z, 0), apexZ)
-	return boundedAdd(boundedAdd(
-		boundedMul(measuredScalar(axis.X, 0), dx),
-		boundedMul(measuredScalar(axis.Y, 0), dy)),
-		boundedMul(measuredScalar(axis.Z, 0), dz))
+func axisDistanceFromApex(apexX, apexY, apexZ proofbound.BoundedScalar, axis, point r3.Vec) proofbound.BoundedScalar {
+	dx := proofbound.BoundedSub(proofbound.MeasuredScalar(point.X, 0), apexX)
+	dy := proofbound.BoundedSub(proofbound.MeasuredScalar(point.Y, 0), apexY)
+	dz := proofbound.BoundedSub(proofbound.MeasuredScalar(point.Z, 0), apexZ)
+	return proofbound.BoundedAdd(proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.MeasuredScalar(axis.X, 0), dx),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(axis.Y, 0), dy)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(axis.Z, 0), dz))
 }
 
 // coneFaceFluxAndMoment is the Cone arm, scoped identically in shape to
@@ -839,9 +841,9 @@ func axisDistanceFromApex(apexX, apexY, apexZ boundedScalar, axis, point r3.Vec)
 // math.Tan exactly once per face, for the apex alone. Verified
 // independently against numeric double-quadrature the same way S_F was,
 // across several random half-angles, anchors, axes and apex placements.
-func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	if len(f.loops) != 2 {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone face bounded by exactly two full circles (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -850,14 +852,14 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 	var rimEdges [2]*Edge
 	for i, l := range f.loops {
 		if len(l.coedges) != 1 {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Cone rim bounded by a single full circle (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
 			)
 		}
 		c3, ok := l.coedges[0].edge.curve.(Circle3)
 		if !ok {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Cone rim bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported, l.coedges[0].edge.curve,
 			)
@@ -868,17 +870,17 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 
 	apexX, apexY, apexZ, err := coneApex(cone)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 
-	var radii [2]boundedScalar
+	var radii [2]proofbound.BoundedScalar
 	for i := range rimEdges {
 		rB, err := boundedCircleRadius(rimEdges[i])
 		if err != nil {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 		}
-		if !(rB.value > 0) {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		if !(rB.Value > 0) {
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a positive cone rim radius (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
 			)
@@ -886,25 +888,25 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 		radii[i] = rB
 	}
 
-	var zs [2]boundedScalar
+	var zs [2]proofbound.BoundedScalar
 	for i := range centers {
 		zs[i] = axisDistanceFromApex(apexX, apexY, apexZ, cone.Axis, centers[i])
 	}
 	loIdx, hiIdx := 0, 1
-	if zs[0].value > zs[1].value {
+	if zs[0].Value > zs[1].Value {
 		loIdx, hiIdx = 1, 0
 	}
 	zLo, zHi := zs[loIdx], zs[hiIdx]
 	rLo, rHi := radii[loIdx], radii[hiIdx]
-	if !(zLo.value > 0) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+	if !(zLo.Value > 0) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone face whose rims sit beyond the apex along its own axis (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
-	dz := boundedSub(zHi, zLo)
-	if !(dz.value > 0) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+	dz := proofbound.BoundedSub(zHi, zLo)
+	if !(dz.Value > 0) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone face whose two rims sit at different positions along its own axis (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -913,51 +915,51 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 	// S_F = pi*(rLo^2 - rHi^2)*Axis; the cross term is (apex-anchor).S_F,
 	// which since S_F is a scalar multiple of the unit Axis reduces to
 	// sMag * Axis.(apex-anchor).
-	sMag := boundedMul(piScalar(), boundedSub(boundedMul(rLo, rLo), boundedMul(rHi, rHi)))
-	axisDotApexMinusAnchor := boundedNeg(axisDistanceFromApex(apexX, apexY, apexZ, cone.Axis, anchor))
-	flux = boundedMul(measuredScalar(sign, 0), boundedMul(sMag, axisDotApexMinusAnchor))
+	sMag := proofbound.BoundedMul(piScalar(), proofbound.BoundedSub(proofbound.BoundedMul(rLo, rLo), proofbound.BoundedMul(rHi, rHi)))
+	axisDotApexMinusAnchor := proofbound.BoundedNeg(axisDistanceFromApex(apexX, apexY, apexZ, cone.Axis, anchor))
+	flux = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), proofbound.BoundedMul(sMag, axisDotApexMinusAnchor))
 
 	// tan^2(beta) from the rims' own slope, never a second HalfAngle trig
 	// evaluation (this function's own doc comment).
-	slopeNum := boundedSub(rHi, rLo)
-	slope := boundedQuotient(slopeNum.value, slopeNum.bound, dz.value, dz.bound)
-	tan2 := boundedMul(slope, slope)
+	slopeNum := proofbound.BoundedSub(rHi, rLo)
+	slope := proofbound.BoundedQuotient(slopeNum.Value, slopeNum.Bound, dz.Value, dz.Bound)
+	tan2 := proofbound.BoundedMul(slope, slope)
 
-	zHiSq, zLoSq := boundedMul(zHi, zHi), boundedMul(zLo, zLo)
-	i1 := boundedMul(measuredScalar(0.5, 0), boundedSub(zHiSq, zLoSq))
-	zHiCu := boundedMul(zHiSq, zHi)
-	zLoCu := boundedMul(zLoSq, zLo)
-	i2 := boundedQuotient(boundedSub(zHiCu, zLoCu).value, boundedSub(zHiCu, zLoCu).bound, 3, 0)
-	zHi4 := boundedMul(zHiSq, zHiSq)
-	zLo4 := boundedMul(zLoSq, zLoSq)
-	i3 := boundedMul(measuredScalar(0.25, 0), boundedSub(zHi4, zLo4))
+	zHiSq, zLoSq := proofbound.BoundedMul(zHi, zHi), proofbound.BoundedMul(zLo, zLo)
+	i1 := proofbound.BoundedMul(proofbound.MeasuredScalar(0.5, 0), proofbound.BoundedSub(zHiSq, zLoSq))
+	zHiCu := proofbound.BoundedMul(zHiSq, zHi)
+	zLoCu := proofbound.BoundedMul(zLoSq, zLo)
+	i2 := proofbound.BoundedQuotient(proofbound.BoundedSub(zHiCu, zLoCu).Value, proofbound.BoundedSub(zHiCu, zLoCu).Bound, 3, 0)
+	zHi4 := proofbound.BoundedMul(zHiSq, zHiSq)
+	zLo4 := proofbound.BoundedMul(zLoSq, zLoSq)
+	i3 := proofbound.BoundedMul(proofbound.MeasuredScalar(0.25, 0), proofbound.BoundedSub(zHi4, zLo4))
 
-	one := measuredScalar(1, 0)
-	two := measuredScalar(2, 0)
-	three := measuredScalar(3, 0)
-	half := measuredScalar(0.5, 0)
-	piTan2 := boundedMul(piScalar(), tan2)
+	one := proofbound.MeasuredScalar(1, 0)
+	two := proofbound.MeasuredScalar(2, 0)
+	three := proofbound.MeasuredScalar(3, 0)
+	half := proofbound.MeasuredScalar(0.5, 0)
+	piTan2 := proofbound.BoundedMul(piScalar(), tan2)
 
-	moment := func(apexI boundedScalar, anchorI, axisI float64) boundedScalar {
-		ai := boundedSub(apexI, measuredScalar(anchorI, 0))
-		bi := measuredScalar(axisI, 0)
-		biSq := boundedMul(bi, bi)
+	moment := func(apexI proofbound.BoundedScalar, anchorI, axisI float64) proofbound.BoundedScalar {
+		ai := proofbound.BoundedSub(apexI, proofbound.MeasuredScalar(anchorI, 0))
+		bi := proofbound.MeasuredScalar(axisI, 0)
+		biSq := proofbound.BoundedMul(bi, bi)
 
-		term1 := boundedNeg(boundedMul(boundedMul(two, boundedMul(ai, ai)), boundedMul(bi, i1)))
+		term1 := proofbound.BoundedNeg(proofbound.BoundedMul(proofbound.BoundedMul(two, proofbound.BoundedMul(ai, ai)), proofbound.BoundedMul(bi, i1)))
 
-		oneMinus3BiSq := boundedSub(one, boundedMul(three, biSq))
-		term2 := boundedMul(boundedMul(two, boundedMul(ai, oneMinus3BiSq)), i2)
+		oneMinus3BiSq := proofbound.BoundedSub(one, proofbound.BoundedMul(three, biSq))
+		term2 := proofbound.BoundedMul(proofbound.BoundedMul(two, proofbound.BoundedMul(ai, oneMinus3BiSq)), i2)
 
-		oneMinus2BiSq := boundedSub(one, boundedMul(two, biSq))
-		partA := boundedMul(two, boundedMul(bi, oneMinus2BiSq))
-		oneMinusBiSq := boundedSub(one, biSq)
-		partB := boundedMul(bi, boundedMul(oneMinusBiSq, tan2))
-		coef3 := boundedSub(partA, partB)
-		term3 := boundedMul(coef3, i3)
+		oneMinus2BiSq := proofbound.BoundedSub(one, proofbound.BoundedMul(two, biSq))
+		partA := proofbound.BoundedMul(two, proofbound.BoundedMul(bi, oneMinus2BiSq))
+		oneMinusBiSq := proofbound.BoundedSub(one, biSq)
+		partB := proofbound.BoundedMul(bi, proofbound.BoundedMul(oneMinusBiSq, tan2))
+		coef3 := proofbound.BoundedSub(partA, partB)
+		term3 := proofbound.BoundedMul(coef3, i3)
 
-		sum := boundedAdd(boundedAdd(term1, term2), term3)
-		m := boundedMul(piTan2, boundedMul(half, sum))
-		return boundedMul(measuredScalar(sign, 0), m)
+		sum := proofbound.BoundedAdd(proofbound.BoundedAdd(term1, term2), term3)
+		m := proofbound.BoundedMul(piTan2, proofbound.BoundedMul(half, sum))
+		return proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), m)
 	}
 	mx = moment(apexX, anchor.X, cone.Axis.X)
 	my = moment(apexY, anchor.Y, cone.Axis.Y)
@@ -980,19 +982,19 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 // closed-form Pappus integral (revolve_build.go's faceArea, walkAxisMoment),
 // the identical value docs/surface-design.md §6.4's Area-sum block already
 // trusts unconditionally for every face kind. Inverting Area = 4πR² through
-// boundedQuotient and boundedSqrt is therefore a reuse of an
+// proofbound.BoundedQuotient and proofbound.BoundedSqrt is therefore a reuse of an
 // already-published, already-tested reading, never a fresh unproven one —
-// boundedSqrt's own exact checks make the inversion itself sound: its
-// rational bracket (ratSqrtDown/ratSqrtUp), or, for a zero-bound operand,
+// proofbound.BoundedSqrt's own exact checks make the inversion itself sound: its
+// rational bracket (proofbound.RatSqrtDown/proofbound.RatSqrtUp), or, for a zero-bound operand,
 // exactFloatSquare's FMA residual proving the float root exact. Go's
 // math.Sqrt carries no accuracy contract this file would otherwise have to
 // lean on either.
-func boundedSphereRadius(f *Face) (boundedScalar, error) {
-	fourPi := boundedMul(measuredScalar(4, 0), piScalar())
-	rSq := boundedQuotient(f.area, f.areaBound, fourPi.value, fourPi.bound)
-	rB := boundedSqrt(rSq)
-	if !(rB.value > 0) {
-		return boundedScalar{}, fmt.Errorf(
+func boundedSphereRadius(f *Face) (proofbound.BoundedScalar, error) {
+	fourPi := proofbound.BoundedMul(proofbound.MeasuredScalar(4, 0), piScalar())
+	rSq := proofbound.BoundedQuotient(f.area, f.areaBound, fourPi.Value, fourPi.Bound)
+	rB := proofbound.BoundedSqrt(rSq)
+	if !(rB.Value > 0) {
+		return proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Sphere face with a positive radius (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
@@ -1057,24 +1059,24 @@ func boundedSphereRadius(f *Face) (boundedScalar, error) {
 // symmetry, ∫r_i² dA = (4/3)πR⁴ from ∫r_i²dA = (1/3)∫|r|²dA = (1/3)R²·Area)
 // gives M_i = σ/(2R)·[2d_i·(4/3)πR⁴] = σ·d_i·(4/3)πR³ — the identical
 // closed form, since (4/3)πR³ = R·Area/3 = K_F/(3σ) and σ²=1.
-func sphereFaceFluxAndMoment(f *Face, sph Sphere, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+func sphereFaceFluxAndMoment(f *Face, sph Sphere, anchor r3.Vec, sign float64) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	if len(f.loops) != 0 {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Sphere face with no boundary at all (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
 	rB, err := boundedSphereRadius(f)
 	if err != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 
-	flux = boundedMul(measuredScalar(sign, 0), boundedMul(rB, measuredScalar(f.area, f.areaBound)))
+	flux = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), proofbound.BoundedMul(rB, proofbound.MeasuredScalar(f.area, f.areaBound)))
 
-	third := boundedQuotient(flux.value, flux.bound, 3, 0)
-	moment := func(centerI, anchorI float64) boundedScalar {
-		d := boundedSub(measuredScalar(centerI, 0), measuredScalar(anchorI, 0))
-		return boundedMul(third, d)
+	third := proofbound.BoundedQuotient(flux.Value, flux.Bound, 3, 0)
+	moment := func(centerI, anchorI float64) proofbound.BoundedScalar {
+		d := proofbound.BoundedSub(proofbound.MeasuredScalar(centerI, 0), proofbound.MeasuredScalar(anchorI, 0))
+		return proofbound.BoundedMul(third, d)
 	}
 	mx = moment(sph.Center.X, anchor.X)
 	my = moment(sph.Center.Y, anchor.Y)
@@ -1202,9 +1204,9 @@ func torusAxisIsCoordinateAligned(t Torus) bool {
 // (1 − Axis_i²)-weighted and constant parts combine to the M_i form above
 // (this PR's own scratch derivation, hand-expanded and cross-checked
 // against the numeric integral).
-func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
-	refuse := func(msg string) (boundedScalar, boundedScalar, boundedScalar, boundedScalar, error) {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
+	refuse := func(msg string) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: %s (docs/surface-design.md Table R row R8)`, ErrUnsupported, msg,
 		)
 	}
@@ -1216,11 +1218,11 @@ func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux
 	}
 	majorValue, merr := t.Major.In(units.Millimeter)
 	if merr != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, merr)
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, merr)
 	}
 	minorValue, nerr := t.Minor.In(units.Millimeter)
 	if nerr != nil {
-		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a torus's minor radius is not a length: %w`, nerr)
+		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(`decad: a torus's minor radius is not a length: %w`, nerr)
 	}
 	if !(majorValue > 0) || !(minorValue > 0) {
 		return refuse(`Stitch's flux path needs a Torus with a positive Major and Minor radius`)
@@ -1233,7 +1235,7 @@ func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux
 		}
 		c3, ok := l.coedges[0].edge.curve.(Circle3)
 		if !ok {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a Torus rim bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported, l.coedges[0].edge.curve,
 			)
@@ -1243,36 +1245,36 @@ func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux
 
 	e0 := boundedDot(t.Axis, centers[0].Sub(t.Center))
 	e1 := boundedDot(t.Axis, centers[1].Sub(t.Center))
-	halfWindow := (e0.value == -minorValue && e1.value == minorValue) ||
-		(e0.value == minorValue && e1.value == -minorValue)
+	halfWindow := (e0.Value == -minorValue && e1.Value == minorValue) ||
+		(e0.Value == minorValue && e1.Value == -minorValue)
 	if !halfWindow {
 		return refuse(`Stitch's flux path needs a Torus face bounded by the tube's own two equatorial rims (its ±π/2 window); this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation`)
 	}
 
-	major := measuredScalar(majorValue, 0)
-	minor := measuredScalar(minorValue, 0)
-	majorSq := boundedMul(major, major)
-	minorSq := boundedMul(minor, minor)
+	major := proofbound.MeasuredScalar(majorValue, 0)
+	minor := proofbound.MeasuredScalar(minorValue, 0)
+	majorSq := proofbound.BoundedMul(major, major)
+	minorSq := proofbound.BoundedMul(minor, minor)
 	pi := piScalar()
-	piSq := boundedMul(pi, pi)
+	piSq := proofbound.BoundedMul(pi, pi)
 
-	term1 := boundedMul(measuredScalar(3, 0), boundedMul(piSq, boundedMul(major, minorSq)))
-	term2 := boundedMul(measuredScalar(4, 0), boundedMul(pi, boundedMul(minor, boundedAdd(majorSq, minorSq))))
-	kf := boundedAdd(term1, term2)
-	flux = boundedMul(measuredScalar(sign, 0), kf)
+	term1 := proofbound.BoundedMul(proofbound.MeasuredScalar(3, 0), proofbound.BoundedMul(piSq, proofbound.BoundedMul(major, minorSq)))
+	term2 := proofbound.BoundedMul(proofbound.MeasuredScalar(4, 0), proofbound.BoundedMul(pi, proofbound.BoundedMul(minor, proofbound.BoundedAdd(majorSq, minorSq))))
+	kf := proofbound.BoundedAdd(term1, term2)
+	flux = proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), kf)
 
-	majMinorPi := boundedMul(pi, boundedMul(major, minor))
-	fourThirdsMinorSq := boundedMul(boundedQuotient(4, 0, 3, 0), minorSq)
-	moment := func(centerI, anchorI, axisI float64) boundedScalar {
-		axisISq := boundedMul(measuredScalar(axisI, 0), measuredScalar(axisI, 0))
-		oneMinusAxisISq := boundedSub(measuredScalar(1, 0), axisISq)
-		bracket := boundedAdd(
-			boundedAdd(boundedMul(measuredScalar(2, 0), boundedMul(majorSq, oneMinusAxisISq)), majMinorPi),
+	majMinorPi := proofbound.BoundedMul(pi, proofbound.BoundedMul(major, minor))
+	fourThirdsMinorSq := proofbound.BoundedMul(proofbound.BoundedQuotient(4, 0, 3, 0), minorSq)
+	moment := func(centerI, anchorI, axisI float64) proofbound.BoundedScalar {
+		axisISq := proofbound.BoundedMul(proofbound.MeasuredScalar(axisI, 0), proofbound.MeasuredScalar(axisI, 0))
+		oneMinusAxisISq := proofbound.BoundedSub(proofbound.MeasuredScalar(1, 0), axisISq)
+		bracket := proofbound.BoundedAdd(
+			proofbound.BoundedAdd(proofbound.BoundedMul(proofbound.MeasuredScalar(2, 0), proofbound.BoundedMul(majorSq, oneMinusAxisISq)), majMinorPi),
 			fourThirdsMinorSq,
 		)
-		d := boundedSub(measuredScalar(centerI, 0), measuredScalar(anchorI, 0))
-		m := boundedMul(pi, boundedMul(minor, boundedMul(d, bracket)))
-		return boundedMul(measuredScalar(sign, 0), m)
+		d := proofbound.BoundedSub(proofbound.MeasuredScalar(centerI, 0), proofbound.MeasuredScalar(anchorI, 0))
+		m := proofbound.BoundedMul(pi, proofbound.BoundedMul(minor, proofbound.BoundedMul(d, bracket)))
+		return proofbound.BoundedMul(proofbound.MeasuredScalar(sign, 0), m)
 	}
 	mx = moment(t.Center.X, anchor.X, t.Axis.X)
 	my = moment(t.Center.Y, anchor.Y, t.Axis.Y)
@@ -1284,7 +1286,7 @@ func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux
 // (stitchFaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
 // analogue of stitch.go's acc.vol6.Sign() < 0 step — divides by three, and
-// charges the placement allowance (sweptVolumeAllow/sweptMomentAllow) on
+// charges the placement allowance (proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow) on
 // the same terms capBandVolume already does for a placed curved solid: a
 // placed curved stitched solid is Approximate on both readings, per
 // docs/surface-design.md §6.4's placed-body paragraph.
@@ -1296,7 +1298,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 	if err != nil {
 		return Measurement{}, VecMeasurement{}, err
 	}
-	if fluxSum.value < 0 {
+	if fluxSum.Value < 0 {
 		for _, f := range faces {
 			reverseFaceOrientation(f)
 		}
@@ -1306,12 +1308,12 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 		}
 	}
 
-	vol := boundedQuotient(fluxSum.value, fluxSum.bound, 3, 0)
+	vol := proofbound.BoundedQuotient(fluxSum.Value, fluxSum.Bound, 3, 0)
 
 	areaUpper := 0.0
 	coordUpper := 0.0
 	for _, f := range faces {
-		areaUpper = absSumUpper(areaUpper, f.area, f.areaBound)
+		areaUpper = proofbound.AbsSumUpper(areaUpper, f.area, f.areaBound)
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
 				coordUpper = math.Max(coordUpper, ce.Start().Position().Value.Sub(anchor).Len())
@@ -1330,7 +1332,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				// from the true one. Both rims share one radius, so reading
 				// either suffices.
 				if rB, err := boundedCircleRadius(f.loops[0].coedges[0].edge); err == nil {
-					coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
 				}
 			}
 		case Cone:
@@ -1345,7 +1347,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 					continue
 				}
 				if rB, err := boundedCircleRadius(l.coedges[0].edge); err == nil {
-					coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+					coordUpper = proofbound.AbsSumUpper(coordUpper, rB.Value, rB.Bound)
 				}
 			}
 		case Sphere:
@@ -1362,7 +1364,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			// the Cylinder/Cone margins above read theirs through
 			// boundedCircleRadius.
 			if rB, err := boundedSphereRadius(f); err == nil {
-				coordUpper = absSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.value, rB.bound)
+				coordUpper = proofbound.AbsSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.Value, rB.Bound)
 			}
 		case Torus:
 			// Every point of a Torus face this file admits lies within
@@ -1378,7 +1380,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			// ran, never in place of it.
 			if majorValue, merr := surf.Major.In(units.Millimeter); merr == nil {
 				if minorValue, nerr := surf.Minor.In(units.Millimeter); nerr == nil {
-					coordUpper = absSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), majorValue+minorValue)
+					coordUpper = proofbound.AbsSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), majorValue+minorValue)
 				}
 			}
 		}
@@ -1386,39 +1388,39 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 
 	if delta > 0 {
 		// The placement allowance is charged once here, on momX/momY/momZ and
-		// vol directly, and every downstream reading (the boundedQuotient
+		// vol directly, and every downstream reading (the proofbound.BoundedQuotient
 		// calls below) composes it through the ordinary quotient-bound
 		// formula rather than through a second, separately-derived term —
 		// charging it twice would only widen an already-sound bound, but it
 		// would also hide a real regression: a shown-to-fail test that
 		// deletes this leg must see the SAME published bound go slack, not a
 		// smaller one still covered by a leftover duplicate charge.
-		epsV := sweptVolumeAllow(delta, areaUpper)
-		epsM := sweptMomentAllow(delta, areaUpper, coordUpper+delta)
-		vol.bound = absSumUpper(vol.bound, epsV)
-		momX.bound = absSumUpper(momX.bound, epsM)
-		momY.bound = absSumUpper(momY.bound, epsM)
-		momZ.bound = absSumUpper(momZ.bound, epsM)
+		epsV := proofbound.SweptVolumeAllow(delta, areaUpper)
+		epsM := proofbound.SweptMomentAllow(delta, areaUpper, coordUpper+delta)
+		vol.Bound = proofbound.AbsSumUpper(vol.Bound, epsV)
+		momX.Bound = proofbound.AbsSumUpper(momX.Bound, epsM)
+		momY.Bound = proofbound.AbsSumUpper(momY.Bound, epsM)
+		momZ.Bound = proofbound.AbsSumUpper(momZ.Bound, epsM)
 	}
 
 	volMeasurement := Measurement{
-		Value:     units.CubicMillimeters(vol.value),
-		Exactness: exactnessOf(vol.bound),
-		Bound:     units.CubicMillimeters(vol.bound),
+		Value:     units.CubicMillimeters(vol.Value),
+		Exactness: exactnessOf(vol.Bound),
+		Bound:     units.CubicMillimeters(vol.Bound),
 	}
-	if vol.value == 0 {
+	if vol.Value == 0 {
 		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: a stitched curved solid with zero net volume has no centroid`, ErrDegenerate)
 	}
 
-	cx := boundedQuotient(momX.value, momX.bound, vol.value, vol.bound)
-	cy := boundedQuotient(momY.value, momY.bound, vol.value, vol.bound)
-	cz := boundedQuotient(momZ.value, momZ.bound, vol.value, vol.bound)
-	if isNonFinite(cx.bound) || isNonFinite(cy.bound) || isNonFinite(cz.bound) {
+	cx := proofbound.BoundedQuotient(momX.Value, momX.Bound, vol.Value, vol.Bound)
+	cy := proofbound.BoundedQuotient(momY.Value, momY.Bound, vol.Value, vol.Bound)
+	cz := proofbound.BoundedQuotient(momZ.Value, momZ.Bound, vol.Value, vol.Bound)
+	if proofbound.IsNonFinite(cx.Bound) || proofbound.IsNonFinite(cy.Bound) || proofbound.IsNonFinite(cz.Bound) {
 		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
 	}
-	fx, fy, fz := anchor.X+cx.value, anchor.Y+cy.value, anchor.Z+cz.value
+	fx, fy, fz := anchor.X+cx.Value, anchor.Y+cy.Value, anchor.Z+cz.Value
 
-	bound := radius3D(math.Max(cx.bound, math.Max(cy.bound, cz.bound)))
+	bound := proofbound.Radius3D(math.Max(cx.Bound, math.Max(cy.Bound, cz.Bound)))
 	centroidMeasurement := VecMeasurement{
 		Value:     r3.NewVec(fx, fy, fz),
 		Exactness: exactnessOf(bound),
@@ -1429,16 +1431,16 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 
 // sumStitchFlux sums every face's own flux and first moment, refusing R8 as
 // soon as any one face's own dispatch does.
-func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ boundedScalar, err error) {
+func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbound.BoundedScalar, err error) {
 	for _, f := range faces {
 		fFlux, fmx, fmy, fmz, err := stitchFaceFluxAndMoment(f, anchor)
 		if err != nil {
-			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 		}
-		flux = boundedAdd(flux, fFlux)
-		momX = boundedAdd(momX, fmx)
-		momY = boundedAdd(momY, fmy)
-		momZ = boundedAdd(momZ, fmz)
+		flux = proofbound.BoundedAdd(flux, fFlux)
+		momX = proofbound.BoundedAdd(momX, fmx)
+		momY = proofbound.BoundedAdd(momY, fmy)
+		momZ = proofbound.BoundedAdd(momZ, fmz)
 	}
 	return flux, momX, momY, momZ, nil
 }

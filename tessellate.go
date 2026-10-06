@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -492,7 +494,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	var loopSag []float64
 	// Parallel to pts2: each sample's own plane-local enclosure gap, which every
 	// mesh vertex it owns carries into its face's published displacement.
-	var sampleBound []walkEndBound
+	var sampleBound []proofbound.WalkEndBound
 	// The trim displacement a CAP carries: the largest sagitta over every loop
 	// bounding it, which is every loop of the section.
 	var capTrim float64
@@ -542,13 +544,13 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		// loop's chord-versus-arc deficit entirely; a solid charges it twice,
 		// once per cap it triangulates (chordedLoop's own doc comment).
 		if sheet {
-			mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack)
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack)
 		} else {
-			mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
 		}
-		segmentArea = absSumUpper(segmentArea, cl.segmentArea)
+		segmentArea = proofbound.AbsSumUpper(segmentArea, cl.segmentArea)
 		walks += cl.walks
-		perimeterUpper = absSumUpper(perimeterUpper, cl.perimeterUpper)
+		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, cl.perimeterUpper)
 
 		base := len(pts2)
 		pts2 = append(pts2, cl.samples...)
@@ -587,23 +589,23 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	mesh.vertices = make([]r3.Vec, 0, 2*len(pts2))
 	// vertexStore is docs/tessellation-reach-design.md §3's deltaStore, one
 	// entry per mesh vertex: the sample's own plane-local enclosure gap carried
-	// through the frame (walkEndBoundAllow) plus the rounding the frame and
+	// through the frame (proofbound.WalkEndBoundAllow) plus the rounding the frame and
 	// placement write commits (exactPrismPointRound). Both are zero for a
 	// recorded line vertex under an axis-aligned identity payload; neither is
 	// ever assumed zero for anything else.
 	vertexStore := make([]float64, 0, 2*len(pts2))
-	vertexBudget := newWorkBudget(ctx)
+	vertexBudget := proofbound.NewWorkBudget(ctx)
 	for j, p := range pts2 {
-		if err := vertexBudget.step(); err != nil {
+		if err := vertexBudget.Step(); err != nil {
 			return nil, err
 		}
 		lo := pp.point(p.U, p.V, pp.z0)
 		hi := pp.point(p.U, p.V, pp.z1)
 		mesh.vertices = append(mesh.vertices, lo, hi)
-		plane := walkEndBoundAllow(sampleBound[j])
+		plane := proofbound.WalkEndBoundAllow(sampleBound[j])
 		vertexStore = append(vertexStore,
-			absSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z0, lo)),
-			absSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z1, hi)),
+			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z0, lo)),
+			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z1, hi)),
 		)
 	}
 	storeMax, err := requireDerivableStore(vertexStore)
@@ -688,20 +690,20 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 		return &mesh, nil
 	}
 	if pp.sectionDelta > 0 {
-		wallMove := productUpper(sectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
 		if sheet {
 			// A sheet carries no cap, so its section-displacement area charge
 			// drops both cap terms and keeps the wall's own alone.
-			mesh.areaSlack = absSumUpper(mesh.areaSlack, wallMove)
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wallMove)
 		} else {
-			capMove := sectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
-			mesh.areaSlack = absSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
+			capMove := proofbound.SectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
+			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
 		}
 	}
 	// Every coordinate the build itself computed can move each facet's own area
 	// (docs/tessellation-design.md §5's per-triangle allowance), so the slack
 	// carries one such term per facet beside the analytic ones above.
-	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
 
 	if sheet {
 		// A sheet encloses no region, so there is no occupied volume to
@@ -723,11 +725,11 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 	height := math.Abs(pp.z1 - pp.z0)
 	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
 	terms := []float64{
-		productUpper(height, segmentArea),
-		productUpper(sectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper), height),
-		productUpper(pp.z0Delta, areaUpper[capStart]),
-		productUpper(pp.z1Delta, areaUpper[capEnd]),
-		sweptVolumeAllow(storeMax, perturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)),
+		proofbound.ProductUpper(height, segmentArea),
+		proofbound.ProductUpper(proofbound.SectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper), height),
+		proofbound.ProductUpper(pp.z0Delta, areaUpper[capStart]),
+		proofbound.ProductUpper(pp.z1Delta, areaUpper[capEnd]),
+		proofbound.SweptVolumeAllow(storeMax, proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)),
 	}
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
@@ -807,7 +809,7 @@ func liftTessellationError(err error) error {
 func requireDerivableStore(store []float64) (float64, error) {
 	worst := 0.0
 	for _, d := range store {
-		if isNonFinite(d) {
+		if proofbound.IsNonFinite(d) {
 			return 0, fmt.Errorf(`%w: a chorded boundary sample states no enclosure of the point its own record denotes, so this mesh can publish no displacement bound for the faces that meet it`, ErrUnsupported)
 		}
 		worst = math.Max(worst, d)
@@ -827,8 +829,8 @@ func composeFaceBounds(m *Mesh, trim, axial map[*Face]float64, store []float64, 
 		}
 	}
 	for f, s := range faceStore {
-		bound := upRound(trim[f] + s + section + axial[f])
-		if isNonFinite(bound) {
+		bound := proofbound.UpRound(trim[f] + s + section + axial[f])
+		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported)
 		}
 		m.setFaceBound(f, bound)
@@ -847,7 +849,7 @@ func meshStoreAreaAllow(m *Mesh, store []float64) float64 {
 			continue
 		}
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		total = absSumUpper(total, perturbedTriangleAreaAllow(a, b, c, d))
+		total = proofbound.AbsSumUpper(total, proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
 	}
 	return total
 }
@@ -864,7 +866,7 @@ func meshFaceAreaUpper(m *Mesh, store []float64) map[*Face]float64 {
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
 		d := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
 		held := b.Sub(a).Cross(c.Sub(a)).Len() / 2
-		out[f] = absSumUpper(out[f], held, perturbedTriangleAreaAllow(a, b, c, d))
+		out[f] = proofbound.AbsSumUpper(out[f], held, proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
 	}
 	return out
 }
@@ -874,8 +876,8 @@ func meshFaceAreaUpper(m *Mesh, store []float64) map[*Face]float64 {
 // state refuses (docs/tessellation-design.md §12) rather than publishing a
 // symmetric-difference bound the boolean would then compose into a result.
 func publishSymDiff(m *Mesh, terms []float64) error {
-	total := absSumUpper(terms...)
-	if isNonFinite(total) {
+	total := proofbound.AbsSumUpper(terms...)
+	if proofbound.IsNonFinite(total) {
 		return fmt.Errorf(`%w: this mesh states no finite bound on the volume it and the body it stands for differ by, so no boolean may consume it`, ErrUnsupported)
 	}
 	m.volSymDiff = total
@@ -907,7 +909,7 @@ type chordedLoop struct {
 	// junction reads the walk's own recorded endpoint bound; an interior
 	// circular station reads chordStationBound. A component the record cannot
 	// enclose reads +Inf, and the tessellation refuses on it.
-	boundOf []walkEndBound
+	boundOf []proofbound.WalkEndBound
 	maxSag  float64
 	// wallSlack is the WALL half of the chord-versus-arc area slack this
 	// loop's curved walks contribute over the sweep height: the deficit
@@ -953,7 +955,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	// One counter spans the segment walk, the walk loop and the sample emission
 	// nested under it: a single walk emits many samples, and it is the SAMPLES
 	// that are the candidate operations §7.2 counts.
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	var loopWalks []segmentWalk
 	if resolved != nil {
 		if !resolved.loopMatches(roleLoop, loop) {
@@ -967,7 +969,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	// section speak for the same curve.
 	perimeterUpper := 0.0
 	for i, seg := range loop.Segments {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return chordedLoop{}, err
 		}
 		// A resolved walk was already through walkOf once
@@ -984,7 +986,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 				return chordedLoop{}, err
 			}
 		}
-		perimeterUpper = absSumUpper(perimeterUpper, w.length, w.lengthBound)
+		perimeterUpper = proofbound.AbsSumUpper(perimeterUpper, w.length, w.lengthBound)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
@@ -995,10 +997,10 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	var samples []Point2
 	var faceOf []*Face
 	var sagOf []float64
-	var boundOf []walkEndBound
+	var boundOf []proofbound.WalkEndBound
 	var maxSag, wallSlack, capSlack, segmentArea float64
 	for _, w := range walks {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return chordedLoop{}, err
 		}
 		face, err := wallFace(w)
@@ -1028,7 +1030,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 				return chordedLoop{}, err
 			}
 			for i, p := range pts {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return chordedLoop{}, err
 				}
 				samples = append(samples, p)
@@ -1043,9 +1045,9 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			// two halves the circular arm below keeps apart, so the caller
 			// can decline the cap half for a sheet (docs/surface-design.md
 			// §10).
-			wallSlack = absSumUpper(wallSlack, wall)
-			capSlack = absSumUpper(capSlack, segment)
-			segmentArea = absSumUpper(segmentArea, segment)
+			wallSlack = proofbound.AbsSumUpper(wallSlack, wall)
+			capSlack = proofbound.AbsSumUpper(capSlack, segment)
+			segmentArea = proofbound.AbsSumUpper(segmentArea, segment)
 		case walkCircular:
 			n, sag, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
 			if err != nil {
@@ -1058,9 +1060,9 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			// totals, rather than after the two are combined: that is what
 			// lets the caller decline the cap half for a sheet without
 			// losing the pad on the half it keeps.
-			wallSlack = absSumUpper(wallSlack, productUpper(walkWallSlack(w.segmentWalk, n, height), 1+1e-9))
-			capSlack = absSumUpper(capSlack, productUpper(walkSegmentArea(w.segmentWalk, n), 1+1e-9))
-			segmentArea = absSumUpper(segmentArea, walkSegmentArea(w.segmentWalk, n))
+			wallSlack = proofbound.AbsSumUpper(wallSlack, proofbound.ProductUpper(walkWallSlack(w.segmentWalk, n, height), 1+1e-9))
+			capSlack = proofbound.AbsSumUpper(capSlack, proofbound.ProductUpper(walkSegmentArea(w.segmentWalk, n), 1+1e-9))
+			segmentArea = proofbound.AbsSumUpper(segmentArea, walkSegmentArea(w.segmentWalk, n))
 			// A circular walk never coalesces (coalesceWalks), so it covers
 			// exactly one recorded segment and every station on it is that
 			// segment's own parameter — which is what lets chordStationBound
@@ -1069,7 +1071,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			seg := loop.Segments[w.segs[0]]
 			dth := (w.th1 - w.th0) / float64(n)
 			for k := range n {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return chordedLoop{}, err
 				}
 				p := Point2{U: w.startU, V: w.startV}
@@ -1125,7 +1127,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 // A station whose plane coordinates are unrepresentable, or whose rounding gap
 // this record cannot enclose, refuses before any sample is emitted
 // (docs/tessellation-design.md §12: a mesh states its bound or it is not built).
-func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []walkEndBound, error) {
+func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []proofbound.WalkEndBound, error) {
 	if len(chain.stations) == 0 {
 		return nil, nil, fmt.Errorf(`%w: a free-form walk chorded to no station has no boundary sample`, ErrDegenerate)
 	}
@@ -1140,22 +1142,22 @@ func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []walkEndB
 	}
 
 	pts := make([]Point2, len(ordered))
-	bounds := make([]walkEndBound, len(ordered))
+	bounds := make([]proofbound.WalkEndBound, len(ordered))
 	for i, station := range ordered {
 		p, ok := point2Of(station)
 		if !ok {
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station has no representable plane coordinate`, ErrUnsupported)
 		}
-		bound := walkEndBound{
-			u: proofarith.RationalFloatError(station.u, p.U),
-			v: proofarith.RationalFloatError(station.v, p.V),
+		bound := proofbound.WalkEndBound{
+			U: proofarith.RationalFloatError(station.u, p.U),
+			V: proofarith.RationalFloatError(station.v, p.V),
 		}
-		if !bound.derivable() {
+		if !bound.Derivable() {
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station states no bound on the rounding its held plane coordinates commit`, ErrUnsupported)
 		}
 		pts[i], bounds[i] = p, bound
 	}
-	if !w.startBound.derivable() {
+	if !w.startBound.Derivable() {
 		return nil, nil, fmt.Errorf(`%w: a free-form walk states no bound on its own start, so the junction it shares carries no displacement`, ErrUnsupported)
 	}
 	pts[0] = Point2{U: w.startU, V: w.startV}
@@ -1170,7 +1172,7 @@ func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []walkEndB
 //
 // The wall term reads the chain's own proven bracket — an arc-length upper
 // bound minus a chord-length lower bound — so it never understates the deficit
-// a chord actually takes. The planar term is sectionDisplacementArea of the
+// a chord actually takes. The planar term is proofbound.SectionDisplacementArea of the
 // chain's measured sagitta over a single cell: every point of the cell's curve
 // lies within that sagitta of the chord SEGMENT, and a cell can cross its own
 // chord at an inflection, so the two-sided tube about the segment is the bound
@@ -1181,9 +1183,9 @@ func freeformChordAreas(chain freeformChain, height float64) (float64, float64) 
 	wall, segment := 0.0, 0.0
 	h := math.Abs(height)
 	for k, arc := range chain.cellArcUpper {
-		deficit := upRound(math.Max(arc-chain.cellChordLower[k], 0))
-		wall = absSumUpper(wall, productUpper(deficit, h))
-		segment = absSumUpper(segment, sectionDisplacementArea(chain.sagitta, 1, arc))
+		deficit := proofbound.UpRound(math.Max(arc-chain.cellChordLower[k], 0))
+		wall = proofbound.AbsSumUpper(wall, proofbound.ProductUpper(deficit, h))
+		segment = proofbound.AbsSumUpper(segment, proofbound.SectionDisplacementArea(chain.sagitta, 1, arc))
 	}
 	return wall, segment
 }
@@ -1284,8 +1286,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		// kept cap or pocket floor, plus a rim band), so it keeps both cap
 		// halves of the loop's slack, the same total chordedLoop's own
 		// combined areaSlack used to carry before it split.
-		mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
-		*area = absSumUpper(*area, cl.segmentArea)
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
+		*area = proofbound.AbsSumUpper(*area, cl.segmentArea)
 		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag, walks: cl.walks, perim: cl.perimeterUpper}
 		r.loV = make([]int, len(samples))
 		r.hiV = make([]int, len(samples))
@@ -1293,11 +1295,11 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		// axial displacement to one of them and takes the larger.
 		wallAxial := math.Max(loDelta, hiDelta)
 		for i, p := range samples {
-			plane := walkEndBoundAllow(cl.boundOf[i])
+			plane := proofbound.WalkEndBoundAllow(cl.boundOf[i])
 			loV := base.point(p.U, p.V, lo)
 			hiV := base.point(p.U, p.V, hi)
-			r.loV[i] = add(loV, absSumUpper(plane, exactPrismPointRound(base, p.U, p.V, lo, loV)))
-			r.hiV[i] = add(hiV, absSumUpper(plane, exactPrismPointRound(base, p.U, p.V, hi, hiV)))
+			r.loV[i] = add(loV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, lo, loV)))
+			r.hiV[i] = add(hiV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, hi, hiV)))
 			f := cl.faceOf[i]
 			faceTrim[f] = math.Max(faceTrim[f], cl.sagOf[i])
 			faceAxial[f] = wallAxial
@@ -1551,7 +1553,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 	var displacedPerim float64
 	for _, r := range displacedRings {
 		displacedWalks += r.walks
-		displacedPerim = absSumUpper(displacedPerim, r.perim)
+		displacedPerim = proofbound.AbsSumUpper(displacedPerim, r.perim)
 	}
 	if cp.offsetDelta > 0 {
 		displacedFaces := map[*Face]struct{}{displacedCap: {}}
@@ -1568,7 +1570,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 			displacedFaces[rim] = struct{}{}
 		}
 		for f := range displacedFaces {
-			faceTrim[f] = absSumUpper(faceTrim[f], cp.offsetDelta)
+			faceTrim[f] = proofbound.AbsSumUpper(faceTrim[f], cp.offsetDelta)
 		}
 	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, 0); err != nil {
@@ -1580,15 +1582,15 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		// occupied-volume proof has not started, so neither is published.
 		return &mesh, nil
 	}
-	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
 	// The displaced region's own area moves by its displacement area once in
 	// its cap and once in the rims it bounds, and its walls' length by the
 	// displacement length over their height — evalPrism's composition for a
 	// section displacement, one region at a time.
-	displacedArea := sectionDisplacementArea(cp.offsetDelta, displacedWalks, displacedPerim)
+	displacedArea := proofbound.SectionDisplacementArea(cp.offsetDelta, displacedWalks, displacedPerim)
 	if cp.offsetDelta > 0 {
-		wallMove := productUpper(sectionDisplacementLength(cp.offsetDelta, displacedWalks), displacedHeight)
-		mesh.areaSlack = absSumUpper(mesh.areaSlack, displacedArea, displacedArea, wallMove)
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(cp.offsetDelta, displacedWalks), displacedHeight)
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, displacedArea, displacedArea, wallMove)
 	}
 
 	// Occupied volume (docs/tessellation-reach-design.md §3): each region's own
@@ -1602,16 +1604,16 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		if err != nil {
 			return nil, err
 		}
-		rimArea = absSumUpper(rimArea, areaUpper[rim])
+		rimArea = proofbound.AbsSumUpper(rimArea, areaUpper[rim])
 	}
 	terms := []float64{
-		productUpper(oHi-oLo, oSegmentArea),
-		productUpper(cHi-cLo, cSegmentArea),
-		productUpper(displacedHeight, displacedArea),
-		productUpper(cp.zOuterDelta, areaUpper[capStart]),
-		productUpper(cp.zCavDelta, areaUpper[shellCap]),
-		productUpper(cp.zOpenDelta, rimArea),
-		sweptVolumeAllow(storeMax, perturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)),
+		proofbound.ProductUpper(oHi-oLo, oSegmentArea),
+		proofbound.ProductUpper(cHi-cLo, cSegmentArea),
+		proofbound.ProductUpper(displacedHeight, displacedArea),
+		proofbound.ProductUpper(cp.zOuterDelta, areaUpper[capStart]),
+		proofbound.ProductUpper(cp.zCavDelta, areaUpper[shellCap]),
+		proofbound.ProductUpper(cp.zOpenDelta, rimArea),
+		proofbound.SweptVolumeAllow(storeMax, proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)),
 	}
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
@@ -1685,14 +1687,14 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	}
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	// The payload carries one global composed displacement and no tighter
 	// per-face certificate, so every restated face publishes that Delta
 	// (docs/tessellation-design.md §2: an incomplete per-face composition falls
 	// back to Delta, NEVER to zero).
 	faceBound := map[*Face]float64{}
 	for i, fi := range fp.faceOf {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if fi < 0 || fi >= len(faces) {
@@ -1821,14 +1823,14 @@ func chordCount(w segmentWalk, tol float64, nMin int) (int, float64, error) {
 // exact-integer range) the computation commits no rounding at all, and
 // outward-rounding a DENOMINATOR would move the bound the WRONG way — a
 // larger denominator gives a SMALLER, tighter, and here unproven quotient.
-// The numerator r·sweep² is outward-rounded through productUpper, and the
-// one division is outward-rounded by a final upRound, exactly the
-// single-operation margin productUpper already applies to a multiply.
+// The numerator r·sweep² is outward-rounded through proofbound.ProductUpper, and the
+// one division is outward-rounded by a final proofbound.UpRound, exactly the
+// single-operation margin proofbound.ProductUpper already applies to a multiply.
 //
 // That float chain is a proven upper bound wherever it lands on a positive
 // value, and it is the only thing this helper publishes there. What it may
 // NOT do is answer ZERO for a positive r·sweep²/(8n²): rounding outward
-// cannot rescue an UNDERFLOW, since upRound leaves 0 alone, and both the
+// cannot rescue an UNDERFLOW, since proofbound.UpRound leaves 0 alone, and both the
 // sweep·sweep product and the final quotient can reach 0 from operands that
 // are each positive. chordCount hands this figure on as the walk's proven
 // sagitta and [Mesh.Bound] publishes it, so a zero there would claim an
@@ -1854,9 +1856,9 @@ func chordCount(w segmentWalk, tol float64, nMin int) (int, float64, error) {
 func chordSagitta(radius, sweep float64, n int) float64 {
 	if n <= 0 || sweep < 0 {
 		// A non-positive n or a negative sweep would otherwise read as
-		// sagitta 0 — productUpper(sweep, sweep) already zeroes a negative
+		// sagitta 0 — proofbound.ProductUpper(sweep, sweep) already zeroes a negative
 		// sweep — which UNDERSTATES the true, positive sagitta rather than
-		// falsifying the claim (cutDisplacementAllow's own rule: an absent
+		// falsifying the claim (proofbound.CutDisplacementAllow's own rule: an absent
 		// bound must never read as a small one).
 		return math.Inf(1)
 	}
@@ -1866,14 +1868,14 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 		// refusal needed.
 		return 0
 	}
-	if isNonFinite(radius) || isNonFinite(sweep) {
+	if proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(sweep) {
 		// A non-finite claim states no bound at all. It refuses with +Inf for
 		// the same reason the two arms above do, rather than carrying the NaN
 		// the arithmetic below would otherwise publish as a bound.
 		return math.Inf(1)
 	}
 	denom := 8 * float64(n) * float64(n)
-	if denom <= 0 || isNonFinite(denom) {
+	if denom <= 0 || proofbound.IsNonFinite(denom) {
 		// 8n² saturated, so the true bound r·sweep²/(8n²) is itself driven to
 		// zero and 0 remains an upper bound.
 		return 0
@@ -1882,7 +1884,7 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 		// The true sagitta is exactly zero, and so is its bound.
 		return 0
 	}
-	if s := upRound(productUpper(radius, productUpper(sweep, sweep)) / denom); s > 0 {
+	if s := proofbound.UpRound(proofbound.ProductUpper(radius, proofbound.ProductUpper(sweep, sweep)) / denom); s > 0 {
 		return s
 	}
 	return exactChordSagitta(radius, sweep, n)
@@ -1898,14 +1900,14 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 //
 // radius and sweep are float64 and therefore exact rationals, and 8n² is an
 // exact integer for every positive n, so the quotient here is the EXACT bound
-// with no rounding anywhere in it. ratFloatUp then rounds that one value
+// with no rounding anywhere in it. proofbound.RatFloatUp then rounds that one value
 // outward, which answers the smallest positive float64 — never zero — for a
 // bound too small for float64 to represent.
 func exactChordSagitta(radius, sweep float64, n int) float64 {
 	num := new(big.Rat).Mul(proofarith.FloatRat(radius), new(big.Rat).Mul(proofarith.FloatRat(sweep), proofarith.FloatRat(sweep)))
 	nRat := new(big.Rat).SetInt64(int64(n))
 	denom := new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat))
-	return ratFloatUp(num.Quo(num, denom))
+	return proofbound.RatFloatUp(num.Quo(num, denom))
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.
@@ -1923,7 +1925,7 @@ var errTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d
 // profile with many loops is proportionally more work because the caller
 // modelled proportionally more geometry, and docs/interference-design.md §7
 // answers large work with cancellation rather than a work cap: the read-only
-// path polls its context at least once per workPollInterval candidate
+// path polls its context at least once per proofbound.WorkPollInterval candidate
 // operations, so chordLoop, bridgeHole and earClip all abandon a large profile
 // promptly. A total cap would instead refuse a profile this evaluator can
 // build correctly.
@@ -1975,9 +1977,9 @@ func sectionClearanceFloor(ctx context.Context, pts []Point2) (float64, error) {
 	minU, maxU := math.Inf(1), math.Inf(-1)
 	minV, maxV := math.Inf(1), math.Inf(-1)
 	maxAbs := 0.0
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for _, p := range pts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, err
 		}
 		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
@@ -2014,7 +2016,7 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 	if err != nil {
 		return err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for i, idx := range loopIdx {
 		m := len(idx)
 		if m < 4 {
@@ -2022,7 +2024,7 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 		}
 		for a := range m {
 			for b := a + 2; b < m; b++ {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				if a == 0 && b == m-1 {
@@ -2058,11 +2060,11 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 // polylines.
 func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float64, error) {
 	best := math.Inf(1)
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for i := range a {
 		a0, a1 := pts[a[i]], pts[a[(i+1)%len(a)]]
 		for j := range b {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return 0, err
 			}
 			b0, b1 := pts[b[j]], pts[b[(j+1)%len(b)]]

@@ -7,62 +7,64 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
-	point := func(x, y, z, w int64) xpt {
-		return xpt{big.NewInt(x), big.NewInt(y), big.NewInt(z), big.NewInt(w)}
+	point := func(x, y, z, w int64) proofbound.Xpt {
+		return proofbound.Xpt{X: big.NewInt(x), Y: big.NewInt(y), Z: big.NewInt(z), W: big.NewInt(w)}
 	}
 	huge := new(big.Int).Lsh(big.NewInt(1), 1000)
-	extreme := xpt{
-		x: new(big.Int).Set(huge),
-		y: new(big.Int).Neg(huge),
-		z: big.NewInt(0),
-		w: big.NewInt(5),
+	extreme := proofbound.Xpt{
+		X: new(big.Int).Set(huge),
+		Y: new(big.Int).Neg(huge),
+		Z: big.NewInt(0),
+		W: big.NewInt(5),
 	}
-	extremePoint := func(z int64) xpt {
-		return xpt{
-			x: new(big.Int).Mul(huge, big.NewInt(3)),
-			y: new(big.Int).Neg(new(big.Int).Mul(huge, big.NewInt(3))),
-			z: big.NewInt(z),
-			w: big.NewInt(15),
+	extremePoint := func(z int64) proofbound.Xpt {
+		return proofbound.Xpt{
+			X: new(big.Int).Mul(huge, big.NewInt(3)),
+			Y: new(big.Int).Neg(new(big.Int).Mul(huge, big.NewInt(3))),
+			Z: big.NewInt(z),
+			W: big.NewInt(15),
 		}
 	}
 	for _, tc := range []struct {
 		name   string
-		anchor xpt
-		normal xpt
-		other  [3]xpt
+		anchor proofbound.Xpt
+		normal proofbound.Xpt
+		other  [3]proofbound.Xpt
 	}{
 		{
 			name:   "odd weights and a plane crossing",
 			anchor: point(1, -2, 1, 3), normal: point(2, -3, 5, 7),
-			other: [3]xpt{point(30, 12, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+			other: [3]proofbound.Xpt{point(30, 12, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
 		},
 		{
 			name:   "reversed normal and shared point",
 			anchor: point(1, -2, 1, 3), normal: point(-2, 3, -5, 11),
-			other: [3]xpt{point(3, -6, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+			other: [3]proofbound.Xpt{point(3, -6, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
 		},
 		{
 			name:   "large cancellation near the plane",
 			anchor: extreme, normal: point(1, 1, 5, 9),
-			other: [3]xpt{extremePoint(1), extremePoint(0), extremePoint(-1)},
+			other: [3]proofbound.Xpt{extremePoint(1), extremePoint(0), extremePoint(-1)},
 		},
 		{
 			name:   "zero normal",
 			anchor: point(5, 3, -9, 7), normal: point(0, 0, 0, 13),
-			other: [3]xpt{point(1, 2, 3, 5), point(-7, 9, 4, 11), point(0, 0, 0, 1)},
+			other: [3]proofbound.Xpt{point(1, 2, 3, 5), point(-7, 9, 4, 11), point(0, 0, 0, 1)},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plane := newLoftExactPlane(tc.anchor, tc.normal)
 			var want [3]int
 			for i, p := range tc.other {
-				want[i] = xdotSign(tc.normal, xsub(p, tc.anchor))
+				want[i] = xdotSign(tc.normal, proofbound.Xsub(p, tc.anchor))
 			}
 			require.Equal(t, want, trianglePlaneSigns(plane, tc.other))
 		})
@@ -71,8 +73,8 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 	plane := newLoftExactPlane(anchor, normal)
 	var sum, term big.Int
 	want := plane.sign(p, &sum, &term)
-	anchor.w.SetInt64(99)
-	normal.x.SetInt64(99)
+	anchor.W.SetInt64(99)
+	normal.X.SetInt64(99)
 	require.Equal(t, want, plane.sign(p, &sum, &term), "cached coefficients must own their integers")
 }
 
@@ -106,7 +108,7 @@ func boxLoftTris() [][3]int {
 // disjoint pair, all classify as their recorded adjacency expects.
 func TestLoftCrossingAuditAdmitsUntwistedBox(t *testing.T) {
 	t.Parallel()
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	err := loftCrossingAudit(budget, boxLoftVerts(), boxLoftTris())
 	require.NoError(t, err)
 }
@@ -129,8 +131,8 @@ func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
 	tb := loftTriCorners(verts, upper0)
 	xta := loftXTriCorners(verts, lower0)
 	xtb := loftXTriCorners(verts, upper0)
-	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
-	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
+	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
 	contact, err := triTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	require.Equal(t, contactRegion, contact.kind,
@@ -169,7 +171,7 @@ func TestLoftCrossingAuditRejectsSameSideApexes(t *testing.T) {
 	require.ErrorContains(t, err, "triangles 0 and 1",
 		"the refusal must name the specific triangle pair the predicate found")
 
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	err = loftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -204,7 +206,7 @@ func TestLoftCrossingAuditRejectsGenuineCrossing(t *testing.T) {
 	require.ErrorContains(t, err, "triangles 0 and 1",
 		"the refusal must name the specific triangle pair the predicate found")
 
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	err = loftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -246,7 +248,7 @@ func TestLoftCrossingAuditRejectsCollapsedTriangle(t *testing.T) {
 	}
 	tris := [][3]int{{0, 1, 2}}
 
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	err := loftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -271,20 +273,20 @@ func syntheticLoftTriangles(n int) ([]r3.Vec, [][3]int) {
 }
 
 // TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest is S8: a synthetic
-// set sized so F*(F-1)/2 exceeds maxFacetPairTestsPerCall must refuse before
+// set sized so F*(F-1)/2 exceeds proofbound.MaxFacetPairTestsPerCall must refuse before
 // a single pair test runs. An instrumented counting budget proves it: the
 // step count after refusal equals exactly the triangle count (S6's own
 // per-triangle scan), never more — no pair test was ever trusted.
 func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 	t.Parallel()
-	// 4001*4000/2 = 8_002_000 > maxFacetPairTestsPerCall (8_000_000).
+	// 4001*4000/2 = 8_002_000 > proofbound.MaxFacetPairTestsPerCall (8_000_000).
 	const n = 4001
 	verts, tris := syntheticLoftTriangles(n)
 
 	calls := 0
-	budget := &workBudget{
-		stepFn: func() error { calls++; return nil },
-		errFn:  func() error { return nil },
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error { calls++; return nil },
+		ErrFn:  func() error { return nil },
 	}
 
 	err := loftCrossingAudit(budget, verts, tris)
@@ -300,15 +302,15 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 	verts, tris := syntheticLoftTriangles(4)
 
 	calls := 0
-	budget := &workBudget{
-		stepFn: func() error {
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error {
 			calls++
 			if calls == 2 {
 				return context.Canceled
 			}
 			return nil
 		},
-		errFn: func() error { return nil },
+		ErrFn: func() error { return nil },
 	}
 
 	err := loftCrossingAudit(budget, verts, tris)
@@ -317,8 +319,8 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 
 // TestLoftCrossingAuditPollsAfterFinalPair proves the audit observes a context
 // cancelled after the S6 boundary check even when no step call ever reaches a
-// poll. The budget here mirrors newWorkBudget's real semantics — step observes
-// the context only on every workPollInterval-th call, err observes it
+// poll. The budget here mirrors proofbound.NewWorkBudget's real semantics — step observes
+// the context only on every proofbound.WorkPollInterval-th call, err observes it
 // unconditionally — so three triangles (three S6 steps, three S7 pair steps)
 // finish the whole audit without a single step poll landing. The trailing
 // budget.err() after S7 is the only thing that can return ctx.Err() here.
@@ -331,18 +333,18 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 
 	const finalPairStep = 6 // 3 triangles in S6, then 3 pairs in S7
 	steps, errs := 0, 0
-	budget := &workBudget{
-		stepFn: func() error {
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error {
 			steps++
 			if steps == finalPairStep {
 				cancel()
 			}
-			if steps%workPollInterval == 0 {
+			if steps%proofbound.WorkPollInterval == 0 {
 				return ctx.Err()
 			}
 			return nil
 		},
-		errFn: func() error {
+		ErrFn: func() error {
 			errs++
 			return ctx.Err()
 		},
@@ -515,7 +517,7 @@ func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {
 func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris [][3]int) {
 	t.Helper()
 
-	_, refErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditReference)
+	_, refErr := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	for _, arm := range []struct {
 		name      string
 		shortcuts loftAuditShortcuts
@@ -524,7 +526,7 @@ func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris []
 		{name: "certificates only", shortcuts: loftAuditShortcuts{certificates: true}},
 		{name: "production", shortcuts: loftAuditProduction},
 	} {
-		_, gotErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, arm.shortcuts)
+		_, gotErr := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, arm.shortcuts)
 		if refErr == nil {
 			require.NoError(t, gotErr, "%s must not turn a passing audit into a failing one", arm.name)
 			continue
@@ -578,7 +580,7 @@ func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 	require.Positive(t, work.skips,
 		"40 mutually far-apart triangles must exercise the short-circuit at least once")
@@ -594,7 +596,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	alone, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	alone, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 	require.Positive(t, alone.skips)
 	require.Equal(t, 40*39/2, alone.skips+alone.edgeCerts+alone.vertexCerts+alone.classifications,
@@ -605,7 +607,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	errs := make([]error, 2)
 	for k := range got {
 		wg.Go(func() {
-			got[k], errs[k] = loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+			got[k], errs[k] = loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		})
 	}
 	wg.Wait()
@@ -629,7 +631,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 	t.Parallel()
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
-		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.skips,
 			"a pair sharing one recorded vertex is required to touch there; the broad-phase must never decide it")
@@ -637,7 +639,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 
 	t.Run("two shared vertices", func(t *testing.T) {
 		verts, tris := sameSideApexesFixture()
-		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.skips,
 			"a pair sharing two recorded vertices is required to touch along that edge; the broad-phase must never decide it")
@@ -656,7 +658,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 	want := auditLoftPair(verts, tris, 0, 1)
 	require.ErrorIs(t, want, ErrDegenerate)
 
-	got := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
+	got := loftCrossingAudit(proofbound.NewWorkBudget(t.Context()), verts, tris)
 	require.ErrorIs(t, got, ErrDegenerate)
 	require.Equal(t, want.Error(), got.Error())
 }
@@ -739,9 +741,9 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 	fs := wedgeFitSpline(t)
 	verts, tris := chordedWedgeTriangles(t, wedgeSplinePoints(fs, stations))
 
-	off, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditReference)
+	off, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	require.NoError(t, err)
-	on, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	on, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 
 	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d edgeCerts=%d vertexCerts=%d",
@@ -812,7 +814,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 		{name: "on", shortcuts: loftAuditProduction},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
-			budget := newWorkBudget(b.Context())
+			budget := proofbound.NewWorkBudget(b.Context())
 			var work loftAuditWork
 			for b.Loop() {
 				var err error
@@ -831,7 +833,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 // This file is a10-plan.md Part 3 PR 9 Task 1c: an END-TO-END fixture for
 // the wall's own three-leg AREA gap (loft_moments.go's
 // m.chorded.areaExcess, area()'s own composition line
-// `bound = absSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)`)
+// `bound = proofbound.AbsSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)`)
 // — the leg zeroing left the ENTIRE repository suite green before this file
 // existed. TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
 // (loft_arc_pairs_internal_test.go) already proves computeLoftChordedAllow's
@@ -887,7 +889,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 // line, not merely "RED":
 //
 //   - m.chorded.areaExcess (the wall leg) zeroed
-//     (`bound = absSumUpper(bound, 0, m.chorded.capAreaExcess)`):
+//     (`bound = proofbound.AbsSumUpper(bound, 0, m.chorded.capAreaExcess)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.002446194848033656" is not less than or equal to "0.0004608435108288873"`
 //     (residual=2.4462e-3, shrunk bound=4.6084e-4) — on "the loft's own
@@ -904,7 +906,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 //     entirely; it is kept as a baseline sanity check, never as the wall
 //     leg's own falsifier.
 //   - m.chorded.capAreaExcess (the cap leg) zeroed
-//     (`bound = absSumUpper(bound, m.chorded.areaExcess, 0)`):
+//     (`bound = proofbound.AbsSumUpper(bound, m.chorded.areaExcess, 0)`):
 //     TestLoftArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.0057332610270179885" is not less than or equal to "0.0038222448743720373"`
 //     (residual=5.7333e-3, shrunk bound=3.8222e-3) — on "the loft's own Area
@@ -919,7 +921,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 //     an untouched bound of 5.9587e+2) — CONTRARY to what an earlier
 //     version of that test's own doc comment claimed about VIOLATION 1: at
 //     its own r0=20 that fixture's bound is dominated by other slack (the
-//     wall summation's own sumSlop term at that scale) by four orders of
+//     wall summation's own proofbound.SumSlop term at that scale) by four orders of
 //     magnitude, so it is not, in fact, a working falsifier for this leg —
 //     a finding surfaced here rather than papered over. This file's own
 //     untwisted-wedge fixture is the one that actually falsifies the cap
@@ -1125,7 +1127,7 @@ func wedgeArcSketchShiftedR(t *testing.T, w *sketch.World, plane *sketch.Plane, 
 // the top section's own construction points ALSO translated by (3, -2),
 // several times the wedge's own radius, against the bottom section: the
 // case where the ruling tilts hardest against the section tangent
-// (cellTwistAreaAllow's own twist leg, a10-plan.md's own wording for this
+// (proofbound.CellTwistAreaAllow's own twist leg, a10-plan.md's own wording for this
 // task).
 func TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference(t *testing.T) {
 	t.Parallel()

@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -32,7 +34,7 @@ func ratStraightEdgeBound(held float64, squared *big.Rat, endpointDeltas ...floa
 	if squared == nil {
 		return math.Inf(1)
 	}
-	return absSumUpper(append([]float64{ratSqrtIntervalError(squared, held)}, endpointDeltas...)...)
+	return proofbound.AbsSumUpper(append([]float64{ratSqrtIntervalError(squared, held)}, endpointDeltas...)...)
 }
 
 // TestStraightEdgeBoundDyadicMatchesRational pins straightEdgeBound and its
@@ -147,9 +149,9 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 		got := straightEdgeBound(held, squared, ok, delta, delta)
 		old := ratStraightEdgeBound(held, want, delta, delta)
 		if want != nil && held >= 0 && new(big.Rat).Mul(proofarith.FloatRat(held), proofarith.FloatRat(held)).Cmp(want) == 0 {
-			requireSameFloatBits(t, absSumUpper(0, delta, delta), got,
+			requireSameFloatBits(t, proofbound.AbsSumUpper(0, delta, delta), got,
 				"an exact length %v from %v to %v must read no square-root term", held, a, b)
-			require.LessOrEqual(t, old, absSumUpper(upRound(ulpOf(held)), delta, delta),
+			require.LessOrEqual(t, old, proofbound.AbsSumUpper(proofbound.UpRound(proofbound.UlpOf(held)), delta, delta),
 				"the oracle may miss an exact length %v by one ulp at most", held)
 			shortcut++
 			if !isExactFloat(want) {
@@ -158,7 +160,7 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 			return
 		}
 		requireSameFloatBits(t, old, got, "bound of %v to %v at %v", a, b, held)
-		if want != nil && !isNonFinite(held) {
+		if want != nil && !proofbound.IsNonFinite(held) {
 			require.Positive(t, got, "%v is not the length from %v to %v and must not read exact", held, a, b)
 			bracket++
 		}

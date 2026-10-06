@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -108,7 +110,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 // can change which pairs of placed triangles meet.
 type stitchPayload struct {
 	xform r3.Transform
-	// delta is the proven displacement rigidRoundAllow charges against the
+	// delta is the proven displacement proofbound.RigidRoundAllow charges against the
 	// placed shared vertex table — zero exactly when xform is the identity
 	// transform, an exact struct comparison (docs/loft-design.md §5's
 	// identical fast path).
@@ -169,26 +171,26 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// never per operand (docs/surface-design.md's "recorded weld" decision).
 	maxInputAbs := 0.0
 	for _, p := range plan.table.verts {
-		maxInputAbs = max(maxInputAbs, vecMaxAbs(p))
+		maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(p))
 	}
 	verts := make([]r3.Vec, len(plan.table.verts))
 	for i, p := range plan.table.verts {
 		v := xform.Apply(p)
-		if !finiteVec(v) {
+		if !proofbound.FiniteVec(v) {
 			return nil, fmt.Errorf(`%w: a placed stitch vertex is not representable`, ErrUnsupported)
 		}
 		verts[i] = v
 	}
 	delta := 0.0
 	if xform != r3.Identity() {
-		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+		delta = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
 	}
 	// massDelta is what the mass accumulator charges instead of delta alone:
 	// a welded vertex the shared-denotation certificate admitted (J5's
 	// bounded-pair lift, docs/surface-design.md §6.2's amendment) is no
 	// longer zero-bound, so the triangle set the tetrahedron sum runs over is
 	// no longer the body's own true vertices — it is only within
-	// maxClassBound of them. sweptVolumeAllow already bounds exactly this
+	// maxClassBound of them. proofbound.SweptVolumeAllow already bounds exactly this
 	// shape of error (a uniform per-vertex displacement), so folding the
 	// widest class bound into the same delta the placement rounding uses is
 	// a reuse, not new proof machinery (§6.4's amendment: a bounded weld's
@@ -201,7 +203,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	}
 	massDelta := delta
 	if maxClassBound > 0 {
-		massDelta = absSumUpper(delta, maxClassBound)
+		massDelta = proofbound.AbsSumUpper(delta, maxClassBound)
 	}
 
 	newFaces, classOf, welded, err := rebuildStitchTopology(ctx, plan, xform, verts, delta, srcFaces)
@@ -292,7 +294,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 			return nil, err
 		}
 
-		budget := newWorkBudget(ctx)
+		budget := proofbound.NewWorkBudget(ctx)
 		auditErr := loftCrossingAudit(budget, verts, tris)
 		switch {
 		case auditErr != nil && !open:
@@ -396,21 +398,21 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	body.lumps = sheetLumps(newFaces)
 
 	// Area is the sum of the constituent faces' own area/areaBound through
-	// boundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a
+	// proofbound.BoundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a
 	// triangle-sum reading, since a general planar triangle's area is a
 	// square root of a rational and so is never Exact the way a face's own
 	// analytically integrated area already is.
-	areaAcc := boundedScalar{}
+	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range newFaces {
-		areaAcc = boundedAdd(areaAcc, measuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
 	}
 	if acc != nil && delta > 0 {
-		areaAcc.bound = absSumUpper(areaAcc.bound, acc.perturbAreaSum)
+		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.perturbAreaSum)
 	}
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(areaAcc.value),
-		Exactness: exactnessOf(areaAcc.bound),
-		Bound:     units.SquareMillimeters(areaAcc.bound),
+		Value:     units.SquareMillimeters(areaAcc.Value),
+		Exactness: exactnessOf(areaAcc.Bound),
+		Bound:     units.SquareMillimeters(areaAcc.Bound),
 	}
 
 	bounds, err := stitchBounds(srcFaces, xform, delta)
@@ -503,7 +505,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		}
 		bound := plan.table.boundByClass[class]
 		if delta > 0 {
-			bound = absSumUpper(bound, delta)
+			bound = proofbound.AbsSumUpper(bound, delta)
 		}
 		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.denotByClass[class].compose(xform)}
 		newVertByClass[class] = nv
@@ -538,7 +540,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		}
 		lengthBound := old.lengthBound
 		if delta > 0 {
-			lengthBound = absSumUpper(lengthBound, delta)
+			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
 			curve:           curve,
@@ -574,7 +576,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		}
 		axialDelta := f.axialDelta
 		if delta > 0 {
-			axialDelta = absSumUpper(axialDelta, delta)
+			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
 			surface:       surface,
@@ -921,9 +923,9 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 // could drift apart. budget charges one step per vertex visited, the same
 // cancellable walk clearance_geom.go's own version charged before this
 // extraction.
-func stitchZeroVertexBound(budget *workBudget, b *Body) (bool, error) {
+func stitchZeroVertexBound(budget *proofbound.WorkBudget, b *Body) (bool, error) {
 	for _, v := range b.Vertices() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		if v.Position().Bound.Mag() != 0 {
@@ -941,10 +943,10 @@ func stitchZeroVertexBound(budget *workBudget, b *Body) (bool, error) {
 // carrier model reads comes straight off the body's own topology, so the
 // worst vertex bound is a sound charge against the whole model, exactly as a
 // placed prism's frame/placement rounding is (bodyGeom's own doc comment).
-func stitchMaxVertexBound(budget *workBudget, b *Body) (float64, error) {
+func stitchMaxVertexBound(budget *proofbound.WorkBudget, b *Body) (float64, error) {
 	best := 0.0
 	for _, v := range b.Vertices() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, err
 		}
 		if m := v.Position().Bound.Mag(); m > best {
@@ -1127,7 +1129,7 @@ func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, err
 		inflate := box.Bound.Base()
 		for _, c := range stitchBoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)
-			if !finiteVec(p) {
+			if !proofbound.FiniteVec(p) {
 				return Box{}, fmt.Errorf(`%w: a placed stitch bound is not representable`, ErrUnsupported)
 			}
 			if !have {

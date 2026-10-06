@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -213,11 +215,11 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 			ideal.Reason = ContactPointTooCoarse
 			return
 		}
-		witness.Bound = units.Millimeters(ratFloatUp(bound))
+		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 		witness.Exactness = exactnessFromBound(witness.Bound.Base())
 	}
 	separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
-	point.Separation.Bound = units.Millimeters(ratFloatUp(separationBound))
+	point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
 	point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
 	ideal.Reason = ContactNoReason

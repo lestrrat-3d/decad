@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +45,7 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 		z0: 0, z1: 10, surfaceResult: true,
 	}
 
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	generated, offErr := offsetProfile(budget, pp.profile, +1, 1)
 	require.NoError(t, offErr)
 	first, ok := generated.Outer.Segments[0].(LineSeg)
@@ -82,7 +84,7 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 	t.Parallel()
 	pp := offsetNeckPayload(t)
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
 	require.Len(t, loops, 1)
@@ -123,7 +125,7 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 func TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone(t *testing.T) {
 	t.Parallel()
 	pp := offsetNeckPayload(t)
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	section, err := offsetPrismSection(t.Context(), pp, +1, 1.5, budget)
 	require.NoError(t, err)
 

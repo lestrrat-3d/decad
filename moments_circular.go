@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -28,24 +30,24 @@ func exactCoordinateDelta(a, b float64) *big.Rat {
 // ArcSeg, given the two exact squared distances. The denoted arc runs on Start's
 // radius and ends at End's ANGLE, so the point the arc actually ends at is
 // Center + ρ·(End − Center); every circular bracket substitutes that for the
-// recorded End. ρ is the ratSqrtDown/ratSqrtUp bracket of the exact rational
+// recorded End. ρ is the proofbound.RatSqrtDown/proofbound.RatSqrtUp bracket of the exact rational
 // r²/endR², rounded outward once at each end and never a float sqrt of a float.
 // Equal squared radii answer the exact point 1 — the record states an exact
 // circle and the substitution is the identity. A zero endR² (End == Center)
 // answers false; the preflight refuses that record before any bracket runs.
-func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
+func arcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
 	if endR2.Sign() == 0 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	if endR2.Cmp(r2) == 0 {
-		return pointInterval(big.NewRat(1, 1)), true
+		return proofbound.PointInterval(big.NewRat(1, 1)), true
 	}
 	q := new(big.Rat).Quo(r2, endR2)
-	lo, hi := proofarith.FloatRat(ratSqrtDown(q)), proofarith.FloatRat(ratSqrtUp(q))
+	lo, hi := proofarith.FloatRat(proofbound.RatSqrtDown(q)), proofarith.FloatRat(proofbound.RatSqrtUp(q))
 	if lo == nil || hi == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return interval(lo, hi), true
+	return proofbound.Interval(lo, hi), true
 }
 
 // circularAreaInterval brackets one circular walk's exact area contribution
@@ -55,7 +57,7 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
 // this bracket stays a proof about the recorded arc rather than about a
 // float-shifted copy of it.
 //
-// A CircleSeg's fractional-turn arm (moments_trig.go's turnSinCosInterval)
+// A CircleSeg's fractional-turn arm (internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval)
 // covers a trimmed fragment the same way the whole-turn fast path covers a
 // full sweep: every non-trig factor (the radius, the recentred centre
 // coordinates, the swept angle) is an exact rational, and only the endpoint
@@ -63,50 +65,50 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
 // below makes for its own endpoints — differing only in where those
 // sine/cosine values come from (an exact ratio there, a certified bracket
 // here, because a CircleSeg's endpoints are not recorded coordinates).
-func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
+func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, bool) {
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	switch seg := seg.(type) {
 	case CircleSeg:
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		r := proofarith.FloatRat(radius)
 		if r == nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		if dt.IsInt() {
 			// An integer number of turns has equal endpoint sine/cosine terms,
 			// leaving exactly dt·π·r².
 			scale := new(big.Rat).Mul(dt, new(big.Rat).Mul(r, r))
-			return intervalScale(interval(piLower, piUpper), scale), true
+			return proofbound.IntervalScale(proofbound.Interval(proofbound.PiLower, proofbound.PiUpper), scale), true
 		}
 		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
-		s0, c0 := turnSinCosInterval(t0)
-		s1, c1 := turnSinCosInterval(t1)
+		s0, c0 := proofbound.TurnSinCosInterval(t0)
+		s1, c1 := proofbound.TurnSinCosInterval(t1)
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
-		piIv := interval(piLower, piUpper)
-		dtheta := intervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
-		sector := intervalScale(dtheta, new(big.Rat).Mul(r, r))
-		uTerm := intervalScale(intervalSub(s1, s0), new(big.Rat).Mul(centerU, r))
-		vTerm := intervalScale(intervalSub(c1, c0), new(big.Rat).Mul(centerV, r))
+		piIv := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
+		dtheta := proofbound.IntervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
+		sector := proofbound.IntervalScale(dtheta, new(big.Rat).Mul(r, r))
+		uTerm := proofbound.IntervalScale(proofbound.IntervalSub(s1, s0), new(big.Rat).Mul(centerU, r))
+		vTerm := proofbound.IntervalScale(proofbound.IntervalSub(c1, c0), new(big.Rat).Mul(centerV, r))
 		// A = ½ ( r²·dθ + c_u·r·(sin θ1 − sin θ0) − c_v·r·(cos θ1 − cos θ0) ) —
 		// addCircular's own closed form (moments.go:1505), every non-trig
 		// factor exact and every trig factor enclosed.
-		return intervalScale(intervalSub(intervalAdd(sector, uTerm), vTerm), big.NewRat(1, 2)), true
+		return proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalAdd(sector, uTerm), vTerm), big.NewRat(1, 2)), true
 	case ArcSeg:
 		forward := seg.TStart == 0 && seg.TEnd == 1
 		reverse := seg.TStart == 1 && seg.TEnd == 0
 		if !forward && !reverse {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
@@ -130,13 +132,13 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 		heldEnd := shiftPoint(seg.End, anchor)
 		heldDY0 := heldStart.V - heldCenter.V
 		heldDY1 := heldEnd.V - heldCenter.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
 		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
 		sign := big.NewRat(1, 1)
 		dx, dy := new(big.Rat).Sub(dx1, dx0), new(big.Rat).Sub(dy1, dy0)
@@ -145,7 +147,7 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 			dx.Neg(dx)
 			dy.Neg(dy)
 		}
-		sector := intervalScale(sweep, new(big.Rat).Mul(sign, r2))
+		sector := proofbound.IntervalScale(sweep, new(big.Rat).Mul(sign, r2))
 		// Only the centre carries the anchor: every radial term above is a
 		// difference the shift cancels out of.
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
@@ -154,10 +156,10 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 			new(big.Rat).Mul(centerU, dy),
 			new(big.Rat).Mul(centerV, dx),
 		)
-		areaProof := intervalAdd(sector, pointInterval(centerTerm))
+		areaProof := proofbound.IntervalAdd(sector, proofbound.PointInterval(centerTerm))
 		if endR2.Cmp(r2) != 0 {
 			if endR2.Sign() == 0 {
-				return ratInterval{}, false
+				return proofbound.RatInterval{}, false
 			}
 			radialGap := new(big.Rat).Sub(endR2, r2)
 			radialGap.Abs(radialGap)
@@ -177,9 +179,9 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 			if !exact {
 				correctionFloat = math.Nextafter(correctionFloat, math.Inf(1))
 			}
-			correctionFloat = absSumUpper(
+			correctionFloat = proofbound.AbsSumUpper(
 				correctionFloat,
-				analyticRoundBound(absSumUpper(
+				proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(
 					heldCenter.U,
 					heldCenter.V,
 					heldEnd.U-heldCenter.U,
@@ -187,17 +189,17 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 				)),
 			)
 			correction = proofarith.FloatRat(correctionFloat)
-			areaProof = intervalAdd(
+			areaProof = proofbound.IntervalAdd(
 				areaProof,
-				intervalScale(interval(big.NewRat(-1, 1), big.NewRat(1, 1)), correction),
+				proofbound.IntervalScale(proofbound.Interval(big.NewRat(-1, 1), big.NewRat(1, 1)), correction),
 			)
 		}
-		return intervalScale(
+		return proofbound.IntervalScale(
 			areaProof,
 			big.NewRat(1, 2),
 		), true
 	default:
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 }
 
@@ -212,9 +214,9 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 //     of the recorded value converted to millimetres, and the walk's sweep is
 //     the exact rational turn 2π·|TEnd − TStart|;
 //   - an ArcSeg states Start, End and Center only, so the radius is the
-//     ratSqrtDown/ratSqrtUp bracket of the exact squared Start-to-Center
+//     proofbound.RatSqrtDown/proofbound.RatSqrtUp bracket of the exact squared Start-to-Center
 //     distance — the same radius circularWalk holds as a math.Hypot float — and
-//     the walk's sweep is the atan2Interval difference of the two recorded
+//     the walk's sweep is the proofbound.Atan2Interval difference of the two recorded
 //     endpoint angles under the +2π branch correction circularAreaInterval
 //     applies, scaled by the recorded |TEnd − TStart|, the same trimming
 //     circularWalk applies to its own held a0 + t·sweep angles.
@@ -224,46 +226,46 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 // can enclose (circularWalk's own doc comment), so a published bound composed
 // from them would be a held value wearing a proof's clothes. A record this
 // bracket cannot state answers false, and the consumer refuses.
-func circularWalkEnclosures(seg CurveSegment) (ratInterval, ratInterval, bool) {
+func circularWalkEnclosures(seg CurveSegment) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r := proofarith.FloatRat(radius)
 		if r == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r.Abs(r)
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		dt.Abs(dt)
-		return pointInterval(r), intervalScale(twoPiInterval(), dt), true
+		return proofbound.PointInterval(r), proofbound.IntervalScale(proofbound.TwoPiInterval(), dt), true
 	case ArcSeg:
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
-		rLo, rHi := proofarith.FloatRat(ratSqrtDown(r2)), proofarith.FloatRat(ratSqrtUp(r2))
+		rLo, rHi := proofarith.FloatRat(proofbound.RatSqrtDown(r2)), proofarith.FloatRat(proofbound.RatSqrtUp(r2))
 		if rLo == nil || rHi == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		heldA0 := math.Atan2(heldDY0, seg.Start.U-seg.Center.U)
 		heldA1 := math.Atan2(heldDY1, seg.End.U-seg.Center.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		dt.Abs(dt)
-		return interval(rLo, rHi), intervalScale(sweep, dt), true
+		return proofbound.Interval(rLo, rHi), proofbound.IntervalScale(sweep, dt), true
 	default:
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 }
 
@@ -271,13 +273,13 @@ func circularWalkEnclosures(seg CurveSegment) (ratInterval, ratInterval, bool) {
 // product of circularWalkEnclosures' two brackets: an arc's length IS its radius
 // times its swept angle, and a length has no cross-term to bracket, so unlike
 // circularAreaInterval and circularFirstMomentInterval it never needed
-// moments_trig.go's endpoint sine/cosine enclosure to admit a trimmed fragment.
-func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
+// internal/proofbound/moments_trig.go's endpoint sine/cosine enclosure to admit a trimmed fragment.
+func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 	r, sweep, ok := circularWalkEnclosures(seg)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalMul(r, sweep), true
+	return proofbound.IntervalMul(r, sweep), true
 }
 
 // circularEndpointInterval encloses the (u, v) position a recorded circular
@@ -289,8 +291,8 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // coordinate the record states.
 //
 // A CircleSeg's point at t is Center + r·(cos 2πt, sin 2πt) for the recorded
-// centre and radius, so the turn is exactly rational and moments_trig.go's
-// turnSinCosInterval encloses the pair with no π-comparison anywhere. A whole
+// centre and radius, so the turn is exactly rational and internal/proofbound/moments_trig.go's
+// proofbound.TurnSinCosInterval encloses the pair with no π-comparison anywhere. A whole
 // multiple of a quarter turn does not even need the series: its sine and cosine
 // are 0 or ±1 exactly (quarterTurnSinCos), which is what keeps a whole circle's
 // own endpoint a zero-width reading.
@@ -298,8 +300,8 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // An ArcSeg states no angle at all — three pinned points, swept
 // counter-clockwise from Start to End about Center (record.go) — so its point
 // at t is Center + r·(cos θ, sin θ) with r the exact Start-to-Center distance
-// (ratSqrtDown/ratSqrtUp) and θ = a0 + t·sweep, both angles enclosed by
-// atan2Interval under the same +2π branch correction circularLengthInterval
+// (proofbound.RatSqrtDown/proofbound.RatSqrtUp) and θ = a0 + t·sweep, both angles enclosed by
+// proofbound.Atan2Interval under the same +2π branch correction circularLengthInterval
 // applies, and the sine and cosine of that enclosed angle taken by
 // radSinCosSpan.
 //
@@ -311,7 +313,7 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // because rounding it to a float first would enclose the curve at a
 // NEIGHBOURING parameter and prove a bound about a point no construction
 // named.
-func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratInterval, bool) {
+func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	return circularOffsetEndpointInterval(seg, rt, new(big.Rat))
 }
 
@@ -319,90 +321,90 @@ func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratIn
 // CONCENTRIC circle whose radius is the segment's own plus radiusOffset (an
 // exact rational; zero gives the segment itself). The offset joins the radius
 // before any product, so for an ArcSeg it shifts BOTH ends of the
-// ratSqrtDown/ratSqrtUp bracket and the held radius's own rounding stays
+// proofbound.RatSqrtDown/proofbound.RatSqrtUp bracket and the held radius's own rounding stays
 // enclosed rather than assumed. A nonzero offset whose resulting radius is
 // not positive denotes no offset circle and answers ok == false. A zero offset
 // keeps circularEndpointInterval's collapsed-radius reading unchanged.
-func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (ratInterval, ratInterval, bool) {
+func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r := proofarith.FloatRat(radius)
 		cu, cv := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if r == nil || cu == nil || cv == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r.Add(r, radiusOffset)
 		if radiusOffset.Sign() != 0 && r.Sign() <= 0 {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		sin, cos := quarterTurnSinCos(rt)
-		return intervalAdd(pointInterval(cu), intervalScale(cos, r)),
-			intervalAdd(pointInterval(cv), intervalScale(sin, r)), true
+		return proofbound.IntervalAdd(proofbound.PointInterval(cu), proofbound.IntervalScale(cos, r)),
+			proofbound.IntervalAdd(proofbound.PointInterval(cv), proofbound.IntervalScale(sin, r)), true
 	case ArcSeg:
 		cu, cv := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cu == nil || cv == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
-		rLo, rHi := proofarith.FloatRat(ratSqrtDown(r2)), proofarith.FloatRat(ratSqrtUp(r2))
+		rLo, rHi := proofarith.FloatRat(proofbound.RatSqrtDown(r2)), proofarith.FloatRat(proofbound.RatSqrtUp(r2))
 		if rLo == nil || rHi == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		rLo.Add(rLo, radiusOffset)
 		rHi.Add(rHi, radiusOffset)
 		if radiusOffset.Sign() != 0 && rLo.Sign() <= 0 {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		heldA0 := math.Atan2(heldDY0, seg.Start.U-seg.Center.U)
 		heldA1 := math.Atan2(heldDY1, seg.End.U-seg.Center.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
-		sin, cos, ok := radSinCosSpan(intervalAdd(a0, intervalScale(sweep, rt)))
+		sin, cos, ok := radSinCosSpan(proofbound.IntervalAdd(a0, proofbound.IntervalScale(sweep, rt)))
 		if !ok {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		r := interval(rLo, rHi)
-		return intervalAdd(pointInterval(cu), intervalMul(r, cos)),
-			intervalAdd(pointInterval(cv), intervalMul(r, sin)), true
+		r := proofbound.Interval(rLo, rHi)
+		return proofbound.IntervalAdd(proofbound.PointInterval(cu), proofbound.IntervalMul(r, cos)),
+			proofbound.IntervalAdd(proofbound.PointInterval(cv), proofbound.IntervalMul(r, sin)), true
 	default:
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 }
 
 // quarterTurnSinCos encloses sin(2πt) and cos(2πt) for an exact rational turn,
 // answering with a POINT interval whenever 4t is an integer: the quadrant turns
 // have sine and cosine 0 or ±1 exactly, which no series can improve on and a
-// series would only widen. Every other turn goes to turnSinCosInterval.
-func quarterTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
+// series would only widen. Every other turn goes to proofbound.TurnSinCosInterval.
+func quarterTurnSinCos(t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
 	quadrants := new(big.Rat).Mul(t, big.NewRat(4, 1))
 	if !quadrants.IsInt() {
-		return turnSinCosInterval(t)
+		return proofbound.TurnSinCosInterval(t)
 	}
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	minusOne := big.NewRat(-1, 1)
 	switch new(big.Int).Mod(quadrants.Num(), big.NewInt(4)).Int64() {
 	case 0:
-		return pointInterval(zero), pointInterval(one)
+		return proofbound.PointInterval(zero), proofbound.PointInterval(one)
 	case 1:
-		return pointInterval(one), pointInterval(zero)
+		return proofbound.PointInterval(one), proofbound.PointInterval(zero)
 	case 2:
-		return pointInterval(zero), pointInterval(minusOne)
+		return proofbound.PointInterval(zero), proofbound.PointInterval(minusOne)
 	default: // 3
-		return pointInterval(minusOne), pointInterval(zero)
+		return proofbound.PointInterval(minusOne), proofbound.PointInterval(zero)
 	}
 }
 
@@ -415,12 +417,12 @@ func quarterTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
 // a finite rational — a +Inf bound, the sqrt bracket a tilted axis's
 // direction does not yet carry — answers ok == false, and
 // circularAxisMomentInterval refuses with it.
-func axisComponentInterval(value, bound float64) (ratInterval, bool) {
+func axisComponentInterval(value, bound float64) (proofbound.RatInterval, bool) {
 	v, b := proofarith.FloatRat(value), proofarith.FloatRat(math.Abs(bound))
 	if v == nil || b == nil {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalWiden(pointInterval(v), b), true
+	return intervalWiden(proofbound.PointInterval(v), b), true
 }
 
 // circularAxisMomentInterval brackets one recorded circular segment's exact
@@ -449,92 +451,92 @@ func axisComponentInterval(value, bound float64) (ratInterval, bool) {
 // enclosure — to agree with them.
 //
 // r and Δθ are circularWalkEnclosures' own brackets; a CircleSeg's endpoint
-// sin/cos come from turnSinCosInterval, with an exact zero-width fast path
+// sin/cos come from proofbound.TurnSinCosInterval, with an exact zero-width fast path
 // when the recorded range spans a whole number of turns (the sine/cosine
 // difference terms above vanish exactly, leaving Pappus's own r·Δθ·ρ_centre
 // form — the torus/whole-circle case); an ArcSeg's come from radSinCosSpan of
-// the atan2Interval endpoint enclosure, exactly as circularEndpointInterval
+// the proofbound.Atan2Interval endpoint enclosure, exactly as circularEndpointInterval
 // evaluates them, and — like circularAreaInterval and
 // circularFirstMomentInterval — only over its own full recorded range
 // (forward or reverse), never a trimmed fragment, whose actual endpoint the
 // record alone does not state.
-func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bool) {
+func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
 	r, dtheta, ok := circularWalkEnclosures(seg)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	var cU, cV *big.Rat
-	var sinDiff, cosDiff ratInterval // sin(hi)-sin(lo), cos(lo)-cos(hi)
+	var sinDiff, cosDiff proofbound.RatInterval // sin(hi)-sin(lo), cos(lo)-cos(hi)
 	switch seg := seg.(type) {
 	case CircleSeg:
 		cU, cV = proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if cU == nil || cV == nil || t0 == nil || t1 == nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		dt := new(big.Rat).Sub(t1, t0)
 		switch {
 		case dt.IsInt():
 			zero := new(big.Rat)
-			sinDiff, cosDiff = pointInterval(zero), pointInterval(zero)
+			sinDiff, cosDiff = proofbound.PointInterval(zero), proofbound.PointInterval(zero)
 		default:
 			loT, hiT := t0, t1
 			if loT.Cmp(hiT) > 0 {
 				loT, hiT = hiT, loT
 			}
-			sinLo, cosLo := turnSinCosInterval(loT)
-			sinHi, cosHi := turnSinCosInterval(hiT)
-			sinDiff = intervalSub(sinHi, sinLo)
-			cosDiff = intervalSub(cosLo, cosHi)
+			sinLo, cosLo := proofbound.TurnSinCosInterval(loT)
+			sinHi, cosHi := proofbound.TurnSinCosInterval(hiT)
+			sinDiff = proofbound.IntervalSub(sinHi, sinLo)
+			cosDiff = proofbound.IntervalSub(cosLo, cosHi)
 		}
 	case ArcSeg:
 		forward := seg.TStart == 0 && seg.TEnd == 1
 		reverse := seg.TStart == 1 && seg.TEnd == 0
 		if !forward && !reverse {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		cU, cV = proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cU == nil || cV == nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		heldDY0 := seg.Start.V - seg.Center.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := intervalAdd(a0, dtheta)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.IntervalAdd(a0, dtheta)
 		sinLo, cosLo, ok0 := radSinCosSpan(a0)
 		sinHi, cosHi, ok1 := radSinCosSpan(a1)
 		if !ok0 || !ok1 {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
-		sinDiff = intervalSub(sinHi, sinLo)
-		cosDiff = intervalSub(cosLo, cosHi)
+		sinDiff = proofbound.IntervalSub(sinHi, sinLo)
+		cosDiff = proofbound.IntervalSub(cosLo, cosHi)
 	default:
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 
 	anchorU, ok := axisComponentInterval(ax.aU, ax.aUBound)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	anchorV, ok := axisComponentInterval(ax.aV, ax.aVBound)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	nU, ok := axisComponentInterval(-ax.dV, ax.dVBound)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	nV, ok := axisComponentInterval(ax.dU, ax.dUBound)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 
-	duU := intervalSub(pointInterval(cU), anchorU)
-	duV := intervalSub(pointInterval(cV), anchorV)
-	intU := intervalMul(r, intervalAdd(intervalMul(duU, dtheta), intervalMul(r, sinDiff)))
-	intV := intervalMul(r, intervalAdd(intervalMul(duV, dtheta), intervalMul(r, cosDiff)))
-	return intervalAdd(intervalMul(nU, intU), intervalMul(nV, intV)), true
+	duU := proofbound.IntervalSub(proofbound.PointInterval(cU), anchorU)
+	duV := proofbound.IntervalSub(proofbound.PointInterval(cV), anchorV)
+	intU := proofbound.IntervalMul(r, proofbound.IntervalAdd(proofbound.IntervalMul(duU, dtheta), proofbound.IntervalMul(r, sinDiff)))
+	intV := proofbound.IntervalMul(r, proofbound.IntervalAdd(proofbound.IntervalMul(duV, dtheta), proofbound.IntervalMul(r, cosDiff)))
+	return proofbound.IntervalAdd(proofbound.IntervalMul(nU, intU), proofbound.IntervalMul(nV, intV)), true
 }
 
 // circularFirstMomentInterval brackets one circular walk's exact first-moment
@@ -548,7 +550,7 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 // moment over a whole period cancels exactly, leaving mu = c.U·r²·π·dt and
 // mv = c.V·r²·π·dt (dt the signed turn count). A fractional turn instead
 // restates addCircular's own mu/mv closed forms (moments.go:1511/1516) with
-// every sine/cosine factor enclosed by moments_trig.go's turnSinCosInterval
+// every sine/cosine factor enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval
 // and every other factor — the radius, the recentred centre coordinates, the
 // swept angle — taken as an exact rational: the same substitution
 // circularAreaInterval's fractional arm makes, one order higher.
@@ -559,7 +561,7 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 // than evaluated: every r that multiplies one of those ratios cancels it
 // back to a rational coordinate difference, and the one term that does not
 // cancel — the θ term inside intCos2/intSin2 — is exactly the swept angle
-// atan2Interval already brackets. What is left after multiplying through is
+// proofbound.Atan2Interval already brackets. What is left after multiplying through is
 // rational except for that single c.U·r²·dth (respectively c.V·r²·dth) term.
 // Forward walks th0→th1 through (Start, End) in the sweep direction; reverse
 // walks the same arc the other way, so the two endpoints swap which
@@ -573,146 +575,150 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 // polynomial in interval arithmetic. Equal pinned radii give the point ρ = 1,
 // so every term is a rational point and the expression is one rational point
 // plus one scaled interval; unequal radii carry ρ's width into the enclosure.
-func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, bool) {
+func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 	switch seg := seg.(type) {
 	case CircleSeg:
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r := proofarith.FloatRat(radius)
 		if r == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
-		piIv := interval(piLower, piUpper)
+		piIv := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
 		if dt.IsInt() {
-			r2dt := ratMul(r, r, dt)
-			return intervalScale(piIv, ratMul(centerU, r2dt)), intervalScale(piIv, ratMul(centerV, r2dt)), true
+			r2dt := proofbound.RatMul(r, r, dt)
+			return proofbound.IntervalScale(piIv, proofbound.RatMul(centerU, r2dt)), proofbound.IntervalScale(piIv, proofbound.RatMul(centerV, r2dt)), true
 		}
 		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		s0, c0 := turnSinCosInterval(t0)
-		s1, c1 := turnSinCosInterval(t1)
-		dtheta := intervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
-		sin2_0 := intervalScale(intervalMul(s0, c0), big.NewRat(2, 1))
-		sin2_1 := intervalScale(intervalMul(s1, c1), big.NewRat(2, 1))
-		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
+		s0, c0 := proofbound.TurnSinCosInterval(t0)
+		s1, c1 := proofbound.TurnSinCosInterval(t1)
+		dtheta := proofbound.IntervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
+		sin2_0 := proofbound.IntervalScale(proofbound.IntervalMul(s0, c0), big.NewRat(2, 1))
+		sin2_1 := proofbound.IntervalScale(proofbound.IntervalMul(s1, c1), big.NewRat(2, 1))
+		cube := func(x proofbound.RatInterval) proofbound.RatInterval {
+			return proofbound.IntervalMul(proofbound.IntervalMul(x, x), x)
+		}
 
-		intCos := intervalSub(s1, s0)
-		intCos2 := intervalAdd(
-			intervalScale(dtheta, big.NewRat(1, 2)),
-			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intCos := proofbound.IntervalSub(s1, s0)
+		intCos2 := proofbound.IntervalAdd(
+			proofbound.IntervalScale(dtheta, big.NewRat(1, 2)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 		)
-		intCos3 := intervalSub(
-			intervalSub(s1, intervalScale(cube(s1), big.NewRat(1, 3))),
-			intervalSub(s0, intervalScale(cube(s0), big.NewRat(1, 3))),
+		intCos3 := proofbound.IntervalSub(
+			proofbound.IntervalSub(s1, proofbound.IntervalScale(cube(s1), big.NewRat(1, 3))),
+			proofbound.IntervalSub(s0, proofbound.IntervalScale(cube(s0), big.NewRat(1, 3))),
 		)
 		cu2 := new(big.Rat).Mul(centerU, centerU)
 		cur2 := ratScale(new(big.Rat).Mul(centerU, r), 2, 1)
 		r2 := new(big.Rat).Mul(r, r)
-		muInner := intervalAdd(
-			intervalAdd(intervalScale(intCos, cu2), intervalScale(intCos2, cur2)),
-			intervalScale(intCos3, r2),
+		muInner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(proofbound.IntervalScale(intCos, cu2), proofbound.IntervalScale(intCos2, cur2)),
+			proofbound.IntervalScale(intCos3, r2),
 		)
-		mu := intervalScale(muInner, ratScale(r, 1, 2))
+		mu := proofbound.IntervalScale(muInner, ratScale(r, 1, 2))
 
-		intSin := intervalSub(c0, c1)
-		intSin2 := intervalSub(
-			intervalScale(dtheta, big.NewRat(1, 2)),
-			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intSin := proofbound.IntervalSub(c0, c1)
+		intSin2 := proofbound.IntervalSub(
+			proofbound.IntervalScale(dtheta, big.NewRat(1, 2)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 		)
-		intSin3 := intervalSub(
-			intervalSub(c0, intervalScale(cube(c0), big.NewRat(1, 3))),
-			intervalSub(c1, intervalScale(cube(c1), big.NewRat(1, 3))),
+		intSin3 := proofbound.IntervalSub(
+			proofbound.IntervalSub(c0, proofbound.IntervalScale(cube(c0), big.NewRat(1, 3))),
+			proofbound.IntervalSub(c1, proofbound.IntervalScale(cube(c1), big.NewRat(1, 3))),
 		)
 		cv2 := new(big.Rat).Mul(centerV, centerV)
 		cvr2 := ratScale(new(big.Rat).Mul(centerV, r), 2, 1)
-		mvInner := intervalAdd(
-			intervalAdd(intervalScale(intSin, cv2), intervalScale(intSin2, cvr2)),
-			intervalScale(intSin3, r2),
+		mvInner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(proofbound.IntervalScale(intSin, cv2), proofbound.IntervalScale(intSin2, cvr2)),
+			proofbound.IntervalScale(intSin3, r2),
 		)
-		mv := intervalScale(mvInner, ratScale(r, 1, 2))
+		mv := proofbound.IntervalScale(mvInner, ratScale(r, 1, 2))
 		return mu, mv, true
 	case ArcSeg:
 		forward := seg.TStart == 0 && seg.TEnd == 1
 		reverse := seg.TStart == 1 && seg.TEnd == 0
 		if !forward && !reverse {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
-		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
+		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
+		endR2 := proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1))
 		rho, ok := arcEndRadialRatio(r2, endR2)
 		if !ok {
-			return ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		heldCenter := shiftPoint(seg.Center, anchor)
 		heldStart := shiftPoint(seg.Start, anchor)
 		heldEnd := shiftPoint(seg.End, anchor)
 		heldDY0 := heldStart.V - heldCenter.V
 		heldDY1 := heldEnd.V - heldCenter.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
 		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
 		// End contributes its ANGLE (the sweep above reads the recorded
 		// deltas); its point on the denoted circle is ρ·(End − Center).
-		s0x, s0y := pointInterval(dx0), pointInterval(dy0)
-		e1x, e1y := intervalScale(rho, dx1), intervalScale(rho, dy1)
+		s0x, s0y := proofbound.PointInterval(dx0), proofbound.PointInterval(dy0)
+		e1x, e1y := proofbound.IntervalScale(rho, dx1), proofbound.IntervalScale(rho, dy1)
 		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
 		if reverse {
 			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
-			dth = intervalNeg(sweep)
+			dth = proofbound.IntervalNeg(sweep)
 		}
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
-		dy := intervalSub(p1y, p0y)
-		dx := intervalSub(p1x, p0x)
-		cross := intervalSub(intervalMul(p1y, p1x), intervalMul(p0y, p0x))
-		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
+		dy := proofbound.IntervalSub(p1y, p0y)
+		dx := proofbound.IntervalSub(p1x, p0x)
+		cross := proofbound.IntervalSub(proofbound.IntervalMul(p1y, p1x), proofbound.IntervalMul(p0y, p0x))
+		cube := func(x proofbound.RatInterval) proofbound.RatInterval {
+			return proofbound.IntervalMul(proofbound.IntervalMul(x, x), x)
+		}
 		third := big.NewRat(1, 3)
 
 		// muConst = c.U²·dy + c.U·cross + r²·dy − (p1y³ − p0y³)/3
-		muConst := intervalSub(
-			intervalAdd(
-				intervalAdd(intervalScale(dy, ratMul(centerU, centerU)), intervalScale(cross, centerU)),
-				intervalScale(dy, r2),
+		muConst := proofbound.IntervalSub(
+			proofbound.IntervalAdd(
+				proofbound.IntervalAdd(proofbound.IntervalScale(dy, proofbound.RatMul(centerU, centerU)), proofbound.IntervalScale(cross, centerU)),
+				proofbound.IntervalScale(dy, r2),
 			),
-			intervalScale(intervalSub(cube(p1y), cube(p0y)), third),
+			proofbound.IntervalScale(proofbound.IntervalSub(cube(p1y), cube(p0y)), third),
 		)
-		muDthCoeff := ratMul(centerU, r2)
-		mu := intervalScale(intervalAdd(muConst, intervalScale(dth, muDthCoeff)), big.NewRat(1, 2))
+		muDthCoeff := proofbound.RatMul(centerU, r2)
+		mu := proofbound.IntervalScale(proofbound.IntervalAdd(muConst, proofbound.IntervalScale(dth, muDthCoeff)), big.NewRat(1, 2))
 
 		// mvConst = −c.V²·dx − c.V·cross − r²·dx + (p1x³ − p0x³)/3
-		mvConst := intervalAdd(
-			intervalNeg(intervalAdd(
-				intervalAdd(intervalScale(dx, ratMul(centerV, centerV)), intervalScale(cross, centerV)),
-				intervalScale(dx, r2),
+		mvConst := proofbound.IntervalAdd(
+			proofbound.IntervalNeg(proofbound.IntervalAdd(
+				proofbound.IntervalAdd(proofbound.IntervalScale(dx, proofbound.RatMul(centerV, centerV)), proofbound.IntervalScale(cross, centerV)),
+				proofbound.IntervalScale(dx, r2),
 			)),
-			intervalScale(intervalSub(cube(p1x), cube(p0x)), third),
+			proofbound.IntervalScale(proofbound.IntervalSub(cube(p1x), cube(p0x)), third),
 		)
-		mvDthCoeff := ratMul(centerV, r2)
-		mv := intervalScale(intervalAdd(mvConst, intervalScale(dth, mvDthCoeff)), big.NewRat(1, 2))
+		mvDthCoeff := proofbound.RatMul(centerV, r2)
+		mv := proofbound.IntervalScale(proofbound.IntervalAdd(mvConst, proofbound.IntervalScale(dth, mvDthCoeff)), big.NewRat(1, 2))
 
 		return mu, mv, true
 	default:
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 }
 
@@ -730,7 +736,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 // (dt the signed turn count) — the disc's own second moments about its
 // centre, shifted by the parallel-axis theorem. A fractional turn instead
 // restates addCircular's own muu/muv/mvv formulas with every sine/cosine
-// factor enclosed by moments_trig.go's turnSinCosInterval, and every
+// factor enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval, and every
 // higher trig multiple — sin(2θ), cos(2θ), sin(4θ) — taken as an exact
 // DOUBLE-ANGLE algebraic combination of that same enclosure (sin2θ = 2·sinθ·cosθ,
 // cos2θ = cos²θ−sin²θ, sin4θ = 2·sin2θ·cos2θ): no new transcendental is ever
@@ -744,191 +750,195 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 // own ArcSeg arm makes for mu/mv. Expanding addCircular's muu/muv/mvv this
 // way leaves exactly one term that does not collapse to a rational: the
 // piece proportional to the swept angle dθ itself (a rational COEFFICIENT
-// times the atan2Interval-bracketed sweep), mirroring mu/mv's own
+// times the proofbound.Atan2Interval-bracketed sweep), mirroring mu/mv's own
 // muDthCoeff/mvDthCoeff term one order higher. Every other term is built from
 // the endpoints' own dx/dy differences and their squares/cubes/quads, with
 // End's pair read as ρ·(End − Center) through arcEndRadialRatio exactly as
 // the first-moment arm reads it: a single rational point interval when the
 // pinned radii are equal (ρ = 1), and an enclosure carrying ρ's width when
 // they differ.
-func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, ratInterval, bool) {
+func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterval, proofbound.RatInterval, proofbound.RatInterval, bool) {
 	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
-		return ratInterval{}, ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 	switch seg := seg.(type) {
 	case CircleSeg:
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		r := proofarith.FloatRat(radius)
 		if r == nil {
-			return ratInterval{}, ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
-		piIv := interval(piLower, piUpper)
-		r2 := ratMul(r, r)
-		r3 := ratMul(r2, r)
-		r4 := ratMul(r2, r2)
+		piIv := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
+		r2 := proofbound.RatMul(r, r)
+		r3 := proofbound.RatMul(r2, r)
+		r4 := proofbound.RatMul(r2, r2)
 		if dt.IsInt() {
 			// A whole number of turns is the enclosed disc's own second
 			// moments about its centre, shifted by the parallel-axis theorem;
 			// every odd trig moment cancels exactly over a full period.
-			muuVal := ratAdd(ratMul(centerU, centerU, r2, dt), ratScale(ratMul(r4, dt), 1, 4))
-			mvvVal := ratAdd(ratMul(centerV, centerV, r2, dt), ratScale(ratMul(r4, dt), 1, 4))
-			muvVal := ratMul(centerU, centerV, r2, dt)
-			return intervalScale(piIv, muuVal), intervalScale(piIv, muvVal), intervalScale(piIv, mvvVal), true
+			muuVal := proofbound.RatAdd(proofbound.RatMul(centerU, centerU, r2, dt), ratScale(proofbound.RatMul(r4, dt), 1, 4))
+			mvvVal := proofbound.RatAdd(proofbound.RatMul(centerV, centerV, r2, dt), ratScale(proofbound.RatMul(r4, dt), 1, 4))
+			muvVal := proofbound.RatMul(centerU, centerV, r2, dt)
+			return proofbound.IntervalScale(piIv, muuVal), proofbound.IntervalScale(piIv, muvVal), proofbound.IntervalScale(piIv, mvvVal), true
 		}
 		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
-			return ratInterval{}, ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		s0, c0 := turnSinCosInterval(t0)
-		s1, c1 := turnSinCosInterval(t1)
-		dtheta := intervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
+		s0, c0 := proofbound.TurnSinCosInterval(t0)
+		s1, c1 := proofbound.TurnSinCosInterval(t1)
+		dtheta := proofbound.IntervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
 		two := big.NewRat(2, 1)
-		sin2_0 := intervalScale(intervalMul(s0, c0), two)
-		sin2_1 := intervalScale(intervalMul(s1, c1), two)
-		cos2_0 := intervalSub(intervalMul(c0, c0), intervalMul(s0, s0))
-		cos2_1 := intervalSub(intervalMul(c1, c1), intervalMul(s1, s1))
-		sin4_0 := intervalScale(intervalMul(sin2_0, cos2_0), two)
-		sin4_1 := intervalScale(intervalMul(sin2_1, cos2_1), two)
-		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
-		sq := func(x ratInterval) ratInterval { return intervalMul(x, x) }
+		sin2_0 := proofbound.IntervalScale(proofbound.IntervalMul(s0, c0), two)
+		sin2_1 := proofbound.IntervalScale(proofbound.IntervalMul(s1, c1), two)
+		cos2_0 := proofbound.IntervalSub(proofbound.IntervalMul(c0, c0), proofbound.IntervalMul(s0, s0))
+		cos2_1 := proofbound.IntervalSub(proofbound.IntervalMul(c1, c1), proofbound.IntervalMul(s1, s1))
+		sin4_0 := proofbound.IntervalScale(proofbound.IntervalMul(sin2_0, cos2_0), two)
+		sin4_1 := proofbound.IntervalScale(proofbound.IntervalMul(sin2_1, cos2_1), two)
+		cube := func(x proofbound.RatInterval) proofbound.RatInterval {
+			return proofbound.IntervalMul(proofbound.IntervalMul(x, x), x)
+		}
+		sq := func(x proofbound.RatInterval) proofbound.RatInterval { return proofbound.IntervalMul(x, x) }
 
-		intCos := intervalSub(s1, s0)
-		intCos2 := intervalAdd(
-			intervalScale(dtheta, big.NewRat(1, 2)),
-			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intCos := proofbound.IntervalSub(s1, s0)
+		intCos2 := proofbound.IntervalAdd(
+			proofbound.IntervalScale(dtheta, big.NewRat(1, 2)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 		)
-		intCos3 := intervalSub(
-			intervalSub(s1, intervalScale(cube(s1), big.NewRat(1, 3))),
-			intervalSub(s0, intervalScale(cube(s0), big.NewRat(1, 3))),
+		intCos3 := proofbound.IntervalSub(
+			proofbound.IntervalSub(s1, proofbound.IntervalScale(cube(s1), big.NewRat(1, 3))),
+			proofbound.IntervalSub(s0, proofbound.IntervalScale(cube(s0), big.NewRat(1, 3))),
 		)
-		intCos4 := intervalAdd(
-			intervalAdd(
-				intervalScale(dtheta, big.NewRat(3, 8)),
-				intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intCos4 := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(
+				proofbound.IntervalScale(dtheta, big.NewRat(3, 8)),
+				proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 			),
-			intervalScale(intervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
 		)
 
-		intSin := intervalSub(c0, c1)
-		intSin2 := intervalSub(
-			intervalScale(dtheta, big.NewRat(1, 2)),
-			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intSin := proofbound.IntervalSub(c0, c1)
+		intSin2 := proofbound.IntervalSub(
+			proofbound.IntervalScale(dtheta, big.NewRat(1, 2)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 		)
-		intSin3 := intervalSub(
-			intervalSub(c0, intervalScale(cube(c0), big.NewRat(1, 3))),
-			intervalSub(c1, intervalScale(cube(c1), big.NewRat(1, 3))),
+		intSin3 := proofbound.IntervalSub(
+			proofbound.IntervalSub(c0, proofbound.IntervalScale(cube(c0), big.NewRat(1, 3))),
+			proofbound.IntervalSub(c1, proofbound.IntervalScale(cube(c1), big.NewRat(1, 3))),
 		)
-		intSin4 := intervalAdd(
-			intervalSub(
-				intervalScale(dtheta, big.NewRat(3, 8)),
-				intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		intSin4 := proofbound.IntervalAdd(
+			proofbound.IntervalSub(
+				proofbound.IntervalScale(dtheta, big.NewRat(3, 8)),
+				proofbound.IntervalScale(proofbound.IntervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
 			),
-			intervalScale(intervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
+			proofbound.IntervalScale(proofbound.IntervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
 		)
 
-		intSC := intervalScale(intervalSub(intervalMul(s1, s1), intervalMul(s0, s0)), big.NewRat(1, 2))
-		intSC2 := intervalScale(intervalSub(cube(c0), cube(c1)), big.NewRat(1, 3))
-		intSC3 := intervalScale(intervalSub(sq(sq(c0)), sq(sq(c1))), big.NewRat(1, 4))
+		intSC := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, s1), proofbound.IntervalMul(s0, s0)), big.NewRat(1, 2))
+		intSC2 := proofbound.IntervalScale(proofbound.IntervalSub(cube(c0), cube(c1)), big.NewRat(1, 3))
+		intSC3 := proofbound.IntervalScale(proofbound.IntervalSub(sq(sq(c0)), sq(sq(c1))), big.NewRat(1, 4))
 
-		cu2 := ratMul(centerU, centerU)
-		cv2 := ratMul(centerV, centerV)
-		cu3 := ratMul(cu2, centerU)
-		cv3 := ratMul(cv2, centerV)
+		cu2 := proofbound.RatMul(centerU, centerU)
+		cv2 := proofbound.RatMul(centerV, centerV)
+		cu3 := proofbound.RatMul(cu2, centerU)
+		cv3 := proofbound.RatMul(cv2, centerV)
 
-		muuInner := intervalAdd(
-			intervalAdd(
-				intervalAdd(intervalScale(intCos, cu3), intervalScale(intCos2, ratMul(cu2, r, big.NewRat(3, 1)))),
-				intervalScale(intCos3, ratMul(centerU, r2, big.NewRat(3, 1))),
+		muuInner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(
+				proofbound.IntervalAdd(proofbound.IntervalScale(intCos, cu3), proofbound.IntervalScale(intCos2, proofbound.RatMul(cu2, r, big.NewRat(3, 1)))),
+				proofbound.IntervalScale(intCos3, proofbound.RatMul(centerU, r2, big.NewRat(3, 1))),
 			),
-			intervalScale(intCos4, r3),
+			proofbound.IntervalScale(intCos4, r3),
 		)
-		muuVal := intervalScale(muuInner, ratScale(r, 1, 3))
+		muuVal := proofbound.IntervalScale(muuInner, ratScale(r, 1, 3))
 
-		mvvInner := intervalAdd(
-			intervalAdd(
-				intervalAdd(intervalScale(intSin, cv3), intervalScale(intSin2, ratMul(cv2, r, big.NewRat(3, 1)))),
-				intervalScale(intSin3, ratMul(centerV, r2, big.NewRat(3, 1))),
+		mvvInner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(
+				proofbound.IntervalAdd(proofbound.IntervalScale(intSin, cv3), proofbound.IntervalScale(intSin2, proofbound.RatMul(cv2, r, big.NewRat(3, 1)))),
+				proofbound.IntervalScale(intSin3, proofbound.RatMul(centerV, r2, big.NewRat(3, 1))),
 			),
-			intervalScale(intSin4, r3),
+			proofbound.IntervalScale(intSin4, r3),
 		)
-		mvvVal := intervalScale(mvvInner, ratScale(r, 1, 3))
+		mvvVal := proofbound.IntervalScale(mvvInner, ratScale(r, 1, 3))
 
-		part1Inner := intervalAdd(
-			intervalAdd(intervalScale(intCos, cu2), intervalScale(intCos2, ratMul(centerU, r, big.NewRat(2, 1)))),
-			intervalScale(intCos3, r2),
+		part1Inner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(proofbound.IntervalScale(intCos, cu2), proofbound.IntervalScale(intCos2, proofbound.RatMul(centerU, r, big.NewRat(2, 1)))),
+			proofbound.IntervalScale(intCos3, r2),
 		)
-		part1 := intervalScale(part1Inner, centerV)
-		part2Inner := intervalAdd(
-			intervalAdd(intervalScale(intSC, cu2), intervalScale(intSC2, ratMul(centerU, r, big.NewRat(2, 1)))),
-			intervalScale(intSC3, r2),
+		part1 := proofbound.IntervalScale(part1Inner, centerV)
+		part2Inner := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(proofbound.IntervalScale(intSC, cu2), proofbound.IntervalScale(intSC2, proofbound.RatMul(centerU, r, big.NewRat(2, 1)))),
+			proofbound.IntervalScale(intSC3, r2),
 		)
-		part2 := intervalScale(part2Inner, r)
-		muvVal := intervalScale(intervalAdd(part1, part2), ratScale(r, 1, 2))
+		part2 := proofbound.IntervalScale(part2Inner, r)
+		muvVal := proofbound.IntervalScale(proofbound.IntervalAdd(part1, part2), ratScale(r, 1, 2))
 
 		return muuVal, muvVal, mvvVal, true
 	case ArcSeg:
 		forward := seg.TStart == 0 && seg.TEnd == 1
 		reverse := seg.TStart == 1 && seg.TEnd == 0
 		if !forward && !reverse {
-			return ratInterval{}, ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
-		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
+		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
+		endR2 := proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1))
 		rho, ok := arcEndRadialRatio(r2, endR2)
 		if !ok {
-			return ratInterval{}, ratInterval{}, ratInterval{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
 		heldCenter := shiftPoint(seg.Center, anchor)
 		heldStart := shiftPoint(seg.Start, anchor)
 		heldEnd := shiftPoint(seg.End, anchor)
 		heldDY0 := heldStart.V - heldCenter.V
 		heldDY1 := heldEnd.V - heldCenter.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
 		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
 		// End contributes its ANGLE (the sweep above reads the recorded
 		// deltas); its point on the denoted circle is ρ·(End − Center).
-		s0x, s0y := pointInterval(dx0), pointInterval(dy0)
-		e1x, e1y := intervalScale(rho, dx1), intervalScale(rho, dy1)
+		s0x, s0y := proofbound.PointInterval(dx0), proofbound.PointInterval(dy0)
+		e1x, e1y := proofbound.IntervalScale(rho, dx1), proofbound.IntervalScale(rho, dy1)
 		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
 		if reverse {
 			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
-			dth = intervalNeg(sweep)
+			dth = proofbound.IntervalNeg(sweep)
 		}
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 
-		dx := intervalSub(p1x, p0x)
-		dy := intervalSub(p1y, p0y)
-		cross := intervalSub(intervalMul(p1y, p1x), intervalMul(p0y, p0x))
-		p0sq := intervalMul(p0x, p0x)
-		p0ysq := intervalMul(p0y, p0y)
-		p1sq := intervalMul(p1x, p1x)
-		p1ysq := intervalMul(p1y, p1y)
-		quad := intervalSub(
-			intervalMul(intervalMul(p1x, p1y), intervalSub(p1sq, p1ysq)),
-			intervalMul(intervalMul(p0x, p0y), intervalSub(p0sq, p0ysq)),
+		dx := proofbound.IntervalSub(p1x, p0x)
+		dy := proofbound.IntervalSub(p1y, p0y)
+		cross := proofbound.IntervalSub(proofbound.IntervalMul(p1y, p1x), proofbound.IntervalMul(p0y, p0x))
+		p0sq := proofbound.IntervalMul(p0x, p0x)
+		p0ysq := proofbound.IntervalMul(p0y, p0y)
+		p1sq := proofbound.IntervalMul(p1x, p1x)
+		p1ysq := proofbound.IntervalMul(p1y, p1y)
+		quad := proofbound.IntervalSub(
+			proofbound.IntervalMul(proofbound.IntervalMul(p1x, p1y), proofbound.IntervalSub(p1sq, p1ysq)),
+			proofbound.IntervalMul(proofbound.IntervalMul(p0x, p0y), proofbound.IntervalSub(p0sq, p0ysq)),
 		)
-		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
+		cube := func(x proofbound.RatInterval) proofbound.RatInterval {
+			return proofbound.IntervalMul(proofbound.IntervalMul(x, x), x)
+		}
 
-		cu2 := ratMul(centerU, centerU)
-		cv2 := ratMul(centerV, centerV)
+		cu2 := proofbound.RatMul(centerU, centerU)
+		cv2 := proofbound.RatMul(centerV, centerV)
 
 		// muu = r/3·(c.U³·intCos + 3c.U²·r·intCos2 + 3c.U·r²·intCos3 + r³·intCos4),
 		// every r·sinθ/r·cosθ power substituted by the matching endpoint
@@ -936,66 +946,66 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 		// circularFirstMomentInterval doc comment names the same collapse one
 		// order down), leaving one constant enclosure plus one term scaled by
 		// the enclosed sweep dth.
-		muuConst := intervalAdd(
-			intervalAdd(
-				intervalAdd(
-					intervalScale(dy, ratMul(centerU, cu2)),
-					intervalScale(cross, ratScale(ratAdd(ratScale(cu2, 3, 1), r2), 1, 2)),
+		muuConst := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(
+				proofbound.IntervalAdd(
+					proofbound.IntervalScale(dy, proofbound.RatMul(centerU, cu2)),
+					proofbound.IntervalScale(cross, ratScale(proofbound.RatAdd(ratScale(cu2, 3, 1), r2), 1, 2)),
 				),
-				intervalScale(dy, ratMul(centerU, r2, big.NewRat(3, 1))),
+				proofbound.IntervalScale(dy, proofbound.RatMul(centerU, r2, big.NewRat(3, 1))),
 			),
-			intervalAdd(
-				intervalScale(intervalSub(cube(p1y), cube(p0y)), new(big.Rat).Neg(centerU)),
-				intervalScale(quad, big.NewRat(1, 8)),
+			proofbound.IntervalAdd(
+				proofbound.IntervalScale(proofbound.IntervalSub(cube(p1y), cube(p0y)), new(big.Rat).Neg(centerU)),
+				proofbound.IntervalScale(quad, big.NewRat(1, 8)),
 			),
 		)
-		muuDthCoeff := ratAdd(ratScale(ratMul(cu2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
-		muuVal := intervalAdd(intervalScale(muuConst, big.NewRat(1, 3)), intervalScale(dth, muuDthCoeff))
+		muuDthCoeff := proofbound.RatAdd(ratScale(proofbound.RatMul(cu2, r2), 1, 2), ratScale(proofbound.RatMul(r2, r2), 1, 8))
+		muuVal := proofbound.IntervalAdd(proofbound.IntervalScale(muuConst, big.NewRat(1, 3)), proofbound.IntervalScale(dth, muuDthCoeff))
 
-		mvvConst := intervalAdd(
-			intervalNeg(intervalAdd(
-				intervalAdd(
-					intervalScale(dx, ratMul(centerV, cv2)),
-					intervalScale(cross, ratScale(ratAdd(ratScale(cv2, 3, 1), r2), 1, 2)),
+		mvvConst := proofbound.IntervalAdd(
+			proofbound.IntervalNeg(proofbound.IntervalAdd(
+				proofbound.IntervalAdd(
+					proofbound.IntervalScale(dx, proofbound.RatMul(centerV, cv2)),
+					proofbound.IntervalScale(cross, ratScale(proofbound.RatAdd(ratScale(cv2, 3, 1), r2), 1, 2)),
 				),
-				intervalScale(dx, ratMul(centerV, r2, big.NewRat(3, 1))),
+				proofbound.IntervalScale(dx, proofbound.RatMul(centerV, r2, big.NewRat(3, 1))),
 			)),
-			intervalAdd(
-				intervalScale(intervalSub(cube(p1x), cube(p0x)), centerV),
-				intervalScale(quad, big.NewRat(1, 8)),
+			proofbound.IntervalAdd(
+				proofbound.IntervalScale(proofbound.IntervalSub(cube(p1x), cube(p0x)), centerV),
+				proofbound.IntervalScale(quad, big.NewRat(1, 8)),
 			),
 		)
-		mvvDthCoeff := ratAdd(ratScale(ratMul(cv2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
-		mvvVal := intervalAdd(intervalScale(mvvConst, big.NewRat(1, 3)), intervalScale(dth, mvvDthCoeff))
+		mvvDthCoeff := proofbound.RatAdd(ratScale(proofbound.RatMul(cv2, r2), 1, 2), ratScale(proofbound.RatMul(r2, r2), 1, 8))
+		mvvVal := proofbound.IntervalAdd(proofbound.IntervalScale(mvvConst, big.NewRat(1, 3)), proofbound.IntervalScale(dth, mvvDthCoeff))
 
 		// muv = ½r·(c.V·(c.U²intCos+2c.U·r·intCos2+r²intCos3) +
 		// r·(c.U²intSC+2c.U·r·intSC2+r²intSC3)) — the same substitution,
 		// collapsing to one constant enclosure except the c.U·c.V·r²·dth piece.
-		muvConst := intervalAdd(
-			intervalAdd(
-				intervalAdd(
-					intervalScale(
-						intervalAdd(intervalScale(dy, cu2), intervalScale(cross, centerU)),
+		muvConst := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(
+				proofbound.IntervalAdd(
+					proofbound.IntervalScale(
+						proofbound.IntervalAdd(proofbound.IntervalScale(dy, cu2), proofbound.IntervalScale(cross, centerU)),
 						ratScale(centerV, 1, 2),
 					),
-					intervalScale(dy, ratScale(ratMul(centerV, r2), 1, 2)),
+					proofbound.IntervalScale(dy, ratScale(proofbound.RatMul(centerV, r2), 1, 2)),
 				),
-				intervalAdd(
-					intervalScale(intervalSub(cube(p1y), cube(p0y)), ratScale(new(big.Rat).Neg(centerV), 1, 6)),
-					intervalScale(intervalSub(p1ysq, p0ysq), ratScale(cu2, 1, 4)),
+				proofbound.IntervalAdd(
+					proofbound.IntervalScale(proofbound.IntervalSub(cube(p1y), cube(p0y)), ratScale(new(big.Rat).Neg(centerV), 1, 6)),
+					proofbound.IntervalScale(proofbound.IntervalSub(p1ysq, p0ysq), ratScale(cu2, 1, 4)),
 				),
 			),
-			intervalAdd(
-				intervalScale(intervalSub(cube(p0x), cube(p1x)), ratScale(centerU, 1, 3)),
-				intervalScale(intervalSub(intervalMul(p0sq, p0sq), intervalMul(p1sq, p1sq)), big.NewRat(1, 8)),
+			proofbound.IntervalAdd(
+				proofbound.IntervalScale(proofbound.IntervalSub(cube(p0x), cube(p1x)), ratScale(centerU, 1, 3)),
+				proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(p0sq, p0sq), proofbound.IntervalMul(p1sq, p1sq)), big.NewRat(1, 8)),
 			),
 		)
-		muvDthCoeff := ratScale(ratMul(centerU, centerV, r2), 1, 2)
-		muvVal := intervalAdd(muvConst, intervalScale(dth, muvDthCoeff))
+		muvDthCoeff := ratScale(proofbound.RatMul(centerU, centerV, r2), 1, 2)
+		muvVal := proofbound.IntervalAdd(muvConst, proofbound.IntervalScale(dth, muvDthCoeff))
 
 		return muuVal, muvVal, mvvVal, true
 	default:
-		return ratInterval{}, ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 }
 
@@ -1011,8 +1021,8 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 type circularMomentWalk struct {
 	cU, cV         *big.Rat
 	r2             *big.Rat
-	dtheta         ratInterval
-	x0, y0, x1, y1 ratInterval
+	dtheta         proofbound.RatInterval
+	x0, y0, x1, y1 proofbound.RatInterval
 	closed         bool
 }
 
@@ -1023,7 +1033,7 @@ type circularMomentWalk struct {
 // record alone does not state. A CircleSeg's endpoints come from
 // quarterTurnSinCos (exact at every quarter turn); an ArcSeg's Start is its
 // recorded offset and its End is ρ·(End − Center) through arcEndRadialRatio,
-// with the swept angle bracketed by atan2Interval under the same +2π branch
+// with the swept angle bracketed by proofbound.Atan2Interval under the same +2π branch
 // correction circularWalkEnclosures applies.
 func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 	switch seg := seg.(type) {
@@ -1043,10 +1053,10 @@ func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 		s1, c1 := quarterTurnSinCos(t1)
 		return circularMomentWalk{
 			cU: cU, cV: cV,
-			r2:     ratMul(r, r),
-			dtheta: intervalScale(twoPiInterval(), dt),
-			x0:     intervalScale(c0, r), y0: intervalScale(s0, r),
-			x1: intervalScale(c1, r), y1: intervalScale(s1, r),
+			r2:     proofbound.RatMul(r, r),
+			dtheta: proofbound.IntervalScale(proofbound.TwoPiInterval(), dt),
+			x0:     proofbound.IntervalScale(c0, r), y0: proofbound.IntervalScale(s0, r),
+			x1: proofbound.IntervalScale(c1, r), y1: proofbound.IntervalScale(s1, r),
 			closed: dt.IsInt(),
 		}, true
 	case ArcSeg:
@@ -1063,27 +1073,27 @@ func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
-		rho, ok := arcEndRadialRatio(r2, ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1)))
+		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
+		rho, ok := arcEndRadialRatio(r2, proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1)))
 		if !ok {
 			return circularMomentWalk{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
-		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := intervalSub(a1, a0)
+		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := proofbound.IntervalSub(a1, a0)
 		if math.Atan2(heldDY1, seg.End.U-seg.Center.U)-math.Atan2(heldDY0, seg.Start.U-seg.Center.U) <= 0 {
-			sweep = intervalAdd(sweep, twoPiInterval())
+			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
 		walk := circularMomentWalk{
 			cU: cU, cV: cV, r2: r2, dtheta: sweep,
-			x0: pointInterval(dx0), y0: pointInterval(dy0),
-			x1: intervalScale(rho, dx1), y1: intervalScale(rho, dy1),
+			x0: proofbound.PointInterval(dx0), y0: proofbound.PointInterval(dy0),
+			x1: proofbound.IntervalScale(rho, dx1), y1: proofbound.IntervalScale(rho, dy1),
 		}
 		if reverse {
 			walk.x0, walk.y0, walk.x1, walk.y1 = walk.x1, walk.y1, walk.x0, walk.y0
-			walk.dtheta = intervalNeg(sweep)
+			walk.dtheta = proofbound.IntervalNeg(sweep)
 		}
 		return walk, true
 	default:
@@ -1092,10 +1102,10 @@ func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 }
 
 // intervalPow is x^n by repeated outward multiplication; x^0 is the exact 1.
-func intervalPow(x ratInterval, n int) ratInterval {
-	out := pointInterval(big.NewRat(1, 1))
+func intervalPow(x proofbound.RatInterval, n int) proofbound.RatInterval {
+	out := proofbound.PointInterval(big.NewRat(1, 1))
 	for range n {
-		out = intervalMul(out, x)
+		out = proofbound.IntervalMul(out, x)
 	}
 	return out
 }
@@ -1112,19 +1122,19 @@ func intervalPow(x ratInterval, n int) ratInterval {
 // with [g] = g(θ1) − g(θ0). Both reductions are the product rule on
 // cos^(a∓1)·sin^(b±1) with sin² + cos² = 1, and hold for a signed sweep of
 // any length. A closed walk's [g] is the exact zero.
-func circularMonomials(walk circularMomentWalk, degree int) [][]ratInterval {
-	endpoint := func(m, n int) ratInterval {
+func circularMonomials(walk circularMomentWalk, degree int) [][]proofbound.RatInterval {
+	endpoint := func(m, n int) proofbound.RatInterval {
 		if walk.closed {
-			return pointInterval(new(big.Rat))
+			return proofbound.PointInterval(new(big.Rat))
 		}
-		return intervalSub(
-			intervalMul(intervalPow(walk.x1, m), intervalPow(walk.y1, n)),
-			intervalMul(intervalPow(walk.x0, m), intervalPow(walk.y0, n)),
+		return proofbound.IntervalSub(
+			proofbound.IntervalMul(intervalPow(walk.x1, m), intervalPow(walk.y1, n)),
+			proofbound.IntervalMul(intervalPow(walk.x0, m), intervalPow(walk.y0, n)),
 		)
 	}
-	j := make([][]ratInterval, degree+1)
+	j := make([][]proofbound.RatInterval, degree+1)
 	for a := range j {
-		j[a] = make([]ratInterval, degree+1-a)
+		j[a] = make([]proofbound.RatInterval, degree+1-a)
 	}
 	for total := 0; total <= degree; total++ {
 		for a := 0; a <= total; a++ {
@@ -1135,17 +1145,17 @@ func circularMonomials(walk circularMomentWalk, degree int) [][]ratInterval {
 			case a == 1 && b == 0:
 				j[1][0] = endpoint(0, 1)
 			case a == 0 && b == 1:
-				j[0][1] = intervalNeg(endpoint(1, 0))
+				j[0][1] = proofbound.IntervalNeg(endpoint(1, 0))
 			case a == 1 && b == 1:
-				j[1][1] = intervalScale(endpoint(0, 2), big.NewRat(1, 2))
+				j[1][1] = proofbound.IntervalScale(endpoint(0, 2), big.NewRat(1, 2))
 			case a >= 2:
-				boundary := intervalScale(endpoint(a-1, b+1), big.NewRat(1, int64(total)))
-				lower := intervalScale(j[a-2][b], ratScale(walk.r2, int64(a-1), int64(total)))
-				j[a][b] = intervalAdd(boundary, lower)
+				boundary := proofbound.IntervalScale(endpoint(a-1, b+1), big.NewRat(1, int64(total)))
+				lower := proofbound.IntervalScale(j[a-2][b], ratScale(walk.r2, int64(a-1), int64(total)))
+				j[a][b] = proofbound.IntervalAdd(boundary, lower)
 			default:
-				boundary := intervalScale(endpoint(a+1, b-1), big.NewRat(-1, int64(total)))
-				lower := intervalScale(j[a][b-2], ratScale(walk.r2, int64(b-1), int64(total)))
-				j[a][b] = intervalAdd(boundary, lower)
+				boundary := proofbound.IntervalScale(endpoint(a+1, b-1), big.NewRat(-1, int64(total)))
+				lower := proofbound.IntervalScale(j[a][b-2], ratScale(walk.r2, int64(b-1), int64(total)))
+				j[a][b] = proofbound.IntervalAdd(boundary, lower)
 			}
 		}
 	}
@@ -1158,8 +1168,8 @@ func circularMonomials(walk circularMomentWalk, degree int) [][]ratInterval {
 // expansion leaves only the J monomials circularMonomials enclosed:
 //
 //	Σ C(p+1,i)·cU^(p+1−i)·C(q,k)·cV^(q−k)·J(i+1, k) / (p+1)
-func circularGreenMoment(walk circularMomentWalk, j [][]ratInterval, p, q int) ratInterval {
-	sum := pointInterval(new(big.Rat))
+func circularGreenMoment(walk circularMomentWalk, j [][]proofbound.RatInterval, p, q int) proofbound.RatInterval {
+	sum := proofbound.PointInterval(new(big.Rat))
 	for i := 0; i <= p+1; i++ {
 		cuPow := new(big.Rat).SetInt64(1)
 		for range p + 1 - i {
@@ -1170,11 +1180,11 @@ func circularGreenMoment(walk circularMomentWalk, j [][]ratInterval, p, q int) r
 			for range q - k {
 				cvPow.Mul(cvPow, walk.cV)
 			}
-			coefficient := ratMul(binomialRat(p+1, i), binomialRat(q, k), cuPow, cvPow)
-			sum = intervalAdd(sum, intervalScale(j[i+1][k], coefficient))
+			coefficient := proofbound.RatMul(binomialRat(p+1, i), binomialRat(q, k), cuPow, cvPow)
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(j[i+1][k], coefficient))
 		}
 	}
-	return intervalScale(sum, big.NewRat(1, int64(p+1)))
+	return proofbound.IntervalScale(sum, big.NewRat(1, int64(p+1)))
 }
 
 // circularThirdMomentInterval encloses one circular walk's third-order
@@ -1183,13 +1193,13 @@ func circularGreenMoment(walk circularMomentWalk, j [][]ratInterval, p, q int) r
 // four, the same form moments.go's line and spline_moments.go's span
 // contributions take, so a loop mixing the three kinds sums one consistent
 // Green's-theorem integral.
-func circularThirdMomentInterval(seg CurveSegment) ([4]ratInterval, bool) {
+func circularThirdMomentInterval(seg CurveSegment) ([4]proofbound.RatInterval, bool) {
 	walk, ok := circularMomentWalkOf(seg)
 	if !ok {
-		return [4]ratInterval{}, false
+		return [4]proofbound.RatInterval{}, false
 	}
 	j := circularMonomials(walk, 5)
-	return [4]ratInterval{
+	return [4]proofbound.RatInterval{
 		circularGreenMoment(walk, j, 3, 0),
 		circularGreenMoment(walk, j, 2, 1),
 		circularGreenMoment(walk, j, 1, 2),

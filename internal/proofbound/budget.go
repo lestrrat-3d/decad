@@ -1,72 +1,72 @@
-package decad
+package proofbound
 
 import (
 	"context"
 	"errors"
 )
 
-var errWallWorkBudget = errors.New("wall survey work budget exhausted")
+var ErrWallWorkBudget = errors.New("wall survey work budget exhausted")
 
-// newWallWorkBudget adapts the fixed shell-admission ceiling to the shared
-// workBudget interface used by the streaming wall kernel.
-func newWallWorkBudget(limit uint64) *workBudget {
+// NewWallWorkBudget adapts the fixed shell-admission ceiling to the shared
+// WorkBudget interface used by the streaming wall kernel.
+func NewWallWorkBudget(limit uint64) *WorkBudget {
 	remaining := limit
-	return &workBudget{
-		stepFn: func() error {
+	return &WorkBudget{
+		StepFn: func() error {
 			if remaining == 0 {
-				return errWallWorkBudget
+				return ErrWallWorkBudget
 			}
 			remaining--
 			return nil
 		},
-		errFn: func() error {
+		ErrFn: func() error {
 			if remaining == 0 {
-				return errWallWorkBudget
+				return ErrWallWorkBudget
 			}
 			return nil
 		},
 	}
 }
 
-// newWallWorkBudgetWithOperation shares the operation cancellation budget with
+// NewWallWorkBudgetWithOperation shares the operation cancellation budget with
 // the fixed wall-survey ceiling.
-func newWallWorkBudgetWithOperation(limit uint64, operation *workBudget) *workBudget {
-	wall := newWallWorkBudget(limit)
-	return &workBudget{
-		stepFn: func() error {
+func NewWallWorkBudgetWithOperation(limit uint64, operation *WorkBudget) *WorkBudget {
+	wall := NewWallWorkBudget(limit)
+	return &WorkBudget{
+		StepFn: func() error {
 			if operation != nil {
-				if err := operation.step(); err != nil {
+				if err := operation.Step(); err != nil {
 					return err
 				}
 			}
-			return wall.step()
+			return wall.Step()
 		},
-		errFn: func() error {
+		ErrFn: func() error {
 			if operation != nil {
-				if err := operation.err(); err != nil {
+				if err := operation.Err(); err != nil {
 					return err
 				}
 			}
-			return wall.err()
+			return wall.Err()
 		},
 	}
 }
 
-func wallCheckedAdd(a, b uint64) (uint64, bool) {
+func WallCheckedAdd(a, b uint64) (uint64, bool) {
 	if ^uint64(0)-a < b {
 		return 0, false
 	}
 	return a + b, true
 }
 
-func wallCheckedMul(a, b uint64) (uint64, bool) {
+func WallCheckedMul(a, b uint64) (uint64, bool) {
 	if a != 0 && b > ^uint64(0)/a {
 		return 0, false
 	}
 	return a * b, true
 }
 
-func wallChoose2(n uint64) (uint64, bool) {
+func WallChoose2(n uint64) (uint64, bool) {
 	if n < 2 {
 		return 0, true
 	}
@@ -76,10 +76,10 @@ func wallChoose2(n uint64) (uint64, bool) {
 	} else {
 		b /= 2
 	}
-	return wallCheckedMul(a, b)
+	return WallCheckedMul(a, b)
 }
 
-func wallChoose3(n uint64) (uint64, bool) {
+func WallChoose3(n uint64) (uint64, bool) {
 	if n < 3 {
 		return 0, true
 	}
@@ -96,57 +96,57 @@ func wallChoose3(n uint64) (uint64, bool) {
 			break
 		}
 	}
-	v, ok := wallCheckedMul(factors[0], factors[1])
+	v, ok := WallCheckedMul(factors[0], factors[1])
 	if !ok {
 		return 0, false
 	}
-	v, ok = wallCheckedMul(v, factors[2])
+	v, ok = WallCheckedMul(v, factors[2])
 	if !ok {
 		return 0, false
 	}
 	return v, true
 }
 
-// wallCandidateWork counts candidate-family visits before validation.
-func wallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool) {
+// WallCandidateWork counts candidate-family visits before validation.
+func WallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool) {
 	if elementCount < 0 || vertexCount < 0 {
 		return 0, false
 	}
 	e, v := uint64(elementCount), uint64(vertexCount)
-	ee, ok := wallChoose2(e)
+	ee, ok := WallChoose2(e)
 	if !ok {
 		return 0, false
 	}
-	ev, ok := wallCheckedMul(e, v)
+	ev, ok := WallCheckedMul(e, v)
 	if !ok {
 		return 0, false
 	}
-	vv, ok := wallChoose2(v)
+	vv, ok := WallChoose2(v)
 	if !ok {
 		return 0, false
 	}
-	q, ok := wallCheckedAdd(e, v)
+	q, ok := WallCheckedAdd(e, v)
 	if !ok {
 		return 0, false
 	}
 	wedgeWork := uint64(0)
 	if wedge {
-		q, ok = wallCheckedAdd(q, 1)
+		q, ok = WallCheckedAdd(q, 1)
 		if !ok {
 			return 0, false
 		}
-		wedgeWork, ok = wallCheckedAdd(e, v)
+		wedgeWork, ok = WallCheckedAdd(e, v)
 		if !ok {
 			return 0, false
 		}
 	}
-	triples, ok := wallChoose3(q)
+	triples, ok := WallChoose3(q)
 	if !ok {
 		return 0, false
 	}
 	total := e
 	for _, n := range []uint64{ee, ev, vv, wedgeWork, triples} {
-		total, ok = wallCheckedAdd(total, n)
+		total, ok = WallCheckedAdd(total, n)
 		if !ok {
 			return 0, false
 		}
@@ -154,51 +154,51 @@ func wallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 	return total, true
 }
 
-// workPollInterval is how many candidate operations may pass between context
+// WorkPollInterval is how many candidate operations may pass between context
 // polls (docs/interference-design.md §7.2).
-const workPollInterval = 256
+const WorkPollInterval = 256
 
-// maxFacetPairTestsPerCall is the fixed ceiling on exact triangle-pair
+// MaxFacetPairTestsPerCall is the fixed ceiling on exact triangle-pair
 // predicate invocations for one call (docs/tessellation-design.md §3): the
 // tessellation boolean pre-pass and the loft crossing audit
 // (docs/loft-design.md §6) both charge every pair test against this one
 // constant rather than minting a second ceiling for the identical quantity.
-const maxFacetPairTestsPerCall = 8_000_000
+const MaxFacetPairTestsPerCall = 8_000_000
 
-// workBudget shares one bounded cancellation counter across every nested loop
+// WorkBudget shares one bounded cancellation counter across every nested loop
 // of one read-only or pre-commit audit phase. Leaf exact predicates stay
 // context-free (docs/interference-design.md §7.2); their callers step this
-// counter, which polls the context at least once per workPollInterval candidate
+// counter, which polls the context at least once per WorkPollInterval candidate
 // operations. Phase boundaries call err instead, which polls unconditionally.
 //
 // The counter is shared rather than per-loop on purpose: a nest of loops that
-// each counted to workPollInterval alone would let the innermost scan run the
+// each counted to WorkPollInterval alone would let the innermost scan run the
 // interval's worth of work for every step of the outermost one.
 //
-// workBudget holds closures rather than a context.Context field, so no
+// WorkBudget holds closures rather than a context.Context field, so no
 // long-lived geometry state stores a context.
-type workBudget struct {
-	stepFn func() error
-	errFn  func() error
+type WorkBudget struct {
+	StepFn func() error
+	ErrFn  func() error
 }
 
-func newWorkBudget(ctx context.Context) *workBudget {
+func NewWorkBudget(ctx context.Context) *WorkBudget {
 	work := 0
-	return &workBudget{
-		stepFn: func() error {
+	return &WorkBudget{
+		StepFn: func() error {
 			work++
-			if work%workPollInterval == 0 {
+			if work%WorkPollInterval == 0 {
 				return ctx.Err()
 			}
 			return nil
 		},
-		errFn: ctx.Err,
+		ErrFn: ctx.Err,
 	}
 }
 
 // step counts one candidate operation and returns ctx.Err() on the polling
 // interval.
-func (b *workBudget) step() error { return b.stepFn() }
+func (b *WorkBudget) Step() error { return b.StepFn() }
 
 // err polls the context unconditionally — the phase-boundary check.
-func (b *workBudget) err() error { return b.errFn() }
+func (b *WorkBudget) Err() error { return b.ErrFn() }

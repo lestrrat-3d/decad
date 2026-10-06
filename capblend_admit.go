@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -29,7 +31,7 @@ import (
 // enters the proof's trimmed term through the same chord-polygon argument; the
 // corner joins are checked only on a loop chamfered on at least one cap, since
 // only a band has an offset foot whose locus the proof must follow.
-func capBlendOccupiedVolumeAdmission(budget *workBudget, cbp capBlendPayload) (error, error) {
+func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlendPayload) (error, error) {
 	for li, loop := range cbp.loops() {
 		cl, err := oneLoopCornerLoop(budget, loop, newFreeformWork())
 		if err != nil {
@@ -52,7 +54,7 @@ func capBlendOccupiedVolumeAdmission(budget *workBudget, cbp capBlendPayload) (e
 		}
 		for i, w := range walks {
 			for _, si := range w.segs {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				seg, err := normalizeSegment(loop.Segments[si])
@@ -72,7 +74,7 @@ func capBlendOccupiedVolumeAdmission(budget *workBudget, cbp capBlendPayload) (e
 			return nil, err
 		}
 		for i := range n {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			prev, cur := walks[(i+n-1)%n], walks[i]

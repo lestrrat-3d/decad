@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -50,7 +52,7 @@ type pathSegmentRecord struct {
 // NewPath records an ordered spatial path beginning at start. It requires at
 // least one non-degenerate segment and copies every segment value.
 func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
-	if !finiteVec(start) {
+	if !proofbound.FiniteVec(start) {
 		return nil, fmt.Errorf(`%w: a path start must be finite`, ErrNotFinite)
 	}
 	if len(segments) == 0 {
@@ -68,7 +70,7 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 
 		switch segment := segment.(type) {
 		case LineTo:
-			if !finiteVec(segment.End) {
+			if !proofbound.FiniteVec(segment.End) {
 				return nil, fmt.Errorf(`%w: path segment %d has a non-finite endpoint`, ErrNotFinite, i)
 			}
 			if segment.End == current {
@@ -81,7 +83,7 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			}
 			current = segment.End
 		case ArcThrough:
-			if !finiteVec(segment.Through) || !finiteVec(segment.End) {
+			if !proofbound.FiniteVec(segment.Through) || !proofbound.FiniteVec(segment.End) {
 				return nil, fmt.Errorf(`%w: path segment %d has a non-finite point`, ErrNotFinite, i)
 			}
 			if segment.Through == current || segment.End == current || segment.Through == segment.End {

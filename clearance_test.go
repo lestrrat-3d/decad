@@ -183,7 +183,7 @@ func TestClearanceParallelCirclePlacementBound(t *testing.T) {
 // rounding that lift commits was charged nowhere. The axis-aligned control
 // below returns exactly 300 as Exact through the same code, which is why a
 // single axis-aligned fixture never caught this: the frame's own zero fast
-// path (bounds.go's frameAndPlacementRoundAllow) makes every term vanish.
+// path (internal/proofbound/bounds.go's frameAndPlacementRoundAllow) makes every term vanish.
 //
 // The assertion is enclosure, never a pinned Bound literal — the charge is
 // ulp-scale and rounds differently on amd64 and arm64.
@@ -394,7 +394,7 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	// The identical stop-built stack, with the smaller box arriving through
 	// Placed (a pure translation) instead of a direct offset-plane
 	// construction: the placement's own frame/placement rounding
-	// (bounds.go's frameAndPlacementRoundAllow) makes the placed box's
+	// (internal/proofbound/bounds.go's frameAndPlacementRoundAllow) makes the placed box's
 	// bodyGeom.delta nonzero, so the §6 coplanar contact certificate — an
 	// exact material-side claim — refuses to fire (clearancePair's own doc
 	// comment). The partition is still proven disjoint through the
@@ -488,7 +488,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	// clearance a subtraction-only rule would misread as "carriers meet".
 	// The tube is a revolve and the peg a prism sketched on the YZ plane, so
 	// the pair also covers the mixed-payload path — a plane the frame's own
-	// zero fast path does not cover (bounds.go's frameAndPlacementRoundAllow
+	// zero fast path does not cover (internal/proofbound/bounds.go's frameAndPlacementRoundAllow
 	// only exempts EXACTLY U=(1,0,0), V=(0,1,0)), and a full turn's own
 	// angular displacement never collapses to exactly zero (2π has no exact
 	// rational value), so both bodyGeom.delta are nonzero and the row reads

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -376,7 +378,7 @@ func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (spineCrit, bool) {
 	t := (uv*ru - rv) / den
 	fa := a.Add(u.Scale(s))
 	fb := b.Add(v.Scale(t))
-	if !finiteVec(fa) || !finiteVec(fb) {
+	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) {
 		return spineCrit{}, false
 	}
 	return exactCrit(fa, fb), true
@@ -606,8 +608,8 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 // returned for the candidate are rounded representatives; the exact rational
 // separation and directed square-root interval certify the distance.
 func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool {
-	if !ea.ang.full || !eb.ang.full || !finiteVec(ea.center) || !finiteVec(eb.center) ||
-		isNonFinite(ea.radius) || isNonFinite(eb.radius) || ea.radius <= 0 || eb.radius <= 0 ||
+	if !ea.ang.full || !eb.ang.full || !proofbound.FiniteVec(ea.center) || !proofbound.FiniteVec(eb.center) ||
+		proofbound.IsNonFinite(ea.radius) || proofbound.IsNonFinite(eb.radius) || ea.radius <= 0 || eb.radius <= 0 ||
 		ea.axis.X != 0 || ea.axis.Y != 0 || math.Abs(ea.axis.Z) != 1 ||
 		eb.axis.X != 0 || eb.axis.Y != 0 || math.Abs(eb.axis.Z) != 1 {
 		return false
@@ -633,13 +635,13 @@ func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool 
 	dz := new(big.Rat).Sub(proofarith.FloatRat(ea.center.Z), proofarith.FloatRat(eb.center.Z))
 	square := new(big.Rat).Mul(gap, gap)
 	square.Add(square, new(big.Rat).Mul(dz, dz))
-	lo, hi := ratSqrtDown(square), ratSqrtUp(square)
-	if lo <= k.tol || isNonFinite(hi) {
+	lo, hi := proofbound.RatSqrtDown(square), proofbound.RatSqrtUp(square)
+	if lo <= k.tol || proofbound.IsNonFinite(hi) {
 		return false
 	}
 	pa := ea.center.Add(radial.Scale(sign * ea.radius))
 	pb := eb.center.Sub(radial.Scale(sign * eb.radius))
-	if !finiteVec(pa) || !finiteVec(pb) {
+	if !proofbound.FiniteVec(pa) || !proofbound.FiniteVec(pb) {
 		return false
 	}
 	sink.candidate(k, 1, lo, hi, lo == hi, pa, pb)
@@ -671,9 +673,9 @@ func (k *pairKernel) circleCircleEE(ea, eb *cEdge, sink *cellSink) {
 // or a spindle axis-collapse point) against the other body's faces and
 // edges — every cell closed form (§3's vertex tiers). It continues the
 // enumerator's budget through every face, edge, and planar trim scan.
-func (k *pairKernel) vertexTier(budget *workBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
+func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
 	for _, f := range other.faces {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		if err := k.vertexFace(budget, v, f, sink); err != nil {
@@ -681,7 +683,7 @@ func (k *pairKernel) vertexTier(budget *workBudget, v r3.Vec, other *bodyGeom, s
 		}
 	}
 	for _, e := range other.edges {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		k.vertexEdge(v, e, sink)
@@ -689,7 +691,7 @@ func (k *pairKernel) vertexTier(budget *workBudget, v r3.Vec, other *bodyGeom, s
 	return nil
 }
 
-func (k *pairKernel) vertexFace(budget *workBudget, v r3.Vec, f *cFace, sink *cellSink) error {
+func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *cFace, sink *cellSink) error {
 	switch f.kind {
 	case ckPlane:
 		h := v.Sub(f.o).Dot(f.n)
@@ -803,10 +805,10 @@ func (k *pairKernel) rulingContactCertified(ctx context.Context) (*rulingContact
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for _, fa := range k.a.faces {
 		for _, fb := range k.b.faces {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			var ruling *rulingContact
@@ -957,7 +959,7 @@ func (k *pairKernel) rulingInsidePlaneTrim(plane *cFace, ends [2]proofarith.DyV3
 		// The nearest float of each end is within an ulp; the trim margin
 		// below is many orders wider.
 		p := dyAxisVec(end)
-		if !finiteVec(p) {
+		if !proofbound.FiniteVec(p) {
 			return false
 		}
 		coords[i][0], coords[i][1] = plane.planeCoords(p)
@@ -1007,7 +1009,7 @@ func axisOfLength(v proofarith.DyV3, length proofarith.Dyadic) (proofarith.DyV3,
 
 // dyVecOf lifts a finite carrier vector exactly.
 func dyVecOf(v r3.Vec) (proofarith.DyV3, bool) {
-	if !finiteVec(v) {
+	if !proofbound.FiniteVec(v) {
 		return proofarith.DyV3{}, false
 	}
 	return proofarith.DyVec(v), true

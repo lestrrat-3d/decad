@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -100,13 +102,13 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // axis frame's proven direction/anchor uncertainty (axisInPlane's
 // dUBound/dVBound/aUBound/aVBound — the fields axisMoments already folds into
 // the region's moments) and from the placement's own rounding
-// (exactIsometryDotRound, bounds.go). It is zero for an axis-aligned frame
+// (proofbound.ExactIsometryDotRound, internal/proofbound/bounds.go). It is zero for an axis-aligned frame
 // under an identity placement, which is what keeps an ordinary, unplaced
 // revolve's box Exact as before.
 //
 // A FOURTH is this reading's own recombination of those terms into a published
 // endpoint — the base + lo and base + hi below, charged exactly by
-// exactSumRound. It covers what none of the other three does: a placement whose
+// proofbound.ExactSumRound. It covers what none of the other three does: a placement whose
 // coefficients are every one of them exactly right, whose sum nonetheless
 // rounds. It is zero wherever that addition is exactly representable, so an
 // unplaced revolve's box keeps its zero bound.
@@ -144,15 +146,15 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 		return 0, 0, 0, err
 	}
 	// outward is the per-end composition: the outward sum of the two terms,
-	// through the same absSumUpper every other composed bound in this package
+	// through the same proofbound.AbsSumUpper every other composed bound in this package
 	// takes. A non-finite term answers +Inf rather than folding into a small
-	// bound (bounds.go's own rule), since absSumUpper is an arithmetic on
+	// bound (internal/proofbound/bounds.go's own rule), since proofbound.AbsSumUpper is an arithmetic on
 	// magnitudes and states nothing about an absent one.
 	outward := func(boundary, sweep float64) float64 {
-		if isNonFinite(boundary) || isNonFinite(sweep) {
+		if proofbound.IsNonFinite(boundary) || proofbound.IsNonFinite(sweep) {
 			return math.Inf(1)
 		}
-		return absSumUpper(boundary, sweep)
+		return proofbound.AbsSumUpper(boundary, sweep)
 	}
 	bound := math.Max(outward(loBound, sweepLo), outward(hiBound, sweepHi))
 	frameAllow, err := rp.frameRoundAllow(g, b, base, wg, c0, c1, work, profile)
@@ -160,8 +162,8 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 		return 0, 0, 0, err
 	}
 	// A FOURTH mechanism is the reading's own final summation base + lo (and
-	// base + hi), charged exactly against the same two terms by exactSumRound
-	// (bounds.go). frameRoundAllow proves base/wg/c0/c1 each right and says
+	// base + hi), charged exactly against the same two terms by proofbound.ExactSumRound
+	// (internal/proofbound/bounds.go). frameRoundAllow proves base/wg/c0/c1 each right and says
 	// nothing about adding them: a pure translation of an axis-aligned revolve
 	// leaves all four exactly right and still rounds here. It is charged per END
 	// — the two ends are summed from different terms — and composed outward with
@@ -169,10 +171,10 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 	// other composition in this reading takes.
 	loEnd, hiEnd := base+lo, base+hi
 	sumAllow := math.Max(
-		exactSumRound(loEnd, base, lo),
-		exactSumRound(hiEnd, base, hi),
+		proofbound.ExactSumRound(loEnd, base, lo),
+		proofbound.ExactSumRound(hiEnd, base, hi),
 	)
-	bound = absSumUpper(bound, frameAllow, sumAllow)
+	bound = proofbound.AbsSumUpper(bound, frameAllow, sumAllow)
 	// The FIFTH mechanism: the meridian this reading scanned is the RECORDED
 	// one, and a trimmed section's own cut coordinates sit within its
 	// sectionDelta of the meridian the record denotes
@@ -180,7 +182,7 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 	// no construction displaced, which is what leaves an ordinary revolve's box
 	// on the path it takes today.
 	if sectionAllow := rp.sectionExtentAllow(); sectionAllow > 0 {
-		bound = absSumUpper(bound, sectionAllow)
+		bound = proofbound.AbsSumUpper(bound, sectionAllow)
 	}
 	return loEnd, hiEnd, bound, nil
 }
@@ -195,13 +197,13 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 // they bound sits on the denoted one.
 //
 // A payload no construction displaced answers its own argument back, untouched:
-// absSumUpper up-rounds, so folding a zero would widen an ordinary revolve's
+// proofbound.AbsSumUpper up-rounds, so folding a zero would widen an ordinary revolve's
 // every published box by an ulp.
 func (rp revolvePayload) sectionCoordUpper(coordUpper float64) float64 {
 	if rp.sectionDelta <= 0 {
 		return coordUpper
 	}
-	return absSumUpper(coordUpper, productUpper(2, rp.sectionDelta))
+	return proofbound.AbsSumUpper(coordUpper, proofbound.ProductUpper(2, rp.sectionDelta))
 }
 
 // sectionExtentAllow is docs/surface-intersection-design.md §7.1's FIFTH
@@ -225,8 +227,8 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 	if rp.sectionDelta <= 0 {
 		return 0
 	}
-	per := productUpper(rp.sectionDelta, absSumUpper(rp.ax.dU, rp.ax.dV))
-	return productUpper(2, per)
+	per := proofbound.ProductUpper(rp.sectionDelta, proofbound.AbsSumUpper(rp.ax.dU, rp.ax.dV))
+	return proofbound.ProductUpper(2, per)
 }
 
 // frameRoundAllow bounds how far base/wg/c0/c1 — the four scalar coefficients
@@ -252,7 +254,7 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 //     isometry carries a magnitude bound through unchanged, in exact
 //     arithmetic.
 //   - placeAllow: the placement's own rounding, through
-//     exactIsometryDotRound's exact rational check (bounds.go) on each of
+//     proofbound.ExactIsometryDotRound's exact rational check (internal/proofbound/bounds.go) on each of
 //     base/wg/c0/c1 against the SAME frame+placement chain applied to the
 //     ALREADY-HELD a3/w/e0/e1 — zero exactly where the placement's own float
 //     arithmetic is exact for this input (an identity placement) regardless
@@ -275,33 +277,33 @@ func (rp revolvePayload) frameRoundAllow(
 	}
 	ax := rp.ax
 	envUpper := ax.radialUpper(rp.sectionCoordUpper(coordUpper))
-	dirAllow := absSumUpper(ax.dUBound, ax.dVBound)
-	e1Allow := absSumUpper(productUpper(2, dirAllow), productUpper(dirAllow, dirAllow))
-	anchorAllow := absSumUpper(ax.aUBound, ax.aVBound)
-	axisAllow := absSumUpper(
+	dirAllow := proofbound.AbsSumUpper(ax.dUBound, ax.dVBound)
+	e1Allow := proofbound.AbsSumUpper(proofbound.ProductUpper(2, dirAllow), proofbound.ProductUpper(dirAllow, dirAllow))
+	anchorAllow := proofbound.AbsSumUpper(ax.aUBound, ax.aVBound)
+	axisAllow := proofbound.AbsSumUpper(
 		anchorAllow,
-		productUpper(dirAllow, envUpper),
-		productUpper(envUpper, absSumUpper(dirAllow, e1Allow)),
+		proofbound.ProductUpper(dirAllow, envUpper),
+		proofbound.ProductUpper(envUpper, proofbound.AbsSumUpper(dirAllow, e1Allow)),
 	)
 
-	baseRound := exactIsometryDotRound(rp.xform, b.a3, g, true, base)
-	wgRound := exactIsometryDotRound(rp.xform, b.w, g, false, wg)
-	c0Round := exactIsometryDotRound(rp.xform, b.e0, g, false, c0)
-	c1Round := exactIsometryDotRound(rp.xform, b.e1, g, false, c1)
-	placeAllow := absSumUpper(
+	baseRound := proofbound.ExactIsometryDotRound(rp.xform, b.a3, g, true, base)
+	wgRound := proofbound.ExactIsometryDotRound(rp.xform, b.w, g, false, wg)
+	c0Round := proofbound.ExactIsometryDotRound(rp.xform, b.e0, g, false, c0)
+	c1Round := proofbound.ExactIsometryDotRound(rp.xform, b.e1, g, false, c1)
+	placeAllow := proofbound.AbsSumUpper(
 		baseRound,
-		productUpper(wgRound, envUpper),
-		productUpper(envUpper, absSumUpper(c0Round, c1Round)),
+		proofbound.ProductUpper(wgRound, envUpper),
+		proofbound.ProductUpper(envUpper, proofbound.AbsSumUpper(c0Round, c1Round)),
 	)
 
-	return absSumUpper(axisAllow, placeAllow), nil
+	return proofbound.AbsSumUpper(axisAllow, placeAllow), nil
 }
 
 // sweepBoundAlong is the swept radial coefficient's own contribution to the
 // extent's half-width along one direction: sweepExtremeBounds proves how far
 // the held sweep extreme (mlo, mhi) can sit from the true one, and that
 // direction error turns into a position error through the same
-// directional-perturbation Lipschitz bound (bounds.go) every directional
+// directional-perturbation Lipschitz bound (internal/proofbound/bounds.go) every directional
 // extreme charges.
 //
 // It returns the LOW end's term and the HIGH end's term separately, never their
@@ -332,12 +334,12 @@ func (rp revolvePayload) sweepBoundAlong(
 		}
 	}
 	rhoUpper := rp.ax.radialUpper(rp.sectionCoordUpper(coordUpper))
-	if isNonFinite(rhoUpper) {
+	if proofbound.IsNonFinite(rhoUpper) {
 		return 0, 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
 	}
 	loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, rp.den, mlo, mhi, rp.full)
-	return directionalPerturbationAllow(loBound, rhoUpper),
-		directionalPerturbationAllow(hiBound, rhoUpper),
+	return proofbound.DirectionalPerturbationAllow(loBound, rhoUpper),
+		proofbound.DirectionalPerturbationAllow(hiBound, rhoUpper),
 		nil
 }
 
@@ -353,9 +355,9 @@ func (rp revolvePayload) sweepBoundAlong(
 //
 // The box states no error term of its own. Every mechanism that can move an
 // end — the sweep extreme's, the boundary scan's candidate positions and its own
-// arithmetic (planeDotDecompositionRoundAllow), the axis frame and
+// arithmetic (proofbound.PlaneDotDecompositionRoundAllow), the axis frame and
 // placement's own rounding (frameRoundAllow), and the endpoint summation's
-// (exactSumRound) — belongs to the extent reading
+// (proofbound.ExactSumRound) — belongs to the extent reading
 // itself (extentBoundedAlong), which every consumer takes, so the box simply
 // maxes the three axes' half-widths. Charging one of them here instead would
 // leave the same coordinate bounded on this path and exact on the
@@ -500,13 +502,13 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // phi0/phi1 read as exact rationals wherever the denotation cannot state one,
 // which reproduces today's reading exactly — sin/cos of each denoted angle by
 // angleDenotation.sinCosFor, which reads a pure-turn end (a degree-stated
-// extent) through turnSinCosInterval, EXACT at every eighth-turn boundary and
+// extent) through proofbound.TurnSinCosInterval, EXACT at every eighth-turn boundary and
 // never comparing against π, rather than through the radian-space bracket
 // (normal_bound.go's radSinCosInterval, the Cone normal's own primitive) that
 // a detour through π would otherwise force even at a quarter turn, and the
 // amplitude √(c0²+c1²) by the rational square-root brackets
-// circularLengthInterval reads an ArcSeg's radius through (ratSqrtDown/
-// ratSqrtUp).
+// circularLengthInterval reads an ArcSeg's radius through (proofbound.RatSqrtDown/
+// proofbound.RatSqrtUp).
 //
 // The true extreme over the denoted sweep always sits at phi0, at phi1, or at
 // an interior critical angle where m′(φ) = −c0·sin φ + c1·cos φ = 0. m′ is
@@ -549,8 +551,8 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 		return math.Inf(1), math.Inf(1)
 	}
 	sq := new(big.Rat).Add(new(big.Rat).Mul(c0R, c0R), new(big.Rat).Mul(c1R, c1R))
-	ampLoF, ampHiF := ratSqrtDown(sq), ratSqrtUp(sq)
-	if isNonFinite(ampLoF) || isNonFinite(ampHiF) {
+	ampLoF, ampHiF := proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq)
+	if proofbound.IsNonFinite(ampLoF) || proofbound.IsNonFinite(ampHiF) {
 		return math.Inf(1), math.Inf(1)
 	}
 	ampLoR, ampHiR := proofarith.FloatRat(ampLoF), proofarith.FloatRat(ampHiF)
@@ -558,9 +560,9 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 		return math.Inf(1), math.Inf(1)
 	}
 	if full {
-		hiIv := interval(ampLoR, ampHiR)
-		loIv := interval(new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR))
-		return intervalFloatError(loIv, heldLo), intervalFloatError(hiIv, heldHi)
+		hiIv := proofbound.Interval(ampLoR, ampHiR)
+		loIv := proofbound.Interval(new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR))
+		return proofbound.IntervalFloatError(loIv, heldLo), proofbound.IntervalFloatError(hiIv, heldHi)
 	}
 	enc0, ok0 := den.phi0.enclosureFor(phi0)
 	enc1, ok1 := den.phi1.enclosureFor(phi1)
@@ -572,8 +574,8 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 	if !ok0t || !ok1t {
 		return math.Inf(1), math.Inf(1)
 	}
-	m0 := intervalAdd(intervalScale(cos0, c0R), intervalScale(sin0, c1R))
-	m1 := intervalAdd(intervalScale(cos1, c0R), intervalScale(sin1, c1R))
+	m0 := proofbound.IntervalAdd(proofbound.IntervalScale(cos0, c0R), proofbound.IntervalScale(sin0, c1R))
+	m1 := proofbound.IntervalAdd(proofbound.IntervalScale(cos1, c0R), proofbound.IntervalScale(sin1, c1R))
 	maxRat := func(a, b *big.Rat) *big.Rat {
 		if a.Cmp(b) >= 0 {
 			return a
@@ -592,10 +594,10 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 	// each — where an unexcluded interior critical angle could push it —
 	// widens, and only in the arms below that cannot certify a tighter
 	// answer.
-	hiLo := maxRat(m0.lo, m1.lo)
-	hiHi := maxRat(m0.hi, m1.hi)
-	loHi := minRat(m0.hi, m1.hi)
-	loLo := minRat(m0.lo, m1.lo)
+	hiLo := maxRat(m0.Lo, m1.Lo)
+	hiHi := maxRat(m0.Hi, m1.Hi)
+	loHi := minRat(m0.Hi, m1.Hi)
+	loLo := minRat(m0.Lo, m1.Lo)
 
 	// m′(φ) = −c0·sin φ + c1·cos φ shares m's own zeros, spaced exactly π
 	// apart, so a closed interval narrower than π contains AT MOST one — and
@@ -606,23 +608,23 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 	// without a second zero, so it holds that one sign throughout and m is
 	// monotone on the whole closed interval.
 	negC0R := new(big.Rat).Neg(c0R)
-	mp0 := intervalAdd(intervalScale(sin0, negC0R), intervalScale(cos0, c1R))
-	mp1 := intervalAdd(intervalScale(sin1, negC0R), intervalScale(cos1, c1R))
-	widthIv := intervalSub(enc1, enc0)
-	widthLessThanPi := widthIv.hi.Cmp(piLower) < 0
-	sameNonPos := mp0.hi.Sign() <= 0 && mp1.hi.Sign() <= 0
-	sameNonNeg := mp0.lo.Sign() >= 0 && mp1.lo.Sign() >= 0
+	mp0 := proofbound.IntervalAdd(proofbound.IntervalScale(sin0, negC0R), proofbound.IntervalScale(cos0, c1R))
+	mp1 := proofbound.IntervalAdd(proofbound.IntervalScale(sin1, negC0R), proofbound.IntervalScale(cos1, c1R))
+	widthIv := proofbound.IntervalSub(enc1, enc0)
+	widthLessThanPi := widthIv.Hi.Cmp(proofbound.PiLower) < 0
+	sameNonPos := mp0.Hi.Sign() <= 0 && mp1.Hi.Sign() <= 0
+	sameNonNeg := mp0.Lo.Sign() >= 0 && mp1.Lo.Sign() >= 0
 	monotonic := widthLessThanPi && (sameNonPos || sameNonNeg)
 	switch {
 	case monotonic:
 		// No interior critical angle at all: both endpoint enclosures stand
 		// as they are.
-	case widthIv.hi.Cmp(twoPiInterval().lo) < 0 && mp0.lo.Sign() > 0 && mp1.hi.Sign() < 0:
+	case widthIv.Hi.Cmp(proofbound.TwoPiInterval().Lo) < 0 && mp0.Lo.Sign() > 0 && mp1.Hi.Sign() < 0:
 		// m′ runs strictly + to strictly −: exactly one interior zero, a
 		// maximum. The true max IS the amplitude, and the min cannot be
 		// interior, so it keeps its endpoint-only enclosure.
 		hiLo, hiHi = ampLoR, ampHiR
-	case widthIv.hi.Cmp(twoPiInterval().lo) < 0 && mp0.hi.Sign() < 0 && mp1.lo.Sign() > 0:
+	case widthIv.Hi.Cmp(proofbound.TwoPiInterval().Lo) < 0 && mp0.Hi.Sign() < 0 && mp1.Lo.Sign() > 0:
 		// The mirror case: a minimum.
 		loLo, loHi = new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR)
 	default:
@@ -642,11 +644,11 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 		// takes the amplitude bracket; an uncertified one keeps the global
 		// widening below, which is sound for any φ.
 		excess, okExcess := den.halfTurnExcessFor(phi0, phi1)
-		atLeastHalfTurn := okExcess && excess.lo.Sign() >= 0
-		crit0 := mp0.lo.Sign() == 0 && mp0.hi.Sign() == 0
-		crit1 := mp1.lo.Sign() == 0 && mp1.hi.Sign() == 0
-		maxIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.lo.Sign() > 0 || mp1.hi.Sign() < 0)
-		minIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.hi.Sign() < 0 || mp1.lo.Sign() > 0)
+		atLeastHalfTurn := okExcess && excess.Lo.Sign() >= 0
+		crit0 := mp0.Lo.Sign() == 0 && mp0.Hi.Sign() == 0
+		crit1 := mp1.Lo.Sign() == 0 && mp1.Hi.Sign() == 0
+		maxIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.Lo.Sign() > 0 || mp1.Hi.Sign() < 0)
+		minIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.Hi.Sign() < 0 || mp1.Lo.Sign() > 0)
 		if maxIsAmp {
 			hiLo, hiHi = ampLoR, ampHiR
 		} else {
@@ -658,9 +660,9 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 			loLo = minRat(loLo, new(big.Rat).Neg(ampHiR))
 		}
 	}
-	hiIv := interval(hiLo, hiHi)
-	loIv := interval(loLo, loHi)
-	return intervalFloatError(loIv, heldLo), intervalFloatError(hiIv, heldHi)
+	hiIv := proofbound.Interval(hiLo, hiHi)
+	loIv := proofbound.Interval(loLo, loHi)
+	return proofbound.IntervalFloatError(loIv, heldLo), proofbound.IntervalFloatError(hiIv, heldHi)
 }
 
 // axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
@@ -677,7 +679,7 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 // the scan holds each candidate as the float gu·u + gv·v, and that
 // multiply-and-sum rounds at the section's coordinate magnitude even where the
 // candidate's position is a value the record states verbatim and the first term
-// is therefore zero. planeDotDecompositionRoundAllow (bounds.go) charges it at
+// is therefore zero. proofbound.PlaneDotDecompositionRoundAllow (internal/proofbound/bounds.go) charges it at
 // the section's own coordinate envelope, which is the only magnitude in this
 // reading it scales with — the prism reading's prismDecompositionRoundAllow is
 // the same mechanism one sweep coordinate wider, and neither reading ever reads
@@ -687,7 +689,7 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 // products, their sum, and the subtraction that carries the scan's extreme into
 // axis coordinates — and every one of those rounds at the ANCHOR's magnitude
 // rather than the section's, so an axis far from the frame origin rounds here
-// while the scan reports zero. exactPlaneDotRound and exactSumRound (bounds.go)
+// while the scan reports zero. proofbound.ExactPlaneDotRound and proofbound.ExactSumRound (internal/proofbound/bounds.go)
 // charge exactly what that arithmetic committed, and the anchor's own proven
 // uncertainty (axisInPlane's aUBound/aVBound) rides in beside them through the
 // direction it is read against.
@@ -713,17 +715,17 @@ func axisExtremeContext(
 			return 0, 0, err
 		}
 	}
-	scanAllow := planeDotDecompositionRoundAllow(gu, gv, coordUpper)
+	scanAllow := proofbound.PlaneDotDecompositionRoundAllow(gu, gv, coordUpper)
 	off := gu*rp.ax.aU + gv*rp.ax.aV
-	shiftAllow := absSumUpper(
-		exactPlaneDotRound(gu, gv, rp.ax.aU, rp.ax.aV, off),
-		productUpper(math.Abs(gu), rp.ax.aUBound),
-		productUpper(math.Abs(gv), rp.ax.aVBound),
+	shiftAllow := proofbound.AbsSumUpper(
+		proofbound.ExactPlaneDotRound(gu, gv, rp.ax.aU, rp.ax.aV, off),
+		proofbound.ProductUpper(math.Abs(gu), rp.ax.aUBound),
+		proofbound.ProductUpper(math.Abs(gv), rp.ax.aVBound),
 	)
 	scan := hi
 	if !wantMax {
 		scan = lo
 	}
 	extreme := scan - off
-	return extreme, absSumUpper(bound, scanAllow, shiftAllow, exactSumRound(extreme, scan, -off)), nil
+	return extreme, proofbound.AbsSumUpper(bound, scanAllow, shiftAllow, proofbound.ExactSumRound(extreme, scan, -off)), nil
 }

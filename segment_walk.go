@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -68,10 +70,10 @@ type segmentWalk struct {
 	// STATES what its own endpoint is worth (lineWalkEndBound,
 	// circularWalkEndBound, freeformEndpointBounds) or REFUSES with +Inf, never
 	// leaves it silently zero. A reading that folds an endpoint into an answer
-	// charges it through pointPerturbationAllow; one that cannot state the
+	// charges it through proofbound.PointPerturbationAllow; one that cannot state the
 	// charge refuses on the +Inf rather than publishing an exactness the
 	// evaluator never proved.
-	startBound, endBound walkEndBound
+	startBound, endBound proofbound.WalkEndBound
 	closed               bool
 	// tanIn/tanOut are the walk tangents at start and end (unit not
 	// required), for junction convexity.
@@ -171,24 +173,6 @@ type segmentWalk struct {
 	// product must still fold.
 	fitInterpolated bool
 }
-
-// walkEndBound is the proven error bound on a walk endpoint's two components,
-// stated PER COMPONENT and never merged into one number. The two are
-// independent readings and an endpoint routinely proves one exactly while the
-// other carries error: a whole circle's own end is exactly that shape, since
-// math.Cos returns 1 at the end angle while math.Sin does not return 0 there.
-// Merging them would spend the exact axis's zero on the other axis's error, and
-// a reading along the exact axis alone would then publish a width its own
-// arithmetic never committed.
-//
-// A component the recorded data cannot enclose reads +Inf, the underivable
-// bound every consumer refuses on, and never zero.
-type walkEndBound struct {
-	u, v float64
-}
-
-// derivable reports whether both components state a bound at all.
-func (b walkEndBound) derivable() bool { return !isNonFinite(b.u) && !isNonFinite(b.v) }
 
 // isCircular reports whether the walk is a circle or arc — the question the
 // closed-form circular branches ask.
@@ -573,13 +557,13 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			th0,
 			th1,
 			math.Abs(r),
-			circularSweepUpper(seg.TStart, seg.TEnd),
+			proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 		)
 		w.closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
 		w.startBound = circularWalkEndBound(seg, seg.TStart, w.startU, w.startV)
 		w.endBound = circularWalkEndBound(seg, seg.TEnd, w.endU, w.endV)
 		if iv, ok := circularLengthInterval(seg); ok {
-			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+			w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(iv, w.length))
 		}
 		return w, nil
 	case ArcSeg:
@@ -597,7 +581,7 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			a0+seg.TStart*sweep,
 			a0+seg.TEnd*sweep,
 			arcRadiusUpper(seg),
-			circularSweepUpper(seg.TStart, seg.TEnd),
+			proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 		)
 		pinArcWalkEnds(&w, seg)
 		// circularWalkEnclosures brackets the radius from the same exact
@@ -608,10 +592,10 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		// where the bracket overflows, and arcWalkRadiusBound answers +Inf
 		// there on its own.
 		if rIv, sweepIv, ok := circularWalkEnclosures(seg); ok {
-			rLo, _ := rIv.lo.Float64()
-			rHi, _ := rIv.hi.Float64()
+			rLo, _ := rIv.Lo.Float64()
+			rHi, _ := rIv.Hi.Float64()
 			w.radiusBound = arcRadiusBoundFromBracket(radius, rLo, rHi)
-			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(intervalMul(rIv, sweepIv), w.length))
+			w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(proofbound.IntervalMul(rIv, sweepIv), w.length))
 		} else {
 			w.radiusBound = arcWalkRadiusBound(seg, radius)
 		}
@@ -658,13 +642,13 @@ func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 // the two agree exactly and this answers zero. A lerp that is not
 // representable as a rational yields +Inf on its component — the underivable
 // bound consumers refuse on.
-func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
-	out := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) proofbound.WalkEndBound {
+	out := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if u, ok := proofarith.DyLerp(seg.Start.U, seg.End.U, t); ok {
-		out.u = proofarith.DyRoundedFloatError(u, heldU)
+		out.U = proofarith.DyRoundedFloatError(u, heldU)
 	}
 	if v, ok := proofarith.DyLerp(seg.Start.V, seg.End.V, t); ok {
-		out.v = proofarith.DyRoundedFloatError(v, heldV)
+		out.V = proofarith.DyRoundedFloatError(v, heldV)
 	}
 	return out
 }
@@ -681,10 +665,10 @@ func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
 //
 // An enclosure the recorded data cannot state yields +Inf — an underivable
 // bound, which every consumer refuses on rather than publishes.
-func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) walkEndBound {
+func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) proofbound.WalkEndBound {
 	rt := proofarith.FloatRat(t)
 	if rt == nil {
-		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+		return proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	}
 	return circularPointBound(seg, rt, heldU, heldV)
 }
@@ -702,14 +686,14 @@ func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) walkEndBoun
 //
 // An enclosure the recorded data cannot state yields +Inf on both components,
 // the underivable bound every consumer refuses on.
-func circularPointBound(seg CurveSegment, t *big.Rat, heldU, heldV float64) walkEndBound {
+func circularPointBound(seg CurveSegment, t *big.Rat, heldU, heldV float64) proofbound.WalkEndBound {
 	uIv, vIv, ok := circularEndpointInterval(seg, t)
 	if !ok {
-		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+		return proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	}
-	return walkEndBound{
-		u: intervalFloatError(uIv, heldU),
-		v: intervalFloatError(vIv, heldV),
+	return proofbound.WalkEndBound{
+		U: proofbound.IntervalFloatError(uIv, heldU),
+		V: proofbound.IntervalFloatError(vIv, heldV),
 	}
 }
 
@@ -717,8 +701,8 @@ func circularPointBound(seg CurveSegment, t *big.Rat, heldU, heldV float64) walk
 // walk's radius, and the reason segmentWalk carries radiusBound at all: the
 // record states Start and Center, never the radius, so the walk's held radius
 // is the float math.Hypot of their difference. The exact radius is
-// √((Su−Cu)² + (Sv−Cv)²) over the recorded coordinates, which ratSqrtDown and
-// ratSqrtUp bracket without rounding, and the bound is the wider side of that
+// √((Su−Cu)² + (Sv−Cv)²) over the recorded coordinates, which proofbound.RatSqrtDown and
+// proofbound.RatSqrtUp bracket without rounding, and the bound is the wider side of that
 // bracket about the held float, rounded outward. A bracket that overflows
 // yields +Inf — an underivable bound, which every consumer refuses on rather
 // than publishes.
@@ -726,8 +710,8 @@ func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
 	dx := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 	dy := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 	r2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
-	rLo, rHi := ratSqrtDown(r2), ratSqrtUp(r2)
-	if isNonFinite(rLo) || isNonFinite(rHi) {
+	rLo, rHi := proofbound.RatSqrtDown(r2), proofbound.RatSqrtUp(r2)
+	if proofbound.IsNonFinite(rLo) || proofbound.IsNonFinite(rHi) {
 		return math.Inf(1)
 	}
 	return arcRadiusBoundFromBracket(held, rLo, rHi)
@@ -739,7 +723,7 @@ func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
 // bracket out of circularWalkEnclosures, states the formula through its one
 // owner instead of copying it.
 func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
-	return math.Max(upRound(held-rLo), upRound(rHi-held))
+	return math.Max(proofbound.UpRound(held-rLo), proofbound.UpRound(rHi-held))
 }
 
 // freeformWalk resolves a Tier A free-form segment into its walk geometry
@@ -802,7 +786,7 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		tanOutBound:     tangents.outBound,
 		length:          length,
 		lengthBound:     bound,
-		lengthUpper:     upRound(length + bound),
+		lengthUpper:     proofbound.UpRound(length + bound),
 		coordUpper:      freeformControlExtent(spans),
 		kind:            walkFreeform,
 		spans:           spans,
@@ -864,12 +848,12 @@ func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
 // displacement from the DENOTED point owes that radial residual on top of this
 // zero; docs/loft-design.md §5.2 names the term and loft_build.go's
 // arcNaturalEndRadialUpper charges it for the loft.
-func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, walkEndBound) {
+func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, proofbound.WalkEndBound) {
 	switch t {
 	case 0:
-		return seg.Start.U, seg.Start.V, walkEndBound{}
+		return seg.Start.U, seg.Start.V, proofbound.WalkEndBound{}
 	case 1:
-		return seg.End.U, seg.End.V, walkEndBound{}
+		return seg.End.U, seg.End.V, proofbound.WalkEndBound{}
 	}
 	return heldU, heldV, circularWalkEndBound(seg, t, heldU, heldV)
 }
@@ -897,8 +881,8 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 		sign = -1
 	}
 	length := r * math.Abs(th1-th0)
-	lengthUpper := productUpper(radiusUpper, sweepUpper)
-	coordUpper := absSumUpper(cu, cv, radiusUpper, radiusUpper)
+	lengthUpper := proofbound.ProductUpper(radiusUpper, sweepUpper)
+	coordUpper := proofbound.AbsSumUpper(cu, cv, radiusUpper, radiusUpper)
 	return segmentWalk{
 		startU: cu + r*cos0, startV: cv + r*sin0,
 		endU: cu + r*cos1, endV: cv + r*sin1,
@@ -907,7 +891,7 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 		tanInBound:  math.Inf(1),
 		tanOutBound: math.Inf(1),
 		length:      length,
-		lengthBound: conservativeValueError(length, lengthUpper),
+		lengthBound: proofbound.ConservativeValueError(length, lengthUpper),
 		lengthUpper: lengthUpper,
 		coordUpper:  coordUpper,
 		kind:        walkCircular,
@@ -937,7 +921,7 @@ func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 		return 0, held, coordUpper
 	}
 	upper := proofarith.DyL1Upper(du, dv)
-	bound := math.Min(conservativeValueError(held, upper), dySqrtIntervalError(lengthSquared, held))
+	bound := math.Min(proofbound.ConservativeValueError(held, upper), dySqrtIntervalError(lengthSquared, held))
 	return bound, upper, coordUpper
 }
 
@@ -945,7 +929,7 @@ func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 // directed-rounding square root bracket (dyadic.go's dySqrtDown/dySqrtUp),
 // assuming no ulp contract from Hypot or Sqrt. The answer is the farther of the
 // held float's two gaps from the bracket's ends, each rounded outward through
-// dyRoundedFloatError — intervalFloatError's rule over this arithmetic. It
+// dyRoundedFloatError — proofbound.IntervalFloatError's rule over this arithmetic. It
 // returns +Inf when the bracket cannot be built (an end past MaxFloat64), so a
 // math.Min against it can only ever keep the caller's own bound.
 func dySqrtIntervalError(lengthSquared proofarith.Dyadic, held float64) float64 {
@@ -986,7 +970,7 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 	return out
 }
 
-func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, error) {
+func coalesceWalksBudget(walks []sideWalk, budget *proofbound.WorkBudget) ([]sideWalk, error) {
 	return coalesceWalksWithPoll(func() error { return wallBudgetStep(budget) }, walks, true)
 }
 
@@ -1019,12 +1003,12 @@ func coalesceWalksWithPoll(poll func() error, walks []sideWalk, wrap bool) ([]si
 		// tangent AND the bound b proved on it — never a's, and never zero.
 		a.tanOutU, a.tanOutV = b.tanOutU, b.tanOutV
 		a.tanOutBound = b.tanOutBound
-		length := boundedAdd(measuredScalar(a.length, a.lengthBound), measuredScalar(b.length, b.lengthBound))
-		a.length, a.lengthBound = length.value, length.bound
-		a.lengthUpper = absSumUpper(a.lengthUpper, b.lengthUpper)
+		length := proofbound.BoundedAdd(proofbound.MeasuredScalar(a.length, a.lengthBound), proofbound.MeasuredScalar(b.length, b.lengthBound))
+		a.length, a.lengthBound = length.Value, length.Bound
+		a.lengthUpper = proofbound.AbsSumUpper(a.lengthUpper, b.lengthUpper)
 		a.coordUpper = math.Max(a.coordUpper, b.coordUpper)
 		a.axisRadiusUpper = math.Max(a.axisRadiusUpper, b.axisRadiusUpper)
-		a.axisMomentUpper = absSumUpper(a.axisMomentUpper, b.axisMomentUpper)
+		a.axisMomentUpper = proofbound.AbsSumUpper(a.axisMomentUpper, b.axisMomentUpper)
 		a.segs = append(a.segs, b.segs...)
 		return a
 	}

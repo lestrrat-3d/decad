@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -70,7 +72,7 @@ func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
 //
 // The zero stationRound here is read off these two walks' own zero
 // startBound, which is the UNTRIMMED case: both are hand-built, so both carry
-// the zero-valued walkEndBound that lineWalkEndBound stamps at a natural
+// the zero-valued proofbound.WalkEndBound that lineWalkEndBound stamps at a natural
 // parameter. It is NOT a property the LineSeg kind grants — §5.2 pins a
 // station by its own natural parameter and never by its kind — and the
 // trimmed-start fixture below asserts the same arm charging a positive term.
@@ -260,9 +262,9 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 // Exactness move.
 //
 // No float bound is pinned as a literal. The expected bound is recomposed
-// in-test through the same absSumUpper chain the evaluator itself uses —
-// delta = absSumUpper(stationRound, placeAllow) with placeAllow exactly zero
-// under r3.Identity(), then Bounds.Bound = absSumUpper(delta, sectionDelta)
+// in-test through the same proofbound.AbsSumUpper chain the evaluator itself uses —
+// delta = proofbound.AbsSumUpper(stationRound, placeAllow) with placeAllow exactly zero
+// under r3.Identity(), then Bounds.Bound = proofbound.AbsSumUpper(delta, sectionDelta)
 // with sectionDelta exactly zero on a LineSeg-only build (§5.2). That the
 // displacement is nonzero at all is trimmedStartWalk's own exact-rational
 // proof and holds on every target; the assertions here read the value it
@@ -277,8 +279,8 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 
 	// The unplaced LineSeg-only composition: placeAllow and sectionDelta are
 	// both exactly zero, so the whole published bound is the trimmed station's
-	// own displacement carried through absSumUpper's outward rounding.
-	wantBound := absSumUpper(absSumUpper(stationRound, 0), 0)
+	// own displacement carried through proofbound.AbsSumUpper's outward rounding.
+	wantBound := proofbound.AbsSumUpper(proofbound.AbsSumUpper(stationRound, 0), 0)
 
 	box, err := body.Bounds()
 	require.NoError(t, err)
@@ -440,7 +442,7 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	// certified reading the arm itself publishes.
 	for i, seg := range []CurveSegment{seg0, seg1} {
 		s := loftCertifiedSagittaUpper(seg, m)
-		require.False(t, isNonFinite(s), "side %d's certified sagitta must be derivable at the settled count", i)
+		require.False(t, proofbound.IsNonFinite(s), "side %d's certified sagitta must be derivable at the settled count", i)
 		require.LessOrEqual(t, s, target, "side %d must meet the target at the settled m=%d", i, m)
 		require.LessOrEqual(t, s, sagittaUpper, "the cell publishes the larger of its two sides' certified sagittae")
 	}
@@ -462,8 +464,8 @@ func requireStationDelta(t *testing.T, w0, w1 segmentWalk, seg0, seg1 CurveSegme
 	t.Helper()
 	_, d0 := circularStationChain(w0, seg0, m)
 	_, d1 := circularStationChain(w1, seg1, m)
-	require.False(t, isNonFinite(d0), "side 0's station displacement must be derivable at m=%d", m)
-	require.False(t, isNonFinite(d1), "side 1's station displacement must be derivable at m=%d", m)
+	require.False(t, proofbound.IsNonFinite(d0), "side 0's station displacement must be derivable at m=%d", m)
+	require.False(t, proofbound.IsNonFinite(d1), "side 1's station displacement must be derivable at m=%d", m)
 	return math.Max(d0, d1)
 }
 
@@ -513,7 +515,7 @@ func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
 	seg, _, held, lower := shortfallArc(t, m)
 
 	certified := loftCertifiedSagittaUpper(seg, m)
-	require.False(t, isNonFinite(certified))
+	require.False(t, proofbound.IsNonFinite(certified))
 	require.Greater(t, lower, held,
 		"a proven LOWER bound on the true sagitta exceeds the held value, so the held value bounds nothing")
 	require.Greater(t, certified, held,
@@ -587,11 +589,11 @@ func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
 	t.Helper()
 	radius, sweep, ok := circularWalkEnclosures(seg)
 	require.True(t, ok)
-	sin, _, ok := radSinCosSpan(intervalScale(sweep, big.NewRat(1, 4*int64(m))))
+	sin, _, ok := radSinCosSpan(proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m))))
 	require.True(t, ok)
-	require.Positive(t, sin.lo.Sign(), "the cell half-angle must be enclosed strictly inside the first quadrant for its sine's lower end to be a bound")
-	s := intervalMul(intervalScale(radius, big.NewRat(2, 1)), intervalMul(sin, sin))
-	return ratFloatDown(s.lo)
+	require.Positive(t, sin.Lo.Sign(), "the cell half-angle must be enclosed strictly inside the first quadrant for its sine's lower end to be a bound")
+	s := proofbound.IntervalMul(proofbound.IntervalScale(radius, big.NewRat(2, 1)), proofbound.IntervalMul(sin, sin))
+	return proofbound.RatFloatDown(s.Lo)
 }
 
 // TestLoftCertifiedSagittaRefusesAnUnderivableRecord is Table S row S14: a
@@ -601,7 +603,7 @@ func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
 func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
 	t.Parallel()
 	seg := CircleSeg{Center: pt(0, 0), Radius: units.Radians(1), TStart: 0, TEnd: 1, CCW: true}
-	require.True(t, isNonFinite(loftCertifiedSagittaUpper(seg, 8)))
+	require.True(t, proofbound.IsNonFinite(loftCertifiedSagittaUpper(seg, 8)))
 
 	good, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 	_, _, _, _, _, err := loftCircularCellStations(w, w, good, seg, 1e-3) //nolint:dogsled // only the error matters here.
@@ -656,7 +658,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // own sagittaUpper, for EVERY cell of the shared chain, never a separate or
 // smaller reading. That per-cell value is the CHORD-TO-CURVE HALF of
 // docs/loft-design.md §5.2's matchedDelta row, which every consumer
-// (bounds.go's cellChordCurveAreaUpper through loft_moments.go's
+// (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper through loft_moments.go's
 // computeLoftChordedAllow) reads straight off this arm before composing it
 // with the build's own delta, and loftPayload's own doc comment states the
 // equality as fact — so it is asserted here rather than left to the
@@ -724,7 +726,7 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // loftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
 // publish orders of magnitude more wall faces than S8's own
-// maxFacetPairTestsPerCall ceiling binds at, an F (§7) far past it
+// proofbound.MaxFacetPairTestsPerCall ceiling binds at, an F (§7) far past it
 // (loft_audit.go), so this fixture is exactly the one the plan names: one
 // that would otherwise reach the audit ceiling.
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
@@ -761,7 +763,7 @@ func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]segmentWalk)
 // TestLoftStationCapClearsTheAuditPairCeiling pins the DERIVATION behind
 // loftStationCap's value (docs/loft-design.md §5.1, §14): a build whose
 // Σstations reaches the cap must assemble an F whose F*(F-1)/2 is STRICTLY
-// below maxFacetPairTestsPerCall, the ceiling S8 enforces.
+// below proofbound.MaxFacetPairTestsPerCall, the ceiling S8 enforces.
 //
 // The F formula the derivation rests on is measured here on a real assembled
 // triangle set rather than assumed: a square-with-square-hole loft has
@@ -791,17 +793,17 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 	// H <= Σ - 1 (every loop holds at least one segment and every pair chords
 	// at m >= 1), so the worst F a build AT the cap can assemble is 8*cap - 8.
 	worstF := uint64(8*loftStationCap - 8)
-	worstPairs, ok := wallChoose2(worstF)
+	worstPairs, ok := proofbound.WallChoose2(worstF)
 	require.True(t, ok, "the worst-case pair count at the cap must not overflow")
-	require.Less(t, worstPairs, uint64(maxFacetPairTestsPerCall),
+	require.Less(t, worstPairs, uint64(proofbound.MaxFacetPairTestsPerCall),
 		"a build at the station cap must stay STRICTLY below S8's own pair ceiling")
 
 	// The cap is not arbitrarily conservative either: two stations further in
 	// that same worst shape already breaks S8's ceiling, so the constant sits
 	// against the bound it is derived from rather than far under it.
-	overPairs, ok := wallChoose2(uint64(8*(loftStationCap+2) - 8))
+	overPairs, ok := proofbound.WallChoose2(uint64(8*(loftStationCap+2) - 8))
 	require.True(t, ok)
-	require.Greater(t, overPairs, uint64(maxFacetPairTestsPerCall),
+	require.Greater(t, overPairs, uint64(proofbound.MaxFacetPairTestsPerCall),
 		"the cap must sit at the ceiling it is derived from, not far below it")
 
 	// And it leaves room for every fixture docs/loft-design.md §13 requires:
@@ -819,7 +821,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 // on a construction that would otherwise reach the audit ceiling. That is
 // asserted, not asserted-by-narration: the settled count is read back, the F
 // the build would have assembled from it is computed through §7's own formula,
-// and its F*(F-1)/2 is shown to exceed maxFacetPairTestsPerCall.
+// and its F*(F-1)/2 is shown to exceed proofbound.MaxFacetPairTestsPerCall.
 //
 // The refusal must NOT read as tessellate.go's own per-walk message. That text
 // blames a "chord tolerance" for asking "more than 16384 chords on one curve",
@@ -842,9 +844,9 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 	// What this build would have assembled had the cap not fired: §7's
 	// F = 4*Σstations - 4 over this hole-free loop, and S8's own pair count
 	// over it (loft_audit.go).
-	wouldBePairs, ok := wallChoose2(uint64(4*n*m - 4))
+	wouldBePairs, ok := proofbound.WallChoose2(uint64(4*n*m - 4))
 	require.True(t, ok)
-	require.Greater(t, wouldBePairs, uint64(maxFacetPairTestsPerCall),
+	require.Greater(t, wouldBePairs, uint64(proofbound.MaxFacetPairTestsPerCall),
 		"the fixture must be one that would otherwise reach S8's audit ceiling")
 
 	err = loftStationCapGate(p, p, make([]int, 1), walks, walks)
@@ -1103,7 +1105,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	seg, w := arcFixture(t, 5, 0.7, math.Pi/2, 0, 1)
 	require.Equal(t, seg.Start.U, w.startU, "walkOf must pin an untrimmed arc start to the recorded coordinate")
 	require.Equal(t, seg.Start.V, w.startV)
-	require.Equal(t, walkEndBound{}, w.startBound, "the pinned end carries a zero displacement reading")
+	require.Equal(t, proofbound.WalkEndBound{}, w.startBound, "the pinned end carries a zero displacement reading")
 
 	stations, _ := circularStationChain(w, seg, 8)
 	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, stations[0],
@@ -1118,10 +1120,10 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, stations[0],
 		"the fixture must be one where the two readings differ, or it proves nothing")
 	recomputedBound := circularWalkEndBound(seg, 0, recomputedU, recomputedV)
-	require.Positive(t, recomputedBound.u+recomputedBound.v,
+	require.Positive(t, recomputedBound.U+recomputedBound.V,
 		"the recomputed station carries a positive displacement from the enclosure the record states")
 	t.Logf("recomputed station 0 sits %.5g, %.5g off the recorded coordinate under a bound of {%.5g, %.5g}",
-		recomputedU-seg.Start.U, recomputedV-seg.Start.V, recomputedBound.u, recomputedBound.v)
+		recomputedU-seg.Start.U, recomputedV-seg.Start.V, recomputedBound.U, recomputedBound.V)
 }
 
 // TestCircularStationChainJunctionsMeetOnOneCoordinate is the terminal half of
@@ -1166,7 +1168,7 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 
 	stations, delta := circularStationChain(w, seg, m)
 	require.Len(t, stations, m)
-	require.False(t, isNonFinite(delta), "the reference arc's stations must state a displacement")
+	require.False(t, proofbound.IsNonFinite(delta), "the reference arc's stations must state a displacement")
 	require.Positive(t, delta, "the interior stations are computed trigonometry, so their displacement is real, never zero")
 	require.Less(t, delta, 1e-13,
 		"a station displacement this far above rounding means the generator is no longer walking the recorded curve")
@@ -1182,13 +1184,13 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 
 		// The enclosure is a bracket, so the station's own worst-case gap from
 		// the point inside it is the wider of its two ends' gaps — the same
-		// reading intervalFloatError takes, spelled out here so this assertion
+		// reading proofbound.IntervalFloatError takes, spelled out here so this assertion
 		// does not borrow the production helper it is checking.
-		gapU := math.Max(proofarith.RationalFloatError(uIv.lo, stations[k].U), proofarith.RationalFloatError(uIv.hi, stations[k].U))
-		gapV := math.Max(proofarith.RationalFloatError(vIv.lo, stations[k].V), proofarith.RationalFloatError(vIv.hi, stations[k].V))
+		gapU := math.Max(proofarith.RationalFloatError(uIv.Lo, stations[k].U), proofarith.RationalFloatError(uIv.Hi, stations[k].U))
+		gapV := math.Max(proofarith.RationalFloatError(vIv.Lo, stations[k].V), proofarith.RationalFloatError(vIv.Hi, stations[k].V))
 		require.LessOrEqual(t, math.Hypot(gapU, gapV), delta,
 			"station %d sits %g from the point the record denotes at its own parameter, past the published delta of %g", k, math.Hypot(gapU, gapV), delta)
-		worst = math.Max(worst, radius2D(gapU, gapV))
+		worst = math.Max(worst, proofbound.Radius2D(gapU, gapV))
 	}
 	require.Equal(t, worst, delta, "the published delta is the worst station's own reading, never a padded constant")
 	t.Logf("the reference arc's %d stations sit within %.4g mm of the curve the record states", m, delta)

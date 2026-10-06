@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -62,7 +64,7 @@ const freeformLengthDepth = 10
 // bound is not representable refuses too — refusing an answer decad cannot
 // state is right, and the enclosure is the only length in hand. Scale alone
 // never refuses otherwise: the square-root seeds work at every scale a finite
-// coordinate can reach (ratSqrtSeed), so a valid curve is never turned away for
+// coordinate can reach (proofbound.RatSqrtSeed), so a valid curve is never turned away for
 // being merely small or large.
 func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64, error) {
 	lo, hi := 0.0, 0.0
@@ -72,13 +74,13 @@ func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64
 		}
 		spanLo, spanHi := spanLengthBracket(span, freeformLengthDepth)
 		lo = downRound(lo + spanLo)
-		hi = upRound(hi + spanHi)
+		hi = proofbound.UpRound(hi + spanHi)
 	}
-	if isNonFinite(lo) || isNonFinite(hi) || hi < lo {
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || hi < lo {
 		return 0, 0, errFreeformLengthUnrepresentable
 	}
 	mid := lo + (hi-lo)/2
-	bound := upRound(math.Max(mid-lo, hi-mid))
+	bound := proofbound.UpRound(math.Max(mid-lo, hi-mid))
 	if bound <= 0 {
 		return 0, 0, errFreeformLengthDegenerate
 	}
@@ -269,7 +271,7 @@ func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
 	left, right, _ := s.split(nil)
 	leftLo, leftHi := left.lengthBracket(depth - 1)
 	rightLo, rightHi := right.lengthBracket(depth - 1)
-	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+	return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
 // lengthSplitScratch owns the three control nets used at one subdivision
@@ -304,7 +306,7 @@ func (s dyadicSpan) lengthBracketScratch(
 	right := dyadicSpan{points: f.right, den: s.den, denSq: s.denSq}
 	leftLo, leftHi := left.lengthBracketScratch(frames[:len(frames)-1], distance)
 	rightLo, rightHi := right.lengthBracketScratch(frames[:len(frames)-1], distance)
-	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+	return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
 func (f *lengthSplitScratch) split(points []dyadicPoint) {
@@ -421,7 +423,7 @@ func (s dyadicSpan) chordLowerScratch(scratch *lengthDistanceScratch) float64 {
 func (s dyadicSpan) polygonUpper() float64 {
 	total := 0.0
 	for i := 0; i+1 < len(s.points); i++ {
-		total = upRound(total + spanSqrtUp(s.distanceSquared(s.points[i], s.points[i+1])))
+		total = proofbound.UpRound(total + spanSqrtUp(s.distanceSquared(s.points[i], s.points[i+1])))
 	}
 	return total
 }
@@ -437,7 +439,7 @@ func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 
 		if i != 0 || !scratch.hasLastUpper {
 			edge = spanSqrtUpScratch(s.distanceSquaredScratch(s.points[i], s.points[i+1], scratch), scratch)
 		}
-		total = upRound(total + edge)
+		total = proofbound.UpRound(total + edge)
 		if i+2 == len(s.points) {
 			scratch.lastUpper = edge
 			scratch.hasLastUpper = true
@@ -541,7 +543,7 @@ func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDista
 	return scratch.lhs.Cmp(scratch.rhs.Lsh(d.num, uint(-shift)))
 }
 
-// spanSqrtSeed follows ratSqrtSeed's 64-bit big.Float quotient, while keeping
+// spanSqrtSeed follows proofbound.RatSqrtSeed's 64-bit big.Float quotient, while keeping
 // the power-of-two part of the denominator as an exponent. SetRat uses the same
 // full-precision integer operands and Quo for a noninteger rational.
 func spanSqrtSeed(d spanSquaredDistance) float64 {
@@ -583,10 +585,10 @@ func spanSqrtDown(d spanSquaredDistance) float64 {
 		return 0
 	}
 	f := spanSqrtSeed(d)
-	if isNonFinite(f) {
+	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
+	for range proofbound.SqrtAdjustLimit {
 		if spanSquareCmp(f, d) <= 0 {
 			return f
 		}
@@ -600,10 +602,10 @@ func spanSqrtDownScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) 
 		return 0
 	}
 	f := spanSqrtSeedScratch(d, scratch)
-	if isNonFinite(f) {
+	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
+	for range proofbound.SqrtAdjustLimit {
 		if spanSquareCmpScratch(f, d, scratch) <= 0 {
 			return f
 		}
@@ -617,10 +619,10 @@ func spanSqrtUp(d spanSquaredDistance) float64 {
 		return 0
 	}
 	f := spanSqrtSeed(d)
-	if isNonFinite(f) {
+	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
+	for range proofbound.SqrtAdjustLimit {
 		if spanSquareCmp(f, d) >= 0 {
 			return f
 		}
@@ -634,10 +636,10 @@ func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) fl
 		return 0
 	}
 	f := spanSqrtSeedScratch(d, scratch)
-	if isNonFinite(f) {
+	if proofbound.IsNonFinite(f) {
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
+	for range proofbound.SqrtAdjustLimit {
 		if spanSquareCmpScratch(f, d, scratch) >= 0 {
 			return f
 		}
@@ -646,99 +648,10 @@ func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) fl
 	return math.Inf(1)
 }
 
-// ratSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a
-// recorded coordinate can reach. It is only a seed: the exact rational
-// comparisons below decide each bound, so a better seed can only reduce false
-// refusals and can never widen or invert the interval.
-//
-// Rounding q to a float64 first is what a seed must not do. A leg distance
-// small enough to make q subnormal loses most of q's significand, and one large
-// enough to make q overflow loses q entirely — either way the seed lands far
-// more than sqrtAdjustLimit ulps from the true root, the walk exhausts, and a
-// perfectly valid curve is refused. Scaling instead is exact: split q into
-// mantissa and binary exponent, force the exponent EVEN so half of it is an
-// integer, take the square root of a mantissa that always sits in [0.5, 2), and
-// scale the result back by a power of two, which moves no significand bit.
-func ratSqrtSeed(q *big.Rat) float64 {
-	mant := new(big.Float).SetPrec(64)
-	exp := new(big.Float).SetPrec(64).SetRat(q).MantExp(mant)
-	if exp%2 != 0 {
-		// Halving an odd exponent is not an integer, so shift one power of two
-		// into the mantissa: [0.5, 1) becomes [1, 2), which still roots cleanly.
-		exp--
-		mant.SetMantExp(mant, 1)
-	}
-	m, _ := mant.Float64()
-	return math.Ldexp(math.Sqrt(m), exp/2)
-}
-
-// ratSqrtDown returns a float f with f*f <= q, proven by exact comparison. The
-// float sqrt seeds the answer; the exact test decides it, so no platform's
-// sqrt accuracy can widen or invert the bracket.
-func ratSqrtDown(q *big.Rat) float64 {
-	if q.Sign() <= 0 {
-		return 0
-	}
-	f := ratSqrtSeed(q)
-	if isNonFinite(f) {
-		// sqrt(q) is at or beyond the top of the range, so the largest float
-		// there is starts the walk; the exact test still decides it.
-		f = math.MaxFloat64
-	}
-	for range sqrtAdjustLimit {
-		if ratSquareAtMost(f, q) {
-			return f
-		}
-		f = math.Nextafter(f, 0)
-	}
-	return 0
-}
-
-// ratSqrtUp returns a float f with f*f >= q, proven by exact comparison. It
-// returns +Inf only where sqrt(q) genuinely exceeds MaxFloat64, which
-// freeformArcLength refuses as R15 rather than report.
-func ratSqrtUp(q *big.Rat) float64 {
-	if q.Sign() <= 0 {
-		return 0
-	}
-	f := ratSqrtSeed(q)
-	if isNonFinite(f) {
-		f = math.MaxFloat64
-	}
-	for range sqrtAdjustLimit {
-		if !ratSquareAtMost(f, q) || ratSquareEquals(f, q) {
-			return f
-		}
-		f = math.Nextafter(f, math.Inf(1))
-	}
-	return math.Inf(1)
-}
-
-// The exact arithmetic package owns the shared directed-rounding walk limit.
-const sqrtAdjustLimit = proofarith.SqrtAdjustLimit
-
-func ratSquareAtMost(f float64, q *big.Rat) bool {
-	square := proofarith.FloatRat(f)
-	if square == nil {
-		return false
-	}
-	square.Mul(square, square)
-	return square.Cmp(q) <= 0
-}
-
-func ratSquareEquals(f float64, q *big.Rat) bool {
-	square := proofarith.FloatRat(f)
-	if square == nil {
-		return false
-	}
-	square.Mul(square, square)
-	return square.Cmp(q) == 0
-}
-
-// downRound is upRound's mirror: the next float toward zero, so a sum of lower
+// downRound is proofbound.UpRound's mirror: the next float toward zero, so a sum of lower
 // bounds stays a lower bound.
 func downRound(x float64) float64 {
-	if x <= 0 || isNonFinite(x) {
+	if x <= 0 || proofbound.IsNonFinite(x) {
 		return x
 	}
 	return math.Nextafter(x, 0)

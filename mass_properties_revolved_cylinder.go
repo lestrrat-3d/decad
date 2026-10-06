@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -40,15 +42,15 @@ func sourceRevolvedCylinderMassProperties(ctx context.Context, b *Body,
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	massFactor := new(big.Rat).Mul(rho, height.Rat())
 	massFactor.Mul(massFactor, radius2)
-	massInterval := intervalScale(interval(piLower, piUpper), massFactor)
-	if massInterval.lo.Sign() <= 0 {
+	massInterval := proofbound.IntervalScale(proofbound.Interval(proofbound.PiLower, proofbound.PiUpper), massFactor)
+	if massInterval.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source cylinder mass interval is not positive", ErrUnsupported)
 	}
-	axial := intervalScale(massInterval, new(big.Rat).Quo(radius2, big.NewRat(2, 1)))
+	axial := proofbound.IntervalScale(massInterval, new(big.Rat).Quo(radius2, big.NewRat(2, 1)))
 	transverseFactor := new(big.Rat).Mul(radius2, big.NewRat(3, 1))
 	transverseFactor.Add(transverseFactor, height2)
-	transverse := intervalScale(massInterval, transverseFactor.Quo(transverseFactor, big.NewRat(12, 1)))
-	if axial.lo.Sign() <= 0 || transverse.lo.Sign() <= 0 {
+	transverse := proofbound.IntervalScale(massInterval, transverseFactor.Quo(transverseFactor, big.NewRat(12, 1)))
+	if axial.Lo.Sign() <= 0 || transverse.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source cylinder inertia interval is not positive", ErrUnsupported)
 	}
 	result := MassProperties{Center: b.centroid}

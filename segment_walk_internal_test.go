@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -35,10 +37,10 @@ func ratLineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 	)
 }
 
-func ratLineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
-	return walkEndBound{
-		u: proofarith.RationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
-		v: proofarith.RationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
+func ratLineWalkEndBound(seg LineSeg, t, heldU, heldV float64) proofbound.WalkEndBound {
+	return proofbound.WalkEndBound{
+		U: proofarith.RationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
+		V: proofarith.RationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
 	}
 }
 
@@ -66,7 +68,7 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 	if !exact {
 		upper = math.Nextafter(upper, math.Inf(1))
 	}
-	bound := math.Min(conservativeValueError(held, upper), ratSqrtIntervalError(lengthSquared, held))
+	bound := math.Min(proofbound.ConservativeValueError(held, upper), ratSqrtIntervalError(lengthSquared, held))
 	return bound, upper, coordUpper
 }
 
@@ -74,11 +76,11 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 // before the dyadic rewrite, kept verbatim as the oracle the line-walk and
 // straight-edge comparisons read.
 func ratSqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
-	lo, hi := proofarith.FloatRat(ratSqrtDown(lengthSquared)), proofarith.FloatRat(ratSqrtUp(lengthSquared))
+	lo, hi := proofarith.FloatRat(proofbound.RatSqrtDown(lengthSquared)), proofarith.FloatRat(proofbound.RatSqrtUp(lengthSquared))
 	if lo == nil || hi == nil {
 		return math.Inf(1)
 	}
-	return intervalFloatError(interval(lo, hi), held)
+	return proofbound.IntervalFloatError(proofbound.Interval(lo, hi), held)
 }
 
 // TestLineWalkBoundsDyadicMatchRational pins lineWalkBounds,
@@ -147,8 +149,8 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 		for _, end := range [][3]float64{{seg.TStart, u0, v0}, {seg.TEnd, u1, v1}} {
 			want := ratLineWalkEndBound(seg, end[0], end[1], end[2])
 			got := lineWalkEndBound(seg, end[0], end[1], end[2])
-			requireSameFloatBits(t, want.u, got.u, "end u of %+v at t=%v", seg, end[0])
-			requireSameFloatBits(t, want.v, got.v, "end v of %+v at t=%v", seg, end[0])
+			requireSameFloatBits(t, want.U, got.U, "end u of %+v at t=%v", seg, end[0])
+			requireSameFloatBits(t, want.V, got.V, "end v of %+v at t=%v", seg, end[0])
 		}
 	}
 }
@@ -172,12 +174,12 @@ func ratArcWalk(seg ArcSeg) segmentWalk {
 		a0+seg.TStart*sweep,
 		a0+seg.TEnd*sweep,
 		arcRadiusUpper(seg),
-		circularSweepUpper(seg.TStart, seg.TEnd),
+		proofbound.CircularSweepUpper(seg.TStart, seg.TEnd),
 	)
 	w.radiusBound = arcWalkRadiusBound(seg, radius)
 	pinArcWalkEnds(&w, seg)
 	if iv, ok := circularLengthInterval(seg); ok {
-		w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+		w.lengthBound = math.Min(w.lengthBound, proofbound.IntervalFloatError(iv, w.length))
 	}
 	return w
 }

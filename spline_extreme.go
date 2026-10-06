@@ -3,8 +3,9 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is docs/spline-design.md §6.2's directional-extreme row, Tier A
@@ -130,42 +131,6 @@ func freeformExtremeCost(controls int) uint64 {
 	return costMul(freeformSpanCost(controls), 8)
 }
 
-// ratFloatDown and ratFloatUp are proven outward roundings of an exact
-// rational to float64: the largest float64 at or below q, and the smallest
-// at or above it. big.Rat.Float64() already rounds to nearest, which can
-// land on EITHER side of q, so each checks its own direction against the
-// float converted back to a rational and only steps once via Nextafter when
-// that check fails — an exactly representable q comes back UNCHANGED, which
-// is what keeps a candidate whose true value is exact from picking up a
-// spurious width it never earned.
-//
-// A q past the float64 range has no such rounding: Float64 saturates to an
-// infinity, which each returns unchanged rather than stepping to a finite
-// neighbour it cannot prove. That infinity is a REFUSAL, never a bound, so no
-// caller may fold it — freeformExtremeFloats is the one conversion the fold
-// runs, and it is what turns the saturation into errFreeformExtremeUnrepresentable.
-func ratFloatDown(q *big.Rat) float64 {
-	f, _ := q.Float64()
-	if isNonFinite(f) {
-		return f
-	}
-	if fr, ok := ratOf(f); ok && fr.Cmp(q) <= 0 {
-		return f
-	}
-	return math.Nextafter(f, math.Inf(-1))
-}
-
-func ratFloatUp(q *big.Rat) float64 {
-	f, _ := q.Float64()
-	if isNonFinite(f) {
-		return f
-	}
-	if fr, ok := ratOf(f); ok && fr.Cmp(q) >= 0 {
-		return f
-	}
-	return math.Nextafter(f, math.Inf(1))
-}
-
 // errFreeformExtremeUnrepresentable is docs/spline-design.md §6.2's own
 // counterpart to §6.1's R15 (spline_length.go's
 // errFreeformLengthUnrepresentable): the enclosure is still PROVEN, but no
@@ -196,8 +161,8 @@ var errFreeformExtremeUnrepresentable = fmt.Errorf(
 // an ordinary nonzero bound, and a through-all stop reading a bounded extent
 // gets the same sentinel here rather than an interval it could charge.
 func freeformExtremeFloats(iv ratIv) (float64, float64, error) {
-	lo, hi := ratFloatDown(iv.lo), ratFloatUp(iv.hi)
-	if isNonFinite(lo) || isNonFinite(hi) || isNonFinite(hi-lo) {
+	lo, hi := proofbound.RatFloatDown(iv.lo), proofbound.RatFloatUp(iv.hi)
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || proofbound.IsNonFinite(hi-lo) {
 		return 0, 0, errFreeformExtremeUnrepresentable
 	}
 	return lo, hi, nil
@@ -208,25 +173,25 @@ func freeformExtremeFloats(iv ratIv) (float64, float64, error) {
 // messages, and it is what lets every caller gate a direction ahead of the R7
 // preflight that must precede the work (docs/spline-design.md §5.2).
 func requireFiniteDirection(gu, gv float64) error {
-	if isNonFinite(gu) {
+	if proofbound.IsNonFinite(gu) {
 		return fmt.Errorf(`%w: a directional extreme's gu component must be finite`, ErrNotFinite)
 	}
-	if isNonFinite(gv) {
+	if proofbound.IsNonFinite(gv) {
 		return fmt.Errorf(`%w: a directional extreme's gv component must be finite`, ErrNotFinite)
 	}
 	return nil
 }
 
 // directionRats lifts the two direction components into the exact rationals
-// spanDirectionalValues multiplies by. ratOf allocates, so this runs only from
-// BEHIND a span's own R7 charge; ratOf fails exactly on a non-finite float, so
+// spanDirectionalValues multiplies by. proofbound.RatOf allocates, so this runs only from
+// BEHIND a span's own R7 charge; proofbound.RatOf fails exactly on a non-finite float, so
 // requireFiniteDirection names which component it was.
 func directionRats(gu, gv float64) (*big.Rat, *big.Rat, error) {
-	guR, ok := ratOf(gu)
+	guR, ok := proofbound.RatOf(gu)
 	if !ok {
 		return nil, nil, requireFiniteDirection(gu, gv)
 	}
-	gvR, ok := ratOf(gv)
+	gvR, ok := proofbound.RatOf(gv)
 	if !ok {
 		return nil, nil, requireFiniteDirection(gu, gv)
 	}

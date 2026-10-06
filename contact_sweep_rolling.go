@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -107,7 +109,7 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	if pathM.drift == nil || pathM.screw != nil || pathS.drift != nil || pathS.screw != nil {
 		return nil, false, nil
 	}
-	solid, delta, ok, err := planarSolidAtPose(ctx, newWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
+	solid, delta, ok, err := planarSolidAtPose(ctx, proofbound.NewWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
 	if err != nil {
 		return nil, true, err
 	}
@@ -318,11 +320,11 @@ func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficient
 		if rate.Abs(rate).Cmp(out.rate) > 0 {
 			out.rate = rate
 		}
-		curvature, ok := ratSqrtUpRat(ratMul(motionM.omegaSq, ratDot3(lever, lever)))
+		curvature, ok := ratSqrtUpRat(proofbound.RatMul(motionM.omegaSq, ratDot3(lever, lever)))
 		if !ok {
 			return rollingCoefficients{}, false
 		}
-		if k := ratMul(curvature, big.NewRat(1, 2)); k.Cmp(out.quadratic) > 0 {
+		if k := proofbound.RatMul(curvature, big.NewRat(1, 2)); k.Cmp(out.quadratic) > 0 {
 			out.quadratic = k
 		}
 		if h := new(big.Rat).Abs(support.heights[i].Rat()); h.Cmp(out.constant) > 0 {
@@ -332,16 +334,16 @@ func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficient
 	// β² = |ω|²·|ã|² − (ω·ã)², exact.
 	axis := ratOfDyV3(r.cylinder.columns[r.cylinder.axis])
 	along := ratDot3(motionM.omega, axis)
-	tiltSq := new(big.Rat).Sub(ratMul(motionM.omegaSq, ratDot3(axis, axis)), ratMul(along, along))
+	tiltSq := new(big.Rat).Sub(proofbound.RatMul(motionM.omegaSq, ratDot3(axis, axis)), proofbound.RatMul(along, along))
 	tilt, ok := ratSqrtUpRat(tiltSq)
 	if !ok {
 		return rollingCoefficients{}, false
 	}
 	out.beta = tilt
-	out.constant = ratAdd(out.constant, r.cylinder.sectionDrift(support.alpha).Rat())
-	out.rate = ratAdd(out.rate, ratMul(big.NewRat(2, 1), radius, tilt, out.alpha))
-	out.quadratic = ratAdd(out.quadratic, ratMul(radius, tiltSq))
-	out.lateral = ratMul(big.NewRat(3, 2), radius, tilt)
+	out.constant = proofbound.RatAdd(out.constant, r.cylinder.sectionDrift(support.alpha).Rat())
+	out.rate = proofbound.RatAdd(out.rate, proofbound.RatMul(big.NewRat(2, 1), radius, tilt, out.alpha))
+	out.quadratic = proofbound.RatAdd(out.quadratic, proofbound.RatMul(radius, tiltSq))
+	out.lateral = proofbound.RatMul(big.NewRat(3, 2), radius, tilt)
 	out.lateralBase = new(big.Rat)
 	if r.cylinder.gram.Sign() != 0 || support.alpha.Sign() != 0 {
 		out.gated = true
@@ -352,13 +354,13 @@ func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficient
 
 // at is the band depth and the rim drift at t seconds.
 func (c rollingCoefficients) at(t *big.Rat) (*big.Rat, *big.Rat) {
-	return ratAdd(c.constant, ratMul(c.rate, t), ratMul(c.quadratic, t, t)),
-		ratAdd(c.lateralBase, ratMul(c.lateral, t))
+	return proofbound.RatAdd(c.constant, proofbound.RatMul(c.rate, t), proofbound.RatMul(c.quadratic, t, t)),
+		proofbound.RatAdd(c.lateralBase, proofbound.RatMul(c.lateral, t))
 }
 
 // driftAdmitted reports whether the rim drift's gate holds through t.
 func (c rollingCoefficients) driftAdmitted(t *big.Rat) bool {
-	return !c.gated || ratAdd(c.alpha, ratMul(c.beta, t)).Cmp(big.NewRat(1, 4)) <= 0
+	return !c.gated || proofbound.RatAdd(c.alpha, proofbound.RatMul(c.beta, t)).Cmp(big.NewRat(1, 4)) <= 0
 }
 
 // band proves the rolling track. Each end's foot must stay inside S's face:
@@ -369,8 +371,8 @@ func (c rollingCoefficients) driftAdmitted(t *big.Rat) bool {
 // corner inside one of its triangles. On a face-local plane the column test
 // (column) must hold through f as well.
 func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
-	budget := newWorkBudget(ctx)
-	support, ok, err := r.support(budget.step)
+	budget := proofbound.NewWorkBudget(ctx)
+	support, ok, err := r.support(budget.Step)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -384,7 +386,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 		return nil, false, nil
 	}
 	holds := func(f *big.Rat) (bool, error) {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		t := new(big.Rat).Mul(f, duration)
@@ -392,10 +394,10 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 			return false, nil
 		}
 		depth, lateral := coefficients.at(t)
-		if !r.footInside(support, f, ratAdd(depth, lateral)) {
+		if !r.footInside(support, f, proofbound.RatAdd(depth, lateral)) {
 			return false, nil
 		}
-		return r.column(support, box, f, budget.step)
+		return r.column(support, box, f, budget.Step)
 	}
 	end, ok, err := sweepGridHorizon(r.resolution, duration, holds)
 	if err != nil || !ok {
@@ -417,11 +419,11 @@ type rollingColumnBox struct {
 
 func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
 	corners := r.cylinder.stagedCorners()
-	stretch, ok := ratSqrtUpRat(ratAdd(big.NewRat(1, 1), r.cylinder.gram.Rat()))
+	stretch, ok := ratSqrtUpRat(proofbound.RatAdd(big.NewRat(1, 1), r.cylinder.gram.Rat()))
 	if !ok {
 		return rollingColumnBox{}, false
 	}
-	return rollingColumnBox{corners: corners[:], reach: ratMul(r.cylinder.radius.Rat(), stretch)}, true
+	return rollingColumnBox{corners: corners[:], reach: proofbound.RatMul(r.cylinder.radius.Rat(), stretch)}, true
 }
 
 // column is §10.6's column test through fraction f on a face-local plane.
@@ -469,8 +471,8 @@ func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) b
 		low, high := spans.hull(axis)
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
 		shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
-		lo[slot] = ratAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
-		hi[slot] = ratAdd(high, new(big.Rat).Neg(shiftLo), growth)
+		lo[slot] = proofbound.RatAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
+		hi[slot] = proofbound.RatAdd(high, new(big.Rat).Neg(shiftLo), growth)
 	}
 	return support.face.holdsBox(lo, hi)
 }
@@ -515,7 +517,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 	}
 	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.radius.Rat(),
 		normal: support.normal, origin: support.origin, featureM: featureM, featureS: featureS,
-		direction: normal, angle: angle, coefficients: coefficients, depth: depth, depthUp: ratFloatUp(depth)}
+		direction: normal, angle: angle, coefficients: coefficients, depth: depth, depthUp: proofbound.RatFloatUp(depth)}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil
 	}
@@ -600,8 +602,8 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*Contact
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
 		}
-		onM, okM := planarTrackPoint(rim, ratAdd(eta[p.m], lateral), resolution)
-		onS, okS := planarTrackPoint(foot, ratAdd(eta[p.m], eta[p.s], lateral), resolution)
+		onM, okM := planarTrackPoint(rim, proofbound.RatAdd(eta[p.m], lateral), resolution)
+		onS, okS := planarTrackPoint(foot, proofbound.RatAdd(eta[p.m], eta[p.s], lateral), resolution)
 		if !okM || !okS {
 			return nil, fmt.Errorf("%w: rolling contact track point exceeds point resolution", ErrUnsupported)
 		}

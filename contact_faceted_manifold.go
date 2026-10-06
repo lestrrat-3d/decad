@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
@@ -27,7 +29,7 @@ import (
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (docs/multibody-dynamics-design.md §10.5).
-func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair.PlanarSolid,
+func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport, a, b *pair.PlanarSolid,
 	result pair.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
 	var points []pair.PatchPoint
 	var planes []pair.SupportPlane
@@ -36,7 +38,7 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 	case pair.Touching:
 		if !convexA && !convexB {
 			// §10.5: a non-convex guest whose contacts all lie on one host face.
-			manifold, err := pair.PlanarGuestTouch(a, b, result.Contacts, budget.step)
+			manifold, err := pair.PlanarGuestTouch(a, b, result.Contacts, budget.Step)
 			if err != nil {
 				return err
 			}
@@ -47,7 +49,7 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 			points, planes = manifold.Points, manifold.Supports
 			break
 		}
-		manifold, err := pair.PlanarTouchManifold(a, b, result.Contacts, convexA, convexB, budget.step)
+		manifold, err := pair.PlanarTouchManifold(a, b, result.Contacts, convexA, convexB, budget.Step)
 		if err != nil {
 			return err
 		}
@@ -108,13 +110,13 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 // growB; zero for an exact body). It returns the points and the support plane
 // whose lifted set a positive band appends, or nil points with the kernel's
 // reason, NoReason when it names none.
-func planarOverlapPatch(budget *workBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
+func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
 	convexA, convexB bool, growA, growB proofarith.Dyadic) ([]pair.PatchPoint, []pair.SupportPlane, pair.Reason, error) {
 	var points []pair.PatchPoint
 	var plane *pair.SupportPlane
 	if convexA && convexB {
 		var err error
-		points, plane, err = pair.PlanarPenetrationSupport(a, b, budget.step)
+		points, plane, err = pair.PlanarPenetrationSupport(a, b, budget.Step)
 		if err != nil {
 			return nil, nil, pair.NoReason, err
 		}
@@ -122,7 +124,7 @@ func planarOverlapPatch(budget *workBudget, a, b *pair.PlanarSolid, result pair.
 	if points == nil {
 		// §9.6: a convex body poking through one face of any planar body.
 		local, err := pair.PlanarFacePenetrationGrown(a, b, result.Crossings, convexA, convexB,
-			growA, growB, budget.step)
+			growA, growB, budget.Step)
 		if err != nil || local.Points == nil {
 			return nil, nil, local.Reason, err
 		}
@@ -142,9 +144,9 @@ func planarOverlapPatch(budget *workBudget, a, b *pair.PlanarSolid, result pair.
 // face, its exact height) hold for any guest.
 // result is ClassifyPlanar's result for a and b, whose derived data the
 // kernel reuses.
-func planarLiftedSet(budget *workBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
+func planarLiftedSet(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
 	planes []pair.SupportPlane, band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
-	return pair.PlanarSupportSets(a, b, result, planes, band, overlap, budget.step)
+	return pair.PlanarSupportSets(a, b, result, planes, band, overlap, budget.Step)
 }
 
 // planarSupportPlanes lists every face of the admitted hosts as a support
@@ -173,7 +175,7 @@ func planarSupportPlanes(a, b *pair.PlanarSolid, hostA, hostB bool) []pair.Suppo
 // The planes are read with the B body's faces first, then A's, each in face
 // order. The gap becomes [0 ± g], g its upper end, and the manifold is every
 // such plane's lifted set. A pair that meets neither stays Separated.
-func planarSupportBand(budget *workBudget, report *ContactReport, a, b *pair.PlanarSolid,
+func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, b *pair.PlanarSolid,
 	result pair.PlanarResult, band proofarith.Dyadic) error {
 	if band.Sign() <= 0 || result.Gap == nil {
 		return nil
@@ -186,7 +188,7 @@ func planarSupportBand(budget *workBudget, report *ContactReport, a, b *pair.Pla
 	if err != nil || len(lifted) == 0 {
 		return err
 	}
-	g := ratFloatUp(upper)
+	g := proofbound.RatFloatUp(upper)
 	if !finiteMeasurementValues(g) {
 		return nil
 	}

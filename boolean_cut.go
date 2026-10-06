@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -25,7 +27,7 @@ import (
 // facet whose plane it lies in, and whether each endpoint lies on THIS
 // facet's own boundary.
 type xseg struct {
-	a, b             xpt
+	a, b             proofbound.Xpt
 	aOnEdge, bOnEdge bool
 	partner          [3]r3.Vec
 	// viaParity marks a contact whose region classification may NOT be read
@@ -44,10 +46,10 @@ type xseg struct {
 // piece an artificial split line severed) carries no anchor and is
 // classified by parity instead.
 type cutRegion struct {
-	tris      [][3]xpt
+	tris      [][3]proofbound.Xpt
 	partner   [3]r3.Vec
 	hasAnchor bool
-	probe     xpt
+	probe     proofbound.Xpt
 }
 
 // cutVert is one subdivision vertex: its exact 2D projection, its exact 3D
@@ -55,7 +57,7 @@ type cutRegion struct {
 // a split line) — the points chains break at.
 type cutVert struct {
 	p2       xp2
-	p3       xpt
+	p3       proofbound.Xpt
 	boundary bool
 }
 
@@ -82,10 +84,10 @@ type triCutter struct {
 	edges []cutEdge
 	swap  bool // projection coordinate swap that keeps the facet CCW
 	u, v  int  // projection axes
-	work  *workBudget
+	work  *proofbound.WorkBudget
 }
 
-func (tc *triCutter) proj(p xpt) xp2 {
+func (tc *triCutter) proj(p proofbound.Xpt) xp2 {
 	if tc.swap {
 		return newXP2FromXpt(p, tc.v, tc.u)
 	}
@@ -93,7 +95,7 @@ func (tc *triCutter) proj(p xpt) xp2 {
 }
 
 // addVert interns a vertex by its exact 2D identity; boundary is sticky.
-func (tc *triCutter) addVert(p2 xp2, p3 xpt, boundary bool) int {
+func (tc *triCutter) addVert(p2 xp2, p3 proofbound.Xpt, boundary bool) int {
 	k := p2.key2()
 	if i, ok := tc.index[k]; ok {
 		if boundary {
@@ -108,22 +110,22 @@ func (tc *triCutter) addVert(p2 xp2, p3 xpt, boundary bool) int {
 
 // cutTriangle subdivides the facet along its contact segments and returns
 // the classified regions.
-func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]cutRegion, error) {
+func cutTriangle(ctx context.Context, xtri [3]proofbound.Xpt, normal proofbound.Xpt, segs []xseg) ([]cutRegion, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	tc := &triCutter{index: map[string]int{}, work: newWorkBudget(ctx)}
+	tc := &triCutter{index: map[string]int{}, work: proofbound.NewWorkBudget(ctx)}
 	tc.u, tc.v = projAxes(normal)
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
-	corner := func(p xpt) xp2 { return newXP2FromXpt(p, tc.u, tc.v) }
+	corner := func(p proofbound.Xpt) xp2 { return newXP2FromXpt(p, tc.u, tc.v) }
 	if cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.swap = true
 	}
 	var cornerIdx [3]int
 	for i := range 3 {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		cornerIdx[i] = tc.addVert(tc.proj(xtri[i]), xtri[i], true)
@@ -132,7 +134,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 	// Intern the contact segments as chain edges.
 	seen := map[[2]int]struct{}{}
 	for _, s := range segs {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		ia := tc.addVert(tc.proj(s.a), s.a, s.aOnEdge)
@@ -151,7 +153,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 		// Every contact collapsed to a point: the facet is whole, classified
 		// by parity.
 		probe := xCentroid(xtri[0], xtri[1], xtri[2])
-		return []cutRegion{{tris: [][3]xpt{xtri}, probe: probe}}, nil
+		return []cutRegion{{tris: [][3]proofbound.Xpt{xtri}, probe: probe}}, nil
 	}
 
 	// Open every closed chain with split lines, then split the facet into
@@ -162,7 +164,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 	}
 	pieces := [][]int{{cornerIdx[0], cornerIdx[1], cornerIdx[2]}}
 	for _, c := range lines {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		var next [][]int
@@ -185,7 +187,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 	// along their chains into the final region polygons.
 	byPiece := make([][]chainPath, len(pieces))
 	for _, ch := range chains {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		probe, err := tc.chainProbe(ch)
@@ -218,7 +220,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 
 	chainEdges := map[[2]int]chainAnchor{}
 	for _, e := range tc.edges {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		chainEdges[[2]int{min(e.a, e.b), max(e.a, e.b)}] = chainAnchor{partner: e.partner, viaParity: e.viaParity}
@@ -226,7 +228,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 
 	var regions []cutRegion
 	for pi, piece := range pieces {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		polys, err := tc.splitByChains(piece, byPiece[pi])
@@ -234,7 +236,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 			return nil, err
 		}
 		for _, poly := range polys {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			reg, err := tc.regionOf(poly, chainEdges)
@@ -261,7 +263,7 @@ type chainPath struct {
 // edge.
 func (tc *triCutter) chainProbe(ch chainPath) (xp2, error) {
 	for _, vi := range ch.verts[1 : len(ch.verts)-1] {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return xp2{}, err
 		}
 		if !tc.verts[vi].boundary {
@@ -279,7 +281,7 @@ func (tc *triCutter) chainProbe(ch chainPath) (xp2, error) {
 func (tc *triCutter) polyPoints(poly []int) ([]xp2, error) {
 	out := make([]xp2, len(poly))
 	for i, vi := range poly {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		out[i] = tc.verts[vi].p2
@@ -295,7 +297,7 @@ func (tc *triCutter) openLoops() ([]*big.Rat, []chainPath, error) {
 	var lines []*big.Rat
 	guard := len(tc.edges) + 8
 	for iter := 0; ; iter++ {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, nil, err
 		}
 		if iter > guard {
@@ -326,14 +328,14 @@ func (tc *triCutter) openLoops() ([]*big.Rat, []chainPath, error) {
 func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 	adj := map[int][]int{} // vertex -> edge indices
 	for ei, e := range tc.edges {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, nil, err
 		}
 		adj[e.a] = append(adj[e.a], ei)
 		adj[e.b] = append(adj[e.b], ei)
 	}
 	for vi, list := range adj {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, nil, err
 		}
 		if !tc.verts[vi].boundary && len(list) > 2 {
@@ -356,7 +358,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 	continues := func(vi int) bool { return !tc.verts[vi].boundary && len(adj[vi]) == 2 }
 	nextEdge := func(vi, from int) (int, error) {
 		for _, ei := range adj[vi] {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return -1, err
 			}
 			if ei != from && !used[ei] {
@@ -366,7 +368,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 		return -1, nil
 	}
 	for start := range tc.edges {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, nil, err
 		}
 		if used[start] {
@@ -377,7 +379,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 		isLoop := false
 		// Extend forward from the tail, then backward from the head.
 		for continues(path[len(path)-1]) {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, nil, err
 			}
 			ei, err := nextEdge(path[len(path)-1], -1)
@@ -393,7 +395,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 		}
 		if !isLoop {
 			for continues(path[0]) {
-				if err := tc.work.step(); err != nil {
+				if err := tc.work.Step(); err != nil {
 					return nil, nil, err
 				}
 				ei, err := nextEdge(path[0], -1)
@@ -407,7 +409,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 				next := otherEnd(ei, path[0])
 				path = append(path, 0)
 				for i := len(path) - 1; i > 0; i-- {
-					if err := tc.work.step(); err != nil {
+					if err := tc.work.Step(); err != nil {
 						return nil, nil, err
 					}
 					path[i] = path[i-1]
@@ -430,7 +432,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 func (tc *triCutter) chooseSplitU(loop chainPath) (*big.Rat, error) {
 	lo, hi := tc.verts[loop.verts[0]].p2.u, tc.verts[loop.verts[0]].p2.u
 	for _, vi := range loop.verts {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		u := tc.verts[vi].p2.u
@@ -447,12 +449,12 @@ func (tc *triCutter) chooseSplitU(loop chainPath) (*big.Rat, error) {
 	half := big.NewRat(1, 2)
 	c := new(big.Rat).Mul(half, new(big.Rat).Add(lo, hi))
 	for range 64 {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		hit := false
 		for _, v := range tc.verts {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			if v.p2.u.Cmp(c) == 0 {
@@ -473,7 +475,7 @@ func (tc *triCutter) chooseSplitU(loop chainPath) (*big.Rat, error) {
 func (tc *triCutter) splitEdgesAtU(c *big.Rat) error {
 	var out []cutEdge
 	for _, e := range tc.edges {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return err
 		}
 		ua := tc.verts[e.a].p2.u
@@ -505,7 +507,7 @@ func (tc *triCutter) splitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 	n := len(piece)
 	var left, right []int
 	for i := range n {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, nil, err
 		}
 		vi, vj := piece[i], piece[(i+1)%n]
@@ -567,7 +569,7 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 	stack := []work{{poly: piece, chains: chains}}
 	var out [][]int
 	for len(stack) > 0 {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		w := stack[len(stack)-1]
@@ -602,7 +604,7 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 		interior := ch.verts[1 : len(ch.verts)-1]
 		var polyA []int
 		for k := i; ; k = (k + 1) % len(poly) {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			polyA = append(polyA, poly[k])
@@ -611,14 +613,14 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 			}
 		}
 		for _, vi := range slices.Backward(interior) {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			polyA = append(polyA, vi)
 		}
 		var polyB []int
 		for k := j; ; k = (k + 1) % len(poly) {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			polyB = append(polyB, poly[k])
@@ -627,7 +629,7 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 			}
 		}
 		for _, vi := range interior {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			polyB = append(polyB, vi)
@@ -654,7 +656,7 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 		wa := work{poly: polyA}
 		wb := work{poly: polyB}
 		for _, rc := range rest {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return nil, err
 			}
 			probe, err := tc.chainProbe(rc)
@@ -700,7 +702,7 @@ func (tc *triCutter) insertOnBoundary(poly []int, vi int) ([]int, error) {
 	p := tc.verts[vi].p2
 	n := len(poly)
 	for i := range n {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		a := tc.verts[poly[i]].p2
@@ -720,7 +722,7 @@ func (tc *triCutter) insertOnBoundary(poly []int, vi int) ([]int, error) {
 
 func (tc *triCutter) indexOf(poly []int, vi int) (int, error) {
 	for i, v := range poly {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return -1, err
 		}
 		if v == vi {
@@ -747,16 +749,16 @@ func (tc *triCutter) regionOf(poly []int, chainEdges map[[2]int]chainAnchor) (cu
 	}
 	reg := cutRegion{}
 	for _, t := range tris2 {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return cutRegion{}, err
 		}
-		corners := [3]xpt{tc.verts[t[0]].p3, tc.verts[t[1]].p3, tc.verts[t[2]].p3}
+		corners := [3]proofbound.Xpt{tc.verts[t[0]].p3, tc.verts[t[1]].p3, tc.verts[t[2]].p3}
 		reg.tris = append(reg.tris, corners)
 		if reg.hasAnchor {
 			continue
 		}
 		for k := range 3 {
-			if err := tc.work.step(); err != nil {
+			if err := tc.work.Step(); err != nil {
 				return cutRegion{}, err
 			}
 			key := [2]int{min(t[k], t[(k+1)%3]), max(t[k], t[(k+1)%3])}
@@ -782,7 +784,7 @@ func (tc *triCutter) regionOf(poly []int, chainEdges map[[2]int]chainAnchor) (cu
 func (tc *triCutter) collectP2() ([]xp2, error) {
 	out := make([]xp2, len(tc.verts))
 	for i, v := range tc.verts {
-		if err := tc.work.step(); err != nil {
+		if err := tc.work.Step(); err != nil {
 			return nil, err
 		}
 		out[i] = v.p2

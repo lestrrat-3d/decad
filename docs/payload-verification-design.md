@@ -71,7 +71,7 @@ Every internal verification routine returns one of:
 | proven invalidity | `Unsound` |
 | undecided | emit no fabricated answer; `Suspect` |
 
-Bounds MUST round outward. Put each new error mechanism in `bounds.go`; NEVER
+Bounds MUST round outward. Put each new error mechanism in `internal/proofbound/bounds.go`; NEVER
 compute a measurement bound at its call site.
 
 ### 2.2 Tolerance vs. proof
@@ -407,7 +407,7 @@ Compute certified held feature-scale lower bound `sH` over:
 - neck-separating boundary pairs found by same remote primitive pass.
 
 Reuse `triTriDistance`, segment distance, exact incidence, and exact parity.
-Replace fixed fractional nudges with `bounds.go` helpers proving float slop.
+Replace fixed fractional nudges with `internal/proofbound/bounds.go` helpers proving float slop.
 
 ### 6.4 Verdict
 
@@ -675,7 +675,7 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 
 | File | Change |
 |---|---|
-| `bounds.go` | interval expansion, distance slop, direction-bound composition |
+| `internal/proofbound/bounds.go` | interval expansion, distance slop, direction-bound composition |
 | `clearance_geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
 | `clearance.go` | bounded extent/contact gates + true interval expansion |
 | `shell.go` / `shell_cup.go` | expose/recheck exact morphology certificate internally |

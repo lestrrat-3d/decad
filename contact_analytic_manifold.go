@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -220,7 +222,7 @@ func rulingNormal(a, b rulingSide, witness VecMeasurement,
 	if bound >= .5 {
 		return VecMeasurement{}, units.Value{}, false
 	}
-	return normal, units.Radians(upRound(4 * bound)), true
+	return normal, units.Radians(proofbound.UpRound(4 * bound)), true
 }
 
 // rulingSideNormal is one side's outward normal ball at the witness, checked
@@ -233,8 +235,8 @@ func rulingSideNormal(side rulingSide, witness VecMeasurement,
 	}
 	bound := reading.Bound.Base()
 	if side.curved && witness.Bound.Base() > 0 {
-		tilt := divUpper(2*witness.Bound.Base(), proofarith.DyFloatDown(side.radius))
-		bound = absSumUpper(bound, tilt)
+		tilt := proofbound.DivUpper(2*witness.Bound.Base(), proofarith.DyFloatDown(side.radius))
+		bound = proofbound.AbsSumUpper(bound, tilt)
 	}
 	if !finiteMeasurementValues(bound) {
 		return VecMeasurement{}, false
@@ -328,8 +330,8 @@ func (c *placedCylinder) sectionDrift(alpha proofarith.Dyadic) proofarith.Dyadic
 // |Ay − |y|·n̂| <= (gram + α²) + gram + |α|·√(1 + gram), and dividing by
 // |y| >= √(1 − gram − α²) >= √(7/8) leaves at most 3·gram + (3/2)·|α|.
 func (c *placedCylinder) rimDrift(alpha *big.Rat) *big.Rat {
-	return ratMul(c.radius.Rat(), ratAdd(ratMul(big.NewRat(3, 1), c.gram.Rat()),
-		ratMul(big.NewRat(3, 2), new(big.Rat).Abs(alpha))))
+	return proofbound.RatMul(c.radius.Rat(), proofbound.RatAdd(proofbound.RatMul(big.NewRat(3, 1), c.gram.Rat()),
+		proofbound.RatMul(big.NewRat(3, 2), new(big.Rat).Abs(alpha))))
 }
 
 // stagedCorners are the eight corners of the cylinder's identity
@@ -536,13 +538,13 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 	if proofarith.DyCmp(cylinder.gram, rulingGramLimit) > 0 {
 		return false, nil
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	solid, delta, ok, err := planarSolidAtPose(ctx, budget, bodyS, poseS, heldChordOf(report.Request))
 	if err != nil || !ok || delta.Sign() != 0 {
 		return false, err
 	}
 	pathS := &rotationalSweepPath{body: bodyS, solid: &solid, startPoints: solid.Verts}
-	plane, ok, err := rulingSupport(&cylinder, pathS, budget.step)
+	plane, ok, err := rulingSupport(&cylinder, pathS, budget.Step)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -572,10 +574,10 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 			return false, nil
 		}
 		r := cylinder.radius.Rat()
-		sigmaLo = new(big.Rat).Sub(ratAdd(sigmaLo, r), ratMul(r, proofarith.FloatRat(rhoHi)))
-		sigmaHi = new(big.Rat).Sub(ratAdd(sigmaHi, r), ratMul(r, proofarith.FloatRat(rhoLo)))
-		slack = ratAdd(cylinder.sectionDrift(plane.alpha).Rat(),
-			ratMul(new(big.Rat).Abs(plane.alpha.Rat()), cylinder.length.Rat()))
+		sigmaLo = new(big.Rat).Sub(proofbound.RatAdd(sigmaLo, r), proofbound.RatMul(r, proofarith.FloatRat(rhoHi)))
+		sigmaHi = new(big.Rat).Sub(proofbound.RatAdd(sigmaHi, r), proofbound.RatMul(r, proofarith.FloatRat(rhoLo)))
+		slack = proofbound.RatAdd(cylinder.sectionDrift(plane.alpha).Rat(),
+			proofbound.RatMul(new(big.Rat).Abs(plane.alpha.Rat()), cylinder.length.Rat()))
 	}
 	trial := ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
@@ -603,9 +605,9 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 		trial.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
 		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst, lateral, new(big.Rat))
 	default:
-		band := ratAdd(dyMax(proofarith.DyAbs(plane.heights[0]), proofarith.DyAbs(plane.heights[1])).Rat(),
+		band := proofbound.RatAdd(dyMax(proofarith.DyAbs(plane.heights[0]), proofarith.DyAbs(plane.heights[1])).Rat(),
 			cylinder.sectionDrift(plane.alpha).Rat())
-		width := ratFloatUp(band)
+		width := proofbound.RatFloatUp(band)
 		if !finiteMeasurementValues(width) || !plane.clearsBand(proofarith.FloatRat(width)) {
 			return false, nil
 		}
@@ -670,7 +672,7 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 		return
 	}
 	faceS := faces[plane.face.id]
-	bound := ratFloatUp(separation)
+	bound := proofbound.RatFloatUp(separation)
 	points := make([]ContactPoint, 0, len(rims))
 	for _, rim := range rims {
 		foot := rim
@@ -705,7 +707,7 @@ func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
 	value := ratFloatNearest(mid)
 	held := proofarith.FloatRat(value)
 	spread := ratMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
-	bound := ratFloatUp(spread)
+	bound := proofbound.RatFloatUp(spread)
 	if !finiteMeasurementValues(value, bound) {
 		return Measurement{}, false
 	}

@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -30,7 +32,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) {
 		return sourceBoxContactProof{}, false
 	}
-	if !finiteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
+	if !proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
 		return sourceBoxContactProof{}, false
 	}
 	var umin, umax, vmin, vmax float64
@@ -137,7 +139,7 @@ func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
 }
 
 func signedAxisTransform(t r3.Transform) bool {
-	if !t.IsValid() || !finiteVec(t.Translation()) {
+	if !t.IsValid() || !proofbound.FiniteVec(t.Translation()) {
 		return false
 	}
 	b := t.Basis()

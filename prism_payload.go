@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -92,9 +94,13 @@ type prismPayload struct {
 // float beside its own axial displacement. Every measurement derived from a
 // level integrates these rather than the bare float, so a level the evaluator
 // computed can never publish itself as the level it denotes.
-func (pp prismPayload) z0Scalar() boundedScalar { return measuredScalar(pp.z0, pp.z0Delta) }
+func (pp prismPayload) z0Scalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(pp.z0, pp.z0Delta)
+}
 
-func (pp prismPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, pp.z1Delta) }
+func (pp prismPayload) z1Scalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(pp.z1, pp.z1Delta)
+}
 
 // axialDelta is the larger of the two ends' displacements: the figure a reading
 // that cannot attribute its error to one particular end takes.
@@ -109,17 +115,13 @@ func (pp prismPayload) point(u, v, z float64) r3.Vec {
 
 // prismPointBound carries plane-local coordinate error through the isometric
 // frame/placement and charges the float operations that evaluate both maps.
-func prismPointBound(pp prismPayload, u, v, z boundedScalar) float64 {
-	source := radius3D(max(u.bound, v.bound, z.bound))
-	held := pp.point(u.value, v.value, z.value)
-	round := exactPrismPointRound(pp, u.value, v.value, z.value, held)
+func prismPointBound(pp prismPayload, u, v, z proofbound.BoundedScalar) float64 {
+	source := proofbound.Radius3D(max(u.Bound, v.Bound, z.Bound))
+	held := pp.point(u.Value, v.Value, z.Value)
+	round := exactPrismPointRound(pp, u.Value, v.Value, z.Value, held)
 	// Frame and transform constructors enforce near-orthonormal maps. A factor
 	// four safely carries the source ball through both held linear maps.
-	return absSumUpper(productUpper(4, source), round)
-}
-
-func vecMaxAbs(v r3.Vec) float64 {
-	return max(math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+	return proofbound.AbsSumUpper(proofbound.ProductUpper(4, source), round)
 }
 
 func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
@@ -138,11 +140,11 @@ func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64
 		if origin[i] == nil || fu[i] == nil || fv[i] == nil || fn[i] == nil {
 			return math.Inf(1)
 		}
-		local[i] = ratAdd(
+		local[i] = proofbound.RatAdd(
 			origin[i],
-			ratMul(fu[i], ru),
-			ratMul(fv[i], rv),
-			ratMul(fn[i], rz),
+			proofbound.RatMul(fu[i], ru),
+			proofbound.RatMul(fv[i], rv),
+			proofbound.RatMul(fn[i], rz),
 		)
 	}
 	basis := pp.xform.Basis()
@@ -153,10 +155,10 @@ func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64
 		if ex[i] == nil || ey[i] == nil || ez[i] == nil || translation[i] == nil {
 			return math.Inf(1)
 		}
-		exact[i] = ratAdd(
-			ratMul(ex[i], local[0]),
-			ratMul(ey[i], local[1]),
-			ratMul(ez[i], local[2]),
+		exact[i] = proofbound.RatAdd(
+			proofbound.RatMul(ex[i], local[0]),
+			proofbound.RatMul(ey[i], local[1]),
+			proofbound.RatMul(ez[i], local[2]),
 			translation[i],
 		)
 	}
@@ -165,11 +167,11 @@ func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64
 		proofarith.RationalFloatError(exact[1], held.Y),
 		proofarith.RationalFloatError(exact[2], held.Z),
 	)
-	return radius3D(perCoord)
+	return proofbound.Radius3D(perCoord)
 }
 
 func vecL1(v r3.Vec) float64 {
-	return absSumUpper(v.X, v.Y, v.Z)
+	return proofbound.AbsSumUpper(v.X, v.Y, v.Z)
 }
 
 // walks is the profile's pre-resolved segment walks (docs/spline-design.md
@@ -268,15 +270,15 @@ func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.
 		return 0, err
 	}
 	zUpper := math.Max(math.Abs(pp.z0), math.Abs(pp.z1))
-	frameUpper := absSumUpper(
+	frameUpper := proofbound.AbsSumUpper(
 		vecL1(pp.frame.Origin()),
-		productUpper(vecL1(pp.frame.U()), coordUpper),
-		productUpper(vecL1(pp.frame.V()), coordUpper),
-		productUpper(vecL1(pp.frame.N()), zUpper),
+		proofbound.ProductUpper(vecL1(pp.frame.U()), coordUpper),
+		proofbound.ProductUpper(vecL1(pp.frame.V()), coordUpper),
+		proofbound.ProductUpper(vecL1(pp.frame.N()), zUpper),
 	)
 	// A rigid map has each output coordinate bounded by the input L1 norm.
-	placedUpper := absSumUpper(productUpper(3, frameUpper), vecL1(pp.xform.Translation()))
-	return absSumUpper(vecL1(held), placedUpper), nil
+	placedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, frameUpper), vecL1(pp.xform.Translation()))
+	return proofbound.AbsSumUpper(vecL1(held), placedUpper), nil
 }
 
 // dir places a plane-local direction (du, dv, dz in frame coordinates) into

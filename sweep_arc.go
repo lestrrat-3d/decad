@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -236,16 +238,16 @@ func sweepArcAngle(r0, r1, axis sweepRatVec) (float64, angleDenotation, error) {
 		}
 		return math.Pi, angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 2)}, nil
 	}
-	sinMagnitude, ok := intervalSqrt(pointInterval(crossSquared))
-	if !ok || sinMagnitude.lo.Sign() <= 0 {
+	sinMagnitude, ok := intervalSqrt(proofbound.PointInterval(crossSquared))
+	if !ok || sinMagnitude.Lo.Sign() <= 0 {
 		return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc angle has no finite enclosure`, ErrUnsupported)
 	}
 	positive := sweepPositiveAtan2Span(sinMagnitude, dot)
 	span := positive
 	if orientation < 0 {
-		span = intervalSub(twoPiInterval(), positive)
+		span = proofbound.IntervalSub(proofbound.TwoPiInterval(), positive)
 	}
-	phiRat := new(big.Rat).Quo(new(big.Rat).Add(span.lo, span.hi), big.NewRat(2, 1))
+	phiRat := new(big.Rat).Quo(new(big.Rat).Add(span.Lo, span.Hi), big.NewRat(2, 1))
 	phi, _, ok := sweepRatHeld(phiRat)
 	if !ok || phi <= 0 || phi >= 2*math.Pi {
 		return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc angle is outside the representable range`, ErrUnsupported)
@@ -253,11 +255,11 @@ func sweepArcAngle(r0, r1, axis sweepRatVec) (float64, angleDenotation, error) {
 	return phi, angleDenotation{span: &span}, nil
 }
 
-func sweepPositiveAtan2Span(y ratInterval, x *big.Rat) ratInterval {
+func sweepPositiveAtan2Span(y proofbound.RatInterval, x *big.Rat) proofbound.RatInterval {
 	if x.Sign() >= 0 {
-		return interval(atan2Interval(y.lo, x, false).lo, atan2Interval(y.hi, x, false).hi)
+		return proofbound.Interval(proofbound.Atan2Interval(y.Lo, x, false).Lo, proofbound.Atan2Interval(y.Hi, x, false).Hi)
 	}
-	return interval(atan2Interval(y.hi, x, false).lo, atan2Interval(y.lo, x, false).hi)
+	return proofbound.Interval(proofbound.Atan2Interval(y.Hi, x, false).Lo, proofbound.Atan2Interval(y.Lo, x, false).Hi)
 }
 
 func sweepRatHeld(value *big.Rat) (float64, float64, bool) {
@@ -324,7 +326,7 @@ func sweepRatScale(v sweepRatVec, scale *big.Rat) sweepRatVec {
 }
 
 func sweepRatDot(a, b sweepRatVec) *big.Rat {
-	return ratAdd(
+	return proofbound.RatAdd(
 		new(big.Rat).Mul(a[0], b[0]),
 		new(big.Rat).Mul(a[1], b[1]),
 		new(big.Rat).Mul(a[2], b[2]),

@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -43,11 +45,11 @@ var errOffsetTopology = fmt.Errorf(`%w: the offset changes the section's topolog
 // (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
 // sense (docs/modify-design.md §7). A dropped feature is S11a (errOffsetDrop);
 // a non-closing miter is S11 (errOffsetTopology). Both are ErrUnsupported.
-func offsetProfile(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+func offsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
 	return offsetProfileBudget(budget, profile, s, t)
 }
 
-func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+func offsetProfileBudget(budget *proofbound.WorkBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return ProfileRecord{}, err
 	}
@@ -81,7 +83,7 @@ func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64
 // the section it builds (modify §7). The cap-chamfer boolean operand's exact
 // admission predicate capJoinIsG1 (exact zero cross over the record) implies
 // this classification and stays separate from it.
-func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]CurveSegment, error) {
+func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	walks := loop.walks
 	n := len(walks)
 	if n == 0 {
@@ -163,7 +165,7 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 // end). It is the one place the corner rule of docs/modify-design.md §7 is
 // decided, so the offset build (offsetLoopBudget) and its displacement proof
 // (offsetSectionDelta) always read the same joins.
-func offsetJoinsBudget(budget *workBudget, walks []sideWalk, s, t float64) ([]cornerJoin, error) {
+func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []sideWalk, s, t float64) ([]cornerJoin, error) {
 	n := len(walks)
 	joins := make([]cornerJoin, n)
 	for i := range n {
@@ -335,7 +337,7 @@ func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
 	return reverseLoopRecordBudget(nil, l)
 }
 
-func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, error) {
+func reverseLoopRecordBudget(budget *proofbound.WorkBudget, l LoopRecord) (LoopRecord, error) {
 	return reverseLoopRecordWithPoll(func() error { return wallBudgetStep(budget) }, l)
 }
 
@@ -391,7 +393,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 // offset loops — S11b, ErrUnsupported), then S9 (nesting). A shell mints no
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
-func auditOffsetSectionBudget(budget *workBudget, orig, offset ProfileRecord) error {
+func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
 	if err != nil {
 		return err
@@ -440,7 +442,7 @@ var errOffsetUnbounded = fmt.Errorf(`%w: this evaluator cannot prove how far the
 // end. Every recorded boundary point is therefore within the figure of the
 // denoted boundary, and every denoted point within it of the record, which is
 // the reading prismPayload.sectionDelta states for a whole section.
-func offsetSectionDelta(budget *workBudget, profile ProfileRecord, s, t, tDelta float64) (float64, error) {
+func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s, t, tDelta float64) (float64, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return 0, err
 	}
@@ -450,9 +452,9 @@ func offsetSectionDelta(budget *workBudget, profile ProfileRecord, s, t, tDelta 
 	}
 	// amount is s·t* over every denoted thickness, the signed offset the
 	// float build spells s*t.
-	amount := interval(new(big.Rat).Sub(rt, rd), new(big.Rat).Add(rt, rd))
+	amount := proofbound.Interval(new(big.Rat).Sub(rt, rd), new(big.Rat).Add(rt, rd))
 	if s < 0 {
-		amount = intervalNeg(amount)
+		amount = proofbound.IntervalNeg(amount)
 	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
@@ -469,8 +471,8 @@ func offsetSectionDelta(budget *workBudget, profile ProfileRecord, s, t, tDelta 
 		}
 		reach = math.Max(reach, r)
 	}
-	delta := productUpper(3, reach)
-	if isNonFinite(delta) {
+	delta := proofbound.ProductUpper(3, reach)
+	if proofbound.IsNonFinite(delta) {
 		return 0, errOffsetUnbounded
 	}
 	return delta, nil
@@ -478,7 +480,7 @@ func offsetSectionDelta(budget *workBudget, profile ProfileRecord, s, t, tDelta 
 
 // offsetLoopReach is the largest reach of one loop's recorded offset points
 // from their enclosures (offsetSectionDelta).
-func offsetLoopReach(budget *workBudget, walks []sideWalk, s, t float64, amount ratInterval) (float64, error) {
+func offsetLoopReach(budget *proofbound.WorkBudget, walks []sideWalk, s, t float64, amount proofbound.RatInterval) (float64, error) {
 	n := len(walks)
 	if n == 0 {
 		return 0, fmt.Errorf(`%w: an offset loop holds no walks`, ErrDegenerate)
@@ -499,7 +501,7 @@ func offsetLoopReach(budget *workBudget, walks []sideWalk, s, t float64, amount 
 		if !ok {
 			return 0, errOffsetUnbounded
 		}
-		return ratFloatUp(gap), nil
+		return proofbound.RatFloatUp(gap), nil
 	}
 	joins, err := offsetJoinsBudget(budget, walks, s, t)
 	if err != nil {
@@ -562,26 +564,26 @@ func offsetLoopReach(budget *workBudget, walks []sideWalk, s, t float64, amount 
 
 // walkPointEnclosure lifts a walk endpoint to the box its own stated bound
 // allows. A recorded endpoint states zero and lifts to its exact point.
-func walkPointEnclosure(u, v float64, bound walkEndBound) (ivPoint, bool) {
+func walkPointEnclosure(u, v float64, bound proofbound.WalkEndBound) (ivPoint, bool) {
 	p, ok := ivExactPoint(u, v)
-	allow := walkEndBoundAllow(bound)
-	if !ok || isNonFinite(allow) {
+	allow := proofbound.WalkEndBoundAllow(bound)
+	if !ok || proofbound.IsNonFinite(allow) {
 		return ivPoint{}, false
 	}
 	if allow == 0 {
 		return p, true
 	}
 	ra := proofarith.FloatRat(allow)
-	widen := func(c ratInterval) ratInterval {
-		return interval(new(big.Rat).Sub(c.lo, ra), new(big.Rat).Add(c.hi, ra))
+	widen := func(c proofbound.RatInterval) proofbound.RatInterval {
+		return proofbound.Interval(new(big.Rat).Sub(c.Lo, ra), new(big.Rat).Add(c.Hi, ra))
 	}
 	return ivPoint{u: widen(p.u), v: widen(p.v)}, true
 }
 
 // ivUnitOf encloses the unit vector of every vector its argument encloses.
 func ivUnitOf(p ivPoint) (ivPoint, bool) {
-	l, ok := intervalSqrt(intervalAdd(intervalSquare(p.u), intervalSquare(p.v)))
-	if !ok || l.lo.Sign() <= 0 {
+	l, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(p.u), intervalSquare(p.v)))
+	if !ok || l.Lo.Sign() <= 0 {
 		return ivPoint{}, false
 	}
 	u, okU := intervalQuo(p.u, l)
@@ -600,7 +602,7 @@ func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
 	}
 	switch {
 	case w.isLine():
-		return ivUnitOf(ivPoint{u: intervalSub(end.u, start.u), v: intervalSub(end.v, start.v)})
+		return ivUnitOf(ivPoint{u: proofbound.IntervalSub(end.u, start.u), v: proofbound.IntervalSub(end.v, start.v)})
 	case w.isCircular():
 		c, ok := ivExactPoint(w.cU, w.cV)
 		if !ok {
@@ -610,11 +612,11 @@ func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
 		if atEnd {
 			p = end
 		}
-		ru, rv := intervalSub(p.u, c.u), intervalSub(p.v, c.v)
+		ru, rv := proofbound.IntervalSub(p.u, c.u), proofbound.IntervalSub(p.v, c.v)
 		if w.th1 > w.th0 {
-			return ivUnitOf(ivPoint{u: intervalNeg(rv), v: ru})
+			return ivUnitOf(ivPoint{u: proofbound.IntervalNeg(rv), v: ru})
 		}
-		return ivUnitOf(ivPoint{u: rv, v: intervalNeg(ru)})
+		return ivUnitOf(ivPoint{u: rv, v: proofbound.IntervalNeg(ru)})
 	default:
 		return ivPoint{}, false
 	}
@@ -622,21 +624,21 @@ func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
 
 // offsetFootEnclosure encloses corner + amount·n̂, n̂ the walk's left unit
 // normal at that end — the point the float build spells v + s·t·(−ty, tx).
-func offsetFootEnclosure(corner ivPoint, w sideWalk, atEnd bool, amount ratInterval) (ivPoint, bool) {
+func offsetFootEnclosure(corner ivPoint, w sideWalk, atEnd bool, amount proofbound.RatInterval) (ivPoint, bool) {
 	tan, ok := walkTangentEnclosure(w, atEnd)
 	if !ok {
 		return ivPoint{}, false
 	}
 	return ivPoint{
-		u: intervalAdd(corner.u, intervalMul(amount, intervalNeg(tan.v))),
-		v: intervalAdd(corner.v, intervalMul(amount, tan.u)),
+		u: proofbound.IntervalAdd(corner.u, proofbound.IntervalMul(amount, proofbound.IntervalNeg(tan.v))),
+		v: proofbound.IntervalAdd(corner.v, proofbound.IntervalMul(amount, tan.u)),
 	}, true
 }
 
 // offsetCarrierEnclosure encloses a walk's offset carrier over every signed
 // offset in amount: the line through the start moved along the left normal,
 // or the concentric circle (offsetCarrier's two shapes).
-func offsetCarrierEnclosure(w sideWalk, amount ratInterval) (ivCarrier, bool) {
+func offsetCarrierEnclosure(w sideWalk, amount proofbound.RatInterval) (ivCarrier, bool) {
 	if w.isCircular() {
 		r, ok := offsetCircleRadius(w, amount)
 		c, okC := ivExactPoint(w.cU, w.cV)
@@ -651,27 +653,27 @@ func offsetCarrierEnclosure(w sideWalk, amount ratInterval) (ivCarrier, bool) {
 		return ivCarrier{}, false
 	}
 	p := ivPoint{
-		u: intervalAdd(start.u, intervalMul(amount, intervalNeg(dir.v))),
-		v: intervalAdd(start.v, intervalMul(amount, dir.u)),
+		u: proofbound.IntervalAdd(start.u, proofbound.IntervalMul(amount, proofbound.IntervalNeg(dir.v))),
+		v: proofbound.IntervalAdd(start.v, proofbound.IntervalMul(amount, dir.u)),
 	}
 	return ivCarrier{isLine: true, p: p, dir: dir}, true
 }
 
 // offsetCircleRadius encloses offsetRadius's R − insideSign·(s·t) over every
 // signed offset in amount, R the walk's radius widened by its own bracket.
-func offsetCircleRadius(w sideWalk, amount ratInterval) (ratInterval, bool) {
+func offsetCircleRadius(w sideWalk, amount proofbound.RatInterval) (proofbound.RatInterval, bool) {
 	rr, rb := proofarith.FloatRat(w.radius), proofarith.FloatRat(w.radiusBound)
 	if rr == nil || rb == nil || rb.Sign() < 0 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	inside := big.NewRat(1, 1)
 	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
 		inside = big.NewRat(-1, 1)
 	}
-	base := interval(new(big.Rat).Sub(rr, rb), new(big.Rat).Add(rr, rb))
-	r := intervalSub(base, intervalScale(amount, inside))
-	if r.lo.Sign() <= 0 {
-		return ratInterval{}, false
+	base := proofbound.Interval(new(big.Rat).Sub(rr, rb), new(big.Rat).Add(rr, rb))
+	r := proofbound.IntervalSub(base, proofbound.IntervalScale(amount, inside))
+	if r.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
 	}
 	return r, true
 }
@@ -680,21 +682,21 @@ func offsetCircleRadius(w sideWalk, amount ratInterval) (ratInterval, bool) {
 // the circle its walk radius brackets, measured radially.
 func circularWalkEndGap(w sideWalk) (float64, bool) {
 	c, okC := ivExactPoint(w.cU, w.cV)
-	r, okR := offsetCircleRadius(w, pointInterval(new(big.Rat)))
+	r, okR := offsetCircleRadius(w, proofbound.PointInterval(new(big.Rat)))
 	if !okC || !okR {
 		return 0, false
 	}
 	gap := new(big.Rat)
-	reach := func(u, v float64, bound walkEndBound) bool {
+	reach := func(u, v float64, bound proofbound.WalkEndBound) bool {
 		p, ok := walkPointEnclosure(u, v, bound)
 		if !ok {
 			return false
 		}
-		d, ok := intervalSqrt(intervalAdd(intervalSquare(intervalSub(p.u, c.u)), intervalSquare(intervalSub(p.v, c.v))))
+		d, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(proofbound.IntervalSub(p.u, c.u)), intervalSquare(proofbound.IntervalSub(p.v, c.v))))
 		if !ok {
 			return false
 		}
-		for _, x := range []*big.Rat{new(big.Rat).Sub(d.hi, r.lo), new(big.Rat).Sub(r.hi, d.lo)} {
+		for _, x := range []*big.Rat{new(big.Rat).Sub(d.Hi, r.Lo), new(big.Rat).Sub(r.Hi, d.Lo)} {
 			if x.Cmp(gap) > 0 {
 				gap = x
 			}
@@ -704,5 +706,5 @@ func circularWalkEndGap(w sideWalk) (float64, bool) {
 	if !reach(w.startU, w.startV, w.startBound) || !reach(w.endU, w.endV, w.endBound) {
 		return 0, false
 	}
-	return ratFloatUp(gap), true
+	return proofbound.RatFloatUp(gap), true
 }

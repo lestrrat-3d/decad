@@ -293,7 +293,7 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 // nothing, which is what lets it run ahead of every R7 charge the scan makes
 // (§5.2: a charge is levied before the work allocates, so no rational may be
 // built before one). A gate that lifted the direction into big.Rat to decide
-// finiteness — ratOf allocates even on the float it rejects — would fail this.
+// finiteness — proofbound.RatOf allocates even on the float it rejects — would fail this.
 // AllocsPerRun goes further and PANICS if any parallel test is in flight, so
 // this one could not be made parallel even if the reading were tolerant.
 //

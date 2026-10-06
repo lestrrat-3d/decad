@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -89,7 +91,7 @@ func bandSpin(t *testing.T, at r3.Vec) RigidDriftSegment {
 // bandRun prepares the general planar sweep of a pair as SweepPair does.
 func bandRun(t *testing.T, doc *Document, a, b *Body, pathA, pathB PairPath) *rotationalPairSweep {
 	t.Helper()
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	var paths [2]rotationalSweepPath
 	for i, side := range []struct {
 		body *Body
@@ -282,10 +284,10 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 		require.True(t, ok)
 		sin, cos := ratSinCosTaylor(f)
 		for _, entry := range []struct {
-			got  ratInterval
+			got  proofbound.RatInterval
 			want *big.Rat
 		}{{ideal.rot.entry(0, 0), cos}, {ideal.rot.entry(1, 0), sin}, {ideal.rot.entry(0, 1), new(big.Rat).Neg(sin)}, {ideal.rot.entry(1, 1), cos}} {
-			require.True(t, entry.got.lo.Cmp(entry.want) <= 0 && entry.want.Cmp(entry.got.hi) <= 0,
+			require.True(t, entry.got.Lo.Cmp(entry.want) <= 0 && entry.want.Cmp(entry.got.Hi) <= 0,
 				"the enclosure holds the true rotation at %d/%d", k, samples)
 		}
 		basis := pose.Basis()
@@ -296,8 +298,8 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 			for j := range 3 {
 				rounded := proofarith.FloatRat(columns[j][i])
 				enclosure := ideal.rot.entry(i, j)
-				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.lo))
-				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.hi)); other.Cmp(far) > 0 {
+				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.Lo))
+				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.Hi)); other.Cmp(far) > 0 {
 					far = other
 				}
 				squared.Add(squared, far.Mul(far, far))

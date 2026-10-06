@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -70,7 +72,7 @@ const (
 // ivVec3 encloses a 3D vector coordinate-wise. A vector built from held
 // float64s alone encloses it EXACTLY — every interval is a point — and only a
 // square root or a sine widens one.
-type ivVec3 [3]ratInterval
+type ivVec3 [3]proofbound.RatInterval
 
 // ivVec3Of encloses a held vector exactly, one point interval per coordinate.
 func ivVec3Of(v r3.Vec) (ivVec3, bool) {
@@ -78,38 +80,38 @@ func ivVec3Of(v r3.Vec) (ivVec3, bool) {
 	if x == nil || y == nil || z == nil {
 		return ivVec3{}, false
 	}
-	return ivVec3{pointInterval(x), pointInterval(y), pointInterval(z)}, true
+	return ivVec3{proofbound.PointInterval(x), proofbound.PointInterval(y), proofbound.PointInterval(z)}, true
 }
 
 func ivVec3Add(a, b ivVec3) ivVec3 {
-	return ivVec3{intervalAdd(a[0], b[0]), intervalAdd(a[1], b[1]), intervalAdd(a[2], b[2])}
+	return ivVec3{proofbound.IntervalAdd(a[0], b[0]), proofbound.IntervalAdd(a[1], b[1]), proofbound.IntervalAdd(a[2], b[2])}
 }
 
 func ivVec3Sub(a, b ivVec3) ivVec3 {
-	return ivVec3{intervalSub(a[0], b[0]), intervalSub(a[1], b[1]), intervalSub(a[2], b[2])}
+	return ivVec3{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
 }
 
-func ivVec3Mul(a ivVec3, s ratInterval) ivVec3 {
-	return ivVec3{intervalMul(a[0], s), intervalMul(a[1], s), intervalMul(a[2], s)}
+func ivVec3Mul(a ivVec3, s proofbound.RatInterval) ivVec3 {
+	return ivVec3{proofbound.IntervalMul(a[0], s), proofbound.IntervalMul(a[1], s), proofbound.IntervalMul(a[2], s)}
 }
 
 func ivVec3Cross(a, b ivVec3) ivVec3 {
 	return ivVec3{
-		intervalSub(intervalMul(a[1], b[2]), intervalMul(a[2], b[1])),
-		intervalSub(intervalMul(a[2], b[0]), intervalMul(a[0], b[2])),
-		intervalSub(intervalMul(a[0], b[1]), intervalMul(a[1], b[0])),
+		proofbound.IntervalSub(proofbound.IntervalMul(a[1], b[2]), proofbound.IntervalMul(a[2], b[1])),
+		proofbound.IntervalSub(proofbound.IntervalMul(a[2], b[0]), proofbound.IntervalMul(a[0], b[2])),
+		proofbound.IntervalSub(proofbound.IntervalMul(a[0], b[1]), proofbound.IntervalMul(a[1], b[0])),
 	}
 }
 
-func ivVec3Dot(a, b ivVec3) ratInterval {
-	return intervalAdd(intervalAdd(intervalMul(a[0], b[0]), intervalMul(a[1], b[1])), intervalMul(a[2], b[2]))
+func ivVec3Dot(a, b ivVec3) proofbound.RatInterval {
+	return proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalMul(a[0], b[0]), proofbound.IntervalMul(a[1], b[1])), proofbound.IntervalMul(a[2], b[2]))
 }
 
-// ivVec3NormSq is |v|² — intervalSquare per coordinate, never intervalMul with
+// ivVec3NormSq is |v|² — intervalSquare per coordinate, never proofbound.IntervalMul with
 // itself, so a coordinate straddling zero cannot contribute a negative low
 // end.
-func ivVec3NormSq(a ivVec3) ratInterval {
-	return intervalAdd(intervalAdd(intervalSquare(a[0]), intervalSquare(a[1])), intervalSquare(a[2]))
+func ivVec3NormSq(a ivVec3) proofbound.RatInterval {
+	return proofbound.IntervalAdd(proofbound.IntervalAdd(intervalSquare(a[0]), intervalSquare(a[1])), intervalSquare(a[2]))
 }
 
 // ivVec3Unit encloses the exact unit vector of an enclosed direction. It is
@@ -118,14 +120,14 @@ func ivVec3NormSq(a ivVec3) ratInterval {
 // square root.
 func ivVec3Unit(a ivVec3) (ivVec3, normalStatus) {
 	n2 := ivVec3NormSq(a)
-	if n2.hi.Sign() <= 0 {
+	if n2.Hi.Sign() <= 0 {
 		return ivVec3{}, normalZero
 	}
-	if n2.lo.Sign() <= 0 {
+	if n2.Lo.Sign() <= 0 {
 		return ivVec3{}, normalUnproven
 	}
 	length, ok := intervalSqrt(n2)
-	if !ok || length.lo.Sign() <= 0 {
+	if !ok || length.Lo.Sign() <= 0 {
 		return ivVec3{}, normalUnproven
 	}
 	var out ivVec3
@@ -151,18 +153,18 @@ func unitDirAllow(exact ivVec3, held r3.Vec) (float64, normalStatus) {
 	if st != normalProven {
 		return 0, st
 	}
-	ex := intervalFloatError(unit[0], held.X)
-	ey := intervalFloatError(unit[1], held.Y)
-	ez := intervalFloatError(unit[2], held.Z)
-	if isNonFinite(ex) || isNonFinite(ey) || isNonFinite(ez) {
+	ex := proofbound.IntervalFloatError(unit[0], held.X)
+	ey := proofbound.IntervalFloatError(unit[1], held.Y)
+	ez := proofbound.IntervalFloatError(unit[2], held.Z)
+	if proofbound.IsNonFinite(ex) || proofbound.IsNonFinite(ey) || proofbound.IsNonFinite(ez) {
 		return 0, normalUnproven
 	}
 	// The three coordinate errors are known separately, so the distance is
-	// their own root sum of squares — radius3D's √3 factor is the answer for
+	// their own root sum of squares — proofbound.Radius3D's √3 factor is the answer for
 	// ONE per-coordinate number, and would only loosen this one.
-	sum := absSumUpper(productUpper(ex, ex), productUpper(ey, ey), productUpper(ez, ez))
-	allow := upRound(math.Sqrt(sum))
-	if isNonFinite(allow) {
+	sum := proofbound.AbsSumUpper(proofbound.ProductUpper(ex, ex), proofbound.ProductUpper(ey, ey), proofbound.ProductUpper(ez, ez))
+	allow := proofbound.UpRound(math.Sqrt(sum))
+	if proofbound.IsNonFinite(allow) {
 		return 0, normalUnproven
 	}
 	return allow, normalProven
@@ -282,11 +284,11 @@ func torusNormalAllow(p r3.Vec, s Torus, major float64, held r3.Vec) (float64, n
 		return 0, normalUnproven
 	}
 	rel := ivVec3Sub(pi, ci)
-	return unitDirAllow(ivVec3Sub(rel, ivVec3Mul(rdir, pointInterval(rMajor))), held)
+	return unitDirAllow(ivVec3Sub(rel, ivVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
 }
 
 // turnGridShift is the dyadic grid the radian-to-turn conversion lands on
-// before moments_trig.go's series runs. π's own in-tree bounds carry
+// before internal/proofbound/moments_trig.go's series runs. π's own in-tree bounds carry
 // seventy-odd digits, so the quotient by 2π is a rational nothing needs to
 // square that wide; rounding it down to a 2⁻⁹⁶ grid and charging the whole
 // gap back through the sine's own Lipschitz constant keeps the series input
@@ -297,57 +299,57 @@ const turnGridShift = 96
 // value x, which is what a Cone's half angle is once it has been read out in
 // radians.
 //
-// moments_trig.go's turnSinCosInterval answers for a rational TURN, and a
+// internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval answers for a rational TURN, and a
 // radian value is not one: dividing by 2π lands on an interval, since π is
 // itself only enclosed. So the turn is rounded DOWN onto a dyadic grid, the
 // series is evaluated at that one point, and both readings are widened by
 // 2π·w with w the whole remaining gap — sound because |sin(2πt) − sin(2πt₀)|
 // ≤ 2π|t − t₀| and the same for the cosine, so no monotonicity over the gap
 // need be argued.
-func radSinCosInterval(x *big.Rat) (ratInterval, ratInterval, bool) {
+func radSinCosInterval(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	if x.Sign() == 0 {
 		zero, one := new(big.Rat), big.NewRat(1, 1)
-		return interval(zero, zero), interval(one, one), true
+		return proofbound.Interval(zero, zero), proofbound.Interval(one, one), true
 	}
-	twoPi := twoPiInterval()
-	turn, ok := intervalQuo(pointInterval(x), twoPi)
+	twoPi := proofbound.TwoPiInterval()
+	turn, ok := intervalQuo(proofbound.PointInterval(x), twoPi)
 	if !ok {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	base := ratFloorGrid(turn.lo, turnGridShift)
-	gap := new(big.Rat).Sub(turn.hi, base)
+	base := ratFloorGrid(turn.Lo, turnGridShift)
+	gap := new(big.Rat).Sub(turn.Hi, base)
 	if gap.Sign() < 0 {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	sin, cos := turnSinCosInterval(base)
-	slop := new(big.Rat).Mul(twoPi.hi, gap)
+	sin, cos := proofbound.TurnSinCosInterval(base)
+	slop := new(big.Rat).Mul(twoPi.Hi, gap)
 	return intervalWiden(sin, slop), intervalWiden(cos, slop), true
 }
 
 // radSinCosSpan is radSinCosInterval over a whole radian INTERVAL rather than
 // one exact radian value — what a caller holds when the angle itself is only
 // enclosed, as an arc's own a0 + t·sweep is (both terms come from
-// atan2Interval).
+// proofbound.Atan2Interval).
 //
 // It evaluates the point enclosure at the span's lower end and widens both
 // readings by the span's own width. That is sound because sine and cosine are
 // 1-Lipschitz, so no monotonicity over the span need be argued — the same
 // argument radSinCosInterval makes for its own grid gap, one level up.
-func radSinCosSpan(x ratInterval) (ratInterval, ratInterval, bool) {
-	width := new(big.Rat).Sub(x.hi, x.lo)
+func radSinCosSpan(x proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
+	width := new(big.Rat).Sub(x.Hi, x.Lo)
 	if width.Sign() < 0 {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	sin, cos, ok := radSinCosInterval(x.lo)
+	sin, cos, ok := radSinCosInterval(x.Lo)
 	if !ok {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 	return intervalWiden(sin, width), intervalWiden(cos, width), true
 }
 
 // intervalWiden grows an enclosure by a non-negative rational on both ends.
-func intervalWiden(a ratInterval, w *big.Rat) ratInterval {
-	return interval(new(big.Rat).Sub(a.lo, w), new(big.Rat).Add(a.hi, w))
+func intervalWiden(a proofbound.RatInterval, w *big.Rat) proofbound.RatInterval {
+	return proofbound.Interval(new(big.Rat).Sub(a.Lo, w), new(big.Rat).Add(a.Hi, w))
 }
 
 // ratFloorGrid rounds a rational DOWN onto the 2⁻ˢʰⁱᶠᵗ grid, so the result is

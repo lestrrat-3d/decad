@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -28,34 +30,34 @@ func driftedArcFixture(t *testing.T) (ArcSeg, *big.Rat, *big.Rat) {
 	dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 	dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 	dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-	r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
-	endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
+	r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
+	endR2 := proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1))
 	require.NotEqual(t, 0, endR2.Cmp(r2), `the fixture's two exact squared radii must differ`)
 	q := new(big.Rat).Quo(r2, endR2)
-	require.NotEqual(t, ratSqrtDown(q), ratSqrtUp(q), `the radial ratio's bracket must have width`)
+	require.NotEqual(t, proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q), `the radial ratio's bracket must have width`)
 	return seg, r2, endR2
 }
 
-func requireIntervalWidthAtMost(t *testing.T, name string, iv ratInterval, ceiling float64) {
+func requireIntervalWidthAtMost(t *testing.T, name string, iv proofbound.RatInterval, ceiling float64) {
 	t.Helper()
-	width, _ := new(big.Rat).Sub(iv.hi, iv.lo).Float64()
+	width, _ := new(big.Rat).Sub(iv.Hi, iv.Lo).Float64()
 	require.GreaterOrEqual(t, width, 0.0, "%s: an interval's hi must not sit below its lo", name)
 	require.LessOrEqual(t, width, ceiling, "%s: interval width %g exceeds %g", name, width, ceiling)
 }
 
-func requireIntervalNegates(t *testing.T, name string, fwd, rev ratInterval) {
+func requireIntervalNegates(t *testing.T, name string, fwd, rev proofbound.RatInterval) {
 	t.Helper()
-	require.Zero(t, rev.lo.Cmp(new(big.Rat).Neg(fwd.hi)), "%s: reversed lo must be the forward hi negated", name)
-	require.Zero(t, rev.hi.Cmp(new(big.Rat).Neg(fwd.lo)), "%s: reversed hi must be the forward lo negated", name)
+	require.Zero(t, rev.Lo.Cmp(new(big.Rat).Neg(fwd.Hi)), "%s: reversed lo must be the forward hi negated", name)
+	require.Zero(t, rev.Hi.Cmp(new(big.Rat).Neg(fwd.Lo)), "%s: reversed hi must be the forward lo negated", name)
 }
 
-func requirePointInterval(t *testing.T, name string, iv ratInterval) {
+func requirePointInterval(t *testing.T, name string, iv proofbound.RatInterval) {
 	t.Helper()
-	require.Zero(t, iv.lo.Cmp(iv.hi), "%s: expected a point interval, got [%s, %s]",
-		name, iv.lo.FloatString(20), iv.hi.FloatString(20))
+	require.Zero(t, iv.Lo.Cmp(iv.Hi), "%s: expected a point interval, got [%s, %s]",
+		name, iv.Lo.FloatString(20), iv.Hi.FloatString(20))
 }
 
-// Shown-to-fail: swapping the ratSqrtDown/ratSqrtUp calls in
+// Shown-to-fail: swapping the proofbound.RatSqrtDown/proofbound.RatSqrtUp calls in
 // arcEndRadialRatio inverts the bracket, and the containment leg goes red.
 func TestArcEndRadialRatioBracketsTheRatio(t *testing.T) {
 	t.Parallel()
@@ -64,14 +66,14 @@ func TestArcEndRadialRatioBracketsTheRatio(t *testing.T) {
 
 	rho, ok := arcEndRadialRatio(r2, endR2)
 	require.True(t, ok)
-	require.LessOrEqual(t, new(big.Rat).Mul(rho.lo, rho.lo).Cmp(q), 0, `lo² must not exceed r²/endR²`)
-	require.GreaterOrEqual(t, new(big.Rat).Mul(rho.hi, rho.hi).Cmp(q), 0, `hi² must not fall below r²/endR²`)
+	require.LessOrEqual(t, new(big.Rat).Mul(rho.Lo, rho.Lo).Cmp(q), 0, `lo² must not exceed r²/endR²`)
+	require.GreaterOrEqual(t, new(big.Rat).Mul(rho.Hi, rho.Hi).Cmp(q), 0, `hi² must not fall below r²/endR²`)
 	requireIntervalWidthAtMost(t, "rho", rho, math.Ldexp(1, -48))
 
 	equal, ok := arcEndRadialRatio(r2, r2)
 	require.True(t, ok)
-	require.Zero(t, equal.lo.Cmp(big.NewRat(1, 1)), `equal radii give exactly 1`)
-	require.Zero(t, equal.hi.Cmp(big.NewRat(1, 1)), `equal radii give exactly 1`)
+	require.Zero(t, equal.Lo.Cmp(big.NewRat(1, 1)), `equal radii give exactly 1`)
+	require.Zero(t, equal.Hi.Cmp(big.NewRat(1, 1)), `equal radii give exactly 1`)
 
 	_, ok = arcEndRadialRatio(r2, new(big.Rat))
 	require.False(t, ok, `an End on the Center has no radial ratio`)
@@ -127,8 +129,8 @@ func TestCircularSecondMomentIntervalChargesEndpointRadiusDrift(t *testing.T) {
 // on the radius-20 circle, both of its deltas nonzero so every leg reads ρ)
 // must keep it a point.
 //
-// Shown-to-fail: replacing the equal-radii fast path's pointInterval(1) in
-// arcEndRadialRatio by interval(1, 1 + 2^-52) widens mu, mv and muv, and each
+// Shown-to-fail: replacing the equal-radii fast path's proofbound.PointInterval(1) in
+// arcEndRadialRatio by proofbound.Interval(1, 1 + 2^-52) widens mu, mv and muv, and each
 // point-interval leg goes red.
 func TestCircularMomentIntervalsExactArcKeepPointRadialRatio(t *testing.T) {
 	t.Parallel()
@@ -151,12 +153,12 @@ func TestCircularMomentIntervalsExactArcKeepPointRadialRatio(t *testing.T) {
 	requirePointInterval(t, "muv", muv)
 }
 
-func requireIntervalsOverlap(t *testing.T, name string, a, b ratInterval) {
+func requireIntervalsOverlap(t *testing.T, name string, a, b proofbound.RatInterval) {
 	t.Helper()
-	require.LessOrEqual(t, a.lo.Cmp(b.hi), 0, "%s: [%s, %s] lies above [%s, %s]", name,
-		a.lo.FloatString(20), a.hi.FloatString(20), b.lo.FloatString(20), b.hi.FloatString(20))
-	require.LessOrEqual(t, b.lo.Cmp(a.hi), 0, "%s: [%s, %s] lies below [%s, %s]", name,
-		a.lo.FloatString(20), a.hi.FloatString(20), b.lo.FloatString(20), b.hi.FloatString(20))
+	require.LessOrEqual(t, a.Lo.Cmp(b.Hi), 0, "%s: [%s, %s] lies above [%s, %s]", name,
+		a.Lo.FloatString(20), a.Hi.FloatString(20), b.Lo.FloatString(20), b.Hi.FloatString(20))
+	require.LessOrEqual(t, b.Lo.Cmp(a.Hi), 0, "%s: [%s, %s] lies below [%s, %s]", name,
+		a.Lo.FloatString(20), a.Hi.FloatString(20), b.Lo.FloatString(20), b.Hi.FloatString(20))
 }
 
 // TestCircularMonomialsAgreeWithClosedForms cross-checks circularMonomials'
@@ -194,7 +196,7 @@ func TestCircularMonomialsAgreeWithClosedForms(t *testing.T) {
 			for _, check := range []struct {
 				name string
 				p, q int
-				want ratInterval
+				want proofbound.RatInterval
 			}{{"mu", 1, 0, mu}, {"muu", 2, 0, muu}, {"muv", 1, 1, muv}} {
 				got := circularGreenMoment(walk, j, check.p, check.q)
 				requireIntervalsOverlap(t, check.name, got, check.want)
@@ -220,12 +222,12 @@ func TestCircularThirdMomentWholeCircle(t *testing.T) {
 	cU, cV := big.NewRat(3, 1), big.NewRat(-2, 1)
 	r2, r4 := big.NewRat(4, 1), big.NewRat(16, 1)
 	quarterR4 := ratScale(r4, 1, 4)
-	pi := interval(piLower, piUpper)
+	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
 	want := [4]*big.Rat{
-		ratAdd(ratMul(cU, cU, cU, r2), ratMul(big.NewRat(3, 1), cU, quarterR4)),
-		ratAdd(ratMul(cU, cU, cV, r2), ratMul(cV, quarterR4)),
-		ratAdd(ratMul(cU, cV, cV, r2), ratMul(cU, quarterR4)),
-		ratAdd(ratMul(cV, cV, cV, r2), ratMul(big.NewRat(3, 1), cV, quarterR4)),
+		proofbound.RatAdd(proofbound.RatMul(cU, cU, cU, r2), proofbound.RatMul(big.NewRat(3, 1), cU, quarterR4)),
+		proofbound.RatAdd(proofbound.RatMul(cU, cU, cV, r2), proofbound.RatMul(cV, quarterR4)),
+		proofbound.RatAdd(proofbound.RatMul(cU, cV, cV, r2), proofbound.RatMul(cU, quarterR4)),
+		proofbound.RatAdd(proofbound.RatMul(cV, cV, cV, r2), proofbound.RatMul(big.NewRat(3, 1), cV, quarterR4)),
 	}
 	for _, start := range []float64{0, 0.125} {
 		seg := CircleSeg{Center: Point2{U: 3, V: -2}, Radius: units.Millimeters(2),
@@ -234,7 +236,7 @@ func TestCircularThirdMomentWholeCircle(t *testing.T) {
 		require.True(t, ok)
 		for i, coefficient := range want {
 			name := []string{"u³", "u²v", "uv²", "v³"}[i]
-			requireIntervalsOverlap(t, name, got[i], intervalScale(pi, coefficient))
+			requireIntervalsOverlap(t, name, got[i], proofbound.IntervalScale(pi, coefficient))
 			requireIntervalWidthAtMost(t, name, got[i], 1e-65)
 		}
 	}

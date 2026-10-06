@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -24,9 +26,9 @@ import (
 // each facet remembers.
 type boolMesh struct {
 	verts       []r3.Vec
-	xverts      []xpt
+	xverts      []proofbound.Xpt
 	tris        [][3]int
-	norms       []xpt
+	norms       []proofbound.Xpt
 	fnorms      []r3.Vec
 	fnormsReady []bool
 	boxes       [][2]r3.Vec
@@ -66,19 +68,19 @@ func (bm *boolMesh) twinFacet(f, k int) (int, bool) {
 // refused rather than partly examined. Loud beats silently wrong.
 func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, error) {
 	bm := &boolMesh{verts: m.vertices, tris: m.triangles, src: src}
-	bm.xverts = make([]xpt, len(m.vertices))
+	bm.xverts = make([]proofbound.Xpt, len(m.vertices))
 	for i, v := range m.vertices {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 		}
-		if isNonFinite(v.X) || isNonFinite(v.Y) || isNonFinite(v.Z) {
+		if proofbound.IsNonFinite(v.X) || proofbound.IsNonFinite(v.Y) || proofbound.IsNonFinite(v.Z) {
 			return nil, fmt.Errorf(`%w: a mesh vertex is not finite`, ErrBooleanFailed)
 		}
-		bm.xverts[i] = xptOf(v)
+		bm.xverts[i] = proofbound.XptOf(v)
 	}
-	bm.norms = make([]xpt, len(m.triangles))
+	bm.norms = make([]proofbound.Xpt, len(m.triangles))
 	bm.fnorms = make([]r3.Vec, len(m.triangles))
 	bm.fnormsReady = make([]bool, len(m.triangles))
 	bm.boxes = make([][2]r3.Vec, len(m.triangles))
@@ -90,8 +92,8 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, er
 			}
 		}
 		a, b, c := bm.xverts[tri[0]], bm.xverts[tri[1]], bm.xverts[tri[2]]
-		n := xcross(xsub(b, a), xsub(c, a))
-		if n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0 {
+		n := xcross(proofbound.Xsub(b, a), proofbound.Xsub(c, a))
+		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 			return nil, fmt.Errorf(`%w: an operand holds a collapsed facet, which carries no plane and no interior — a contact made on it could not be classified at all, so this evaluator refuses the operand rather than examine it in part`, ErrUnsupported)
 		}
 		bm.norms[i] = n
@@ -115,11 +117,9 @@ func (bm *boolMesh) prepareFloatNormal(i int) {
 	if bm.fnormsReady[i] {
 		return
 	}
-	bm.fnorms[i] = bm.norms[i].vec()
+	bm.fnorms[i] = bm.norms[i].Vec()
 	bm.fnormsReady[i] = true
 }
-
-func isNonFinite(f float64) bool { return math.IsNaN(f) || math.IsInf(f, 0) }
 
 // triBox is the facet's float bounding box — float min/max are exact, so the
 // box is a true bound.
@@ -142,7 +142,7 @@ func boxesOverlap(a, b [2]r3.Vec) bool {
 // keptFacet is one facet of the boolean result, still exact: its corners,
 // the global source-face id it approximates, and which operand it came from.
 type keptFacet struct {
-	v   [3]xpt
+	v   [3]proofbound.Xpt
 	src int
 }
 
@@ -183,7 +183,7 @@ const (
 // triTriClassify.
 type triContact struct {
 	kind   contactKind
-	p0, p1 xpt
+	p0, p1 proofbound.Xpt
 	// p0OnA … p1OnB record whether each endpoint lies on each triangle's own
 	// closed BOUNDARY — decided by asking what the point is (onTriBoundary),
 	// never by which triangle's crossing list it happened to be drawn from.
@@ -197,7 +197,7 @@ type triContact struct {
 	// sin2 is the exact squared sine of the two facet planes' crossing angle,
 	// nil for a coplanar or empty pair. The boolean's own rim vertices are
 	// displaced by (δA + δB)/sin θ, so the smallest one over the pair's
-	// contacts is what bounds the result (bounds.go, rimDelta).
+	// contacts is what bounds the result (internal/proofbound/bounds.go, rimDelta).
 	sin2 *big.Rat
 }
 
@@ -322,14 +322,14 @@ func (c *contactMemo) classify(i, j int) (triContact, error) { //nolint:unparam 
 // geometry do I look on". For a non-coplanar pair the two planes meet in one
 // line; each triangle's intersection with the OTHER's plane is an interval on
 // that line, and the answer is the intervals' overlap. That is the whole rule.
-func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
+func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt) (triContact, error) {
 	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, r3.Vec{}, r3.Vec{}, false)
 }
 
 // triTriClassifyPrepared is triTriClassify for prepared boolean operands.
 // fna and fnb are the correctly rounded float values of na and nb, computed
 // once per facet rather than once per candidate pair.
-func triTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, fna, fnb r3.Vec) (triContact, error) {
+func triTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, fna, fnb r3.Vec) (triContact, error) {
 	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, fna, fnb, true)
 }
 
@@ -342,11 +342,11 @@ func triTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, fna, 
 // belongs to one call. A switch a test flipped would decide the classification
 // of every other caller running at that moment, which is both a data race and a
 // wrong answer, and it is why those tests could not run in parallel.
-func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int, useFilter bool) (triContact, error) {
+func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, pa, pb *[3]xp2, sa, sb *[3]int, useFilter bool) (triContact, error) {
 	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, r3.Vec{}, r3.Vec{}, false)
 }
 
-func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int,
+func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, pa, pb *[3]xp2, sa, sb *[3]int,
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
 ) (triContact, error) {
 	out := triContact{edgeA: -1, edgeB: -1}
@@ -401,7 +401,7 @@ func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[
 	// meet in exactly one line, and every point of the intersection lies on it.
 	if useFilter {
 		if !normalsPrepared {
-			fna, fnb = na.vec(), nb.vec()
+			fna, fnb = na.Vec(), nb.Vec()
 		}
 		if triTriMissesFilter(ta, tb, fna, fnb, signsA, signsB) {
 			return out, nil
@@ -456,7 +456,7 @@ func allOneSide(s [3]int) bool {
 // coplanarFloatSeparated is a conservative separating-axis filter for
 // coplanar triangles. It only rejects when every orientation sign is clear of
 // the floating-point error margin; ambiguous pairs continue to exact clipping.
-func coplanarFloatSeparated(a, b [3]r3.Vec, n xpt) bool {
+func coplanarFloatSeparated(a, b [3]r3.Vec, n proofbound.Xpt) bool {
 	u, v := projAxes(n)
 	pa := [3][2]float64{}
 	pb := [3][2]float64{}
@@ -515,7 +515,7 @@ func axisCoord(v r3.Vec, axis int) float64 {
 // coplanarTouch returns the single point two coplanar, non-overlapping closed
 // triangles share, looking BOTH ways — the symmetric shape the whole classifier
 // is built on.
-func coplanarTouch(xta, xtb [3]xpt, na, nb xpt) (xpt, bool) {
+func coplanarTouch(xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt) (proofbound.Xpt, bool) {
 	for i := range 3 {
 		if pointOnTri(xta[i], xtb, nb) {
 			return xta[i], true
@@ -526,12 +526,12 @@ func coplanarTouch(xta, xtb [3]xpt, na, nb xpt) (xpt, bool) {
 			return xtb[i], true
 		}
 	}
-	return xpt{}, false
+	return proofbound.Xpt{}, false
 }
 
 // orderOnLine sorts a triangle's one or two plane crossings along the planes'
 // common line, giving the interval the triangle occupies on it.
-func orderOnLine(pts []xpt, dir xpt) (xpt, xpt) {
+func orderOnLine(pts []proofbound.Xpt, dir proofbound.Xpt) (proofbound.Xpt, proofbound.Xpt) {
 	if len(pts) == 1 {
 		return pts[0], pts[0]
 	}
@@ -544,16 +544,16 @@ func orderOnLine(pts []xpt, dir xpt) (xpt, xpt) {
 // cmpOnLine orders two points of the planes' common line along it: a·dir and
 // b·dir share dir's own denominator, which cancels, so the two remaining
 // positive denominators (a.w, b.w) are cross-multiplied rather than divided.
-func cmpOnLine(a, b, dir xpt) int {
-	left := new(big.Int).Mul(xdotNum(a, dir), b.w)
-	right := new(big.Int).Mul(xdotNum(b, dir), a.w)
+func cmpOnLine(a, b, dir proofbound.Xpt) int {
+	left := new(big.Int).Mul(proofbound.XdotNum(a, dir), b.W)
+	right := new(big.Int).Mul(proofbound.XdotNum(b, dir), a.W)
 	return left.Cmp(right)
 }
 
 // onTriBoundary reports whether the exact point p — already on the triangle's
 // plane — lies on one of its three CLOSED edges. The projection is invertible
 // on the plane, so the 2-D answer IS the 3-D one.
-func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
+func onTriBoundary(p proofbound.Xpt, xt [3]proofbound.Xpt, n proofbound.Xpt) bool {
 	for i := range 3 {
 		a, b := xt[i], xt[(i+1)%3]
 		if planeSide(a, b, p, n) == 0 && pointOnSegment3D(a, b, p) {
@@ -567,7 +567,7 @@ func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
 // along, or −1. Such a segment lies in the other facet's plane, so the edge it
 // runs along has both its endpoints on that plane — the in-plane edge whose
 // graze-or-crossing verdict only the edge's two adjacent facets can give.
-func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
+func segAlongEdge(p0, p1 proofbound.Xpt, xt [3]proofbound.Xpt, n proofbound.Xpt) int {
 	for i := range 3 {
 		a, b := xt[i], xt[(i+1)%3]
 		if planeSide(a, b, p0, n) != 0 || !pointOnSegment3D(a, b, p0) {
@@ -582,10 +582,10 @@ func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
 
 // sinSquared is the exact sin²θ of the angle between two facet planes:
 // |na × nb|² / (|na|²·|nb|²).
-func sinSquared(na, nb xpt) *big.Rat {
+func sinSquared(na, nb proofbound.Xpt) *big.Rat {
 	c := xcross(na, nb)
-	num := xdotRat(c, c)
-	den := new(big.Rat).Mul(xdotRat(na, na), xdotRat(nb, nb))
+	num := proofbound.XdotRat(c, c)
+	den := new(big.Rat).Mul(proofbound.XdotRat(na, na), proofbound.XdotRat(nb, nb))
 	if den.Sign() == 0 {
 		return new(big.Rat)
 	}
@@ -617,8 +617,8 @@ func sinLowerBound(sin2 *big.Rat) float64 {
 // two distinct points: its on-plane vertices, or crossings on edges whose
 // endpoints have strictly opposite signs. No canonical point-key pass is
 // needed to deduplicate this list.
-func planeCrossings(xt [3]xpt, xo [3]xpt, signs [3]int) []xpt {
-	var out []xpt
+func planeCrossings(xt [3]proofbound.Xpt, xo [3]proofbound.Xpt, signs [3]int) []proofbound.Xpt {
+	var out []proofbound.Xpt
 	nums := [3]*big.Int{}
 	dens := [3]*big.Int{}
 	val := func(i int) (*big.Int, *big.Int) {
@@ -659,10 +659,10 @@ func countZero(s [3]int) int {
 // invertible on the plane. n's three coordinates share one positive
 // denominator, so their magnitudes compare directly as integers — no
 // cross-multiplication needed.
-func projAxes(n xpt) (int, int) {
-	ax := new(big.Int).Abs(n.x)
-	ay := new(big.Int).Abs(n.y)
-	az := new(big.Int).Abs(n.z)
+func projAxes(n proofbound.Xpt) (int, int) {
+	ax := new(big.Int).Abs(n.X)
+	ay := new(big.Int).Abs(n.Y)
+	az := new(big.Int).Abs(n.Z)
 	if az.Cmp(ax) >= 0 && az.Cmp(ay) >= 0 {
 		return 0, 1
 	}
@@ -674,24 +674,24 @@ func projAxes(n xpt) (int, int) {
 
 // pointOnTri reports whether the exact point p — already on the triangle's
 // plane — lies inside or on the closed triangle, via exact side-of-edge signs.
-func pointOnTri(p xpt, xt [3]xpt, n xpt) bool {
+func pointOnTri(p proofbound.Xpt, xt [3]proofbound.Xpt, n proofbound.Xpt) bool {
 	s0 := planeSide(xt[0], xt[1], p, n)
 	s1 := planeSide(xt[1], xt[2], p, n)
 	s2 := planeSide(xt[2], xt[0], p, n)
 	return (s0 >= 0 && s1 >= 0 && s2 >= 0) || (s0 <= 0 && s1 <= 0 && s2 <= 0)
 }
 
-func planeSide(a, b, p, n xpt) int {
-	return xdotSign(xcross(xsub(b, a), xsub(p, a)), n)
+func planeSide(a, b, p, n proofbound.Xpt) int {
+	return xdotSign(xcross(proofbound.Xsub(b, a), proofbound.Xsub(p, a)), n)
 }
 
-func pointOnSegment3D(a, b, p xpt) bool {
-	delta := xsub(b, a)
+func pointOnSegment3D(a, b, p proofbound.Xpt) bool {
+	delta := proofbound.Xsub(b, a)
 	axis := 0
-	if absInt(delta.y).Cmp(absInt(delta.x)) > 0 {
+	if absInt(delta.Y).Cmp(absInt(delta.X)) > 0 {
 		axis = 1
 	}
-	if absInt(delta.z).Cmp(absInt(coord(delta, axis))) > 0 {
+	if absInt(delta.Z).Cmp(absInt(coord(delta, axis))) > 0 {
 		axis = 2
 	}
 	lo, hi := a, b
@@ -701,14 +701,14 @@ func pointOnSegment3D(a, b, p xpt) bool {
 	return compareCoord(lo, p, axis) <= 0 && compareCoord(p, hi, axis) <= 0
 }
 
-func coord(p xpt, axis int) *big.Int {
+func coord(p proofbound.Xpt, axis int) *big.Int {
 	switch axis {
 	case 0:
-		return p.x
+		return p.X
 	case 1:
-		return p.y
+		return p.Y
 	default:
-		return p.z
+		return p.Z
 	}
 }
 
@@ -716,9 +716,9 @@ func absInt(v *big.Int) *big.Int {
 	return new(big.Int).Abs(v)
 }
 
-func compareCoord(a, b xpt, axis int) int {
-	left := new(big.Int).Mul(coord(a, axis), b.w)
-	right := new(big.Int).Mul(coord(b, axis), a.w)
+func compareCoord(a, b proofbound.Xpt, axis int) int {
+	left := new(big.Int).Mul(coord(a, axis), b.W)
+	right := new(big.Int).Mul(coord(b, axis), a.W)
 	return left.Cmp(right)
 }
 
@@ -795,7 +795,7 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 
 // coplanarOverlap reports whether two coplanar triangles share positive
 // area or a positive-length boundary segment — exactly.
-func coplanarOverlap(xta, xtb [3]xpt, n xpt) bool {
+func coplanarOverlap(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt) bool {
 	u, v := projAxes(n)
 	var a2, b2 [3]xp2
 	for i := range 3 {
@@ -847,7 +847,7 @@ type pairContact struct {
 // meshBoolean runs the exact-predicate boolean over two prepared operand
 // tessellations. It returns the kept, still-exact facets and a proven LOWER
 // bound on the sine of the crossing angle of every contact it used — the
-// number the rim's displacement bound divides by (bounds.go, rimDelta).
+// number the rim's displacement bound divides by (internal/proofbound/bounds.go, rimDelta).
 func meshBoolean(ctx context.Context, op operationKind, ma, mb *boolMesh, memo *contactMemo) ([]keptFacet, float64, error) {
 	wantA, wantB, flipB, err := booleanKeep(op)
 	if err != nil {
@@ -857,8 +857,8 @@ func meshBoolean(ctx context.Context, op operationKind, ma, mb *boolMesh, memo *
 	// Exact contacts, per facet of each operand. Facet boxes prune the pairs.
 	cutsA := map[int][]xseg{}
 	cutsB := map[int][]xseg{}
-	var pointTouches []xpt
-	var segEnds []xpt
+	var pointTouches []proofbound.Xpt
+	var segEnds []proofbound.Xpt
 	var inPlane []pairContact
 	var minSin2 *big.Rat
 	work := 0
@@ -981,10 +981,10 @@ func meshBoolean(ctx context.Context, op operationKind, ma, mb *boolMesh, memo *
 	if len(pointTouches) > 0 {
 		ends := map[string]struct{}{}
 		for _, p := range segEnds {
-			ends[p.key()] = struct{}{}
+			ends[p.Key()] = struct{}{}
 		}
 		for _, p := range pointTouches {
-			if _, ok := ends[p.key()]; !ok {
+			if _, ok := ends[p.Key()]; !ok {
 				return nil, 0, errUnclassifiableContact(`the operand boundaries touch at an isolated point`)
 			}
 		}
@@ -1072,9 +1072,9 @@ func triCorners(m *boolMesh, i int) [3]r3.Vec {
 	return [3]r3.Vec{m.verts[t[0]], m.verts[t[1]], m.verts[t[2]]}
 }
 
-func xtriCorners(m *boolMesh, i int) [3]xpt {
+func xtriCorners(m *boolMesh, i int) [3]proofbound.Xpt {
 	t := m.tris[i]
-	return [3]xpt{m.xverts[t[0]], m.xverts[t[1]], m.xverts[t[2]]}
+	return [3]proofbound.Xpt{m.xverts[t[0]], m.xverts[t[1]], m.xverts[t[2]]}
 }
 
 // keepSide classifies one operand's boundary against the other solid and
@@ -1084,7 +1084,7 @@ func xtriCorners(m *boolMesh, i int) [3]xpt {
 // nothing).
 func keepSide(ctx context.Context, m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct{}, wantInside, flip bool) ([]keptFacet, error) {
 	var kept []keptFacet
-	emit := func(tri [3]xpt, src int) {
+	emit := func(tri [3]proofbound.Xpt, src int) {
 		if flip {
 			tri[1], tri[2] = tri[2], tri[1]
 		}
@@ -1259,23 +1259,23 @@ func facetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 // denominator by 3 rather than dividing the numerators by it, since a
 // numerator need not be a multiple of 3 — the same "multiply w, never divide
 // the numerator" rule every homogeneous construction here follows.
-func xCentroid(a, b, c xpt) xpt {
-	bwcw := new(big.Int).Mul(b.w, c.w)
-	awcw := new(big.Int).Mul(a.w, c.w)
-	awbw := new(big.Int).Mul(a.w, b.w)
+func xCentroid(a, b, c proofbound.Xpt) proofbound.Xpt {
+	bwcw := new(big.Int).Mul(b.W, c.W)
+	awcw := new(big.Int).Mul(a.W, c.W)
+	awbw := new(big.Int).Mul(a.W, b.W)
 	axis := func(ax, bx, cx *big.Int) *big.Int {
 		s := new(big.Int).Mul(ax, bwcw)
 		s.Add(s, new(big.Int).Mul(bx, awcw))
 		s.Add(s, new(big.Int).Mul(cx, awbw))
 		return s
 	}
-	w := new(big.Int).Mul(awbw, c.w)
+	w := new(big.Int).Mul(awbw, c.W)
 	w.Mul(w, big.NewInt(3))
-	return xpt(xhpStripTwosOwned(xhp{
-		x: axis(a.x, b.x, c.x),
-		y: axis(a.y, b.y, c.y),
-		z: axis(a.z, b.z, c.z),
-		w: w,
+	return proofbound.Xpt(proofbound.XhpStripTwosOwned(proofbound.Xhp{
+		X: axis(a.X, b.X, c.X),
+		Y: axis(a.Y, b.Y, c.Y),
+		Z: axis(a.Z, b.Z, c.Z),
+		W: w,
 	}))
 }
 
@@ -1312,16 +1312,16 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 	if len(kept) == 0 {
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, ErrBooleanFailed)
 	}
-	var xverts []xpt
+	var xverts []proofbound.Xpt
 	index := map[string]int{}
 	// Exact vertices are immutable after construction. Reuse the canonical key
 	// when another incident facet carries the same four integer pointers.
 	keyByRaw := map[[4]*big.Int]string{}
-	addVert := func(p xpt) int {
-		raw := [4]*big.Int{p.x, p.y, p.z, p.w}
+	addVert := func(p proofbound.Xpt) int {
+		raw := [4]*big.Int{p.X, p.Y, p.Z, p.W}
 		k, ok := keyByRaw[raw]
 		if !ok {
-			k = p.key()
+			k = p.Key()
 			keyByRaw[raw] = k
 		}
 		if i, ok := index[k]; ok {
@@ -1400,7 +1400,7 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 				return nil, err
 			}
 		}
-		v := p.vec()
+		v := p.Vec()
 		fi, ok := floatIdx[v]
 		if !ok {
 			fi = len(out.verts)
@@ -1408,7 +1408,7 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 			out.verts = append(out.verts, v)
 		}
 		remap[i] = fi
-		px, py, pz := xhpRat(xhp(p))
+		px, py, pz := xhpRat(proofbound.Xhp(p))
 		d := new(big.Rat).Sub(px, mustRatOf(v.X))
 		d.Abs(d)
 		for _, pair := range [][2]*big.Rat{{py, mustRatOf(v.Y)}, {pz, mustRatOf(v.Z)}} {
@@ -1423,12 +1423,12 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 		}
 	}
 	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
-	// distance bound, and all three coordinates can round at once (bounds.go,
-	// radius3D). A positive rational error can round to zero as float64, so
+	// distance bound, and all three coordinates can round at once (internal/proofbound/bounds.go,
+	// proofbound.Radius3D). A positive rational error can round to zero as float64, so
 	// preserve that proof before widening it to a 3D radius.
 	if worst.Sign() > 0 {
 		w, _ := worst.Float64()
-		out.round = radius3D(provenUpRound(w))
+		out.round = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 	}
 
 	dropped := make([]bool, len(tris))
@@ -1451,15 +1451,15 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 	}
 	// The pre-round surface: every facet the exact stitch produced, dropped
 	// ones included, measured on the held vertices and inflated by the
-	// rounding they may each have travelled (bounds.go, perturbedAreaUpper).
-	out.preArea = perturbedAreaUpper(out.verts, welded, out.round)
+	// rounding they may each have travelled (internal/proofbound/bounds.go, proofbound.PerturbedAreaUpper).
+	out.preArea = proofbound.PerturbedAreaUpper(out.verts, welded, out.round)
 	var droppedTris [][3]int
 	for ti := range tris {
 		if dropped[ti] {
 			droppedTris = append(droppedTris, welded[ti])
 		}
 	}
-	out.dropArea = perturbedAreaUpper(out.verts, droppedTris, out.round)
+	out.dropArea = proofbound.PerturbedAreaUpper(out.verts, droppedTris, out.round)
 
 	directed = map[[2]int]int{}
 	for _, tri := range out.tris {
@@ -1536,14 +1536,14 @@ func refuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []boo
 // conformOnce inserts, into every facet edge, the mesh vertices that lie
 // exactly in that edge's interior, re-triangulating the facet so the
 // subdivision conforms. Returns whether anything split.
-func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
+func conformOnce(ctx context.Context, xverts *[]proofbound.Xpt, tris *[][3]int, src *[]int) (bool, error) {
 	verts := *xverts
 	// One counter spans the facet walk, the grid-cell candidate scan nested
 	// under it, and the along-edge ordering: the candidate vertices a single
 	// facet edge sweeps are the candidate operations §7.2 counts, not the
 	// facets.
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return false, err
 	}
 	scan, err := newConformScan(budget, verts)
@@ -1555,7 +1555,7 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 	var outSrc []int
 	splitAny := false
 	for ti, tri := range *tris {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		inserted := [3][]int{}
@@ -1609,11 +1609,11 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 // are positive) and "t > 0" reads ap[axis]'s sign directly (ap.w is
 // positive). Only the FINAL combination branches on d[axis]'s sign, the same
 // rule stage A's version of this function established.
-func onSegmentInterior3(a, b, p xpt) bool {
-	d := xsub(b, a)
-	ap := xsub(p, a)
+func onSegmentInterior3(a, b, p proofbound.Xpt) bool {
+	d := proofbound.Xsub(b, a)
+	ap := proofbound.Xsub(p, a)
 	cr := xcross(d, ap)
-	if cr.x.Sign() != 0 || cr.y.Sign() != 0 || cr.z.Sign() != 0 {
+	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return false
 	}
 	axis := dominantAxis(d)
@@ -1623,7 +1623,7 @@ func onSegmentInterior3(a, b, p xpt) bool {
 		return false
 	}
 	apAxis := xIntCoordOf(ap, axis)
-	cmp := new(big.Int).Mul(apAxis, d.w).Cmp(new(big.Int).Mul(dAxis, ap.w))
+	cmp := new(big.Int).Mul(apAxis, d.W).Cmp(new(big.Int).Mul(dAxis, ap.W))
 	if dSign > 0 {
 		return apAxis.Sign() > 0 && cmp < 0
 	}
@@ -1633,10 +1633,10 @@ func onSegmentInterior3(a, b, p xpt) bool {
 // dominantAxis picks the coordinate of d with the largest magnitude. d's
 // three coordinates share one positive denominator, so their magnitudes
 // compare directly as integers — no cross-multiplication needed.
-func dominantAxis(d xpt) int {
-	ax := new(big.Int).Abs(d.x)
-	ay := new(big.Int).Abs(d.y)
-	az := new(big.Int).Abs(d.z)
+func dominantAxis(d proofbound.Xpt) int {
+	ax := new(big.Int).Abs(d.X)
+	ay := new(big.Int).Abs(d.Y)
+	az := new(big.Int).Abs(d.Z)
 	if ax.Cmp(ay) >= 0 && ax.Cmp(az) >= 0 {
 		return 0
 	}
@@ -1652,7 +1652,7 @@ func dominantAxis(d xpt) int {
 // every candidate is measured against. The grid prunes the exact on-edge tests;
 // the slack absorbs the approximation, so no incidence is missed.
 type conformScan struct {
-	verts  []xpt
+	verts  []proofbound.Xpt
 	approx []r3.Vec
 	grid   map[[3]int][]int
 	lo     r3.Vec
@@ -1661,14 +1661,14 @@ type conformScan struct {
 	tau2   float64
 }
 
-func newConformScan(budget *workBudget, verts []xpt) (*conformScan, error) {
+func newConformScan(budget *proofbound.WorkBudget, verts []proofbound.Xpt) (*conformScan, error) {
 	lo, hi := r3.Vec{}, r3.Vec{}
 	approx := make([]r3.Vec, len(verts))
 	for i, p := range verts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		v := p.vec()
+		v := p.Vec()
 		approx[i] = v
 		if i == 0 {
 			lo, hi = v, v
@@ -1698,7 +1698,7 @@ func newConformScan(budget *workBudget, verts []xpt) (*conformScan, error) {
 	}
 	s.tau2 = segAdmissionRadius2(s.slack, maxAbs)
 	for i := range verts {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		c := s.cellOf(approx[i].X, approx[i].Y, approx[i].Z)
@@ -1729,7 +1729,7 @@ func (s *conformScan) cellOf(x, y, z float64) [3]int {
 // at its source, but it would also owe a completeness proof a superset does not
 // — and it measured no faster here, because the filter has already reduced what
 // a visited cell costs to a handful of float operations.
-func (s *conformScan) edgeInteriorHits(budget *workBudget, a, b int, tri [3]int) ([]int, error) {
+func (s *conformScan) edgeInteriorHits(budget *proofbound.WorkBudget, a, b int, tri [3]int) ([]int, error) {
 	pa, pb := s.approx[a], s.approx[b]
 	filter := newSegFilter(pa, pb, s.tau2)
 	var hits []int
@@ -1738,11 +1738,11 @@ func (s *conformScan) edgeInteriorHits(budget *workBudget, a, b int, tri [3]int)
 	for cx := cLo[0]; cx <= cHi[0]; cx++ {
 		for cy := cLo[1]; cy <= cHi[1]; cy++ {
 			for cz := cLo[2]; cz <= cHi[2]; cz++ {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return nil, err
 				}
 				for _, vi := range s.grid[[3]int{cx, cy, cz}] {
-					if err := budget.step(); err != nil {
+					if err := budget.Step(); err != nil {
 						return nil, err
 					}
 					if vi == tri[0] || vi == tri[1] || vi == tri[2] {
@@ -1778,17 +1778,17 @@ type edgeParam struct{ num, den *big.Int }
 // inside the comparator would make the pass quadratic in rational arithmetic
 // rather than in comparisons; cross-multiplying keeps every intermediate an
 // integer product with no normalisation at all.
-func sortAlongEdge(budget *workBudget, verts []xpt, a, b int, hits []int) error {
-	d := xsub(verts[b], verts[a])
+func sortAlongEdge(budget *proofbound.WorkBudget, verts []proofbound.Xpt, a, b int, hits []int) error {
+	d := proofbound.Xsub(verts[b], verts[a])
 	axis := dominantAxis(d)
 	daSign := xIntCoordOf(d, axis).Sign()
 	params := make([]edgeParam, len(hits))
 	for i, vi := range hits {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
-		ap := xsub(verts[vi], verts[a])
-		params[i] = edgeParam{num: xIntCoordOf(ap, axis), den: ap.w}
+		ap := proofbound.Xsub(verts[vi], verts[a])
+		params[i] = edgeParam{num: xIntCoordOf(ap, axis), den: ap.W}
 	}
 	less := func(i, j int) bool {
 		// Both denominators are positive, so this cross-multiplication never
@@ -1805,7 +1805,7 @@ func sortAlongEdge(budget *workBudget, verts []xpt, a, b int, hits []int) error 
 	}
 	for i := 1; i < len(hits); i++ {
 		for j := i; j > 0 && less(j, j-1); j-- {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			hits[j], hits[j-1] = hits[j-1], hits[j]
@@ -1818,24 +1818,24 @@ func sortAlongEdge(budget *workBudget, verts []xpt, a, b int, hits []int) error 
 // triangulatePlanarPolygon triangulates a planar polygon of mesh vertices
 // (a facet boundary with collinear insertions) by exact ear clipping in the
 // polygon's own plane, preserving orientation and using every vertex.
-func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][3]int, error) {
+func triangulatePlanarPolygon(ctx context.Context, verts []proofbound.Xpt, poly []int) ([][3]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	if len(poly) < 3 {
 		return nil, fmt.Errorf(`%w: a conforming polygon lost its corners`, ErrBooleanFailed)
 	}
 	// The polygon is a triangle with edge insertions: its normal is the
 	// original facet's, recoverable from any strict corner.
-	n := xpt{x: new(big.Int), y: new(big.Int), z: new(big.Int), w: big.NewInt(1)}
+	n := proofbound.Xpt{X: new(big.Int), Y: new(big.Int), Z: new(big.Int), W: big.NewInt(1)}
 	found := false
 	for i := 1; i+1 < len(poly); i++ {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		cand := xcross(xsub(verts[poly[i]], verts[poly[0]]), xsub(verts[poly[i+1]], verts[poly[0]]))
-		if cand.x.Sign() != 0 || cand.y.Sign() != 0 || cand.z.Sign() != 0 {
+		cand := xcross(proofbound.Xsub(verts[poly[i]], verts[poly[0]]), proofbound.Xsub(verts[poly[i+1]], verts[poly[0]]))
+		if cand.X.Sign() != 0 || cand.Y.Sign() != 0 || cand.Z.Sign() != 0 {
 			n = cand
 			found = true
 			break
@@ -1848,7 +1848,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	pts := make([]xp2, len(poly))
 	idx := make([]int, len(poly))
 	for i, vi := range poly {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		pts[i] = newXP2(ratCoordOf(verts[vi], u), ratCoordOf(verts[vi], v))
@@ -1863,7 +1863,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	flip := area < 0
 	if flip {
 		for i, j := 0, len(idx)-1; i < j; i, j = i+1, j-1 {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			idx[i], idx[j] = idx[j], idx[i]
@@ -1875,7 +1875,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	}
 	out := make([][3]int, 0, len(tris2))
 	for _, t := range tris2 {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		a, b, c := poly[t[0]], poly[t[1]], poly[t[2]]

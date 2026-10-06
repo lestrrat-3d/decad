@@ -6,26 +6,28 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// This file tests bounds.go's perturbedTriangleAreaAllow, the one new
+// This file tests internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow, the one new
 // helper docs/loft-design.md §12 PR 2a extracts from
-// perturbedAreaUpperWithBudget's own per-facet term, rigidRoundAllow's
+// proofbound.PerturbedAreaUpperWithBudget's own per-facet term, proofbound.RigidRoundAllow's
 // own saturated-scale answer, which that PR's placement path is the first
-// consumer to reach at an extreme coordinate, and boundedSqrt's own two
+// consumer to reach at an extreme coordinate, and proofbound.BoundedSqrt's own two
 // arms: the exact answer a zero-bound operand keeps, and the outward step a
-// genuinely bounded one still receives, and boundedFloatError, the bridge a
+// genuinely bounded one still receives, and proofbound.BoundedFloatError, the bridge a
 // producer crosses when it evaluates a quantity one way and proves it another.
 // It also owns the outward-rounding primitives every other helper in that file
-// is built on — productUpper and divUpper — where the rule under test is that
+// is built on — proofbound.ProductUpper and proofbound.DivUpper — where the rule under test is that
 // a bound may vanish only when a term is genuinely ABSENT, never because
 // float64 flushed it.
 
-// TestRigidRoundAllowIsAlwaysAFiniteBound pins bounds.go's rigidRoundAllow
+// TestRigidRoundAllowIsAlwaysAFiniteBound pins internal/proofbound/bounds.go's proofbound.RigidRoundAllow
 // answering a finite, positive bound at every magnitude, including the ones
 // whose 2·maxInputAbs + maxTransAbs scale leaves the finite float64 range.
 // NaN is the failure this guards: it is not a large bound but the absence of
@@ -37,8 +39,8 @@ func TestRigidRoundAllowIsAlwaysAFiniteBound(t *testing.T) {
 	// The largest scale whose ulp is still readable: 2·maxInputAbs +
 	// maxTransAbs sits one binade below MaxFloat64, so nothing saturates and
 	// the answer is the plain 16-ulp charge.
-	unsaturated := rigidRoundAllow(math.Ldexp(1, 1021), 0)
-	require.Equal(t, radius3D(16*math.Ldexp(1, 1022-52)), unsaturated)
+	unsaturated := proofbound.RigidRoundAllow(math.Ldexp(1, 1021), 0)
+	require.Equal(t, proofbound.Radius3D(16*math.Ldexp(1, 1022-52)), unsaturated)
 
 	for _, tc := range []struct {
 		name       string
@@ -51,12 +53,12 @@ func TestRigidRoundAllowIsAlwaysAFiniteBound(t *testing.T) {
 		// reported reproduction's own magnitude.
 		{"input scale overflows", 0.75 * math.MaxFloat64, 1, unsaturated},
 		{"both at the ceiling", math.MaxFloat64, math.MaxFloat64, unsaturated},
-		// ulpOf itself answers +Inf exactly at MaxFloat64, because its own
+		// proofbound.UlpOf itself answers +Inf exactly at MaxFloat64, because its own
 		// math.Nextafter step leaves the finite range.
 		{"scale lands exactly on MaxFloat64", math.MaxFloat64 / 2, 0, unsaturated},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := rigidRoundAllow(tc.input, tc.trans)
+			got := proofbound.RigidRoundAllow(tc.input, tc.trans)
 			require.False(t, math.IsNaN(got), "a NaN bound is no bound at all")
 			require.False(t, math.IsInf(got, 0), "the bound must stay finite")
 			require.Greater(t, got, 0.0)
@@ -73,7 +75,7 @@ func TestRigidRoundAllowIsAlwaysAFiniteBound(t *testing.T) {
 func TestRigidRoundAllowEnclosesAPlacedCoordinate(t *testing.T) {
 	t.Parallel()
 	x := 0.75 * math.MaxFloat64
-	allow := rigidRoundAllow(x, 1)
+	allow := proofbound.RigidRoundAllow(x, 1)
 
 	// A rotation about Z by 37 degrees, then a 1 mm translation: the placed
 	// coordinates round inside their own products and sums, which is exactly
@@ -91,7 +93,7 @@ func TestRigidRoundAllowEnclosesAPlacedCoordinate(t *testing.T) {
 		r3.NewVec(-x/2, 0, x/8),
 	} {
 		got := move.Apply(p)
-		require.True(t, finiteVec(got), "allow speaks only for a placed point the caller has proven finite")
+		require.True(t, proofbound.FiniteVec(got), "allow speaks only for a placed point the caller has proven finite")
 
 		want := exactApply(move, p)
 		dist := new(big.Float).SetPrec(400)
@@ -140,26 +142,26 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 func TestWalkEndpointAllow(t *testing.T) {
 	t.Parallel()
 	t.Run("zero envelope gives zero", func(t *testing.T) {
-		require.Equal(t, 0.0, walkEndpointAllow(0))
+		require.Equal(t, 0.0, proofbound.WalkEndpointAllow(0))
 	})
 
 	t.Run("positive envelope exceeds the derived lerp2 rounding at that magnitude", func(t *testing.T) {
 		for _, envelope := range []float64{12, 1, 1e-3, 1e6, 1e12} {
-			got := walkEndpointAllow(envelope)
+			got := proofbound.WalkEndpointAllow(envelope)
 			require.Positive(t, got)
 			require.False(t, math.IsInf(got, 0))
 			// The helper's own derivation: lerp2's general arm rounds three
 			// times — the difference, the product, the sum — for at most
 			// 5·u·E per coordinate at operand magnitude E. The published
 			// bound is a 3D radius over 16 ulps of 2E and must clear it.
-			require.Greaterf(t, got, 5*unitRoundoff*envelope,
+			require.Greaterf(t, got, 5*proofbound.UnitRoundoff*envelope,
 				"the bound at envelope %g must contain the derived per-coordinate worst case", envelope)
-			require.Greaterf(t, got, ulpOf(envelope), "the bound at envelope %g must exceed one ulp there", envelope)
+			require.Greaterf(t, got, proofbound.UlpOf(envelope), "the bound at envelope %g must exceed one ulp there", envelope)
 		}
 	})
 
 	t.Run("larger envelope gives a larger bound", func(t *testing.T) {
-		require.Greater(t, walkEndpointAllow(1e6), walkEndpointAllow(12))
+		require.Greater(t, proofbound.WalkEndpointAllow(1e6), proofbound.WalkEndpointAllow(12))
 	})
 
 	for _, tc := range []struct {
@@ -170,7 +172,7 @@ func TestWalkEndpointAllow(t *testing.T) {
 		{"NaN", math.NaN()},
 	} {
 		t.Run(tc.name+" envelope gives +Inf, never 0", func(t *testing.T) {
-			got := walkEndpointAllow(tc.input)
+			got := proofbound.WalkEndpointAllow(tc.input)
 			require.True(t, math.IsInf(got, 1), "an absent bound must never read as a small one")
 		})
 	}
@@ -226,7 +228,7 @@ func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, b, c := sliver(10, tc.aspect)
 			held := triArea(a, b, c)
-			allow := perturbedTriangleAreaAllow(a, b, c, tc.delta)
+			allow := proofbound.PerturbedTriangleAreaAllow(a, b, c, tc.delta)
 			require.Greater(t, allow, 0.0)
 
 			for range 20000 {
@@ -241,13 +243,13 @@ func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 	}
 }
 
-// requireEnclosesSqrt proves a boundedSqrt answer's own interval contains the
+// requireEnclosesSqrt proves a proofbound.BoundedSqrt answer's own interval contains the
 // TRUE square root of q, by comparing the interval's exactly squared ends
 // against q over the rationals — never against another float64 square root of
 // the same operand, which would only compare one evaluation with itself.
-func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
+func requireEnclosesSqrt(t *testing.T, q *big.Rat, got proofbound.BoundedScalar) {
 	t.Helper()
-	v, b := proofarith.FloatRat(got.value), proofarith.FloatRat(got.bound)
+	v, b := proofarith.FloatRat(got.Value), proofarith.FloatRat(got.Bound)
 	require.NotNil(t, v)
 	require.NotNil(t, b)
 	lo := new(big.Rat).Sub(v, b)
@@ -263,7 +265,7 @@ func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
 // TestBoundedSqrtKeepsAZeroBoundOperandExact pins the arm the analytic surveys
 // publish their exact readings through. A zero-bound operand's interval ends
 // are its own held value — adding or subtracting exactly zero rounds nothing —
-// so boundedSqrt answers a zero bound precisely when that value is a perfect
+// so proofbound.BoundedSqrt answers a zero bound precisely when that value is a perfect
 // square of a float64, and a genuine directed-rounding bound when it is not.
 func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 	t.Parallel()
@@ -278,24 +280,24 @@ func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 		{"a fractional perfect square", 0.0625, 0.25},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := boundedSqrt(exactScalar(tc.in))
-			require.Equal(t, tc.want, got.value)
-			require.Equal(t, 0.0, got.bound)
+			got := proofbound.BoundedSqrt(proofbound.ExactScalar(tc.in))
+			require.Equal(t, tc.want, got.Value)
+			require.Equal(t, 0.0, got.Bound)
 		})
 	}
 
-	// boundedHypot (survey2d.go) reads two exact leaves through this same arm,
+	// proofbound.BoundedHypot (survey2d.go) reads two exact leaves through this same arm,
 	// which is how a straight meridian's own tangent reaches it in
 	// revolveMinRadius.
-	h := boundedHypot(10, 0)
-	require.Equal(t, 10.0, h.value)
-	require.Equal(t, 0.0, h.bound)
+	h := proofbound.BoundedHypot(10, 0)
+	require.Equal(t, 10.0, h.Value)
+	require.Equal(t, 0.0, h.Bound)
 
 	// An exact operand that is not a perfect square still reads bounded: no
 	// float64 holds √2, so the brackets straddle it and the interval encloses
 	// the truth.
-	two := boundedSqrt(exactScalar(2))
-	require.Greater(t, two.bound, 0.0)
+	two := proofbound.BoundedSqrt(proofbound.ExactScalar(2))
+	require.Greater(t, two.Bound, 0.0)
 	requireEnclosesSqrt(t, big.NewRat(2, 1), two)
 }
 
@@ -307,9 +309,9 @@ func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 // would read exact while the true operand is not one.
 func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 	t.Parallel()
-	got := boundedSqrt(measuredScalar(1, 1e-17))
-	require.Equal(t, 1.0, got.value)
-	require.Greater(t, got.bound, 0.0)
+	got := proofbound.BoundedSqrt(proofbound.MeasuredScalar(1, 1e-17))
+	require.Equal(t, 1.0, got.Value)
+	require.Greater(t, got.Bound, 0.0)
 
 	one := big.NewRat(1, 1)
 	tiny := proofarith.FloatRat(1e-17)
@@ -317,25 +319,25 @@ func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 	requireEnclosesSqrt(t, new(big.Rat).Sub(one, tiny), got)
 
 	// A bound wide enough to survive the sum is enclosed on the same terms.
-	wide := boundedSqrt(measuredScalar(4, 1e-6))
-	require.Greater(t, wide.bound, 0.0)
+	wide := proofbound.BoundedSqrt(proofbound.MeasuredScalar(4, 1e-6))
+	require.Greater(t, wide.Bound, 0.0)
 	four := big.NewRat(4, 1)
 	micro := proofarith.FloatRat(1e-6)
 	requireEnclosesSqrt(t, new(big.Rat).Add(four, micro), wide)
 	requireEnclosesSqrt(t, new(big.Rat).Sub(four, micro), wide)
 }
 
-// boundedSqrtBracketOracle is boundedSqrt as it was before exactFloatSquare's
+// boundedSqrtBracketOracle is proofbound.BoundedSqrt as it was before exactFloatSquare's
 // shortcut, kept verbatim as the oracle below: every operand, exact or not,
 // goes through the rational brackets.
-func boundedSqrtBracketOracle(x boundedScalar) boundedScalar {
-	value := math.Sqrt(math.Max(x.value, 0))
-	if isNonFinite(x.bound) {
-		return measuredScalar(value, math.Inf(1))
+func boundedSqrtBracketOracle(x proofbound.BoundedScalar) proofbound.BoundedScalar {
+	value := math.Sqrt(math.Max(x.Value, 0))
+	if proofbound.IsNonFinite(x.Bound) {
+		return proofbound.MeasuredScalar(value, math.Inf(1))
 	}
-	lo := math.Max(0, x.value-x.bound)
-	hi := x.value + x.bound
-	if x.bound != 0 {
+	lo := math.Max(0, x.Value-x.Bound)
+	hi := x.Value + x.Bound
+	if x.Bound != 0 {
 		lo = math.Nextafter(lo, math.Inf(-1))
 		if lo < 0 {
 			lo = 0
@@ -344,15 +346,15 @@ func boundedSqrtBracketOracle(x boundedScalar) boundedScalar {
 	}
 	loR, hiR := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if loR == nil || hiR == nil {
-		return measuredScalar(value, math.Inf(1))
+		return proofbound.MeasuredScalar(value, math.Inf(1))
 	}
-	sqrtLo := ratSqrtDown(loR)
-	sqrtHi := ratSqrtUp(hiR)
-	if isNonFinite(sqrtLo) || isNonFinite(sqrtHi) {
-		return measuredScalar(value, math.Inf(1))
+	sqrtLo := proofbound.RatSqrtDown(loR)
+	sqrtHi := proofbound.RatSqrtUp(hiR)
+	if proofbound.IsNonFinite(sqrtLo) || proofbound.IsNonFinite(sqrtHi) {
+		return proofbound.MeasuredScalar(value, math.Inf(1))
 	}
-	bound := upRound(math.Max(value-sqrtLo, sqrtHi-value))
-	return measuredScalar(value, bound)
+	bound := proofbound.UpRound(math.Max(value-sqrtLo, sqrtHi-value))
+	return proofbound.MeasuredScalar(value, bound)
 }
 
 // ratIsFloatSquare reports, over the rationals, whether root² == value
@@ -367,7 +369,7 @@ func ratIsFloatSquare(root, value float64) bool {
 }
 
 // TestBoundedSqrtExactSquareMatchesBracket pins exactFloatSquare's shortcut in
-// boundedSqrt to the rational-bracket computation it skips. Every operand must
+// proofbound.BoundedSqrt to the rational-bracket computation it skips. Every operand must
 // read bit for bit what the bracket oracle reads, except an exact operand that
 // is the exact square of its own float root: that one must read a zero bound,
 // and the oracle may read zero or at most one ulp there. Every answer that is
@@ -381,36 +383,36 @@ func ratIsFloatSquare(root, value float64) bool {
 // then claims a root that is wrong. Replacing the FMA residual test with true
 // (leaving only the rounded root*root == value check) turns the 11 fixture,
 // the MaxFloat64 edge operand and the random sweep red. Dropping the
-// x.bound == 0 guard in boundedSqrt turns TestBoundedSqrtWidensABoundedOperand
+// x.bound == 0 guard in proofbound.BoundedSqrt turns TestBoundedSqrtWidensABoundedOperand
 // red. The counters at the end prove the sweep reaches the shortcut, a
 // rounded non-square the FMA residual rejects, and an exact square below the
 // gate.
 func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 	t.Parallel()
 	var shortcut, fmaRejected, belowGate int
-	check := func(t *testing.T, x boundedScalar) {
+	check := func(t *testing.T, x proofbound.BoundedScalar) {
 		t.Helper()
-		got := boundedSqrt(x)
+		got := proofbound.BoundedSqrt(x)
 		want := boundedSqrtBracketOracle(x)
-		requireSameFloatBits(t, want.value, got.value, "the root of %v", x)
-		if x.bound == 0 && ratIsFloatSquare(got.value, x.value) {
-			requireSameFloatBits(t, 0, got.bound, "an exact square %v must read a zero bound", x.value)
-			if want.bound != 0 {
-				require.LessOrEqual(t, want.bound, upRound(ulpOf(got.value)),
-					"the oracle may miss an exact square %v by one ulp at most", x.value)
+		requireSameFloatBits(t, want.Value, got.Value, "the root of %v", x)
+		if x.Bound == 0 && ratIsFloatSquare(got.Value, x.Value) {
+			requireSameFloatBits(t, 0, got.Bound, "an exact square %v must read a zero bound", x.Value)
+			if want.Bound != 0 {
+				require.LessOrEqual(t, want.Bound, proofbound.UpRound(proofbound.UlpOf(got.Value)),
+					"the oracle may miss an exact square %v by one ulp at most", x.Value)
 			}
-			if proofarith.ExactFloatSquare(got.value, x.value) {
+			if proofarith.ExactFloatSquare(got.Value, x.Value) {
 				shortcut++
-			} else if got.value != 0 {
+			} else if got.Value != 0 {
 				belowGate++
 			}
 			return
 		}
-		requireSameFloatBits(t, want.bound, got.bound, "the bound on the root of %v", x)
-		if x.bound == 0 && x.value >= 0 && !isNonFinite(x.value) {
-			require.Positive(t, got.bound, "%v is not the square of %v and must not read exact", x.value, got.value)
-			requireEnclosesSqrt(t, proofarith.FloatRat(x.value), got)
-			if got.value*got.value == x.value {
+		requireSameFloatBits(t, want.Bound, got.Bound, "the bound on the root of %v", x)
+		if x.Bound == 0 && x.Value >= 0 && !proofbound.IsNonFinite(x.Value) {
+			require.Positive(t, got.Bound, "%v is not the square of %v and must not read exact", x.Value, got.Value)
+			requireEnclosesSqrt(t, proofarith.FloatRat(x.Value), got)
+			if got.Value*got.Value == x.Value {
 				fmaRejected++
 			}
 		}
@@ -426,10 +428,10 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 		require.Zero(t, math.FMA(root, root, -value), "the fixture's residual must flush in FMA")
 		require.False(t, ratIsFloatSquare(root, value), "the fixture must not be an exact square")
 
-		got := boundedSqrt(exactScalar(value))
-		require.Positive(t, got.bound)
+		got := proofbound.BoundedSqrt(proofbound.ExactScalar(value))
+		require.Positive(t, got.Bound)
 		requireEnclosesSqrt(t, proofarith.FloatRat(value), got)
-		check(t, exactScalar(value))
+		check(t, proofbound.ExactScalar(value))
 		require.False(t, proofarith.ExactFloatSquare(root, value))
 	})
 
@@ -440,10 +442,10 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 		require.Equal(t, 11.0, root*root, "the fixture's rounded square must come back to 11")
 		require.NotZero(t, math.FMA(root, root, -11))
 
-		got := boundedSqrt(exactScalar(11))
-		require.Positive(t, got.bound)
+		got := proofbound.BoundedSqrt(proofbound.ExactScalar(11))
+		require.Positive(t, got.Bound)
 		requireEnclosesSqrt(t, big.NewRat(11, 1), got)
-		check(t, exactScalar(11))
+		check(t, proofbound.ExactScalar(11))
 		require.False(t, proofarith.ExactFloatSquare(root, 11))
 	})
 
@@ -459,10 +461,10 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 			math.Ldexp(1, 1022), math.MaxFloat64,
 			math.Ldexp(float64((1<<26-1)*(1<<26-1)), 972), // ((2^26-1)·2^486)², near the top
 		} {
-			check(t, exactScalar(v))
+			check(t, proofbound.ExactScalar(v))
 		}
 		top := math.Sqrt(math.MaxFloat64)
-		check(t, exactScalar(top*top))
+		check(t, proofbound.ExactScalar(top*top))
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -471,15 +473,15 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 			// A root with at most 26 significant bits squares exactly wherever
 			// the square stays normal.
 			short := math.Ldexp(float64(1+rng.IntN(1<<26-1)), rng.IntN(1040)-560)
-			check(t, exactScalar(short*short))
+			check(t, proofbound.ExactScalar(short*short))
 			// A full-width root's rounded square is almost never exact, and its
 			// own float root often squares back to it anyway.
 			full := math.Ldexp(1+rng.Float64(), rng.IntN(1020)-510)
-			check(t, exactScalar(full*full))
-			check(t, exactScalar(math.Nextafter(short*short, math.Inf(1))))
-			check(t, exactScalar(math.Float64frombits(rng.Uint64())))
+			check(t, proofbound.ExactScalar(full*full))
+			check(t, proofbound.ExactScalar(math.Nextafter(short*short, math.Inf(1))))
+			check(t, proofbound.ExactScalar(math.Float64frombits(rng.Uint64())))
 			// An operand that carries a bound never takes the shortcut.
-			check(t, measuredScalar(short*short, math.Abs(rng.NormFloat64())*math.Ldexp(1, rng.IntN(120)-100)))
+			check(t, proofbound.MeasuredScalar(short*short, math.Abs(rng.NormFloat64())*math.Ldexp(1, rng.IntN(120)-100)))
 		}
 	})
 
@@ -488,7 +490,7 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 	require.Positive(t, belowGate, "the sweep must reach an exact square below the gate")
 }
 
-// TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits pins boundedFloatError's
+// TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits pins proofbound.BoundedFloatError's
 // whole contract: the answer must bound |held − t| for EVERY t the bounded
 // scalar admits, not merely the gap to its held centre. The truth is swept over
 // the enclosure's own ends and interior at 200 bits, so a term dropped from the
@@ -497,26 +499,26 @@ func TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		bs   boundedScalar
+		bs   proofbound.BoundedScalar
 		held float64
 	}{
-		{"exact scalar read back exactly", exactScalar(1.5), 1.5},
-		{"exact scalar read one ulp off", exactScalar(1.5), math.Nextafter(1.5, math.Inf(1))},
-		{"bounded scalar centred on the held value", measuredScalar(2, 1e-12), 2},
-		{"bounded scalar the held value sits below", measuredScalar(2, 1e-12), 2 - 3e-13},
-		{"bounded scalar the held value sits above", measuredScalar(2, 1e-12), 2 + 7e-13},
-		{"held far from a tight enclosure", measuredScalar(1e6, 1e-9), 1e6 + 1e-6},
-		{"negative operands", measuredScalar(-4.25, 1e-11), -4.25 - 4e-12},
+		{"exact scalar read back exactly", proofbound.ExactScalar(1.5), 1.5},
+		{"exact scalar read one ulp off", proofbound.ExactScalar(1.5), math.Nextafter(1.5, math.Inf(1))},
+		{"bounded scalar centred on the held value", proofbound.MeasuredScalar(2, 1e-12), 2},
+		{"bounded scalar the held value sits below", proofbound.MeasuredScalar(2, 1e-12), 2 - 3e-13},
+		{"bounded scalar the held value sits above", proofbound.MeasuredScalar(2, 1e-12), 2 + 7e-13},
+		{"held far from a tight enclosure", proofbound.MeasuredScalar(1e6, 1e-9), 1e6 + 1e-6},
+		{"negative operands", proofbound.MeasuredScalar(-4.25, 1e-11), -4.25 - 4e-12},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := boundedFloatError(tc.bs, tc.held)
-			require.False(t, isNonFinite(got), "a finite operand must never answer non-finite")
+			got := proofbound.BoundedFloatError(tc.bs, tc.held)
+			require.False(t, proofbound.IsNonFinite(got), "a finite operand must never answer non-finite")
 			require.GreaterOrEqual(t, got, 0.0)
 
 			held := new(big.Float).SetPrec(200).SetFloat64(tc.held)
-			centre := new(big.Float).SetPrec(200).SetFloat64(tc.bs.value)
-			bound := new(big.Float).SetPrec(200).SetFloat64(tc.bs.bound)
+			centre := new(big.Float).SetPrec(200).SetFloat64(tc.bs.Value)
+			bound := new(big.Float).SetPrec(200).SetFloat64(tc.bs.Bound)
 			lo := new(big.Float).SetPrec(200).Sub(centre, bound)
 			hi := new(big.Float).SetPrec(200).Add(centre, bound)
 			answer := new(big.Float).SetPrec(200).SetFloat64(got)
@@ -546,10 +548,10 @@ func TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits(t *testing.T) {
 func TestBoundedFloatErrorRefusesANonFiniteOperand(t *testing.T) {
 	t.Parallel()
 	inf := math.Inf(1)
-	require.True(t, math.IsInf(boundedFloatError(measuredScalar(inf, 1), 1), 1))
-	require.True(t, math.IsInf(boundedFloatError(measuredScalar(1, inf), 1), 1))
-	require.True(t, math.IsInf(boundedFloatError(measuredScalar(1, 1), inf), 1))
-	require.True(t, math.IsInf(boundedFloatError(measuredScalar(math.NaN(), 1), 1), 1))
+	require.True(t, math.IsInf(proofbound.BoundedFloatError(proofbound.MeasuredScalar(inf, 1), 1), 1))
+	require.True(t, math.IsInf(proofbound.BoundedFloatError(proofbound.MeasuredScalar(1, inf), 1), 1))
+	require.True(t, math.IsInf(proofbound.BoundedFloatError(proofbound.MeasuredScalar(1, 1), inf), 1))
+	require.True(t, math.IsInf(proofbound.BoundedFloatError(proofbound.MeasuredScalar(math.NaN(), 1), 1), 1))
 }
 
 // TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate pins the composition a
@@ -568,7 +570,7 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 		{"a coordinate under its own bound", 3e-12, 1e-12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := snapToZeroAllow(tc.bound, math.Abs(tc.coordinate))
+			got := proofbound.SnapToZeroAllow(tc.bound, math.Abs(tc.coordinate))
 			// The truth is anywhere within the pre-snap bound of the
 			// coordinate; the farthest it can sit from the assigned zero is
 			// the sum of the two.
@@ -579,13 +581,13 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 
 	// A coordinate the arithmetic already put exactly on zero discards
 	// nothing, so its own exactness survives the assignment.
-	require.Equal(t, 0.0, snapToZeroAllow(0, 0))
-	require.Equal(t, 1e-12, snapToZeroAllow(1e-12, 0))
+	require.Equal(t, 0.0, proofbound.SnapToZeroAllow(0, 0))
+	require.Equal(t, 1e-12, proofbound.SnapToZeroAllow(1e-12, 0))
 
 	// A magnitude no float states is the ABSENCE of a charge, never a zero
 	// one: answering the caller's own bound would let the assignment vanish.
-	require.True(t, math.IsInf(snapToZeroAllow(0, math.NaN()), 1))
-	require.True(t, math.IsInf(snapToZeroAllow(0, math.Inf(1)), 1))
+	require.True(t, math.IsInf(proofbound.SnapToZeroAllow(0, math.NaN()), 1))
+	require.True(t, math.IsInf(proofbound.SnapToZeroAllow(0, math.Inf(1)), 1))
 }
 
 // TestProductUpperRefusesRatherThanAnnihilatesARefusal pins the second half of
@@ -593,10 +595,10 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 // (bounds_flush_internal_test.go) opens: +Inf is a REFUSAL, not a magnitude, so
 // an absent factor may not cancel it away.
 //
-// The arithmetic identity Inf*0 = NaN is not what this guards — productUpper
+// The arithmetic identity Inf*0 = NaN is not what this guards — proofbound.ProductUpper
 // short-circuits on its own operand tests, so a +Inf paired with a 0 used to
 // take the "absent term" arm and publish a PROVEN zero for a term whose scale
-// nothing had bounded. cellChordCurveAreaAllow reaches it directly: its beta
+// nothing had bounded. proofbound.CellChordCurveAreaAllow reaches it directly: its beta
 // factor overflows to +Inf at a large rung while its energy sum vanishes at a
 // small one, and the sharper arm then wins the final min with a bound of 0.
 func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
@@ -607,7 +609,7 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 		"both refused":   {math.Inf(1), math.Inf(1)},
 		"refusal scaled": {math.Inf(1), 3},
 	} {
-		require.True(t, math.IsInf(productUpper(ab[0], ab[1]), 1), "%s must answer +Inf", name)
+		require.True(t, math.IsInf(proofbound.ProductUpper(ab[0], ab[1]), 1), "%s must answer +Inf", name)
 	}
 
 	// A denominator that states no scale — zero, negative, or itself
@@ -620,17 +622,17 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 		"NaN numerator":          {math.NaN(), 1},
 		"refused numerator":      {math.Inf(1), 2},
 	} {
-		require.True(t, math.IsInf(divUpper(nd[0], nd[1]), 1), "%s must answer +Inf", name)
+		require.True(t, math.IsInf(proofbound.DivUpper(nd[0], nd[1]), 1), "%s must answer +Inf", name)
 	}
 }
 
-// This file tests ONE rule across bounds.go's outward-rounding primitives and
+// This file tests ONE rule across internal/proofbound/bounds.go's outward-rounding primitives and
 // every chorded-loft bound built on them: a bound may publish 0 only when the
 // quantity it bounds is genuinely ABSENT, never because float64's own
 // arithmetic flushed a positive result to +0.
 //
 // float64 rounds a positive product or quotient to +0 as soon as that result
-// falls below half the smallest subnormal, and upRound cannot undo it — 0 is
+// falls below half the smallest subnormal, and proofbound.UpRound cannot undo it — 0 is
 // not a representable neighbour away from a positive number, it IS the rounded
 // answer. The consequence is not a slightly loose bound but an UNSOUND one:
 // the published interval [value−bound, value+bound] collapses to a point that
@@ -642,15 +644,15 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 // rounding to +0 PROVES the exact result sits at or below half the smallest
 // subnormal, so the smallest subnormal encloses it — and stays FINITE, which a
 // +Inf refusal would not, and which the consumers that gate on a positive
-// bound (chordedBoundaryVolumeAllow's own wallAreaUpper > 0 branch) need.
+// bound (proofbound.ChordedBoundaryVolumeAllow's own wallAreaUpper > 0 branch) need.
 //
 // No leg below pins a float literal a platform's own FMA contraction could
 // move: each asserts the SIGN of the published bound and the exactness class
 // it lands in, and the primitive legs pin only the smallest subnormal itself,
 // which a single multiply or divide reaches identically on every target.
 
-// TestOutwardRoundingNeverPublishesAFlushedZero pins the rule productUpper and
-// divUpper carry for every bound in this package: two operands the helper has
+// TestOutwardRoundingNeverPublishesAFlushedZero pins the rule proofbound.ProductUpper and
+// proofbound.DivUpper carry for every bound in this package: two operands the helper has
 // itself PROVEN positive can never answer 0.
 //
 // An operand at or below zero is an ABSENT term, not a flushed one. It is the
@@ -673,17 +675,17 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				require.Equal(t, 0.0, tc.a*tc.b, `the fixture must actually exercise a flush`)
-				require.Equal(t, tiny, productUpper(tc.a, tc.b))
-				require.Equal(t, Approximate, exactnessOf(productUpper(tc.a, tc.b)))
+				require.Equal(t, tiny, proofbound.ProductUpper(tc.a, tc.b))
+				require.Equal(t, Approximate, exactnessOf(proofbound.ProductUpper(tc.a, tc.b)))
 			})
 		}
 	})
 
 	t.Run("swept volume", func(t *testing.T) {
 		require.Zero(t, tiny*0.25, `the raw product must flush to zero`)
-		require.Equal(t, tiny, sweptVolumeAllow(tiny, 0.25))
-		require.Zero(t, sweptVolumeAllow(0, 0.25))
-		require.Zero(t, sweptVolumeAllow(tiny, 0))
+		require.Equal(t, tiny, proofbound.SweptVolumeAllow(tiny, 0.25))
+		require.Zero(t, proofbound.SweptVolumeAllow(0, 0.25))
+		require.Zero(t, proofbound.SweptVolumeAllow(tiny, 0))
 	})
 
 	t.Run("rational reading", func(t *testing.T) {
@@ -713,37 +715,37 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				require.Equal(t, 0.0, tc.num/tc.den, `the fixture must actually exercise a flush`)
-				require.Equal(t, tiny, divUpper(tc.num, tc.den))
-				require.Equal(t, Approximate, exactnessOf(divUpper(tc.num, tc.den)))
+				require.Equal(t, tiny, proofbound.DivUpper(tc.num, tc.den))
+				require.Equal(t, Approximate, exactnessOf(proofbound.DivUpper(tc.num, tc.den)))
 			})
 		}
 	})
 
 	t.Run("an absent term still publishes an honest zero", func(t *testing.T) {
-		require.Equal(t, 0.0, productUpper(0, 1e300))
-		require.Equal(t, 0.0, productUpper(1e300, 0))
-		require.Equal(t, 0.0, productUpper(-1, 5))
-		require.Equal(t, 0.0, divUpper(0, 2))
-		require.Equal(t, 0.0, divUpper(-1, 2))
-		require.Equal(t, Exact, exactnessOf(productUpper(0, 1e300)))
+		require.Equal(t, 0.0, proofbound.ProductUpper(0, 1e300))
+		require.Equal(t, 0.0, proofbound.ProductUpper(1e300, 0))
+		require.Equal(t, 0.0, proofbound.ProductUpper(-1, 5))
+		require.Equal(t, 0.0, proofbound.DivUpper(0, 2))
+		require.Equal(t, 0.0, proofbound.DivUpper(-1, 2))
+		require.Equal(t, Exact, exactnessOf(proofbound.ProductUpper(0, 1e300)))
 	})
 
 	t.Run("an ordinary reading still rounds outward", func(t *testing.T) {
-		require.GreaterOrEqual(t, productUpper(3, 5), 15.0)
-		require.GreaterOrEqual(t, productUpper(0.1, 0.1), 0.01)
-		require.GreaterOrEqual(t, divUpper(15, 5), 3.0)
-		require.GreaterOrEqual(t, divUpper(1, 3), 1.0/3.0)
+		require.GreaterOrEqual(t, proofbound.ProductUpper(3, 5), 15.0)
+		require.GreaterOrEqual(t, proofbound.ProductUpper(0.1, 0.1), 0.01)
+		require.GreaterOrEqual(t, proofbound.DivUpper(15, 5), 3.0)
+		require.GreaterOrEqual(t, proofbound.DivUpper(1, 3), 1.0/3.0)
 	})
 
 	t.Run("a divisor that states no scale refuses", func(t *testing.T) {
-		require.True(t, math.IsInf(divUpper(1, 0), 1))
-		require.True(t, math.IsInf(divUpper(1, -2), 1))
-		require.True(t, math.IsInf(divUpper(1, math.Inf(1)), 1))
-		require.True(t, math.IsInf(divUpper(math.NaN(), 2), 1))
-		require.True(t, math.IsInf(divUpper(1, math.NaN()), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(1, 0), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(1, -2), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(1, math.Inf(1)), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(math.NaN(), 2), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(1, math.NaN()), 1))
 		// A numerator that already refuses stays a refusal rather than
 		// becoming a finite quotient.
-		require.True(t, math.IsInf(divUpper(math.Inf(1), 3), 1))
+		require.True(t, math.IsInf(proofbound.DivUpper(math.Inf(1), 3), 1))
 	})
 
 	t.Run("addition and multiplication keep their exact rounding errors", func(t *testing.T) {
@@ -820,7 +822,7 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// and eB are positive, so the ruled patch this bounds carries
 		// positive area — a zero here claims the wall cell's whole
 		// chord-to-curve homotopy sweeps no area at all.
-		got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, 4*s, 4*s, 0)
+		got := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, 4*s, 4*s, 0)
 		require.Greater(t, got, 0.0,
 			`a cell with four distinct corners bounds a positive area`)
 		require.Equal(t, Approximate, exactnessOf(got))
@@ -829,9 +831,9 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 	t.Run("cell twist volume", func(t *testing.T) {
 		// The exact swept determinant is nonzero, so the ruled patch and the
 		// built triangle pair carry positive swept measure between them.
-		require.Greater(t, cellTwistQuarterUpper(vLo, vHi, wLo, twHi), 0.0,
+		require.Greater(t, proofbound.CellTwistQuarterUpper(vLo, vHi, wLo, twHi), 0.0,
 			`the fixture must carry a certified nonzero twist`)
-		got := cellTwistVolumeAllow(vLo, vHi, wLo, twHi)
+		got := proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, twHi)
 		require.Greater(t, got, 0.0,
 			`a twisted cell bounds a positive ruled-to-triangle volume`)
 		require.Equal(t, Approximate, exactnessOf(got))
@@ -840,7 +842,7 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 	t.Run("cap area volume", func(t *testing.T) {
 		// Both operands pass the helper's own positivity gate, so |h|·|ΔArea|/3
 		// is positive and a zero would republish a moved cap as an unmoved one.
-		got := capAreaVolumeAllow(s, s)
+		got := proofbound.CapAreaVolumeAllow(s, s)
 		require.Greater(t, got, 0.0,
 			`a positive plane offset over a positive area gap bounds a positive volume`)
 		require.Equal(t, Approximate, exactnessOf(got))
@@ -850,11 +852,11 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// The product itself is representable; only the division by 3
 		// underflows, so this leg falsifies the DIVIDE independently of the
 		// multiply the leg above covers.
-		require.Greater(t, productUpper(s, 0.1), 0.0,
+		require.Greater(t, proofbound.ProductUpper(s, 0.1), 0.0,
 			`the fixture must carry a positive numerator into the divide`)
-		require.Equal(t, 0.0, productUpper(s, 0.1)/3,
+		require.Equal(t, 0.0, proofbound.ProductUpper(s, 0.1)/3,
 			`the fixture must actually exercise a flush at the divide`)
-		got := capAreaVolumeAllow(s, 0.1)
+		got := proofbound.CapAreaVolumeAllow(s, 0.1)
 		require.Greater(t, got, 0.0, `the third of a positive volume is positive`)
 		require.Equal(t, Approximate, exactnessOf(got))
 	})
@@ -863,14 +865,14 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// matchedDelta and wallAreaUpper both pass the helper's own > 0
 		// branch gate, so the wall leg matchedDelta·wallAreaUpper is positive
 		// and the composed total cannot be zero.
-		got := chordedBoundaryVolumeAllow(s, s, 0, 0, 0)
+		got := proofbound.ChordedBoundaryVolumeAllow(s, s, 0, 0, 0)
 		require.Greater(t, got, 0.0,
 			`a positive displacement over a positive wall area bounds a positive volume`)
 		require.Equal(t, Approximate, exactnessOf(got))
 	})
 
 	t.Run("seam correction", func(t *testing.T) {
-		got := chordedBoundarySeamAllow(s, s, s)
+		got := proofbound.ChordedBoundarySeamAllow(s, s, s)
 		require.Greater(t, got, 0.0,
 			`three positive operands bound a positive line-integral residue`)
 		require.Equal(t, Approximate, exactnessOf(got))
@@ -879,9 +881,9 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 	t.Run("seam correction whose product survives but whose third flushes", func(t *testing.T) {
 		// As with the cap: the numerator is representable and only the
 		// division by 3 underflows.
-		require.Equal(t, 0.0, productUpper(s, productUpper(0.1, 1))/3,
+		require.Equal(t, 0.0, proofbound.ProductUpper(s, proofbound.ProductUpper(0.1, 1))/3,
 			`the fixture must actually exercise a flush at the divide`)
-		got := chordedBoundarySeamAllow(s, 0.1, 1)
+		got := proofbound.ChordedBoundarySeamAllow(s, 0.1, 1)
 		require.Greater(t, got, 0.0, `the third of a positive residue is positive`)
 		require.Equal(t, Approximate, exactnessOf(got))
 	})
@@ -890,7 +892,7 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// The volume leg is positive, and the widened radius is positive
 		// through matchedDelta alone, so the first moment this bounds is
 		// positive whatever the held coordinate envelope.
-		got := chordedBoundaryMomentAllow(s, s, 0, 0, 0, 0, 0)
+		got := proofbound.ChordedBoundaryMomentAllow(s, s, 0, 0, 0, 0, 0)
 		require.Greater(t, got, 0.0,
 			`a positive displaced volume at a positive radius bounds a positive moment`)
 		require.Equal(t, Approximate, exactnessOf(got))
@@ -900,24 +902,24 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		// Every zero below comes from a term that is ABSENT, not flushed, and
 		// each must survive the change: these are the only readings in the
 		// family exactnessOf may keep calling Exact.
-		require.Equal(t, 0.0, cellChordCurveAreaUpper(vLo, vLo, vLo, vLo, 0, 0, 0))
-		require.Equal(t, 0.0, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
-		require.Equal(t, 0.0, capAreaVolumeAllow(0, 1))
-		require.Equal(t, 0.0, capAreaVolumeAllow(1, 0))
-		require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, 1, 0, 0, 0))
-		require.Equal(t, 0.0, chordedBoundarySeamAllow(0, 1, 1))
-		require.Equal(t, 0.0, chordedBoundarySeamAllow(1, 0, 1))
-		require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, 1, 0, 0, 0, 0, 0))
+		require.Equal(t, 0.0, proofbound.CellChordCurveAreaUpper(vLo, vLo, vLo, vLo, 0, 0, 0))
+		require.Equal(t, 0.0, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+		require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(0, 1))
+		require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(1, 0))
+		require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, 1, 0, 0, 0))
+		require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0, 1, 1))
+		require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(1, 0, 1))
+		require.Equal(t, 0.0, proofbound.ChordedBoundaryMomentAllow(0, 1, 0, 0, 0, 0, 0))
 	})
 }
 
-// This file is the falsifier for bounds.go's PROVEN-NORM rule: a bound whose
+// This file is the falsifier for internal/proofbound/bounds.go's PROVEN-NORM rule: a bound whose
 // factors are vector lengths must form every one of them exactly and round it
-// OUTWARD (heldDelta into dvLenUpper), never read r3.Vec.Len.
+// OUTWARD (proofbound.HeldDelta into proofbound.DvLenUpper), never read r3.Vec.Len.
 //
 // r3.Vec.Len is math.Hypot and r3.Vec.Sub is a float subtraction, both
 // round-to-NEAREST, so neither is an upper bound on anything. The composed
-// helpers upRound/productUpper/absSumUpper buy back about one ulp of the
+// helpers proofbound.UpRound/proofbound.ProductUpper/proofbound.AbsSumUpper buy back about one ulp of the
 // PRODUCT, which happens to hide the shortfall on a well-conditioned cell and
 // cannot begin to cover a difference that CANCELS — there the float norm's own
 // relative error is unbounded, and the fixtures below carry one where it
@@ -1106,9 +1108,9 @@ func provenNormFixtures() []cellQuad {
 // refTwistAreaProduct is |T|·(eA+eB) computed exactly from the cell's own
 // corners, the quantity the linear fallback arm publishes.
 func refTwistAreaProduct(c cellQuad) *big.Float {
-	twist := proofarith.DvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
-	eA := refMax(refLen(heldDelta(c.vHi, c.vLo)), refLen(heldDelta(c.wHi, c.wLo)))
-	eB := refMax(refLen(heldDelta(c.wLo, c.vLo)), refLen(heldDelta(c.wHi, c.vHi)))
+	twist := proofarith.DvSub(proofbound.HeldDelta(c.vLo, c.vHi), proofbound.HeldDelta(c.wLo, c.wHi))
+	eA := refMax(refLen(proofbound.HeldDelta(c.vHi, c.vLo)), refLen(proofbound.HeldDelta(c.wHi, c.wLo)))
+	eB := refMax(refLen(proofbound.HeldDelta(c.wLo, c.vLo)), refLen(proofbound.HeldDelta(c.wHi, c.vHi)))
 	return refMul(refLen(twist), refAdd(eA, eB))
 }
 
@@ -1125,7 +1127,7 @@ func floatTwistAreaProduct(c cellQuad) float64 {
 	t := c.vLo.Sub(c.vHi).Sub(c.wLo).Add(c.wHi)
 	eA := math.Max(naiveNorm(c.vHi.Sub(c.vLo)), naiveNorm(c.wHi.Sub(c.wLo)))
 	eB := math.Max(naiveNorm(c.wLo.Sub(c.vLo)), naiveNorm(c.wHi.Sub(c.vHi)))
-	return productUpper(naiveNorm(t), absSumUpper(eA, eB))
+	return proofbound.ProductUpper(naiveNorm(t), proofbound.AbsSumUpper(eA, eB))
 }
 
 // TestCellTwistAreaLinearArmEnclosesTheExactProduct pins the fallback arm on
@@ -1134,8 +1136,8 @@ func TestCellTwistAreaLinearArmEnclosesTheExactProduct(t *testing.T) {
 	t.Parallel()
 	for _, c := range provenNormFixtures() {
 		t.Run(c.name, func(t *testing.T) {
-			corners := cellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
-			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+			corners := proofbound.CellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
+			got := proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners))
 			want := refTwistAreaProduct(c)
 			t.Logf("%s: published=%.17g exact=%s", c.name, got, want.Text('g', 25))
 			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0,
@@ -1169,8 +1171,8 @@ func TestCellTwistAreaLinearArmEnclosesOrdinaryCells(t *testing.T) {
 	for range cases {
 		c := cellQuad{vLo: vec(), vHi: vec(), wLo: vec(), wHi: vec()}
 		want := refTwistAreaProduct(c)
-		corners := cellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
-		got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+		corners := proofbound.CellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
+		got := proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners))
 		require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0,
 			"linear twist-area arm fell below the exact product for %+v", c)
 		if refFloat(floatTwistAreaProduct(c)).Cmp(want) < 0 {
@@ -1182,21 +1184,21 @@ func TestCellTwistAreaLinearArmEnclosesOrdinaryCells(t *testing.T) {
 		"the sweep must reach cells the float-norm route understates, or it proves nothing")
 }
 
-// refChordCurveAreaAllow states cellChordCurveAreaAllow's published value
+// refChordCurveAreaAllow states proofbound.CellChordCurveAreaAllow's published value
 // mathematically, at refPrec bits, from the cell's own EXACT corner
 // differences: every norm is the true one and no term carries an outward
-// nudge. Production composes the same terms through upRound/productUpper/
-// absSumUpper, each of which only ever widens, and each term is monotone
+// nudge. Production composes the same terms through proofbound.UpRound/proofbound.ProductUpper/
+// proofbound.AbsSumUpper, each of which only ever widens, and each term is monotone
 // non-decreasing in every norm it reads — so the published value must sit at
 // or above this reference, and a norm that reverts to r3.Vec.Len drops it
 // below.
 //
-// nMin is read from production's own cellChordPatchNormalLower, which is
+// nMin is read from production's own proofbound.CellChordPatchNormalLower, which is
 // already exact-rational: this reference falsifies the NORMS, not that helper.
 func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64) *big.Float {
-	da, db := heldDelta(c.vHi, c.vLo), heldDelta(c.wHi, c.wLo)
+	da, db := proofbound.HeldDelta(c.vHi, c.vLo), proofbound.HeldDelta(c.wHi, c.wLo)
 	ca, cb := refLen(da), refLen(db)
-	eB := refMax(refLen(heldDelta(c.wLo, c.vLo)), refLen(heldDelta(c.wHi, c.vHi)))
+	eB := refMax(refLen(proofbound.HeldDelta(c.wLo, c.vLo)), refLen(proofbound.HeldDelta(c.wHi, c.vHi)))
 	cMax := refMax(ca, cb)
 	mdF := refFloat(md)
 	two := refFloat(2)
@@ -1204,7 +1206,7 @@ func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64
 	dev := func(arcLen float64, chord *big.Float, energy float64) (*big.Float, *big.Float) {
 		span := refAdd(refFloat(arcLen), chord)
 		i, j := span, refMul(span, span)
-		if !isNonFinite(energy) && energy >= 0 {
+		if !proofbound.IsNonFinite(energy) && energy >= 0 {
 			e := refFloat(energy)
 			i = refMin(i, new(big.Float).SetPrec(refPrec).Sqrt(e))
 			j = refMin(j, e)
@@ -1218,12 +1220,12 @@ func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64
 	gamma := refMul(refMul(two, mdF), cMax)
 
 	free := refAdd(refQuo(refMul(beta, refAdd(ia, ib)), two), gamma)
-	nMin := cellChordPatchNormalLower(c.vLo, c.vHi, c.wLo, c.wHi)
+	nMin := proofbound.CellChordPatchNormalLower(c.vLo, c.vHi, c.wLo, c.wHi)
 	if nMin <= 0 {
 		return free
 	}
 	nMinF := refFloat(nMin)
-	twist := proofarith.DvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
+	twist := proofarith.DvSub(proofbound.HeldDelta(c.vLo, c.vHi), proofbound.HeldDelta(c.wLo, c.wHi))
 	pCrossT := refMax(refLen(proofarith.DvCross(da, twist)), refLen(proofarith.DvCross(db, twist)))
 	oscW := refAdd(refLen(twist), refQuo(refMul(eB, pCrossT), nMinF))
 	lin := refAdd(refMul(oscW, iMax), refMul(refMul(two, mdF), refAdd(cMax, iMax)))
@@ -1267,12 +1269,12 @@ func TestCellChordCurveAreaAllowEnclosesItsExactTerms(t *testing.T) {
 			// Both arc-length claims are proven upper bounds: an outward
 			// chord length is itself one for a straight side, and the sweep
 			// factor keeps every fixture's claim above the chord it subtends.
-			arcA := upRound(1.25 * dvLenUpper(heldDelta(c.vHi, c.vLo)))
-			arcB := upRound(1.25 * dvLenUpper(heldDelta(c.wHi, c.wLo)))
-			got := cellChordCurveAreaAllow(c.vLo, c.vHi, c.wLo, c.wHi, arcA, arcB, r.md, r.energyA, r.energyB)
+			arcA := proofbound.UpRound(1.25 * proofbound.DvLenUpper(proofbound.HeldDelta(c.vHi, c.vLo)))
+			arcB := proofbound.UpRound(1.25 * proofbound.DvLenUpper(proofbound.HeldDelta(c.wHi, c.wLo)))
+			got := proofbound.CellChordCurveAreaAllow(c.vLo, c.vHi, c.wLo, c.wHi, arcA, arcB, r.md, r.energyA, r.energyB)
 			want := refChordCurveAreaAllow(c, arcA, arcB, r.md, r.energyA, r.energyB)
 			t.Logf("%s: published=%.17g exact=%s nMin=%.6e",
-				r.name, got, want.Text('g', 25), cellChordPatchNormalLower(c.vLo, c.vHi, c.wLo, c.wHi))
+				r.name, got, want.Text('g', 25), proofbound.CellChordPatchNormalLower(c.vLo, c.vHi, c.wLo, c.wHi))
 			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0,
 				"the published ruled leg must enclose its own exactly-stated terms")
 		})
@@ -1289,10 +1291,10 @@ func TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim(t *testing.T) {
 	// an arcLenUpper of 5 is exactly tight rather than short.
 	vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0)
 	wLo, wHi := r3.NewVec(0, 0, 12), r3.NewVec(3, 4, 12)
-	require.Equal(t, 5.0, dvLenUpper(heldDelta(vHi, vLo)), "the fixture's chord must be exactly representable")
-	require.Equal(t, 0.0, cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 5, 5, 0, 0, 0),
+	require.Equal(t, 5.0, proofbound.DvLenUpper(proofbound.HeldDelta(vHi, vLo)), "the fixture's chord must be exactly representable")
+	require.Equal(t, 0.0, proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 5, 5, 0, 0, 0),
 		"an exactly-tight arc claim on a straight, untwisted cell is admitted and charges nothing")
-	require.True(t, math.IsInf(cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 4.999, 5, 0, 0, 0), 1),
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 4.999, 5, 0, 0, 0), 1),
 		"an arc claim genuinely below its own chord is still refused")
 }
 
@@ -1309,8 +1311,8 @@ func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
 	}
 	for name, pair := range cases {
 		t.Run(name, func(t *testing.T) {
-			d := heldDelta(pair[1], pair[0])
-			got, want := dvLenUpper(d), refLen(d)
+			d := proofbound.HeldDelta(pair[1], pair[0])
+			got, want := proofbound.DvLenUpper(d), refLen(d)
 			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0, "dvLenUpper must enclose the exact norm")
 			if want.Sign() == 0 {
 				require.Equal(t, 0.0, got, "a zero difference has length exactly zero")
@@ -1324,15 +1326,15 @@ func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
 // a single ulp, neither decided by a rounded norm.
 func TestRatLenAtLeastDecidesExactly(t *testing.T) {
 	t.Parallel()
-	d := heldDelta(r3.NewVec(3, 4, 0), r3.NewVec(0, 0, 0))
-	require.True(t, dvLenAtLeast(5, d), "a claim equal to the exact norm is admitted")
-	require.True(t, dvLenAtLeast(math.Nextafter(5, math.Inf(1)), d), "a claim above the exact norm is admitted")
-	require.False(t, dvLenAtLeast(math.Nextafter(5, 0), d), "a claim one ulp short is refused")
-	require.False(t, dvLenAtLeast(-1, d), "a negative claim is refused")
-	require.False(t, dvLenAtLeast(math.NaN(), d), "a NaN claim is refused")
+	d := proofbound.HeldDelta(r3.NewVec(3, 4, 0), r3.NewVec(0, 0, 0))
+	require.True(t, proofbound.DvLenAtLeast(5, d), "a claim equal to the exact norm is admitted")
+	require.True(t, proofbound.DvLenAtLeast(math.Nextafter(5, math.Inf(1)), d), "a claim above the exact norm is admitted")
+	require.False(t, proofbound.DvLenAtLeast(math.Nextafter(5, 0), d), "a claim one ulp short is refused")
+	require.False(t, proofbound.DvLenAtLeast(-1, d), "a negative claim is refused")
+	require.False(t, proofbound.DvLenAtLeast(math.NaN(), d), "a NaN claim is refused")
 }
 
-// ratExactSumRound is exactSumRound as it was computed over big.Rat before the
+// ratExactSumRound is proofbound.ExactSumRound as it was computed over big.Rat before the
 // dyadic rewrite, kept verbatim as the oracle below.
 func ratExactSumRound(held float64, terms ...float64) float64 {
 	sum := new(big.Rat)
@@ -1346,7 +1348,7 @@ func ratExactSumRound(held float64, terms ...float64) float64 {
 	return proofarith.RationalFloatError(sum, held)
 }
 
-// TestExactSumRoundDyadicMatchesRational pins exactSumRound, computed over
+// TestExactSumRoundDyadicMatchesRational pins proofbound.ExactSumRound, computed over
 // dyadics, to the big.Rat computation it replaced, bit for bit, on random
 // two-to-four term sums of mixed magnitudes and on sums holding a NaN term.
 // Each is read at the float sum itself, one ulp below it, and at a held value
@@ -1382,7 +1384,7 @@ func TestExactSumRoundDyadicMatchesRational(t *testing.T) {
 			held += term
 		}
 		for _, h := range []float64{held, math.Nextafter(held, math.Inf(-1)), 0} {
-			want, got := ratExactSumRound(h, terms...), exactSumRound(h, terms...)
+			want, got := ratExactSumRound(h, terms...), proofbound.ExactSumRound(h, terms...)
 			require.Equal(t, math.Float64bits(want), math.Float64bits(got), "terms %v at %v", terms, h)
 		}
 	}

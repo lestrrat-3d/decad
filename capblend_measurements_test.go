@@ -1175,7 +1175,7 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 }
 
 // TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux is the units-mismatch
-// regression for bounds.go's chordLocusVolumeAllow (PR-122 review): the
+// regression for internal/proofbound/bounds.go's chordLocusVolumeAllow (PR-122 review): the
 // function composes envelopeSlack (a difference of two patchRawFlux results —
 // raw FLUX, three times a volume) with sweptVolumeAllow(patchDeviation,
 // areaUpper) (already a VOLUME), and capBandVolume divides the composed sum

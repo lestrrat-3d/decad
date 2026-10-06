@@ -37,22 +37,22 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 		phi1, d1 := deg(180)
 		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
 		require.True(t, ok)
-		require.Zero(t, ex.lo.Sign())
-		require.Zero(t, ex.hi.Sign())
+		require.Zero(t, ex.Lo.Sign())
+		require.Zero(t, ex.Hi.Sign())
 	})
 
 	t.Run("179.99deg is strictly under", func(t *testing.T) {
 		phi1, d1 := deg(179.99)
 		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
 		require.True(t, ok)
-		require.Negative(t, ex.hi.Sign())
+		require.Negative(t, ex.Hi.Sign())
 	})
 
 	t.Run("180.01deg is strictly over", func(t *testing.T) {
 		phi1, d1 := deg(180.01)
 		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: d1}.halfTurnExcessFor(0, phi1)
 		require.True(t, ok)
-		require.Positive(t, ex.lo.Sign())
+		require.Positive(t, ex.Lo.Sign())
 	})
 
 	t.Run("radian-stated pi is certified under a half turn", func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 		r, dr := probeEnd(t, units.Radians(math.Pi))
 		ex, ok := sweepDenotation{phi0: zeroAngleDenotation(), phi1: dr}.halfTurnExcessFor(0, r)
 		require.True(t, ok)
-		require.Negative(t, ex.hi.Sign())
+		require.Negative(t, ex.Hi.Sign())
 	})
 
 	t.Run("two-sided 90/90 certifies exactly", func(t *testing.T) {
@@ -70,8 +70,8 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 		sd := sweepDenotation{phi0: d0neg.neg(), phi1: d1}
 		ex, ok := sd.halfTurnExcessFor(-phi0, phi1)
 		require.True(t, ok)
-		require.Zero(t, ex.lo.Sign())
-		require.Zero(t, ex.hi.Sign())
+		require.Zero(t, ex.Lo.Sign())
+		require.Zero(t, ex.Hi.Sign())
 	})
 
 	t.Run("mixed 2rad/-100deg is sign-definite positive", func(t *testing.T) {
@@ -80,17 +80,17 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 		sd := sweepDenotation{phi0: d0.neg(), phi1: d1}
 		ex, ok := sd.halfTurnExcessFor(-phi0, phi1)
 		require.True(t, ok)
-		require.Positive(t, ex.lo.Sign())
+		require.Positive(t, ex.Lo.Sign())
 	})
 
 	t.Run("empty denotation falls back to the held floats", func(t *testing.T) {
 		ex, ok := sweepDenotation{}.halfTurnExcessFor(0, 3.2)
 		require.True(t, ok)
-		require.Positive(t, ex.lo.Sign())
+		require.Positive(t, ex.Lo.Sign())
 
 		ex, ok = sweepDenotation{}.halfTurnExcessFor(0, 3.1)
 		require.True(t, ok)
-		require.Negative(t, ex.hi.Sign())
+		require.Negative(t, ex.Hi.Sign())
 	})
 
 	t.Run("a NaN held float with no denotation answers not ok", func(t *testing.T) {

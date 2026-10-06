@@ -102,7 +102,7 @@ func buildDipShaftBodyCharged(t *testing.T, profile ProfileRecord, full bool, ph
 
 // T90: a dipped profile's published volume interval contains the volume its
 // own face set encloses. radialAdmitAllow/axialExtentUpper are the interval
-// resolveAxisSide's own charged path (survStraddle in its admission switch)
+// resolveAxisSide's own charged path (proofbound.SurvStraddle in its admission switch)
 // carries forward whenever the boundary scan itself — never the axis, held
 // zero-bound here — cannot prove the radial minimum clear of zero: the same
 // mechanism as the investigation's own 100 mm/1e-7 mm shaft (T93 below is
@@ -236,7 +236,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // not exactly representable): a shaft profile whose near edge sits AT that
 // axis (rather than dipped below it) resolves with a genuinely nonzero
 // radialAdmitAllow — confirmed below rather than assumed — because
-// resolveAxisSide's own scan-arithmetic charge (planeDotDecompositionRoundAllow,
+// resolveAxisSide's own scan-arithmetic charge (proofbound.PlaneDotDecompositionRoundAllow,
 // the same mechanism axisExtremeContext already uses) provably cannot rule
 // out either sign for a computed value this close to the true radial
 // minimum, whichever way the tilted axis's own rounding lands it on a given

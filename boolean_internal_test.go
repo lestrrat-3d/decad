@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -68,10 +70,10 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 // way the mesh pass does.
 func classify(t *testing.T, ta, tb [3]r3.Vec) triContact {
 	t.Helper()
-	xta := [3]xpt{xptOf(ta[0]), xptOf(ta[1]), xptOf(ta[2])}
-	xtb := [3]xpt{xptOf(tb[0]), xptOf(tb[1]), xptOf(tb[2])}
-	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
-	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
+	xta := [3]proofbound.Xpt{proofbound.XptOf(ta[0]), proofbound.XptOf(ta[1]), proofbound.XptOf(ta[2])}
+	xtb := [3]proofbound.Xpt{proofbound.XptOf(tb[0]), proofbound.XptOf(tb[1]), proofbound.XptOf(tb[2])}
+	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
 	c, err := triTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	return c
@@ -92,14 +94,14 @@ func TestTriTriClassifyIsSymmetric(t *testing.T) {
 
 	fwd := classify(t, a, b)
 	require.Equal(t, contactPoint, fwd.kind)
-	require.Equal(t, r3.Vec{}, fwd.p0.vec(), `the contact is the origin`)
+	require.Equal(t, r3.Vec{}, fwd.p0.Vec(), `the contact is the origin`)
 	// The point lies on A's boundary (inside its edge) AND on B's (its corner).
 	require.True(t, fwd.p0OnA)
 	require.True(t, fwd.p0OnB)
 
 	rev := classify(t, b, a)
 	require.Equal(t, contactPoint, rev.kind)
-	require.Equal(t, fwd.p0.vec(), rev.p0.vec(), `the answer does not depend on the argument order`)
+	require.Equal(t, fwd.p0.Vec(), rev.p0.Vec(), `the answer does not depend on the argument order`)
 	require.Equal(t, fwd.p0OnA, rev.p0OnB)
 	require.Equal(t, fwd.p0OnB, rev.p0OnA)
 }
@@ -172,12 +174,12 @@ func TestContactMemoRepeatsTheClassifier(t *testing.T) {
 		require.Equal(t, want.kind, got.kind)
 		require.Equal(t, want.edgeA, got.edgeA)
 		require.Equal(t, want.edgeB, got.edgeB)
-		require.Zero(t, want.p0.x.Cmp(got.p0.x))
-		require.Zero(t, want.p0.y.Cmp(got.p0.y))
-		require.Zero(t, want.p0.z.Cmp(got.p0.z))
-		require.Zero(t, want.p1.x.Cmp(got.p1.x))
-		require.Zero(t, want.p1.y.Cmp(got.p1.y))
-		require.Zero(t, want.p1.z.Cmp(got.p1.z))
+		require.Zero(t, want.p0.X.Cmp(got.p0.X))
+		require.Zero(t, want.p0.Y.Cmp(got.p0.Y))
+		require.Zero(t, want.p0.Z.Cmp(got.p0.Z))
+		require.Zero(t, want.p1.X.Cmp(got.p1.X))
+		require.Zero(t, want.p1.Y.Cmp(got.p1.Y))
+		require.Zero(t, want.p1.Z.Cmp(got.p1.Z))
 		require.Zero(t, want.sin2.Cmp(got.sin2))
 	}
 
@@ -417,7 +419,7 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*boolMesh, *boolMesh, []gateF
 	require.NoError(t, err)
 	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
 	require.NoError(t, err)
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	fa, err := facesOfMesh(budget, ma)
 	require.NoError(t, err)
 	fb, err := facesOfMesh(budget, mb)
@@ -539,21 +541,21 @@ func tinyOffset() *big.Rat {
 
 // xptFromRat builds an exact point directly from three big.Rat coordinates —
 // used only where a test needs sub-ulp control production's float-only entry
-// point (xptOf) cannot express, over one shared homogeneous denominator the
-// same way xhpOf lifts a float vertex.
-func xptFromRat(x, y, z *big.Rat) xpt {
+// point (proofbound.XptOf) cannot express, over one shared homogeneous denominator the
+// same way proofbound.XhpOf lifts a float vertex.
+func xptFromRat(x, y, z *big.Rat) proofbound.Xpt {
 	dx, dy, dz := x.Denom(), y.Denom(), z.Denom()
-	return xpt{
-		x: new(big.Int).Mul(x.Num(), new(big.Int).Mul(dy, dz)),
-		y: new(big.Int).Mul(y.Num(), new(big.Int).Mul(dx, dz)),
-		z: new(big.Int).Mul(z.Num(), new(big.Int).Mul(dx, dy)),
-		w: new(big.Int).Mul(dx, new(big.Int).Mul(dy, dz)),
+	return proofbound.Xpt{
+		X: new(big.Int).Mul(x.Num(), new(big.Int).Mul(dy, dz)),
+		Y: new(big.Int).Mul(y.Num(), new(big.Int).Mul(dx, dz)),
+		Z: new(big.Int).Mul(z.Num(), new(big.Int).Mul(dx, dy)),
+		W: new(big.Int).Mul(dx, new(big.Int).Mul(dy, dz)),
 	}
 }
 
 // xat is an exact point from whole millimetres, optionally nudged by a
 // sub-ulp offset on one axis.
-func xat(x, y, z float64, nudge int) xpt {
+func xat(x, y, z float64, nudge int) proofbound.Xpt {
 	rx, ry, rz := mustRatOf(x), mustRatOf(y), mustRatOf(z)
 	switch nudge {
 	case 0:
@@ -572,16 +574,16 @@ func xat(x, y, z float64, nudge int) xpt {
 // survives as the tetra. Every directed edge pairs with its reverse, so the
 // exact closure audit passes before the rounding ever runs.
 func splitApexTetra() []keptFacet {
-	a, b, c := xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0)), xptOf(r3.NewVec(0, 10, 0))
-	d1 := xptOf(r3.NewVec(2, 2, 9))
+	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
+	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xat(2, 2, 9, 0)
 	return []keptFacet{
-		{v: [3]xpt{a, c, b}},
-		{v: [3]xpt{a, b, d1}},
-		{v: [3]xpt{b, c, d2}},
-		{v: [3]xpt{c, a, d2}},
-		{v: [3]xpt{b, d2, d1}},
-		{v: [3]xpt{a, d1, d2}},
+		{v: [3]proofbound.Xpt{a, c, b}},
+		{v: [3]proofbound.Xpt{a, b, d1}},
+		{v: [3]proofbound.Xpt{b, c, d2}},
+		{v: [3]proofbound.Xpt{c, a, d2}},
+		{v: [3]proofbound.Xpt{b, d2, d1}},
+		{v: [3]proofbound.Xpt{a, d1, d2}},
 	}
 }
 
@@ -589,13 +591,13 @@ func splitApexTetra() []keptFacet {
 // float64 vertex: every one of its facets collapses under the weld, so the
 // whole component is welded out of existence.
 func subUlpTetra() []keptFacet {
-	p := xptOf(r3.NewVec(40, 40, 40))
+	p := proofbound.XptOf(r3.NewVec(40, 40, 40))
 	q, r, s := xat(40, 40, 40, 0), xat(40, 40, 40, 1), xat(40, 40, 40, 2)
 	return []keptFacet{
-		{v: [3]xpt{p, r, q}},
-		{v: [3]xpt{p, q, s}},
-		{v: [3]xpt{q, r, s}},
-		{v: [3]xpt{r, p, s}},
+		{v: [3]proofbound.Xpt{p, r, q}},
+		{v: [3]proofbound.Xpt{p, q, s}},
+		{v: [3]proofbound.Xpt{q, r, s}},
+		{v: [3]proofbound.Xpt{r, p, s}},
 	}
 }
 
@@ -634,7 +636,7 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	require.Positive(t, got.round)
 	// The volume the weld can have moved is bounded by the displacement times
 	// the pre-round area — a strictly larger charge than the held mesh's own.
-	require.Greater(t, sweptVolumeAllow(got.round, got.preArea), sweptVolumeAllow(got.round, held))
+	require.Greater(t, proofbound.SweptVolumeAllow(got.round, got.preArea), proofbound.SweptVolumeAllow(got.round, held))
 }
 
 func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
@@ -696,23 +698,23 @@ func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
 	// held float. The rational-to-float reading of that displacement is zero.
 	subnormal := new(big.Rat).SetFloat64(math.SmallestNonzeroFloat64)
 	offset := new(big.Rat).Quo(subnormal, big.NewRat(4, 1))
-	a, b, c := xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0)), xptOf(r3.NewVec(0, 10, 0))
-	d1 := xptOf(r3.NewVec(2, 2, 9))
+	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
+	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xptFromRat(new(big.Rat).Add(big.NewRat(2, 1), offset), big.NewRat(2, 1), big.NewRat(9, 1))
 	kept := []keptFacet{
-		{v: [3]xpt{a, c, b}},
-		{v: [3]xpt{a, b, d1}},
-		{v: [3]xpt{b, c, d2}},
-		{v: [3]xpt{c, a, d2}},
-		{v: [3]xpt{b, d2, d1}},
-		{v: [3]xpt{a, d1, d2}},
+		{v: [3]proofbound.Xpt{a, c, b}},
+		{v: [3]proofbound.Xpt{a, b, d1}},
+		{v: [3]proofbound.Xpt{b, c, d2}},
+		{v: [3]proofbound.Xpt{c, a, d2}},
+		{v: [3]proofbound.Xpt{b, d2, d1}},
+		{v: [3]proofbound.Xpt{a, d1, d2}},
 	}
 	got, err := stitchFacetsContext(t.Context(), kept)
 	require.NoError(t, err)
 	require.Len(t, got.tris, 4)
 	require.Positive(t, got.round)
 	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got.round).Cmp(offset), 0)
-	require.Positive(t, sweptVolumeAllow(got.round, got.preArea))
+	require.Positive(t, proofbound.SweptVolumeAllow(got.round, got.preArea))
 	require.Positive(t, pointRoundBound(d2, r3.NewVec(2, 2, 9)))
 }
 
@@ -722,11 +724,11 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		gap := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54))
 		exactVolume := new(big.Rat).Add(big.NewRat(1, 1), gap)
 		x := new(big.Rat).Mul(exactVolume, big.NewRat(6, 1))
-		verts := []xpt{
-			xptOf(r3.Vec{}),
+		verts := []proofbound.Xpt{
+			proofbound.XptOf(r3.Vec{}),
 			xptFromRat(x, big.NewRat(0, 1), big.NewRat(0, 1)),
-			xptOf(r3.NewVec(0, 1, 0)),
-			xptOf(r3.NewVec(0, 0, 1)),
+			proofbound.XptOf(r3.NewVec(0, 1, 0)),
+			proofbound.XptOf(r3.NewVec(0, 0, 1)),
 		}
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		reading, gotVolume, err := meshVolumeMeasurement(t.Context(), verts, tris, tiny)
@@ -750,7 +752,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		require.Equal(t, 1.0, body.centroid.Value.X)
 		trueCenterX := new(big.Rat).Add(big.NewRat(1, 1),
 			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54)))
-		round := radius3D(ratAbsDiff(trueCenterX, body.centroid.Value.X))
+		round := proofbound.Radius3D(ratAbsDiff(trueCenterX, body.centroid.Value.X))
 		volume := new(big.Rat).Quo(new(big.Rat).SetFloat64(width), big.NewRat(6, 1))
 		allowance := facetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
 		wantBound := new(big.Rat).Add(new(big.Rat).SetFloat64(round), new(big.Rat).SetFloat64(allowance))
@@ -928,12 +930,12 @@ func requireSameTriContact(t *testing.T, exact, filtered triContact) {
 	if exact.kind == contactNone {
 		return
 	}
-	require.Zero(t, exact.p0.x.Cmp(filtered.p0.x))
-	require.Zero(t, exact.p0.y.Cmp(filtered.p0.y))
-	require.Zero(t, exact.p0.z.Cmp(filtered.p0.z))
-	require.Zero(t, exact.p1.x.Cmp(filtered.p1.x))
-	require.Zero(t, exact.p1.y.Cmp(filtered.p1.y))
-	require.Zero(t, exact.p1.z.Cmp(filtered.p1.z))
+	require.Zero(t, exact.p0.X.Cmp(filtered.p0.X))
+	require.Zero(t, exact.p0.Y.Cmp(filtered.p0.Y))
+	require.Zero(t, exact.p0.Z.Cmp(filtered.p0.Z))
+	require.Zero(t, exact.p1.X.Cmp(filtered.p1.X))
+	require.Zero(t, exact.p1.Y.Cmp(filtered.p1.Y))
+	require.Zero(t, exact.p1.Z.Cmp(filtered.p1.Z))
 	require.Equal(t, exact.p0OnA, filtered.p0OnA)
 	require.Equal(t, exact.p1OnA, filtered.p1OnA)
 	require.Equal(t, exact.p0OnB, filtered.p0OnB)
@@ -952,7 +954,7 @@ func requireSameTriContact(t *testing.T, exact, filtered triContact) {
 // filter on or off, which is what the two equivalence tests below compare. The
 // choice travels as an argument, so these tests decide nothing for any other
 // test running beside them.
-func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, useFilter bool) (triContact, error) {
+func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, useFilter bool) (triContact, error) {
 	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, useFilter)
 }
 
@@ -1004,10 +1006,10 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 
 	a := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: 10, Z: 0}}
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
-	xta := [3]xpt{xptOf(a[0]), xptOf(a[1]), xptOf(a[2])}
-	xtb := [3]xpt{xptOf(b[0]), xptOf(b[1]), xptOf(b[2])}
-	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
-	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
+	xta := [3]proofbound.Xpt{proofbound.XptOf(a[0]), proofbound.XptOf(a[1]), proofbound.XptOf(a[2])}
+	xtb := [3]proofbound.Xpt{proofbound.XptOf(b[0]), proofbound.XptOf(b[1]), proofbound.XptOf(b[2])}
+	na := xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
+	nb := xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
 
 	filtered, err := classifyPair(a, b, xta, xtb, na, nb, true)
 	require.NoError(t, err)
@@ -1031,8 +1033,8 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			xtri := [3]xpt{xptOf(tc.tri[0]), xptOf(tc.tri[1]), xptOf(tc.tri[2])}
-			ntri := xcross(xsub(xtri[1], xtri[0]), xsub(xtri[2], xtri[0]))
+			xtri := [3]proofbound.Xpt{proofbound.XptOf(tc.tri[0]), proofbound.XptOf(tc.tri[1]), proofbound.XptOf(tc.tri[2])}
+			ntri := xcross(proofbound.Xsub(xtri[1], xtri[0]), proofbound.Xsub(xtri[2], xtri[0]))
 			uncertain := 0
 			for i := range 3 {
 				_, certainA := orientSignFloat(a[0], a[1], a[2], tc.tri[i])
@@ -1187,10 +1189,10 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	for _, v := range before.verts {
 		maxInput = math.Max(maxInput, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
 	}
-	allow := rigidRoundAllow(maxInput, 1)
-	areaUpper, err := perturbedAreaUpperContext(t.Context(), after.verts, after.tris, allow)
+	allow := proofbound.RigidRoundAllow(maxInput, 1)
+	areaUpper, err := proofbound.PerturbedAreaUpperContext(t.Context(), after.verts, after.tris, allow)
 	require.NoError(t, err)
-	roundVol := sweptVolumeAllow(allow, areaUpper)
+	roundVol := proofbound.SweptVolumeAllow(allow, areaUpper)
 	for _, tc := range []struct{ got, increment float64 }{
 		{after.meshBound, allow},
 		{after.volSymDiff, roundVol},
@@ -1303,7 +1305,7 @@ func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 		source:    []*Face{stated, stated},
 		faceBound: map[*Face]float64{stated: 0.25},
 	}
-	got, err := facesOfMesh(newWorkBudget(t.Context()), m)
+	got, err := facesOfMesh(proofbound.NewWorkBudget(t.Context()), m)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, 0.25, got[0].delta, `the gate charges the face what the mesh proved for it`)
@@ -1312,6 +1314,6 @@ func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 	// A source face the record omits is a broken evaluator, not a staged
 	// capability, and never a zero the gate would read as "held exactly".
 	m.source[1] = omitted
-	_, err = facesOfMesh(newWorkBudget(t.Context()), m)
+	_, err = facesOfMesh(proofbound.NewWorkBudget(t.Context()), m)
 	require.ErrorIs(t, err, ErrBooleanFailed)
 }

@@ -110,7 +110,7 @@ Per tess §5/§6, with the terms the current code already computes plus the two 
 | `deltaTrim(face)` | wall: its walk's `chordCount` sagitta; cap/floor/rim: max sagitta over the loops bounding that patch (`chordedLoop.maxSag`) |
 | `deltaSection` | `pp.sectionDelta` (0 for a cup) |
 | `deltaAxial(face)` | `z0Delta` for `capStart`, `z1Delta` for `capEnd`, `max` for a wall; cup floors/rims read `cp.zDelta` per level |
-| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `moments_trig.go`), carried by `walkEndBoundAllow`; (b) `exactPrismPointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
+| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `internal/proofbound/moments_trig.go`), carried by `walkEndBoundAllow`; (b) `exactPrismPointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
 
 `faceBound(f) = upRound(deltaTrim + deltaStore + deltaSection + deltaAxial)`. `bound` stays the conservative
 composition tess §5 already permits (largest sagitta + payload-wide axial max + `deltaStore` max).
@@ -183,7 +183,7 @@ re-evaluates, so nothing stored can disagree with the records.
 |---|---|---|
 | `facetDeparture` | `absSumUpper(chordCellDeltaUpper(sectionMatchedDelta, a.delta), chorded.maxTwistOffsetUpper)` — computed UNCONDITIONALLY, so a `LineSeg`-only placed loft publishes `a.delta` (loft §5.2's facet-departure row: "`matchedDelta` reduces to `delta`") | loft §5.2 `matchedDelta`, `maxTwistOffsetUpper` rows |
 | `areaSlack` | `upRound(mass.perturbAreaSum + chorded.twistAreaAllow + chorded.areaExcess + chorded.capAreaExcess)` | tess §2's loft row: the per-triangle perturbation sum, the wall's three legs (`cellTwistAreaAllow` held-to-bilinear, `cellChordCurveAreaAllow` + `cellStationShiftAreaAllow` already summed in `areaExcess`), and the two caps' `capAreaAllow` |
-| `volSymDiff` | `absSumUpper(sweptVolumeAllow(a.delta, perturbedAreaUpper(verts, tris, a.delta)), chordedBoundaryVolumeAllow(matchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow))` | tess §2's loft row; the FOUR-leg helper (`bounds.go:chordedBoundaryVolumeAllow`), not the three-leg residual `Volume` uses, because the mesh holds the uncorrected triangles |
+| `volSymDiff` | `absSumUpper(sweptVolumeAllow(a.delta, perturbedAreaUpper(verts, tris, a.delta)), chordedBoundaryVolumeAllow(matchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow))` | tess §2's loft row; the FOUR-leg helper (`internal/proofbound/bounds.go:chordedBoundaryVolumeAllow`), not the three-leg residual `Volume` uses, because the mesh holds the uncorrected triangles |
 
 `loftChordedAllow` gains `twistAreaAllow`, the sum of `cellTwistAreaAllow(vLo, vHi, wLo, wHi)` over the same
 chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[j] > 0`, never on kind).
@@ -589,7 +589,7 @@ area `ρ²(Δθ − sin Δθ)/2` is monotone in `ρ`, so the larger of the two r
 over the one shared window.
 
 `volume(M △ B1)` is vertex motion: `M` and `B1` share a triangle index set and differ vertex by vertex, so
-`sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax))` (bounds.go) bounds it, with `motionMax`
+`sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax))` (internal/proofbound/bounds.go) bounds it, with `motionMax`
 the largest per-vertex displacement:
 
 | Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |

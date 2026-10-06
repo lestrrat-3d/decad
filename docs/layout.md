@@ -90,9 +90,6 @@ to the byte budget.
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
-| `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
-| `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
-| `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |
 | `moments_circular.go` | Exact rational arc/circle enclosures for `moments.go` and `revolve_build.go`. See the file's doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
 | `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
@@ -206,7 +203,6 @@ to the byte budget.
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | The exact three-valued receiver-face undercut reader the surveys share, decided over the rationals. See the file's doc comment. |
 | `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey and the modify section audit. See `docs/verification-design.md` §6. |
-| `budget.go` | `workBudget`, the shared bounded work counter audit phases poll via `step`/`err`. It holds closures, never a `context.Context`. See `docs/interference-design.md` §7.2. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Exact motion bounds. See its doc comment. |
@@ -232,7 +228,6 @@ to the byte budget.
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's doc comment. |
 | `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only pre-filters. See each filter's own doc comment. |
 | `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, measurements integrated exactly with composed bounds. See the file's doc comment and `docs/evaluator-design.md` §9. |
-| `bounds.go` | Faceted measurement error bounds. See its doc comment and `docs/prism-boolean-design.md` §7. |
 
 ### Output
 
@@ -262,6 +257,7 @@ to the byte budget.
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |
 | `internal/tessellation/` | Mesh audits and the loft exact restatement over neutral triangle data. |
+| `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `_gallery/` | Own nested module for README images, landing clip and dynamics scenes; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; root race shards depend on `race-binary`. `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |

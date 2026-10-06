@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -117,7 +119,7 @@ func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 			H := g.capZ - g.sideZ
 			envelope := math.Abs(H) * (math.Abs(g.sideRadius) + math.Abs(g.capRadius)) *
 				(math.Abs(g.cU) + math.Abs(g.cV) + math.Abs(g.sideRadius) + math.Abs(g.capRadius) + math.Abs(g.sideZ))
-			width, _ := new(big.Rat).Sub(iv.hi, iv.lo).Float64()
+			width, _ := new(big.Rat).Sub(iv.Hi, iv.Lo).Float64()
 			require.LessOrEqual(t, width, 1e-24*(1+envelope),
 				`%s: the enclosure (%v wide) must stay at the radian grid's own level`, tc.name, width)
 
@@ -129,10 +131,10 @@ func TestCapBlendConeFluxIntervalEnclosesFloatClosedForm(t *testing.T) {
 			// patchRawFlux holds the enclosure's midpoint and publishes at
 			// least the enclosure's reach from it, which is never zero.
 			flux := patchRawFlux(g)
-			require.Equal(t, mid, flux.value, `%s: patchRawFlux must hold the enclosure's midpoint`, tc.name)
-			require.Greater(t, flux.bound, 0.0, `%s: patchRawFlux's bound must be positive`, tc.name)
-			require.GreaterOrEqual(t, flux.bound, intervalFloatError(iv, mid),
-				`%s: patchRawFlux's bound (%v) must cover the enclosure's reach`, tc.name, flux.bound)
+			require.Equal(t, mid, flux.Value, `%s: patchRawFlux must hold the enclosure's midpoint`, tc.name)
+			require.Greater(t, flux.Bound, 0.0, `%s: patchRawFlux's bound must be positive`, tc.name)
+			require.GreaterOrEqual(t, flux.Bound, proofbound.IntervalFloatError(iv, mid),
+				`%s: patchRawFlux's bound (%v) must cover the enclosure's reach`, tc.name, flux.Bound)
 		})
 	}
 }

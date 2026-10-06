@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -50,7 +52,7 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 
 	// The bound is the displacement, up-rounded once.
 	require.GreaterOrEqual(t, mesh.bound, pp.sectionDelta)
-	require.Equal(t, upRound(pp.sectionDelta), mesh.bound)
+	require.Equal(t, proofbound.UpRound(pp.sectionDelta), mesh.bound)
 
 	// The slack is the same displacement read as an area, composed exactly as
 	// evalPrism composes it: the section's own tube once per cap — 2·δ·p over
@@ -307,7 +309,7 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 // TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims pins
 // chordSagitta's own three failure arms (its doc comment): a negative sweep
 // and a non-positive n each answer +Inf rather than a silently-understated
-// 0, since productUpper's own a<=0 guard would otherwise read a negative
+// 0, since proofbound.ProductUpper's own a<=0 guard would otherwise read a negative
 // sweep as a zero sagitta when the true sagitta is positive. A negative
 // radius is different — the true sagitta r·(1−cos) is itself non-positive
 // there, so 0 remains a genuine (if unattained) upper bound and needs no

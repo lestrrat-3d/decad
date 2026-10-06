@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -73,9 +75,9 @@ var revolveArcGrid = func() oldRevolveArcGridData {
 	return grid
 }()
 
-func oldRevolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
+func oldRevolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope proofbound.RatInterval, extra *big.Rat, weight int) *big.Rat {
 	at := func(i int) *big.Rat {
-		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, revolveArcGrid.t[i])))
+		f := proofbound.IntervalSub(scaledRho[i], proofbound.IntervalAdd(held, proofbound.IntervalScale(slope, revolveArcGrid.t[i])))
 		return intervalAbsUpper(f)
 	}
 	weights := &revolveArcGrid.weights[revolveWeightOne]
@@ -120,9 +122,9 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	held := scale * mean
 
 	cell := arcCellFixture(cV, radius, th0, dth)
-	step := intervalScale(twoPiInterval(), big.NewRat(1, nPhi))
-	area := pointInterval(big.NewRat(0, 1).SetFloat64(held))
-	got, err := revolveArcCellSlack(cell, step, [2]ratInterval{area, area}, 0)
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
+	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(held))
+	got, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
 
 	want := arcCellReference(cell, scale, held, revolveWeightT) +
@@ -145,29 +147,29 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		start, span float64
-		held, slope ratInterval
+		held, slope proofbound.RatInterval
 	}{
-		{"cancellation", th0, dth, area, pointInterval(new(big.Rat))},
-		{"wrap", 2*math.Pi - 0.2, 0.4, interval(big.NewRat(6, 1), big.NewRat(7, 1)),
-			pointInterval(new(big.Rat))},
-		{"extremum", math.Pi/2 - 0.3, 0.6, area, pointInterval(new(big.Rat))},
-		{"reversed fan", 0.4, -0.8, pointInterval(new(big.Rat)),
-			interval(big.NewRat(-2, 1), big.NewRat(3, 1))},
+		{"cancellation", th0, dth, area, proofbound.PointInterval(new(big.Rat))},
+		{"wrap", 2*math.Pi - 0.2, 0.4, proofbound.Interval(big.NewRat(6, 1), big.NewRat(7, 1)),
+			proofbound.PointInterval(new(big.Rat))},
+		{"extremum", math.Pi/2 - 0.3, 0.6, area, proofbound.PointInterval(new(big.Rat))},
+		{"reversed fan", 0.4, -0.8, proofbound.PointInterval(new(big.Rat)),
+			proofbound.Interval(big.NewRat(-2, 1), big.NewRat(3, 1))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cell := arcCellFixture(cV, radius, tc.start, tc.span)
 			_, rho, extra, ok := revolveArcScale(cell, step, 1e-3)
 			require.True(t, ok)
 			den := revolveArcIntegralDenominator(rho, tc.held, tc.slope, extra)
-			heldLo := revolveArcScaledNumerator(tc.held.lo, den, 1)
-			heldHi := revolveArcScaledNumerator(tc.held.hi, den, 1)
-			slopeLo := revolveArcScaledNumerator(tc.slope.lo, den, revolveArcIntegralSteps)
-			slopeHi := revolveArcScaledNumerator(tc.slope.hi, den, revolveArcIntegralSteps)
+			heldLo := revolveArcScaledNumerator(tc.held.Lo, den, 1)
+			heldHi := revolveArcScaledNumerator(tc.held.Hi, den, 1)
+			slopeLo := revolveArcScaledNumerator(tc.slope.Lo, den, revolveArcIntegralSteps)
+			slopeHi := revolveArcScaledNumerator(tc.slope.Hi, den, revolveArcIntegralSteps)
 			for i, node := range rho {
 				lo, hi := revolveArcNodeNumerators(node, den, heldLo, heldHi, slopeLo, slopeHi, i)
-				old := intervalSub(node, intervalAdd(tc.held, intervalScale(tc.slope, revolveArcGrid.t[i])))
-				require.Zero(t, new(big.Rat).SetFrac(lo, den).Cmp(old.lo), "node %d lower endpoint", i)
-				require.Zero(t, new(big.Rat).SetFrac(hi, den).Cmp(old.hi), "node %d upper endpoint", i)
+				old := proofbound.IntervalSub(node, proofbound.IntervalAdd(tc.held, proofbound.IntervalScale(tc.slope, revolveArcGrid.t[i])))
+				require.Zero(t, new(big.Rat).SetFrac(lo, den).Cmp(old.Lo), "node %d lower endpoint", i)
+				require.Zero(t, new(big.Rat).SetFrac(hi, den).Cmp(old.Hi), "node %d upper endpoint", i)
 			}
 			for _, weight := range []int{revolveWeightOne, revolveWeightT, revolveWeightOneMinusT} {
 				got := revolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
@@ -191,16 +193,16 @@ func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {
 	held := 0.0 // Jheld = 0 keeps scale·ρ strictly positive throughout.
 
 	cell := arcCellFixture(cV, radius, th0, dth)
-	step := intervalScale(twoPiInterval(), big.NewRat(1, nPhi))
-	area := pointInterval(new(big.Rat))
-	got, err := revolveArcCellSlack(cell, step, [2]ratInterval{area, area}, 0)
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
+	area := proofbound.PointInterval(new(big.Rat))
+	got, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
 	want := arcCellReference(cell, scale, held, revolveWeightT) +
 		arcCellReference(cell, scale, held, revolveWeightOneMinusT)
 	require.GreaterOrEqual(t, got, want)
 	require.InDelta(t, want, got, 0.01*want)
 	reversed := arcCellFixture(cV, radius, dth, -dth)
-	gotReversed, err := revolveArcCellSlack(reversed, step, [2]ratInterval{area, area}, 0)
+	gotReversed, err := revolveArcCellSlack(reversed, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, gotReversed, want)
 	require.InDelta(t, got, gotReversed, 0.01*want)
@@ -218,8 +220,8 @@ func TestRevolveArcFanSlackBoundsAPoleCell(t *testing.T) {
 	twoArea := 0.9 * scale * radius * math.Sin(dth)
 
 	cell := arcCellFixture(cV, radius, th0, dth)
-	step := intervalScale(twoPiInterval(), big.NewRat(1, nPhi))
-	area := pointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, nPhi))
+	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
 	for _, poleFirst := range []bool{true, false} {
 		got, err := revolveArcFanSlack(cell, poleFirst, step, area, 0)
 		require.NoError(t, err)
@@ -244,15 +246,15 @@ func TestRevolveArcCellSlackWidensWithTheModelSlack(t *testing.T) {
 	// caller hands it the composed coordinate displacement to widen ρ by. A
 	// larger displacement must produce a larger allowance, never the same one.
 	cell := arcCellFixture(10, 3, 0.2, 0.3)
-	step := intervalScale(twoPiInterval(), big.NewRat(1, 24))
-	area := pointInterval(big.NewRat(0, 1).SetFloat64(0.5))
-	tight, err := revolveArcCellSlack(cell, step, [2]ratInterval{area, area}, 0)
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, 24))
+	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(0.5))
+	tight, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 0)
 	require.NoError(t, err)
-	loose, err := revolveArcCellSlack(cell, step, [2]ratInterval{area, area}, 1e-3)
+	loose, err := revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, 1e-3)
 	require.NoError(t, err)
 	require.Greater(t, loose, tight)
 
-	_, err = revolveArcCellSlack(cell, step, [2]ratInterval{area, area}, math.Inf(1))
+	_, err = revolveArcCellSlack(cell, step, [2]proofbound.RatInterval{area, area}, math.Inf(1))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 

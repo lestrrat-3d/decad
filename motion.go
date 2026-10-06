@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -67,7 +69,7 @@ func (m Revolute) validate() error {
 	if err := motionFinite(m.From, m.To); err != nil {
 		return err
 	}
-	if !finiteVec(m.Center) || !finiteVec(m.Axis) {
+	if !proofbound.FiniteVec(m.Center) || !proofbound.FiniteVec(m.Axis) {
 		return fmt.Errorf(`%w: a revolute's center and axis must be finite, got %v and %v`, ErrNotFinite, m.Center, m.Axis)
 	}
 	if zeroVec(m.Axis) {
@@ -121,7 +123,7 @@ func (m Prismatic) validate() error {
 	if err := motionFinite(m.From, m.To); err != nil {
 		return err
 	}
-	if !finiteVec(m.Dir) {
+	if !proofbound.FiniteVec(m.Dir) {
 		return fmt.Errorf(`%w: a prismatic direction must be finite, got %v`, ErrNotFinite, m.Dir)
 	}
 	if _, ok := m.Dir.Normalize(); !ok {
@@ -168,7 +170,7 @@ func (m Between) PoseAt(at units.Value) (r3.Transform, error) {
 		return r3.Transform{}, err
 	}
 	s, err := at.In(units.One)
-	if err != nil || isNonFinite(s) {
+	if err != nil || proofbound.IsNonFinite(s) {
 		return r3.Transform{}, fmt.Errorf(`%w: the pose fraction is not representable`, ErrNotFinite)
 	}
 	switch s {
@@ -195,7 +197,7 @@ func (m Between) validate() error {
 	ends := [2]r3.Transform{m.From, m.To}
 	for _, t := range ends {
 		b := t.Basis()
-		if !finiteVec(b.EX) || !finiteVec(b.EY) || !finiteVec(b.EZ) || !finiteVec(t.Translation()) {
+		if !proofbound.FiniteVec(b.EX) || !proofbound.FiniteVec(b.EY) || !proofbound.FiniteVec(b.EZ) || !proofbound.FiniteVec(t.Translation()) {
 			return fmt.Errorf(`%w: a between's From and To must be finite`, ErrNotFinite)
 		}
 	}
@@ -272,7 +274,7 @@ func motionValueValid(v units.Value, kind units.Kind, what string) error {
 }
 
 func motionValueFinite(v units.Value, what string) error {
-	if isNonFinite(v.Mag()) {
+	if proofbound.IsNonFinite(v.Mag()) {
 		return fmt.Errorf(`%w: %s must be finite, got %s`, ErrNotFinite, what, v)
 	}
 	base, ok := units.BaseUnit(v.Kind())

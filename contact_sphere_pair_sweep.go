@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -182,7 +184,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	// displacement divided by the shorter center-line length.
 	normalMotion := 0.0
 	if deviation.Sign() > 0 {
-		normalMotion = provenUpRound(2 * ratFloatUp(deviation) / minimumDistance)
+		normalMotion = proofbound.ProvenUpRound(2 * proofbound.RatFloatUp(deviation) / minimumDistance)
 	}
 	observedNormal := actual.Normal.Value
 	idealNormal := want.Normal.Value
@@ -193,14 +195,14 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	normalDifference := math.Hypot(observedNormal.X-idealNormal.X,
 		math.Hypot(observedNormal.Y-idealNormal.Y, observedNormal.Z-idealNormal.Z))
 	if !finiteMeasurementValues(normalMotion, normalDifference) ||
-		normalDifference > provenUpRound(actual.Normal.Bound.Base()+want.Normal.Bound.Base()+normalMotion) {
+		normalDifference > proofbound.ProvenUpRound(actual.Normal.Bound.Base()+want.Normal.Bound.Base()+normalMotion) {
 		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
 		return
 	}
 	if normalMotion > 0 {
-		actual.Normal.Bound = units.Scalar(provenUpRound(actual.Normal.Bound.Base() + normalMotion))
+		actual.Normal.Bound = units.Scalar(proofbound.ProvenUpRound(actual.Normal.Bound.Base() + normalMotion))
 		actual.Normal.Exactness = exactnessFromBound(actual.Normal.Bound.Base())
-		actual.NormalAngle = units.Radians(provenUpRound(actual.NormalAngle.Base() + 4*normalMotion))
+		actual.NormalAngle = units.Radians(proofbound.ProvenUpRound(actual.NormalAngle.Base() + 4*normalMotion))
 	}
 	if actual.Normal.Bound.Base() > r.req.NormalResolution.Base() ||
 		actual.NormalAngle.Base() > r.req.NormalResolution.Base() {
@@ -218,21 +220,21 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	}{{&actual.OnA, r.sphereA.radius}, {&actual.OnB, r.sphereB.radius}} {
 		bound := new(big.Rat).Add(proofarith.FloatRat(witness.point.Bound.Base()), deviation)
 		if normalMotion > 0 {
-			bound.Add(bound, proofarith.FloatRat(provenUpRound(ratFloatUp(witness.radius.Rat())*normalMotion)))
+			bound.Add(bound, proofarith.FloatRat(proofbound.ProvenUpRound(proofbound.RatFloatUp(witness.radius.Rat())*normalMotion)))
 		}
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 			return
 		}
-		witness.point.Bound = units.Millimeters(ratFloatUp(bound))
+		witness.point.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 		witness.point.Exactness = exactnessFromBound(witness.point.Bound.Base())
 	}
 	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
 	if normalMotion > 0 {
-		sepBound.Add(sepBound, proofarith.FloatRat(provenUpRound(
-			ratFloatUp(proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
+		sepBound.Add(sepBound, proofarith.FloatRat(proofbound.ProvenUpRound(
+			proofbound.RatFloatUp(proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
 	}
-	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
+	actual.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason

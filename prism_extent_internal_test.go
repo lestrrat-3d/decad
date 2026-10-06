@@ -3,6 +3,8 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -26,11 +28,11 @@ func TestPrismPlacementCoeffAllowIdentityWorldAxes(t *testing.T) {
 			gu := pp.dir(1, 0, 0).Dot(g)
 			gv := pp.dir(0, 1, 0).Dot(g)
 			gz := pp.dir(0, 0, 1).Dot(g)
-			require.Zero(t, exactIsometryDotRound(pp.xform, frame.Origin(), g, true, base))
-			require.Zero(t, exactIsometryDotRound(pp.xform, frame.U(), g, false, gu))
-			require.Zero(t, exactIsometryDotRound(pp.xform, frame.V(), g, false, gv))
-			require.Zero(t, exactIsometryDotRound(pp.xform, frame.N(), g, false, gz))
-			want := absSumUpper(0, 0, 0, 0, prismDecompositionRoundAllow(gu, gv, gz, base, 23, 9))
+			require.Zero(t, proofbound.ExactIsometryDotRound(pp.xform, frame.Origin(), g, true, base))
+			require.Zero(t, proofbound.ExactIsometryDotRound(pp.xform, frame.U(), g, false, gu))
+			require.Zero(t, proofbound.ExactIsometryDotRound(pp.xform, frame.V(), g, false, gv))
+			require.Zero(t, proofbound.ExactIsometryDotRound(pp.xform, frame.N(), g, false, gz))
+			want := proofbound.AbsSumUpper(0, 0, 0, 0, prismDecompositionRoundAllow(gu, gv, gz, base, 23, 9))
 			require.Equal(t, want, prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
 		}
 	}
@@ -58,11 +60,11 @@ func TestPrismPlacementCoeffAllowKeepsGeneralProof(t *testing.T) {
 		gu := pp.dir(1, 0, 0).Dot(g)
 		gv := pp.dir(0, 1, 0).Dot(g)
 		gz := pp.dir(0, 0, 1).Dot(g)
-		want := absSumUpper(
-			exactIsometryDotRound(pp.xform, frame.Origin(), g, true, base),
-			directionalPerturbationAllow(exactIsometryDotRound(pp.xform, frame.U(), g, false, gu), 23),
-			directionalPerturbationAllow(exactIsometryDotRound(pp.xform, frame.V(), g, false, gv), 23),
-			directionalPerturbationAllow(exactIsometryDotRound(pp.xform, frame.N(), g, false, gz), 9),
+		want := proofbound.AbsSumUpper(
+			proofbound.ExactIsometryDotRound(pp.xform, frame.Origin(), g, true, base),
+			proofbound.DirectionalPerturbationAllow(proofbound.ExactIsometryDotRound(pp.xform, frame.U(), g, false, gu), 23),
+			proofbound.DirectionalPerturbationAllow(proofbound.ExactIsometryDotRound(pp.xform, frame.V(), g, false, gv), 23),
+			proofbound.DirectionalPerturbationAllow(proofbound.ExactIsometryDotRound(pp.xform, frame.N(), g, false, gz), 9),
 			prismDecompositionRoundAllow(gu, gv, gz, base, 23, 9),
 		)
 		require.Equal(t, want, prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -222,7 +224,7 @@ func validateMomentFieldsWork(work *freeformWork, record ProfileRecord) (momentP
 	return validateMomentFieldsWithPoll(nil, record, work)
 }
 
-func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (momentPreflight, error) {
+func validateMomentFieldsBudget(budget *proofbound.WorkBudget, record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record, newFreeformWork())
 }
 

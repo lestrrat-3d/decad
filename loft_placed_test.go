@@ -589,7 +589,7 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 // TestLoftPlacedNearMaxFloatSectionRefusesUnsupported pins the refusal a
 // placement owes at a coordinate whose DISPLACEMENT SCALE, not its
 // coordinate, leaves the finite float64 range. Both sections sit at
-// 0.75*MaxFloat64, so 2*maxInputAbs overflows inside bounds.go's
+// 0.75*MaxFloat64, so 2*maxInputAbs overflows inside internal/proofbound/bounds.go's
 // rigidRoundAllow while every placed coordinate itself stays finite — S13
 // never fires, and the placement is decided by the terms delta feeds.
 //

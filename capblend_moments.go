@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -43,16 +45,16 @@ import (
 // integral cancels likewise. A rounding budget scaled by the sum they
 // cancelled to under-counts by exactly that ratio, so no bound here is ever
 // read off a summed result — each is charged against the absolute terms the
-// step acted on, and boundedAdd/boundedMul then sum bounds while the values
+// step acted on, and proofbound.BoundedAdd/proofbound.BoundedMul then sum bounds while the values
 // cancel. The Plane arm escapes that composition entirely rather than manage
 // it: an exact rational has nothing to cancel, and its committed rounding is
 // measured (rationalFloatError), not budgeted. The Cone arm escapes it the
 // same way: its closed form is an exact-rational interval whose trig factors
 // are certified enclosures, so its bound is the interval's reach from the held
-// midpoint (intervalFloatError). Only the whole-turn arm, which has no trig
+// midpoint (proofbound.IntervalFloatError). Only the whole-turn arm, which has no trig
 // term to enclose, and the non-finite fallback, which has no rational to
 // carry, still pass through math.Sincos; there the magnitude envelope
-// bounded.go's analyticRoundBound doc reserves for a libm result stands, never
+// internal/proofbound/bounded.go's proofbound.AnalyticRoundBound doc reserves for a libm result stands, never
 // that helper's roundoff budget alone.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
@@ -72,13 +74,13 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
 	endLoopObjs := make([]*Loop, len(loops))
-	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume boundedScalar
+	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume proofbound.BoundedScalar
 	// muTotal, mvTotal, mzTotal accumulate the body's own plane-local first
 	// moments (docs/modify-reach-design.md §8.4's fourth reading): the SAME
 	// per-loop sign this loop already applies to slabVolume/bandVolume, over
 	// the SAME two-part decomposition (a signed slab term via
 	// loopEnclosedMomentsContext, a band term via capBandMoment).
-	var muTotal, mvTotal, mzTotal boundedScalar
+	var muTotal, mvTotal, mzTotal proofbound.BoundedScalar
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
 	// order, the order the DX7 survey then reports its faces in.
@@ -113,13 +115,13 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// reaches the volume at the scale of the band itself and is charged here
 		// — the same term capBandVolume charges for the identical level it reads
 		// as sideZ.
-		zLo, zHi := measuredScalar(cbp.z0, cbp.z0Delta), measuredScalar(cbp.z1, cbp.z1Delta)
-		setback := measuredScalar(cbp.d, cbp.dDelta)
+		zLo, zHi := proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta), proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
+		setback := proofbound.MeasuredScalar(cbp.d, cbp.dDelta)
 		if onStart {
-			zLo = boundedAdd(zLo, setback)
+			zLo = proofbound.BoundedAdd(zLo, setback)
 		}
 		if onEnd {
-			zHi = boundedSub(zHi, setback)
+			zHi = proofbound.BoundedSub(zHi, setback)
 		}
 		// The side walls are built over those same two bounded levels, so each
 		// end's displacement goes in with it: the wall vertices, the vertical
@@ -127,10 +129,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// computed, never one they can claim was recorded.
 		ppFor := prismPayload{
 			frame:   cbp.frame,
-			z0:      zLo.value,
-			z1:      zHi.value,
-			z0Delta: zLo.bound,
-			z1Delta: zHi.bound,
+			z0:      zLo.Value,
+			z1:      zHi.Value,
+			z0Delta: zLo.Bound,
+			z1Delta: zHi.Bound,
 			xform:   cbp.xform,
 		}
 		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
@@ -139,7 +141,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		}
 		faces = append(faces, sideFaces...)
 		for _, f := range sideFaces {
-			sideArea = boundedAdd(sideArea, measuredScalar(f.area, f.areaBound))
+			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.area, f.areaBound))
 		}
 		_ = loopLen
 
@@ -147,29 +149,29 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		if err != nil {
 			return nil, err
 		}
-		straightHeight := boundedSub(zHi, zLo)
-		loopSlab := boundedMul(loopArea, straightHeight)
-		slabVolume = boundedAdd(slabVolume, measuredScalar(sign*loopSlab.value, loopSlab.bound))
+		straightHeight := proofbound.BoundedSub(zHi, zLo)
+		loopSlab := proofbound.BoundedMul(loopArea, straightHeight)
+		slabVolume = proofbound.BoundedAdd(slabVolume, proofbound.MeasuredScalar(sign*loopSlab.Value, loopSlab.Bound))
 
 		// M_slab = (mu·h, mv·h, A·h·(zLo+zHi)/2), docs/modify-reach-design.md
 		// §8.4(a): mu, mv are the loop's own signed first moments (already
 		// canonicalized the same way loopArea is), and A·h is loopSlab itself,
 		// so the z component reuses it rather than recomputing A·h a second
 		// time.
-		zMid := boundedDiv(boundedAdd(zLo, zHi), exactScalar(2))
-		loopMuSlab := boundedMul(loopMu, straightHeight)
-		loopMvSlab := boundedMul(loopMv, straightHeight)
-		loopMzSlab := boundedMul(loopSlab, zMid)
-		muTotal = boundedAdd(muTotal, measuredScalar(sign*loopMuSlab.value, loopMuSlab.bound))
-		mvTotal = boundedAdd(mvTotal, measuredScalar(sign*loopMvSlab.value, loopMvSlab.bound))
-		mzTotal = boundedAdd(mzTotal, measuredScalar(sign*loopMzSlab.value, loopMzSlab.bound))
+		zMid := proofbound.BoundedDiv(proofbound.BoundedAdd(zLo, zHi), proofbound.ExactScalar(2))
+		loopMuSlab := proofbound.BoundedMul(loopMu, straightHeight)
+		loopMvSlab := proofbound.BoundedMul(loopMv, straightHeight)
+		loopMzSlab := proofbound.BoundedMul(loopSlab, zMid)
+		muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*loopMuSlab.Value, loopMuSlab.Bound))
+		mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*loopMvSlab.Value, loopMvSlab.Bound))
+		mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*loopMzSlab.Value, loopMzSlab.Bound))
 
 		startCo, endCo := bottomCo, topCo
 
 		// startBand/endBand default to the zero capBandResult (delta 0, capCo
 		// nil) where the loop is not chamfered on that cap, which is what
 		// leaves the area correction below at its own zero — the delta<=0
-		// guards in sectionDisplacementArea and bandPatchAreaAllow, not a
+		// guards in proofbound.SectionDisplacementArea and proofbound.BandPatchAreaAllow, not a
 		// separate onStart/onEnd branch.
 		var startBand, endBand capBandResult
 		if onStart {
@@ -186,18 +188,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			if err != nil {
 				return nil, err
 			}
-			bandVolume = boundedAdd(bandVolume, measuredScalar(sign*v.value, v.bound))
+			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
 			for _, g := range band.geom {
 				pa, pb := patchAreaOf(g)
-				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
+				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
 			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, work)
 			if err != nil {
 				return nil, err
 			}
-			muTotal = boundedAdd(muTotal, measuredScalar(sign*bmu.value, bmu.bound))
-			mvTotal = boundedAdd(mvTotal, measuredScalar(sign*bmv.value, bmv.bound))
-			mzTotal = boundedAdd(mzTotal, measuredScalar(sign*bmz.value, bmz.bound))
+			muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*bmu.Value, bmu.Bound))
+			mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*bmv.Value, bmv.Bound))
+			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 		if onEnd {
 			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z1, -1, topCo, work)
@@ -213,18 +215,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			if err != nil {
 				return nil, err
 			}
-			bandVolume = boundedAdd(bandVolume, measuredScalar(sign*v.value, v.bound))
+			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
 			for _, g := range band.geom {
 				pa, pb := patchAreaOf(g)
-				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
+				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
 			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, work)
 			if err != nil {
 				return nil, err
 			}
-			muTotal = boundedAdd(muTotal, measuredScalar(sign*bmu.value, bmu.bound))
-			mvTotal = boundedAdd(mvTotal, measuredScalar(sign*bmv.value, bmv.bound))
-			mzTotal = boundedAdd(mzTotal, measuredScalar(sign*bmz.value, bmz.bound))
+			muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*bmu.Value, bmu.Bound))
+			mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*bmv.Value, bmv.Bound))
+			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
 		startLoopObjs[li] = &Loop{coedges: startCo, outer: li == 0}
@@ -243,16 +245,16 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		}
 		// sArea is measured on the BUILT cap contour (loopEnclosedAreaContext's
 		// own arithmetic bound), which says nothing about how far that contour
-		// sits from the one the offset DENOTES. sectionDisplacementArea is the
+		// sits from the one the offset DENOTES. proofbound.SectionDisplacementArea is the
 		// same 2D set-displacement identity extrude.go's own region area
 		// composes (docs/prism-boolean-design.md §7, one dimension down from
-		// sweptVolumeAllow above): a set bound, sound even where the
+		// proofbound.SweptVolumeAllow above): a set bound, sound even where the
 		// displacement changes which regions the offset merged, charged
 		// against this loop's own held boundary via capContourPerimeterUpper
 		// so it stands whatever the corner geometry did.
-		sBound := absSumUpper(sArea.bound,
-			sectionDisplacementArea(startBand.delta, len(loop.Segments), capContourPerimeterUpper(startBand.capCo)))
-		startArea = boundedAdd(startArea, measuredScalar(sign*sArea.value, sBound))
+		sBound := proofbound.AbsSumUpper(sArea.Bound,
+			proofbound.SectionDisplacementArea(startBand.delta, len(loop.Segments), capContourPerimeterUpper(startBand.capCo)))
+		startArea = proofbound.BoundedAdd(startArea, proofbound.MeasuredScalar(sign*sArea.Value, sBound))
 
 		endBoundary := loop
 		if onEnd {
@@ -265,9 +267,9 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		if err != nil {
 			return nil, err
 		}
-		eBound := absSumUpper(eArea.bound,
-			sectionDisplacementArea(endBand.delta, len(loop.Segments), capContourPerimeterUpper(endBand.capCo)))
-		endArea = boundedAdd(endArea, measuredScalar(sign*eArea.value, eBound))
+		eBound := proofbound.AbsSumUpper(eArea.Bound,
+			proofbound.SectionDisplacementArea(endBand.delta, len(loop.Segments), capContourPerimeterUpper(endBand.capCo)))
+		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
 
 	pl := prismPayload{frame: cbp.frame, xform: cbp.xform}
@@ -284,8 +286,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
 		loops:         startLoopObjs,
-		area:          startArea.value,
-		areaBound:     startArea.bound,
+		area:          startArea.Value,
+		areaBound:     startArea.Bound,
 		axialDelta:    cbp.z0Delta,
 		hasAxialDelta: true,
 	}
@@ -294,8 +296,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:          body,
 		loops:         endLoopObjs,
-		area:          endArea.value,
-		areaBound:     endArea.bound,
+		area:          endArea.Value,
+		areaBound:     endArea.Bound,
 		axialDelta:    cbp.z1Delta,
 		hasAxialDelta: true,
 	}
@@ -305,18 +307,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	faces = append(faces, capStart, capEnd)
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
-	volume := boundedAdd(slabVolume, bandVolume)
+	volume := proofbound.BoundedAdd(slabVolume, bandVolume)
 	body.volume = Measurement{
-		Value:     units.CubicMillimeters(volume.value),
-		Exactness: exactnessOf(volume.bound),
-		Bound:     units.CubicMillimeters(volume.bound),
+		Value:     units.CubicMillimeters(volume.Value),
+		Exactness: exactnessOf(volume.Bound),
+		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 
-	totalArea := boundedAdd(boundedAdd(boundedAdd(startArea, endArea), sideArea), patchArea)
+	totalArea := proofbound.BoundedAdd(proofbound.BoundedAdd(proofbound.BoundedAdd(startArea, endArea), sideArea), patchArea)
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(totalArea.value),
-		Exactness: exactnessOf(totalArea.bound),
-		Bound:     units.SquareMillimeters(totalArea.bound),
+		Value:     units.SquareMillimeters(totalArea.Value),
+		Exactness: exactnessOf(totalArea.Bound),
+		Bound:     units.SquareMillimeters(totalArea.Bound),
 	}
 
 	// Centroid: the closed-form first moments divided by the body's own
@@ -327,10 +329,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	if err != nil {
 		return nil, err
 	}
-	cu := boundedQuotient(muTotal.value, muTotal.bound, volume.value, volume.bound)
-	cv := boundedQuotient(mvTotal.value, mvTotal.bound, volume.value, volume.bound)
-	cz := boundedQuotient(mzTotal.value, mzTotal.bound, volume.value, volume.bound)
-	centroidValue := pl.point(cu.value, cv.value, cz.value)
+	cu := proofbound.BoundedQuotient(muTotal.Value, muTotal.Bound, volume.Value, volume.Bound)
+	cv := proofbound.BoundedQuotient(mvTotal.Value, mvTotal.Bound, volume.Value, volume.Bound)
+	cz := proofbound.BoundedQuotient(mzTotal.Value, mzTotal.Bound, volume.Value, volume.Bound)
+	centroidValue := pl.point(cu.Value, cv.Value, cz.Value)
 	formulaBound := prismPointBound(pl, cu, cv, cz)
 	geometryBound := capBlendCentroidGeometryBound(centroidValue, bounds)
 	centroidBound := math.Min(formulaBound, geometryBound)
@@ -357,21 +359,21 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 // from the SAME offset math loopEnclosedAreaContext(capLoopBoundary(...))
 // measures the area of, so the two readings of one contour never disagree
 // about which boundary they describe. A nil capCo (the loop is not chamfered
-// on this cap) sums to zero, which is what leaves sectionDisplacementArea's
+// on this cap) sums to zero, which is what leaves proofbound.SectionDisplacementArea's
 // own delta<=0 guard as the only gate that matters.
 func capContourPerimeterUpper(capCo []coedge) float64 {
-	total := boundedScalar{}
+	total := proofbound.BoundedScalar{}
 	for _, ce := range capCo {
-		total = boundedAdd(total, measuredScalar(ce.edge.length, ce.edge.lengthBound))
+		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.length, ce.edge.lengthBound))
 	}
-	return absSumUpper(total.value, total.bound)
+	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }
 
 // capLoopBoundary returns loop_li's OWN offset-by-d boundary as a standalone
 // LoopRecord, used to compute a chamfered cap's per-loop enclosed area and
 // the band's closing disk at the cap level.
 func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	work := newFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, loop, work)
 	if err != nil {
@@ -403,12 +405,12 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 //     exact rational's rounding) multiplied by the level it sits at;
 //   - the rounding of sideZ itself, which multiplies a whole disk area;
 //   - each float multiplication and addition, whose committed error
-//     boundedMul/boundedAdd take EXACTLY over big.Rat rather than estimate;
+//     proofbound.BoundedMul/proofbound.BoundedAdd take EXACTLY over big.Rat rather than estimate;
 //   - each patch's own flux bound (patchRawFlux), including a Cone patch's
 //     trig terms, which a certified enclosure bounds (a magnitude envelope
-//     only where no enclosure lifts) and analyticRoundBound never speaks for.
+//     only where no enclosure lifts) and proofbound.AnalyticRoundBound never speaks for.
 //
-// boundedAdd sums bounds, so no step of this composition is ever rescaled by
+// proofbound.BoundedAdd sums bounds, so no step of this composition is ever rescaled by
 // a result the step's own operands cancelled down to.
 //
 // None of those terms speaks for the cap contour's own displacement (delta,
@@ -417,13 +419,13 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // that sits within delta of the one it denotes. That is one displacement
 // acting on the whole surface the band closes on — this loop's patches AND
 // the cap disk they meet — so it is composed ONCE here, after the flux sum,
-// via bounds.go's sweptVolumeAllow(delta, areaUpper): charging it inside
+// via internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper): charging it inside
 // capArea's own bound, or inside each patchRawFlux term, would count the SAME
 // displaced coordinates twice, since patchRawFlux already reads them.
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (boundedScalar, error) {
+func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (proofbound.BoundedScalar, error) {
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := boundedAdd(capZB, measuredScalar(matSign*cbp.d, cbp.dDelta))
-	sideZ := sideZB.value
+	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZ := sideZB.Value
 	// sideZ multiplies a whole disk area below, so its own rounding is a term
 	// of the band and is charged here — an error the size of an ulp of the
 	// sweep height, amplified by the section's area, which is of the order of
@@ -436,9 +438,9 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// actually recorded. Every patch, in contrast, is built from the loop's
 	// OWN walk, so a clockwise loop (a hole) hands the band patches facing
 	// into it. orient rotates them back onto the disks' own orientation.
-	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)
+	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
-		return boundedScalar{}, err
+		return proofbound.BoundedScalar{}, err
 	}
 	orient := 1.0
 	if signedArea < 0 {
@@ -446,15 +448,15 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	}
 	sideArea, err := loopEnclosedAreaContext(ctx, loop)
 	if err != nil {
-		return boundedScalar{}, err
+		return proofbound.BoundedScalar{}, err
 	}
 	capBoundary, err := capLoopBoundary(ctx, loop, cbp.d)
 	if err != nil {
-		return boundedScalar{}, err
+		return proofbound.BoundedScalar{}, err
 	}
 	capArea, err := loopEnclosedAreaContext(ctx, capBoundary)
 	if err != nil {
-		return boundedScalar{}, err
+		return proofbound.BoundedScalar{}, err
 	}
 	// Outward normal signs (docs/modify-reach-design.md §8.4): the disk at
 	// capZ faces -matSign*Z, the disk at sideZ faces +matSign*Z, both away
@@ -465,9 +467,9 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// level keeps whatever bound it arrived with: capZ can inherit a body-
 	// relative stop's axial displacement, and sideZ adds its own rounding to
 	// that same displacement.
-	fluxTotal := boundedAdd(
-		boundedMul(measuredScalar(capZB.value*(-matSign), capZB.bound), capArea),
-		boundedMul(measuredScalar(sideZ*matSign, sideZB.bound), sideArea),
+	fluxTotal := proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.MeasuredScalar(capZB.Value*(-matSign), capZB.Bound), capArea),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(sideZ*matSign, sideZB.Bound), sideArea),
 	)
 	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
 	// side-level vertices first, cap-level second — regardless of which cap
@@ -479,20 +481,20 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// (TestCapBlendStartCapVolumeMatchesEndCap). -matSign speaks for the
 	// AXIAL half and orient for the IN-PLANE half; patchRawFlux itself has
 	// already put each patch in its own walk's sense.
-	patchAreaTotal := boundedScalar{}
+	patchAreaTotal := proofbound.BoundedScalar{}
 	for _, g := range geom {
 		f := patchRawFlux(g)
-		fluxTotal = boundedAdd(fluxTotal, measuredScalar(-matSign*orient*f.value, f.bound))
+		fluxTotal = proofbound.BoundedAdd(fluxTotal, proofbound.MeasuredScalar(-matSign*orient*f.Value, f.Bound))
 		pa, pb := patchAreaOf(g)
-		patchAreaTotal = boundedAdd(patchAreaTotal, measuredScalar(pa, pb))
+		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
 	}
-	result := boundedQuotient(fluxTotal.value, fluxTotal.bound, 3, 0)
+	result := proofbound.BoundedQuotient(fluxTotal.Value, fluxTotal.Bound, 3, 0)
 	// areaUpper is the surface the contour's own displacement acted on: this
 	// band's patches plus the cap disk they close on (capArea) — the same two
 	// terms patchRawFlux and the disk flux above both read displaced
 	// coordinates from.
-	areaUpper := absSumUpper(patchAreaTotal.value, patchAreaTotal.bound, capArea.value, capArea.bound)
-	result.bound = absSumUpper(result.bound, sweptVolumeAllow(delta, areaUpper))
+	areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
+	result.Bound = proofbound.AbsSumUpper(result.Bound, proofbound.SweptVolumeAllow(delta, areaUpper))
 	return result, nil
 }
 
@@ -541,14 +543,14 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 // the straight ruling only touches at s=0 and s=1 and chords in between. That
 // gap is real, grows as the setback approaches the section's own inradius (the
 // cap window closes hard against the side one), and can exceed the arithmetic
-// bound above by several times over — bounds.go's chordLocusVolumeAllow is the
+// bound above by several times over — internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow is the
 // dedicated proven term for it (chordLocusResidualAllow below gathers this
 // patch's own inputs to it), added into the bound whenever the two windows
 // genuinely differ and left at its own zero, unchanged, wherever they
 // coincide. TestCapBlendErosionFamilyVolumeBoundEncloses judges the composed
 // bound against an independent erosion-family reference, including the
 // setback-limit family this term exists for.
-func patchRawFlux(g capPatchGeom) boundedScalar {
+func patchRawFlux(g capPatchGeom) proofbound.BoundedScalar {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
 		v1 := r3.NewVec(g.sideB.U, g.sideB.V, g.sideZ)
@@ -556,7 +558,7 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		v3 := r3.NewVec(g.capA.U, g.capA.V, g.capZ)
 		if exact, ok := exactPlanePatchFlux(v0, v1, v2, v3); ok {
 			held, _ := exact.Float64()
-			return measuredScalar(held, proofarith.RationalFloatError(exact, held))
+			return proofbound.MeasuredScalar(held, proofarith.RationalFloatError(exact, held))
 		}
 		tri := func(a, b, c r3.Vec) float64 { return a.Dot(b.Cross(c)) }
 		value := 0.5*tri(v0, v1, v2) + 0.5*tri(v0, v2, v3)
@@ -564,8 +566,8 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		// triple product AND on the product itself, so the two together are
 		// the envelope of the whole expression; the dropped halvings only
 		// widen it.
-		env := absSumUpper(tripleProductUpper(v0, v1, v2), tripleProductUpper(v0, v2, v3))
-		return measuredScalar(value, analyticRoundBound(env))
+		env := proofbound.AbsSumUpper(tripleProductUpper(v0, v1, v2), tripleProductUpper(v0, v2, v3))
+		return proofbound.MeasuredScalar(value, proofbound.AnalyticRoundBound(env))
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	z0, z1 := g.sideZ, g.capZ
@@ -641,21 +643,21 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 	// junctions) multiplied by |z0|, plus the H-only piece — with the /2
 	// divisors dropped because dropping a divisor above one only widens an
 	// envelope. It carries no libm result, so its rounding is ordinary basic
-	// arithmetic and analyticRoundBound is the budget for it.
-	polyZ0Env := absSumUpper(
-		productUpper(productUpper(absR1, absR1), absDSC),
-		productUpper(productUpper(absDS, absDR), absSumUpper(absR0, absR1)),
+	// arithmetic and proofbound.AnalyticRoundBound is the budget for it.
+	polyZ0Env := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(proofbound.ProductUpper(absR1, absR1), absDSC),
+		proofbound.ProductUpper(proofbound.ProductUpper(absDS, absDR), proofbound.AbsSumUpper(absR0, absR1)),
 	)
-	polyEnv := absSumUpper(
-		productUpper(absZ0, polyZ0Env),
-		productUpper(productUpper(absR0, absR0), productUpper(absH, absDS)),
+	polyEnv := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(absZ0, polyZ0Env),
+		proofbound.ProductUpper(proofbound.ProductUpper(absR0, absR0), proofbound.ProductUpper(absH, absDS)),
 	)
 	// polyEnv, originEnv and crossEnv serve the whole-turn arm and the
 	// non-finite fallback below; every other patch takes
 	// conePatchFluxInterval's enclosure instead and reads none of them.
 	// origin and cross both carry a trig factor — origin through Sincos
-	// directly, cross through ruledAngleCos's cos/sinc — and bounded.go's
-	// analyticRoundBound states the rule both break: Go gives Sin, Cos and
+	// directly, cross through ruledAngleCos's cos/sinc — and internal/proofbound/bounded.go's
+	// proofbound.AnalyticRoundBound states the rule both break: Go gives Sin, Cos and
 	// Atan2 no ulp contract, so a result computed through them never rests on
 	// that roundoff budget alone. originEnv/crossEnv are the STRUCTURAL
 	// magnitude envelopes that stand in its place instead — never read off
@@ -665,11 +667,11 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 	// |ruledAngleCos| never exceeds 1 (|cos| <= 1, |sinc| <= 1 for every
 	// real argument), so cross's magnitude never exceeds the same
 	// z0-proportional-plus-H-only envelope poly's own regrouping gives it.
-	originEnv := productUpper(productUpper(absH, absSumUpper(absR0, absR1)), absSumUpper(g.cU, g.cV))
-	crossZ0Env := productUpper(productUpper(absR0, absR1), absDSC)
-	crossEnv := absSumUpper(
-		productUpper(absZ0, crossZ0Env),
-		productUpper(productUpper(absR0, absR1), productUpper(absH, absDC)),
+	originEnv := proofbound.ProductUpper(proofbound.ProductUpper(absH, proofbound.AbsSumUpper(absR0, absR1)), proofbound.AbsSumUpper(g.cU, g.cV))
+	crossZ0Env := proofbound.ProductUpper(proofbound.ProductUpper(absR0, absR1), absDSC)
+	crossEnv := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(absZ0, crossZ0Env),
+		proofbound.ProductUpper(proofbound.ProductUpper(absR0, absR1), proofbound.ProductUpper(absH, absDC)),
 	)
 
 	var flux, bound float64
@@ -686,8 +688,8 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		// origin is therefore its own whole error, and cross (now ordinary
 		// arithmetic, no trig) is charged the same rounding budget poly is.
 		flux = poly + cross + origin
-		trigBound := upRound(math.Abs(origin))
-		bound = absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
+		trigBound := proofbound.UpRound(math.Abs(origin))
+		bound = proofbound.AbsSumUpper(proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
 	default:
 		iv, ok := conePatchFluxInterval(g)
 		if !ok {
@@ -696,21 +698,21 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 			intCos := ruledAngleCos(thS0, thS1, thC0, thC1)
 			trig := origin + cross*intCos
 			flux = poly + trig
-			trigBound := conservativeValueError(trig, absSumUpper(originEnv, crossEnv))
-			bound = absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
+			trigBound := proofbound.ConservativeValueError(trig, proofbound.AbsSumUpper(originEnv, crossEnv))
+			bound = proofbound.AbsSumUpper(proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
 			break
 		}
 		held, _ := intervalMid(iv).Float64()
 		flux = held
-		bound = intervalFloatError(iv, held)
+		bound = proofbound.IntervalFloatError(iv, held)
 	}
 	if !g.wholeTurn {
 		// The arithmetic bound above is only for the STRAIGHT-RULED patch
 		// this evaluator actually builds; at a non-tangential corner (where
 		// the cap-level window genuinely differs from the side-level one) it
 		// says nothing about that patch's own gap from the TRUE curved miter
-		// locus the construction denotes (bounds.go's chordLocusVolumeAllow).
-		bound = absSumUpper(bound, chordLocusResidualAllow(g))
+		// locus the construction denotes (internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow).
+		bound = proofbound.AbsSumUpper(bound, chordLocusResidualAllow(g))
 	}
 	if !g.sweepCCW {
 		// The integral is taken over the NORMALIZED window th0 < th1, which
@@ -721,18 +723,18 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		// mirror surface, so its flux is negated back to the sense its walk
 		// actually has. The caller then rotates the whole band into the
 		// virtual band's own orientation.
-		return measuredScalar(-flux, bound)
+		return proofbound.MeasuredScalar(-flux, bound)
 	}
-	return measuredScalar(flux, bound)
+	return proofbound.MeasuredScalar(flux, bound)
 }
 
 // chordLocusResidualAllow gathers this ONE patch's own inputs to
-// bounds.go's chordLocusVolumeAllow: the two reference cone-sector fluxes
+// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow: the two reference cone-sector fluxes
 // (the wide, side-window-only reading and the narrow, cap-window-only one —
 // both this same patchRawFlux formula, degenerate to the ordinary
 // rotationally-symmetric cone sector once a patch's two directrices share one
-// window) and this patch's own held area, the surface bounds.go's
-// sweptVolumeAllow needs. Zero wherever the two windows already coincide (a
+// window) and this patch's own held area, the surface internal/proofbound/bounds.go's
+// proofbound.SweptVolumeAllow needs. Zero wherever the two windows already coincide (a
 // tangent join, or either degenerate patch), matching every already-shipped
 // reading those configurations publish.
 //
@@ -771,8 +773,8 @@ func chordLocusResidualAllow(g capPatchGeom) float64 {
 	wide := patchRawFlux(wideGeom)
 	narrow := patchRawFlux(narrowGeom)
 	pa, pb := patchAreaOf(g)
-	return chordLocusVolumeAllow(wide.value, wide.bound, narrow.value, narrow.bound,
-		g.sideRadius, g.capRadius, windowSkewMax, absSumUpper(pa, pb))
+	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
+		g.sideRadius, g.capRadius, windowSkewMax, proofbound.AbsSumUpper(pa, pb))
 }
 
 // capWindowOnBranch shifts the cap-level window (capTh0, capTh1) by the
@@ -820,16 +822,16 @@ func sincHalf(x float64) float64 {
 // at x == 0 (no enclosure needed), otherwise the certified sine of h = x/2
 // divided by the exact nonzero point h. intervalQuo never refuses here: the
 // divisor is a nonzero point interval.
-func sincHalfInterval(x *big.Rat) (ratInterval, bool) {
+func sincHalfInterval(x *big.Rat) (proofbound.RatInterval, bool) {
 	if x.Sign() == 0 {
-		return pointInterval(big.NewRat(1, 1)), true
+		return proofbound.PointInterval(big.NewRat(1, 1)), true
 	}
 	h := new(big.Rat).Mul(x, big.NewRat(1, 2))
 	sin, _, ok := radSinCosInterval(h)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalQuo(sin, pointInterval(h))
+	return intervalQuo(sin, proofbound.PointInterval(h))
 }
 
 // phaseIntegralInterval encloses ∫₀¹ cos(a0 + u·(a1−a0)) du and the sine
@@ -837,20 +839,20 @@ func sincHalfInterval(x *big.Rat) (ratInterval, bool) {
 // cos(mid)·sinc(width/2), sin(mid)·sinc(width/2) that ruledAngleCos and
 // phaseSumInterval already state (mid = (a0+a1)/2, width = a1−a0). Both
 // factors are certified enclosures (radSinCosInterval, sincHalfInterval) and
-// intervalMul is inclusion-monotonic, so each output contains the true
+// proofbound.IntervalMul is inclusion-monotonic, so each output contains the true
 // integral whatever the platform's math package returns.
-func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv ratInterval, ok bool) {
+func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval, ok bool) {
 	mid := new(big.Rat).Mul(new(big.Rat).Add(a0, a1), big.NewRat(1, 2))
 	width := new(big.Rat).Sub(a1, a0)
 	s, c, okMid := radSinCosInterval(mid)
 	if !okMid {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
 	sc, okSinc := sincHalfInterval(width)
 	if !okSinc {
-		return ratInterval{}, ratInterval{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
-	return intervalMul(c, sc), intervalMul(s, sc), true
+	return proofbound.IntervalMul(c, sc), proofbound.IntervalMul(s, sc), true
 }
 
 // conePatchFluxInterval encloses the EXACT raw flux of the ruled Cone patch
@@ -869,7 +871,7 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv ratInterval, ok bool) 
 //     is inclusion-monotonic, so the result contains the exact closed form at
 //     the held parameters whatever the platform's math package does;
 //   - its caller holds the nearest float to the midpoint and publishes
-//     intervalFloatError, the larger distance to either end rounded up, so
+//     proofbound.IntervalFloatError, the larger distance to either end rounded up, so
 //     the true flux in the interval lies within that bound of the held value.
 //
 // Nothing here grows with the arc centre's distance from the plane-local
@@ -877,7 +879,7 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv ratInterval, ok bool) 
 // grid (turnGridShift), not by a magnitude envelope. The width is never zero
 // for a non-whole-turn patch: radSinCosInterval answers a non-point interval
 // for every nonzero rational, so a Cone patch stays Approximate.
-func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
+func conePatchFluxInterval(g capPatchGeom) (proofbound.RatInterval, bool) {
 	R0, R1 := proofarith.FloatRat(g.sideRadius), proofarith.FloatRat(g.capRadius)
 	z0, z1 := proofarith.FloatRat(g.sideZ), proofarith.FloatRat(g.capZ)
 	thS0, thS1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
@@ -885,7 +887,7 @@ func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
 	cU, cV := proofarith.FloatRat(g.cU), proofarith.FloatRat(g.cV)
 	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
 		if r == nil {
-			return ratInterval{}, false
+			return proofbound.RatInterval{}, false
 		}
 	}
 	half := big.NewRat(1, 2)
@@ -900,25 +902,25 @@ func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
 	sC0, cC0, okC0 := radSinCosInterval(thC0)
 	sC1, cC1, okC1 := radSinCosInterval(thC1)
 	if !okS0 || !okS1 || !okC0 || !okC1 {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
 	// origin = H/2·R0·(cU·(sinS1−sinS0) + cV·(cosS0−cosS1))
 	//        + H/2·R1·(cU·(sinC1−sinC0) + cV·(cosC0−cosC1)).
-	originR0 := intervalScale(
-		intervalAdd(intervalScale(intervalSub(sS1, sS0), cU), intervalScale(intervalSub(cS0, cS1), cV)),
-		ratMul(H, half, R0))
-	originR1 := intervalScale(
-		intervalAdd(intervalScale(intervalSub(sC1, sC0), cU), intervalScale(intervalSub(cC0, cC1), cV)),
-		ratMul(H, half, R1))
-	origin := intervalAdd(originR0, originR1)
+	originR0 := proofbound.IntervalScale(
+		proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.IntervalSub(sS1, sS0), cU), proofbound.IntervalScale(proofbound.IntervalSub(cS0, cS1), cV)),
+		proofbound.RatMul(H, half, R0))
+	originR1 := proofbound.IntervalScale(
+		proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.IntervalSub(sC1, sC0), cU), proofbound.IntervalScale(proofbound.IntervalSub(cC0, cC1), cV)),
+		proofbound.RatMul(H, half, R1))
+	origin := proofbound.IntervalAdd(originR0, originR1)
 
 	// poly = z0·(R1²·dSC − dS·dR·(R0+R1))/2 + R0²·H·dS/2 and
 	// cross = z0·(−R0·R1·dSC)/2 + R0·R1·H·dC/2, patchRawFlux's own regrouped
 	// forms — exact identities, so the grouping costs nothing over rationals.
-	polyZ0 := new(big.Rat).Sub(ratMul(R1, R1, dSC), ratMul(dS, dR, ratAdd(R0, R1)))
-	poly := ratAdd(ratMul(z0, polyZ0, half), ratMul(R0, R0, H, dS, half))
-	crossZ0 := new(big.Rat).Neg(ratMul(R0, R1, dSC))
-	cross := ratAdd(ratMul(z0, crossZ0, half), ratMul(R0, R1, H, dC, half))
+	polyZ0 := new(big.Rat).Sub(proofbound.RatMul(R1, R1, dSC), proofbound.RatMul(dS, dR, proofbound.RatAdd(R0, R1)))
+	poly := proofbound.RatAdd(proofbound.RatMul(z0, polyZ0, half), proofbound.RatMul(R0, R0, H, dS, half))
+	crossZ0 := new(big.Rat).Neg(proofbound.RatMul(R0, R1, dSC))
+	cross := proofbound.RatAdd(proofbound.RatMul(z0, crossZ0, half), proofbound.RatMul(R0, R1, H, dC, half))
 
 	// intCos = ∫₀¹ cos(thS(u) − thC(u)) du, the phase running from
 	// phi0 = thS0−thC0 to phi1 = thS1−thC1: ruledAngleCos's
@@ -927,9 +929,9 @@ func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
 	phi1 := new(big.Rat).Sub(thS1, thC1)
 	intCos, _, ok := phaseIntegralInterval(phi0, phi1)
 	if !ok {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	return intervalAdd(intervalAdd(pointInterval(poly), origin), intervalScale(intCos, cross)), true
+	return proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.PointInterval(poly), origin), proofbound.IntervalScale(intCos, cross)), true
 }
 
 // exactPlanePatchFlux is the flat quad patch's raw flux
@@ -972,16 +974,16 @@ func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
 // evaluation of it passes through: each cross-product component is a
 // difference of two of the six products below, and each final product is one
 // of a_i times such a difference, so their absolute sum dominates all of
-// them. It is the envelope analyticRoundBound is owed for a determinant,
+// them. It is the envelope proofbound.AnalyticRoundBound is owed for a determinant,
 // whose own value cancels to an arbitrarily small fraction of it.
 func tripleProductUpper(a, b, c r3.Vec) float64 {
-	return absSumUpper(
-		productUpper(math.Abs(a.X), productUpper(math.Abs(b.Y), math.Abs(c.Z))),
-		productUpper(math.Abs(a.X), productUpper(math.Abs(b.Z), math.Abs(c.Y))),
-		productUpper(math.Abs(a.Y), productUpper(math.Abs(b.Z), math.Abs(c.X))),
-		productUpper(math.Abs(a.Y), productUpper(math.Abs(b.X), math.Abs(c.Z))),
-		productUpper(math.Abs(a.Z), productUpper(math.Abs(b.X), math.Abs(c.Y))),
-		productUpper(math.Abs(a.Z), productUpper(math.Abs(b.Y), math.Abs(c.X))),
+	return proofbound.AbsSumUpper(
+		proofbound.ProductUpper(math.Abs(a.X), proofbound.ProductUpper(math.Abs(b.Y), math.Abs(c.Z))),
+		proofbound.ProductUpper(math.Abs(a.X), proofbound.ProductUpper(math.Abs(b.Z), math.Abs(c.Y))),
+		proofbound.ProductUpper(math.Abs(a.Y), proofbound.ProductUpper(math.Abs(b.Z), math.Abs(c.X))),
+		proofbound.ProductUpper(math.Abs(a.Y), proofbound.ProductUpper(math.Abs(b.X), math.Abs(c.Z))),
+		proofbound.ProductUpper(math.Abs(a.Z), proofbound.ProductUpper(math.Abs(b.X), math.Abs(c.Y))),
+		proofbound.ProductUpper(math.Abs(a.Z), proofbound.ProductUpper(math.Abs(b.Y), math.Abs(c.X))),
 	)
 }
 
@@ -994,13 +996,13 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 // ratio of the wall's length to the setback — and a budget read off the
 // surviving area under-counts by that ratio.
 func crossProductUpper(a, b r3.Vec) float64 {
-	return absSumUpper(
-		productUpper(math.Abs(a.Y), math.Abs(b.Z)),
-		productUpper(math.Abs(a.Z), math.Abs(b.Y)),
-		productUpper(math.Abs(a.Z), math.Abs(b.X)),
-		productUpper(math.Abs(a.X), math.Abs(b.Z)),
-		productUpper(math.Abs(a.X), math.Abs(b.Y)),
-		productUpper(math.Abs(a.Y), math.Abs(b.X)),
+	return proofbound.AbsSumUpper(
+		proofbound.ProductUpper(math.Abs(a.Y), math.Abs(b.Z)),
+		proofbound.ProductUpper(math.Abs(a.Z), math.Abs(b.Y)),
+		proofbound.ProductUpper(math.Abs(a.Z), math.Abs(b.X)),
+		proofbound.ProductUpper(math.Abs(a.X), math.Abs(b.Z)),
+		proofbound.ProductUpper(math.Abs(a.X), math.Abs(b.Y)),
+		proofbound.ProductUpper(math.Abs(a.Y), math.Abs(b.X)),
 	)
 }
 
@@ -1009,12 +1011,12 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // Plane reading is NEVER exact. Its two terms are each a float subtraction, a
 // float cross product and a float norm — r3's own Len is a nested Hypot, which
 // carries no ulp contract at all — and their sum rounds once more, so the held
-// value is a float evaluation and sumSlop is the proven, never-zero bound
-// bounds.go keeps for that shape (the same one boolean_body.go's mesh facet
+// value is a float evaluation and proofbound.SumSlop is the proven, never-zero bound
+// internal/proofbound/bounds.go keeps for that shape (the same one boolean_body.go's mesh facet
 // areas take). Returning a zero bound there would publish an Exact the
 // arithmetic has not earned, on the face AND in the body's own area sum.
 //
-// sumSlop alone is not the whole of it, because it charges each term a few
+// proofbound.SumSlop alone is not the whole of it, because it charges each term a few
 // ulps of the term's OWN value and a band patch's cross product cancels
 // before that value is reached. crossProductUpper carries the envelope those
 // products actually reach, so the charge tracks the terms rather than what
@@ -1024,7 +1026,7 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // contour displacement (capblend_contour.go): both read g's coordinates as
 // exact inputs, but a chamfered patch's cap-level corner sits where a float
 // offset solve put it, not where the offset denotes. g.contourAllow is that
-// allowance, computed once at build time (bounds.go's bandPatchAreaAllow)
+// allowance, computed once at build time (internal/proofbound/bounds.go's proofbound.BandPatchAreaAllow)
 // from this patch's own held chord and slant, and it is zero wherever the
 // band's contour displacement is zero — an axis-aligned section's exact
 // miters — which is what keeps TestCapBlendPlanePatchVolumeIsExact's area
@@ -1040,8 +1042,8 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // substituting the HELD side level for the denoted one in a 512-bit reference
 // drops the three patches' residuals from 3358.207374649123 /
 // 111990.60743768104 / 111940.24564437279 mm^2 to 5.236122866634288e-06 /
-// 8.892307483919435e-06 / 2.7272066797437425e-06 mm^2. bounds.go's
-// bandLevelAreaAllow is that charge, and it is zero wherever the sum is exact
+// 8.892307483919435e-06 / 2.7272066797437425e-06 mm^2. internal/proofbound/bounds.go's
+// proofbound.BandLevelAreaAllow is that charge, and it is zero wherever the sum is exact
 // (an ordinary sweep and setback), which is what leaves every tight reading
 // tight.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
@@ -1053,11 +1055,11 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 		a1 := v1.Sub(v0).Cross(v2.Sub(v0)).Len() / 2
 		a2 := v2.Sub(v0).Cross(v3.Sub(v0)).Len() / 2
 		area := a1 + a2
-		crossEnv := absSumUpper(
+		crossEnv := proofbound.AbsSumUpper(
 			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
 			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
 		)
-		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), patchDisplacementAreaAllow(g))
+		bound := proofbound.AbsSumUpper(proofbound.SumSlop(2, proofbound.AbsSumUpper(a1, a2)), proofbound.AnalyticRoundBound(crossEnv), patchDisplacementAreaAllow(g))
 		return area, bound
 	}
 	R0, R1 := g.sideRadius, g.capRadius
@@ -1107,27 +1109,27 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	// offset trimmed at its own miter feet, so the skew is corner-local, and
 	// no reachable body in the sweep produced one.
 	sideDth := math.Abs(g.th1 - g.th0)
-	windowSkew := productUpper(math.Abs(sideDth-dth), productUpper(absSumUpper(R0, R1), slant))
+	windowSkew := proofbound.ProductUpper(math.Abs(sideDth-dth), proofbound.ProductUpper(proofbound.AbsSumUpper(R0, R1), slant))
 	// The core term (everything but windowSkew, contourAllow and the level
 	// allowance below, which stand unchanged either way) takes the SMALLER of
 	// two independently sound
-	// bounds: the unconditional envelope conservativeValueError always gives,
+	// bounds: the unconditional envelope proofbound.ConservativeValueError always gives,
 	// and coneFrustumAreaBracket's certified interval — sound wherever it
 	// manages to build one, +Inf (hence never the min) where it cannot. This
 	// can only shrink the published bound, never grow it.
 	core := math.Min(
-		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
+		proofbound.ConservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
 		coneFrustumAreaBracket(R0, R1, H, dth, g.capThAllow, area),
 	)
-	bound := absSumUpper(core, windowSkew, patchDisplacementAreaAllow(g))
+	bound := proofbound.AbsSumUpper(core, windowSkew, patchDisplacementAreaAllow(g))
 	return area, bound
 }
 
 // patchDisplacementAreaAllow is the part of a band patch's own area bound that
 // comes from the two DISPLACEMENTS its directrices carry rather than from the
 // arithmetic that evaluated its area: the cap contour's own in-plane
-// displacement (contourAllow, bandPatchAreaAllow at build time) beside the side
-// level's axial one (bandLevelAreaAllow over levelDelta). patchAreaOf composes
+// displacement (contourAllow, proofbound.BandPatchAreaAllow at build time) beside the side
+// level's axial one (proofbound.BandLevelAreaAllow over levelDelta). patchAreaOf composes
 // it into the bound it publishes, and the tessellator charges the same two
 // terms per patch into the mesh's own area slack
 // (docs/tessellation-reach-design.md §7), so neither reader can be told a
@@ -1144,24 +1146,24 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 // single level, so each 3D length IS its 2D one.
 func patchDisplacementAreaAllow(g capPatchGeom) float64 {
 	if !g.circular {
-		return absSumUpper(g.contourAllow, bandLevelAreaAllow(g.levelDelta,
-			absSumUpper(chordUpper2(g.sideA, g.sideB), chordUpper2(g.capA, g.capB))))
+		return proofbound.AbsSumUpper(g.contourAllow, proofbound.BandLevelAreaAllow(g.levelDelta,
+			proofbound.AbsSumUpper(chordUpper2(g.sideA, g.sideB), chordUpper2(g.capA, g.capB))))
 	}
 	h := g.capZ - g.sideZ
 	dth := math.Abs(g.capTh1 - g.capTh0)
-	return absSumUpper(g.contourAllow, bandLevelAreaAllow(
-		absSumUpper(g.levelDelta, proofarith.AddRoundError(g.capZ, -g.sideZ, h)),
-		productUpper(absSumUpper(dth, g.capThAllow), absSumUpper(g.sideRadius, g.capRadius)),
+	return proofbound.AbsSumUpper(g.contourAllow, proofbound.BandLevelAreaAllow(
+		proofbound.AbsSumUpper(g.levelDelta, proofarith.AddRoundError(g.capZ, -g.sideZ, h)),
+		proofbound.ProductUpper(proofbound.AbsSumUpper(dth, g.capThAllow), proofbound.AbsSumUpper(g.sideRadius, g.capRadius)),
 	))
 }
 
 // chordUpper2 is a PROVEN upper bound on the distance between two plane-local
 // points, taken without trusting any libm contract: the 1-norm dominates the
 // 2-norm, each coordinate difference is one float subtraction, and
-// analyticRoundBound covers those two roundings at the sum's own magnitude.
+// proofbound.AnalyticRoundBound covers those two roundings at the sum's own magnitude.
 func chordUpper2(a, b Point2) float64 {
-	raw := absSumUpper(b.U-a.U, b.V-a.V)
-	return absSumUpper(raw, analyticRoundBound(raw))
+	raw := proofbound.AbsSumUpper(b.U-a.U, b.V-a.V)
+	return proofbound.AbsSumUpper(raw, proofbound.AnalyticRoundBound(raw))
 }
 
 // coneFrustumAreaBracket is the certified interval bound on patchAreaOf's
@@ -1179,8 +1181,8 @@ func chordUpper2(a, b Point2) float64 {
 // inside is what keeps the interval a statement about the held patch.
 //
 // The remaining inexact factors are the sweep Δθ — bracketed by dthAllow,
-// capThAllow's own proven enclosure of the true window (an atan2Interval
-// bracket on the patch's own offset feet, or piLower/piUpper for the
+// capThAllow's own proven enclosure of the true window (an proofbound.Atan2Interval
+// bracket on the patch's own offset feet, or proofbound.PiLower/proofbound.PiUpper for the
 // structurally whole-turn circle; capblend_contour.go/capblend_geom.go) — and
 // the square root, rounded outward by intervalSqrt. Interval arithmetic is
 // inclusion-monotonic, so the composed product [dth−dthAllow, dth+dthAllow] ×
@@ -1193,12 +1195,12 @@ func chordUpper2(a, b Point2) float64 {
 // and H describe, and lifting those three exactly is precisely what makes it
 // so. It is not a claim about the patch the chamfer DENOTES: H is capZ minus
 // a ROUNDED side level, and the distance between the two patches is the
-// caller's own separate charge (bandLevelAreaAllow), which no tightening here
+// caller's own separate charge (proofbound.BandLevelAreaAllow), which no tightening here
 // can ever substitute for. That charge already covers the H subtraction's own
 // rounding (patchAreaOf folds addRoundError(capZ, −sideZ, H) in beside the
 // level's displacement), which is why H stays a parameter where ΔR does not.
 func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
-	if isNonFinite(dthAllow) {
+	if proofbound.IsNonFinite(dthAllow) {
 		return math.Inf(1)
 	}
 	rR0, rR1 := proofarith.FloatRat(R0), proofarith.FloatRat(R1)
@@ -1208,18 +1210,18 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 		return math.Inf(1)
 	}
 	rdR := new(big.Rat).Sub(rR1, rR0)
-	slantIv, ok := intervalSqrt(intervalAdd(intervalSquare(pointInterval(rdR)), intervalSquare(pointInterval(rH))))
+	slantIv, ok := intervalSqrt(proofbound.IntervalAdd(intervalSquare(proofbound.PointInterval(rdR)), intervalSquare(proofbound.PointInterval(rH))))
 	if !ok {
 		return math.Inf(1)
 	}
-	radiiIv := pointInterval(new(big.Rat).Add(rR0, rR1))
+	radiiIv := proofbound.PointInterval(new(big.Rat).Add(rR0, rR1))
 	// [dth-dthAllow, dth+dthAllow], taken EXACTLY over rationals (never as a
 	// float subtraction/addition, which could round the interval's own
 	// endpoint the wrong way and silently exclude the true value it is
 	// supposed to enclose).
-	dthIv := interval(new(big.Rat).Sub(rdth, rAllow), new(big.Rat).Add(rdth, rAllow))
-	areaIv := intervalScale(intervalMul(dthIv, intervalMul(radiiIv, slantIv)), big.NewRat(1, 2))
-	return intervalFloatError(areaIv, held)
+	dthIv := proofbound.Interval(new(big.Rat).Sub(rdth, rAllow), new(big.Rat).Add(rdth, rAllow))
+	areaIv := proofbound.IntervalScale(proofbound.IntervalMul(dthIv, proofbound.IntervalMul(radiiIv, slantIv)), big.NewRat(1, 2))
+	return proofbound.IntervalFloatError(areaIv, held)
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -752,7 +754,7 @@ func tierSphereFace(x float64) *cFace {
 
 func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
 	t.Parallel()
-	faces := make([]*cFace, workPollInterval+64)
+	faces := make([]*cFace, proofbound.WorkPollInterval+64)
 	for i := range faces {
 		faces[i] = tierSphereFace(100 + float64(i))
 	}
@@ -772,7 +774,7 @@ func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
 
 func TestVertexTierCountsEdges(t *testing.T) {
 	t.Parallel()
-	edges := make([]*cEdge, workPollInterval+64)
+	edges := make([]*cEdge, proofbound.WorkPollInterval+64)
 	for i := range edges {
 		y := 100 + float64(i)
 		edges[i] = &cEdge{
@@ -784,7 +786,7 @@ func TestVertexTierCountsEdges(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "vertexTier"}
 	k := &pairKernel{ctx: ctx, tol: 1e-9}
 
-	err := k.vertexTier(newWorkBudget(ctx), r3.Vec{}, &bodyGeom{edges: edges}, &cellSink{})
+	err := k.vertexTier(proofbound.NewWorkBudget(ctx), r3.Vec{}, &bodyGeom{edges: edges}, &cellSink{})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -792,11 +794,11 @@ func TestVertexTierCountsEdges(t *testing.T) {
 
 func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 	t.Parallel()
-	region := internalPolygonRegion(t, 0, 0, 100, workPollInterval+64)
+	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval+64)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionBoundaryDistBudget"}
 	k := &pairKernel{ctx: ctx, tol: region.tol()}
 
-	err := k.vertexFace(newWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
+	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -804,11 +806,11 @@ func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 
 func TestVertexFaceCountsWindingScan(t *testing.T) {
 	t.Parallel()
-	region := internalPolygonRegion(t, 0, 0, 100, workPollInterval-16)
+	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval-16)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionContainsBudget"}
 	k := &pairKernel{ctx: ctx, tol: region.tol()}
 
-	err := k.vertexFace(newWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
+	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -818,15 +820,15 @@ func TestVertexTierPropagatesBudgetExhaustion(t *testing.T) {
 	t.Parallel()
 	exhausted := errors.New("work budget exhausted")
 	steps := 0
-	budget := &workBudget{
-		stepFn: func() error {
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error {
 			steps++
 			if steps == 2 {
 				return exhausted
 			}
 			return nil
 		},
-		errFn: func() error { return nil },
+		ErrFn: func() error { return nil },
 	}
 	k := &pairKernel{ctx: t.Context(), tol: 1e-9}
 	other := &bodyGeom{faces: []*cFace{tierSphereFace(100), tierSphereFace(200)}}
@@ -844,7 +846,7 @@ func TestVertexTierBudgetKeepsNormalResult(t *testing.T) {
 	sink := &cellSink{}
 
 	err := k.vertexTier(
-		newWorkBudget(t.Context()),
+		proofbound.NewWorkBudget(t.Context()),
 		r3.NewVec(0, 0, 5),
 		&bodyGeom{faces: []*cFace{tierPlaneFace(region)}},
 		sink,

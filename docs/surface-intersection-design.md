@@ -358,7 +358,7 @@ point pointing here.
 | RS13 | `Split` handed a revolve-family pair, or any construction handing a `revolvePayload` carrying a nonzero section displacement to the solid build | `ErrUnsupported` | No — §11's Split increment lifts both, and §3.4 states what it owes first |
 | RS14 | `Extend` handed a partially revolved ribbon, or a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — the first waits on a recorded free-end map (§2.2), the second on the pole topology a cut fragment ending on the axis would sweep |
 
-The work budget and cancellation are `budget.go`'s existing `workBudget` and
+The work budget and cancellation are `internal/proofbound/budget.go`'s existing `workBudget` and
 prism §10's discipline unchanged: one counter per attempt, charged per created
 entity and per candidate cell or edge touched, polled at phase boundaries, and
 `s.Profiles()` run in one bounded worker while the caller selects against
@@ -378,7 +378,7 @@ Every recorded field of a result is one of:
   endpoint.
 
 So **one term displaces the result, and it is prism §7's `δ_cut`**: the
-parameter allowance `bounds.go`'s `cutParamUlps` states, times the carrier's
+parameter allowance `internal/proofbound/bounds.go`'s `cutParamUlps` states, times the carrier's
 own speed over its parameterisation through `cutDisplacementAllow` — the chord
 for a line, `2πR` for a circle or an arc. `δ_cut` is the largest such
 allowance over the surviving fragments, and the result's `sectionDelta` is

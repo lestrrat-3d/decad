@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 	"slices"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is the certified-bracket machinery of docs/clearance-design.md
@@ -27,17 +29,9 @@ type ratPoly []*big.Rat
 
 var errNonFiniteClearancePolynomial = errors.New("decad: non-finite clearance polynomial coefficient")
 
-func ratOf(f float64) (*big.Rat, bool) {
-	r := new(big.Rat)
-	if r.SetFloat64(f) == nil {
-		return nil, false
-	}
-	return r, true
-}
-
 // mustRatOf lifts a float whose caller has already proved finite.
 func mustRatOf(f float64) *big.Rat {
-	r, ok := ratOf(f)
+	r, ok := proofbound.RatOf(f)
 	if !ok {
 		panic("decad: exact rational lift requires a finite float")
 	}
@@ -48,7 +42,7 @@ func ratPolyOf(coeffs ...float64) (ratPoly, bool) {
 	out := make(ratPoly, len(coeffs))
 	for i, coeff := range coeffs {
 		var ok bool
-		out[i], ok = ratOf(coeff)
+		out[i], ok = proofbound.RatOf(coeff)
 		if !ok {
 			return nil, false
 		}

@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +37,7 @@ import (
 //     excluding two points whose contribution is always the additive
 //     identity of a max cannot change any max this file computes, on any
 //     span, ever. No fixture can tell the two forms apart.
-//   - Swap ratSqrtUp for ratSqrtDown in dyadicSpanSagittaUpper's final
+//   - Swap proofbound.RatSqrtUp for proofbound.RatSqrtDown in dyadicSpanSagittaUpper's final
 //     rounding: TestSpanSagittaUpperRoundsOutward went red — the returned
 //     bound, converted to a big.Float, fell strictly BELOW the exact rational
 //     maximum squared distance's own proven square root, violating the
@@ -127,7 +129,7 @@ import (
 //     exactly.
 //   - A6: the cost model charged one flat 8 units per control point for both
 //     readings, left ratPointAt's reconstruction, dyadicSpanOf's conversion
-//     and the per-call ratSqrtUp entirely free, and so was not the upper
+//     and the per-call proofbound.RatSqrtUp entirely free, and so was not the upper
 //     bound its own doc comment claimed. Each charge is now counted on its own
 //     code path. Five mutations were each run red against the new fixtures:
 //     deleting the conversion charge (TestPairStationsChargesEveryPhaseOfA
@@ -220,11 +222,11 @@ import (
 // it, and restored:
 //
 //   - D1: spanMatchedDeltaUpper's exact quartering replaced by the float
-//     halving upRound(gap / 2) of the already-rounded hodograph gap:
+//     halving proofbound.UpRound(gap / 2) of the already-rounded hodograph gap:
 //     TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero went red on
 //     every row of its window — the published bound read exactly 0 where the
 //     true parameter-matched deviation is positive, which is an under-cover
-//     and not a rounding, since bounds.go's cellChordCurveAreaUpper gates its
+//     and not a rounding, since internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper gates its
 //     whole chord-to-curve leg on matchedDelta > 0.
 //
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
@@ -753,7 +755,7 @@ func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
 // by hand for this fixture) and its square root is bracketed to 200 bits with
 // math/big.Float.Sqrt. spanSagittaUpper's returned float64 must sit AT OR
 // ABOVE that bracket, never below it — the property that distinguishes
-// ratSqrtUp from ratSqrtDown, and one dense sampling at float64 precision is
+// proofbound.RatSqrtUp from proofbound.RatSqrtDown, and one dense sampling at float64 precision is
 // too coarse (both round within a handful of ulps of the true root) to catch
 // on its own.
 func TestSpanSagittaUpperRoundsOutward(t *testing.T) {
@@ -1034,9 +1036,9 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	require.Equal(t, ratQuarterOps, ratQuarterCost,
 		"the exact quartering the matched delta roots must be charged, and charged for the Mul's own normalisation")
 
-	// ratSqrtUp: the seed, then at most sqrtAdjustLimit walks of two ratSquare
+	// proofbound.RatSqrtUp: the seed, then at most proofbound.SqrtAdjustLimit walks of two ratSquare
 	// probes (floatRat, Mul, Cmp) plus one Nextafter.
-	const ratSqrtUpOps = 4 + sqrtAdjustLimit*(2*3+1)
+	const ratSqrtUpOps = 4 + proofbound.SqrtAdjustLimit*(2*3+1)
 	require.GreaterOrEqual(t, ratSqrtUpCost, ratSqrtUpOps,
 		"the per-call outward rounding must be charged, and charged for its whole bounded walk")
 
@@ -1359,7 +1361,7 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 		"mutating a returned station must never change the caller's own input span")
 }
 
-// --- C: matched-delta primitives (bounds.go's cellChordCurveAreaUpper
+// --- C: matched-delta primitives (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
 // matchedDeltaUpper obligation) — spanHodographGapUpper, spanMatchedDeltaUpper,
 // spanSpeedUpper ---
 
@@ -1426,7 +1428,7 @@ func zigzagHuggingSpan() bezierSpan {
 // fixture: it densely proves the sagitta of 0 FAILS to bound the true
 // parameter-matched deviation on zigzagHuggingSpan, and that
 // spanMatchedDeltaUpper (d/2) DOES bound it. This is F1's rule made
-// concrete: cellChordCurveAreaUpper's matchedDeltaUpper obligation is a
+// concrete: proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation is a
 // strictly stronger claim than the sagitta, and confusing the two is exactly
 // the unsoundness this function exists to prevent a downstream caller from
 // committing.
@@ -1491,7 +1493,7 @@ func nearMidpointQuadraticSpan(eps *big.Rat) bezierSpan {
 // hodograph gap loses the bound outright, rather than the single span that
 // first exposed it.
 //
-// The window is not a knife edge. ratSqrtUp reports the smallest subnormal for
+// The window is not a knife edge. proofbound.RatSqrtUp reports the smallest subnormal for
 // EVERY positive exact radicand at or below (2^-1074)^2, because big.Rat has no
 // underflow to lose the radicand in, so every span whose exact gap d sits at or
 // below 2^-1074 publishes the same subnormal d. Halving that float in float
@@ -1502,7 +1504,7 @@ func nearMidpointQuadraticSpan(eps *big.Rat) bezierSpan {
 // and not merely to pass.
 //
 // A published 0 is not a narrow bound here, it is an absent one:
-// cellChordCurveAreaUpper (bounds.go) gates its chord-to-curve leg on
+// proofbound.CellChordCurveAreaUpper (internal/proofbound/bounds.go) gates its chord-to-curve leg on
 // matchedDelta > 0 and drops the leg entirely at 0. The enclosure is therefore
 // asserted over the exact rationals, against eps/2 itself — a dense float
 // sample cannot even represent the deviations in this window.
@@ -1551,7 +1553,7 @@ func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
 	for i, span := range quarterCircleFitSpans(t) {
 		gap := hodographGapOf(t, span)
 		matched := matchedDeltaOf(t, span)
-		require.LessOrEqual(t, matched, upRound(gap/2),
+		require.LessOrEqual(t, matched, proofbound.UpRound(gap/2),
 			"span %d: rooting d^2/4 must never read above the float halving of d", i)
 		require.Positive(t, matched, "span %d: a curved span carries a positive parameter-matched deviation", i)
 	}
@@ -1560,7 +1562,7 @@ func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
 // TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength checks
 // both of spanSpeedUpper's own obligations: it encloses a dense finite-
 // difference sample of ||C'(t)||, and it never reads below the span's own
-// chord length — the floor cellChordCurveAreaUpper's own tangent-magnitude
+// chord length — the floor proofbound.CellChordCurveAreaUpper's own tangent-magnitude
 // argument depends on.
 func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testing.T) {
 	t.Parallel()

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -364,8 +366,12 @@ type chainPayload struct {
 	sectionDelta float64
 }
 
-func (pp chainPayload) z0Scalar() boundedScalar { return measuredScalar(pp.z0, pp.z0Delta) }
-func (pp chainPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, pp.z1Delta) }
+func (pp chainPayload) z0Scalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(pp.z0, pp.z0Delta)
+}
+func (pp chainPayload) z1Scalar() proofbound.BoundedScalar {
+	return proofbound.MeasuredScalar(pp.z1, pp.z1Delta)
+}
 
 // prism is a *view* of pp as a zero-section-delta prismPayload — never a body
 // this evaluator builds — used only to feed pp.point/pp.dir/reflected and
@@ -492,14 +498,14 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	if len(pp.chains) == 0 {
 		return nil, fmt.Errorf(`%w: a ribbon payload holds no walk`, ErrDegenerate)
 	}
-	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
-	if height.value <= 0 {
+	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
+	if height.Value <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
 	var allFaces []*Face
-	total := boundedScalar{}
+	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture
 	if pp.sectionDelta == 0 {
 		captures = make([]chainWalkCapture, len(pp.chains))
@@ -514,14 +520,14 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 			return nil, err
 		}
 		allFaces = append(allFaces, faces...)
-		total = boundedAdd(total, area)
+		total = proofbound.BoundedAdd(total, area)
 	}
 	body.lumps = sheetLumps(allFaces)
 
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(total.value),
-		Exactness: exactnessOf(total.bound),
-		Bound:     units.SquareMillimeters(total.bound),
+		Value:     units.SquareMillimeters(total.Value),
+		Exactness: exactnessOf(total.Bound),
+		Bound:     units.SquareMillimeters(total.Bound),
 	}
 	// volume and centroid stay at their zero value: finite, so
 	// validateAnalyticBodyMeasurements below passes, and neither is
@@ -594,17 +600,17 @@ func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *profi
 // (1..n-1) shares its sweep edge between the two walls it joins, exactly as
 // buildLoopSidesAs's own junction verticals do for a closed loop
 // (docs/surface-design.md §13.4). It returns the faces and the walk's own
-// total wall area, folded through boundedAdd rather than summed as raw
+// total wall area, folded through proofbound.BoundedAdd rather than summed as raw
 // floats.
-func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeformWork, capture *chainWalkCapture) ([]*Face, boundedScalar, error) {
+func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
 	prismView := pp.prism()
 	// Every coordinate this walk's segments read sits within pp's own section
 	// displacement of the section it denotes, so each segment's own length
 	// carries that displacement too — buildLoopSidesAs's identical charge,
-	// prism-boolean §7's 12·π·δ per walk (bounds.go's
-	// sectionDisplacementLength), zero for every payload ExtrudeChain builds
+	// prism-boolean §7's 12·π·δ per walk (internal/proofbound/bounds.go's
+	// proofbound.SectionDisplacementLength), zero for every payload ExtrudeChain builds
 	// directly.
-	walkLenAllow := sectionDisplacementLength(pp.sectionDelta, 1)
+	walkLenAllow := proofbound.SectionDisplacementLength(pp.sectionDelta, 1)
 	raw := make([]sideWalk, len(chain.Segments))
 	if capture != nil {
 		capture.walks = make([]segmentWalk, len(chain.Segments))
@@ -612,41 +618,41 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	}
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		before, beforeRecon := workSpent(work)
 		w, err := walkOf(seg, work)
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		if capture != nil {
 			after, afterRecon := workSpent(work)
 			capture.walks[i] = w
 			capture.charges[i] = walkReadCharge{after - before, afterRecon - beforeRecon}
 		}
-		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
+		w.lengthBound = proofbound.AbsSumUpper(w.lengthBound, walkLenAllow)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {
-		return nil, boundedScalar{}, err
+		return nil, proofbound.BoundedScalar{}, err
 	}
 	n := len(walks)
 
-	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
+	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
 	maxCoordUpper := 0.0
 	for _, w := range walks {
 		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
 	}
 	// frameLiftAllow is the one proven bound this ribbon's rim vertices share
 	// for the payload's own frame lift and accumulated placement
-	// (bounds.go's frameAndPlacementRoundAllow) — exactly zero for an
+	// (internal/proofbound/bounds.go's proofbound.FrameAndPlacementRoundAllow) — exactly zero for an
 	// axis-aligned, unplaced payload, which is what keeps a plain
 	// ExtrudeChain's rim vertices Exact, mirroring buildLoopSidesAs's own
 	// frameLiftAllow.
-	frameLiftAllow := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
-	bottomBoundBase := absSumUpper(pp.z0Delta, frameLiftAllow)
-	topBoundBase := absSumUpper(pp.z1Delta, frameLiftAllow)
+	frameLiftAllow := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	bottomBoundBase := proofbound.AbsSumUpper(pp.z0Delta, frameLiftAllow)
+	topBoundBase := proofbound.AbsSumUpper(pp.z1Delta, frameLiftAllow)
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
 	// i < n, and at the LAST walk's own end for i == n — the chain's two free
@@ -657,7 +663,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	topV := make([]*Vertex, n+1)
 	for i := 0; i <= n; i++ {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		var u, v, extra float64
 		if i < n {
@@ -670,8 +676,8 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		if i > 0 && i < n {
 			extra = math.Max(extra, freeformVertexAllow(walks[i-1].segmentWalk, walks[i-1].endBound))
 		}
-		bottomV[i] = &Vertex{position: prismView.point(u, v, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
-		topV[i] = &Vertex{position: prismView.point(u, v, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
+		bottomV[i] = &Vertex{position: prismView.point(u, v, pp.z0), bound: units.Millimeters(proofbound.AbsSumUpper(bottomBoundBase, extra))}
+		topV[i] = &Vertex{position: prismView.point(u, v, pp.z1), bound: units.Millimeters(proofbound.AbsSumUpper(topBoundBase, extra))}
 	}
 
 	// Sweep edges at every post, free-end and interior alike. Convexity from
@@ -682,43 +688,43 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	vertical := make([]*Edge, n+1)
 	for i := 0; i <= n; i++ {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		convex := false
 		if i > 0 && i < n {
 			prev, w := walks[i-1], walks[i]
 			convex = prev.tanOutU*w.tanInV-prev.tanOutV*w.tanInU > 0
 		}
-		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.bound}
+		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.Bound}
 	}
 
 	faces := make([]*Face, 0, n)
-	total := boundedScalar{}
+	total := proofbound.BoundedScalar{}
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		// holeLoop is always false: a chain has no hole, and the whole walk
 		// takes the loop-0 (outer) convention (docs/surface-design.md §13.4).
 		convex, err := rimConvexity(ctx, w, false, work)
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		bottomEdge, topEdge, surf, faceReversed, err := buildWallGeometry(prismView, w, convex, false, bottomV[i], bottomV[i+1], topV[i], topV[i+1])
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
 		origins, err := sideOriginsContext(ctx, ref, chainIdx, w.segs)
 		if err != nil {
-			return nil, boundedScalar{}, err
+			return nil, proofbound.BoundedScalar{}, err
 		}
-		faceArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
+		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.length, w.lengthBound), height)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
 			body:      body,
-			area:      faceArea.value,
-			areaBound: faceArea.bound,
+			area:      faceArea.Value,
+			areaBound: faceArea.Bound,
 			reversed:  faceReversed,
 			loops: []*Loop{{outer: true, coedges: []coedge{
 				{edge: bottomEdge, forward: true},
@@ -731,7 +737,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			e.faces = append(e.faces, face)
 		}
 		faces = append(faces, face)
-		total = boundedAdd(total, faceArea)
+		total = proofbound.BoundedAdd(total, faceArea)
 	}
 	return faces, total, nil
 }

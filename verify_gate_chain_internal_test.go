@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -91,8 +93,8 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 			require.Positive(t, allow)
 			walk, err := walkOf(tc.segment, newFreeformWork())
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, allow, walkEndBoundAllow(walk.startBound))
-			require.GreaterOrEqual(t, allow, walkEndBoundAllow(walk.endBound))
+			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.startBound))
+			require.GreaterOrEqual(t, allow, proofbound.WalkEndBoundAllow(walk.endBound))
 			require.GreaterOrEqual(t, allow, arcNaturalEndRadialUpper(tc.segment))
 		})
 	}

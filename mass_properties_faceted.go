@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/units"
 )
 
@@ -14,8 +16,8 @@ import (
 // certificate, and admits them only when the VerifyAll mesh restating them
 // publishes the same certificate.
 func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, density units.Value) (MassProperties, error) {
-	if len(pp.verts) == 0 || len(pp.tris) == 0 || isNonFinite(pp.meshBound) || pp.meshBound < 0 ||
-		isNonFinite(pp.volSymDiff) || pp.volSymDiff < 0 {
+	if len(pp.verts) == 0 || len(pp.tris) == 0 || proofbound.IsNonFinite(pp.meshBound) || pp.meshBound < 0 ||
+		proofbound.IsNonFinite(pp.volSymDiff) || pp.volSymDiff < 0 {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no finite occupied-volume certificate", ErrUnsupported)
 	}
 	mesh, err := b.Tessellate(ctx, units.Millimeters(math.Max(1, pp.meshBound)), WithVerification(VerifyAll))

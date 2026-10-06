@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -177,8 +179,8 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	holed := len(pp.profile.Holes) > 0
 	h := pp.z1 - pp.z0
-	offsetBudget := newWorkBudget(ctx)
-	if err := offsetBudget.err(); err != nil {
+	offsetBudget := proofbound.NewWorkBudget(ctx)
+	if err := offsetBudget.Err(); err != nil {
 		return nil, err
 	}
 
@@ -348,7 +350,7 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 // scale-relative shellTol below the limit — 1e-9 of the section's own size,
 // decades above the aggregate's own half-width — so the interval cannot reach
 // across a decision the margin has not already made.
-func sectionInradius(budget *workBudget, profile ProfileRecord, thickness, thicknessDelta float64) (float64, bool, error) {
+func sectionInradius(budget *proofbound.WorkBudget, profile ProfileRecord, thickness, thicknessDelta float64) (float64, bool, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
@@ -381,7 +383,7 @@ func sectionInradius(budget *workBudget, profile ProfileRecord, thickness, thick
 	if err := wallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
-	candidateWork, ok := wallCandidateWork(len(elems), len(verts), false)
+	candidateWork, ok := proofbound.WallCandidateWork(len(elems), len(verts), false)
 	if err := wallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
@@ -404,15 +406,15 @@ func sectionInradius(budget *workBudget, profile ProfileRecord, thickness, thick
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, exactScalar(0), false, math.Inf(1))
+	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, proofbound.ExactScalar(0), false, math.Inf(1))
 	if err != nil {
 		return 0, false, err
 	}
-	out, err := k.runBudget(newWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
+	out, err := k.runBudget(proofbound.NewWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return 0, false, err
 	}
-	if errors.Is(err, errWallWorkBudget) {
+	if errors.Is(err, proofbound.ErrWallWorkBudget) {
 		return 0, false, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
 	}
 	if err != nil {
@@ -429,7 +431,7 @@ func sectionInradius(budget *workBudget, profile ProfileRecord, thickness, thick
 // centers. A failed search says nothing: sectionInradius then runs its usual
 // complete survey. Only recorded line endpoints with zero displacement and
 // whole circles with bounded converted radii enter this proof.
-func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][]sideWalk, thickness, thicknessDelta float64) (bool, error) {
+func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord, loops [][]sideWalk, thickness, thicknessDelta float64) (bool, error) {
 	if len(loops) == 0 || len(loops[0]) != 4 {
 		return false, nil
 	}
@@ -438,7 +440,7 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 	minY, maxY := outer[0].startV, outer[0].startV
 	for _, side := range outer {
 		w := side.segmentWalk
-		if w.kind != walkLine || w.startBound != (walkEndBound{}) || w.endBound != (walkEndBound{}) {
+		if w.kind != walkLine || w.startBound != (proofbound.WalkEndBound{}) || w.endBound != (proofbound.WalkEndBound{}) {
 			return false, nil
 		}
 		minX = math.Min(minX, w.startU)
@@ -447,7 +449,7 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 		maxY = math.Max(maxY, w.startV)
 	}
 	if !(minX < maxX && minY < maxY) ||
-		isNonFinite(minX) || isNonFinite(maxX) || isNonFinite(minY) || isNonFinite(maxY) {
+		proofbound.IsNonFinite(minX) || proofbound.IsNonFinite(maxX) || proofbound.IsNonFinite(minY) || proofbound.IsNonFinite(maxY) {
 		return false, nil
 	}
 	var sides uint8
@@ -490,14 +492,14 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 		}
 		w := loop[0].segmentWalk
 		if w.kind != walkCircular || !w.closed || w.radiusBound != 0 ||
-			isNonFinite(w.cU) || isNonFinite(w.cV) || isNonFinite(w.radius) || w.radius <= 0 {
+			proofbound.IsNonFinite(w.cU) || proofbound.IsNonFinite(w.cV) || proofbound.IsNonFinite(w.radius) || w.radius <= 0 {
 			return false, nil
 		}
 		radius, radiusDelta, err := magnitudeInBounded(segment.Radius, units.Length, units.Millimeter, "the hole radius")
 		if err != nil {
 			return false, err
 		}
-		if radius != w.radius || isNonFinite(radiusDelta) {
+		if radius != w.radius || proofbound.IsNonFinite(radiusDelta) {
 			return false, nil
 		}
 		radiusUpper := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(radiusDelta))

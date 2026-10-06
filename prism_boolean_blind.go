@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -11,7 +13,7 @@ import (
 // The structural match already proved that every target loop survives whole.
 // Keep those records verbatim so a wall shared across slabs stays one column;
 // take only the new tool hole from the authenticated arranged profile.
-func canonicalizeStackedCutProfile(budget *workBudget, target ProfileRecord, match *sketch.Profile,
+func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target ProfileRecord, match *sketch.Profile,
 	tags map[sketch.Entity]prismEntityOrigin, candidate ProfileRecord) (ProfileRecord, error) {
 	if len(match.Holes) != len(candidate.Holes) || len(candidate.Holes) != len(target.Holes)+1 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the cut profile has an unexpected hole count`, ErrUnsupported)
@@ -44,8 +46,8 @@ func canonicalizeStackedCutProfile(budget *workBudget, target ProfileRecord, mat
 // tryBlindStackedCut admits a cleanly nested blind tool against a prism. The
 // private sketch scene proves the two slab sections before they are recorded.
 func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return stackedPrismPayload{}, false, err
 	}
 	target, tool, ok, err := admitPrismPairBudget(budget, a, b)
@@ -116,11 +118,11 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if innerDelta == 0 {
 		innerDelta = shiftRound
 	} else {
-		innerDelta = absSumUpper(innerDelta, shiftRound)
+		innerDelta = proofbound.AbsSumUpper(innerDelta, shiftRound)
 	}
 	sp := stackedPrismPayload{frame: target.frame, xform: target.xform, slabs: make([]prismSlab, 2),
-		sectionDelta: max(absSumUpper(target.sectionDelta, sceneDelta.a),
-			absSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))}
+		sectionDelta: max(proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))}
 	if openAtTop {
 		sp.slabs[0] = prismSlab{regions: []ProfileRecord{target.profile},
 			z0: target.z0, z1: innerHeld, z0Delta: target.z0Delta, z1Delta: innerDelta}
@@ -155,7 +157,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()
 	proxy := &Body{payload: outer}
 	_, tool, ok, err := admitPrismPairBudget(budget, proxy, b)
@@ -177,7 +179,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	result.slabs = append([]prismSlab(nil), sp.slabs...)
 	result.interfaces = make([]prismSlabInterface, len(sp.interfaces))
 	for k, slab := range sp.slabs {
-		if err := budget.err(); err != nil {
+		if err := budget.Err(); err != nil {
 			return stackedPrismPayload{}, false, err
 		}
 		target := outer
@@ -215,8 +217,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		}
 		result.slabs[k].regions = []ProfileRecord{profile}
 		result.sectionDelta = max(result.sectionDelta,
-			absSumUpper(target.sectionDelta, sceneDelta.a),
-			absSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))
+			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))
 	}
 	for k := range result.interfaces {
 		lowerOnly, upperOnly, err := stackedExclusiveHoles(

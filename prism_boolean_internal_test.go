@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -364,9 +366,9 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	require.Equal(t, nearest, result.z1)
 	require.Positive(t, result.z1Delta)
 	// B's incoming z1Delta is 0, so the published term is the rounding charge
-	// folded through absSumUpper's outward rounding.
+	// folded through proofbound.AbsSumUpper's outward rounding.
 	require.GreaterOrEqual(t, result.z1Delta, proofarith.RationalFloatError(exact, result.z1))
-	require.Equal(t, absSumUpper(0, proofarith.RationalFloatError(exact, result.z1)), result.z1Delta)
+	require.Equal(t, proofbound.AbsSumUpper(0, proofarith.RationalFloatError(exact, result.z1)), result.z1Delta)
 
 	body, err := evalPrism(New(), producerID(0), result, newFreeformWork())
 	require.NoError(t, err)
@@ -441,7 +443,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	reexpression, err := newPrismReexpression(pa, pb)
 	require.NoError(t, err)
 	require.False(t, reexpression.identity)
-	scene, _, _, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -499,11 +501,11 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
 
-	scene, _, _, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), first, shallow, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	split, err := prismProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
+	split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
@@ -994,7 +996,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
 	require.Zero(t, reexpression.delta, "δ_reexpress must be zero")
 
-	_, _, sceneDelta, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	require.Positive(t, sceneDelta.a, "operand A's own trimmed walls must carry a walk charge")
 	require.Zero(t, sceneDelta.b, "operand B is drawn whole, so δ_walkB is zero")
@@ -1006,16 +1008,16 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	// §7's formula, term by term, with δ_cut = 0 because the merge cuts
 	// nothing: every walk charge sits inside its own operand's fold.
 	const cutDelta = 0.0
-	want := absSumUpper(
+	want := proofbound.AbsSumUpper(
 		max(
-			absSumUpper(pa.sectionDelta, sceneDelta.a),
-			absSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.delta),
+			proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
+			proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.delta),
 		),
 		cutDelta,
 	)
 	require.Equal(t, want, pu.sectionDelta,
 		"with every other term zero the published displacement is A's own walk charge, folded in once")
-	require.Less(t, pu.sectionDelta, absSumUpper(want, sceneDelta.a),
+	require.Less(t, pu.sectionDelta, proofbound.AbsSumUpper(want, sceneDelta.a),
 		"a second, separate walk charge outside the max would roughly double the published displacement")
 }
 
@@ -1240,7 +1242,7 @@ func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
 				require.NoError(t, err)
 
 				profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
-				refused, err := prismProfileHasTrimmedCircularSource(newWorkBudget(t.Context()), profile)
+				refused, err := prismProfileHasTrimmedCircularSource(proofbound.NewWorkBudget(t.Context()), profile)
 				require.NoError(t, err)
 
 				require.Equal(t, rng.wantRefusal, refused,
@@ -1430,7 +1432,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			require.False(t, math.IsInf(charge, 0))
 
 			chargeSq := new(big.Rat).Mul(prismRatOf(t, charge), prismRatOf(t, charge))
-			endpointOnly := walkEndpointAllow(w.coordUpper)
+			endpointOnly := proofbound.WalkEndpointAllow(w.coordUpper)
 			endpointOnlySq := new(big.Rat).Mul(prismRatOf(t, endpointOnly), prismRatOf(t, endpointOnly))
 
 			// The three evaluations every row is judged at: the walk this
@@ -1574,7 +1576,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}}
-			got, err := prismProfileHasTrimmedCircularSource(newWorkBudget(t.Context()), profile)
+			got, err := prismProfileHasTrimmedCircularSource(proofbound.NewWorkBudget(t.Context()), profile)
 			require.NoError(t, err)
 			require.Equal(t, tc.trimmed, got)
 		})
@@ -1642,12 +1644,12 @@ func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
 
-	scene, _, sceneDelta, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	require.Positive(t, sceneDelta.a, "operand A's own trimmed bottom/top walls must carry a walk charge")
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	split, err := prismProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
+	split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
 	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
 
@@ -1944,7 +1946,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 // single arrangement cell through the same recordEdge/edgeJoin/
 // prismUnionCutDelta sequence and the same evalPrism math, so their published
 // Value must agree exactly. Bound is not required to match bit for bit — the
-// one-cell sum still charges exactSumRound's own accumulated-rounding term
+// one-cell sum still charges proofbound.ExactSumRound's own accumulated-rounding term
 // (§4.5's "The sum" paragraph), which is a legitimate, slightly more
 // conservative outward rounding a single-term sum still commits, never a
 // tighter one.

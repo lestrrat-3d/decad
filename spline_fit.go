@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
@@ -102,19 +104,19 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeformWork) ([]bezierSpan, e
 	points := make([]ratPoint, k)
 	seconds := make([]ratPoint, k)
 	for i := range k {
-		p, ok := ratOf(interp.Params[i])
+		p, ok := proofbound.RatOf(interp.Params[i])
 		if !ok {
 			return nil, fmt.Errorf(`%w: a fit spline's cumulative chord parameter is not finite`, ErrNotFinite)
 		}
 		params[i] = p
-		u, okU := ratOf(interp.Points[i][0])
-		v, okV := ratOf(interp.Points[i][1])
+		u, okU := proofbound.RatOf(interp.Points[i][0])
+		v, okV := proofbound.RatOf(interp.Points[i][1])
 		if !okU || !okV {
 			return nil, fmt.Errorf(`%w: a fit spline's active point is not finite`, ErrNotFinite)
 		}
 		points[i] = ratPoint{u: u, v: v}
-		mu, okMU := ratOf(interp.SecondDerivs[i][0])
-		mv, okMV := ratOf(interp.SecondDerivs[i][1])
+		mu, okMU := proofbound.RatOf(interp.SecondDerivs[i][0])
+		mv, okMV := proofbound.RatOf(interp.SecondDerivs[i][1])
 		if !okMU || !okMV {
 			return nil, fmt.Errorf(`%w: a fit spline's second derivative is not finite`, ErrNotFinite)
 		}

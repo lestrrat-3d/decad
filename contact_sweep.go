@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -423,7 +425,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 		out.supported = true
 	case RigidDriftSegment:
 		out.from = p.From
-		if !p.From.IsValid() || !finiteVec(p.Center) {
+		if !p.From.IsValid() || !proofbound.FiniteVec(p.Center) {
 			return out, fmt.Errorf("%w: invalid drift placement or center", ErrDegenerate)
 		}
 		out.duration, _ = exactBaseValue(p.Duration)
@@ -815,7 +817,7 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 				useIdeal()
 				return
 			}
-			publishedBound := ratFloatUp(bound)
+			publishedBound := proofbound.RatFloatUp(bound)
 			if publishedBound > r.req.PointResolution.Base() {
 				useIdeal()
 				return
@@ -824,7 +826,7 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 			witness.Exactness = exactnessFromBound(witness.Bound.Base())
 		}
 		separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
-		point.Separation.Bound = units.Millimeters(ratFloatUp(separationBound))
+		point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
 		point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 	}
 	event.Manifold = &ContactManifold{Points: points}
@@ -989,7 +991,7 @@ func sourceContactRootBracket(root, duration, resolution *big.Rat) (*big.Rat, *b
 
 // Every contact coordinate lies within the start/end box endpoint envelope.
 // One ULP at its maximum magnitude safely bounds conversion of any enclosed
-// dyadic fraction to float; radius3D turns that into a point-ball radius.
+// dyadic fraction to float; proofbound.Radius3D turns that into a point-ball radius.
 func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic, resolution float64) bool {
 	maximum := new(big.Rat)
 	for _, moving := range []struct {
@@ -1007,12 +1009,12 @@ func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]proofarith.Dy
 			}
 		}
 	}
-	maxFloat := ratFloatUp(maximum)
+	maxFloat := proofbound.RatFloatUp(maximum)
 	if !finiteMeasurementValues(maxFloat) {
 		return false
 	}
 	ulp := math.Nextafter(maxFloat, math.Inf(1)) - maxFloat
-	bound := radius3D(ulp)
+	bound := proofbound.Radius3D(ulp)
 	return finiteMeasurementValues(bound) && bound <= resolution
 }
 

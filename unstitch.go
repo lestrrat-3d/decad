@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // This file is Unstitch of docs/surface-design.md §6.5: the inverse of
 // stitch.go's Stitch, splitting a body back into one single-face sheet body
-// per face. It reuses stitch.go's transformSurface/transformCurve/finiteVec
+// per face. It reuses stitch.go's transformSurface/transformCurve/proofbound.FiniteVec
 // machinery unchanged — a placed unstitched face is transformed the same way
 // a placed stitched one is — and adds the one new mechanism §6.5 calls for: a
 // payload that re-evaluates ONE held face of an already-built B-rep under a
@@ -88,7 +90,7 @@ func (b *Body) Unstitch(ctx context.Context) ([]*Body, error) {
 // evalStitchContext.
 type unstitchPayload struct {
 	xform r3.Transform
-	// delta is the proven displacement rigidRoundAllow charges against this
+	// delta is the proven displacement proofbound.RigidRoundAllow charges against this
 	// face's placed geometry — zero exactly when xform is the identity
 	// transform, an exact struct comparison.
 	delta float64
@@ -134,12 +136,12 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	maxInputAbs := 0.0
 	for _, l := range srcFace.loops {
 		for _, ce := range l.coedges {
-			maxInputAbs = max(maxInputAbs, vecMaxAbs(ce.edge.start.position), vecMaxAbs(ce.edge.end.position))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
 		}
 	}
 	delta := 0.0
 	if xform != r3.Identity() {
-		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+		delta = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
 	}
 
 	nf, err := copyFaceUnderContext(ctx, srcFace, xform, delta)
@@ -231,12 +233,12 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			return nv, nil
 		}
 		p := xform.Apply(old.position)
-		if !finiteVec(p) {
+		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
 		bound := old.bound.Base()
 		if delta > 0 {
-			bound = absSumUpper(bound, delta)
+			bound = proofbound.AbsSumUpper(bound, delta)
 		}
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, so a
@@ -266,7 +268,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		}
 		lengthBound := old.lengthBound
 		if delta > 0 {
-			lengthBound = absSumUpper(lengthBound, delta)
+			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
 			curve:           curve,
@@ -288,7 +290,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	}
 	axialDelta := srcFace.axialDelta
 	if delta > 0 {
-		axialDelta = absSumUpper(axialDelta, delta)
+		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
 		surface:       surface,
@@ -376,7 +378,7 @@ func facePolygonBounds(nf *Face) (Box, error) {
 	var lo, hi r3.Vec
 	maxBound := 0.0
 	fold := func(v *Vertex) error {
-		if !finiteVec(v.position) {
+		if !proofbound.FiniteVec(v.position) {
 			return fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
 		if !have {
@@ -421,7 +423,7 @@ func unstitchBounds(srcBounds Box, xform r3.Transform, delta float64) (Box, erro
 	var lo, hi r3.Vec
 	for _, c := range stitchBoxCorners(srcBounds.Min, srcBounds.Max, inflate) {
 		p := xform.Apply(c)
-		if !finiteVec(p) {
+		if !proofbound.FiniteVec(p) {
 			return Box{}, fmt.Errorf(`%w: a placed unstitch bound is not representable`, ErrUnsupported)
 		}
 		if !have {

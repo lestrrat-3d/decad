@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -23,8 +25,8 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		!rectangularProfile(pp.profile) ||
 		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
-		!signedAxisTransform(pp.xform) || !pose.IsValid() || !finiteVec(pose.Translation()) ||
-		!finiteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
+		!signedAxisTransform(pp.xform) || !pose.IsValid() || !proofbound.FiniteVec(pose.Translation()) ||
+		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
 		return orientedSourceBox{}, false
 	}
 	var umin, umax, vmin, vmax float64
@@ -507,7 +509,7 @@ func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 // orientedBoxGap encloses the true minimum distance. SAT supplies a lower
 // bound; actual vertex/face point pairs supply upper bounds.
 func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) (Measurement, bool) {
-	normUp := ratSqrtUp(normSquared.Rat())
+	normUp := proofbound.RatSqrtUp(normSquared.Rat())
 	if !finiteMeasurementValues(normUp) || normUp <= 0 {
 		return Measurement{}, false
 	}
@@ -542,7 +544,7 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) 
 	if upperSquared == nil {
 		return Measurement{}, false
 	}
-	upperFloat := ratSqrtUp(upperSquared)
+	upperFloat := proofbound.RatSqrtUp(upperSquared)
 	if !finiteMeasurementValues(upperFloat) {
 		return Measurement{}, false
 	}
@@ -563,7 +565,7 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) 
 	if other.Cmp(deviation) > 0 {
 		deviation = other
 	}
-	bound := ratFloatUp(deviation)
+	bound := proofbound.RatFloatUp(deviation)
 	if !finiteMeasurementValues(bound) || new(big.Rat).Sub(held, proofarith.FloatRat(bound)).Sign() <= 0 {
 		return Measurement{}, false
 	}
@@ -735,7 +737,7 @@ func orientedPointInside(box orientedSourceBox, point [3]*big.Rat, eta *big.Rat)
 				normal[k] = proofarith.DyNeg(normal[k])
 			}
 		}
-		normUp := ratSqrtUp(proofarith.DvDot(normal, normal).Rat())
+		normUp := proofbound.RatSqrtUp(proofarith.DvDot(normal, normal).Rat())
 		if !finiteMeasurementValues(normUp) || normUp <= 0 {
 			return false
 		}

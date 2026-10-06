@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -110,44 +112,44 @@ func clearanceAxisBoxes(a, b *Body) (pairResult, bool) {
 	if !axisBoxPrism(a) || !axisBoxPrism(b) {
 		return pairResult{}, false
 	}
-	axisGap := func(amin, amax, bmin, bmax float64) boundedScalar {
+	axisGap := func(amin, amax, bmin, bmax float64) proofbound.BoundedScalar {
 		if amax < bmin {
-			return boundedSub(exactScalar(bmin), exactScalar(amax))
+			return proofbound.BoundedSub(proofbound.ExactScalar(bmin), proofbound.ExactScalar(amax))
 		}
 		if bmax < amin {
-			return boundedSub(exactScalar(amin), exactScalar(bmax))
+			return proofbound.BoundedSub(proofbound.ExactScalar(amin), proofbound.ExactScalar(bmax))
 		}
-		return exactScalar(0)
+		return proofbound.ExactScalar(0)
 	}
 	ab, bb := a.bounds, b.bounds
 	dx := axisGap(ab.Min.X, ab.Max.X, bb.Min.X, bb.Max.X)
 	dy := axisGap(ab.Min.Y, ab.Max.Y, bb.Min.Y, bb.Max.Y)
 	dz := axisGap(ab.Min.Z, ab.Max.Z, bb.Min.Z, bb.Max.Z)
-	squared := boundedAdd(boundedAdd(boundedMul(dx, dx), boundedMul(dy, dy)), boundedMul(dz, dz))
-	gap := boundedSqrt(squared)
-	lo, hi := boundedEnds(gap)
+	squared := proofbound.BoundedAdd(proofbound.BoundedAdd(proofbound.BoundedMul(dx, dx), proofbound.BoundedMul(dy, dy)), proofbound.BoundedMul(dz, dz))
+	gap := proofbound.BoundedSqrt(squared)
+	lo, hi := proofbound.BoundedEnds(gap)
 	lo = math.Max(0, lo)
 	scale := max(1, math.Abs(ab.Min.X), math.Abs(ab.Min.Y), math.Abs(ab.Min.Z),
 		math.Abs(ab.Max.X), math.Abs(ab.Max.Y), math.Abs(ab.Max.Z),
 		math.Abs(bb.Min.X), math.Abs(bb.Min.Y), math.Abs(bb.Min.Z),
 		math.Abs(bb.Max.X), math.Abs(bb.Max.Y), math.Abs(bb.Max.Z))
-	if isNonFinite(hi) || lo <= 1e-9*scale {
+	if proofbound.IsNonFinite(hi) || lo <= 1e-9*scale {
 		return pairResult{}, false
 	}
 	// The farthest distance within or between two boxes occurs at corners.
 	// Use downward endpoints so the reference diameter never overstates it.
-	distanceLower := func(x, y, z boundedScalar) float64 {
-		sum := boundedAdd(boundedAdd(boundedMul(x, x), boundedMul(y, y)), boundedMul(z, z))
-		lower, _ := boundedEnds(boundedSqrt(sum))
+	distanceLower := func(x, y, z proofbound.BoundedScalar) float64 {
+		sum := proofbound.BoundedAdd(proofbound.BoundedAdd(proofbound.BoundedMul(x, x), proofbound.BoundedMul(y, y)), proofbound.BoundedMul(z, z))
+		lower, _ := proofbound.BoundedEnds(proofbound.BoundedSqrt(sum))
 		return math.Max(0, lower)
 	}
-	span := func(lo, hi float64) boundedScalar {
-		return boundedSub(exactScalar(hi), exactScalar(lo))
+	span := func(lo, hi float64) proofbound.BoundedScalar {
+		return proofbound.BoundedSub(proofbound.ExactScalar(hi), proofbound.ExactScalar(lo))
 	}
-	far := func(amin, amax, bmin, bmax float64) boundedScalar {
+	far := func(amin, amax, bmin, bmax float64) proofbound.BoundedScalar {
 		left := span(bmin, amax)
 		right := span(amin, bmax)
-		if left.value >= right.value {
+		if left.Value >= right.Value {
 			return left
 		}
 		return right
@@ -161,8 +163,8 @@ func clearanceAxisBoxes(a, b *Body) (pairResult, bool) {
 			far(ab.Min.Z, ab.Max.Z, bb.Min.Z, bb.Max.Z),
 		),
 	)
-	if isNonFinite(diam) {
+	if proofbound.IsNonFinite(diam) {
 		return pairResult{}, false
 	}
-	return pairResult{verdict: pairDisjoint, lo: lo, hi: hi, exact: gap.bound == 0, diam: diam}, true
+	return pairResult{verdict: pairDisjoint, lo: lo, hi: hi, exact: gap.Bound == 0, diam: diam}, true
 }

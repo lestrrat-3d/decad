@@ -7,6 +7,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -185,7 +187,7 @@ func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
 
 func TestMomentValidationCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	segments := make([]CurveSegment, workPollInterval+64)
+	segments := make([]CurveSegment, proofbound.WorkPollInterval+64)
 	for i := range segments {
 		start := Point2{U: float64(i), V: 0}
 		segments[i] = LineSeg{Start: start, End: Point2{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
@@ -193,7 +195,7 @@ func TestMomentValidationCancellationIsBounded(t *testing.T) {
 	record := ProfileRecord{Outer: LoopRecord{Segments: segments}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validateMomentFieldsBudget"}
 
-	_, err := record.integralsBudget(newWorkBudget(ctx))
+	_, err := record.integralsBudget(proofbound.NewWorkBudget(ctx))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `moment field validation must poll inside its segment scan`)
@@ -294,13 +296,13 @@ func BenchmarkRatLerpTrimmed(b *testing.B) {
 	}
 }
 
-// exactAtanSeries is atanSmallInterval's pre-port body, kept here verbatim as
+// exactAtanSeries is proofbound.AtanSmallInterval's pre-port body, kept here verbatim as
 // the oracle TestAtanSmallIntervalContainsExactSeries checks the fixed-point
 // port against: the same 64-term alternating series and x^129/129 remainder,
 // evaluated over exact big.Rat instead of the fixed-point grid.
-func exactAtanSeries(x *big.Rat) ratInterval {
+func exactAtanSeries(x *big.Rat) proofbound.RatInterval {
 	if x.Sign() < 0 {
-		return intervalNeg(exactAtanSeries(new(big.Rat).Neg(x)))
+		return proofbound.IntervalNeg(exactAtanSeries(new(big.Rat).Neg(x)))
 	}
 	x2 := new(big.Rat).Mul(x, x)
 	power := new(big.Rat).Set(x)
@@ -315,7 +317,7 @@ func exactAtanSeries(x *big.Rat) ratInterval {
 		power.Mul(power, x2)
 	}
 	remainder := new(big.Rat).Quo(power, big.NewRat(129, 1))
-	return interval(sum, new(big.Rat).Add(sum, remainder))
+	return proofbound.Interval(sum, new(big.Rat).Add(sum, remainder))
 }
 
 // TestAtanSmallIntervalContainsExactSeries is the fast-path/slow-path
@@ -349,13 +351,13 @@ func TestAtanSmallIntervalContainsExactSeries(t *testing.T) {
 	const widthCeiling = 0x1p-120 // measured worst case during the investigation: ~2^-137.6
 
 	for _, x := range args {
-		got := atanSmallInterval(x)
+		got := proofbound.AtanSmallInterval(x)
 		want := exactAtanSeries(x)
 
-		require.LessOrEqualf(t, got.lo.Cmp(want.lo), 0, "x=%v: new lower bound narrower than the exact series", x)
-		require.GreaterOrEqualf(t, got.hi.Cmp(want.hi), 0, "x=%v: new upper bound narrower than the exact series", x)
+		require.LessOrEqualf(t, got.Lo.Cmp(want.Lo), 0, "x=%v: new lower bound narrower than the exact series", x)
+		require.GreaterOrEqualf(t, got.Hi.Cmp(want.Hi), 0, "x=%v: new upper bound narrower than the exact series", x)
 
-		width := new(big.Rat).Sub(got.hi, got.lo)
+		width := new(big.Rat).Sub(got.Hi, got.Lo)
 		widthF, _ := width.Float64()
 		require.Lessf(t, widthF, widthCeiling, "x=%v: enclosure too wide", x)
 	}
@@ -382,8 +384,8 @@ func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
 	for _, x64 := range args {
 		x := proofarith.FloatRat(x64)
 		require.NotNilf(t, x, "x=%v", x64)
-		got := atanSmallInterval(x)
-		require.LessOrEqualf(t, got.lo.Cmp(got.hi), 0, "x=%v: interval inverted", x64)
+		got := proofbound.AtanSmallInterval(x)
+		require.LessOrEqualf(t, got.Lo.Cmp(got.Hi), 0, "x=%v: interval inverted", x64)
 
 		truth := math.Atan(x64)
 		truthRat := proofarith.FloatRat(truth)
@@ -395,8 +397,8 @@ func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
 		upper := new(big.Rat).Add(truthRat, slack)
 		lower := new(big.Rat).Sub(truthRat, slack)
 
-		require.LessOrEqualf(t, got.lo.Cmp(upper), 0, "x=%v: lower bound above truth+2ulp", x64)
-		require.GreaterOrEqualf(t, got.hi.Cmp(lower), 0, "x=%v: upper bound below truth-2ulp", x64)
+		require.LessOrEqualf(t, got.Lo.Cmp(upper), 0, "x=%v: lower bound above truth+2ulp", x64)
+		require.GreaterOrEqualf(t, got.Hi.Cmp(lower), 0, "x=%v: upper bound below truth-2ulp", x64)
 	}
 }
 
@@ -406,25 +408,25 @@ func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
 func TestAtanSmallIntervalDegenerateArguments(t *testing.T) {
 	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
-		got := atanSmallInterval(new(big.Rat))
-		gridUnit := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), trigFixedBits))
+		got := proofbound.AtanSmallInterval(new(big.Rat))
+		gridUnit := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), proofbound.TrigFixedBits))
 		negGridUnit := new(big.Rat).Neg(gridUnit)
-		require.LessOrEqualf(t, got.lo.Cmp(gridUnit), 0, "lower bound too far above zero")
-		require.GreaterOrEqualf(t, got.lo.Cmp(negGridUnit), 0, "lower bound too far below zero")
-		require.LessOrEqualf(t, got.hi.Cmp(gridUnit), 0, "upper bound too far above zero")
-		require.GreaterOrEqualf(t, got.hi.Cmp(negGridUnit), 0, "upper bound too far below zero")
+		require.LessOrEqualf(t, got.Lo.Cmp(gridUnit), 0, "lower bound too far above zero")
+		require.GreaterOrEqualf(t, got.Lo.Cmp(negGridUnit), 0, "lower bound too far below zero")
+		require.LessOrEqualf(t, got.Hi.Cmp(gridUnit), 0, "upper bound too far above zero")
+		require.GreaterOrEqualf(t, got.Hi.Cmp(negGridUnit), 0, "upper bound too far below zero")
 	})
 
 	t.Run("underflowing tiny argument", func(t *testing.T) {
 		tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 400))
-		got := atanSmallInterval(tiny)
-		require.LessOrEqualf(t, got.lo.Sign(), 0, "lower bound must not exceed zero")
-		require.Greaterf(t, got.hi.Sign(), 0, "upper bound must be strictly positive")
+		got := proofbound.AtanSmallInterval(tiny)
+		require.LessOrEqualf(t, got.Lo.Sign(), 0, "lower bound must not exceed zero")
+		require.Greaterf(t, got.Hi.Sign(), 0, "upper bound must be strictly positive")
 	})
 }
 
 // BenchmarkAtanSmallInterval is task fu159 §9's per-call cost guard: 20
-// full-53-bit-dyadic arguments, the shape atan2Interval actually passes down
+// full-53-bit-dyadic arguments, the shape proofbound.Atan2Interval actually passes down
 // (a ratio of two recorded coordinate deltas) and the shape whose powers blow
 // up a big.Rat numerator.
 func BenchmarkAtanSmallInterval(b *testing.B) {
@@ -435,7 +437,7 @@ func BenchmarkAtanSmallInterval(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		for _, x := range args {
-			atanSmallInterval(x)
+			proofbound.AtanSmallInterval(x)
 		}
 	}
 }
@@ -456,14 +458,14 @@ func BenchmarkAtan2Interval(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		for _, p := range pairs {
-			atan2Interval(p.y, p.x, false)
+			proofbound.Atan2Interval(p.y, p.x, false)
 		}
 	}
 }
 
 // BenchmarkPiInterval pins task fu159's caching of the pi multiples. The
 // cached arm measures the three accessors callers now reach the multiples
-// through; the rebuild arm measures the intervalScale-over-piLower/piUpper
+// through; the rebuild arm measures the proofbound.IntervalScale-over-proofbound.PiLower/proofbound.PiUpper
 // work those accessors avoid. Both arms produce the same three multiples per
 // iteration, so their ns/op are directly comparable.
 func BenchmarkPiInterval(b *testing.B) {
@@ -474,27 +476,27 @@ func BenchmarkPiInterval(b *testing.B) {
 	b.Run("cached", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			piIntervalSink[0] = quarterPiInterval()
-			piIntervalSink[1] = halfPiInterval()
-			piIntervalSink[2] = twoPiInterval()
+			piIntervalSink[0] = proofbound.QuarterPiInterval()
+			piIntervalSink[1] = proofbound.HalfPiInterval()
+			piIntervalSink[2] = proofbound.TwoPiInterval()
 		}
 	})
 
 	b.Run("rebuild", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			piIntervalSink[0] = intervalScale(interval(piLower, piUpper), big.NewRat(1, 4))
-			piIntervalSink[1] = intervalScale(interval(piLower, piUpper), big.NewRat(1, 2))
-			piIntervalSink[2] = intervalScale(interval(piLower, piUpper), big.NewRat(2, 1))
+			piIntervalSink[0] = proofbound.IntervalScale(proofbound.Interval(proofbound.PiLower, proofbound.PiUpper), big.NewRat(1, 4))
+			piIntervalSink[1] = proofbound.IntervalScale(proofbound.Interval(proofbound.PiLower, proofbound.PiUpper), big.NewRat(1, 2))
+			piIntervalSink[2] = proofbound.IntervalScale(proofbound.Interval(proofbound.PiLower, proofbound.PiUpper), big.NewRat(2, 1))
 		}
 	})
 }
 
 // piIntervalSink holds BenchmarkPiInterval's three pi multiples, one slot per
 // multiple, so neither arm's measured work is dead on arrival.
-var piIntervalSink [3]ratInterval
+var piIntervalSink [3]proofbound.RatInterval
 
-// TestTurnSinCosIntervalEnclosesMathSincos is turnSinCosInterval's own
+// TestTurnSinCosIntervalEnclosesMathSincos is proofbound.TurnSinCosInterval's own
 // enclosure proof (design A7 §5.1): every turn checked must have
 // math.Sincos's own float64 answer land inside the returned interval, widened
 // by a few ulps to absorb the reference libm call's own (undocumented, but
@@ -503,7 +505,7 @@ var piIntervalSink [3]ratInterval
 // but not the bottleneck of the bracket it serves.
 func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
 	t.Parallel()
-	const widthCeiling = 1e-40 // trigFixedSeries's own margin measures in the 1e-58 range
+	const widthCeiling = 1e-40 // proofbound.TrigFixedSeries's own margin measures in the 1e-58 range
 	const ulpSlack = 1e-15
 
 	turns := make([]float64, 0, 400)
@@ -521,12 +523,12 @@ func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
 	for _, turn := range turns {
 		tr := new(big.Rat).SetFloat64(turn)
 		require.NotNil(t, tr, "turn=%g", turn)
-		sinIv, cosIv := turnSinCosInterval(tr)
+		sinIv, cosIv := proofbound.TurnSinCosInterval(tr)
 
-		sinLo, _ := sinIv.lo.Float64()
-		sinHi, _ := sinIv.hi.Float64()
-		cosLo, _ := cosIv.lo.Float64()
-		cosHi, _ := cosIv.hi.Float64()
+		sinLo, _ := sinIv.Lo.Float64()
+		sinHi, _ := sinIv.Hi.Float64()
+		cosLo, _ := cosIv.Lo.Float64()
+		cosHi, _ := cosIv.Hi.Float64()
 		require.LessOrEqualf(t, sinLo, sinHi, "turn=%g: sin interval inverted", turn)
 		require.LessOrEqualf(t, cosLo, cosHi, "turn=%g: cos interval inverted", turn)
 
@@ -536,8 +538,8 @@ func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
 		require.GreaterOrEqualf(t, wantCos, cosLo-ulpSlack, "turn=%g: cos below the enclosure", turn)
 		require.LessOrEqualf(t, wantCos, cosHi+ulpSlack, "turn=%g: cos above the enclosure", turn)
 
-		sinWidth := new(big.Rat).Sub(sinIv.hi, sinIv.lo)
-		cosWidth := new(big.Rat).Sub(cosIv.hi, cosIv.lo)
+		sinWidth := new(big.Rat).Sub(sinIv.Hi, sinIv.Lo)
+		cosWidth := new(big.Rat).Sub(cosIv.Hi, cosIv.Lo)
 		sinWidthF, _ := sinWidth.Float64()
 		cosWidthF, _ := cosWidth.Float64()
 		require.LessOrEqualf(t, sinWidthF, widthCeiling, "turn=%g: sin interval too wide", turn)
@@ -547,17 +549,17 @@ func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
 		// for the true value, so a sound enclosure of both factors must
 		// enclose their sum of squares at 1.
 		one := big.NewRat(1, 1)
-		sq := func(iv ratInterval) ratInterval { return intervalMul(iv, iv) }
-		pyth := intervalAdd(sq(sinIv), sq(cosIv))
-		require.LessOrEqualf(t, pyth.lo.Cmp(one), 0, "turn=%g: sin^2+cos^2 lower bound above 1", turn)
-		require.GreaterOrEqualf(t, pyth.hi.Cmp(one), 0, "turn=%g: sin^2+cos^2 upper bound below 1", turn)
+		sq := func(iv proofbound.RatInterval) proofbound.RatInterval { return proofbound.IntervalMul(iv, iv) }
+		pyth := proofbound.IntervalAdd(sq(sinIv), sq(cosIv))
+		require.LessOrEqualf(t, pyth.Lo.Cmp(one), 0, "turn=%g: sin^2+cos^2 lower bound above 1", turn)
+		require.GreaterOrEqualf(t, pyth.Hi.Cmp(one), 0, "turn=%g: sin^2+cos^2 upper bound below 1", turn)
 	}
 }
 
 // TestTurnSinCosIntervalMatchesKnownTurns checks a handful of turns whose
 // sine/cosine are exactly representable rationals or simple radicals, against
 // their own closed forms rather than against math.Sincos, so this test does
-// not merely check turnSinCosInterval against the same libm call it is meant
+// not merely check proofbound.TurnSinCosInterval against the same libm call it is meant
 // to replace.
 func TestTurnSinCosIntervalMatchesKnownTurns(t *testing.T) {
 	t.Parallel()
@@ -577,11 +579,11 @@ func TestTurnSinCosIntervalMatchesKnownTurns(t *testing.T) {
 	} {
 		tr := new(big.Rat).SetFloat64(tc.turn)
 		require.NotNil(t, tr)
-		sinIv, cosIv := turnSinCosInterval(tr)
-		sinLo, _ := sinIv.lo.Float64()
-		sinHi, _ := sinIv.hi.Float64()
-		cosLo, _ := cosIv.lo.Float64()
-		cosHi, _ := cosIv.hi.Float64()
+		sinIv, cosIv := proofbound.TurnSinCosInterval(tr)
+		sinLo, _ := sinIv.Lo.Float64()
+		sinHi, _ := sinIv.Hi.Float64()
+		cosLo, _ := cosIv.Lo.Float64()
+		cosHi, _ := cosIv.Hi.Float64()
 		require.InDeltaf(t, tc.sin, (sinLo+sinHi)/2, 1e-12, "turn=%g sin", tc.turn)
 		require.InDeltaf(t, tc.cos, (cosLo+cosHi)/2, 1e-12, "turn=%g cos", tc.turn)
 		require.LessOrEqualf(t, sinLo, tc.sin+1e-12, "turn=%g sin below expected", tc.turn)
@@ -591,7 +593,7 @@ func TestTurnSinCosIntervalMatchesKnownTurns(t *testing.T) {
 
 // BenchmarkTurnSinCosInterval is the design's own cost guard (A7 §5.6):
 // ~34us/turn was the prototype's own figure with a 12-term series later
-// found to under-charge the alternating-series remainder (trigSeriesTerms's
+// found to under-charge the alternating-series remainder (proofbound.TrigSeriesTerms's
 // own comment); this benchmark is this file's live measurement of the
 // corrected 24-term series' real cost, in place of a number asserted in a
 // comment. A fractional CircleSeg charges two calls (one per endpoint) per
@@ -603,7 +605,7 @@ func BenchmarkTurnSinCosInterval(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		turnSinCosInterval(turns[i%len(turns)])
+		proofbound.TurnSinCosInterval(turns[i%len(turns)])
 	}
 }
 
@@ -632,7 +634,7 @@ func TestThirdOrderMomentsOfASector(t *testing.T) {
 
 	c0, s0 := big.NewRat(4, 5), big.NewRat(3, 5)
 	c1, s1 := new(big.Rat), big.NewRat(1, 1)
-	cube := func(x *big.Rat) *big.Rat { return ratMul(x, x, x) }
+	cube := func(x *big.Rat) *big.Rat { return proofbound.RatMul(x, x, x) }
 	third := func(x *big.Rat) *big.Rat { return ratScale(x, 1, 3) }
 	trig := [4]*big.Rat{
 		new(big.Rat).Sub(new(big.Rat).Sub(s1, third(cube(s1))), new(big.Rat).Sub(s0, third(cube(s0)))),
@@ -642,8 +644,8 @@ func TestThirdOrderMomentsOfASector(t *testing.T) {
 	}
 	for i, factor := range trig {
 		name := []string{"u³", "u²v", "uv²", "v³"}[i]
-		want := ratMul(big.NewRat(625, 1), factor)
-		requireIntervalsOverlap(t, name, got[i], pointInterval(want))
+		want := proofbound.RatMul(big.NewRat(625, 1), factor)
+		requireIntervalsOverlap(t, name, got[i], proofbound.PointInterval(want))
 		requireIntervalWidthAtMost(t, name, got[i], 1e-9)
 	}
 

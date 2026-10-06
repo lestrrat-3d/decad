@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -96,8 +98,8 @@ func (c revArcCell) speed() *big.Rat {
 // the NODES and charging that term is what makes the fixed budget worth
 // spending: a whole-span enclosure would instead widen by the first-order h,
 // which is larger by N·8/Δθ at every depth.
-func (c revArcCell) rhoNodes() ([]ratInterval, *big.Rat, bool) {
-	nodes := make([]ratInterval, revolveArcIntegralSteps+1)
+func (c revArcCell) rhoNodes() ([]proofbound.RatInterval, *big.Rat, bool) {
+	nodes := make([]proofbound.RatInterval, revolveArcIntegralSteps+1)
 	step := new(big.Rat).Quo(c.dth, big.NewRat(revolveArcIntegralSteps, 1))
 	sinIv, cosIv, ok := radSinCosInterval(c.th0)
 	if !ok {
@@ -110,7 +112,7 @@ func (c revArcCell) rhoNodes() ([]ratInterval, *big.Rat, bool) {
 	sin, cos := arcFixedFromRat(sinIv), arcFixedFromRat(cosIv)
 	stepSin, stepCos := arcFixedFromRat(stepSinIv), arcFixedFromRat(stepCosIv)
 	for i := range nodes {
-		nodes[i] = intervalAdd(pointInterval(c.cV), intervalScale(sin.rat(), c.radius))
+		nodes[i] = proofbound.IntervalAdd(proofbound.PointInterval(c.cV), proofbound.IntervalScale(sin.rat(), c.radius))
 		if i+1 < len(nodes) {
 			nextSin := arcFixedAdd(arcFixedMul(sin, stepCos), arcFixedMul(cos, stepSin))
 			cos = arcFixedSub(arcFixedMul(cos, stepCos), arcFixedMul(sin, stepSin))
@@ -126,16 +128,16 @@ func (c revArcCell) rhoNodes() ([]ratInterval, *big.Rat, bool) {
 }
 
 // arcFixedInterval holds a certified interval as integer multiples of the
-// package's 2^-trigFixedBits grid. The recurrence rounds each product outward,
+// package's 2^-proofbound.TrigFixedBits grid. The recurrence rounds each product outward,
 // keeping numerator and denominator sizes fixed across all 32 nodes.
 type arcFixedInterval struct{ lo, hi *big.Int }
 
-func arcFixedFromRat(a ratInterval) arcFixedInterval {
-	return arcFixedInterval{fixedFloor(a.lo), fixedCeil(a.hi)}
+func arcFixedFromRat(a proofbound.RatInterval) arcFixedInterval {
+	return arcFixedInterval{proofbound.FixedFloor(a.Lo), proofbound.FixedCeil(a.Hi)}
 }
 
-func (a arcFixedInterval) rat() ratInterval {
-	return intervalOwned(fixedToRat(a.lo), fixedToRat(a.hi))
+func (a arcFixedInterval) rat() proofbound.RatInterval {
+	return proofbound.IntervalOwned(proofbound.FixedToRat(a.lo), proofbound.FixedToRat(a.hi))
 }
 
 func arcFixedAdd(a, b arcFixedInterval) arcFixedInterval {
@@ -162,8 +164,8 @@ func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 	}
 	// Rsh rounds a negative integer toward minus infinity. Negating that
 	// floor gives the outward ceiling for the upper endpoint.
-	lo = new(big.Int).Rsh(lo, trigFixedBits)
-	hi = new(big.Int).Neg(new(big.Int).Rsh(new(big.Int).Neg(hi), trigFixedBits))
+	lo = new(big.Int).Rsh(lo, proofbound.TrigFixedBits)
+	hi = new(big.Int).Neg(new(big.Int).Rsh(new(big.Int).Neg(hi), proofbound.TrigFixedBits))
 	return arcFixedInterval{lo, hi}
 }
 
@@ -213,17 +215,17 @@ const revolveArcIntegralSteps = 32
 // step encloses dφ, twoArea encloses twice each ideal half-triangle's area in
 // the order (diagonal-low half, diagonal-high half), and slack is the proven
 // departure of this model's ρ from the meridian the record denotes.
-func revolveArcCellSlack(cell revArcCell, step ratInterval, twoArea [2]ratInterval, slack float64) (float64, error) {
+func revolveArcCellSlack(cell revArcCell, step proofbound.RatInterval, twoArea [2]proofbound.RatInterval, slack float64) (float64, error) {
 	_, rho, extra, ok := revolveArcScale(cell, step, slack)
 	if !ok {
 		return 0, errRevolveArcCellSlack
 	}
 	total := new(big.Rat)
-	zero := pointInterval(new(big.Rat))
+	zero := proofbound.PointInterval(new(big.Rat))
 	for half, weight := range [2]int{revolveWeightT, revolveWeightOneMinusT} {
 		total.Add(total, revolveArcAbsIntegral(rho, twoArea[half], zero, extra, weight))
 	}
-	return ratFloatUp(total), nil
+	return proofbound.RatFloatUp(total), nil
 }
 
 // revolveArcFanSlack is revolveArcCellSlack for a circular cell with ONE ring
@@ -232,16 +234,16 @@ func revolveArcCellSlack(cell revArcCell, step ratInterval, twoArea [2]ratInterv
 // Jheld = 2A·t for a pole at t = 0 and 2A·(1 − t) for a pole at t = 1, while
 // Jtrue keeps the same sinusoidal ρ(t) the quad case has. The subdivision is
 // therefore identical with a LINEAR held density in place of a constant one.
-func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterval, slack float64) (float64, error) {
+func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea proofbound.RatInterval, slack float64) (float64, error) {
 	_, rho, extra, ok := revolveArcScale(cell, step, slack)
 	if !ok {
 		return 0, errRevolveArcCellSlack
 	}
-	held, slope := pointInterval(new(big.Rat)), twoArea
+	held, slope := proofbound.PointInterval(new(big.Rat)), twoArea
 	if !poleFirst {
-		held, slope = twoArea, intervalNeg(twoArea)
+		held, slope = twoArea, proofbound.IntervalNeg(twoArea)
 	}
-	return ratFloatUp(revolveArcAbsIntegral(rho, held, slope, extra, revolveWeightOne)), nil
+	return proofbound.RatFloatUp(revolveArcAbsIntegral(rho, held, slope, extra, revolveWeightOne)), nil
 }
 
 // revolveArcScale composes the non-negative factor r·|Δθ|·|dφ| every circular
@@ -256,21 +258,21 @@ func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterv
 // meridian may sit from the model at all. The slack is kept out of the
 // curvature argument because a displacement of the true meridian is not
 // required to be smooth.
-func revolveArcScale(cell revArcCell, step ratInterval, slack float64) (ratInterval, []ratInterval, *big.Rat, bool) { //nolint:unparam // scale is the density factor this function's own doc comment names as part of what it composes; both callers now read it pre-multiplied into the returned rho nodes rather than by name.
+func revolveArcScale(cell revArcCell, step proofbound.RatInterval, slack float64) (proofbound.RatInterval, []proofbound.RatInterval, *big.Rat, bool) { //nolint:unparam // scale is the density factor this function's own doc comment names as part of what it composes; both callers now read it pre-multiplied into the returned rho nodes rather than by name.
 	s := proofarith.FloatRat(slack)
 	if s == nil || s.Sign() < 0 || cell.radius.Sign() < 0 {
-		return ratInterval{}, nil, nil, false
+		return proofbound.RatInterval{}, nil, nil, false
 	}
 	rho, bulge, ok := cell.rhoNodes()
 	if !ok {
-		return ratInterval{}, nil, nil, false
+		return proofbound.RatInterval{}, nil, nil, false
 	}
-	scale := intervalScale(intervalAbsSpan(step), cell.speed())
-	extra := new(big.Rat).Mul(scale.hi, new(big.Rat).Add(bulge, s))
+	scale := proofbound.IntervalScale(intervalAbsSpan(step), cell.speed())
+	extra := new(big.Rat).Mul(scale.Hi, new(big.Rat).Add(bulge, s))
 	// The subdivision's two halves read the same scale·ρ at every node, so
 	// the product is taken here once and the nodes are returned pre-scaled.
 	for i := range rho {
-		rho[i] = intervalMul(scale, rho[i])
+		rho[i] = proofbound.IntervalMul(scale, rho[i])
 	}
 	return scale, rho, extra, true
 }
@@ -283,17 +285,17 @@ var errRevolveArcCellSlack = fmt.Errorf(`%w: a circular revolve cell states no e
 // charged the larger of its two nodes' magnitudes plus the caller's own
 // allowance, times the exact integral of the weight over that piece, so the
 // answer is an upper bound at any depth and nothing cancels between pieces.
-func revolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
+func revolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope proofbound.RatInterval, extra *big.Rat, weight int) *big.Rat {
 	// Every node uses t=i/N, and each weight integrates to an integer over
 	// 2N². Put all endpoint and allowance rationals over one denominator,
 	// then sum integer numerators. The final SetFrac is the only reduction;
 	// the resulting rational is identical to the per-piece Rat sum.
 	const n = revolveArcIntegralSteps
 	den := revolveArcIntegralDenominator(scaledRho, held, slope, extra)
-	heldLo := revolveArcScaledNumerator(held.lo, den, 1)
-	heldHi := revolveArcScaledNumerator(held.hi, den, 1)
-	slopeLo := revolveArcScaledNumerator(slope.lo, den, n)
-	slopeHi := revolveArcScaledNumerator(slope.hi, den, n)
+	heldLo := revolveArcScaledNumerator(held.Lo, den, 1)
+	heldHi := revolveArcScaledNumerator(held.Hi, den, 1)
+	slopeLo := revolveArcScaledNumerator(slope.Lo, den, n)
+	slopeHi := revolveArcScaledNumerator(slope.Hi, den, n)
 	extraNum := revolveArcScaledNumerator(extra, den, 1)
 	at := func(i int) *big.Int {
 		lo, hi := revolveArcNodeNumerators(scaledRho[i], den, heldLo, heldHi, slopeLo, slopeHi, i)
@@ -329,7 +331,7 @@ func revolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, ext
 // revolveArcIntegralDenominator is divisible by every endpoint denominator,
 // the allowance's denominator, and each slope denominator times the grid size.
 // This lets every node and piece be evaluated over the same exact unit.
-func revolveArcIntegralDenominator(rho []ratInterval, held, slope ratInterval, extra *big.Rat) *big.Int {
+func revolveArcIntegralDenominator(rho []proofbound.RatInterval, held, slope proofbound.RatInterval, extra *big.Rat) *big.Int {
 	den := big.NewInt(1)
 	include := func(r *big.Rat, factor int64) {
 		d := new(big.Int).Mul(r.Denom(), big.NewInt(factor))
@@ -337,13 +339,13 @@ func revolveArcIntegralDenominator(rho []ratInterval, held, slope ratInterval, e
 		den.Mul(new(big.Int).Quo(den, g), d)
 	}
 	for _, node := range rho {
-		include(node.lo, 1)
-		include(node.hi, 1)
+		include(node.Lo, 1)
+		include(node.Hi, 1)
 	}
-	include(held.lo, 1)
-	include(held.hi, 1)
-	include(slope.lo, revolveArcIntegralSteps)
-	include(slope.hi, revolveArcIntegralSteps)
+	include(held.Lo, 1)
+	include(held.Hi, 1)
+	include(slope.Lo, revolveArcIntegralSteps)
+	include(slope.Hi, revolveArcIntegralSteps)
 	include(extra, 1)
 	return den
 }
@@ -356,24 +358,24 @@ func revolveArcScaledNumerator(r *big.Rat, den *big.Int, factor int64) *big.Int 
 // revolveArcNodeNumerators returns the old interval subtraction's exact lower
 // and upper endpoints as integer numerators over den. Inputs remain owned by
 // the caller; the returned integers are fresh and may be mutated.
-func revolveArcNodeNumerators(rho ratInterval, den, heldLo, heldHi, slopeLo, slopeHi *big.Int, i int) (*big.Int, *big.Int) {
+func revolveArcNodeNumerators(rho proofbound.RatInterval, den, heldLo, heldHi, slopeLo, slopeHi *big.Int, i int) (*big.Int, *big.Int) {
 	idx := big.NewInt(int64(i))
-	lo := new(big.Int).Sub(revolveArcScaledNumerator(rho.lo, den, 1), heldHi)
+	lo := new(big.Int).Sub(revolveArcScaledNumerator(rho.Lo, den, 1), heldHi)
 	lo.Sub(lo, new(big.Int).Mul(idx, slopeHi))
-	hi := new(big.Int).Sub(revolveArcScaledNumerator(rho.hi, den, 1), heldLo)
+	hi := new(big.Int).Sub(revolveArcScaledNumerator(rho.Hi, den, 1), heldLo)
 	hi.Sub(hi, new(big.Int).Mul(idx, slopeLo))
 	return lo, hi
 }
 
 // intervalAbsSpan is the enclosure of |x| for x in the given enclosure.
-func intervalAbsSpan(a ratInterval) ratInterval {
-	if a.lo.Sign() >= 0 {
+func intervalAbsSpan(a proofbound.RatInterval) proofbound.RatInterval {
+	if a.Lo.Sign() >= 0 {
 		return a
 	}
-	if a.hi.Sign() <= 0 {
-		return intervalNeg(a)
+	if a.Hi.Sign() <= 0 {
+		return proofbound.IntervalNeg(a)
 	}
-	return interval(new(big.Rat), intervalAbsUpper(a))
+	return proofbound.Interval(new(big.Rat), intervalAbsUpper(a))
 }
 
 // revolveArcStation is one interior meridian sample of a circular walk: the
@@ -418,8 +420,8 @@ func revolveArcStation(ax axisFrame, seg CurveSegment, k, n int) (revMeridian, f
 	}
 	z, _ := intervalMid(zIv).Float64()
 	rho, _ := intervalMid(rhoIv).Float64()
-	gap := math.Max(intervalFloatError(zIv, z), intervalFloatError(rhoIv, rho))
-	if isNonFinite(z) || isNonFinite(rho) || isNonFinite(gap) {
+	gap := math.Max(proofbound.IntervalFloatError(zIv, z), proofbound.IntervalFloatError(rhoIv, rho))
+	if proofbound.IsNonFinite(z) || proofbound.IsNonFinite(rho) || proofbound.IsNonFinite(gap) {
 		return revMeridian{}, 0, errRevolveStationEnclosure
 	}
 	if rho <= 0 {
@@ -445,16 +447,16 @@ var errRevolveStationEnclosure = fmt.Errorf(`%w: a revolve meridian chord statio
 // admitted n keeps it far inside float64's exact-integer range and rounding a
 // DIVISOR outward would tighten the quotient, the wrong direction.
 func chordSegmentArea(radius, sweep float64, n int) float64 {
-	if n <= 0 || sweep < 0 || isNonFinite(radius) || isNonFinite(sweep) {
+	if n <= 0 || sweep < 0 || proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(sweep) {
 		return math.Inf(1)
 	}
 	if radius <= 0 || sweep == 0 {
 		return 0
 	}
 	denom := 12 * float64(n) * float64(n)
-	if denom <= 0 || isNonFinite(denom) {
+	if denom <= 0 || proofbound.IsNonFinite(denom) {
 		return 0
 	}
-	cube := productUpper(sweep, productUpper(sweep, sweep))
-	return upRound(productUpper(productUpper(radius, radius), cube) / denom)
+	cube := proofbound.ProductUpper(sweep, proofbound.ProductUpper(sweep, sweep))
+	return proofbound.UpRound(proofbound.ProductUpper(proofbound.ProductUpper(radius, radius), cube) / denom)
 }

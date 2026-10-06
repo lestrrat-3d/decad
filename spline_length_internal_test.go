@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/stretchr/testify/require"
@@ -74,17 +76,17 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	var rationalBracket func(bezierSpan, int) (float64, float64)
 	rationalBracket = func(span bezierSpan, depth int) (float64, float64) {
 		if depth == 0 {
-			lo := ratSqrtDown(ratSquaredDistance(span[0], span[len(span)-1]))
+			lo := proofbound.RatSqrtDown(ratSquaredDistance(span[0], span[len(span)-1]))
 			hi := 0.0
 			for i := 0; i+1 < len(span); i++ {
-				hi = upRound(hi + ratSqrtUp(ratSquaredDistance(span[i], span[i+1])))
+				hi = proofbound.UpRound(hi + proofbound.RatSqrtUp(ratSquaredDistance(span[i], span[i+1])))
 			}
 			return lo, hi
 		}
 		left, right := referenceSplit(span)
 		leftLo, leftHi := rationalBracket(left, depth-1)
 		rightLo, rightHi := rationalBracket(right, depth-1)
-		return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+		return downRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 	}
 	wantLo, wantHi := rationalBracket(spans[0], freeformLengthDepth)
 	gotLo, gotHi := spanLengthBracket(spans[0], freeformLengthDepth)
@@ -362,8 +364,8 @@ func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	b := ratPoint{u: mustRatOf(1), v: mustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
 
-	lo := ratSqrtDown(squared)
-	hi := ratSqrtUp(squared)
+	lo := proofbound.RatSqrtDown(squared)
+	hi := proofbound.RatSqrtUp(squared)
 	require.LessOrEqual(t, lo*lo, 2.0)
 	require.GreaterOrEqual(t, hi*hi, 2.0)
 	require.LessOrEqual(t, lo, hi)
@@ -396,12 +398,12 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 				ratPoint{u: mustRatOf(leg), v: mustRatOf(0)},
 			)
 
-			lo := ratSqrtDown(q)
-			hi := ratSqrtUp(q)
-			require.False(t, isNonFinite(lo), "the lower bound stays finite")
-			require.False(t, isNonFinite(hi), "the upper bound stays finite")
-			require.True(t, ratSquareAtMost(lo, q), "the lower bound's square does not exceed the exact distance")
-			require.False(t, ratSquareAtMost(hi, q) && !ratSquareEquals(hi, q),
+			lo := proofbound.RatSqrtDown(q)
+			hi := proofbound.RatSqrtUp(q)
+			require.False(t, proofbound.IsNonFinite(lo), "the lower bound stays finite")
+			require.False(t, proofbound.IsNonFinite(hi), "the upper bound stays finite")
+			require.True(t, proofbound.RatSquareAtMost(lo, q), "the lower bound's square does not exceed the exact distance")
+			require.False(t, proofbound.RatSquareAtMost(hi, q) && !proofbound.RatSquareEquals(hi, q),
 				"the upper bound's square is not below the exact distance")
 			require.LessOrEqual(t, lo, hi)
 			// The leg is its own exact root here, so a seed that works at this
@@ -757,8 +759,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		q := ratSquaredDistance(span[0], span[1])
 		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(scratchDistance, scratch)),
 			"scratch seed matches the original at every finite scale")
-		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
-		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
+		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
+		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
 		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(scratchDistance, scratch), "scratch lower bound")
 		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(scratchDistance, scratch), "scratch upper bound")
 	}
@@ -778,8 +780,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			denSq: new(big.Int).Mul(q.Denom(), factor),
 			exp:   17,
 		}
-		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
-		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
+		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
+		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
 		scratch := &lengthDistanceScratch{}
 		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(d, scratch)),
 			"large common factor scratch seed")
@@ -833,8 +835,8 @@ func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference bezierSpan, msgA
 		d := dyadic.distanceSquared(dyadic.points[i], dyadic.points[i+1])
 		q := ratSquaredDistance(reference[i], reference[i+1])
 		require.Zero(t, dyadic.squaredDistance(dyadic.points[i], dyadic.points[i+1]).Cmp(q), msgAndArgs...)
-		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), msgAndArgs...)
-		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), msgAndArgs...)
+		require.Equal(t, proofbound.RatSqrtDown(q), spanSqrtDown(d), msgAndArgs...)
+		require.Equal(t, proofbound.RatSqrtUp(q), spanSqrtUp(d), msgAndArgs...)
 	}
 }
 

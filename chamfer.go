@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -154,7 +156,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		return body, nil
 	}
 
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, err
@@ -180,7 +182,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// Stage 3 (§4): the construction's own gate, per corner — S4 (a corner
 	// exists). There is no S5: a chord exists between any two distinct feet.
 	for _, corner := range matched {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)

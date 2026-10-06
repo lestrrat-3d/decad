@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -32,7 +34,7 @@ import (
 // triangle set as a Mesh, CLOSED or OPEN. Its per-face bound is the largest
 // Vertex.Bound() over the vertices that face's own triangles touch, zero
 // exactly when every one of them is; its areaSlack is the matching
-// perturbedTriangleAreaAllow sum. A CLOSED body (b.Kind() == BodySolid)
+// proofbound.PerturbedTriangleAreaAllow sum. A CLOSED body (b.Kind() == BodySolid)
 // whose every vertex carries a proven bound of exactly zero
 // (stitchZeroVertexBound, stitch.go) publishes a zero occupied-volume proof
 // (symDiffOK == true) — see the comment at that publication below for the
@@ -292,7 +294,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	}
 	for sourceFace, liveFace := range paired {
 		bound, ok := sourceMesh.sourceBound(sourceFace)
-		if !ok || isNonFinite(bound) {
+		if !ok || proofbound.IsNonFinite(bound) {
 			return refuse("the revolve mesh has no finite source-face bound")
 		}
 		mesh.setFaceBound(liveFace, bound)
@@ -337,10 +339,10 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		source:    append([]*Face(nil), sp.triFaces...),
 	}
 
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	slack := 0.0
 	for i, tri := range mesh.triangles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		delta := 0.0
@@ -350,10 +352,10 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		mesh.setFaceBound(mesh.source[i], delta)
 		if delta > 0 {
 			a, bb, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
-			slack = absSumUpper(slack, perturbedTriangleAreaAllow(a, bb, c, delta))
+			slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
 		}
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	mesh.areaSlack = slack
@@ -375,7 +377,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	//     own proven bounds is exactly zero — the same gate
 	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
 	//     verbatim rather than re-derived. That rules out both a nonzero
-	//     placement delta (stitch.go's rigidRoundAllow, evalStitchContext)
+	//     placement delta (stitch.go's proofbound.RigidRoundAllow, evalStitchContext)
 	//     and a certificate-welded class bound (docs/surface-design.md §6.4's
 	//     massDelta amendment) — the only two ways this evaluator ever widens
 	//     a stitched vertex's bound above zero.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -89,8 +91,8 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // an ordinary prism's box Exact.
 //
 // A THIRD term composes outward with both: the reading's own final summation
-// base + lo + zlo, charged exactly against the same terms by exactSumRound
-// (bounds.go). It is not covered by either of the other two — a pure
+// base + lo + zlo, charged exactly against the same terms by proofbound.ExactSumRound
+// (internal/proofbound/bounds.go). It is not covered by either of the other two — a pure
 // translation leaves every coefficient exactly right and every multiply exact,
 // and the addition that follows still rounds — and it is zero exactly where
 // that addition is exactly representable, so an unplaced prism's box stays
@@ -126,10 +128,10 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 	// revolvePayload.extentBoundedAlong states for its own per-end composition.
 	loEnd, hiEnd := base+lo+zlo, base+hi+zhi
 	sumAllow := math.Max(
-		exactSumRound(loEnd, base, lo, zlo),
-		exactSumRound(hiEnd, base, hi, zhi),
+		proofbound.ExactSumRound(loEnd, base, lo, zlo),
+		proofbound.ExactSumRound(hiEnd, base, hi, zhi),
 	)
-	bound = absSumUpper(bound, placeAllow, sumAllow)
+	bound = proofbound.AbsSumUpper(bound, placeAllow, sumAllow)
 	return loEnd, hiEnd, bound, nil
 }
 
@@ -138,10 +140,10 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 // through — can sit from the value the SAME frame-and-placement chain's exact
 // arithmetic would give. An identity placement read along a world axis uses
 // only exact zero-or-one products and additions for these coefficients; other
-// cases use exactIsometryDotRound's rational check (bounds.go). Each
+// cases use proofbound.ExactIsometryDotRound's rational check (internal/proofbound/bounds.go). Each
 // coefficient's own displacement moves the published
 // extreme at the rate of the coordinate it multiplies —
-// directionalPerturbationAllow's own Lipschitz shape, coordUpper for gu/gv and
+// proofbound.DirectionalPerturbationAllow's own Lipschitz shape, coordUpper for gu/gv and
 // zUpper for gz — while base's displaces the extreme directly, at both ends
 // alike, since it is the section's own constant offset under this direction.
 // capBlendPayload.extentBoundedAlong reuses this unchanged through
@@ -154,21 +156,21 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 // applying the frame and placement to the point directly, even though the two
 // are equal in exact arithmetic. The recombination with base that FOLLOWS is a
 // third term, charged exactly at the call site rather than here
-// (exactSumRound), because it rounds for placements this function's own check
+// (proofbound.ExactSumRound), because it rounds for placements this function's own check
 // proves exact — a translation is committed there and nowhere else.
 func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
 	var baseRound, guRound, gvRound, gzRound float64
 	if pp.xform != r3.Identity() || !prismWorldAxis(g) {
-		baseRound = exactIsometryDotRound(pp.xform, pp.frame.Origin(), g, true, base)
-		guRound = exactIsometryDotRound(pp.xform, pp.frame.U(), g, false, gu)
-		gvRound = exactIsometryDotRound(pp.xform, pp.frame.V(), g, false, gv)
-		gzRound = exactIsometryDotRound(pp.xform, pp.frame.N(), g, false, gz)
+		baseRound = proofbound.ExactIsometryDotRound(pp.xform, pp.frame.Origin(), g, true, base)
+		guRound = proofbound.ExactIsometryDotRound(pp.xform, pp.frame.U(), g, false, gu)
+		gvRound = proofbound.ExactIsometryDotRound(pp.xform, pp.frame.V(), g, false, gv)
+		gzRound = proofbound.ExactIsometryDotRound(pp.xform, pp.frame.N(), g, false, gz)
 	}
-	return absSumUpper(
+	return proofbound.AbsSumUpper(
 		baseRound,
-		directionalPerturbationAllow(guRound, coordUpper),
-		directionalPerturbationAllow(gvRound, coordUpper),
-		directionalPerturbationAllow(gzRound, zUpper),
+		proofbound.DirectionalPerturbationAllow(guRound, coordUpper),
+		proofbound.DirectionalPerturbationAllow(gvRound, coordUpper),
+		proofbound.DirectionalPerturbationAllow(gzRound, zUpper),
 		prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper),
 	)
 }
@@ -183,7 +185,7 @@ func prismWorldAxis(g r3.Vec) bool {
 // prismDecompositionRoundAllow bounds the rounding the MULTIPLY-AND-SUM
 // combination base + gu*u + gv*v + gz*z commits, given base/gu/gv/gz
 // themselves proven exact against the isometry that produced them
-// (prismPlacementCoeffAllow's own exactIsometryDotRound check, above). IEEE
+// (prismPlacementCoeffAllow's own proofbound.ExactIsometryDotRound check, above). IEEE
 // 754 multiplies exactly by 0, 1 or -1 for ANY operand — those three values
 // are the only ones that never round a multiply — so a coefficient outside
 // that set can round when it multiplies a recorded coordinate, and this
@@ -193,7 +195,7 @@ func prismWorldAxis(g r3.Vec) bool {
 // top of that even where every individual multiply happens not to. Both are
 // genuinely new roundings a non-axis-permuting frame commits, so the term is
 // zero where every coefficient is trivial — and otherwise reuses
-// analyticRoundBound's own established "a bounded number of basic ops at a
+// proofbound.AnalyticRoundBound's own established "a bounded number of basic ops at a
 // magnitude" contract: at most 3 multiplies and 3 additions here, far under
 // its 128-operation budget. |base| stays in that envelope because the same
 // left-to-right evaluation folds base in, and charging it in both arms is only
@@ -207,7 +209,7 @@ func prismWorldAxis(g r3.Vec) bool {
 // is the recombination with base and the sweep level, which rounds for a
 // coefficient set this arm calls trivial — a pure translation is exactly that
 // case — so extentBoundedAlong charges it separately and exactly through
-// exactSumRound (bounds.go), and this term must never be read as covering it.
+// proofbound.ExactSumRound (internal/proofbound/bounds.go), and this term must never be read as covering it.
 func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) float64 {
 	trivial := func(c float64) bool { return c == 0 || c == 1 || c == -1 }
 	if trivial(gu) && trivial(gv) && trivial(gz) {
@@ -217,12 +219,12 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 	// fixture measures both halves of that. A 5x5 mm section swept 1 mm on the
 	// UNPLACED frame U=(0.6,0.8,0), V=(-0.8,0.6,0) reports Min=(-4,0,0),
 	// Max=(3,7,1), Approximate, bound 3.9790393202565666e-13. That whole figure
-	// is this term: divide it by analyticRoundBound's own 256*unitRoundoff and
+	// is this term: divide it by proofbound.AnalyticRoundBound's own 256*proofbound.UnitRoundoff and
 	// it comes to 14 up to that helper's outward rounding, which is the scale
 	// below — |gu|*coordUpper + |gv|*coordUpper = 0.6*10 + 0.8*10, the walk's
 	// coordUpper being 10 for that section — while every sibling term answers
-	// zero: exactIsometryDotRound on base/gu/gv/gz under the identity xform,
-	// exactSumRound on base 0 with levels 0 and 1, and both displacement terms
+	// zero: proofbound.ExactIsometryDotRound on base/gu/gv/gz under the identity xform,
+	// proofbound.ExactSumRound on base 0 with levels 0 and 1, and both displacement terms
 	// prismBoundsContext composes. A zero bound on that fixture would be
 	// unsound rather than tighter, because the extremes it would call exact are
 	// not: summing this frame's OWN held entries over the rationals against the
@@ -235,13 +237,13 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 	// representable amount (2.22e-16 in X-min, 1.11e-16 in X-max and Y-max),
 	// X-min and Y-max landing INSIDE the true extreme and X-max landing outward
 	// of it, a miss this term covers with wide margin.
-	scale := absSumUpper(
-		productUpper(math.Abs(gu), coordUpper),
-		productUpper(math.Abs(gv), coordUpper),
-		productUpper(math.Abs(gz), zUpper),
+	scale := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(math.Abs(gu), coordUpper),
+		proofbound.ProductUpper(math.Abs(gv), coordUpper),
+		proofbound.ProductUpper(math.Abs(gz), zUpper),
 		math.Abs(base),
 	)
-	return analyticRoundBound(scale)
+	return proofbound.AnalyticRoundBound(scale)
 }
 
 // prismBoundsContext computes the exact axis-aligned bounds of the placed prism:
@@ -275,7 +277,7 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
 	// directional-extreme bracket bound (docs/spline-design.md §6.2) and with
 	// the frame and placement's own rounding (prismPlacementCoeffAllow) and the
-	// endpoint summation's (exactSumRound), both folded into
+	// endpoint summation's (proofbound.ExactSumRound), both folded into
 	// extentBoundedAlong's own returned bound above: the frame and
 	// placement ARE isometries in exact arithmetic, but their FLOAT evaluation
 	// rounds wherever the frame is not axis-aligned or the placement is not the
@@ -295,10 +297,10 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// while an extreme held by an irrational interior root publishes that
 	// bracket's width and is Approximate — §6.2's own stated contract
 	// consequence. The sum only
-	// goes through absSumUpper's own per-term rounding where there are two
+	// goes through proofbound.AbsSumUpper's own per-term rounding where there are two
 	// genuine terms to compose: bumping a lone sectionDelta a second time for
 	// an always-zero extremeBound term would grow the box's bound past the
-	// single upRound tessellate.go's own mesh bound composes it against.
+	// single proofbound.UpRound tessellate.go's own mesh bound composes it against.
 	//
 	// The sweep's own ends enter the same way. Each axis reading takes the
 	// levels through zlo/zhi scaled by |gz| ≤ 1 (a unit axis against a placed
@@ -322,7 +324,7 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	case 1:
 		bound = terms[0]
 	default:
-		bound = absSumUpper(terms...)
+		bound = proofbound.AbsSumUpper(terms...)
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
@@ -346,20 +348,20 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 // leaves each enter through the bounded arithmetic: the walk's radius under its
 // own proven bound (segmentWalk.radiusBound — an ArcSeg states Start and Center,
 // so its radius is a math.Hypot), the direction's magnitude through
-// boundedNorm2's certified square-root brackets, and every product and sum
-// through boundedMul/boundedAdd's own exact rounding terms. An exactly
+// proofbound.BoundedNorm2's certified square-root brackets, and every product and sum
+// through proofbound.BoundedMul/proofbound.BoundedAdd's own exact rounding terms. An exactly
 // representable apex therefore still reports a zero bound, which is what lets a
 // recorded circle's box stay Exact along an axis whose reading the apex holds —
 // the walk's own endpoints answer for themselves there
 // (segmentWalk.startBound/endBound).
-func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boundedScalar) {
-	gmag := boundedNorm2(exactScalar(gu), exactScalar(gv))
-	centre := boundedAdd(
-		boundedMul(exactScalar(gu), exactScalar(w.cU)),
-		boundedMul(exactScalar(gv), exactScalar(w.cV)),
+func circularExtremeInterval(w segmentWalk, gu, gv float64) (proofbound.BoundedScalar, proofbound.BoundedScalar) {
+	gmag := proofbound.BoundedNorm2(proofbound.ExactScalar(gu), proofbound.ExactScalar(gv))
+	centre := proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.ExactScalar(gu), proofbound.ExactScalar(w.cU)),
+		proofbound.BoundedMul(proofbound.ExactScalar(gv), proofbound.ExactScalar(w.cV)),
 	)
-	amplitude := boundedMul(measuredScalar(w.radius, w.radiusBound), gmag)
-	return boundedSub(centre, amplitude), boundedAdd(centre, amplitude)
+	amplitude := proofbound.BoundedMul(proofbound.MeasuredScalar(w.radius, w.radiusBound), gmag)
+	return proofbound.BoundedSub(centre, amplitude), proofbound.BoundedAdd(centre, amplitude)
 }
 
 // boundaryExtremesBoundedContext is the one scan, total over walkKind
@@ -372,7 +374,7 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boun
 // multiply-and-sum is the CALLER's to charge, at the coordinate envelope the
 // caller's own geometry states: a prism reads it through
 // prismDecompositionRoundAllow, a revolve through
-// planeDotDecompositionRoundAllow (bounds.go), and a caller that charges
+// proofbound.PlaneDotDecompositionRoundAllow (internal/proofbound/bounds.go), and a caller that charges
 // neither publishes a candidate the record states verbatim — a zero-width one,
 // on which this scan reports zero — as if the arithmetic reading it had
 // committed nothing.
@@ -384,7 +386,7 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boun
 // bounds — and there the candidate has zero width, so an all-straight section's
 // reading stays exact. Every other endpoint is one this evaluator computed, and
 // the walk states what it is worth (segmentWalk.startBound/endBound);
-// pointPerturbationAllow carries that displacement through the functional so
+// proofbound.PointPerturbationAllow carries that displacement through the functional so
 // the candidate enters at the width its own construction owes, never at zero.
 // An endpoint whose bound no arithmetic could state refuses the whole scan
 // rather than folding an infinity into the accumulators.
@@ -450,7 +452,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 	// generator derived. A zero bound enters as the held value twice: widening
 	// an exact candidate by a directed rounding would mint an error the
 	// arithmetic provably did not commit. A nonzero one is stepped outward with
-	// math.Nextafter rather than upRound/downRound, since a directional value
+	// math.Nextafter rather than proofbound.UpRound/downRound, since a directional value
 	// can be negative and those two only move a POSITIVE bound toward zero.
 	take := func(g, allow float64) {
 		if allow == 0 {
@@ -463,12 +465,12 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 		takeLo(lo, hi)
 		takeHi(lo, hi)
 	}
-	takeVertex := func(u, v float64, bound walkEndBound) {
-		take(gu*u+gv*v, pointPerturbationAllow(bound, gu, gv))
+	takeVertex := func(u, v float64, bound proofbound.WalkEndBound) {
+		take(gu*u+gv*v, proofbound.PointPerturbationAllow(bound, gu, gv))
 	}
 	// Every span enclosure enters the fold through freeformExtremeFloats
-	// (spline_extreme.go), which rounds outward through ratFloatDown/ratFloatUp
-	// — never downRound/upRound: a directional value can be negative, and those
+	// (spline_extreme.go), which rounds outward through proofbound.RatFloatDown/proofbound.RatFloatUp
+	// — never downRound/proofbound.UpRound: a directional value can be negative, and those
 	// only ever move a POSITIVE bound toward zero (spline_length.go's
 	// arc-length-only convention), the wrong direction for a negative
 	// candidate and a spurious one-ulp widening of an exactly representable
@@ -504,7 +506,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 				}
 				continue
 			}
-			if !w.startBound.derivable() || !w.endBound.derivable() {
+			if !w.startBound.Derivable() || !w.endBound.Derivable() {
 				return 0, 0, 0, fmt.Errorf(`%w: a boundary segment's walked endpoint states no proven displacement, so this scan cannot bound the region's extremes`, ErrUnsupported)
 			}
 			takeVertex(w.startU, w.startV, w.startBound)
@@ -534,7 +536,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 						continue
 					}
 					held := gu*(w.cU+w.radius*math.Cos(th)) + gv*(w.cV+w.radius*math.Sin(th))
-					take(held, boundedFloatError(apex, held))
+					take(held, proofbound.BoundedFloatError(apex, held))
 				}
 			}
 		}
@@ -544,7 +546,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 	}
 	loMid := loLower + (loUpper-loLower)/2
 	hiMid := hiLower + (hiUpper-hiLower)/2
-	bound := upRound(math.Max(
+	bound := proofbound.UpRound(math.Max(
 		math.Max(loMid-loLower, loUpper-loMid),
 		math.Max(hiMid-hiLower, hiUpper-hiMid),
 	))

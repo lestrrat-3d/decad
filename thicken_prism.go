@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -18,15 +20,15 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	if !pp.surfaceResult || pp.sectionDelta != 0 || len(pp.profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this prism sheet has no admitted Thicken section`, ErrUnsupported)
 	}
-	if admitAbove(boundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != survAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the prism sheet has no proven positive sweep height`, ErrUnsupported)
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
 	if err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	sec, err := thickenSectionOf(ctx, pp.profile, side, amount, budget, nil)
@@ -57,11 +59,11 @@ func thickenAmount(tmm, tDelta float64, side ThickenSide) (float64, error) {
 	if side != ThickenCentered {
 		return tmm, nil
 	}
-	half := boundedQuotient(tmm, 0, 2, 0)
-	if half.bound != 0 || half.value <= 0 {
+	half := proofbound.BoundedQuotient(tmm, 0, 2, 0)
+	if half.Bound != 0 || half.Value <= 0 {
 		return 0, fmt.Errorf(`%w: the half-thickness is not exactly representable`, ErrUnsupported)
 	}
-	return half.value, nil
+	return half.Value, nil
 }
 
 // thickenSection is the certified offset pair one Thicken arm sweeps: the
@@ -104,7 +106,7 @@ func thickenAnnulus(ctx context.Context, sec thickenSection) (ProfileRecord, err
 // line arm otherwise. radial is the revolve arm's radial gate and nil for a
 // prism, whose walls never turn about an axis.
 func thickenSectionOf(ctx context.Context, profile ProfileRecord, side ThickenSide,
-	amount float64, budget *workBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
 	if len(profile.Outer.Segments) == 1 {
 		if circle, ok := profile.Outer.Segments[0].(CircleSeg); ok {
 			return thickenCircleSection(profile, circle, side, amount, budget, radial)
@@ -118,7 +120,7 @@ func thickenSectionOf(ctx context.Context, profile ProfileRecord, side ThickenSi
 // exact, so their strict radius order proves separation for every offset
 // parameter from zero through the requested endpoint.
 func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenSide,
-	amount float64, budget *workBudget, radial *thickenRadial) (thickenSection, error) {
+	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
 	if !circle.CCW {
 		return thickenSection{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
@@ -161,7 +163,7 @@ func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenS
 	return sec, nil
 }
 
-func prismCircleOffset(budget *workBudget, source ProfileRecord, radius, sense, amount float64) (ProfileRecord, error) {
+func prismCircleOffset(budget *proofbound.WorkBudget, source ProfileRecord, radius, sense, amount float64) (ProfileRecord, error) {
 	offset, err := offsetProfile(budget, source, sense, amount)
 	if err != nil {
 		return ProfileRecord{}, err

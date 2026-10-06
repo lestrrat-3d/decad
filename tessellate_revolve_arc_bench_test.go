@@ -4,17 +4,19 @@ import (
 	"math"
 	"math/big"
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // BenchmarkRevolveArcCellSlack measures the certified slack calculation for
 // the inner-torus arc cell from TestRevolveArcCellSlackBoundsASignChangingJacobianGap.
 func BenchmarkRevolveArcCellSlack(b *testing.B) {
 	cell := arcCellFixture(10, 3, 3*math.Pi/2-0.4, 0.8)
-	step := intervalScale(twoPiInterval(), big.NewRat(1, 16))
+	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, 16))
 	// This representative twice-area lies between the inner-point and endpoint
 	// model densities, so the Jacobian error changes sign within the cell.
-	heldTwiceArea := pointInterval(big.NewRat(0, 1).SetFloat64(6.67))
-	twoArea := [2]ratInterval{heldTwiceArea, heldTwiceArea}
+	heldTwiceArea := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(6.67))
+	twoArea := [2]proofbound.RatInterval{heldTwiceArea, heldTwiceArea}
 
 	b.ReportAllocs()
 	b.ResetTimer()

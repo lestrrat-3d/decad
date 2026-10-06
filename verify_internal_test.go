@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -201,7 +203,7 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 	witness, displacement, ok := gateWitnessPrism(pp)
 	require.True(t, ok, `a displaced prism earns a witness prism instead of losing its gate reference`)
 	require.Zero(t, witness.sectionDelta, `the witness prism's own section is read as held, never as displaced`)
-	require.Equal(t, absSumUpper(delta, pp.axialDelta()), displacement,
+	require.Equal(t, proofbound.AbsSumUpper(delta, pp.axialDelta()), displacement,
 		`the charged displacement is the SUM of the section and axial terms, since they are perpendicular`)
 
 	d, ok, err := bodyGateDiameter(t.Context(), &Body{payload: pp})
@@ -486,7 +488,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 			require.False(t, armOK, "the arm must withhold on this path")
 
 			body := &Body{payload: pp}
-			_, fallbackOK, err := fallbackGateDiameter(newWorkBudget(t.Context()), body)
+			_, fallbackOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), body)
 			require.NoError(t, err)
 			require.False(t, fallbackOK,
 				"the fallback a withheld answer falls through to has no arm for a zero-sectionDelta prism")
@@ -498,17 +500,17 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 	}
 }
 
-// Refusal: walkEndBoundAllow (bounds.go) is the mechanism behind every
+// Refusal: proofbound.WalkEndBoundAllow (internal/proofbound/bounds.go) is the mechanism behind every
 // witness's own displacement charge, and its own contract is that an
 // underivable component reads +Inf, never a small number a build could
 // silently spend in its place.
 func TestWalkEndBoundAllowRefusesNonFiniteComponent(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, math.Inf(1), walkEndBoundAllow(walkEndBound{u: math.Inf(1), v: 0}))
-	require.Equal(t, math.Inf(1), walkEndBoundAllow(walkEndBound{u: 0, v: math.Inf(1)}))
+	require.Equal(t, math.Inf(1), proofbound.WalkEndBoundAllow(proofbound.WalkEndBound{U: math.Inf(1), V: 0}))
+	require.Equal(t, math.Inf(1), proofbound.WalkEndBoundAllow(proofbound.WalkEndBound{U: 0, V: math.Inf(1)}))
 
-	got := walkEndBoundAllow(walkEndBound{u: 3, v: 4})
-	require.Equal(t, radius3D(4), got, "the wider of the two components is the one radius3D reads")
+	got := proofbound.WalkEndBoundAllow(proofbound.WalkEndBound{U: 3, V: 4})
+	require.Equal(t, proofbound.Radius3D(4), got, "the wider of the two components is the one radius3D reads")
 }
 
 // 6a. Regression: an analytic (non-free-form) box's diameter still reads off
@@ -548,7 +550,7 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 	require.False(t, armOK, "no free-form segment is present, so the new arm must decline outright")
 	require.Zero(t, armD)
 
-	want, wantOK, err := fallbackGateDiameter(newWorkBudget(t.Context()), &Body{payload: pp})
+	want, wantOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &Body{payload: pp})
 	require.NoError(t, err)
 	require.True(t, wantOK)
 
@@ -900,7 +902,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 // offset — very nearly cancels in float64: the naive central value lands on
 // exactly 0.0, which a bare subtraction (bound 0, since this profile's own
 // vertices are exact) reads as PROVEN non-negative and wrongly admits. The
-// fix's own composed bound (~4.4e-7, from boundedMul/boundedAdd charging the
+// fix's own composed bound (~4.4e-7, from proofbound.BoundedMul/proofbound.BoundedAdd charging the
 // offset multiplication's rounding) safely exceeds that cancellation, so the
 // interval straddles zero and the leg correctly refuses.
 func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {

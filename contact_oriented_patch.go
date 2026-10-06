@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -187,7 +189,7 @@ func orientedBoxPoint(point [3]*big.Rat) (VecMeasurement, bool) {
 			maxError = deviation
 		}
 	}
-	bound := radius3D(ratFloatUp(maxError))
+	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
 	if !finiteMeasurementValues(bound) {
 		return VecMeasurement{}, false
 	}
@@ -200,7 +202,7 @@ func orientedBoxNormal(axis proofarith.DyV3) (VecMeasurement, units.Value, bool)
 	if squared.Sign() <= 0 {
 		return VecMeasurement{}, units.Value{}, false
 	}
-	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
+	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return VecMeasurement{}, units.Value{}, false
 	}
@@ -209,7 +211,7 @@ func orientedBoxNormal(axis proofarith.DyV3) (VecMeasurement, units.Value, bool)
 	raw.Y, _ = axis[1].Float64()
 	raw.Z, _ = axis[2].Float64()
 	value, ok := raw.Normalize()
-	if !ok || !finiteVec(value) {
+	if !ok || !proofbound.FiniteVec(value) {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	components := [3]float64{value.X, value.Y, value.Z}
@@ -225,8 +227,8 @@ func orientedBoxNormal(axis proofarith.DyV3) (VecMeasurement, units.Value, bool)
 			}
 		}
 	}
-	bound := radius3D(ratFloatUp(maxError))
-	angle := upRound(4 * bound)
+	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
+	angle := proofbound.UpRound(4 * bound)
 	if !finiteMeasurementValues(bound, angle) || angle >= math.Pi {
 		return VecMeasurement{}, units.Value{}, false
 	}

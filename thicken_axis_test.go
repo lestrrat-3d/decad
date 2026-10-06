@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +25,7 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 		profile: ProfileRecord{Outer: LoopRecord{Segments: segments}},
 		z0:      0, z1: 10, surfaceResult: true,
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
 	dirs, err := thickenAxisDirections(loops[0], budget)
@@ -82,7 +84,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 	chain := ChainRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
@@ -113,7 +115,7 @@ func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 		}}, "line-only axis-parallel segments"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			budget := newWorkBudget(t.Context())
+			budget := proofbound.NewWorkBudget(t.Context())
 			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())

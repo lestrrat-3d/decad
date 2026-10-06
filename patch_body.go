@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -183,7 +185,7 @@ type bodyPatchChain struct {
 // replays evalUnstitchFaceContext.
 type bodyPatchPayload struct {
 	xform r3.Transform
-	// delta is the proven displacement rigidRoundAllow charges against this
+	// delta is the proven displacement proofbound.RigidRoundAllow charges against this
 	// body's placed geometry — zero exactly when xform is the identity
 	// transform, an exact struct comparison (unstitchPayload's own delta).
 	delta float64
@@ -411,7 +413,7 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
 	for _, v := range verts {
-		if !finiteVec(v.position) || v.bound.Base() != 0 {
+		if !proofbound.FiniteVec(v.position) || v.bound.Base() != 0 {
 			return fmt.Errorf(`%w: a Body.Patch chain vertex carries a nonzero bound, so its position is not proven exactly (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}
@@ -419,7 +421,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 		if !patchEdgeGeometryExact(e) {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's own curve carries a nonzero bound, so its geometry is not proven exactly (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
-		if center, axis, curved := patchCurveCarrier(e); curved && (!finiteVec(center) || !finiteVec(axis)) {
+		if center, axis, curved := patchCurveCarrier(e); curved && (!proofbound.FiniteVec(center) || !proofbound.FiniteVec(axis)) {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane is not representable (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}
@@ -645,13 +647,13 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range srcFaces {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
-				maxInputAbs = max(maxInputAbs, vecMaxAbs(ce.edge.start.position), vecMaxAbs(ce.edge.end.position))
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
 			}
 		}
 	}
 	delta := 0.0
 	if xform != r3.Identity() {
-		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+		delta = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
 	}
 
 	newFaces, edgeCopy, err := copyPatchFacesUnder(ctx, srcFaces, xform, delta)
@@ -690,18 +692,18 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	body.lumps = sheetLumps(allFaces)
 
 	// Area is the receiver's own faces' area plus each new face's, composed
-	// through boundedAdd — never a re-derived reading — exactly the sum
+	// through proofbound.BoundedAdd — never a re-derived reading — exactly the sum
 	// evalStitchContext already runs over its own constituent faces
 	// (docs/surface-design.md §6.4/§8), reused here for one operand's own
 	// face set plus the faces this call adds to it.
-	areaAcc := boundedScalar{}
+	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range allFaces {
-		areaAcc = boundedAdd(areaAcc, measuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
 	}
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(areaAcc.value),
-		Exactness: exactnessOf(areaAcc.bound),
-		Bound:     units.SquareMillimeters(areaAcc.bound),
+		Value:     units.SquareMillimeters(areaAcc.Value),
+		Exactness: exactnessOf(areaAcc.Bound),
+		Bound:     units.SquareMillimeters(areaAcc.Bound),
 	}
 
 	// Bounds is the receiver's own already-proven box: every new face's
@@ -747,12 +749,12 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			return nv, nil
 		}
 		p := xform.Apply(old.position)
-		if !finiteVec(p) {
+		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed patch vertex is not representable`, ErrUnsupported)
 		}
 		bound := old.bound.Base()
 		if delta > 0 {
-			bound = absSumUpper(bound, delta)
+			bound = proofbound.AbsSumUpper(bound, delta)
 		}
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, exactly
@@ -781,7 +783,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		}
 		lengthBound := old.lengthBound
 		if delta > 0 {
-			lengthBound = absSumUpper(lengthBound, delta)
+			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
 			curve:           curve,
@@ -875,13 +877,13 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			return nil, err
 		}
 		origin = xform.Apply(chain.level.origin)
-		// A placement's own rounding (rigidRoundAllow) displaces the token's
+		// A placement's own rounding (proofbound.RigidRoundAllow) displaces the token's
 		// origin exactly as it displaces every other placed coordinate this
 		// evaluator publishes (copyPatchFacesUnder's own vertex/edge
 		// widening), so it folds into the SAME axialDelta the token's own
 		// bound already states.
 		if delta > 0 {
-			axialDelta = absSumUpper(axialDelta, delta)
+			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 	}
 	frame, segs, err := patchChainFrameAndSegments(ordered, edgeCopy, origin, normal)
@@ -897,7 +899,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		return nil, fmt.Errorf(`%w: a Body.Patch chain encloses no area`, ErrDegenerate)
 	}
 
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	segEntries, err := buildSegEntriesBudget(budget, []LoopRecord{{Segments: segs}})
 	if err != nil {
 		return nil, patchRemapCrossingError(err)

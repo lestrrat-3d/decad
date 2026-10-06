@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -104,11 +106,11 @@ func transportSweepLine(current sweepTransportFrame, record pathSegmentRecord) (
 	}
 
 	delta := record.end.Sub(record.start)
-	if !finiteVec(delta) {
+	if !proofbound.FiniteVec(delta) {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: a line span's translation is outside the representable range`, ErrUnsupported)
 	}
 	origin := current.frame.Origin().Add(delta)
-	if !finiteVec(origin) {
+	if !proofbound.FiniteVec(origin) {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: a line span's transported origin is outside the representable range`, ErrUnsupported)
 	}
 	frame, err := r3.NewFrame(origin, current.frame.U(), current.frame.V())
@@ -141,12 +143,12 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 	}
 
 	rotateDirection := func(vector ivVec3) ivVec3 {
-		oneMinusCos := intervalSub(pointInterval(big.NewRat(1, 1)), cos)
+		oneMinusCos := proofbound.IntervalSub(proofbound.PointInterval(big.NewRat(1, 1)), cos)
 		return ivVec3Add(
 			ivVec3Mul(vector, cos),
 			ivVec3Add(
 				ivVec3Mul(ivVec3Cross(axisExact, vector), sin),
-				ivVec3Mul(axisExact, intervalMul(oneMinusCos, ivVec3Dot(axisExact, vector))),
+				ivVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, ivVec3Dot(axisExact, vector))),
 			),
 		)
 	}
@@ -177,7 +179,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 	origin := rotation.Apply(current.frame.Origin())
 	u := rotation.ApplyDir(current.frame.U())
 	v := rotation.ApplyDir(current.frame.V())
-	if !finiteVec(origin) || !finiteVec(u) || !finiteVec(v) {
+	if !proofbound.FiniteVec(origin) || !proofbound.FiniteVec(u) || !proofbound.FiniteVec(v) {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span produced a non-finite transported frame`, ErrUnsupported)
 	}
 	frame, err := r3.NewFrame(origin, u, v)
@@ -216,10 +218,10 @@ func exactSweepTransportFrame(
 func exactSweepIVVec(vector ivVec3) (r3.Vec, bool) {
 	components := [3]float64{}
 	for i, coordinate := range vector {
-		if coordinate.lo.Cmp(coordinate.hi) != 0 {
+		if coordinate.Lo.Cmp(coordinate.Hi) != 0 {
 			return r3.Vec{}, false
 		}
-		held, exact := coordinate.lo.Float64()
+		held, exact := coordinate.Lo.Float64()
 		if !exact || math.IsNaN(held) || math.IsInf(held, 0) {
 			return r3.Vec{}, false
 		}
@@ -255,22 +257,22 @@ func newSweepTransportFrame(
 }
 
 func sweepIVVecError(exact ivVec3, held r3.Vec) (float64, bool) {
-	ex := intervalFloatError(exact[0], held.X)
-	ey := intervalFloatError(exact[1], held.Y)
-	ez := intervalFloatError(exact[2], held.Z)
+	ex := proofbound.IntervalFloatError(exact[0], held.X)
+	ey := proofbound.IntervalFloatError(exact[1], held.Y)
+	ez := proofbound.IntervalFloatError(exact[2], held.Z)
 	if !finiteAxisValues(ex, ey, ez) {
 		return 0, false
 	}
-	squared := absSumUpper(productUpper(ex, ex), productUpper(ey, ey), productUpper(ez, ez))
-	bound := upRound(math.Sqrt(squared))
+	squared := proofbound.AbsSumUpper(proofbound.ProductUpper(ex, ex), proofbound.ProductUpper(ey, ey), proofbound.ProductUpper(ez, ez))
+	bound := proofbound.UpRound(math.Sqrt(squared))
 	return bound, !math.IsNaN(bound) && !math.IsInf(bound, 0)
 }
 
 func sweepRatIntervalVec(vector sweepRatVec) ivVec3 {
 	return ivVec3{
-		pointInterval(vector[0]),
-		pointInterval(vector[1]),
-		pointInterval(vector[2]),
+		proofbound.PointInterval(vector[0]),
+		proofbound.PointInterval(vector[1]),
+		proofbound.PointInterval(vector[2]),
 	}
 }
 
@@ -290,14 +292,14 @@ func heldSweepRatVec(vector sweepRatVec) (r3.Vec, bool) {
 }
 
 func heldSweepUnitVector(unit ivVec3) (r3.Vec, bool) {
-	component := func(value ratInterval) float64 {
-		midpoint := new(big.Rat).Add(value.lo, value.hi)
+	component := func(value proofbound.RatInterval) float64 {
+		midpoint := new(big.Rat).Add(value.Lo, value.Hi)
 		midpoint.Quo(midpoint, big.NewRat(2, 1))
 		held, _ := midpoint.Float64()
 		return held
 	}
 	held := r3.NewVec(component(unit[0]), component(unit[1]), component(unit[2]))
-	if !finiteVec(held) {
+	if !proofbound.FiniteVec(held) {
 		return r3.Vec{}, false
 	}
 	return held.Normalize()

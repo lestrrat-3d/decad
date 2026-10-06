@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -328,13 +330,13 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 
 	unplacedVol, unplacedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
 	require.NoError(t, err)
-	// delta = 1 makes sweptVolumeAllow/sweptMomentAllow's own contribution
+	// delta = 1 makes proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow's own contribution
 	// (proportional to the body's ~2513 mm^2 of face area) many orders of
-	// magnitude larger than the couple of ulps every absSumUpper call nudges
+	// magnitude larger than the couple of ulps every proofbound.AbsSumUpper call nudges
 	// a bound by regardless of what it is summing — the margin below is set
 	// well above that ulp noise floor and well below the ~2513 mm^3 this
 	// leg is expected to add, so the assertion is about the LEG, not about
-	// absSumUpper's own unconditional upward nudge.
+	// proofbound.AbsSumUpper's own unconditional upward nudge.
 	placedVol, placedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 1)
 	require.NoError(t, err)
 
@@ -379,7 +381,7 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 // composition's own shown-to-fail leg: K_F = σ·Radius·f.area reuses the
 // face's own already-proven area/areaBound rather than integrating
 // anything fresh (this file's own doc comment), so the flux's own bound
-// must scale with f.areaBound exactly through boundedMul's productUpper
+// must scale with f.areaBound exactly through proofbound.BoundedMul's proofbound.ProductUpper
 // term — driven directly at stitchFaceFluxAndMoment so neither piScalar's
 // own tiny representation error nor any other term can mask the leg,
 // unlike the whole-pipeline reading where every term is the same tiny
@@ -391,12 +393,12 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 	f := stitchTestCylinderFace(r, height, area, 1.0)                    // areaBound=1, far above ulp noise
 	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, flux.bound, r*1.0, "the flux bound must scale with f.areaBound through the Radius multiply")
+	require.GreaterOrEqual(t, flux.Bound, r*1.0, "the flux bound must scale with f.areaBound through the Radius multiply")
 
 	zero := stitchTestCylinderFace(r, height, area, 0)
 	fluxZero, _, _, _, err := stitchFaceFluxAndMoment(zero, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
-	require.Less(t, fluxZero.bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
+	require.Less(t, fluxZero.Bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
 }
 
 // TestStitchCylinderMomentChargesRadiusBound is boundedCircleRadius's own
@@ -424,13 +426,13 @@ func TestStitchCylinderMomentChargesRadiusBound(t *testing.T) {
 	f := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 1.0) // rim lengthBound=1
 	_, mx, _, mz, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Greater(t, mx.bound, 0.1, "the Cylinder moment must scale with the rim's own lengthBound through boundedCircleRadius")
-	require.Zero(t, mz.bound, "the axis component's own (1 - Axis_z^2) factor is exactly zero, so it carries no radius term to widen")
+	require.Greater(t, mx.Bound, 0.1, "the Cylinder moment must scale with the rim's own lengthBound through boundedCircleRadius")
+	require.Zero(t, mz.Bound, "the axis component's own (1 - Axis_z^2) factor is exactly zero, so it carries no radius term to widen")
 
 	zero := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 0)
 	_, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mx and the error matter here.
 	require.NoError(t, err)
-	require.Less(t, mxZero.bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
+	require.Less(t, mxZero.Bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
 }
 
 // stitchTestPlaneDiskFace builds a hand-made Plane face bounded by a single
@@ -472,16 +474,16 @@ func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
 	f := stitchTestPlaneDiskFace(r, 1.0) // rim lengthBound=1
 	flux, mx, my, mz, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Equal(t, boundedScalar{}, mx)
-	require.Equal(t, boundedScalar{}, my)
-	require.InDelta(t, -500*math.Pi, flux.value, 1e-10)
-	require.InDelta(t, 1250*math.Pi, mz.value, 1e-10)
-	require.Greater(t, mz.bound, 0.01, "the Plane area term must scale with the rim's own lengthBound")
+	require.Equal(t, proofbound.BoundedScalar{}, mx)
+	require.Equal(t, proofbound.BoundedScalar{}, my)
+	require.InDelta(t, -500*math.Pi, flux.Value, 1e-10)
+	require.InDelta(t, 1250*math.Pi, mz.Value, 1e-10)
+	require.Greater(t, mz.Bound, 0.01, "the Plane area term must scale with the rim's own lengthBound")
 
 	zero := stitchTestPlaneDiskFace(r, 0)
 	_, _, _, mzZero, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mz and the error matter here.
 	require.NoError(t, err)
-	require.Less(t, mzZero.bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
+	require.Less(t, mzZero.Bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
 }
 
 // TestStitchPlaneMomentUsesTiltedDiskTerms checks the in-plane disk
@@ -507,7 +509,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	anchor := r3.NewVec(1, 1, 1)
 	flux, mx, my, mz, err := stitchFaceFluxAndMoment(face, anchor)
 	require.NoError(t, err)
-	require.Equal(t, boundedScalar{}, mx)
+	require.Equal(t, proofbound.BoundedScalar{}, mx)
 
 	area := math.Pi * radius * radius
 	fourth := math.Pi * math.Pow(radius, 4) / 4
@@ -516,15 +518,15 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	v := frame.V()
 	planeDelta := frame.Origin().Sub(anchor)
 	centerDelta := center.Sub(anchor)
-	require.InDelta(t, area*(planeDelta.Y*n.Y+planeDelta.Z*n.Z), flux.value, 1e-10)
-	require.InDelta(t, n.Y*(area*centerDelta.Y*centerDelta.Y+fourth*(u.Y*u.Y+v.Y*v.Y))/2, my.value, 1e-10)
-	require.InDelta(t, n.Z*(area*centerDelta.Z*centerDelta.Z+fourth*(u.Z*u.Z+v.Z*v.Z))/2, mz.value, 1e-10)
+	require.InDelta(t, area*(planeDelta.Y*n.Y+planeDelta.Z*n.Z), flux.Value, 1e-10)
+	require.InDelta(t, n.Y*(area*centerDelta.Y*centerDelta.Y+fourth*(u.Y*u.Y+v.Y*v.Y))/2, my.Value, 1e-10)
+	require.InDelta(t, n.Z*(area*centerDelta.Z*centerDelta.Z+fourth*(u.Z*u.Z+v.Z*v.Z))/2, mz.Value, 1e-10)
 
 	edge.lengthBound = 0.5
 	_, _, myWide, mzWide, err := stitchFaceFluxAndMoment(face, anchor)
 	require.NoError(t, err)
-	require.Greater(t, myWide.bound, my.bound)
-	require.Greater(t, mzWide.bound, mz.bound)
+	require.Greater(t, myWide.Bound, my.Bound)
+	require.Greater(t, mzWide.Bound, mz.Bound)
 }
 
 // mustPlaneFrame returns an arbitrary valid orthonormal frame for
@@ -589,12 +591,12 @@ func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 	zeroRadius.Radius = units.Millimeters(0)
 	zx, zy, zz, err := coneApex(zeroRadius)
 	require.NoError(t, err)
-	require.Equal(t, origin.X, zx.value)
-	require.Equal(t, origin.Y, zy.value)
-	require.Equal(t, origin.Z, zz.value)
-	require.Zero(t, zx.bound, "a literal zero Radius must publish an Exact apex")
-	require.Zero(t, zy.bound)
-	require.Zero(t, zz.bound)
+	require.Equal(t, origin.X, zx.Value)
+	require.Equal(t, origin.Y, zy.Value)
+	require.Equal(t, origin.Z, zz.Value)
+	require.Zero(t, zx.Bound, "a literal zero Radius must publish an Exact apex")
+	require.Zero(t, zy.Bound)
+	require.Zero(t, zz.Bound)
 }
 
 // TestStitchConeHalfAngleRefusesDegenerateTangent is docs/surface-design.md's
@@ -605,7 +607,7 @@ func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 // requirement). A HalfAngle of NaN is refused one layer up, by
 // units.Value.In itself (ErrNotFinite, wrapped rather than reaching
 // coneApex's own tangent check at all) — units.Value.In never hands back a
-// non-finite float, so coneApex's own `isNonFinite(tanValue)` guard stands
+// non-finite float, so coneApex's own `proofbound.IsNonFinite(tanValue)` guard stands
 // as a defensive backstop for a pathological finite HalfAngle whose
 // math.Tan happens to round to +/-Inf, which no float64 input this test can
 // construct actually triggers; that guard is therefore not independently
@@ -653,14 +655,14 @@ func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
 	f := stitchTestConeFace(0.6, 3, 2, 8, 5, 1.0) // rims' own lengthBound=1, far above ulp noise
 	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Greater(t, flux.bound, 0.01, "the flux bound must scale with the rims' own lengthBound through S_F's radius terms")
-	require.Greater(t, mx.bound, 0.01, "the moment bound must scale with the rims' own lengthBound through the rim-slope tan^2(beta)")
+	require.Greater(t, flux.Bound, 0.01, "the flux bound must scale with the rims' own lengthBound through S_F's radius terms")
+	require.Greater(t, mx.Bound, 0.01, "the moment bound must scale with the rims' own lengthBound through the rim-slope tan^2(beta)")
 
 	zero := stitchTestConeFace(0.6, 3, 2, 8, 5, 0)
 	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
 	require.NoError(t, err)
-	require.Less(t, fluxZero.bound, 1e-6, "with the rims' own lengthBound zero, the flux bound has no other source of that magnitude")
-	require.Less(t, mxZero.bound, 1e-6, "with the rims' own lengthBound zero, the moment bound has no other source of that magnitude")
+	require.Less(t, fluxZero.Bound, 1e-6, "with the rims' own lengthBound zero, the flux bound has no other source of that magnitude")
+	require.Less(t, mxZero.Bound, 1e-6, "with the rims' own lengthBound zero, the moment bound has no other source of that magnitude")
 }
 
 // TestStitchCurvedMassCorrectsInwardOrientationForCone is the orientation
@@ -782,14 +784,14 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 	f := stitchTestSphereFace(center, radius, 1.0) // areaBound=1, far above ulp noise
 	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Greater(t, flux.bound, 0.1, "the flux bound must scale with f.areaBound")
-	require.Greater(t, mx.bound, 0.1, "the moment bound must scale with f.areaBound")
+	require.Greater(t, flux.Bound, 0.1, "the flux bound must scale with f.areaBound")
+	require.Greater(t, mx.Bound, 0.1, "the moment bound must scale with f.areaBound")
 
 	zero := stitchTestSphereFace(center, radius, 0)
 	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
 	require.NoError(t, err)
-	require.Less(t, fluxZero.bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
-	require.Less(t, mxZero.bound, 1e-6, "with areaBound zero, the moment bound has no other source of that magnitude")
+	require.Less(t, fluxZero.Bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
+	require.Less(t, mxZero.Bound, 1e-6, "with areaBound zero, the moment bound has no other source of that magnitude")
 }
 
 // TestStitchSphereFluxDerivesRadiusFromAreaNotBareField is the direct
@@ -814,7 +816,7 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
 	wantFlux := trueRadius * f.area
-	require.InDelta(t, wantFlux, flux.value, 1e-6,
+	require.InDelta(t, wantFlux, flux.Value, 1e-6,
 		"the published flux must come from the area-derived radius (5 mm), never the bare Sphere.Radius field (999 mm)")
 }
 
@@ -894,7 +896,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForSphere(t *testing.T) {
 // (Center-anchor is the zero vector), so every bit of the placed centroid's
 // own bound below comes from the delta-widening step alone, isolating the
 // coordUpper term from the rest of the pipeline. delta is set far smaller
-// than the radius, so sweptMomentAllow's own linear dependence on
+// than the radius, so proofbound.SweptMomentAllow's own linear dependence on
 // (coordUpper+delta) is dominated by coordUpper whenever the Sphere case
 // fires, and by delta alone (order delta^2 once areaUpper's own
 // delta factor is folded in) when it does not — the two cases differ by
@@ -1065,7 +1067,7 @@ func TestStitchTorusFluxAndMomentMatchClosedForm(t *testing.T) {
 	require.NoError(t, err)
 
 	wantFlux := 3*math.Pi*math.Pi*major*minor*minor + 4*math.Pi*minor*(major*major+minor*minor)
-	require.InDelta(t, wantFlux, flux.value, 1e-9)
+	require.InDelta(t, wantFlux, flux.Value, 1e-9)
 
 	bracket := func(axisI float64) float64 {
 		return 2*major*major*(1-axisI*axisI) + math.Pi*major*minor + (4.0/3.0)*minor*minor
@@ -1073,9 +1075,9 @@ func TestStitchTorusFluxAndMomentMatchClosedForm(t *testing.T) {
 	wantMoment := func(centerI, anchorI, axisI float64) float64 {
 		return math.Pi * minor * (centerI - anchorI) * bracket(axisI)
 	}
-	require.InDelta(t, wantMoment(center.X, anchor.X, 1), mx.value, 1e-9)
-	require.InDelta(t, wantMoment(center.Y, anchor.Y, 0), my.value, 1e-9)
-	require.InDelta(t, wantMoment(center.Z, anchor.Z, 0), mz.value, 1e-9)
+	require.InDelta(t, wantMoment(center.X, anchor.X, 1), mx.Value, 1e-9)
+	require.InDelta(t, wantMoment(center.Y, anchor.Y, 0), my.Value, 1e-9)
+	require.InDelta(t, wantMoment(center.Z, anchor.Z, 0), mz.Value, 1e-9)
 }
 
 // halfTorusAnalyticsForInternalTest is stitch_flux_test.go's

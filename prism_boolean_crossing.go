@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -49,7 +51,7 @@ import (
 // comes back unresolved. resolved=false (err always nil in that case) is
 // silent fallback per this file's own header; a non-nil error is a genuine
 // refusal past §3.4's point of no return.
-func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
+func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	if len(target.profile.Holes) != 0 || len(tool.profile.Holes) != 0 {
 		// This classifier is scoped to hole-free operands (this file's own
 		// header); a holed target/tool falls back to the mesh path exactly
@@ -85,10 +87,10 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *workBudget, ta
 		// §7's formula, unchanged from Union's own: this path assembles a
 		// merged loop exactly like Union's, so it carries the same four
 		// displacement terms, cutDelta included.
-		sectionDelta: absSumUpper(
+		sectionDelta: proofbound.AbsSumUpper(
 			max(
-				absSumUpper(target.sectionDelta, sceneDelta.a),
-				absSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
+				proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
+				proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
 			),
 			cutDelta,
 		),
@@ -100,7 +102,7 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *workBudget, ta
 // cells that are material of BOTH operands. §3.2's Intersect z-interval and
 // axial displacement selection reuse prismZShift/prismIntersectEnd
 // (prism_boolean_nesting.go) unchanged.
-func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
+func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 {
 		return prismPayload{}, false, nil
 	}
@@ -134,10 +136,10 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *workBudg
 		z1:      z1,
 		z0Delta: z0Delta,
 		z1Delta: z1Delta,
-		sectionDelta: absSumUpper(
+		sectionDelta: proofbound.AbsSumUpper(
 			max(
-				absSumUpper(pa.sectionDelta, sceneDelta.a),
-				absSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
+				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
+				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
 			),
 			cutDelta,
 		),
@@ -151,7 +153,7 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *workBudg
 // (prism_boolean.go). resolved=false (err always nil in that case) is silent
 // fallback throughout — every check here runs before §3.4's point of no
 // return. opName feeds mergePrismCells's own RB1 message.
-func resolvePrismCrossing(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
+func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
@@ -184,19 +186,19 @@ func resolvePrismCrossing(ctx context.Context, budget *workBudget, pa, pb prismP
 //
 // resolved=false (err always nil in that case) is silent fallback throughout
 // (§4.4) — every check here runs before §3.4's point of no return.
-func resolvePrismCrossingCells(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool) (selected []*sketch.Profile, sceneDelta prismSceneDelta, resolved bool, err error) {
+func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool) (selected []*sketch.Profile, sceneDelta prismSceneDelta, resolved bool, err error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
 	if len(profiles) == 0 {
@@ -234,10 +236,10 @@ func resolvePrismCrossingCells(ctx context.Context, budget *workBudget, pa, pb p
 
 // selectPrismCells filters profiles to the cells keep admits, given each
 // cell's own classification — a pure data selection, no geometry read.
-func selectPrismCells(budget *workBudget, profiles []*sketch.Profile, matterA, matterB []bool, keep func(a, b bool) bool) ([]*sketch.Profile, error) {
+func selectPrismCells(budget *proofbound.WorkBudget, profiles []*sketch.Profile, matterA, matterB []bool, keep func(a, b bool) bool) ([]*sketch.Profile, error) {
 	var selected []*sketch.Profile
 	for i, p := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if keep(matterA[i], matterB[i]) {
@@ -271,7 +273,7 @@ type prismCellLink struct {
 // cover (an invalid cell, a cell carrying its own hole, an edge shared by
 // more than two cells, or an entity this scene did not create) — the whole
 // attempt is unresolved, per this file's own header.
-func classifyPrismCells(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) (matterA, matterB []bool, resolved bool, err error) {
+func classifyPrismCells(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) (matterA, matterB []bool, resolved bool, err error) {
 	n := len(profiles)
 	memberA := make([]prismCellMembership, n)
 	memberB := make([]prismCellMembership, n)
@@ -287,7 +289,7 @@ func classifyPrismCells(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 	occ := map[edgeKey][]occurrence{}
 
 	for i, p := range profiles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, nil, false, err
 		}
 		if !p.Valid || len(p.Holes) != 0 {
@@ -297,7 +299,7 @@ func classifyPrismCells(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 			return nil, nil, false, nil
 		}
 		for _, e := range p.Outer {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return nil, nil, false, err
 			}
 			origin, ok := tags[e.Entity]
@@ -331,7 +333,7 @@ func classifyPrismCells(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 	// classification, nothing further to connect.
 	var links []prismCellLink
 	for _, os := range occ {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, nil, false, err
 		}
 		switch len(os) {
@@ -370,7 +372,7 @@ func classifyPrismCells(budget *workBudget, tags map[sketch.Entity]prismEntityOr
 // propagating B's (over A's edges). A multi-source BFS from every
 // already-known cell reaches every cell propagation can settle; what remains
 // unknown afterward is genuinely unresolved (§4.4), read by the caller.
-func propagatePrismMembership(budget *workBudget, links []prismCellLink, connectorIsB bool, member []prismCellMembership) error {
+func propagatePrismMembership(budget *proofbound.WorkBudget, links []prismCellLink, connectorIsB bool, member []prismCellMembership) error {
 	adj := make([][]int, len(member))
 	for _, l := range links {
 		if l.isB != connectorIsB {
@@ -390,7 +392,7 @@ func propagatePrismMembership(budget *workBudget, links []prismCellLink, connect
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		for _, nb := range adj[cur] {

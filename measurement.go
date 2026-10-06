@@ -80,7 +80,7 @@ type Box struct {
 // prism commits: every one of the four checks below is finiteness only, so a
 // +Inf bound reads the same ErrNotFinite as a NaN value would, even though
 // +Inf is this codebase's own stated UNDERIVABLE-bound convention
-// (walkEndBound's doc comment) rather than a non-finite input.
+// (proofbound.WalkEndBound's doc comment) rather than a non-finite input.
 //
 // That mismatch cannot actually reach a free-form prism's build. Every
 // mechanism capable of publishing +Inf into one of these four measurements

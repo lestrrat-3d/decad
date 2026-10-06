@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -100,7 +102,7 @@ func TestPlacePlanarSnapshotMatchesFullAudit(t *testing.T) {
 		"held":  bandChamferedBlock(t, doc),
 	}
 	rng := rand.New(rand.NewPCG(97, 101))
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	for name, body := range bodies {
 		snapshot, err := planarSnapshotOf(t.Context(), budget, body, 0)
 		require.NoError(t, err, name)

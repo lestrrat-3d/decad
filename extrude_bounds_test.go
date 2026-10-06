@@ -298,7 +298,7 @@ func quarterDiscRecord(r float64) decad.ProfileRecord {
 // to conservativeValueError's body-scale envelope — a bound 4.9 orders of
 // magnitude looser than the identical quarter disc recorded as an ArcSeg
 // (design A7 §1.2: 385.619 against 4.91e-16 on an area of 78.5398). The
-// fractional-turn arm (moments_trig.go's turnSinCosInterval) now brackets a
+// fractional-turn arm (internal/proofbound/moments_trig.go's turnSinCosInterval) now brackets a
 // trimmed CircleSeg the same way.
 func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
 	t.Parallel()

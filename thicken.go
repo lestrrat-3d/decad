@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -102,23 +104,23 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 }
 
 func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	level := measuredScalar(tmm, tDelta)
-	var z0, z1 boundedScalar
+	level := proofbound.MeasuredScalar(tmm, tDelta)
+	var z0, z1 proofbound.BoundedScalar
 	switch side {
 	case ThickenPositive:
 		z1 = level
 	case ThickenNegative:
-		z0 = boundedNeg(level)
+		z0 = proofbound.BoundedNeg(level)
 	case ThickenCentered:
-		half := boundedQuotient(level.value, level.bound, 2, 0)
-		z0, z1 = boundedNeg(half), half
+		half := proofbound.BoundedQuotient(level.Value, level.Bound, 2, 0)
+		z0, z1 = proofbound.BoundedNeg(half), half
 	}
-	if admitAbove(boundedSub(z1, z0), 0) != survAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(z1, z0), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the thicken interval has no proven positive height`, ErrUnsupported)
 	}
 	prism := pp.prism()
-	prism.z0, prism.z0Delta = z0.value, z0.bound
-	prism.z1, prism.z1Delta = z1.value, z1.bound
+	prism.z0, prism.z0Delta = z0.Value, z0.Bound
+	prism.z1, prism.z1Delta = z1.Value, z1.Bound
 	ref := d.nextProducerID()
 	return evalPrismContext(ctx, d, ref, prism, newFreeformWork())
 }
@@ -199,8 +201,8 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	if err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	sec, err := thickenSectionOf(ctx, rp.profile, side, amount, budget, &radial)
@@ -239,15 +241,15 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	if len(cp.chains) != 1 || cp.sectionDelta != 0 {
 		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, ErrUnsupported)
 	}
-	if admitAbove(boundedSub(cp.z1Scalar(), cp.z0Scalar()), 0) != survAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(cp.z1Scalar(), cp.z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the ribbon has no proven positive sweep height`, ErrUnsupported)
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
 	if err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	// ONE free-form work counter for the record: the walk resolution below and
@@ -286,8 +288,8 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	if err != nil {
 		return nil, err
 	}
-	budget := newWorkBudget(ctx)
-	if err := budget.err(); err != nil {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	// ONE free-form work counter for the record: the walk resolution, the axis

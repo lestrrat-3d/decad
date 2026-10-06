@@ -3,6 +3,8 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -60,7 +62,7 @@ import (
 // about the tag's own axis, and it is zero — a proven zero, not a small one —
 // whenever that image is exact, which an unplaced axis-aligned section's is.
 type capPatchModel struct {
-	a, b, c ratInterval
+	a, b, c proofbound.RatInterval
 	slop    *big.Rat
 }
 
@@ -120,8 +122,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	}
 	perp := func(v ivVec3) ivVec3 { return ivVec3Sub(v, ivVec3Mul(ahat, ivVec3Dot(v, ahat))) }
 	offset := perp(ivVec3Sub(world.point(cU, cV, capZ), originIv))
-	qu := ivVec3Mul(perp(world.du), pointInterval(radius))
-	qv := ivVec3Mul(perp(world.dv), pointInterval(radius))
+	qu := ivVec3Mul(perp(world.du), proofbound.PointInterval(radius))
+	qv := ivVec3Mul(perp(world.dv), proofbound.PointInterval(radius))
 
 	length, okLen := radialLengthEnclosure(offset, qu, qv)
 	if !okLen {
@@ -132,8 +134,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	// The largest |1/|g(θ)| - 1/fixed| the enclosure allows, taken from whichever
 	// end is further from the fixed length in reciprocal terms.
 	gap := ratMax(
-		new(big.Rat).Sub(new(big.Rat).Inv(length.lo), invFixed),
-		new(big.Rat).Sub(invFixed, new(big.Rat).Inv(length.hi)),
+		new(big.Rat).Sub(new(big.Rat).Inv(length.Lo), invFixed),
+		new(big.Rat).Sub(invFixed, new(big.Rat).Inv(length.Hi)),
 	)
 
 	// The three coefficients of g·p in the LOCAL azimuth, then rotated onto the
@@ -146,22 +148,22 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !okT {
 		return capPatchModel{}, false
 	}
-	anchoredU := intervalAdd(intervalMul(uComp, cos0), intervalMul(vComp, sin0))
-	anchoredV := intervalSub(intervalMul(vComp, cos0), intervalMul(uComp, sin0))
+	anchoredU := proofbound.IntervalAdd(proofbound.IntervalMul(uComp, cos0), proofbound.IntervalMul(vComp, sin0))
+	anchoredV := proofbound.IntervalSub(proofbound.IntervalMul(vComp, cos0), proofbound.IntervalMul(uComp, sin0))
 
 	sign := big.NewRat(1, 1)
 	if f.reversed {
 		sign = big.NewRat(-1, 1)
 	}
-	scale := intervalScale(cosH, new(big.Rat).Mul(sign, invFixed))
-	axial := intervalScale(intervalMul(sinH, ivVec3Dot(ahat, pv)), sign)
+	scale := proofbound.IntervalScale(cosH, new(big.Rat).Mul(sign, invFixed))
+	axial := proofbound.IntervalScale(proofbound.IntervalMul(sinH, ivVec3Dot(ahat, pv)), sign)
 	return capPatchModel{
-		a: intervalMul(scale, anchoredU),
-		b: intervalMul(scale, anchoredV),
-		c: intervalSub(intervalMul(scale, offComp), axial),
-		slop: ratMul(
+		a: proofbound.IntervalMul(scale, anchoredU),
+		b: proofbound.IntervalMul(scale, anchoredV),
+		c: proofbound.IntervalSub(proofbound.IntervalMul(scale, offComp), axial),
+		slop: proofbound.RatMul(
 			intervalAbsUpper(cosH),
-			ratAdd(intervalAbsUpper(uComp), intervalAbsUpper(vComp), intervalAbsUpper(offComp)),
+			proofbound.RatAdd(intervalAbsUpper(uComp), intervalAbsUpper(vComp), intervalAbsUpper(offComp)),
 			gap,
 		),
 	}, true
@@ -173,26 +175,26 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 // there — so it takes the exact pair rather than a second code path. Any other
 // tag refuses: a patch whose surface this file cannot state exactly gets no
 // model at all, and DX7 answers undecided.
-func coneTagTerms(f *Face) (ratInterval, ratInterval, r3.Vec, r3.Vec, bool) {
+func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.Vec, r3.Vec, bool) {
 	switch s := f.surface.(type) {
 	case Cone:
 		half, err := s.HalfAngle.In(units.Radian)
 		if err != nil {
-			return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
 		rHalf := proofarith.FloatRat(half)
 		if rHalf == nil {
-			return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
 		sin, cos, ok := radSinCosInterval(rHalf)
 		if !ok {
-			return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
 		return sin, cos, s.Origin, s.Axis, true
 	case Cylinder:
-		return pointInterval(new(big.Rat)), pointInterval(big.NewRat(1, 1)), s.Origin, s.Axis, true
+		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1)), s.Origin, s.Axis, true
 	default:
-		return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 	}
 }
 
@@ -212,29 +214,29 @@ func coneTagTerms(f *Face) (ratInterval, ratInterval, r3.Vec, r3.Vec, bool) {
 // It refuses rather than clamp where the enclosure reaches zero: a length that
 // is not proven positive gives the patch no radial direction, so there is no
 // normal to state a range for.
-func radialLengthEnclosure(offset, qu, qv ivVec3) (ratInterval, bool) {
+func radialLengthEnclosure(offset, qu, qv ivVec3) (proofbound.RatInterval, bool) {
 	half := big.NewRat(1, 2)
 	uSq, vSq := ivVec3NormSq(qu), ivVec3NormSq(qv)
-	base := intervalAdd(ivVec3NormSq(offset), intervalScale(intervalAdd(uSq, vSq), half))
-	skew, okSkew := intervalSqrt(intervalAdd(
-		intervalSquare(intervalScale(intervalSub(uSq, vSq), half)),
+	base := proofbound.IntervalAdd(ivVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
+	skew, okSkew := intervalSqrt(proofbound.IntervalAdd(
+		intervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
 		intervalSquare(ivVec3Dot(qu, qv)),
 	))
-	eccentric, okEcc := intervalSqrt(intervalAdd(
+	eccentric, okEcc := intervalSqrt(proofbound.IntervalAdd(
 		intervalSquare(ivVec3Dot(offset, qu)),
 		intervalSquare(ivVec3Dot(offset, qv)),
 	))
 	if !okSkew || !okEcc {
-		return ratInterval{}, false
+		return proofbound.RatInterval{}, false
 	}
-	widen := ratAdd(skew.hi, ratMul(big.NewRat(2, 1), eccentric.hi))
-	squared := interval(new(big.Rat).Sub(base.lo, widen), new(big.Rat).Add(base.hi, widen))
-	if squared.lo.Sign() <= 0 {
-		return ratInterval{}, false
+	widen := proofbound.RatAdd(skew.Hi, proofbound.RatMul(big.NewRat(2, 1), eccentric.Hi))
+	squared := proofbound.Interval(new(big.Rat).Sub(base.Lo, widen), new(big.Rat).Add(base.Hi, widen))
+	if squared.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
 	}
 	length, ok := intervalSqrt(squared)
-	if !ok || length.lo.Sign() <= 0 {
-		return ratInterval{}, false
+	if !ok || length.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, false
 	}
 	return length, true
 }
@@ -273,28 +275,28 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 	if width.Sign() < 0 {
 		return harmonicExtremes{}, false
 	}
-	amp, okAmp := intervalSqrt(pointInterval(ratAdd(ratMul(a, a), ratMul(b, b))))
+	amp, okAmp := intervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return harmonicExtremes{}, false
 	}
-	peak := intervalAdd(pointInterval(c), amp)
-	trough := intervalSub(pointInterval(c), amp)
+	peak := proofbound.IntervalAdd(proofbound.PointInterval(c), amp)
+	trough := proofbound.IntervalSub(proofbound.PointInterval(c), amp)
 	if wholeTurn {
-		return harmonicExtremes{minLo: trough.lo, minHi: trough.hi, maxLo: peak.lo, maxHi: peak.hi}, true
+		return harmonicExtremes{minLo: trough.Lo, minHi: trough.Hi, maxLo: peak.Lo, maxHi: peak.Hi}, true
 	}
 
 	const arcs = 4
-	sins, coss := make([]ratInterval, arcs+1), make([]ratInterval, arcs+1)
+	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
 	var ext harmonicExtremes
 	for j := range arcs + 1 {
-		sin, cos, ok := radSinCosInterval(ratMul(width, big.NewRat(int64(j), arcs)))
+		sin, cos, ok := radSinCosInterval(proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
 		if !ok {
 			return harmonicExtremes{}, false
 		}
 		sins[j], coss[j] = sin, cos
-		at := intervalAdd(intervalAdd(intervalScale(cos, a), intervalScale(sin, b)), pointInterval(c))
+		at := proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalScale(cos, a), proofbound.IntervalScale(sin, b)), proofbound.PointInterval(c))
 		if j == 0 {
-			ext = harmonicExtremes{minLo: at.lo, minHi: at.hi, maxLo: at.lo, maxHi: at.hi}
+			ext = harmonicExtremes{minLo: at.Lo, minHi: at.Hi, maxLo: at.Lo, maxHi: at.Hi}
 			continue
 		}
 		// Each end of the minimum's enclosure takes the matching end of the
@@ -308,23 +310,23 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 		// charges minHi-minLo and maxHi-maxLo into the allowance DX7 reads, so
 		// its listing test mn+allow < 0 can never fire on a positive true
 		// minimum.
-		ext.minLo, ext.minHi = ratMin(ext.minLo, at.lo), ratMin(ext.minHi, at.hi)
-		ext.maxLo, ext.maxHi = ratMax(ext.maxLo, at.lo), ratMax(ext.maxHi, at.hi)
+		ext.minLo, ext.minHi = ratMin(ext.minLo, at.Lo), ratMin(ext.minHi, at.Hi)
+		ext.maxLo, ext.maxHi = ratMax(ext.maxLo, at.Lo), ratMax(ext.maxHi, at.Hi)
 	}
 
 	sure, maybe := windowReachesDirection(coss, sins, a, b)
 	if maybe {
-		ext.maxHi = ratMax(ext.maxHi, peak.hi)
+		ext.maxHi = ratMax(ext.maxHi, peak.Hi)
 	}
 	if sure {
-		ext.maxLo = ratMax(ext.maxLo, peak.lo)
+		ext.maxLo = ratMax(ext.maxLo, peak.Lo)
 	}
 	sure, maybe = windowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
 	if maybe {
-		ext.minLo = ratMin(ext.minLo, trough.lo)
+		ext.minLo = ratMin(ext.minLo, trough.Lo)
 	}
 	if sure {
-		ext.minHi = ratMin(ext.minHi, trough.hi)
+		ext.minHi = ratMin(ext.minHi, trough.Hi)
 	}
 	return ext, true
 }
@@ -339,17 +341,17 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 // A zero direction — the constant form, a = b = 0 — makes both cross products
 // exactly zero and so reads as proven inside, which is right: every azimuth
 // attains the constant.
-func windowReachesDirection(coss, sins []ratInterval, dx, dy *big.Rat) (bool, bool) {
+func windowReachesDirection(coss, sins []proofbound.RatInterval, dx, dy *big.Rat) (bool, bool) {
 	sure, maybe := false, false
 	for j := 0; j+1 < len(coss); j++ {
 		// The cross product of the arc's start with the direction, then of the
 		// direction with the arc's end: both non-negative places it between them.
-		from := intervalSub(intervalScale(coss[j], dy), intervalScale(sins[j], dx))
-		to := intervalSub(intervalScale(sins[j+1], dx), intervalScale(coss[j+1], dy))
-		if from.lo.Sign() >= 0 && to.lo.Sign() >= 0 {
+		from := proofbound.IntervalSub(proofbound.IntervalScale(coss[j], dy), proofbound.IntervalScale(sins[j], dx))
+		to := proofbound.IntervalSub(proofbound.IntervalScale(sins[j+1], dx), proofbound.IntervalScale(coss[j+1], dy))
+		if from.Lo.Sign() >= 0 && to.Lo.Sign() >= 0 {
 			sure = true
 		}
-		if from.hi.Sign() >= 0 && to.hi.Sign() >= 0 {
+		if from.Hi.Sign() >= 0 && to.Hi.Sign() >= 0 {
 			maybe = true
 		}
 	}
@@ -397,20 +399,20 @@ func newPlacedFrameMap(pp prismPayload) (placedFrameMap, bool) {
 // point is the exact image of a plane-local (u, v) at height z.
 func (m placedFrameMap) point(u, v, z *big.Rat) ivVec3 {
 	return ivVec3Add(m.origin, ivVec3Add(
-		ivVec3Mul(m.du, pointInterval(u)),
-		ivVec3Add(ivVec3Mul(m.dv, pointInterval(v)), ivVec3Mul(m.dn, pointInterval(z))),
+		ivVec3Mul(m.du, proofbound.PointInterval(u)),
+		ivVec3Add(ivVec3Mul(m.dv, proofbound.PointInterval(v)), ivVec3Mul(m.dn, proofbound.PointInterval(z))),
 	))
 }
 
 // intervalMid is one rational strictly inside an enclosure, the point a bound
 // measured from either end is smallest against.
-func intervalMid(a ratInterval) *big.Rat {
-	return new(big.Rat).Mul(new(big.Rat).Add(a.lo, a.hi), big.NewRat(1, 2))
+func intervalMid(a proofbound.RatInterval) *big.Rat {
+	return new(big.Rat).Mul(new(big.Rat).Add(a.Lo, a.Hi), big.NewRat(1, 2))
 }
 
 // intervalAbsUpper is the largest magnitude an enclosure allows.
-func intervalAbsUpper(a ratInterval) *big.Rat {
-	return ratMax(new(big.Rat).Abs(a.lo), new(big.Rat).Abs(a.hi))
+func intervalAbsUpper(a proofbound.RatInterval) *big.Rat {
+	return ratMax(new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi))
 }
 
 func ratMin(a, b *big.Rat) *big.Rat {

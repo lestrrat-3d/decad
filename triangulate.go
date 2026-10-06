@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is the cap triangulator behind Body.Tessellate: a plane region
@@ -43,7 +45,7 @@ func triangulate2DContext(ctx context.Context, pts []Point2, loops [][]int) ([][
 	if len(loops) == 0 || len(loops[0]) < 3 {
 		return nil, fmt.Errorf(`%w: a cap needs at least three boundary samples`, ErrDegenerate)
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	merged := append([]int(nil), loops[0]...)
 	holes := append([][]int(nil), loops[1:]...)
 	// Bridge right-to-left so each hole's visibility ray meets geometry that
@@ -64,7 +66,7 @@ func triangulate2DContext(ctx context.Context, pts []Point2, loops [][]int) ([][
 	sort.SliceStable(order, func(i, j int) bool { return keys[order[i]] > keys[order[j]] })
 	for _, h := range order {
 		hole := holes[h]
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		var err error
@@ -77,10 +79,10 @@ func triangulate2DContext(ctx context.Context, pts []Point2, loops [][]int) ([][
 }
 
 // maxU returns the largest u-coordinate over the loop's vertices.
-func maxU(budget *workBudget, pts []Point2, loop []int) (float64, error) {
+func maxU(budget *proofbound.WorkBudget, pts []Point2, loop []int) (float64, error) {
 	u := math.Inf(-1)
 	for _, i := range loop {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return 0, err
 		}
 		u = math.Max(u, pts[i].U)
@@ -98,10 +100,10 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	if len(hole) < 3 {
 		return nil, fmt.Errorf(`%w: a hole needs at least three boundary samples`, ErrDegenerate)
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	mi := 0
 	for i := 1; i < len(hole); i++ {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if pts[hole[i]].U > pts[hole[mi]].U {
@@ -117,7 +119,7 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	bestU := math.Inf(1)
 	bestEdge := -1
 	for i := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		a, b := pts[merged[i]], pts[merged[(i+1)%n]]
@@ -176,7 +178,7 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	// first on ties) is visible instead.
 	bestCos, bestDist := math.Inf(-1), math.Inf(1)
 	for j := range n {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if j == bridge {

@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -13,13 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file owns the fixtures for bounds.go's cellChordCurveAreaAllow — the
+// This file owns the fixtures for internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow — the
 // RULED leg of one loft wall cell's own area gap, |Area(bilinear chord patch) −
 // Area(ruled patch)| with BOTH patches pinned at the four corners that helper
 // is handed — and for the two readings it is built on,
-// uniformSpeedTangentEnergyUpper and cellChordPatchNormalLower. It also owns
+// proofbound.UniformSpeedTangentEnergyUpper and proofbound.CellChordPatchNormalLower. It also owns
 // the fixture for the full held-to-true decomposition, and for the
-// STATION-SHIFT leg cellStationShiftAreaAllow that reaches from the bilinear
+// STATION-SHIFT leg proofbound.CellStationShiftAreaAllow that reaches from the bilinear
 // corners to the stations they denote:
 // TestDisplacedStationCellNeedsTheStationShiftLeg.
 //
@@ -45,8 +47,8 @@ import (
 // source, rerun the named test, confirm RED, restore). Each entry quotes the
 // ACTUAL failing assertion.
 //
-//   - L2, the ruled leg (cellChordCurveAreaAllow), zeroed in
-//     loft_moments.go's composition (`absSumUpper(areaExcess, 0, stationLeg)`):
+//   - L2, the ruled leg (proofbound.CellChordCurveAreaAllow), zeroed in
+//     loft_moments.go's composition (`proofbound.AbsSumUpper(areaExcess, 0, stationLeg)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.002446194848033656" is not less than or equal to
 //     "0.000460843512606508"`;
@@ -56,7 +58,7 @@ import (
 //     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 0 degrees —
 //     `"0.025836198167183966" is not less than or equal to
 //     "0.004918800807284351"` — each on its own enclosure assertion.
-//   - L3, the sharp arm's OSCILLATION term (bounds.go's oscW):
+//   - L3, the sharp arm's OSCILLATION term (internal/proofbound/bounds.go's oscW):
 //     TestCellChordCurveAreaAllowComposesEveryTerm/oscillation-carried fails —
 //     `Relative error is too high: 1e-13 (expected)` — on "the published bound
 //     must be the four derivation terms composed as min(ceiling,
@@ -79,7 +81,7 @@ import (
 //     worst case 0.6654, an opposite-bulge cell, at 1024^2 quadrature nodes.
 //     So an enclosure assertion of the shape `gap <= allow` still passes with
 //     the term deleted, and adding one would record coverage it does not
-//     have. What deleting `productUpper(oscW, iMax)` from bounds.go's lin
+//     have. What deleting `proofbound.ProductUpper(oscW, iMax)` from internal/proofbound/bounds.go's lin
 //     does redden is four subtests across two tests:
 //     TestCellChordCurveAreaAllowComposesEveryTerm/{oscillation-carried,
 //     ceiling-carried} below, and
@@ -87,7 +89,7 @@ import (
 //     oscillation carried; cancelling twist, matched delta carried} in
 //     bounds_proven_norm_internal_test.go — whose refChordCurveAreaAllow
 //     big.Float reference restates the published value mathematically and
-//     never calls cellChordCurveAreaAllow, so those rows are not a
+//     never calls proofbound.CellChordCurveAreaAllow, so those rows are not a
 //     self-consistency check of the function against itself.
 //   - L4, the sharp arm's MATCHED-DELTA term:
 //     TestCellChordCurveAreaAllowEnclosesOppositeBulgeGap fails —
@@ -108,15 +110,15 @@ import (
 //     area element", which is the only arm that cell has;
 //     TestCellChordCurveAreaAllowEnclosesTwistedRuledGap and
 //     ...EnclosesOppositeBulgeGap fail on their own enclosure assertions too.
-//   - L7, uniformSpeedTangentEnergyUpper neutered to +Inf (the whole
+//   - L7, proofbound.UniformSpeedTangentEnergyUpper neutered to +Inf (the whole
 //     tangent-deviation energy withdrawn):
 //     TestCellChordCurveAreaAllowComposesEveryTerm fails on three rows —
 //     `"0.8585262442152457" is not less than "0.03434351964087584"` and its
 //     siblings — on "this row must be carried by the sharp arm": without the
 //     energy every reading falls back to arcLen+chord and the sharp arm stops
 //     being the tighter one at all.
-//   - L8, the composition's THIRD leg, bounds.go's
-//     cellStationShiftAreaAllow neutered to return 0:
+//   - L8, the composition's THIRD leg, internal/proofbound/bounds.go's
+//     proofbound.CellStationShiftAreaAllow neutered to return 0:
 //     TestDisplacedStationCellNeedsTheStationShiftLeg fails on all three rows
 //     — `"0.019999497629115126" is not less than or equal to "0"`,
 //     `"0.03999974896660774" is not less than or equal to "0"` and
@@ -137,7 +139,7 @@ import (
 // understated bound misses by orders of magnitude, never by an ulp (the
 // package's own FMA-contraction rule: never pin a float bound to a locally
 // measured literal).
-const referenceUlpSlack = 8 * unitRoundoff
+const referenceUlpSlack = 8 * proofbound.UnitRoundoff
 
 // loftTwistSweepDegrees is the rotation sweep every fixture in this file runs:
 // an untwisted baseline plus three genuinely twisted rows.
@@ -145,7 +147,7 @@ var loftTwistSweepDegrees = []float64{0, 5, 15, 30}
 
 // ruledArc is a CONSTANT-SPEED circular directrix — the same uniform-ANGLE
 // parametrization loftCircularCellStations places its stations under, which is
-// what makes uniformSpeedTangentEnergyUpper's own premise hold for it.
+// what makes proofbound.UniformSpeedTangentEnergyUpper's own premise hold for it.
 type ruledArc struct {
 	centre r3.Vec
 	radius float64
@@ -253,23 +255,23 @@ func twistedArcCellPair(phi, offCentre, radius, height, t0, dt float64) (ruledAr
 	return lo, hi
 }
 
-// cellAllowFor calls cellChordCurveAreaAllow with the obligations each side's
+// cellAllowFor calls proofbound.CellChordCurveAreaAllow with the obligations each side's
 // own analytic geometry discharges: the exact arc length as the tangent bound,
 // the parameter-matched sagitta as matchedDelta, and
-// uniformSpeedTangentEnergyUpper over a chord rounded DOWN twice as the
+// proofbound.UniformSpeedTangentEnergyUpper over a chord rounded DOWN twice as the
 // tangent-deviation energy — the same discharge perCellTangentEnergy's own
 // circular arm makes in the real build.
 func cellAllowFor(a, b ruledArc) float64 {
 	vLo, vHi := a.at(0), a.at(1)
 	wLo, wHi := b.at(0), b.at(1)
-	arcA, arcB := upRound(a.arcLen()), upRound(b.arcLen())
+	arcA, arcB := proofbound.UpRound(a.arcLen()), proofbound.UpRound(b.arcLen())
 	md := math.Max(a.sagittaUpper(), b.sagittaUpper())
 	chordLo := func(c ruledArc) float64 {
 		return downRound(downRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
 	}
-	return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
-		uniformSpeedTangentEnergyUpper(arcA, chordLo(a)),
-		uniformSpeedTangentEnergyUpper(arcB, chordLo(b)))
+	return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
+		proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(a)),
+		proofbound.UniformSpeedTangentEnergyUpper(arcB, chordLo(b)))
 }
 
 // TestCellChordCurveAreaAllowEnclosesTwistedRuledGap is the ruled leg's own
@@ -322,10 +324,10 @@ func TestCellChordCurveAreaAllowEnclosesTwistedRuledGap(t *testing.T) {
 //
 //   - a wide rung (sep = 1e200) leaves the premise-free arm at ordinary scale,
 //     so only the PROVEN-energy arm flushes — inside
-//     uniformSpeedTangentEnergyUpper's own (arcLen-chord)*(arcLen+chord)
+//     proofbound.UniformSpeedTangentEnergyUpper's own (arcLen-chord)*(arcLen+chord)
 //     product, which is quadratically smaller than the gap it serves;
 //   - a unit rung (sep = 1) shrinks every term to the section's own scale, so
-//     the premise-free square in tangentDeviationUpper flushes too and the
+//     the premise-free square in proofbound.TangentDeviationUpper flushes too and the
 //     ABSENT-energy arm collapses as well. There the free arm survives at
 //     8e-201 and the sharper arm is the one that flushes, so the published
 //     minimum takes the flushed arm over a sound one — a bound that is wrong by
@@ -342,10 +344,10 @@ func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
 		require.Positive(t, gap, "the reference must be a representable quantity worth missing")
 
 		vLo, vHi, wLo, wHi := lo.at(0), lo.at(1), hi.at(0), hi.at(1)
-		arcA, arcB := upRound(lo.arcLen()), upRound(hi.arcLen())
+		arcA, arcB := proofbound.UpRound(lo.arcLen()), proofbound.UpRound(hi.arcLen())
 		md := math.Max(lo.sagittaUpper(), hi.sagittaUpper())
 		chordLower := downRound(downRound(2 * radius * math.Sin(dt/2)))
-		energy := uniformSpeedTangentEnergyUpper(arcA, chordLower)
+		energy := proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLower)
 		t.Run(fmt.Sprintf("sep=%g/energy", separation), func(t *testing.T) {
 			require.Positive(t, energy,
 				"this cell's arc genuinely exceeds its chord, so its own tangent-deviation energy is not zero")
@@ -359,7 +361,7 @@ func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
 			{"absent energy", math.Inf(1)},
 		} {
 			t.Run(fmt.Sprintf("sep=%g/%s", separation, tc.name), func(t *testing.T) {
-				allow := cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.energy, tc.energy)
+				allow := proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.energy, tc.energy)
 				t.Logf("gap=%.9e allow=%.9e", gap, allow)
 				require.LessOrEqual(t, gap, allow,
 					"the ruled leg must enclose the underflowing cell's own chord-patch-to-ruled-patch gap")
@@ -407,7 +409,7 @@ func TestUniformSpeedTangentEnergyUpperEnclosesTheIntegratedEnergy(t *testing.T)
 			sum += d.Dot(d)
 		}
 		integrated := sum / n
-		published := uniformSpeedTangentEnergyUpper(upRound(lo.arcLen()),
+		published := proofbound.UniformSpeedTangentEnergyUpper(proofbound.UpRound(lo.arcLen()),
 			downRound(downRound(2*math.Abs(lo.radius)*math.Sin(math.Abs(dt)/2))))
 		t.Logf("cellSweep=%.3f integrated energy=%.9e published=%.9e", dt, integrated, published)
 		require.LessOrEqual(t, integrated, published,
@@ -427,10 +429,10 @@ func TestUniformSpeedTangentEnergyUpperRefusesBrokenClaims(t *testing.T) {
 		"negative chord": {2, -1},
 		"chord past arc": {1, 2},
 	} {
-		require.True(t, math.IsInf(uniformSpeedTangentEnergyUpper(args[0], args[1]), 1),
+		require.True(t, math.IsInf(proofbound.UniformSpeedTangentEnergyUpper(args[0], args[1]), 1),
 			"%s must answer +Inf", name)
 	}
-	require.Equal(t, 0.0, uniformSpeedTangentEnergyUpper(0, 0),
+	require.Equal(t, 0.0, proofbound.UniformSpeedTangentEnergyUpper(0, 0),
 		"a wholly degenerate cell has no energy to publish")
 }
 
@@ -458,7 +460,7 @@ func TestCellChordPatchNormalLowerBoundsTheAreaElement(t *testing.T) {
 				sampled = math.Min(sampled, p.Cross(g).Len())
 			}
 		}
-		published := cellChordPatchNormalLower(vLo, vHi, wLo, wHi)
+		published := proofbound.CellChordPatchNormalLower(vLo, vHi, wLo, wHi)
 		t.Logf("twist=%4.1fdeg: published area-element lower bound=%.9g sampled minimum=%.9g", deg, published, sampled)
 		require.Greater(t, published, 0.0, "this cell's own four corner normals do fit in one half space")
 		// The slack is the SAMPLED reference's own evaluation error, not the
@@ -474,7 +476,7 @@ func TestCellChordPatchNormalLowerBoundsTheAreaElement(t *testing.T) {
 // TestCellChordPatchNormalLowerRefusesADegenerateCell pins the refusal arm: a
 // cell whose four corner normals do NOT fit in one open half space has no
 // positive area-element bound to publish, and this reduction answers 0 rather
-// than a number its own premise does not support. cellChordCurveAreaAllow then
+// than a number its own premise does not support. proofbound.CellChordCurveAreaAllow then
 // falls back to its premise-free arm, which is what the next test checks.
 func TestCellChordPatchNormalLowerRefusesADegenerateCell(t *testing.T) {
 	t.Parallel()
@@ -485,9 +487,9 @@ func TestCellChordPatchNormalLowerRefusesADegenerateCell(t *testing.T) {
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 1, 0)
 	wHi := r3.NewVec(1, -1, 0)
-	require.Equal(t, 0.0, cellChordPatchNormalLower(vLo, vHi, wLo, wHi),
+	require.Equal(t, 0.0, proofbound.CellChordPatchNormalLower(vLo, vHi, wLo, wHi),
 		"a cell whose chord patch folds has no positive area-element lower bound")
-	require.Equal(t, 0.0, cellChordPatchNormalLower(
+	require.Equal(t, 0.0, proofbound.CellChordPatchNormalLower(
 		r3.NewVec(math.NaN(), 0, 0), vHi, wLo, wHi),
 		"a non-finite corner is a refusal, never a NaN a comparison would drop")
 }
@@ -502,7 +504,7 @@ func TestCellChordCurveAreaAllowFallsBackOnADegenerateCell(t *testing.T) {
 	lo := ruledArc{centre: r3.NewVec(0, 0, 0), radius: 2, u: r3.NewVec(1, 0, 0), v: r3.NewVec(0, 1, 0), t0: 0.2, dt: 0.5}
 	hi := ruledArc{centre: r3.NewVec(0, 0, 0), radius: 2, u: r3.NewVec(1, 0, 0), v: r3.NewVec(0, 1, 0), t0: 0.2 + 0.9, dt: -1.4}
 	vLo, vHi, wLo, wHi := lo.at(0), lo.at(1), hi.at(0), hi.at(1)
-	require.Equal(t, 0.0, cellChordPatchNormalLower(vLo, vHi, wLo, wHi),
+	require.Equal(t, 0.0, proofbound.CellChordPatchNormalLower(vLo, vHi, wLo, wHi),
 		"this fixture must actually reach the premise-free arm")
 	gap := math.Abs(convergedRuledGap(t, lo, hi))
 	allow := cellAllowFor(lo, hi)
@@ -520,28 +522,28 @@ func TestCellChordCurveAreaAllowRefusesBrokenClaims(t *testing.T) {
 	bad := math.NaN()
 	cases := map[string]func() float64{
 		"non-finite corner": func() float64 {
-			return cellChordCurveAreaAllow(r3.NewVec(bad, 0, 0), vHi, wLo, wHi, 1, 1, 0, 0, 0)
+			return proofbound.CellChordCurveAreaAllow(r3.NewVec(bad, 0, 0), vHi, wLo, wHi, 1, 1, 0, 0, 0)
 		},
 		"non-finite arc length": func() float64 {
-			return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, math.Inf(1), 1, 0, 0, 0)
+			return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, math.Inf(1), 1, 0, 0, 0)
 		},
 		"negative matched delta": func() float64 {
-			return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, -1, 0, 0)
+			return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, -1, 0, 0)
 		},
 		"NaN energy": func() float64 {
-			return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, bad, 0)
+			return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, bad, 0)
 		},
 		"negative energy": func() float64 {
-			return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, 0, -1)
+			return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, 0, -1)
 		},
 		"arc length below its own chord": func() float64 {
-			return cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 0.5, 1, 0, 0, 0)
+			return proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 0.5, 1, 0, 0, 0)
 		},
 	}
 	for name, run := range cases {
 		require.True(t, math.IsInf(run(), 1), "%s must answer +Inf", name)
 	}
-	require.Equal(t, 0.0, cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, 0, 0),
+	require.Equal(t, 0.0, proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 1, 1, 0, 0, 0),
 		"an exactly straight cell has no ruled-versus-chord gap to charge")
 }
 
@@ -590,16 +592,16 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 // the walk's own held math.Hypot radius and math.Atan2 endpoint angles can land
 // ABOVE the true chord, because a math.Atan2 endpoint's own error is amplified
 // by 1/sweep on a short arc while the roundings applied to the held floats
-// cover about one ulp. uniformSpeedTangentEnergyUpper DECREASES in its chord
+// cover about one ulp. proofbound.UniformSpeedTangentEnergyUpper DECREASES in its chord
 // operand, so such an overstatement understates the energy — and
-// cellChordCurveAreaAllow's sharp arm increases in the energy, so the published
+// proofbound.CellChordCurveAreaAllow's sharp arm increases in the energy, so the published
 // Area allowance comes out too small. A public caller reaches this with an
 // unplaced loft over two untrimmed ArcSeg profiles at m = 1.
 //
 // The arc below is a Pythagorean rotation of its own start point about the
 // origin: Start and End are EXACTLY equidistant from Center (asserted, not
 // assumed), so the recorded arc's own t=1 point IS End and the true m=1 chord
-// is exactly |End − Start|, which ratSqrtUp brackets from above with no
+// is exactly |End − Start|, which proofbound.RatSqrtUp brackets from above with no
 // trigonometry in the reference at all. A held-float reading of this record
 // answers about 5592.1318893204816 against a true 5592.1318893050811 — roughly
 // 1.5e-8 too large, some four orders of magnitude past this record's own ulp.
@@ -627,7 +629,7 @@ func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 	du := new(big.Rat).Sub(proofarith.FloatRat(seg.End.U), proofarith.FloatRat(seg.Start.U))
 	dv := new(big.Rat).Sub(proofarith.FloatRat(seg.End.V), proofarith.FloatRat(seg.Start.V))
 	chord2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-	trueChordUpper := ratSqrtUp(chord2)
+	trueChordUpper := proofbound.RatSqrtUp(chord2)
 
 	got := loftCertifiedChordLower(seg, 1)
 	require.Greater(t, got, 0.0, "the fixture must reach a real bound rather than the empty one")
@@ -728,46 +730,46 @@ func TestCellChordCurveAreaAllowEnclosesOppositeBulgeGap(t *testing.T) {
 		"the ruled leg must enclose the directly integrated gap on a cell whose two sides bulge apart")
 }
 
-// recomposeCellAllow rebuilds cellChordCurveAreaAllow's own published value from
+// recomposeCellAllow rebuilds proofbound.CellChordCurveAreaAllow's own published value from
 // its four derivation terms, INDEPENDENTLY of that function, so a term dropped
 // from the production composition shows up as a mismatch. It is the falsifier
 // for the two terms no enclosure fixture can bind (see the table below).
 func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, float64) {
 	vLo, vHi := a.at(0), a.at(1)
 	wLo, wHi := b.at(0), b.at(1)
-	arcA, arcB := upRound(a.arcLen()), upRound(b.arcLen())
+	arcA, arcB := proofbound.UpRound(a.arcLen()), proofbound.UpRound(b.arcLen())
 	md := math.Max(a.sagittaUpper(), b.sagittaUpper())
 	chordLo := func(c ruledArc) float64 {
 		return downRound(downRound(2 * math.Abs(c.radius) * math.Sin(math.Abs(c.dt)/2)))
 	}
-	energyA := uniformSpeedTangentEnergyUpper(arcA, chordLo(a))
-	energyB := uniformSpeedTangentEnergyUpper(arcB, chordLo(b))
+	energyA := proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(a))
+	energyB := proofbound.UniformSpeedTangentEnergyUpper(arcB, chordLo(b))
 
-	da, db := heldDelta(vHi, vLo), heldDelta(wHi, wLo)
-	ca, cb := dvLenUpper(da), dvLenUpper(db)
-	eB := math.Max(dvLenUpper(heldDelta(wLo, vLo)), dvLenUpper(heldDelta(wHi, vHi)))
+	da, db := proofbound.HeldDelta(vHi, vLo), proofbound.HeldDelta(wHi, wLo)
+	ca, cb := proofbound.DvLenUpper(da), proofbound.DvLenUpper(db)
+	eB := math.Max(proofbound.DvLenUpper(proofbound.HeldDelta(wLo, vLo)), proofbound.DvLenUpper(proofbound.HeldDelta(wHi, vHi)))
 	cMax := math.Max(ca, cb)
-	ia, ja := tangentDeviationUpper(arcA, ca, energyA)
-	ib, jb := tangentDeviationUpper(arcB, cb, energyB)
+	ia, ja := proofbound.TangentDeviationUpper(arcA, ca, energyA)
+	ib, jb := proofbound.TangentDeviationUpper(arcB, cb, energyB)
 	iMax := math.Max(ia, ib)
-	beta := absSumUpper(eB, productUpper(2, md))
-	gamma := productUpper(productUpper(2, md), cMax)
+	beta := proofbound.AbsSumUpper(eB, proofbound.ProductUpper(2, md))
+	gamma := proofbound.ProductUpper(proofbound.ProductUpper(2, md), cMax)
 
-	free := absSumUpper(upRound(productUpper(beta, absSumUpper(ia, ib))/2), gamma)
-	nMin := cellChordPatchNormalLower(vLo, vHi, wLo, wHi)
+	free := proofbound.AbsSumUpper(proofbound.UpRound(proofbound.ProductUpper(beta, proofbound.AbsSumUpper(ia, ib))/2), gamma)
+	nMin := proofbound.CellChordPatchNormalLower(vLo, vHi, wLo, wHi)
 	if nMin <= 0 {
 		return free, free, 0, 0, 0
 	}
-	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	pCrossT := math.Max(dvLenUpper(proofarith.DvCross(da, twist)), dvLenUpper(proofarith.DvCross(db, twist)))
-	oscW := absSumUpper(dvLenUpper(twist), upRound(productUpper(eB, pCrossT)/nMin))
-	oscTerm := productUpper(oscW, iMax)
-	mdTerm := productUpper(productUpper(2, md), absSumUpper(cMax, iMax))
-	quad := upRound(absSumUpper(
-		productUpper(productUpper(beta, beta), absSumUpper(ja, jb)),
-		productUpper(2, productUpper(gamma, gamma)),
+	twist := proofarith.DvSub(proofbound.HeldDelta(vLo, vHi), proofbound.HeldDelta(wLo, wHi))
+	pCrossT := math.Max(proofbound.DvLenUpper(proofarith.DvCross(da, twist)), proofbound.DvLenUpper(proofarith.DvCross(db, twist)))
+	oscW := proofbound.AbsSumUpper(proofbound.DvLenUpper(twist), proofbound.UpRound(proofbound.ProductUpper(eB, pCrossT)/nMin))
+	oscTerm := proofbound.ProductUpper(oscW, iMax)
+	mdTerm := proofbound.ProductUpper(proofbound.ProductUpper(2, md), proofbound.AbsSumUpper(cMax, iMax))
+	quad := proofbound.UpRound(proofbound.AbsSumUpper(
+		proofbound.ProductUpper(proofbound.ProductUpper(beta, beta), proofbound.AbsSumUpper(ja, jb)),
+		proofbound.ProductUpper(2, proofbound.ProductUpper(gamma, gamma)),
 	) / (2 * nMin))
-	return math.Min(free, absSumUpper(absSumUpper(oscTerm, mdTerm), quad)), free, oscTerm, mdTerm, quad
+	return math.Min(free, proofbound.AbsSumUpper(proofbound.AbsSumUpper(oscTerm, mdTerm), quad)), free, oscTerm, mdTerm, quad
 }
 
 // TestCellChordCurveAreaAllowComposesEveryTerm is the falsifier for the sharp
@@ -805,11 +807,11 @@ func TestCellChordCurveAreaAllowComposesEveryTerm(t *testing.T) {
 		t.Run(r.name, func(t *testing.T) {
 			want, free, osc, md, quad := recomposeCellAllow(r.lo, r.hi)
 			got := cellAllowFor(r.lo, r.hi)
-			sharp := absSumUpper(absSumUpper(osc, md), quad)
+			sharp := proofbound.AbsSumUpper(proofbound.AbsSumUpper(osc, md), quad)
 			t.Logf("%s: published=%.9e free=%.9e osc=%.9e md=%.9e quad=%.9e", r.name, got, free, osc, md, quad)
 			require.InEpsilon(t, want, got, 1e-13,
 				"the published bound must be the four derivation terms composed as min(ceiling, osc+md+quad)")
-			require.Greater(t, cellChordPatchNormalLower(r.lo.at(0), r.lo.at(1), r.hi.at(0), r.hi.at(1)), 0.0,
+			require.Greater(t, proofbound.CellChordPatchNormalLower(r.lo.at(0), r.lo.at(1), r.hi.at(0), r.hi.at(1)), 0.0,
 				"every row must reach the sharp arm, so the minimum below is a real choice")
 			switch r.carries {
 			case "free":
@@ -967,7 +969,7 @@ type ruledDirectrix interface {
 
 // shiftedArc is a directrix displaced from the stations it denotes onto the
 // corners a build HOLDS: a(s) = arc(s) + (1−s)·p + s·q, the affine correction
-// cellChordCurveAreaAllow's own composition section writes, with p and q the
+// proofbound.CellChordCurveAreaAllow's own composition section writes, with p and q the
 // two corner displacements. Its derivative is arc'(s) + (q−p) exactly, so the
 // integrator below reads the held patch with no resampling of its own.
 type shiftedArc struct {
@@ -1030,7 +1032,7 @@ func convergedRuledArea(t *testing.T, a, b ruledDirectrix, tol float64) float64 
 // corners a build would hold, ADVERSARIALLY: both ends of each side are pulled
 // INWARD along that side's own chord, so each held chord is shorter than the
 // denoted one by exactly 2*delta. That is the direction that maximises the
-// mean-zero violation cellChordCurveAreaAllow's own derivation is scoped away
+// mean-zero violation proofbound.CellChordCurveAreaAllow's own derivation is scoped away
 // from — its two patches are pinned at the corners it is handed, and this is
 // the displacement the THIRD leg has to carry.
 func pullStationsInward(a, b ruledArc, delta float64) (r3.Vec, r3.Vec, r3.Vec, r3.Vec) {
@@ -1053,11 +1055,11 @@ func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {
 }
 
 // TestDisplacedStationCellNeedsTheStationShiftLeg pins the THREE-LEG
-// composition cellChordCurveAreaAllow's own doc comment states and area()
+// composition proofbound.CellChordCurveAreaAllow's own doc comment states and area()
 // spends: over a cell whose held corners are displaced from the stations they
 // denote,
 //
-//	|A_true − T_held| <= ruled leg + twist leg + cellStationShiftAreaAllow,
+//	|A_true − T_held| <= ruled leg + twist leg + proofbound.CellStationShiftAreaAllow,
 //
 // and the first two legs ALONE do not cover it. It asserts three things:
 //
@@ -1070,7 +1072,7 @@ func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //   - the first two legs alone do NOT, so the third stays load-bearing.
 //
 // The cells are UNTWISTED on purpose. Their four corners form a parallelogram,
-// so the exact twist vector T is zero and cellTwistAreaAllow is a certified
+// so the exact twist vector T is zero and proofbound.CellTwistAreaAllow is a certified
 // zero: what remains is the ruled leg against the station-shift leg, with no
 // third term able to mask which one carries the gap. Every reference is a
 // direct numerical integral of the surfaces themselves, converged well below
@@ -1093,7 +1095,7 @@ func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 			lo, hi := twistedArcCellPair(0, 0, tc.radius, tc.height, 0.3, dt)
 			vLo, vHi, wLo, wHi := pullStationsInward(lo, hi, tc.delta)
 
-			arcA, arcB := upRound(lo.arcLen()), upRound(hi.arcLen())
+			arcA, arcB := proofbound.UpRound(lo.arcLen()), proofbound.UpRound(hi.arcLen())
 			chordLo := func(a ruledArc) float64 {
 				return downRound(downRound(2 * math.Abs(a.radius) * math.Sin(math.Abs(a.dt)/2)))
 			}
@@ -1101,12 +1103,12 @@ func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 			// composes the certified sagitta with the station displacement,
 			// and perCellTangentEnergy's circular arm discharges the energy.
 			md := chordCellDeltaUpper(math.Max(lo.sagittaUpper(), hi.sagittaUpper()), tc.delta)
-			ruled := cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
-				uniformSpeedTangentEnergyUpper(arcA, chordLo(lo)),
-				uniformSpeedTangentEnergyUpper(arcB, chordLo(hi)))
-			twist := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
+			ruled := proofbound.CellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md,
+				proofbound.UniformSpeedTangentEnergyUpper(arcA, chordLo(lo)),
+				proofbound.UniformSpeedTangentEnergyUpper(arcB, chordLo(hi)))
+			twist := proofbound.CellTwistAreaAllow(vLo, vHi, wLo, wHi)
 			require.Zero(t, twist, "an untwisted cell's four corners form a parallelogram, so the twist leg is a certified zero")
-			station := cellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.delta)
+			station := proofbound.CellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.delta)
 
 			// The step the station-shift leg is charged for, integrated
 			// directly: the SAME patch area over the denoted directrices and
@@ -1120,8 +1122,8 @@ func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 			held := heldTrianglePairArea(vLo, vHi, wLo, wHi)
 			gap := math.Abs(trueArea - held)
 
-			twoLegs := absSumUpper(ruled, twist)
-			composed := absSumUpper(ruled, twist, station)
+			twoLegs := proofbound.AbsSumUpper(ruled, twist)
+			composed := proofbound.AbsSumUpper(ruled, twist, station)
 			t.Logf("%s: gap=%.6e surfaceStep=%.6e ruled=%.6e twist=%.6e station=%.6e twoLegs=%.6e composed=%.6e (step/station=%.4g gap/twoLegs=%.4g gap/composed=%.4g)",
 				tc.name, gap, surfaceStep, ruled, twist, station, twoLegs, composed,
 				surfaceStep/station, gap/twoLegs, gap/composed)

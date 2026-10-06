@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -51,7 +53,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if density.Kind() != units.Density {
 		return MassProperties{}, fmt.Errorf("%w: mass density is required", ErrUnitKind)
 	}
-	if isNonFinite(density.Mag()) || isNonFinite(density.Unit().Factor()) {
+	if proofbound.IsNonFinite(density.Mag()) || proofbound.IsNonFinite(density.Unit().Factor()) {
 		return MassProperties{}, fmt.Errorf("%w: density is not finite", ErrNotFinite)
 	}
 	if density.Mag() < 0 {
@@ -238,7 +240,7 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 		return MassProperties{}, err
 	}
 	a, mu, mv := section[0], section[1], section[2]
-	if a.lo.Sign() <= 0 {
+	if a.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
 	}
 	h := new(big.Rat).Sub(proofarith.FloatRat(pp.z1), proofarith.FloatRat(pp.z0))
@@ -247,25 +249,25 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	}
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	rhoH := new(big.Rat).Mul(rho, h)
-	massIv := intervalScale(a, rhoH)
-	mu2OverA, _ := intervalQuo(intervalMul(mu, mu), a)
-	mv2OverA, _ := intervalQuo(intervalMul(mv, mv), a)
-	mumvOverA, _ := intervalQuo(intervalMul(mu, mv), a)
-	cuu := intervalSub(section[3], mu2OverA)
-	cuv := intervalSub(section[4], mumvOverA)
-	cvv := intervalSub(section[5], mv2OverA)
+	massIv := proofbound.IntervalScale(a, rhoH)
+	mu2OverA, _ := intervalQuo(proofbound.IntervalMul(mu, mu), a)
+	mv2OverA, _ := intervalQuo(proofbound.IntervalMul(mv, mv), a)
+	mumvOverA, _ := intervalQuo(proofbound.IntervalMul(mu, mv), a)
+	cuu := proofbound.IntervalSub(section[3], mu2OverA)
+	cuv := proofbound.IntervalSub(section[4], mumvOverA)
+	cvv := proofbound.IntervalSub(section[5], mv2OverA)
 	h2Over12 := new(big.Rat).Quo(new(big.Rat).Mul(h, h), big.NewRat(12, 1))
-	axial := intervalScale(a, new(big.Rat).Mul(rhoH, h2Over12))
-	local := [3][3]ratInterval{}
-	local[0][0] = intervalAdd(intervalScale(cvv, rhoH), axial)
-	local[1][1] = intervalAdd(intervalScale(cuu, rhoH), axial)
-	local[2][2] = intervalScale(intervalAdd(cuu, cvv), rhoH)
-	local[0][1] = intervalScale(cuv, new(big.Rat).Neg(rhoH))
+	axial := proofbound.IntervalScale(a, new(big.Rat).Mul(rhoH, h2Over12))
+	local := [3][3]proofbound.RatInterval{}
+	local[0][0] = proofbound.IntervalAdd(proofbound.IntervalScale(cvv, rhoH), axial)
+	local[1][1] = proofbound.IntervalAdd(proofbound.IntervalScale(cuu, rhoH), axial)
+	local[2][2] = proofbound.IntervalScale(proofbound.IntervalAdd(cuu, cvv), rhoH)
+	local[0][1] = proofbound.IntervalScale(cuv, new(big.Rat).Neg(rhoH))
 	local[1][0] = local[0][1]
-	zero := pointInterval(new(big.Rat))
+	zero := proofbound.PointInterval(new(big.Rat))
 	local[0][2], local[2][0], local[1][2], local[2][1] = zero, zero, zero, zero
 
-	world := [3][3]ratInterval{}
+	world := [3][3]proofbound.RatInterval{}
 	var worldAxis [3]int
 	var sign [3]int64
 	for k, axis := range []r3.Vec{
@@ -286,17 +288,17 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	}
 	for i := range local {
 		for j := range local[i] {
-			world[worldAxis[i]][worldAxis[j]] = intervalScale(local[i][j], big.NewRat(sign[i]*sign[j], 1))
+			world[worldAxis[i]][worldAxis[j]] = proofbound.IntervalScale(local[i][j], big.NewRat(sign[i]*sign[j], 1))
 		}
 	}
 	for i := range world {
-		lower := new(big.Rat).Set(world[i][i].lo)
+		lower := new(big.Rat).Set(world[i][i].Lo)
 		for j := range world[i] {
 			if i == j {
 				continue
 			}
-			magnitude := new(big.Rat).Abs(world[i][j].lo)
-			if upper := new(big.Rat).Abs(world[i][j].hi); upper.Cmp(magnitude) > 0 {
+			magnitude := new(big.Rat).Abs(world[i][j].Lo)
+			if upper := new(big.Rat).Abs(world[i][j].Hi); upper.Cmp(magnitude) > 0 {
 				magnitude = upper
 			}
 			lower.Sub(lower, magnitude)
@@ -311,7 +313,7 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 		return MassProperties{}, err
 	}
 	entries := []struct {
-		iv      ratInterval
+		iv      proofbound.RatInterval
 		reading *Measurement
 	}{
 		{world[0][0], &result.Inertia.XX}, {world[1][1], &result.Inertia.YY},
@@ -330,21 +332,21 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	return result, nil
 }
 
-func massMomentInterval(value boundedScalar) (ratInterval, error) {
-	if isNonFinite(value.value) || isNonFinite(value.bound) || value.bound < 0 {
-		return ratInterval{}, fmt.Errorf("%w: section moment has no finite enclosure", ErrNotFinite)
+func massMomentInterval(value proofbound.BoundedScalar) (proofbound.RatInterval, error) {
+	if proofbound.IsNonFinite(value.Value) || proofbound.IsNonFinite(value.Bound) || value.Bound < 0 {
+		return proofbound.RatInterval{}, fmt.Errorf("%w: section moment has no finite enclosure", ErrNotFinite)
 	}
-	held, bound := proofarith.FloatRat(value.value), proofarith.FloatRat(value.bound)
-	return intervalOwned(new(big.Rat).Sub(held, bound), new(big.Rat).Add(held, bound)), nil
+	held, bound := proofarith.FloatRat(value.Value), proofarith.FloatRat(value.Bound)
+	return proofbound.IntervalOwned(new(big.Rat).Sub(held, bound), new(big.Rat).Add(held, bound)), nil
 }
 
-func massIntervalReading(iv ratInterval, unit units.Unit) (Measurement, error) {
-	if iv.lo.Cmp(iv.hi) == 0 {
-		return massReading(iv.lo, unit)
+func massIntervalReading(iv proofbound.RatInterval, unit units.Unit) (Measurement, error) {
+	if iv.Lo.Cmp(iv.Hi) == 0 {
+		return massReading(iv.Lo, unit)
 	}
 	held, _ := intervalMid(iv).Float64()
-	bound := intervalFloatError(iv, held)
-	if isNonFinite(held) || isNonFinite(bound) {
+	bound := proofbound.IntervalFloatError(iv, held)
+	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
 		return Measurement{}, fmt.Errorf("%w: mass property cannot be represented finitely", ErrNotFinite)
 	}
 	return Measurement{Value: units.New(held, unit), Bound: units.New(bound, unit), Exactness: exactnessOf(bound)}, nil
@@ -353,7 +355,7 @@ func massIntervalReading(iv ratInterval, unit units.Unit) (Measurement, error) {
 func massReading(exact *big.Rat, unit units.Unit) (Measurement, error) {
 	value, _ := exact.Float64()
 	bound := proofarith.RationalFloatError(exact, value)
-	if isNonFinite(value) || isNonFinite(bound) {
+	if proofbound.IsNonFinite(value) || proofbound.IsNonFinite(bound) {
 		return Measurement{}, fmt.Errorf("%w: mass property cannot be represented finitely", ErrNotFinite)
 	}
 	return Measurement{

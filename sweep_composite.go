@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // compositeSpanPart is one closed single-span reduction before its internal
@@ -149,9 +151,9 @@ func assembleCompositeSweepBody(
 }
 
 func validateCompositeSweepRims(ctx context.Context, parts []compositeSpanPart) error {
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for join := 0; join+1 < len(parts); join++ {
-		if err := budget.err(); err != nil {
+		if err := budget.Err(); err != nil {
 			return err
 		}
 		from, to := parts[join].endCap, parts[join+1].startCap
@@ -159,14 +161,14 @@ func validateCompositeSweepRims(ctx context.Context, parts []compositeSpanPart) 
 			return fmt.Errorf(`%w: adjacent sweep sections have different loop counts`, ErrUnsupported)
 		}
 		for li := range from.loops {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			if len(from.loops[li].coedges) != len(to.loops[li].coedges) {
 				return fmt.Errorf(`%w: adjacent sweep section loop %d has different edge counts`, ErrUnsupported, li)
 			}
 			for ci := range from.loops[li].coedges {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				fromUse := from.loops[li].coedges[ci]
@@ -182,7 +184,7 @@ func validateCompositeSweepRims(ctx context.Context, parts []compositeSpanPart) 
 			}
 		}
 	}
-	return budget.err()
+	return budget.Err()
 }
 
 func sewCompositeSweepJoin(
@@ -289,13 +291,13 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 	if body == nil {
 		return fmt.Errorf(`%w: a nil composite sweep body has no boundary`, ErrDegenerate)
 	}
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	uses := make(map[*Edge][]compositeCoedgeUse)
 	for _, face := range body.Faces() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
-		if admitAbove(measuredScalar(face.area, face.areaBound), 0) != survAdmit {
+		if proofbound.AdmitAbove(proofbound.MeasuredScalar(face.area, face.areaBound), 0) != proofbound.SurvAdmit {
 			return fmt.Errorf(`%w: a composite sweep face is not proven to have positive area`, ErrUnsupported)
 		}
 		if len(face.loops) == 0 {
@@ -306,7 +308,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 				return fmt.Errorf(`%w: a composite sweep face has an empty boundary loop`, ErrUnsupported)
 			}
 			for _, use := range loop.coedges {
-				if err := budget.step(); err != nil {
+				if err := budget.Step(); err != nil {
 					return err
 				}
 				if use.edge == nil {
@@ -324,7 +326,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 	}
 
 	for edge, edgeUses := range uses {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		// An edge may have one or two incident faces (a surface result's own
@@ -347,7 +349,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 	if err := auditVertexLinks(budget, uses); err != nil {
 		return err
 	}
-	return budget.err()
+	return budget.Err()
 }
 
 // auditVertexLinks proves the manifold-with-boundary invariant at every
@@ -374,7 +376,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 // that caller builds its own uses map over a set of faces that has no
 // *Body at all until after this audit is meant to run.
 func auditVertexLinks(
-	budget *workBudget,
+	budget *proofbound.WorkBudget,
 	uses map[*Edge][]compositeCoedgeUse,
 ) error {
 	type vertexLink struct {
@@ -400,7 +402,7 @@ func auditVertexLinks(
 			return fmt.Errorf(`%w: a composite sweep edge has incomplete endpoint topology`, ErrUnsupported)
 		}
 		for _, vertex := range []*Vertex{edge.start, edge.end} {
-			if err := budget.step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return err
 			}
 			link := linkFor(vertex)
@@ -424,7 +426,7 @@ func auditVertexLinks(
 		}
 	}
 	for _, link := range links {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		ends := 0

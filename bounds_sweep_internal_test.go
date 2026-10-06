@@ -7,6 +7,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -23,15 +25,15 @@ func TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample(t *testing
 
 			// Both sides are straight LineSegs (sectionDelta=0): each
 			// side's own arc length equals its own chord length exactly,
-			// claimed through cellSpanUpper because r3.Vec.Len of that same
+			// claimed through proofbound.CellSpanUpper because r3.Vec.Len of that same
 			// chord is not itself a proven upper bound on it.
-			arcLenA := cellSpanUpper(vHi, vLo)
-			arcLenB := cellSpanUpper(wHi, wLo)
+			arcLenA := proofbound.CellSpanUpper(vHi, vLo)
+			arcLenB := proofbound.CellSpanUpper(wHi, wLo)
 
 			patchArea := bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi)
 			heldTriangleArea := h / 2 // the two flat triangles' own combined area, degenerating toward 0 with h
 
-			allow := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
+			allow := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
 			require.GreaterOrEqualf(t, allow, patchArea,
 				"h=%g: cellChordCurveAreaUpper=%.6g must enclose the bilinear patch's own area %.6g, "+
 					"even though the held triangle pair carries only %.6g",
@@ -56,11 +58,11 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 	wLo := r3.NewVec(0, -1, h)
 	wHi := r3.NewVec(0, 1, h)
 
-	arcLenA := cellSpanUpper(vHi, vLo)
-	arcLenB := cellSpanUpper(wHi, wLo)
+	arcLenA := proofbound.CellSpanUpper(vHi, vLo)
+	arcLenB := proofbound.CellSpanUpper(wHi, wLo)
 
 	patchArea := bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi)
-	allow := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
+	allow := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
 	require.GreaterOrEqualf(t, allow, patchArea,
 		"cellChordCurveAreaUpper=%.6g must enclose the crossed cell's own bilinear patch area %.6g",
 		allow, patchArea)
@@ -69,13 +71,13 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 
 // TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta pins
 // the cross-check the derivation's own doc comment claims: at
-// sectionDelta=0, cellChordCurveAreaUpper's own eA (arc length, which
+// sectionDelta=0, proofbound.CellChordCurveAreaUpper's own eA (arc length, which
 // equals chord length for a straight LineSeg pairing) and eB (corner
-// separation) are EXACTLY the same eA, eB cellTwistVolumeAllow's own already
+// separation) are EXACTLY the same eA, eB proofbound.CellTwistVolumeAllow's own already
 // -proven derivation uses for the SAME bilinear patch, so the two speak for
 // the same eA*eB product on the same four corners. The check is against that
-// product itself, not against cellTwistVolumeAllow's own float: both helpers
-// certify their norms over the rationals (cellSpanUpper), so the two answers
+// product itself, not against proofbound.CellTwistVolumeAllow's own float: both helpers
+// certify their norms over the rationals (proofbound.CellSpanUpper), so the two answers
 // agree on the quantity while each rounds outward on its own.
 func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *testing.T) {
 	t.Parallel()
@@ -84,21 +86,21 @@ func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *test
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
 
-	arcLenA := cellSpanUpper(vHi, vLo)
-	arcLenB := cellSpanUpper(wHi, wLo)
+	arcLenA := proofbound.CellSpanUpper(vHi, vLo)
+	arcLenB := proofbound.CellSpanUpper(wHi, wLo)
 	eA := math.Max(arcLenA, arcLenB)
-	eB := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
+	eB := math.Max(proofbound.CellSpanUpper(wLo, vLo), proofbound.CellSpanUpper(wHi, vHi))
 	want := eA * eB
 
-	// Not an exact match: cellChordCurveAreaUpper's own eB folds a
-	// productUpper(2, sectionDelta) term (0 at sectionDelta=0, but still an
-	// upRound-outward-rounded absSumUpper step over eBBase) beside eBBase, so
+	// Not an exact match: proofbound.CellChordCurveAreaUpper's own eB folds a
+	// proofbound.ProductUpper(2, sectionDelta) term (0 at sectionDelta=0, but still an
+	// proofbound.UpRound-outward-rounded proofbound.AbsSumUpper step over eBBase) beside eBBase, so
 	// the published answer can sit a representable float above this test's
 	// own un-rounded eA*eB by construction — a platform-independent, one-ulp
 	// -scale outward nudge, never a mismatch in the underlying quantity
 	// (HOST PORTABILITY: never pin a bound to a literal this machine
 	// measured).
-	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
+	got := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
 	require.InDelta(t, want, got, 1e-9)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
@@ -115,26 +117,26 @@ func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
-	chordA := cellSpanUpper(vHi, vLo)
-	chordB := cellSpanUpper(wHi, wLo)
+	chordA := proofbound.CellSpanUpper(vHi, vLo)
+	chordB := proofbound.CellSpanUpper(wHi, wLo)
 
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.NaN(), chordB, 0), 1), "NaN arcLenA")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, math.NaN(), 0), 1), "NaN arcLenB")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB, math.NaN()), 1), "NaN sectionDelta")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, -1, chordB, 0), 1), "negative arcLenA")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, -1, 0), 1), "negative arcLenB")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB, -1), 1), "negative sectionDelta")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA/2, chordB, 0), 1), "arcLenA below its own chord")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB/2, 0), 1), "arcLenB below its own chord")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.NaN(), chordB, 0), 1), "NaN arcLenA")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, math.NaN(), 0), 1), "NaN arcLenB")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB, math.NaN()), 1), "NaN sectionDelta")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, -1, chordB, 0), 1), "negative arcLenA")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, -1, 0), 1), "negative arcLenB")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB, -1), 1), "negative sectionDelta")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA/2, chordB, 0), 1), "arcLenA below its own chord")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, chordB/2, 0), 1), "arcLenB below its own chord")
 	// +Inf arcLenA/arcLenB are legitimate (an unbounded caller claim), and
 	// the answer must stay a genuine +Inf refusal rather than becoming NaN
 	// through arithmetic.
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.Inf(1), chordB, 0), 1), "+Inf arcLenA")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.Inf(1), chordB, 0), 1), "+Inf arcLenA")
 }
 
 // TestCellChordCurveAreaUpperRefusesNonFiniteCorners pins F5: an earlier
 // version validated only the three scalar operands, so a NaN corner sailed
-// straight through the range gate `arcLenUpperA < cellSpanUpper(vHi, vLo)`
+// straight through the range gate `arcLenUpperA < proofbound.CellSpanUpper(vHi, vLo)`
 // (NaN compares false against everything, so the gate never refuses) and
 // propagated through eBBase's own math.Max into a silently-NaN answer for a
 // cell whose own geometry is unstateable, rather than a refusing +Inf — an
@@ -148,19 +150,19 @@ func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
 	nan := r3.NewVec(math.NaN(), 0, 0)
-	chordA := cellSpanUpper(vHi, vLo)
-	chordB := cellSpanUpper(wHi, wLo)
+	chordA := proofbound.CellSpanUpper(vHi, vLo)
+	chordB := proofbound.CellSpanUpper(wHi, wLo)
 
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(nan, vHi, wLo, wHi, chordA, chordB, 0), 1), "NaN vLo")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, nan, wLo, wHi, chordA, chordB, 0), 1), "NaN vHi")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, nan, wHi, chordA, chordB, 0), 1), "NaN wLo")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, nan, chordA, chordB, 0), 1), "NaN wHi")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(nan, vHi, wLo, wHi, chordA, chordB, 0), 1), "NaN vLo")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, nan, wLo, wHi, chordA, chordB, 0), 1), "NaN vHi")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, nan, wHi, chordA, chordB, 0), 1), "NaN wLo")
+	require.True(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, nan, chordA, chordB, 0), 1), "NaN wHi")
 }
 
 // ratSpanUpper and ratTwistQuarterUpper are the DIRECT big.Rat readings of
 // |a−b| and |T|/4 — one exact rational operation per step, the most literal
-// spelling of the two quantities there is. cellSpanUpper and
-// cellTwistQuarterUpper carry the same exact values through the homogeneous
+// spelling of the two quantities there is. proofbound.CellSpanUpper and
+// proofbound.CellTwistQuarterUpper carry the same exact values through the homogeneous
 // INTEGER kernel instead, which normalises once at the end rather than at
 // every step, and the two tests below pin that this is a change of
 // representation only. They exist as REFERENCES for those tests and for
@@ -182,8 +184,8 @@ func ratTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // certified cell quantities through the homogeneous integer kernel publishes
 // EXACTLY what the direct big.Rat chain publishes — bit for bit, never within
 // a tolerance. Nothing here is an approximation to be checked for closeness:
-// both chains are exact, both feed ratSqrtUp, and a big.Rat is canonical, so
-// equal VALUES are the same big.Rat and ratSqrtUp cannot tell which chain
+// both chains are exact, both feed proofbound.RatSqrtUp, and a big.Rat is canonical, so
+// equal VALUES are the same big.Rat and proofbound.RatSqrtUp cannot tell which chain
 // built it. A difference of any size would mean one of the chains is not
 // carrying the value it claims.
 //
@@ -212,14 +214,14 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 	t.Run("spans", func(t *testing.T) {
 		for i, a := range vecs {
 			for j, b := range vecs {
-				require.Equalf(t, ratSpanUpper(a, b), cellSpanUpper(a, b), "vecs[%d] to vecs[%d]", i, j)
+				require.Equalf(t, ratSpanUpper(a, b), proofbound.CellSpanUpper(a, b), "vecs[%d] to vecs[%d]", i, j)
 			}
 		}
 		rng := rand.New(rand.NewPCG(41, 43))
 		for range 500 {
 			a := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
 			b := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
-			require.Equal(t, ratSpanUpper(a, b), cellSpanUpper(a, b))
+			require.Equal(t, ratSpanUpper(a, b), proofbound.CellSpanUpper(a, b))
 		}
 	})
 
@@ -227,7 +229,7 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 		for i := range vecs {
 			vLo, vHi := vecs[i], vecs[(i+1)%len(vecs)]
 			wLo, wHi := vecs[(i+2)%len(vecs)], vecs[(i+3)%len(vecs)]
-			require.Equalf(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), cellTwistQuarterUpper(vLo, vHi, wLo, wHi), "cell at vecs[%d]", i)
+			require.Equalf(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), proofbound.CellTwistQuarterUpper(vLo, vHi, wLo, wHi), "cell at vecs[%d]", i)
 		}
 		// The cancelling chain: wHi is BUILT as vHi+wLo, so the float chain
 		// reads exactly (0,0,0) while the exact T is the addition's own
@@ -235,7 +237,7 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 		vHi, wLo := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(0.7, 1.1, 1.3)
 		require.Equal(t,
 			ratTwistQuarterUpper(r3.NewVec(0, 0, 0), vHi, wLo, vHi.Add(wLo)),
-			cellTwistQuarterUpper(r3.NewVec(0, 0, 0), vHi, wLo, vHi.Add(wLo)))
+			proofbound.CellTwistQuarterUpper(r3.NewVec(0, 0, 0), vHi, wLo, vHi.Add(wLo)))
 
 		rng := rand.New(rand.NewPCG(47, 53))
 		for range 500 {
@@ -243,12 +245,12 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 				return r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
 			}
 			vLo, vHi, wLo, wHi := corner(), corner(), corner(), corner()
-			require.Equal(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), cellTwistQuarterUpper(vLo, vHi, wLo, wHi))
+			require.Equal(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), proofbound.CellTwistQuarterUpper(vLo, vHi, wLo, wHi))
 		}
 	})
 }
 
-// TestCellAllowsOfMatchesThePerBoundHelpers pins cellAllowsOf's whole
+// TestCellAllowsOfMatchesThePerBoundHelpers pins proofbound.CellAllowsOf's whole
 // contract. That reader exists only to certify one cell's four spans and its
 // |T|/4 endpoint ONCE for all three of the cell's bounds instead of once per
 // bound, so each of its three fields must equal — BIT FOR BIT, never within a
@@ -262,7 +264,7 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 // under r3.Vec.Len (so the certified endpoint is what decides both the
 // premise gate and eBBase); a cell whose twist chain CANCELS to exactly
 // (0,0,0) in float while its exact T is nonzero (the case
-// cellTwistQuarterUpper exists for); a wholly degenerate cell; a cell whose
+// proofbound.CellTwistQuarterUpper exists for); a wholly degenerate cell; a cell whose
 // SCALAR claims are broken, where only the area reading may refuse; and a
 // cell with a non-finite corner, where all three must. The randomized sweep
 // then covers ordinary cells, with arc-length claims deliberately straddling
@@ -272,10 +274,10 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 	t.Parallel()
 	check := func(t *testing.T, vLo, vHi, wLo, wHi r3.Vec, arcLenA, arcLenB, matchedDelta float64) {
 		t.Helper()
-		got := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta)
-		require.Equal(t, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta), got.chordCurveAreaUpper, "chordCurveAreaUpper")
-		require.Equal(t, cellTwistVolumeAllow(vLo, vHi, wLo, wHi), got.twistVolumeAllow, "twistVolumeAllow")
-		require.Equal(t, cellTwistOffsetUpper(vLo, vHi, wLo, wHi), got.twistOffsetUpper, "twistOffsetUpper")
+		got := proofbound.CellAllowsOf(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta)
+		require.Equal(t, proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta), got.ChordCurveAreaUpper, "chordCurveAreaUpper")
+		require.Equal(t, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi), got.TwistVolumeAllow, "twistVolumeAllow")
+		require.Equal(t, proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi), got.TwistOffsetUpper, "twistOffsetUpper")
 	}
 
 	// The float chain vLo−vHi−wLo+wHi cancels to exactly (0,0,0) here, since
@@ -345,8 +347,8 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 			wHi := r3.NewVec(coord(), coord(), coord())
 			// Straddles each side's own certified chord, so roughly half the
 			// rows are admitted by the premise gate and the rest refused.
-			arcLenA := cellSpanUpper(vHi, vLo) * (0.5 + rng.Float64())
-			arcLenB := cellSpanUpper(wHi, wLo) * (0.5 + rng.Float64())
+			arcLenA := proofbound.CellSpanUpper(vHi, vLo) * (0.5 + rng.Float64())
+			arcLenB := proofbound.CellSpanUpper(wHi, wLo) * (0.5 + rng.Float64())
 			check(t, vLo, vHi, wLo, wHi, arcLenA, arcLenB, rng.Float64()*0.1)
 		}
 	})
@@ -416,12 +418,12 @@ func edgeProductRows() []edgeProductRow {
 // channel on this helper's own eB term, the same channel
 // TestCellTwistBoundsEncloseTheirExactTerms pins one helper over: naiveNorm
 // carries no accuracy contract on its own, and past rawNormShortfallFloor it
-// can sit several ulp BELOW the exact norm, which neither absSumUpper's nor
-// productUpper's one-ulp outward nudge can recover.
+// can sit several ulp BELOW the exact norm, which neither proofbound.AbsSumUpper's nor
+// proofbound.ProductUpper's one-ulp outward nudge can recover.
 // At matchedDeltaUpper=0 the eB term is eBBase alone, so the published
 // answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|) and an
 // understated eBBase puts the answer BELOW it — the unsound direction, since
-// chordedBoundaryVolumeAllow sums this reading over every wall cell for its
+// proofbound.ChordedBoundaryVolumeAllow sums this reading over every wall cell for its
 // wallAreaUpper. The comparison is over exact rationals in SQUARED form (the
 // norms are irrational, their squares exactly rational), never against a
 // float reference that shares the defect.
@@ -437,10 +439,10 @@ func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
 				require.True(t, rawNormIsBelowExact(r.wHi, r.vHi), "the fixture must exercise the raw-norm channel on |wHi−vHi|")
 			}
 
-			require.GreaterOrEqual(t, r.arcLenUpper, cellSpanUpper(r.vHi, r.vLo), "the fixture's arc-length claim must dominate side A's chord")
-			require.GreaterOrEqual(t, r.arcLenUpper, cellSpanUpper(r.wHi, r.wLo), "the fixture's arc-length claim must dominate side B's chord")
+			require.GreaterOrEqual(t, r.arcLenUpper, proofbound.CellSpanUpper(r.vHi, r.vLo), "the fixture's arc-length claim must dominate side A's chord")
+			require.GreaterOrEqual(t, r.arcLenUpper, proofbound.CellSpanUpper(r.wHi, r.wLo), "the fixture's arc-length claim must dominate side B's chord")
 
-			got := cellChordCurveAreaUpper(r.vLo, r.vHi, r.wLo, r.wHi, r.arcLenUpper, r.arcLenUpper, 0)
+			got := proofbound.CellChordCurveAreaUpper(r.vLo, r.vHi, r.wLo, r.wHi, r.arcLenUpper, r.arcLenUpper, 0)
 			require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
 
 			// exactCellTwistFactors' own second return IS eBBase's
@@ -478,22 +480,22 @@ func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
 			}
 
 			rawA, rawB := naiveNorm(vHi.Sub(vLo)), naiveNorm(wHi.Sub(wLo))
-			certA, certB := cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo)
+			certA, certB := proofbound.CellSpanUpper(vHi, vLo), proofbound.CellSpanUpper(wHi, wLo)
 
-			gotRawA := math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, rawA, certB, 0), 1)
-			gotRawB := math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, rawB, 0), 1)
+			gotRawA := math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, rawA, certB, 0), 1)
+			gotRawB := math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, rawB, 0), 1)
 			if r.rawChannelExpected {
 				require.True(t, gotRawA, "a raw-norm arcLenUpperA is provably below side A's own chord and must be refused")
 				require.True(t, gotRawB, "a raw-norm arcLenUpperB is provably below side B's own chord and must be refused")
 			}
-			require.False(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, certB, 0), 1),
+			require.False(t, math.IsInf(proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, certB, 0), 1),
 				"the certified chord endpoints are a sound claim and must still be admitted")
 		})
 	}
 }
 
 // TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins F1's own
-// counterexample: cellChordCurveAreaUpper's matchedDeltaUpper obligation is
+// counterexample: proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation is
 // a PARAMETER-MATCHED bound, never the loft evaluator's SET-distance sagitta
 // (loftPayload.sectionDelta). Side A is straight (vLo=(0,0,0), vHi=(1,0,0),
 // chord length 1). Side B's CHORD is also straight (wLo=(0,0,0.001),
@@ -511,7 +513,7 @@ func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
 // packing almost all of side B's arc length into x in [0,0.02] decouples the
 // zigzag's own arc-length-matched position from its chord position by
 // nearly the full chord length, something a SET-distance sagitta says
-// nothing about (cellChordCurveAreaUpper's own doc comment).
+// nothing about (proofbound.CellChordCurveAreaUpper's own doc comment).
 //
 // No caller can derive a parameter-matched bound for this curve today (only
 // a LINE or an ARC can, per that doc comment), so the only HONEST value to
@@ -529,7 +531,7 @@ func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
 	// The old (broken) contract's own answer, pinned here as the violation
 	// this fix closes: a wrongly sagitta-fed reading published far less area
 	// than the true ruled surface carries.
-	oldBroken := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, sagitta)
+	oldBroken := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, sagitta)
 	const trueRuledSurfaceArea = 0.2365
 	require.Less(t, oldBroken, trueRuledSurfaceArea,
 		"pinning the historical violation: the sagitta-fed reading %.6g must fall short of the true ruled-surface area %.6g", oldBroken, trueRuledSurfaceArea)
@@ -537,7 +539,7 @@ func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
 	// The fixed contract: no caller can honestly state a parameter-matched
 	// bound for this curve, so the only value to pass is +Inf, and the
 	// helper must publish +Inf right back — never the sagitta's own 0.007734.
-	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, math.Inf(1))
+	got := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, math.Inf(1))
 	require.True(t, math.IsInf(got, 1), "an unstatable parameter-matched bound must refuse, not publish %.6g", got)
 }
 
@@ -566,9 +568,9 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 // sup_s |arc(s)-chord(s)| equals the chord's own TRUE sagitta
 // 2r*sin^2(theta/4) EXACTLY, at every cell angle theta a build can produce.
 // That is the one curve kind (besides a trivial straight LINE) where
-// cellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
+// proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
 // evaluator's sagitta-only sectionDelta field coincide, so every caller
-// leaning on the coincidence (bounds.go's own matchedDeltaUpper paragraph,
+// leaning on the coincidence (internal/proofbound/bounds.go's own matchedDeltaUpper paragraph,
 // loft_build.go's loftCircularCellStations) rests on what follows.
 //
 // THE DERIVATION. Put the chord's own midpoint on the x axis. An arc of
@@ -749,7 +751,7 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 func TestCellChordCurveAreaUpperIsZeroForADegenerateCell(t *testing.T) {
 	t.Parallel()
 	p := r3.NewVec(1, 2, 3)
-	require.Equal(t, 0.0, cellChordCurveAreaUpper(p, p, p, p, 0, 0, 0))
+	require.Equal(t, 0.0, proofbound.CellChordCurveAreaUpper(p, p, p, p, 0, 0, 0))
 }
 
 // TestCellTwistVolumeAllowIsZeroWithoutTwist pins the existing term's own
@@ -763,7 +765,7 @@ func TestCellTwistVolumeAllowIsZeroWithoutTwist(t *testing.T) {
 	vHi := r3.NewVec(0, 1, 0)
 	wLo := vLo.Add(r3.NewVec(0, 0, 5))
 	wHi := vHi.Add(r3.NewVec(0, 0, 5))
-	require.Equal(t, 0.0, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+	require.Equal(t, 0.0, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 }
 
 // TestCellTwistVolumeAllowMatchesTheSweptMeasure pins the exact determinant
@@ -778,7 +780,7 @@ func TestCellTwistVolumeAllowMatchesTheSweptMeasure(t *testing.T) {
 
 	want := 1.0 / 12
 
-	got := cellTwistVolumeAllow(vLo, vHi, wLo, wHi)
+	got := proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi)
 	require.InDelta(t, want, got, 1e-12)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
@@ -817,14 +819,14 @@ func TestCellTwistMomentPlanarShortcutMatchesExactIntegral(t *testing.T) {
 		{"near-coplanar", near, r3.NewVec(0, 0, 0), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			signed := cellTwistVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3])
+			signed := proofbound.CellTwistVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3])
 			if tc.planar {
 				require.Zero(t, signed.Sign())
 			} else {
 				require.NotZero(t, signed.Sign())
 			}
-			want := cellTwistMoment(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor)
-			got := cellTwistMomentFromVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor, signed)
+			want := proofbound.CellTwistMoment(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor)
+			got := proofbound.CellTwistMomentFromVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor, signed)
 			for axis := range want {
 				require.Zero(t, got[axis].Cmp(want[axis]))
 				if tc.planar {
@@ -847,7 +849,7 @@ func TestCellTwistOffsetUpperMatchesPointwiseDeviation(t *testing.T) {
 	twist := vLo.Sub(vHi).Sub(wLo).Add(wHi)
 	want := twist.Len() / 4
 
-	got := cellTwistOffsetUpper(vLo, vHi, wLo, wHi)
+	got := proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi)
 	require.InDelta(t, want, got, 1e-15)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
@@ -860,7 +862,7 @@ func TestCellTwistOffsetUpperIsZeroWithoutTwist(t *testing.T) {
 	vHi := r3.NewVec(0, 1, 0)
 	wLo := vLo.Add(r3.NewVec(0, 0, 5))
 	wHi := vHi.Add(r3.NewVec(0, 0, 5))
-	require.Equal(t, 0.0, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+	require.Equal(t, 0.0, proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi))
 }
 
 // exactCellTwistFactors returns the exact rational squares of |T| and eB.
@@ -897,11 +899,11 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat) {
 }
 
 // exactCellTwistVolume returns |det(a,T,b)|/12 over the cell's exact float64
-// coordinates, independently of cellTwistVolumeAllow's implementation.
+// coordinates, independently of proofbound.CellTwistVolumeAllow's implementation.
 func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
-	a := heldDelta(vHi, vLo)
-	b := heldDelta(wLo, vLo)
-	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	a := proofbound.HeldDelta(vHi, vLo)
+	b := proofbound.HeldDelta(wLo, vLo)
+	twist := proofarith.DvSub(proofbound.HeldDelta(vLo, vHi), proofbound.HeldDelta(wLo, wHi))
 	det := proofarith.DyAbs(proofarith.DvDot(a, proofarith.DvCross(twist, b))).Rat()
 	return det.Quo(det, big.NewRat(12, 1))
 }
@@ -962,12 +964,12 @@ func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
 				return lhs.Cmp(target) >= 0
 			}
 
-			offset := cellTwistOffsetUpper(row.vLo, row.vHi, row.wLo, row.wHi)
+			offset := proofbound.CellTwistOffsetUpper(row.vLo, row.vHi, row.wLo, row.wHi)
 			require.Positive(t, offset, "the pointwise bound must not vanish while the exact |T| is positive")
 			require.True(t, dominates(offset, twist2),
 				"cellTwistOffsetUpper = %.20g sits BELOW the exact |T|/4 it claims to dominate", offset)
 
-			volume := cellTwistVolumeAllow(row.vLo, row.vHi, row.wLo, row.wHi)
+			volume := proofbound.CellTwistVolumeAllow(row.vLo, row.vHi, row.wLo, row.wHi)
 			wantVolume := exactCellTwistVolume(row.vLo, row.vHi, row.wLo, row.wHi)
 			require.GreaterOrEqual(t, ratOfFloat(volume).Cmp(wantVolume), 0,
 				"cellTwistVolumeAllow = %.20g sits below the exact determinant measure", volume)
@@ -984,7 +986,7 @@ func TestCapAreaVolumeAllowIsExactForAPlanarFace(t *testing.T) {
 	t.Parallel()
 	const h, area = 4.0, 6.0
 	want := h * area / 3
-	got := capAreaVolumeAllow(h, area)
+	got := proofbound.CapAreaVolumeAllow(h, area)
 	require.InDelta(t, want, got, 1e-12)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
@@ -997,8 +999,8 @@ func TestCapAreaVolumeAllowIsExactForAPlanarFace(t *testing.T) {
 // own plane offset.
 func TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, 0.0, capAreaVolumeAllow(0, 6.0))
-	require.Equal(t, 0.0, capAreaVolumeAllow(4.0, 0))
+	require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(0, 6.0))
+	require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(4.0, 0))
 }
 
 // TestCapAreaVolumeAllowRefusesOnBrokenClaims pins the reject-only gate: a
@@ -1006,44 +1008,44 @@ func TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap(t *testing.T) {
 // never a finite number computed past a broken claim.
 func TestCapAreaVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 	t.Parallel()
-	require.True(t, math.IsInf(capAreaVolumeAllow(math.NaN(), 6.0), 1))
-	require.True(t, math.IsInf(capAreaVolumeAllow(4.0, math.NaN()), 1))
-	require.True(t, math.IsInf(capAreaVolumeAllow(math.Inf(1), 6.0), 1))
-	require.True(t, math.IsInf(capAreaVolumeAllow(4.0, math.Inf(1)), 1))
-	require.True(t, math.IsInf(capAreaVolumeAllow(-1, 6.0), 1))
-	require.True(t, math.IsInf(capAreaVolumeAllow(4.0, -1), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.NaN(), 6.0), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, math.NaN()), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.Inf(1), 6.0), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, math.Inf(1)), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(-1, 6.0), 1))
+	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, -1), 1))
 }
 
 // TestChordedBoundaryVolumeAllowComposesAllFourLegs pins that
-// chordedBoundaryVolumeAllow composes its wall chord-to-curve leg, its
+// proofbound.ChordedBoundaryVolumeAllow composes its wall chord-to-curve leg, its
 // caller-supplied twist leg, its caller-supplied cap leg and its caller-
-// supplied seam leg by absSumUpper, never by picking the largest of the four
+// supplied seam leg by proofbound.AbsSumUpper, never by picking the largest of the four
 // or dropping any: with only one leg positive at a time, the whole answer is
 // exactly that leg; with all four positive, the answer is at least as large
 // as any one leg alone.
 func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
 	t.Parallel()
-	// absSumUpper rounds its outward-nudged sum away from an exact value by
-	// construction (upRound's own contract), so single-leg cases are checked
+	// proofbound.AbsSumUpper rounds its outward-nudged sum away from an exact value by
+	// construction (proofbound.UpRound's own contract), so single-leg cases are checked
 	// as an enclosure — never pinned to a literal float this platform's own
 	// rounding could move a ulp either way — rather than an exact match.
-	twistOnly := chordedBoundaryVolumeAllow(0, 5.0, 3.5, 0, 0)
+	twistOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 3.5, 0, 0)
 	require.GreaterOrEqual(t, twistOnly, 3.5)
 	require.InDelta(t, 3.5, twistOnly, 1e-12)
 
-	capOnly := chordedBoundaryVolumeAllow(0, 5.0, 0, 2.0, 0)
+	capOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 2.0, 0)
 	require.GreaterOrEqual(t, capOnly, 2.0)
 	require.InDelta(t, 2.0, capOnly, 1e-12)
 
-	seamOnly := chordedBoundaryVolumeAllow(0, 5.0, 0, 0, 1.5)
+	seamOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 0, 1.5)
 	require.GreaterOrEqual(t, seamOnly, 1.5)
 	require.InDelta(t, 1.5, seamOnly, 1e-12)
 
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, 5.0, 0, 0, 0))
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0.01, 0, 0, 0, 0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 0, 0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0.01, 0, 0, 0, 0))
 
-	all := chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, 1.5)
-	wallOnly := chordedBoundaryVolumeAllow(0.01, 5.0, 0, 0, 0)
+	all := proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, 1.5)
+	wallOnly := proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 0, 0, 0)
 	require.GreaterOrEqual(t, all, wallOnly)
 	require.GreaterOrEqual(t, all, twistOnly)
 	require.GreaterOrEqual(t, all, capOnly)
@@ -1053,27 +1055,27 @@ func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
 // TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims pins F6's own fix: an
 // earlier version of this bound let a NaN wallAreaUpper compare false
 // against `> 0` and silently vanish from the sum (rather than refusing),
-// and let absSumUpper's internal math.Abs flip a negative broken
+// and let proofbound.AbsSumUpper's internal math.Abs flip a negative broken
 // twistVolumeUpper, capVolumeUpper or seamAllow positive instead of
 // refusing. Every case here must answer +Inf, never a finite number computed
 // past a broken claim.
 func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 	t.Parallel()
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0, 1.5), 1), "NaN matchedDelta")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0, 1.5), 1), "negative matchedDelta")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0, 1.5), 1), "matchedDelta>0 with NaN wallAreaUpper — F6's own scenario")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, -1, 3.5, 2.0, 1.5), 1), "matchedDelta>0 with negative wallAreaUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, math.NaN(), 2.0, 1.5), 1), "NaN twistVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, -1, 2.0, 1.5), 1), "negative twistVolumeUpper — must refuse, never flip positive via absSumUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, math.NaN(), 1.5), 1), "NaN capVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, -1, 1.5), 1), "negative capVolumeUpper — must refuse, never flip positive via absSumUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, math.NaN()), 1), "NaN seamAllow")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, -1), 1), "negative seamAllow — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0, 1.5), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0, 1.5), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0, 1.5), 1), "matchedDelta>0 with NaN wallAreaUpper — F6's own scenario")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(1, -1, 3.5, 2.0, 1.5), 1), "matchedDelta>0 with negative wallAreaUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, math.NaN(), 2.0, 1.5), 1), "NaN twistVolumeUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, -1, 2.0, 1.5), 1), "negative twistVolumeUpper — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, math.NaN(), 1.5), 1), "NaN capVolumeUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, -1, 1.5), 1), "negative capVolumeUpper — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, math.NaN()), 1), "NaN seamAllow")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, -1), 1), "negative seamAllow — must refuse, never flip positive via absSumUpper")
 
 	// matchedDelta==0 is a legitimate SKIP of the wall leg regardless of what
 	// wallAreaUpper claims (the boundary provably does not move, so the area
 	// it would move across is irrelevant) — never a refusal on its own.
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, math.Inf(1), 0, 0, 0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, math.Inf(1), 0, 0, 0))
 }
 
 // TestChordedBoundarySeamAllowRefusesOnBrokenClaims pins F2's own seam
@@ -1083,16 +1085,16 @@ func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 // zeros (any operand exactly 0) must publish exactly 0.
 func TestChordedBoundarySeamAllowRefusesOnBrokenClaims(t *testing.T) {
 	t.Parallel()
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(math.NaN(), 5.0, 10.0), 1), "NaN matchedDelta")
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(-1, 5.0, 10.0), 1), "negative matchedDelta")
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, math.NaN(), 10.0), 1), "NaN posUpper")
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, -1, 10.0), 1), "negative posUpper")
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, 5.0, math.NaN()), 1), "NaN seamPerimeterUpper")
-	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, 5.0, -1), 1), "negative seamPerimeterUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(math.NaN(), 5.0, 10.0), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(-1, 5.0, 10.0), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, math.NaN(), 10.0), 1), "NaN posUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, -1, 10.0), 1), "negative posUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, 5.0, math.NaN()), 1), "NaN seamPerimeterUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, 5.0, -1), 1), "negative seamPerimeterUpper")
 
-	require.Equal(t, 0.0, chordedBoundarySeamAllow(0, 5.0, 10.0))
-	require.Equal(t, 0.0, chordedBoundarySeamAllow(0.01, 0, 10.0))
-	require.Equal(t, 0.0, chordedBoundarySeamAllow(0.01, 5.0, 0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0, 5.0, 10.0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0.01, 0, 10.0))
+	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0.01, 5.0, 0))
 }
 
 // TestChordedBoundarySeamAllowScalesWithItsThreeOperands pins the closed
@@ -1102,7 +1104,7 @@ func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
 	t.Parallel()
 	const matchedDelta, posUpper, seamPerimeterUpper = 0.02, 12.0, 40.0
 	want := matchedDelta * posUpper * seamPerimeterUpper / 3
-	got := chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
+	got := proofbound.ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
 	require.InDelta(t, want, got, 1e-9)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
@@ -1116,27 +1118,27 @@ func TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures(t *testing.T) {
 	matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow := 0.02, 7.5, 1.25, 0.5, 0.1
 	maxTwistOffsetUpper, coordUpper := 0.3, 3.0
 
-	wallMeasure := productUpper(matchedDelta, wallAreaUpper)
-	want := absSumUpper(
-		productUpper(wallMeasure, absSumUpper(coordUpper, matchedDelta)),
-		productUpper(twistVolumeUpper, coordUpper),
+	wallMeasure := proofbound.ProductUpper(matchedDelta, wallAreaUpper)
+	want := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(wallMeasure, proofbound.AbsSumUpper(coordUpper, matchedDelta)),
+		proofbound.ProductUpper(twistVolumeUpper, coordUpper),
 	)
 
-	got := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
+	got := proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
 	require.Equal(t, want, got)
 
 	// A zero VOLUME is a legitimate zero: nothing is displaced, so there is
 	// no moment for any radius to charge.
-	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, 0, coordUpper))
+	require.Equal(t, 0.0, proofbound.ChordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, 0, coordUpper))
 
 	// A zero coordUpper still leaves the wall sweep's matchedDelta widening.
-	zeroCoordWall := productUpper(wallMeasure, absSumUpper(0, matchedDelta))
-	require.Equal(t, absSumUpper(zeroCoordWall, productUpper(twistVolumeUpper, 0)),
-		chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
+	zeroCoordWall := proofbound.ProductUpper(wallMeasure, proofbound.AbsSumUpper(0, matchedDelta))
+	require.Equal(t, proofbound.AbsSumUpper(zeroCoordWall, proofbound.ProductUpper(twistVolumeUpper, 0)),
+		proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
 
 	// R == 0 — every widening leg zero as well — reaches 0 through
-	// productUpper's own zero factor, not through a guard on coordUpper.
-	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, 0, 0))
+	// proofbound.ProductUpper's own zero factor, not through a guard on coordUpper.
+	require.Equal(t, 0.0, proofbound.ChordedBoundaryMomentAllow(0, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, 0, 0))
 }
 
 // TestChordedBoundaryMomentAllowWidensTheWallMeasure pins that the
@@ -1147,11 +1149,11 @@ func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
 	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
-	widenedAnswer := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
-	wallMeasure := productUpper(matchedDelta, wallAreaUpper)
-	unwidenedAnswer := absSumUpper(
-		productUpper(wallMeasure, coordUpper),
-		productUpper(twistVolumeUpper, coordUpper),
+	widenedAnswer := proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
+	wallMeasure := proofbound.ProductUpper(matchedDelta, wallAreaUpper)
+	unwidenedAnswer := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(wallMeasure, coordUpper),
+		proofbound.ProductUpper(twistVolumeUpper, coordUpper),
 	)
 
 	require.Greater(t, widenedAnswer, unwidenedAnswer,
@@ -1159,9 +1161,9 @@ func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
 
 	// At coordUpper == 0 only the wall widening remains; the twist sweep is in
 	// the held convex hull and therefore carries a zero coordinate radius.
-	zeroCoordWidened := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0)
-	zeroCoordWall := productUpper(wallMeasure, absSumUpper(0, matchedDelta))
-	require.Equal(t, absSumUpper(zeroCoordWall, productUpper(twistVolumeUpper, 0)), zeroCoordWidened)
+	zeroCoordWidened := proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0)
+	zeroCoordWall := proofbound.ProductUpper(wallMeasure, proofbound.AbsSumUpper(0, matchedDelta))
+	require.Equal(t, proofbound.AbsSumUpper(zeroCoordWall, proofbound.ProductUpper(twistVolumeUpper, 0)), zeroCoordWidened)
 }
 
 // TestChordedBoundaryMomentAllowRefusesOnBrokenClaims pins the reject-only
@@ -1170,25 +1172,25 @@ func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
 // coordUpper must each, when NaN or a negative claim where negative is
 // broken, produce a non-finite published bound, never a finite number
 // silently computed past it. F6: a NEGATIVE coordUpper is one such broken
-// claim — an earlier version of this bound guarded only isNonFinite(coordUpper)
+// claim — an earlier version of this bound guarded only proofbound.IsNonFinite(coordUpper)
 // and let a negative claim return 0 instead of +Inf.
 func TestChordedBoundaryMomentAllowRefusesOnBrokenClaims(t *testing.T) {
 	t.Parallel()
 	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(math.NaN(), wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN matchedDelta")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(-1, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "negative matchedDelta")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, math.NaN(), twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN wallAreaUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, math.NaN(), capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN twistVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, math.NaN(), seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN capVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, math.NaN(), maxTwistOffsetUpper, coordUpper), 1), "NaN seamAllow")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, -1, maxTwistOffsetUpper, coordUpper), 1), "negative seamAllow")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, math.NaN(), coordUpper), 1), "NaN maxTwistOffsetUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, -1, coordUpper), 1), "negative maxTwistOffsetUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.NaN()), 1), "NaN coordUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, -1), 1), "negative coordUpper — F6")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(math.NaN(), wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(-1, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, math.NaN(), twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN wallAreaUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, math.NaN(), capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN twistVolumeUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, math.NaN(), seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN capVolumeUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, math.NaN(), maxTwistOffsetUpper, coordUpper), 1), "NaN seamAllow")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, -1, maxTwistOffsetUpper, coordUpper), 1), "negative seamAllow")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, math.NaN(), coordUpper), 1), "NaN maxTwistOffsetUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, -1, coordUpper), 1), "negative maxTwistOffsetUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.NaN()), 1), "NaN coordUpper")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, -1), 1), "negative coordUpper — F6")
+	require.True(t, math.IsInf(proofbound.ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
 }
 
 // exactTwistAreaLower is a float64 at or below the exact value the linear
@@ -1303,8 +1305,8 @@ func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
 					"fixture premise: the float64 twist chain cancels to zero here")
 			}
 
-			corners := cellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
-			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+			corners := proofbound.CellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			got := proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners))
 			want := exactTwistAreaLower(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			require.Greater(t, want, 0.0, "fixture premise: the exact deviation is positive")
 			require.GreaterOrEqual(t, got, want,
@@ -1317,12 +1319,12 @@ func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
 		// vector, not a cancelled one, so there is no deviation to charge.
 		vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0)
 		wLo, wHi := r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0)
-		corners := cellCornersOf(vLo, vHi, wLo, wHi)
-		require.Zero(t, cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners)))
+		corners := proofbound.CellCornersOf(vLo, vHi, wLo, wHi)
+		require.Zero(t, proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners)))
 	})
 
 	t.Run("a non-finite corner refuses", func(t *testing.T) {
-		require.True(t, math.IsInf(cellTwistAreaAllow(
+		require.True(t, math.IsInf(proofbound.CellTwistAreaAllow(
 			r3.NewVec(math.NaN(), 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 1)), 1))
 	})
 
@@ -1333,8 +1335,8 @@ func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
 		}
 		for i := range 400 {
 			vLo, vHi, wLo, wHi := vec(), vec(), vec(), vec()
-			corners := cellCornersOf(vLo, vHi, wLo, wHi)
-			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+			corners := proofbound.CellCornersOf(vLo, vHi, wLo, wHi)
+			got := proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners))
 			require.GreaterOrEqual(t, got, exactTwistAreaLower(vLo, vHi, wLo, wHi), "cell %d", i)
 		}
 	})
@@ -1367,12 +1369,12 @@ func TestCellTwistAreaAllowEnclosesTheBilinearGap(t *testing.T) {
 			patchArea := bilinearPatchAreaNumeric(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			heldArea := heldTrianglePairArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			gap := math.Abs(patchArea - heldArea)
-			allow := cellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			allow := proofbound.CellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			require.LessOrEqual(t, gap, allow+1e-8,
 				"the allowance must enclose the independently integrated area gap")
 			if tc.sharp {
-				corners := cellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
-				linear := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+				corners := proofbound.CellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+				linear := proofbound.CellTwistAreaLinearFromSpans(corners.Spans(), proofbound.XtwistQuarterUpper(corners))
 				require.Less(t, allow, linear,
 					"the cancellation-preserving arm must tighten a small rotational twist")
 			}

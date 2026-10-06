@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is docs/surface-design.md §13.4's chain-fed tessellation
@@ -61,9 +63,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		return i
 	}
 
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	for _, f := range b.Faces() {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		if _, ok := f.Surface().(Plane); !ok {
@@ -96,9 +98,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		}
 		mesh.addTriangle(tri1, f)
 		mesh.addTriangle(tri2, f)
-		mesh.setFaceBound(f, upRound(cornerDelta+pp.sectionDelta))
+		mesh.setFaceBound(f, proofbound.UpRound(cornerDelta+pp.sectionDelta))
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 
@@ -108,8 +110,8 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		for _, chain := range pp.chains {
 			walks += len(chain.Segments)
 		}
-		wallMove := productUpper(sectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
-		mesh.areaSlack = absSumUpper(mesh.areaSlack, wallMove)
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
+		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wallMove)
 	}
 
 	// A chain-fed body is a BodySheet by construction, always (Table G), so

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -526,7 +528,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	if relation != ContactSeparated {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
 	}
-	norm := ratSqrtUp(normSquared.Rat())
+	norm := proofbound.RatSqrtUp(normSquared.Rat())
 	if !finiteMeasurementValues(norm) || norm <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay gap has no finite bound", ErrUnsupported)
 	}

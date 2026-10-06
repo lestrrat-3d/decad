@@ -6,6 +6,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -257,7 +259,7 @@ func transformVerts(verts []r3.Vec, scale float64, shift r3.Vec) []r3.Vec {
 // path decided every pair rather than only how many pairs there were.
 func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts, want loftAuditWork) error {
 	t.Helper()
-	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, shortcuts)
+	work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, shortcuts)
 	require.Equal(t, want, work)
 	return err
 }
@@ -334,7 +336,7 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 		// The box's OTHER shared-edge pairs — the rungs between consecutive
 		// cells, which meet at a right angle — are the noncoplanar case, so
 		// the whole audit still fires the certificate four times.
-		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.NoError(t, err)
 		require.Equal(t, 4, work.edgeCerts,
 			"one certificate per rung shared by two consecutive wall cells")
@@ -492,7 +494,7 @@ func TestLoftCrossingAuditCertificatesPreserveCancellationPrecedence(t *testing.
 		{name: "production", shortcuts: loftAuditProduction},
 	} {
 		t.Run(arm.name, func(t *testing.T) {
-			_, err := loftCrossingAuditWork(newWorkBudget(ctx), verts, tris, arm.shortcuts)
+			_, err := loftCrossingAuditWork(proofbound.NewWorkBudget(ctx), verts, tris, arm.shortcuts)
 			require.ErrorIs(t, err, context.Canceled,
 				"a cancelled context outranks the pair verdict on every shortcut setting")
 		})

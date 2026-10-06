@@ -49,7 +49,7 @@ of an all-planar pair whose contact points round exactly, which is integrated in
 exact rational arithmetic over the held mesh and whose rounding term is then
 genuinely zero. Every other measurement of a mesh-built result is Approximate —
 a length, an area or a centroid is a float sum of square roots, and the last ulp
-is not free, so its bound is never zero (§9, `bounds.go`).
+is not free, so its bound is never zero (§9, `internal/proofbound/bounds.go`).
 
 **On the analytic reduction (§9), the result is a swept payload and reads by §4
 like any other one**, so a volume, an area, a centroid and a `Box` can all reach
@@ -233,7 +233,7 @@ identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
 that rounding rather than reading the placed extreme as an exact leaf. Every
 rim and side vertex `buildLoopSidesAs` places charges the identical frame/
 placement rounding, computed once per loop as `frameLiftAllow`
-(`bounds.go`'s `frameAndPlacementRoundAllow`) and folded into the vertex's own
+(`internal/proofbound/bounds.go`'s `frameAndPlacementRoundAllow`) and folded into the vertex's own
 section/axial displacement rather than into `Bounds` alone — a cap-loop
 chamfer's own cap-level vertices take the same charge in `capblend_geom.go`'s
 `buildCapBand`, beside their own contour displacement, never inside the
@@ -342,7 +342,7 @@ diameter. Clearance and interference stay on the prism's own precedent:
 neither reads the axial displacement there, and neither reads the angular
 one here. Beside the angular displacement, every junction, seam and cap
 vertex `buildRevolveLoop` places charges the SAME frame/placement rounding
-`Bounds` charges below — `revolveVertexFrameLiftAllow`, `bounds.go`'s
+`Bounds` charges below — `revolveVertexFrameLiftAllow`, `internal/proofbound/bounds.go`'s
 `frameAndPlacementRoundAllow` read at the junction's own axis-radius envelope
 — since a swept vertex's plane-local coordinate is lifted through the
 payload's frame and placement exactly as a box extreme is, and a tilted
@@ -457,7 +457,7 @@ rounding of its OWN recombination of the placed terms into a published
 coordinate, which a pure translation commits even where the isometry's float
 evaluation rounded nothing. `Vertex.Position` takes the identical charge for
 every rim, junction and cap-level vertex `prismPayload`, `revolvePayload` and
-`capBlendPayload` place (`bounds.go`'s `frameAndPlacementRoundAllow`, one
+`capBlendPayload` place (`internal/proofbound/bounds.go`'s `frameAndPlacementRoundAllow`, one
 cheap call per vertex group rather than a per-vertex exact-rational bound): a
 vertex sits at a plane-local
 coordinate lifted through the payload's own frame and then its placement, the
@@ -673,7 +673,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     dropped facets' own swept volume out of the bound entirely. So the swept
     volume is charged against the pre-round surface, and the area the weld
     dropped — which the held mesh can no longer report — joins the operands'
-    chord deficit in the area bound (`bounds.go`: `sweptVolumeAllow`,
+    chord deficit in the area bound (`internal/proofbound/bounds.go`: `sweptVolumeAllow`,
     `perturbedAreaUpper`).
   - **A component welded out of existence is REFUSED.** When *every* facet of a
     connected component collapses, that whole shell disappears — a lump gone
@@ -725,7 +725,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   the inflated bound reaches the pair's own diameter it has stopped bounding
   anything, and the operation is refused (`ErrUnsupported`) rather than
   reported with a number nobody can use. Every bound has exactly one owner
-  (`bounds.go`); no measurement site computes one inline.
+  (`internal/proofbound/bounds.go`); no measurement site computes one inline.
 - Rejected alternatives: a third-party kernel (dependency rule; also the
   supply-chain surface); float-only BSP classification (the flipped-sign
   nonsense solid of core §2.1); snapping/welding heuristics (silently moves

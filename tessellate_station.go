@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -33,16 +35,16 @@ import (
 // NEIGHBOURING parameter, and the answer would then be a proof about a point
 // this chording never named.
 //
-// The mechanism per kind is circularEndpointInterval's own: turnSinCosInterval
-// for a CircleSeg's exactly-rational turn, radSinCosSpan over atan2Interval for
+// The mechanism per kind is circularEndpointInterval's own: proofbound.TurnSinCosInterval
+// for a CircleSeg's exactly-rational turn, radSinCosSpan over proofbound.Atan2Interval for
 // an ArcSeg's enclosed angle. Neither ever compares against π.
 //
 // An enclosure the recorded data cannot state, a parameter that is not
 // representable as a rational, and a station index outside the walk's own
 // interior all answer +Inf on both components — the underivable bound the
 // tessellation refuses on (docs/tessellation-design.md §12), never a zero.
-func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) walkEndBound {
-	underivable := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) proofbound.WalkEndBound {
+	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if n <= 0 || k <= 0 || k >= n {
 		return underivable
 	}
@@ -74,8 +76,8 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) walkEnd
 // coordinate that is not finite all answer +Inf on both components — the
 // underivable bound the tessellation refuses on (docs/tessellation-design.md
 // §12), never a zero.
-func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) walkEndBound {
-	underivable := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) proofbound.WalkEndBound {
+	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if n <= 0 || k < 0 || k > n || radiusOffset == nil {
 		return underivable
 	}
@@ -93,7 +95,7 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 	if !ok {
 		return underivable
 	}
-	return walkEndBound{u: intervalFloatError(uIv, heldU), v: intervalFloatError(vIv, heldV)}
+	return proofbound.WalkEndBound{U: proofbound.IntervalFloatError(uIv, heldU), V: proofbound.IntervalFloatError(vIv, heldV)}
 }
 
 // capWallRadiusOffset is the exact rational a circular wall's cap contour adds

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -83,7 +85,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	values := make([]float64, 0, len(selected))
 	boundTerms := make([]float64, 0, len(selected))
 	for _, p := range selected {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return Measurement{}, false, err
 		}
 
@@ -101,10 +103,10 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		// §7's formula, byte-identical to
 		// resolveAndBuildPrismIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
-		sectionDelta := absSumUpper(
+		sectionDelta := proofbound.AbsSumUpper(
 			max(
-				absSumUpper(pa.sectionDelta, sceneDelta.a),
-				absSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
+				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
+				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
 			),
 			cutDelta,
 		)
@@ -135,15 +137,15 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	}
 
 	// The sum (§4.5's own "The sum" paragraph): the value is the cells'
-	// float sum; the bound is absSumUpper over the cells' own bounds and
-	// that sum's own accumulated rounding (bounds.go's exactSumRound, the
+	// float sum; the bound is proofbound.AbsSumUpper over the cells' own bounds and
+	// that sum's own accumulated rounding (internal/proofbound/bounds.go's proofbound.ExactSumRound, the
 	// mechanism's one owner — no new helper is added here).
 	sum := 0.0
 	for _, v := range values {
 		sum += v
 	}
-	rounding := exactSumRound(sum, values...)
-	bound := absSumUpper(append(boundTerms, rounding)...)
+	rounding := proofbound.ExactSumRound(sum, values...)
+	bound := proofbound.AbsSumUpper(append(boundTerms, rounding)...)
 
 	return Measurement{
 		Value:     units.CubicMillimeters(sum),
@@ -161,12 +163,12 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 // free here, exactly as it is for the clean-nesting match. cutDelta is the
 // maximum §7 cut-parameter charge over the cell's own edges, zero when every
 // edge is whole.
-func recordPrismOverlapCell(budget *workBudget, edges []sketch.BoundaryEdge) (ProfileRecord, float64, error) {
+func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge) (ProfileRecord, float64, error) {
 	segs := make([]CurveSegment, len(edges))
 	joins := make([]loopJoin, len(edges))
 	cutDelta := 0.0
 	for i, e := range edges {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return ProfileRecord{}, 0, err
 		}
 		seg, err := recordEdge(e)

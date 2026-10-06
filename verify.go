@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -502,13 +504,13 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 }
 
 func pairGapMeasurement(res pairResult) Measurement {
-	midpoint := boundedMul(boundedAdd(exactScalar(res.lo), exactScalar(res.hi)), exactScalar(0.5))
-	halfWidth := boundedMul(boundedSub(exactScalar(res.hi), exactScalar(res.lo)), exactScalar(0.5))
+	midpoint := proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.ExactScalar(res.lo), proofbound.ExactScalar(res.hi)), proofbound.ExactScalar(0.5))
+	halfWidth := proofbound.BoundedMul(proofbound.BoundedSub(proofbound.ExactScalar(res.hi), proofbound.ExactScalar(res.lo)), proofbound.ExactScalar(0.5))
 	// The midpoint error and the half-width's own error both widen the
 	// published interval. The same bound feeds appendClearance's tolerance gate.
-	bound := absSumUpper(halfWidth.value, halfWidth.bound, midpoint.bound)
+	bound := proofbound.AbsSumUpper(halfWidth.Value, halfWidth.Bound, midpoint.Bound)
 	gap := Measurement{
-		Value:     units.Millimeters(midpoint.value),
+		Value:     units.Millimeters(midpoint.Value),
 		Exactness: Approximate,
 		Bound:     units.Millimeters(bound),
 	}
@@ -753,7 +755,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	case surveysRunnable && surveysAsked:
 		var surveyDiags []Diagnostic
 		var err error
-		surveys, surveyDiags, err = runSurveys(newWorkBudget(ctx), b, cfg)
+		surveys, surveyDiags, err = runSurveys(proofbound.NewWorkBudget(ctx), b, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -1203,10 +1205,10 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // the strict-zero comparison below could read a NEGATIVE true radial minimum
 // as non-negative by exactly the rounding it dropped — the identical fault
 // this leg exists to close in resolveAxisSide's build-time tolerance, only
-// smaller. boundedMul/boundedAdd/boundedSub charge both the operands' own
+// smaller. proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub charge both the operands' own
 // proven bounds and this arithmetic's own commissioned rounding (the same
 // vocabulary axisFrame.toAxisRhoBound already uses for the identical ρ
-// formula at a single point), so the bound handed to admitBelow below
+// formula at a single point), so the bound handed to proofbound.AdmitBelow below
 // provably covers every operation between the extremes call and the
 // comparison — never a number the accompanying bound does not cover.
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
@@ -1224,12 +1226,12 @@ func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 	if err != nil {
 		return false
 	}
-	offset := boundedAdd(
-		boundedMul(measuredScalar(nU, rp.ax.dVBound), measuredScalar(rp.ax.aU, rp.ax.aUBound)),
-		boundedMul(measuredScalar(nV, rp.ax.dUBound), measuredScalar(rp.ax.aV, rp.ax.aVBound)),
+	offset := proofbound.BoundedAdd(
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nU, rp.ax.dVBound), proofbound.MeasuredScalar(rp.ax.aU, rp.ax.aUBound)),
+		proofbound.BoundedMul(proofbound.MeasuredScalar(nV, rp.ax.dUBound), proofbound.MeasuredScalar(rp.ax.aV, rp.ax.aVBound)),
 	)
-	rlo := boundedSub(measuredScalar(rawLo, rawBound), offset)
-	return admitBelow(rlo, 0) == survReject
+	rlo := proofbound.BoundedSub(proofbound.MeasuredScalar(rawLo, rawBound), offset)
+	return proofbound.AdmitBelow(rlo, 0) == proofbound.SurvReject
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

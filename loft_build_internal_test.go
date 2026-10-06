@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -84,7 +86,7 @@ func boxLoftPayload(t *testing.T) loftPayload {
 
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 	t.Helper()
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 	return body
@@ -138,7 +140,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 func TestEvalLoftRolesUseTheGivenProducerID(t *testing.T) {
 	t.Parallel()
 	const ref = producerID(7)
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
@@ -749,7 +751,7 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 // reference collapses to zero and the arm answers no diameter at all, and no
 // such placement ever reaches the gate, because S12 refuses it first. The
 // divergence theorem bounds a closed boundary's own volume by d*A/3, so a
-// delta at or above d/2 puts sweptVolumeAllow's delta*A at 3/2 of the held
+// delta at or above d/2 puts proofbound.SweptVolumeAllow's delta*A at 3/2 of the held
 // volume or more — exactly S12's non-positive clearance. Each fixture below
 // asserts it sits in the collapse regime BEFORE asserting the refusal, so a
 // fixture that drifted out of that regime fails rather than passing on an
@@ -779,11 +781,11 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 
 			maxInputAbs := 0.0
 			for _, v := range held.verts {
-				maxInputAbs = max(maxInputAbs, vecMaxAbs(v))
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(v))
 			}
 			move, err := r3.Translation(r3.NewVec(tc.dx, 0, 0))
 			require.NoError(t, err)
-			delta := rigidRoundAllow(maxInputAbs, vecMaxAbs(move.Translation()))
+			delta := proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(move.Translation()))
 			require.GreaterOrEqual(t, 2*delta, d,
 				"the fixture must sit in the collapse regime the doc's antecedence claim covers")
 
@@ -799,7 +801,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	budget := newWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	_, err := evalLoft(ctx, New(), producerID(0), boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }
@@ -921,7 +923,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S6: a corner shared by both profiles collapses its incident wall triangles")
 }
@@ -942,7 +944,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S7: a mirrored correspondence self-crosses")
 }
@@ -977,7 +979,7 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
-	budget := newWorkBudget(t.Context())
+	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }
@@ -1336,7 +1338,7 @@ func TestCellBilinearAreaEnclosesDirectIntegral(t *testing.T) {
 	wLo := r3.NewVec(-0.5, 2, 6)
 	wHi := r3.NewVec(3, 4, 7.5)
 
-	value, bound := cellBilinearArea(vLo, vHi, wLo, wHi)
+	value, bound := proofbound.CellBilinearArea(vLo, vHi, wLo, wHi)
 	reference := bilinearAreaMidpoint(vLo, vHi, wLo, wHi, 1024)
 	require.False(t, math.IsInf(bound, 0), "the ordinary finite cell must have a finite area enclosure")
 	require.Positive(t, bound, "the warped cell's integration interval must have nonzero width")
@@ -1348,12 +1350,12 @@ func TestCellBilinearAreaEnclosesDirectIntegral(t *testing.T) {
 // grid cache, including its original summation and non-finite return order.
 func cellBilinearAreaUncached(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	const divisions = 4
-	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+	if !proofbound.FiniteVec(vLo) || !proofbound.FiniteVec(vHi) || !proofbound.FiniteVec(wLo) || !proofbound.FiniteVec(wHi) {
 		return 0, math.Inf(1)
 	}
-	da := heldDelta(vHi, vLo)
-	g := heldDelta(wLo, vLo)
-	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	da := proofbound.HeldDelta(vHi, vLo)
+	g := proofbound.HeldDelta(wLo, vLo)
+	twist := proofarith.DvSub(proofbound.HeldDelta(vLo, vHi), proofbound.HeldDelta(wLo, wHi))
 	n0 := proofarith.DvCross(da, g)
 	a := proofarith.DvCross(da, twist)
 	b := proofarith.DvCross(twist, g)
@@ -1434,9 +1436,9 @@ func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			switch tc.name {
 			case "A zero taper", "B zero taper", "one ulp from A zero", "one ulp from B zero":
-				da := heldDelta(tc.vHi, tc.vLo)
-				g := heldDelta(tc.wLo, tc.vLo)
-				twist := proofarith.DvSub(heldDelta(tc.vLo, tc.vHi), heldDelta(tc.wLo, tc.wHi))
+				da := proofbound.HeldDelta(tc.vHi, tc.vLo)
+				g := proofbound.HeldDelta(tc.wLo, tc.vLo)
+				twist := proofarith.DvSub(proofbound.HeldDelta(tc.vLo, tc.vHi), proofbound.HeldDelta(tc.wLo, tc.wHi))
 				aZero := proofarith.DvIsZero(proofarith.DvCross(da, twist))
 				bZero := proofarith.DvIsZero(proofarith.DvCross(twist, g))
 				switch tc.name {
@@ -1452,7 +1454,7 @@ func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
 				}
 			}
 			wantValue, wantBound := cellBilinearAreaUncached(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
-			gotValue, gotBound := cellBilinearArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			gotValue, gotBound := proofbound.CellBilinearArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(gotValue))
 			require.Equal(t, math.Float64bits(wantBound), math.Float64bits(gotBound))
 		})
@@ -1470,8 +1472,8 @@ func TestCellTwistMomentsMatchRefinedBilinearSurface(t *testing.T) {
 	coarseVol6, coarseMoment := bilinearFacetMoments(vLo, vHi, wLo, wHi, anchor, 1)
 	mediumVol6, mediumMoment := bilinearFacetMoments(vLo, vHi, wLo, wHi, anchor, 256)
 	fineVol6, fineMoment := bilinearFacetMoments(vLo, vHi, wLo, wHi, anchor, 512)
-	wantVolumeCorrection, _ := cellTwistVolume(vLo, vHi, wLo, wHi).Float64()
-	wantMomentCorrection := cellTwistMoment(vLo, vHi, wLo, wHi, anchor)
+	wantVolumeCorrection, _ := proofbound.CellTwistVolume(vLo, vHi, wLo, wHi).Float64()
+	wantMomentCorrection := proofbound.CellTwistMoment(vLo, vHi, wLo, wHi, anchor)
 
 	refinedVol6 := (4*fineVol6 - mediumVol6) / 3
 	require.InDelta(t, 6*wantVolumeCorrection, refinedVol6-coarseVol6, 1e-6)
