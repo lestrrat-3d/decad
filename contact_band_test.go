@@ -43,8 +43,9 @@ import (
 //     blocks publish a track on a held face;
 //   - δ on the track's face containment: TestSweepPairBandFootStaysInsideFace
 //     publishes a track whose true foot may leave the floor;
-//   - δ on the replay's clear check: TestSweepPairBandReplayChargesDisplacement
-//     replays the bracket's left edge, inside the band.
+//   - the transfer charge on the replay's clear check:
+//     TestReplayTransferChargeIsTheBasisDifference in
+//     contact_band_internal_test.go reads a zero charge on a rotating path.
 //
 // contact_band_internal_test.go shows the sweep's transfer legs on the
 // transfer itself. The track replay's height check reads the held depth, as
@@ -367,7 +368,7 @@ func TestSweepPairBandFootStaysInsideFace(t *testing.T) {
 	require.Equal(t, decad.SweepContactTrackUnproved, rim.Cause)
 }
 
-func TestSweepPairBandReplayChargesDisplacement(t *testing.T) {
+func TestSweepPairBandReplaysBracketLeftEdge(t *testing.T) {
 	// The knob falls 1 mm onto the octagon floor at 1 mm/s. Its held gap
 	// enters the band at δ, so the bracket brackets that crossing, and the
 	// left edge's true gap is no wider than one time step's travel.
@@ -388,8 +389,10 @@ func TestSweepPairBandReplayChargesDisplacement(t *testing.T) {
 
 	_, _, err = report.CertifiedPosesAt(units.Seconds(.5))
 	require.NoError(t, err)
-	// At the left edge the true gap may be under 2δ, inside the band the
-	// rounded pose's own displacement is charged against.
+	// At the left edge the proven true gap is positive but far under δ. The
+	// falling path only translates, so its rounded basis is the ideal one and
+	// replay charges no transfer (§10.4): the gap need only exceed the pose
+	// rounding, and the edge replays.
 	_, _, err = report.CertifiedPosesAt(report.Bracket.From.Elapsed.Value)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NoError(t, err)
 }

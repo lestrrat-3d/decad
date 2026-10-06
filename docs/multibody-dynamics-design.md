@@ -2863,10 +2863,15 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
   knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
   fraction, where the `(s + 1)·δ` form refuses each (recorded in the test); on a rotating path the charge
-  at every sampled fraction equals the Frobenius norm of the rounded basis less the ideal enclosure's
-  nearest entries times `δ`, computed independently in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to
-  fail: the charge zeroed, the rotating fixture's charge reads zero.
+  at every sampled fraction equals the Frobenius norm of the rounded basis less the ideal enclosure, each
+  entry read at its farther endpoint so the norm bounds every member, times `δ`, computed independently
+  in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to fail: the charge zeroed, the rotating fixture's
+  charge reads zero.
 - Depends on: PR 18.
+- Shipped. `rotationalSweepPath.transferCharge` in `contact_sweep_rotation.go` computes the charge and
+  `replayDeviation` returns it, so replay (`contact_sweep_replay.go`) and the rotating bracket's
+  narrowing read the same figure. `contact_band_test.go`'s knob falling onto the floor replays its
+  bracket's left edge, whose proven gap is far under `δ`.
 
 PRs 20a, 20e and 20f touch disjoint files and may land in any order; PR 20b follows 20a only for the
 scene's sweep; PRs 20c and 20d follow 20b.

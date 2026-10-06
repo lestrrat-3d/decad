@@ -787,9 +787,10 @@ func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool 
 //
 // The vertex deviation bounds the held bodies' move from ideal to rounded. A
 // true point of a positive-displacement body (§10.4) lies within δ of its held
-// body, and the rounded and ideal linear parts move that offset by at most
-// (s + 1)·δ, s the rounded pose's stretch (planarPoseScale) and one the ideal
-// rotation's, so the lower gap must also exceed that for each body.
+// body, and the rounded and ideal linear parts move that offset apart by at
+// most the transfer charge ‖R_r − R_i‖_F·δ (rotationalSweepPath.transferCharge),
+// so the lower gap must also exceed that for each body. A translating path
+// charges nothing, and a rotating one a few ulps of δ.
 func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	p := r.replay
 	var poses [2]r3.Transform
