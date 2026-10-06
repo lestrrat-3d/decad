@@ -1435,6 +1435,7 @@
 4	0.05	TestPlanarManifoldMatchesClippedBoxPatch
 4	0.01	TestPlanarManifoldStitchedVertexTouch
 4	0.00	TestPlanarReplayLowerGapChargesTravel
+4	1.81	TestPlanarSupportsMatchScan
 4	0.00	TestPointInBodyCancellationReachesTorusRootPath
 4	0.00	TestPositiveAreaGateConsultsExactRational
 4	0.20	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace

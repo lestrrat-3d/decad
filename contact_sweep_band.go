@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 	"sort"
@@ -146,7 +147,12 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		// A named local, read once: no array element is re-read across the
 		// calls below.
 		spinM := spins[m]
-		var tried []planarSupport
+		boxesM := make([]proofarith.FloatBox3, len(M.startPoints))
+		for i, v := range M.startPoints {
+			boxesM[i] = proofarith.DvFloatBox(v)
+		}
+		tried := make(map[string]struct{})
+		var key []byte
 		for t, tri := range S.solid.Tris {
 			if err := poll(); err != nil {
 				return nil, err
@@ -154,10 +160,17 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 			a := S.startPoints[tri[0]]
 			n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], a),
 				proofarith.DvSub(S.startPoints[tri[2]], a))
-			if proofarith.DvIsZero(n) || planarPlaneTried(tried, n, a) {
+			if proofarith.DvIsZero(n) {
 				continue
 			}
-			tried = append(tried, planarSupport{normal: n, origin: a})
+			key = planarPlaneKey(key[:0], n, a)
+			if _, ok := tried[string(key)]; ok {
+				continue
+			}
+			tried[string(key)] = struct{}{}
+			if planarSupportRuledOut(boxesM, n, a, r.req.ContactRequest) {
+				continue
+			}
 			support, ok, err := planarSupportOf(S, M, n, a, r.req.ContactRequest, poll)
 			if err != nil {
 				return nil, err
@@ -197,6 +210,66 @@ func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
 		}
 	}
 	return false
+}
+
+// planarPlaneKey appends to b a key naming the plane through a with nonzero
+// normal n: n's primitive integer direction d (proofarith.DvPrimitive), sign
+// kept, and the exact offset d·a. Two keys are equal exactly when
+// planarPlaneTried would match the two planes. The directions agree exactly
+// when one normal is a positive multiple of the other, which is the cross
+// product's zero with a positive dot product. Each normal is then a positive
+// multiple of d, so p.normal·(a − p.origin) is zero exactly when d·a equals
+// d·p.origin.
+func planarPlaneKey(b []byte, n, a proofarith.DyV3) []byte {
+	d := proofarith.DvPrimitive(n)
+	for _, c := range d {
+		b = c.AppendKey(b)
+	}
+	return proofarith.DvDot(d, a).AppendKey(b)
+}
+
+// planarSupportRuledOut reports whether planarSupportOf must reject the plane
+// through a with normal n, decided from outward float enclosures of the M
+// vertex heights h = n·v − n·a. A true answer holds only where the exact test
+// reaches the same rejection; false decides nothing. Two cases are proven:
+//
+//   - an enclosure entirely below zero: that vertex's exact height is
+//     negative, and planarSupportOf rejects a plane with any M vertex behind
+//     it;
+//   - every enclosure entirely above t, with t zero, or, under a positive
+//     band, a float at or above sqrt(band²·n·n) (proofarith.DySqrtUp): every
+//     exact height h then exceeds t ≥ 0, so h is positive and h² exceeds
+//     band²·n·n. No vertex is in contact and none is lifted, and
+//     planarSupportOf rejects an empty support set.
+//
+// planarSupportOf accepts only when both of these fail. Its other early
+// answers, a face-local plane's, are rejections too, so a proven rejection
+// stands for whichever one the exact test reaches first.
+func planarSupportRuledOut(boxesM []proofarith.FloatBox3, n, a proofarith.DyV3, req ContactRequest) bool {
+	nBox := proofarith.DvFloatBox(n)
+	cLo, cHi := proofarith.FloatBounds(proofarith.DvDot(n, a))
+	// Every comparison below is false on a NaN end, so a NaN decides nothing.
+	allAbove, minLo := true, math.Inf(1)
+	for _, box := range boxesM {
+		lo, hi := proofarith.DotSubEnclosure(nBox, box, cLo, cHi)
+		if hi < 0 {
+			return true
+		}
+		if !(lo > 0) {
+			allAbove = false
+			continue
+		}
+		minLo = math.Min(minLo, lo)
+	}
+	if !allAbove {
+		return false
+	}
+	band := supportBandOf(req)
+	if band.Sign() <= 0 {
+		return true
+	}
+	limit := proofarith.DyMul(proofarith.DyMul(band, band), proofarith.DvDot(n, n))
+	return minLo > proofarith.DySqrtUp(limit)
 }
 
 // planarSupportOf checks one plane: every M vertex on or in front of it, and
