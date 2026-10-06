@@ -385,6 +385,10 @@
 2	0.00	TestDiagnosticReadingKindTokens
 2	0.00	TestDiagnosticSurveyKindTokens
 2	0.08	TestDisplacedSupportSetChamferedBlock
+2	0.01	TestDocumentRemoveConcurrentWithVerify
+2	0.01	TestDocumentRemoveLeavesDerivedBodiesUnaffected
+2	0.00	TestDocumentRemoveRefusals
+2	0.01	TestDocumentRemoveTakesBodyOutOfTheModel
 2	0.00	TestDocumentSweptBoxRefusals
 2	0.00	TestDuplicate
 2	0.00	TestDuplicatePlainExtrudeHasNoBlendRoles

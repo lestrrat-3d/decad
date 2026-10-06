@@ -279,6 +279,7 @@ type Document struct{ /* ... */ }
 func New(opts ...DocumentOption) *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
+func (d *Document) Remove(b *Body) error        // retire a live body by hand
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 ```
 
@@ -302,6 +303,16 @@ remains readable, but it is gone from `Document.Bodies()` and
 **depend on** the source without consuming it, exactly as an `Extrude` depends
 on the body a `ToFace` names (§8.1), so the source stays live and the copy is a
 new body beside it.
+
+**`Document.Remove` is the same retirement by the caller's own hand.** A caller
+that added bodies it now rejects — say, support bodies `Verify` found
+interfering — takes them back out. A removed body is a retired body in every
+respect: it stays readable, its selectors and `Origin` still answer, and no
+operation takes it, so there is no way back into the model. Remove produces
+nothing, so no producer identity advances, and a body already built from the
+removed one keeps its geometry and its provenance. A nil body is
+`ErrDegenerate`, another document's body is `ErrForeignBody`, and a body
+already retired — consumed or removed — is `ErrRetiredBody` (§12).
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
 readable — its measurements still answer — but handing it to a boolean, to a modify
@@ -1644,8 +1655,8 @@ the resulting bodies, measurements, and verification reports directly.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
-  owned by different documents, or an extent or axis named a body owned by another
-  document, §8.1), `ErrForeignProfile` (a feature was handed a profile built from
+  owned by different documents, an extent or axis named a body owned by another
+  document, §8.1, or `Document.Remove` was handed another document's body, §6), `ErrForeignProfile` (a feature was handed a profile built from
   a different sketch than the one given, or a boundary entity the source sketch
   does not own, §7),
   `ErrStaleProfile` (a feature was handed a profile built before the sketch's
@@ -1712,7 +1723,9 @@ the resulting bodies, measurements, and verification reports directly.
   all and resolves to zero entities.
 - `Body` is immutable → safe to read from many goroutines.
 - `Document` owns mutable state and is NOT safe for concurrent mutation. `Verify`
-  is non-mutating and safe.
+  is non-mutating and safe. The live body set alone is guarded, so `Bodies`,
+  `Remove` and `Verify` may run concurrently with one another; a `Verify`
+  reports on the set as it stood when the call began.
 
 ## 13. Non-goals for v1
 

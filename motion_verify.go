@@ -391,15 +391,19 @@ func (r *motionRun) setup(moving []*Body) {
 	// Payload rebuilding mints level and curve denotations. Start above every
 	// live identity, then mint only on this copy: successive pose bodies stay
 	// distinct from static geometry without changing the caller's document.
-	transient := *r.d
-	transient.bodies = append([]*Body(nil), r.d.bodies...)
-	r.transient = &transient
+	live := r.d.liveBodies()
+	r.transient = &Document{
+		bodies:       live,
+		nextProducer: r.d.nextProducer,
+		nextLevel:    r.d.nextLevel,
+		nextCurve:    r.d.nextCurve,
+	}
 	isMover := make(map[*Body]struct{}, len(moving))
 	for _, b := range moving {
 		isMover[b] = struct{}{}
 		r.movers = append(r.movers, motionMover{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
 	}
-	for _, b := range r.d.bodies {
+	for _, b := range live {
 		if _, ok := isMover[b]; ok {
 			continue
 		}

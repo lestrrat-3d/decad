@@ -105,7 +105,7 @@ to the byte budget.
 |---|---|
 | `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind every `Face.NormalAt` bound, per surface arm. See the file's doc comment. |
-| `document.go` | `Document`, commit, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
+| `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken` grows an admitted sheet into a solid. See surface §16. |

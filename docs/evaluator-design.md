@@ -435,6 +435,15 @@ because provenance roles are stable (§3).
 
 `Document` owns the live body set and a private monotonic producer identity used for topology provenance. Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, and advances the producer identity. Cancellation and every other failure leave the document unchanged.
 
+`Document.Remove` is commit's retire step with no feature around it: it gates the body exactly as
+`requireLive` does, retires it, and registers nothing, so the producer identity does not advance.
+The live body set sits behind the document's own lock. `commit`, `commitMany` and `Remove` change
+it under that lock, and every reader — `Bodies`, `Verify`, `VerifyMotion`, the `ThroughAll` stop
+scan and the liveness gates — reads it under the same lock, and a reader that walks the set walks
+its own snapshot. That is what lets a `Remove` run beside a `Verify`. The lock guards the set alone: the identity counters and a
+feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
+for concurrent mutation (core §12).
+
 `Body.Placed`, `Body.Duplicate`, and `Body.PlacedCopy` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements.
 When a zero-bound faceted Boolean undergoes translation-only placement, its
 payload also carries the original exact mesh beside the rebuilt held mesh.

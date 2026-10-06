@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"sync"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -16,9 +17,15 @@ import (
 // Document is the mutable root of a model: it owns the live body set and the
 // producer identities used for topology provenance. It is immediate-mode —
 // the caller's Go function is the feature tree (core §6) — and it is NOT
-// safe for concurrent mutation (core §12);
-// the bodies it hands out are immutable and safe to read from anywhere.
+// safe for concurrent mutation (core §12), with one guarded exception: the
+// live body set sits behind mu, so Bodies, Remove and Verify may run
+// concurrently with one another. The bodies it hands out are immutable and
+// safe to read from anywhere.
 type Document struct {
+	// mu guards bodies alone. Every reader takes a snapshot under it
+	// (liveBodies) and works on that copy, so a Remove racing a Verify never
+	// shifts the slice a reader is walking.
+	mu           sync.RWMutex
 	bodies       []*Body
 	nextProducer producerID
 	// nextLevel is denotation.go's own counter behind mintLevel: the LEVEL
@@ -44,7 +51,46 @@ func New(_ ...DocumentOption) *Document {
 // Bodies returns the live bodies — the model as it stands. The slice is a
 // copy; the elements are the live (immutable) bodies.
 func (d *Document) Bodies() []*Body {
+	return d.liveBodies()
+}
+
+// liveBodies is the snapshot every internal reader of the live set walks.
+func (d *Document) liveBodies() []*Body {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return append([]*Body(nil), d.bodies...)
+}
+
+// Remove takes b out of the live model by the caller's own hand: b leaves
+// Bodies() and Verify stops reporting on it, exactly as a body a feature
+// consumed (core §6). A removed body IS a retired body. It stays readable —
+// its measurements, topology, selectors and Origin still answer — but no
+// operation takes it (ErrRetiredBody), and nothing returns it to the model.
+// Remove produces no body, so no producer identity advances, and every other
+// body, including one built from b, keeps its geometry and provenance.
+//
+// b MUST NOT be nil (ErrDegenerate). A body another document owns is
+// ErrForeignBody, and a body already retired — consumed by a feature or
+// removed before — is ErrRetiredBody. A refused call leaves the document
+// unchanged. Remove may run concurrently with Bodies and Verify; a Verify
+// already under way reports on the set as it stood when the call began.
+func (d *Document) Remove(b *Body) error {
+	if d == nil {
+		return fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	if b == nil {
+		return fmt.Errorf(`%w: a nil body names nothing to remove`, ErrDegenerate)
+	}
+	if b.doc != d {
+		return ErrForeignBody
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !slices.Contains(d.bodies, b) {
+		return ErrRetiredBody
+	}
+	d.retire(b)
+	return nil
 }
 
 // commit registers the produced body, advances its private producer identity,
@@ -53,6 +99,8 @@ func (d *Document) Bodies() []*Body {
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.nextProducer++
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
@@ -71,6 +119,8 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 // producer.
 func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 	d.nextProducer += producerID(len(produced))
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
@@ -79,6 +129,7 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 
 // retire removes a body from the live set. The body itself is untouched —
 // retiring is a change of document membership, not of the body (core §6).
+// The caller holds mu.
 func (d *Document) retire(b *Body) {
 	for i, live := range d.bodies {
 		if live != b {
@@ -91,6 +142,8 @@ func (d *Document) retire(b *Body) {
 
 // isLive reports whether b is currently part of the model.
 func (d *Document) isLive(b *Body) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return slices.Contains(d.bodies, b)
 }
 
