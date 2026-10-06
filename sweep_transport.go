@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -96,7 +98,7 @@ func initialSweepTransportFrame(frame r3.Frame) (sweepTransportFrame, error) {
 }
 
 func transportSweepLine(current sweepTransportFrame, record pathSegmentRecord) (sweepTransportFrame, error) {
-	deltaExact := ivVec3Sub(mustIVVec3Of(record.end), mustIVVec3Of(record.start))
+	deltaExact := tessellation.IvVec3Sub(mustIVVec3Of(record.end), mustIVVec3Of(record.start))
 	originExact := survey2d.IvVec3Add(current.originExact, deltaExact)
 	if exact, ok := exactSweepTransportFrame(
 		originExact,
@@ -149,13 +151,13 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		return survey2d.IvVec3Add(
 			survey2d.IvVec3Mul(vector, cos),
 			survey2d.IvVec3Add(
-				survey2d.IvVec3Mul(ivVec3Cross(axisExact, vector), sin),
+				survey2d.IvVec3Mul(tessellation.IvVec3Cross(axisExact, vector), sin),
 				survey2d.IvVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, survey2d.IvVec3Dot(axisExact, vector))),
 			),
 		)
 	}
 	rotatePoint := func(point survey2d.IvVec3) survey2d.IvVec3 {
-		return survey2d.IvVec3Add(centerExact, rotateDirection(ivVec3Sub(point, centerExact)))
+		return survey2d.IvVec3Add(centerExact, rotateDirection(tessellation.IvVec3Sub(point, centerExact)))
 	}
 
 	originExact := rotatePoint(current.originExact)

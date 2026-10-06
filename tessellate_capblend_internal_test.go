@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -415,7 +417,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	seg := bore.loop.Segments[bore.walks[0].Segs[0]]
 	held := bore.capPts[0]
 	gap := proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, 0, bore.count[0],
-		capWallRadiusOffset(bore.walks[0], cbp.d), held.U, held.V))
+		tessellation.CapWallRadiusOffset(bore.walks[0], cbp.d), held.U, held.V))
 	require.Positive(t, gap, `the float full turn leaves the seam station off (19, 0)`)
 	seam := motion[bore.capHiV[0]]
 	require.Positive(t, seam)

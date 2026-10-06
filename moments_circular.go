@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -307,7 +309,7 @@ func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 // (proofbound.RatSqrtDown/proofbound.RatSqrtUp) and θ = a0 + t·sweep, both angles enclosed by
 // proofbound.Atan2Interval under the same +2π branch correction circularLengthInterval
 // applies, and the sine and cosine of that enclosed angle taken by
-// radSinCosSpan.
+// tessellation.RadSinCosSpan.
 //
 // The parameter is taken as an EXACT RATIONAL, never a float. A caller reading
 // a walk's own endpoint converts its held float parameter (floatRat) at the
@@ -377,7 +379,7 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		if heldA1-heldA0 <= 0 {
 			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
 		}
-		sin, cos, ok := radSinCosSpan(proofbound.IntervalAdd(a0, proofbound.IntervalScale(sweep, rt)))
+		sin, cos, ok := tessellation.RadSinCosSpan(proofbound.IntervalAdd(a0, proofbound.IntervalScale(sweep, rt)))
 		if !ok {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
@@ -458,7 +460,7 @@ func axisComponentInterval(value, bound float64) (proofbound.RatInterval, bool) 
 // sin/cos come from proofbound.TurnSinCosInterval, with an exact zero-width fast path
 // when the recorded range spans a whole number of turns (the sine/cosine
 // difference terms above vanish exactly, leaving Pappus's own r·Δθ·ρ_centre
-// form — the torus/whole-circle case); an ArcSeg's come from radSinCosSpan of
+// form — the torus/whole-circle case); an ArcSeg's come from tessellation.RadSinCosSpan of
 // the proofbound.Atan2Interval endpoint enclosure, exactly as circularEndpointInterval
 // evaluates them, and — like circularAreaInterval and
 // circularFirstMomentInterval — only over its own full recorded range
@@ -508,8 +510,8 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 		heldDY0 := seg.Start.V - seg.Center.V
 		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
 		a1 := proofbound.IntervalAdd(a0, dtheta)
-		sinLo, cosLo, ok0 := radSinCosSpan(a0)
-		sinHi, cosHi, ok1 := radSinCosSpan(a1)
+		sinLo, cosLo, ok0 := tessellation.RadSinCosSpan(a0)
+		sinHi, cosHi, ok1 := tessellation.RadSinCosSpan(a1)
 		if !ok0 || !ok1 {
 			return proofbound.RatInterval{}, false
 		}

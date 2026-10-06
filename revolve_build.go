@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -127,21 +129,12 @@ func (rp revolvePayload) placed(ctx context.Context, d *Document, ref producerID
 	return evalRevolveContext(ctx, d, ref, rp)
 }
 
-// revolveBasis is the unplaced world anchor of the sweep: a3 the axis
-// origin, w the unit axis direction, e0 the in-plane radial direction at
-// sweep angle zero, and e1 = w × e0 the sweep-velocity direction at zero —
-// so a rotation by +φ about w carries e0 toward e1, the right-handed sense
-// Along means.
-type revolveBasis struct {
-	a3, w, e0, e1 r3.Vec
-}
-
 // basis derives the sweep basis from the plane frame and the axis frame.
-func (rp revolvePayload) basis() revolveBasis {
+func (rp revolvePayload) basis() tessellation.RevolveBasis {
 	a3 := rp.frame.ToWorldUV(rp.ax.aU, rp.ax.aV)
 	w := rp.frame.U().Scale(rp.ax.dU).Add(rp.frame.V().Scale(rp.ax.dV))
 	e0 := rp.frame.U().Scale(-rp.ax.dV).Add(rp.frame.V().Scale(rp.ax.dU))
-	return revolveBasis{a3: a3, w: w, e0: e0, e1: w.Cross(e0)}
+	return tessellation.RevolveBasis{A3: a3, W: w, E0: e0, E1: w.Cross(e0)}
 }
 
 // revolveVertexFrameLiftAllow bounds one junction's own share of the
@@ -193,10 +186,10 @@ func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform
 
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
 // world space.
-func (rp revolvePayload) point(b revolveBasis, z, rho, phi float64) r3.Vec {
+func (rp revolvePayload) point(b tessellation.RevolveBasis, z, rho, phi float64) r3.Vec {
 	sin, cos := math.Sincos(phi)
-	radial := b.e0.Scale(cos).Add(b.e1.Scale(sin))
-	return rp.xform.Apply(b.a3.Add(b.w.Scale(z)).Add(radial.Scale(rho)))
+	radial := b.E0.Scale(cos).Add(b.E1.Scale(sin))
+	return rp.xform.Apply(b.A3.Add(b.W.Scale(z)).Add(radial.Scale(rho)))
 }
 
 // reflected reports whether the accumulated placement flips handedness — a
@@ -506,8 +499,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 
 	axial := proofbound.BoundedDiv(mzr, q)
-	cen := b.a3.Add(b.w.Scale(axial.Value))
-	centroidScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(b.a3), axial.Value)
+	cen := b.A3.Add(b.W.Scale(axial.Value))
+	centroidScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(b.A3), axial.Value)
 	centroidBound := proofbound.AbsSumUpper(axial.Bound, proofbound.Radius3D(proofbound.AnalyticRoundBound(centroidScale)))
 	if !rp.full {
 		// The in-plane term is the swept radial direction integrated over
@@ -517,7 +510,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		sin0, cos0 := endSinCos(rp.den.phi0, rp.phi0)
 		rx := proofbound.BoundedSub(sin1, sin0)
 		ry := proofbound.BoundedSub(cos0, cos1)
-		radial := b.e0.Scale(rx.Value).Add(b.e1.Scale(ry.Value))
+		radial := b.E0.Scale(rx.Value).Add(b.E1.Scale(ry.Value))
 		radialBound := proofbound.Radius2D(rx.Bound, ry.Bound)
 		radialScale := proofbound.BoundedDiv(mrr, proofbound.BoundedMul(sweep, q))
 		cen = cen.Add(radial.Scale(radialScale.Value))
@@ -570,19 +563,19 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 // against the sweep, the end cap's along it; the axes are ordered so the
 // frame's normal IS the outward normal, and a reflected placement swaps them
 // once more (a reflection flips the cross product's handedness).
-func (rp revolvePayload) capFrame(b revolveBasis, phi float64, start bool) (r3.Frame, error) {
+func (rp revolvePayload) capFrame(b tessellation.RevolveBasis, phi float64, start bool) (r3.Frame, error) {
 	sin, cos := math.Sincos(phi)
-	radial := b.e0.Scale(cos).Add(b.e1.Scale(sin))
+	radial := b.E0.Scale(cos).Add(b.E1.Scale(sin))
 	// (w, radial) has w × radial = the rotated plane normal — the sweep
 	// velocity direction, the END cap's outward normal.
-	u3, v3 := b.w, radial
+	u3, v3 := b.W, radial
 	if start {
 		u3, v3 = v3, u3
 	}
 	if rp.reflected() {
 		u3, v3 = v3, u3
 	}
-	f, err := r3.NewFrame(rp.xform.Apply(b.a3), rp.xform.ApplyDir(u3), rp.xform.ApplyDir(v3))
+	f, err := r3.NewFrame(rp.xform.Apply(b.A3), rp.xform.ApplyDir(u3), rp.xform.ApplyDir(v3))
 	if err != nil {
 		return r3.Frame{}, fmt.Errorf(`%w: the placed cap frame is degenerate: %s`, ErrDegenerate, err)
 	}
@@ -694,7 +687,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b tessellation.RevolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork) (revLoopParts, error) {
 	resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve wall build")
 	if err != nil {
 		return revLoopParts{}, err
@@ -707,7 +700,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	if rp.reflected() {
 		sweepSign = -1
 	}
-	wDir := rp.xform.ApplyDir(b.w)
+	wDir := rp.xform.ApplyDir(b.W)
 
 	// Junction vertices and swept edges: junction i sits at walk i's start
 	// (== walk i−1's end). A single whole closed curve has none; a junction
@@ -961,7 +954,7 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // displacement of THIS end (rp.phi0Delta() or rp.phi1Delta(), matching
 // whichever of phi0/phi1 phi is), charged into a closed walk's own seam
 // vertex the same way every other cap vertex is (docs/evaluator-design.md §6).
-func (rp revolvePayload) capEdge(b revolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
+func (rp revolvePayload) capEdge(b tessellation.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
 	convex := !holeLoop
 	if w.IsCircular() {
 		convex = w.Th0 < w.Th1
@@ -977,7 +970,7 @@ func (rp revolvePayload) capEdge(b revolveBasis, w survey2d.SegmentWalk, closed 
 	// range order is the arc's CCW sense about it, inverted once by a
 	// reflected placement.
 	sin, cos := math.Sincos(phi)
-	normal := b.e0.Scale(-sin).Add(b.e1.Scale(cos))
+	normal := b.E0.Scale(-sin).Add(b.E1.Scale(cos))
 	sign := 1.0
 	if w.Th1 < w.Th0 {
 		sign = -1
@@ -1011,9 +1004,9 @@ func (rp revolvePayload) capEdge(b revolveBasis, w survey2d.SegmentWalk, closed 
 // so those reverse exactly when the walk runs clockwise. Radial directions
 // are reflection-equivariant, so a reflected placement changes none of
 // this; only the plane frames (built from cross products) correct for it.
-func (rp revolvePayload) wallSurface(b revolveBasis, w survey2d.SegmentWalk, kind wallKind) (Surface, bool, error) {
-	place := func(z float64) r3.Vec { return rp.xform.Apply(b.a3.Add(b.w.Scale(z))) }
-	axis := rp.xform.ApplyDir(b.w)
+func (rp revolvePayload) wallSurface(b tessellation.RevolveBasis, w survey2d.SegmentWalk, kind wallKind) (Surface, bool, error) {
+	place := func(z float64) r3.Vec { return rp.xform.Apply(b.A3.Add(b.W.Scale(z))) }
+	axis := rp.xform.ApplyDir(b.W)
 	switch kind {
 	case wallCylinder:
 		return Cylinder{
@@ -1025,7 +1018,7 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w survey2d.SegmentWalk, kin
 		// The outward normal is ±axis by the walk's radial heading; the
 		// frame's axes are ordered so its normal is outward, swapped once
 		// more under a reflected placement.
-		u3, v3 := b.e0, b.e1
+		u3, v3 := b.E0, b.E1
 		if w.TanInV < 0 {
 			u3, v3 = v3, u3
 		}
@@ -1314,7 +1307,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 // attached to a cap face here — a chain mints none — so it stays free
 // regardless of position (docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
-func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolveBasis, resolved revolveWalks) ([]*Face, proofbound.BoundedScalar, error) {
+func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b tessellation.RevolveBasis, resolved revolveWalks) ([]*Face, proofbound.BoundedScalar, error) {
 	walks, kinds := resolved.walks, resolved.kinds
 	n := len(walks)
 	sweep := rp.sweep()
@@ -1323,7 +1316,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	if rp.reflected() {
 		sweepSign = -1
 	}
-	wDir := rp.xform.ApplyDir(b.w)
+	wDir := rp.xform.ApplyDir(b.W)
 
 	// junctionSource reads junction i's own (z, rho) and the walk whose end
 	// it belongs to: junction i sits at walk i's start for i < n, and at the

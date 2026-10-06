@@ -856,7 +856,7 @@ endpoint predicate with certified coordinate enclosures from §8; the stored
 endpoint uses the boolean's exact predicates over its binary64 values.
 
 The revolve audit reads each exact sign and separating-axis gap through a
-float pre-test first (`tessellate_revolve_filter.go`). The pre-test encloses
+float pre-test first (`internal/tessellation/tessellate_revolve_filter.go`). The pre-test encloses
 the same expression over the same stored floats in an interval rounded outward
 at every operation. When the interval lies wholly past the reading's threshold,
 or wholly inside it, the exact reading must give that same answer, so the

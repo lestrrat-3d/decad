@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -139,8 +141,8 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 	origin, u, v := rp.frame.Origin(), rp.frame.U(), rp.frame.V()
 	var out [3]*big.Rat
 	for i := range out {
-		o := proofarith.FloatRat(vecComponent(origin, i))
-		ui, vi := proofarith.FloatRat(vecComponent(u, i)), proofarith.FloatRat(vecComponent(v, i))
+		o := proofarith.FloatRat(tessellation.VecComponent(origin, i))
+		ui, vi := proofarith.FloatRat(tessellation.VecComponent(u, i)), proofarith.FloatRat(tessellation.VecComponent(v, i))
 		if o == nil || ui == nil || vi == nil {
 			return [3]*big.Rat{}, fmt.Errorf("%w: revolve frame is not finite", ErrNotFinite)
 		}

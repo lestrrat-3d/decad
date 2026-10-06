@@ -2,7 +2,8 @@ package decad
 
 import (
 	"math"
-	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -70,18 +71,6 @@ const (
 	// from zero, or a held number is not finite. Nothing is claimed.
 	normalUnproven
 )
-
-func ivVec3Sub(a, b survey2d.IvVec3) survey2d.IvVec3 {
-	return survey2d.IvVec3{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
-}
-
-func ivVec3Cross(a, b survey2d.IvVec3) survey2d.IvVec3 {
-	return survey2d.IvVec3{
-		proofbound.IntervalSub(proofbound.IntervalMul(a[1], b[2]), proofbound.IntervalMul(a[2], b[1])),
-		proofbound.IntervalSub(proofbound.IntervalMul(a[2], b[0]), proofbound.IntervalMul(a[0], b[2])),
-		proofbound.IntervalSub(proofbound.IntervalMul(a[0], b[1]), proofbound.IntervalMul(a[1], b[0])),
-	}
-}
 
 // ivVec3Unit encloses the exact unit vector of an enclosed direction. It is
 // the 3D sibling of capblend_contour.go's ivUnitVec, and like it the only
@@ -154,12 +143,12 @@ func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
 	if !okP || !okO || !okA {
 		return survey2d.IvVec3{}, false
 	}
-	rel := ivVec3Sub(pi, oi)
+	rel := tessellation.IvVec3Sub(pi, oi)
 	share, ok := survey2d.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
 	if !ok {
 		return survey2d.IvVec3{}, false
 	}
-	return ivVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
+	return tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
 }
 
 // planeNormalAllow bounds the Plane arm's own reading. An r3.Frame stores no
@@ -177,7 +166,7 @@ func planeNormalAllow(fr r3.Frame, held r3.Vec) (float64, normalStatus) {
 	if !okU || !okV {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(ivVec3Cross(u, v), held)
+	return unitDirAllow(tessellation.IvVec3Cross(u, v), held)
 }
 
 // axialNormalAllow bounds the Cylinder arm's reading: its exact normal is the
@@ -198,7 +187,7 @@ func radialNormalAllow(p, center r3.Vec, held r3.Vec) (float64, normalStatus) {
 	if !okP || !okC {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(ivVec3Sub(pi, ci), held)
+	return unitDirAllow(tessellation.IvVec3Sub(pi, ci), held)
 }
 
 // coneNormalAllow bounds the Cone arm's reading. The exact normal is
@@ -231,7 +220,7 @@ func coneNormalAllow(p r3.Vec, s Cone, half float64, held r3.Vec) (float64, norm
 	if !okT {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(ivVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
+	return unitDirAllow(tessellation.IvVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
 }
 
 // torusNormalAllow bounds the Torus arm's reading: the exact direction runs
@@ -252,27 +241,6 @@ func torusNormalAllow(p r3.Vec, s Torus, major float64, held r3.Vec) (float64, n
 	if rMajor == nil || !okP || !okC {
 		return 0, normalUnproven
 	}
-	rel := ivVec3Sub(pi, ci)
-	return unitDirAllow(ivVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
-}
-
-// radSinCosSpan is survey2d.RadSinCosInterval over a whole radian INTERVAL rather than
-// one exact radian value — what a caller holds when the angle itself is only
-// enclosed, as an arc's own a0 + t·sweep is (both terms come from
-// proofbound.Atan2Interval).
-//
-// It evaluates the point enclosure at the span's lower end and widens both
-// readings by the span's own width. That is sound because sine and cosine are
-// 1-Lipschitz, so no monotonicity over the span need be argued — the same
-// argument survey2d.RadSinCosInterval makes for its own grid gap, one level up.
-func radSinCosSpan(x proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
-	width := new(big.Rat).Sub(x.Hi, x.Lo)
-	if width.Sign() < 0 {
-		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
-	}
-	sin, cos, ok := survey2d.RadSinCosInterval(x.Lo)
-	if !ok {
-		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
-	}
-	return survey2d.IntervalWiden(sin, width), survey2d.IntervalWiden(cos, width), true
+	rel := tessellation.IvVec3Sub(pi, ci)
+	return unitDirAllow(tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
 }

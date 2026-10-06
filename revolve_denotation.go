@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -121,7 +123,7 @@ func (d angleDenotation) enclosureFor(held float64) (proofbound.RatInterval, boo
 func (d angleDenotation) sinCosFor(held float64) (sin, cos proofbound.RatInterval, ok bool) {
 	switch {
 	case d.span != nil:
-		return radSinCosSpan(*d.span)
+		return tessellation.RadSinCosSpan(*d.span)
 	case d.valid() && d.turn.Sign() == 0:
 		// Pure radian, the exact angle zero included: survey2d.RadSinCosInterval
 		// already answers sin=0, cos=1 exactly at zero, with no series

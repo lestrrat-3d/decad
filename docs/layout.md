@@ -233,9 +233,8 @@ to the byte budget.
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's doc comment. |
-| `tessellate_revolve_proof.go` | Revolve mesh proofs and audits. See the file's doc comment. |
-| `tessellate_revolve_filter.go` | Outward-rounded float intervals that settle the revolve facet-contact audit's exact sign and gap readings before the Dyadic arithmetic runs; a reading they cannot settle runs exactly. See `docs/tessellation-design.md` §9. |
-| `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's doc comment. |
+| `tessellate_revolve_proof.go` | Revolve mesh audit wiring over `internal/tessellation/`'s revolve proofs. |
+| `tessellate_revolve_arc.go` | `revolveArcStation`: a CIRCULAR generator's meridian stations; its `Ecell` and cap area live in `internal/tessellation/`. |
 | `tessellate_revolve_volume.go` | Revolve mesh occupied-volume proof. See the file's doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
@@ -254,7 +253,7 @@ to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |
-| `internal/tessellation/` | Mesh audits, the loft crossing audit and the loft exact restatement over neutral triangle data. |
+| `internal/tessellation/` | Mesh audits, the loft crossing audit, revolve mesh proofs and their float pre-test, and the loft exact restatement over neutral triangle data. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
