@@ -1349,7 +1349,7 @@ The published points are §9.3's shallow row: each deepest vertex paired with it
 plane (the feet of an edge clipped to `h`'s region, each piece reaching the interior), `Separation` an
 exact enclosure of `−d`, the normal `h`'s exact outward normal oriented `A` toward `B`, and the features
 the vertex's or edge's faces and `h`. Under a positive `SupportBand` the lifted set of `h` follows
-(§10.5's `Overlapping` row, `PlanarSupportSet` with `overlap` set). Reversal swaps sides as §9.5 states.
+(§10.5's `Overlapping` row, `PlanarSupportSets` with `overlap` set). Reversal swaps sides as §9.5 states.
 `publishPlanarManifold` runs this path whenever §9.3's convex-convex path publishes nothing, including
 for a pair §9.3 never reads because only one body carries the convexity certificate. Each certified
 body in turn is tried as `M` against the other as `S`; the patch is published when exactly one order
@@ -1750,7 +1750,7 @@ query orders publish the same set reversed (§9.5). Several planes (a box agains
 publish per plane with their own normals, as §9.3's last row does. Two oriented source boxes take this path
 for a touch, a shallow overlap or a gap within the band, as §9.4's last paragraph routes their edge and vertex
 touches today: the box patches certify exact touches and know no band. `internal/pair/planar_manifold.go`
-gains `PlanarSupportSet`, which takes the two snapshots, a support plane and the band and returns the lifted
+gains `PlanarSupportSets`, which takes the two snapshots, their support planes and the band and returns the lifted
 points with their exact heights; `contact_faceted_manifold.go` maps and publishes them.
 
 **`SweepPair`.** A §9 pair whose first sample is `Touching`, or `ContactBand` from this path, continues under

@@ -84,7 +84,7 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 		return nil
 	}
 	if band.Sign() > 0 {
-		lifted, err := planarLiftedSet(budget, a, b, planes, band, overlap)
+		lifted, err := planarLiftedSet(budget, a, b, result, planes, band, overlap)
 		if err != nil {
 			return err
 		}
@@ -140,17 +140,11 @@ func planarOverlapPatch(budget *workBudget, a, b *pair.PlanarSolid, result pair.
 // so a point within the band over the plane has a vertex within it, and each
 // lifted point's claims (an exact vertex, its exact foot inside the host
 // face, its exact height) hold for any guest.
-func planarLiftedSet(budget *workBudget, a, b *pair.PlanarSolid, planes []pair.SupportPlane,
-	band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
-	var out []pair.PatchPoint
-	for _, plane := range planes {
-		points, err := pair.PlanarSupportSet(a, b, plane, band, overlap, budget.step)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, points...)
-	}
-	return out, nil
+// result is ClassifyPlanar's result for a and b, whose derived data the
+// kernel reuses.
+func planarLiftedSet(budget *workBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
+	planes []pair.SupportPlane, band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
+	return pair.PlanarSupportSets(a, b, result, planes, band, overlap, budget.step)
 }
 
 // planarSupportPlanes lists every face of the admitted hosts as a support
@@ -188,7 +182,7 @@ func planarSupportBand(budget *workBudget, report *ContactReport, a, b *pair.Pla
 	if upper.Cmp(band.Rat()) > 0 {
 		return nil
 	}
-	lifted, err := planarLiftedSet(budget, a, b, planarSupportPlanes(a, b, true, true), band, false)
+	lifted, err := planarLiftedSet(budget, a, b, result, planarSupportPlanes(a, b, true, true), band, false)
 	if err != nil || len(lifted) == 0 {
 		return err
 	}

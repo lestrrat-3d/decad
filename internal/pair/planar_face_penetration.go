@@ -48,7 +48,7 @@ import (
 // AmbiguousFeature. The points are §9.3's shallow row: each deepest vertex
 // paired with its exact foot on h's plane, h's outward normal oriented A to
 // B, and a Separation enclosing −d. Supports names h, whose lifted set
-// (PlanarSupportSet with overlap) a positive band appends. A withheld patch
+// (PlanarSupportSets with overlap) a positive band appends. A withheld patch
 // carries AmbiguousFeature when the overlap crossed two faces of S, and no
 // reason otherwise. Both snapshots must carry Faces. poll is charged
 // throughout; its error is returned unchanged.

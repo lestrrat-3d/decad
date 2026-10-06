@@ -96,6 +96,23 @@ type PlanarResult struct {
 	Gap       *ScalarReading
 	Contacts  []PlanarContact
 	Crossings []PlanarCrossing
+
+	// preps is the derived data ClassifyPlanar built for its two solids,
+	// which PlanarSupportSets reuses (preparedFor).
+	preps [2]*planarPrep
+}
+
+// preparedFor returns the derived data of s that ClassifyPlanar built, or
+// builds it when s is not one of the solids this result classified. The data
+// is a pure function of the solid, so a solid unchanged since
+// ClassifyPlanar read it gets the same data either way.
+func (r PlanarResult) preparedFor(s *PlanarSolid) *planarPrep {
+	for _, prep := range r.preps {
+		if prep != nil && prep.s == s {
+			return prep
+		}
+	}
+	return preparePlanar(s)
 }
 
 // CheckPlanarSolid audits a snapshot before any relation reads it: indices in
@@ -166,9 +183,20 @@ func PlanarConvex(s *PlanarSolid, poll func() error) (bool, error) {
 
 // ClassifyPlanar decides the relation of two audited planar solids. Both must
 // have passed CheckPlanarSolid. poll is charged once per exact predicate
-// group; its error is returned unchanged.
+// group; its error is returned unchanged. The result carries the solids'
+// derived data for PlanarSupportSets, so neither solid may change while the
+// result is in use.
 func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) {
 	pa, pb := preparePlanar(a), preparePlanar(b)
+	result, err := classifyPrepared(pa, pb, poll)
+	if err != nil {
+		return PlanarResult{}, err
+	}
+	result.preps = [2]*planarPrep{pa, pb}
+	return result, nil
+}
+
+func classifyPrepared(pa, pb *planarPrep, poll func() error) (PlanarResult, error) {
 	k := &planarKernel{a: pa, b: pb, poll: poll}
 	if err := k.crossings(); err != nil {
 		return PlanarResult{}, err

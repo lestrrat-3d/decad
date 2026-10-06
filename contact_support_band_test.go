@@ -19,7 +19,7 @@ import (
 // exact.
 //
 // Legs shown to fail (each deleted in turn, fixture red, then restored):
-//   - the foot test of PlanarSupportSet (the foot strictly inside the face):
+//   - the foot test of PlanarSupportSets (the foot strictly inside the face):
 //     TestContactPairSupportSetPastRim publishes four points, and
 //     TestContactPairSupportSetTray publishes the far bottom edge over the
 //     floor;

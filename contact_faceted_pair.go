@@ -672,7 +672,7 @@ func (p *planarBandPair) classify(ctx context.Context, budget *workBudget, repor
 	case pair.Separated:
 		value, bound := proofarith.FloatRat(result.Gap.ValueMM), proofarith.FloatRat(result.Gap.BoundMM)
 		upper := new(big.Rat).Add(value, bound)
-		if banded, err := p.liftedBand(budget, report, upper); err != nil || banded {
+		if banded, err := p.liftedBand(budget, report, result, upper); err != nil || banded {
 			return err
 		}
 		charged := new(big.Rat).Add(bound, delta)
@@ -749,13 +749,15 @@ func (p *planarBandPair) classify(ctx context.Context, budget *workBudget, repor
 // lifted set however small SupportBand is. The gap becomes [0 ± (g + δ)], g
 // the held gap's upper float, and the manifold is the lifted sets charged
 // with δ (chargedManifold). It reports whether it published.
-func (p *planarBandPair) liftedBand(budget *workBudget, report *ContactReport, upper *big.Rat) (bool, error) {
+func (p *planarBandPair) liftedBand(budget *workBudget, report *ContactReport, result pair.PlanarResult,
+	upper *big.Rat) (bool, error) {
 	band := p.liftedWidth(report.Request)
 	hostA, hostB := p.deltaA.Sign() == 0, p.deltaB.Sign() == 0
 	if upper.Cmp(band.Rat()) > 0 || !hostA && !hostB {
 		return false, nil
 	}
-	lifted, err := planarLiftedSet(budget, p.a, p.b, planarSupportPlanes(p.a, p.b, hostA, hostB), band, false)
+	lifted, err := planarLiftedSet(budget, p.a, p.b, result, planarSupportPlanes(p.a, p.b, hostA, hostB), band,
+		false)
 	if err != nil || len(lifted) == 0 {
 		return false, err
 	}
@@ -815,7 +817,7 @@ func (p *planarBandPair) overlapManifold(ctx context.Context, budget *workBudget
 		report.Reason = contactReason
 		return err
 	}
-	lifted, err := planarLiftedSet(budget, p.a, p.b, planes, p.liftedWidth(report.Request), true)
+	lifted, err := planarLiftedSet(budget, p.a, p.b, result, planes, p.liftedWidth(report.Request), true)
 	if err != nil {
 		return err
 	}
