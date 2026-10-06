@@ -1,8 +1,9 @@
 package decad
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
 // The sentinel errors of the public API (docs/api-design.md §12): the cases an
@@ -15,19 +16,19 @@ import (
 // assertion — Exactly(n) / AtLeast(n), or the implicit exactly-one of a
 // ToFace, ToFaceAngular or EdgeAxis — reports [ErrCardinality] instead, even
 // at zero matches.
-var ErrNoMatch = errors.New("decad: selector matched nothing")
+var ErrNoMatch = decaderr.ErrNoMatch
 
 // ErrCardinality is returned when a cardinality assertion fails: an explicit
 // Exactly(n) / AtLeast(n) on a query, or the implicit exactly-one of a ToFace,
 // ToFaceAngular or EdgeAxis. It takes precedence at zero matches — a failed
 // assertion is ErrCardinality even when the selector matched nothing.
-var ErrCardinality = errors.New("decad: cardinality assertion failed")
+var ErrCardinality = decaderr.ErrCardinality
 
 // ErrBodyReportNotFound is returned by [Report.ForBody] when the report
 // contains no entry for the requested body — including a body foreign to
 // the document the report was taken from. [ErrNoMatch] keeps its
 // selector-only meaning; ForBody never returns it.
-var ErrBodyReportNotFound = errors.New("decad: body is not represented in this report")
+var ErrBodyReportNotFound = decaderr.ErrBodyReportNotFound
 
 // ErrForeignBody is returned when an operation is handed bodies owned by
 // different documents, or when an extent or axis names a body owned by a
@@ -35,26 +36,26 @@ var ErrBodyReportNotFound = errors.New("decad: body is not represented in this r
 // documents cannot be combined: the result would have no owner, and a face in
 // another document's coordinates would stop a sweep somewhere the caller
 // never named.
-var ErrForeignBody = errors.New("decad: body is owned by a different document")
+var ErrForeignBody = decaderr.ErrForeignBody
 
 // ErrForeignProfile is returned when a feature is handed a profile built from
 // a different sketch than the one given, or when the profile's mutable boundary
 // contains an entity the source sketch does not own. A foreign profile or
 // boundary is expressed in another sketch's plane-local coordinates, so
 // lifting it through the given sketch's frame would silently misplace it.
-var ErrForeignProfile = errors.New("decad: profile was built from a different sketch")
+var ErrForeignProfile = decaderr.ErrForeignProfile
 
 // ErrStaleProfile is returned when a feature is handed a profile built before
 // the sketch's current state — Profile.IsStale(), sketch's own staleness
 // answer. A stale profile's boundary is the old geometry; sweeping it would
 // silently build the wrong part. The caller rebuilds with s.Profiles() and
 // passes a current one.
-var ErrStaleProfile = errors.New("decad: profile is stale")
+var ErrStaleProfile = decaderr.ErrStaleProfile
 
 // ErrRetiredBody is returned when an operation, or an extent or axis, is
 // handed a body its document has retired. A retired body remains readable,
 // but it is no longer part of the model: no operation takes one.
-var ErrRetiredBody = errors.New("decad: body has been retired from its document")
+var ErrRetiredBody = decaderr.ErrRetiredBody
 
 // ErrNegativeMagnitude is returned when a magnitude is given as a negative
 // value. Magnitudes — extent distances and angles, fillet and chamfer sizes,
@@ -63,7 +64,7 @@ var ErrRetiredBody = errors.New("decad: body has been retired from its document"
 // The two signed displacements, ToFace.Offset and the extrude taper, are
 // outside it: neither carries a Direction to reverse, so a negative value
 // there is a legal intent.
-var ErrNegativeMagnitude = errors.New("decad: negative magnitude")
+var ErrNegativeMagnitude = decaderr.ErrNegativeMagnitude
 
 // ErrUnrecordableProfile is returned when a feature is handed a valid profile
 // whose boundary decad cannot record exactly: a Partial fragment sketch could
@@ -75,12 +76,12 @@ var ErrNegativeMagnitude = errors.New("decad: negative magnitude")
 // uncertified range as an exact trim, would misstate the input geometry, so
 // decad rejects — it never repairs, projects, fits or solves for a point.
 // Full semantics in docs/sketch-seam-design.md.
-var ErrUnrecordableProfile = errors.New("decad: profile boundary cannot be recorded exactly")
+var ErrUnrecordableProfile = decaderr.ErrUnrecordableProfile
 
 // ErrNotSolid is returned by a region quantity of a body that is not a valid
 // solid — a volume or centroid of a body with no enclosed region. It is never
 // a zero value: a zero volume and "not a solid" are different answers.
-var ErrNotSolid = errors.New("decad: body is not a solid")
+var ErrNotSolid = decaderr.ErrNotSolid
 
 // ErrDegenerate is returned for an input with no usable geometry: a zero or
 // invalid transform, a zero pull direction, a zero wall-thickness tool, a
@@ -91,27 +92,27 @@ var ErrNotSolid = errors.New("decad: body is not a solid")
 // chorded finely enough (a finer tolerance may clear it). A valid but
 // unclassifiable contact or analytic prism-arrangement refusal is
 // [BooleanUnsupportedContact], never ErrDegenerate (docs/api-design.md §8 / H2).
-var ErrDegenerate = errors.New("decad: degenerate input")
+var ErrDegenerate = decaderr.ErrDegenerate
 
 // ErrBooleanFailed is returned when a boolean operation cannot produce a
 // result body. A public Union, Cut or Intersect reports it wrapped in a
 // [BooleanError]: an empty result carries [BooleanEmpty], an internal
 // invariant break [BooleanEvaluatorFailure]. errors.Is(err, ErrBooleanFailed)
 // still branches on it; errors.As(err, &be) then be.Code is the fine branch.
-var ErrBooleanFailed = errors.New("decad: boolean operation failed")
+var ErrBooleanFailed = decaderr.ErrBooleanFailed
 
 // ErrInvalidProfile is returned when a feature is handed a profile whose Valid
 // is false, whose boundary contains a nil entity, or whose exported snapshot
 // fields no longer exactly match one current result from Sketch.Profiles. A
 // self-intersecting, degenerate, or caller-altered region is never silently
 // swept.
-var ErrInvalidProfile = errors.New("decad: profile is not a valid region")
+var ErrInvalidProfile = decaderr.ErrInvalidProfile
 
 // ErrUnitKind is returned for a units.Value whose Kind is not the one the
 // parameter takes: an angle where a length is wanted, or a tolerance that is
 // not Dimensionless. It is never a coercion — units are never silently
 // relabelled.
-var ErrUnitKind = errors.New("decad: wrong unit kind")
+var ErrUnitKind = decaderr.ErrUnitKind
 
 // ErrNotFinite is returned for a non-finite units.Value magnitude or r3.Vec
 // component handed as a parameter, when Revolve axis validation derives a
@@ -120,7 +121,7 @@ var ErrUnitKind = errors.New("decad: wrong unit kind")
 // non-finite value and only its operations reject one, so the call must: an
 // infinite tolerance would turn the verification gate off, and a NaN would
 // turn it inside out.
-var ErrNotFinite = errors.New("decad: non-finite value")
+var ErrNotFinite = decaderr.ErrNotFinite
 
 // ErrUnsupported is returned when the current evaluator does not build the
 // requested intent. Evaluator staging is explicit and rejected at the call —
@@ -135,7 +136,7 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // coarser than the pair tolerance) is a capability limit reached before any contact —
 // it passes through as a plain ErrUnsupported, not a [BooleanError].
 // errors.Is(err, ErrUnsupported) branches on both.
-var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
+var ErrUnsupported = decaderr.ErrUnsupported
 
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
