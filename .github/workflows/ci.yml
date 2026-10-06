@@ -224,7 +224,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/ ./internal/decaderr/ ./internal/survey2d/ ./internal/motionbound/ ./internal/freeform/ ./internal/meshbool/ ./internal/clearance/"
+            packages: "./examples/ ./decadtest/ ./export/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/ ./internal/proofbound/ ./internal/decaderr/ ./internal/survey2d/ ./internal/motionbound/ ./internal/freeform/ ./internal/meshbool/ ./internal/clearance/ ./internal/circularmoments/ ./internal/triangulation/"
             timeout: "10m"
           - os: ubuntu-latest
             race: "-race"

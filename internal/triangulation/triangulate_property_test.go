@@ -1,4 +1,4 @@
-package decad
+package triangulation
 
 import (
 	"math"
@@ -10,10 +10,9 @@ import (
 )
 
 // This file is randomized property testing plus a native fuzz target for the
-// shared cap triangulator (triangulate.go: triangulate2D and its helpers
-// bridgeHole / earClip). It is package-internal — like triangulate_internal_test.go
-// — because triangulate2D and Point2 are unexported; it reuses that
-// file's loopSignedArea2. This treatment matches the randomized suites revolve,
+// shared cap triangulator (triangulate.go: Triangulate and its helpers
+// BridgeHole / EarClip). It reuses triangulate_test.go's loopSignedArea2.
+// This treatment matches the randomized suites revolve,
 // the boolean and the fillet already carry.
 //
 // The triangulator is shared by every Tessellate (prism, cup, boolean), so it
@@ -230,7 +229,7 @@ func triAssert(t *testing.T, pts []Point2, outer []int, holes [][]int) {
 	}
 
 	loops := append([][]int{outer}, holes...)
-	tris, err := triangulate2DContext(t.Context(), pts, loops)
+	tris, err := Triangulate(t.Context(), pts, loops)
 
 	// P1: a valid input must triangulate into at least one facet.
 	require.NoError(t, err, `valid polygon-with-holes must triangulate`)

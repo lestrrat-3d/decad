@@ -1,4 +1,4 @@
-package decad
+package circularmoments
 
 import (
 	"math"

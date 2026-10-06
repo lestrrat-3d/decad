@@ -18,6 +18,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireIntervalWidthAtMost(t *testing.T, name string, iv proofbound.RatInterval, ceiling float64) {
+	t.Helper()
+	width, _ := new(big.Rat).Sub(iv.Hi, iv.Lo).Float64()
+	require.GreaterOrEqual(t, width, 0.0, "%s: an interval's hi must not sit below its lo", name)
+	require.LessOrEqual(t, width, ceiling, "%s: interval width %g exceeds %g", name, width, ceiling)
+}
+
+func requireIntervalsOverlap(t *testing.T, name string, a, b proofbound.RatInterval) {
+	t.Helper()
+	require.LessOrEqual(t, a.Lo.Cmp(b.Hi), 0, "%s: [%s, %s] lies above [%s, %s]", name,
+		a.Lo.FloatString(20), a.Hi.FloatString(20), b.Lo.FloatString(20), b.Hi.FloatString(20))
+	require.LessOrEqual(t, b.Lo.Cmp(a.Hi), 0, "%s: [%s, %s] lies below [%s, %s]", name,
+		a.Lo.FloatString(20), a.Hi.FloatString(20), b.Lo.FloatString(20), b.Hi.FloatString(20))
+}
+
 func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	t.Parallel()
 	check := func(t *testing.T, first, full regionIntegrals) {
