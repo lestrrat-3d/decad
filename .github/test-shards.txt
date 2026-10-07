@@ -455,6 +455,7 @@
 3	0.01	TestLinkageChainTravelAcrossWaypoints
 3	0.01	TestLinkageCornerVelocity
 3	0.01	TestLinkageProjectionBoundHandSum
+3	0.01	TestLinkageProjectionSegmentTerm
 3	0.00	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
 3	0.00	TestLoftArcSegAgainstCircleSegRefusesS3
 3	0.00	TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit

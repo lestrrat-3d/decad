@@ -635,3 +635,75 @@ func TestLinkageProjectionLeavesTheDiscToTheTravelBound(t *testing.T) {
 		require.Negative(t, dr.projection(0, 0, a, b).Cmp(travel), "interval %d", k)
 	}
 }
+
+// TestLinkageProjectionSegmentTerm pins docs/linkage-check-design.md §5.8's
+// segment term on scene 13's pendulum over θ ∈ [0, h], h = π/32, an interval
+// holding no waypoint. From θ = 0 forward, each corner (x, y) moves along Y
+// at x per radian, so the block's highest point is bounded by
+// max_c [y + max(0, x·h)] + Rem = −40 + 5·h + Rem. From θ = h backward, each
+// corner sits at y' = x·sin h + y·cos h and moves along Y at
+// x' = x·cos h − y·sin h per radian forward, so the segment run backward adds
+// max(0, −x'·h): nothing for the corners rising toward the wall, whose
+// highest, (5, −40), bounds the block at 5·sin h − 40·cos h + Rem. The box
+// form charges every corner |x'|·h from that end instead.
+//
+// A waypoint at which the schedule bends leaves an interval off one segment;
+// one on the straight line through its neighbours at equal shares does not.
+//
+// Legs seen to fail when deleted: the max(0, ·) of the term (the receding
+// corner is charged a negative step), the step's sign from the far end (the
+// backward segment is read forward), and the bend test (the interval holding
+// the 60° corner reads one segment).
+func TestLinkageProjectionSegmentTerm(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	block := internalBoxBody(t, doc, -5, -50, 5, -40, 10)
+	internalBoxBodyAtZ(t, doc, -100, 20, 100, 40, -10, 30)
+	l := NewLinkage()
+	swing, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{block})
+	require.NoError(t, err)
+	run := linkageRunOf(t, doc, l, Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}}, WithResolution(units.Scalar(1.0/16)))
+	dr := run.drive.(*linkageDriver)
+	fa, fb := new(big.Rat), big.NewRat(1, 16)
+	a, err := run.evaluatePose(fa, run.dom.label(fa))
+	require.NoError(t, err)
+	b, err := run.evaluatePose(fb, run.dom.label(fb))
+	require.NoError(t, err)
+	b0 := dr.bounds[0]
+	h, ok := dr.projectionSpans(b0, 0, fa, fb)
+	require.True(t, ok)
+	steps := dr.projectionSteps(b0, 0, fa, fb)
+	require.Len(t, steps, 1)
+	rem := projectionRemainder(b0, 0, h)
+	hf := math.Pi / 32
+	remF := linkRatFloat(t, rem)
+	require.InDelta(t, math.Sqrt(50*50+5*5)*hf*hf/2, remF, 1e-9)
+
+	ca, ok := dr.cornersAt(a, 0, b0, 0)
+	require.True(t, ok)
+	up, _ := projectionSide{corners: ca, h: h, seg: stepsFrom(steps, false), rem: rem}.extents()
+	require.InDelta(t, -40+5*hf+remF, linkRatFloat(t, up[1]), 1e-9)
+
+	cb, ok := dr.cornersAt(b, 0, b0, 0)
+	require.True(t, ok)
+	up, _ = projectionSide{corners: cb, h: h, seg: stepsFrom(steps, true), rem: rem}.extents()
+	require.InDelta(t, 5*math.Sin(hf)-40*math.Cos(hf)+remF, linkRatFloat(t, up[1]), 1e-9)
+	boxUp, _ := projectionSide{corners: cb, h: h, rem: rem}.extents()
+	require.Greater(t, linkRatFloat(t, boxUp[1]), linkRatFloat(t, up[1]), `the box form charges the rising corners too`)
+
+	ends := []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2)}
+	waypoint := Drive{{Link: swing, From: units.Degrees(0), Via: []units.Value{units.Degrees(60), units.Degrees(10)}, To: units.Degrees(20)}}
+	spec, err := l.resolveDrive(waypoint)
+	require.NoError(t, err)
+	_, ok = jointStep(spec.joints[0], ends[0], ends[1])
+	require.False(t, ok, `a waypoint at 1/3 leaves the interval off one segment`)
+	_, ok = jointStep(spec.joints[0], big.NewRat(1, 3), ends[1])
+	require.True(t, ok, `a waypoint at an end leaves it on one segment`)
+	straight := Drive{{Link: swing, From: units.Degrees(0), Via: []units.Value{units.Degrees(45)}, To: units.Degrees(90)}}
+	spec, err = l.resolveDrive(straight)
+	require.NoError(t, err)
+	step, ok := jointStep(spec.joints[0], big.NewRat(1, 4), big.NewRat(3, 4))
+	require.True(t, ok, `a waypoint on the straight line at an equal share bends nothing`)
+	require.InDelta(t, math.Pi/4, linkRatFloat(t, step.Lo), 1e-15)
+	require.InDelta(t, math.Pi/4, linkRatFloat(t, step.Hi), 1e-15)
+}
