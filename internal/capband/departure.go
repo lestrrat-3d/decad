@@ -206,10 +206,10 @@ func PlaneDeparture(tagUVec, tagVVec r3.Vec, b PatchBuilt) (float64, bool) {
 
 	// |N| from below: the constant term's own length, less what the two affine
 	// terms can take from it anywhere in the unit square.
-	baseLen, okB := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(c0))
-	uLen, okU := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(cu))
-	vLen, okV := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(cv))
-	tagLen, okL := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(n))
+	baseLen, okB := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(c0))
+	uLen, okU := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(cu))
+	vLen, okV := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(cv))
+	tagLen, okL := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(n))
 	if !okB || !okU || !okV || !okL {
 		return 0, false
 	}
@@ -227,7 +227,7 @@ func PlaneDeparture(tagUVec, tagVVec r3.Vec, b PatchBuilt) (float64, bool) {
 		comp := proofbound.RatAdd(proofbound.IntervalAbsUpper(k0[i]), proofbound.IntervalAbsUpper(ku[i]), proofbound.IntervalAbsUpper(kv[i]))
 		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
 	}
-	crossLen, okX := survey2d.IntervalSqrt(proofbound.PointInterval(crossSq))
+	crossLen, okX := proofbound.IntervalSqrt(proofbound.PointInterval(crossSq))
 	if !okX {
 		return 0, false
 	}
@@ -348,9 +348,9 @@ func ConeDeparture(sinH, cosH proofbound.RatInterval, originVec, axisVec r3.Vec,
 	default:
 		return 0, false
 	}
-	rulingLen, okLen := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(
-		survey2d.IntervalSquare(dz).Hi,
-		survey2d.IntervalSquare(proofbound.IntervalSub(capped.rho, side.rho)).Hi,
+	rulingLen, okLen := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(
+		proofbound.IntervalSquare(dz).Hi,
+		proofbound.IntervalSquare(proofbound.IntervalSub(capped.rho, side.rho)).Hi,
 		proofbound.RatMul(side.rho.Hi, capped.rho.Hi, sigmaSq),
 	)))
 	if !okLen {
@@ -426,7 +426,7 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 
 	rel := survey2d.IvVec3Sub(centerIv, origin)
 	zc := survey2d.IvVec3Dot(rel, ahat)
-	offset, okOff := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
+	offset, okOff := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
 	if !okOff {
 		return capDirectrix{}, false
 	}
@@ -443,9 +443,9 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 		}
 		relV := survey2d.IvVec3Sub(vIv, origin)
 		zv := survey2d.IvVec3Dot(relV, ahat)
-		rho, okRho := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
+		rho, okRho := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
 		armRel := survey2d.IvVec3Sub(vIv, centerIv)
-		arm, okArm := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
+		arm, okArm := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
 		if !okRho || !okArm {
 			return capDirectrix{}, false
 		}

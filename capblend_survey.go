@@ -345,7 +345,7 @@ func pullLengthUpper(p r3.Vec) (float64, bool) {
 	if !ok {
 		return 0, false
 	}
-	length, okSqrt := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(pv))
+	length, okSqrt := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(pv))
 	if !okSqrt {
 		return 0, false
 	}

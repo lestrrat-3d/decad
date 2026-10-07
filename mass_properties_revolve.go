@@ -164,7 +164,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmomen
 	var centroidal [3][3]proofbound.RatInterval
 	for i := range 3 {
 		for j := i; j < 3; j++ {
-			shift, ok := survey2d.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
+			shift, ok := proofbound.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
 			if !ok {
 				return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 			}

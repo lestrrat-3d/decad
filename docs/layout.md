@@ -267,7 +267,7 @@ the rules leave to the byte budget.
 | `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
-| `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
+| `internal/proofbound/` | Bounded scalars, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |

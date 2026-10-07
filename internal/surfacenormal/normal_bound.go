@@ -80,13 +80,13 @@ func UnitVec3(a survey2d.IvVec3) (survey2d.IvVec3, Status) {
 	if n2.Lo.Sign() <= 0 {
 		return survey2d.IvVec3{}, Unproven
 	}
-	length, ok := survey2d.IntervalSqrt(n2)
+	length, ok := proofbound.IntervalSqrt(n2)
 	if !ok || length.Lo.Sign() <= 0 {
 		return survey2d.IvVec3{}, Unproven
 	}
 	var out survey2d.IvVec3
 	for i, comp := range a {
-		q, ok := survey2d.IntervalQuo(comp, length)
+		q, ok := proofbound.IntervalQuo(comp, length)
 		if !ok {
 			return survey2d.IvVec3{}, Unproven
 		}
@@ -140,7 +140,7 @@ func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
 		return survey2d.IvVec3{}, false
 	}
 	rel := survey2d.IvVec3Sub(pi, oi)
-	share, ok := survey2d.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
+	share, ok := proofbound.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
 	if !ok {
 		return survey2d.IvVec3{}, false
 	}

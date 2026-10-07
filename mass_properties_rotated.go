@@ -57,7 +57,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	var central [3][3]proofbound.RatInterval
 	for i := range central {
 		for j := range central[i] {
-			shift, _ := survey2d.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
+			shift, _ := proofbound.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
 			central[i][j] = proofbound.IntervalSub(second[i][j], shift)
 		}
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -255,16 +254,16 @@ func AxisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, f
 	if lengthSquared.Sign() == 0 {
 		return fallbackU, fallbackV
 	}
-	sqrtIv, ok := survey2d.IntervalSqrt(proofbound.PointInterval(lengthSquared))
+	sqrtIv, ok := proofbound.IntervalSqrt(proofbound.PointInterval(lengthSquared))
 	if !ok {
 		return fallbackU, fallbackV
 	}
 	uBound := fallbackU
-	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
+	if enc, ok := proofbound.IntervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
 		uBound = math.Min(fallbackU, proofbound.IntervalFloatError(enc, heldU))
 	}
 	vBound := fallbackV
-	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
+	if enc, ok := proofbound.IntervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
 		vBound = math.Min(fallbackV, proofbound.IntervalFloatError(enc, heldV))
 	}
 	return uBound, vBound

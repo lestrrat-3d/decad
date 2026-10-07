@@ -332,7 +332,7 @@ func sincHalf(x float64) float64 {
 
 // sincHalfInterval encloses sin(x/2)/(x/2) for an exact rational x: exactly 1
 // at x == 0 (no enclosure needed), otherwise the certified sine of h = x/2
-// divided by the exact nonzero point h. survey2d.IntervalQuo never refuses here: the
+// divided by the exact nonzero point h. proofbound.IntervalQuo never refuses here: the
 // divisor is a nonzero point interval.
 func sincHalfInterval(x *big.Rat) (proofbound.RatInterval, bool) {
 	if x.Sign() == 0 {
@@ -343,7 +343,7 @@ func sincHalfInterval(x *big.Rat) (proofbound.RatInterval, bool) {
 	if !ok {
 		return proofbound.RatInterval{}, false
 	}
-	return survey2d.IntervalQuo(sin, proofbound.PointInterval(h))
+	return proofbound.IntervalQuo(sin, proofbound.PointInterval(h))
 }
 
 // phaseIntegralInterval encloses ∫₀¹ cos(a0 + u·(a1−a0)) du and the sine

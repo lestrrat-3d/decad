@@ -53,7 +53,7 @@ func IvVec3Dot(a, b IvVec3) proofbound.RatInterval {
 // itself, so a coordinate straddling zero cannot contribute a negative low
 // end.
 func IvVec3NormSq(a IvVec3) proofbound.RatInterval {
-	return proofbound.IntervalAdd(proofbound.IntervalAdd(IntervalSquare(a[0]), IntervalSquare(a[1])), IntervalSquare(a[2]))
+	return proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalSquare(a[0]), proofbound.IntervalSquare(a[1])), proofbound.IntervalSquare(a[2]))
 }
 
 // TurnGridShift is the dyadic grid the radian-to-turn conversion lands on
@@ -174,7 +174,7 @@ func radSinCosKey(x *big.Rat) string {
 // without the memo; RadSinCosInterval's doc comment states the argument.
 func radSinCosIntervalUncached(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	twoPi := proofbound.TwoPiInterval()
-	turn, ok := IntervalQuo(proofbound.PointInterval(x), twoPi)
+	turn, ok := proofbound.IntervalQuo(proofbound.PointInterval(x), twoPi)
 	if !ok {
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 	}
