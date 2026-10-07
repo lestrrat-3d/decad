@@ -78,7 +78,7 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | Integrates records and checks sketch topology. See `docs/evaluator-design.md` §4. |
+| `moments.go` / `moments_validate.go` | Record integrals and sketch checks. See evaluator §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md` §2–§3. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
@@ -261,7 +261,8 @@ the rules leave to the byte budget.
 | `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentinput/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
+| `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
+| `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
 | `internal/loftmesh/` | Loft stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
