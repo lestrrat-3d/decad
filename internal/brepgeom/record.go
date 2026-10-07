@@ -2,6 +2,7 @@ package brepgeom
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -144,12 +145,101 @@ func CurveKey(e Embed, w survey2d.SegmentWalk, z float64) (EdgeKey, bool) {
 type Use struct {
 	Face            int
 	Loop            int
+	Seg             int
 	Part            Part
 	Key             EdgeKey
 	From, To        [3]float64
 	DirFrom, DirTo  [3]float64
 	Sense, DirSense bool
 	Walk            survey2d.SegmentWalk
+	Level           float64
+	LevelDelta      float64
+}
+
+// FaceWalks is one validated face's recorded walks and sweep levels.
+type FaceWalks struct {
+	Embed            Embed
+	Planar           [][]survey2d.SegmentWalk
+	Wall             survey2d.SegmentWalk
+	IsPlanar         bool
+	Z0, Z1           float64
+	Z0Delta, Z1Delta float64
+}
+
+// Topology holds each face's uses in walk order and paired edge indices.
+type Topology struct {
+	Walls      map[int]survey2d.SegmentWalk
+	Planar     map[int][][]survey2d.SegmentWalk
+	Uses       []Use
+	Edges      [][2]int
+	EdgeOf     []int
+	FaceUses   [][]int
+	CoordUpper float64
+}
+
+// Build records every face's uses, then pairs them by exact edge identity.
+// Every face's walks must already have passed the caller's record audit.
+func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
+	topo := &Topology{
+		Walls:    map[int]survey2d.SegmentWalk{},
+		Planar:   map[int][][]survey2d.SegmentWalk{},
+		FaceUses: make([][]int, len(faces)),
+	}
+	add := func(u Use) {
+		topo.FaceUses[u.Face] = append(topo.FaceUses[u.Face], len(topo.Uses))
+		topo.Uses = append(topo.Uses, u)
+	}
+	for fi, f := range faces {
+		e := f.Embed
+		topo.CoordUpper = math.Max(topo.CoordUpper, math.Max(math.Abs(f.Z0), math.Abs(f.Z1)))
+		if f.IsPlanar {
+			for li, loop := range f.Planar {
+				for si, w := range loop {
+					topo.CoordUpper = math.Max(topo.CoordUpper, w.CoordUpper)
+					u := Use{Face: fi, Loop: li, Seg: si, Part: LoopSeg, Walk: w,
+						Level: f.Z0, LevelDelta: f.Z0Delta}
+					u.Key, u.Sense = CurveKey(e, w, f.Z0)
+					u.DirSense = u.Sense
+					u.From, u.To = e.Canon(w.StartU, w.StartV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z0)
+					u.DirFrom, u.DirTo = u.From, u.To
+					add(u)
+				}
+			}
+			topo.Planar[fi] = f.Planar
+			continue
+		}
+		w := f.Wall
+		topo.CoordUpper = math.Max(topo.CoordUpper, w.CoordUpper)
+		topo.Walls[fi] = w
+		s0, s1 := e.Canon(w.StartU, w.StartV, f.Z0), e.Canon(w.StartU, w.StartV, f.Z1)
+		t0, t1 := e.Canon(w.EndU, w.EndV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z1)
+		rim := func(part Part, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) Use {
+			u := Use{Face: fi, Loop: -1, Seg: -1, Part: part, Walk: w, Level: z, LevelDelta: zDelta,
+				From: from, To: to, DirFrom: dirFrom, DirTo: dirTo}
+			u.Key, u.Sense = CurveKey(e, w, z)
+			u.DirSense = u.Sense
+			if reversed {
+				u.Sense = !u.Sense
+			}
+			return u
+		}
+		add(rim(Rim0, f.Z0, f.Z0Delta, s0, t0, s0, t0, false))
+		if w.Closed {
+			add(rim(Rim1, f.Z1, f.Z1Delta, s1, s1, s1, s1, true))
+			continue
+		}
+		add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side1, Key: LineKey(t0, t1),
+			From: t0, To: t1, DirFrom: t0, DirTo: t1})
+		add(rim(Rim1, f.Z1, f.Z1Delta, t1, s1, s1, t1, true))
+		add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side0, Key: LineKey(s0, s1),
+			From: s1, To: s0, DirFrom: s0, DirTo: s1})
+	}
+	var err error
+	topo.Edges, topo.EdgeOf, err = Pair(topo.Uses, unsupported)
+	if err != nil {
+		return nil, err
+	}
+	return topo, nil
 }
 
 // Pair requires each edge to bound exactly two distinct faces. The first use
