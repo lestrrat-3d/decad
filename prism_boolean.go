@@ -1032,7 +1032,7 @@ type prismSceneDelta struct {
 // Operand A's segments are created verbatim (A's frame is the reference);
 // operand B's are re-expressed into A's frame first (reexpressPrismPoint) —
 // the one new rounding this design introduces. Entities are deduplicated
-// WITHIN each operand (the same dedup key discipline moments_validate.go's
+// WITHIN each operand (the same dedup key discipline internal/momentvalidate/reconstruct.go's
 // momentRecordScene already uses for one record) but NEVER across operands: a
 // coincident carrier is handed to sketch as two separate, numerically
 // matching entities, and sketch's own coincident-carrier resolution decides
