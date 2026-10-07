@@ -698,10 +698,20 @@ evaluates `513` poses either way, while the same disc on its axis evaluates `2`.
 a tilted wall, is charged its box corner the same way. In both the certificate is still the larger of
 two proven bounds, so no interval or cell reads worse than under the travel bound alone. A tighter support
 of a body along `n`, read from the clearance kernel's own carriers, and the kernel's closest-point
-direction as a seventh candidate `n`, are later tightenings that change no soundness argument. A pair whose relative
-path holds a dependent joint (§15) takes the travel bound alone: its value at a pose is an enclosure and
-its travel over an interval the hull bound of §15.5, both of which the expansion could consume through
-`MotionFrame.AtRange`, and that extension is a later increment.
+direction as a seventh candidate `n`, are later tightenings that change no soundness argument.
+
+**Over a loop's dependent joint.** A dependent joint's value at a pose is an enclosure `E_e` (§15.4) and
+over an interval it lies in the hull `H` that §15.5 reads, never an exact value; the expansion takes it
+as follows. The centre `m` need not be a configuration the drive visits: Taylor's theorem along the
+straight segment from `m` to `q` holds for any `m` with `|q_j − m_j| ≤ h_j` on every joint and every
+configuration between them inside the drive's range. So the dependent's centre is `m_j`, the exact
+midpoint of `E_e`, and `h_j` is the larger distance from `m_j` to an end of the hull of `H` and `E_e` —
+every value the dependent takes over the interval lies in that hull. The corner positions and velocities
+are read at `m`, the stated joints at their exact values and each dependent at its `m_j`; `m_j` lies
+inside `E_e` and the hull inside the dependent's reach (§15.5), so every configuration on the segment
+lies inside the range `ρ` and `B_ij` were read over. A dependent's schedule is not affine in `s`, so a pair
+whose relative path holds one takes the box form, the segment term never. A pose or an interval the loop
+could not be enclosed at takes neither bound, as §15.6 says.
 
 **The interval form.** On `[s_a, s_b]` the bound is read from each end `e ∈ {a, b}`, the larger of the two
 ends' `L_n` serving. The remainder takes `h_i = D_i`, `jointSpan`'s total variation of joint `i` over the
@@ -1694,6 +1704,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | P1b (`linkage_bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage_verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the segment term's internal test; the measured counts re-recorded | as after P1 |
 | S1 (`linkage_bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage_verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
 | S2 (`linkage_box.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
+| D1 (`linkage_loop.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
@@ -1708,8 +1719,8 @@ fewer poses and closes at the first step that meets the gate, so its interval ca
 wider while inside the gate; each test that pins a measured count is re-measured in the PR that moves it.
 Later increments, each a tightening with no soundness change (§5.8): the kernel's closest-point direction
 as a seventh `n`;
-a body's own support along `n` from the kernel's carriers, for discs and tilted contacts; the expansion
-over a dependent joint's enclosure; the same certificate for `VerifyMotion`, which changes motion §9 test
+a body's own support along `n` from the kernel's carriers, for discs and tilted contacts; the same
+certificate for `VerifyMotion`, which changes motion §9 test
 2's default-resolution leg and its reports.
 
 ### 14.10 Settled points
@@ -2155,7 +2166,7 @@ An `Enclose` point ask costs about a millisecond on the crank-rocker; a cell cos
 pieces (`0.4` s). The decomposition asks a certifiable drive as one cell. A pose at depth `d` asks at most
 `d` new cells and one point, and the cells of one depth tile the drive once, so a verification that
 reaches depth `d` everywhere asks about `d` times the full-range work. Measured: scene 7 at
-`WithResolution(Scalar(1.0/256))` evaluates `37` poses in about `0.4` s; scene 9 at the defaults evaluates
+`WithResolution(Scalar(1.0/256))` evaluates `34` poses in about `0.4` s; scene 9 at the defaults evaluates
 `8` poses in about `0.7` s, most of it the decomposition walking the refused cells down to the fold; scene
 8 at `WithResolution(Scalar(1.0/256))` evaluates `10` poses in about `0.1` s. The
 kernel cost per pose is §10's. A tilted loop costs the scene nothing measurable, but on a tilted
@@ -2190,7 +2201,7 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
   66.792358°`, `s₂ = 0.742137`. At `WithResolution(Scalar(1.0/256))` assert: `Status` `Interfering`; the
   first `LinkCollision` is `(follower, wall)` at the grid point `36/256`, the first above `s₁`; every
   collision lies in `(s₁, s₂)` with `Bound` below `Value`; every `IntervalClear` interval ends at or below
-  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`. Measured: `37` poses.
+  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`. Measured: `34` poses.
 - At `θ2 = 38.671875°`, the grid point `110/256` nearest the follower's minimum, as the end of a drive
   `0° → 38.671875°` evaluated at its endpoints alone: the corner's depth `δ = y − 68.5` is below
   `8·|cos θ4|`, so the overlap is the triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³, asserted within
@@ -2224,6 +2235,16 @@ passes the pin. Assert `Suspect`, no `Collision`, the interval `[1/8, 1/4]` `Int
 `WithResolution(Scalar(1.0/1024))` `Interfering` with the first `Collision.At` above `16.551652/90` and
 within `2/1024` of it. This is the leg that goes red when a dependent joint contributes nothing to `τ`:
 the coarse interval then certifies from its ends.
+
+**The projection over a dependent (§5.8).** Scene 7 without the wall, a block `x ∈ [96, 104],
+y ∈ [60, 66], z ∈ [40, 48]` riding the follower in a layer of its own under a ceiling `x ∈ [50, 150],
+y ∈ [67.5, 77.5], z ∈ [39, 49]`. The follower turns by `Δ = θ4(θ2) − θ4(0)`, so the block's top reaches
+`66·cos Δ + 4·|sin Δ|` and the gap is smallest, `67.5 − √4372 ≈ 1.379` mm, where `Δ = −atan(4/66)`, a flat
+minimum of the drive met twice. At the defaults assert `Sound`, the reading enclosing it, every
+`IntervalClear` interval at or below the closed-form gap at its ends, and no interval narrower than
+`1/1024`; measured `36` poses down to `1/128`, against `1119` down to `1/8192` under the travel bound
+alone. Red when the dependent's expansion is dropped, and when `h` is read from the end's enclosure alone
+or as a quarter of the hull — the pin legs of this section then certify across their collisions.
 
 **The turn-back (the two-sided hull).** Scene 7 without the wall, the crank driven `0° → 81.857366°`,
 where the follower returns to its starting angle `110.3002°` after dipping to `101.5370°`; the pin centred

@@ -1693,6 +1693,42 @@ func (ld *loopDrive) span(joint int, sa, sb *big.Rat) *big.Rat {
 	return sum
 }
 
+// dependentHull is a dependent joint's hull over [sa, sb], from the readings
+// intervalSpans took for the interval: the hull of every piece's hull, as
+// rational radians or millimetres. ok is false when there are no readings.
+func (ld *loopDrive) dependentHull(joint int, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
+	lo, hi := sa, sb
+	if lo.Cmp(hi) > 0 {
+		lo, hi = hi, lo
+	}
+	ld.mu.Lock()
+	pieces, ok := ld.spans[loopSpanKey(lo, hi)]
+	ld.mu.Unlock()
+	j := slices.Index(ld.deps, joint)
+	if !ok || j < 0 || len(pieces) == 0 {
+		return proofbound.RatInterval{}, false
+	}
+	ivs := make([]proofbound.RatInterval, len(pieces))
+	for n, piece := range pieces {
+		ivs[n] = piece[j].h
+	}
+	return hull(ivs...), true
+}
+
+// dependentAt is a dependent joint's enclosure at the exact fraction s, the
+// one the pose there was built from, as rational radians or millimetres.
+func (ld *loopDrive) dependentAt(ctx context.Context, joint int, s *big.Rat) (proofbound.RatInterval, bool) {
+	j := slices.Index(ld.deps, joint)
+	if j < 0 {
+		return proofbound.RatInterval{}, false
+	}
+	values, err := ld.pointValues(ctx, s)
+	if err != nil {
+		return proofbound.RatInterval{}, false
+	}
+	return valueInterval(values[j][0], values[j][1]), true
+}
+
 // loopSpanKey names a verification interval.
 func loopSpanKey(a, b *big.Rat) string { return a.RatString() + "," + b.RatString() }
 
