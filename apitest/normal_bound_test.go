@@ -14,7 +14,7 @@ import (
 )
 
 // This file is Face.NormalAt's own exactness contract (topology.go,
-// normal_bound.go). The reading is a DIRECTION, so it is Exact only where the
+// internal/surfacenormal/normal_bound.go). The reading is a DIRECTION, so it is Exact only where the
 // float triple handed back really is the exact unit normal of the surface the
 // face is tagged with — and two ordinary constructions leave it not being one:
 // a rotated placement, whose cap frame normal is the rounded cross product of
@@ -24,7 +24,7 @@ import (
 // own direction defect is MEASURED here, not merely asserted: its rows check
 // the held reading against a reference this file proves independently, in
 // exact rational interval arithmetic over its own square-root and sine/cosine
-// series (ratSqrtIv, ratSinCosIv), never by asking normal_bound.go for its own
+// series (ratSqrtIv, ratSinCosIv), never by asking internal/surfacenormal/normal_bound.go for its own
 // answer.
 
 // normalFaceByRole finds the one face carrying the named feature role.
@@ -81,7 +81,7 @@ func dyVecCross(a, b dyVec) dyVec {
 
 // axialRadialOf is the exact vector from a surface's own axis to p,
 // perpendicular to that axis: rel − a·(rel·a)/(a·a). That is the UNIT-axis
-// spelling normal_bound.go states each arm is judged against, written so no
+// spelling internal/surfacenormal/normal_bound.go states each arm is judged against, written so no
 // square root enters and the answer stays rational.
 func axialRadialOf(p, origin, axis r3.Vec) dyVec {
 	rel := dyVecSub(dyVecOf(p), dyVecOf(origin))
@@ -122,7 +122,7 @@ func alongDefectSq(n r3.Vec, w dyVec) *big.Rat {
 // arm's exact normal needs a transcendental — a sine and cosine of the held
 // half angle — so its spelling is instead the LOW end of a proven rational
 // interval enclosure, built from this file's own square-root and sine/cosine
-// series (ratSqrtIv, ratSinCosIv), never from normal_bound.go's. The reading's
+// series (ratSqrtIv, ratSinCosIv), never from internal/surfacenormal/normal_bound.go's. The reading's
 // own outward sign is a float negation and every reading here is squared, so
 // the sign never enters.
 func armDefectSq(t *testing.T, f *decad.Face, p r3.Vec, n r3.Vec) *big.Rat {
@@ -186,7 +186,7 @@ func unitDefect(n r3.Vec) *big.Rat {
 }
 
 // ratIv is an exact rational interval [lo, hi], this file's own — kept apart
-// from normal_bound.go's ratInterval so the Cone reference below is an
+// from internal/surfacenormal/normal_bound.go's ratInterval so the Cone reference below is an
 // independent witness, never the code under test agreeing with itself. Every
 // operation is exact: a *big.Rat never rounds, so an enclosure widens only
 // where a square root or a series remainder puts slack in.
@@ -304,7 +304,7 @@ func ratSqrtIv(t *testing.T, x *big.Rat) ratIv {
 // charging the last included one instead is more conservative still.
 //
 // No π enters anywhere, so nothing here depends on a platform's libm, and
-// this must never call normal_bound.go's radSinCosInterval: the point of this
+// this must never call internal/surfacenormal/normal_bound.go's radSinCosInterval: the point of this
 // reference is an independent witness, not the code under test agreeing with
 // itself. Every cone half angle this file feeds it lands in range: it is an
 // angle between an axis and a wall, read out in radians.
@@ -388,10 +388,10 @@ func ratIvVecSub(a, b ratIvVec) ratIvVec {
 
 // coneDefectSq is armDefectSq's Cone arm: a proven LOWER bound on the squared
 // distance between a held reading n and the tagged cone's exact unit normal
-// r̂·cos(h) − â·sin(h), the closed form normal_bound.go's coneNormalAllow
+// r̂·cos(h) − â·sin(h), the closed form internal/surfacenormal/normal_bound.go's ConeAllow
 // states. r̂ and â are this file's own proven unit enclosures of the radial
 // and axis directions, h's sine and cosine are this file's own series, and
-// nothing here reads normal_bound.go's radSinCosInterval or ivVec3Unit.
+// nothing here reads internal/surfacenormal/normal_bound.go's radSinCosInterval or UnitVec3.
 func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
 	t.Helper()
 	radial := axialRadialOf(p, s.Origin, s.Axis)

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -17,7 +18,7 @@ import (
 // actually carries can point away from the surface the build tags it with
 // (docs/modify-reach-design.md §8.3) — the `Cone` of a circular patch and the
 // `Plane` of a flat one alike. `Face.NormalAt` publishes it beside its own
-// arithmetic proof (normal_bound.go) and DX7 composes it into the allowance its
+// arithmetic proof (internal/surfacenormal) and DX7 composes it into the allowance its
 // decision reads (capblend_survey.go).
 //
 // The surface the build assembles is not the tag, and it is not the tag for two
@@ -57,7 +58,7 @@ import (
 //
 //	n = σ·(r̂_P·cos h - â·sin h),  r̂_P the unit radial direction from the axis,
 //
-// the same exact answer `Face.NormalAt`'s Cone arm computes and normal_bound.go
+// the same exact answer `Face.NormalAt`'s Cone arm computes and internal/surfacenormal
 // judges. The built surface at P is spanned by its own two tangents — the
 // straight ruling r and the directrix tangent t — so writing p for the part of n
 // lying in that span and decomposing p in the (generally oblique) basis (r̂, t̂),
@@ -209,7 +210,7 @@ func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 // capPlaneDeparture is the flat half of this file's derivation, evaluated over
 // exact rational arithmetic on the patch's own four held corners and the tag's
 // own two held frame axes. Those axes, crossed exactly, are the same reference
-// direction normal_bound.go's Plane arm is judged against — an r3.Frame stores
+// direction internal/surfacenormal's Plane arm is judged against — an r3.Frame stores
 // no normal and rounds one out of that cross on every call — so the two bounds
 // this face publishes meet at one model and compose by the triangle inequality
 // rather than leaving that rounding uncharged between them. It reports ok false
@@ -311,8 +312,8 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	if !okR || !okA || !okO {
 		return 0, false
 	}
-	ahat, st := ivVec3Unit(axisIv)
-	if st != normalProven {
+	ahat, st := surfacenormal.UnitVec3(axisIv)
+	if st != surfacenormal.Proven {
 		return 0, false
 	}
 
