@@ -799,8 +799,9 @@ ideal poses, and the box inflated by its `Bound` encloses the ideal body, so no 
 **Scope.** The projection bound is tried for exactly the pairs the travel bound is tried for: an
 undeclared evaluated pair with a measured gap at both ends of the interval, or at the cell's centre. A
 pair the kernel leaves undecided, a sheet, an invalid operand, a declared pair and an excluded pair stand
-as §5.4, §5.7, §6 and §7 say. `VerifyMotion` is unchanged: its driver supplies no projection bound, every
-one of its intervals is the travel bound's, and its reports are the same byte for byte.
+as §5.4, §5.7, §6 and §7 say. `VerifyMotion` takes the same bound over its one motion, read as one joint
+whose value is the motion's parameter (motion §5.2), so a one-link linkage and the equivalent `Revolute`
+read the same points and report the same poses and outcomes.
 
 **Cost of the certificate.** Per pose or centre and per moving body it reads eight corner positions and
 their velocities under each joint on the path once, and projects them onto six directions: a few hundred
@@ -903,13 +904,12 @@ each of its ends, which is at least the minimum over it.
   exactly; red when the top level is lifted by the pad.
 - **Agreement with `VerifyMotion`** (§11) is restated. At the endpoints alone, on motion §9's fixtures 1,
   2 and 4, neither bound certifies the one interval and the two reports agree in every reading.
-  Bisected, `VerifyMotion` keeps the travel bound alone and the linkage certifies some intervals sooner
-  on all three: the leg asserts the same collisions, no more poses than `VerifyMotion`'s, every linkage
-  interval's `Clearance` at or below the closed-form gap at each of its ends, equal `Status` on fixtures
-  1 and 4, and on fixture 2, where the linkage's reading meets the gate at the floor and `VerifyMotion`'s
-  does not, `Sound` against `Suspect` with both readings enclosing `10` within `0.1` mm. Measured:
-  fixture 1 evaluates `11` poses against `13`, fixture 2 `16` against `102`, fixture 4 `21` against
-  `114`.
+  Bisected, both take the projection bound (motion §5.2), and the leg asserts the same collisions,
+  `Status`, poses and interval outcomes, each interval's `Clearance` within `1e-9` of the other's — `ρ_11`
+  and `ρ_max` are read by two routes and may part in the last ulp — every interval's `Clearance` at or
+  below the closed-form gap at each of its ends, and on fixture 2 `Sound` with both readings enclosing `10`
+  within `0.1` mm. Measured, for both: fixture 1 evaluates `11` poses, fixture 2 `16` and fixture 4 `21`,
+  where the travel bound alone takes `13`, `102` and `114`.
 
 ## 6. The procedure
 
@@ -1803,20 +1803,20 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | H1 (`linkage_bound.go`: `bodyHullPoints`, the point readings, `extentsAlong` and the hull bound over every candidate direction; `linkage_verify.go`: the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
 | C1 (`linkage_bound.go`: the cylinder beside the ball in `readLinkBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
 | H2 (`linkage_box.go`: `cellProjection` over hull points and face normals, `hullAttained`, `addHullShares`) | §5.8's hull points and directions in the cell form; the tilted box and the slot (§14.8) | — |
+| M1 (`motion_verify.go`: `singleMotion`'s projection bound, its points per pose and its remainder; motion §5.2) | §5.8's interval form for `VerifyMotion`, the motion read as one joint; motion §9 tests 22–25; the agreement test asserting equal reports; motion §9 tests 2 and 13's default-floor legs restated | — |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
 one report, with scene 6's closed-form region as its acceptance. This section ships in PR 1. P1 is the
 projection certificate's end-to-end instance: the real three-joint drive, the real kernel, the bound read
-off real poses, one report, with its closed-form minimum as acceptance; P2 adds the cell form on it. Both
-leave `VerifyMotion`'s reports, every collision and every outcome the travel bound certified unchanged —
+off real poses, one report, with its closed-form minimum as acceptance; P2 adds the cell form on it, and
+M1 the same interval form for `VerifyMotion`. Each leaves every collision and every outcome the travel
+bound certified unchanged —
 a pose the larger bound spares lies inside an interval or cell proven clear, where no collision sits.
 Where the projection bound is the larger they raise interval and cell lower bounds, turn undecided
 intervals and cells clear, and evaluate fewer poses or centres. The whole-drive reading is then read over
 fewer poses and closes at the first step that meets the gate, so its interval can sit slightly higher or
 wider while inside the gate; each test that pins a measured count is re-measured in the PR that moves it.
-A later increment, a tightening with no soundness change (§5.8): the same certificate for `VerifyMotion`,
-which changes motion §9 test 2's default-resolution leg and its reports.
 
 ### 14.10 Settled points
 
@@ -1834,7 +1834,7 @@ interval, is the larger of the travel bound and the projection bound: the gap bo
 bodies' separation along a direction, each body's rest-box corners or its hull points —
 expanded to second order in the joint values from the centre or an end, with the remainder proven from
 `ρ` (§5.8, §14.3). The candidate directions are the six coordinate directions and the face normals of
-either body's hull points; `VerifyMotion` keeps the travel bound alone (§5.8).
+either body's hull points; `VerifyMotion` takes the same bound over its one motion (motion §5.2).
 
 ## 15. Closed loops
 

@@ -375,13 +375,14 @@ func TestLinkageConstructorRefusals(t *testing.T) {
 // clears by 10 mm) and 4 (a stop it rests on). The one-link τ is
 // ρ_{11}·|Δq_1|, which is MoverTravel's value, and the ideal pose is one
 // MotionFrame.At, so at the endpoints alone, where no bound certifies the one
-// interval, the two reports agree in every reading. Bisected, VerifyMotion
-// keeps the travel bound alone while VerifyLinkage takes the larger of it and
-// the projection bound (docs/linkage-check-design.md §5.8), so the linkage
-// certifies some intervals sooner and evaluates fewer poses: the same
-// collisions, the same Status but on fixture 2, where the linkage's reading
-// meets the gate at the floor VerifyMotion's misses, both readings enclosing
-// 10 mm, and every IntervalClear interval's Clearance at or below the arm's
+// interval, the two reports agree in every reading. Bisected, both take the
+// larger of the travel bound and the projection bound
+// (docs/linkage-check-design.md §5.8, docs/motion-check-design.md §5.2) over
+// the same corner and hull readings, so they agree there too: the same
+// collisions and Status, the same poses, the same interval outcomes, each
+// interval's Clearance within 1e-9 — ρ_11 and ρ_max are read by two routes
+// and may part in the last ulp — both readings enclosing 10 mm on fixture 2,
+// and every IntervalClear interval's Clearance at or below the arm's
 // closed-form gap at its ends — its corner (48, 14) at y = 48·sin θ + 14·cos θ
 // below the wall's face, or its corner (0, −14) 14·(1 − cos θ) above the
 // stop's.
@@ -468,7 +469,20 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 			t.Parallel()
 			motion, linkage := both(t, tc.static, tc.motionRes, tc.linkageRes)
 			requireSameCollisions(t, motion, linkage)
-			require.LessOrEqual(t, len(linkage.Poses), len(motion.Poses))
+			require.Equal(t, motion.Status, linkage.Status)
+			require.Len(t, linkage.Poses, len(motion.Poses))
+			require.Len(t, linkage.Intervals, len(motion.Intervals))
+			for k, iv := range motion.Intervals {
+				got := linkage.Intervals[k]
+				require.Equal(t, iv.Outcome, got.Outcome)
+				require.InDelta(t, iv.From.Mag(), 90*got.From.Mag(), 1e-9)
+				if iv.Clearance == nil {
+					require.Nil(t, got.Clearance)
+					continue
+				}
+				require.NotNil(t, got.Clearance)
+				require.InDelta(t, iv.Clearance.Value.Mag(), got.Clearance.Value.Mag(), 1e-9)
+			}
 			for _, iv := range linkage.Intervals {
 				if iv.Outcome != decad.IntervalClear {
 					continue
@@ -478,14 +492,11 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 				}
 			}
 			if motion.Clearance == nil {
-				require.Equal(t, motion.Status, linkage.Status)
 				require.Nil(t, linkage.Clearance)
 				return
 			}
-			// Fixture 2: the travel bound's reading misses the gate at the
-			// floor, the projection bound's meets it.
-			require.Equal(t, decad.Suspect, motion.Status)
-			require.Equal(t, decad.Sound, linkage.Status)
+			// Fixture 2: both projection bounds meet the gate at the floor.
+			require.Equal(t, decad.Sound, motion.Status)
 			for _, reading := range []*decad.ScalarReading{motion.Clearance, linkage.Clearance} {
 				require.NotNil(t, reading)
 				require.InDelta(t, 10, reading.Value.Mag(), 0.1)

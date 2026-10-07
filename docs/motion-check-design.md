@@ -469,6 +469,31 @@ boundary crossing occurs and the pair's relation cannot change from the disjoint
 a nesting cannot begin without the boundaries crossing, and a touching cannot occur with positive distance.
 The interval is `IntervalClear` only when EVERY (mover, static) pair certifies.
 
+**The projection bound.** A pair also certifies over the interval when a second proven lower bound on its
+gap there is positive: the projection bound of `docs/linkage-check-design.md` §5.8, with the motion read
+as one joint whose value is the motion's parameter. A `Revolute` is one revolute joint about its own axis,
+its value the angle in radians. A `Prismatic` is one prismatic joint along `Dir`, its value the
+displacement in millimetres. A `Between` is the screw of the read parameters from `From`, its value the
+fraction `s`. At each end of the interval the mover's points — the eight corners of its rest box inflated
+by its `Bound`, and, where the body has them, its hull points with their pad (linkage §5.8) — are posed
+exactly by the ideal pose `T*` there, and each point's velocity per unit of the parameter is read at its
+posed position `x`: `k × (x − c)` for a `Revolute` about the unit axis `k` through `c`, the unit `Dir` for
+a `Prismatic`, and `θ·k × (x − c) + d·k` for a `Between`, with `θ` over its enclosure. The static partner's
+points stand as they are. The parameter is affine in the fraction along the whole path, so the segment
+term always serves: each point moves to first order by its velocity times the interval's signed step,
+negated from the far end. The remainder is `½·B·h²` for the parameter's span `h`, where `B` bounds every
+point's second derivative in the parameter, its distance from the axis: `ρ_max` per radian² for a
+`Revolute`, `θ²·ρ_max` per unit fraction for a `Between`, and nothing for a `Prismatic`, which moves every
+point along a straight line. `ρ_max` covers the hull points too, which lie inside the inflated rest box
+(linkage §5.8). The bound is the largest separation, along the six coordinate directions and every face
+normal of either body's hull points, of the expanded mover from the partner, from either end. The pair's
+lower bound over the interval is the larger of this and the travel certificate's
+`(lo_k + lo_{k+1} − τ_k)/2`, and that larger bound, rounded down, is its `Clearance`. Both are proven lower
+bounds on the same gap, so the larger is one, and every collision and every outcome the travel bound
+alone certifies stands. Where the gap has a flat minimum the travel bound sits up to `τ_k/2` below it,
+first order in the step, while the projection bound sits about `½·B·Δ²` below it, second order, so the
+reading closes at a coarser step.
+
 Three consequences are deliberate:
 
 - **A touching endpoint can never certify its interval.** A swing that begins resting on a stop has
@@ -491,7 +516,8 @@ Three consequences are deliberate:
   is computed over it: a collision has been found, which is what the caller asked.
 
 Everything the certificate consumes is a proven bound already in hand or a closed-form up-rounded term; it
-adds no new geometric proof. The one new proof piece is `η_k` (§5.1), and the one new reading is `ρ_max`.
+adds no new geometric proof. The one new proof piece is `η_k` (§5.1); the readings are `ρ_max` and the
+projection bound's posed points.
 
 ### 5.3 What the whole path proves
 
@@ -556,9 +582,10 @@ verdicts and the same report (evaluator §8):
    walks the first collision down to within one resolution step of the onset. An interval colliding at both
    ends is not split: the overlap's interior is not the question.
 6. **Bisect for the reading.** A certified interval's `Clearance` sits below the true minimum by up to
-   `τ_k/2` — for the arm of §9, `25 mm × Δθ` — so an interval that certifies at a coarse width leaves the
-   path reading's half-width (§5.3) at that scale, and a margin that the true gap meets by less than
-   `τ_k/2` reads undecided. Refinement therefore continues past certification, on certified intervals, with
+   `τ_k/2` under the travel bound — for the arm of §9, `25 mm × Δθ` — and by about `½·B·Δ²` under the
+   projection bound at a flat minimum, so an interval that certifies at a coarse width leaves the path
+   reading's half-width (§5.3) at that scale, and a margin that the true gap meets by less reads
+   undecided. Refinement therefore continues past certification, on certified intervals, with
    two stopping rules, each bounded by the resolution floor: while `MotionReport.Clearance` would fail the
    tolerance gate, bisect the interval holding the smallest `Clearance` (ties in traversal order) unless its
    width is at or below the resolution; and while `WithMinClearance` is neither proven (every interval's
@@ -576,9 +603,9 @@ contact's onset costs about `log₂(|To − From| / Resolution)` further poses p
 the colliding interval that still has a collision-free end; step 6 spends them
 only around the current minimum, so its cost grows with the logarithm of `1 / Resolution` rather than with
 the path length. A caller who wants only the verdict and not the figures states a coarse `WithResolution`;
-a caller who wants a path reading at the gate states one fine enough that `ρ_max × Resolution / 4` — for a
-`Between`, `(ρ_max·θ + |d|) × Resolution / 4` — is below `rel × gap` (§9 tests 2 and 13 work the
-arithmetic).
+at a flat minimum the projection bound closes the reading at the default floor when `½·B·Resolution²` is
+below `rel × gap`, and a caller with a tighter `WithMotionTolerance` states a finer resolution (§9 tests 2
+and 13 work the arithmetic).
 
 A pose whose pair is undecided or unsupported (a payload the kernel cannot model, an uncertified contact)
 offers no `lo`, so no interval touching it can certify through that endpoint; the far endpoint may still
@@ -665,18 +692,22 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
    alone certify nothing, and the test has two parts. **Endpoints only** (no bisection): assert `Status` is
    `Suspect`, the one interval is `IntervalUndecided`, `Collisions` is empty, `Clearance` is nil, the `0°`
    row is an `Exact` `46` and the `90°` row encloses `12` with an ulp-scale bound. **Bisected**, with
-   `WithResolution(0.01°)`: a certified interval's `Clearance` dips below the true gap by up to
-   `τ_k/2 = 25 mm × Δθ`, so the path reading's half-width is about `12.5 mm × Δθ`, and the gate at
-   `rel = 1e-3` on a `10` mm gap admits `0.01` mm; `Δθ = 0.01° ≈ 1.75e-4 rad` gives `2.2e-3` mm, inside it,
-   while the default floor `90°/1024` gives `0.019` mm, outside it. Assert: `Status` is `Sound`; every
+   `WithResolution(0.01°)`: under the travel bound a certified interval's `Clearance` dips below the true
+   gap by up to `τ_k/2 = 25 mm × Δθ`, so the path reading's half-width is about `12.5 mm × Δθ`, and the
+   gate at `rel = 1e-3` on a `10` mm gap admits `0.01` mm; `Δθ = 0.01° ≈ 1.75e-4 rad` gives `2.2e-3` mm,
+   inside it. Assert: `Status` is `Sound`; every
    interval is `IntervalClear`; `MotionReport.Clearance.Value` is within `0.1` mm of `10` with
    `Tolerance.State` `ToleranceSatisfied`; with `WithMinClearance(9 mm)` the `Assessment` is
    `AssessmentMet`; with `WithMinClearance(11 mm)` it is `AssessmentViolated` and `Status` is `Violating`
    with a `DiagMotionClearanceViolated` whose `At` is the pose of the proving gap; with
    `WithMinClearance(10 mm)` exactly, the `Assessment` is `AssessmentUndecided` and the report `Suspect` —
-   never `Met`, because no proven lower bound can reach an exact minimum. Assert also that at the default
-   resolution the same fixture is `Sound` in verdict but its `Clearance` reading is beyond tolerance, so the
-   report reads `Suspect` with a `DiagMeasurementBeyondTolerance` on `ReadingGap` and a nil `At`.
+   never `Met`, because no proven lower bound can reach an exact minimum. At the default resolution
+   `90°/1024` the travel bound alone would leave `0.019` mm, outside the gate, but the projection bound
+   (§5.2) leaves about `½·50·Δθ² ≈ 5.9e-5` mm at the flat minimum: assert `Sound`, no diagnostics and the
+   reading enclosing `10` with `ToleranceSatisfied` — red when the projection bound is dropped. Under
+   `WithMotionTolerance(1e-7)` the gate is `1e-6` mm, below that: assert `Sound` in verdict but the
+   reading beyond tolerance, so the report reads `Suspect` with one `DiagMeasurementBeyondTolerance` on
+   `ReadingGap` and a nil `At`.
 3. **Near miss between samples.** Mover: a blade `x ∈ [0, 50], y ∈ [−0.5, 0.5]`, same motion. Static: a pin,
    an axis-aligned `0.8` mm cube, `z ∈ [4.6, 5.4]`, centred at polar angle `α = 90·31/64 = 43.59375°`,
    radius `49`. The window is worked out as follows. With the blade at angle `θ`, the pin's centre sits
@@ -777,9 +808,11 @@ the endpoints alone.
     `Sound`; every interval `IntervalClear`; `Clearance.Value` within `0.1` mm of `10` with
     `ToleranceSatisfied`; `WithMinClearance(9 mm)` gives `AssessmentMet`; `11 mm` gives
     `AssessmentViolated`, `Violating` and a `DiagMotionClearanceViolated` whose `At` is the proving pose;
-    `10 mm` exactly gives `AssessmentUndecided` and `Suspect`. At the default resolution assert the verdict
-    `Sound` but the reading beyond tolerance: `Suspect`, with a `DiagMeasurementBeyondTolerance` on
-    `ReadingGap` and a nil `At`. This fixture goes red when the ideal pose omits the slide or reads `θ` in
+    `10 mm` exactly gives `AssessmentUndecided` and `Suspect`. At the default resolution the projection
+    bound (§5.2) closes the reading: assert `Sound`, every interval clear and the reading enclosing `10` with
+    `ToleranceSatisfied` — red when the projection bound is dropped. Under `WithMotionTolerance(1e-7)` assert
+    the verdict `Sound` but the reading beyond tolerance: `Suspect`, with a `DiagMeasurementBeyondTolerance`
+    on `ReadingGap` and a nil `At`. This fixture goes red when the ideal pose omits the slide or reads `θ` in
     anything but radians: `η` then exceeds the gaps and no interval certifies.
 14. **Near miss between samples under a screw.** Test 3's blade and pin under
     `Between{Identity(), RotationAround(origin, Z, 90°)}`. The pin's angle `α = 90·31/64°` is the fraction
@@ -876,6 +909,31 @@ the endpoints alone.
     `s* ≈ 0.40967`, where the corner penetrates the wall by `0.0235` mm and the overlap is a `5.8e-3` mm³
     wedge, far above the transfer allowance — on every platform.
 
+**The projection bound** (§5.2).
+
+22. **Along a wall.** Test 5's cube slides `0 → 100` mm along `+X` under a wall `y ∈ [20, 30]`, so the gap
+    is `10` mm at every parameter. The travel bound certifies only intervals shorter than `20` mm; the
+    projection bound's segment term charges the cube's motion along the wall's normal, which is nothing.
+    Assert `Sound` with two poses, the one interval's `Clearance` within `1e-9` of `10` and not above it,
+    and the reading enclosing `10` with `ToleranceSatisfied`. Red when the projection bound is dropped.
+23. **The pendulum, the remainder's test.** A block `x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10]` swings
+    about `Z` through the origin toward a wall `y ∈ [20, 40]`, as a `Revolute` `0° → 90°` at
+    `WithResolution(90°/16)` and as a `Between` to the quarter turn at `Scalar(1.0/16)`. The gap
+    `g(θ) = 20 − 5·sin θ + 40·cos θ` falls and is concave, so the expansion from an interval's near end
+    without its remainder exceeds the minimum at its far end by about `½·|g''|·Δθ²`, with `|g''| ≤ 40`
+    and `ρ_max ≈ 50.25`. Assert every `IntervalClear` interval's `Clearance` at or below `g` at its far end.
+    Red when the remainder is dropped, when the `Between`'s remainder loses its `θ²`, and when its velocity
+    loses its `θ`.
+24. **A screw's slide.** Test 5's cube turned `30°` about the line through `(5, ·, 5)` along `+Y` while it
+    slides `12` mm along it, toward a wall whose face is `15` mm above it. A turn about an axis along `Y`
+    moves no point along `Y`, so the gap is `15 − 12·s`. Assert every `IntervalClear` interval's
+    `Clearance` at or below it at its far end and the reading enclosing `3`. Red when the `Between`'s
+    velocity loses its slide term `d·k`.
+25. **The agreement with `VerifyLinkage`** (linkage §11). A one-link linkage on a revolute joint and the
+    same arm under the equivalent `Revolute`, on tests 1, 2 and 4 bisected, report the same collisions,
+    `Status`, poses and interval outcomes, each `Clearance` within `1e-9`. Red when the projection bound
+    is dropped. A step negated from the wrong end turns tests 2, 3, 5, 13–16 and this one red.
+
 Three legs of the `Between` bound sit below any public fixture's observability and are pinned by internal
 tests in `motion_internal_test.go`, each on the production function: `pathAreaUpper`'s stretch base — a
 base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1` reproduces
@@ -899,13 +957,17 @@ and example above, and `go test . ./apitest/ -run '^TestCI'` is run before the p
 | 1 (`motion.go`, `motion_verify.go`, `motion_bound.go`) | `Motion`, `Revolute`, `Prismatic`, `PoseAt` and their refusals; `WithMotionTolerance`; `Diagnostic.At` and the four `DiagMotion*` codes; `VerifyMotion` over the two endpoints only (§6 steps 1–4 and 7, no bisection), the swept-box exclusion with travel from rest, `η_k` charged to gaps, `ρ_max` and `τ` over exact rationals; `IntervalClear`/`IntervalColliding`/`IntervalUndecided`; `MotionRequest.RelativeTolerance`; tests 2 (endpoints only), 4, 5, 6, 7, 8, 9, 10 and the swept-box-from-rest test | every interval the endpoints alone cannot certify (test 2's swing among them); a collision at a pose whose `η_k` is nonzero is published without the §5.1 transfer |
 | 2 | §6 steps 5 and 6 — bisection for the verdict, including the onset bisection of a colliding interval with a collision-free end, and for the reading — `WithResolution`, `WithMinClearance`, `Assessment`, `MotionRequest.Resolution`/`MinClearance`; the §5.1 collision transfer through `sweptVolumeAllow(η_k, A)`, with `DiagUndecidedInterference` at a pose for an overlap that does not transfer, and `Collision`'s doc comment restated as a claim about the ideal pose; tests 1, 2 (bisected), 3, 11, and a transfer test: a pose with a nonzero `η_k` whose measured overlap is published with its bound widened by the allowance, and a fixture whose overlap volume is below the allowance that reads `DiagUndecidedInterference` rather than `Collision` | pairs the clearance kernel leaves undecided (§7); a stitched mover under a `Revolute` |
 | 3 (`motion.go`, `motion_verify.go`, `motion_bound.go`; `go.mod` pins `r3` at `b624f6d`) | `Between`, its `PoseAt` and refusals (§2, §8); the `Dimensionless` parameter, its resolution and labels (§2, §3); the screw frame — `θ`, `d`, `Axis`, `Point` and `From` read exactly, `radianSinCos` for `s·θ` — and `η_1 = max(η_ideal, η_To)` at the stated `To` (§5.1); `ρ_max` and the swept box from the From-placed corners (§5.2, §6); `τ` with the slide term (§5.2); `pathAreaUpper`'s stretch base and `basisSigmaUpper` (§5.1); tests 12–21, the internal tests of §9, and test 9's and test 7's `Between` rows | pairs the clearance kernel leaves undecided (§7); a stitched mover under any `Between` that is not a translation between translations |
+| 4 (`motion_verify.go`; linkage §14.9's M1) | the projection bound (§5.2): the motion read as one joint, its points posed per pose, the segment term and the remainder; tests 22–25, and tests 2's and 13's default-floor legs restated | pairs the clearance kernel leaves undecided (§7) |
 
 PR 1 was the end-to-end instance: a real mover, a real static body, the real kernel, one certificate, one
 report, at endpoint scope. PR 2 builds on it and changes no PR 1 result except the two the transfer rule
 names: a collision whose measured volume does not clear `sweptVolumeAllow(η_k, A)` stops being a
 `Collision`, and every published collision volume carries the widened bound. PR 3 changes no `Revolute` or
 `Prismatic` result: both pass the stretch base `1`, read their swept box at rest and their `τ` without a
-slide term, exactly as before.
+slide term, exactly as before. PR 4 changes reports only where the projection bound is the larger: interval lower bounds
+rise, undecided intervals turn clear, fewer poses are evaluated, and the whole-path reading, read over
+fewer poses, closes at the first step that meets the gate; every collision and every outcome the travel
+bound certified stands.
 
 ## 11. Dependencies and settled points
 
@@ -938,4 +1000,5 @@ parameter is the dimensionless fraction `s ∈ [0, 1]` (§2); its ideal path is 
 parameters composed onto `From`, and the stated `To` is charged at `s = 1` through `η_1 = max(η_ideal,
 η_To)`, not reported and not refused (§5.1); its travel bound is the sum `|Δs|·(ρ_max·θ + |d|)`, not the
 Pythagorean form (§5.2); its `ρ_max` and swept box are read from the From-placed corners (§5.2, §6); it
-traces the shorter arc, accepts two reflections and refuses a reflection on one side only (§2).
+traces the shorter arc, accepts two reflections and refuses a reflection on one side only (§2); an
+interval's lower bound is the larger of the travel certificate and the projection bound (§5.2).

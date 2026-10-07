@@ -187,7 +187,9 @@ func TestVerifyMotionBetweenKnownCollision(t *testing.T) {
 // nothing. A certified interval's Clearance dips below the true gap by up to
 // (50·θ + 20)/2 × Δs ≈ 49.27 × Δs mm, so the path reading's half-width is
 // about 24.6 × Δs: Δs = 1/4096 gives 6.0e-3 mm, inside the 0.01 mm gate on a
-// 10 mm gap at rel = 1e-3, while the default 1/1024 gives 0.024 mm, outside.
+// 10 mm gap at rel = 1e-3, while the default 1/1024 gives 0.024 mm, outside;
+// the projection bound (§5.2) closes the default floor's reading, and a gate
+// at rel = 1e-7 is past it. The projection bound is the default floor's leg.
 //
 // Legs seen to fail when deleted: the slide term s·d·n of the ideal pose, and
 // θ read as degrees instead of radians (each fails every subtest but the
@@ -282,10 +284,23 @@ func TestVerifyMotionBetweenClearPath(t *testing.T) {
 		require.Equal(t, decad.AssessmentUndecided, report.Assessment)
 		require.Equal(t, decad.Suspect, report.Status)
 	})
-	t.Run("the default floor leaves the reading beyond tolerance", func(t *testing.T) {
+	t.Run("the default floor closes the reading", func(t *testing.T) {
 		t.Parallel()
 		report := run(t)
 		require.Equal(t, units.Scalar(1.0/1024), report.Request.Resolution)
+		for _, iv := range report.Intervals {
+			require.Equal(t, decad.IntervalClear, iv.Outcome)
+		}
+		require.Equal(t, decad.Sound, report.Status)
+		require.Empty(t, report.Diagnostics)
+		require.NotNil(t, report.Clearance)
+		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), 10.0)
+		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 10.0)
+	})
+	t.Run("a tolerance finer than the floor's reading leaves it beyond tolerance", func(t *testing.T) {
+		t.Parallel()
+		report := run(t, decad.WithMotionTolerance(units.Scalar(1e-7)))
 		for _, iv := range report.Intervals {
 			require.Equal(t, decad.IntervalClear, iv.Outcome, `Sound in verdict`)
 		}
