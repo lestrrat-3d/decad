@@ -505,7 +505,7 @@ endpoint ends the argument.
 | a rest-box corner's position `f_c` and velocities `v_{i,c}` at a pose, projected onto `n` (§5.8) | enclosed by the ideal poses at that pose, rounded outward to floats; the bound takes the end that weakens it |
 | the float pose the kernel measured | charged by `η_k` (§5.1); never trusted |
 | a link body with no record radius (a stitched payload) under a path with any revolute joint | `η` unbounded: the pair reads `DiagUndecidedClearance` at every pose and no collision transfers, exactly as motion §7's stitched mover under a `Revolute`; a path of prismatic joints alone leaves the linear part the identity and `η` is the translation term |
-| a pin on one link in a bore on another, the two axes exactly coincident in the ideal poses | the float poses put the two carriers' anchors a few ulps apart; the kernel's windowed nested cell (clearance §4) reads the gap as `R − r ∓ d_sup`, `Approximate`, widened by `δ` and `η` like any placed pair's |
+| a pin on one link in a bore on another, the two axes exactly coincident in the ideal poses | the float poses put the two carriers' anchors a few ulps apart; the kernel's windowed nested cell (clearance §4) reads the gap as `R − r ∓ d_sup`, `Approximate`, widened by `δ` and `η` like any placed pair's; a constant pair (§5.9) reads it `Exact` once instead |
 | a pin whose radius equals its bore's | undecided at every pose: a contact clearance §6 does not certify; declared, it publishes nothing (§5.4) |
 | a `Bounds()` box or an axis the exact reader cannot form (non-finite) | `ErrNotFinite` at the call |
 
@@ -527,7 +527,9 @@ with declared pairs: every undeclared pair has a proven positive gap at every pa
 AND every declared pair is proven free of transferred overlap at both endpoints. Nothing continuous is
 claimed about a declared pair — a pin that leaves its bore and re-enters it between two samples is not
 found — and §5.6 says so. This is the reason the declaration is explicit, listed in the report, and
-per pair: the caller names the scope of the sampled claim, and the report shows it.
+per pair: the caller names the scope of the sampled claim, and the report shows it. A declared pair that
+is also a constant pair (§5.9) publishes the same rows from one evaluation; the report's vocabulary for it
+is unchanged.
 
 ### 5.5 What the whole drive proves
 
@@ -916,6 +918,61 @@ each of its ends, which is at least the minimum over it.
   within `0.1` mm. Measured, for both: fixture 1 evaluates `11` poses, fixture 2 `16` and fixture 4 `21`,
   where the travel bound alone takes `13`, `102` and `114`.
 
+### 5.9 Constant pairs
+
+A pin turns in its bore, a shaft in its bearing, a disc on its spindle: at the joint, one body is a
+surface of revolution about the joint's own axis, and turning it changes nothing about where it is. Such
+a pair's relation is the same at every configuration, and the check reads it once.
+
+**The rule.** A pair is **constant** when its relative path (§5.2, §5.7) is exactly one revolute joint `i`
+— every other joint on it holds `0` and is passed over, as §5.7 passes them — and at least one of its two
+bodies is proven symmetric about joint `i`'s axis by §5.2's exact test (`bodySymmetryAxis`: a solid prism
+whose profile is one whole circle, or a solid full revolve, under a cardinal frame and a signed-axis
+placement, whose axis is exactly joint `i`'s axis line). Either body may be the symmetric one: a pin on link
+`i` in a bore on the link above it, a bore on link `i` around a pin above it, or a static post in a bore on
+a link whose only moving joint is `i`.
+
+**Why it holds.** Let `L` be the pair's common ancestor, `B` the body on joint `i`'s branch and `A` the
+other, so the ideal poses are `T_L·A` and `T_L∘J_i(q_i)·B`: every other joint below `L` holds `0` and is
+the identity. When `B` is symmetric, `J_i(q)·B = B` for
+every `q`, and the pair is `T_L·A` against `T_L·B`. When `A` is symmetric, `dist(T_L·A, T_L·J_i·B) =
+dist(A, J_i·B) = dist(J_i⁻¹·A, B) = dist(A, B)`, since `J_i⁻¹` is a rotation about the same axis. Either
+way the pair's distance, its contact set and its overlap volume are those of the two bodies as they stand
+at the zero pose, at every `s`. Nothing about the drive, the waypoints or a loop enters: the argument holds
+for a dependent joint whose value is an enclosure (§15.4) exactly as for a stated one, because it holds
+for every value.
+
+**What the check does with it.** A constant pair is evaluated once, the first time a pose reaches it
+(§6 step 4), by the pair procedure on the two bodies as they stand — unplaced, so `δ` and `η` are exactly
+zero, and an extruded pin in an extruded bore reads the kernel's `Exact` ring value `R − r` — and that one
+outcome is the pair's outcome at every pose, exactly as a held link's constant placement serves every pose
+(§6 step 2). A mover whose evaluated pairs are all constant is never placed:
+
+- a measured gap publishes the same `Clearance` row at every evaluated pose, contributes its lower bound
+  to every interval and every cell with `τ = 0` — the relation does not change, so nothing travels — or
+  the projection bound (§5.8) where that is larger, and, undeclared, enters the whole-drive reading as the
+  interval `[lo, hi]`, judged as any evaluated pair's;
+- a proven overlap is a `LinkCollision` at every evaluated pose, with the volume measured once and no
+  `η` allowance on it; every interval is `IntervalColliding`, the onset bisection has nothing to bracket,
+  a cell is `CellBlocked`, and the report reads `Interfering` — a jammed pin is found once, not once per
+  pose;
+- a touching, undecided or sheet outcome leaves the pair to the ordinary per-pose procedure, which §5.4
+  and the kernel's windowed nested cell (clearance §4) then answer pose by pose.
+
+A declared constant pair publishes what §5.4 publishes — its row, or its collision — from the one
+evaluation; §5.4's claim stays the sampled one, and the constant relation is what makes the sample worth
+exactly what a continuous claim would be. The rocker's closure pins (§15) are NOT constant pairs: the
+coupler and the follower meet at the closure, whose relative path through the tree runs over the crank,
+the coupler joint and the follower joint, so those pairs are evaluated at every pose and read through the
+kernel's windowed cell. The symmetric fixtures of §11 — the disc on its own axis beside a wall, the cone
+on its own axis below a wall — are constant pairs: the disc reads the `Exact` `7` with `Bound` zero at both
+poses, and the cone its unplaced reading, `5` with a `Bound` of about `4e-15`, at both.
+
+**Exactness.** Every admission test is §5.2's and §5.7's, exact rationals with no tolerance; the one
+evaluation is `Verify`'s own pair procedure on live bodies, with its own exactness and its own mesh path
+for an overlap's volume. The rule lives in `linkageDriver.markConstantPairs` (`linkage_verify.go`), the one
+evaluation and its replay in `motion_verify.go` (`settleConstant`, `replayConstant`).
+
 ## 6. The procedure
 
 Motion §6's deterministic dyadic bisection is reused as it stands — endpoints first, then bisection for
@@ -945,7 +1002,10 @@ several moving groups (§12 PR 1). The steps that differ:
    their two proven lower bounds: a swept box grows by the link's reach in every direction, so a layer
    the joints keep exactly can prove more — the Scotch yoke's yoke and block, `2` mm apart along `Z`,
    whose swept boxes separate along `Y` by about `1.54`. A declared pair is excluded
-   on the same terms: a pair proven apart over the whole drive is proven free of overlap too.
+   on the same terms: a pair proven apart over the whole drive is proven free of overlap too. A pair
+   neither settles that is a constant pair (§5.9) is evaluated once, on its bodies as they stand, and its
+   outcome serves every pose; a constant pair whose one evaluation is undecided, touching or unmeasured
+   is evaluated at every pose like any other.
 5. **Evaluate, bisect and publish** as motion §6 steps 4–7, with `τ` per pair from §5.2, the projection
    bound per pair from §5.8 read off each pose once and serving both intervals it ends, and the declared
    pairs handled as §5.4 says. Step 6's refinement for the reading's tolerance gate stops at the reading
@@ -993,7 +1053,8 @@ Each pose runs the pair procedure once per evaluated pair; a declared pair costs
 one. A pin in a bore costs the kernel's windowed nested cell (clearance §4), about `0.1` ms per pose on
 the folding arm's elbow. A pair the kernel leaves undecided falls to the read-only mesh intersection at
 every pose, the slow path, which re-tessellates each transient placement; the windowed cell keeps a pin
-pair off it. The per-call `bodyGeomCache` holds every static body's clearance carriers for the whole run,
+pair off it. A constant pair (§5.9) costs one evaluation per call, whatever the pose count. The per-call
+`bodyGeomCache` holds every static body's clearance carriers for the whole run,
 and each transient link placement is built, used for its pairs, and dropped per pose, as `VerifyMotion`
 does. The one-mesh-per-body cache of interference §5.3 is `Verify`'s and does not apply: a pose measures
 transient bodies, and each pair keeps its own tolerance, as that section records for the motion check. A
@@ -1204,17 +1265,24 @@ of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute abou
   rotation's image of `(48, 0, 0)`, `P`'s is the `Then`-composed elbow-then-shoulder pose's image of
   `(48, 0, −1)`, and the two differ by `3e-15` to `7e-15` at `s = 1/4`, `3/4` and `1` on amd64, zero at
   `s = 0`, `1/8`, `1/3` and `1/2`.
-- Assert: `Status` is `Interfering` with every `LinkCollision` on `(A, wall)` or `(P, wall)` and none on
-  `(A, P)`; EVERY evaluated pose carries
-  a `Clearance` row for `(A, P)` with `Gap.Value` within `1e-9` of `0.5` and `Bound` at most `1e-9`; no
-  diagnostic names `(A, P)`. Red when the windowed face cell is deleted, and again when its edge-tier
-  twin is (clearance §4): the kernel's `RingFamily` is undecided where the anchors differ, and the bore's
-  rims against the pin's wall take the coarse enclosure's zero lower bound, so the pair is undecided there
-  and the declared pair's row is missing at `s = 1` and at `4` of the other `9` evaluated poses on amd64
-  (`10` poses, the first `(A, wall)` collision at `70/256`, the first `(P, wall)` one at `1/2`).
+- `(A, P)` is a constant pair (§5.9): its relative path is the elbow alone and the pin is symmetric about
+  it. Assert: `Status` is `Interfering` with every `LinkCollision` on `(A, wall)` or `(P, wall)` and none
+  on `(A, P)`; EVERY evaluated pose carries a `Clearance` row for `(A, P)`, `Exact` `0.5` with `Bound` zero;
+  no diagnostic names `(A, P)` (`10` poses, the first `(A, wall)` collision at `70/256`, the first
+  `(P, wall)` one at `1/2`). Red when the symmetry test is dropped from the rule: the rows read the placed
+  bodies, `Approximate` with bounds near `1e-11`.
+- **Two stacked joints.** The pin hung from a wrist on the elbow's own axis, under an elbow link carrying
+  a block above both bars, elbow and wrist each `0° → −45°`: the pin's relative path holds two moving
+  joints, so the pair is not constant and every pose measures it through the kernel's windowed nested cell.
+  Assert every evaluated pose carries the `(A, P)` row within `1e-9` of `0.5` with `Bound` at most
+  `1e-9`. Red when the windowed face cell is deleted, and again when its edge-tier twin is (clearance §4):
+  the kernel's `RingFamily` is undecided where the anchors differ, and the bore's rims against the pin's
+  wall take the coarse enclosure's zero lower bound, so the row is missing from `s = 1/4` on.
 - **The jammed pin.** `r = 5.6`: a `LinkCollision` on `(A, P)` at every evaluated pose, `Volume.Value ±
   Bound` enclosing `8·π·(5.6² − 5.5²) ≈ 27.897` mm³ (measured `27.896 ± 0.68` through the mesh path);
-  `Status` `Interfering` with the pin unmeasured at no pose. This leg pins the order the kernel reads its
+  `Status` `Interfering` with the pin unmeasured at no pose, and the one volume, measured on the bodies as
+  they stand, at every pose; red when the symmetry test is dropped (the volume at `s = 1` reads a few ulps
+  off the one at `s = 0`). This leg pins the order the kernel reads its
   findings in: the bore body's caps cross the pin's wall inside their trims, and that `sink.Overlap` is
   read before the windowed cell's interval, which here bounds the two cylinder FACES a proven `0.1` apart.
 - **The filled bore.** `r = 5.5`: no `(A, P)` row and no finding naming `(A, P)` at any pose; the report's
@@ -1222,8 +1290,9 @@ of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute abou
   still leave the pair undecided here, since the pair's own lower bound must clear `tol`; the kernel's band
   test is the leg that goes red for it.
 - **The pin on a static post.** Scene 8 without the elbow: `P` static, `A` on a shoulder revolute about `Z`
-  through `(48, 0, 0)`, the bore on the joint. Every pose carries the `(A, P)` row at `0.5` today — a
-  single `RotationAround` fixes its centre bit for bit on this scene — and keeps it.
+  through `(48, 0, 0)`, the bore on the joint. The post is symmetric about the joint, so the pair is
+  constant and every pose carries the `(A, P)` row `Exact` at `0.5` with `Bound` zero; red when the
+  symmetry test is dropped.
 - `_gallery`'s folding arm and crank-rocker put their pins back on their bores' centres, and
   `linkage_clip_test.go` asserts every evaluated pose of each declared pair carries its row.
 
@@ -1294,7 +1363,8 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | 3 | §6 step 2's held links — a link holding `0` stands where it is and forms no pair with a static body, a link held elsewhere is one constant placement; link-link swept-box exclusion; the layer exclusion (§5.7); their tests | a clear drive's whole-drive reading at the default floor where its minimum is reached at one parameter (§10) |
 | 4 | the reading floor (§3): `ReadingResolution`, the reading's refinement past the verdict floor at the defaults, the margin held to the verdict floor; its tests | a stated `WithResolution` too coarse for the reading, and a constant gap the layer exclusion cannot settle whose gate needs a step under `1/16384` |
 | 5 | waypoints (§2.3): `JointSweep.Via`, equal-share segments, `PoseAt` per segment, limits at every waypoint, `m_i`, holds and standings over every waypoint, `|Δq_i|` cut at every waypoint inside an interval (§5.2); scene 5 and its example | as after PR 4 |
-| 6 (`internal/clearance/facepair`, `internal/clearance/curvepair`: clearance §4's windowed nested cell and its edge-tier twin, clearance §8 PR 4) | a placed pin in a bore measured at every pose: scene 8, its jammed, filled and static-post variants, the kernel's band, tilt and rim tests; `_gallery`'s pins back on their centres | a pin that fills its bore |
+| 6 (`internal/clearance/facepair`, `internal/clearance/curvepair`: clearance §4's windowed nested cell and its edge-tier twin, clearance §8 PR 4) | a placed pin in a bore measured at every pose: scene 8, its jammed, filled and static-post variants, the kernel's band, tilt and rim tests; `_gallery`'s pins back on their centres | a pin that fills its bore; a constant pair still evaluated per pose |
+| 7 (`linkage_verify.go` `markConstantPairs`; `motion_verify.go`: `motionPair.constant` with the one cached outcome, `travel` zero for it, a mover whose evaluated pairs are all constant never placed; `linkage_box.go`: no joint term for it) | §5.9's constant pairs; scene 8's `Exact` rows and once-measured collision, its two-stacked-joints variant; the rule's internal test; §11's symmetric fixtures' pairs read once | — |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
 one report, with the closed-form answer of scene 1 as its acceptance. This design document ships in PR 1.
@@ -1320,12 +1390,12 @@ holding a waypoint takes each joint's travel on both sides of it (§2.3, §5.2).
 vocabulary are `VerifyMotion`'s (§3, §4). The joint set is revolute and prismatic, every other lower pair
 a chain of them, and a joint moved by a caller's transform is refused, since no travel bound covers it
 (§1). Nothing continuous is claimed about a declared joint contact, and two bodies of one link form no
-pair (§4, §5.4, §5.6): both are the caller's stated scope. A pin coaxial with its bore in the ideal poses
-but a few ulps off in the float ones is measured by the kernel's windowed nested cell (clearance §4), never
-repaired into coaxiality. A link
-body with no record radius — a stitched
-payload — under a path with a revolute joint leaves `η` unbounded and its pairs undecided, exactly as
-`VerifyMotion`'s stitched mover (§5.3).
+pair (§4, §5.4, §5.6): both are the caller's stated scope. A pair whose relative path is one revolute
+joint and one of whose bodies is symmetric about it has a constant relation, evaluated once on the bodies
+as they stand (§5.9); a pin coaxial with its bore in the ideal poses but a few ulps off in the float ones
+is measured by the kernel's windowed nested cell (clearance §4), never repaired into coaxiality. A link
+body with no record radius — a stitched payload — under a path with a revolute joint leaves `η` unbounded
+and its pairs undecided, exactly as `VerifyMotion`'s stitched mover (§5.3).
 
 ## 14. The joint box
 

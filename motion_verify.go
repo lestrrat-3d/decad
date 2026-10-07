@@ -478,6 +478,26 @@ type motionPair struct {
 	// undecided, touching or tolerance finding, and it enters no interval
 	// certificate and no whole-path reading.
 	declared bool
+	// constant: the pair's relation is the same at every configuration
+	// (docs/linkage-check-design.md §5.9) — its relative path is one revolute
+	// joint and one of its bodies is symmetric about that joint's axis. Its
+	// first evaluation reads the two bodies as they stand; once holds the
+	// outcome, which every pose replays with no placement, and the pair
+	// travels nothing over an interval or a cell. A constant pair whose one
+	// evaluation is undecided, touching or unmeasured is evaluated at every
+	// pose like any other, with constant cleared.
+	constant bool
+	once     *constantOutcome
+}
+
+// constantOutcome is a constant pair's one evaluation on the bodies as they
+// stand, where δ and η are zero: a measured gap, or a proven overlap with its
+// volume measured once and its tolerance finding, nil when it passes.
+type constantOutcome struct {
+	res       pairResult
+	collision bool
+	volume    Measurement
+	beyond    *Diagnostic
 }
 
 func (p motionPair) evaluated() bool { return !p.excluded && !p.invalid && !p.sheet && !p.unformed }
@@ -1100,10 +1120,12 @@ func (mp *motionPose) stamp(diag Diagnostic) Diagnostic {
 }
 
 // evaluateMover runs mover i's row of pairs at the pose: a sheet pair's
-// finding first, then every evaluated pair over the transient placements.
+// finding first, then every evaluated pair in pair order — a constant pair
+// replaying its one evaluation, every other pair over the transient
+// placements, each built when its first pair needs it, so a mover whose
+// evaluated pairs are all constant is never placed.
 func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced) error {
 	mv := r.movers[i]
-	need := false
 	for k, pair := range r.pairs[i] {
 		if pair.sheet && !pair.declared && !pair.unformed {
 			diag := mp.stamp(pairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
@@ -1111,22 +1133,30 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced)
 			mp.result.Diagnostics = append(mp.result.Diagnostics, diag)
 			mp.findings = append(mp.findings, diag)
 		}
-		need = need || pair.evaluated()
 	}
-	if !need {
-		return nil
-	}
-	a, err := r.place(mp, i, placed)
-	if err != nil {
-		return err
-	}
-	for k, pair := range r.pairs[i] {
-		if !pair.evaluated() {
+	var a *motionPlaced
+	for k := range r.pairs[i] {
+		if !r.pairs[i][k].evaluated() {
 			continue
 		}
+		if r.pairs[i][k].constant {
+			if err := r.settleConstant(i, k); err != nil {
+				return err
+			}
+		}
+		if once := r.pairs[i][k].once; once != nil {
+			r.replayConstant(mp, i, k, once)
+			continue
+		}
+		var err error
+		if a == nil {
+			if a, err = r.place(mp, i, placed); err != nil {
+				return err
+			}
+		}
 		var b *motionPlaced
-		if pair.other >= 0 {
-			if b, err = r.place(mp, pair.other, placed); err != nil {
+		if other := r.pairs[i][k].other; other >= 0 {
+			if b, err = r.place(mp, other, placed); err != nil {
 				return err
 			}
 		}
@@ -1135,6 +1165,66 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced)
 		}
 	}
 	return nil
+}
+
+// settleConstant runs constant pair k of mover i's one evaluation
+// (docs/linkage-check-design.md §5.9) on the two bodies as they stand, the
+// first time a pose reaches it: a measured gap or a transferred overlap is
+// kept as the pair's outcome at every pose; any other outcome clears the
+// pair's constant mark and leaves it to the per-pose procedure.
+func (r *motionRun) settleConstant(i, k int) error {
+	pair := &r.pairs[i][k]
+	pair.constant = false
+	mover, partner := r.movers[i].body, r.partner(i, k)
+	boxProven := boxesDisjoint(mover.bounds, partner.bounds)
+	res, fast := clearanceAxisBoxes(mover, partner)
+	if !fast {
+		var err error
+		if res, err = clearancePairCached(r.ctx, mover, partner, boxProven, r.cache); err != nil {
+			return err
+		}
+	}
+	if err := r.ctx.Err(); err != nil {
+		return err
+	}
+	switch {
+	case res.verdict == pairDisjoint:
+		pair.once = &constantOutcome{res: res}
+		return nil
+	case res.verdict == pairTouching || boxProven:
+		return nil
+	}
+	volume, outcome, err := measuredInterference(r.ctx, mover, partner, res, pairMeshes{})
+	if err != nil {
+		return err
+	}
+	if outcome != interferenceMeasured {
+		return nil
+	}
+	published, ok := transferredOverlap(volume, true, 0)
+	if !ok {
+		return nil
+	}
+	beyond, fails, err := r.collisionBeyond(mover, partner, mover, partner, published)
+	if err != nil {
+		return err
+	}
+	pair.once = &constantOutcome{collision: true, volume: published}
+	if fails {
+		pair.once.beyond = &beyond
+	}
+	return nil
+}
+
+// replayConstant publishes constant pair k of mover i's one outcome at the
+// pose: its gap with η zero, or its collision, exactly as evaluatePair
+// publishes them.
+func (r *motionRun) replayConstant(mp *motionPose, i, k int, once *constantOutcome) {
+	if !once.collision {
+		r.recordGap(mp, i, k, once.res, 0, 0)
+		return
+	}
+	r.publishCollision(mp, i, k, once.volume, once.beyond)
 }
 
 // place builds mover i's transient placement at the pose once. η is the
@@ -1247,12 +1337,57 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
 		return nil
 	}
+	beyond, fails, err := r.collisionBeyond(a.body, target, mover, partner, published)
+	if err != nil {
+		return err
+	}
+	if !fails {
+		r.publishCollision(mp, i, k, published, nil)
+		return nil
+	}
+	r.publishCollision(mp, i, k, published, &beyond)
+	return nil
+}
+
+// collisionBeyond is a transferred collision's tolerance finding, read on
+// the measured bodies a and b and naming the caller's mover and partner;
+// fails is false, and the finding empty, when the volume reading passes the
+// relative tolerance.
+func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measurement) (Diagnostic, bool, error) {
+	pairD, err := interferencePairDiameter(r.ctx, a, b)
+	if err != nil {
+		return Diagnostic{}, false, err
+	}
+	pass, ref, haveRef := interferenceToleranceRef(published, a, b, pairD, r.cfg.rel)
+	if pass {
+		return Diagnostic{}, false, nil
+	}
+	obs := published
+	beyond := Diagnostic{
+		Code:     DiagMeasurementBeyondTolerance,
+		Status:   Suspect,
+		Pair:     &DiagnosticPair{A: mover, B: partner},
+		Reading:  ReadingOverlapVolume,
+		Observed: &obs,
+		Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
+	}
+	if haveRef {
+		beyond.Required = requiredThreshold(r.cfg.rel*ref, published.Value)
+	}
+	return beyond, true, nil
+}
+
+// publishCollision records pair k of mover i's transferred collision at the
+// pose: the collision, its Interference row, its DiagMotionCollision and, when
+// given, its tolerance finding.
+func (r *motionRun) publishCollision(mp *motionPose, i, k int, published Measurement, beyond *Diagnostic) {
+	mover, partner := r.movers[i].body, r.partner(i, k)
 	mp.pairs[i][k].collision = true
 	obs := published
 	mp.collisions = append(mp.collisions, Collision{At: mp.result.At, Pose: mp.result.Pose, Moving: mover, Static: partner, Volume: published})
 	mp.result.Interferences = append(mp.result.Interferences, Interference{A: mover, B: partner, Volume: published})
 	msg := fmt.Sprintf("the moving body overlaps a static body at %s", mp.where)
-	if b != nil {
+	if r.pairs[i][k].other >= 0 {
 		msg = fmt.Sprintf("the moving body overlaps another moving body at %s", mp.where)
 	}
 	mp.findings = append(mp.findings, mp.stamp(Diagnostic{
@@ -1263,26 +1398,12 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		Observed: &obs,
 		Message:  msg,
 	}))
-	pairD, err := interferencePairDiameter(r.ctx, a.body, target)
-	if err != nil {
-		return err
+	if beyond != nil {
+		finding := *beyond
+		observed := *finding.Observed
+		finding.Observed = &observed
+		mp.findings = append(mp.findings, mp.stamp(finding))
 	}
-	pass, ref, haveRef := interferenceToleranceRef(published, a.body, target, pairD, r.cfg.rel)
-	if !pass {
-		beyond := Diagnostic{
-			Code:     DiagMeasurementBeyondTolerance,
-			Status:   Suspect,
-			Pair:     &DiagnosticPair{A: mover, B: partner},
-			Reading:  ReadingOverlapVolume,
-			Observed: &obs,
-			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
-		}
-		if haveRef {
-			beyond.Required = requiredThreshold(r.cfg.rel*ref, published.Value)
-		}
-		mp.findings = append(mp.findings, mp.stamp(beyond))
-	}
-	return nil
 }
 
 // transferredOverlap is §5.1's collision transfer. An overlap measured at the
@@ -1426,7 +1547,13 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 			return nil
 		}
 		var bound *big.Rat
-		if tau := r.drive.travel(i, k, a.param, b.param); tau != nil {
+		tau := r.drive.travel(i, k, a.param, b.param)
+		if r.pairs[i][k].once != nil {
+			// A constant pair travels nothing (docs/linkage-check-design.md
+			// §5.9).
+			tau = new(big.Rat)
+		}
+		if tau != nil {
 			bound = new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
 			bound.Sub(bound, tau)
 			bound.Quo(bound, big.NewRat(2, 1))
