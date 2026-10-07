@@ -7,15 +7,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
-	"github.com/lestrrat-3d/decad/internal/lengthbound"
-
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // This file owns the CAP CONTOUR's displacement — the one term every cap-level
@@ -217,35 +212,35 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64,
 
 // The root proof and geometry callers keep their existing private names.
 func dySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (proofarith.Dyadic, bool) {
-	return lengthbound.DySquaredDistance3(a0, a1, a2, b0, b1, b2)
+	return proofarith.DySquaredDistance3(a0, a1, a2, b0, b1, b2)
 }
 
 func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
-	return lengthbound.RatSquaredDistance3(a0, a1, a2, b0, b1, b2)
+	return proofarith.RatSquaredDistance3(a0, a1, a2, b0, b1, b2)
 }
 
 func straightEdgeBound(held float64, squared proofarith.Dyadic, ok bool, endpointDeltas ...float64) float64 {
-	return lengthbound.StraightEdgeBound(held, squared, ok, endpointDeltas...)
+	return capcontour.StraightEdgeBound(held, squared, ok, endpointDeltas...)
 }
 
 func capEdgeLengthBound(held float64, end, start Point2, delta float64) float64 {
-	return lengthbound.CapEdgeLengthBound(held, end, start, delta)
+	return capcontour.CapEdgeLengthBound(held, end, start, delta)
 }
 
 func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) float64 {
-	return lengthbound.CapApexArcBound(
-		lengthbound.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB}, d, held, wraps, delta,
+	return capcontour.CapApexArcBound(
+		capcontour.ApexJoin{VU: j.vU, VV: j.vV, PA: j.pA, PB: j.pB}, d, held, wraps, delta,
 	)
 }
 
 func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
-	return lengthbound.CapCircleLengthBound(exactRadius, held)
+	return capcontour.CapCircleLengthBound(exactRadius, held)
 }
 
 func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
-	return lengthbound.CapWallArcBound(cU, cV, start, end, capRadius, held, wraps, delta)
+	return capcontour.CapWallArcBound(cU, cV, start, end, capRadius, held, wraps, delta)
 }
 
 func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {
-	return lengthbound.CapSweepAllow(cU, cV, radius, start, end, held, wraps, delta)
+	return capcontour.CapSweepAllow(cU, cV, radius, start, end, held, wraps, delta)
 }

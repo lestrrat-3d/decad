@@ -1,4 +1,4 @@
-package lengthbound
+package capcontour
 
 import (
 	"math"
@@ -17,40 +17,10 @@ type ApexJoin struct {
 	PA, PB sectionrecord.Point2
 }
 
-// DySquaredDistance3 is the exact squared distance between two points, every
-// coordinate a float64 and hence an exact dyadic, so the returned value is the
-// true square of the length the float evaluation approximated.
-// boundarywalk.DySqrtIntervalError then reports what that evaluation committed. ok is false
-// where a coordinate is not finite, which states no distance at all.
-func DySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (proofarith.Dyadic, bool) {
-	sum := proofarith.DyZero()
-	for _, pair := range [3][2]float64{{a0, b0}, {a1, b1}, {a2, b2}} {
-		x, okX := proofarith.DyOf(pair[0])
-		y, okY := proofarith.DyOf(pair[1])
-		if !okX || !okY {
-			return proofarith.Dyadic{}, false
-		}
-		diff := proofarith.DySubScalar(x, y)
-		sum = proofarith.DyAdd(sum, proofarith.DyMul(diff, diff))
-	}
-	return sum, true
-}
-
-// RatSquaredDistance3 is DySquaredDistance3 as a big.Rat, for the callers that
-// go on to divide by it or compare it against a general fraction. It answers
-// nil where a coordinate is not finite.
-func RatSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
-	d, ok := DySquaredDistance3(a0, a1, a2, b0, b1, b2)
-	if !ok {
-		return nil
-	}
-	return d.Rat()
-}
-
 // StraightEdgeBound is the proven bound on a straight cap-level edge's held
 // length. It has three independent terms and each speaks for a different thing:
 // the square root's own committed error, measured against the exact squared
-// length (DySquaredDistance3) rather than against a Hypot ulp contract Go does
+// length (proof.DySquaredDistance3) rather than against a Hypot ulp contract Go does
 // not give; and one displacement per endpoint, since moving an endpoint of a
 // segment by e moves its length by at most e. ok false — a squared length the
 // coordinates could not state — is an underivable bound, +Inf.
@@ -74,7 +44,7 @@ func StraightEdgeBound(held float64, squared proofarith.Dyadic, ok bool, endpoin
 // CapEdgeLengthBound is StraightEdgeBound for a straight cap-level edge between
 // two contour points, each displaced by the band's own delta.
 func CapEdgeLengthBound(held float64, end, start sectionrecord.Point2, delta float64) float64 {
-	squared, ok := DySquaredDistance3(end.U, end.V, 0, start.U, start.V, 0)
+	squared, ok := proofarith.DySquaredDistance3(end.U, end.V, 0, start.U, start.V, 0)
 	return StraightEdgeBound(held, squared, ok, delta, delta)
 }
 

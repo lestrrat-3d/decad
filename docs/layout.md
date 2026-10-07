@@ -152,7 +152,7 @@ the rules leave to the byte budget.
 |---|---|
 | `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. See `docs/modify-reach-design.md` §8.3/§4. |
 | `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone band patches. See `docs/modify-reach-design.md` §8.3. |
-| `capblend_contour.go` | Bounds cap contour displacement through `internal/capcontour/` and `internal/lengthbound/`. See modify-reach §8.3-§8.4. |
+| `capblend_contour.go` | Bounds cap contour displacement and length through `internal/capcontour/`. See modify-reach §8.3-§8.4. |
 | `capblend_centroid.go` | Assembles cap-blend first moments and bounds from slab, disk and `internal/capband/` patch terms. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and assembles bounded area/volume readings over `internal/capband/`. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
@@ -248,7 +248,7 @@ the rules leave to the byte budget.
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
-| `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
+| `internal/proof/` | Exact dyadic arithmetic and distance, rational interval operations, shared-denominator intervals, float rounding bounds, and arithmetic tests. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis and oriented box contact proofs. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
@@ -272,8 +272,7 @@ the rules leave to the byte budget.
 | `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
-| `internal/capcontour/` | Cap contour and shell offset interval bounds. See modify-reach §8.3-§8.4. |
-| `internal/lengthbound/` | Exact edge and cap arc bounds. See modify-reach §8.4. |
+| `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |

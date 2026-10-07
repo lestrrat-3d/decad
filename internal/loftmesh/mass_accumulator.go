@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/lengthbound"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -249,7 +248,7 @@ func (m *MassAccumulator) FoldCoordUpper(p r3.Vec) {
 	d := p.Sub(m.anchorF)
 	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 	dist := math.Inf(1)
-	if d2 := lengthbound.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+	if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
 		dist = proofbound.RatSqrtUp(d2)
 	}
 	m.DistUpper = max(m.DistUpper, dist)
@@ -263,7 +262,7 @@ func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistan
 	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 	if !entry.Ready {
 		entry.Upper = math.Inf(1)
-		if d2 := lengthbound.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+		if d2 := proofarith.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
 			entry.Upper = proofbound.RatSqrtUp(d2)
 		}
 		entry.Ready = true
