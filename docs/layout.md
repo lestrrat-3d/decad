@@ -286,9 +286,10 @@ the rules leave to the byte budget.
 | `internal/triangulation/` | Cap hole bridging and ear clipping; indexed triangles, chording refusals. |
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
-| `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
+| `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
+| `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
-| `internal/prismcells/` | Prism scenes, cell matching, charges and trim walks. See prism-boolean §4 and surface-intersection §3. |
+| `internal/prismcells/` | Prism scenes, cells, charges and trim walks. See prism-boolean §4. |
 | `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
@@ -297,7 +298,7 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
-| `internal/motionbound/` | Exact motion parameters, domain resolution and labels, ordering, poses and sweeps. |
+| `internal/motionbound/` | Exact motion parameters, poses and sweeps. |
 | `internal/planarsweep/` | Planar sweep motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
