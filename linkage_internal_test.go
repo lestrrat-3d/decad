@@ -673,7 +673,7 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 	b, err := run.evaluatePose(fb, run.dom.label(fb))
 	require.NoError(t, err)
 	b0 := dr.bounds[0]
-	h, ok := dr.projectionSpans(b0, 0, fa, fb)
+	h, ok := dr.projectionSpans(b0, 0, fa, fb, a)
 	require.True(t, ok)
 	steps := dr.projectionSteps(b0, 0, fa, fb)
 	require.Len(t, steps, 1)

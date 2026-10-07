@@ -341,21 +341,6 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 	if other >= 0 {
 		theirs = dr.pathOf(other, below)
 	}
-	hMine, ok := dr.projectionSpans(mine, below, a.f, b.f)
-	if !ok {
-		return nil
-	}
-	var hTheirs []*big.Rat
-	if other >= 0 {
-		if hTheirs, ok = dr.projectionSpans(theirs, below, a.f, b.f); !ok {
-			return nil
-		}
-	}
-	remMine := projectionRemainder(mine, below, hMine)
-	var remTheirs *big.Rat
-	if other >= 0 {
-		remTheirs = projectionRemainder(theirs, below, hTheirs)
-	}
 	segMine := dr.projectionSteps(mine, below, a.f, b.f)
 	var segTheirs []proofbound.RatInterval
 	if other >= 0 {
@@ -366,6 +351,19 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 	}
 	var best *big.Rat
 	for n, end := range []*motionPose{a, b} {
+		hMine, ok := dr.projectionSpans(mine, below, a.f, b.f, end)
+		if !ok {
+			return nil
+		}
+		remMine := projectionRemainder(mine, below, hMine)
+		var hTheirs []*big.Rat
+		var remTheirs *big.Rat
+		if other >= 0 {
+			if hTheirs, ok = dr.projectionSpans(theirs, below, a.f, b.f, end); !ok {
+				return nil
+			}
+			remTheirs = projectionRemainder(theirs, below, hTheirs)
+		}
 		cm, ok := dr.cornersAt(end, i, mine, below)
 		if !ok {
 			return nil
@@ -399,24 +397,50 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 }
 
 // projectionSpans is h of docs/linkage-check-design.md §5.8's interval form
-// for each joint on b's path from position below on: jointSpan's total
-// variation over [sa, sb], which bounds the joint's change from either end to
-// any parameter of the interval, rounded up to a float. ok is false when a
-// joint is a loop's dependent or a span overflows.
-func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat) ([]*big.Rat, bool) {
+// for each joint on b's path from position below on, read from the pose end:
+// a stated joint's jointSpan, the total variation over [sa, sb], which bounds
+// its change from either end to any parameter of the interval; a loop's
+// dependent, the larger distance from its centre at end, the midpoint of its
+// enclosure there, to an end of the hull of its interval hull and that
+// enclosure, which holds every value it takes over the interval. Each is
+// rounded up to a float. ok is false when a dependent's readings are missing or a span
+// overflows.
+func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat, end *motionPose) ([]*big.Rat, bool) {
 	h := make([]*big.Rat, 0, len(b.path)-below)
 	for _, i := range b.path[below:] {
 		jt := dr.spec.joints[i]
-		if jt.dep != nil {
+		var span *big.Rat
+		if jt.dep == nil {
+			span = jointSpan(jt, sa, sb)
+		} else {
+			hull, ok := jt.dep.dependentHull(i, sa, sb)
+			if !ok {
+				return nil, false
+			}
+			at, ok := jt.dep.dependentAt(dr.run.ctx, i, end.f)
+			if !ok {
+				return nil, false
+			}
+			hull = proofbound.IntervalOwned(minRat(hull.Lo, at.Lo), maxRat(hull.Hi, at.Hi))
+			centre := intervalMidpoint(at)
+			span = new(big.Rat).Sub(hull.Hi, centre)
+			if low := new(big.Rat).Sub(centre, hull.Lo); low.Cmp(span) > 0 {
+				span = low
+			}
+		}
+		rounded := proofarith.FloatRat(proofbound.RatFloatUp(span))
+		if rounded == nil {
 			return nil, false
 		}
-		span := proofarith.FloatRat(proofbound.RatFloatUp(jointSpan(jt, sa, sb)))
-		if span == nil {
-			return nil, false
-		}
-		h = append(h, span)
+		h = append(h, rounded)
 	}
 	return h, true
+}
+
+// intervalMidpoint is an interval's exact midpoint.
+func intervalMidpoint(iv proofbound.RatInterval) *big.Rat {
+	mid := new(big.Rat).Add(iv.Lo, iv.Hi)
+	return mid.Quo(mid, big.NewRat(2, 1))
 }
 
 // projectionSteps is each joint's segment step Δq_i over [sa, sb] on b's path
@@ -426,6 +450,10 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
 	steps := make([]proofbound.RatInterval, 0, len(b.path)-below)
 	for _, i := range b.path[below:] {
+		if dr.spec.joints[i].dep != nil {
+			// A dependent is not affine in s (§5.8): the box form serves.
+			return nil
+		}
 		step, ok := jointStep(dr.spec.joints[i], sa, sb)
 		if !ok {
 			return nil
@@ -462,7 +490,18 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 	}
 	params := make([]motionbound.MotionParam, len(dr.spec.joints))
 	for _, i := range b.path[below:] {
-		params[i] = jointParam(dr.spec.joints[i], pose.f)
+		jt := dr.spec.joints[i]
+		if jt.dep == nil {
+			params[i] = jointParam(jt, pose.f)
+			continue
+		}
+		// A dependent is read at its centre, the midpoint of its enclosure
+		// at the pose (docs/linkage-check-design.md §5.8).
+		at, ok := jt.dep.dependentAt(dr.run.ctx, i, pose.f)
+		if !ok {
+			return cornerBounds{}, false
+		}
+		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: intervalMidpoint(at)}
 	}
 	reading, ok := roundCorners(readCorners(dr.spec, dr.frames, params, b, below, lo, hi))
 	if !ok {
