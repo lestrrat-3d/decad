@@ -290,10 +290,10 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		f.normalBound,
 		// How far the recovered form can sit from the patch's own exact one,
 		// everywhere on the window at once.
-		proofbound.IntervalFloatError(model.a, a),
-		proofbound.IntervalFloatError(model.b, b),
-		proofbound.IntervalFloatError(model.c, c),
-		proofbound.RatFloatUp(model.slop),
+		proofbound.IntervalFloatError(model.A, a),
+		proofbound.IntervalFloatError(model.B, b),
+		proofbound.IntervalFloatError(model.C, c),
+		proofbound.RatFloatUp(model.Slop),
 		// How far each reported end can sit from the extreme it stands for:
 		// the extreme's own enclosure width, and the float conversion's own
 		// outward step.
