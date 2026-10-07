@@ -282,7 +282,7 @@ the rules leave to the byte budget.
 | `internal/linkagebound/` | Linkage projections. See linkage §5.8. |
 | `internal/freeform/` | Exact free-form arithmetic and bounds. See `docs/spline-design.md`. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
-| `internal/clearance/` | Clearance geometry and degeneracy checks. See `docs/clearance-design.md`. |
+| `internal/clearance/` | Clearance geometry, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
