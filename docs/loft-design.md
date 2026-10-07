@@ -1360,7 +1360,7 @@ a weighted sum of each tetrahedron's own centroid by its signed volume,
 divided by the total). Both are **polynomial in the vertex coordinates —
 no square root anywhere** — so both reduce to `moments.go`'s existing
 discipline: every vertex coordinate is a float, taken exactly as a
-`math/big.Rat` (the same "take the floats exactly" rule `internal/polynomial/polynomial.go`
+`math/big.Rat` (the same "take the floats exactly" rule `internal/polynomial/rat_poly.go`
 and `spline_bezier.go` already follow), accumulated into the rational volume
 and three rational centroid coordinates (anchored at `p0`'s own
 `PlaneRecord.Origin`, mirroring `moments.go`'s own

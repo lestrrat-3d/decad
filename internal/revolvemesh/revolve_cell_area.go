@@ -30,7 +30,7 @@ import (
 // the domain — the half the fixed diagonal cuts. Their difference is therefore
 // LINEAR in t on each half, its single zero is an exact rational quotient, and
 // each sign-fixed piece integrates in closed form. No polynomial root
-// isolation, no interval subdivision, and internal/polynomial/polynomial.go's Sturm engine is
+// isolation, no interval subdivision, and internal/polynomial/sturm.go's Sturm engine is
 // not reached: the certified enclosures of cos dφ and sin dφ enter only through
 // the ideal triangle's own area, never inside a root isolation, so the
 // widening tess §9's open question worried about cannot lose a sign here.
