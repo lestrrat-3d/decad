@@ -170,7 +170,7 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 //
 // An ENDPOINT candidate is the walk's own endpoint read through the direction
 // the caller holds, which this evaluator reads as an exact leaf throughout (the
-// convention internal/survey2d/survey2d.go's own file comment states). The endpoint itself is an
+// convention internal/survey2d/wall_kernel.go's own file comment states). The endpoint itself is an
 // exact leaf only where the record STATES it — a line's or an arc's natural
 // bounds — and there the candidate has zero width, so an all-straight section's
 // reading stays exact. Every other endpoint is one this evaluator computed, and

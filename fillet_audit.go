@@ -32,7 +32,7 @@ import (
 // region — disjoint from every outer segment, yet OUTSIDE the rounded material.
 // So S9 (nestingAuditBudget) is COMPUTED, not discharged by construction: it
 // classifies one point of each hole against the outer loop and each other hole,
-// using the same ray-parity walk with direction retries that internal/survey2d/survey2d.go runs
+// using the same ray-parity walk with direction retries that internal/survey2d/wall_kernel.go runs
 // (loopContains). An undecidable containment is S9 ErrUnsupported — the
 // evaluator declines rather than guess; a hole PROVEN outside the outer loop, or
 // nested inside another hole, is nesting decidably broken — the fillet consumed

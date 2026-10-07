@@ -1684,7 +1684,7 @@ capabilities — land early, before revolve and before the surveys.
 
 ### 8.1 Wall thickness is the one capability with no complete candidate set
 
-`internal/survey2d/survey2d.go` answers `Wall` from a CLOSED-FORM candidate set of
+`internal/survey2d/wall_kernel.go` answers `Wall` from a CLOSED-FORM candidate set of
 critical inscribed disks, and the set is COMPLETE for the attained infimum over
 line/arc boundaries. Completeness is what makes the answer exact.
 

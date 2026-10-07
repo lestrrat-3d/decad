@@ -271,7 +271,7 @@ func sectionBBoxBudget(budget *proofbound.WorkBudget, segs []Entry) (minU, minV,
 // the rewritten loops strictly disjoint, each hole lies wholly inside or wholly
 // outside the outer loop and every other hole. It classifies one point of each
 // hole against the outer loop's boundary and against every other hole's, using
-// the ray-parity walk with direction retries internal/survey2d/survey2d.go already runs
+// the ray-parity walk with direction retries internal/survey2d/wall_kernel.go already runs
 // (loopContains, over survey2d.RayCrossings). The audit passes only when the outer loop
 // is PROVEN to contain each hole and the holes are proven mutually exterior.
 //
