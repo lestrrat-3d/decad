@@ -57,7 +57,7 @@ const FreeformLengthDepth = 10
 // whose control-polygon upper bound is zero, and it refuses as ErrDegenerate
 // (Table R row R14) rather than report a length at all. That is the same answer
 // the moments path already gives the identical record (freeformDegenerate in
-// internal/momentvalidate/validate.go). Every curve that is not a point brackets strictly wide:
+// internal/momentinput/validate.go). Every curve that is not a point brackets strictly wide:
 // each subdivision level rounds the lower sum down and the upper sum up, so a
 // positive length can never close its own interval.
 //

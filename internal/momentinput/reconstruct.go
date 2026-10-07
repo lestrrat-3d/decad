@@ -1,4 +1,4 @@
-package momentvalidate
+package momentinput
 
 import (
 	"fmt"

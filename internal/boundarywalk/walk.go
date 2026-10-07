@@ -1,4 +1,4 @@
-package walkconvert
+package boundarywalk
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularmoments"
-	"github.com/lestrrat-3d/decad/internal/curveconvert"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
 )
@@ -33,17 +33,17 @@ var (
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
 	return sectionrecord.NormalizeSegment(segment)
 }
-func isFreeformSegment(segment CurveSegment) bool { return curveconvert.IsFreeformSegment(segment) }
+func isFreeformSegment(segment CurveSegment) bool { return splinebezier.IsFreeformSegment(segment) }
 func freeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {
-	return curveconvert.FreeformBezierSpans(segment, work)
+	return splinebezier.FreeformBezierSpans(segment, work)
 }
 func freeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Point2, error) {
-	return curveconvert.FreeformEndpoints(spans, reversed)
+	return splinebezier.FreeformEndpoints(spans, reversed)
 }
 func freeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
-	return curveconvert.FreeformEndpointBounds(spans, reversed, start, end)
+	return splinebezier.FreeformEndpointBounds(spans, reversed, start, end)
 }
-func isFitSplineSeg(segment CurveSegment) bool { return curveconvert.IsFitSplineSeg(segment) }
+func isFitSplineSeg(segment CurveSegment) bool { return splinebezier.IsFitSplineSeg(segment) }
 func circularEndpointInterval(segment CurveSegment, t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	return circularmoments.EndpointInterval(circularmoments.RecordSegment(segment), t)
 }

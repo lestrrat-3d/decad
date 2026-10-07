@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentvalidate"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -69,35 +69,35 @@ type freeformPlan struct {
 	reversed bool
 }
 
-func momentProfile(record ProfileRecord) momentvalidate.Profile {
-	return momentvalidate.Profile{Outer: record.Outer, Holes: record.Holes}
+func momentProfile(record ProfileRecord) momentinput.Profile {
+	return momentinput.Profile{Outer: record.Outer, Holes: record.Holes}
 }
 
-func profileFromMoment(record momentvalidate.Profile) ProfileRecord {
+func profileFromMoment(record momentinput.Profile) ProfileRecord {
 	return ProfileRecord{Outer: record.Outer, Holes: record.Holes}
 }
 
 func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (ProfileRecord, error) {
-	scaled, err := momentvalidate.ScaleForValidation(momentProfile(record), anchor)
+	scaled, err := momentinput.ScaleForValidation(momentProfile(record), anchor)
 	return profileFromMoment(scaled), err
 }
 
 func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
-	checked, start, plan, err := momentvalidate.ValidateSegment(segment, work)
+	checked, start, plan, err := momentinput.ValidateSegment(segment, work)
 	return checked, start, freeformPlan{spans: plan.Spans, reversed: plan.Reversed}, err
 }
 
 func validateFreeformMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
-	checked, start, plan, err := momentvalidate.ValidateFreeformSegment(segment, work)
+	checked, start, plan, err := momentinput.ValidateFreeformSegment(segment, work)
 	return checked, start, freeformPlan{spans: plan.Spans, reversed: plan.Reversed}, err
 }
 
 func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
-	return momentvalidate.ValidateWholeCircleRegion(momentProfile(record))
+	return momentinput.ValidateWholeCircleRegion(momentProfile(record))
 }
 
 func normalizeReconstructionWeights(record ProfileRecord) ProfileRecord {
-	return profileFromMoment(momentvalidate.NormalizeReconstructionWeights(momentProfile(record)))
+	return profileFromMoment(momentinput.NormalizeReconstructionWeights(momentProfile(record)))
 }
 
 // planAt returns the plan the preflight converted for one segment. A segment
@@ -394,7 +394,7 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work 
 // loop is never free.
 func momentRecordMatchesSketch(record ProfileRecord, work *freeform.FreeformWork, arrangement uint64) (bool, error) {
 	record = normalizeReconstructionWeights(record)
-	s, built := momentvalidate.RecordScene(momentProfile(record))
+	s, built := momentinput.RecordScene(momentProfile(record))
 	if !built {
 		return false, nil
 	}
@@ -407,7 +407,7 @@ func momentRecordMatchesSketch(record ProfileRecord, work *freeform.FreeformWork
 			return false, err
 		}
 		candidate, _, err := RecordProfile(s, profile)
-		if err == nil && momentvalidate.RecordsEqual(momentProfile(record), momentProfile(candidate)) {
+		if err == nil && momentinput.RecordsEqual(momentProfile(record), momentProfile(candidate)) {
 			return true, nil
 		}
 	}

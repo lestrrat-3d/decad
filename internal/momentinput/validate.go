@@ -1,16 +1,16 @@
-package momentvalidate
+package momentinput
 
 import (
 	"fmt"
 	"math"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/curveconvert"
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/walkconvert"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -178,7 +178,7 @@ func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (C
 	if segment == nil {
 		return nil, Point2{}, Plan{}, sectionrecord.ErrNilSegment
 	}
-	if curveconvert.IsFreeformSegment(segment) {
+	if splinebezier.IsFreeformSegment(segment) {
 		return validateFreeformMomentSegment(segment, work)
 	}
 	checked, start, err := validateAnalyticMomentSegment(segment, work)
@@ -275,7 +275,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.Freeform
 // the record-level preflight above: it arranges the whole scene at once, so its
 // cost is a property of the record rather than of any segment in it.
 func validateFreeformMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, Plan, error) {
-	spans, reversed, err := curveconvert.FreeformBezierSpans(segment, work)
+	spans, reversed, err := splinebezier.FreeformBezierSpans(segment, work)
 	if err != nil {
 		return nil, Point2{}, Plan{}, err
 	}
@@ -285,7 +285,7 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeform.Freeform
 	if err := freeform.ChargeFreeformSpans(spans, work); err != nil {
 		return nil, Point2{}, Plan{}, err
 	}
-	start, end, err := curveconvert.FreeformEndpoints(spans, reversed)
+	start, end, err := splinebezier.FreeformEndpoints(spans, reversed)
 	if err != nil {
 		return nil, Point2{}, Plan{}, err
 	}
@@ -371,7 +371,7 @@ func freeformDegenerate(spans []survey2d.BezierSpan) bool {
 }
 
 func validateMomentWalk(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, error) {
-	walk, err := walkconvert.WalkOf(segment, work)
+	walk, err := boundarywalk.WalkOf(segment, work)
 	if err != nil {
 		return nil, Point2{}, err
 	}

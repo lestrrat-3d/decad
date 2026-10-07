@@ -85,8 +85,8 @@ the rules leave to the byte budget.
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_circular.go` | Maps recorded circle and arc segments to `internal/circularmoments/` for exact rational enclosures. |
-| `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/curveconvert/`. See `docs/spline-design.md` §5.1. |
-| `spline_fit.go` | Adapts fit-spline conversion from `internal/curveconvert/`. See `docs/spline-design.md` §5.1.2. |
+| `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/splinebezier/`. See `docs/spline-design.md` §5.1. |
+| `spline_fit.go` | Adapts fit-spline conversion from `internal/splinebezier/`. See `docs/spline-design.md` §5.1.2. |
 | `spline_moments.go` | `addFreeformTo` folds `internal/freeform/`'s exact span moments into a region's integrals. See `docs/spline-design.md` §5.1. |
 
 ### Features
@@ -120,7 +120,7 @@ the rules leave to the byte budget.
 | `prism_payload.go` | `prismPayload` and its coordinate readings: a world point, its proven bound, and the coordinate envelopes later bounds charge against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | Caches profile walks for extrude, revolve and loft. |
-| `segment_walk_adapters.go` | Adapts root walk callers to `internal/walkconvert/`. |
+| `segment_walk_adapters.go` | Adapts root walk callers to `internal/boundarywalk/`. |
 | `prism_extent.go` | A finished prism's extent readings, reach along a direction and the containing box, each a bounded interval charging the frame, section and axial terms. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and `WithSurfaceResult` parsing, angular-extent resolution. Axis, build and extent readings: the other `revolve_*.go` files. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
@@ -253,11 +253,11 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/sketchrecord/` | Sketch edge conversion and join checks. |
-| `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
-| `internal/walkconvert/` | Bounded walks and coalescing over recorded segments. |
+| `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
+| `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentvalidate/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
+| `internal/momentinput/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
