@@ -59,19 +59,19 @@ func TestTransportSweepFramesAcrossOrthogonalBends(t *testing.T) {
 	}
 	for i, want := range expected {
 		got := frames[i]
-		require.Zero(t, got.originBound, "frame %d origin must stay exact", i)
-		require.Zero(t, got.uBound, "frame %d U must stay exact", i)
-		require.Zero(t, got.vBound, "frame %d V must stay exact", i)
-		require.Zero(t, got.nBound, "frame %d N must stay exact", i)
-		require.LessOrEqual(t, got.frame.Origin().Sub(want.origin).Len(), got.originBound, "frame %d origin", i)
-		require.LessOrEqual(t, got.frame.U().Sub(want.u).Len(), got.uBound, "frame %d U", i)
-		require.LessOrEqual(t, got.frame.V().Sub(want.v).Len(), got.vBound, "frame %d V", i)
-		require.LessOrEqual(t, got.frame.N().Sub(want.n).Len(), got.nBound, "frame %d N", i)
+		require.Zero(t, got.OriginBound, "frame %d origin must stay exact", i)
+		require.Zero(t, got.UBound, "frame %d U must stay exact", i)
+		require.Zero(t, got.VBound, "frame %d V must stay exact", i)
+		require.Zero(t, got.NBound, "frame %d N must stay exact", i)
+		require.LessOrEqual(t, got.Frame.Origin().Sub(want.origin).Len(), got.OriginBound, "frame %d origin", i)
+		require.LessOrEqual(t, got.Frame.U().Sub(want.u).Len(), got.UBound, "frame %d U", i)
+		require.LessOrEqual(t, got.Frame.V().Sub(want.v).Len(), got.VBound, "frame %d V", i)
+		require.LessOrEqual(t, got.Frame.N().Sub(want.n).Len(), got.NBound, "frame %d N", i)
 	}
 
-	require.Equal(t, frames[1].frame.U(), frames[2].frame.U())
-	require.Equal(t, frames[1].frame.V(), frames[2].frame.V())
-	require.Equal(t, frames[1].frame.N(), frames[2].frame.N())
+	require.Equal(t, frames[1].Frame.U(), frames[2].Frame.U())
+	require.Equal(t, frames[1].Frame.V(), frames[2].Frame.V())
+	require.Equal(t, frames[1].Frame.N(), frames[2].Frame.N())
 }
 
 func TestTransportSweepFramesRejectsNonTangentJoin(t *testing.T) {

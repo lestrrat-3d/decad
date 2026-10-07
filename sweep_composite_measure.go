@@ -134,7 +134,7 @@ func evalCompositeSweepContext(
 		return nil, err
 	}
 	for i, transported := range frames {
-		if transported.originBound != 0 || transported.uBound != 0 || transported.vBound != 0 || transported.nBound != 0 {
+		if transported.OriginBound != 0 || transported.UBound != 0 || transported.VBound != 0 || transported.NBound != 0 {
 			return nil, fmt.Errorf(`%w: transported frame %d carries displacement that analytic composite spans cannot represent`, ErrUnsupported, i)
 		}
 	}
@@ -159,7 +159,7 @@ func evalCompositeSweepContext(
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		current := frames[i].frame
+		current := frames[i].Frame
 		var err error
 		if record.arc == nil {
 			payload.spans[i], err = compositeLineSweepSpan(profile, current, record)

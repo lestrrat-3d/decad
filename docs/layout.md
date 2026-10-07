@@ -117,7 +117,7 @@ the rules leave to the byte budget.
 | `sweep_mitre.go` | `WithMitredJoins`/`WithSectionScale`, Table SM's entry gates, the mitred payload, placement and restatement. See `docs/sweep-design.md` §16. |
 | `sweep_mitre_build.go` | §16.3's exact mitred construction, rounding, orientation and SM8 audit. See `docs/sweep-design.md` §16.3–§16.4. |
 | `sweep_mitre_body.go` | Table BM's triangles and topology, and §16.6's readings. See `docs/sweep-design.md` §16.5–§16.6. |
-| `sweep_transport.go` | Rotation-minimizing endpoint-frame transport over exact path records, with rational enclosures of each held frame. See `docs/sweep-design.md` §3.2. |
+| `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload` and its coordinate readings: a world point, its proven bound, and the coordinate envelopes later bounds charge against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | Caches profile walks for extrude, revolve and loft. |
@@ -256,10 +256,11 @@ the rules leave to the byte budget.
 | `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/walkconvert/` | Bounded walks and coalescing over recorded segments. |
 | `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |
+| `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentvalidate/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
-| `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
+| `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
 | `internal/capcontour/` | Interval enclosures for cap contour points, offset carrier intersections and miter locus speed. See `docs/modify-reach-design.md` §8.3-§8.4. |
 | `internal/cappatch/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
