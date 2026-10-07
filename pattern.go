@@ -8,7 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -282,241 +282,38 @@ func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload feat
 	if rp.circular {
 		return rp.axis == n || rp.axis == n.Scale(-1), nil
 	}
-	return ratVecDot(ratVecOf(rp.dir), ratVecOf(n)).Sign() == 0, nil
+	return patternrecord.Perpendicular(rp.dir, n), nil
 }
 
-// ratVec is an exact rational 3-vector.
-type ratVec [3]*big.Rat
+// pointMotion is the plane-local mapping used by the root payload builders.
+type pointMotion = patternrecord.PointMotion
 
-func ratVecOf(v r3.Vec) ratVec {
-	return ratVec{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-}
-
-func ratVecDot(a, b ratVec) *big.Rat {
-	return proofbound.RatAdd(proofbound.RatMul(a[0], b[0]), proofbound.RatMul(a[1], b[1]), proofbound.RatMul(a[2], b[2]))
-}
-
-// placedAxes are the receiver's frame axes and origin as placed in world
-// space, exact rationals of the held floats: B·U, B·V and B·O + t, with B the
-// placement's basis and t its translation.
-func placedAxes(frame r3.Frame, xform r3.Transform) (u, v, o ratVec) {
-	basis := xform.Basis()
-	ex, ey, ez := ratVecOf(basis.EX), ratVecOf(basis.EY), ratVecOf(basis.EZ)
-	apply := func(w r3.Vec) ratVec {
-		r := ratVecOf(w)
-		var out ratVec
-		for k := range out {
-			out[k] = proofbound.RatAdd(proofbound.RatMul(ex[k], r[0]), proofbound.RatMul(ey[k], r[1]), proofbound.RatMul(ez[k], r[2]))
-		}
-		return out
-	}
-	u, v = apply(frame.U()), apply(frame.V())
-	o = apply(frame.Origin())
-	t := ratVecOf(xform.Translation())
-	for k := range o {
-		o[k] = new(big.Rat).Add(o[k], t[k])
-	}
-	return u, v, o
-}
-
-// pointMotion moves one plane-local point exactly and rounds it once,
-// returning the held point beside the distance it can sit from the exact
-// image (the two coordinates' errors summed, or the one that rounded).
-type pointMotion func(Point2) (Point2, float64, error)
-
-// heldOf rounds an exact coordinate interval to the float nearest its
-// midpoint, beside the farthest the true coordinate can sit from it.
-func heldOf(iv proofbound.RatInterval) (float64, float64, error) {
-	mid := new(big.Rat).Add(iv.Lo, iv.Hi)
-	mid.Quo(mid, big.NewRat(2, 1))
-	held, _ := mid.Float64()
-	if math.IsInf(held, 0) {
-		return 0, 0, fmt.Errorf(`%w: a pattern instance coordinate overflows a float`, ErrNotFinite)
-	}
-	return held, proofbound.IntervalFloatError(iv, held), nil
-}
-
-func heldPoint(u, v proofbound.RatInterval) (Point2, float64, error) {
-	hu, eu, err := heldOf(u)
-	if err != nil {
-		return Point2{}, 0, err
-	}
-	hv, ev, err := heldOf(v)
-	if err != nil {
-		return Point2{}, 0, err
-	}
-	p := Point2{U: hu, V: hv}
-	switch {
-	case eu == 0:
-		return p, ev, nil
-	case ev == 0:
-		return p, eu, nil
-	default:
-		return p, proofbound.AbsSumUpper(eu, ev), nil
+func (rp resolvedPattern) recordSpec() patternrecord.Spec {
+	return patternrecord.Spec{
+		Count: rp.count, Circular: rp.circular, Dir: rp.dir, StepRat: rp.stepRat,
+		Center: rp.center, Axis: rp.axis,
 	}
 }
 
-// linearMotion is instance i's in-plane offset (§6.2): the world offset
-// t = i·step·Dir/|Dir| read on the placed frame axes, (t·U, t·V). step is the
-// exact rational the caller's Step denotes in millimetres, and 1/|Dir| is a
-// certified enclosure from RatSqrtDown/RatSqrtUp over the exact Dir·Dir, of
-// zero width when Dir·Dir is a float's square. Each moved coordinate is an
-// exact interval rounded once at its midpoint, so the step's conversion, the
-// enclosure's width and the sum's rounding are all inside the one charge.
 func (rp resolvedPattern) linearMotion(frame r3.Frame, xform r3.Transform, i int) (pointMotion, error) {
-	dir := ratVecOf(rp.dir)
-	q := ratVecDot(dir, dir)
-	lo, hi := proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
-	if lo <= 0 || math.IsInf(hi, 0) {
-		return nil, fmt.Errorf(`%w: the pattern direction's length has no certified enclosure`, ErrUnsupported)
-	}
-	scale := new(big.Rat).Mul(big.NewRat(int64(i), 1), rp.stepRat)
-	k := proofbound.IntervalScale(proofbound.Interval(
-		new(big.Rat).Inv(proofarith.FloatRat(hi)), new(big.Rat).Inv(proofarith.FloatRat(lo))), scale)
-	u, v, _ := placedAxes(frame, xform)
-	ou := proofbound.IntervalScale(k, ratVecDot(dir, u))
-	ov := proofbound.IntervalScale(k, ratVecDot(dir, v))
-	return func(p Point2) (Point2, float64, error) {
-		return heldPoint(
-			proofbound.IntervalAdd(proofbound.PointInterval(proofarith.FloatRat(p.U)), ou),
-			proofbound.IntervalAdd(proofbound.PointInterval(proofarith.FloatRat(p.V)), ov))
-	}, nil
+	return rp.recordSpec().LinearMotion(frame, xform, i)
 }
 
-// circularMotion is instance i's in-plane rotation (§6.2) by i/Count of a
-// turn about the centre the pattern's axis passes through, read on the placed
-// frame axes as an exact rational. The sense is the world rotation's, carried
-// into the plane: reversed when Axis is −N, and reversed again when the
-// placement is a reflection, which conjugates a rotation into its inverse.
-//
-// A half turn and a quarter turn are the exact maps (u, v) ↦ (−u, −v) and
-// (−v, u) about the centre: the angle denotes exactly those, and no trig
-// runs. Every other turn reads cos and sin from TurnSinCosInterval, the
-// certified enclosure of sin(2πt) and cos(2πt) for a rational turn t, so each
-// rotated coordinate is an exact interval rounded once at its midpoint.
-func (rp resolvedPattern) circularMotion(frame r3.Frame, xform r3.Transform, i int) pointMotion {
-	u, v, o := placedAxes(frame, xform)
-	c := ratVecOf(rp.center)
-	rel := ratVec{new(big.Rat).Sub(c[0], o[0]), new(big.Rat).Sub(c[1], o[1]), new(big.Rat).Sub(c[2], o[2])}
-	cu, cv := ratVecDot(rel, u), ratVecDot(rel, v)
-	sense := int64(1)
-	if rp.axis != xform.ApplyDir(frame.N()) {
-		sense = -sense
-	}
-	if xform.IsReflection() {
-		sense = -sense
-	}
-	turn := big.NewRat(sense*int64(i), int64(rp.count))
-	// Reduce into [0, 1) to name the exact quarter and half turns.
-	whole := new(big.Int).Div(turn.Num(), turn.Denom())
-	frac := new(big.Rat).Sub(turn, new(big.Rat).SetInt(whole))
-	var cosIv, sinIv proofbound.RatInterval
-	switch {
-	case frac.Cmp(big.NewRat(1, 4)) == 0:
-		cosIv, sinIv = proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1))
-	case frac.Cmp(big.NewRat(1, 2)) == 0:
-		cosIv, sinIv = proofbound.PointInterval(big.NewRat(-1, 1)), proofbound.PointInterval(new(big.Rat))
-	case frac.Cmp(big.NewRat(3, 4)) == 0:
-		cosIv, sinIv = proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(-1, 1))
-	default:
-		sinIv, cosIv = proofbound.TurnSinCosInterval(frac)
-	}
-	return func(p Point2) (Point2, float64, error) {
-		du := proofbound.PointInterval(new(big.Rat).Sub(proofarith.FloatRat(p.U), cu))
-		dv := proofbound.PointInterval(new(big.Rat).Sub(proofarith.FloatRat(p.V), cv))
-		ru := proofbound.IntervalAdd(proofbound.PointInterval(cu),
-			proofbound.IntervalSub(proofbound.IntervalMul(cosIv, du), proofbound.IntervalMul(sinIv, dv)))
-		rv := proofbound.IntervalAdd(proofbound.PointInterval(cv),
-			proofbound.IntervalAdd(proofbound.IntervalMul(sinIv, du), proofbound.IntervalMul(cosIv, dv)))
-		return heldPoint(ru, rv)
-	}
+func (rp resolvedPattern) instanceMotion(frame r3.Frame, xform r3.Transform, i int) (pointMotion, error) {
+	return rp.recordSpec().Motion(frame, xform, i)
 }
 
-// moveRegion moves every segment of a region by mv, keeping each segment's
-// kind, sense and range: a translation or a proper rotation changes neither.
-// It returns the moved region beside the largest segment charge: a line's
-// larger endpoint charge, a circle's centre charge, and an arc's largest
-// point charge tripled, since its centre and radius both move with its three
-// points' rounding (the argument offsetSectionDelta states for a recorded
-// arc).
 func moveRegion(budget *proofbound.WorkBudget, region ProfileRecord, mv pointMotion) (ProfileRecord, float64, error) {
-	delta := 0.0
-	moveLoop := func(loop LoopRecord) (LoopRecord, error) {
-		out := make([]CurveSegment, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return LoopRecord{}, err
-			}
-			pts := func(in ...Point2) ([]Point2, float64, error) {
-				moved := make([]Point2, len(in))
-				worst := 0.0
-				for k, p := range in {
-					m, e, err := mv(p)
-					if err != nil {
-						return nil, 0, err
-					}
-					moved[k], worst = m, math.Max(worst, e)
-				}
-				return moved, worst, nil
-			}
-			switch s := seg.(type) {
-			case LineSeg:
-				p, e, err := pts(s.Start, s.End)
-				if err != nil {
-					return LoopRecord{}, err
-				}
-				s.Start, s.End = p[0], p[1]
-				out[i], delta = s, math.Max(delta, e)
-			case ArcSeg:
-				p, e, err := pts(s.Center, s.Start, s.End)
-				if err != nil {
-					return LoopRecord{}, err
-				}
-				s.Center, s.Start, s.End = p[0], p[1], p[2]
-				out[i], delta = s, math.Max(delta, proofbound.ProductUpper(3, e))
-			case CircleSeg:
-				p, e, err := pts(s.Center)
-				if err != nil {
-					return LoopRecord{}, err
-				}
-				s.Center = p[0]
-				out[i], delta = s, math.Max(delta, e)
-			default:
-				return LoopRecord{}, fmt.Errorf(`%w: a %T segment has no exact pattern motion`, ErrUnsupported, seg)
-			}
-		}
-		return LoopRecord{Segments: out}, nil
-	}
-	outer, err := moveLoop(region.Outer)
+	moved, delta, err := patternrecord.MoveRegion(budget,
+		patternrecord.Region{Outer: region.Outer, Holes: region.Holes}, mv)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	out := ProfileRecord{Outer: outer}
-	for _, hole := range region.Holes {
-		moved, err := moveLoop(hole)
-		if err != nil {
-			return ProfileRecord{}, 0, err
-		}
-		out.Holes = append(out.Holes, moved)
-	}
-	return out, delta, nil
+	return ProfileRecord{Outer: moved.Outer, Holes: moved.Holes}, delta, nil
 }
 
-// instanceMotion is instance i's in-plane motion of the frame-keeping arm.
-func (rp resolvedPattern) instanceMotion(frame r3.Frame, xform r3.Transform, i int) (pointMotion, error) {
-	if rp.circular {
-		return rp.circularMotion(frame, xform, i), nil
-	}
-	return rp.linearMotion(frame, xform, i)
-}
-
-// withPatternDelta adds an instance's motion charge to the receiver's own
-// section displacement; a zero charge keeps it bit for bit.
 func withPatternDelta(sectionDelta, delta float64) float64 {
-	if delta == 0 {
-		return sectionDelta
-	}
-	return proofbound.AbsSumUpper(sectionDelta, delta)
+	return patternrecord.WithDelta(sectionDelta, delta)
 }
 
 // frameKeepingInstance builds instance i of the frame-keeping arm: the

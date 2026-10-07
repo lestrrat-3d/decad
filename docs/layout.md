@@ -99,7 +99,7 @@ the rules leave to the byte budget.
 | `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
-| `pattern.go` | `PatternCopies`, `Patterned`, specs: frame-keeping records with `δ_pattern`, or `PlacedCopy`. See `docs/mirror-pattern-design.md` §6. |
+| `pattern.go` | Pattern entry points and payload adapters. See mirror-pattern §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
@@ -291,6 +291,7 @@ the rules leave to the byte budget.
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
 | `internal/prismcells/` | Prism scenes, cells, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
+| `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
