@@ -436,20 +436,10 @@ type patchOrientedEdge struct {
 	forward bool
 }
 
-// orientPatchChain derives the one combinatorial answer §5.2's ORIENTATION
-// section states: each chain edge is traversed by its one adjacent face
-// (the edge is free, so there is exactly one) in some sense, and the patch
-// traverses it in the opposite sense. That per-edge choice is then walked
-// into a single connected cyclic order — every edge's chosen End must equal
-// exactly one other edge's chosen Start, and following that chain from any
-// edge must visit every edge in the chain and return to the start — which is
-// what "the patch's own boundary is a consistent walk" actually requires
-// beyond the per-edge sense alone. Where it is not (unreachable through this
-// evaluator's own builders, each of which leaves one shell consistently
-// oriented, docs/surface-design.md §2.3, but not excluded by the public
-// seam), that is patchRowFacesDisagree, [ErrDegenerate].
+// orientPatchChain reads each edge's adjacent face and delegates the cycle
+// walk to internal/patchchain. See docs/surface-design.md §5.2.
 func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
-	oriented := make([]patchOrientedEdge, len(chain.edges))
+	oriented := make([]patchchain.OrientedEdge[*Edge, *Vertex], len(chain.edges))
 	for i, e := range chain.edges {
 		if len(e.faces) != 1 {
 			return nil, fmt.Errorf(`%w: a Body.Patch chain edge is not free (%s)`, ErrDegenerate, patchRowFacesDisagree)
@@ -458,43 +448,15 @@ func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
 		if !ok {
 			return nil, fmt.Errorf(`%w: a Body.Patch chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
-		oriented[i] = patchOrientedEdge{old: e, forward: !dir}
+		oriented[i] = patchchain.OrientedEdge[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end, Forward: !dir}
 	}
-
-	nextFrom := map[*Vertex]*patchOrientedEdge{}
-	for i := range oriented {
-		oe := &oriented[i]
-		start := oe.old.end
-		if oe.forward {
-			start = oe.old.start
-		}
-		if _, dup := nextFrom[start]; dup {
-			return nil, fmt.Errorf(`%w: the chain's adjacent faces do not agree on its orientation (%s)`, ErrDegenerate, patchRowFacesDisagree)
-		}
-		nextFrom[start] = oe
+	walk, err := patchchain.Orient(oriented, patchRowFacesDisagree)
+	if err != nil {
+		return nil, err
 	}
-
-	order := make([]patchOrientedEdge, 0, len(oriented))
-	seen := map[*Edge]bool{}
-	cur, curForward := oriented[0].old, oriented[0].forward
-	for range oriented {
-		if seen[cur] {
-			return nil, fmt.Errorf(`%w: the chain's adjacent faces do not agree on its orientation (%s)`, ErrDegenerate, patchRowFacesDisagree)
-		}
-		seen[cur] = true
-		order = append(order, patchOrientedEdge{old: cur, forward: curForward})
-		end := cur.start
-		if curForward {
-			end = cur.end
-		}
-		nxt, ok := nextFrom[end]
-		if !ok {
-			return nil, fmt.Errorf(`%w: the chain's adjacent faces do not agree on its orientation (%s)`, ErrDegenerate, patchRowFacesDisagree)
-		}
-		cur, curForward = nxt.old, nxt.forward
-	}
-	if cur != oriented[0].old || len(seen) != len(oriented) {
-		return nil, fmt.Errorf(`%w: the chain's adjacent faces do not agree on its orientation (%s)`, ErrDegenerate, patchRowFacesDisagree)
+	order := make([]patchOrientedEdge, len(walk))
+	for i, oe := range walk {
+		order[i] = patchOrientedEdge{old: oe.Edge, forward: oe.Forward}
 	}
 	return order, nil
 }
@@ -821,66 +783,10 @@ func patchRemapCrossingError(err error) error {
 	return err
 }
 
-// patchChainOrientedNormal derives a normal DETERMINISTICALLY from the
-// chain's already-oriented, already-placed geometry — never by trying one of
-// the two candidate signs and correcting it from a computed area, which
-// would silently accept either sign and so could never surface a wrong
-// orientPatchChain answer (a dropped sense reversal there would still read a
-// valid, merely mirror-image, loop). For a chain the EXACT arm admitted,
-// buildPatchFace publishes this vector as the face's own normal outright.
-// For a chain the LEVEL arm admitted, buildPatchFace instead uses it only to
-// pick which of the level token's own two normal directions matches this
-// walk's sense (patchChainLevelNormal): the fit below is over held vertex
-// coordinates gate 3's level arm never proved exactly coplanar, so its
-// MAGNITUDE and any tilt away from the true plane are never published.
-//
-// A curved (Circle3 or Arc3) edge's own effective axis — its Axis when
-// walked forward, negated when walked backward, since walking a curve
-// backward is CCW about the opposite axis — already states an outward
-// normal, so the first one found decides it outright: gate 3 already proved
-// every curved edge's carrier plane is the chain's own, so any one of them
-// names the same plane, and orientPatchChain already fixed which sense this
-// edge is walked in.
-//
-// A chain of straight edges alone carries no such axis, so this falls back
-// to Newell's method: for a closed polygon, Σ Pi × Pi+1 over its vertices IN
-// WALK ORDER is twice the signed area vector, and that sum is provably
-// independent of where the origin is taken (shifting every point by a
-// constant c adds Σ Pi×c + Σ c×Pi+1 + Σ c×c, and the first two terms cancel
-// over a closed walk since ΣPi and ΣPi+1 are the same set) — so it needs no
-// anchor point, and reversing the walk direction negates it outright, with
-// no candidate-and-correct step to mask that reversal.
+// patchChainOrientedNormal adapts placed geometry for internal/patchchain's
+// normal derivation. See docs/surface-design.md §5.2.
 func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) (r3.Vec, error) {
-	for _, oe := range ordered {
-		ne := edgeCopy[oe.old]
-		var axis r3.Vec
-		switch c := ne.curve.(type) {
-		case Circle3:
-			axis = c.Axis
-		case Arc3:
-			axis = c.Axis
-		default:
-			continue
-		}
-		if !oe.forward {
-			axis = axis.Scale(-1)
-		}
-		return axis, nil
-	}
-
-	var sum r3.Vec
-	for _, oe := range ordered {
-		ne := edgeCopy[oe.old]
-		a, b := ne.start.position, ne.end.position
-		if !oe.forward {
-			a, b = b, a
-		}
-		sum = sum.Add(a.Cross(b))
-	}
-	if _, ok := sum.Normalize(); !ok {
-		return r3.Vec{}, fmt.Errorf(`%w: a Body.Patch chain's orientation is degenerate`, ErrDegenerate)
-	}
-	return sum, nil
+	return patchchain.OrientedNormal(patchGeometryEdges(ordered, edgeCopy))
 }
 
 // patchChainWalkOrigin is the exact arm's own plane origin: the chain's
@@ -896,132 +802,49 @@ func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge)
 	return first.start.position
 }
 
-// patchChainLevelNormal resolves the sign ambiguity between fitted —
-// patchChainOrientedNormal's own vector, fit to held vertex coordinates
-// gate 3's level arm never proved exactly coplanar — and tokenNormal, the
-// level token's own frame-derived normal (denotation.go), already
-// transformed by this evaluation's own placement. fitted decides ONLY which
-// of ±tokenNormal matches the chain's own walk sense: its dot product with
-// tokenNormal is, up to ordinary floating rounding, the polygon's own
-// signed area times |tokenNormal|² — a magnitude many orders above the
-// fitting error a rotated frame's rounding could ever introduce
-// (docs/surface-design.md §5.2), so that rounding can never flip its sign.
-// The PUBLISHED direction is tokenNormal itself, sign-corrected — never
-// fitted — so the returned vector is exactly the recorded frame's own
-// normal under this evaluation's placement, with no fitting argument
-// needed for it at all.
+// patchChainLevelNormal adapts the recorded level normal's sign decision.
 func patchChainLevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
-	sign := fitted.Dot(tokenNormal)
-	if sign == 0 {
-		return r3.Vec{}, fmt.Errorf(`%w: a Body.Patch chain's orientation is degenerate against its own level`, ErrDegenerate)
-	}
-	if sign < 0 {
-		return tokenNormal.Scale(-1), nil
-	}
-	return tokenNormal, nil
+	return patchchain.LevelNormal(fitted, tokenNormal)
 }
 
-// patchChainFrameAndSegments builds the new face's plane frame — at origin,
-// with normal as given — and the chain's plane-local segment record: one
-// CurveSegment per oriented edge, in walk order, so the record is a valid
-// connected LoopRecord for fillet_audit.go's crossing audit and moments.go's
-// region integral alike. origin and normal come from patchChainWalkOrigin
-// and patchChainOrientedNormal for a chain the exact arm admitted, or from
-// the chain's own levelToken for one the level arm admitted
-// (buildPatchFace's own dispatch).
-//
-// A curved edge's own effective sweep sense — CCW about +Axis when walked
-// forward, CCW about -Axis (so CW about +Axis) when walked backward — may or
-// may not match "CCW as plotted in this frame's own (u, v)", since the
-// frame's normal sign is a free choice this function's caller is still
-// deciding between. Where it matches, the segment's Start/End are the
-// coedge's own Start/End, walked forward (TStart 0, TEnd 1): a CircleSeg
-// records CCW true, and an ArcSeg's own "swept counter-clockwise from Start
-// to End" convention already describes the real arc. Where it does not, the
-// SAME two points are recorded with Start and End swapped and the range
-// reversed (TStart 1, TEnd 0): LoopRecord's own contract is that the walk
-// runs from the point AT TStart to the point AT TEnd, so this keeps the
-// walked start/end — and so the chain's own connectivity — unchanged while
-// describing the OTHER (complementary) arc between the same two points,
-// which is the one the real 3D curve actually is under this frame's chosen
-// sign. Swapping the Start/End FIELDS themselves would instead describe the
-// same arc read backwards, not the complementary one, which is why the
-// fields swap together with the range rather than the range alone.
+// patchChainFrameAndSegments adapts placed edges to plane-local records.
+// internal/patchchain owns the curved edge sense rule.
 func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, origin, normal r3.Vec) (r3.Frame, []CurveSegment, error) {
 	frame, err := planeFrameFromNormal(origin, normal)
 	if err != nil {
 		return r3.Frame{}, nil, err
 	}
-
-	segs := make([]CurveSegment, len(ordered))
-	for i, oe := range ordered {
-		ne := edgeCopy[oe.old]
-		start, end := ne.start, ne.end
-		if !oe.forward {
-			start, end = end, start
-		}
-		p2Start := patchPoint2(frame, start.position)
-		p2End := patchPoint2(frame, end.position)
-		switch c := ne.curve.(type) {
-		case Line3:
-			segs[i] = LineSeg{Start: p2Start, End: p2End, TStart: 0, TEnd: 1}
-		case Circle3:
-			axis := c.Axis
-			if !oe.forward {
-				axis = axis.Scale(-1)
-			}
-			center := patchPoint2(frame, c.Center)
-			if axis.Dot(frame.N()) > 0 {
-				segs[i] = CircleSeg{Center: center, Radius: c.Radius, CCW: true, TStart: 0, TEnd: 1}
-			} else {
-				segs[i] = CircleSeg{Center: center, Radius: c.Radius, CCW: false, TStart: 1, TEnd: 0}
-			}
-		case Arc3:
-			axis := c.Axis
-			if !oe.forward {
-				axis = axis.Scale(-1)
-			}
-			center := patchPoint2(frame, c.Center)
-			if axis.Dot(frame.N()) > 0 {
-				segs[i] = ArcSeg{Center: center, Start: p2Start, End: p2End, TStart: 0, TEnd: 1}
-			} else {
-				segs[i] = ArcSeg{Center: center, Start: p2End, End: p2Start, TStart: 1, TEnd: 0}
-			}
-		default:
-			return r3.Frame{}, nil, fmt.Errorf(`%w: Body.Patch cannot represent curve kind %T`, ErrUnsupported, c)
-		}
+	segs, err := patchchain.SegmentsInFrame(frame, patchGeometryEdges(ordered, edgeCopy))
+	if err != nil {
+		return r3.Frame{}, nil, err
 	}
 	return frame, segs, nil
 }
 
-// patchPoint2 projects a world position into frame's local (u, v), the same
-// reading stitch.go's triangulateStitchFaces takes of a placed vertex.
-func patchPoint2(frame r3.Frame, p r3.Vec) Point2 {
-	local := frame.ToLocal(p)
-	return Point2{U: local.X, V: local.Y}
+// patchGeometryEdges adapts the rebuilt topology to the ordered geometry read.
+func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) []patchchain.GeometryEdge {
+	out := make([]patchchain.GeometryEdge, len(ordered))
+	for i, oe := range ordered {
+		ne := edgeCopy[oe.old]
+		g := patchchain.GeometryEdge{Start: ne.start.position, End: ne.end.position, Forward: oe.forward}
+		switch c := ne.curve.(type) {
+		case Line3:
+			g.Kind = patchchain.Line
+		case Circle3:
+			g.Kind, g.Center, g.Axis, g.Radius = patchchain.Circle, c.Center, c.Axis, c.Radius
+		case Arc3:
+			g.Kind, g.Center, g.Axis = patchchain.Arc, c.Center, c.Axis
+		default:
+			g.Kind, g.CurveName = patchchain.Unsupported, fmt.Sprintf("%T", c)
+		}
+		out[i] = g
+	}
+	return out
 }
 
-// planeFrameFromNormal builds an orthonormal frame at origin whose normal is
-// normal: any vector not parallel to normal is projected into the plane to
-// seed the first in-plane axis, and the second is normal's own cross with
-// it, which r3.NewFrame's own Gram-Schmidt then only has to normalize
-// (CLAUDE.md's rule against hand-rolled coordinate math — every step here is
-// an r3.Vec operation, never a raw float computation).
+// planeFrameFromNormal adapts the patch chain's plane-frame construction.
 func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
-	n, ok := normal.Normalize()
-	if !ok {
-		return r3.Frame{}, fmt.Errorf(`%w: a Body.Patch chain's plane normal is degenerate`, ErrDegenerate)
-	}
-	ref := r3.NewVec(1, 0, 0)
-	if math.Abs(n.Dot(ref)) > 0.9 {
-		ref = r3.NewVec(0, 1, 0)
-	}
-	u, ok := ref.Sub(n.Scale(ref.Dot(n))).Normalize()
-	if !ok {
-		return r3.Frame{}, fmt.Errorf(`%w: a Body.Patch chain's plane normal is degenerate`, ErrDegenerate)
-	}
-	v := n.Cross(u)
-	return r3.NewFrame(origin, u, v)
+	return patchchain.PlaneFrameFromNormal(origin, normal)
 }
 
 // Rule P (docs/surface-design.md §6.4) is the construction-proof gate a

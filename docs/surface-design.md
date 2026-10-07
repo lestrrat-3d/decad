@@ -645,7 +645,7 @@ adjacent face in some sense, and the patch traverses it in the opposite
 sense. That is a combinatorial choice with one answer, and it needs no
 geometry beyond deciding which of the two possible plane frames makes the
 resulting loop read as its own outer (counter-clockwise) boundary
-(`patchChainOrientedNormal`, `patch_body.go`) — never by trying a candidate
+(`patchchain.OrientedNormal`, `internal/patchchain/orientation.go`) — never by trying a candidate
 frame and correcting its sign from a computed area, which would silently
 accept either sign and could never surface a dropped reversal. Where a
 chain's own adjacent faces do not agree among themselves on that sense — an
