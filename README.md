@@ -75,8 +75,8 @@ meshes decad tessellates.
 </tr>
 <tr>
 <td>
-<img src="docs/images/features/freeform.gif" alt="A spline-edged blade section rises into a solid" width="320"><br>
-<strong>Free-form profiles</strong> carry spline walls, measured exactly rather than approximated.
+<img src="docs/images/features/freeform.gif" alt="Two curved spline edges form a leaf-shaped section before it rises into a solid" width="320"><br>
+<strong>Free-form profiles</strong> shape a section with fit splines; Extrude carries those curves into the solid walls.
 </td>
 <td>
 <img src="docs/images/features/fillet.gif" alt="A plate's four upright edges gradually round over" width="320"><br>

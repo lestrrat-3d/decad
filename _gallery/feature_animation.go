@@ -177,7 +177,14 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, violet, chord)
 	case "freeform":
-		body, err := bladeBodyAtHeight(ctx, float64(stage+1)*30/featureAnimationSteps)
+		const profileSteps = 10
+		height := 1.5
+		profileScale := float64(stage+1) / profileSteps
+		if stage >= profileSteps {
+			profileScale = 1
+			height += float64(stage-profileSteps+1) * (30 - height) / (featureAnimationSteps - profileSteps)
+		}
+		body, err := bladeBodyAtShape(ctx, height, profileScale)
 		if err != nil {
 			return nil, err
 		}

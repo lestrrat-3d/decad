@@ -358,9 +358,8 @@ func booleanShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 	return oneModel(ctx, plate, violet, chord)
 }
 
-// freeformShot extrudes a section whose curved wall is a fit spline, closed by
-// a straight chord: a blade the evaluator measures exactly rather than
-// approximating.
+// freeformShot extrudes a section bounded by two fit splines: a blade the
+// evaluator measures exactly rather than approximating.
 func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	blade, err := bladeBody(ctx)
 	if err != nil {
@@ -369,27 +368,29 @@ func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, er
 	return oneModel(ctx, blade, coral, chord)
 }
 
-// bladeBody extrudes 30mm a section bounded by a fit spline through five
-// points and the straight chord between its ends.
+// bladeBody extrudes a 30mm section bounded by two fit splines.
 func bladeBody(ctx context.Context) (*decad.Body, error) {
-	return bladeBodyAtHeight(ctx, 30)
+	return bladeBodyAtShape(ctx, 30, 1)
 }
 
-func bladeBodyAtHeight(ctx context.Context, height float64) (*decad.Body, error) {
+// bladeBodyAtShape scales the section's Y coordinates before extruding it.
+func bladeBodyAtShape(ctx context.Context, height, profileScale float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		return nil, err
 	}
-	fit := make([]*sketch.Point, 0, 5)
-	for _, p := range []point{{-46, 14}, {-26, -6}, {0, -14}, {26, -6}, {46, 14}} {
-		fit = append(fit, s.CreatePoint(p.x, p.y))
-	}
-	s.Fix(fit[0])
-	if _, err := s.CreateFitSpline(fit...); err != nil {
+	start := s.CreatePoint(-48, 0)
+	end := s.CreatePoint(48, 0)
+	s.Fix(start)
+	upper := []*sketch.Point{start, s.CreatePoint(-10, 28*profileScale), end}
+	if _, err := s.CreateFitSpline(upper...); err != nil {
 		return nil, err
 	}
-	s.CreateLine(fit[len(fit)-1], fit[0])
+	lower := []*sketch.Point{end, s.CreatePoint(12, -22*profileScale), start}
+	if _, err := s.CreateFitSpline(lower...); err != nil {
+		return nil, err
+	}
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
