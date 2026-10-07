@@ -30,7 +30,7 @@
 // the ffmpeg command that writes docs/images/hero.gif.
 //
 // The clip subcommand renders the landing-page clip instead: `go run . clip`
-// animates the boolean plate, the shapes of the feature thumbnails and the
+// animates the boolean plate, selected feature parts, a curved duct and the
 // hero wordmark with kinetograph, writes each shot's PNG frames under out/,
 // and prints the two ffmpeg commands that assemble them into
 // out/decad-landing.mp4 and out/decad-landing.gif, so

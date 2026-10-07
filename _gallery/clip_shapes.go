@@ -44,9 +44,9 @@ func one(build func(context.Context) (*decad.Body, error)) func(context.Context)
 	}
 }
 
-// shelf is act B's parts in shelf order: the bodies and colours of the
-// revolve, sweep, loft, free-form, shell and surface thumbnails. The dish is
-// violet outside and gold on its inner side, as surfaceShot draws it.
+// shelf is act B's parts in shelf order: five gallery bodies and a curved
+// duct. The dish is violet outside and gold on its inner side, as surfaceShot
+// draws it.
 func shelf() []shelfSlot {
 	inner := solidlens.Matte(gold)
 	dish := matte(violet)

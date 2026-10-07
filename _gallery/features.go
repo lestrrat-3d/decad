@@ -58,29 +58,45 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot carries a square section through two orthogonal bend planes,
-// drawn as the three spans ductSpans builds.
+// sweepShot renders one mitred Sweep along a path that turns in two planes.
 func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	spans, err := ductSpans(ctx)
+	body, err := mitredDuct(ctx, 120)
 	if err != nil {
 		return nil, err
 	}
-	models := make([]solidlens.Model, 0, len(spans))
-	for _, body := range spans {
-		spanModels, modelErr := oneModel(ctx, body, cyan, chord)
-		if modelErr != nil {
-			return nil, modelErr
-		}
-		models = append(models, spanModels...)
-	}
-	return models, nil
+	return oneModel(ctx, body, cyan, chord)
 }
 
-// ductSpans sweeps a 12mm square section along an arc, a line and a second
-// arc in another plane. The current Sweep payload deliberately stages
-// tessellation, so it returns the two Revolve spans and the intervening
-// Extrude that fill the same space, after the real composite Sweep has passed
-// its topology, measurement, and contact audits.
+// mitredDuct sweeps a square along up to 120mm of a three-span spatial path.
+// Every partial path is one real Sweep body with the same recorded section.
+func mitredDuct(ctx context.Context, length float64) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-34, -24, -26, -16))
+	if err != nil {
+		return nil, err
+	}
+	segments := []decad.PathSegment{
+		decad.LineTo{End: r3.NewVec(-30, -20, min(length, 30))},
+	}
+	if length > 30 {
+		segments = append(segments, decad.LineTo{End: r3.NewVec(-30+min(length-30, 50), -20, 30)})
+	}
+	if length > 80 {
+		segments = append(segments, decad.LineTo{End: r3.NewVec(20, -20+min(length-80, 40), 30)})
+	}
+	path, err := decad.NewPath(r3.NewVec(-30, -20, 0), segments...)
+	if err != nil {
+		return nil, fmt.Errorf("record duct path: %w", err)
+	}
+	body, err := decad.New().Sweep(ctx, s, profile, path, decad.WithMitredJoins())
+	if err != nil {
+		return nil, fmt.Errorf("sweep duct: %w", err)
+	}
+	return body, nil
+}
+
+// ductSpans supplies the landing clip's curved shelf part. The composite
+// arc Sweep's tessellation is staged, so that clip draws equivalent spans.
 func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-46, -6, -34, 6))

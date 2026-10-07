@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	featureAnimationSteps      = 8
-	featureAnimationHoldFrames = 6
+	featureAnimationSteps      = 24
+	featureAnimationHoldFrames = 12
+	featureAnimationFPS        = 12
 )
 
 // runFeatureAnimations renders each feature's intermediate decad bodies and
@@ -99,7 +100,8 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 	output := filepath.Join(root, name+".gif")
 	filter := "[0:v]split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];" +
 		"[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle[v]"
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-loglevel", "error", "-framerate", "4", "-i", input,
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-loglevel", "error", "-framerate",
+		strconv.Itoa(featureAnimationFPS), "-i", input,
 		"-filter_complex", filter, "-map", "[v]", "-frames:v",
 		strconv.Itoa(featureAnimationSteps+featureAnimationHoldFrames), "-loop", "0", output) //nolint:gosec
 	if ffmpegOutput, err := cmd.CombinedOutput(); err != nil {
@@ -126,19 +128,11 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, blue, chord)
 	case "sweep":
-		spans, err := ductSpans(ctx)
+		body, err := mitredDuct(ctx, float64(stage+1)*120/featureAnimationSteps)
 		if err != nil {
 			return nil, err
 		}
-		var models []solidlens.Model
-		for _, body := range spans[:1+stage/3] {
-			part, err := oneModel(ctx, body, cyan, chord)
-			if err != nil {
-				return nil, err
-			}
-			models = append(models, part...)
-		}
-		return models, nil
+		return oneModel(ctx, body, cyan, chord)
 	case "loft":
 		body, err := loftDuctAtHeight(ctx, 8+float64(stage)*38/(featureAnimationSteps-1))
 		if err != nil {
@@ -174,7 +168,7 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 					units.Millimeters(16*size))
 			case "cap-chamfer":
 				body, err = body.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(body))),
-					units.Millimeters(10*size))
+					units.Millimeters(0.6+9.4*float64(stage-1)/(featureAnimationSteps-2)))
 			}
 			if err != nil {
 				return nil, err
@@ -189,23 +183,15 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		return oneModel(ctx, body, blue, chord)
 	case "boolean":
 		shape := flangeShape{height: flangeThickness, depths: map[string]float64{}}
-		if stage >= 1 {
-			shape.depths["bore"] = 8
-		}
-		if stage >= 2 {
-			shape.depths["bore"] = flangeThickness + holeClearance
-		}
-		if stage >= 3 {
-			shape.depths["left"] = 8
-		}
-		if stage >= 4 {
-			shape.depths["left"] = flangeThickness + holeClearance
-		}
-		if stage >= 5 {
-			shape.depths["right"] = 8
-		}
-		if stage >= 6 {
-			shape.depths["right"] = flangeThickness + holeClearance
+		for i, drill := range drills {
+			start := i * featureAnimationSteps / len(drills)
+			local := stage - start
+			switch {
+			case local >= featureAnimationSteps/len(drills)-1:
+				shape.depths[drill.name] = flangeThickness + holeClearance
+			case local > 0:
+				shape.depths[drill.name] = float64(local) * 2.3
+			}
 		}
 		body, err := flangeBody(ctx, shape)
 		if err != nil {
@@ -233,7 +219,11 @@ func verifyAnimationModels(ctx context.Context, stage int, chord units.Value) ([
 		return nil, err
 	}
 	if stage > 0 {
-		bore, err := boreTool(ctx, doc, w, point{0, 0}, 22)
+		depth := float64(min(stage, 7)) * 2.3
+		if stage >= 8 {
+			depth = flangeThickness + holeClearance
+		}
+		bore, err := holeTool(ctx, doc, w, drill{name: "fit", radius: 22}, 16, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -243,14 +233,14 @@ func verifyAnimationModels(ctx context.Context, stage int, chord units.Value) ([
 		}
 	}
 	models, err := oneModel(ctx, plate, gold, chord)
-	if err != nil || stage < 2 {
+	if err != nil || stage < 8 {
 		return models, err
 	}
 	pin, err := verifyPin(ctx, doc, w)
 	if err != nil {
 		return nil, err
 	}
-	travel := 80 * float64(featureAnimationSteps-1-stage) / (featureAnimationSteps - 3)
+	travel := 80 * float64(featureAnimationSteps-1-stage) / (featureAnimationSteps - 9)
 	if travel > 0 {
 		translation, err := r3.Translation(r3.NewVec(0, 0, travel))
 		if err != nil {

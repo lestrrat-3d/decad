@@ -65,8 +65,8 @@ meshes decad tessellates.
 </tr>
 <tr>
 <td>
-<img src="docs/images/features/sweep.gif" alt="A square duct gains three spans along a bent 3D path" width="320"><br>
-<strong>Sweep</strong> moves one solved profile along a tangent 3D path through multiple bend planes.
+<img src="docs/images/features/sweep.gif" alt="One square section follows a three-segment 3D path" width="320"><br>
+<strong>Sweep</strong> moves one solved profile along a 3D path with two mitred bends.
 </td>
 <td>
 <img src="docs/images/features/loft.gif" alt="A transition duct grows between two offset rectangles" width="320"><br>
@@ -122,7 +122,7 @@ regenerate the animated hero with `go run . hero > hero-assemble.sh && sh hero-a
 Its letters assemble, a light crosses them, the finished logo holds for ten
 seconds, and the letters lift away before the loop repeats.
 
-The landing-page clip animates these parts and the wordmark. Render it with
+The landing-page clip animates several gallery parts, a curved duct, and the wordmark. Render it with
 `cd _gallery && go run . clip > assemble.sh && sh assemble.sh`: the program
 writes each shot's PNG frames under `_gallery/out/` and prints the two ffmpeg
 commands, which the script runs to write `out/decad-landing.mp4` and
