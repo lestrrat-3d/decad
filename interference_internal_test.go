@@ -48,12 +48,12 @@ func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
 		}
 		sink := &cellSink{}
 		k.planeCrossesRevolved(plane, cyl, sink)
-		require.False(t, sink.overlap,
+		require.False(t, sink.Overlap,
 			`the full carrier meets the plane trim only outside the partial revolve sweep`)
 		cyl.Sweep = clearance.AngWindow{Full: true}
 		sink = &cellSink{}
 		k.planeCrossesRevolved(plane, cyl, sink)
-		require.True(t, sink.overlap)
+		require.True(t, sink.Overlap)
 	})
 
 	t.Run("sphere meridian outside the plane trim", func(t *testing.T) {
@@ -64,12 +64,12 @@ func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
 		}
 		sink := &cellSink{}
 		k.planeSphere(plane, sphere, sink)
-		require.False(t, sink.overlap,
+		require.False(t, sink.Overlap,
 			`the equator is outside the shipped sphere patch's meridian trim`)
 		sphere.Merid = clearance.AngWindow{Full: true}
 		sink = &cellSink{}
 		k.planeSphere(plane, sphere, sink)
-		require.True(t, sink.overlap)
+		require.True(t, sink.Overlap)
 	})
 }
 

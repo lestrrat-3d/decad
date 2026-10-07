@@ -174,7 +174,7 @@ func newPairKernel(ctx context.Context, ga, gb *bodyGeom) *pairKernel {
 // certificate is an exact material-side claim (payload-verification §7.2's
 // rule for the faceted case, applied here to every analytic arm) that a
 // carrier built from rounded coordinates cannot honestly make. Past that, an
-// admitted transversal crossing (sink.overlap) is read before sink.unsure, so
+// admitted transversal crossing (sink.Overlap) is read before sink.Unsure, so
 // a pair that is both overlapping AND touches an unsupported contact
 // elsewhere still reports the overlap it can prove. The held-candidate
 // interval is then widened ONCE by the two bodies' deltas (clearanceDeltaWiden,
@@ -243,13 +243,13 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if err != nil {
 		return pairResult{}, err
 	}
-	if sink.overlap {
+	if sink.Overlap {
 		return pairResult{verdict: pairOverlapping, diam: diam}, nil
 	}
-	if sink.unsure {
+	if sink.Unsure {
 		return pairResult{diam: diam}, nil
 	}
-	lo, hi, exact, ok := sink.interval()
+	lo, hi, exact, ok := sink.Interval()
 	if !ok {
 		return pairResult{diam: diam}, nil
 	}
@@ -535,13 +535,13 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	if err != nil {
 		return sheetSolidResult{}, err
 	}
-	if sink.overlap {
+	if sink.Overlap {
 		return sheetSolidResult{verdict: sheetSolidCrossing, diam: diam}, nil
 	}
-	if sink.unsure {
+	if sink.Unsure {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
-	lo, hi, exact, ok := sink.interval()
+	lo, hi, exact, ok := sink.Interval()
 	if !ok {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}
