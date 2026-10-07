@@ -521,6 +521,11 @@ type boxCell struct {
 	delta    map[int]*big.Rat
 	gate     string
 	gateLoop *loopDrive
+	// projShares holds, for each evaluated pair whose bound over the cell is
+	// the projection bound (docs/linkage-check-design.md §5.8), every axis's
+	// share of that bound's defect; a pair absent here takes the travel
+	// bound's shares, pairShares.
+	projShares map[[2]int]map[int]*big.Rat
 }
 
 // centre is the fraction of joint k's range at the cell's centre.
@@ -619,8 +624,8 @@ func (b *boxRun) splitForVerdict() error {
 // clear and the whole-box reading fails the tolerance gate, along an axis
 // wider than the reading floor; and while a requested margin is neither proven
 // by that bound nor disproven by some centre, along an axis wider than the
-// verdict floor. The axis is the one with the largest share of the travel of
-// the pair that attained the bound.
+// verdict floor. The axis is the one with the largest share of the defect of
+// the bound the pair that attained it holds (readingAxis).
 func (b *boxRun) nextReadingSplit() (int, int) {
 	r := b.run
 	allClear, smallest := true, -1
@@ -653,10 +658,20 @@ func (b *boxRun) nextReadingSplit() (int, int) {
 }
 
 // readingAxis is the varying joint, among those wide reports wider than its
-// floor, with the largest share of the travel of the pair that attained a
-// clear cell's bound; ties go to the earliest link, −1 when none is wide.
+// floor, with the largest share of the defect of the bound the pair that
+// attained a clear cell's bound holds (boundShares); ties go to the earliest
+// link, −1 when none qualifies.
 func (b *boxRun) readingAxis(c *boxCell, wide func(*boxCell, int) bool) int {
-	share := b.pairShares(c, c.low[0], c.low[1])
+	share, projected := b.boundShares(c, c.low[0], c.low[1])
+	return b.rankAxes(c, share, projected, wide)
+}
+
+// rankAxes is the varying joint, among those wide reports wider than its
+// floor, with the largest share; ties go to the earliest link, −1 when none
+// qualifies. Under a projection bound a joint with no share is one the bound
+// does not depend on, and splitting it lowers nothing, so it never qualifies
+// (docs/linkage-check-design.md §5.8, the split axis).
+func (b *boxRun) rankAxes(c *boxCell, share map[int]*big.Rat, projected bool, wide func(*boxCell, int) bool) int {
 	axis := -1
 	var top *big.Rat
 	for _, k := range b.axes {
@@ -667,11 +682,24 @@ func (b *boxRun) readingAxis(c *boxCell, wide func(*boxCell, int) bool) int {
 		if v == nil {
 			v = new(big.Rat)
 		}
+		if projected && v.Sign() == 0 {
+			continue
+		}
 		if axis < 0 || v.Cmp(top) > 0 {
 			axis, top = k, v
 		}
 	}
 	return axis
+}
+
+// boundShares is each axis's share of the defect of pair k of mover i's
+// bound over cell c: the projection bound's own shares where that bound is
+// the pair's (projected true), else the travel bound's, w_i·span_i.
+func (b *boxRun) boundShares(c *boxCell, i, k int) (map[int]*big.Rat, bool) {
+	if shares, ok := c.projShares[[2]int{i, k}]; ok {
+		return shares, true
+	}
+	return b.pairShares(c, i, k), false
 }
 
 // upperPoses is the evaluated centre holding the smallest proven upper end
@@ -896,16 +924,27 @@ func (b *boxRun) classify(c *boxCell) {
 	}
 	var lowBound *big.Rat
 	var low *[2]int
+	readings := make(map[[2]int]cornerBounds)
 	lowest, ok := r.certifyPairs(func(i, k int) *big.Rat {
 		pp := mp.pairs[i][k]
 		if !pp.hasGap {
 			return nil
 		}
-		lo, tau := proofarith.FloatRat(pp.lo), b.halfTravel(c, i, k)
-		if lo.Cmp(tau) <= 0 {
+		// docs/linkage-check-design.md §14.3: the pair's bound over the cell is
+		// the larger of the travel bound lo_m − τ_half and the projection
+		// bound L_n(C), two proven lower bounds on one gap.
+		lo := proofarith.FloatRat(pp.lo)
+		bound := lo.Sub(lo, b.halfTravel(c, i, k))
+		if proj, shares := b.cellProjection(c, i, k, readings); proj != nil && proj.Cmp(bound) > 0 {
+			bound = proj
+			if c.projShares == nil {
+				c.projShares = make(map[[2]int]map[int]*big.Rat)
+			}
+			c.projShares[[2]int{i, k}] = shares
+		}
+		if bound.Sign() <= 0 {
 			return nil
 		}
-		bound := lo.Sub(lo, tau)
 		if lowBound == nil || bound.Cmp(lowBound) < 0 {
 			lowBound, low = bound, &[2]int{i, k}
 		}
@@ -923,6 +962,142 @@ func (b *boxRun) classify(c *boxCell) {
 	c.outcome, c.clearance = CellClear, lowerBoundMeasurement(lowest)
 	if lowBound != nil && lowBound.Cmp(lowest) == 0 {
 		c.low = low
+	}
+}
+
+// cellProjection is docs/linkage-check-design.md §5.8's cell form for pair k
+// of mover i over cell c (§14.3): each body's inflated box read at the
+// centre's ideal poses under the joints on its relative path — the joints
+// strictly below a link-link pair's lowest common ancestor — and expanded to
+// second order in h_i, half of each joint's span across the cell rounded up
+// to a float; the largest separation along the six coordinate directions.
+// It returns the bound and each axis's share of its defect, or nil when
+// either path holds a loop's dependent joint, whose value is an enclosure
+// the expansion does not consume, or a box cannot be read exactly. readings
+// keeps each mover's corner reading at the centre for the cell's other
+// pairs.
+func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]cornerBounds) (*big.Rat, map[int]*big.Rat) {
+	r, dr := b.run, b.dr
+	mine := dr.bounds[r.movers[i].group]
+	other := r.pairs[i][k].other
+	below := 0
+	var theirs linkBound
+	if other >= 0 {
+		theirs = dr.bounds[r.movers[other].group]
+		below = commonDepth(mine.path, theirs.path)
+	}
+	side := func(m int, bound linkBound) (projectionSide, bool) {
+		h := make([]*big.Rat, 0, len(bound.path)-below)
+		for _, j := range bound.path[below:] {
+			jt := dr.spec.joints[j]
+			if jt.dep != nil {
+				return projectionSide{}, false
+			}
+			span := jointParam(jt, c.lo[j]).SpanUpper(jointParam(jt, c.hi[j]))
+			half := proofarith.FloatRat(proofbound.RatFloatUp(span.Quo(span, big.NewRat(2, 1))))
+			if half == nil {
+				return projectionSide{}, false
+			}
+			h = append(h, half)
+		}
+		key := [2]int{m, below}
+		corners, ok := readings[key]
+		if !ok {
+			lo, hi, okBox := boxCornersExact(r.movers[m].body.bounds, new(big.Rat))
+			if !okBox {
+				return projectionSide{}, false
+			}
+			params := make([]motionbound.MotionParam, len(dr.spec.joints))
+			for _, j := range bound.path[below:] {
+				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
+			}
+			if corners, ok = roundCorners(readCorners(dr.spec, dr.frames, params, bound, below, lo, hi)); !ok {
+				return projectionSide{}, false
+			}
+			readings[key] = corners
+		}
+		return projectionSide{corners: corners, h: h, rem: projectionRemainder(bound, below, h)}, true
+	}
+	a, ok := side(i, mine)
+	if !ok {
+		return nil, nil
+	}
+	var p projectionSide
+	if other < 0 {
+		lo, hi, okBox := boxCornersExact(r.statics[k].body.bounds, new(big.Rat))
+		if !okBox {
+			return nil, nil
+		}
+		if p.corners, ok = roundCorners(staticCorners(lo, hi)); !ok {
+			return nil, nil
+		}
+	} else if p, ok = side(other, theirs); !ok {
+		return nil, nil
+	}
+	bound := projectionLower(a, p)
+	shares := make(map[int]*big.Rat)
+	axis, sense := attainedDirection(a, p, bound)
+	addProjectionShares(shares, a, mine, below, axis, sense)
+	if other >= 0 {
+		addProjectionShares(shares, p, theirs, below, axis, -sense)
+	}
+	return bound, shares
+}
+
+// attainedDirection is the coordinate axis and sense, ±1, of the direction
+// n = sense·e_axis along which projectionLower attained bound: the first, in
+// projectionLower's own order, whose separation equals it.
+func attainedDirection(a, p projectionSide, bound *big.Rat) (int, int) {
+	aUp, aDown := a.extents()
+	pUp, pDown := p.extents()
+	for d := range 3 {
+		if new(big.Rat).Neg(new(big.Rat).Add(pDown[d], aUp[d])).Cmp(bound) == 0 {
+			return d, 1
+		}
+		if new(big.Rat).Neg(new(big.Rat).Add(pUp[d], aDown[d])).Cmp(bound) == 0 {
+			return d, -1
+		}
+	}
+	return 0, 1
+}
+
+// addProjectionShares adds one body's shares of a projection bound's defect
+// along sense·e_axis (docs/linkage-check-design.md §5.8, the split axis): at
+// the corner attaining the body's extent along that direction, each joint i
+// on its relative path takes |n·v_{i,c}|·h_i + Σ_j B_ij·h_i·h_j, the part of
+// the first-order term and the remainder that halving h_i removes. A body
+// with no joint, a static partner, takes nothing.
+func addProjectionShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below, axis, sense int) {
+	if len(s.h) == 0 {
+		return
+	}
+	attained, top := -1, (*big.Rat)(nil)
+	for c := range s.corners.hi {
+		up, down := s.firstOrder(c, axis)
+		v := up.Add(up, s.corners.hi[c][axis])
+		if sense < 0 {
+			v = down.Sub(down, s.corners.lo[c][axis])
+		}
+		if top == nil || v.Cmp(top) > 0 {
+			attained, top = c, v
+		}
+	}
+	for n := range s.h {
+		share := ivAbsUpper(s.corners.vel[attained][n][axis])
+		share.Mul(share, s.h[n])
+		for m := range s.h {
+			lo, hi := min(n, m), max(n, m)
+			if w := secondDerivativeBound(bound, below+lo, below+hi); w != nil {
+				term := new(big.Rat).Mul(w, s.h[n])
+				share.Add(share, term.Mul(term, s.h[m]))
+			}
+		}
+		joint := bound.path[below+n]
+		if cur, ok := shares[joint]; ok {
+			cur.Add(cur, share)
+			continue
+		}
+		shares[joint] = share
 	}
 }
 
@@ -1048,9 +1223,10 @@ func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 // §14.4 step 5), or −1 when the cell is not splittable: a cell splits only
 // when it is undecided by pairs a split can help, or colliding, and some
 // varying joint's span is wider than the resolution. The axis is the varying
-// joint, among those wider than the resolution, with the largest share
-// w_i·span_i of the travel of any pair that held the cell back; ties go to
-// the earliest link.
+// joint, among those wider than the resolution, with the largest share of
+// the defect of the bound of any pair that held the cell back — w_i·span_i
+// of its travel bound, or its projection bound's own share where that bound
+// is the larger (boundShares) — ties to the earliest link.
 //
 // A gated cell (docs/linkage-check-design.md §16.4) has no pair travel to
 // rank: it splits along the refusing loop's driver, the one axis a split
@@ -1071,28 +1247,17 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 		return ld.driver
 	}
 	best := make(map[int]*big.Rat, len(b.axes))
+	projected := false
 	for _, pair := range c.held {
-		for joint, v := range b.pairShares(c, pair[0], pair[1]) {
+		shares, proj := b.boundShares(c, pair[0], pair[1])
+		projected = projected || proj
+		for joint, v := range shares {
 			if cur, ok := best[joint]; !ok || v.Cmp(cur) > 0 {
 				best[joint] = v
 			}
 		}
 	}
-	axis := -1
-	var top *big.Rat
-	for _, k := range b.axes {
-		if !b.wide(c, k) {
-			continue
-		}
-		v := best[k]
-		if v == nil {
-			v = new(big.Rat)
-		}
-		if axis < 0 || v.Cmp(top) > 0 {
-			axis, top = k, v
-		}
-	}
-	return axis
+	return b.rankAxes(c, best, projected, b.wide)
 }
 
 // wide reports whether cell c's span along joint k, as a fraction of the
