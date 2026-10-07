@@ -74,9 +74,6 @@ func ivAxisSpread(iv proofbound.RatInterval, c float64) (*big.Rat, bool) {
 }
 
 func ivUnion(a, b ivPoint) ivPoint { return capcontour.Union(a, b) }
-func intervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
-	return capcontour.IntervalHull(a, b)
-}
 func ivOffsetFoot(vU, vV, tu, tv, d float64) (ivPoint, bool) {
 	return capcontour.OffsetFoot(vU, vV, tu, tv, d)
 }
