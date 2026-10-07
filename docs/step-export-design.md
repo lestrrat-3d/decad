@@ -28,16 +28,30 @@ according to the writer path.
 - Admit one valid `BodySolid` with one non-void shell. Refuse sheets, multiple
   shells, and disconnected facet sets. Multiple shells need separate solids or
   void relationships, which this adapter cannot safely infer.
-- Use analytic AP214 faces when every body face is a `Plane` or a `Cylinder`,
-  every edge is a `Line3` or full `Circle3`, and each cylindrical wall has
+- Use analytic AP214 faces when every body face is a `Plane` or a `Cylinder`
+  and every edge is a `Line3`, an `Arc3` or a full `Circle3`. A plane's loops
+  are one full circle each, or chains of lines and arcs (at least three
+  edges, or two when one is an arc). A cylindrical wall is either full —
   exactly two one-circle boundary loops whose start vertices align along its
-  axis. Emit one `ADVANCED_FACE` per body face. Share `VERTEX_POINT`s and
-  `EDGE_CURVE`s by body topology identity.
-  A cylindrical wall receives one synthetic straight seam edge, used twice
-  in opposite directions in its STEP loop. This seam changes STEP topology,
-  not the body's geometry. Plane faces use their source outer and inner loops.
-  A face's plane sense follows its outward normal; reverse its loop walks when
-  the source walk opposes that normal.
+  axis — or partial: one loop of four edges alternating an `Arc3` about the
+  cylinder's axis (its `Axis` that axis or its negation, exactly) and a
+  `Line3` along it (an exactly zero cross product). Emit one `ADVANCED_FACE`
+  per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
+  identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
+  reference direction to its start vertex, trimmed by its two vertices; it
+  sweeps counter-clockwise about that axis from start to end, so its
+  `EDGE_CURVE` keeps the circle's sense.
+  A full cylindrical wall receives one synthetic straight seam edge, used
+  twice in opposite directions in its STEP loop. This seam changes STEP
+  topology, not the body's geometry. Plane faces use their source outer and
+  inner loops. A face's plane sense follows its outward normal; reverse its
+  loop walks when the source walk opposes that normal. A plane whose outer
+  loop is a chain of lines and arcs takes its own plane normal as the
+  placement axis, turned so the loop's signed area about it (each arc adding
+  its circular segment) is positive; the sense is never read off the turn at
+  the loop's first vertex, which a reflex corner reverses. A partial wall's sense follows its outward normal
+  against the radial direction, and its loop is reversed when its signed area
+  in the cylinder's (θ, z) parameter plane disagrees with that sense.
 - Otherwise preserve mesh vertex indices as distinct `VERTEX_POINT`s and
   share one `EDGE_CURVE` per undirected mesh edge. Emit one oriented edge per
   facet side, one `EDGE_LOOP`, `FACE_OUTER_BOUND`, and planar `ADVANCED_FACE`

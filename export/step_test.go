@@ -180,6 +180,237 @@ func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
 	}
 }
 
+// TestNewSTEPFileArcPrismsAnalytic writes two arc-bearing prisms through the
+// analytic arm: a half disc of radius 10 swept 5 mm (a convex partial
+// cylinder wall, a planar wall, two caps whose loops are an arc and a line)
+// and a 20×10 plate swept 4 mm with a radius-3 semicircular notch in its top
+// edge (a concave partial wall). Each file carries one CYLINDRICAL_SURFACE,
+// one CIRCLE per arc edge, and uses every EDGE_CURVE exactly twice with
+// opposite senses, which a closed shell whose faces' loops are each oriented
+// about their own face normal requires. Shown to fail with
+// supportsAnalyticPartialWall refusing every wall (both files took the
+// faceted writer) and with partialWallSense's reversal decision inverted
+// (each wall then used its rim and side edges in its neighbours' sense).
+func TestNewSTEPFileArcPrismsAnalytic(t *testing.T) {
+	t.Parallel()
+	build := func(t *testing.T, h float64, draw func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point)) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		draw(s, func(u, v float64) *sketch.Point {
+			p := s.CreatePoint(u, v)
+			s.Fix(p)
+			return p
+		})
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		profiles := s.Profiles()
+		require.Len(t, profiles, 1)
+		body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		require.NoError(t, err)
+		return body
+	}
+	for _, tc := range []struct {
+		name          string
+		h             float64
+		draw          func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point)
+		faces, planes int
+	}{
+		{"half disc", 5, func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point) {
+			c, a, b := fixed(0, 0), fixed(10, 0), fixed(-10, 0)
+			s.CreateArc(c, a, b)
+			s.CreateLine(b, a)
+		}, 4, 3},
+		{"notched plate", 4, func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point) {
+			p0, p1, p2, p3 := fixed(0, 0), fixed(20, 0), fixed(20, 10), fixed(13, 10)
+			q0, q1, nc := fixed(7, 10), fixed(0, 10), fixed(10, 10)
+			s.CreateLine(p0, p1)
+			s.CreateLine(p1, p2)
+			s.CreateLine(p2, p3)
+			s.CreateArc(nc, q0, p3)
+			s.CreateLine(q0, q1)
+			s.CreateLine(q1, p0)
+		}, 8, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := build(t, tc.h, tc.draw)
+			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+			require.NoError(t, err)
+			counts, uses := entityUses(f)
+			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
+			require.Equal(t, tc.planes, counts["PLANE"])
+			require.Equal(t, 1, counts["CYLINDRICAL_SURFACE"])
+			require.Equal(t, 2, counts["CIRCLE"], "one circle per arc edge, top and bottom")
+			for _, senses := range uses {
+				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+			}
+			data, err := f.Marshal()
+			require.NoError(t, err)
+			require.Contains(t, string(data), "analytic decad solid")
+		})
+	}
+}
+
+// entityUses counts a file's entities by name and lists, per EDGE_CURVE, the
+// sense of every ORIENTED_EDGE that uses it.
+func entityUses(f step.File) (map[string]int, map[step.Reference][]step.Enumeration) {
+	counts := map[string]int{}
+	uses := map[step.Reference][]step.Enumeration{}
+	for _, entity := range f.Entities {
+		counts[entity.Name]++
+		if entity.Name == "ORIENTED_EDGE" {
+			edge := entity.Parameters[3].(step.Reference)
+			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
+		}
+	}
+	return counts, uses
+}
+
+// lPrism extrudes the L of 20×5 and 5×15 (its one reflex corner at (5, 5))
+// drawn as six fixed lines, the corners listed from start onward.
+func lPrism(t *testing.T, start int) *decad.Body {
+	t.Helper()
+	corners := [][2]float64{{0, 0}, {20, 0}, {20, 5}, {5, 5}, {5, 20}, {0, 20}}
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := make([]*sketch.Point, len(corners))
+	for i := range corners {
+		c := corners[(start+i)%len(corners)]
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// firstCornerReflex reports whether the face's outer loop turns against the
+// face's outward normal at its first vertex: a reflex corner there.
+func firstCornerReflex(t *testing.T, face *decad.Face) bool {
+	t.Helper()
+	coedges := face.Loops()[0].CoEdges()
+	last := coedges[len(coedges)-1]
+	in := last.End().Position().Value.Sub(last.Start().Position().Value)
+	out := coedges[0].End().Position().Value.Sub(coedges[0].Start().Position().Value)
+	normal, err := face.NormalAt(coedges[0].Start().Position().Value)
+	require.NoError(t, err)
+	return in.Cross(out).Dot(normal.Value) < 0
+}
+
+// TestNewSTEPFileLPrismWithReflexFirstCorner writes the L prism drawn from
+// each of its six corners. Wherever a cap's outer loop starts at the reflex
+// corner, the plane placement cannot read the loop's sense off its first turn;
+// the signed-area placement reads it off the whole loop. Every file must use
+// each EDGE_CURVE once in each sense, and at least one start must put a cap's
+// first vertex on the reflex corner, or the fixture tests nothing. Shown to
+// fail with planarSTEPPlacement reading a line loop's axis off its first turn
+// (a reflex-first cap reversed its sense, so its edges' uses matched their
+// walls').
+func TestNewSTEPFileLPrismWithReflexFirstCorner(t *testing.T) {
+	t.Parallel()
+	reflexFirst := 0
+	for start := range 6 {
+		body := lPrism(t, start)
+		for _, face := range body.Faces() {
+			if _, ok := face.Surface().(decad.Plane); ok && len(face.Loops()[0].CoEdges()) == 6 && firstCornerReflex(t, face) {
+				reflexFirst++
+			}
+		}
+		f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+		require.NoError(t, err)
+		counts, uses := entityUses(f)
+		require.Equal(t, 8, counts["ADVANCED_FACE"])
+		for _, senses := range uses {
+			require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses, "start %d", start)
+		}
+	}
+	require.Positive(t, reflexFirst, "some start must put a cap's first vertex on the reflex corner")
+}
+
+// classBCut is general-boolean §9's class B fixture through the public API:
+// a 40×20×20 box cut by a tool drawn on an XZ plane moved to y = 10 and
+// extruded 11 mm to each side, so it runs through the box along y.
+func classBCut(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
+	t.Helper()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	base, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := base.CreateRectangle(0, 0, 40, 20)
+	base.Fix(rect.A)
+	_, err = base.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	plane, err := w.CreateOffsetPlane(w.XZ(), -10)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	draw(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	require.NoError(t, err)
+	result, err := decad.Cut(t.Context(), box, tool)
+	require.NoError(t, err)
+	return result
+}
+
+// TestNewSTEPFileClassBCutAnalytic writes two class B Cut results — brep
+// bodies a public boolean builds — through the analytic arm: S1, the box
+// drilled Ø6 along y through (20, ·, 10) (6 planes and one full cylinder
+// wall), and B1, the box cut by a 10×10 slot along y (10 planes). Each file
+// is the analytic one with the face count the result has, and uses every
+// EDGE_CURVE exactly once in each sense, which a closed shell whose faces'
+// loops each run about their own face normal requires. Shown to fail with
+// addPlanarFace's face sense inverted (S1's planes then disagreed with its
+// cylinder wall at both rims) and with supportsAnalyticSTEP refusing every
+// body (both files took the faceted writer).
+func TestNewSTEPFileClassBCutAnalytic(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                     string
+		draw                     func(s *sketch.Sketch)
+		faces, planes, cylinders int
+	}{
+		{"S1 cross drill", func(s *sketch.Sketch) {
+			c := s.CreatePoint(20, 10)
+			s.Fix(c)
+			s.CreateCircle(c, 3)
+		}, 7, 6, 1},
+		{"B1 cross slot", func(s *sketch.Sketch) {
+			r := s.CreateRectangle(15, 5, 25, 15)
+			s.Fix(r.A)
+		}, 10, 10, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := classBCut(t, tc.draw)
+			require.Len(t, body.Faces(), tc.faces)
+			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+			require.NoError(t, err)
+			counts, uses := entityUses(f)
+			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
+			require.Equal(t, tc.planes, counts["PLANE"])
+			require.Equal(t, tc.cylinders, counts["CYLINDRICAL_SURFACE"])
+			for _, senses := range uses {
+				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+			}
+			data, err := f.Marshal()
+			require.NoError(t, err)
+			require.Contains(t, string(data), "analytic decad solid")
+		})
+	}
+}
+
 func TestNewSTEPFileConeUsesFacetedFallback(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()

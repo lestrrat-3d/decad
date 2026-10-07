@@ -225,7 +225,7 @@ the rules leave to the byte budget.
 | `stacked_union.go` | Unequal-interval `Union` as stacked slabs. See general-boolean A1. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
-| `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and measurements. See general-boolean §4. |
+| `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and readings. See general-boolean §4. |
 | `classb_cut.go` | Perpendicular prism `Cut` into a brep body. See general-boolean §3 B. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |

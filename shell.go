@@ -161,6 +161,11 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
 		return nil, err
 	}
+	// SX16 (modify-reach Table RX's RX7): a brep receiver is staged the same
+	// way, ahead of the generic refusal.
+	if err := requireNotBrepReceiver(b.payload, "shells"); err != nil {
+		return nil, err
+	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every removed face
 	// is a cap (S2).

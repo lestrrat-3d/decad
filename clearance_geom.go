@@ -99,6 +99,8 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 			return nil, false, nil
 		}
 		ok, err = g.addRevolveFaces(budget, pl)
+	case brepPayload:
+		ok, err = g.addBrepFaces(budget, pl)
 	case stitchPayload:
 		// Refuse outright unless the recorded triangle set exists (an
 		// all-planar body, open or closed — tessellate_stitch.go's own gate).
@@ -280,9 +282,6 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 		// one. The error return is reserved for cancellation.
 		return false, nil
 	}
-	nDir := pp.dir(0, 0, 1)
-	h := pp.z1 - pp.z0
-
 	var capElems []survey2d.SurveyElem
 	maxCoordUpper := 0.0
 	for _, loop := range loops {
@@ -299,60 +298,10 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 				capElems = append(capElems, el)
 			}
 
-			if w.IsCircular() {
-				f := &clearance.CFace{
-					Kind:   clearance.CkCylinder,
-					Anchor: pp.point(w.CU, w.CV, pp.z0),
-					Axis:   nDir,
-					RefU:   pp.dir(1, 0, 0),
-					RefV:   pp.dir(0, 1, 0),
-					Radius: w.Radius,
-					ZWin:   clearance.NewLinWindow(0, h),
-					Sweep:  clearance.AngWindow{Full: w.Closed},
-				}
-				if !w.Closed {
-					f.Sweep = clearance.NewAngWindow(w.Th0, w.Th1)
-				}
-				top := pp.point(w.CU, w.CV, pp.z1)
-				f.Box = clearance.BoxUnion(clearance.CircleBox(f.Anchor, nDir, w.Radius), clearance.CircleBox(top, nDir, w.Radius))
-				midTh := (w.Th0 + w.Th1) / 2
-				f.Wit = append(f.Wit,
-					pp.point(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (pp.z0+pp.z1)/2),
-					pp.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), pp.z0))
-				g.faces = append(g.faces, f)
-				continue
-			}
-
-			l := math.Hypot(w.EndU-w.StartU, w.EndV-w.StartV)
-			if l == 0 {
-				return false, nil
-			}
-			e1, ok := pp.dir(w.EndU-w.StartU, w.EndV-w.StartV, 0).Normalize()
+			f, ok := prismWallCFace(pp, w.SegmentWalk)
 			if !ok {
 				return false, nil
 			}
-			tu, tv := w.TanInU, w.TanInV
-			if pp.reflected() {
-				tu, tv = -tu, -tv
-			}
-			nOut, ok := pp.dir(tu, tv, 0).Cross(nDir).Normalize()
-			if !ok {
-				return false, nil
-			}
-			f := &clearance.CFace{
-				Kind: clearance.CkPlane,
-				O:    pp.point(w.StartU, w.StartV, pp.z0),
-				U:    e1,
-				V:    nDir,
-				N:    nOut,
-			}
-			le0, _ := survey2d.LineElem(0, 0, l, 0)
-			le1, _ := survey2d.LineElem(l, 0, l, h)
-			le2, _ := survey2d.LineElem(l, h, 0, h)
-			le3, _ := survey2d.LineElem(0, h, 0, 0)
-			f.Region = clearance.NewRegion2([]survey2d.SurveyElem{le0, le1, le2, le3})
-			f.Box = clearance.BoxOf(f.O, f.O.Add(e1.Scale(l)), f.O.Add(nDir.Scale(h)), f.O.Add(e1.Scale(l)).Add(nDir.Scale(h)))
-			f.Wit = append(f.Wit, f.O.Add(e1.Scale(l/2)).Add(nDir.Scale(h/2)), f.O)
 			g.faces = append(g.faces, f)
 		}
 	}
@@ -363,17 +312,7 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 			z    float64
 			sign float64
 		}{{z: pp.z0, sign: -1}, {z: pp.z1, sign: 1}} {
-			f := &clearance.CFace{
-				Kind:   clearance.CkPlane,
-				O:      pp.point(0, 0, cap.z),
-				U:      pp.dir(1, 0, 0),
-				V:      pp.dir(0, 1, 0),
-				N:      nDir.Scale(cap.sign),
-				Region: region,
-			}
-			f.Box = clearance.CapBox(f)
-			f.Wit = clearance.CapWitnesses(f)
-			g.faces = append(g.faces, f)
+			g.faces = append(g.faces, prismPlaneCFace(pp, cap.z, cap.sign, region))
 		}
 	}
 	// g.delta charges the three terms clearance_geom.go's package doc comment
@@ -389,6 +328,168 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
 	g.carrierDelta = g.delta
 	return true, nil
+}
+
+// prismWallCFace is one prism side's carrier face, over the prism's own
+// frame, placement and sweep interval: a cylinder for a circular walk (its
+// angular window the walk's own, a whole circle's full), a plane rectangle
+// L × h for a line walk with its outward normal the walk's right, turned
+// back for a reflected placement. ok is false for a walk this kernel cannot
+// carry (a zero-length line or a direction that does not normalise).
+func prismWallCFace(pp prismPayload, w survey2d.SegmentWalk) (*clearance.CFace, bool) {
+	nDir := pp.dir(0, 0, 1)
+	h := pp.z1 - pp.z0
+	if w.IsCircular() {
+		f := &clearance.CFace{
+			Kind:   clearance.CkCylinder,
+			Anchor: pp.point(w.CU, w.CV, pp.z0),
+			Axis:   nDir,
+			RefU:   pp.dir(1, 0, 0),
+			RefV:   pp.dir(0, 1, 0),
+			Radius: w.Radius,
+			ZWin:   clearance.NewLinWindow(0, h),
+			Sweep:  clearance.AngWindow{Full: w.Closed},
+		}
+		if !w.Closed {
+			f.Sweep = clearance.NewAngWindow(w.Th0, w.Th1)
+		}
+		top := pp.point(w.CU, w.CV, pp.z1)
+		f.Box = clearance.BoxUnion(clearance.CircleBox(f.Anchor, nDir, w.Radius), clearance.CircleBox(top, nDir, w.Radius))
+		midTh := (w.Th0 + w.Th1) / 2
+		f.Wit = append(f.Wit,
+			pp.point(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (pp.z0+pp.z1)/2),
+			pp.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), pp.z0))
+		return f, true
+	}
+
+	l := math.Hypot(w.EndU-w.StartU, w.EndV-w.StartV)
+	if l == 0 {
+		return nil, false
+	}
+	e1, ok := pp.dir(w.EndU-w.StartU, w.EndV-w.StartV, 0).Normalize()
+	if !ok {
+		return nil, false
+	}
+	tu, tv := w.TanInU, w.TanInV
+	if pp.reflected() {
+		tu, tv = -tu, -tv
+	}
+	nOut, ok := pp.dir(tu, tv, 0).Cross(nDir).Normalize()
+	if !ok {
+		return nil, false
+	}
+	f := &clearance.CFace{
+		Kind: clearance.CkPlane,
+		O:    pp.point(w.StartU, w.StartV, pp.z0),
+		U:    e1,
+		V:    nDir,
+		N:    nOut,
+	}
+	le0, _ := survey2d.LineElem(0, 0, l, 0)
+	le1, _ := survey2d.LineElem(l, 0, l, h)
+	le2, _ := survey2d.LineElem(l, h, 0, h)
+	le3, _ := survey2d.LineElem(0, h, 0, 0)
+	f.Region = clearance.NewRegion2([]survey2d.SurveyElem{le0, le1, le2, le3})
+	f.Box = clearance.BoxOf(f.O, f.O.Add(e1.Scale(l)), f.O.Add(nDir.Scale(h)), f.O.Add(e1.Scale(l)).Add(nDir.Scale(h)))
+	f.Wit = append(f.Wit, f.O.Add(e1.Scale(l/2)).Add(nDir.Scale(h/2)), f.O)
+	return f, true
+}
+
+// prismPlaneCFace is a planar carrier face at level z of the prism's frame,
+// with outward normal sign·N and the given trim region in frame coordinates.
+func prismPlaneCFace(pp prismPayload, z, sign float64, region clearance.Region2) *clearance.CFace {
+	f := &clearance.CFace{
+		Kind:   clearance.CkPlane,
+		O:      pp.point(0, 0, z),
+		U:      pp.dir(1, 0, 0),
+		V:      pp.dir(0, 1, 0),
+		N:      pp.dir(0, 0, 1).Scale(sign),
+		Region: region,
+	}
+	f.Box = clearance.CapBox(f)
+	f.Wit = clearance.CapWitnesses(f)
+	return f
+}
+
+// addBrepFaces builds a brep body's carrier faces from its own record
+// (docs/general-boolean-design.md §4.5's clearance row), each face over its
+// own frame through the prism builders addPrismFaces uses: a swept face is
+// prismWallCFace over its wall walk and interval, a planar face a plane at
+// its level whose trim region is its own loops' (outer and holes, crossing
+// parity decides membership), its normal the frame's N turned outward.
+//
+// A record carrying any section displacement has no model, as addPrismFaces
+// refuses a displaced prism: the certificates are exact statements about the
+// carriers read. g.delta charges, per face, the same three terms a prism's
+// model does — the frame and placement point rounding at that face's own
+// coordinate envelope, the record's largest level displacement, and the tilt
+// a rounded carrier normal commits across that face's extent — and keeps the
+// largest. Every face frame is a signed permutation of the reference frame
+// (brepEmbeds), so no face's rounding can exceed what its own frame states.
+func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (bool, error) {
+	if bp.sectionDelta() != 0 {
+		return false, nil
+	}
+	pointTerm, tiltTerm := 0.0, 0.0
+	for _, f := range bp.faces {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		pp := f.view(bp.xform)
+		coordUpper := math.Max(math.Abs(f.z0), math.Abs(f.z1))
+		var face *clearance.CFace
+		if f.planar() {
+			loops, err := recordLoops(budget, *f.region)
+			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return false, err
+				}
+				return false, nil
+			}
+			var elems []survey2d.SurveyElem
+			for _, loop := range loops {
+				for _, w := range loop {
+					el, ok := walkElem(w.SegmentWalk)
+					if !ok {
+						return false, nil
+					}
+					elems = append(elems, el)
+					coordUpper = math.Max(coordUpper, w.CoordUpper)
+				}
+			}
+			sign := -1.0
+			if f.outward {
+				sign = 1
+			}
+			face = prismPlaneCFace(pp, f.z0, sign, clearance.NewRegion2(elems))
+		} else {
+			w, ok := brepCarrierWalk(f.wall)
+			if !ok {
+				return false, nil
+			}
+			coordUpper = math.Max(coordUpper, w.CoordUpper)
+			if face, ok = prismWallCFace(pp, w); !ok {
+				return false, nil
+			}
+		}
+		g.faces = append(g.faces, face)
+		pointTerm = math.Max(pointTerm, proofbound.FrameAndPlacementRoundAllow(f.frame, bp.xform, coordUpper))
+		tiltTerm = math.Max(tiltTerm, clearance.BodyFaceTiltDelta([]*clearance.CFace{face}, f.frame, bp.xform))
+	}
+	g.delta = proofbound.AbsSumUpper(pointTerm, bp.axialDelta(), tiltTerm)
+	g.carrierDelta = g.delta
+	return true, nil
+}
+
+// brepCarrierWalk walks one brep wall for the clearance model. ok is false
+// for a wall this kernel cannot carry, which leaves the body with no model.
+func brepCarrierWalk(seg CurveSegment) (survey2d.SegmentWalk, bool) {
+	w, err := walkOf(seg, nil)
+	if err != nil {
+		return survey2d.SegmentWalk{}, false
+	}
+	_, ok := walkElem(w)
+	return w, ok
 }
 
 // addRevolveFaces builds the revolved body's faces from its own payload. Its
