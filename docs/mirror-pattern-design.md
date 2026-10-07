@@ -216,11 +216,11 @@ fallback to `Union`:
 
 | # | Condition | Sentinel |
 |---|---|---|
-| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload`. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach) |
-| J2 | The plane is a `MirrorFace` of the receiver itself, and every selected face is a planar WALL of the receiver — a face whose role is `side(i, j)` (or `slab(k).region(0).side(i, j)`) over a `LineSeg`. | `ErrUnsupported` for a `MirrorFrame` or a foreign body (the join needs the mirror line as a recorded carrier, §5.2); `ErrDegenerate` for a cap or a curved wall |
+| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload`, and the receiver is a solid. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach; a sheet has no union to build) |
+| J2 | The plane is a `MirrorFace` of the receiver itself, its selector resolves to at least one face, and every selected face is a planar WALL of the receiver — a face whose role is `side(i, j)` (or `slab(k).region(0).side(i, j)`) over a `LineSeg`. | `ErrUnsupported` for a `MirrorFrame` or another body's face (the join needs the mirror line as a recorded carrier, §5.2); `ErrCardinality` with `Expected "at least 1"` for no face; `ErrDegenerate` for a cap or a curved wall |
 | J3 | Every selected wall's segment lies on ONE line: the exact rational cross product of each segment's recorded endpoints against the first's is zero (`internal/proof`). | `ErrDegenerate` |
 | J4 | Every selected segment is WHOLE (`TStart`/`TEnd` the natural domain). | `ErrUnsupported` (a fragment of a longer carrier would mirror a wall the record does not state whole) |
-| J5 | Every other segment of every loop lies in the closed half-plane on the material side of the line: both recorded endpoints have a non-negative exact signed distance, and an `ArcSeg`/`CircleSeg` additionally has its circle on that side — exact rational comparison of the centre's signed distance against the radius squared. A segment with an endpoint ON the line that is not a selected wall is admitted only as the neighbour of a selected wall at that junction. | `ErrUnsupported` (a loop crossing the line would need an arrangement, which §5.2 never asks for) |
+| J5 | Every selected wall walks the first one's way, every region's outer loop holds a selected wall, and every other segment of every loop is a `LineSeg`, `ArcSeg` or `CircleSeg` in the closed half-plane on the material side of the line: both recorded endpoints (and a narrowed line's walked endpoints) have a non-negative exact signed distance, and an `ArcSeg`/`CircleSeg` additionally has its circle on that side — exact rational comparison of the centre's signed distance against the radius squared, an arc's radius the larger of its two recorded ones. A segment with an endpoint ON the line that is not a selected wall is admitted only as the neighbour of a selected wall at that junction. | `ErrUnsupported` (a loop crossing the line would need an arrangement, which §5.2 never asks for) |
 | J6 | No `ArcSeg`/`CircleSeg` of the receiver is recorded over a narrowed range (`prismProfileHasTrimmedCircularSource`, prism-boolean §4.1). | `ErrUnsupported` |
 | J7 | `sectionDelta == 0` on the receiver. | `ErrUnsupported` (a reflection amplifies nothing, but the §5.3 audit proves closure on recorded coordinates and a displaced record states none) |
 
@@ -251,44 +251,56 @@ segment's recorded `Start` and `End`. For a point `X`, `m(X) = X − 2·d·n`
 with `d` the signed distance along the line's normal `n`, a rational function
 of the three points: no square root, since `n` need not be unit length when
 `d·n` is written as `((X − P)·n⊥)/(n⊥·n⊥) · n⊥`. Each reflected coordinate
-is computed over `big.Rat`, rounded to the nearest float ONCE, and its
-`rationalFloatError` is the charge `δ_mirror` (the largest over every
-reflected coordinate). For a wall on an axis-aligned line through integer
-millimetre coordinates every reflected coordinate is a float, and
-`δ_mirror == 0`.
+is computed over `big.Rat` and rounded to the nearest float ONCE. A point's
+charge is its two coordinates' `rationalFloatError` summed (the one that
+rounded, when only one did), which bounds the held image's distance from the
+exact one. A segment's charge is its largest point charge, tripled for an arc
+(its centre and radius both move with its three points' rounding, the
+argument `offsetSectionDelta` states for a recorded arc), plus a narrowed
+line's `δ_walk`. `δ_mirror` is the largest segment charge. For a wall on an
+axis-aligned line through integer millimetre coordinates every reflected
+coordinate is a float, and `δ_mirror == 0`.
 
 A loop's segments are walked in record order. Runs of consecutive segments
 between selected (on-line) segments are the material's own boundary arcs; each
 run `R` closes with its own reflection: `R` followed by `m(R)` walked
-backwards, each segment mirrored:
+backwards, each segment mirrored. That is the per-loop re-winding rule a
+reflected boolean operand takes (`docs/general-boolean-design.md` §3 A4,
+`rewindLoop`), run under the exact reflection:
 
 | Segment | Mirrored, reversed |
 |---|---|
 | `LineSeg{Start, End}` | `LineSeg{m(End), m(Start)}`, whole |
 | `ArcSeg{Center, Start, End}` (CCW from Start to End) | `ArcSeg{m(Center), m(End), m(Start)}`: the reflection turns the arc clockwise, and walking it backwards turns it counter-clockwise again from the new Start |
-| `CircleSeg` | `CircleSeg{m(Center), Radius, !CCW}`: a hole's own loop, never on the line (J5) |
+| `CircleSeg` | `CircleSeg{m(Center), Radius, CCW}` over the same range: the reflection reverses the circle's winding and the reversed walk reverses it back, so the flag and the range order still agree. A hole's own loop, never on the line (J5) |
 | a `LineSeg` recorded over a narrowed range | its walked endpoints (`walkOf`, prism-boolean §7 `δ_walk`) stand in as a whole segment before mirroring; the charge joins `δ_mirror` |
 
 Every closed run walks with the material on its left by construction, since
 the receiver's walk did and reflection-plus-reversal preserves that side. A
 loop with one selected wall yields one closed loop. A loop with `k ≥ 2`
 selected walls (a U whose two tips both end on the line) yields `k` closed
-loops, and the one whose exact rational signed area is the largest positive
-is the outer; the rest are holes (the notch and its image close into one).
+loops, and the one whose signed area is the largest positive is the outer;
+the rest are holes (the notch and its image close into one). The pick reads
+the float signed area; §5.3's S8 then refuses a hole that winds as an outer
+and S9 a hole outside the outer, so a wrong pick cannot be built.
 A loop with no selected wall (every hole, by J5) is mirrored whole and
 reversed, and appended as one more hole beside its original. The result's
 `Outer` is the one outer; `Holes` is every other loop.
 
-For a `stackedPrismPayload` receiver, J2–J5 run over every slab's region
-and every interface's exposed records, and the rewrite runs per record. The
-stacked audit (`falsifyStackedPayload`, stacked §2.2) re-derives the exposed
-records from the rewritten regions and rejects a disagreement.
+For a `stackedPrismPayload` receiver, a selected wall marks its segment in
+every slab whose region holds an equal loop (its face spans that column),
+J5–J6 run over every slab's region (an exposed record is a hole's own loop
+reversed, so it is covered), and the rewrite runs per region. The interfaces'
+exposed records are re-derived from the rewritten regions, and the stacked
+audit (`falsifyStackedPayload`, stacked §2.2) re-checks them.
 
 ### 5.3 Audit and exactness
 
 The assembled record passes modify §5's audit verbatim with an empty blend
 map, in prism-boolean §6's order: the junction falsifier (seam §3) on every
-junction, S8 (signed area neither flipped nor collapsed), S7 (no non-adjacent
+junction — two recorded endpoints compare exactly, and a narrowed line's
+walked endpoint with the range falsifier's tolerance — S8 (the outer's signed
+area positive, every hole's negative), S7 (no non-adjacent
 pair crosses or contacts within the diameter-anchored floor), S9 (every hole
 provably inside the outer). The sentinels are prism-boolean §9's RB3–RB6 and
 RB9. Every check is reject-only.

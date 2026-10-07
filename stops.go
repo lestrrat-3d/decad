@@ -188,14 +188,9 @@ func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
 // runs, so every count-not-one that reaches impliedOneFace is a concrete query
 // and cannot miss its SelectionError.
 func selectImpliedOneFace(body *Body, sel FaceSelector, what string) (*Face, error) {
-	q, ok := sel.(*FaceQuery)
-	switch {
-	case sel == nil:
-		return nil, fmt.Errorf(`%w: %s names no face selector`, ErrDegenerate, what)
-	case !ok:
-		return nil, fmt.Errorf(`%w: %s's face selector is not a decad face query (%T)`, ErrDegenerate, what, sel)
-	case q == nil:
-		return nil, errNilSelector
+	q, err := builtinFaceQuery(sel, what)
+	if err != nil {
+		return nil, err
 	}
 	faces, err := q.SelectFaces(body)
 	if err != nil {
@@ -217,6 +212,22 @@ func selectImpliedOneFace(body *Body, sel FaceSelector, what string) (*Face, err
 		return nil, impliedOneFace(body, q, len(faces))
 	}
 	return faces[0], nil
+}
+
+// builtinFaceQuery gates a selector a body-relative reference names to the
+// built-in *FaceQuery: a nil selector, a typed nil query and a foreign
+// implementation are each malformed input (ErrDegenerate).
+func builtinFaceQuery(sel FaceSelector, what string) (*FaceQuery, error) {
+	q, ok := sel.(*FaceQuery)
+	switch {
+	case sel == nil:
+		return nil, fmt.Errorf(`%w: %s names no face selector`, ErrDegenerate, what)
+	case !ok:
+		return nil, fmt.Errorf(`%w: %s's face selector is not a decad face query (%T)`, ErrDegenerate, what, sel)
+	case q == nil:
+		return nil, errNilSelector
+	}
+	return q, nil
 }
 
 // resolveToFace resolves a linear to-face stop into the signed stop

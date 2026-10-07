@@ -89,7 +89,7 @@ evaluator does not build — never repaired.
 | I2 | Each slab holds exactly one region. Multi-region slabs are modify-reach §9.1's shell migration and are not built. (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`, as `evalCup` refuses one.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
-| I5 | Every slab's outer loop is the same record (`loopRecordsEqual`). A clean-nesting cut never touches the outer loop, so the outer wall runs the whole height. | `ErrUnsupported` |
+| I5 | Every slab's outer loop is the same record (`loopRecordsEqual`). A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so the outer wall runs the whole height. | `ErrUnsupported` |
 | I6 | Each interface is **monotone**: every hole of the lower region either equals (`loopRecordsEqual`) a hole of the upper region or is lower-only; every hole of the upper region either equals a hole of the lower region or is upper-only; and lower-only and upper-only holes do not both exist at one interface. | `ErrUnsupported` |
 | I7 | `interfaces[i].lowerExposed` holds exactly one record per upper-only hole — `{Outer: reverse(hole)}` — and `upperExposed` one per lower-only hole, the same way. The audit re-derives both lists from the two regions and compares them record for record. | `ErrDegenerate` |
 
@@ -99,6 +99,13 @@ exclusive hole's own interior, which `reverse(hole)` states as a region with
 material inside. An interface where both sides have exclusive holes needs the
 two hole sets proven disjoint before the exposed regions can be stated, and
 nothing in this evaluator proves that yet (§7, stage 2).
+
+A mirror join (`docs/mirror-pattern-design.md` §5) builds a stacked payload by
+rewriting every slab's region with one splice. The splice is a function of the
+loop record alone, so equal loops in two slabs rewrite to equal loops: the
+outer stays one record (I5) and every interface stays monotone (I6). The
+join re-derives each interface's exposed records from the rewritten regions
+(I7), and this audit checks all three again before the body is built.
 
 ### 2.3 Loop columns
 
