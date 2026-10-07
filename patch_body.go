@@ -7,10 +7,10 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/patchchain"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -250,69 +250,11 @@ func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 // what proves the partition exists; the walk below only recovers WHICH edges
 // share a chain, never re-decides that they do.
 func partitionPatchChains(edges []*Edge) ([][]*Edge, error) {
-	degree := map[*Vertex]int{}
-	for _, e := range edges {
-		degree[e.start]++
-		degree[e.end]++
+	refs := make([]patchchain.EdgeRef[*Edge, *Vertex], len(edges))
+	for i, e := range edges {
+		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end}
 	}
-	for v, n := range degree {
-		if n != 2 {
-			return nil, fmt.Errorf(`%w: Body.Patch selection is not exactly closed chains — a vertex at %s has degree %d over the selection, not 2 (docs/surface-design.md Table R row R5)`,
-				ErrDegenerate, renderCoord3(v.position), n)
-		}
-	}
-
-	// adj pairs every non-closed edge with the two OTHER edges — never
-	// itself — touching each of its own vertices; a closed edge is handled
-	// separately below, since both its "slots" are itself.
-	adj := map[*Vertex][]*Edge{}
-	for _, e := range edges {
-		if e.start == e.end {
-			continue
-		}
-		adj[e.start] = append(adj[e.start], e)
-		adj[e.end] = append(adj[e.end], e)
-	}
-
-	visited := map[*Edge]bool{}
-	var chains [][]*Edge
-	for _, e0 := range edges {
-		if visited[e0] {
-			continue
-		}
-		if e0.start == e0.end {
-			visited[e0] = true
-			chains = append(chains, []*Edge{e0})
-			continue
-		}
-		visited[e0] = true
-		chain := []*Edge{e0}
-		start, current := e0.start, e0.end
-		for current != start {
-			var next *Edge
-			for _, cand := range adj[current] {
-				if !visited[cand] {
-					next = cand
-					break
-				}
-			}
-			if next == nil {
-				// Unreachable given the degree check above (a 2-regular
-				// graph's connected components are exactly cycles), kept as
-				// a defensive refusal rather than a silent short chain.
-				return nil, fmt.Errorf(`%w: Body.Patch selection does not partition into closed chains (docs/surface-design.md Table R row R5)`, ErrDegenerate)
-			}
-			visited[next] = true
-			chain = append(chain, next)
-			if next.start == current {
-				current = next.end
-			} else {
-				current = next.start
-			}
-		}
-		chains = append(chains, chain)
-	}
-	return chains, nil
+	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.position) })
 }
 
 // renderCoord3 formats a world position for a Table R diagnostic, the 3D
@@ -414,50 +356,16 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 // planar" and "proven non-planar" alike, since neither admits the chain.
 func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
-	for _, v := range verts {
-		if !proofbound.FiniteVec(v.position) || v.bound.Base() != 0 {
-			return fmt.Errorf(`%w: a Body.Patch chain vertex carries a nonzero bound, so its position is not proven exactly (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
+	points := make([]patchchain.Vertex, len(verts))
+	for i, v := range verts {
+		points[i] = patchchain.Vertex{Position: v.position, Bound: v.bound.Base()}
 	}
-	for _, e := range edges {
-		if !patchEdgeGeometryExact(e) {
-			return fmt.Errorf(`%w: a Body.Patch chain edge's own curve carries a nonzero bound, so its geometry is not proven exactly (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
-		if center, axis, curved := patchCurveCarrier(e); curved && (!proofbound.FiniteVec(center) || !proofbound.FiniteVec(axis)) {
-			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane is not representable (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
-	}
-
-	normal, origin, ok := patchPlaneFromVertices(verts)
-	if !ok {
-		normal, origin, ok = patchPlaneFromCarrier(edges)
-	}
-	if !ok {
-		return fmt.Errorf(`%w: a Body.Patch chain has too few independent points to determine a plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-	}
-
-	normalDy := proofarith.DyVec(normal)
-	originDy := proofarith.DyVec(origin)
-	for _, v := range verts {
-		rel := proofarith.DvSub(proofarith.DyVec(v.position), originDy)
-		if !proofarith.DvDot(normalDy, rel).IsZero() {
-			return fmt.Errorf(`%w: a Body.Patch chain is not planar (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
-	}
-	for _, e := range edges {
+	curves := make([]patchchain.Edge, len(edges))
+	for i, e := range edges {
 		center, axis, curved := patchCurveCarrier(e)
-		if !curved {
-			continue
-		}
-		if !proofarith.DvIsZero(proofarith.DvCross(proofarith.DyVec(axis), normalDy)) {
-			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
-		rel := proofarith.DvSub(proofarith.DyVec(center), originDy)
-		if !proofarith.DvDot(normalDy, rel).IsZero() {
-			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
-		}
+		curves[i] = patchchain.Edge{Exact: patchEdgeGeometryExact(e), Center: center, Axis: axis, Curved: curved}
 	}
-	return nil
+	return patchchain.ProvePlane(points, curves)
 }
 
 // patchChainVertices returns the chain's distinct vertices, deduplicated by
@@ -518,49 +426,6 @@ func patchCurveCarrier(e *Edge) (center, axis r3.Vec, curved bool) {
 	default:
 		return r3.Vec{}, r3.Vec{}, false
 	}
-}
-
-// patchPlaneFromVertices searches for three chain vertices that are not all
-// collinear — a common point v0 and two others whose position differences
-// from it have a nonzero exact cross product — and returns that cross
-// product as the plane's (unoriented) normal, with v0 as a point on the
-// plane. ok is false when fewer than three vertices exist or every vertex is
-// collinear with the first two found, the "under three independent
-// vertices" case provePatchChainPlane's own doc comment states.
-func patchPlaneFromVertices(verts []*Vertex) (normal, origin r3.Vec, ok bool) {
-	if len(verts) < 3 {
-		return r3.Vec{}, r3.Vec{}, false
-	}
-	v0 := verts[0].position
-	d0 := proofarith.DyVec(v0)
-	for i := 1; i < len(verts); i++ {
-		vi := verts[i].position
-		di := proofarith.DvSub(proofarith.DyVec(vi), d0)
-		if proofarith.DvIsZero(di) {
-			continue
-		}
-		for j := i + 1; j < len(verts); j++ {
-			vj := verts[j].position
-			dj := proofarith.DvSub(proofarith.DyVec(vj), d0)
-			cross := proofarith.DvCross(di, dj)
-			if !proofarith.DvIsZero(cross) {
-				return vi.Sub(v0).Cross(vj.Sub(v0)), v0, true
-			}
-		}
-	}
-	return r3.Vec{}, r3.Vec{}, false
-}
-
-// patchPlaneFromCarrier returns the first curved edge's own carrier plane —
-// the fallback provePatchChainPlane's own doc comment states for a chain
-// with fewer than three independent vertices.
-func patchPlaneFromCarrier(edges []*Edge) (normal, origin r3.Vec, ok bool) {
-	for _, e := range edges {
-		if center, axis, curved := patchCurveCarrier(e); curved {
-			return axis, center, true
-		}
-	}
-	return r3.Vec{}, r3.Vec{}, false
 }
 
 // patchOrientedEdge is one chain edge under the orientation decision: the
