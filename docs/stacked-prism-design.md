@@ -107,7 +107,8 @@ rewriting every slab's region with one splice. The splice is a function of the
 loop record alone, so equal loops in two slabs rewrite to equal loops: the
 outer stays one record (I5) and every interface stays monotone (I6). The
 join re-derives each interface's exposed records from the rewritten regions
-(I7), and this audit checks all three again before the body is built.
+(I7), and this audit checks all three again before the body is built. A
+union-built stack, whose outer loop changes between slabs, is not joined.
 
 A union-built stack reads I5–I7 per interface. Where the two outer loops are
 one record, the rows above apply unchanged. Where they differ:

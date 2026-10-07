@@ -989,6 +989,7 @@
 5	0.01	TestStackedUnionGateDiameterStaysOnTheBody
 5	0.01	TestStackedUnionInterfaceReportsSplitBoundary
 5	0.01	TestStackedUnionLevelChargesExactOffsetSum
+5	0.01	TestStackedUnionMirrorJoinRefuses
 5	0.01	TestStackedUnionPayloadAuditRejectsBrokenInterfaces
 5	0.02	TestStackedUnionPlacedBossChargesSectionDisplacement
 5	0.01	TestStackedUnionRecordsSlabsAndFloor

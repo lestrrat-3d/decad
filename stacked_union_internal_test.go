@@ -205,3 +205,14 @@ func TestStackedUnionExtentReadsEveryRun(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(hi-15), bound)
 	require.LessOrEqual(t, math.Abs(lo+15), bound)
 }
+
+// A mirror join re-derives interfaces from exclusive holes, so it refuses a
+// union-built stack (mirror J1) before reading any region.
+func TestStackedUnionMirrorJoinRefuses(t *testing.T) {
+	plate, boss := internalBossOnPlate(t, 0, 10, 15)
+	got, err := Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	_, err = got.Mirrored(t.Context(), MirrorFace{Body: got, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "union-built stack")
+}
