@@ -1,22 +1,13 @@
 package decad
 
-import (
-	"math/big"
+import "github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-)
-
-// This file is docs/spline-design.md §5.1's exact integration: the
-// Green's-theorem boundary forms over the Bézier spans spline_bezier.go
-// produced. Every integrand is a POLYNOMIAL in the span parameter, so every
-// integral is an exact rational — which is what earns a Tier A kind its zero
-// bound, and why §5.2 forbids a quadrature fallback here.
+// This file adapts docs/spline-design.md §5.1's exact integration into the
+// region accumulator. Every integrand over the Bézier spans is a polynomial,
+// so the span integral is an exact rational.
 //
-// The polynomial machinery is polynomial.RatPoly from internal/polynomial,
-// forked (spline design §6.2): that file already owns dense rational
-// polynomials with the products and derivatives these forms need.
+// The polynomial machinery is polynomial.RatPoly from internal/polynomial
+// (spline design §6.2).
 
 // addFreeformTo accumulates one converted free-form curve's contribution. The
 // exact rational goes into the REGION's own accumulator, which is what the
@@ -31,28 +22,5 @@ import (
 // The chain arrives already converted, re-anchored and CHARGED by the
 // record-level preflight, so nothing here consults the work counter.
 func (ig *regionIntegrals) addFreeformTo(spans []freeform.BezierSpan, reversed bool, order freeform.MomentIntegralOrder) {
-	exact := freeform.ExactFreeformMoments(spans, reversed, order)
-	if extent := freeform.FreeformControlExtent(spans); extent > ig.coordUpper {
-		ig.coordUpper = extent
-	}
-	moments := []struct {
-		value *float64
-		bound *float64
-		exact *big.Rat
-	}{
-		{&ig.area, &ig.areaBound, exact.Area},
-		{&ig.mu, &ig.muBound, exact.Mu},
-		{&ig.mv, &ig.mvBound, exact.Mv},
-		{&ig.muu, &ig.muuBound, exact.Muu},
-		{&ig.muv, &ig.muvBound, exact.Muv},
-		{&ig.mvv, &ig.mvvBound, exact.Mvv},
-	}
-	if order < freeform.MomentSecondOrder {
-		moments = moments[:3]
-	}
-	for _, moment := range moments {
-		held, _ := moment.exact.Float64()
-		accumulateMoment(moment.value, moment.bound, held, proofarith.RationalFloatError(moment.exact, held))
-	}
-	ig.addExact(exact)
+	ig.state().AddFreeform(spans, reversed, order)
 }

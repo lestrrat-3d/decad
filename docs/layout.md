@@ -80,16 +80,16 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | Record integrals and sketch checks. See evaluator §4. |
+| `moments.go` / `moments_validate.go` | Moment readings and record checks. See evaluator §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md` §2–§3. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
-| `moments_circular.go` | Maps recorded circle and arc segments to `internal/circularbounds/` for exact rational enclosures. |
+| `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |
 | `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/splinebezier/`. See `docs/spline-design.md` §5.1. |
 | `spline_fit.go` | Adapts fit-spline conversion from `internal/splinebezier/`. See `docs/spline-design.md` §5.1.2. |
-| `spline_moments.go` | `addFreeformTo` folds `internal/freeform/`'s exact span moments into a region's integrals. See `docs/spline-design.md` §5.1. |
+| `spline_moments.go` | Adapts free-form moments. See spline §5.1. |
 
 ### Features
 
@@ -279,6 +279,7 @@ the rules leave to the byte budget.
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
+| `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Chord bounds and samples, section clearance, and mesh audits. |
 | `internal/loftmesh/` | Loft pairing, stations, assembly, mass sums, mesh proofs and restatement. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
