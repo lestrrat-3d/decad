@@ -2459,8 +2459,11 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
-scene 7's closed-form onset as its acceptance. The `_gallery` linkage clip of a looped scene is a separate
-`_gallery` change after L1.
+scene 7's closed-form onset as its acceptance. The `_gallery` module films scene 7 with its wall
+(`go run . linkage -scene rocker`): each link's node is driven by a track that reads `Schedule.PoseAt`,
+the chain `VerifyLinkage` poses every check through, and its test asserts every node's transform equal to
+the schedule's pose bit for bit, the follower's turn within `1e-9` rad of `θ4(θ2) − θ4(0)`, and the clip
+marking the report's first collision, `36/256`, from frame `36` on.
 
 ### 15.12 Settled points, and what sketch #155 supplies
 
