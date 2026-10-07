@@ -325,22 +325,11 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 		out.slabs[k].regions = []ProfileRecord{joined}
 		out.sectionDelta = math.Max(out.sectionDelta, delta)
 	}
-	out.interfaces = make([]prismSlabInterface, len(out.slabs)-1)
-	for i := range out.interfaces {
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(out.slabs[i].regions[0], out.slabs[i+1].regions[0])
-		if err != nil {
-			return stackedPrismPayload{}, err
-		}
-		lower, err := stackedExposed(ctx, upperOnly)
-		if err != nil {
-			return stackedPrismPayload{}, err
-		}
-		upper, err := stackedExposed(ctx, lowerOnly)
-		if err != nil {
-			return stackedPrismPayload{}, err
-		}
-		out.interfaces[i] = prismSlabInterface{lowerExposed: lower, upperExposed: upper}
+	interfaces, err := stackedInterfaces(ctx, out.slabs, sp.interfaces)
+	if err != nil {
+		return stackedPrismPayload{}, err
 	}
+	out.interfaces = interfaces
 	return out, nil
 }
 

@@ -583,6 +583,9 @@
 3	0.00	TestParseLayoutRowsRejectsMalformedRows
 3	0.00	TestPatchAreaOfChargesTheSideLevelRounding
 3	0.00	TestPatchAreaOfEnclosesRoundedRadiusDifference
+3	0.02	TestPatternCopiesChargesTheMotion
+3	0.02	TestPatternCopiesUnionStackArm
+3	0.00	TestPatternLinearMotionUsesTheDenotedStep
 3	0.26	TestPlanarPairVerdictTouchNeedsZeroDisplacement
 3	0.00	TestPlanarReplayLowerGapChargesTravel
 3	0.00	TestPointInBodyCancellationReachesTorusRootPath
