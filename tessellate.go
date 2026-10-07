@@ -13,7 +13,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -1083,200 +1082,18 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		return chordedLoop{}, err
 	}
 
-	var samples []Point2
-	var faceOf []*Face
-	var sagOf []float64
-	var boundOf []proofbound.WalkEndBound
-	var maxSag, wallSlack, capSlack, segmentArea float64
-	for _, w := range walks {
-		if err := budget.Step(); err != nil {
-			return chordedLoop{}, err
-		}
-		face, err := wallFace(w)
-		if err != nil {
-			return chordedLoop{}, err
-		}
-		// A switch on survey2d.WalkKind must be total (extrude.go's survey2d.WalkKind doc
-		// comment): a straight walk contributes its own start alone, a
-		// free-form walk chords through its Bézier chain, and a circular walk
-		// through its own angle.
-		switch w.Kind {
-		case survey2d.WalkLine:
-			samples = append(samples, Point2{U: w.StartU, V: w.StartV})
-			faceOf = append(faceOf, face)
-			sagOf = append(sagOf, 0)
-			boundOf = append(boundOf, w.StartBound)
-		case survey2d.WalkFreeform:
-			// One chain per free-form walk, chorded at the same budget every
-			// other walk of this loop is chorded at, over the record's own
-			// shared free-form counter (docs/tessellation-reach-design.md §5).
-			chain, err := freeform.ChainStations(w.Spans, chord, work)
-			if err != nil {
-				return chordedLoop{}, err
-			}
-			pts, bounds, err := freeformWalkStations(w, chain)
-			if err != nil {
-				return chordedLoop{}, err
-			}
-			for i, p := range pts {
-				if err := budget.Step(); err != nil {
-					return chordedLoop{}, err
-				}
-				samples = append(samples, p)
-				faceOf = append(faceOf, face)
-				sagOf = append(sagOf, chain.Sagitta)
-				boundOf = append(boundOf, bounds[i])
-			}
-			maxSag = math.Max(maxSag, chain.Sagitta)
-			wall, segment := freeformChordAreas(chain, height)
-			// The wall loses (arc − chord) over the sweep height and each cap
-			// gains or loses the region between curve and chord — the same
-			// two halves the circular arm below keeps apart, so the caller
-			// can decline the cap half for a sheet (docs/surface-design.md
-			// §10).
-			wallSlack = proofbound.AbsSumUpper(wallSlack, wall)
-			capSlack = proofbound.AbsSumUpper(capSlack, segment)
-			segmentArea = proofbound.AbsSumUpper(segmentArea, segment)
-		case survey2d.WalkCircular:
-			n, sag, err := chordCount(w.SegmentWalk, chord, chordWalkMin(w.SegmentWalk))
-			if err != nil {
-				return chordedLoop{}, err
-			}
-			maxSag = math.Max(maxSag, sag)
-			// walkAreaSlack's own pad — proven area terms padded a hair so
-			// float rounding never understates them — is applied here, at
-			// the point each term is summed into the loop's running wall/cap
-			// totals, rather than after the two are combined: that is what
-			// lets the caller decline the cap half for a sheet without
-			// losing the pad on the half it keeps.
-			wallSlack = proofbound.AbsSumUpper(wallSlack, proofbound.ProductUpper(walkWallSlack(w.SegmentWalk, n, height), 1+1e-9))
-			capSlack = proofbound.AbsSumUpper(capSlack, proofbound.ProductUpper(walkSegmentArea(w.SegmentWalk, n), 1+1e-9))
-			segmentArea = proofbound.AbsSumUpper(segmentArea, walkSegmentArea(w.SegmentWalk, n))
-			// A circular walk never coalesces (coalesceWalks), so it covers
-			// exactly one recorded segment and every station on it is that
-			// segment's own parameter — which is what lets chordStationBound
-			// enclose the point the RECORD denotes there rather than the point
-			// this walk's float trig landed on.
-			seg := loop.Segments[w.Segs[0]]
-			dth := (w.Th1 - w.Th0) / float64(n)
-			for k := range n {
-				if err := budget.Step(); err != nil {
-					return chordedLoop{}, err
-				}
-				p := Point2{U: w.StartU, V: w.StartV}
-				bound := w.StartBound
-				if k > 0 {
-					th := w.Th0 + float64(k)*dth
-					p = Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
-					bound = chordStationBound(seg, k, n, p.U, p.V)
-				}
-				samples = append(samples, p)
-				faceOf = append(faceOf, face)
-				sagOf = append(sagOf, sag)
-				boundOf = append(boundOf, bound)
-			}
-		default:
-			return chordedLoop{}, fmt.Errorf(`%w: chording a boundary loop does not support walk kind %d`, ErrUnsupported, w.Kind)
-		}
+	sampled, err := tessellation.SampleLoop[*Face](walks, loop.Segments, chord, height, work, budget,
+		wallFace, chordStationBound)
+	if err != nil {
+		return chordedLoop{}, err
 	}
 	return chordedLoop{
-		samples:        samples,
-		faceOf:         faceOf,
-		sagOf:          sagOf,
-		boundOf:        boundOf,
-		maxSag:         maxSag,
-		wallSlack:      wallSlack,
-		capSlack:       capSlack,
-		segmentArea:    segmentArea,
-		walks:          len(walks),
-		perimeterUpper: perimeterUpper,
+		samples: sampled.Samples, faceOf: sampled.FaceOf,
+		sagOf: sampled.SagOf, boundOf: sampled.BoundOf,
+		maxSag: sampled.MaxSag, wallSlack: sampled.WallSlack,
+		capSlack: sampled.CapSlack, segmentArea: sampled.SegmentArea,
+		walks: sampled.Walks, perimeterUpper: perimeterUpper,
 	}, nil
-}
-
-// freeformWalkStations turns one free-form walk's dyadic station chain into the
-// boundary samples chordLoop emits for it: one per chord, the walk's own start
-// included and its end excluded, since the walk's end IS the next walk's start
-// and the loop emits each junction exactly once
-// (docs/tessellation-reach-design.md §5).
-//
-// A REVERSED walk runs against the recorded curve, so its own start is the
-// chain's END and its samples run backwards: the chain's end first, then its
-// stations from the last down to the second, with the chain's start dropped —
-// which is the same set of cell boundaries the forward walk emits, in the
-// opposite order, so the two directions chord one curve identically.
-//
-// Each station is an EXACT rational point on the curve (freeform.ChainStations), so the
-// only error a held sample carries is the ONE rounding into Point2, measured
-// here against the rational itself — freeformEndpointBounds' reading, applied
-// at an interior cell boundary rather than at an end. The walk's own start is
-// emitted verbatim from the walk instead, so the junction this sample shares
-// with the previous walk is the SAME float64 pair that walk's endpoint carries
-// and the chorded loop closes by construction rather than by comparison.
-//
-// A station whose plane coordinates are unrepresentable, or whose rounding gap
-// this record cannot enclose, refuses before any sample is emitted
-// (docs/tessellation-design.md §12: a mesh states its bound or it is not built).
-func freeformWalkStations(w survey2d.SideWalk, chain freeform.FreeformChain) ([]Point2, []proofbound.WalkEndBound, error) {
-	if len(chain.Stations) == 0 {
-		return nil, nil, fmt.Errorf(`%w: a free-form walk chorded to no station has no boundary sample`, ErrDegenerate)
-	}
-	ordered := make([]survey2d.RatPoint, 0, len(chain.Stations))
-	if !w.Reversed {
-		ordered = append(ordered, chain.Stations...)
-	} else {
-		ordered = append(ordered, chain.End)
-		for i := len(chain.Stations) - 1; i >= 1; i-- {
-			ordered = append(ordered, chain.Stations[i])
-		}
-	}
-
-	pts := make([]Point2, len(ordered))
-	bounds := make([]proofbound.WalkEndBound, len(ordered))
-	for i, station := range ordered {
-		p, ok := point2Of(station)
-		if !ok {
-			return nil, nil, fmt.Errorf(`%w: a free-form chord station has no representable plane coordinate`, ErrUnsupported)
-		}
-		bound := proofbound.WalkEndBound{
-			U: proofarith.RationalFloatError(station.U, p.U),
-			V: proofarith.RationalFloatError(station.V, p.V),
-		}
-		if !bound.Derivable() {
-			return nil, nil, fmt.Errorf(`%w: a free-form chord station states no bound on the rounding its held plane coordinates commit`, ErrUnsupported)
-		}
-		pts[i], bounds[i] = p, bound
-	}
-	if !w.StartBound.Derivable() {
-		return nil, nil, fmt.Errorf(`%w: a free-form walk states no bound on its own start, so the junction it shares carries no displacement`, ErrUnsupported)
-	}
-	pts[0] = Point2{U: w.StartU, V: w.StartV}
-	bounds[0] = w.StartBound
-	return pts, bounds, nil
-}
-
-// freeformChordAreas is one chorded free-form walk's own share of the two area
-// readings a prism section publishes (docs/tessellation-reach-design.md §5):
-// the WALL deficit, (arc − chord) over the sweep height, summed cell by cell,
-// and the PLANAR area one cap gains or loses between the curve and its chords.
-//
-// The wall term reads the chain's own proven bracket — an arc-length upper
-// bound minus a chord-length lower bound — so it never understates the deficit
-// a chord actually takes. The planar term is proofbound.SectionDisplacementArea of the
-// chain's measured sagitta over a single cell: every point of the cell's curve
-// lies within that sagitta of the chord SEGMENT, and a cell can cross its own
-// chord at an inflection, so the two-sided tube about the segment is the bound
-// and a one-sided circular segment is not. The caller charges the planar term
-// ONCE PER CAP for its area slack and once against the sweep height for the
-// occupied volume, exactly as walkSegmentArea is charged for a circular walk.
-func freeformChordAreas(chain freeform.FreeformChain, height float64) (float64, float64) {
-	wall, segment := 0.0, 0.0
-	h := math.Abs(height)
-	for k, arc := range chain.CellArcUpper {
-		deficit := proofbound.UpRound(math.Max(arc-chain.CellChordLower[k], 0))
-		wall = proofbound.AbsSumUpper(wall, proofbound.ProductUpper(deficit, h))
-		segment = proofbound.AbsSumUpper(segment, proofbound.SectionDisplacementArea(chain.Sagitta, 1, arc))
-	}
-	return wall, segment
 }
 
 // tessellateCup meshes a cup (docs/modify-design.md §9, D4): the outer region O
