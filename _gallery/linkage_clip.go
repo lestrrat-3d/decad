@@ -40,13 +40,16 @@ const (
 	linkageWallFace  = 38.0
 )
 
-// linkageScene is the folding arm, as verified and as filmed.
+// linkageScene is a mechanism as verified and as filmed: the folding arm, or
+// the crank-rocker, whose drive moves a loop and whose frames are posed
+// through schedule.
 type linkageScene struct {
 	doc      *decad.Document
 	linkage  *decad.Linkage
 	drive    decad.Drive
 	shoulder *decad.Link
 	elbow    *decad.Link
+	schedule *decad.Schedule // nil for a tree linkage
 	parts    []linkagePart
 	camera   kinetograph.Camera
 }
@@ -167,17 +170,9 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 	if err != nil {
 		return nil, render.Style{}, err
 	}
-	names := make(map[*decad.Body]string)
-	for _, part := range s.parts {
-		names[part.body] = part.name
-	}
-	linkNodes, err := scene.AddLinkage(s.linkage, s.drive, fraction, names)
+	nodes, err := s.linkNodes(rig, scene, fraction)
 	if err != nil {
 		return nil, render.Style{}, err
-	}
-	nodes := make(map[*decad.Link]*kinetograph.Node, len(linkNodes))
-	for i, link := range s.linkage.Links() {
-		nodes[link] = linkNodes[i]
 	}
 	var hit *decad.LinkCollision
 	if report != nil && len(report.Collisions) > 0 {
@@ -197,8 +192,11 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 		node := rig.Root()
 		if part.link != nil {
 			node = nodes[part.link]
-		} else if err := scene.AddPart(part.name, node, part.body); err != nil {
-			return nil, render.Style{}, err
+		}
+		if part.link == nil || s.schedule != nil {
+			if err := scene.AddPart(part.name, node, part.body); err != nil {
+				return nil, render.Style{}, err
+			}
 		}
 		style.Parts[part.name] = matte(part.color)
 		if hit != nil && part.body == hit.A {
@@ -231,6 +229,38 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 		style.Parts[part.name+"-hit"] = tinted
 	}
 	return clip, style, nil
+}
+
+// linkNodes is one driven node per link directly under the rig's root: for a
+// tree linkage kinetograph's AddLinkage, which also adds every link body as a
+// part, and for a looped one a scheduleTrack per link, whose bodies the
+// caller adds.
+func (s *linkageScene) linkNodes(rig *kinetograph.Rig, scene *kinetograph.Scene,
+	fraction *kinetograph.Channel) (map[*decad.Link]*kinetograph.Node, error) {
+	links := s.linkage.Links()
+	nodes := make(map[*decad.Link]*kinetograph.Node, len(links))
+	if s.schedule == nil {
+		names := make(map[*decad.Body]string)
+		for _, part := range s.parts {
+			names[part.body] = part.name
+		}
+		linkNodes, err := scene.AddLinkage(s.linkage, s.drive, fraction, names)
+		if err != nil {
+			return nil, err
+		}
+		for i, link := range links {
+			nodes[link] = linkNodes[i]
+		}
+		return nodes, nil
+	}
+	for i, link := range links {
+		node, err := rig.Root().Driven(&scheduleTrack{schedule: s.schedule, index: i, fraction: fraction})
+		if err != nil {
+			return nil, err
+		}
+		nodes[link] = node
+	}
+	return nodes, nil
 }
 
 // hitFades returns the two Fade channels that switch a part's colour at the
@@ -268,16 +298,20 @@ func hitFades(clip *kinetograph.Clip, s float64) (*kinetograph.Channel, *kinetog
 
 // linkageOptions are the linkage subcommand's parsed flags.
 type linkageOptions struct {
+	scene         string
 	out           string
 	width, height int
 	workers       int
 	smoke         bool
 }
 
-// runLinkage renders the folding arm of docs/linkage-check-design.md §11
-// scene 1 as a PNG sequence. It first runs VerifyLinkage over the drive at
-// a resolution of 1/256, then films the same drive at 64 frames per second
-// with kinetograph's AddLinkage, one driven node per link reading Linkage.PoseAt, so
+// runLinkage renders a mechanism as a PNG sequence: the folding arm of
+// docs/linkage-check-design.md §11 scene 1 by default, or with -scene rocker
+// the crank-rocker of §15.10 scene 7, a closed loop posed through a
+// decad.Schedule. It first runs VerifyLinkage over the drive at
+// a resolution of 1/256, then films the same drive at 64 frames per second,
+// one driven node per link — kinetograph's AddLinkage reading Linkage.PoseAt
+// for the arm, a track reading the schedule's PoseAt for the rocker — so
 // frame i of the drive shows the pose VerifyLinkage evaluates at s = i/256.
 // From the frame of the report's first collision on, the colliding body is
 // drawn in coral. The drive runs 4 s and the clip holds its end for 1 s more.
@@ -289,6 +323,7 @@ type linkageOptions struct {
 //
 // Flags:
 //
+//   - -scene arm|rocker picks the mechanism (default arm).
 //   - -out <dir> is where the frames go (default "out").
 //   - -width and -height set the frame size (default 1280x720).
 //   - -workers sets how many frames render at once (default: the CPU count).
@@ -299,6 +334,7 @@ type linkageOptions struct {
 func runLinkage(ctx context.Context, args []string, stderr io.Writer) error {
 	var opts linkageOptions
 	fs := flag.NewFlagSet("linkage", flag.ContinueOnError)
+	fs.StringVar(&opts.scene, "scene", "arm", "the mechanism to film: arm (the folding arm) or rocker (the crank-rocker, a closed loop)")
 	fs.StringVar(&opts.out, "out", "out", "directory to write the frames to")
 	fs.IntVar(&opts.width, "width", 1280, "frame width in pixels")
 	fs.IntVar(&opts.height, "height", 720, "frame height in pixels")
@@ -317,7 +353,16 @@ func runLinkage(ctx context.Context, args []string, stderr io.Writer) error {
 		return fmt.Errorf("linkage: -width, -height and -workers must be positive")
 	}
 
-	scene, err := foldingArmScene(ctx)
+	var scene *linkageScene
+	var err error
+	switch opts.scene {
+	case "arm":
+		scene, err = foldingArmScene(ctx)
+	case "rocker":
+		scene, err = crankRockerScene(ctx)
+	default:
+		return fmt.Errorf("linkage: -scene is arm or rocker, got %q", opts.scene)
+	}
 	if err != nil {
 		return err
 	}
