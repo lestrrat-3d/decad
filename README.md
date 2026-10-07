@@ -221,8 +221,6 @@ not"*.
 and `Kind`). decad and `sketch` share it, so lengths, angles and error bounds
 use one unit system.
 
-decad imports `sketch`, `r3` and `units`. None of them imports decad.
-
 ## License
 
 This project is **source-available**, and is licensed under the
