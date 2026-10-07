@@ -8,7 +8,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -142,7 +141,7 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 		if err := budget.Step(); err != nil {
 			return MassProperties{}, err
 		}
-		det := proofarith.XdotRat(lifted[tri[0]], meshbool.Xcross(lifted[tri[1]], lifted[tri[2]]))
+		det := proofarith.XdotRat(lifted[tri[0]], proofarith.Xcross(lifted[tri[1]], lifted[tri[2]]))
 		sums.add(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]], det)
 	}
 	if err := budget.Err(); err != nil {

@@ -59,7 +59,7 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 			}
 		}
 		a, b, c := bm.Xverts[tri[0]], bm.Xverts[tri[1]], bm.Xverts[tri[2]]
-		n := meshbool.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+		n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 			return nil, fmt.Errorf(`%w: an operand holds a collapsed facet, which carries no plane and no interior — a contact made on it could not be classified at all, so this evaluator refuses the operand rather than examine it in part`, ErrUnsupported)
 		}

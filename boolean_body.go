@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -474,7 +473,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		det := proof.XdotRat(a, meshbool.Xcross(b, c))
+		det := proof.XdotRat(a, proof.Xcross(b, c))
 		ax, ay, az := proof.XhpRat(proof.Xhp(a))
 		bx, by, bz := proof.XhpRat(proof.Xhp(b))
 		cx, cy, cz := proof.XhpRat(proof.Xhp(c))
@@ -613,7 +612,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []proof.Xpt, tris [][3]in
 			}
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		total.Add(total, proof.XdotRat(a, meshbool.Xcross(b, c)))
+		total.Add(total, proof.XdotRat(a, proof.Xcross(b, c)))
 	}
 	volRat := new(big.Rat).Mul(total, big.NewRat(1, 6))
 	if volRat.Sign() <= 0 {
@@ -741,7 +740,7 @@ func buildFacetedTopology(
 			// plane — below (negative) is material bending away: convex.
 			tw := tris[twin]
 			opp := tw[0] + tw[1] + tw[2] - u - v
-			s := meshbool.OrientSign(verts[t[0]], verts[t[1]], verts[t[2]], verts[opp])
+			s := proof.OrientSign(verts[t[0]], verts[t[1]], verts[t[2]], verts[opp])
 			hinges[[2]int{u, v}] = hingeInfo{fa: facetFace[mine], fb: facetFace[twin], sign: s}
 			boundaryEdges = append(boundaryEdges, [2]int{u, v})
 		}

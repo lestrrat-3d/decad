@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the exact-arithmetic kernel behind the mesh boolean
+// The mesh boolean uses exact-arithmetic predicates
 // (docs/evaluator-design.md §9): sign tests decided by an adaptive float
 // filter that falls back to exact rational arithmetic exactly at the
 // boundary cases, plus the rational point, segment and parity predicates the
@@ -30,99 +30,6 @@ import (
 // point has many spellings. A sign decided exactly is a topology decision
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
-
-// Xcross is a × b, exact, stripped the same way as xsub.
-func Xcross(a, b proof.Xpt) proof.Xpt {
-	return proof.Xpt(proof.XhpStripTwosOwned(proof.XhpCross(proof.Xhp(a), proof.Xhp(b))))
-}
-
-// XdotSign is the sign of a·b, decided as a plain integer sign: the shared
-// denominator a.w·b.w is always positive, so the numerator's sign IS the
-// dot product's sign.
-func XdotSign(a, b proof.Xpt) int { return proof.XdotNum(a, b).Sign() }
-
-// Xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
-// stripped on return — the growth control that keeps a chain of lerps from
-// growing its denominator multiplicatively at every link (measured: 14113
-// bits unreduced at lerp depth 6, 462 bits stripped after every step).
-func Xlerp(a, b proof.Xpt, tn, td *big.Int) proof.Xpt {
-	return proof.Xpt(proof.XhpStripTwosOwned(proof.XhpLerp(proof.Xhp(a), proof.Xhp(b), tn, td)))
-}
-
-// OrientNum is the exact value of det[b−a, c−a, d−a] as an integer numerator
-// over a positive denominator, formed without ever materialising a big.Rat:
-// positive when d lies on the side the counter-clockwise normal of (a, b, c)
-// points to.
-func OrientNum(a, b, c, d proof.Xpt) (num, den *big.Int) {
-	ha, hb, hc, hd := proof.Xhp(a), proof.Xhp(b), proof.Xhp(c), proof.Xhp(d)
-	ba, ca, da := proof.XhpSub(hb, ha), proof.XhpSub(hc, ha), proof.XhpSub(hd, ha)
-	cr := proof.XhpCross(ba, ca)
-	return proof.XhpDotNum(cr, da), new(big.Int).Mul(cr.W, da.W)
-}
-
-// OrientSignExact is the exact sign of det[b−a, c−a, d−a], decided as a plain
-// integer sign with no big.Rat and no normalisation anywhere in the chain —
-// proof.XhpOrientSign's own guarantee, carried through xpt.
-func OrientSignExact(a, b, c, d proof.Xpt) int {
-	return proof.XhpOrientSign(proof.Xhp(a), proof.Xhp(b), proof.Xhp(c), proof.Xhp(d))
-}
-
-// OrientRat materialises det[b−a, c−a, d−a] as a big.Rat — the one place this
-// value pays a normalisation, for the rare caller that needs the value rather
-// than the sign.
-func OrientRat(a, b, c, d proof.Xpt) *big.Rat {
-	num, den := OrientNum(a, b, c, d)
-	return new(big.Rat).SetFrac(num, den)
-}
-
-// OrientSign is the adaptive-precision sign of det[b−a, c−a, d−a] for float
-// inputs: a float evaluation whose forward error provably cannot cross zero
-// decides the generic case; anything inside the error bound falls back to the
-// exact value — the §9 discipline, so a sign is never wrong.
-func OrientSign(a, b, c, d r3.Vec) int {
-	if sign, certain := OrientSignFloat(a, b, c, d); certain {
-		return sign
-	}
-	return OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d))
-}
-
-// OrientSignPrepared uses an already lifted triangle and its exact normal on
-// the uncertain path. xa and xd are the exact lifts of a and d, and n is the
-// exact oriented cross product of (b-a) and (c-a), with positive denominator.
-func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n proof.Xpt) int {
-	if sign, certain := OrientSignFloat(a, b, c, d); certain {
-		return sign
-	}
-	return XdotSign(n, proof.Xsub(xd, xa))
-}
-
-// OrientSignFloat gives the same adaptive float decision to both plane-side
-// callers. An uncertain sign must be decided by exact integer arithmetic.
-func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
-	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
-	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
-	dax, day, daz := d.X-a.X, d.Y-a.Y, d.Z-a.Z
-	det := bax*(cay*daz-caz*day) + bay*(caz*dax-cax*daz) + baz*(cax*day-cay*dax)
-	perm := math.Abs(bax)*(math.Abs(cay)*math.Abs(daz)+math.Abs(caz)*math.Abs(day)) +
-		math.Abs(bay)*(math.Abs(caz)*math.Abs(dax)+math.Abs(cax)*math.Abs(daz)) +
-		math.Abs(baz)*(math.Abs(cax)*math.Abs(day)+math.Abs(cay)*math.Abs(dax))
-	// The true forward error is bounded by a few ulps of the permanent; 1e-12
-	// leaves three decades of margin, so a sign the filter accepts is proven.
-	if err := 1e-12 * perm; det > err || det < -err {
-		if det > 0 {
-			return 1, true
-		}
-		return -1, true
-	}
-	return 0, false
-}
-
-// OrientSignMixed is the exact plane-side sign of a homogeneous probe against
-// a float triangle: positive on the triangle's counter-clockwise-normal side.
-func OrientSignMixed(a, b, c r3.Vec, d proof.Xpt) int {
-	return OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), d)
-}
-
 const (
 	// SegFilterErrCoef covers SegFilter.tooFar's own float evaluation: 64·u,
 	// against the magnitude the branch taken carries. tooFar derives it.
@@ -1372,7 +1279,7 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 			// so the plane normal's swept component cannot vanish.
 			a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
 			xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
-			n := Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+			n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
 			nAxis := XIntCoordOf(n, ray.Axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true

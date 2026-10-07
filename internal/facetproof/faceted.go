@@ -237,7 +237,7 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 				}
 			}
 			t := tris[fi]
-			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], meshbool.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])))
+			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])))
 		}
 		audit.CompVol[ci] = v.Mul(v, sixth)
 		if audit.CompVol[ci].Sign() == 0 {

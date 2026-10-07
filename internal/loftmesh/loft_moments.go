@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -35,7 +34,7 @@ type LoftVertexDistance struct {
 // LineSegs is exactly that shape (docs/loft-design.md Table B splits every
 // wall quad along a diagonal), so this is the ordinary case, not an edge one.
 func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
-	w := meshbool.Xcross(u, v)
+	w := proof.Xcross(u, v)
 	q := proof.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)

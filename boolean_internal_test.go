@@ -75,8 +75,8 @@ func classify(t *testing.T, ta, tb [3]r3.Vec) meshbool.TriContact {
 	t.Helper()
 	xta := [3]proofarith.Xpt{proofarith.XptOf(ta[0]), proofarith.XptOf(ta[1]), proofarith.XptOf(ta[2])}
 	xtb := [3]proofarith.Xpt{proofarith.XptOf(tb[0]), proofarith.XptOf(tb[1]), proofarith.XptOf(tb[2])}
-	na := meshbool.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
+	na := proofarith.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
+	nb := proofarith.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
 	c, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	return c
@@ -1015,8 +1015,8 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
 	xta := [3]proofarith.Xpt{proofarith.XptOf(a[0]), proofarith.XptOf(a[1]), proofarith.XptOf(a[2])}
 	xtb := [3]proofarith.Xpt{proofarith.XptOf(b[0]), proofarith.XptOf(b[1]), proofarith.XptOf(b[2])}
-	na := meshbool.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
+	na := proofarith.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
+	nb := proofarith.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
 
 	filtered, err := classifyPair(a, b, xta, xtb, na, nb, true)
 	require.NoError(t, err)
@@ -1041,21 +1041,21 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			xtri := [3]proofarith.Xpt{proofarith.XptOf(tc.tri[0]), proofarith.XptOf(tc.tri[1]), proofarith.XptOf(tc.tri[2])}
-			ntri := meshbool.Xcross(proofarith.Xsub(xtri[1], xtri[0]), proofarith.Xsub(xtri[2], xtri[0]))
+			ntri := proofarith.Xcross(proofarith.Xsub(xtri[1], xtri[0]), proofarith.Xsub(xtri[2], xtri[0]))
 			uncertain := 0
 			for i := range 3 {
-				_, certainA := meshbool.OrientSignFloat(a[0], a[1], a[2], tc.tri[i])
-				_, certainB := meshbool.OrientSignFloat(tc.tri[0], tc.tri[1], tc.tri[2], a[i])
+				_, certainA := proofarith.OrientSignFloat(a[0], a[1], a[2], tc.tri[i])
+				_, certainB := proofarith.OrientSignFloat(tc.tri[0], tc.tri[1], tc.tri[2], a[i])
 				if !certainA {
 					uncertain++
 				}
 				if !certainB {
 					uncertain++
 				}
-				require.Equal(t, meshbool.OrientSign(a[0], a[1], a[2], tc.tri[i]),
-					meshbool.OrientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
-				require.Equal(t, meshbool.OrientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
-					meshbool.OrientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
+				require.Equal(t, proofarith.OrientSign(a[0], a[1], a[2], tc.tri[i]),
+					proofarith.OrientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
+				require.Equal(t, proofarith.OrientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
+					proofarith.OrientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
 			}
 			require.Positive(t, uncertain, `this case must exercise the exact fallback`)
 		})

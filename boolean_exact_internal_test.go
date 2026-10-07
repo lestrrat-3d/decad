@@ -183,7 +183,7 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 		xa, xb := proof.XptOf(a), proof.XptOf(b)
 		// An exact interior point of the exact segment, at a rational parameter
 		// no float64 can represent, so its rounding is a genuine approximation.
-		xp := meshbool.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
+		xp := proof.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 		p := xp.Vec()
 		require.True(t, meshbool.OnSegmentInterior3(xa, xb, xp),
 			`the constructed point must be exactly interior to the exact segment`)
@@ -239,7 +239,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			a := r3.NewVec(coord(s), coord(s), coord(s))
 			b := r3.NewVec(coord(s), coord(s), coord(s))
 			xa, xb := proof.XptOf(a), proof.XptOf(b)
-			xp := meshbool.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
+			xp := proof.Xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 			p := xp.Vec()
 			require.True(t, meshbool.OnSegmentInterior3(xa, xb, xp),
 				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
@@ -539,7 +539,7 @@ func assertXHPRatEqual(t *testing.T, got proof.Xhp, want refPoint) {
 }
 
 // TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
-// into: meshbool.OrientRat's materialised value and meshbool.OrientSignExact's plain integer
+// into: proof.OrientRat's materialised value and proof.OrientSignExact's plain integer
 // sign must agree over the same probes, sign consumer and value consumer
 // alike.
 func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
@@ -550,7 +550,7 @@ func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
 		for _, py := range xhpGrid {
 			for _, pz := range xhpGrid {
 				p := proof.XptOf(r3.NewVec(px, py, pz))
-				require.Equalf(t, meshbool.OrientSignExact(xa, xb, xc, p), meshbool.OrientRat(xa, xb, xc, p).Sign(),
+				require.Equalf(t, proof.OrientSignExact(xa, xb, xc, p), proof.OrientRat(xa, xb, xc, p).Sign(),
 					`probe (%v,%v,%v): the sign and the materialised value must agree`, px, py, pz)
 			}
 		}
@@ -963,7 +963,7 @@ func referenceMeshParityContext(ctx context.Context, p proof.Xpt, verts []r3.Vec
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
 			xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
-			n := meshbool.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+			n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
 			nAxis := meshbool.XIntCoordOf(n, ray.Axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true

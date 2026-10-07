@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -281,7 +280,7 @@ func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
 func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
 	u := proofarith.Xsub(proofarith.XptOf(b), proofarith.XptOf(a))
 	v := proofarith.Xsub(proofarith.XptOf(c), proofarith.XptOf(a))
-	w := meshbool.Xcross(u, v)
+	w := proofarith.Xcross(u, v)
 	q := proofarith.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))

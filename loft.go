@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -422,7 +421,7 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 // it.
 //
 // Both signs are exact rationals over the two records' own U, V and Origin
-// floats — internal/meshbool/boolean_exact.go's proof.XptOf/xcross/meshbool.XdotSign, the package's
+// floats — internal/proof/exact_point.go's proof.XptOf/proof.Xcross/proof.XdotSign, the package's
 // take-the-floats-exactly discipline — so the gate rests on no tolerance and
 // no residual. It is reject-only: it can refuse a pose, and it never admits
 // one on a small number. The rejected alternative is reading the sign of
@@ -434,15 +433,15 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 // coplanar pose (S5), so a parallel pair that survives that refusal has a
 // strictly nonzero offset and the sign below can only be positive or negative.
 func chainLoftPlaneSideGate(pl0, pl1 PlaneRecord) error {
-	n0 := meshbool.Xcross(proof.XptOf(pl0.U), proof.XptOf(pl0.V))
-	n1 := meshbool.Xcross(proof.XptOf(pl1.U), proof.XptOf(pl1.V))
-	cr := meshbool.Xcross(n0, n1)
+	n0 := proof.Xcross(proof.XptOf(pl0.U), proof.XptOf(pl0.V))
+	n1 := proof.Xcross(proof.XptOf(pl1.U), proof.XptOf(pl1.V))
+	cr := proof.Xcross(n0, n1)
 	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return fmt.Errorf(
 			`%w: the two chain planes are not exactly parallel, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
 			ErrUnsupported)
 	}
-	if meshbool.XdotSign(n0, proof.Xsub(proof.XptOf(pl1.Origin), proof.XptOf(pl0.Origin))) <= 0 {
+	if proof.XdotSign(n0, proof.Xsub(proof.XptOf(pl1.Origin), proof.XptOf(pl0.Origin))) <= 0 {
 		return fmt.Errorf(
 			`%w: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
 			ErrUnsupported)

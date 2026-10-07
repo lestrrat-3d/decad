@@ -973,7 +973,7 @@ func TriangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 //     from RatSqrtUp of the exact |T|²/16, whose answer is decided by exact
 //     rational comparison rather than by any libm's rounding.
 //
-// The chain runs over the HOMOGENEOUS INTEGER kernel (xpt, internal/meshbool/boolean_exact.go),
+// The chain runs over the HOMOGENEOUS INTEGER kernel (xpt, internal/proof/exact_point.go),
 // which carries the same exact values with no normalisation per operation —
 // xhp's own doc comment gives the reason — and materialises one big.Rat at the
 // end, for RatSqrtUp alone. A big.Rat is canonical, so the value handed over
@@ -1025,7 +1025,7 @@ func XspanUpper(a, b proofarith.Xpt) float64 {
 }
 
 // CellCorners is ONE wall cell's four corners lifted to exact homogeneous
-// integer coordinates (proofarith.XptOf, internal/meshbool/boolean_exact.go). Every exact quantity a cell
+// integer coordinates (proofarith.XptOf, internal/proof/exact_point.go). Every exact quantity a cell
 // publishes — its four certified spans and its certified |T|/4 endpoint — is a
 // function of these four points and nothing else, and lifting a corner is the
 // single most expensive step in each of them, so a caller reading more than one
