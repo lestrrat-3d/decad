@@ -272,7 +272,7 @@ the rules leave to the byte budget.
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, trim walks, and Trim/Extend record helpers. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
-| `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
+| `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
