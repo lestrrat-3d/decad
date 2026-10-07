@@ -2,12 +2,14 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -171,50 +173,25 @@ func offsetLoopBudget(budget *proofbound.WorkBudget, loop cornerLoop, s, t float
 // decided, so the offset build (offsetLoopBudget) and its displacement proof
 // (offsetSectionDelta) always read the same joins.
 func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t float64) ([]cornerJoin, error) {
-	n := len(walks)
-	joins := make([]cornerJoin, n)
-	for i := range n {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		prev := walks[(i+n-1)%n]
-		cur := walks[i]
-		vU, vV := cur.StartU, cur.StartV
-		aox, aoy, la := normalize2(prev.TanOutU, prev.TanOutV)
-		bix, biy, lb := normalize2(cur.TanInU, cur.TanInV)
-		if la == 0 || lb == 0 {
-			return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
-		}
-		cross := aox*biy - aoy*bix
-		// Left normals of the two tangents point into the material (the walk
-		// keeps the material on its left); the offset endpoint is t along it.
-		pA := Point2{U: vU + s*t*(-aoy), V: vV + s*t*aox}
-		pB := Point2{U: vU + s*t*(-biy), V: vV + s*t*bix}
-		if math.Abs(cross) > shellTol && (cross > 0) == (s < 0) {
-			// arc corner: sign(cross) == −s.
-			joins[i] = cornerJoin{arc: true, vU: vU, vV: vV, pA: pA, pB: pB}
-			continue
-		}
-		if math.Abs(cross) <= shellTol && aox*bix+aoy*biy > 0 {
-			// G1 join (modify §7's dead-zone rule): the two offset carriers are
-			// tangent at the corner moved t along the shared normal, so that point
-			// is their one common point. Intersecting them would solve a double
-			// root the float discriminant cannot hold at zero (±1e-14 in practice),
-			// which is the erratic S11/S11a refusal this branch replaces. A cusp
-			// (dot <= 0) stays on the miter row below.
-			joins[i] = cornerJoin{g1: true, vU: vU, vV: vV, m: pB}
-			continue
-		}
-		// miter corner: intersect the two offset carriers, nearest the corner.
-		offA := offsetCarrier(prev, s, t)
-		offB := offsetCarrier(cur, s, t)
-		mx, my, err := intersectOffsets(offA, offB, vU, vV)
-		if err != nil {
-			return nil, errOffsetTopology
-		}
-		joins[i] = cornerJoin{vU: vU, vV: vV, m: Point2{U: mx, V: my}}
+	result, err := offset2d.JoinsBudget(budget, walks, s, t, shellTol)
+	if errors.Is(err, offset2d.ErrNoDirection) {
+		return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 	}
-
+	if errors.Is(err, offset2d.ErrNoIntersection) {
+		return nil, errOffsetTopology
+	}
+	if err != nil {
+		return nil, err
+	}
+	joins := make([]cornerJoin, len(result))
+	for i, j := range result {
+		joins[i] = cornerJoin{
+			arc: j.Arc, g1: j.G1, vU: j.VertU, vV: j.VertV,
+			m:  Point2{U: j.M.U, V: j.M.V},
+			pA: Point2{U: j.PA.U, V: j.PA.V},
+			pB: Point2{U: j.PB.U, V: j.PB.V},
+		}
+	}
 	return joins, nil
 }
 
@@ -238,28 +215,7 @@ type cornerJoin struct {
 // other way outward. ok is false when the radius reaches zero or goes negative —
 // the segment drops (S11a).
 func offsetRadius(w survey2d.SideWalk, s, t float64) (float64, bool) {
-	inside := 1.0
-	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
-		inside = -1.0
-	}
-	rr := w.Radius - s*inside*t
-	if rr <= shellTol*math.Max(1, w.Radius) {
-		return 0, false
-	}
-	return rr, true
-}
-
-// offsetCarrier builds a walk's offset carrier for a miter intersection: an
-// offset line (a point on it plus the walk's unit tangent) or a concentric
-// circle. It reuses the fillet's offCurve so the closed-form intersectOffsets
-// serves both ops.
-func offsetCarrier(w survey2d.SideWalk, s, t float64) offCurve {
-	if !w.IsCircular() {
-		tx, ty, _ := normalize2(w.TanInU, w.TanInV)
-		return offCurve{isLine: true, px: w.StartU + s*t*(-ty), py: w.StartV + s*t*tx, dx: tx, dy: ty}
-	}
-	rr, _ := offsetRadius(w, s, t) // positivity already gated in offsetLoop
-	return offCurve{cx: w.CU, cy: w.CV, rr: rr}
+	return offset2d.OffsetRadius(w, s, t, shellTol)
 }
 
 // offsetWalkSegment re-emits a walk's offset curve trimmed to (start, end): a
@@ -288,41 +244,8 @@ func offsetWalkSegment(w survey2d.SideWalk, s, t float64, start, end Point2) (Cu
 // against shellTol scaled by the walk's coordinate magnitude, so the rounding
 // of feet held far from the origin never reads as a sweep past the span.
 func walkOffsetConsumed(w survey2d.SideWalk, start, end Point2) bool {
-	du, dv := end.U-start.U, end.V-start.V
-	if !w.IsCircular() {
-		tx, ty, l := normalize2(w.TanInU, w.TanInV)
-		if l == 0 {
-			return false // no direction to compare against; left to other gates
-		}
-		adv := du*tx + dv*ty // signed advance along the walk's tangent
-		return adv <= shellTol*math.Max(1, math.Hypot(du, dv))
-	}
-	// An arc's offset must not sweep further than the arc it descends from: a
-	// consumed arc's trimmed feet swap sides, so its walk-sense sweep wraps the
-	// long way round, exceeding the original span.
-	a0 := math.Atan2(start.V-w.CV, start.U-w.CU)
-	a1 := math.Atan2(end.V-w.CV, end.U-w.CU)
-	span := a1 - a0
-	if w.Th1 > w.Th0 { // CCW walk
-		for span < 0 {
-			span += 2 * math.Pi
-		}
-	} else { // CW walk
-		for span > 0 {
-			span -= 2 * math.Pi
-		}
-		span = -span
-	}
-	// The feet are held to coordinate rounding, so an overshoot is evidence only
-	// once it exceeds that rounding AS A LENGTH on the offset circle — the same
-	// scale-relative reading offsetRadius and the line branch above take. A
-	// consumed arc overshoots by nearly a whole turn minus its own span, so the
-	// gate's reject side is untouched; only a G1-joined arc far from the origin,
-	// whose feet differ from its own endpoints' radials by ulp(coordinate)/radius,
-	// stops reading as consumed.
-	overshoot := span - math.Abs(w.Th1-w.Th0)
-	rr := math.Hypot(start.U-w.CU, start.V-w.CV)
-	return rr*overshoot > shellTol*math.Max(1, math.Abs(w.CU)+math.Abs(w.CV)+2*w.Radius)
+	return offset2d.WalkConsumed(w, offset2d.Point{U: start.U, V: start.V},
+		offset2d.Point{U: end.U, V: end.V}, shellTol)
 }
 
 // circleSegConcentric records a full-circle walk as a CircleSeg of radius rr in
