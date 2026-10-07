@@ -99,6 +99,7 @@ the rules leave to the byte budget.
 | `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
 | `mirror_join.go` | `WithJoin`: the mirror join's admission, exact reflection, record splice and audit. See `docs/mirror-pattern-design.md` §5. |
+| `pattern.go` | `PatternCopies` and its specs: frame-keeping instance records with `δ_pattern`, or `PlacedCopy`. See `docs/mirror-pattern-design.md` §6.2. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
@@ -136,7 +137,7 @@ the rules leave to the byte budget.
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
-| `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
+| `loft_topology.go` | Assembles the paired stations into the payload's flat-triangle solid and builds its `Body` topology. See `docs/loft-design.md` §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Modify
@@ -148,7 +149,7 @@ the rules leave to the byte budget.
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
-| `shell_cup.go` | `cupPayload` and `evalCup`: the two-co-directional-prism body a one-cap `Shell` builds, with Exact mass properties and roles. See `docs/modify-design.md` §9; clearance stays staged (§12 D6). |
+| `shell_cup.go` | `cupPayload` and `evalCup`: the two-prism body a one-cap `Shell` builds, with its mass properties and roles. See `docs/modify-design.md` §9, §12 D6. |
 
 ### Cap-loop chamfer
 
@@ -252,7 +253,7 @@ the rules leave to the byte budget.
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks). Never `package main`. |
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
-| `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
+| `decadtest/` | The public test kit: comparison helpers over bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis and oriented box contact proofs. |

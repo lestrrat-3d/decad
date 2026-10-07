@@ -585,6 +585,14 @@
 2	0.00	TestPatchReproducesThroughPlacement
 2	0.00	TestPatchVerifiesUndecided
 2	0.00	TestPathRecordsOwnedSegments
+2	0.02	TestPatternCopiesCircular
+2	0.02	TestPatternCopiesGates
+2	0.02	TestPatternCopiesLinearExact
+2	0.02	TestPatternCopiesLinearInches
+2	0.02	TestPatternCopiesRotationSense
+2	0.02	TestPatternCopiesNonCoDirectional
+2	0.02	TestPatternCopiesStacked
+2	0.02	TestPatternCopiesUnionStack
 2	0.00	TestPlaced
 2	0.00	TestPlacedCopy
 2	0.00	TestPlacedCopyPreservesChamferRoles

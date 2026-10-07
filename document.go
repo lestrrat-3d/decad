@@ -323,10 +323,21 @@ func magnitudeInBounded(v units.Value, kind units.Kind, unit units.Unit, what st
 // and so an exact rational, so the comparison is the conversion's true error,
 // whatever sequence of float operations produced the held value.
 func conversionRound(v units.Value, unit units.Unit, held float64) float64 {
-	mag, from, to := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor()), proofarith.FloatRat(unit.Factor())
-	if mag == nil || from == nil || to == nil || to.Sign() == 0 {
+	exact := exactConversion(v, unit)
+	if exact == nil {
 		return math.Inf(1)
 	}
-	exact := new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
 	return proofarith.RationalFloatError(exact, held)
+}
+
+// exactConversion is v in unit as the exact rational the rescale denotes: its
+// magnitude times its own unit's factor over unit's factor, every operand the
+// float it is held as. It is nil when an operand is not finite or unit's
+// factor is zero.
+func exactConversion(v units.Value, unit units.Unit) *big.Rat {
+	mag, from, to := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor()), proofarith.FloatRat(unit.Factor())
+	if mag == nil || from == nil || to == nil || to.Sign() == 0 {
+		return nil
+	}
+	return new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
 }

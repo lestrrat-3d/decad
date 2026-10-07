@@ -190,6 +190,60 @@ func stackedExposed(ctx context.Context, holes []LoopRecord) ([]ProfileRecord, e
 	return out, nil
 }
 
+// stackedInterfaces derives every interface's exposed records from the slabs
+// alone, so a rewrite that moves or rebuilds the slab regions (the mirror
+// join, a pattern instance) re-derives its interfaces here rather than moving
+// the old ones, and falsifyStackedPayload's I7 holds by construction and is
+// still checked. Where the two outers match, each exclusive hole of one side,
+// reversed, is the material the other side exposes. Where they differ (§2.2's
+// union reading), the one patch is the wider region with the narrower outer
+// reversed as its hole, on the side prior records: which side is wider is a
+// fact of the stack's construction, and a rigid motion of both regions keeps
+// it.
+func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlabInterface) ([]prismSlabInterface, error) {
+	out := make([]prismSlabInterface, len(slabs)-1)
+	for i := range out {
+		lowerRegion, upperRegion := slabs[i].regions[0], slabs[i+1].regions[0]
+		same, err := loopRecordsEqual(nil, lowerRegion.Outer, upperRegion.Outer)
+		if err != nil {
+			return nil, err
+		}
+		if !same {
+			if i >= len(prior) {
+				return nil, fmt.Errorf(`%w: interface %d changes the outer loop and has no prior record of its exposed side`, ErrDegenerate, i)
+			}
+			if len(prior[i].lowerExposed) == 1 && len(prior[i].upperExposed) == 0 {
+				lower, err := stackedUnionExposed(ctx, lowerRegion, upperRegion)
+				if err != nil {
+					return nil, err
+				}
+				out[i] = prismSlabInterface{lowerExposed: lower}
+				continue
+			}
+			upper, err := stackedUnionExposed(ctx, upperRegion, lowerRegion)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = prismSlabInterface{upperExposed: upper}
+			continue
+		}
+		lowerOnly, upperOnly, err := stackedExclusiveHoles(lowerRegion, upperRegion)
+		if err != nil {
+			return nil, err
+		}
+		lower, err := stackedExposed(ctx, upperOnly)
+		if err != nil {
+			return nil, err
+		}
+		upper, err := stackedExposed(ctx, lowerOnly)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = prismSlabInterface{lowerExposed: lower, upperExposed: upper}
+	}
+	return out, nil
+}
+
 // falsifyStackedPayload refuses any record whose interfaces cannot be built
 // from whole, shared loop columns. It is run before topology and chording.
 func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {

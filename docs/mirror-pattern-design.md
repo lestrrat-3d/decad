@@ -188,16 +188,21 @@ func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error)
 bodies, instances `1..Count−1` in order. `Patterned` retires the receiver and
 returns ONE body holding every instance (§6). `Count < 2` is `ErrDegenerate`
 (a pattern of one is the receiver), a non-finite or zero `Dir`/`Axis` is
-`ErrNotFinite`/`ErrDegenerate`, a wrong-kind `Step` is `ErrUnitKind`, a
-negative one `ErrNegativeMagnitude` (core §12: sense is `Dir`'s). A
+`ErrNotFinite`/`ErrDegenerate` (a non-finite `Center` too is `ErrNotFinite`),
+a wrong-kind `Step` is `ErrUnitKind`, a negative one `ErrNegativeMagnitude`
+(core §12: sense is `Dir`'s) and a zero one `ErrDegenerate` (every instance
+would sit on the receiver). Every instance is built before any is registered,
+so a refusal or a cancelled context leaves the document unchanged. A
 `CircularPattern` whose `Center` does not lie on the receiver's own sweep axis
 is admitted: the instance is rotated about the stated axis, wherever it is.
 
 **An instance of a co-directional prism keeps the receiver's frame.** Where
-the receiver is a `prismPayload` or `stackedPrismPayload` and the motion
-keeps it co-directional — `Dir · N == 0.0` for a linear pattern, or `Axis`
-bit-identical to `±N` for a circular one, both read on the composed world
-normal `xform.ApplyDir(frame.N())` exactly as prism-boolean G3 reads it — an
+the receiver is a `prismPayload` or `stackedPrismPayload` whose every
+segment is a `LineSeg`, `ArcSeg` or `CircleSeg` with no trimmed arc or circle,
+and the motion keeps it co-directional — the exact rational `Dir · N` zero
+for a linear pattern, or `Axis` bit-identical to `±N` for a circular one,
+both read on the composed world normal `xform.ApplyDir(frame.N())` as
+prism-boolean G3 reads it — an
 instance is NOT a `PlacedCopy`. It is the same frame and placement over a
 TRANSLATED or ROTATED copy of the record (§6.2), with the rounding of that
 record motion charged into the instance's `sectionDelta`. That is what keeps
@@ -348,34 +353,46 @@ For the frame-keeping arm, instance `i`'s record is the receiver's record
 under an in-plane motion of the section:
 
 - **Linear.** The offset is `t_i = (i · step / |Dir|) · Dir` in world
-  millimetres, read in the frame as `(t_i · U, t_i · V)` through
-  `Frame.ToLocal` on the direction (never hand-rolled: `r3` does the
-  projection). `1/|Dir|` is a certified rational enclosure
-  (`ratSqrtDown`/`ratSqrtUp` over the exact `Dir · Dir`), zero-width when
-  `Dir · Dir` is a perfect square of a float — every stored axis is. Each
-  coordinate of each segment point is `u + du_i`, `v + dv_i`. The exact
-  rational value of each sum over the stored floats is compared with the
-  float held, and `rationalFloatError` of every coordinate, the enclosure's
-  width, `du_i`/`dv_i`'s own rounding and `step`'s unit conversion
-  (`conversionRound`) are charged into the group's `sectionDelta` as
-  `δ_pattern`, the largest over every instance and coordinate. A `Dir`
-  bit-identical to `±U` or `±V`, an integer-millimetre `step` and
-  integer-millimetre coordinates make every term exactly zero.
-- **Circular about `±N`.** `Center` is read in the frame as `(c_u, c_v)`
-  through `Frame.ToLocal` (rounding charged as above); the rotation angle of
+  millimetres, read on the placed frame axes as the exact rationals
+  `(t_i · U_w, t_i · V_w)`, with `U_w`, `V_w` the frame's axes under the
+  placement's basis, taken over the held floats. `step` is the exact rational
+  the caller's `Step` denotes in millimetres (`exactConversion`, the value
+  `conversionRound` compares against), and `1/|Dir|` is a certified rational
+  enclosure (`RatSqrtDown`/`RatSqrtUp` over the exact `Dir · Dir`),
+  zero-width when `Dir · Dir` is a float's square — every stored axis is.
+  Each moved coordinate `u + du_i`, `v + dv_i` is therefore an exact
+  interval; the float nearest its midpoint is held, and its
+  `IntervalFloatError` covers the enclosure's width, the conversion and the
+  sum's rounding at once. A `Dir` along a frame axis, an integer-millimetre
+  `step` and integer-millimetre coordinates make every term exactly zero.
+- **Circular about `±N`.** `Center` is read on the placed frame axes as the
+  exact rationals `(c_u, c_v)`, and the rotation is applied to exact
+  rationals, so the centre enters no rounding of its own. The rotation of
   instance `i` is `i/Count` of a turn, and `cos`/`sin` of it are certified
-  enclosures from `internal/proofbound`'s certified trig, so each rotated
-  coordinate `c + R(θ_i)(p − c)` is an interval whose midpoint is held and
-  whose half-width plus the final rounding is charged into `δ_pattern`.
-  `Count ∈ {1, 2, 4}` and the half-turn and quarter-turn instances of any
-  `Count` divisible by 4 are special-cased to the exact permutations
-  `(u, v) ↦ (−u, −v)` and `(−v, u)` about `c`, since the angle denotes
-  exactly those and no trig is needed; a bolt circle of four holes on integer
-  coordinates is `Exact`.
+  enclosures from `proofbound.TurnSinCosInterval` (sin and cos of `2πt` for a
+  rational turn `t`), so each rotated coordinate `c + R(θ_i)(p − c)` is an
+  interval whose midpoint is held and whose `IntervalFloatError` is charged.
+  The half turn and the quarter turns (`t` reduced to `1/2`, `1/4`, `3/4`)
+  are the exact maps `(u, v) ↦ (−u, −v)`, `(−v, u)` and `(v, −u)` about `c`,
+  since the angle denotes exactly those and no trig is needed; a bolt circle
+  of four holes on integer coordinates is `Exact`. The plane's rotation sense
+  is the world rotation's, reversed when `Axis` is `−N` and reversed again
+  when `xform` is a reflection, which conjugates a rotation into its inverse.
+- A point's charge is its two coordinates' errors summed (the one that
+  rounded, when only one did). A segment's charge is its largest point
+  charge, tripled for an arc (its centre and radius both move with its three
+  points' rounding, the argument `offsetSectionDelta` states), and
+  `δ_pattern` is the largest segment charge, added to the receiver's own
+  `sectionDelta`.
 - Every `CircleSeg`'s `CCW`, every `ArcSeg`'s sense and every `TStart`/`TEnd`
-  carry over unchanged: a translation or a proper rotation changes no sense.
-  A receiver whose `xform` is a reflection is unaffected: the record is in
-  the receiver's own frame and the reflection stays in `xform`.
+  carry over unchanged: a translation or a proper rotation changes no sense,
+  and the reflection of a reflected receiver stays in `xform`. A stacked
+  receiver's interfaces are re-derived from its moved regions
+  (`stackedInterfaces`), each changed-outer interface of a union-built stack
+  on the side its receiver records. A union-built stack keeps its frame only
+  under a motion with `δ_pattern == 0`: its narrower outer lies inside the
+  wider one by construction, which no audit re-proves, so a rounding motion
+  copies through `PlacedCopy` instead.
 
 `PatternCopies` builds exactly these records too, one `prismPayload` per
 instance under the receiver's frame and placement, so a copy and a group
@@ -438,8 +455,8 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | Reflected coordinate | `big.Rat` reflection, one rounding | `δ_mirror = max rationalFloatError`, into `sectionDelta` | — |
 | Closure of each spliced loop | the seam's junction falsifier on the assembled record | — | rejects a junction the two recorded coordinates contradict (RB9); admits nothing |
 | Simplicity, orientation, nesting of the assembled record | modify §5 audit, empty blend map | the diameter-anchored floor is verification §4's | S7 refuses near contact; S8/S9 refuse a decided break; none admits |
-| Instance translation | `Frame.ToLocal` of the world offset, per-coordinate sums | `δ_pattern = max rationalFloatError` over sums, offsets and `step` conversion, into `sectionDelta` | — |
-| Instance rotation | certified `cos`/`sin` enclosures, exact quarter and half turns | enclosure half-width plus rounding into `δ_pattern` | — |
+| Instance translation | exact rational offset on the placed axes, per-coordinate interval sums | `δ_pattern`: `IntervalFloatError` per coordinate, covering offset, enclosure, conversion and sum, into `sectionDelta` | — |
+| Instance rotation | `TurnSinCosInterval` enclosures over an exact centre, exact quarter and half turns | `IntervalFloatError` per coordinate into `δ_pattern` | — |
 | Disjointness of a group | `sketch` arrangement of the outers, read structurally | — | any `Partial` edge, hole or invalid cell refuses the group; nothing admits one but `Count` whole valid cells |
 | Group measurements | stacked §4 bounded sums | each term's own bound; `exactSumRound` on the sum | — |
 
@@ -495,9 +512,10 @@ Every test asserts computed geometry; bounds are asserted as relations
   `Patterned` returns 4 lumps, 24 faces, `Exact` 500 mm³, `sectionDelta`
   exactly `0.0`; `PatternCopies` returns 3 live bodies and leaves the
   receiver live, each instance `Exact` with centroid x = 2.5 + 10i.
-- **Linear pattern, charged**: step `units.Inches(1)` reports
-  `sectionDelta > 0` equal to the conversion's `rationalFloatError`
-  composed with the sum roundings, asserted first on the instance.
+- **Linear pattern, charged**: step `units.Inches(0.3)` reports
+  `sectionDelta > 0`, at least the conversion's `rationalFloatError`, and an
+  instance centroid enclosing the exact `2.5 + i · 0.3 · 25.4` over the held
+  floats (`units.Inches(1)` converts to the float 25.4 with no rounding).
 - **Circular pattern**: six Ø4 holes on a 20 mm radius about the plate normal:
   `Patterned` on the cylinder tool gives 6 regions, each centre within the
   published `sectionDelta` of `(20 cos θ_i, 20 sin θ_i)` taken over
