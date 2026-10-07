@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -19,10 +18,10 @@ import (
 type Frame struct {
 	Frame r3.Frame
 
-	OriginExact survey2d.IvVec3
-	UExact      survey2d.IvVec3
-	VExact      survey2d.IvVec3
-	NExact      survey2d.IvVec3
+	OriginExact proofbound.IvVec3
+	UExact      proofbound.IvVec3
+	VExact      proofbound.IvVec3
+	NExact      proofbound.IvVec3
 
 	OriginBound float64
 	UBound      float64
@@ -31,10 +30,10 @@ type Frame struct {
 }
 
 func InitialFrame(frame r3.Frame) (Frame, error) {
-	origin, okO := survey2d.IvVec3Of(frame.Origin())
-	u, okU := survey2d.IvVec3Of(frame.U())
-	v, okV := survey2d.IvVec3Of(frame.V())
-	n, okN := survey2d.IvVec3Of(frame.N())
+	origin, okO := proofbound.IvVec3Of(frame.Origin())
+	u, okU := proofbound.IvVec3Of(frame.U())
+	v, okV := proofbound.IvVec3Of(frame.V())
+	n, okN := proofbound.IvVec3Of(frame.N())
 	if !okO || !okU || !okV || !okN {
 		return Frame{}, fmt.Errorf(`%w: the source sweep frame is not finite`, decaderr.ErrUnsupported)
 	}
@@ -43,8 +42,8 @@ func InitialFrame(frame r3.Frame) (Frame, error) {
 
 // Line transports a frame along one recorded straight span.
 func Line(current Frame, start, end r3.Vec) (Frame, error) {
-	deltaExact := survey2d.IvVec3Sub(mustIVVec3Of(end), mustIVVec3Of(start))
-	originExact := survey2d.IvVec3Add(current.OriginExact, deltaExact)
+	deltaExact := proofbound.IvVec3Sub(mustIVVec3Of(end), mustIVVec3Of(start))
+	originExact := proofbound.IvVec3Add(current.OriginExact, deltaExact)
 	if exact, ok := exactSweepTransportFrame(
 		originExact,
 		current.UExact,
@@ -77,7 +76,7 @@ func Line(current Frame, start, end r3.Vec) (Frame, error) {
 
 // Arc holds the certified geometry of one recorded circular span.
 type Arc struct {
-	CenterExact, AxisExact survey2d.IvVec3
+	CenterExact, AxisExact proofbound.IvVec3
 	Sin, Cos               proofbound.RatInterval
 	Phi                    float64
 }
@@ -87,18 +86,18 @@ func TransportArc(current Frame, arc Arc) (Frame, error) {
 	centerExact, axisExact := arc.CenterExact, arc.AxisExact
 	sin, cos := arc.Sin, arc.Cos
 
-	rotateDirection := func(vector survey2d.IvVec3) survey2d.IvVec3 {
+	rotateDirection := func(vector proofbound.IvVec3) proofbound.IvVec3 {
 		oneMinusCos := proofbound.IntervalSub(proofbound.PointInterval(big.NewRat(1, 1)), cos)
-		return survey2d.IvVec3Add(
-			survey2d.IvVec3Mul(vector, cos),
-			survey2d.IvVec3Add(
-				survey2d.IvVec3Mul(survey2d.IvVec3Cross(axisExact, vector), sin),
-				survey2d.IvVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, survey2d.IvVec3Dot(axisExact, vector))),
+		return proofbound.IvVec3Add(
+			proofbound.IvVec3Mul(vector, cos),
+			proofbound.IvVec3Add(
+				proofbound.IvVec3Mul(proofbound.IvVec3Cross(axisExact, vector), sin),
+				proofbound.IvVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, proofbound.IvVec3Dot(axisExact, vector))),
 			),
 		)
 	}
-	rotatePoint := func(point survey2d.IvVec3) survey2d.IvVec3 {
-		return survey2d.IvVec3Add(centerExact, rotateDirection(survey2d.IvVec3Sub(point, centerExact)))
+	rotatePoint := func(point proofbound.IvVec3) proofbound.IvVec3 {
+		return proofbound.IvVec3Add(centerExact, rotateDirection(proofbound.IvVec3Sub(point, centerExact)))
 	}
 
 	originExact := rotatePoint(current.OriginExact)
@@ -141,7 +140,7 @@ func TransportArc(current Frame, arc Arc) (Frame, error) {
 // any rounded coordinate or any normalization movement falls back to the
 // bounded general transport.
 func exactSweepTransportFrame(
-	originExact, uExact, vExact, nExact survey2d.IvVec3,
+	originExact, uExact, vExact, nExact proofbound.IvVec3,
 ) (Frame, bool) {
 	origin, okO := exactSweepIVVec(originExact)
 	u, okU := exactSweepIVVec(uExact)
@@ -160,7 +159,7 @@ func exactSweepTransportFrame(
 	return out, true
 }
 
-func exactSweepIVVec(vector survey2d.IvVec3) (r3.Vec, bool) {
+func exactSweepIVVec(vector proofbound.IvVec3) (r3.Vec, bool) {
 	components := [3]float64{}
 	for i, coordinate := range vector {
 		if coordinate.Lo.Cmp(coordinate.Hi) != 0 {
@@ -177,7 +176,7 @@ func exactSweepIVVec(vector survey2d.IvVec3) (r3.Vec, bool) {
 
 func newSweepTransportFrame(
 	frame r3.Frame,
-	originExact, uExact, vExact, nExact survey2d.IvVec3,
+	originExact, uExact, vExact, nExact proofbound.IvVec3,
 ) (Frame, error) {
 	originBound, okO := sweepIVVecError(originExact, frame.Origin())
 	uBound, okU := sweepIVVecError(uExact, frame.U())
@@ -201,7 +200,7 @@ func newSweepTransportFrame(
 	}, nil
 }
 
-func sweepIVVecError(exact survey2d.IvVec3, held r3.Vec) (float64, bool) {
+func sweepIVVecError(exact proofbound.IvVec3, held r3.Vec) (float64, bool) {
 	ex := proofbound.IntervalFloatError(exact[0], held.X)
 	ey := proofbound.IntervalFloatError(exact[1], held.Y)
 	ez := proofbound.IntervalFloatError(exact[2], held.Z)
@@ -213,8 +212,8 @@ func sweepIVVecError(exact survey2d.IvVec3, held r3.Vec) (float64, bool) {
 	return bound, !math.IsNaN(bound) && !math.IsInf(bound, 0)
 }
 
-func mustIVVec3Of(vector r3.Vec) survey2d.IvVec3 {
-	out, ok := survey2d.IvVec3Of(vector)
+func mustIVVec3Of(vector r3.Vec) proofbound.IvVec3 {
+	out, ok := proofbound.IvVec3Of(vector)
 	if !ok {
 		panic("decad: a recorded Sweep path point must be finite")
 	}
@@ -230,7 +229,7 @@ func finiteValues(values ...float64) bool {
 	return true
 }
 
-func heldSweepRatVec(vector survey2d.IvVec3) (r3.Vec, bool) {
+func heldSweepRatVec(vector proofbound.IvVec3) (r3.Vec, bool) {
 	var held [3]float64
 	for i, component := range vector {
 		value := component.Lo
@@ -242,7 +241,7 @@ func heldSweepRatVec(vector survey2d.IvVec3) (r3.Vec, bool) {
 	return r3.NewVec(held[0], held[1], held[2]), true
 }
 
-func heldSweepUnitVector(unit survey2d.IvVec3) (r3.Vec, bool) {
+func heldSweepUnitVector(unit proofbound.IvVec3) (r3.Vec, bool) {
 	component := func(value proofbound.RatInterval) float64 {
 		midpoint := new(big.Rat).Add(value.Lo, value.Hi)
 		midpoint.Quo(midpoint, big.NewRat(2, 1))

@@ -9,8 +9,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -956,7 +954,7 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 					if at.Cmp(new(big.Rat)) < 0 || at.Cmp(width) > 0 {
 						continue
 					}
-					sin, cos, okT := survey2d.RadSinCosInterval(at)
+					sin, cos, okT := proofbound.RadSinCosInterval(at)
 					require.True(t, okT)
 					v := proofbound.IntervalAdd(proofbound.IntervalAdd(proofbound.IntervalScale(cos, tc.a), proofbound.IntervalScale(sin, tc.b)), proofbound.PointInterval(tc.c))
 					require.LessOrEqual(t, ext.minLo.Cmp(v.Hi), 0, "a reachable value sits below the reported minimum")

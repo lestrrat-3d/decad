@@ -1,4 +1,4 @@
-package survey2d
+package proofbound
 
 import "math/big"
 

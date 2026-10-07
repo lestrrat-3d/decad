@@ -325,12 +325,12 @@ func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, 
 	if err != nil || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(v) {
 		return 0, 0, false
 	}
-	nv, okN := survey2d.IvVec3Of(n.Value)
-	pv, okP := survey2d.IvVec3Of(p)
+	nv, okN := proofbound.IvVec3Of(n.Value)
+	pv, okP := proofbound.IvVec3Of(p)
 	if !okN || !okP {
 		return 0, 0, false
 	}
-	allow := proofbound.AbsSumUpper(proofbound.ProductUpper(bound, pLen), proofbound.IntervalFloatError(survey2d.IvVec3Dot(nv, pv), v))
+	allow := proofbound.AbsSumUpper(proofbound.ProductUpper(bound, pLen), proofbound.IntervalFloatError(proofbound.IvVec3Dot(nv, pv), v))
 	if proofbound.IsNonFinite(allow) {
 		return 0, 0, false
 	}
@@ -341,11 +341,11 @@ func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, 
 // one ulp either side of one, and stating it beats assuming it: a bound scaled
 // by a length that is 1+e is a bound, and one scaled by an assumed 1 is not.
 func pullLengthUpper(p r3.Vec) (float64, bool) {
-	pv, ok := survey2d.IvVec3Of(p)
+	pv, ok := proofbound.IvVec3Of(p)
 	if !ok {
 		return 0, false
 	}
-	length, okSqrt := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(pv))
+	length, okSqrt := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(pv))
 	if !okSqrt {
 		return 0, false
 	}

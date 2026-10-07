@@ -56,7 +56,7 @@ func (c RevArcCell) Speed() *big.Rat {
 // rhoNodes encloses ρ at each node of the fixed subdivision, and states the
 // per-piece second-order allowance the integral below charges beside them.
 //
-// Nothing here compares against π. Two survey2d.RadSinCosInterval calls enclose the
+// Nothing here compares against π. Two proofbound.RadSinCosInterval calls enclose the
 // starting angle and one step. The addition identities then carry certified
 // intervals from one node to the next. This avoids running the trig series at
 // every node while preserving an enclosure at each exact rational angle.
@@ -73,11 +73,11 @@ func (c RevArcCell) Speed() *big.Rat {
 func (c RevArcCell) RhoNodes() ([]proofbound.RatInterval, *big.Rat, bool) {
 	nodes := make([]proofbound.RatInterval, RevolveArcIntegralSteps+1)
 	step := new(big.Rat).Quo(c.Dth, big.NewRat(RevolveArcIntegralSteps, 1))
-	sinIv, cosIv, ok := survey2d.RadSinCosInterval(c.Th0)
+	sinIv, cosIv, ok := proofbound.RadSinCosInterval(c.Th0)
 	if !ok {
 		return nil, nil, false
 	}
-	stepSinIv, stepCosIv, ok := survey2d.RadSinCosInterval(step)
+	stepSinIv, stepCosIv, ok := proofbound.RadSinCosInterval(step)
 	if !ok {
 		return nil, nil, false
 	}

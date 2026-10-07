@@ -6,8 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -91,8 +89,8 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 	})
 }
 
-func sweepRatIntervalVec(vector sweepRatVec) survey2d.IvVec3 {
-	return survey2d.IvVec3{
+func sweepRatIntervalVec(vector sweepRatVec) proofbound.IvVec3 {
+	return proofbound.IvVec3{
 		proofbound.PointInterval(vector[0]),
 		proofbound.PointInterval(vector[1]),
 		proofbound.PointInterval(vector[2]),

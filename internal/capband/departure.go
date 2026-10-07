@@ -189,27 +189,27 @@ type PatchBuilt struct {
 // from zero, or a sine not proven below one — and the caller publishes the
 // trivial bound there.
 func PlaneDeparture(tagUVec, tagVVec r3.Vec, b PatchBuilt) (float64, bool) {
-	tagU, okU := survey2d.IvVec3Of(tagUVec)
-	tagV, okV := survey2d.IvVec3Of(tagVVec)
+	tagU, okU := proofbound.IvVec3Of(tagUVec)
+	tagV, okV := proofbound.IvVec3Of(tagVVec)
 	a0, a1, okS := straightEnds(b.SideDir)
 	b0, b1, okC := straightEnds(b.CapDir)
 	if !okU || !okV || !okS || !okC {
 		return 0, false
 	}
-	n := survey2d.IvVec3Cross(tagU, tagV)
+	n := proofbound.IvVec3Cross(tagU, tagV)
 
 	// The bilinear patch's own normal N(u, v) = C0 + u·Cu + v·Cv, exactly.
-	p0 := survey2d.IvVec3Sub(a1, a0)
-	dp := survey2d.IvVec3Sub(survey2d.IvVec3Sub(b1, b0), p0)
-	r0 := survey2d.IvVec3Sub(b0, a0)
-	c0, cu, cv := survey2d.IvVec3Cross(p0, r0), survey2d.IvVec3Cross(p0, dp), survey2d.IvVec3Cross(dp, r0)
+	p0 := proofbound.IvVec3Sub(a1, a0)
+	dp := proofbound.IvVec3Sub(proofbound.IvVec3Sub(b1, b0), p0)
+	r0 := proofbound.IvVec3Sub(b0, a0)
+	c0, cu, cv := proofbound.IvVec3Cross(p0, r0), proofbound.IvVec3Cross(p0, dp), proofbound.IvVec3Cross(dp, r0)
 
 	// |N| from below: the constant term's own length, less what the two affine
 	// terms can take from it anywhere in the unit square.
-	baseLen, okB := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(c0))
-	uLen, okU := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(cu))
-	vLen, okV := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(cv))
-	tagLen, okL := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(n))
+	baseLen, okB := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(c0))
+	uLen, okU := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(cu))
+	vLen, okV := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(cv))
+	tagLen, okL := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(n))
 	if !okB || !okU || !okV || !okL {
 		return 0, false
 	}
@@ -222,7 +222,7 @@ func PlaneDeparture(tagUVec, tagVVec r3.Vec, b PatchBuilt) (float64, bool) {
 	// normal is taken on each exact coefficient BEFORE anything is bounded, so
 	// the cancellation the near-planar quad carries survives into the answer.
 	crossSq := new(big.Rat)
-	k0, ku, kv := survey2d.IvVec3Cross(n, c0), survey2d.IvVec3Cross(n, cu), survey2d.IvVec3Cross(n, cv)
+	k0, ku, kv := proofbound.IvVec3Cross(n, c0), proofbound.IvVec3Cross(n, cu), proofbound.IvVec3Cross(n, cv)
 	for i := range 3 {
 		comp := proofbound.RatAdd(proofbound.IntervalAbsUpper(k0[i]), proofbound.IntervalAbsUpper(ku[i]), proofbound.IntervalAbsUpper(kv[i]))
 		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
@@ -248,14 +248,14 @@ func PlaneDeparture(tagUVec, tagVVec r3.Vec, b PatchBuilt) (float64, bool) {
 // straightEnds encloses one straight directrix's two held ruling endpoints,
 // which is everything the flat derivation reads off it. A directrix the body
 // publishes as anything but a `Line3` carrying exactly two ends is refused.
-func straightEnds(ref DirectrixRef) (survey2d.IvVec3, survey2d.IvVec3, bool) {
+func straightEnds(ref DirectrixRef) (proofbound.IvVec3, proofbound.IvVec3, bool) {
 	if !ref.Straight || len(ref.Ends) != 2 {
-		return survey2d.IvVec3{}, survey2d.IvVec3{}, false
+		return proofbound.IvVec3{}, proofbound.IvVec3{}, false
 	}
-	first, okF := survey2d.IvVec3Of(ref.Ends[0])
-	second, okS := survey2d.IvVec3Of(ref.Ends[1])
+	first, okF := proofbound.IvVec3Of(ref.Ends[0])
+	second, okS := proofbound.IvVec3Of(ref.Ends[1])
 	if !okF || !okS {
-		return survey2d.IvVec3{}, survey2d.IvVec3{}, false
+		return proofbound.IvVec3{}, proofbound.IvVec3{}, false
 	}
 	return first, second, true
 }
@@ -267,8 +267,8 @@ func straightEnds(ref DirectrixRef) (survey2d.IvVec3, survey2d.IvVec3, bool) {
 // vanishing tangent arm or sweep height, or a sine not proven below one — and
 // the caller publishes the trivial bound there.
 func ConeDeparture(sinH, cosH proofbound.RatInterval, originVec, axisVec r3.Vec, tagRadius *big.Rat, b PatchBuilt) (float64, bool) {
-	axisIv, okA := survey2d.IvVec3Of(axisVec)
-	originIv, okO := survey2d.IvVec3Of(originVec)
+	axisIv, okA := proofbound.IvVec3Of(axisVec)
+	originIv, okO := proofbound.IvVec3Of(originVec)
 	if !okA || !okO {
 		return 0, false
 	}
@@ -395,12 +395,12 @@ type capDirectrix struct {
 // It refuses a directrix whose own axis is not proven exactly parallel to the
 // tag's: the enclosure of a circle's axial coordinate as a constant is that
 // parallelism, and nothing else here would notice its loss.
-func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin survey2d.IvVec3) (capDirectrix, bool) {
+func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin proofbound.IvVec3) (capDirectrix, bool) {
 	radius := proofarith.FloatRat(ref.Radius)
 	if ref.Straight || radius == nil || radius.Sign() < 0 {
 		return capDirectrix{}, false
 	}
-	centerIv, okC := survey2d.IvVec3Of(ref.Center)
+	centerIv, okC := proofbound.IvVec3Of(ref.Center)
 	if !okC || len(ref.Ends) == 0 {
 		return capDirectrix{}, false
 	}
@@ -424,9 +424,9 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 		return capDirectrix{}, false
 	}
 
-	rel := survey2d.IvVec3Sub(centerIv, origin)
-	zc := survey2d.IvVec3Dot(rel, ahat)
-	offset, okOff := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
+	rel := proofbound.IvVec3Sub(centerIv, origin)
+	zc := proofbound.IvVec3Dot(rel, ahat)
+	offset, okOff := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(proofbound.IvVec3Sub(rel, proofbound.IvVec3Mul(ahat, zc))))
 	if !okOff {
 		return capDirectrix{}, false
 	}
@@ -437,15 +437,15 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 		offset: offset.Hi,
 	}
 	for _, v := range ref.Ends {
-		vIv, ok := survey2d.IvVec3Of(v)
+		vIv, ok := proofbound.IvVec3Of(v)
 		if !ok {
 			return capDirectrix{}, false
 		}
-		relV := survey2d.IvVec3Sub(vIv, origin)
-		zv := survey2d.IvVec3Dot(relV, ahat)
-		rho, okRho := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
-		armRel := survey2d.IvVec3Sub(vIv, centerIv)
-		arm, okArm := proofbound.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
+		relV := proofbound.IvVec3Sub(vIv, origin)
+		zv := proofbound.IvVec3Dot(relV, ahat)
+		rho, okRho := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(proofbound.IvVec3Sub(relV, proofbound.IvVec3Mul(ahat, zv))))
+		armRel := proofbound.IvVec3Sub(vIv, centerIv)
+		arm, okArm := proofbound.IntervalSqrt(proofbound.IvVec3NormSq(proofbound.IvVec3Sub(armRel, proofbound.IvVec3Mul(ahat, proofbound.IvVec3Dot(armRel, ahat)))))
 		if !okRho || !okArm {
 			return capDirectrix{}, false
 		}
@@ -470,7 +470,7 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 // A patch with a point directrix has no such pair at all: its rulings all leave
 // the tag's own origin, where every ruling's own azimuth is the other end's, so
 // the spread is an exact zero.
-func capRulingSkew(b PatchBuilt, side, capped capDirectrix, ahat, origin survey2d.IvVec3) (*big.Rat, bool) {
+func capRulingSkew(b PatchBuilt, side, capped capDirectrix, ahat, origin proofbound.IvVec3) (*big.Rat, bool) {
 	if side.point || capped.point {
 		return new(big.Rat), true
 	}
@@ -484,11 +484,11 @@ func capRulingSkew(b PatchBuilt, side, capped capDirectrix, ahat, origin survey2
 		if !oks || !okc {
 			return nil, false
 		}
-		dot := survey2d.IvVec3Dot(qs, qc)
+		dot := proofbound.IvVec3Dot(qs, qc)
 		if dot.Lo.Sign() <= 0 {
 			return nil, false
 		}
-		cross := survey2d.IvVec3Dot(ahat, survey2d.IvVec3Cross(qs, qc))
+		cross := proofbound.IvVec3Dot(ahat, proofbound.IvVec3Cross(qs, qc))
 		skew = survey2d.RatMax(skew, new(big.Rat).Quo(proofbound.IntervalAbsUpper(cross), dot.Lo))
 	}
 	return skew, true
@@ -496,13 +496,13 @@ func capRulingSkew(b PatchBuilt, side, capped capDirectrix, ahat, origin survey2
 
 // capAxisPerp is a held point's own axis-perpendicular offset from the tag's
 // origin, exactly enclosed.
-func capAxisPerp(p r3.Vec, ahat, origin survey2d.IvVec3) (survey2d.IvVec3, bool) {
-	pIv, ok := survey2d.IvVec3Of(p)
+func capAxisPerp(p r3.Vec, ahat, origin proofbound.IvVec3) (proofbound.IvVec3, bool) {
+	pIv, ok := proofbound.IvVec3Of(p)
 	if !ok {
-		return survey2d.IvVec3{}, false
+		return proofbound.IvVec3{}, false
 	}
-	rel := survey2d.IvVec3Sub(pIv, origin)
-	return survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(rel, ahat))), true
+	rel := proofbound.IvVec3Sub(pIv, origin)
+	return proofbound.IvVec3Sub(rel, proofbound.IvVec3Mul(ahat, proofbound.IvVec3Dot(rel, ahat))), true
 }
 
 // capAxesParallel decides, in exact arithmetic on the two held vectors alone,
@@ -512,12 +512,12 @@ func capAxisPerp(p r3.Vec, ahat, origin survey2d.IvVec3) (survey2d.IvVec3, bool)
 // cross product is exactly zero wherever the build is the one this file
 // describes, and anything else refuses.
 func capAxesParallel(a, b r3.Vec) bool {
-	av, oka := survey2d.IvVec3Of(a)
-	bv, okb := survey2d.IvVec3Of(b)
+	av, oka := proofbound.IvVec3Of(a)
+	bv, okb := proofbound.IvVec3Of(b)
 	if !oka || !okb {
 		return false
 	}
-	cross := survey2d.IvVec3Cross(av, bv)
+	cross := proofbound.IvVec3Cross(av, bv)
 	for _, c := range cross {
 		if c.Lo.Sign() != 0 || c.Hi.Sign() != 0 {
 			return false

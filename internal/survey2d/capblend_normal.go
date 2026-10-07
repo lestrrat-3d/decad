@@ -39,16 +39,16 @@ func WindowReachesDirection(coss, sins []proofbound.RatInterval, dx, dy *big.Rat
 // through the placement — and this is the map those roundings approximate,
 // which is the map the payload DENOTES: a placement re-evaluates the record and
 // stores its own coordinates, so the held numbers ARE what they denote (the same
-// rule normal_bound.go states).
+// rule internal/proofbound/interval_vector.go states).
 type PlacedFrameMap struct {
-	Origin, Du, Dv, Dn IvVec3
+	Origin, Du, Dv, Dn proofbound.IvVec3
 }
 
 // point is the exact image of a plane-local (u, v) at height z.
-func (m PlacedFrameMap) Point(u, v, z *big.Rat) IvVec3 {
-	return IvVec3Add(m.Origin, IvVec3Add(
-		IvVec3Mul(m.Du, proofbound.PointInterval(u)),
-		IvVec3Add(IvVec3Mul(m.Dv, proofbound.PointInterval(v)), IvVec3Mul(m.Dn, proofbound.PointInterval(z))),
+func (m PlacedFrameMap) Point(u, v, z *big.Rat) proofbound.IvVec3 {
+	return proofbound.IvVec3Add(m.Origin, proofbound.IvVec3Add(
+		proofbound.IvVec3Mul(m.Du, proofbound.PointInterval(u)),
+		proofbound.IvVec3Add(proofbound.IvVec3Mul(m.Dv, proofbound.PointInterval(v)), proofbound.IvVec3Mul(m.Dn, proofbound.PointInterval(z))),
 	))
 }
 

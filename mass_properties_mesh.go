@@ -10,8 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -161,17 +159,17 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	// Over the symmetric difference D, |∫_D q_i| <= R_i·E and
 	// |∫_D q_i q_j| <= R_i·R_j·E, since |q_i| <= R_i on both regions.
 	volumeError := proofarith.FloatRat(volSymDiff)
-	volumeIV := survey2d.IntervalWiden(proofbound.PointInterval(volume), volumeError)
+	volumeIV := proofbound.IntervalWiden(proofbound.PointInterval(volume), volumeError)
 	if volumeIV.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mesh volume interval includes zero", errMassIntervalUnproved)
 	}
 	var firstIV [3]proofbound.RatInterval
 	var secondIV [3][3]proofbound.RatInterval
 	for i := range 3 {
-		firstIV[i] = survey2d.IntervalWiden(proofbound.PointInterval(first[i]), new(big.Rat).Mul(extent[i], volumeError))
+		firstIV[i] = proofbound.IntervalWiden(proofbound.PointInterval(first[i]), new(big.Rat).Mul(extent[i], volumeError))
 		for j := i; j < 3; j++ {
 			secondError := new(big.Rat).Mul(new(big.Rat).Mul(extent[i], extent[j]), volumeError)
-			secondIV[i][j] = survey2d.IntervalWiden(proofbound.PointInterval(second[i][j]), secondError)
+			secondIV[i][j] = proofbound.IntervalWiden(proofbound.PointInterval(second[i][j]), secondError)
 		}
 	}
 

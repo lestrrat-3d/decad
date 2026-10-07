@@ -1,4 +1,4 @@
-package survey2d_test
+package proofbound_test
 
 import (
 	"math"
@@ -9,7 +9,6 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,15 +43,15 @@ func TestRadSinCosIntervalMemoMatchesUncached(t *testing.T) {
 
 	for name, x := range angles {
 		t.Run(name, func(t *testing.T) {
-			wantSin, wantCos, ok := survey2d.RadSinCosIntervalUncached(x)
+			wantSin, wantCos, ok := proofbound.RadSinCosIntervalUncached(x)
 			require.True(t, ok)
 			for call := range 3 {
-				sin, cos, ok := survey2d.RadSinCosInterval(x)
+				sin, cos, ok := proofbound.RadSinCosInterval(x)
 				require.True(t, ok, "call %d", call)
 				msg := "call " + strconv.Itoa(call)
 				requireSameInterval(t, wantSin, sin, msg)
 				requireSameInterval(t, wantCos, cos, msg)
-				require.True(t, survey2d.RadSinCosMemoHolds(x), msg)
+				require.True(t, proofbound.RadSinCosMemoHolds(x), msg)
 				// The caller owns the endpoints: mutating them must not reach
 				// the memo.
 				one := big.NewRat(1, 1)
@@ -72,11 +71,11 @@ func TestRadSinCosIntervalMemoMatchesUncached(t *testing.T) {
 			{big.NewRat(17, 19), big.NewRat(17, 23)},
 		}
 		for _, pair := range pairs {
-			_, _, ok := survey2d.RadSinCosInterval(pair[0])
+			_, _, ok := proofbound.RadSinCosInterval(pair[0])
 			require.True(t, ok)
-			wantSin, wantCos, ok := survey2d.RadSinCosIntervalUncached(pair[1])
+			wantSin, wantCos, ok := proofbound.RadSinCosIntervalUncached(pair[1])
 			require.True(t, ok)
-			sin, cos, ok := survey2d.RadSinCosInterval(pair[1])
+			sin, cos, ok := proofbound.RadSinCosInterval(pair[1])
 			require.True(t, ok)
 			requireSameInterval(t, wantSin, sin, pair[1].RatString())
 			requireSameInterval(t, wantCos, cos, pair[1].RatString())
@@ -84,7 +83,7 @@ func TestRadSinCosIntervalMemoMatchesUncached(t *testing.T) {
 	})
 
 	t.Run("zero", func(t *testing.T) {
-		sin, cos, ok := survey2d.RadSinCosInterval(new(big.Rat))
+		sin, cos, ok := proofbound.RadSinCosInterval(new(big.Rat))
 		require.True(t, ok)
 		require.Zero(t, sin.Lo.Sign())
 		require.Zero(t, sin.Hi.Sign())
