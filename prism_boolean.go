@@ -622,11 +622,6 @@ func prismProfileHasTrimmedCircularSource(budget *proofbound.WorkBudget, p Profi
 	return prismcells.ProfileHasTrimmedCircularSource(budget, p.Outer, p.Holes)
 }
 
-// wholeSegmentRange preserves the shared record-range check for surface operations.
-func wholeSegmentRange(tStart, tEnd float64) bool {
-	return prismcells.WholeSegmentRange(tStart, tEnd)
-}
-
 // walkChargeOf preserves the root scene builder and its test seam.
 func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 	return prismcells.WalkChargeOf(seg, w)
