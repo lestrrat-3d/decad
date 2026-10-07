@@ -99,7 +99,7 @@ the rules leave to the byte budget.
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
-| `thicken_axis.go` | Builds axis offsets and ribbon sections. See surface §16. |
+| `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
 | `patch_body.go` | `Body.Patch`: splits a free-edge selection into closed chains, proves each planar and fills it with a face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
@@ -275,7 +275,7 @@ the rules leave to the byte budget.
 | `internal/capband/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
-| `internal/thickenaxis/` | Checks exact axis offset coordinates. See surface §16.2. |
+| `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, poses, sweep bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic and bounds. See `docs/spline-design.md`. |

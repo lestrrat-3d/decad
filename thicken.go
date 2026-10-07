@@ -3,9 +3,9 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -134,7 +134,7 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 // its meridian plane, so offsetting the meridian IS offsetting the surface,
 // and the swept offset folds exactly where the offset meridian reaches the
 // axis.
-type thickenRadial struct{ aU, aV, dU, dV *big.Rat }
+type thickenRadial = thickenaxis.Radial
 
 // thickenRadialOf reads one resolved axis frame into the gate, refusing any
 // axis this arm cannot decide exactly.
@@ -157,35 +157,7 @@ func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
 	if aU == nil || aV == nil || dU == nil || dV == nil {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis has a non-finite plane-local coordinate`, ErrUnsupported)
 	}
-	return thickenRadial{aU: aU, aV: aV, dU: dU, dV: dV}, nil
-}
-
-// rho is axisFrame.toAxis's own radial coordinate, taken over the rationals.
-func (r thickenRadial) rho(u, v *big.Rat) *big.Rat {
-	du := new(big.Rat).Sub(u, r.aU)
-	dv := new(big.Rat).Sub(v, r.aV)
-	return new(big.Rat).Sub(new(big.Rat).Mul(dv, r.dU), new(big.Rat).Mul(du, r.dV))
-}
-
-// leastOverBox is the least radius any point of one exact box reaches. ρ is
-// affine in (u, v), so its minimum over a box sits at a corner.
-func (r thickenRadial) leastOverBox(b thickenExactBox) *big.Rat {
-	least := r.rho(b.minU, b.minV)
-	for _, corner := range [][2]*big.Rat{{b.minU, b.maxV}, {b.maxU, b.minV}, {b.maxU, b.maxV}} {
-		if got := r.rho(corner[0], corner[1]); got.Cmp(least) < 0 {
-			least = got
-		}
-	}
-	return least
-}
-
-// require refuses a swept offset whose least radius is not proven positive.
-func (r thickenRadial) require(least *big.Rat) error {
-	if least.Sign() <= 0 {
-		return fmt.Errorf(`%w: the swept offset reaches the revolve axis (least radius %s mm)`,
-			ErrUnsupported, least.FloatString(9))
-	}
-	return nil
+	return thickenaxis.NewRadial(aU, aV, dU, dV), nil
 }
 
 // thickenRevolve builds a solid of revolution from an admitted revolve sheet
