@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -89,6 +90,49 @@ func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 
 	// prism-boolean §4.4: an unresolved topology is a silent miss.
 	_, ok, err := tryStackedUnion(t.Context(), plate, crossing)
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
+// TestStackedUnionFlushBossFallsBack pins general-boolean §3 A1's flush-wall
+// fallback. A 10 mm square boss standing on a 40 mm plate's top in its
+// corner shares the plate's walls x = 20 and y = −20. The interface scene
+// answers the 2D question soundly through A3's shared-span reading: its cells
+// resolve, and the plate-only cells are the exposed floor, 1500 mm². The
+// stacked payload cannot state the result: the flush walls are one plane on
+// each side across the plate's column and the boss's, which evaluator §3's
+// canonicalization makes one face, while a stacked wall is one column's
+// segment swept over that column alone, and the floor's boundary takes part
+// of each column's ring where an interface patch takes whole rings. So the
+// union is a silent miss, and the pair takes the mesh path.
+func TestStackedUnionFlushBossFallsBack(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
+	boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
+	base := plate.payload.(prismPayload)
+	budget := proofbound.NewWorkBudget(t.Context())
+	m, err := stackedUnionInterfaceMatch(t.Context(), budget, base, base.profile, boss.payload.(prismPayload).profile)
+	require.NoError(t, err)
+	require.Equal(t, stackedNestNone, m.nest)
+	require.True(t, m.split, "the shared walls split the plate's outline at the boss's corners")
+
+	reading, ok, err := prismcells.CoincidentEdges(budget, m.tags, m.profiles)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, reading.Spans, 2, "the walls x = 20 and y = −20 each share one span")
+	matterPlate, matterBoss, resolved, err := prismcells.Classify(budget, m.tags, m.profiles)
+	require.NoError(t, err)
+	require.True(t, resolved)
+	floor := 0.0
+	for i, p := range m.profiles {
+		if matterPlate[i] && !matterBoss[i] {
+			floor += p.Area
+		}
+	}
+	require.InDelta(t, 1500, floor, 1e-9)
+
+	_, ok, err = tryStackedUnion(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
