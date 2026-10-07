@@ -46,7 +46,7 @@ func radiansOf(t *testing.T, v units.Value) float64 {
 // (|Y| ≤ 10), 160 − X is its distance from the face, an upper bound on the
 // gap.
 //
-// Measured: 437 centres into 219 leaves, where the travel bound alone
+// Measured: 419 centres into 210 leaves, where the travel bound alone
 // exhausts the default budget of 16384 and reads Suspect (§14.7).
 //
 // Legs seen to fail when deleted: the projection bound (the budget runs out

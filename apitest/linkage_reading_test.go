@@ -44,7 +44,7 @@ func narrowest(report *decad.LinkageReport) float64 {
 //     tighter tolerance, WithMotionTolerance(1e-5), the reading refines past
 //     the verdict floor 1/1024 around its one minimum (the wrist's corner
 //     9.36 mm from a post) toward the reading floor 1/16384: Sound, with the
-//     reading inside the gate, in 26 poses.
+//     reading inside the gate, in 25 poses.
 //   - Stated, WithResolution is both floors: at 1/64 the same arm stops its
 //     reading at 1/64, Suspect with the reading beyond tolerance.
 //   - A margin refines to the verdict floor only: scene 1's arms, settled by
