@@ -279,10 +279,10 @@ func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
 // rationals — a float64 IS a rational — so the only inexactness anywhere is
 // the closing square root, computed at far more precision than float64 holds.
 func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
-	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
-	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
+	u := proofarith.Xsub(proofarith.XptOf(b), proofarith.XptOf(a))
+	v := proofarith.Xsub(proofarith.XptOf(c), proofarith.XptOf(a))
 	w := meshbool.Xcross(u, v)
-	q := proofbound.XdotRat(w, w)
+	q := proofarith.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))
 }

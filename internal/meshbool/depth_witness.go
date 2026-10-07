@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // FacesNearMiss reports whether two faces' facet sets come within slack of each
@@ -102,8 +102,8 @@ func DeepWitnessInside(ctx context.Context, m *BoolMesh, closeFacets []int, othe
 // facet: its three corners, its three edge midpoints and its centroid. Every one
 // is an exact rational, so the parity test that reads it decides strict
 // containment without rounding.
-func facetSamplePoints(a, b, c proofbound.Xpt) []proofbound.Xpt {
+func facetSamplePoints(a, b, c proof.Xpt) []proof.Xpt {
 	one, two := big.NewInt(1), big.NewInt(2)
-	mid := func(p, q proofbound.Xpt) proofbound.Xpt { return Xlerp(p, q, one, two) }
-	return []proofbound.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), XCentroid(a, b, c)}
+	mid := func(p, q proof.Xpt) proof.Xpt { return Xlerp(p, q, one, two) }
+	return []proof.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), XCentroid(a, b, c)}
 }

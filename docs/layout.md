@@ -248,7 +248,7 @@ the rules leave to the byte budget.
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
-| `internal/proof/` | Exact dyadic arithmetic and distance, rational interval operations, shared-denominator intervals, float rounding bounds, and arithmetic tests. |
+| `internal/proof/` | Exact dyadic and homogeneous point arithmetic, distance, rational and shared-denominator intervals, float rounding, and tests. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis and oriented box contact proofs. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |

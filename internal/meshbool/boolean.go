@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -184,7 +185,7 @@ func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 // point of that segment lies on both closed facets (TriTriClassify).
 type ContactSpan struct {
 	I, J   int
-	P0, P1 proofbound.Xpt
+	P0, P1 proof.Xpt
 }
 
 // MaxDepthWitnessFacets caps how many contacting facets deepWitnessInside
@@ -251,14 +252,14 @@ func SpanWitness(ctx context.Context, bmA, bmB *BoolMesh, spans []ContactSpan, b
 // of m and on facet fj of other, it steps toward every corner of facet fi that
 // lies strictly on the inner side of facet fj's plane and asks DeepWitnessAt
 // about each step.
-func WalkFacetFromSpan(ctx context.Context, mid proofbound.Xpt, m *BoolMesh, fi int, other *BoolMesh, fj int, all []int, b float64) (bool, error) {
+func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, other *BoolMesh, fj int, all []int, b float64) (bool, error) {
 	ot := other.Tris[fj]
 	origin, normal := other.Xverts[ot[0]], other.Norms[fj]
 	midF := mid.Vec()
 	one := big.NewInt(1)
 	for _, vi := range m.Tris[fi] {
 		c := m.Xverts[vi]
-		if XdotSign(normal, proofbound.Xsub(c, origin)) >= 0 {
+		if XdotSign(normal, proof.Xsub(c, origin)) >= 0 {
 			continue
 		}
 		// The float length only decides when to stop halving. Stopping early
@@ -288,7 +289,7 @@ func WalkFacetFromSpan(ctx context.Context, mid proofbound.Xpt, m *BoolMesh, fi 
 // witness search goes through. The cheap float depth runs before the costly
 // exact parity: a point no deeper than b is no witness however it classifies,
 // so the order changes which points are tested, never which become witnesses.
-func DeepWitnessAt(ctx context.Context, p proofbound.Xpt, other *BoolMesh, all []int, b float64) (bool, error) {
+func DeepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, all []int, b float64) (bool, error) {
 	if CertifiedInteriorDepth(p, other) <= b {
 		return false, nil
 	}
@@ -311,7 +312,7 @@ func DeepWitnessAt(ctx context.Context, p proofbound.Xpt, other *BoolMesh, all [
 // float error, then reduced by an upper bound on p's exact→float rounding. It is
 // only ever read as "> b", so under-reporting is safe (it over-refuses, never
 // over-admits).
-func CertifiedInteriorDepth(p proofbound.Xpt, other *BoolMesh) float64 {
+func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 	pf := p.Vec()
 	best := math.Inf(1)
 	for i := range other.Tris {
@@ -339,8 +340,8 @@ func CertifiedInteriorDepth(p proofbound.Xpt, other *BoolMesh) float64 {
 // PointRoundBound upper-bounds the 3D displacement between the exact point p and
 // its float rounding pf: the largest per-coordinate rational gap, up-rounded and
 // read as a 3D distance (internal/proofbound/bounds.go, proofbound.Radius3D).
-func PointRoundBound(p proofbound.Xpt, pf r3.Vec) float64 {
-	px, py, pz := XhpRat(proofbound.Xhp(p))
+func PointRoundBound(p proof.Xpt, pf r3.Vec) float64 {
+	px, py, pz := proof.XhpRat(proof.Xhp(p))
 	worst := new(big.Rat)
 	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(pf.X)}, {py, polynomial.MustRatOf(pf.Y)}, {pz, polynomial.MustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])

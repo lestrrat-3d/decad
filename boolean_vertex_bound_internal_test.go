@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -56,7 +57,7 @@ func vertexBoundPolygonSketch(t *testing.T, n int, r float64) (*sketch.Sketch, *
 // (δ(t_A) + δ(t_B)) / sin θ over the contact segments ending there, and the
 // same figure divided by the pair-wide shallowest sine instead.
 type vertexBoundRim struct {
-	p        proofbound.Xpt
+	p        proof.Xpt
 	own      float64
 	pairWide float64
 }
@@ -94,7 +95,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	facet := func(beta []float64, tri [3]int) float64 { return max(beta[tri[0]], beta[tri[1]], beta[tri[2]]) }
 
 	type segment struct {
-		p0, p1 proofbound.Xpt
+		p0, p1 proof.Xpt
 		sum    float64
 		sin2   *big.Rat
 	}
@@ -128,7 +129,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	for _, s := range segs {
 		own := proofbound.DivUpper(s.sum, meshbool.SinLowerBound(s.sin2))
 		pairWide := proofbound.DivUpper(s.sum, sinMin)
-		for _, p := range []proofbound.Xpt{s.p0, s.p1} {
+		for _, p := range []proof.Xpt{s.p0, s.p1} {
 			key := p.Key()
 			r, ok := rims[key]
 			if !ok {
@@ -160,7 +161,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 
 // held finds the result vertex that stands for the exact point p: its own
 // nearest float, or, failing that, the held vertex nearest it per coordinate.
-func (f vertexBoundFixture) held(t *testing.T, p proofbound.Xpt) int {
+func (f vertexBoundFixture) held(t *testing.T, p proof.Xpt) int {
 	t.Helper()
 	if i, ok := f.heldIdx[p.Vec()]; ok {
 		return i
@@ -178,7 +179,7 @@ func (f vertexBoundFixture) held(t *testing.T, p proofbound.Xpt) int {
 // weldOf is the per-vertex weld docs/faceted-vertex-bounds-design.md §3.4
 // charges: p's largest per-coordinate distance to the float that holds it,
 // widened to a 3D radius and rounded up, and zero when the float is exact.
-func weldOf(p proofbound.Xpt, v r3.Vec) float64 {
+func weldOf(p proof.Xpt, v r3.Vec) float64 {
 	gap := meshbool.CoordDistance(p, v)
 	if gap.Sign() == 0 {
 		return 0
@@ -250,7 +251,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if _, rim := f.rims[proofbound.XptOf(v).Key()]; rim {
+		if _, rim := f.rims[proof.XptOf(v).Key()]; rim {
 			continue
 		}
 		require.Equal(t, beta, f.result.vertexBound[i], `operand vertex %v keeps its own bound`, v)
@@ -296,7 +297,7 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 		require.Zero(t, r.own)
 		i := f.held(t, p)
 		v := f.result.verts[i]
-		px, py, pz := meshbool.XhpRat(proofbound.Xhp(p))
+		px, py, pz := proof.XhpRat(proof.Xhp(p))
 		d2 := new(big.Rat)
 		for _, pair := range [][2]*big.Rat{{px, new(big.Rat).SetFloat64(v.X)}, {py, new(big.Rat).SetFloat64(v.Y)}, {pz, new(big.Rat).SetFloat64(v.Z)}} {
 			d := new(big.Rat).Sub(pair[0], pair[1])

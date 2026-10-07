@@ -12,6 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
@@ -150,15 +151,15 @@ func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
 
 func TestFacetCutCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	tri := [3]proofbound.Xpt{
-		proofbound.XptOf(r3.NewVec(0, 0, 0)),
-		proofbound.XptOf(r3.NewVec(10, 0, 0)),
-		proofbound.XptOf(r3.NewVec(0, 10, 0)),
+	tri := [3]proof.Xpt{
+		proof.XptOf(r3.NewVec(0, 0, 0)),
+		proof.XptOf(r3.NewVec(10, 0, 0)),
+		proof.XptOf(r3.NewVec(0, 10, 0)),
 	}
-	normal := meshbool.Xcross(proofbound.Xsub(tri[1], tri[0]), proofbound.Xsub(tri[2], tri[0]))
+	normal := meshbool.Xcross(proof.Xsub(tri[1], tri[0]), proof.Xsub(tri[2], tri[0]))
 	seg := meshbool.Xseg{
-		A: proofbound.XptOf(r3.NewVec(1, 1, 0)),
-		B: proofbound.XptOf(r3.NewVec(2, 1, 0)),
+		A: proof.XptOf(r3.NewVec(1, 1, 0)),
+		B: proof.XptOf(r3.NewVec(2, 1, 0)),
 	}
 	segs := make([]meshbool.Xseg, 300)
 	for i := range segs {
@@ -459,16 +460,16 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 
 func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	verts := []proofbound.Xpt{
-		proofbound.XptOf(r3.NewVec(0, 0, 0)),
-		proofbound.XptOf(r3.NewVec(1000, 0, 0)),
-		proofbound.XptOf(r3.NewVec(0, 1, 0)),
+	verts := []proof.Xpt{
+		proof.XptOf(r3.NewVec(0, 0, 0)),
+		proof.XptOf(r3.NewVec(1000, 0, 0)),
+		proof.XptOf(r3.NewVec(0, 1, 0)),
 	}
 	// An edge spanning the mesh diagonal sweeps the cells of the whole grid and
 	// every vertex standing in them, which is well past the polling interval on
 	// either count.
 	for i := range 2 * proofbound.WorkPollInterval {
-		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
+		verts = append(verts, proof.XptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
 	}
 	scan, err := meshbool.NewConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
@@ -482,13 +483,13 @@ func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 
 func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 	t.Parallel()
-	verts := []proofbound.Xpt{
-		proofbound.XptOf(r3.NewVec(0, 0, 0)),
-		proofbound.XptOf(r3.NewVec(10, 0, 0)),
-		proofbound.XptOf(r3.NewVec(0, 1, 0)),
-		proofbound.XptOf(r3.NewVec(4, 0, 0)),  // exactly interior to edge (0, 1)
-		proofbound.XptOf(r3.NewVec(4, 5, 0)),  // off the edge
-		proofbound.XptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
+	verts := []proof.Xpt{
+		proof.XptOf(r3.NewVec(0, 0, 0)),
+		proof.XptOf(r3.NewVec(10, 0, 0)),
+		proof.XptOf(r3.NewVec(0, 1, 0)),
+		proof.XptOf(r3.NewVec(4, 0, 0)),  // exactly interior to edge (0, 1)
+		proof.XptOf(r3.NewVec(4, 5, 0)),  // off the edge
+		proof.XptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
 	}
 	scan, err := meshbool.NewConformScan(proofbound.NewWorkBudget(t.Context()), verts)
 	require.NoError(t, err)
@@ -501,10 +502,10 @@ func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 
 func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	verts := []proofbound.Xpt{proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(1000, 0, 0))}
+	verts := []proof.Xpt{proof.XptOf(r3.NewVec(0, 0, 0)), proof.XptOf(r3.NewVec(1000, 0, 0))}
 	var hits []int
 	for i := range 300 {
-		verts = append(verts, proofbound.XptOf(r3.NewVec(float64(300-i), 0, 0)))
+		verts = append(verts, proof.XptOf(r3.NewVec(float64(300-i), 0, 0)))
 		hits = append(hits, i+2)
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SortAlongEdge"}
@@ -517,9 +518,9 @@ func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 
 func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
 	t.Parallel()
-	verts := []proofbound.Xpt{proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0))}
+	verts := []proof.Xpt{proof.XptOf(r3.NewVec(0, 0, 0)), proof.XptOf(r3.NewVec(10, 0, 0))}
 	for _, x := range []float64{7, 1, 4} {
-		verts = append(verts, proofbound.XptOf(r3.NewVec(x, 0, 0)))
+		verts = append(verts, proof.XptOf(r3.NewVec(x, 0, 0)))
 	}
 	hits := []int{2, 3, 4} // parameters 0.7, 0.1, 0.4
 

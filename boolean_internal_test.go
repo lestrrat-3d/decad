@@ -73,10 +73,10 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 // way the mesh pass does.
 func classify(t *testing.T, ta, tb [3]r3.Vec) meshbool.TriContact {
 	t.Helper()
-	xta := [3]proofbound.Xpt{proofbound.XptOf(ta[0]), proofbound.XptOf(ta[1]), proofbound.XptOf(ta[2])}
-	xtb := [3]proofbound.Xpt{proofbound.XptOf(tb[0]), proofbound.XptOf(tb[1]), proofbound.XptOf(tb[2])}
-	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	xta := [3]proofarith.Xpt{proofarith.XptOf(ta[0]), proofarith.XptOf(ta[1]), proofarith.XptOf(ta[2])}
+	xtb := [3]proofarith.Xpt{proofarith.XptOf(tb[0]), proofarith.XptOf(tb[1]), proofarith.XptOf(tb[2])}
+	na := meshbool.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
 	c, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	return c
@@ -548,11 +548,11 @@ func tinyOffset() *big.Rat {
 
 // xptFromRat builds an exact point directly from three big.Rat coordinates —
 // used only where a test needs sub-ulp control production's float-only entry
-// point (proofbound.XptOf) cannot express, over one shared homogeneous denominator the
-// same way proofbound.XhpOf lifts a float vertex.
-func xptFromRat(x, y, z *big.Rat) proofbound.Xpt {
+// point (proofarith.XptOf) cannot express, over one shared homogeneous denominator the
+// same way proofarith.XhpOf lifts a float vertex.
+func xptFromRat(x, y, z *big.Rat) proofarith.Xpt {
 	dx, dy, dz := x.Denom(), y.Denom(), z.Denom()
-	return proofbound.Xpt{
+	return proofarith.Xpt{
 		X: new(big.Int).Mul(x.Num(), new(big.Int).Mul(dy, dz)),
 		Y: new(big.Int).Mul(y.Num(), new(big.Int).Mul(dx, dz)),
 		Z: new(big.Int).Mul(z.Num(), new(big.Int).Mul(dx, dy)),
@@ -562,7 +562,7 @@ func xptFromRat(x, y, z *big.Rat) proofbound.Xpt {
 
 // xat is an exact point from whole millimetres, optionally nudged by a
 // sub-ulp offset on one axis.
-func xat(x, y, z float64, nudge int) proofbound.Xpt {
+func xat(x, y, z float64, nudge int) proofarith.Xpt {
 	rx, ry, rz := polynomial.MustRatOf(x), polynomial.MustRatOf(y), polynomial.MustRatOf(z)
 	switch nudge {
 	case 0:
@@ -581,16 +581,16 @@ func xat(x, y, z float64, nudge int) proofbound.Xpt {
 // survives as the tetra. Every directed edge pairs with its reverse, so the
 // exact closure audit passes before the rounding ever runs.
 func splitApexTetra() []meshbool.KeptFacet {
-	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
-	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
+	a, b, c := proofarith.XptOf(r3.NewVec(0, 0, 0)), proofarith.XptOf(r3.NewVec(10, 0, 0)), proofarith.XptOf(r3.NewVec(0, 10, 0))
+	d1 := proofarith.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xat(2, 2, 9, 0)
 	return []meshbool.KeptFacet{
-		{V: [3]proofbound.Xpt{a, c, b}},
-		{V: [3]proofbound.Xpt{a, b, d1}},
-		{V: [3]proofbound.Xpt{b, c, d2}},
-		{V: [3]proofbound.Xpt{c, a, d2}},
-		{V: [3]proofbound.Xpt{b, d2, d1}},
-		{V: [3]proofbound.Xpt{a, d1, d2}},
+		{V: [3]proofarith.Xpt{a, c, b}},
+		{V: [3]proofarith.Xpt{a, b, d1}},
+		{V: [3]proofarith.Xpt{b, c, d2}},
+		{V: [3]proofarith.Xpt{c, a, d2}},
+		{V: [3]proofarith.Xpt{b, d2, d1}},
+		{V: [3]proofarith.Xpt{a, d1, d2}},
 	}
 }
 
@@ -598,13 +598,13 @@ func splitApexTetra() []meshbool.KeptFacet {
 // float64 vertex: every one of its facets collapses under the weld, so the
 // whole component is welded out of existence.
 func subUlpTetra() []meshbool.KeptFacet {
-	p := proofbound.XptOf(r3.NewVec(40, 40, 40))
+	p := proofarith.XptOf(r3.NewVec(40, 40, 40))
 	q, r, s := xat(40, 40, 40, 0), xat(40, 40, 40, 1), xat(40, 40, 40, 2)
 	return []meshbool.KeptFacet{
-		{V: [3]proofbound.Xpt{p, r, q}},
-		{V: [3]proofbound.Xpt{p, q, s}},
-		{V: [3]proofbound.Xpt{q, r, s}},
-		{V: [3]proofbound.Xpt{r, p, s}},
+		{V: [3]proofarith.Xpt{p, r, q}},
+		{V: [3]proofarith.Xpt{p, q, s}},
+		{V: [3]proofarith.Xpt{q, r, s}},
+		{V: [3]proofarith.Xpt{r, p, s}},
 	}
 }
 
@@ -705,16 +705,16 @@ func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
 	// held float. The rational-to-float reading of that displacement is zero.
 	subnormal := new(big.Rat).SetFloat64(math.SmallestNonzeroFloat64)
 	offset := new(big.Rat).Quo(subnormal, big.NewRat(4, 1))
-	a, b, c := proofbound.XptOf(r3.NewVec(0, 0, 0)), proofbound.XptOf(r3.NewVec(10, 0, 0)), proofbound.XptOf(r3.NewVec(0, 10, 0))
-	d1 := proofbound.XptOf(r3.NewVec(2, 2, 9))
+	a, b, c := proofarith.XptOf(r3.NewVec(0, 0, 0)), proofarith.XptOf(r3.NewVec(10, 0, 0)), proofarith.XptOf(r3.NewVec(0, 10, 0))
+	d1 := proofarith.XptOf(r3.NewVec(2, 2, 9))
 	d2 := xptFromRat(new(big.Rat).Add(big.NewRat(2, 1), offset), big.NewRat(2, 1), big.NewRat(9, 1))
 	kept := []meshbool.KeptFacet{
-		{V: [3]proofbound.Xpt{a, c, b}},
-		{V: [3]proofbound.Xpt{a, b, d1}},
-		{V: [3]proofbound.Xpt{b, c, d2}},
-		{V: [3]proofbound.Xpt{c, a, d2}},
-		{V: [3]proofbound.Xpt{b, d2, d1}},
-		{V: [3]proofbound.Xpt{a, d1, d2}},
+		{V: [3]proofarith.Xpt{a, c, b}},
+		{V: [3]proofarith.Xpt{a, b, d1}},
+		{V: [3]proofarith.Xpt{b, c, d2}},
+		{V: [3]proofarith.Xpt{c, a, d2}},
+		{V: [3]proofarith.Xpt{b, d2, d1}},
+		{V: [3]proofarith.Xpt{a, d1, d2}},
 	}
 	got, err := meshbool.StitchFacetsContext(t.Context(), kept)
 	require.NoError(t, err)
@@ -731,11 +731,11 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		gap := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54))
 		exactVolume := new(big.Rat).Add(big.NewRat(1, 1), gap)
 		x := new(big.Rat).Mul(exactVolume, big.NewRat(6, 1))
-		verts := []proofbound.Xpt{
-			proofbound.XptOf(r3.Vec{}),
+		verts := []proofarith.Xpt{
+			proofarith.XptOf(r3.Vec{}),
 			xptFromRat(x, big.NewRat(0, 1), big.NewRat(0, 1)),
-			proofbound.XptOf(r3.NewVec(0, 1, 0)),
-			proofbound.XptOf(r3.NewVec(0, 0, 1)),
+			proofarith.XptOf(r3.NewVec(0, 1, 0)),
+			proofarith.XptOf(r3.NewVec(0, 0, 1)),
 		}
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		reading, gotVolume, err := meshVolumeMeasurement(t.Context(), verts, tris, tiny)
@@ -961,7 +961,7 @@ func requireSameTriContact(t *testing.T, exact, filtered meshbool.TriContact) {
 // filter on or off, which is what the two equivalence tests below compare. The
 // choice travels as an argument, so these tests decide nothing for any other
 // test running beside them.
-func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]proofbound.Xpt, na, nb proofbound.Xpt, useFilter bool) (meshbool.TriContact, error) {
+func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]proofarith.Xpt, na, nb proofarith.Xpt, useFilter bool) (meshbool.TriContact, error) {
 	return meshbool.TriTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, useFilter)
 }
 
@@ -1013,10 +1013,10 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 
 	a := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: 10, Z: 0}}
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
-	xta := [3]proofbound.Xpt{proofbound.XptOf(a[0]), proofbound.XptOf(a[1]), proofbound.XptOf(a[2])}
-	xtb := [3]proofbound.Xpt{proofbound.XptOf(b[0]), proofbound.XptOf(b[1]), proofbound.XptOf(b[2])}
-	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	xta := [3]proofarith.Xpt{proofarith.XptOf(a[0]), proofarith.XptOf(a[1]), proofarith.XptOf(a[2])}
+	xtb := [3]proofarith.Xpt{proofarith.XptOf(b[0]), proofarith.XptOf(b[1]), proofarith.XptOf(b[2])}
+	na := meshbool.Xcross(proofarith.Xsub(xta[1], xta[0]), proofarith.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proofarith.Xsub(xtb[1], xtb[0]), proofarith.Xsub(xtb[2], xtb[0]))
 
 	filtered, err := classifyPair(a, b, xta, xtb, na, nb, true)
 	require.NoError(t, err)
@@ -1040,8 +1040,8 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			xtri := [3]proofbound.Xpt{proofbound.XptOf(tc.tri[0]), proofbound.XptOf(tc.tri[1]), proofbound.XptOf(tc.tri[2])}
-			ntri := meshbool.Xcross(proofbound.Xsub(xtri[1], xtri[0]), proofbound.Xsub(xtri[2], xtri[0]))
+			xtri := [3]proofarith.Xpt{proofarith.XptOf(tc.tri[0]), proofarith.XptOf(tc.tri[1]), proofarith.XptOf(tc.tri[2])}
+			ntri := meshbool.Xcross(proofarith.Xsub(xtri[1], xtri[0]), proofarith.Xsub(xtri[2], xtri[0]))
 			uncertain := 0
 			for i := range 3 {
 				_, certainA := meshbool.OrientSignFloat(a[0], a[1], a[2], tc.tri[i])

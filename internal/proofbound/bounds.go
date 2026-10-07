@@ -988,14 +988,14 @@ func CellTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // them once.
 func XtwistQuarterUpper(c CellCorners) float64 {
 	// T = vLo − vHi − wLo + wHi = (vLo − vHi) − (wLo − wHi).
-	t := Xsub(Xsub(c.VLo, c.VHi), Xsub(c.WLo, c.WHi))
+	t := proofarith.Xsub(proofarith.Xsub(c.VLo, c.VHi), proofarith.Xsub(c.WLo, c.WHi))
 	if t.X.Sign() == 0 && t.Y.Sign() == 0 && t.Z.Sign() == 0 {
 		return 0
 	}
-	// |T|²/16 over one shared positive denominator: XdotNum's own w·w, times
+	// |T|²/16 over one shared positive denominator: proofarith.XdotNum's own w·w, times
 	// the 16. The whole quotient normalises once, here.
 	den := new(big.Int).Mul(new(big.Int).Mul(t.W, t.W), big.NewInt(16))
-	return RatSqrtUp(new(big.Rat).SetFrac(XdotNum(t, t), den))
+	return RatSqrtUp(new(big.Rat).SetFrac(proofarith.XdotNum(t, t), den))
 }
 
 // CellSpanUpper is the CERTIFIED upper endpoint of |a − b| for two of a wall
@@ -1015,31 +1015,31 @@ func XtwistQuarterUpper(c CellCorners) float64 {
 // refused a non-finite one before calling: every entry point that reaches it
 // goes through CellCornersOf, and each of those runs FiniteVec first.
 func CellSpanUpper(a, b r3.Vec) float64 {
-	return XspanUpper(XptOf(a), XptOf(b))
+	return XspanUpper(proofarith.XptOf(a), proofarith.XptOf(b))
 }
 
 // XspanUpper is CellSpanUpper's own reading over corners already lifted.
-func XspanUpper(a, b Xpt) float64 {
-	d := Xsub(a, b)
-	return RatSqrtUp(XdotRat(d, d))
+func XspanUpper(a, b proofarith.Xpt) float64 {
+	d := proofarith.Xsub(a, b)
+	return RatSqrtUp(proofarith.XdotRat(d, d))
 }
 
 // CellCorners is ONE wall cell's four corners lifted to exact homogeneous
-// integer coordinates (XptOf, internal/meshbool/boolean_exact.go). Every exact quantity a cell
+// integer coordinates (proofarith.XptOf, internal/meshbool/boolean_exact.go). Every exact quantity a cell
 // publishes — its four certified spans and its certified |T|/4 endpoint — is a
 // function of these four points and nothing else, and lifting a corner is the
 // single most expensive step in each of them, so a caller reading more than one
 // of those quantities lifts the cell's corners once and reads them all from the
 // same four points.
 //
-// The lift rounds nothing: a float64 is an exact dyadic rational (XptOf's own
+// The lift rounds nothing: a float64 is an exact dyadic rational (proofarith.XptOf's own
 // doc comment), so these four points denote the cell's own corners exactly.
-type CellCorners struct{ VLo, VHi, WLo, WHi Xpt }
+type CellCorners struct{ VLo, VHi, WLo, WHi proofarith.Xpt }
 
 // CellCornersOf lifts a cell whose four corners the caller has already proved
 // finite, which is the exact lift's own precondition.
 func CellCornersOf(vLo, vHi, wLo, wHi r3.Vec) CellCorners {
-	return CellCorners{VLo: XptOf(vLo), VHi: XptOf(vHi), WLo: XptOf(wLo), WHi: XptOf(wHi)}
+	return CellCorners{VLo: proofarith.XptOf(vLo), VHi: proofarith.XptOf(vHi), WLo: proofarith.XptOf(wLo), WHi: proofarith.XptOf(wHi)}
 }
 
 // CellSpans is ONE wall cell's four certified corner spans — every span any

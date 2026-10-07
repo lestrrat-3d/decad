@@ -1,32 +1,27 @@
-package proofbound
+package proof
 
 import (
 	"encoding/binary"
 	"math/big"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
-// Xpt is an exact 3D point carried in homogeneous integer form: the same
-// representation xhp documents below, and structurally identical to it — the
-// two convert for free — so xpt keeps its own name and every call site
-// survives, rather than xhp replacing it outright. The zero value is
-// unusable; construct through XptOf or the arithmetic helpers, every one of
-// which strips the common power of two before returning (the growth control;
-// see xhpStripTwos). Two spellings of one point exist (any positive common
-// factor of x, y, z and w denotes the same coordinate), so exact identity for
-// welding goes through the canonical form (key), never the raw fields.
+// Xpt is an exact 3D point in homogeneous integer form. It has the same
+// representation as Xhp, so conversions between them require no arithmetic.
+// The zero value is unusable; construct through XptOf or the arithmetic
+// helpers, which strip common powers of two before returning. A point has
+// multiple homogeneous spellings, so Key compares canonical coordinates.
 type Xpt struct{ X, Y, Z, W *big.Int }
 
 // XptOf lifts a finite float vertex into exact homogeneous coordinates. A
 // float64 is an exact rational, so no information is lost.
 func XptOf(v r3.Vec) Xpt { return Xpt(XhpStripTwosOwned(XhpOf(v))) }
 
-// vec rounds the exact point to the nearest float64 coordinates.
+// Vec rounds the exact point to the nearest float64 coordinates.
 func (p Xpt) Vec() r3.Vec { return XhpVec(Xhp(p)) }
 
-// key is the exact identity of the point: two points weld exactly when their
+// Key is the exact identity of the point: two points weld exactly when their
 // CANONICAL homogeneous coordinates are identical — stitching by shared exact
 // vertices, never by distance (docs/evaluator-design.md §9). A homogeneous
 // point has many spellings, so the raw fields are never compared directly;
@@ -57,7 +52,7 @@ func ExactIntsKey(values ...*big.Int) string {
 }
 
 // Xsub is a − b, exact, with the common power of two stripped on return (the
-// growth control every construction pays — see xhpStripTwos).
+// growth control every construction pays — see XhpStripTwosOwned).
 func Xsub(a, b Xpt) Xpt { return Xpt(XhpStripTwosOwned(XhpSub(Xhp(a), Xhp(b)))) }
 
 // XdotNum is the raw numerator of a·b over the positive denominator a.w·b.w —
@@ -84,11 +79,11 @@ func XdotRat(a, b Xpt) *big.Rat {
 //
 // The invariant w > 0 is load-bearing: every helper below reduces a
 // division's sign to the sign of a product of denominators, which only holds
-// when every denominator involved is positive. XhpSub and xhpCross each
+// when every denominator involved is positive. XhpSub and XhpCross each
 // combine two operands whose own w is positive into a result whose w is their
 // PRODUCT — again positive by construction, with no branch needed — so the
 // invariant propagates through every point/vector this file builds except
-// one: xhpLerp's lerp-parameter denominator can arrive negative, and it
+// one: XhpLerp's lerp-parameter denominator can arrive negative, and it
 // renormalises explicitly before folding it in.
 //
 // A homogeneous point has many spellings — (x, y, z, w) and (2x, 2y, 2z, 2w)
@@ -101,9 +96,9 @@ type Xhp struct{ X, Y, Z, W *big.Int }
 // directly gives one shared power-of-two denominator without constructing
 // three big.Rat values or multiplying their denominators.
 func XhpOf(v r3.Vec) Xhp {
-	dx, dy, dz := proofarith.MustDyOf(v.X), proofarith.MustDyOf(v.Y), proofarith.MustDyOf(v.Z)
+	dx, dy, dz := MustDyOf(v.X), MustDyOf(v.Y), MustDyOf(v.Z)
 	base := 0
-	lower := func(d proofarith.Dyadic) {
+	lower := func(d Dyadic) {
 		if !d.IsZero() && d.Exp() < base {
 			base = d.Exp()
 		}
@@ -111,7 +106,7 @@ func XhpOf(v r3.Vec) Xhp {
 	lower(dx)
 	lower(dy)
 	lower(dz)
-	coord := func(d proofarith.Dyadic) *big.Int {
+	coord := func(d Dyadic) *big.Int {
 		if d.IsZero() {
 			return new(big.Int)
 		}
@@ -153,7 +148,7 @@ func XhpSub(p, q Xhp) Xhp {
 // XhpDotNum is the NUMERATOR of a·b over the positive denominator a.w·b.w.
 // The denominator is never formed: every consumer either reads only this
 // numerator's sign, or divides it back out at the one point a value is
-// actually published (xhpRat).
+// actually published (XhpRat).
 func XhpDotNum(a, b Xhp) *big.Int {
 	s := new(big.Int).Mul(a.X, b.X)
 	var term big.Int
@@ -219,4 +214,60 @@ func XhpCanon(p Xhp) Xhp {
 		Z: new(big.Int).Quo(p.Z, g),
 		W: new(big.Int).Quo(p.W, g),
 	}
+}
+
+// XhpCross is a × b, exact: its numerators over the positive denominator
+// a.w·b.w.
+func XhpCross(a, b Xhp) Xhp {
+	var term big.Int
+	axis := func(a0, b0, a1, b1 *big.Int) *big.Int {
+		out := new(big.Int).Mul(a0, b0)
+		return out.Sub(out, term.Mul(a1, b1))
+	}
+	return Xhp{
+		X: axis(a.Y, b.Z, a.Z, b.Y),
+		Y: axis(a.Z, b.X, a.X, b.Z),
+		Z: axis(a.X, b.Y, a.Y, b.X),
+		W: new(big.Int).Mul(a.W, b.W),
+	}
+}
+
+// XhpLerp is a + t·(b − a) for t = tn/td, exact. td may arrive negative; a.w
+// and b.w are already positive by invariant, so the result's own w — their
+// product with td — is renormalised by flipping td's (and tn's) sign first,
+// which leaves the value t = tn/td unchanged.
+func XhpLerp(a, b Xhp, tn, td *big.Int) Xhp {
+	n, d := tn, td
+	if d.Sign() < 0 {
+		n = new(big.Int).Neg(n)
+		d = new(big.Int).Neg(d)
+	}
+	// a + t·(b−a) = a·(d−n)/d + b·n/d = [a·(d−n)·b.w + b·n·a.w] / (a.w·b.w·d).
+	diff := new(big.Int).Sub(d, n)
+	axis := func(av, bv *big.Int) *big.Int {
+		term := new(big.Int).Mul(av, diff)
+		term.Mul(term, b.W)
+		other := new(big.Int).Mul(bv, n)
+		other.Mul(other, a.W)
+		return term.Add(term, other)
+	}
+	w := new(big.Int).Mul(a.W, b.W)
+	w.Mul(w, d)
+	return Xhp{X: axis(a.X, b.X), Y: axis(a.Y, b.Y), Z: axis(a.Z, b.Z), W: w}
+}
+
+// XhpOrientSign is the exact sign of det[b−a, c−a, d−a], decided as a plain
+// integer sign with no big.Rat and no normalisation anywhere in the chain:
+// every intermediate xhp carries a positive denominator by construction, so
+// the final numerator's sign IS the determinant's sign.
+func XhpOrientSign(a, b, c, d Xhp) int {
+	ba, ca, da := XhpSub(b, a), XhpSub(c, a), XhpSub(d, a)
+	return XhpDotNum(XhpCross(ba, ca), da).Sign()
+}
+
+// XhpRat materialises p's three coordinates as big.Rat — the one place a
+// homogeneous point pays a normalisation, and only when a caller genuinely
+// needs a rational VALUE rather than a sign.
+func XhpRat(p Xhp) (x, y, z *big.Rat) {
+	return new(big.Rat).SetFrac(p.X, p.W), new(big.Rat).SetFrac(p.Y, p.W), new(big.Rat).SetFrac(p.Z, p.W)
 }

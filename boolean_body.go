@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -473,10 +474,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		det := proofbound.XdotRat(a, meshbool.Xcross(b, c))
-		ax, ay, az := meshbool.XhpRat(proofbound.Xhp(a))
-		bx, by, bz := meshbool.XhpRat(proofbound.Xhp(b))
-		cx, cy, cz := meshbool.XhpRat(proofbound.Xhp(c))
+		det := proof.XdotRat(a, meshbool.Xcross(b, c))
+		ax, ay, az := proof.XhpRat(proof.Xhp(a))
+		bx, by, bz := proof.XhpRat(proof.Xhp(b))
+		cx, cy, cz := proof.XhpRat(proof.Xhp(c))
 		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ax, bx), cx)))
 		my.Add(my, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ay, by), cy)))
 		mz.Add(mz, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(az, bz), cz)))
@@ -603,7 +604,7 @@ func facetFaceIndices(ctx context.Context, faces, facetFace []*Face) ([]int, err
 // exact rational arithmetic and composes the shared symmetric-difference
 // allowance with the final rational-to-float rounding. It reuses the audit's
 // exact vertices while retaining the original facet-order sum.
-func meshVolumeMeasurement(ctx context.Context, xverts []proofbound.Xpt, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
+func meshVolumeMeasurement(ctx context.Context, xverts []proof.Xpt, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
 	total := new(big.Rat)
 	for i, t := range tris {
 		if i%256 == 0 {
@@ -612,7 +613,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []proofbound.Xpt, tris []
 			}
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		total.Add(total, proofbound.XdotRat(a, meshbool.Xcross(b, c)))
+		total.Add(total, proof.XdotRat(a, meshbool.Xcross(b, c)))
 	}
 	volRat := new(big.Rat).Mul(total, big.NewRat(1, 6))
 	if volRat.Sign() <= 0 {

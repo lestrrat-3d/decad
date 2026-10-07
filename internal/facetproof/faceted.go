@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -28,7 +29,7 @@ func KeepPlacedEmbedded(ctx context.Context, src, held []r3.Vec, tris [][3]int, 
 	h := meshbool.HeldRounding{
 		Verts:   held,
 		Tris:    tris,
-		Exact:   make([]proofbound.Xpt, len(held)),
+		Exact:   make([]proof.Xpt, len(held)),
 		Moved:   make([]bool, len(held)),
 		Movable: make([]bool, len(held)),
 	}
@@ -147,7 +148,7 @@ func FacetedExtremeError(budget *proofbound.WorkBudget, verts []r3.Vec, beta, B 
 // It allocates no topology objects and holds no document reference, so the
 // read-only evaluator can run the same invariant checks as body construction.
 type MeshAudit struct {
-	XVerts   []proofbound.Xpt
+	XVerts   []proof.Xpt
 	Comp     []int
 	Adj      [][]int
 	Members  [][]int
@@ -177,14 +178,14 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 		}
 	}
 
-	audit := &MeshAudit{XVerts: make([]proofbound.Xpt, len(verts))}
+	audit := &MeshAudit{XVerts: make([]proof.Xpt, len(verts))}
 	for i, v := range verts {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 		}
-		audit.XVerts[i] = proofbound.XptOf(v)
+		audit.XVerts[i] = proof.XptOf(v)
 	}
 
 	audit.Comp = make([]int, len(tris))
@@ -236,7 +237,7 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 				}
 			}
 			t := tris[fi]
-			v.Add(v, proofbound.XdotRat(audit.XVerts[t[0]], meshbool.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])))
+			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], meshbool.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])))
 		}
 		audit.CompVol[ci] = v.Mul(v, sixth)
 		if audit.CompVol[ci].Sign() == 0 {

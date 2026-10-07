@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -240,18 +240,18 @@ func circularSegmentCCW(seg sectionrecord.CurveSegment) (bool, bool) {
 }
 
 // PlanesCoincide decides S5 over exact rationals on the recorded U/V/
-// Origin floats (internal/meshbool/boolean_exact.go's proofbound.XptOf/xcross/xdot, the take-the-floats-
+// Origin floats (internal/meshbool/boolean_exact.go's proof.XptOf/xcross/xdot, the take-the-floats-
 // exactly discipline): the two planes coincide when their normals (U×V) are
 // exactly parallel and the displacement between their origins lies in that
 // plane. A tolerance here would refuse a legitimately thin loft, and the
 // existence claim S5 makes is a structural zero volume, not a small one.
 func PlanesCoincide(a, b sectionrecord.PlaneRecord) bool {
-	na := meshbool.Xcross(proofbound.XptOf(a.U), proofbound.XptOf(a.V))
-	nb := meshbool.Xcross(proofbound.XptOf(b.U), proofbound.XptOf(b.V))
+	na := meshbool.Xcross(proof.XptOf(a.U), proof.XptOf(a.V))
+	nb := meshbool.Xcross(proof.XptOf(b.U), proof.XptOf(b.V))
 	cr := meshbool.Xcross(na, nb)
 	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return false
 	}
-	d := proofbound.Xsub(proofbound.XptOf(b.Origin), proofbound.XptOf(a.Origin))
+	d := proof.Xsub(proof.XptOf(b.Origin), proof.XptOf(a.Origin))
 	return meshbool.XdotSign(na, d) == 0
 }

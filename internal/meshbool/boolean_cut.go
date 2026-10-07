@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -29,7 +30,7 @@ import (
 // facet whose plane it lies in, and whether each endpoint lies on THIS
 // facet's own boundary.
 type Xseg struct {
-	A, B             proofbound.Xpt
+	A, B             proof.Xpt
 	AOnEdge, BOnEdge bool
 	Partner          [3]r3.Vec
 	// viaParity marks a contact whose region classification may NOT be read
@@ -48,10 +49,10 @@ type Xseg struct {
 // piece an artificial split line severed) carries no anchor and is
 // classified by parity instead.
 type CutRegion struct {
-	Tris      [][3]proofbound.Xpt
+	Tris      [][3]proof.Xpt
 	Partner   [3]r3.Vec
 	HasAnchor bool
-	Probe     proofbound.Xpt
+	Probe     proof.Xpt
 }
 
 // CutVert is one subdivision vertex: its exact 2D projection, its exact 3D
@@ -59,7 +60,7 @@ type CutRegion struct {
 // a split line) — the points chains break at.
 type CutVert struct {
 	P2       Xp2
-	P3       proofbound.Xpt
+	P3       proof.Xpt
 	Boundary bool
 }
 
@@ -89,7 +90,7 @@ type TriCutter struct {
 	Work  *proofbound.WorkBudget
 }
 
-func (tc *TriCutter) Proj(p proofbound.Xpt) Xp2 {
+func (tc *TriCutter) Proj(p proof.Xpt) Xp2 {
 	if tc.Swap {
 		return NewXP2FromXpt(p, tc.V, tc.U)
 	}
@@ -97,7 +98,7 @@ func (tc *TriCutter) Proj(p proofbound.Xpt) Xp2 {
 }
 
 // addVert interns a vertex by its exact 2D identity; boundary is sticky.
-func (tc *TriCutter) AddVert(p2 Xp2, p3 proofbound.Xpt, boundary bool) int {
+func (tc *TriCutter) AddVert(p2 Xp2, p3 proof.Xpt, boundary bool) int {
 	k := p2.Key2()
 	if i, ok := tc.Index[k]; ok {
 		if boundary {
@@ -112,7 +113,7 @@ func (tc *TriCutter) AddVert(p2 Xp2, p3 proofbound.Xpt, boundary bool) int {
 
 // CutTriangle subdivides the facet along its contact segments and returns
 // the classified regions.
-func CutTriangle(ctx context.Context, xtri [3]proofbound.Xpt, normal proofbound.Xpt, segs []Xseg) ([]CutRegion, error) {
+func CutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs []Xseg) ([]CutRegion, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func CutTriangle(ctx context.Context, xtri [3]proofbound.Xpt, normal proofbound.
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
-	corner := func(p proofbound.Xpt) Xp2 { return NewXP2FromXpt(p, tc.U, tc.V) }
+	corner := func(p proof.Xpt) Xp2 { return NewXP2FromXpt(p, tc.U, tc.V) }
 	if Cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.Swap = true
 	}
@@ -155,7 +156,7 @@ func CutTriangle(ctx context.Context, xtri [3]proofbound.Xpt, normal proofbound.
 		// Every contact collapsed to a point: the facet is whole, classified
 		// by parity.
 		probe := XCentroid(xtri[0], xtri[1], xtri[2])
-		return []CutRegion{{Tris: [][3]proofbound.Xpt{xtri}, Probe: probe}}, nil
+		return []CutRegion{{Tris: [][3]proof.Xpt{xtri}, Probe: probe}}, nil
 	}
 
 	// Open every closed chain with split lines, then split the facet into
@@ -754,7 +755,7 @@ func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (Cu
 		if err := tc.Work.Step(); err != nil {
 			return CutRegion{}, err
 		}
-		corners := [3]proofbound.Xpt{tc.Verts[t[0]].P3, tc.Verts[t[1]].P3, tc.Verts[t[2]].P3}
+		corners := [3]proof.Xpt{tc.Verts[t[0]].P3, tc.Verts[t[1]].P3, tc.Verts[t[2]].P3}
 		reg.Tris = append(reg.Tris, corners)
 		if reg.HasAnchor {
 			continue

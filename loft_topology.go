@@ -363,8 +363,8 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 		return nil, err
 	}
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
-	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
+	u := proofarith.Xsub(proofarith.XptOf(b), proofarith.XptOf(a))
+	v := proofarith.Xsub(proofarith.XptOf(c), proofarith.XptOf(a))
 	lo, hi := loftmesh.WallTriangleArea(u, v)
 	areaBound := proofbound.UpRound(hi - lo)
 	if delta > 0 {
