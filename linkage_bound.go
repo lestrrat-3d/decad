@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
@@ -45,6 +46,14 @@ type linkBound struct {
 	// from the zero pose at any parameter of the drive: Σ ρ_{ik}·m_i over the
 	// revolute joints on path, plus m_i over the prismatic ones.
 	reach *big.Rat
+}
+
+// ratCylinder is an infinite cylinder: the line through point along dir and
+// the radius r about it, all exact rationals (docs/linkage-check-design.md
+// §5.2).
+type ratCylinder struct {
+	point, dir motionbound.RatVec
+	r          *big.Rat
 }
 
 // ratBall is a ball of exact rational centre and radius.
@@ -233,27 +242,55 @@ func readLinkBounds(spec *linkageSpec, frames []motionbound.MotionFrame) ([]link
 			return nil, false
 		}
 		rho[len(path)-1] = own
+		// The cylinder of §5.2, from the first revolute joint walked: nil
+		// until then, and once a revolute not parallel to its axis drops it.
+		var cyl *ratCylinder
+		if jt.revolute {
+			cyl = &ratCylinder{point: frames[k].Center, dir: frames[k].Axis, r: own}
+		}
+		ballRho := slices.Clone(rho)
 		for n := len(path) - 2; n >= 0; n-- {
 			i := path[n]
 			above := spec.joints[i]
+			f := frames[i]
 			if !above.revolute {
 				ball = ratBall{c: ball.c, r: new(big.Rat).Add(ball.r, jointReach(above))}
+				if cyl != nil && !ratZero(ratCross(cyl.dir, f.Axis)) {
+					cyl = &ratCylinder{point: cyl.point, dir: cyl.dir, r: new(big.Rat).Add(cyl.r, jointReach(above))}
+				}
 				continue
 			}
-			f := frames[i]
 			d := sqrtUpRat(lineDistanceSq(ball.c, f.Center, f.Axis, axisSq(f.Axis)))
 			toCenter := sqrtUpRat(distanceSq(ball.c, f.Center))
 			if d == nil || toCenter == nil {
 				return nil, false
 			}
-			rho[n] = new(big.Rat).Add(d, ball.r)
+			ballRho[n] = new(big.Rat).Add(d, ball.r)
+			rho[n] = ballRho[n]
 			ball = ratBall{c: f.Center, r: toCenter.Add(toCenter, ball.r)}
+			switch {
+			case cyl == nil:
+				cyl = &ratCylinder{point: f.Center, dir: f.Axis, r: rho[n]}
+			case ratZero(ratCross(cyl.dir, f.Axis)):
+				between := sqrtUpRat(lineDistanceSq(cyl.point, f.Center, f.Axis, axisSq(f.Axis)))
+				if between == nil {
+					return nil, false
+				}
+				if viaCyl := between.Add(between, cyl.r); viaCyl.Cmp(rho[n]) < 0 {
+					rho[n] = viaCyl
+				}
+				cyl = &ratCylinder{point: f.Center, dir: f.Axis, r: rho[n]}
+			default:
+				cyl = &ratCylinder{point: f.Center, dir: f.Axis, r: rho[n]}
+			}
 		}
+		// The swept-box reach keeps the ball's readings (§5.2), so the
+		// exclusion settles exactly the pairs it settles without the cylinder.
 		reach := new(big.Rat)
 		for n, i := range path {
 			m := jointReach(spec.joints[i])
-			if rho[n] != nil {
-				m.Mul(m, rho[n])
+			if ballRho[n] != nil {
+				m.Mul(m, ballRho[n])
 			}
 			reach.Add(reach, m)
 		}

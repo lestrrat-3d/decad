@@ -83,24 +83,35 @@ func linkRatFloat(t *testing.T, q *big.Rat) float64 {
 }
 
 // TestLinkageBallReading pins ρ_{ik} on linkageChain against hand-computed
-// radii.
+// radii: the ball's readings, which the swept-box reach keeps, and the
+// cylinder's beside them (docs/linkage-check-design.md §5.2), whose smaller
+// one ρ carries.
 //
 // Link 4 (own prismatic): its ball is centred on its box centre (88, 0, 2)
 // with radius the half-diagonal √24 plus its reach 6. ρ_34 is that centre's
 // distance 28 from joint 3's axis plus the radius. Joint 3 is revolute, so
 // the ball moves to its centre (60, 0, 0) with radius |(88, 0, 2) − (60, 0, 0)|
 // = √788 plus the radius; joint 2 is prismatic, so the radius grows by its
-// reach 10; ρ_14 is the distance 60 of (60, 0, 0) from joint 1's axis plus
-// the radius. Link 3 (own revolute): ρ_33 is its far corner's distance √425
-// from its own axis, its ball the far corner's distance √450 from (60, 0, 0),
-// and ρ_13 is 60 plus that radius plus joint 2's reach. A prismatic joint
-// carries no ρ.
+// reach 10; the ball reads ρ_14 as the distance 60 of (60, 0, 0) from joint
+// 1's axis plus the radius. The cylinder starts at joint 3, its axis and
+// radius ρ_34; the slide along X, across that axis, grows it by 10; joint 1's
+// axis is parallel, 60 away, so the cylinder reads ρ_14 = 60 + ρ_34 + 10,
+// below the ball's by √788 − 28. Link 3 (own revolute): ρ_33 is its far
+// corner's distance √425 from its own axis, its ball the far corner's
+// distance √450 from (60, 0, 0), and the ball reads ρ_13 as 60 plus that
+// radius plus joint 2's reach, the cylinder 60 + √425 + 10. Link 2's ρ_12 is
+// the ball's: no revolute below joint 1 starts a cylinder. A prismatic joint
+// carries no ρ. The reach of links 3 and 4 is read from the ball's ρ.
 //
 // Legs seen to fail when deleted: the prismatic own ball's reach m_k (ρ_34
-// falls by 6); the revolute step's |c − c_i| (ρ_14 falls by √788); the
+// falls by 6); the revolute step's |c − c_i| (link 4's reach falls); the
 // prismatic step's reach m_i (ρ_14 and ρ_13 fall by 10); dist(c, axis_i) in
-// ρ_{ik} (ρ_34 falls by 28, ρ_14 by 60); the revolute own ball's corner
-// radius (ρ_13 falls by √450); and the corner reading of ρ_kk (ρ_33 is lost).
+// ρ_{ik} (ρ_34 falls by 28); the revolute own ball's corner radius (link 3's
+// reach falls); the corner reading of ρ_kk (ρ_33 is lost); the cylinder's
+// line distance (ρ_14 and ρ_13 fall by 60); the cylinder's growth across a
+// slide (ρ_14 and ρ_13 fall by 10); the cylinder itself (ρ_14 and ρ_13
+// rise to the ball's); and the parallel test (the crossed chain's ρ_12 falls
+// to √125, below its true reach).
 func TestLinkageBallReading(t *testing.T) {
 	t.Parallel()
 	_, _, bounds := linkageChain(t)
@@ -109,8 +120,8 @@ func TestLinkageBallReading(t *testing.T) {
 	want := [][]float64{
 		{math.Sqrt(125)},
 		{math.Sqrt(10*10+5*5+2.5*2.5) + 10 + 30, -1},
-		{60 + r3ball + 10, -1, math.Sqrt(425)},
-		{60 + math.Sqrt(788) + r4 + 10, -1, 28 + r4, -1},
+		{60 + math.Sqrt(425) + 10, -1, math.Sqrt(425)},
+		{60 + 28 + r4 + 10, -1, 28 + r4, -1},
 	}
 	for k, b := range bounds {
 		require.Len(t, b.path, k+1)
@@ -129,6 +140,36 @@ func TestLinkageBallReading(t *testing.T) {
 	require.InDelta(t, 30+math.Sqrt(131.25)+10, linkRatFloat(t, bounds[1].rho[0]), 1e-9)
 	reach := linkRatFloat(t, bounds[3].reach)
 	require.InDelta(t, (60+math.Sqrt(788)+r4+10)*math.Pi/2+10+(28+r4)*math.Pi/4+6, reach, 1e-9)
+	reach3 := linkRatFloat(t, bounds[2].reach)
+	require.InDelta(t, (60+r3ball+10)*math.Pi/2+10+math.Sqrt(425)*math.Pi/4, reach3, 1e-9)
+
+	// Scene 1's forearm about the shoulder: the cylinder about the elbow,
+	// radius √(48² + 14²) = 50, sits 48 from the shoulder's axis, so ρ_12 is
+	// exactly 98, where the ball reads 48 + √(48² + 14² + 22²).
+	run, _, _ := foldingArmRun(t)
+	arm := run.drive.(*linkageDriver).bounds[1]
+	require.Zero(t, arm.rho[0].Cmp(big.NewRat(98, 1)))
+
+	// A revolute about X above one about Z: the axes cross, so the cylinder
+	// about the elbow cannot reach above it and ρ_12 is the ball's — the
+	// block's farthest corner from (50, 0, 0), √(10² + 5² + 5²), with the
+	// elbow on the X axis.
+	doc := New()
+	l := NewLinkage()
+	tilt, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(1, 0, 0), []*Body{internalBoxBody(t, doc, -5, -5, 5, 5, 5)})
+	require.NoError(t, err)
+	turn, err := tilt.Revolute(r3.NewVec(50, 0, 0), r3.NewVec(0, 0, 1), []*Body{internalBoxBody(t, doc, 50, -5, 60, 5, 5)})
+	require.NoError(t, err)
+	spec, err := l.resolveDrive(Drive{
+		{Link: tilt, From: units.Degrees(0), To: units.Degrees(30)},
+		{Link: turn, From: units.Degrees(0), To: units.Degrees(30)},
+	})
+	require.NoError(t, err)
+	frames, ok := linkageFrames(spec)
+	require.True(t, ok)
+	crossed, ok := readLinkBounds(spec, frames)
+	require.True(t, ok)
+	require.InDelta(t, math.Sqrt(150), linkRatFloat(t, crossed[1].rho[0]), 1e-9)
 }
 
 // TestLinkageChainTravel pins τ^(L)_k's telescoping sum on linkageChain over

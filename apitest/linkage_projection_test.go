@@ -59,8 +59,8 @@ func requireIntervalsBelow(t *testing.T, report *decad.LinkageReport, gap func(s
 // floor: Sound, the reading enclosing the minimum inside the gate, no interval
 // narrower than 1/1024. The segment term (§5.8) charges the corner's motion
 // along the drive itself, near zero at the minimum though each joint alone
-// moves it, so the bound is second order in the step. Measured: 16 poses,
-// against 251 under the travel bound alone. The reading floor's own leg, a
+// moves it, so the bound is second order in the step. Measured: 15 poses,
+// against 239 under the travel bound alone. The reading floor's own leg, a
 // tolerance that refines past the verdict floor, is
 // TestVerifyLinkageReadingFloor's.
 //

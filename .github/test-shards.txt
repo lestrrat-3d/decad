@@ -947,7 +947,7 @@
 5	0.00	TestJointBoxDependentDelta
 5	0.92	TestJointBoxLoopSplitAxis
 5	0.00	TestJointBoxStuckRule
-5	0.01	TestLinkageBallReading
+5	0.02	TestLinkageBallReading
 5	0.34	TestLoftArcWedgeAreaOracleAtGrowingRadius
 5	0.26	TestLoftArcWedgeBoxSoundness
 5	0.11	TestLoftArcWedgeBuildsAndMatchesClosedForm

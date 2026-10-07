@@ -422,9 +422,26 @@ path from link `k` toward joint `i`, carrying a ball that encloses link `k` unde
 Every square root is `proofbound.RatSqrtUp`, an up-rounded float read back as an exact rational; every sum
 and product is `big.Rat` arithmetic. No float operation touches a bound after its root, so each `ρ_{ik}`
 and each `τ_k` is a proven upper bound, not an estimate (motion §5.2, and the rule that a proven bound stops
-covering a value once raw float ops touch it). The ball form is loose where a link is long along a joint's
-axis — §11's first scene reads `ρ_{12} ≈ 102.6` mm for a true `98` — and refinement absorbs the slack; a
-cylinder enclosure for parallel axes is a later tightening, not a soundness question.
+covering a value once raw float ops touch it).
+
+**A cylinder beside the ball.** The ball is loose where a link is long along a joint's axis — a ball
+around scene 1's forearm charges its height along `Z` as reach about the shoulder, `ρ_{12} ≈ 102.6` mm for
+a true `98`. So the reading carries, beside the ball, a **cylinder** — an axis line and a radius — from
+the first revolute joint `i` it walks on: the line of `axis_i` and the radius `ρ_{ik}`, which encloses the
+link under joints `i..k` at any values since a rotation about `axis_i` keeps every distance from it. Walking
+on to a joint `m` above:
+
+| joint `m` | the cylinder `(L, R)` under joints `m+1..k` becomes |
+|---|---|
+| revolute, `Axis` exactly parallel to `L` | `(axis_m, dist(L, axis_m) + R)`: every point within `R` of `L` stays within that of `axis_m` under any rotation about it, two parallel lines' distance squared exactly and rooted upward; and `ρ_{mk}` is the smaller of the ball's reading and `dist(L, axis_m) + R` |
+| prismatic, `Dir` exactly parallel to `L` | unchanged: a slide along its own axis keeps an infinite cylinder |
+| prismatic otherwise | `(L, R + m_m)` |
+| revolute not parallel to `L` | restarted: `(axis_m, ρ_{mk})`, the ball's reading |
+
+Each reading is a proven upper bound, so their minimum is one; it is what `τ` and the projection bound's
+`B_ij` read. The swept-box reach of §6 step 4 keeps the ball's readings, so no pair the exclusion left
+evaluated is settled by the tighter reading and every report changes only in the bounds `τ` gives. On
+scene 1 the cylinder reads `ρ_{12} = 48 + √(48² + 14²) = 98`.
 
 **Two moving bodies.** For a pair of bodies in links `j` and `m`, `τ_{jm}(Δ) = τ^{(L)}_j(Δ) + τ^{(L)}_m(Δ)`,
 where `L` is the two links' lowest common ancestor and `τ^{(L)}` sums over the joints strictly below `L`
@@ -575,7 +592,7 @@ with its first power — the reading's defect per interval is about `τ_rate·Δ
 meeting the gate `rel·gap` needs a step of about `4·rel·gap/τ_rate` over the whole region where the gap
 sits within `rel·gap` of its minimum. For a gap curving as `κ·Δq²` that region is about
 `2·√(rel·gap/κ)` wide along each joint, so the cell count grows as `(τ_rate/√(rel·gap·κ))^n`: about a
-hundred intervals for the three-joint arm's drive (§10: `251` poses under the travel bound alone), and about `10^8` cells for the same
+hundred intervals for the three-joint arm's drive (§10: `239` poses under the travel bound alone), and about `10^8` cells for the same
 arm's box (§14.7), which no budget reaches. This certificate bounds a pair's gap over an interval or a
 cell to second order in the step instead, from the bodies' `Bounds()` boxes and the ideal poses alone.
 
@@ -771,10 +788,10 @@ one of its intervals is the travel bound's, and its reports are the same byte fo
 their velocities under each joint on the path once, and projects them onto six directions: a few hundred
 rational-interval operations, and a few hundred sums over short dyadics per pair and interval. The
 readings are kept on the pose and serve both intervals it ends. Measured on §10's three-joint arm: at
-`WithResolution(Scalar(1.0/64))` its `10` poses take about `50` ms against `30` under the travel bound
-alone, and at the defaults the reading closes at a step of `1/256` in `16` poses and about `80` ms, where
-the travel bound alone refines to the reading floor in `251` poses and about `0.8` s. Estimated, and
-measured by §14.9's P2: the arm's box reads `Sound` in `437` centres, about `2.5` s, in place of exhausting
+`WithResolution(Scalar(1.0/64))` its `9` poses take about `50` ms against `30` under the travel bound
+alone, and at the defaults the reading closes at a step of `1/256` in `15` poses and about `80` ms, where
+the travel bound alone refines to the reading floor in `239` poses and about `0.8` s. Estimated, and
+measured by §14.9's P2: the arm's box reads `Sound` in `419` centres, about `2.5` s, in place of exhausting
 the budget (§14.7). The disc is unchanged. A box whose minimum sits at a corner of the box with a nonzero
 gradient (§14.8's clear crane box) still gains: its reading's upper end is a centre's gap, which no centre
 brings to the corner faster than linearly, but the lower end, the leaves' bounds, closes to second order,
@@ -806,7 +823,7 @@ each of its ends, which is at least the minimum over it.
   than `1/1024`, and the pose count recorded: `16`, against the estimate of about `90` that assumed a step
   of `1/512`; the segment term closes the reading at `1/256`. Red when the projection bound is dropped:
   the reading then refines to `1/16384` (§10). The reading floor's leg (§11) runs the same arm at
-  `WithMotionTolerance(Scalar(1e-5))`: `Sound` with some interval narrower than `1/1024`, measured `26`
+  `WithMotionTolerance(Scalar(1e-5))`: `Sound` with some interval narrower than `1/1024`, measured `25`
   poses down to `1/4096`; red when the segment term is dropped, since the box form's first-order defect
   then leaves the reading beyond tolerance at the reading floor.
 - **Scene 13 — the pendulum (the remainder's leg).** A block `x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10]`
@@ -952,11 +969,6 @@ Proving every configuration in `[Min_1, Max_1] × … × [Min_n, Max_n]` clear i
 cells of joint space instead of intervals of one parameter. It is a second entry point,
 `VerifyJointBox`, designed in §14 and landing as §14.9's increments; it changes nothing in §1–§8.
 
-### 9.3 A tighter `ρ` for parallel axes
-
-§5.2's balls are loose where a link is long along a joint's axis; a cylinder enclosure about parallel
-axes would tighten `ρ_{ik}`. It changes no soundness argument, only how early an interval certifies, and it
-waits on a measured drive whose pose count the ball's slack decides.
 
 ## 10. Cost
 
@@ -978,11 +990,11 @@ for a clear sweep, and `10`–`20` onset poses per contact found.
 Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
 the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
 publish nothing, the shoulder-wrist pair is settled by the layer exclusion (§5.7), and four pairs are
-evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `10` poses, about `50` ms,
+evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `9` poses, about `50` ms,
 every interval `IntervalClear` and the reading beyond tolerance. At the defaults the projection bound
-(§5.8) closes the reading around its one minimum at a step of `1/256`: `16` poses, about `80` ms,
-`Sound`. The travel bound alone settles the verdict in `50` poses and refines the reading to the reading
-floor in `251`, about `0.8` s.
+(§5.8) closes the reading around its one minimum at a step of `1/256`: `15` poses, about `80` ms,
+`Sound`. The travel bound alone settles the verdict in `48` poses and refines the reading to the reading
+floor in `239`, about `0.8` s.
 
 **The whole-drive reading at the default floor.** The verdict is cheap; the reading need not be. A certified
 interval's lower bound sits up to `τ/2` below the true gap, so the reading's half-width near the minimum
@@ -991,9 +1003,9 @@ its `ρ_{ik}·|To_i − From_i|` — hundreds of millimetres per unit `s` for an
 `rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, under the verdict floor `1/1024`. That is
 why the reading has its own floor (§3): refinement past the verdict floor goes only to the interval holding
 the smallest bound, so around an isolated minimum it costs about `log₂(16)` halvings per tie broken (the
-three-joint arm above under the travel bound alone: `50` poses for the verdict, `251` with the reading).
+three-joint arm above under the travel bound alone: `48` poses for the verdict, `239` with the reading).
 The projection bound of §5.8 sits second order in the step below the gap, and closes such a minimum's
-reading a few halvings past the width at which the verdict settles (`16` poses for the same arm); the reading
+reading a few halvings past the width at which the verdict settles (`15` poses for the same arm); the reading
 floor then serves a tighter tolerance and the pairs that certificate leaves loose. A caller who states
 `WithResolution` stops the reading there too, and a clear drive whose reading the stated floor leaves
 coarse reads `Suspect` with a `DiagMeasurementBeyondTolerance` on it. A minimum that holds along the drive —
@@ -1593,7 +1605,7 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   `1` GB and reads `Suspect`, the reading beyond tolerance and the budget finding raised, and
   `WithCellBudget(65536)` takes about `6` minutes and `2.1` GB and still does not meet the gate. The
   projection certificate (§5.8) bounds the gap over a cell to second order: with `Σ B_ij ≈ 700` mm/rad²
-  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `437`
+  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `419`
   centres, about `2.5` s, at the defaults and at `WithResolution(Scalar(1.0/1024))`; at
   `WithResolution(Scalar(1.0/64))` the reading stops coarse at `259` centres and reads `Suspect`. A caller
   who wants the verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
@@ -1659,7 +1671,7 @@ with no leaf narrower than `1/64`; red when a stated resolution leaves the readi
 three-joint arm with each joint over `[0°, 90°]`, at the defaults. Its minimum is §14.7's `60 − 10·√26
 ≈ 9.0098` mm at `(0°, 0°, atan(1/5))`, where the wrist's corner `(150, −10)` faces the post at
 mid-height. Assert `Sound`, no `DiagJointBoxBudgetExhausted`, `Clearance` enclosing the minimum with
-`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `437` centres into `219` leaves), every
+`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `419` centres into `210` leaves), every
 leaf's bound at or below the smallest upper end of its centre's rows, and, at each of the leaf's centre
 and eight corners where the wrist's corner faces the post (`|Y| ≤ 10`), a bound at or below the
 closed-form gap `160 − X` there, which is at least the cell's minimum. Red when the projection bound is
@@ -1747,6 +1759,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | D1 (`linkage_loop.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
 | D2 (`linkage_box.go`: `dependentReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
 | H1 (`linkage_bound.go`: `bodyHullPoints`, the point readings, `extentsAlong` and the hull bound over every candidate direction; `linkage_verify.go`: the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
+| C1 (`linkage_bound.go`: the cylinder beside the ball in `readLinkBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
