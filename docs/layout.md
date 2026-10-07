@@ -193,7 +193,7 @@ the rules leave to the byte budget.
 | `contact_analytic_manifold.go` | Ruling contacts: clearance certificates and placed poses. See `docs/contact-geometry-design.md` §4.5. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
-| `contact_sweep_replay.go` | Cached affine and rotating sweep replay, and each report's replay memo. See `docs/contact-sweep-design.md` §6. |
+| `contact_sweep_replay.go` | Affine and rotating replay adapters. See contact-sweep §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: each body's clearance faces, edges and nesting test over `internal/clearance/`'s carriers. See `docs/clearance-design.md` §2–§3. |
@@ -302,7 +302,7 @@ the rules leave to the byte budget.
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, poses and sweeps. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
-| `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
+| `internal/sweepmemo/` | Sweep path, radius and replay memo tables. See contact-sweep §6–§7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
