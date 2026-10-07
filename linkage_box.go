@@ -518,7 +518,10 @@ type boxCell struct {
 	// loop's. gate is the refusal that left the cell's centre or a hull
 	// unread, empty otherwise, and gateLoop the loop that refused: such a
 	// cell has no δ_j, so no pair of it has a τ_half.
-	delta    map[int]*big.Rat
+	delta map[int]*big.Rat
+	// depReach is, per dependent joint, its centre and half-span for the
+	// projection bound's expansion over the cell (dependentReach).
+	depReach map[int]depReach
 	gate     string
 	gateLoop *loopDrive
 	// projShares holds, for each evaluated pair whose bound over the cell is
@@ -844,6 +847,7 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 		return loopPose{}, err
 	}
 	c.delta = make(map[int]*big.Rat)
+	c.depReach = make(map[int]depReach)
 	for _, ld := range spec.loops {
 		var hulls []proofbound.RatInterval
 		if !ld.held {
@@ -868,11 +872,33 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 				h, delta = hulls[j], dependentDelta(m, hulls[j])
 			}
 			c.delta[d] = delta
+			c.depReach[d] = dependentReach(m, h)
 			unit := lp.values[d].Unit()
 			c.cell.Min[d], c.cell.Max[d] = units.New(proofbound.RatFloatDown(h.Lo), unit), units.New(proofbound.RatFloatUp(h.Hi), unit)
 		}
 	}
 	return lp, nil
+}
+
+// depReach is a loop dependent's centre and half-span over a cell for the
+// projection bound's expansion (docs/linkage-check-design.md §5.8, §16.3).
+type depReach struct {
+	centre, h *big.Rat
+}
+
+// dependentReach is a dependent's expansion over a cell: its centre the exact
+// midpoint of m, the enclosure at the cell's centre, and h the larger
+// distance from that centre to an end of the hull of the cell's hull h and
+// m, which holds every value the dependent takes over the cell. A held
+// loop's dependent stands still across the cell, its hull m itself.
+func dependentReach(m, hull proofbound.RatInterval) depReach {
+	all := proofbound.IntervalOwned(minRat(hull.Lo, m.Lo), maxRat(hull.Hi, m.Hi))
+	centre := intervalMidpoint(m)
+	h := new(big.Rat).Sub(all.Hi, centre)
+	if low := new(big.Rat).Sub(centre, all.Lo); low.Cmp(h) > 0 {
+		h = low
+	}
+	return depReach{centre: centre, h: h}
 }
 
 // dependentDelta is δ_j of docs/linkage-check-design.md §16.3: with the
@@ -971,10 +997,13 @@ func (b *boxRun) classify(c *boxCell) {
 // strictly below a link-link pair's lowest common ancestor, less a symmetric
 // body's own joint (linkageDriver.pathOf, §5.2) — and expanded to
 // second order in h_i, half of each joint's span across the cell rounded up
-// to a float; the largest separation along the six coordinate directions.
-// It returns the bound and each axis's share of its defect, or nil when
-// either path holds a loop's dependent joint, whose value is an enclosure
-// the expansion does not consume, or a box cannot be read exactly. readings
+// to a float; the largest separation along the six coordinate directions. A
+// loop's dependent joint is read at its centre, the midpoint of its
+// enclosure at the cell's centre, with h_i the farthest that centre sits
+// from the hull of the cell's hull and that enclosure (dependentReach), and
+// its share is charged to its driver. It returns the bound and each axis's
+// share of its defect, or nil when a dependent's readings are missing, as on
+// a gated cell, or a box cannot be read exactly. readings
 // keeps each mover's corner reading at the centre for the cell's other
 // pairs.
 func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]cornerBounds) (*big.Rat, map[int]*big.Rat) {
@@ -990,11 +1019,18 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 		h := make([]*big.Rat, 0, len(bound.path)-below)
 		for _, j := range bound.path[below:] {
 			jt := dr.spec.joints[j]
-			if jt.dep != nil {
-				return projectionSide{}, false
+			var span *big.Rat
+			if jt.dep == nil {
+				span = jointParam(jt, c.lo[j]).SpanUpper(jointParam(jt, c.hi[j]))
+				span.Quo(span, big.NewRat(2, 1))
+			} else {
+				reach, ok := c.depReach[j]
+				if !ok {
+					return projectionSide{}, false
+				}
+				span = new(big.Rat).Set(reach.h)
 			}
-			span := jointParam(jt, c.lo[j]).SpanUpper(jointParam(jt, c.hi[j]))
-			half := proofarith.FloatRat(proofbound.RatFloatUp(span.Quo(span, big.NewRat(2, 1))))
+			half := proofarith.FloatRat(proofbound.RatFloatUp(span))
 			if half == nil {
 				return projectionSide{}, false
 			}
@@ -1009,6 +1045,12 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 			}
 			params := make([]motionbound.MotionParam, len(dr.spec.joints))
 			for _, j := range bound.path[below:] {
+				if dr.spec.joints[j].dep != nil {
+					// A dependent is read at its centre, the midpoint of its
+					// enclosure at the cell's centre (§5.8).
+					params[j] = motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).Set(c.depReach[j].centre)}
+					continue
+				}
 				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
 			}
 			if corners, ok = roundCorners(readCorners(dr.spec, dr.frames, params, bound, below, lo, hi)); !ok {
@@ -1037,9 +1079,15 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 	bound := projectionLower(a, p)
 	shares := make(map[int]*big.Rat)
 	axis, sense := attainedDirection(a, p, bound)
-	addProjectionShares(shares, a, mine, below, axis, sense)
+	axisOf := func(joint int) int {
+		if ld := dr.spec.joints[joint].dep; ld != nil {
+			return ld.driver
+		}
+		return joint
+	}
+	addProjectionShares(shares, a, mine, below, axis, sense, axisOf)
 	if other >= 0 {
-		addProjectionShares(shares, p, theirs, below, axis, -sense)
+		addProjectionShares(shares, p, theirs, below, axis, -sense, axisOf)
 	}
 	return bound, shares
 }
@@ -1065,9 +1113,10 @@ func attainedDirection(a, p projectionSide, bound *big.Rat) (int, int) {
 // along sense·e_axis (docs/linkage-check-design.md §5.8, the split axis): at
 // the corner attaining the body's extent along that direction, each joint i
 // on its relative path takes |n·v_{i,c}|·h_i + Σ_j B_ij·h_i·h_j, the part of
-// the first-order term and the remainder that halving h_i removes. A body
-// with no joint, a static partner, takes nothing.
-func addProjectionShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below, axis, sense int) {
+// the first-order term and the remainder that halving h_i removes, charged
+// to axisOf(i): the joint itself, or a loop dependent's driver. A body with
+// no joint, a static partner, takes nothing.
+func addProjectionShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below, axis, sense int, axisOf func(int) int) {
 	if len(s.h) == 0 {
 		return
 	}
@@ -1092,7 +1141,7 @@ func addProjectionShares(shares map[int]*big.Rat, s projectionSide, bound linkBo
 				share.Add(share, term.Mul(term, s.h[m]))
 			}
 		}
-		joint := bound.path[below+n]
+		joint := axisOf(bound.path[below+n])
 		if cur, ok := shares[joint]; ok {
 			cur.Add(cur, share)
 			continue
