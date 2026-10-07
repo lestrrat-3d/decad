@@ -190,7 +190,7 @@ the rules leave to the byte budget.
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Cached affine and rotating sweep replay, and each report's replay memo. See `docs/contact-sweep-design.md` §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
-| `clearance_tiers.go` | Vertex tiers, ruling certificates, and curve-cell adapters. See clearance §3/§4/§6. |
+| `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: each body's clearance faces, edges and nesting test over `internal/clearance/`'s carriers. See `docs/clearance-design.md` §2–§3. |
 | `survey.go` | Adapts analytic payloads to wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
@@ -284,8 +284,9 @@ the rules leave to the byte budget.
 | `internal/freeform/` | Exact free-form arithmetic and bounds. See `docs/spline-design.md`. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance geometry, cell accumulation, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
-| `internal/clearance/facepair/` | Face-pair clearance cells. See clearance §4. |
-| `internal/clearance/curvepair/` | Face-edge and edge-edge clearance cells. See clearance §4. |
+| `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
+| `internal/clearance/curvepair/` | Face-edge and edge-edge cells. See clearance §4. |
+| `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
