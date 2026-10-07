@@ -238,7 +238,7 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 //     only because walkOf refuses a CCW flag contradicting an ascending range.
 //   - ArcSeg. buildPrismScene creates CreateArc(centre, lo, hi) with lo and hi
 //     the walked endpoints put in ascending-angle order. At (0, 1)
-//     pinArcWalkEnds (segment_walk.go) pins them to the record's own Start and
+//     pinArcWalkEnds (internal/walkconvert/walk.go) pins them to the record's own Start and
 //     End verbatim and th1 > th0 leaves them unswapped, so the scene arc sweeps
 //     CCW from Start to End — the very angle interval a0 → a0 + sweep the
 //     record's own t indexes. The identity.

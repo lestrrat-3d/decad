@@ -242,7 +242,7 @@ overflows must be refused while it is still a float.
 ZERO-RADIUS arc consumes decides which row answers.** A recorded `ArcSeg`
 whose `Center`, `Start` and `End` are one point walks at radius zero, so
 every station on that side lands on the centre. **A zero SWEEP is not the
-trigger and cannot be one:** `segment_walk.go` folds an arc's `math.Mod` sweep
+trigger and cannot be one:** `internal/walkconvert/walk.go` folds an arc's `math.Mod` sweep
 into `(0, 2π]` by adding `2π` to a non-positive result, so coincident
 recorded endpoints walk a FULL turn rather than none, and `record.go`
 refuses `TStart == TEnd` outright. A zero-radius arc on exactly ONE side
@@ -581,7 +581,7 @@ same chord-cell count, never the count of station points.
 
 **A CLOSED side holds `m` CYCLIC station points, not `m + 1`, and its final
 cell pairs the last station back to the first.** A `CircleSeg` recorded over
-a full turn walks closed (`segment_walk.go`), and the station loop appends exactly
+a full turn walks closed (`internal/walkconvert/walk.go`), and the station loop appends exactly
 one point per chord cell and never the terminal one (`tessellate.go`),
 because that point IS the walk's own first station. So a full-circle side has
 ONE station where an open side has two ends, and `m` stations carry `m`
@@ -1001,7 +1001,7 @@ position provenance, not a guarantee that the recorded coordinate equals the
 point the record denotes at that parameter; the guaranteed-zero list below
 owns that separate claim.
 
-- an **untrimmed `ArcSeg` end**: `segment_walk.go`'s `arcWalkEnd` PINS the held
+- an **untrimmed `ArcSeg` end**: `internal/walkconvert/walk.go`'s `arcWalkEnd` PINS the held
   pair to the recorded `Start` / `End` verbatim at `t == 0` and `t == 1`
   ALONE, so that station IS a recorded coordinate;
 - an **untrimmed `LineSeg` end**: `lerp2` and `DyLerp` (`internal/proof/dyadic.go`) each

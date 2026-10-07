@@ -9,24 +9,11 @@ import (
 
 // circularSegment transfers only the recorded fields used by circular proofs.
 func circularSegment(seg CurveSegment) circularmoments.CurveSegment {
-	switch seg := seg.(type) {
-	case CircleSeg:
-		return circularmoments.CircleSeg{
-			Center: circularPoint(seg.Center), Radius: seg.Radius, CCW: seg.CCW,
-			TStart: seg.TStart, TEnd: seg.TEnd,
-		}
-	case ArcSeg:
-		return circularmoments.ArcSeg{
-			Center: circularPoint(seg.Center), Start: circularPoint(seg.Start), End: circularPoint(seg.End),
-			TStart: seg.TStart, TEnd: seg.TEnd,
-		}
-	default:
-		return nil
-	}
+	return circularmoments.RecordSegment(seg)
 }
 
 func circularPoint(p Point2) circularmoments.Point2 {
-	return circularmoments.Point2{U: p.U, V: p.V}
+	return circularmoments.RecordPoint(p)
 }
 
 func exactCoordinateDelta(a, b float64) *big.Rat {

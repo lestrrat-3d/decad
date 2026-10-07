@@ -399,7 +399,7 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) (
 // survey2d.SegmentWalk's spans are NOT such a chain: one profileWalks set is read by the
 // build, the tessellation, the extent readings and every rigid re-evaluation of
 // the record, and this write would reach all of them at once, past a cache
-// guard that only ever compares the record (segment_walk.go's spans field).
+// guard that only ever compares the record (internal/walkconvert/walk.go's spans field).
 // Hand it a copy, or a fresh conversion.
 func shiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
 	u, okU := proofbound.RatOf(anchor.U)

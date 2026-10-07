@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/curveconvert"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -37,10 +36,6 @@ func shiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
 
 func freeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Point2, error) {
 	return curveconvert.FreeformEndpoints(spans, reversed)
-}
-
-func freeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
-	return curveconvert.FreeformEndpointBounds(spans, reversed, start, end)
 }
 
 func point2Of(point survey2d.RatPoint) (Point2, bool) { return curveconvert.Point2Of(point) }
