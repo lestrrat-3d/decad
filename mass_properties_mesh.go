@@ -115,9 +115,9 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	}
 	// The binary64 vertex coordinates are exact rational inputs; only the
 	// final readings round.
-	anchorExact := proofbound.XptOf(anchor)
+	anchorExact := proofarith.XptOf(anchor)
 	vertices := make([][3]*big.Rat, len(verts))
-	lifted := make([]proofbound.Xpt, len(verts))
+	lifted := make([]proofarith.Xpt, len(verts))
 	maxMesh := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	budget := proofbound.NewWorkBudget(ctx)
 	for i, v := range verts {
@@ -127,8 +127,8 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 		if !proofbound.FiniteVec(v) {
 			return MassProperties{}, fmt.Errorf("%w: mesh mass vertex is nonfinite", ErrUnsupported)
 		}
-		lifted[i] = proofbound.Xsub(proofbound.XptOf(v), anchorExact)
-		x, y, z := meshbool.XhpRat(proofbound.Xhp(lifted[i]))
+		lifted[i] = proofarith.Xsub(proofarith.XptOf(v), anchorExact)
+		x, y, z := proofarith.XhpRat(proofarith.Xhp(lifted[i]))
 		vertices[i] = [3]*big.Rat{x, y, z}
 		for axis, coord := range vertices[i] {
 			magnitude := new(big.Rat).Abs(coord)
@@ -142,7 +142,7 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 		if err := budget.Step(); err != nil {
 			return MassProperties{}, err
 		}
-		det := proofbound.XdotRat(lifted[tri[0]], meshbool.Xcross(lifted[tri[1]], lifted[tri[2]]))
+		det := proofarith.XdotRat(lifted[tri[0]], meshbool.Xcross(lifted[tri[1]], lifted[tri[2]]))
 		sums.add(vertices[tri[0]], vertices[tri[1]], vertices[tri[2]], det)
 	}
 	if err := budget.Err(); err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -34,7 +35,7 @@ import (
 // refused rather than partly examined. Loud beats silently wrong.
 func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.BoolMesh, error) {
 	bm := &meshbool.BoolMesh{Verts: m.vertices, Tris: m.triangles, Src: src}
-	bm.Xverts = make([]proofbound.Xpt, len(m.vertices))
+	bm.Xverts = make([]proof.Xpt, len(m.vertices))
 	for i, v := range m.vertices {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -44,9 +45,9 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 		if proofbound.IsNonFinite(v.X) || proofbound.IsNonFinite(v.Y) || proofbound.IsNonFinite(v.Z) {
 			return nil, fmt.Errorf(`%w: a mesh vertex is not finite`, ErrBooleanFailed)
 		}
-		bm.Xverts[i] = proofbound.XptOf(v)
+		bm.Xverts[i] = proof.XptOf(v)
 	}
-	bm.Norms = make([]proofbound.Xpt, len(m.triangles))
+	bm.Norms = make([]proof.Xpt, len(m.triangles))
 	bm.Fnorms = make([]r3.Vec, len(m.triangles))
 	bm.FnormsReady = make([]bool, len(m.triangles))
 	bm.Boxes = make([][2]r3.Vec, len(m.triangles))
@@ -58,7 +59,7 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 			}
 		}
 		a, b, c := bm.Xverts[tri[0]], bm.Xverts[tri[1]], bm.Xverts[tri[2]]
-		n := meshbool.Xcross(proofbound.Xsub(b, a), proofbound.Xsub(c, a))
+		n := meshbool.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 			return nil, fmt.Errorf(`%w: an operand holds a collapsed facet, which carries no plane and no interior — a contact made on it could not be classified at all, so this evaluator refuses the operand rather than examine it in part`, ErrUnsupported)
 		}

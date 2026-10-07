@@ -10,7 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -33,11 +33,11 @@ func heldFragment(facets [][3]r3.Vec) meshbool.HeldRounding {
 		}
 		h.Tris = append(h.Tris, tri)
 	}
-	h.Exact = make([]proofbound.Xpt, len(h.Verts))
+	h.Exact = make([]proof.Xpt, len(h.Verts))
 	h.Moved = make([]bool, len(h.Verts))
 	h.Movable = make([]bool, len(h.Verts))
 	for i, v := range h.Verts {
-		h.Exact[i] = proofbound.XptOf(v)
+		h.Exact[i] = proof.XptOf(v)
 		h.Moved[i] = true
 	}
 	return h
@@ -89,7 +89,7 @@ func union23Fold() meshbool.HeldRounding {
 func subUlpSliver(offset int64) meshbool.HeldRounding {
 	exactY := new(big.Rat).Add(big.NewRat(1, 2), new(big.Rat).SetFrac(big.NewInt(offset), new(big.Int).Lsh(big.NewInt(1), 60)))
 	w := new(big.Int).Lsh(big.NewInt(1), 61)
-	p := proofbound.Xpt{
+	p := proof.Xpt{
 		X: new(big.Int).Rsh(w, 1),
 		Y: new(big.Int).Div(new(big.Int).Mul(exactY.Num(), w), exactY.Denom()),
 		Z: big.NewInt(0),
@@ -99,7 +99,7 @@ func subUlpSliver(offset int64) meshbool.HeldRounding {
 	return meshbool.HeldRounding{
 		Verts:   verts,
 		Tris:    [][3]int{{0, 2, 1}, {0, 1, 3}},
-		Exact:   []proofbound.Xpt{proofbound.XptOf(verts[0]), proofbound.XptOf(verts[1]), proofbound.XptOf(verts[2]), p},
+		Exact:   []proof.Xpt{proof.XptOf(verts[0]), proof.XptOf(verts[1]), proof.XptOf(verts[2]), p},
 		Moved:   []bool{false, false, false, true},
 		Movable: []bool{false, false, false, true},
 	}
@@ -152,7 +152,7 @@ func TestFloatBoxCornersOrder(t *testing.T) {
 func layeredSlivers(rng *rand.Rand) meshbool.HeldRounding {
 	var h meshbool.HeldRounding
 	w := new(big.Int).Lsh(big.NewInt(1), 61)
-	exactOf := func(x, y, z *big.Rat) proofbound.Xpt {
+	exactOf := func(x, y, z *big.Rat) proof.Xpt {
 		num := func(r *big.Rat) *big.Int {
 			n := new(big.Rat).Mul(r, new(big.Rat).SetInt(w))
 			if !n.IsInt() {
@@ -160,7 +160,7 @@ func layeredSlivers(rng *rand.Rand) meshbool.HeldRounding {
 			}
 			return new(big.Int).Set(n.Num())
 		}
-		return proofbound.Xpt{X: num(x), Y: num(y), Z: num(z), W: new(big.Int).Set(w)}
+		return proof.Xpt{X: num(x), Y: num(y), Z: num(z), W: new(big.Int).Set(w)}
 	}
 	ratOf := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
 	add := func(x, y, z float64, dy int64) int {

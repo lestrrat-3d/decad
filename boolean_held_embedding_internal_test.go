@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -23,19 +23,19 @@ import (
 // with meshbool.EnforceHeldEmbedding's grid or search.
 func heldMeshFolds(t *testing.T, verts []r3.Vec, tris [][3]int) []string {
 	t.Helper()
-	x := make([]proofbound.Xpt, len(verts))
+	x := make([]proof.Xpt, len(verts))
 	for i, v := range verts {
-		x[i] = proofbound.XptOf(v)
+		x[i] = proof.XptOf(v)
 	}
-	norms := make([]proofbound.Xpt, len(tris))
+	norms := make([]proof.Xpt, len(tris))
 	boxes := make([][2]r3.Vec, len(tris))
 	for i, tri := range tris {
-		norms[i] = meshbool.Xcross(proofbound.Xsub(x[tri[1]], x[tri[0]]), proofbound.Xsub(x[tri[2]], x[tri[0]]))
+		norms[i] = meshbool.Xcross(proof.Xsub(x[tri[1]], x[tri[0]]), proof.Xsub(x[tri[2]], x[tri[0]]))
 		boxes[i] = meshbool.TriBox(verts, tri)
 	}
-	corners := func(i int) ([3]r3.Vec, [3]proofbound.Xpt) {
+	corners := func(i int) ([3]r3.Vec, [3]proof.Xpt) {
 		tri := tris[i]
-		return [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}, [3]proofbound.Xpt{x[tri[0]], x[tri[1]], x[tri[2]]}
+		return [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}, [3]proof.Xpt{x[tri[0]], x[tri[1]], x[tri[2]]}
 	}
 	var out []string
 	for i := range tris {

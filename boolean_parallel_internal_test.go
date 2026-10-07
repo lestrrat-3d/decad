@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -29,7 +28,7 @@ func TestContactBatchMergesOutOfOrderCompletionsInInputOrder(t *testing.T) {
 		for i := range slices.Backward(pairs) {
 			// Completion order is reverse input order. Results retain their
 			// indexed slots, as production workers do.
-			results[i] = meshbool.ContactBatchResult{Contact: meshbool.TriContact{Kind: meshbool.ContactPoint, P0: proofbound.Xpt{}}}
+			results[i] = meshbool.ContactBatchResult{Contact: meshbool.TriContact{Kind: meshbool.ContactPoint, P0: proof.Xpt{}}}
 		}
 		return nil
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -20,56 +21,56 @@ import (
 // boundary cases, plus the rational point, segment and parity predicates the
 // subdivision and classification passes run on. The exact fallback is
 // carried as homogeneous integer coordinates — an integer numerator triple
-// over one shared positive denominator, xhp/xpt below — never as
+// over one shared positive denominator, as proof.Xhp and proof.Xpt — never as
 // math/big.Rat: every predicate is a homogeneous form of fixed degree in the
 // differences, so its sign is invariant under scaling by a positive
 // denominator, and the exactness guarantee is unchanged. A point is reduced
-// to its canonical form only at vertex emission (proofbound.Xpt.key), because welding is
+// to its canonical form only at vertex emission (proof.Xpt.Key), because welding is
 // by exact identity (boolean_mesh.go's StitchFacetsContext) and a homogeneous
 // point has many spellings. A sign decided exactly is a topology decision
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
 
 // Xcross is a × b, exact, stripped the same way as xsub.
-func Xcross(a, b proofbound.Xpt) proofbound.Xpt {
-	return proofbound.Xpt(proofbound.XhpStripTwosOwned(XhpCross(proofbound.Xhp(a), proofbound.Xhp(b))))
+func Xcross(a, b proof.Xpt) proof.Xpt {
+	return proof.Xpt(proof.XhpStripTwosOwned(proof.XhpCross(proof.Xhp(a), proof.Xhp(b))))
 }
 
 // XdotSign is the sign of a·b, decided as a plain integer sign: the shared
 // denominator a.w·b.w is always positive, so the numerator's sign IS the
 // dot product's sign.
-func XdotSign(a, b proofbound.Xpt) int { return proofbound.XdotNum(a, b).Sign() }
+func XdotSign(a, b proof.Xpt) int { return proof.XdotNum(a, b).Sign() }
 
 // Xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
 // stripped on return — the growth control that keeps a chain of lerps from
 // growing its denominator multiplicatively at every link (measured: 14113
 // bits unreduced at lerp depth 6, 462 bits stripped after every step).
-func Xlerp(a, b proofbound.Xpt, tn, td *big.Int) proofbound.Xpt {
-	return proofbound.Xpt(proofbound.XhpStripTwosOwned(XhpLerp(proofbound.Xhp(a), proofbound.Xhp(b), tn, td)))
+func Xlerp(a, b proof.Xpt, tn, td *big.Int) proof.Xpt {
+	return proof.Xpt(proof.XhpStripTwosOwned(proof.XhpLerp(proof.Xhp(a), proof.Xhp(b), tn, td)))
 }
 
 // OrientNum is the exact value of det[b−a, c−a, d−a] as an integer numerator
 // over a positive denominator, formed without ever materialising a big.Rat:
 // positive when d lies on the side the counter-clockwise normal of (a, b, c)
 // points to.
-func OrientNum(a, b, c, d proofbound.Xpt) (num, den *big.Int) {
-	ha, hb, hc, hd := proofbound.Xhp(a), proofbound.Xhp(b), proofbound.Xhp(c), proofbound.Xhp(d)
-	ba, ca, da := proofbound.XhpSub(hb, ha), proofbound.XhpSub(hc, ha), proofbound.XhpSub(hd, ha)
-	cr := XhpCross(ba, ca)
-	return proofbound.XhpDotNum(cr, da), new(big.Int).Mul(cr.W, da.W)
+func OrientNum(a, b, c, d proof.Xpt) (num, den *big.Int) {
+	ha, hb, hc, hd := proof.Xhp(a), proof.Xhp(b), proof.Xhp(c), proof.Xhp(d)
+	ba, ca, da := proof.XhpSub(hb, ha), proof.XhpSub(hc, ha), proof.XhpSub(hd, ha)
+	cr := proof.XhpCross(ba, ca)
+	return proof.XhpDotNum(cr, da), new(big.Int).Mul(cr.W, da.W)
 }
 
 // OrientSignExact is the exact sign of det[b−a, c−a, d−a], decided as a plain
 // integer sign with no big.Rat and no normalisation anywhere in the chain —
-// XhpOrientSign's own guarantee, carried through xpt.
-func OrientSignExact(a, b, c, d proofbound.Xpt) int {
-	return XhpOrientSign(proofbound.Xhp(a), proofbound.Xhp(b), proofbound.Xhp(c), proofbound.Xhp(d))
+// proof.XhpOrientSign's own guarantee, carried through xpt.
+func OrientSignExact(a, b, c, d proof.Xpt) int {
+	return proof.XhpOrientSign(proof.Xhp(a), proof.Xhp(b), proof.Xhp(c), proof.Xhp(d))
 }
 
 // OrientRat materialises det[b−a, c−a, d−a] as a big.Rat — the one place this
 // value pays a normalisation, for the rare caller that needs the value rather
 // than the sign.
-func OrientRat(a, b, c, d proofbound.Xpt) *big.Rat {
+func OrientRat(a, b, c, d proof.Xpt) *big.Rat {
 	num, den := OrientNum(a, b, c, d)
 	return new(big.Rat).SetFrac(num, den)
 }
@@ -82,17 +83,17 @@ func OrientSign(a, b, c, d r3.Vec) int {
 	if sign, certain := OrientSignFloat(a, b, c, d); certain {
 		return sign
 	}
-	return OrientSignExact(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c), proofbound.XptOf(d))
+	return OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d))
 }
 
 // OrientSignPrepared uses an already lifted triangle and its exact normal on
 // the uncertain path. xa and xd are the exact lifts of a and d, and n is the
 // exact oriented cross product of (b-a) and (c-a), with positive denominator.
-func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n proofbound.Xpt) int {
+func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n proof.Xpt) int {
 	if sign, certain := OrientSignFloat(a, b, c, d); certain {
 		return sign
 	}
-	return XdotSign(n, proofbound.Xsub(xd, xa))
+	return XdotSign(n, proof.Xsub(xd, xa))
 }
 
 // OrientSignFloat gives the same adaptive float decision to both plane-side
@@ -118,64 +119,8 @@ func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 
 // OrientSignMixed is the exact plane-side sign of a homogeneous probe against
 // a float triangle: positive on the triangle's counter-clockwise-normal side.
-func OrientSignMixed(a, b, c r3.Vec, d proofbound.Xpt) int {
-	return OrientSignExact(proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c), d)
-}
-
-// XhpCross is a × b, exact: its numerators over the positive denominator
-// a.w·b.w.
-func XhpCross(a, b proofbound.Xhp) proofbound.Xhp {
-	var term big.Int
-	axis := func(a0, b0, a1, b1 *big.Int) *big.Int {
-		out := new(big.Int).Mul(a0, b0)
-		return out.Sub(out, term.Mul(a1, b1))
-	}
-	return proofbound.Xhp{
-		X: axis(a.Y, b.Z, a.Z, b.Y),
-		Y: axis(a.Z, b.X, a.X, b.Z),
-		Z: axis(a.X, b.Y, a.Y, b.X),
-		W: new(big.Int).Mul(a.W, b.W),
-	}
-}
-
-// XhpLerp is a + t·(b − a) for t = tn/td, exact. td may arrive negative; a.w
-// and b.w are already positive by invariant, so the result's own w — their
-// product with td — is renormalised by flipping td's (and tn's) sign first,
-// which leaves the value t = tn/td unchanged.
-func XhpLerp(a, b proofbound.Xhp, tn, td *big.Int) proofbound.Xhp {
-	n, d := tn, td
-	if d.Sign() < 0 {
-		n = new(big.Int).Neg(n)
-		d = new(big.Int).Neg(d)
-	}
-	// a + t·(b−a) = a·(d−n)/d + b·n/d = [a·(d−n)·b.w + b·n·a.w] / (a.w·b.w·d).
-	diff := new(big.Int).Sub(d, n)
-	axis := func(av, bv *big.Int) *big.Int {
-		term := new(big.Int).Mul(av, diff)
-		term.Mul(term, b.W)
-		other := new(big.Int).Mul(bv, n)
-		other.Mul(other, a.W)
-		return term.Add(term, other)
-	}
-	w := new(big.Int).Mul(a.W, b.W)
-	w.Mul(w, d)
-	return proofbound.Xhp{X: axis(a.X, b.X), Y: axis(a.Y, b.Y), Z: axis(a.Z, b.Z), W: w}
-}
-
-// XhpOrientSign is the exact sign of det[b−a, c−a, d−a], decided as a plain
-// integer sign with no big.Rat and no normalisation anywhere in the chain:
-// every intermediate xhp carries a positive denominator by construction, so
-// the final numerator's sign IS the determinant's sign.
-func XhpOrientSign(a, b, c, d proofbound.Xhp) int {
-	ba, ca, da := proofbound.XhpSub(b, a), proofbound.XhpSub(c, a), proofbound.XhpSub(d, a)
-	return proofbound.XhpDotNum(XhpCross(ba, ca), da).Sign()
-}
-
-// XhpRat materialises p's three coordinates as big.Rat — the one place a
-// homogeneous point pays a normalisation, and only when a caller genuinely
-// needs a rational VALUE rather than a sign.
-func XhpRat(p proofbound.Xhp) (x, y, z *big.Rat) {
-	return new(big.Rat).SetFrac(p.X, p.W), new(big.Rat).SetFrac(p.Y, p.W), new(big.Rat).SetFrac(p.Z, p.W)
+func OrientSignMixed(a, b, c r3.Vec, d proof.Xpt) int {
+	return OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), d)
 }
 
 const (
@@ -208,7 +153,7 @@ const (
 // every vertex of the stitched mesh, and slack is that pass's own grid slack.
 //
 // DERIVATION. Write a, b, p for the exact rational endpoints and candidate and
-// A, B, P for their float64 roundings (proofbound.Xpt.vec, round to nearest). Suppose the
+// A, B, P for their float64 roundings (proof.Xpt.Vec, round to nearest). Suppose the
 // exact predicate WOULD accept p — that is, p = (1−t)·a + t·b for some
 // t ∈ (0, 1). Put Q = (1−t)·A + t·B, which is a point OF the float segment
 // [A, B]. Then
@@ -543,7 +488,7 @@ func FivPoint(x float64) FloatInterval {
 // big.Rat.Float64 makes — into an interval with one full ulp of margin on
 // each side, which covers that half-ulp with the same spare-half-ulp margin
 // every other widening in this type carries. TriTriMissesFilter's na/nb
-// arguments are proofbound.Xpt.vec() results, so they are exactly this case.
+// arguments are proof.Xpt.Vec() results, so they are exactly this case.
 func FivRounded(x float64) FloatInterval {
 	if proofbound.IsNonFinite(x) {
 		return FivAbstain
@@ -732,7 +677,7 @@ func TriSpanOnLine(t, o [3]FivVec, signs [3]int, dir FivVec) (FloatInterval, boo
 //
 // ta, tb are the operands' own float corners, read as exact point intervals
 // (FivPoint — a float64 vertex coordinate is exact, never itself a
-// rounding). na, nb are proofbound.Xpt.vec() — the correctly-rounded float64 conversion
+// rounding). na, nb are proof.Xpt.Vec() — the correctly-rounded float64 conversion
 // of the pair's exact rational normals — read with FivRounded's extra ulp of
 // margin for that rounding. sa, sb are the vertex-against-the-other-plane
 // sign triples OrientSign already decided; see TriSpanOnLine for how they
@@ -791,7 +736,7 @@ func NewXP2(u, v *big.Rat) Xp2 {
 // its rational coordinates. The rational values remain the public exact 2D
 // representation used by polygon construction, while Cross2x can use the
 // homogeneous form to avoid normalising four intermediate differences.
-func NewXP2FromXpt(p proofbound.Xpt, u, v int) Xp2 {
+func NewXP2FromXpt(p proof.Xpt, u, v int) Xp2 {
 	ur, vr := RatCoordOf(p, u), RatCoordOf(p, v)
 	fu, _ := ur.Float64()
 	fv, _ := vr.Float64()
@@ -1149,7 +1094,7 @@ func CoordOf(v r3.Vec, axis int) float64 {
 // index — the projection into Xp2's own (untouched) rational domain. This is
 // the one place a homogeneous coordinate pays a normalisation to become a
 // value; a sign-only reader wants XIntCoordOf instead.
-func RatCoordOf(p proofbound.Xpt, axis int) *big.Rat {
+func RatCoordOf(p proof.Xpt, axis int) *big.Rat {
 	switch axis {
 	case 0:
 		return new(big.Rat).SetFrac(p.X, p.W)
@@ -1164,7 +1109,7 @@ func RatCoordOf(p proofbound.Xpt, axis int) *big.Rat {
 // with no normalisation at all: since the denominator (p.w) is always
 // positive, this integer's sign already IS the coordinate's sign, which is
 // what every sign-only reader in this file actually wants.
-func XIntCoordOf(p proofbound.Xpt, axis int) *big.Int {
+func XIntCoordOf(p proof.Xpt, axis int) *big.Int {
 	switch axis {
 	case 0:
 		return p.X
@@ -1350,7 +1295,7 @@ func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 // This is the raw-buffer entry point: it prepares a single-use projection cache
 // and answers one query through it. A caller holding an operand across many
 // queries wants MeshParityPreparedContext with that operand's own cache.
-func MeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
+func MeshParityContext(ctx context.Context, p proof.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
 	return MeshParityPreparedContext(ctx, p, NewParityMesh(verts, tris), subset)
 }
 
@@ -1358,7 +1303,7 @@ func MeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r3.Vec, tr
 // vertex projections persist between queries. The classification is identical:
 // only where each projection's rationals come from changes, and the cache hands
 // back the same value the per-facet construction built.
-func MeshParityPreparedContext(ctx context.Context, p proofbound.Xpt, prepared *ParityMesh, subset []int) (bool, bool, error) {
+func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh, subset []int) (bool, bool, error) {
 	for _, ray := range AxisRays {
 		crossings := 0
 		ambiguous := false
@@ -1426,8 +1371,8 @@ func MeshParityPreparedContext(ctx context.Context, p proofbound.Xpt, prepared *
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
 			a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
-			xa, xb, xc := proofbound.XptOf(a), proofbound.XptOf(b), proofbound.XptOf(c)
-			n := Xcross(proofbound.Xsub(xb, xa), proofbound.Xsub(xc, xa))
+			xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
+			n := Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
 			nAxis := XIntCoordOf(n, ray.Axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true
@@ -1436,11 +1381,11 @@ func MeshParityPreparedContext(ctx context.Context, p proofbound.Xpt, prepared *
 			// t = tNum/nAxis decides the crossing; nAxis is already proven
 			// nonzero above, so its sign alone tells the division's sign
 			// without ever forming the quotient — only t's sign is read, and
-			// proofbound.XdotNum's raw numerator carries that sign with no normalisation
+			// proof.XdotNum's raw numerator carries that sign with no normalisation
 			// anywhere in the chain (docs/evaluator-design.md §9's
 			// reject-only discipline extends to never paying for a value
 			// nothing but Sign() consumes).
-			tNum := proofbound.XdotNum(proofbound.Xsub(xa, p), n)
+			tNum := proof.XdotNum(proof.Xsub(xa, p), n)
 			switch s := tNum.Sign() * nAxis.Sign() * ray.Dir; {
 			case s > 0:
 				crossings++

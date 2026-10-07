@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -92,7 +92,7 @@ var xp2Flavours = []xp2Flavour{
 	},
 	{
 		name: "homogeneous",
-		lift: func(p pt2) Xp2 { return NewXP2FromXpt(proofbound.XptOf(r3.Vec{X: p.x, Y: p.y}), 0, 1) },
+		lift: func(p pt2) Xp2 { return NewXP2FromXpt(proof.XptOf(r3.Vec{X: p.x, Y: p.y}), 0, 1) },
 	},
 	{
 		name: "homogeneous-weighted",
@@ -104,7 +104,7 @@ var xp2Flavours = []xp2Flavour{
 // the two segment endpoints and the three triangle corners no longer share one
 // denominator. The coordinate is unchanged: numerator and weight are scaled
 // together.
-func weightedXpt(p pt2, w int64) proofbound.Xpt {
+func weightedXpt(p pt2, w int64) proof.Xpt {
 	x, y := polynomial.MustRatOf(p.x), polynomial.MustRatOf(p.y)
 	den := new(big.Int).Mul(x.Denom(), y.Denom())
 	den.Mul(den, big.NewInt(w))
@@ -112,7 +112,7 @@ func weightedXpt(p pt2, w int64) proofbound.Xpt {
 		out := new(big.Int).Mul(r.Num(), den)
 		return out.Quo(out, r.Denom())
 	}
-	return proofbound.Xpt{X: num(x), Y: num(y), Z: big.NewInt(0), W: den}
+	return proof.Xpt{X: num(x), Y: num(y), Z: big.NewInt(0), W: den}
 }
 
 // segTriCase is one segment-versus-triangle configuration.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -20,18 +21,18 @@ import (
 )
 
 func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
-	point := func(x, y, z, w int64) proofbound.Xpt {
-		return proofbound.Xpt{X: big.NewInt(x), Y: big.NewInt(y), Z: big.NewInt(z), W: big.NewInt(w)}
+	point := func(x, y, z, w int64) proof.Xpt {
+		return proof.Xpt{X: big.NewInt(x), Y: big.NewInt(y), Z: big.NewInt(z), W: big.NewInt(w)}
 	}
 	huge := new(big.Int).Lsh(big.NewInt(1), 1000)
-	extreme := proofbound.Xpt{
+	extreme := proof.Xpt{
 		X: new(big.Int).Set(huge),
 		Y: new(big.Int).Neg(huge),
 		Z: big.NewInt(0),
 		W: big.NewInt(5),
 	}
-	extremePoint := func(z int64) proofbound.Xpt {
-		return proofbound.Xpt{
+	extremePoint := func(z int64) proof.Xpt {
+		return proof.Xpt{
 			X: new(big.Int).Mul(huge, big.NewInt(3)),
 			Y: new(big.Int).Neg(new(big.Int).Mul(huge, big.NewInt(3))),
 			Z: big.NewInt(z),
@@ -40,36 +41,36 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name   string
-		anchor proofbound.Xpt
-		normal proofbound.Xpt
-		other  [3]proofbound.Xpt
+		anchor proof.Xpt
+		normal proof.Xpt
+		other  [3]proof.Xpt
 	}{
 		{
 			name:   "odd weights and a plane crossing",
 			anchor: point(1, -2, 1, 3), normal: point(2, -3, 5, 7),
-			other: [3]proofbound.Xpt{point(30, 12, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+			other: [3]proof.Xpt{point(30, 12, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
 		},
 		{
 			name:   "reversed normal and shared point",
 			anchor: point(1, -2, 1, 3), normal: point(-2, 3, -5, 11),
-			other: [3]proofbound.Xpt{point(3, -6, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+			other: [3]proof.Xpt{point(3, -6, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
 		},
 		{
 			name:   "large cancellation near the plane",
 			anchor: extreme, normal: point(1, 1, 5, 9),
-			other: [3]proofbound.Xpt{extremePoint(1), extremePoint(0), extremePoint(-1)},
+			other: [3]proof.Xpt{extremePoint(1), extremePoint(0), extremePoint(-1)},
 		},
 		{
 			name:   "zero normal",
 			anchor: point(5, 3, -9, 7), normal: point(0, 0, 0, 13),
-			other: [3]proofbound.Xpt{point(1, 2, 3, 5), point(-7, 9, 4, 11), point(0, 0, 0, 1)},
+			other: [3]proof.Xpt{point(1, 2, 3, 5), point(-7, 9, 4, 11), point(0, 0, 0, 1)},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plane := loftmesh.NewLoftExactPlane(tc.anchor, tc.normal)
 			var want [3]int
 			for i, p := range tc.other {
-				want[i] = meshbool.XdotSign(tc.normal, proofbound.Xsub(p, tc.anchor))
+				want[i] = meshbool.XdotSign(tc.normal, proof.Xsub(p, tc.anchor))
 			}
 			require.Equal(t, want, loftmesh.TrianglePlaneSigns(plane, tc.other))
 		})
@@ -136,8 +137,8 @@ func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
 	tb := loftmesh.LoftTriCorners(verts, upper0)
 	xta := loftmesh.LoftXTriCorners(verts, lower0)
 	xtb := loftmesh.LoftXTriCorners(verts, upper0)
-	na := meshbool.Xcross(proofbound.Xsub(xta[1], xta[0]), proofbound.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proofbound.Xsub(xtb[1], xtb[0]), proofbound.Xsub(xtb[2], xtb[0]))
+	na := meshbool.Xcross(proof.Xsub(xta[1], xta[0]), proof.Xsub(xta[2], xta[0]))
+	nb := meshbool.Xcross(proof.Xsub(xtb[1], xtb[0]), proof.Xsub(xtb[2], xtb[0]))
 	contact, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	require.Equal(t, meshbool.ContactRegion, contact.Kind,

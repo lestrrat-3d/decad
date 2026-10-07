@@ -21,7 +21,7 @@ import (
 // polygon its triangulation was built from (loft_build.go's
 // capPolygonAreaRat), never the sum of its triangulation's own float areas.
 type MassAccumulator struct {
-	anchor  proofbound.Xpt
+	anchor  proofarith.Xpt
 	anchorF r3.Vec
 
 	// delta is the placement's own proven displacement of every held vertex
@@ -132,7 +132,7 @@ type MassAccumulator struct {
 // an unplaced LineSeg-only body.
 func NewMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta float64) *MassAccumulator {
 	return &MassAccumulator{
-		anchor:              proofbound.XptOf(anchor),
+		anchor:              proofarith.XptOf(anchor),
 		anchorF:             anchor,
 		delta:               delta,
 		sectionDelta:        sectionDelta,
@@ -159,16 +159,16 @@ func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
 // indices and a cache, so repeated references to one assembled vertex reuse
 // its exact Euclidean upper distance.
 func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []LoftVertexDistance) {
-	sa := proofbound.Xsub(proofbound.XptOf(a), m.anchor)
-	sb := proofbound.Xsub(proofbound.XptOf(b), m.anchor)
-	sc := proofbound.Xsub(proofbound.XptOf(c), m.anchor)
+	sa := proofarith.Xsub(proofarith.XptOf(a), m.anchor)
+	sb := proofarith.Xsub(proofarith.XptOf(b), m.anchor)
+	sc := proofarith.Xsub(proofarith.XptOf(c), m.anchor)
 
-	triVol6 := proofbound.XdotRat(sa, meshbool.Xcross(sb, sc))
+	triVol6 := proofarith.XdotRat(sa, meshbool.Xcross(sb, sc))
 	m.Vol6.Add(m.Vol6, triVol6)
 
-	saX, saY, saZ := meshbool.XhpRat(proofbound.Xhp(sa))
-	sbX, sbY, sbZ := meshbool.XhpRat(proofbound.Xhp(sb))
-	scX, scY, scZ := meshbool.XhpRat(proofbound.Xhp(sc))
+	saX, saY, saZ := proofarith.XhpRat(proofarith.Xhp(sa))
+	sbX, sbY, sbZ := proofarith.XhpRat(proofarith.Xhp(sb))
+	scX, scY, scZ := proofarith.XhpRat(proofarith.Xhp(sc))
 	sumX := proofbound.RatAdd(saX, sbX, scX)
 	sumY := proofbound.RatAdd(saY, sbY, scY)
 	sumZ := proofbound.RatAdd(saZ, sbZ, scZ)
@@ -198,7 +198,7 @@ func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int,
 	}
 	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
 	// rationals, so the already-lifted vertices serve the area bracket too.
-	lo, hi := WallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
+	lo, hi := WallTriangleArea(proofarith.Xsub(sb, sa), proofarith.Xsub(sc, sa))
 	m.WallAreaSum += lo
 	m.WallAreaAbs = proofbound.UpRound(m.WallAreaAbs + lo)
 	m.WallAreaSlack = proofbound.UpRound(m.WallAreaSlack + proofbound.UpRound(hi-lo))
@@ -347,7 +347,7 @@ func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float
 		return r3.Vec{}, 0, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, decaderr.ErrDegenerate)
 	}
 	denom := new(big.Rat).Mul(big.NewRat(4, 1), vol6)
-	anchorX, anchorY, anchorZ := meshbool.XhpRat(proofbound.Xhp(m.anchor))
+	anchorX, anchorY, anchorZ := proofarith.XhpRat(proofarith.Xhp(m.anchor))
 	cx := new(big.Rat).Add(anchorX, new(big.Rat).Quo(momX, denom))
 	cy := new(big.Rat).Add(anchorY, new(big.Rat).Quo(momY, denom))
 	cz := new(big.Rat).Add(anchorZ, new(big.Rat).Quo(momZ, denom))

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -35,7 +36,7 @@ import (
 type HeldRounding struct {
 	Verts   []r3.Vec
 	Tris    [][3]int
-	Exact   []proofbound.Xpt
+	Exact   []proof.Xpt
 	Moved   []bool
 	Movable []bool
 }
@@ -153,9 +154,9 @@ type heldEmbedding struct {
 
 	// Exact lifts of the held float vertices and facets, invalidated when a
 	// vertex moves.
-	xv     []proofbound.Xpt
+	xv     []proof.Xpt
 	xvOK   []bool
-	norm   []proofbound.Xpt
+	norm   []proof.Xpt
 	normOK []bool
 	// plane is each facet's exact plane, interned so two facets are coplanar
 	// exactly when their ids match; -1 is not yet computed, -2 no plane.
@@ -208,9 +209,9 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		memoOn: memo,
 		inc:    make([][]int, len(h.Verts)),
 		taken:  make(map[r3.Vec]int, len(h.Verts)),
-		xv:     make([]proofbound.Xpt, len(h.Verts)),
+		xv:     make([]proof.Xpt, len(h.Verts)),
 		xvOK:   make([]bool, len(h.Verts)),
-		norm:   make([]proofbound.Xpt, len(h.Tris)),
+		norm:   make([]proof.Xpt, len(h.Tris)),
 		normOK: make([]bool, len(h.Tris)),
 		plane:  make([]int, len(h.Tris)),
 		fnorm:  make([]r3.Vec, len(h.Tris)),
@@ -287,20 +288,20 @@ func (e *heldEmbedding) restamp(v int, saved []uint64) {
 	}
 }
 
-func (e *heldEmbedding) lift(v int) proofbound.Xpt {
+func (e *heldEmbedding) lift(v int) proof.Xpt {
 	if !e.xvOK[v] {
-		e.xv[v] = proofbound.XptOf(e.h.Verts[v])
+		e.xv[v] = proof.XptOf(e.h.Verts[v])
 		e.xvOK[v] = true
 	}
 	return e.xv[v]
 }
 
-func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proofbound.Xpt, proofbound.Xpt) {
+func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proof.Xpt, proof.Xpt) {
 	t := e.h.Tris[i]
 	f := [3]r3.Vec{e.h.Verts[t[0]], e.h.Verts[t[1]], e.h.Verts[t[2]]}
-	x := [3]proofbound.Xpt{e.lift(t[0]), e.lift(t[1]), e.lift(t[2])}
+	x := [3]proof.Xpt{e.lift(t[0]), e.lift(t[1]), e.lift(t[2])}
 	if !e.normOK[i] {
-		e.norm[i] = Xcross(proofbound.Xsub(x[1], x[0]), proofbound.Xsub(x[2], x[0]))
+		e.norm[i] = Xcross(proof.Xsub(x[1], x[0]), proof.Xsub(x[2], x[0]))
 		e.fnorm[i] = e.norm[i].Vec()
 		e.normOK[i] = true
 	}
@@ -324,7 +325,7 @@ func (e *heldEmbedding) setVert(v int, p r3.Vec) {
 	}
 }
 
-func zeroXpt(n proofbound.Xpt) bool {
+func zeroXpt(n proof.Xpt) bool {
 	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
 }
 
@@ -622,7 +623,7 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 		return s
 	}
 	_, x, n := e.facet(f)
-	return XdotSign(n, proofbound.Xsub(e.lift(p), x[0]))
+	return XdotSign(n, proof.Xsub(e.lift(p), x[0]))
 }
 
 // facetFailures returns the facets j that facet i meets improperly, and
@@ -764,8 +765,8 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 // above, one value when the coordinate is itself a float. Order is fixed — x
 // before y before z, the lower float before the upper — so the search that
 // reads it is deterministic.
-func FloatBoxCorners(p proofbound.Xpt) []r3.Vec {
-	px, py, pz := XhpRat(proofbound.Xhp(p))
+func FloatBoxCorners(p proof.Xpt) []r3.Vec {
+	px, py, pz := proof.XhpRat(proof.Xhp(p))
 	x, y, z := floatBracket(px), floatBracket(py), floatBracket(pz)
 	out := make([]r3.Vec, 0, 8)
 	for _, a := range x {
@@ -915,7 +916,7 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 // ExactRigidImage is the exact image of p under the linear part b followed by
 // the translation t, every product and sum taken in rationals: the point a
 // float evaluation of the motion only approximates.
-func ExactRigidImage(b r3.Basis, t, p r3.Vec) proofbound.Xpt {
+func ExactRigidImage(b r3.Basis, t, p r3.Vec) proof.Xpt {
 	coord := func(ex, ey, ez, tc float64) *big.Rat {
 		s := new(big.Rat).Mul(polynomial.MustRatOf(ex), polynomial.MustRatOf(p.X))
 		s.Add(s, new(big.Rat).Mul(polynomial.MustRatOf(ey), polynomial.MustRatOf(p.Y)))
@@ -933,5 +934,5 @@ func ExactRigidImage(b r3.Basis, t, p r3.Vec) proofbound.Xpt {
 	num := func(r *big.Rat) *big.Int {
 		return new(big.Int).Mul(r.Num(), new(big.Int).Quo(w, r.Denom()))
 	}
-	return proofbound.Xpt(proofbound.XhpStripTwosOwned(proofbound.Xhp{X: num(x), Y: num(y), Z: num(z), W: w}))
+	return proof.Xpt(proof.XhpStripTwosOwned(proof.Xhp{X: num(x), Y: num(y), Z: num(z), W: w}))
 }

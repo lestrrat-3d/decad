@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -33,9 +34,9 @@ type LoftVertexDistance struct {
 // held sum would not enclose it. The wall of a short loft over long recorded
 // LineSegs is exactly that shape (docs/loft-design.md Table B splits every
 // wall quad along a diagonal), so this is the ordinary case, not an edge one.
-func WallTriangleArea(u, v proofbound.Xpt) (float64, float64) {
+func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 	w := meshbool.Xcross(u, v)
-	q := proofbound.XdotRat(w, w)
+	q := proof.XdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 }

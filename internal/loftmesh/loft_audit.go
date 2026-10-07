@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -49,8 +50,8 @@ import (
 // triangle has no interior, so the shell it would contribute to does not
 // exist.
 func TriangleCollapsed(verts []r3.Vec, tri [3]int) bool {
-	a, b, c := proofbound.XptOf(verts[tri[0]]), proofbound.XptOf(verts[tri[1]]), proofbound.XptOf(verts[tri[2]])
-	n := meshbool.Xcross(proofbound.Xsub(b, a), proofbound.Xsub(c, a))
+	a, b, c := proof.XptOf(verts[tri[0]]), proof.XptOf(verts[tri[1]]), proof.XptOf(verts[tri[2]])
+	n := meshbool.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
 }
 
@@ -61,9 +62,9 @@ func LoftTriCorners(verts []r3.Vec, tri [3]int) [3]r3.Vec {
 }
 
 // LoftXTriCorners is LoftTriCorners' exact lift.
-func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proofbound.Xpt {
+func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proof.Xpt {
 	c := LoftTriCorners(verts, tri)
-	return [3]proofbound.Xpt{proofbound.XptOf(c[0]), proofbound.XptOf(c[1]), proofbound.XptOf(c[2])}
+	return [3]proof.Xpt{proof.XptOf(c[0]), proof.XptOf(c[1]), proof.XptOf(c[2])}
 }
 
 // LoftAuditData holds the immutable per-vertex and per-triangle values shared
@@ -74,9 +75,9 @@ func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proofbound.Xpt {
 // the same exact arithmetic.
 type LoftAuditData struct {
 	Corners     [][3]r3.Vec
-	Xverts      []proofbound.Xpt
-	Xtris       [][3]proofbound.Xpt
-	Norms       []proofbound.Xpt
+	Xverts      []proof.Xpt
+	Xtris       [][3]proof.Xpt
+	Norms       []proof.Xpt
 	Planes      []LoftExactPlane
 	Projections [][3]meshbool.Xp2
 }
@@ -86,8 +87,8 @@ type LoftAuditData struct {
 // (p-anchor), since all three homogeneous weights are positive.
 type LoftExactPlane struct{ A, B, C, D *big.Int }
 
-func NewLoftExactPlane(anchor, n proofbound.Xpt) LoftExactPlane {
-	d := proofbound.XdotNum(n, anchor)
+func NewLoftExactPlane(anchor, n proof.Xpt) LoftExactPlane {
+	d := proof.XdotNum(n, anchor)
 	return LoftExactPlane{
 		A: new(big.Int).Mul(n.X, anchor.W),
 		B: new(big.Int).Mul(n.Y, anchor.W),
@@ -96,7 +97,7 @@ func NewLoftExactPlane(anchor, n proofbound.Xpt) LoftExactPlane {
 	}
 }
 
-func (plane LoftExactPlane) Sign(p proofbound.Xpt, sum, term *big.Int) int {
+func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 	sum.Mul(plane.A, p.X)
 	sum.Add(sum, term.Mul(plane.B, p.Y))
 	sum.Add(sum, term.Mul(plane.C, p.Z))
@@ -107,19 +108,19 @@ func (plane LoftExactPlane) Sign(p proofbound.Xpt, sum, term *big.Int) int {
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	d := &LoftAuditData{
 		Corners:     make([][3]r3.Vec, len(tris)),
-		Xverts:      make([]proofbound.Xpt, len(verts)),
-		Xtris:       make([][3]proofbound.Xpt, len(tris)),
-		Norms:       make([]proofbound.Xpt, len(tris)),
+		Xverts:      make([]proof.Xpt, len(verts)),
+		Xtris:       make([][3]proof.Xpt, len(tris)),
+		Norms:       make([]proof.Xpt, len(tris)),
 		Planes:      make([]LoftExactPlane, len(tris)),
 		Projections: make([][3]meshbool.Xp2, len(tris)),
 	}
 	for i, v := range verts {
-		d.Xverts[i] = proofbound.XptOf(v)
+		d.Xverts[i] = proof.XptOf(v)
 	}
 	for i, tri := range tris {
 		d.Corners[i] = LoftTriCorners(verts, tri)
-		d.Xtris[i] = [3]proofbound.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
-		d.Norms[i] = meshbool.Xcross(proofbound.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proofbound.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
+		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
+		d.Norms[i] = meshbool.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
 		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
 		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
 		for j, p := range d.Xtris[i] {
@@ -170,9 +171,9 @@ func (e *LoftContactError) Unwrap() error { return decaderr.ErrDegenerate }
 // segment, never a shared area. It never writes to meshbool.TriTriClassify or any
 // shared classification state, so it cannot change mesh-boolean contact
 // classification (docs/loft-design.md §6, required test).
-func TriTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edgeA, edgeB proofbound.Xpt) bool {
+func TriTriCoplanarSharedEdge(xta, xtb [3]proof.Xpt, n proof.Xpt, edgeA, edgeB proof.Xpt) bool {
 	edgeAKey, edgeBKey := edgeA.Key(), edgeB.Key()
-	var apexA, apexB proofbound.Xpt
+	var apexA, apexB proof.Xpt
 	for _, p := range xta {
 		key := p.Key()
 		if key != edgeAKey && key != edgeBKey {
@@ -194,7 +195,7 @@ func TriTriCoplanarSharedEdge(xta, xtb [3]proofbound.Xpt, n proofbound.Xpt, edge
 
 // SegMatchesRecordedEdge reports whether a non-coplanar segment contact is
 // exactly the recorded shared edge (either endpoint order).
-func SegMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proofbound.Xpt) bool {
+func SegMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proof.Xpt) bool {
 	if c.Kind != meshbool.ContactSegment {
 		return false
 	}
@@ -292,7 +293,7 @@ const (
 // near-tangent to one another — never touches big.Rat at all.
 //
 // This is deliberately NOT meshbool.TriTriMissesFilter (internal/meshbool/boolean_exact.go): that
-// filter's own doc comment requires na/nb to be proofbound.Xpt.vec() — the
+// filter's own doc comment requires na/nb to be proof.Xpt.vec() — the
 // correctly-rounded float64 conversion of the pair's EXACT rational
 // normal — with meshbool.FivRounded's extra ulp of margin calibrated for exactly
 // that rounding step, so using it here would still force building the exact
@@ -398,7 +399,7 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if sharedCount == 2 {
 		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
 		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
-		if meshbool.XdotSign(na, proofbound.Xsub(apex, edgeA)) == 0 {
+		if meshbool.XdotSign(na, proof.Xsub(apex, edgeA)) == 0 {
 			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
 				return LoftPairClassified, nil
 			}
@@ -538,7 +539,7 @@ func IsolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 // TrianglePlaneSigns returns the exact signs of other against the cached
 // oriented plane. Its affine numerator avoids rebuilding a difference vector
 // for each point of each facet pair.
-func TrianglePlaneSigns(plane LoftExactPlane, other [3]proofbound.Xpt) [3]int {
+func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 	var signs [3]int
 	var sum, term big.Int
 	for i, p := range other {
@@ -616,7 +617,7 @@ func LoftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 	// pair PROVEN apart. meshbool.TriBox's own doc comment already establishes the
 	// box is exact — "float min/max are exact, so the box is a true
 	// bound" — built from float64 vertex coordinates that are themselves
-	// exact inputs to proofbound.XptOf (no rounding occurs converting a float64 to its
+	// exact inputs to proof.XptOf (no rounding occurs converting a float64 to its
 	// rational value), so no epsilon widening is needed or added: every
 	// point of the closed triangle, in exact arithmetic, is a convex
 	// combination of its three vertices, and a convex combination of values
