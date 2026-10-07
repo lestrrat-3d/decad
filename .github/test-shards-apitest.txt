@@ -1321,6 +1321,13 @@
 5	0.01	TestShellCupWallContextCancellationDuringOffset
 5	0.03	TestShellTubeInwardBox
 5	0.01	TestSolidBodiesReportSolidKindAndNoFreeBoundary
+5	0.03	TestStackedUnionCrossingBossTakesMeshPath
+5	0.05	TestStackedUnionBossOnPlate
+5	0.01	TestStackedUnionEqualBoxesStacked
+5	0.05	TestStackedUnionFlangeOnShaft
+5	0.01	TestStackedUnionKnifeEdgeNestedWedge
+5	0.20	TestStackedUnionPatchRingsMustClear
+5	0.01	TestStackedUnionRootedBoss
 5	0.01	TestStitchClosesBoxFromThreeSheets
 5	0.14	TestStitchCurvedMeshInheritsSourcePlacementBound
 5	0.01	TestStitchPatchCappedTubeClosesToASolid

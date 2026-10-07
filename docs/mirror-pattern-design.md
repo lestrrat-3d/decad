@@ -216,7 +216,7 @@ fallback to `Union`:
 
 | # | Condition | Sentinel |
 |---|---|---|
-| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload`, and the receiver is a solid. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach; a sheet has no union to build) |
+| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload` whose slabs share one outer loop (a union-built stack does not), and the receiver is a solid. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach; a sheet has no union to build) |
 | J2 | The plane is a `MirrorFace` of the receiver itself, its selector resolves to at least one face, and every selected face is a planar WALL of the receiver — a face whose role is `side(i, j)` (or `slab(k).region(0).side(i, j)`) over a `LineSeg`. | `ErrUnsupported` for a `MirrorFrame` or another body's face (the join needs the mirror line as a recorded carrier, §5.2); `ErrCardinality` with `Expected "at least 1"` for no face; `ErrDegenerate` for a cap or a curved wall |
 | J3 | Every selected wall's segment lies on ONE line: the exact rational cross product of each segment's recorded endpoints against the first's is zero (`internal/proof`). | `ErrDegenerate` |
 | J4 | Every selected segment is WHOLE (`TStart`/`TEnd` the natural domain). | `ErrUnsupported` (a fragment of a longer carrier would mirror a wall the record does not state whole) |

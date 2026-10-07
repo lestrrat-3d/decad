@@ -580,17 +580,19 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 // displacement of the point the payload denotes, so the held maximum can
 // overstate the denoted body's diameter by twice it. The fallback shrinks the
 // held witness maximum by that amount before it becomes a lower-bound
-// reference, which is why gateWitnessPrism hands back a displacement beside
-// the prism to read.
+// reference, which is why gateWitnessPrisms hands back a displacement beside
+// the prisms to read.
 func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, bool, error) {
-	witness, displacement, ok := gateWitnessPrism(body.payload)
+	witnesses, displacement, ok := gateWitnessPrisms(body.payload)
 	if !ok {
 		return 0, false, nil
 	}
 	g := &bodyGeom{body: body}
-	ok, err := g.addPrismFaces(budget, witness)
-	if err != nil || !ok {
-		return 0, false, err
+	for _, witness := range witnesses {
+		ok, err := g.addPrismFaces(budget, witness)
+		if err != nil || !ok {
+			return 0, false, err
+		}
 	}
 	var pts []r3.Vec
 	for _, f := range g.faces {
@@ -679,11 +681,6 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
 		witness.sectionDelta = 0
 		return witness, displacement, true
-	case stackedPrismPayload:
-		witness := pl.outerPrism()
-		displacement := proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta())
-		witness.sectionDelta = 0
-		return witness, displacement, true
 	case prismPayload:
 		if pl.sectionDelta == 0 {
 			return prismPayload{}, 0, false
@@ -700,6 +697,30 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 	default:
 		return prismPayload{}, 0, false
 	}
+}
+
+// gateWitnessPrisms is gateWitnessPrism's reading for every payload. A stacked
+// prism reads one witness prism per outer run (stackedPrismPayload.outerRuns)
+// over that run's own interval. Every run's outer loop is the outer wall of
+// the slabs it spans, so every witness is a point of the body. The first
+// slab's outer swept over the whole stack would hold points a union-built
+// stack does not reach, and would overstate its diameter.
+func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
+	if pl, ok := payload.(stackedPrismPayload); ok {
+		runs, err := pl.outerRuns()
+		if err != nil {
+			return nil, 0, false
+		}
+		for i := range runs {
+			runs[i].sectionDelta = 0
+		}
+		return runs, proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta()), true
+	}
+	witness, displacement, ok := gateWitnessPrism(payload)
+	if !ok {
+		return nil, 0, false
+	}
+	return []prismPayload{witness}, displacement, true
 }
 
 func pointSetDiameter(points []r3.Vec) (float64, bool) {

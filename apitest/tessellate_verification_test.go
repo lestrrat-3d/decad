@@ -80,9 +80,9 @@ func TestTessellateDefaultsToVerifyAll(t *testing.T) {
 func TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	// The two boxes span different z ranges, so the analytic prism-boolean path
-	// declines the pair and the result is a FACETED body — the restatement this
-	// test is about.
+	// The second box crosses the first's outline at a different height, so the
+	// analytic paths decline the pair and the result is a FACETED body — the
+	// restatement this test is about.
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBodyAtZ(t, doc, 5, 5, 15, 15, 4, 8)
 	fused, err := decad.Union(t.Context(), a, b)
