@@ -132,7 +132,7 @@ the rules leave to the byte budget.
 | `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused, never matched to the nearest. See §5, §5.1. |
-| `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from its curve, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
+| `loft_stations.go` | Sets the shared loft chord target and station cap, and feeds record enclosures to `internal/tessellation/`. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
 | `loft_moments.go` | `loftMassAccumulator` publishes Volume/Centroid/Bounds/Area from exact-rational tetrahedron sums and maps loft cell data to `internal/tessellation/`'s chord proof. See `docs/loft-design.md` §8, §12. |
 
@@ -250,7 +250,7 @@ the rules leave to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
-| `internal/tessellation/` | Shared chord bounds, loft cell corrections and residuals, mesh audits, the loft crossing audit, revolve mesh proofs, and loft exact restatement over neutral triangle data. |
+| `internal/tessellation/` | Shared chord bounds and loft stations, loft cell corrections and residuals, mesh audits, the loft crossing audit, revolve mesh proofs, and loft exact restatement over neutral triangle data. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
