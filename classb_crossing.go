@@ -324,8 +324,8 @@ func (b *cbBuild) chords(ctx context.Context, op int, f cbCarrier) ([]cbChord, e
 		if err != nil {
 			return nil, err
 		}
-		l, _ := box.lo[1-fixedLocal].Float64()
-		h, _ := box.hi[1-fixedLocal].Float64()
+		l, _ := box.Lo[1-fixedLocal].Float64()
+		h, _ := box.Hi[1-fixedLocal].Float64()
 		lo, hi = math.Min(lo, l), math.Max(hi, h)
 	}
 	span := hi - lo + 1
