@@ -453,7 +453,7 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	spans := s.pathM.cornerSpan(new(big.Rat), f)
 	var lo, hi [3]*big.Rat
 	for axis := range 3 {
-		lo[axis], hi[axis] = spans.hull(axis)
+		lo[axis], hi[axis] = spans.Hull(axis)
 		shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
 		lo[axis] = new(big.Rat).Sub(lo[axis], proofbound.RatMax(shift, new(big.Rat)))
 		hi[axis] = new(big.Rat).Sub(hi[axis], proofbound.RatMin(shift, new(big.Rat)))
@@ -933,7 +933,7 @@ func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func(
 		for slot, axis := range [2]int{i, j} {
 			shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
 			shiftLo, shiftHi := proofbound.RatMin(shift, new(big.Rat)), proofbound.RatMax(shift, new(big.Rat))
-			span := spans.span(index, axis)
+			span := spans.Span(index, axis)
 			lo[slot] = proofbound.RatAdd(span.Lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
 			hi[slot] = proofbound.RatAdd(span.Hi, new(big.Rat).Neg(shiftLo), depth)
 		}

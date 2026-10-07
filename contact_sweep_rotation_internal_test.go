@@ -236,10 +236,10 @@ func TestCornerSpanMatchesRationalForm(t *testing.T) {
 		for _, span := range rotationFormFractions() {
 			got := path.cornerSpan(span[0], span[1])
 			want := cornerSpanRational(path, span[0], span[1])
-			require.Equal(t, len(want), got.len(), name)
+			require.Equal(t, len(want), got.Len(), name)
 			for axis := range 3 {
 				for index := range want {
-					endpoints := got.span(index, axis)
+					endpoints := got.Span(index, axis)
 					require.Zero(t, endpoints.Lo.Cmp(want[index][axis].Lo), "%s %v point %d axis %d", name, span, index, axis)
 					require.Zero(t, endpoints.Hi.Cmp(want[index][axis].Hi), "%s %v point %d axis %d", name, span, index, axis)
 				}
@@ -247,7 +247,7 @@ func TestCornerSpanMatchesRationalForm(t *testing.T) {
 				for _, point := range want[1:] {
 					low, high = proofbound.RatMin(low, point[axis].Lo), proofbound.RatMax(high, point[axis].Hi)
 				}
-				gotLow, gotHigh := got.hull(axis)
+				gotLow, gotHigh := got.Hull(axis)
 				require.Zero(t, gotLow.Cmp(low), "%s %v axis %d", name, span, axis)
 				require.Zero(t, gotHigh.Cmp(high), "%s %v axis %d", name, span, axis)
 			}
@@ -286,10 +286,10 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 			ideal, ok := path.idealAt(f)
 			require.True(t, ok, name)
 			want := idealAtRational(path, f)
-			requireScaledMatrix(t, want.Rot, ideal.rot, name)
+			requireScaledMatrix(t, want.Rot, ideal.Rot, name)
 			for axis := range 3 {
-				require.Zero(t, ideal.shift[axis].Lo.Cmp(want.Shift[axis].Lo), "%s axis %d", name, axis)
-				require.Zero(t, ideal.shift[axis].Hi.Cmp(want.Shift[axis].Hi), "%s axis %d", name, axis)
+				require.Zero(t, ideal.Shift[axis].Lo.Cmp(want.Shift[axis].Lo), "%s axis %d", name, axis)
+				require.Zero(t, ideal.Shift[axis].Hi.Cmp(want.Shift[axis].Hi), "%s axis %d", name, axis)
 			}
 		}
 	}
@@ -336,12 +336,12 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 		}
 	}
 	q := proofarith.CommonDenom(coordinates...)
-	rot := ideal.rot
+	rot := ideal.Rot
 	rotDen := new(big.Int).Mul(rot.Den, q)
 	var den, rotMultiplier, observedMultiplier, shiftLo, shiftHi, toWhole [3]*big.Int
 	whole := big.NewInt(1)
 	for axis := range 3 {
-		shift := ideal.shift[axis]
+		shift := ideal.Shift[axis]
 		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift.Lo.Denom()), shift.Hi.Denom())
 		rotMultiplier[axis] = new(big.Int).Quo(den[axis], rotDen)
 		observedMultiplier[axis] = new(big.Int).Quo(den[axis], q)
