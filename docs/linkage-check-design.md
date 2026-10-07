@@ -2423,7 +2423,8 @@ after its approach. A sub-segment holding the driver at `0` reads on a side some
 
 **A crossing between waypoints stated in mixed terms.** Where one waypoint is in whole turns and the other
 in radians, `t₀ = 2π·T/(2π·T − B)` depends on `π` and `s₀` is irrational, so the segment is cut at two
-rationals around it instead (`crossingCuts`): `t₀` is read at both ends of `π`'s enclosure, the two
+rationals around it instead (`crossingCuts` in `internal/linkagebound/`): `t₀` is read at both ends of `π`'s
+enclosure, the two
 readings are widened outward by the gap between them, and the driver's value at each cut is then proven,
 for every `π` in the enclosure, to carry the sign of the waypoint on its side. On §15.10's `−30° → 1 rad`
 drive the cuts lie `2e-76` apart. The segment becomes three sub-segments: up to the lower cut, on its waypoint's side, and

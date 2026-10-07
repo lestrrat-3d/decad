@@ -395,7 +395,7 @@ func (l *Linkage) resolveBox(box JointBox) (*linkageSpec, []int, error) {
 		if !okMin || !okMax {
 			return nil, nil, fmt.Errorf(`%w: a joint range's end is not representable`, ErrNotFinite)
 		}
-		c, ok := paramCompare(rg.Min, rg.Max)
+		c, ok := motionbound.ParamCompare(rg.Min, rg.Max)
 		if !ok || c > 0 {
 			return nil, nil, fmt.Errorf(`%w: link %d's range needs Min <= Max, got %s and %s`, ErrDegenerate, link.index, rg.Min, rg.Max)
 		}

@@ -276,7 +276,7 @@ func resolveJointOptions(opts []JointOption, kind units.Kind) (*JointLimits, err
 		if err := motionFinite(v.Min, v.Max); err != nil {
 			return nil, err
 		}
-		if c, ok := paramCompare(v.Min, v.Max); !ok || c >= 0 {
+		if c, ok := motionbound.ParamCompare(v.Min, v.Max); !ok || c >= 0 {
 			return nil, fmt.Errorf(`%w: a joint's limits need Min < Max, got %s and %s`, ErrDegenerate, v.Min, v.Max)
 		}
 		limits = &v
@@ -284,46 +284,11 @@ func resolveJointOptions(opts []JointOption, kind units.Kind) (*JointLimits, err
 	return limits, nil
 }
 
-// paramCompare orders two finite values of one Kind by the exact quantities
-// they denote (motionbound.MotionParam): −1, 0 or +1. An angle mixing whole
-// turns and radians is compared through π's enclosure; ok is false when that
-// enclosure cannot sign the difference, and every caller refuses then.
-func paramCompare(a, b units.Value) (int, bool) {
-	pa, okA := motionbound.ExactMotionParam(a)
-	pb, okB := motionbound.ExactMotionParam(b)
-	if !okA || !okB {
-		return 0, false
-	}
-	dTurn := new(big.Rat).Sub(pa.Turn, pb.Turn)
-	dBase := new(big.Rat).Sub(pa.Base, pb.Base)
-	switch {
-	case dTurn.Sign() == 0:
-		return dBase.Sign(), true
-	case dBase.Sign() == 0:
-		return dTurn.Sign(), true
-	}
-	twoPi := proofbound.TwoPiInterval()
-	lo := new(big.Rat).Mul(dTurn, twoPi.Lo)
-	hi := new(big.Rat).Mul(dTurn, twoPi.Hi)
-	if lo.Cmp(hi) > 0 {
-		lo, hi = hi, lo
-	}
-	lo.Add(lo, dBase)
-	hi.Add(hi, dBase)
-	switch {
-	case lo.Sign() > 0:
-		return 1, true
-	case hi.Sign() < 0:
-		return -1, true
-	}
-	return 0, false
-}
-
 // within reports whether v lies in the closed range the limits declare, as
-// far as paramCompare can decide; an undecided comparison is outside.
+// far as motionbound.ParamCompare can decide; an undecided comparison is outside.
 func (lim *JointLimits) within(v units.Value) bool {
-	lo, okLo := paramCompare(lim.Min, v)
-	hi, okHi := paramCompare(v, lim.Max)
+	lo, okLo := motionbound.ParamCompare(lim.Min, v)
+	hi, okHi := motionbound.ParamCompare(v, lim.Max)
 	return okLo && okHi && lo <= 0 && hi <= 0
 }
 
