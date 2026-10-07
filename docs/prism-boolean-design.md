@@ -453,7 +453,7 @@ material side at that edge (X's authored convention already puts material on
 the walk's left), a mismatch means X's void side. This is a **flag
 comparison**, not a geometric test — the classification `sketch` already
 encodes in which direction it walked a shared entity for this specific cell.
-`prismcells.Origin.AuthoredReversed` (`prism_boolean.go`'s `buildPrismScene`)
+`prismcells.Origin.AuthoredReversed` (`internal/prismcells/scene.go`)
 records, once per created entity at scene-build time, whether that operand's
 own recorded walk runs backwards relative to the entity's own natural
 parameterization, so the comparison above is bookkeeping on a fact already

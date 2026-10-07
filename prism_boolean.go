@@ -804,156 +804,28 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 	return buildPrismSceneRegions(budget, []ProfileRecord{pa.profile}, []ProfileRecord{pb.profile}, reexpress)
 }
 
-// buildPrismSceneRegions is buildPrismScene over operands that hold several
-// regions: a prism group (docs/general-boolean-design.md §3 A5) enters as
-// one region per lump, each loop tagged with its region index
-// (prismcells.Origin.Region). A prism is the one-region case. Entities are
-// deduplicated within an operand only, as for a single region.
+// buildPrismSceneRegions adapts root profile records and the composed
+// placement to prismcells' private scene builder.
 func buildPrismSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []ProfileRecord, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
-	world := sketch.NewWorld()
-	s, err := world.CreateSketch(world.XY())
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
-	}
+	s, tags, charge, err := prismcells.BuildSceneRegions(budget, sceneProfiles(regionsA), sceneProfiles(regionsB), reexpress)
+	return s, tags, prismSceneDelta{a: charge.A, b: charge.B}, err
+}
 
-	points := map[Point2]*sketch.Point{}
-	point := func(p Point2) *sketch.Point {
-		if existing, ok := points[p]; ok {
-			return existing
-		}
-		created := s.CreatePoint(p.U, p.V)
-		points[p] = created
-		return created
+func sceneProfiles(regions []ProfileRecord) []prismcells.SceneProfile {
+	out := make([]prismcells.SceneProfile, len(regions))
+	for i, region := range regions {
+		out[i] = prismcells.SceneProfile{Outer: region.Outer, Holes: region.Holes}
 	}
+	return out
+}
 
-	tags := map[sketch.Entity]prismcells.Origin{}
-	sceneDelta := prismSceneDelta{}
+func (re *prismReexpression) Reflection() bool { return re.reflection }
 
-	// mapPt is the identity for operand A, and for an operand B whose record
-	// was already re-expressed and re-wound (prismReexpression.rewound).
-	addOperand := func(profile ProfileRecord, isB bool, region int, mapPt func(Point2) Point2) error {
-		type entityKey struct {
-			kind    uint8 // 1 = line, 2 = whole circle, 3 = arc (incl. a partial circle)
-			a, b, c Point2
-			radius  float64
-		}
-		// Fresh per operand: §4.1 forbids deduplicating an entity across the
-		// two operands, even where the same physical curve appears in both.
-		entities := map[entityKey]struct{}{}
-		reexpressPt := func(p Point2) Point2 {
-			if mapPt == nil {
-				return p
-			}
-			return mapPt(p)
-		}
-		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
-		for li, loop := range loops {
-			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
-			tag := func(ent sketch.Entity, authoredReversed bool) {
-				tags[ent] = prismcells.Origin{IsB: isB, Region: region, Hole: hole, AuthoredReversed: authoredReversed}
-			}
-			for _, seg := range loop.Segments {
-				if err := budget.Step(); err != nil {
-					return err
-				}
-				w, err := walkOf(seg, nil) // G4 admits only Line/Circle/Arc: no free-form work counter needed
-				if err != nil {
-					return err
-				}
-				charge, err := walkChargeOf(seg, w)
-				if err != nil {
-					return err
-				}
-				if isB {
-					sceneDelta.b = math.Max(sceneDelta.b, charge)
-				} else {
-					sceneDelta.a = math.Max(sceneDelta.a, charge)
-				}
-				// authoredReversed is §4.2's crossing-sub-case bookkeeping
-				// (prism_boolean_crossing.go): whether this operand's own
-				// recorded walk of this entity runs backwards relative to the
-				// entity's own natural parameterization, as sketch will later
-				// report it through a returned BoundaryEdge.Reversed. A line's
-				// creation order always matches the walk (never reversed); a
-				// circle or arc's does whenever the walk's own angle runs from
-				// high to low — the SAME th1<th0 test the arc branch below
-				// already computes for its own lo/hi ordering, read once here
-				// for any circular kind, whole or arc alike, since w.th0/w.th1
-				// are populated either way.
-				authoredReversed := w.IsCircular() && w.Th1 < w.Th0
-				switch {
-				case w.IsLine():
-					start := reexpressPt(Point2{U: w.StartU, V: w.StartV})
-					end := reexpressPt(Point2{U: w.EndU, V: w.EndV})
-					key := entityKey{kind: 1, a: start, b: end}
-					if _, ok := entities[key]; !ok {
-						tag(s.CreateLine(point(start), point(end)), authoredReversed)
-						entities[key] = struct{}{}
-					}
-				case w.IsCircular() && w.Closed:
-					center := reexpressPt(Point2{U: w.CU, V: w.CV})
-					key := entityKey{kind: 2, a: center, radius: w.Radius}
-					if _, ok := entities[key]; !ok {
-						tag(s.CreateCircle(point(center), w.Radius), authoredReversed)
-						entities[key] = struct{}{}
-					}
-				case w.IsCircular():
-					// sketch.CreateArc sweeps CCW from its second point to its
-					// third; the walk's own OWN direction may run either way, so
-					// the two candidate endpoints are passed in ascending-angle
-					// order — the physical set of points between th0 and th1 is
-					// the same set either way, since a walked arc never spans a
-					// full turn.
-					loU, loV, hiU, hiV := w.StartU, w.StartV, w.EndU, w.EndV
-					if w.Th1 < w.Th0 {
-						loU, loV, hiU, hiV = hiU, hiV, loU, loV
-					}
-					center := reexpressPt(Point2{U: w.CU, V: w.CV})
-					lo := reexpressPt(Point2{U: loU, V: loV})
-					hi := reexpressPt(Point2{U: hiU, V: hiV})
-					key := entityKey{kind: 3, a: center, b: lo, c: hi}
-					if _, ok := entities[key]; !ok {
-						tag(s.CreateArc(point(center), point(lo), point(hi)), authoredReversed)
-						entities[key] = struct{}{}
-					}
-				default:
-					// G4 already excludes every other kind before this runs.
-					return fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
-				}
-			}
-		}
-		return nil
-	}
+func (re *prismReexpression) MapPoint(p Point2) Point2 { return re.point(p) }
 
-	for r, region := range regionsA {
-		if err := addOperand(region, false, r, nil); err != nil {
-			return nil, nil, prismSceneDelta{}, err
-		}
-	}
-	if !reexpress.reflection {
-		for r, region := range regionsB {
-			if err := addOperand(region, true, r, reexpress.point); err != nil {
-				return nil, nil, prismSceneDelta{}, err
-			}
-		}
-		return s, tags, sceneDelta, nil
-	}
-	// docs/general-boolean-design.md §3 A4: a reflection reverses every loop's
-	// winding, so B's record is mapped AND re-wound before any entity exists.
-	// Every entity, and every tag's AuthoredReversed, then reads the re-wound
-	// record, whose segments are all whole and already in A's frame. The
-	// narrowed LineSegs it replaced by their walked endpoints charge here.
-	for r, region := range regionsB {
-		rewound, walkCharge, err := reexpress.rewound(budget, region)
-		if err != nil {
-			return nil, nil, prismSceneDelta{}, err
-		}
-		sceneDelta.b = math.Max(sceneDelta.b, walkCharge)
-		if err := addOperand(rewound, true, r, nil); err != nil {
-			return nil, nil, prismSceneDelta{}, err
-		}
-	}
-	return s, tags, sceneDelta, nil
+func (re *prismReexpression) Rewind(budget *proofbound.WorkBudget, region prismcells.SceneProfile) (prismcells.SceneProfile, float64, error) {
+	rewound, charge, err := re.rewound(budget, ProfileRecord{Outer: region.Outer, Holes: region.Holes})
+	return prismcells.SceneProfile{Outer: rewound.Outer, Holes: rewound.Holes}, charge, err
 }
 
 // prismReexpression is §4.1's coordinate re-expression of operand B into
@@ -1095,70 +967,7 @@ func (re *prismReexpression) rewound(budget *proofbound.WorkBudget, profile Prof
 // constructions share one statement of the rule. mapPoint owns its own
 // rounding charge.
 func rewindLoop(budget *proofbound.WorkBudget, loop LoopRecord, mapPoint func(Point2) (Point2, error)) (LoopRecord, float64, error) {
-	charge := 0.0
-	n := len(loop.Segments)
-	out := make([]CurveSegment, n)
-	for i, seg := range loop.Segments {
-		if err := budget.Step(); err != nil {
-			return LoopRecord{}, 0, err
-		}
-		pts := func(in ...Point2) ([]Point2, error) {
-			mapped := make([]Point2, len(in))
-			for k, p := range in {
-				m, err := mapPoint(p)
-				if err != nil {
-					return nil, err
-				}
-				mapped[k] = m
-			}
-			return mapped, nil
-		}
-		var mapped CurveSegment
-		switch s := seg.(type) {
-		case LineSeg:
-			start, end, tStart, tEnd := s.Start, s.End, s.TStart, s.TEnd
-			if !prismcells.WholeSegmentRange(tStart, tEnd) {
-				w, err := walkOf(s, nil)
-				if err != nil {
-					return LoopRecord{}, 0, err
-				}
-				c, err := walkChargeOf(s, w)
-				if err != nil {
-					return LoopRecord{}, 0, err
-				}
-				charge = math.Max(charge, c)
-				start, end = Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
-				tStart, tEnd = 0, 1
-			}
-			p, err := pts(end, start)
-			if err != nil {
-				return LoopRecord{}, 0, err
-			}
-			mapped = LineSeg{Start: p[0], End: p[1], TStart: tStart, TEnd: tEnd}
-		case ArcSeg:
-			if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
-				return LoopRecord{}, 0, fmt.Errorf(`%w: a reflected operand's trimmed arc cannot be re-wound`, ErrUnsupported)
-			}
-			p, err := pts(s.Center, s.End, s.Start)
-			if err != nil {
-				return LoopRecord{}, 0, err
-			}
-			mapped = ArcSeg{Center: p[0], Start: p[1], End: p[2], TStart: s.TStart, TEnd: s.TEnd}
-		case CircleSeg:
-			if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
-				return LoopRecord{}, 0, fmt.Errorf(`%w: a reflected operand's trimmed circle cannot be re-wound`, ErrUnsupported)
-			}
-			p, err := pts(s.Center)
-			if err != nil {
-				return LoopRecord{}, 0, err
-			}
-			mapped = CircleSeg{Center: p[0], Radius: s.Radius, CCW: s.CCW, TStart: s.TStart, TEnd: s.TEnd}
-		default:
-			return LoopRecord{}, 0, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
-		}
-		out[n-1-i] = mapped
-	}
-	return LoopRecord{Segments: out}, charge, nil
+	return prismcells.RewindLoop(budget, loop, mapPoint)
 }
 
 // point re-expresses one of operand B's plane-local points into operand A's
