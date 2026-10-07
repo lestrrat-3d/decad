@@ -154,3 +154,25 @@ func TestWindowedNestedTilt(t *testing.T) {
 	require.GreaterOrEqual(t, hi, trueMin)
 	require.InDelta(t, 0.5-5e-6, (lo+hi)/2, 1e-7)
 }
+
+// TestWindowedNestedKeepsTheCoarseEnclosure pins that the windowed cell
+// tightens the coarse enclosure of a line pair with no critical rather than
+// replacing it. A pin of radius 1 over z ∈ [20, 22], its axis 1e-12 rad off
+// the bore's, stands above a bore of radius 5.5 over z ∈ [0, 8]: the windowed
+// cell proves only 5.5 − 1 and admits no witness, while the faces' boxes lie
+// 12 apart and the coarse witnesses bound the pair above. Seen red: the
+// windowed bound alone reads [4.5, +Inf).
+func TestWindowedNestedKeepsTheCoarseEnclosure(t *testing.T) {
+	t.Parallel()
+	tilted, ok := r3.NewVec(0, -1e-12, 1).Normalize()
+	require.True(t, ok)
+	pin := cylinderFace(r3.Vec{}, tilted, 1, 20, 22)
+	bore := cylinderFace(r3.Vec{}, r3.NewVec(0, 0, 1), 5.5, 0, 8)
+	sink, _ := faceCell(t, pin, bore, 22)
+	require.False(t, sink.Unsure)
+	lo, hi, _, ok := sink.Interval()
+	require.True(t, ok, `the coarse witnesses bound the pair above`)
+	require.GreaterOrEqual(t, lo, 12.0)
+	require.False(t, math.IsInf(hi, 1))
+	require.GreaterOrEqual(t, hi, lo)
+}

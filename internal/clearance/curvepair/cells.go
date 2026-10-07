@@ -446,10 +446,13 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 }
 
 // windowedCircleOrCoarse answers a circular edge against a sphere or cylinder
-// face whose coaxiality the oracle cannot decide: the windowed reading below
-// when it certifies, the coarse enclosure otherwise.
+// face whose coaxiality the oracle cannot decide: the coarse enclosure,
+// tightened by the windowed reading below when it certifies. The reading
+// never replaces the enclosure: an edge axially outside the face's trim
+// admits no witness, and the coarse box distance can prove more.
 func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, sink *clearance.CellSink) {
-	if k.windowedCircleFE(f, e, sink) {
+	if lo, hi, ok := k.windowedCircleFE(f, e); ok {
+		sink.CoarseWith(lo, hi, f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 		return
 	}
 	sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
@@ -476,12 +479,12 @@ func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, 
 // the band carries the charge windowedNested makes, AnalyticRoundBound over
 // an envelope of every coordinate and radius read. The upper bound is the
 // nearest admitted witness pair: an edge point at each azimuth of a uniform
-// set and the edge's own window, and its radial image on the face's carrier.
-// It reports false when the band does not clear r.
-func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge, sink *clearance.CellSink) bool {
+// set and the edge's own window, and its radial image on the face's carrier,
+// +Inf when none is admitted. ok is false when the band does not clear r.
+func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge) (float64, float64, bool) {
 	spine := clearance.SpineOf(f)
 	if spine > 1 {
-		return false
+		return 0, 0, false
 	}
 	rho, r := e.Radius, f.Radius
 	charge := proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(
@@ -498,18 +501,18 @@ func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		sin := math.Min(1, proofbound.AbsSumUpper(e.Axis.Cross(f.Axis).Len(), proofbound.AnalyticRoundBound(1)))
 		dLo, dHi = rho*math.Sqrt(1-sin*sin)-delta, rho+delta
 	}
-	dLo, dHi = dLo-charge, proofbound.AbsSumUpper(dHi, charge)
+	dLo, dHi = freeform.DownRound(dLo-charge), proofbound.AbsSumUpper(dHi, charge)
 	var lo float64
 	switch {
-	case dLo-r > k.tol:
-		lo = dLo - r
-	case r-dHi > k.tol:
-		lo = r - dHi
+	case freeform.DownRound(dLo-r) > k.tol:
+		lo = freeform.DownRound(dLo - r)
+	case freeform.DownRound(r-dHi) > k.tol:
+		lo = freeform.DownRound(r - dHi)
 	default:
-		return false
+		return 0, 0, false
 	}
 	if proofbound.IsNonFinite(lo) {
-		return false
+		return 0, 0, false
 	}
 	const uniform = 16
 	angles := make([]float64, 0, uniform+3)
@@ -541,11 +544,9 @@ func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		}
 	}
 	if math.IsInf(best, 1) {
-		sink.LoOnly(lo)
-		return true
+		return lo, best, true
 	}
-	sink.Contribs = append(sink.Contribs, clearance.GapContrib{Lo: lo, Hi: proofbound.AbsSumUpper(best, charge)})
-	return true
+	return lo, proofbound.AbsSumUpper(best, charge), true
 }
 
 // EdgeEdge dispatches one edge pair through §4's curve tiers.

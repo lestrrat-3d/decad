@@ -1,6 +1,7 @@
 package curvepair_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -103,4 +104,40 @@ func TestWindowedCircleEdge(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWindowedCircleKeepsTheCoarseEnclosure pins that the windowed reading
+// tightens the coarse enclosure rather than replacing it. A rim of radius 30
+// about (20, 0, 20), its axis 1e-12 rad off Z, rings a pin of radius 5 over
+// z ∈ [0, 8] about Z: the band proves only 30 − 20 − 5 and the pin's trim
+// admits no witness at the rim's height, while the two boxes lie 12 apart and
+// the coarse witnesses bound the pair above. Seen red: the windowed bound
+// alone reads [5, +Inf).
+func TestWindowedCircleKeepsTheCoarseEnclosure(t *testing.T) {
+	t.Parallel()
+	axis, ok := r3.NewVec(0, -1e-12, 1).Normalize()
+	require.True(t, ok)
+	u := clearance.PerpTo(axis)
+	centre := r3.NewVec(20, 0, 20)
+	rim := &clearance.CEdge{
+		Center: centre,
+		Axis:   axis,
+		RefU:   u,
+		RefV:   axis.Cross(u),
+		Radius: 30,
+		Ang:    clearance.AngWindow{Full: true},
+		Box:    clearance.CircleBox(centre, axis, 30),
+	}
+	pin := windowedCylinder(r3.Vec{}, r3.NewVec(0, 0, 1), 5, 0, 8)
+	tol := 1e-9 * 50
+	k := curvepair.New(t.Context(), tol, tol)
+	sink := &clearance.CellSink{}
+	k.FaceEdge(pin, rim, sink)
+	require.NoError(t, k.Err())
+	require.False(t, sink.Unsure)
+	lo, hi, _, ok := sink.Interval()
+	require.True(t, ok, `the coarse witnesses bound the pair above`)
+	require.GreaterOrEqual(t, lo, 12.0)
+	require.False(t, math.IsInf(hi, 1))
+	require.GreaterOrEqual(t, hi, lo)
 }

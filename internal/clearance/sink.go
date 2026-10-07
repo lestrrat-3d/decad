@@ -129,6 +129,17 @@ func (s *CellSink) LoOnly(lo float64) {
 	s.Contribs = append(s.Contribs, GapContrib{Lo: math.Max(0, lo), Hi: math.Inf(1)})
 }
 
+// CoarseWith contributes Coarse's enclosure tightened by a proven [lo, hi]
+// the caller holds for the same feature pair: two enclosures of one distance
+// both hold, so the larger lower bound and the smaller upper bound do too.
+// hi is +Inf when the caller proved no upper bound.
+func (s *CellSink) CoarseWith(lo, hi float64, boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
+	var coarse CellSink
+	coarse.Coarse(boxA, boxB, witA, witB)
+	c := coarse.Contribs[0]
+	s.Contribs = append(s.Contribs, GapContrib{Lo: math.Max(lo, c.Lo), Hi: math.Min(hi, c.Hi)})
+}
+
 // Coarse contributes a conservative enclosure for a pair no shipped cell can
 // solve: the boxes' distance below, the closest admitted witness pair above
 // (§5 — enclosure distance never exceeds true distance, a witness is always

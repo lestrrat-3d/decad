@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -80,9 +81,15 @@ func (k *Kernel) offsetPair(f, g *clearance.CFace, sink *clearance.CellSink) {
 	crits, ok := k.spineCriticals(f, g)
 	if !ok {
 		// A line pair the parallel oracle cannot decide has no critical, but
-		// the windowed cell needs none.
-		if f.Kind == clearance.CkCylinder && g.Kind == clearance.CkCylinder && k.windowedNested(f, g, sink) {
-			return
+		// the windowed cell needs none. Its bound tightens the coarse
+		// enclosure rather than replacing it: a window axially outside the
+		// partner's trim admits no witness, and the coarse box distance can
+		// prove more than the windowed one.
+		if f.Kind == clearance.CkCylinder && g.Kind == clearance.CkCylinder {
+			if lo, hi, ok := k.windowedNested(f, g); ok {
+				sink.CoarseWith(lo, hi, f.Box, g.Box, f.Wit, g.Wit)
+				return
+			}
 		}
 		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
 		return
@@ -149,7 +156,8 @@ func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFac
 			k.emitRingCombos(sink, f, g, c)
 			return false
 		}
-		if k.windowedNested(f, g, sink) {
+		if lo, hi, ok := k.windowedNested(f, g); ok {
+			sink.Contribs = append(sink.Contribs, clearance.GapContrib{Lo: lo, Hi: hi})
 			return true
 		}
 		sink.Unsure = true
@@ -188,9 +196,10 @@ func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFac
 // from f's spine window (its centre, or its axial window's two ends) to g's
 // spine, plus the charge below; when r_g − r_f − d_sup clears the tolerance,
 // every point of f's face lies strictly inside g's carrier, so the two faces
-// cannot meet and every point pair is at least that far apart. It reports
-// false, and touches nothing, when the radii, the spines or the margin do not
-// admit the certificate.
+// cannot meet and every point pair is at least that far apart. It returns
+// that lower bound and the nearest admitted witness pair's distance as the
+// upper one, +Inf when no witness is admitted, and ok false when the radii,
+// the spines or the margin do not admit the certificate.
 //
 // The charge is AnalyticRoundBound over an envelope of every coordinate and
 // radius the cell reads: each distance and each witness takes fewer than 128
@@ -198,12 +207,12 @@ func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFac
 // at that magnitude. A witness is never Exact: its feet are float points a
 // few roundings off the carriers, and a window end is read 2·tol inside the
 // window so the trim admits it with the kernel's own margin.
-func (k *Kernel) windowedNested(f, g *clearance.CFace, sink *clearance.CellSink) bool {
+func (k *Kernel) windowedNested(f, g *clearance.CFace) (float64, float64, bool) {
 	if clearance.SpineOffset(g) < clearance.SpineOffset(f) {
 		f, g = g, f
 	}
 	if clearance.SpineOf(f) > 1 || clearance.SpineOf(g) > 1 {
-		return false // a circle spine has no endpoint maximum
+		return 0, 0, false // a circle spine has no endpoint maximum
 	}
 	rf, rg := clearance.SpineOffset(f), clearance.SpineOffset(g)
 	window := []float64{0}
@@ -219,9 +228,9 @@ func (k *Kernel) windowedNested(f, g *clearance.CFace, sink *clearance.CellSink)
 		dSup = math.Max(dSup, clearance.PointSpineDist(f.Anchor.Add(f.Axis.Scale(z)), g))
 	}
 	dSup = proofbound.AbsSumUpper(dSup, charge)
-	lo := rg - rf - dSup
+	lo := freeform.DownRound(freeform.DownRound(rg-rf) - dSup)
 	if proofbound.IsNonFinite(lo) || !(lo > k.tol) {
-		return false
+		return 0, 0, false
 	}
 
 	axis := f.Axis
@@ -269,11 +278,9 @@ func (k *Kernel) windowedNested(f, g *clearance.CFace, sink *clearance.CellSink)
 	if math.IsInf(best, 1) {
 		// A sample proves a witness present, never absent: the lower bound
 		// stands alone and the pair reads undecided for want of an upper one.
-		sink.LoOnly(lo)
-		return true
+		return lo, best, true
 	}
-	sink.Contribs = append(sink.Contribs, clearance.GapContrib{Lo: lo, Hi: proofbound.AbsSumUpper(best, charge)})
-	return true
+	return lo, proofbound.AbsSumUpper(best, charge), true
 }
 
 // emitRingCombos handles the concentric family of a coincident-spine critical

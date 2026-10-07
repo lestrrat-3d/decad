@@ -448,7 +448,8 @@ trimmed inner face alone and asks the oracle nothing:
   `a` of its spine and a unit `u`, so `dist(p, spine_g) ≤ dist(a, spine_g)
   + r_f ≤ d_sup + r_f < r_g`; a point `q` of `g`'s carrier has
   `dist(q, spine_g) = r_g`; distance to a point or a line is 1-Lipschitz, so
-  `|p − q| ≥ r_g − dist(p, spine_g) ≥ r_g − r_f − d_sup`. The cell
+  `|p − q| ≥ r_g − dist(p, spine_g) ≥ r_g − r_f − d_sup`, both
+  subtractions rounded toward zero. The cell
   contributes that value as a lower bound for the whole face pair and, since
   `f`'s face cannot reach `g`'s, excludes a crossing of the two faces exactly
   as the oracle-certified nested branch does.
@@ -474,7 +475,12 @@ trimmed inner face alone and asks the oracle nothing:
   and a line pair the parallel oracle cannot decide (`LineLineCrits`
   answers `ok` false). It never replaces a decided answer: an exactly
   coaxial pair still reads the ring family's `Exact` value, and a provenly
-  offset pair still reads the exact offset combinations.
+  offset pair still reads the exact offset combinations. Where the line pair
+  would otherwise take the coarse enclosure, the cell tightens it rather
+  than replacing it: the pair contributes one interval, the larger of the
+  two lower bounds and the smaller of the two upper ones. A pin standing
+  axially clear of its bore's trim admits no witness, and the faces' box
+  distance proves more than `r_g − r_f − d_sup` does.
 - **The edge tier's twin.** The same rounding error leaves a circular edge
   about the pin's axis — the bore's rims against the pin's wall, the pin's
   rims against the bore's — in the curve tier's undecided band, where
@@ -494,8 +500,10 @@ trimmed inner face alone and asks the oracle nothing:
   image on the carrier is the upper bound. It runs where the curve tier
   gives up for want of an oracle answer — a point spine the oracle cannot
   place on the circle's axis, a line spine it cannot prove parallel, or one
-  exactly parallel whose offset it cannot decide — and a band that does not
-  clear leaves the coarse enclosure in place.
+  exactly parallel whose offset it cannot decide. It tightens the coarse
+  enclosure there exactly as the face cell does, one interval of the larger
+  lower and the smaller upper bound, and a band that does not clear leaves
+  the coarse enclosure as it stands.
 - **What it costs and what it reads.** Two point-to-line distances and at
   most `3 × 22` witness pairs, closed form: about `0.1` ms for a pin pair.
   A pin of radius `r` in a bore of radius `R`, a rounding error off
@@ -728,7 +736,7 @@ reads `Suspect`, never an error, never a silent pass:
 | 1 | the tier enumeration + exact admission, every CF cell, the P4/P8 certified brackets, the nesting exclusion, coplanar `Plane` × `Plane` contact, report wiring — rows, the empty list, the `Gap` gate, pair `D` | cone-involved pairs near contact (coarse enclosure interval only: proven disjoint with a wide honest row when even the coarse `lo` clears zero, undecided when it does not); every non-coplanar contact type |
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
-| 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis; its band test (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; and a pin that fills its bore undecided, red when a lower bound at or below `tol` is admitted), its tilt test (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends), its rim test (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero), and `docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
+| 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis; its band test (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; and a pin that fills its bore undecided, red when a lower bound at or below `tol` is admitted), its tilt test (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends), its rim test (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero), its coarse-enclosure tests (a rim of radius `30` axially clear of a pin and a short pin axially clear of a bore, each lower bound at least the boxes' `12` with a finite upper bound, red when the windowed bound replaces the coarse enclosure), and `docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
 
 The cup adapter lands in payload verification §13. Until its stage lands, an
 invoked pair containing a cup remains `Suspect`; the analytic kernel does not
