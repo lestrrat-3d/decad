@@ -212,6 +212,7 @@ func TestVerifyLinkageLoopCrankRocker(t *testing.T) {
 		two, err := fb.linkage.Schedule(t.Context(), drive)
 		require.NoError(t, err)
 		require.Equal(t, drive, one.Drive())
+		require.Same(t, fb.linkage, one.Linkage())
 		for _, p := range report.Poses {
 			got, err := one.PoseAt(t.Context(), p.Pose.At)
 			require.NoError(t, err)
