@@ -477,16 +477,6 @@ func dyDenominatorExp(d proofarith.Dyadic) int {
 	return max(0, -d.Exp())
 }
 
-// dyScaledNum is d·2^shift as an integer, proofarith.ScaledNum(d.Rat(), q)
-// for q = 2^shift, which shift at least dyDenominatorExp(d) makes whole.
-func dyScaledNum(d proofarith.Dyadic, shift int) *big.Int {
-	if d.Sign() == 0 {
-		return new(big.Int)
-	}
-	mant := d.MantInto(new(big.Int))
-	return mant.Lsh(mant, uint(d.Exp()+shift))
-}
-
 type rotationalPairSweep struct {
 	doc        *Document
 	a, b       rotationalSweepPath
