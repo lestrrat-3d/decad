@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 	"slices"
 	"sort"
@@ -123,7 +122,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 			if proofarith.DvIsZero(n) {
 				continue
 			}
-			key = planarPlaneKey(key[:0], n, a)
+			key = planarsweep.PlaneKey(key[:0], n, a)
 			if _, ok := tried[string(key)]; ok {
 				continue
 			}
@@ -164,64 +163,9 @@ func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
 	return false
 }
 
-// planarPlaneKey appends to b a key naming the plane through a with nonzero
-// normal n: n's primitive integer direction d (proofarith.DvPrimitive), sign
-// kept, and the exact offset d·a. Two keys are equal exactly when
-// planarPlaneTried would match the two planes. The directions agree exactly
-// when one normal is a positive multiple of the other, which is the cross
-// product's zero with a positive dot product. Each normal is then a positive
-// multiple of d, so p.normal·(a − p.origin) is zero exactly when d·a equals
-// d·p.origin.
-func planarPlaneKey(b []byte, n, a proofarith.DyV3) []byte {
-	d := proofarith.DvPrimitive(n)
-	for _, c := range d {
-		b = c.AppendKey(b)
-	}
-	return proofarith.DvDot(d, a).AppendKey(b)
-}
-
-// planarSupportRuledOut reports whether planarSupportOf must reject the plane
-// through a with normal n, decided from outward float enclosures of the M
-// vertex heights h = n·v − n·a. A true answer holds only where the exact test
-// reaches the same rejection; false decides nothing. Two cases are proven:
-//
-//   - an enclosure entirely below zero: that vertex's exact height is
-//     negative, and planarSupportOf rejects a plane with any M vertex behind
-//     it;
-//   - every enclosure entirely above t, with t zero, or, under a positive
-//     band, a float at or above sqrt(band²·n·n) (proofarith.DySqrtUp): every
-//     exact height h then exceeds t ≥ 0, so h is positive and h² exceeds
-//     band²·n·n. No vertex is in contact and none is lifted, and
-//     planarSupportOf rejects an empty support set.
-//
-// planarSupportOf accepts only when both of these fail. Its other early
-// answers, a face-local plane's, are rejections too, so a proven rejection
-// stands for whichever one the exact test reaches first.
+// planarSupportRuledOut is the root request adapter for the support-band check.
 func planarSupportRuledOut(boxesM []proofarith.FloatBox3, n, a proofarith.DyV3, req ContactRequest) bool {
-	nBox := proofarith.DvFloatBox(n)
-	cLo, cHi := proofarith.FloatBounds(proofarith.DvDot(n, a))
-	// Every comparison below is false on a NaN end, so a NaN decides nothing.
-	allAbove, minLo := true, math.Inf(1)
-	for _, box := range boxesM {
-		lo, hi := proofarith.DotSubEnclosure(nBox, box, cLo, cHi)
-		if hi < 0 {
-			return true
-		}
-		if !(lo > 0) {
-			allAbove = false
-			continue
-		}
-		minLo = math.Min(minLo, lo)
-	}
-	if !allAbove {
-		return false
-	}
-	band := supportBandOf(req)
-	if band.Sign() <= 0 {
-		return true
-	}
-	limit := proofarith.DyMul(proofarith.DyMul(band, band), proofarith.DvDot(n, n))
-	return minLo > proofarith.DySqrtUp(limit)
+	return planarsweep.SupportRuledOut(boxesM, n, a, supportBandOf(req))
 }
 
 // planarSupportOf checks one plane: every M vertex on or in front of it, and
@@ -234,44 +178,16 @@ func planarSupportRuledOut(boxesM []proofarith.FloatBox3, n, a proofarith.DyV3, 
 // in the departure's and the band's grid searches.
 func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req ContactRequest,
 	poll func() error) (planarSupport, bool, error) {
-	band := supportBandOf(req)
-	limit := proofarith.DyMul(proofarith.DyMul(band, band), proofarith.DvDot(n, n))
-	local := false
-	for _, v := range S.startPoints {
-		if err := poll(); err != nil {
-			return planarSupport{}, false, err
-		}
-		if proofarith.DvDot(n, proofarith.DvSub(v, a)).Sign() > 0 {
-			local = true
-			break
-		}
+	read, ok, err := planarsweep.ReadSupport(S.startPoints, M.startPoints, n, a, supportBandOf(req),
+		S.path.drift != nil || S.path.screw != nil, poll)
+	if err != nil || !ok {
+		return planarSupport{}, false, err
 	}
-	if local && (S.path.drift != nil || S.path.screw != nil) {
-		return planarSupport{}, false, nil
+	support := planarSupport{
+		normal: n, origin: a, local: read.Local, pathS: S,
+		heights: read.Heights, contact: read.Contact, lifted: read.Lifted,
 	}
-	support := planarSupport{normal: n, origin: a, local: local, pathS: S,
-		heights: make([]*big.Rat, len(M.startPoints))}
-	for i, v := range M.startPoints {
-		if err := poll(); err != nil {
-			return planarSupport{}, false, err
-		}
-		height := proofarith.DvDot(n, proofarith.DvSub(v, a))
-		switch height.Sign() {
-		case -1:
-			return planarSupport{}, false, nil
-		case 0:
-			support.contact = append(support.contact, i)
-		default:
-			if band.Sign() > 0 && proofarith.DyCmp(proofarith.DyMul(height, height), limit) <= 0 {
-				support.lifted = append(support.lifted, i)
-			}
-		}
-		support.heights[i] = height.Rat()
-	}
-	if len(support.contact) == 0 && len(support.lifted) == 0 {
-		return planarSupport{}, false, nil
-	}
-	if local {
+	if read.Local {
 		if _, ok := planarSupportFace(&support); !ok {
 			return planarSupport{}, false, nil
 		}
@@ -333,38 +249,7 @@ func (s *planarSupport) depthAt(t *big.Rat, k []*big.Rat, rate *big.Rat) *big.Ra
 // levels so every fraction is a float. holds must be monotone: true at a
 // fraction implies true at every smaller one.
 func (r *rotationalPairSweep) gridHorizon(holds func(f *big.Rat) (bool, error)) (*big.Rat, bool, error) {
-	return sweepGridHorizon(r.resolution, r.a.path.duration, holds)
-}
-
-// sweepGridHorizon is gridHorizon for a sweep of the given time resolution
-// and duration.
-func sweepGridHorizon(resolution, duration *big.Rat,
-	holds func(f *big.Rat) (bool, error)) (*big.Rat, bool, error) {
-	ok, err := holds(big.NewRat(1, 1))
-	if err != nil || ok {
-		return big.NewRat(1, 1), ok, err
-	}
-	depth := uint(0)
-	for depth < 52 && new(big.Rat).Mul(resolution, new(big.Rat).SetInt64(int64(1)<<depth)).Cmp(duration) < 0 {
-		depth++
-	}
-	low, high := int64(0), int64(1)<<depth
-	for high-low > 1 {
-		mid := low + (high-low)/2
-		holdsMid, err := holds(big.NewRat(mid, int64(1)<<depth))
-		if err != nil {
-			return nil, false, err
-		}
-		if holdsMid {
-			low = mid
-		} else {
-			high = mid
-		}
-	}
-	if low == 0 {
-		return nil, false, nil
-	}
-	return big.NewRat(low, int64(1)<<depth), true, nil
+	return planarsweep.GridHorizon(r.resolution, r.a.path.duration, holds)
 }
 
 // planarDepartureProof is §10.2's certificate: on (0, until] every M vertex

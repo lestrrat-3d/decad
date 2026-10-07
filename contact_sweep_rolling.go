@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -405,7 +406,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 		}
 		return r.column(support, box, f, budget.Step)
 	}
-	end, ok, err := sweepGridHorizon(r.resolution, duration, holds)
+	end, ok, err := planarsweep.GridHorizon(r.resolution, duration, holds)
 	if err != nil || !ok {
 		return nil, false, err
 	}
