@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -195,59 +193,10 @@ func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2
 	return out, nil
 }
 
-// walkElem turns one walk into a kernel boundary element — the ONE conversion
-// from a walk into survey2d's 2D vocabulary, shared by the wall survey, the
-// modify section audit and the clearance kernel's planar trims. The material
-// side is irrelevant to ray parity, so an arc's walk sense is not consulted.
-//
-// The switch is total over survey2d.WalkKind on purpose: a free-form walk has no
-// survey2d.SurveyElem to become, and answering false is what keeps it from silently
-// converting into the straight line between its endpoints. Its element awaits
-// docs/spline-design.md §8's free-form kernels.
+// walkElem keeps the root callers of survey2d.WalkElem on one conversion path.
+// A free-form walk has no survey element and leaves its caller undecided.
 func walkElem(w survey2d.SegmentWalk) (survey2d.SurveyElem, bool) {
-	switch w.Kind {
-	case survey2d.WalkCircular:
-		e, ok := survey2d.ArcElem(w.CU, w.CV, w.Radius, w.Th0, w.Th1, w.Closed)
-		if !ok {
-			return e, false
-		}
-		// The walk's radius is not always a recorded number, so the element
-		// takes the walk's own proven bound on it rather than reading it as an
-		// exact leaf (extrude.go's arcWalkRadiusBound).
-		e.RrBound = w.RadiusBound
-		return e, true
-	case survey2d.WalkLine:
-		return survey2d.LineElem(w.StartU, w.StartV, w.EndU, w.EndV)
-	default:
-		return survey2d.SurveyElem{}, false
-	}
-}
-
-// mirrorElem reflects an element across the axis (y → −y), reversing the
-// walk so the material stays on its left.
-func mirrorElem(e survey2d.SurveyElem) survey2d.SurveyElem {
-	if e.Kind == survey2d.SurveyLine {
-		m, _ := survey2d.LineElem(e.Bx, -e.By, e.Ax, -e.Ay)
-		return m
-	}
-	m, _ := survey2d.ArcElem(e.Qx, -e.Qy, e.Rr, -e.Th1, -e.Th0, e.Closed)
-	// A reflection moves no radius, so the mirrored element states the same
-	// radius under the same proven bound.
-	m.RrBound = e.RrBound
-	return m
-}
-
-// junctionPinch reports whether the material corner between an incoming and
-// an outgoing walk tangent is a dihedral within the allowance — a wedge that
-// is a wall by the caller's own line, pinched to zero (verification §6:
-// δ ≤ α spans at every size an edge starves a ball to; a tangency is the
-// knife edge's genuine zero).
-func junctionPinch(inU, inV, outU, outV, alpha float64) bool {
-	cross := inU*outV - inV*outU
-	dot := inU*outU + inV*outV
-	turn := math.Atan2(cross, dot) // left turn positive, (−π, π]
-	delta := math.Pi - turn        // interior material angle; reflex > π
-	return delta <= alpha+survey2d.SurvAngTol
+	return survey2d.WalkElem(w)
 }
 
 // prismWall is the spanning-ball reading of a prism: the profile's spanning
@@ -290,118 +239,9 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 		}
 		return wallOutcome{}, err
 	}
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return wallOutcome{}, err
-	}
-	var elems []survey2d.SurveyElem
-	var verts [][2]float64
-	pinch := false
-	for _, loop := range loops {
-		single := len(loop) == 1 && loop[0].Closed
-		for i, w := range loop {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return wallOutcome{}, err
-			}
-			el, ok := walkElem(w.SegmentWalk)
-			if !ok {
-				return wallOutcome{}, nil
-			}
-			elems = append(elems, el)
-			if single {
-				continue
-			}
-			verts = append(verts, [2]float64{w.StartU, w.StartV})
-			prev := loop[(i+len(loop)-1)%len(loop)]
-			if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
-				pinch = true
-			}
-		}
-	}
-	h := pp.z1 - pp.z0
-	k, err := survey2d.NewWallKernelBudget(budget, elems, nil, verts, alpha, proofbound.ExactScalar(0), false, h)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	out, err := k.RunBudget(budget)
-	if err != nil {
-		return wallOutcome{}, err
-	}
-	if !out.Ok {
-		return wallOutcome{}, nil
-	}
-	// The three arms are candidates of ONE minimum, so they reduce through the
-	// §9.2 aggregate rather than through a comparison of held values. Two of
-	// them — the section's spanning diameter and the cap-to-cap height — are
-	// independent quantities carrying independent bounds, and the smaller held
-	// value is not always the smaller truth: whenever the height's own axial
-	// displacement is wider than the gap between the two held numbers, a
-	// winner-only reduction publishes the section's interval while the true
-	// minimum is the height's, sitting below it. The aggregate reaches down to
-	// whichever arm's interval reaches lowest.
-	agg := survey2d.MinAggregate()
-	if pinch {
-		agg.Take(0, 0)
-	}
-	if out.SubTolFar && !pinch {
-		// Same rule as the revolve path: a dropped off-junction
-		// sub-tolerance disk could be a real web thinner than the kernel
-		// resolves — only an exact zero still decides.
-		return wallOutcome{}, nil
-	}
-	if out.HasSpan {
-		agg.Take(out.Span, out.SpanBound)
-	}
-	// The height arm's ADMISSION is a separate question from its value: the
-	// cap-to-cap ball exists only where the section's own largest inscribed
-	// disk reaches h/2. That reading is the kernel's inradius aggregate, so
-	// the gate is taken on its proven interval — an interval that cannot be
-	// separated from h/2 decides neither that the arm belongs (which would
-	// publish a wall the body may not have) nor that it does not (which would
-	// drop a wall the body may have), and leaves the survey undecided.
-	//
-	// Unlike the kernel's own candidate guards, this one really does have
-	// decades of room, so the undecided branch is an edge and not the ordinary
-	// case: it compares against k.tol, 1e-9 of the section's scale, while the
-	// inradius aggregate's half-width is the largest empty disk's own
-	// arithmetic error — ulp-scale, since that disk is pinned by recorded
-	// coordinates rather than by an angle-limit division. The boundary case
-	// the gate exists for is the cube, whose inradius equals h/2 exactly and
-	// clears by the whole of k.tol.
-	switch proofbound.AdmitAbove(proofbound.MeasuredScalar(out.Inradius, out.InradiusBound), h/2-k.Tol) {
-	case proofbound.SurvAdmit:
-		agg.Take(h, heightArmBound(pp))
-	case proofbound.SurvStraddle:
-		return wallOutcome{}, nil
-	}
-	if agg.Empty() && !agg.Unbounded {
-		return wallOutcome{ok: true}, nil
-	}
-	best, bestBound, ok := agg.Resolve()
-	if !ok {
-		// A candidate this reading relied on could not be bounded: the answer
-		// is not one this evaluator can stand behind (see runBudget's own doc
-		// comment), so it is undecided rather than published with an unusable
-		// bound.
-		return wallOutcome{}, nil
-	}
-	return wallOutcome{reading: &best, bound: bestBound, ok: true}, nil
-}
-
-// heightArmBound is prismWall's height-arm bound: the payload's own two axial
-// displacements (docs/evaluator-design.md §5), one per end, SUMMED rather
-// than maxed — the two ends move independently and in opposite senses for a
-// height reading (CLAUDE.md's "every level-derived reading takes it") — plus
-// the float subtraction z1 − z0's own rounding, measured exactly against the
-// rational difference the same way boolean_body.go's own volume/centroid
-// readings measure a held float against its exact rational.
-func heightArmBound(pp prismPayload) float64 {
-	z0R, z1R := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
-	if z0R == nil || z1R == nil {
-		return math.Inf(1)
-	}
-	h := pp.z1 - pp.z0
-	subErr := survey2d.RatAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
-	return proofbound.AbsSumUpper(pp.z0Delta, pp.z1Delta, subErr)
+	height := survey2d.PrismHeight{Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta}
+	reading, err := survey2d.PrismWallReading(budget, loops, height, alpha)
+	return wallOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.Ok}, err
 }
 
 // revolveWall is the spanning-ball reading of a revolved body, computed in
@@ -465,7 +305,7 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 			}
 			elems = append(elems, el)
 			if rp.full {
-				elems = append(elems, mirrorElem(el))
+				elems = append(elems, survey2d.MirrorElem(el))
 			}
 			if single {
 				continue
@@ -482,19 +322,19 @@ func revolveWall(budget *proofbound.WorkBudget, rp revolvePayload, alpha float64
 			nextAxis := kinds[(i+1)%n] == wallAxis
 			switch {
 			case !prevAxis:
-				if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
+				if survey2d.JunctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
 					pinch = true
 				}
 			case rp.full:
 				// The walk continues as its own mirror image across the axis:
 				// the dihedral there is the corner the symmetrized section
 				// shows (a cone's apex reads its full apex angle).
-				if junctionPinch(-w.TanInU, w.TanInV, w.TanInU, w.TanInV, alpha) {
+				if survey2d.JunctionPinch(-w.TanInU, w.TanInV, w.TanInU, w.TanInV, alpha) {
 					pinch = true
 				}
 			}
 			if nextAxis && rp.full {
-				if junctionPinch(w.TanOutU, w.TanOutV, -w.TanOutU, w.TanOutV, alpha) {
+				if survey2d.JunctionPinch(w.TanOutU, w.TanOutV, -w.TanOutU, w.TanOutV, alpha) {
 					pinch = true
 				}
 			}
@@ -1078,7 +918,7 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 					return false, false, err
 				}
 				prev := loop[(i+len(loop)-1)%len(loop)]
-				if junctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
+				if survey2d.JunctionPinch(prev.TanOutU, prev.TanOutV, w.TanInU, w.TanInV, alpha) {
 					return true, true, nil
 				}
 			}
