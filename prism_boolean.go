@@ -545,11 +545,19 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 
-	// Union, hole-free operands (G6): select every returned cell — by
-	// construction there is no bounded cell that is material of neither
-	// operand (§4.2). mergePrismCells is the shared merge/chain tail the
-	// crossing sub-case (prism_boolean_crossing.go) reuses over its OWN,
-	// narrower selected cell set.
+	// Union, hole-free operands (G6): select every returned cell, which is
+	// the union once no cell is material of neither operand. Two hole-free
+	// operands can still enclose such a cell between them, so a scene with
+	// one is unresolved (§4.2, §4.4). mergePrismCells is the shared
+	// merge/chain tail the crossing sub-case (prism_boolean_crossing.go)
+	// reuses over its OWN, narrower selected cell set.
+	voidFree, err := prismCellsHaveNoVoid(budget, tags, profiles)
+	if err != nil {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+	}
+	if !voidFree {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+	}
 	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
 	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
@@ -558,6 +566,41 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
 	}
 	return merged, sceneDelta, cutDelta, true, nil
+}
+
+// prismCellsHaveNoVoid reports whether every cell has at least one boundary
+// edge on its operand's material side, which is what makes Union's
+// select-all merge (§4.2) the union. Membership is constant over a cell, so
+// one material-side edge puts the cell inside that operand. A cell whose
+// every edge lies on its operand's void side is outside each operand with an
+// edge on it, and, since every region of either operand is hole-free (G6),
+// no bounded cell is enclosed by one operand's edges alone: such a cell is
+// material of neither, an enclosed void (two C shapes facing each other),
+// and the answer is false. The check reads sketch's Reversed flag against
+// the authored sense, the same flag comparison prismcells.Classify reads.
+// It can only refuse: false sends the pair to the mesh path.
+func prismCellsHaveNoVoid(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile) (bool, error) {
+	for _, p := range profiles {
+		material := false
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return false, err
+				}
+				origin, ok := tags[e.Entity]
+				if !ok {
+					return false, nil // defensive: an entity this scene did not create
+				}
+				if e.Reversed == origin.AuthoredReversed {
+					material = true
+				}
+			}
+		}
+		if !material {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // mergePrismCells preserves the root caller's profile result around the cell merge.

@@ -2056,3 +2056,43 @@ func TestPrismOverlapVolumeSoundAgainstIndependentTriangleSum(t *testing.T) {
 	require.Greater(t, volume.Value.Base()-volume.Bound.Base(), 0.0)
 	require.Less(t, volume.Bound.Base(), 1e-9)
 }
+
+// The facing C shapes enclose a cell neither operand covers: the select-all
+// paths decline the pair silently rather than fill it (§4.2, §4.4).
+func TestPrismUnionEnclosedVoidIsUnresolved(t *testing.T) {
+	doc := New()
+	poly := func(pts [][2]float64, h float64) *Body {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		ps := make([]*sketch.Point, len(pts))
+		for i, p := range pts {
+			ps[i] = s.CreatePoint(p[0], p[1])
+			s.Fix(ps[i])
+		}
+		for i := range ps {
+			s.CreateLine(ps[i], ps[(i+1)%len(ps)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+		require.NoError(t, err)
+		return body
+	}
+	a := poly([][2]float64{{0, 0}, {6, 0}, {6, 3}, {3, 3}, {3, 7}, {6, 7}, {6, 10}, {0, 10}}, 1)
+	b := poly([][2]float64{{5, -1}, {11, -1}, {11, 11}, {5, 11}, {5, 8}, {8, 8}, {8, 2}, {5, 2}}, 1)
+	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
+	require.NoError(t, err)
+	require.False(t, ok)
+	_, ok, err = tryPrismGroupUnion(t.Context(), a, b)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	// The same pair under a taller block: A1's slab merge declines it too.
+	block := internalBoxBodyAtZ(t, doc, 0.5, 4, 2.5, 6, 1, 1)
+	stack, err := Union(t.Context(), a, block)
+	require.NoError(t, err)
+	_, ok, err = tryStackedUnion(t.Context(), stack, b)
+	require.NoError(t, err)
+	require.False(t, ok)
+}

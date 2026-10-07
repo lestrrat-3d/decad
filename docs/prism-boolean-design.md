@@ -367,13 +367,21 @@ their `Whole` flag, and `Profile.Valid`) — it is comparison and bookkeeping on
 those facts, never a point-in-polygon test, a containment computation, or a
 re-derived crossing parameter.
 
-**`Union`, hole-free operands (G6): select every returned cell.** For two
-hole-free operands, every bounded cell the arrangement of `{A's outer,
-B's outer}` alone produces is, by construction, material of A, of B, or both
-— there is no bounded cell that is material of neither (a hole would be the
-only way to produce one, which G6 excludes). So the union's material is
-*every* returned cell, unconditionally: no per-cell classification is needed
-at all for this sub-case. Assemble by taking the multiset of every selected
+**`Union`, hole-free operands (G6): select every returned cell, once no
+cell is a void.** Two hole-free operands can still enclose a bounded cell
+that is material of neither: two C shapes facing each other with
+overlapping tips, or a ring of overlapping bars, bound an empty cell between
+them that neither operand's own loop encloses. Selecting every cell would
+fill it. So the select-all path first requires every cell to carry at least
+one boundary edge on its operand's material side — `Reversed` compared with
+the authored sense, the crossing sub-case's own flag comparison
+(`prismCellsHaveNoVoid`). One material-side edge puts the cell inside that
+operand, since membership is constant over a cell. A cell with none is
+outside every operand with an edge on it, and a cell bounded by one
+operand's edges alone would be a hole of that operand, which G6 excludes,
+so such a cell is a void and the pair is unresolved (§4.4): it takes the
+mesh path. The check only refuses. Once it passes, the union's material is
+every returned cell, with no further per-cell classification. Assemble by taking the multiset of every selected
 cell's boundary edges and dropping any edge that appears on **two** selected
 cells (matched by `Entity` identity plus its unordered `{TStart, TEnd}` pair
 — a shared wall between two adjacent selected cells, walked in opposite
@@ -384,8 +392,7 @@ directed-edge-loop-closure shape `boolean_body.go`'s face-patch construction
 already performs for the mesh boolean's own loops); a chain that does not
 close into exactly one simple loop — a disjoint pair of footprints producing
 two separate lumps, which the single-outer-loop `ProfileRecord` cannot
-represent, or a union that encloses an internal void — is not resolved by
-this increment (§4.4).
+represent — is not resolved by this increment (§4.4).
 
 **`Cut`/`Intersect`, "clean" sub-case: structural whole-loop match, no
 per-cell classification at all.** When operand B's boundary does not touch

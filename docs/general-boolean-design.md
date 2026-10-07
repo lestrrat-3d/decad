@@ -107,9 +107,10 @@ in either arm, and G5 read for `Union` as "the intervals overlap or touch"
 (`z0_b' <= z1_a && z0_a <= z1_b'`, exact over `big.Rat`). The distinct levels
 `{z0_a, z1_a, z0_b', z1_b'}` sorted exactly cut the union into at most three
 slabs. In a slab both operands reach, the region is `Union`'s select-all
-merge (prism-boolean §4.2) over the two records, with its §6 audit and §7
-displacement; where the clean-nesting match below proves one region carries
-the other's outer whole as a hole, that merge is the containing region, and
+merge (prism-boolean §4.2, with its enclosed-void check) over the two
+records, with its §6 audit and §7 displacement; where the clean-nesting
+match below proves one region carries the other's outer whole as a hole,
+that merge is the containing region, and
 the slab keeps the containing operand's record verbatim. In a slab one
 operand reaches, the region is that operand's own record verbatim; under a
 non-identity re-expression, B's region is arranged alone in a private scene
@@ -188,10 +189,10 @@ overlap-area reading is unchanged.
 Select-all keeps every bounded cell, which is the union only when no cell is
 material of neither operand. Hole-free operands can still enclose such a
 cell between them (two C shapes facing each other, or four bars in a ring),
-so A5's `Union` first requires every cell to carry at least one boundary
-edge on its operand's material side, read by the same `Reversed` against
-authored-sense comparison the crossing classifier reads. A cell with none is
-an enclosed void, and the pair takes the mesh path. A group operand needs
+so A5's `Union`, like every select-all merge (prism-boolean §4.2, A1's
+slabs), first requires every cell to carry at least one boundary edge on
+its operand's material side. A cell with none is an enclosed void, and the
+pair takes the mesh path. A group operand needs
 the partner's interval exactly (prism-boolean §3.2's `Union` row), and a
 result whose survivors close into one loop is a prism. A group scene whose
 cuts carry a displaced operand's displacement (a placed group, for one)

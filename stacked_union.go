@@ -298,6 +298,12 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	if ok, err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil || !ok {
 		return ProfileRecord{}, false, err
 	}
+	// Select-all is the union only without an enclosed void (§4.2): a void
+	// is unresolved, never an error, so the pair takes the mesh path.
+	voidFree, err := prismCellsHaveNoVoid(st.budget, m.tags, m.profiles)
+	if err != nil || !voidFree {
+		return ProfileRecord{}, false, err
+	}
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
 	if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, err); fallBack || err != nil || !resolved {
 		return ProfileRecord{}, false, err

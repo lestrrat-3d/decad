@@ -185,6 +185,7 @@
 2	0.10	TestPreparedParityProjectionReuse
 2	0.34	TestPrismBuildPublishesItsOwnResolution
 2	0.01	TestPrismProofRecordChargesEveryFaceItsOwnDisplacement
+2	0.01	TestPrismUnionEnclosedVoidIsUnresolved
 2	0.04	TestPrismWallFreeformSectionReadsUndecided
 2	0.80	TestProfileWalksReadBackMatchesFreshResolution
 2	0.06	TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep

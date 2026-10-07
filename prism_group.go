@@ -332,39 +332,6 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 	return sp, true, nil
 }
 
-// prismCellsHaveNoVoid reports whether every cell has at least one boundary
-// edge on its operand's material side. Membership is constant over a cell,
-// so one material-side edge puts the cell inside that operand. A cell whose
-// every edge lies on its operand's void side is outside each operand with an
-// edge on it, and, since every region of either operand is hole-free (G6),
-// no bounded cell is enclosed by one operand's edges alone: such a cell is
-// material of neither, and the answer is false. The check reads sketch's
-// Reversed flag against the authored sense, the same flag comparison
-// prismcells.Classify reads.
-func prismCellsHaveNoVoid(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile) (bool, error) {
-	for _, p := range profiles {
-		material := false
-		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
-			for _, e := range loop {
-				if err := budget.Step(); err != nil {
-					return false, err
-				}
-				origin, ok := tags[e.Entity]
-				if !ok {
-					return false, nil // defensive: an entity this scene did not create
-				}
-				if e.Reversed == origin.AuthoredReversed {
-					material = true
-				}
-			}
-		}
-		if !material {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // provePrismRegionsDisjoint is docs/mirror-pattern-design.md §6.3's
 // disjointness read: a private scene holds every region's outer, and
 // sketch's arrangement must return exactly one valid cell per region, each

@@ -333,16 +333,18 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 	})
 
-	t.Run("union still builds analytically", func(t *testing.T) {
+	t.Run("union leaves the enclosed notch to the mesh path", func(t *testing.T) {
+		// The bar closes the U's notch between y = 5 and y = 8: a 2×3 cell
+		// neither operand covers. Union's select-all merge would fill it, so
+		// the analytic path declines (prism-boolean §4.2) and the mesh path
+		// refuses the shared caps.
 		doc := decad.New()
 		u, bar := uAndBarBodies(t, doc)
-		got, err := decad.Union(t.Context(), u, bar)
-		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(got),
-			"Union's select-all path merges every cell into one loop and is unaffected by §4.5")
-		vol, err := got.Volume()
-		require.NoError(t, err)
-		require.Positive(t, vol.Value.Base())
+		_, err := decad.Union(t.Context(), u, bar)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		var be *decad.BooleanError
+		require.True(t, errors.As(err, &be))
+		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 	})
 }
 

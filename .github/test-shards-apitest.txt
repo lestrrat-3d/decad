@@ -594,6 +594,7 @@
 2	0.02	TestPatternCopiesStacked
 2	0.02	TestPatternCopiesUnionStack
 2	0.05	TestPatternedCircularGroup
+2	0.01	TestPatternedEnclosedVoidTakesMeshPath
 2	0.05	TestPatternedFallsBackToUnion
 2	0.05	TestPatternedGates
 2	0.05	TestPatternedLinearGroup
@@ -621,6 +622,7 @@
 2	0.01	TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement
 2	0.00	TestPrismUnionDisplacedSectionDownstreamReadings
 2	0.00	TestPrismUnionDisplacedSectionRefusesTheSectionRewrites
+2	0.01	TestPrismUnionEnclosedVoidTakesMeshPath
 2	0.02	TestPrismUnionReExpressionDisplacementBoundEnclosesTheError
 2	0.00	TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism
 2	0.00	TestPrismUnionWholeEdgeMergeStaysExact
@@ -742,6 +744,7 @@
 2	0.01	TestShellCupTessellateReflected
 2	0.09	TestShellInwardSectionWorkBudget
 2	0.01	TestShellSelectorAdmission
+2	0.01	TestStackedUnionEnclosedVoidTakesMeshPath
 2	0.00	TestStatusString
 2	0.00	TestStitchAnnularRevolveSheetClosesToATube
 2	0.01	TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof
