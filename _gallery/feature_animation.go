@@ -233,31 +233,26 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 	}
 }
 
-// booleanAnimationModels holds all three cutters in place while their holes
-// deepen together, then fades the cutters to reveal the completed flange.
+// booleanAnimationModels holds all three cutters in place, switches the plate
+// to its fully cut result in one frame, then fades the cutters away.
 func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) ([]solidlens.Model, error) {
 	const (
-		cutStart   = 2
-		cutEnd     = 16
+		cutFrame   = 8
+		fadeEnd    = 16
 		toolBottom = -holeClearance
 		toolLength = 48.0
 	)
 
-	shape := flangeShape{height: flangeThickness, depths: make(map[string]float64, len(drills))}
-	if stage >= cutEnd {
+	shape := flangeShape{height: flangeThickness}
+	if stage >= cutFrame {
 		shape = throughFlange()
-	} else if stage > cutStart {
-		depth := flangeThickness * float64(stage-cutStart) / (cutEnd - cutStart)
-		for _, d := range drills {
-			shape.depths[d.name] = depth
-		}
 	}
 	plate, err := flangeBody(ctx, shape)
 	if err != nil {
 		return nil, err
 	}
 	models, err := oneModel(ctx, plate, violet, chord)
-	if err != nil || stage == featureAnimationSteps-1 {
+	if err != nil || stage >= fadeEnd {
 		return models, err
 	}
 
@@ -268,8 +263,8 @@ func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) (
 		return nil, err
 	}
 	opacity := 1.0
-	if stage > cutEnd {
-		opacity = float64(featureAnimationSteps-1-stage) / (featureAnimationSteps - 1 - cutEnd)
+	if stage > cutFrame {
+		opacity = float64(fadeEnd-stage) / (fadeEnd - cutFrame)
 	}
 	for _, d := range drills {
 		tool, err := cylinder(ctx, doc, w, plane, point{d.x, 0}, d.radius,
