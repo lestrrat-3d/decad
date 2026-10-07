@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/clearancespine"
+	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -384,11 +384,11 @@ func (k *pairKernel) offsetPair(f, g *clearance.CFace, sink *cellSink) {
 	sink.unsure = true
 }
 
-func (k *pairKernel) spineEngine() *clearancespine.Engine {
-	return &clearancespine.Engine{Context: k.ctx, Tolerance: k.tol, Slack: k.slack}
+func (k *pairKernel) spineEngine() *spine.Engine {
+	return &spine.Engine{Context: k.ctx, Tolerance: k.tol, Slack: k.slack}
 }
 
-func (k *pairKernel) captureSpine(e *clearancespine.Engine) {
+func (k *pairKernel) captureSpine(e *spine.Engine) {
 	if e.Err != nil {
 		k.err = e.Err
 	}

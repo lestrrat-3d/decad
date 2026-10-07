@@ -4,7 +4,7 @@ import (
 	"context"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/cappatch"
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -498,28 +498,28 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	return result, nil
 }
 
-func patchRawFlux(g capPatchGeom) proofbound.BoundedScalar { return cappatch.RawFlux(g.patch()) }
+func patchRawFlux(g capPatchGeom) proofbound.BoundedScalar { return capband.RawFlux(g.patch()) }
 
-func patchAreaOf(g capPatchGeom) (float64, float64) { return cappatch.AreaOf(g.patch()) }
+func patchAreaOf(g capPatchGeom) (float64, float64) { return capband.AreaOf(g.patch()) }
 
 func patchDisplacementAreaAllow(g capPatchGeom) float64 {
-	return cappatch.DisplacementAreaAllow(g.patch())
+	return capband.DisplacementAreaAllow(g.patch())
 }
 
 func capWindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {
-	return cappatch.WindowOnBranch(capTh0, capTh1, th0)
+	return capband.WindowOnBranch(capTh0, capTh1, th0)
 }
 
 func ruledAngleCos(thS0, thS1, thC0, thC1 float64) float64 {
-	return cappatch.RuledAngleCos(thS0, thS1, thC0, thC1)
+	return capband.RuledAngleCos(thS0, thS1, thC0, thC1)
 }
 
 func conePatchFluxInterval(g capPatchGeom) (proofbound.RatInterval, bool) {
-	return cappatch.ConeFluxInterval(g.patch())
+	return capband.ConeFluxInterval(g.patch())
 }
 
 func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
-	return cappatch.FrustumAreaBracket(R0, R1, H, dth, dthAllow, held)
+	return capband.FrustumAreaBracket(R0, R1, H, dth, dthAllow, held)
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read

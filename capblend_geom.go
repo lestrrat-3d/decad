@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/cappatch"
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -295,9 +295,9 @@ type capPatchGeom struct {
 	capThAllow float64
 }
 
-func (g capPatchGeom) patch() cappatch.Patch {
-	point := func(p Point2) cappatch.Point { return cappatch.Point{U: p.U, V: p.V} }
-	return cappatch.Patch{
+func (g capPatchGeom) patch() capband.Patch {
+	point := func(p Point2) capband.Point { return capband.Point{U: p.U, V: p.V} }
+	return capband.Patch{
 		Circular: g.circular,
 		SideA:    point(g.sideA), SideB: point(g.sideB),
 		CapA: point(g.capA), CapB: point(g.capB),

@@ -1,4 +1,4 @@
-package cappatch
+package capband
 
 // Point is one plane-local cap patch coordinate.
 type Point struct{ U, V float64 }
