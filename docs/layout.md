@@ -171,7 +171,7 @@ the rules leave to the byte budget.
 | `verify_pairs.go` | `Verify`'s bounded pair workers and ordered outcomes. See `docs/interference-design.md` §2, §5.3 and §7.2. |
 | `report.go` | `Verify`'s report vocabulary: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
-| `verify_gate.go` | Proves the tolerance gate's reference diameter per payload, or withholds the gate. See `docs/verification-design.md` §3. |
+| `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_result.go` | Types `Verify`'s report is written in: `Report`, `BodyReport`, and every per-survey result record. Types and `Passed`/`ForBody` only; `verify_publish.go` builds the values. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
@@ -273,6 +273,7 @@ the rules leave to the byte budget.
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
+| `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, trim walks, and Trim/Extend record helpers. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |

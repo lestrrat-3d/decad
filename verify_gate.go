@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -346,20 +347,10 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 	return 0, false, nil
 }
 
-// lowerDiameterForDisplacement turns a held witness diameter into a lower
-// bound on the denoted body's diameter. Every witness can move by at most the
-// supplied displacement, so their pair distance can shrink by twice that
-// amount. The subtraction rounds toward zero because this value only tightens
-// the tolerance gate when it remains a lower bound.
+// lowerDiameterForDisplacement adapts the held witness reading to
+// internal/diameter's displacement adjustment.
 func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
-	if displacement == 0 {
-		return d, true
-	}
-	if !usableMagnitude(d) || !usableMagnitude(displacement) {
-		return 0, false
-	}
-	d = freeform.DownRound(d - 2*displacement)
-	return d, d > 0 && usableMagnitude(d)
+	return diameter.LowerForDisplacement(d, displacement)
 }
 
 // freeformSectionGateDiameter is bodyGateDiameter's arm for a free-form-walled
@@ -720,94 +711,8 @@ func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, boo
 	return pointSetDiameterWithBudget(proofbound.NewWorkBudget(ctx), points)
 }
 
-// pointSetDiameterWithBudget is the ONE witness-maximum reader every gate
-// diameter is published through — bodyGateDiameter's exact carrier arm and its
-// loft arm, freeformSectionGateDiameter, fallbackGateDiameter, and the cached
-// facetedPayload.diameter buildFacetedBody stores (boolean_body.go). What it
-// returns is a CERTIFIED value at or below the exact greatest distance between
-// two of the supplied points: the float scan only SELECTS a pair, and the
-// published number is that pair's own distance computed over exact rationals
-// and rounded toward zero (exactPairDistanceDown).
-//
-// The float scan cannot publish that number itself. Sub rounds each component
-// and Len rounds the norm, so points[i].Sub(points[j]).Len() can land ABOVE
-// the pair's exact distance — a 6x6x7 box's corner pair reads
-// 11.000000000000002 against an exact sqrt(121) = 11 — while every consumer
-// here reads the answer as a LOWER bound on the body's own diameter
-// (docs/verification-design.md §3: an understated D tightens the gate into a
-// false Suspect at worst, an overstated one loosens it into a false Sound).
-// Charging that roundoff as an outward allowance is not open to this function
-// either: it publishes one number, not an interval, so the charge has to land
-// inside the value, which means rounding the value itself toward zero.
-//
-// Selecting the pair in floats costs nothing here. Whatever pair the scan
-// picks, the published number is a REAL pair distance rounded toward zero and
-// is therefore at or below the exact maximum; a near-tie the float rounding
-// mis-orders changes how TIGHT the answer is, never whether it is a lower
-// bound. So the certification rests on the exact arithmetic alone, and the
-// scan is left free to cost what it always did.
-//
-// ok is false for an empty set, for a pair distance that is not a usable
-// magnitude, and for a winning pair whose coordinates have no exact rational
-// form — an absent answer, never a substitute one.
+// pointSetDiameterWithBudget adapts Verify's witness set to internal/diameter.
+// See docs/verification-design.md §3 for its lower-bound contract.
 func pointSetDiameterWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, bool, error) {
-	if len(points) == 0 {
-		return 0, false, nil
-	}
-	best := 0.0
-	bestI, bestJ := 0, 0
-	for i := range points {
-		for j := i + 1; j < len(points); j++ {
-			if budget != nil {
-				if err := budget.Step(); err != nil {
-					return 0, false, err
-				}
-			}
-			distance := points[i].Sub(points[j]).Len()
-			if !usableMagnitude(distance) {
-				return 0, false, nil
-			}
-			if distance > best {
-				best, bestI, bestJ = distance, i, j
-			}
-		}
-	}
-	if budget != nil {
-		if err := budget.Err(); err != nil {
-			return 0, false, err
-		}
-	}
-	if best == 0 {
-		// A single point, or a set whose every pair is coincident: zero is
-		// already exact and needs no rounding step.
-		return 0, true, nil
-	}
-	d, ok := exactPairDistanceDown(points[bestI], points[bestJ])
-	if !ok {
-		return 0, false, nil
-	}
-	return d, true, nil
-}
-
-// exactPairDistanceDown returns the largest float64 at or below the EXACT
-// distance between two points. Both coordinates of each axis are float64s and
-// so are exact rationals; the difference and its square are exact in that
-// arithmetic, and proofbound.RatSqrtDown (internal/freeform/spline_length.go) decides the last step by
-// comparing a candidate's exact square against the exact sum rather than by
-// trusting the platform's own square root. Nothing in the chain rounds outward,
-// so the answer is proven to be at or below the pair's true distance.
-//
-// ok is false when a coordinate has no rational form (a non-finite one), which
-// its callers read as no answer at all.
-func exactPairDistanceDown(a, b r3.Vec) (float64, bool) {
-	total := new(big.Rat)
-	for _, axis := range [3][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
-		ra, rb := proofarith.FloatRat(axis[0]), proofarith.FloatRat(axis[1])
-		if ra == nil || rb == nil {
-			return 0, false
-		}
-		d := ra.Sub(ra, rb)
-		total.Add(total, d.Mul(d, d))
-	}
-	return proofbound.RatSqrtDown(total), true
+	return diameter.PointsWithBudget(budget, points)
 }
