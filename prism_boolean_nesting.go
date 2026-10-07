@@ -460,7 +460,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 }
 
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement
-// (authenticateProfile's fresh s.Profiles() call, seam.go) observable to a
+// (sketchrecord.AuthenticateProfile's fresh s.Profiles() call) observable to a
 // caller's context, the same way prismProfilesContext wraps the FIRST
 // arrangement. The scene is already capped by prismMaxArrangementSegments, so
 // this second pass over it stays bounded too. The returned PlaneRecord is not
