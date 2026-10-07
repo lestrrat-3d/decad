@@ -3,11 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -85,123 +84,20 @@ func assembleMitredSweep(c mitredConstruction, stride int) mitredAssembly {
 	return a
 }
 
-// scaleMitredVertices lifts the rational vertices, relative to the anchor,
-// onto one common denominator: it returns den, the least common multiple of
-// every coordinate's own denominator, and each vertex's (p − anchor)·den,
-// an integer vector.
-func scaleMitredVertices(exact []sweepRatVec, anchor sweepRatVec) (*big.Int, [][3]*big.Int) {
-	den := big.NewInt(1)
-	var rem, g big.Int
-	widen := func(r *big.Rat) {
-		d := r.Denom()
-		if rem.Rem(den, d).Sign() == 0 {
-			return
-		}
-		g.GCD(nil, nil, den, d)
-		den.Mul(den, rem.Quo(d, &g))
-	}
-	for _, p := range exact {
-		for axis := range 3 {
-			widen(p[axis])
-		}
-	}
-	for axis := range 3 {
-		widen(anchor[axis])
-	}
-	lift := func(r *big.Rat) *big.Int {
-		n := new(big.Int).Quo(den, r.Denom())
-		return n.Mul(n, r.Num())
-	}
-	origin := [3]*big.Int{lift(anchor[0]), lift(anchor[1]), lift(anchor[2])}
-	rel := make([][3]*big.Int, len(exact))
-	for v, p := range exact {
-		for axis := range 3 {
-			n := lift(p[axis])
-			rel[v][axis] = n.Sub(n, origin[axis])
-		}
-	}
-	return den, rel
-}
-
-// mitredVolumeMoments is the exact tetrahedron sum over every held triangle
-// anchored at the placed V_0: six times the signed volume, and the signed
-// first moment relative to the anchor times twenty-four.
-//
-// The sums run over the vertices lifted onto one common denominator den:
-// each tetrahedron's term is then an integer over den³ and its moment
-// contribution an integer over den⁴, so the sums are integers and each is
-// divided by its power of den once at the end. No partial sum is reduced on
-// the way, and SetFrac's single normalisation yields the same canonical
-// rational a term-by-term rational sum does.
 func mitredVolumeMoments(exact []sweepRatVec, tris [][3]int, anchor sweepRatVec) (*big.Rat, [3]*big.Rat) {
-	den, rel := scaleMitredVertices(exact, anchor)
-	var vol6N, term, sum, tmp big.Int
-	var momN, cross [3]big.Int
-	for _, t := range tris {
-		a, b, c := rel[t[0]], rel[t[1]], rel[t[2]]
-		for i := range 3 {
-			j, k := (i+1)%3, (i+2)%3
-			cross[i].Mul(b[j], c[k])
-			cross[i].Sub(&cross[i], tmp.Mul(b[k], c[j]))
-		}
-		term.Mul(a[0], &cross[0])
-		term.Add(&term, tmp.Mul(a[1], &cross[1]))
-		term.Add(&term, tmp.Mul(a[2], &cross[2]))
-		vol6N.Add(&vol6N, &term)
-		for axis := range 3 {
-			sum.Add(a[axis], b[axis])
-			sum.Add(&sum, c[axis])
-			momN[axis].Add(&momN[axis], tmp.Mul(&sum, &term))
-		}
-	}
-	den3 := new(big.Int).Mul(den, den)
-	den3.Mul(den3, den)
-	den4 := new(big.Int).Mul(den3, den)
-	vol6 := new(big.Rat).SetFrac(&vol6N, den3)
-	var moments [3]*big.Rat
-	for axis := range 3 {
-		moments[axis] = new(big.Rat).SetFrac(&momN[axis], den4)
-	}
-	return vol6, moments
+	return sweepmitre.VolumeMoments(exact, tris, anchor)
 }
 
-// mitredTriangleAreas encloses every held triangle's exact area: the square
-// root of a rational, bracketed by ratSqrtDown and ratSqrtUp.
 func mitredTriangleAreas(ctx context.Context, exact []sweepRatVec, tris [][3]int) ([][2]*big.Rat, error) {
-	quarter := big.NewRat(1, 4)
-	out := make([][2]*big.Rat, len(tris))
-	for k, t := range tris {
-		if k%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		n := sweepRatCross(sweepRatSub(exact[t[1]], exact[t[0]]), sweepRatSub(exact[t[2]], exact[t[0]]))
-		q := sweepRatDot(n, n)
-		q.Mul(q, quarter)
-		lo, hi := proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
-		if math.IsInf(hi, 0) {
-			return nil, fmt.Errorf(`%w: a mitred sweep triangle's area runs past the representable float64 range`, ErrUnsupported)
-		}
-		out[k] = [2]*big.Rat{proofarith.FloatRat(lo), proofarith.FloatRat(hi)}
-	}
-	return out, nil
+	return sweepmitre.TriangleAreas(ctx, exact, tris)
 }
 
-// mitredEnclosure publishes a quantity known to lie in [lo, hi]: the nearest
-// float to the midpoint, and the larger of its exact distances to the two
-// ends, rounded up.
 func mitredEnclosure(lo, hi *big.Rat) (float64, float64) {
-	mid := new(big.Rat).Add(lo, hi)
-	mid.Quo(mid, big.NewRat(2, 1))
-	value, _ := mid.Float64()
-	return value, math.Max(proofarith.RationalFloatError(lo, value), proofarith.RationalFloatError(hi, value))
+	return sweepmitre.Enclosure(lo, hi)
 }
 
-// mitredOrientSign is the exact sign of det[b−a, c−a, d−a] over rationals,
-// proofarith.OrientSign's convention.
 func mitredOrientSign(a, b, c, d sweepRatVec) int {
-	return sweepRatDot(sweepRatCross(sweepRatSub(b, a), sweepRatSub(c, a)), sweepRatSub(d, a)).Sign()
+	return sweepmitre.OrientSign(a, b, c, d)
 }
 
 // mitredJunctionConvex decides a junction edge's convexity the way
@@ -365,19 +261,10 @@ func mitredVolume(vol6 *big.Rat) Measurement {
 // mitredCentroid publishes anchor + moment / (4·vol6), each coordinate
 // rounded once, with the largest per-coordinate rounding read as a 3D radius.
 func mitredCentroid(anchor sweepRatVec, vol6 *big.Rat, moments [3]*big.Rat) (VecMeasurement, error) {
-	if vol6.Sign() == 0 {
-		return VecMeasurement{}, fmt.Errorf(`%w: a mitred sweep with zero volume has no centroid`, ErrDegenerate)
+	value, bound, err := sweepmitre.Centroid(anchor, vol6, moments)
+	if err != nil {
+		return VecMeasurement{}, err
 	}
-	denom := new(big.Rat).Mul(big.NewRat(4, 1), vol6)
-	var value [3]float64
-	worst := 0.0
-	for axis := range 3 {
-		c := new(big.Rat).Quo(moments[axis], denom)
-		c.Add(c, anchor[axis])
-		value[axis], _ = c.Float64()
-		worst = math.Max(worst, proofarith.RationalFloatError(c, value[axis]))
-	}
-	bound := proofbound.Radius3D(worst)
 	return VecMeasurement{
 		Value:     r3.NewVec(value[0], value[1], value[2]),
 		Exactness: exactnessOf(bound),
@@ -389,25 +276,7 @@ func mitredCentroid(anchor sweepRatVec, vol6 *big.Rat, moments [3]*big.Rat) (Vec
 // outward: the box holds the exact body, and Bound is the largest outward
 // rounding, read exactly.
 func mitredBounds(exact []sweepRatVec) Box {
-	var lo, hi [3]*big.Rat
-	for _, p := range exact {
-		for axis := range 3 {
-			if lo[axis] == nil || p[axis].Cmp(lo[axis]) < 0 {
-				lo[axis] = p[axis]
-			}
-			if hi[axis] == nil || p[axis].Cmp(hi[axis]) > 0 {
-				hi[axis] = p[axis]
-			}
-		}
-	}
-	var minV, maxV [3]float64
-	worst := 0.0
-	for axis := range 3 {
-		minV[axis] = proofbound.RatFloatDown(lo[axis])
-		maxV[axis] = proofbound.RatFloatUp(hi[axis])
-		worst = math.Max(worst, proofarith.RationalFloatError(lo[axis], minV[axis]))
-		worst = math.Max(worst, proofarith.RationalFloatError(hi[axis], maxV[axis]))
-	}
+	minV, maxV, worst := sweepmitre.Bounds(exact)
 	return Box{
 		Min:       r3.NewVec(minV[0], minV[1], minV[2]),
 		Max:       r3.NewVec(maxV[0], maxV[1], maxV[2]),
