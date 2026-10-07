@@ -927,6 +927,8 @@ func sectionDisplacementOf(b *Body) float64 {
 		return p.sectionDelta
 	case stackedPrismPayload:
 		return p.sectionDelta
+	case brepPayload:
+		return p.sectionDelta()
 	default:
 		return 0
 	}

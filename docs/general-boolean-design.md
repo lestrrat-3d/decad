@@ -255,12 +255,12 @@ charged per scene.
 ```go
 // brepFace is one analytically trimmed face.
 type brepFace struct {
-    frame   r3.Frame       // the face's own plane (planar) or the sweep frame of its wall (swept)
+    frame   r3.Frame       // the face's plane (planar) or the sweep frame of its wall (swept)
     // exactly one of:
-    region  *ProfileRecord // planar: one outer loop and holes in frame coordinates, outward +N or -N
+    region  *ProfileRecord // planar: one outer loop and holes in frame coordinates, material left of each walk
     outward bool           // planar: true when the outward normal is frame.N()
-    wall    *CurveSegment  // swept: a LineSeg/CircleSeg/ArcSeg in frame coordinates
-    z0, z1  float64        // swept: the sweep interval along frame.N()
+    wall    CurveSegment   // swept: a LineSeg/CircleSeg/ArcSeg in frame coordinates, material on its left
+    z0, z1  float64        // swept: the sweep interval along frame.N(); planar: the level, z0 == z1
     z0Delta, z1Delta float64
     delta   float64        // the face's own section displacement (prism-boolean §7 terms)
     role    string
@@ -279,6 +279,13 @@ never stored for them. A class-B result stores it. Every face's frame is
 stated in the payload's unplaced coordinates and `xform` places the whole
 body, as every payload does.
 
+Every face frame shares the first face's origin bit for bit and carries each
+of its axes, or that axis negated, bit for bit, keeping handedness. The map
+between two face frames is then a signed permutation, which moves every
+coordinate and level exactly, and §4.2–§4.4 read every face in the first
+face's frame, the reference frame. The datum planes XY, XZ and YZ meet this. A
+record whose frames do not is `ErrUnsupported`.
+
 ### 4.2 Topology and roles
 
 Faces are the record's. Edges: each planar face's loop segments and each
@@ -287,12 +294,19 @@ side lines (a wall's ends at the junction with the next face). Every edge is
 shared by exactly two faces by construction: a planar face's segment is one
 rim of exactly one swept wall, or one line of exactly one other planar face
 (two planar faces meeting along a line), and the build identifies them by
-exact record identity (same recorded coordinates, same level). A result
-whose edges do not pair is `ErrUnsupported` (`BooleanEvaluatorFailure`): the
-build proves closure by counting, as the mesh audit does. `Edge.IsConvex`
-reads the walked boundary as evaluator §3 states, on the face whose loop
-contains the segment; `Lumps` and `Shells` are derived from face adjacency
-(`sheetLumps`). Roles are fresh under the boolean's producer identity:
+exact record identity in reference coordinates (same coordinates, same
+level). A result whose edges do not pair is `ErrUnsupported`
+(`BooleanEvaluatorFailure`): the build proves closure by counting, as the
+mesh audit does. A circular edge that bounds no swept wall, and a rim shared
+by two swept walls, are `ErrUnsupported` too. `Edge.IsConvex` reads the walked
+boundary as evaluator §3 states. A rim reads the wall it runs along: a
+circular wall by its own turn, a straight wall by the role of the loop it
+belongs to. The planar face sharing the rim states that role: its own loop's
+role when it walks the rim the wall's way, the other role when it walks it
+the opposite way, as a stacked floor walks a reversed hole. A side line
+between two walls is a junction, convex when the walk turns left there. Any
+other line reads its planar face's loop role. `Lumps` and `Shells` are derived
+from face adjacency (`sheetLumps`). Roles are fresh under the boolean's producer identity:
 `face(k)` for planar faces, `wall(k)` for swept, both indexed by the result
 record, and `capStart`/`capEnd` are not minted (core §9: the helper returns a
 reference matching nothing). `Face.Origins` carry no operand provenance
@@ -301,23 +315,39 @@ reference matching nothing). `Face.Origins` carry no operand provenance
 ### 4.3 Measurements
 
 Every quantity is a sum over faces of a closed form in that face's own
-record, through `internal/proofbound`'s bounded arithmetic:
+record, read in reference coordinates. Volume is `(1/3)∮ p·n dA` and the
+first moment along reference axis `i` is `½∮ x_i²·n_i dA`. A planar face at
+level `z` with outward sign `s` (`+1` when `outward`) has its normal on one
+reference axis `k` with sign `σ`; a swept face over height `h = z1 − z0` has
+its `u` and `v` on two reference axes with signs `σ_u`, `σ_v`. Each segment
+contributes its Green's-theorem terms about the frame origin in the forms
+evaluator §4 accumulates: `g = ½∫(u dv − v du)`, `mu = ½∫u² dv`,
+`mv = −½∫v² du`.
 
-| Quantity | Planar face | Swept wall, `LineSeg` | Swept wall, circular |
-|---|---|---|---|
-| `Volume` | `(1/3)(o·n)·A` with `o` the frame origin, `n` the outward normal, `A` the region area (evaluator §4) | `(1/3)(p·n)·L·h` over the wall's own plane | `(1/3)·h·(r·L + c·∫n̂ ds)`, the arc's outward flux: `∫n̂ ds` is `r·(sin θ1 − sin θ0, cos θ0 − cos θ1)` with certified trig |
-| `Area` | `A` | `L·h` | `r·Δθ·h` (the prism wall's own reading) |
-| `Centroid` | `(1/2)∫ p (p·n) dA` from the region's first and second moments (`∫u² dA`, `∫uv dA`, evaluator §4) | the quad's own moments | closed form in `θ0, θ1, z0, z1` with certified trig |
-| `Bounds` | per-face extremes (prism-extent's per-segment extreme analysis, per face) | | |
+| Quantity | Planar face | Swept wall |
+|---|---|---|
+| `Volume` | `(1/3)·s·z·A`, `A` the region area (evaluator §4) | `(1/3)·2·h·g` |
+| first moment | `½·s·σ·z²·A` along axis `k` | `σ_u·h·mu` and `σ_v·h·mv` along the `u` and `v` axes |
+| `Area` | `A` | `L·h` (the prism wall's own reading) |
+| `Bounds` | the face's own extremes (prism-extent's per-segment analysis over the face's prism view) | |
+
+`Centroid` is each moment over the volume, lifted through the reference frame
+and the placement as a prism's is. The volume and moment sums run in exact
+rational intervals: a line's terms and a line region's area are exact
+rationals, a circular term is the held float widened by its proven bound, and
+each published value is the sum rounded once.
 
 Each face's `delta`, `z0Delta`, `z1Delta` enter as prism-boolean §7 enters
-them for a prism: the area displacement `2·δ·p + n·π·δ²` per planar face,
-the length displacement per wall, the level displacement times the face
-area. `Exactness` is `exactnessOf` on the composed bound: `Exact` for an
-all-planar result with every coordinate recorded and every level a float.
-The divergence-theorem sums are signed and may cancel in VALUE, never in
-BOUND: every term's bound is added, so a cancelling pair of faces widens the
-bound rather than narrowing it.
+them for a prism. A planar face's area carries `2·δ·p + n·π·δ²`; a wall's
+length carries the length displacement, and its height both level
+displacements. The volume the denoted body can differ by is each wall's band
+`2·δ·L + π·δ²` over its height plus both level displacements, and each planar
+face's level displacement times its area; that volume times the coordinate
+envelope bounds each moment. `Exactness` is `exactnessOf` on the composed
+bound: `Exact` for an all-planar result with every coordinate recorded and
+every level a float. The divergence-theorem sums are signed and may cancel in
+VALUE, never in BOUND: every term's enclosure width is carried, so a
+cancelling pair of faces widens the bound rather than narrowing it.
 
 ### 4.4 Tessellation and the occupied-volume proof
 
@@ -327,15 +357,20 @@ the swept wall that owns the arc (tessellation §3). A swept wall is the
 prism wall path over its own segment and interval. The mesh closes by
 construction because every edge is shared by exactly two faces (§4.2) and
 both chord it from one sample set; `internal/tessellation.RequireClosedMesh`
-proves it. `Bound` per face is the wall's sagitta plus its level
-displacement, or the planar patch's bounding-loop sagitta, composed with
-`delta`. Occupied volume: the analytic body and the chorded body differ only
-inside the circular-segment slivers of each circular wall, swept over its
-height — `Σ_walls h · E_wall`, tessellation §5's prism term applied per
-wall — plus the `sectionDisplacementArea` terms where `delta > 0` and
-`sweptVolumeAllow` over the store maximum. Every planar face is exact. The
-mesh therefore carries `volSymDiff`, and a class-B result is an ordinary
-mesh-path operand and export input.
+proves it. The largest `delta` is reserved from the chord budget, as a
+prism's is. Each planar face proves its loops' clearance, and every two walls
+sweeping along one reference axis over overlapping intervals, sharing no
+endpoint, prove theirs, so no two chorded walls cross where the analytic ones
+do not. `Bound` per face is the wall's sagitta plus its level displacement,
+or the planar patch's bounding-loop sagitta plus its level displacement,
+composed with `delta`. Occupied volume: the analytic body and the chorded
+body differ only inside the circular-segment slivers of each circular wall,
+swept over its height — `Σ_walls h · E_wall`, tessellation §5's prism term
+applied per wall — plus each wall's section band over its height where
+`delta > 0`, each planar face's level displacement times its area, and
+`sweptVolumeAllow` over the store maximum. Planar faces chord nothing of their
+own. The mesh therefore carries `volSymDiff`, and a class-B result is an
+ordinary mesh-path operand and export input.
 
 ### 4.5 Consumers
 
@@ -344,9 +379,9 @@ mesh-path operand and export input.
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a pair outside B1–B8 takes the mesh path over §4.4's mesh |
 | `Body.Placed` / `Duplicate` / `PlacedCopy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
 | `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` — modify-reach gains an RX row for the payload. This is STAGED, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims, so a later design can rewrite a planar face's region and re-trim its walls on the same terms modify §2 rewrites a section |
-| `ThroughAll` / `ToFace` stops | a planar face's level is its frame; a directional extent reads the per-face extremes (§4.3) |
+| `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |
-| `Verify` tolerance gate | `gateWitnessPrism`'s reader over every face's recorded vertices, shrunk by the largest `delta` plus axial term (verification §3) |
+| `Verify` tolerance gate | `gateWitnessPrism`'s reader over every body vertex and each swept face's prism-wall witnesses, shrunk by the largest `delta` plus axial term (verification §3) |
 | `Verify` wall survey | staged `Suspect` (`DiagUnsupportedSurveyPayload`): the 2D spanning-disk reduction has no single section to read |
 | `Verify` undercut, minimum radius | per face: exact normal ranges for planes and cylinders (DX7's reading), the tightest concave circular wall radius (DX8's) — both land with the payload |
 | Clearance kernel | a `bodyGeom` arm adding each face's plane or cylinder carrier with its trims, as `addPrismFaces` does for a prism; undecidable cells stay `Suspect` |
@@ -513,8 +548,10 @@ are relations, never literals.
   its bound of the closed form (box minus the cylinder clipped by the top
   plane: circular-segment integrals).
 - **brep measurements**: a prism viewed as a brep reports volume, area,
-  centroid and bounds bit-identical to `prismPayload`'s for an all-line
-  record and within the composed bounds for a circular one.
+  bounds and centroid value bit-identical to `prismPayload`'s for an
+  all-line record whose readings are exact rationals rounded once, and
+  within the composed bounds for a circular one. The brep's centroid bound is
+  the exact error of that one rounding, so it is at or below the prism's.
 - **Cancellation and the cap** as prism-boolean §15, per scene.
 
 ## 10. Open questions

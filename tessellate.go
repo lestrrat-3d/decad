@@ -430,6 +430,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if sp, ok := b.payload.(stackedPrismPayload); ok {
 		return tessellateStacked(ctx, b, sp, chord, verify)
 	}
+	if bp, ok := b.payload.(brepPayload); ok {
+		return tessellateBrep(ctx, b, bp, chord, verify)
+	}
 	if lp, ok := b.payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording
@@ -487,7 +490,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, chain-fed prism, one-span straight sweep, mitred sweep, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, stacked prism, brep, chain-fed prism, one-span straight sweep, mitred sweep, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }

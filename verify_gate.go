@@ -184,6 +184,9 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if payload, ok := body.payload.(chainRevolvePayload); ok {
 		return chainRevolveEdgeGateDiameter(ctx, body, payload.sectionDelta)
 	}
+	if payload, ok := body.payload.(brepPayload); ok {
+		return brepGateDiameter(ctx, body, payload)
+	}
 	if _, ok := body.payload.(patchPayload); ok {
 		// A patch has no exact carrier model of its own (it is a single flat
 		// face, not a prism or a revolve), and no witness set gateWitnessPrism
@@ -721,6 +724,54 @@ func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
 		return nil, 0, false
 	}
 	return []prismPayload{witness}, displacement, true
+}
+
+// brepGateDiameter is bodyGateDiameter's arm for a brepPayload
+// (docs/general-boolean-design.md §4.5): gateWitnessPrism's reader taken over
+// every face's own prism view instead of one witness prism. Every body vertex
+// is a witness, and every swept face adds the witnesses addPrismFaces takes
+// off a prism wall — a circular wall's mid-angle point at mid-height and its
+// start at z0, a straight wall's quad midpoint — so a whole circle still
+// yields an antipodal pair. The witnesses are read off the recorded body the
+// way addPrismFaces reads a prism's, and the recorded body lies within the
+// largest section displacement plus the largest level displacement of the body
+// the record denotes, so the held maximum is shrunk by that sum
+// (lowerDiameterForDisplacement), as the fallback's stacked and
+// displaced-prism arms shrink theirs.
+func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64, bool, error) {
+	var witnesses []r3.Vec
+	for _, v := range body.Vertices() {
+		witnesses = append(witnesses, v.position)
+	}
+	work := freeform.NewFreeformWork()
+	for _, f := range bp.faces {
+		if f.planar() {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		w, err := walkOf(f.wall, work)
+		if err != nil {
+			return 0, false, err
+		}
+		pp := f.view(bp.xform)
+		mid := (pp.z0 + pp.z1) / 2
+		if w.IsCircular() {
+			th := (w.Th0 + w.Th1) / 2
+			witnesses = append(witnesses,
+				pp.point(w.CU+w.Radius*math.Cos(th), w.CV+w.Radius*math.Sin(th), mid),
+				pp.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), pp.z0))
+			continue
+		}
+		witnesses = append(witnesses, pp.point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, mid))
+	}
+	d, ok, err := pointSetDiameterContext(ctx, witnesses)
+	if err != nil || !ok {
+		return d, ok, err
+	}
+	d, ok = lowerDiameterForDisplacement(d, proofbound.AbsSumUpper(bp.sectionDelta(), bp.axialDelta()))
+	return d, ok, nil
 }
 
 func pointSetDiameter(points []r3.Vec) (float64, bool) {
