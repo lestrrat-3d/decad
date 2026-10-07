@@ -252,6 +252,8 @@ func loftDuct(ctx context.Context) (*decad.Body, error) {
 	return loftDuctAtHeight(ctx, 46)
 }
 
+// loftDuctAtHeight caps the final loft at height. Its top rectangle follows
+// the corresponding section of the final ruled walls.
 func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	bottom, bottomProfile, err := sketchLoops(ctx, w, w.XY(), rectangle(-42, -30, 42, 30))
@@ -262,7 +264,9 @@ func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) 
 	if err != nil {
 		return nil, err
 	}
-	top, topProfile, err := sketchLoops(ctx, w, topPlane, rectangle(-4, -14, 32, 14))
+	t := height / 46
+	topSection := rectangle(-42+38*t, -30+16*t, 42-10*t, 30-16*t)
+	top, topProfile, err := sketchLoops(ctx, w, topPlane, topSection)
 	if err != nil {
 		return nil, err
 	}

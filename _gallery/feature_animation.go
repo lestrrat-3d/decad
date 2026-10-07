@@ -134,7 +134,7 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, cyan, chord)
 	case "loft":
-		body, err := loftDuctAtHeight(ctx, 8+float64(stage)*38/(featureAnimationSteps-1))
+		body, err := loftDuctAtHeight(ctx, float64(stage+1)*46/featureAnimationSteps)
 		if err != nil {
 			return nil, err
 		}
