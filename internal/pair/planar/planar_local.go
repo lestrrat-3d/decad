@@ -5,6 +5,10 @@ import "github.com/lestrrat-3d/decad/internal/proof"
 // This file is the local half of the planar relation (planar.go): the proof
 // that two solids' materials do not overlap near one zero-distance site.
 
+func dvNeg(v proof.DyV3) proof.DyV3 {
+	return proof.DyV3{proof.DyNeg(v[0]), proof.DyNeg(v[1]), proof.DyNeg(v[2])}
+}
+
 // fan is the part of one solid's boundary that contains a contact point:
 // every triangle holding it with its outward normal, the fan's vertices, the
 // directions of the edges holding it, the normals of the triangles whose own

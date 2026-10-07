@@ -358,6 +358,8 @@ func fracCmp(x, y frac) int {
 	return proof.DyCmp(proof.DyMul(x.num, y.den), proof.DyMul(y.num, x.den))
 }
 
+func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
+
 // fracSqrtReading encloses sqrt(num/den) between two floats, each proven by an
 // exact comparison of its square, and publishes their midpoint with an
 // outward half-width. An exactly representable root has a zero bound.
