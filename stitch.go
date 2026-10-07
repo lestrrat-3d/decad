@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -699,6 +700,32 @@ func reverseFaceOrientation(f *Face) {
 	f.reversed = !f.reversed
 }
 
+func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
+	topo := stitchweld.Topology[*Face, *Edge]{
+		Faces: faces, Uses: map[*Face][]stitchweld.Use[*Edge]{}, Adjacent: map[*Edge][]*Face{},
+	}
+	queue := append([]*Face(nil), faces...)
+	seen := map[*Face]struct{}{}
+	for len(queue) > 0 {
+		f := queue[0]
+		queue = queue[1:]
+		if _, ok := seen[f]; ok {
+			continue
+		}
+		seen[f] = struct{}{}
+		var uses []stitchweld.Use[*Edge]
+		for _, l := range f.loops {
+			for _, ce := range l.coedges {
+				uses = append(uses, stitchweld.Use[*Edge]{Edge: ce.edge, Forward: ce.forward})
+				topo.Adjacent[ce.edge] = ce.edge.faces
+				queue = append(queue, ce.edge.faces...)
+			}
+		}
+		topo.Uses[f] = uses
+	}
+	return topo
+}
+
 // deriveStitchOrientation derives one consistent orientation across the
 // welded set by walking every two-face edge and requiring the two adjacent
 // faces to traverse it in opposite senses, flipping a whole face (never a
@@ -709,47 +736,9 @@ func reverseFaceOrientation(f *Face) {
 // path directly, on a hand-built face set, because Stitch's own public
 // gates admit no way to reach a non-orientable assembly through the seam.
 func deriveStitchOrientation(faces []*Face) error {
-	flip := map[*Face]bool{}
-	for _, root := range faces {
-		if _, ok := flip[root]; ok {
-			continue
-		}
-		flip[root] = false
-		queue := []*Face{root}
-		for len(queue) > 0 {
-			f := queue[0]
-			queue = queue[1:]
-			for _, l := range f.loops {
-				for _, ce := range l.coedges {
-					e := ce.edge
-					if len(e.faces) != 2 {
-						continue
-					}
-					other := e.faces[0]
-					if other == f {
-						other = e.faces[1]
-					}
-					if other == f {
-						continue
-					}
-					dirOther, ok := coedgeDirectionFor(other, e)
-					if !ok {
-						continue
-					}
-					effectiveF := ce.forward != flip[f]
-					wantOther := !effectiveF
-					flipOther := dirOther != wantOther
-					if existing, seen := flip[other]; seen {
-						if existing != flipOther {
-							return fmt.Errorf(`%w: Stitch's welded set cannot be consistently oriented (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-						}
-						continue
-					}
-					flip[other] = flipOther
-					queue = append(queue, other)
-				}
-			}
-		}
+	flip, ok := stitchTopology(faces).Orientation()
+	if !ok {
+		return fmt.Errorf(`%w: Stitch's welded set cannot be consistently oriented (docs/surface-design.md Table R row R7)`, ErrDegenerate)
 	}
 	for f, fl := range flip {
 		if fl {
@@ -770,41 +759,13 @@ func deriveStitchOrientation(faces []*Face) error {
 // triangles sharing one edge would pass every pairwise contact test the
 // crossing audit alone runs, which is exactly the gap this leg closes.
 func checkStitchClosure(faces []*Face) error {
-	uses := map[*Edge]int{}
-	forward := map[*Edge]int{}
-	backward := map[*Edge]int{}
-	var order []*Edge
-	seen := map[*Edge]struct{}{}
-	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				e := ce.edge
-				if _, ok := seen[e]; !ok {
-					seen[e] = struct{}{}
-					order = append(order, e)
-				}
-				uses[e]++
-				if ce.forward {
-					forward[e]++
-				} else {
-					backward[e]++
-				}
-			}
-		}
-	}
-	for _, e := range order {
-		switch len(e.faces) {
-		case 1:
-			if uses[e] != 1 {
-				return fmt.Errorf(`%w: a stitched edge's coedge-use count disagrees with its one adjacent face (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-			}
-		case 2:
-			if uses[e] != 2 || forward[e] != 1 || backward[e] != 1 {
-				return fmt.Errorf(`%w: a stitched edge is not traversed by exactly one forward and one backward coedge (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-			}
-		default:
-			return fmt.Errorf(`%w: a stitched edge is adjacent to more than two faces (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-		}
+	switch stitchTopology(faces).CheckClosure() {
+	case stitchweld.ClosureOneFaceUses:
+		return fmt.Errorf(`%w: a stitched edge's coedge-use count disagrees with its one adjacent face (docs/surface-design.md Table R row R7)`, ErrDegenerate)
+	case stitchweld.ClosureTwoFaceParity:
+		return fmt.Errorf(`%w: a stitched edge is not traversed by exactly one forward and one backward coedge (docs/surface-design.md Table R row R7)`, ErrDegenerate)
+	case stitchweld.ClosureTooManyFaces:
+		return fmt.Errorf(`%w: a stitched edge is adjacent to more than two faces (docs/surface-design.md Table R row R7)`, ErrDegenerate)
 	}
 	return nil
 }
