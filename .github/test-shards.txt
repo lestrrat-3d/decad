@@ -341,10 +341,16 @@
 3	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
 3	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 3	0.00	TestClampedConversionCostIsQuadratic
+3	0.30	TestClassBBreakingOutHoleWaitsOnCrossings
+3	0.30	TestClassBChain
 3	0.02	TestClassBCutCrossDrilledBox
 3	0.01	TestClassBCutCrossSlot
 3	0.02	TestClassBCutExactOffsetPlane
 3	0.10	TestClassBCutKeywayTakesMeshPath
+3	0.30	TestClassBMissesAFaceInsideTheTube
+3	0.30	TestClassBRootedPin
+3	0.30	TestClassBStackedTarget
+3	0.30	TestClassBThroughPin
 3	0.00	TestClearDenomsIsAPositiveRescaling
 3	0.00	TestClearanceEnumerationCountsVertexTierFaces
 3	0.01	TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal

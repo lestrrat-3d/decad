@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -291,16 +292,6 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 				s.Fix(r.A)
 			})
 		}},
-		{name: "blind cross hole", tool: func(t *testing.T, doc *Document) *Body {
-			w := sketch.NewWorld()
-			plane, err := w.CreateOffsetPlane(w.XZ(), -5)
-			require.NoError(t, err)
-			return internalClassBTool(t, doc, w, plane, 6, func(s *sketch.Sketch) {
-				c := s.CreatePoint(20, 10)
-				s.Fix(c)
-				s.CreateCircle(c, 3)
-			})
-		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -311,7 +302,7 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 			}
 			a := target(doc)
 			b := tc.tool(t, doc)
-			_, ok, err := tryClassBCut(t.Context(), a, b)
+			_, ok, err := tryClassB(t.Context(), meshbool.OpCut, a, b)
 			require.NoError(t, err)
 			require.False(t, ok)
 			result, err := Cut(t.Context(), a, b)

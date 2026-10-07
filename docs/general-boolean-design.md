@@ -305,34 +305,59 @@ charged per scene.
 
 #### B.3 The built reach
 
-`Cut` builds class B for a prism target X and a prism tool Y
-(`classb_cut.go`). Beside B1–B8, the record of §4.1 needs one shared
-placement (`X.xform == Y.xform`), Y's axes carried bit for bit as signed axes
-of X, and every segment of both over its natural range. Y's record is moved
-into `g`, Y's axes at X's origin, by the exact rational dot of the origin
-difference with each axis. The pair is admitted only when every moved
-coordinate and level is a float, so a datum plane and its `CreateOffsetPlane`
-at a float distance meet it and a shift that would round misses.
+`Cut`, `Union` and `Intersect` build class B for an operand X read through
+its face view (a prism, a stacked prism whose slabs keep one outer loop and
+one region, or a brep body) and a prism Y (`classb.go`). `Cut` takes X as the
+target; `Union` and `Intersect` try the operands both ways, so a brep or
+stacked operand enters in either position. Beside B1–B8, the record of §4.1
+needs one shared placement (`X.xform == Y.xform`), Y's axes carried bit for
+bit as signed axes of X's reference frame (its first face's), and every
+segment of both over its natural range, walked either way. Y's record is
+moved into `g`, Y's axes at the reference origin, by the exact rational dot
+of the origin difference with each axis. The pair is admitted only when
+every moved coordinate and level is a float, so a datum plane and its
+`CreateOffsetPlane` at a float distance meet it and a shift that would round
+misses. B3 binds a prism or stacked X; a brep X has no single sweep and takes
+Y along any reference axis, so a cross-drilled bar takes a hole down its own
+caps.
 
 Within that, the built reach is the through-nesting one, decided by exact
-comparisons of recorded coordinates. Let d be the axis of X's plane Y sweeps
-along, e the other, and w X's normal. Y's section box in `(e, w)` lies strictly
-inside X's sweep interval, with each level displacement as margin. Exactly
-two segments of X meet the closed strip of e that box spans: two lines along
-e, at `d = l0 < l1`, each running strictly past the strip at both ends. Y's
-sweep runs strictly past both. X over the strip is then the slab
-`l0 ≤ d ≤ l1`, and X ∩ Y is Y's section swept over it. The two slab walls
-become planar faces carrying Y's section as a hole; each one's region is its
-perpendicular-face scene's clean-nesting match (§5). Y's walls, reversed,
-become the hole's walls over `[l0, l1]`. No edge of either section is cut,
-so the section and parallel-face scenes are not built. S1's cross-drilled box
-and B1's cross slot are in the reach.
+comparisons of recorded coordinates. Let d be the reference axis Y sweeps
+along, and T Y's tube: its section's outward box (arcs by their radius
+rounded outward) swept over its interval. The faces of X whose boxes,
+widened by their level displacements, are not strictly apart from T are one
+or two, each across d: a planar face whose normal lies on d, or a straight
+wall at constant d. Each sits strictly inside Y's interval, both level
+displacements as margin, and two of them bound X's material between them
+(the lower outward −d, the upper +d). No other face of X meets T, so inside
+Y's tube the only boundary of X is those faces' patches over Y's section,
+and each face's perpendicular-face scene (§5) proves that patch lies inside
+its region by the clean-nesting match. Over Y's tube X is then the slab
+between two faces (through) or the side of one face its outward normal
+points away from (rooted), so every result is Y's section swept over an
+interval joined to X's faces:
 
-Every pair whose scenes would cut an edge takes the mesh path: B2's keyway,
-a blind cross hole, a hole breaking out, a tool crossing a wall. A cut is a
-fragment endpoint `sketch` computes in one scene, and two scenes that meet
-one crossing record it at different floats (§10), so §4.2's pairing by
-record identity does not close such a result.
+| Op | Through (two faces) | Rooted (one face) |
+|---|---|---|
+| `Cut` | Y's walls reversed between the faces | Y's walls reversed over the inside part, and Y's section as the hole's floor |
+| `Union` | Y's walls and caps over both outside parts | Y's walls and cap over the outside part |
+| `Intersect` | Y's section between the faces: a prism | Y's section over the inside part: a prism |
+
+Each slab face becomes a planar face in `g` carrying Y's section as a new
+hole: a straight wall by the rectangle it sweeps, a planar face by its region
+through the signed permutation between its frame and `g`, walked back
+(`rewindLoop`) where that map reverses the plane. No edge of either section
+is cut, so the section and parallel-face scenes are not built. S1's
+cross-drilled box, B1's cross slot, a blind cross hole, a pin rooted in a
+wall, S11's chain of cross holes and a cross hole under a blind pocket are in
+the reach.
+
+Every pair whose scenes would cut an edge takes the mesh path: B2's keyway, a
+hole breaking out of a face, a tool crossing a wall, two holes whose walls
+are not apart (B7). A cut is a fragment endpoint `sketch` computes in one
+scene, and two scenes that meet one crossing record it at different floats
+(§10), so §4.2's pairing by record identity does not close such a result
+until the keyed crossing table lands.
 
 ## 4. The `brepPayload`
 
@@ -634,18 +659,28 @@ are relations, never literals.
 - **B exact offset**: a drill on a frame whose origin is shifted in plane
   builds when the shifted centre is a float (0.5 + 19.5) and takes the mesh
   path when it rounds (0.1 + 19.9).
-- **B chain**: S11's three cross holes build analytically, then a fourth
-  overlapping the first refuses by B8 or B7 with `ErrUnsupported`, pinned.
+- **B chain**: S11's three cross holes build analytically, 9 faces with two
+  y walls of three holes each, `12000 − 240π`; a hole down the result's caps
+  builds, `12000 − 280π`; a pin rooted in the bar's end wall unions with the
+  brep in either position; a fourth hole overlapping the first misses B7 and
+  takes the mesh path, pinned.
 - **B gate misses**: S10 (tilted plane), S7 (cylinder × cylinder), a
   non-perpendicular pair 1e-12 off, a non-permutation frame pair, a slanted
-  tool wall (B6), a tool face in the target's cap plane (B8) and a blind
-  cross hole each take the mesh path; the non-perpendicular fixture asserts
-  `N_A · N_B != 0` itself.
+  tool wall (B6) and a tool face in the target's cap plane (B8) each take the
+  mesh path; the non-perpendicular fixture asserts `N_A · N_B != 0` itself.
+- **B rooted and through, every op**: a Ø6 pin rooted in a 40×20×10 plate's
+  wall x = 40 from x = 30 to 50: `Union` 8 faces, volume within its bound of
+  `8000 + 90π`; `Cut` a blind hole of 8 faces, `8000 − 90π`; `Intersect` a
+  prism of `90π`. The same pin from x = −5 to 45: `Union` 10 faces,
+  `8000 + 90π`, and `Intersect` `360π`, each with either operand first.
+- **B stacked target**: a cross hole under a blind pocket builds a brep of
+  `4000 − 400 − 80π`.
 - **B with a hole breaking out**: a cross hole whose circle crosses the bar's
-  top face: the perpendicular-face scenes report `Partial` edges, the
-  crossing sub-case builds, the top cap gains a chord notch, volume within
-  its bound of the closed form (box minus the cylinder clipped by the top
-  plane: circular-segment integrals).
+  top face misses the through reach (the top face meets the tube) and takes
+  the mesh path today, its volume within the mesh bound of the closed form
+  (box minus the cylinder clipped by the top plane: circular-segment
+  integrals). With the crossing reach the top cap gains a chord notch and
+  the result builds analytically within the same closed form.
 - **brep measurements**: a prism viewed as a brep reports volume, area,
   bounds and centroid value bit-identical to `prismPayload`'s for an
   all-line record whose readings are exact rationals rounded once, and

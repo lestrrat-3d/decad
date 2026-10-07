@@ -333,16 +333,17 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		} else if ok {
 			return analyticBooleanBody(ctx, d, ref, pp)
 		}
-		// docs/general-boolean-design.md §3 class B: a perpendicular prism
-		// pair builds a brep body. Same contract as above.
-		if bp, ok, err := tryClassBCut(ctx, a, b); err != nil {
-			if errors.Is(err, ErrUnsupported) {
-				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
-			}
-			return nil, err
-		} else if ok {
-			return analyticBooleanBody(ctx, d, ref, bp)
+	}
+	// docs/general-boolean-design.md §3 class B: a perpendicular pair with a
+	// prism, stacked or brep operand builds a brep body (or, for Intersect, a
+	// prism). Same contract as above.
+	if payload, ok, err := tryClassB(ctx, op, a, b); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 		}
+		return nil, err
+	} else if ok {
+		return analyticBooleanBody(ctx, d, ref, payload)
 	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)

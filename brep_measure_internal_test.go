@@ -233,7 +233,7 @@ func internalPinThroughS1(t *testing.T, doc *Document) *Body {
 }
 
 // TestBrepConsumersOnTheClassBCutResult runs the same consumers over S1 as a
-// public Cut builds it (class B, classb_cut.go), not the hand-built record:
+// public Cut builds it (class B, classb.go), not the hand-built record:
 // a pull up hooks only the hole's cylinder; a pull along (1, 0, 1) hooks the
 // cylinder and the two planes facing −x and −z; the concave-radius survey
 // measures the hole's 3 mm; and the clearance rows read 5 mm to a box off
