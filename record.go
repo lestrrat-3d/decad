@@ -63,5 +63,3 @@ func validateSegment(segment CurveSegment) error  { return record.ValidateSegmen
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
 	return record.NormalizeSegment(segment)
 }
-
-var errNilSegment = record.ErrNilSegment

@@ -27,6 +27,21 @@ func ValidateNURBSSegmentContent(segment NURBSSeg) error          { return valid
 func ValidateSegment(segment CurveSegment) error                  { return validateSegment(segment) }
 func NormalizeSegment(segment CurveSegment) (CurveSegment, error) { return normalizeSegment(segment) }
 
+// MagnitudeIn checks a typed, non-negative magnitude before conversion.
+func MagnitudeIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, error) {
+	if v.Kind() != kind {
+		return 0, fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
+	}
+	m, err := v.In(unit)
+	if err != nil {
+		return 0, fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
+	}
+	if m < 0 {
+		return 0, fmt.Errorf(`%w: %s must be non-negative, got %s`, ErrNegativeMagnitude, what, v)
+	}
+	return m, nil
+}
+
 // This file defines the evaluator's structural, plane-local profile records.
 // They hold no live sketch profile or frame: decad converts the source geometry
 // into values before evaluation.

@@ -493,7 +493,7 @@ sketch's reconstruction rebuilds the SAME entity from the SAME `Fit` points
 and reports the SAME dedup-collapsed curve every time, so it can never falsify
 this particular mismatch. decad's own moments path therefore runs the one
 self-consistency check that CAN: `requireFitSplineTerminalJoins`
-(`moments_validate.go`) compares the converted chain's own natural-end
+(`internal/momentvalidate/validate.go`) compares the converted chain's own natural-end
 coordinate against `Fit[len(Fit)-1]` by exact identity — not a tolerance,
 since the two floats are bit-identical whenever nothing was collapsed — and
 refuses `ErrDegenerate` on any difference (R17): the record's own boundary
