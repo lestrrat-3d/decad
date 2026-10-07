@@ -70,7 +70,7 @@ the rules leave to the byte budget.
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
-| `seam.go` | `RecordProfile`/`RecordChain` and snapshot checks. See `docs/sketch-seam-design.md` §1, §7. |
+| `seam.go` | `RecordProfile`/`RecordChain` adapters. See sketch-seam §1–§2. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | Linear and angular extent types; `ToFace`/`ToFaceAngular` references. See `docs/api-design.md` §8.1. |
 | `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicates and cardinality; a failure is a `SelectionError`. See `docs/api-design.md` §9. |
@@ -261,7 +261,7 @@ the rules leave to the byte budget.
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
-| `internal/sketchrecord/` | Sketch edge conversion and join checks. |
+| `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/revolveaxis/` | Axis input resolution, walks, charges, snap bounds and radial envelopes. See evaluator §6. |
