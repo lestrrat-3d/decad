@@ -2,11 +2,10 @@ package decad
 
 import (
 	"fmt"
-	"math"
-	"reflect"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -121,34 +120,16 @@ type walkReadCharge struct {
 // cost, so a later rigid re-evaluation can replay the charge instead of
 // re-running the work (charge).
 func resolveProfileWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profileWalks, error) {
-	before, beforeRecon := workSpent(work)
-	outer := make([]survey2d.SegmentWalk, len(profile.Outer.Segments))
-	for i, seg := range profile.Outer.Segments {
-		w, err := walkOf(seg, work)
-		if err != nil {
-			return nil, err
-		}
-		outer[i] = w
+	resolved, err := boundarywalk.ResolveProfile(boundarywalk.Profile{Outer: profile.Outer, Holes: profile.Holes}, work)
+	if err != nil {
+		return nil, err
 	}
-	holes := make([][]survey2d.SegmentWalk, len(profile.Holes))
-	for hi, hole := range profile.Holes {
-		hw := make([]survey2d.SegmentWalk, len(hole.Segments))
-		for i, seg := range hole.Segments {
-			w, err := walkOf(seg, work)
-			if err != nil {
-				return nil, err
-			}
-			hw[i] = w
-		}
-		holes[hi] = hw
-	}
-	after, afterRecon := workSpent(work)
 	return &profileWalks{
 		profile:             profile,
-		outer:               outer,
-		holes:               holes,
-		spent:               after - before,
-		reconstructionSpent: afterRecon - beforeRecon,
+		outer:               resolved.Outer,
+		holes:               resolved.Holes,
+		spent:               resolved.Spent,
+		reconstructionSpent: resolved.ReconstructionSpent,
 		metered:             true,
 	}, nil
 }
@@ -184,10 +165,7 @@ func (pw *profileWalks) charge(work *freeform.FreeformWork) error {
 // workSpent reads both of a counter's totals. A nil counter has spent nothing,
 // which is what step and reconstructionStep already treat it as.
 func workSpent(work *freeform.FreeformWork) (uint64, uint64) {
-	if work == nil {
-		return 0, 0
-	}
-	return work.Spent, work.ReconstructionSpent
+	return boundarywalk.WorkSpent(work)
 }
 
 // at returns the resolved walk for loop index loopIndex (0 the outer loop,
@@ -220,7 +198,7 @@ func (pw *profileWalks) loopWalks(loopIndex int) []survey2d.SegmentWalk {
 
 // matches reports whether pw was resolved from THIS profile: the same loops
 // in the same order, each holding the same recorded segments — the same
-// variant with the same field values, compared exactly (identicalRecord).
+// variant with the same field values, compared exactly by sectionrecord.IdenticalRecord.
 // Shape alone is not enough, and never was: two profiles can carry the same
 // outer, hole and per-hole segment counts while every coordinate differs, and
 // a set resolved from one read against the other would report the first
@@ -239,7 +217,7 @@ func (pw *profileWalks) matches(profile ProfileRecord) bool {
 	if pw == nil {
 		return false
 	}
-	return identicalRecord(pw.profile, profile)
+	return sectionrecord.IdenticalRecord(pw.profile, profile)
 }
 
 // loopMatches reports whether pw holds, at loop index loopIndex (the same
@@ -255,80 +233,7 @@ func (pw *profileWalks) loopMatches(loopIndex int, loop LoopRecord) bool {
 	if loopIndex < 0 || loopIndex >= len(loops) {
 		return false
 	}
-	return identicalRecord(loops[loopIndex], loop)
-}
-
-// identicalRecord reports whether two recorded values are the same record:
-// the same dynamic type throughout, and every field, element and float bit
-// equal. It is the exact structural comparison profileWalks' own guard rests
-// on, and it is deliberately stricter than a numeric comparison — floats are
-// compared by their BITS (math.Float64bits), so a value that merely rounds to
-// the same number, or a zero of the other sign, is a mismatch rather than a
-// match.
-//
-// The traversal is reflective rather than a per-variant type switch on the
-// sealed CurveSegment set, and that is the point: a hand-written comparator
-// that forgets a field a variant gains later would go on reporting two
-// different records as the same one, which is exactly the failure this guard
-// exists to prevent. Reflection covers a new field the moment it is declared.
-//
-// A shape the traversal does not know — a map, a channel, a function — is
-// reported as a mismatch, never as a match. Every refusal here is safe: it
-// costs the caller a cached read, which it can always resolve itself, whereas
-// a wrong match publishes another section's geometry as this one's.
-func identicalRecord(a, b any) bool {
-	return identicalRecordValue(reflect.ValueOf(a), reflect.ValueOf(b))
-}
-
-// identicalRecordValue is identicalRecord's traversal. The zero reflect.Value
-// (a nil interface handed to reflect.ValueOf) matches only another zero one.
-func identicalRecordValue(a, b reflect.Value) bool {
-	if !a.IsValid() || !b.IsValid() {
-		return a.IsValid() == b.IsValid()
-	}
-	if a.Type() != b.Type() {
-		return false
-	}
-	switch a.Kind() { //nolint:exhaustive // an unhandled kind is a mismatch, by the doc comment above.
-	case reflect.Bool:
-		return a.Bool() == b.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return a.Int() == b.Int()
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return a.Uint() == b.Uint()
-	case reflect.Float32, reflect.Float64:
-		// Float() widens a float32 exactly, so one comparison serves both.
-		return math.Float64bits(a.Float()) == math.Float64bits(b.Float())
-	case reflect.String:
-		return a.String() == b.String()
-	case reflect.Struct:
-		for i := range a.NumField() {
-			// Field reads an unexported field read-only, which is all this
-			// traversal ever does — units.Value's own magnitude and unit are
-			// unexported and are compared here like any other field.
-			if !identicalRecordValue(a.Field(i), b.Field(i)) {
-				return false
-			}
-		}
-		return true
-	case reflect.Slice, reflect.Array:
-		if a.Len() != b.Len() {
-			return false
-		}
-		for i := range a.Len() {
-			if !identicalRecordValue(a.Index(i), b.Index(i)) {
-				return false
-			}
-		}
-		return true
-	case reflect.Interface, reflect.Pointer:
-		if a.IsNil() || b.IsNil() {
-			return a.IsNil() && b.IsNil()
-		}
-		return identicalRecordValue(a.Elem(), b.Elem())
-	default:
-		return false
-	}
+	return sectionrecord.IdenticalRecord(loops[loopIndex], loop)
 }
 
 // errResolvedWalksMismatch reports a *profileWalks handed to a consumer that
