@@ -1378,3 +1378,5 @@
 2	0.05	TestVerifyLinkageOutAndBackPin
 1	0.50	TestVerifyLinkageSymmetricBody
 1	3.56	TestVerifyLinkageLoopProjection
+2	5.55	TestVerifyLinkageSlotKeepsItsBox
+1	0.38	TestVerifyLinkageTiltedPendulum

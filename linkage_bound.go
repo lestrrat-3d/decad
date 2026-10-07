@@ -574,23 +574,38 @@ func sweptBoxesLower(aLo, aHi, bLo, bHi motionbound.RatVec) (float64, bool) {
 }
 
 // cornerReading is one body's docs/linkage-check-design.md §5.8 reading at
-// one configuration: the eight corners of its inflated rest box under the
-// ideal poses of the joints on its relative path, and each corner's velocity
-// under each of those joints alone. Every entry is a rational interval that
-// encloses the exact value for every member of the ideal poses' enclosures.
+// one configuration: a finite set of points whose convex hull holds the body
+// — the eight corners of its inflated rest box, or its hull points
+// (bodyHullPoints) — under the ideal poses of the joints on its relative
+// path, and each point's velocity under each of those joints alone. Every
+// entry is a rational interval that encloses the exact value for every member
+// of the ideal poses' enclosures.
 type cornerReading struct {
-	pos [8]motionbound.IvVec
-	// vel holds, per corner, its velocity under each joint on the relative
+	pos []motionbound.IvVec
+	// vel holds, per point, its velocity under each joint on the relative
 	// path, shallowest first: ω × (x − o) for a revolute, the unit direction
 	// for a prismatic, per radian or per millimetre of the joint's value.
-	vel [8][]motionbound.IvVec
+	vel [][]motionbound.IvVec
+	// pad is the radius of the ball around every point the body may reach
+	// beyond the points' hull; nil for none.
+	pad *big.Rat
+	// prismK is the vertex count of a prism's outer loop when the points are
+	// its hull points, the k bottom vertices then the k top ones; 0 for box
+	// corners.
+	prismK int
 }
 
 // staticCorners is the corner reading of a box no joint moves: its eight
 // corners as points, with no velocity.
 func staticCorners(lo, hi motionbound.RatVec) cornerReading {
-	var out cornerReading
-	for c, x := range boxCorners(lo, hi) {
+	corners := boxCorners(lo, hi)
+	return staticPoints(corners[:])
+}
+
+// staticPoints is the reading of points no joint moves, with no velocity.
+func staticPoints(points []motionbound.RatVec) cornerReading {
+	out := cornerReading{pos: make([]motionbound.IvVec, len(points)), vel: make([][]motionbound.IvVec, len(points))}
+	for c, x := range points {
 		out.pos[c] = motionbound.PointVec(x)
 	}
 	return out
@@ -630,6 +645,13 @@ func ivAbsUpper(iv proofbound.RatInterval) *big.Rat {
 // that pose's rotation, and a prismatic's direction is turned the same way.
 // lo and hi are the body's Bounds box inflated by its own Bound.
 func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, lo, hi motionbound.RatVec) cornerReading {
+	corners := boxCorners(lo, hi)
+	return readPoints(spec, frames, params, b, below, staticPoints(corners[:]))
+}
+
+// readPoints is readCorners over any static point reading: each point mapped
+// through the relative pose and given its velocity under each joint.
+func readPoints(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) cornerReading {
 	type jointAt struct {
 		revolute    bool
 		unit, pivot motionbound.IvVec
@@ -652,7 +674,6 @@ func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []m
 		joints = append(joints, jointAt{revolute: spec.joints[i].revolute, unit: unit, pivot: pivot})
 		pose = &ideal
 	}
-	out := staticCorners(lo, hi)
 	for c := range out.pos {
 		if pose != nil {
 			out.pos[c] = applyIdeal(*pose, out.pos[c])
@@ -719,10 +740,13 @@ func projectionRemainder(b linkBound, below int, h []*big.Rat) *big.Rat {
 // component's enclosure widened to the floats around it. Rounding outward
 // only weakens the bound the values enter.
 type cornerBounds struct {
-	lo, hi [8][3]*big.Rat
-	// vel holds, per corner and per joint on the relative path, each
+	lo, hi [][3]*big.Rat
+	// vel holds, per point and per joint on the relative path, each
 	// velocity component's enclosure.
-	vel [8][][3]proofbound.RatInterval
+	vel [][][3]proofbound.RatInterval
+	// pad and prismK are the reading's own (cornerReading).
+	pad    *big.Rat
+	prismK int
 }
 
 // roundOut widens an enclosure to the floats around it, read back as exact
@@ -739,7 +763,10 @@ func roundOut(iv proofbound.RatInterval) (proofbound.RatInterval, bool) {
 // roundCorners rounds a corner reading outward (cornerBounds); ok is false
 // when a value overflows a float.
 func roundCorners(r cornerReading) (cornerBounds, bool) {
-	var out cornerBounds
+	out := cornerBounds{
+		lo: make([][3]*big.Rat, len(r.pos)), hi: make([][3]*big.Rat, len(r.pos)),
+		vel: make([][][3]proofbound.RatInterval, len(r.pos)), pad: r.pad, prismK: r.prismK,
+	}
 	for c := range r.pos {
 		for d := range 3 {
 			iv, ok := roundOut(r.pos[c][d])
@@ -961,4 +988,200 @@ func symmetricAboutJoint(b *Body, jt linkJoint, f motionbound.MotionFrame) bool 
 func withoutOwnJoint(b linkBound) linkBound {
 	n := len(b.path) - 1
 	return linkBound{path: b.path[:n], rho: b.rho[:n], reach: b.reach}
+}
+
+// bodyHullPoints is docs/linkage-check-design.md §5.8's hull point reading of
+// a body: points whose convex hull, padded by a ball of radius pad, holds the
+// body the payload denotes. A straight prism whose outer loop is all line
+// segments answers its outer vertices at its two levels, k bottom then k top,
+// each the exact rational image of its recorded floats through the frame and
+// the placement read exactly, and pad = 4·√3 times the largest of its section
+// and level displacements, rounded up — the charge prismPointBound makes
+// through the two near-orthonormal maps. ok is false for any other payload.
+func bodyHullPoints(b *Body) (points []motionbound.RatVec, pad *big.Rat, k int, ok bool) {
+	pp, isPrism := b.payload.(prismPayload)
+	if !isPrism || len(pp.profile.Outer.Segments) < 3 {
+		return nil, nil, 0, false
+	}
+	ratOf := func(v r3.Vec) (motionbound.RatVec, bool) { return motionbound.RatVecOf(v) }
+	origin, okO := ratOf(pp.frame.Origin())
+	fu, okU := ratOf(pp.frame.U())
+	fv, okV := ratOf(pp.frame.V())
+	fn, okN := ratOf(pp.frame.N())
+	basis := pp.xform.Basis()
+	ex, okX := ratOf(basis.EX)
+	ey, okY := ratOf(basis.EY)
+	ez, okZ := ratOf(basis.EZ)
+	shift, okT := ratOf(pp.xform.Translation())
+	if !okO || !okU || !okV || !okN || !okX || !okY || !okZ || !okT {
+		return nil, nil, 0, false
+	}
+	lift := func(u, v, z *big.Rat) motionbound.RatVec {
+		var local, out motionbound.RatVec
+		for i := range 3 {
+			local[i] = proofbound.RatAdd(origin[i], proofbound.RatMul(fu[i], u), proofbound.RatMul(fv[i], v), proofbound.RatMul(fn[i], z))
+		}
+		for i := range 3 {
+			out[i] = proofbound.RatAdd(proofbound.RatMul(ex[i], local[0]), proofbound.RatMul(ey[i], local[1]),
+				proofbound.RatMul(ez[i], local[2]), shift[i])
+		}
+		return out
+	}
+	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
+	if z0 == nil || z1 == nil {
+		return nil, nil, 0, false
+	}
+	k = len(pp.profile.Outer.Segments)
+	points = make([]motionbound.RatVec, 2*k)
+	for n, seg := range pp.profile.Outer.Segments {
+		line, isLine := seg.(LineSeg)
+		if !isLine {
+			return nil, nil, 0, false
+		}
+		u, v := proofarith.FloatRat(line.Start.U), proofarith.FloatRat(line.Start.V)
+		if u == nil || v == nil {
+			return nil, nil, 0, false
+		}
+		points[n], points[k+n] = lift(u, v, z0), lift(u, v, z1)
+	}
+	padF := proofbound.ProductUpper(4, proofbound.Radius3D(max(pp.sectionDelta, pp.z0Delta, pp.z1Delta)))
+	if pad = proofarith.FloatRat(padF); pad == nil {
+		return nil, nil, 0, false
+	}
+	return points, pad, k, true
+}
+
+// faceNormals is docs/linkage-check-design.md §5.8's candidate directions
+// read off a point reading: for a prism's hull points, its extrusion
+// direction and each side face's normal, the cross product of the side's
+// bottom edge with that direction; for box corners, the three edge
+// directions at the first corner. Each is formed in float from the readings'
+// lower ends and read exactly: any fixed nonzero vector serves as n, so none
+// needs a proof, and a zero or non-finite one is skipped.
+func faceNormals(c cornerBounds) []motionbound.RatVec {
+	at := func(n int) r3.Vec {
+		f := func(q *big.Rat) float64 { v, _ := q.Float64(); return v }
+		return r3.NewVec(f(c.lo[n][0]), f(c.lo[n][1]), f(c.lo[n][2]))
+	}
+	var vecs []r3.Vec
+	switch {
+	case c.prismK >= 3 && len(c.lo) == 2*c.prismK:
+		k := c.prismK
+		axis := at(k).Sub(at(0))
+		vecs = append(vecs, axis)
+		for n := range k {
+			edge := at((n + 1) % k).Sub(at(n))
+			vecs = append(vecs, edge.Cross(axis))
+		}
+	case len(c.lo) == 8:
+		vecs = append(vecs, at(1).Sub(at(0)), at(2).Sub(at(0)), at(4).Sub(at(0)))
+	}
+	var out []motionbound.RatVec
+	for _, v := range vecs {
+		if r, ok := motionbound.RatVecOf(v); ok && !ratZero(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// extentsAlong is projectionSide.extents along any nonzero direction n:
+// proven upper bounds on n·x (up) and on −n·x (down) over the body at every
+// parameter of the interval, before its pad. The remainder bounds a vector,
+// so it is charged Rem·norm, norm an upper bound on |n|.
+func (s projectionSide) extentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.Rat) {
+	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
+		sum := proofbound.PointInterval(new(big.Rat))
+		for d := range 3 {
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(p[d], n[d]))
+		}
+		return sum
+	}
+	for c := range s.corners.hi {
+		pos := dot([3]proofbound.RatInterval{
+			proofbound.IntervalOwned(s.corners.lo[c][0], s.corners.hi[c][0]),
+			proofbound.IntervalOwned(s.corners.lo[c][1], s.corners.hi[c][1]),
+			proofbound.IntervalOwned(s.corners.lo[c][2], s.corners.hi[c][2]),
+		})
+		linUp, linDown := new(big.Rat), new(big.Rat)
+		if s.seg != nil {
+			sum := proofbound.PointInterval(new(big.Rat))
+			for j, v := range s.corners.vel[c] {
+				sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(dot(v), s.seg[j]))
+			}
+			if sum.Hi.Sign() > 0 {
+				linUp.Set(sum.Hi)
+			}
+			if sum.Lo.Sign() < 0 {
+				linDown.Neg(sum.Lo)
+			}
+		} else {
+			for j, v := range s.corners.vel[c] {
+				if s.h[j].Sign() == 0 {
+					continue
+				}
+				term := ivAbsUpper(dot(v))
+				linUp.Add(linUp, term.Mul(term, s.h[j]))
+			}
+			linDown.Set(linUp)
+		}
+		hi := linUp.Add(linUp, pos.Hi)
+		lo := linDown.Sub(linDown, pos.Lo)
+		if up == nil || hi.Cmp(up) > 0 {
+			up = hi
+		}
+		if down == nil || lo.Cmp(down) > 0 {
+			down = lo
+		}
+	}
+	if s.rem != nil {
+		rem := new(big.Rat).Mul(s.rem, norm)
+		up.Add(up, rem)
+		down.Add(down, rem)
+	}
+	return up, down
+}
+
+// projectionLowerHull is docs/linkage-check-design.md §5.8's hull bound for
+// a pair whose two sides read hull points: the largest L_n over the six
+// coordinate directions and every face normal of either side, each
+// numerator divided by |n| rounded up when positive and down otherwise, less
+// both pads; nil when no direction can be normed.
+func projectionLowerHull(a, b projectionSide) *big.Rat {
+	one, zero := big.NewRat(1, 1), new(big.Rat)
+	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
+	dirs = append(dirs, faceNormals(a.corners)...)
+	dirs = append(dirs, faceNormals(b.corners)...)
+	pads := new(big.Rat)
+	for _, p := range []*big.Rat{a.corners.pad, b.corners.pad} {
+		if p != nil {
+			pads.Add(pads, p)
+		}
+	}
+	var best *big.Rat
+	for _, n := range dirs {
+		sq := axisSq(n)
+		normUp := sqrtUpRat(sq)
+		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
+		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
+			continue
+		}
+		aUp, aDown := a.extentsAlong(n, normUp)
+		bUp, bDown := b.extentsAlong(n, normUp)
+		for _, num := range []*big.Rat{
+			new(big.Rat).Neg(new(big.Rat).Add(bDown, aUp)),
+			new(big.Rat).Neg(new(big.Rat).Add(bUp, aDown)),
+		} {
+			norm := normDown
+			if num.Sign() > 0 {
+				norm = normUp
+			}
+			l := num.Quo(num, norm)
+			l.Sub(l, pads)
+			if best == nil || l.Cmp(best) > 0 {
+				best = l
+			}
+		}
+	}
+	return best
 }

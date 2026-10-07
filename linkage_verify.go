@@ -221,6 +221,8 @@ type linkageDriver struct {
 	// (docs/linkage-check-design.md §5.8), once per pose, body and relative
 	// path, so a pose's reading serves both intervals it ends.
 	corners map[cornerKey]cornerBounds
+	// statics holds each static body's hull point reading, by its position.
+	statics map[int]cornerBounds
 }
 
 // cornerKey names one corner reading: a mover's own box under the joints on
@@ -228,6 +230,9 @@ type linkageDriver struct {
 type cornerKey struct {
 	pose         *motionPose
 	mover, below int
+	// hull marks the reading of the body's hull points (bodyHullPoints)
+	// rather than its box corners.
+	hull bool
 }
 
 // posesAt builds every link's float pose by linkageSpec.posesAt — the
@@ -364,7 +369,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 			}
 			remTheirs = projectionRemainder(theirs, below, hTheirs)
 		}
-		cm, ok := dr.cornersAt(end, i, mine, below)
+		cm, ok := dr.cornersAt(end, i, mine, below, false)
 		if !ok {
 			return nil
 		}
@@ -383,13 +388,28 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 			}
 			partner = projectionSide{corners: corners}
 		} else {
-			ct, ok := dr.cornersAt(end, other, theirs, below)
+			ct, ok := dr.cornersAt(end, other, theirs, below, false)
 			if !ok {
 				return nil
 			}
 			partner = projectionSide{corners: ct, h: hTheirs, seg: stepsFrom(segTheirs, backward), rem: remTheirs}
 		}
 		if l := projectionLower(side, partner); best == nil || l.Cmp(best) > 0 {
+			best = l
+		}
+		// The hull bound (§5.8): the same expansion over each body's hull
+		// points, along every candidate direction; the larger serves.
+		if side.corners, ok = dr.cornersAt(end, i, mine, below, true); !ok {
+			continue
+		}
+		if other < 0 {
+			if partner.corners, ok = dr.staticHull(k); !ok {
+				continue
+			}
+		} else if partner.corners, ok = dr.cornersAt(end, other, theirs, below, true); !ok {
+			continue
+		}
+		if l := projectionLowerHull(side, partner); l != nil && l.Cmp(best) > 0 {
 			best = l
 		}
 	}
@@ -479,12 +499,12 @@ func stepsFrom(steps []proofbound.RatInterval, backward bool) []proofbound.RatIn
 
 // cornersAt is mover m's corner reading at a pose under the joints on its
 // link's path from position below on, rounded outward, read once and kept.
-func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below int) (cornerBounds, bool) {
-	key := cornerKey{pose: pose, mover: m, below: below}
+func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below int, hull bool) (cornerBounds, bool) {
+	key := cornerKey{pose: pose, mover: m, below: below, hull: hull}
 	if got, ok := dr.corners[key]; ok {
 		return got, true
 	}
-	lo, hi, ok := boxCornersExact(dr.run.movers[m].body.bounds, new(big.Rat))
+	points, ok := bodyPoints(dr.run.movers[m].body, hull)
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -503,7 +523,7 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 		}
 		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: intervalMidpoint(at)}
 	}
-	reading, ok := roundCorners(readCorners(dr.spec, dr.frames, params, b, below, lo, hi))
+	reading, ok := roundCorners(readPoints(dr.spec, dr.frames, params, b, below, points))
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -512,6 +532,44 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 	}
 	dr.corners[key] = reading
 	return reading, true
+}
+
+// staticHull is static body k's hull point reading, read once and kept.
+func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
+	if got, ok := dr.statics[k]; ok {
+		return got, true
+	}
+	points, ok := bodyPoints(dr.run.statics[k].body, true)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	reading, ok := roundCorners(points)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	if dr.statics == nil {
+		dr.statics = make(map[int]cornerBounds)
+	}
+	dr.statics[k] = reading
+	return reading, true
+}
+
+// bodyPoints is a body's static point reading: its hull points when hull is
+// set and the body has them (bodyHullPoints), and otherwise the eight corners
+// of its Bounds box inflated by its own Bound.
+func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
+	if hull {
+		if points, pad, k, ok := bodyHullPoints(b); ok {
+			reading := staticPoints(points)
+			reading.pad, reading.prismK = pad, k
+			return reading, true
+		}
+	}
+	lo, hi, ok := boxCornersExact(b.bounds, new(big.Rat))
+	if !ok {
+		return cornerReading{}, false
+	}
+	return staticCorners(lo, hi), true
 }
 
 // publishLinkage assembles VerifyLinkage's report

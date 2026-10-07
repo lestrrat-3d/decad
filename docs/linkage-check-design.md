@@ -688,17 +688,40 @@ radian of its three joints, which the box form charges as `7.1` and the segment 
 `0`. The interval form is then second order on a drive, as the cell form is in a box, and the reading
 closes once `Rem(|Δq|)` falls under about `rel·gap/2`.
 
-**Where it is loose, and what still holds.** The bound is as tight as the two boxes are along `n`. A body
-whose extreme along `n` lies inside its box corner's image is charged the corner: a disc or a cylinder
+**Where it is loose, and what still holds.** The bound is as tight as the two point sets below are along
+`n`. A body whose extreme along `n` lies inside its points' hull is charged the hull: a disc or a cylinder
 turning about an axis near its own but not on it — so §5.2's symmetry rule does not drop the joint —
 keeps every point within about its radius `r` of the axis while its box corner sweeps a circle of radius
 `r·√2`, so between the quarter turns `sep_n` falls short of the gap by up to `(√2 − 1)·r`, the travel
 bound is the larger, and the pair pays §10's linear cost as before — §11's disc `1e-9` mm off its axis
-evaluates `513` poses either way, while the same disc on its axis evaluates `2`. A partner met along a direction off the coordinate axes,
-a tilted wall, is charged its box corner the same way. In both the certificate is still the larger of
-two proven bounds, so no interval or cell reads worse than under the travel bound alone. A tighter support
-of a body along `n`, read from the clearance kernel's own carriers, and the kernel's closest-point
-direction as a seventh candidate `n`, are later tightenings that change no soundness argument.
+evaluates `513` poses either way, while the same disc on its axis evaluates `2`. In every case the
+certificate is still the larger of proven bounds, so no interval or cell reads worse than under the
+travel bound alone.
+
+**A body's hull points.** The argument above needs only a finite set of points whose convex hull holds
+the body; the inflated box's eight corners are one. A straight prism whose outer loop is all line segments
+lies in the hull of that loop's vertices at its two levels — a region lies in the hull of its boundary,
+and a polygon's hull is its vertices' — and an affine map keeps hull containment, so the vertices mapped
+exactly through the payload's own frame and placement, read as the exact rationals of their floats, are
+another such set. The payload's own displacement bounds — the section's and each level's (§5.3,
+`prismPayload`) — move the denoted body off that exact image by at most `4·√3` times the largest, the
+charge `prismPointBound` already makes through the two near-orthonormal maps, and that **pad** is a ball
+around every hull point, worth `pad` along any unit `n`. A tilted block, the rotated bar of a tilted loop,
+a wall set off the coordinate axes: each is read at its own vertices, not at the corners of the box around
+it. Every other payload keeps its box corners.
+
+**More directions.** `L_n` is a lower bound for any fixed nonzero `n`, unit or not, once divided by `|n|`:
+`|a − b|·|n| ≥ n·(b − a)`. So the choice of `n` needs no proof, and decad tries, beside the six coordinate
+directions, every face normal of either body's hull points at the end — for a prism, its extrusion
+direction and the normal of each side face, the cross product of the side's edge with that direction,
+each read from the midpoints of the readings in float and both senses — the direction a tilted wall is
+met along. The numerator is exact, and it is divided by `|n|` rounded up when it is positive and rounded
+down otherwise, so the quotient is a lower bound either way; the pads come off after the division. The
+remainder bounds a vector, so along `n` it is charged `Rem·|n|`, rounded up.
+
+**Two bounds, the larger.** For each pair the projection bound is the larger of the box-corner bound over
+the six coordinate directions and the hull-point bound over every candidate direction: two proven lower
+bounds, so their maximum is one, and no interval reads worse than under the box corners alone.
 
 **Over a loop's dependent joint.** A dependent joint's value at a pose is an enclosure `E_e` (§15.4) and
 over an interval it lies in the hull `H` that §15.5 reads, never an exact value; the expansion takes it
@@ -825,6 +848,21 @@ each of its ends, which is at least the minimum over it.
   interval against the hand sum, red when the remainder or the first-order term is dropped; and the
   certificate taking the larger bound — on the disc of §11 every interval's bound equals the travel
   bound's bit for bit, red when the projection bound is taken alone.
+- **The tilted pendulum (hull points and directions).** Scene 13 carried by the rotation that takes `X`
+  to `(1, −1, 0)/√2` and `Z` to `(1, 1, 1)/√3`, block and wall placed by it and the joint about the tilt
+  of `Z`: every distance is scene 13's, but the wall is met along no coordinate direction and both boxes
+  stand far outside their bodies. At `WithMotionTolerance(Scalar(1e-5))` assert `Sound`, the reading
+  enclosing `15`, every `IntervalClear` interval at or below `g` at its ends; red when the hull bound is
+  dropped and when the face normals are (the reading stops at the reading floor beyond tolerance).
+  Measured: `11` poses, as untilted.
+- **The slot (the line-segment test).** A slot, cap centres `(0, 45)` and `(0, 85)` with radius `5`,
+  rocks `−20° → 20°` about `Z` through the origin under a wall `y ∈ [95, 105]`: its top cap reaches
+  `85·cos θ + 5`, a flat minimum of `5` mm upright, `5` mm above its segments' start points. Assert every
+  `IntervalClear` interval at or below `90 − 85·cos θ` at its ends and the reading enclosing `5`; red when
+  an outer loop with an arc is read at its start points. The internal test pins a block's eight hull
+  points exactly, a displaced level's pad of `4·√3` times the displacement, and two blocks `10` mm apart
+  read `10` by the hull bound and `9.25` padded by `0.5` and `0.25`; red when the pad or the pads in the
+  bound are dropped.
 - **Agreement with `VerifyMotion`** (§11) is restated. At the endpoints alone, on motion §9's fixtures 1,
   2 and 4, neither bound certifies the one interval and the two reports agree in every reading.
   Bisected, `VerifyMotion` keeps the travel bound alone and the linkage certifies some intervals sooner
@@ -1708,6 +1746,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | S2 (`linkage_box.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
 | D1 (`linkage_loop.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
 | D2 (`linkage_box.go`: `dependentReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
+| H1 (`linkage_bound.go`: `bodyHullPoints`, the point readings, `extentsAlong` and the hull bound over every candidate direction; `linkage_verify.go`: the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
@@ -1720,11 +1759,8 @@ Where the projection bound is the larger they raise interval and cell lower boun
 intervals and cells clear, and evaluate fewer poses or centres. The whole-drive reading is then read over
 fewer poses and closes at the first step that meets the gate, so its interval can sit slightly higher or
 wider while inside the gate; each test that pins a measured count is re-measured in the PR that moves it.
-Later increments, each a tightening with no soundness change (§5.8): the kernel's closest-point direction
-as a seventh `n`;
-a body's own support along `n` from the kernel's carriers, for discs and tilted contacts; the same
-certificate for `VerifyMotion`, which changes motion §9 test
-2's default-resolution leg and its reports.
+A later increment, a tightening with no soundness change (§5.8): the same certificate for `VerifyMotion`,
+which changes motion §9 test 2's default-resolution leg and its reports.
 
 ### 14.10 Settled points
 
@@ -1739,10 +1775,10 @@ the one whose halving lowers `τ_half` most for the pair that held the cell back
 (§14.1, §14.4). Leaves tile the box; a split cell's collisions stay in the report (§14.2). One diagnostic
 code and one `Diagnostic` field are added (§14.2). A pair's bound over a cell, and over a drive's
 interval, is the larger of the travel bound and the projection bound: the gap bounded below by the
-bodies' separation along a coordinate direction, each body's rest-box corners expanded to second order in
-the joint values from the centre or an end, with the remainder proven from `ρ` (§5.8, §14.3). The six
-coordinate directions are the only candidates in v1, and `VerifyMotion` keeps the travel bound alone
-(§5.8).
+bodies' separation along a direction, each body's rest-box corners — or, on a drive, its hull points —
+expanded to second order in the joint values from the centre or an end, with the remainder proven from
+`ρ` (§5.8, §14.3). The candidate directions are the six coordinate directions and, on a drive, the face
+normals of either body's hull points; `VerifyMotion` keeps the travel bound alone (§5.8).
 
 ## 15. Closed loops
 
@@ -2169,7 +2205,7 @@ An `Enclose` point ask costs about a millisecond on the crank-rocker; a cell cos
 pieces (`0.4` s). The decomposition asks a certifiable drive as one cell. A pose at depth `d` asks at most
 `d` new cells and one point, and the cells of one depth tile the drive once, so a verification that
 reaches depth `d` everywhere asks about `d` times the full-range work. Measured: scene 7 at
-`WithResolution(Scalar(1.0/256))` evaluates `34` poses in about `0.4` s; scene 9 at the defaults evaluates
+`WithResolution(Scalar(1.0/256))` evaluates `22` poses in about `0.3` s; scene 9 at the defaults evaluates
 `8` poses in about `0.7` s, most of it the decomposition walking the refused cells down to the fold; scene
 8 at `WithResolution(Scalar(1.0/256))` evaluates `10` poses in about `0.1` s. The
 kernel cost per pose is §10's. A tilted loop costs the scene nothing measurable, but on a tilted
@@ -2204,7 +2240,7 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
   66.792358°`, `s₂ = 0.742137`. At `WithResolution(Scalar(1.0/256))` assert: `Status` `Interfering`; the
   first `LinkCollision` is `(follower, wall)` at the grid point `36/256`, the first above `s₁`; every
   collision lies in `(s₁, s₂)` with `Bound` below `Value`; every `IntervalClear` interval ends at or below
-  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`. Measured: `34` poses.
+  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`. Measured: `22` poses.
 - At `θ2 = 38.671875°`, the grid point `110/256` nearest the follower's minimum, as the end of a drive
   `0° → 38.671875°` evaluated at its endpoints alone: the corner's depth `δ = y − 68.5` is below
   `8·|cos θ4|`, so the overlap is the triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³, asserted within
