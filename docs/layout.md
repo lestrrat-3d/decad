@@ -200,7 +200,7 @@ the rules leave to the byte budget.
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See `docs/linkage-check-design.md`. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
-| `linkage_bound.go` | The chain travel bound. See its doc comment. |
+| `linkage_bound.go` | The chain travel and projection bounds. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_memo.go` | Sweep run and sweep radius memos. See `docs/contact-sweep-design.md` §7. |

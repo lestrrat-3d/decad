@@ -41,6 +41,7 @@
 0	0.06	TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans
 0	0.01	TestJointBoxHalfTravel
 0	0.01	TestLinkageIdealPoseComposesTheChain
+0	0.06	TestLinkageSecondDerivativeBound
 0	0.11	TestLoftArcWedgeReadingsApproximateWithPositiveBounds
 0	0.01	TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit
 0	1.31	TestLoftCrossingAuditBroadPhaseCutsClassificationWork
@@ -102,6 +103,7 @@
 1	0.24	TestFreeformArcLengthReportsPositiveBound
 1	0.02	TestFreeformWalkRefusedByAnalyticConsumers
 1	0.01	TestJointBoxSplitAxis
+1	3.01	TestLinkageProjectionLeavesTheDiscToTheTravelBound
 1	0.01	TestLoftArcPairDriftedEndChargesRadialResidual
 1	0.06	TestLoftArcToFitSplineStillRefusesS3
 1	0.10	TestLoftChordCalibrationTrueOutlineIsTheChordedTwin
@@ -451,6 +453,8 @@
 3	9.66	TestLineWalkBoundsDyadicMatchRational
 3	0.01	TestLinkageChainTravel
 3	0.01	TestLinkageChainTravelAcrossWaypoints
+3	0.01	TestLinkageCornerVelocity
+3	0.01	TestLinkageProjectionBoundHandSum
 3	0.00	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
 3	0.00	TestLoftArcSegAgainstCircleSegRefusesS3
 3	0.00	TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit

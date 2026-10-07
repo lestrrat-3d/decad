@@ -7,7 +7,9 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -207,6 +209,17 @@ type linkageDriver struct {
 	standing []linkStanding // per link, §6 step 2
 	frames   []motionbound.MotionFrame
 	bounds   []linkBound
+	// corners holds every corner reading the projection bound has read
+	// (docs/linkage-check-design.md §5.8), once per pose, body and relative
+	// path, so a pose's reading serves both intervals it ends.
+	corners map[cornerKey]cornerBounds
+}
+
+// cornerKey names one corner reading: a mover's own box under the joints on
+// its link's path from position below on, at one pose.
+type cornerKey struct {
+	pose         *motionPose
+	mover, below int
 }
 
 // posesAt builds every link's float pose by linkageSpec.posesAt — the
@@ -273,6 +286,119 @@ func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 	below := commonDepth(mine.path, theirs.path)
 	tau := chainTravel(dr.spec, mine, below, a.Base, b.Base)
 	return tau.Add(tau, chainTravel(dr.spec, theirs, below, a.Base, b.Base))
+}
+
+// projection is the projection bound of docs/linkage-check-design.md §5.8
+// for pair k of mover i over the interval between poses a and b: each body's
+// inflated box expanded from each end to second order in its joints' travel
+// over the interval, the largest separation along the six coordinate
+// directions, the larger of the two ends' readings. A link-link pair drops
+// the joints at and above the two links' lowest common ancestor, as travel
+// does. It is nil when either body's relative path holds a loop's dependent
+// joint, whose value is an enclosure the expansion does not consume, or a box
+// cannot be read exactly.
+func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
+	r := dr.run
+	mine := dr.bounds[r.movers[i].group]
+	other := r.pairs[i][k].other
+	below := 0
+	var theirs linkBound
+	if other >= 0 {
+		theirs = dr.bounds[r.movers[other].group]
+		below = commonDepth(mine.path, theirs.path)
+	}
+	hMine, ok := dr.projectionSpans(mine, below, a.f, b.f)
+	if !ok {
+		return nil
+	}
+	var hTheirs []*big.Rat
+	if other >= 0 {
+		if hTheirs, ok = dr.projectionSpans(theirs, below, a.f, b.f); !ok {
+			return nil
+		}
+	}
+	remMine := projectionRemainder(mine, below, hMine)
+	var remTheirs *big.Rat
+	if other >= 0 {
+		remTheirs = projectionRemainder(theirs, below, hTheirs)
+	}
+	var best *big.Rat
+	for _, end := range []*motionPose{a, b} {
+		cm, ok := dr.cornersAt(end, i, mine, below)
+		if !ok {
+			return nil
+		}
+		side := projectionSide{corners: cm, h: hMine, rem: remMine}
+		var partner projectionSide
+		if other < 0 {
+			lo, hi, ok := boxCornersExact(r.statics[k].body.bounds, new(big.Rat))
+			if !ok {
+				return nil
+			}
+			corners, ok := roundCorners(staticCorners(lo, hi))
+			if !ok {
+				return nil
+			}
+			partner = projectionSide{corners: corners}
+		} else {
+			ct, ok := dr.cornersAt(end, other, theirs, below)
+			if !ok {
+				return nil
+			}
+			partner = projectionSide{corners: ct, h: hTheirs, rem: remTheirs}
+		}
+		if l := projectionLower(side, partner); best == nil || l.Cmp(best) > 0 {
+			best = l
+		}
+	}
+	return best
+}
+
+// projectionSpans is h of docs/linkage-check-design.md §5.8's interval form
+// for each joint on b's path from position below on: jointSpan's total
+// variation over [sa, sb], which bounds the joint's change from either end to
+// any parameter of the interval, rounded up to a float. ok is false when a
+// joint is a loop's dependent or a span overflows.
+func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat) ([]*big.Rat, bool) {
+	h := make([]*big.Rat, 0, len(b.path)-below)
+	for _, i := range b.path[below:] {
+		jt := dr.spec.joints[i]
+		if jt.dep != nil {
+			return nil, false
+		}
+		span := proofarith.FloatRat(proofbound.RatFloatUp(jointSpan(jt, sa, sb)))
+		if span == nil {
+			return nil, false
+		}
+		h = append(h, span)
+	}
+	return h, true
+}
+
+// cornersAt is mover m's corner reading at a pose under the joints on its
+// link's path from position below on, rounded outward, read once and kept.
+func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below int) (cornerBounds, bool) {
+	key := cornerKey{pose: pose, mover: m, below: below}
+	if got, ok := dr.corners[key]; ok {
+		return got, true
+	}
+	lo, hi, ok := boxCornersExact(dr.run.movers[m].body.bounds, new(big.Rat))
+	if !ok {
+		return cornerBounds{}, false
+	}
+	params := make([]motionbound.MotionParam, len(dr.spec.joints))
+	for _, i := range b.path[below:] {
+		params[i] = jointParam(dr.spec.joints[i], pose.f)
+	}
+	reading, ok := roundCorners(readCorners(dr.spec, dr.frames, params, b, below, lo, hi))
+	if !ok {
+		return cornerBounds{}, false
+	}
+	if dr.corners == nil {
+		dr.corners = make(map[cornerKey]cornerBounds)
+	}
+	dr.corners[key] = reading
+	return reading, true
 }
 
 // publishLinkage assembles VerifyLinkage's report

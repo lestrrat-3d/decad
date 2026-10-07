@@ -39,11 +39,12 @@ func narrowest(report *decad.LinkageReport) float64 {
 // TestVerifyLinkageReadingFloor pins docs/linkage-check-design.md §3's two
 // floors.
 //
-//   - At the defaults the three-joint arm of §10 settles its verdict by the
-//     verdict floor 1/1024 and refines its reading, around its one minimum
-//     (the wrist tip 10 mm from a post), down to the reading floor 1/16384:
-//     Sound, with the reading inside the gate, in 251 poses against 50 at
-//     the verdict floor alone.
+//   - At the defaults the three-joint arm of §10 closes its reading at the
+//     verdict floor (TestVerifyLinkageThreeJointFlatMinimum). Under a tighter
+//     tolerance, WithMotionTolerance(1e-4), the reading refines past the
+//     verdict floor 1/1024 around its one minimum (the wrist's corner 9.36 mm
+//     from a post) toward the reading floor 1/16384: Sound, with the reading
+//     inside the gate, in 47 poses.
 //   - Stated, WithResolution is both floors: at 1/64 the same arm stops its
 //     reading at 1/64, Suspect with the reading beyond tolerance.
 //   - A margin refines to the verdict floor only: scene 1's arms, settled by
@@ -61,10 +62,10 @@ func narrowest(report *decad.LinkageReport) float64 {
 // (the 3 mm margin's intervals refine past 1/1024).
 func TestVerifyLinkageReadingFloor(t *testing.T) {
 	t.Parallel()
-	t.Run("the three-joint arm reads Sound at the defaults", func(t *testing.T) {
+	t.Run("the three-joint arm refines its reading past the verdict floor", func(t *testing.T) {
 		t.Parallel()
 		doc, l, drive := threeJointArm(t)
-		report := verifyLinkage(t, doc, l, drive)
+		report := verifyLinkage(t, doc, l, drive, decad.WithMotionTolerance(units.Scalar(1e-4)))
 		require.Equal(t, decad.Sound, report.Status)
 		require.Empty(t, report.Diagnostics)
 		require.Equal(t, units.Scalar(1.0/1024), report.Request.Resolution)

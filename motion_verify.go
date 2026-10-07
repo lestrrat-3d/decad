@@ -391,6 +391,12 @@ type motionDriver interface {
 	// distance between the two bodies of pair k of mover i can change while
 	// the parameter runs from a to b; nil when no bound exists.
 	travel(i, k int, a, b motionbound.MotionParam) *big.Rat
+	// projection is a second proven lower bound, as an exact rational, on
+	// the distance between the two bodies of pair k of mover i at every
+	// parameter between the poses a and b, which certifies the pair alone
+	// when it is positive (docs/linkage-check-design.md §5.8); nil when the
+	// driver supplies none.
+	projection(i, k int, a, b *motionPose) *big.Rat
 }
 
 // motionGroupPose is one moving group's pose at one parameter: the float
@@ -690,6 +696,10 @@ func (m singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.Moti
 func (m singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
 	return motionbound.MoverTravel(m.r.spec.frame, m.r.movers[i].rho, a, b)
 }
+
+// projection is nil: VerifyMotion certifies an interval by the travel bound
+// alone (docs/linkage-check-design.md §5.8).
+func (singleMotion) projection(int, int, *motionPose, *motionPose) *big.Rat { return nil }
 
 // maxRat is the larger of two optional rationals; a nil (unbounded) operand
 // wins.
@@ -1219,10 +1229,12 @@ func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res 
 // (docs/motion-check-design.md §5.2). A proven collision at either end makes
 // it IntervalColliding. Otherwise it is IntervalClear only when EVERY pair
 // certifies: a swept-box-excluded pair by its whole-path lower bound, an
-// evaluated pair by lo_a + lo_b > τ — taken over exact rationals, so no
-// rounding sits between the proven terms and the strict comparison. The lower
-// envelope's minimum over the interval, (lo_a + lo_b − τ)/2, is rounded down
-// to the float the Clearance publishes.
+// evaluated pair by the larger of two proven lower bounds on its gap over the
+// interval being positive — the travel bound (lo_a + lo_b − τ)/2, the lower
+// envelope's minimum, and the driver's projection bound when it supplies one
+// (docs/linkage-check-design.md §5.8) — taken over exact rationals, so no
+// rounding sits between the proven terms and the strict comparison. That
+// larger bound is rounded down to the float the Clearance publishes.
 func (r *motionRun) intervalVerdict(a, b *motionPose) motionSpan {
 	for _, p := range []*motionPose{a, b} {
 		if p.unbuildable != nil {
@@ -1249,16 +1261,19 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 		if !pa.hasGap || !pb.hasGap {
 			return nil
 		}
-		tau := r.drive.travel(i, k, a.param, b.param)
-		if tau == nil {
+		var bound *big.Rat
+		if tau := r.drive.travel(i, k, a.param, b.param); tau != nil {
+			bound = new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
+			bound.Sub(bound, tau)
+			bound.Quo(bound, big.NewRat(2, 1))
+		}
+		if proj := r.drive.projection(i, k, a, b); proj != nil && (bound == nil || proj.Cmp(bound) > 0) {
+			bound = proj
+		}
+		if bound == nil || bound.Sign() <= 0 {
 			return nil
 		}
-		sum := new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
-		if sum.Cmp(tau) <= 0 {
-			return nil
-		}
-		envelope := sum.Sub(sum, tau)
-		return envelope.Quo(envelope, big.NewRat(2, 1))
+		return bound
 	}, nil)
 	if !ok {
 		return IntervalUndecided, nil

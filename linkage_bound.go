@@ -23,7 +23,11 @@ import (
 //     through balls carried down the path (§5.2);
 //   - the chain travel bound τ, summed joint by joint below a pair's lowest
 //     common ancestor (§5.2), and the reach the swept-box exclusion inflates a
-//     link body's box by (§6 step 4).
+//     link body's box by (§6 step 4);
+//   - the projection bound L_n (§5.8): each body's inflated box corners and
+//     their velocities under each joint at a pose, the second-derivative
+//     bounds B_ij and the remainder Rem they give over an interval, and the
+//     separation of two bodies along a coordinate direction that follows.
 //
 // Every square root is proofbound.RatSqrtUp, an up-rounded float read back as
 // an exact rational; every sum and product after it is big.Rat arithmetic.
@@ -566,4 +570,247 @@ func sweptBoxesLower(aLo, aHi, bLo, bHi motionbound.RatVec) (float64, bool) {
 	}
 	lower := proofbound.RatFloatDown(best)
 	return lower, lower > 0
+}
+
+// cornerReading is one body's docs/linkage-check-design.md §5.8 reading at
+// one configuration: the eight corners of its inflated rest box under the
+// ideal poses of the joints on its relative path, and each corner's velocity
+// under each of those joints alone. Every entry is a rational interval that
+// encloses the exact value for every member of the ideal poses' enclosures.
+type cornerReading struct {
+	pos [8]motionbound.IvVec
+	// vel holds, per corner, its velocity under each joint on the relative
+	// path, shallowest first: ω × (x − o) for a revolute, the unit direction
+	// for a prismatic, per radian or per millimetre of the joint's value.
+	vel [8][]motionbound.IvVec
+}
+
+// staticCorners is the corner reading of a box no joint moves: its eight
+// corners as points, with no velocity.
+func staticCorners(lo, hi motionbound.RatVec) cornerReading {
+	var out cornerReading
+	for c, x := range boxCorners(lo, hi) {
+		out.pos[c] = motionbound.PointVec(x)
+	}
+	return out
+}
+
+// applyIdeal maps an enclosed point through an ideal pose,
+// x ↦ rot·(x − pivot) + pivot + shift.
+func applyIdeal(p motionbound.IdealPose, x motionbound.IvVec) motionbound.IvVec {
+	return motionbound.IvVecAdd(motionbound.IvVecAdd(p.Rot.Apply(motionbound.IvVecSub(x, p.Pivot)), p.Pivot), p.Shift)
+}
+
+// ivCross is the cross product a × b over rational intervals.
+func ivCross(a, b motionbound.IvVec) motionbound.IvVec {
+	term := func(i, j int) proofbound.RatInterval {
+		return proofbound.IntervalSub(proofbound.IntervalMul(a[i], b[j]), proofbound.IntervalMul(a[j], b[i]))
+	}
+	return motionbound.IvVec{term(1, 2), term(2, 0), term(0, 1)}
+}
+
+// ivAbsUpper is the largest magnitude an enclosure allows.
+func ivAbsUpper(iv proofbound.RatInterval) *big.Rat {
+	out := new(big.Rat).Abs(iv.Lo)
+	if hi := new(big.Rat).Abs(iv.Hi); hi.Cmp(out) > 0 {
+		out = hi
+	}
+	return out
+}
+
+// readCorners is docs/linkage-check-design.md §5.8's reading of one body of
+// link b at the exact joint values params, under the joints on b's path from
+// position below on — the joints strictly below a pair's lowest common
+// ancestor, whose rigid motion above that ancestor changes no distance. The
+// relative pose composes those joints' ideal motions exactly as
+// idealPosesOf composes a link's, starting from the identity; joint i's axis
+// at the configuration runs through o_i, the image of its Center under the
+// relative pose of the joints above it, along ω_i, its unit Axis turned by
+// that pose's rotation, and a prismatic's direction is turned the same way.
+// lo and hi are the body's Bounds box inflated by its own Bound.
+func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, lo, hi motionbound.RatVec) cornerReading {
+	type jointAt struct {
+		revolute    bool
+		unit, pivot motionbound.IvVec
+	}
+	joints := make([]jointAt, 0, len(b.path)-below)
+	var pose *motionbound.IdealPose
+	for _, i := range b.path[below:] {
+		f := frames[i]
+		var unit motionbound.IvVec
+		for d := range 3 {
+			unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
+		}
+		pivot := motionbound.PointVec(f.Center)
+		ideal := f.At(params[i])
+		if pose != nil {
+			unit = pose.Rot.Apply(unit)
+			pivot = applyIdeal(*pose, pivot)
+			ideal = ideal.Then(*pose)
+		}
+		joints = append(joints, jointAt{revolute: spec.joints[i].revolute, unit: unit, pivot: pivot})
+		pose = &ideal
+	}
+	out := staticCorners(lo, hi)
+	for c := range out.pos {
+		if pose != nil {
+			out.pos[c] = applyIdeal(*pose, out.pos[c])
+		}
+		out.vel[c] = make([]motionbound.IvVec, len(joints))
+		for n, j := range joints {
+			if !j.revolute {
+				out.vel[c][n] = j.unit
+				continue
+			}
+			out.vel[c][n] = ivCross(j.unit, motionbound.IvVecSub(out.pos[c], j.pivot))
+		}
+	}
+	return out
+}
+
+// secondDerivativeBound is B_ij of docs/linkage-check-design.md §5.8 for
+// the joints at positions m ≤ n of b's path, m the shallower: a proven upper
+// bound on |∂²x_c/∂q_i∂q_j| for every corner c of the link at every
+// configuration the drive reaches. The shallower joint turns the deeper
+// one's velocity, whose length is at most w_j — ρ_jk for a revolute joint j,
+// 1 for a prismatic one — so B_ij = w_j when the shallower joint is a
+// revolute; a prismatic shallower joint turns nothing, and B_ij is 0, nil
+// here.
+func secondDerivativeBound(b linkBound, m, n int) *big.Rat {
+	if b.rho[m] == nil {
+		return nil
+	}
+	if w := b.rho[n]; w != nil {
+		return w
+	}
+	return big.NewRat(1, 1)
+}
+
+// projectionRemainder is Rem(h) = ½·Σ_{i,j} B_ij·h_i·h_j of
+// docs/linkage-check-design.md §5.8 over the joints on b's path from
+// position below on, h holding each one's travel bound in path order: by
+// Taylor's theorem along the straight segment in joint space, it bounds how
+// far a corner's position departs from its first-order expansion.
+func projectionRemainder(b linkBound, below int, h []*big.Rat) *big.Rat {
+	sum := new(big.Rat)
+	half := big.NewRat(1, 2)
+	for m := range h {
+		for n := m; n < len(h); n++ {
+			w := secondDerivativeBound(b, below+m, below+n)
+			if w == nil {
+				continue
+			}
+			term := new(big.Rat).Mul(h[m], h[n])
+			term.Mul(term, w)
+			if n == m {
+				term.Mul(term, half)
+			}
+			sum.Add(sum, term)
+		}
+	}
+	return sum
+}
+
+// cornerBounds is a corner reading rounded outward to floats and read back
+// as exact rationals, so the per-interval sums of docs/linkage-check-design.md
+// §5.8 run over short dyadics rather than the long rationals of composed
+// rotations: each corner coordinate's enclosure widened to the floats around
+// it, and each velocity component's largest magnitude rounded up. Rounding
+// outward only weakens the bound the values enter.
+type cornerBounds struct {
+	lo, hi [8][3]*big.Rat
+	// speed holds, per corner and per joint on the relative path, an upper
+	// bound on each velocity component's magnitude.
+	speed [8][][3]*big.Rat
+}
+
+// roundCorners rounds a corner reading outward (cornerBounds); ok is false
+// when a value overflows a float.
+func roundCorners(r cornerReading) (cornerBounds, bool) {
+	var out cornerBounds
+	down := func(q *big.Rat) *big.Rat { return proofarith.FloatRat(proofbound.RatFloatDown(q)) }
+	up := func(q *big.Rat) *big.Rat { return proofarith.FloatRat(proofbound.RatFloatUp(q)) }
+	for c := range r.pos {
+		for d := range 3 {
+			out.lo[c][d], out.hi[c][d] = down(r.pos[c][d].Lo), up(r.pos[c][d].Hi)
+			if out.lo[c][d] == nil || out.hi[c][d] == nil {
+				return cornerBounds{}, false
+			}
+		}
+		out.speed[c] = make([][3]*big.Rat, len(r.vel[c]))
+		for n, v := range r.vel[c] {
+			for d := range 3 {
+				if out.speed[c][n][d] = up(ivAbsUpper(v[d])); out.speed[c][n][d] == nil {
+					return cornerBounds{}, false
+				}
+			}
+		}
+	}
+	return out, true
+}
+
+// projectionSide is one body of a pair as docs/linkage-check-design.md §5.8
+// expands it over an interval: its rounded corner reading at one end, the
+// travel bound h of each joint on its relative path over the interval, and
+// the remainder those give. A static body has no joint and no remainder.
+type projectionSide struct {
+	corners cornerBounds
+	h       []*big.Rat
+	rem     *big.Rat
+}
+
+// extents are proven upper bounds on x[axis] (up) and on −x[axis] (down)
+// over the body at every parameter of the interval, per axis: the largest
+// over its corners of the corner's coordinate end plus each joint's
+// first-order term |v[axis]|·h, then the remainder.
+func (s projectionSide) extents() (up, down [3]*big.Rat) {
+	for c := range s.corners.hi {
+		for d := range 3 {
+			lin := new(big.Rat)
+			for n, speed := range s.corners.speed[c] {
+				if s.h[n].Sign() == 0 {
+					continue
+				}
+				lin.Add(lin, new(big.Rat).Mul(speed[d], s.h[n]))
+			}
+			hi := new(big.Rat).Add(s.corners.hi[c][d], lin)
+			lo := lin.Sub(lin, s.corners.lo[c][d])
+			if up[d] == nil || hi.Cmp(up[d]) > 0 {
+				up[d] = hi
+			}
+			if down[d] == nil || lo.Cmp(down[d]) > 0 {
+				down[d] = lo
+			}
+		}
+	}
+	if s.rem != nil {
+		for d := range 3 {
+			up[d].Add(up[d], s.rem)
+			down[d].Add(down[d], s.rem)
+		}
+	}
+	return up, down
+}
+
+// projectionLower is the largest L_n of docs/linkage-check-design.md §5.8
+// over the six coordinate directions n = ±e_axis: the partner's least extent
+// along n less the body's greatest. Along +e_axis that is −b.down − a.up,
+// along −e_axis −b.up − a.down. The distance between two sets is at least
+// the separation of their projections onto any unit vector, so each L_n is
+// a proven lower bound on the pair's gap at every parameter of the interval.
+func projectionLower(a, b projectionSide) *big.Rat {
+	aUp, aDown := a.extents()
+	bUp, bDown := b.extents()
+	var best *big.Rat
+	for d := range 3 {
+		for _, l := range []*big.Rat{
+			new(big.Rat).Neg(new(big.Rat).Add(bDown[d], aUp[d])),
+			new(big.Rat).Neg(new(big.Rat).Add(bUp[d], aDown[d])),
+		} {
+			if best == nil || l.Cmp(best) > 0 {
+				best = l
+			}
+		}
+	}
+	return best
 }

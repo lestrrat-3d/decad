@@ -61,7 +61,8 @@ func threeJointArm(tb testing.TB) (*decad.Document, *decad.Linkage, decad.Drive)
 
 // BenchmarkVerifyLinkageThreeJointArm measures §10's three-joint arm, once at
 // a resolution that settles the verdict and once at the default, where the
-// whole-drive reading refines further. It reports the poses each evaluates.
+// projection bound (§5.8) closes the whole-drive reading at the verdict floor.
+// It reports the poses each evaluates: 10 and 22.
 func BenchmarkVerifyLinkageThreeJointArm(b *testing.B) {
 	for _, tc := range []struct {
 		name string
