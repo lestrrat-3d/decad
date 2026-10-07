@@ -453,7 +453,7 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 		break
 	}
 	widened := extendSetBound(seg, atStart, nearest)
-	delta, err := prismUnionCutDelta(sketch.BoundaryEdge{Partial: true}, widened)
+	delta, err := prismcells.CutDelta(sketch.BoundaryEdge{Partial: true}, widened)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -824,8 +824,8 @@ func trimSegmentParamRange(seg CurveSegment) (t0, t1 float64, err error) {
 // δ_cut: how far a cut endpoint's u and v coordinates can EACH sit from the
 // crossing they denote, given proofbound.CutDisplacementAllow's own parameter-to-
 // coordinate scaling (internal/proofbound/bounds.go). A CircleSeg/ArcSeg's position varies with
-// BOTH components under a cos/sin walk, so both take carrierSpeedUpper's
-// existing isotropic reading (prism_boolean.go) unchanged. A LineSeg's does
+// BOTH components under a cos/sin walk, so both take prismcells.CarrierSpeedUpper's
+// existing isotropic reading (internal/prismcells/merge.go) unchanged. A LineSeg's does
 // not: its walk is Start + t·(End−Start), so a coordinate whose OWN
 // End−Start difference is exactly zero — a horizontal line's v, a vertical
 // line's u — carries no displacement AT ALL as t moves, however uncertain t
@@ -833,7 +833,7 @@ func trimSegmentParamRange(seg CurveSegment) (t0, t1 float64, err error) {
 // slop onto an axis the cut never touches (T170's own top and bottom walls,
 // whose v never moves at any parameter). Each component's own exact
 // End−Start difference, taken over the recorded floats and rounded outward
-// (ratL1Upper), is what carrierSpeedUpper already reduces to a single L1
+// (ratL1Upper), is what prismcells.CarrierSpeedUpper already reduces to a single L1
 // figure for the isotropic case; reading it per component instead is the
 // same mechanism, not a new one.
 func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
@@ -846,7 +846,7 @@ func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 		dv := ratL1Upper(exactCoordinateDelta(line.End.V, line.Start.V))
 		return proofbound.CutDisplacementAllow(du), proofbound.CutDisplacementAllow(dv), nil
 	}
-	speed, err := carrierSpeedUpper(seg)
+	speed, err := prismcells.CarrierSpeedUpper(seg)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1078,7 +1078,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 				return nil, 0, err
 			}
 			joins[i] = join
-			d, err := prismUnionCutDelta(e, seg)
+			d, err := prismcells.CutDelta(e, seg)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -1341,7 +1341,7 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 	if err != nil {
 		return nil, err
 	}
-	selected, err := selectPrismCells(budget, profiles, matterTarget, make([]bool, len(profiles)),
+	selected, err := prismcells.Select(budget, profiles, matterTarget, make([]bool, len(profiles)),
 		func(a, _ bool) bool { return a })
 	if err != nil {
 		return nil, err
@@ -1368,7 +1368,7 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 				if err != nil {
 					return nil, err
 				}
-				delta, err := prismUnionCutDelta(edge, seg)
+				delta, err := prismcells.CutDelta(edge, seg)
 				if err != nil {
 					return nil, err
 				}

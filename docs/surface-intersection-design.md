@@ -228,7 +228,7 @@ boundary at `1 − t` for a reversed `LineSeg` receiver — a wrong boundary, no
 refusal, and with the two refusal directions swapped besides.
 
 **`Split`: the pieces are the cells, and no side is read.** The classification
-runs against the TARGET alone — `selectPrismCells` under a `keep` predicate
+runs against the TARGET alone — `prismcells.Select` under a `keep` predicate
 that reads the target's own label and ignores the other — because the tool has
 no authored side for a cell to sit on and, being possibly an open walk,
 publishes no loop with a winding to compare against. Its edges contribute cell
@@ -240,7 +240,7 @@ refuses rather than returning the target back unchanged.
 
 **`Trim`'s surviving fragments chain into open walks.** Which survivor follows
 which is resolved in `sketch`'s own arranged polyline order, exactly as
-`chainPrismUnionSurvivors` (`prism_boolean.go`) resolves it for a merged
+`prismcells.ChainClosedSurvivors` (`internal/prismcells/merge.go`) resolves it for a merged
 union loop — a fact about the arrangement, not about what the record states.
 Two things differ from that function, and nothing else does: the chain is not
 required to close, and a survivor set that falls into several runs yields

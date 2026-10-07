@@ -1948,7 +1948,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 // resolveAndBuildPrismIntersectCrossing's own crossing-sub-case answer for a
 // pair whose overlap happens to be ONE region: both routes record the same
 // single arrangement cell through the same recordEdge/edgeJoin/
-// prismUnionCutDelta sequence and the same evalPrism math, so their published
+// prismcells.CutDelta sequence and the same evalPrism math, so their published
 // Value must agree exactly. Bound is not required to match bit for bit — the
 // one-cell sum still charges proofbound.ExactSumRound's own accumulated-rounding term
 // (§4.5's "The sum" paragraph), which is a legitimate, slightly more

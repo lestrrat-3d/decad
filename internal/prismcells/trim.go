@@ -82,11 +82,11 @@ func SurvivingFragments(budget *proofbound.WorkBudget, tags map[sketch.Entity]Or
 	return survivors, total, nil
 }
 
-// ChainSurvivorWalks is §3.3's open-walk chaining: chainPrismUnionSurvivors
-// (prism_boolean.go) generalized two ways, and nothing else — the walk is not
+// ChainSurvivorWalks is §3.3's open-walk chaining: ChainClosedSurvivors
+// (merge.go) generalized two ways, and nothing else — the walk is not
 // required to close, and a survivor set that falls into several runs yields
 // several walks rather than failing. Connectivity reads sketch's own walked
-// Polyline endpoints exactly as chainPrismUnionSurvivors does: bookkeeping on
+// Polyline endpoints exactly as ChainClosedSurvivors does: bookkeeping on
 // an answer sketch already computed, never a re-derived geometric fact.
 // resolved=false (err always nil in that case) means the survivors do not
 // partition cleanly into dangling-ended runs — a shape this evaluator does

@@ -520,7 +520,7 @@ overlap (`docs/interference-design.md` §1, §6). It does not need a `Body`.
 Every limit §4.4 states for a multi-region `Cut`/`Intersect` is a limit on
 ASSEMBLING one — a `ProfileRecord` carries a single outer loop, so a selection
 covering two or more disjoint regions cannot become a section at all, and
-`chainPrismUnionSurvivors` correctly reports it unresolved. This reading
+`prismcells.ChainClosedSurvivors` correctly reports it unresolved. This reading
 answers the volume without assembling anything, so a pair whose 2D outlines
 overlap in several disjoint regions — a pair of meshing gears, which always
 engages several teeth at once — is measured rather than left undecided.
@@ -535,7 +535,7 @@ decision.
 (`admitPrismPairBudget`), the trimmed-circular refusal
 (`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
 z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
-§3.4's split-boundary reroute, `prismcells.Classify`, and `selectPrismCells`
+§3.4's split-boundary reroute, `prismcells.Classify`, and `prismcells.Select`
 under `Intersect`'s own `keep`. The reading begins where `mergePrismCells`
 would have been called, and replaces only that tail.
 
@@ -653,7 +653,7 @@ not the caller's sketch — it is one decad built. Authentication here is
    an empty blend map): §6 runs the closed-form crossing/orientation/nesting
    checks the same way, on the merged record, as the second, independent
    proof. Neither of those checks proves the merged loop's own **closure**.
-   `chainPrismUnionSurvivors` resolves which survivor follows which in
+   `prismcells.ChainClosedSurvivors` resolves which survivor follows which in
    `sketch`'s own arranged polyline order — a fact about the arrangement, not
    about what the record states — and §6's crossing check skips adjacent
    segment pairs by construction, since an adjacent pair sharing a junction
