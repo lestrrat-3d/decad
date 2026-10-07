@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -15,7 +16,7 @@ import (
 // This file is docs/spline-design.md §6.2's directional-extreme row, Tier A
 // (polynomial Bézier) column only: a proven bracket on the min and max of the
 // linear functional g(u, v) = gu·u + gv·v over one converted free-form span.
-// It reduces to clearance_poly.go's certified root engine exactly as the row
+// It reduces to internal/polynomial's certified root engine exactly as the row
 // prescribes — reuse it, never fork a second one.
 //
 // The reduction: P(t) = g·C(t) is itself a polynomial Bézier of the same
@@ -23,7 +24,7 @@ import (
 // polynomial), so its Bernstein coefficients are gu·p.u + gv·p.v, one per
 // control point. P's extreme over [0, 1] is attained either at an endpoint —
 // exact, a Bézier interpolates its ends — or at an interior root of P'.
-// Isolating those roots with RpIsolateRootsContext and bracketing P's value
+// Isolating those roots with polynomial.RpIsolateRootsContext and bracketing P's value
 // over each isolating interval via the convex-hull property (BernsteinHull
 // of the Bernstein form RESTRICTED to that interval, BernsteinRestrict) is
 // the Lipschitz step the row asks for, made exact rather than estimated: the
@@ -164,7 +165,7 @@ var ErrFreeformExtremeUnrepresentable = fmt.Errorf(
 // revolve twin answer ErrUnsupported, exactly as they do for a bracket carrying
 // an ordinary nonzero bound, and a through-all stop reading a bounded extent
 // gets the same sentinel here rather than an interval it could charge.
-func FreeformExtremeFloats(iv RatIv) (float64, float64, error) {
+func FreeformExtremeFloats(iv polynomial.RatIv) (float64, float64, error) {
 	lo, hi := proofbound.RatFloatDown(iv.Lo), proofbound.RatFloatUp(iv.Hi)
 	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || proofbound.IsNonFinite(hi-lo) {
 		return 0, 0, ErrFreeformExtremeUnrepresentable
@@ -211,16 +212,16 @@ func DirectionRats(gu, gv float64) (*big.Rat, *big.Rat, error) {
 // rational allocates. It therefore takes the direction as the two FLOATS its
 // caller holds, never as rationals a caller would have had to allocate ahead
 // of this charge.
-func SpanExtremeEnclosureContext(ctx context.Context, span survey2d.BezierSpan, gu, gv float64, work *FreeformWork) (RatIv, RatIv, error) {
+func SpanExtremeEnclosureContext(ctx context.Context, span survey2d.BezierSpan, gu, gv float64, work *FreeformWork) (polynomial.RatIv, polynomial.RatIv, error) {
 	if err := work.Step(FreeformExtremeCost(len(span))); err != nil {
-		return RatIv{}, RatIv{}, err
+		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return RatIv{}, RatIv{}, err
+		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}
 	guR, gvR, err := DirectionRats(gu, gv)
 	if err != nil {
-		return RatIv{}, RatIv{}, err
+		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}
 
 	values := SpanDirectionalValues(span, guR, gvR)
@@ -243,14 +244,14 @@ func SpanExtremeEnclosureContext(ctx context.Context, span survey2d.BezierSpan, 
 	}
 	fold(last, last)
 
-	stationary := RpSquareFree(RpDeriv(RpFromBernstein(values)))
-	chain, err := SturmChainIntContext(ctx, RpTrim(stationary))
+	stationary := polynomial.RpSquareFree(polynomial.RpDeriv(RpFromBernstein(values)))
+	chain, err := polynomial.SturmChainIntContext(ctx, polynomial.RpTrim(stationary))
 	if err != nil {
-		return RatIv{}, RatIv{}, err
+		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}
-	ivs, err := RpIsolateRootsContext(ctx, stationary, chain)
+	ivs, err := polynomial.RpIsolateRootsContext(ctx, stationary, chain)
 	if err != nil {
-		return RatIv{}, RatIv{}, err
+		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	for _, iv := range ivs {
@@ -269,5 +270,5 @@ func SpanExtremeEnclosureContext(ctx context.Context, span survey2d.BezierSpan, 
 		lo, hi := BernsteinHull(BernsteinRestrict(values, a, b))
 		fold(lo, hi)
 	}
-	return RatIv{Lo: minLo, Hi: minHi}, RatIv{Lo: maxLo, Hi: maxHi}, nil
+	return polynomial.RatIv{Lo: minLo, Hi: minHi}, polynomial.RatIv{Lo: maxLo, Hi: maxHi}, nil
 }

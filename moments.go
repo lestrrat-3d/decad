@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/circularmoments"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentline"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -619,8 +620,8 @@ func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound
 			return [4]proofbound.RatInterval{}, false
 		}
 		exact = freeform.PolyThirdMoments(
-			freeform.RatPoly{u0, new(big.Rat).Sub(u1, u0)},
-			freeform.RatPoly{v0, new(big.Rat).Sub(v1, v0)},
+			polynomial.RatPoly{u0, new(big.Rat).Sub(u1, u0)},
+			polynomial.RatPoly{v0, new(big.Rat).Sub(v1, v0)},
 		)
 	case CircleSeg, ArcSeg:
 		return circularThirdMomentInterval(segment)

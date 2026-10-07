@@ -5,12 +5,13 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/stretchr/testify/require"
 )
 
-func literalBernsteinMonomial(values []*big.Rat) RatPoly {
+func literalBernsteinMonomial(values []*big.Rat) polynomial.RatPoly {
 	degree := len(values) - 1
 	if degree < 0 {
 		return nil
@@ -47,7 +48,7 @@ func literalBernsteinMonomial(values []*big.Rat) RatPoly {
 	return trimTestRatPoly(result)
 }
 
-func trimTestRatPoly(p RatPoly) RatPoly {
+func trimTestRatPoly(p polynomial.RatPoly) polynomial.RatPoly {
 	for len(p) > 0 && p[len(p)-1].Sign() == 0 {
 		p = p[:len(p)-1]
 	}
@@ -130,8 +131,8 @@ func TestFreeformThirdMomentsParabolicRegion(t *testing.T) {
 	parabola := []survey2d.BezierSpan{{point(0, 0), point(1, 0), point(2, 4)}}
 	curve := FreeformThirdMoments(parabola, false)
 	chord := PolyThirdMoments(
-		RatPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},
-		RatPoly{big.NewRat(4, 1), big.NewRat(-4, 1)},
+		polynomial.RatPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},
+		polynomial.RatPoly{big.NewRat(4, 1), big.NewRat(-4, 1)},
 	)
 	for i, pq := range [4][2]int{{3, 0}, {2, 1}, {1, 2}, {0, 3}} {
 		p, q := pq[0], pq[1]

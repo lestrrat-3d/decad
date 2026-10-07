@@ -4,8 +4,7 @@ import (
 	"context"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1105,44 +1104,44 @@ func (f *CFace) TorusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) 
 	a1 := dir.Dot(f.Axis)
 	k := f.Major*f.Major + q0 - f.Radius*f.Radius
 	// f(t) = (|x−C|² + R² − r²)² − 4R²(|x−C|² − axial²)
-	quad, ok := freeform.RatPolyOf(k, q1, q2)
+	quad, ok := polynomial.RatPolyOf(k, q1, q2)
 	if !ok {
 		return 0, false, nil
 	}
-	sq := freeform.RpMul(quad, quad)
-	perpBase, ok := freeform.RatPolyOf(q0, q1, q2)
+	sq := polynomial.RpMul(quad, quad)
+	perpBase, ok := polynomial.RatPolyOf(q0, q1, q2)
 	if !ok {
 		return 0, false, nil
 	}
-	axial, ok := freeform.RatPolyOf(a0, a1)
+	axial, ok := polynomial.RatPolyOf(a0, a1)
 	if !ok {
 		return 0, false, nil
 	}
-	perp := freeform.RpSub(perpBase, freeform.RpMul(axial, axial))
+	perp := polynomial.RpSub(perpBase, polynomial.RpMul(axial, axial))
 	four, ok := proofbound.RatOf(4 * f.Major * f.Major)
 	if !ok {
 		return 0, false, nil
 	}
-	poly := freeform.RpTrim(freeform.RpSub(sq, freeform.RpScale(perp, four)))
-	if freeform.RpDeg(poly) < 1 {
+	poly := polynomial.RpTrim(polynomial.RpSub(sq, polynomial.RpScale(perp, four)))
+	if polynomial.RpDeg(poly) < 1 {
 		return 0, false, nil
 	}
-	sf := freeform.RpSquareFree(poly)
-	if freeform.RpDeg(sf) != freeform.RpDeg(poly) {
+	sf := polynomial.RpSquareFree(poly)
+	if polynomial.RpDeg(sf) != polynomial.RpDeg(poly) {
 		// A repeated root is a tangency somewhere on the line: ambiguous.
 		return 0, false, nil
 	}
-	chain, err := freeform.SturmChainIntContext(ctx, sf)
+	chain, err := polynomial.SturmChainIntContext(ctx, sf)
 	if err != nil {
 		return 0, false, err
 	}
 	n := 0
-	ivs, err := freeform.RpIsolateRootsContext(ctx, sf, chain)
+	ivs, err := polynomial.RpIsolateRootsContext(ctx, sf, chain)
 	if err != nil {
 		return 0, false, err
 	}
 	for _, iv := range ivs {
-		iv, err = freeform.RpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+		iv, err = polynomial.RpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
 		if err != nil {
 			return 0, false, err
 		}

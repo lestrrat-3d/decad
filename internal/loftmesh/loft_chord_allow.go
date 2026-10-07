@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -211,9 +211,9 @@ func ComputeLoftChordedAllow(
 			vLoX := proofbound.XptOf(vLo)
 			lowerLo, _ := WallTriangleArea(proofbound.Xsub(proofbound.XptOf(vHi), vLoX), proofbound.Xsub(proofbound.XptOf(wHi), vLoX))
 			upperLo, _ := WallTriangleArea(proofbound.Xsub(proofbound.XptOf(wHi), vLoX), proofbound.Xsub(proofbound.XptOf(wLo), vLoX))
-			areaCorrection.Add(areaCorrection, freeform.MustRatOf(bilinearValue))
-			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(lowerLo))
-			areaCorrection.Sub(areaCorrection, freeform.MustRatOf(upperLo))
+			areaCorrection.Add(areaCorrection, polynomial.MustRatOf(bilinearValue))
+			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(lowerLo))
+			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(upperLo))
 			stationLeg := proofbound.CellStationShiftAreaAllow(
 				vLo, vHi, wLo, wHi,
 				p.ArcUpperV[j], p.ArcUpperW[j], cellMatched, delta,

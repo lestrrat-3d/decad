@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -185,8 +186,8 @@ func coxDeBoorExact(control []Point2, knots []*big.Rat, at *big.Rat) (*big.Rat, 
 		if basis.Sign() == 0 {
 			continue
 		}
-		u.Add(u, new(big.Rat).Mul(basis, freeform.MustRatOf(point.U)))
-		v.Add(v, new(big.Rat).Mul(basis, freeform.MustRatOf(point.V)))
+		u.Add(u, new(big.Rat).Mul(basis, polynomial.MustRatOf(point.U)))
+		v.Add(v, new(big.Rat).Mul(basis, polynomial.MustRatOf(point.V)))
 	}
 	return u, v
 }
@@ -209,7 +210,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 	// The offending values, stated once: 1/3 and the float geom actually holds.
 	require.NotEqual(t, 0, freeform.ClampedUniformKnots(6)[4].Cmp(big.NewRat(1, 3)),
 		"geom's interior knot is the rounding of 1/3, not 1/3")
-	require.Equal(t, 0, freeform.ClampedUniformKnots(6)[4].Cmp(freeform.MustRatOf(geom.ClampedKnots(6)[4])),
+	require.Equal(t, 0, freeform.ClampedUniformKnots(6)[4].Cmp(polynomial.MustRatOf(geom.ClampedKnots(6)[4])),
 		"the lifted vector is geom's own float, taken exactly")
 
 	for _, controls := range []int{6, 9} {
@@ -223,7 +224,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 			// values and not a self-consistency check.
 			knots := make([]*big.Rat, controls+4)
 			for i, knot := range geom.ClampedKnots(controls) {
-				knots[i] = freeform.MustRatOf(knot)
+				knots[i] = polynomial.MustRatOf(knot)
 			}
 
 			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeform.FreeformWork{})

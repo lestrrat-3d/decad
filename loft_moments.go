@@ -71,7 +71,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 	// Derive cap1's offset before lifting any wall cell into exact rationals.
 	// Production has already refused non-finite vertices at S13, while direct
 	// internal callers still receive S14's existing derivation refusal instead
-	// of reaching freeform.MustRatOf with a NaN.
+	// of reaching polynomial.MustRatOf with a NaN.
 	// h1Upper (cap1's own offset from anchor) is bounded by the distance to
 	// the CLOSEST held cap1 vertex to anchor, never an arbitrary one: a
 	// plane's own perpendicular offset from a point is at most the distance

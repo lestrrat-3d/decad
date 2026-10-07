@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -78,12 +78,12 @@ func thickenMovingOffset(u, v float64, du, dv int) thickenMovingPoint {
 	return thickenMovingPoint{u: thickenAffineCoord(u, du), v: thickenAffineCoord(v, dv)}
 }
 
-func thickenAffineSub(a, b thickenAffine) freeform.RatPoly {
-	return freeform.RatPoly{new(big.Rat).Sub(a.a, b.a), new(big.Rat).Sub(a.b, b.b)}
+func thickenAffineSub(a, b thickenAffine) polynomial.RatPoly {
+	return polynomial.RatPoly{new(big.Rat).Sub(a.a, b.a), new(big.Rat).Sub(a.b, b.b)}
 }
 
-func thickenAffineConst(a thickenAffine, b *big.Rat) freeform.RatPoly {
-	return freeform.RatPoly{new(big.Rat).Sub(a.a, b), new(big.Rat).Set(a.b)}
+func thickenAffineConst(a thickenAffine, b *big.Rat) polynomial.RatPoly {
+	return polynomial.RatPoly{new(big.Rat).Sub(a.a, b), new(big.Rat).Set(a.b)}
 }
 
 func thickenAffineAt(a thickenAffine, at *big.Rat) *big.Rat {
@@ -131,16 +131,16 @@ func thickenBoxesDisjoint(a, b thickenExactBox) bool {
 		a.maxV.Cmp(b.minV) < 0 || b.maxV.Cmp(a.minV) < 0
 }
 
-func thickenContactEvent(ctx context.Context, p freeform.RatPoly, limit *big.Rat) (bool, error) {
-	p = freeform.RpSquareFree(p)
-	if freeform.RpDeg(p) < 1 {
+func thickenContactEvent(ctx context.Context, p polynomial.RatPoly, limit *big.Rat) (bool, error) {
+	p = polynomial.RpSquareFree(p)
+	if polynomial.RpDeg(p) < 1 {
 		return false, nil
 	}
-	chain, err := freeform.SturmChainIntContext(ctx, p)
+	chain, err := polynomial.SturmChainIntContext(ctx, p)
 	if err != nil {
 		return false, err
 	}
-	return freeform.SturmCount(chain, new(big.Rat), limit) > 0, nil
+	return polynomial.SturmCount(chain, new(big.Rat), limit) > 0, nil
 }
 
 // AxisIntervalClear isolates every possible first contact event of
@@ -219,7 +219,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 			}
 		}
 	}
-	check := func(p freeform.RatPoly) error {
+	check := func(p polynomial.RatPoly) error {
 		contact, err := thickenContactEvent(ctx, p, limit)
 		if err != nil {
 			return err
@@ -256,7 +256,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 				}
 				continue
 			}
-			var candidates []freeform.RatPoly
+			var candidates []polynomial.RatPoly
 			switch {
 			case a.line:
 				candidates = thickenLineArcEvents(a, b)
@@ -266,7 +266,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 				du := new(big.Rat).Sub(a.center.u, b.center.u)
 				dv := new(big.Rat).Sub(a.center.v, b.center.v)
 				d2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-				candidates = []freeform.RatPoly{{new(big.Rat).Neg(d2), new(big.Rat), big.NewRat(4, 1)}}
+				candidates = []polynomial.RatPoly{{new(big.Rat).Neg(d2), new(big.Rat), big.NewRat(4, 1)}}
 			}
 			for _, p := range candidates {
 				if err := check(p); err != nil {
@@ -283,7 +283,7 @@ func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece
 // rational; test finite segment inclusion at each exact root.
 func thickenLineLineContact(a, b thickenMovingPiece, limit *big.Rat) bool {
 	for _, p := range thickenLineLineEvents(a, b) {
-		p = freeform.RpTrim(p)
+		p = polynomial.RpTrim(p)
 		if len(p) != 2 || p[1].Sign() == 0 {
 			continue
 		}
@@ -326,16 +326,16 @@ func thickenLinesTouchAt(a, b thickenMovingPiece, at *big.Rat) bool {
 	return thickenWithin(au0, bu0, bu1) && thickenWithin(bv0, av0, av1)
 }
 
-func thickenLineLineEvents(a, b thickenMovingPiece) []freeform.RatPoly {
+func thickenLineLineEvents(a, b thickenMovingPiece) []polynomial.RatPoly {
 	if a.horizontal && b.horizontal {
-		return []freeform.RatPoly{
+		return []polynomial.RatPoly{
 			thickenAffineSub(a.start.v, b.start.v),
 			thickenAffineSub(a.start.u, b.start.u), thickenAffineSub(a.start.u, b.end.u),
 			thickenAffineSub(a.end.u, b.start.u), thickenAffineSub(a.end.u, b.end.u),
 		}
 	}
 	if !a.horizontal && !b.horizontal {
-		return []freeform.RatPoly{
+		return []polynomial.RatPoly{
 			thickenAffineSub(a.start.u, b.start.u),
 			thickenAffineSub(a.start.v, b.start.v), thickenAffineSub(a.start.v, b.end.v),
 			thickenAffineSub(a.end.v, b.start.v), thickenAffineSub(a.end.v, b.end.v),
@@ -345,7 +345,7 @@ func thickenLineLineEvents(a, b thickenMovingPiece) []freeform.RatPoly {
 	if !a.horizontal {
 		horizontal, vertical = b, a
 	}
-	return []freeform.RatPoly{
+	return []polynomial.RatPoly{
 		thickenAffineSub(vertical.start.u, horizontal.start.u),
 		thickenAffineSub(vertical.start.u, horizontal.end.u),
 		thickenAffineSub(horizontal.start.v, vertical.start.v),
@@ -353,8 +353,8 @@ func thickenLineLineEvents(a, b thickenMovingPiece) []freeform.RatPoly {
 	}
 }
 
-func thickenLineArcEvents(line, arc thickenMovingPiece) []freeform.RatPoly {
-	var distance freeform.RatPoly
+func thickenLineArcEvents(line, arc thickenMovingPiece) []polynomial.RatPoly {
+	var distance polynomial.RatPoly
 	var arcStart, arcEnd, lineCoord thickenAffine
 	if line.horizontal {
 		distance = thickenAffineConst(line.start.v, arc.center.v)
@@ -365,13 +365,13 @@ func thickenLineArcEvents(line, arc thickenMovingPiece) []freeform.RatPoly {
 		arcStart, arcEnd = arc.start.u, arc.end.u
 		lineCoord = line.start.u
 	}
-	tau := freeform.RatPoly{new(big.Rat), big.NewRat(1, 1)}
-	contact := freeform.RpSub(freeform.RpMul(distance, distance), freeform.RpMul(tau, tau))
-	endpoint := func(p thickenMovingPoint) freeform.RatPoly {
+	tau := polynomial.RatPoly{new(big.Rat), big.NewRat(1, 1)}
+	contact := polynomial.RpSub(polynomial.RpMul(distance, distance), polynomial.RpMul(tau, tau))
+	endpoint := func(p thickenMovingPoint) polynomial.RatPoly {
 		du := thickenAffineConst(p.u, arc.center.u)
 		dv := thickenAffineConst(p.v, arc.center.v)
-		return freeform.RpSub(freeform.RpAdd(freeform.RpMul(du, du), freeform.RpMul(dv, dv)), freeform.RpMul(tau, tau))
+		return polynomial.RpSub(polynomial.RpAdd(polynomial.RpMul(du, du), polynomial.RpMul(dv, dv)), polynomial.RpMul(tau, tau))
 	}
-	return []freeform.RatPoly{contact, endpoint(line.start), endpoint(line.end),
+	return []polynomial.RatPoly{contact, endpoint(line.start), endpoint(line.end),
 		thickenAffineSub(arcStart, lineCoord), thickenAffineSub(arcEnd, lineCoord)}
 }

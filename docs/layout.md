@@ -276,12 +276,13 @@ the rules leave to the byte budget.
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
-| `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall and undercut readers, and section walk and Bézier carriers. See `docs/verification-design.md` §6. |
+| `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, poses, sweeps, and trig memo. See motion design. |
 | `internal/linkagebound/` | Exact link reach and projection bounds. See linkage §5.2, §5.8. |
-| `internal/freeform/` | Exact free-form arithmetic and bounds. See `docs/spline-design.md`. |
+| `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
+| `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance geometry, cell accumulation, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |

@@ -7,8 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -89,7 +88,7 @@ type xp2Flavour struct {
 var xp2Flavours = []xp2Flavour{
 	{
 		name: "rational",
-		lift: func(p pt2) Xp2 { return NewXP2(freeform.MustRatOf(p.x), freeform.MustRatOf(p.y)) },
+		lift: func(p pt2) Xp2 { return NewXP2(polynomial.MustRatOf(p.x), polynomial.MustRatOf(p.y)) },
 	},
 	{
 		name: "homogeneous",
@@ -106,7 +105,7 @@ var xp2Flavours = []xp2Flavour{
 // denominator. The coordinate is unchanged: numerator and weight are scaled
 // together.
 func weightedXpt(p pt2, w int64) proofbound.Xpt {
-	x, y := freeform.MustRatOf(p.x), freeform.MustRatOf(p.y)
+	x, y := polynomial.MustRatOf(p.x), polynomial.MustRatOf(p.y)
 	den := new(big.Int).Mul(x.Denom(), y.Denom())
 	den.Mul(den, big.NewInt(w))
 	num := func(r *big.Rat) *big.Int {

@@ -1,4 +1,4 @@
-package freeform
+package polynomial
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file is the certified-bracket machinery of docs/clearance-design.md
-// §4/§5: the P4/P8 cells' stationarity polynomials and the torus ray-cast
-// quartic are isolated by Sturm sequences built over math/big.Rat on the
-// evaluator's own float coefficients taken exactly, so every real root lands
+// This package holds the shared exact polynomial and root-isolation machinery
+// used by clearance, mesh boolean, and spline proofs. The P4/P8 stationarity
+// polynomials of docs/clearance-design.md §4/§5 are isolated by Sturm
+// sequences built over math/big.Rat on float coefficients taken exactly. Every real root lands
 // in an interval that cannot lie, and a bracket on a critical VALUE follows
 // from the isolated parameter interval plus a proven Lipschitz bound — the
 // same adaptive-exactness discipline as the boolean's sign tests
@@ -582,7 +582,7 @@ type CritBracket struct {
 
 func (b CritBracket) Mid() float64 { return (b.ThLo + b.ThHi) / 2 }
 
-// trigStationaryBrackets isolates every zero of the stationarity polynomial
+// TrigStationaryBracketsContext isolates every zero of the stationarity polynomial
 // f over the full circle and returns certified enclosures of the objective g
 // at each of them: g is 1-Lipschitz-composed with a parameterization whose
 // speed is at most lip, and slack absorbs floating evaluation noise. The
@@ -649,7 +649,7 @@ func (cp CircleParam) At(th float64) [3]float64 {
 	return out
 }
 
-// lineCircleBrackets encloses every critical value of the distance from the
+// LineCircleBracketsContext encloses every critical value of the distance from the
 // circle to the infinite line (a, d̂): the P4 cell. Returns the brackets, or
 // constant=true when the distance is constant over the circle.
 func LineCircleBracketsContext(ctx context.Context, cp CircleParam, a, d [3]float64, slack float64) ([]CritBracket, bool, error) {
@@ -679,7 +679,7 @@ func LineCircleBracketsContext(ctx context.Context, cp CircleParam, a, d [3]floa
 	return TrigStationaryBracketsContext(ctx, CsDerivTheta(dist2), g, cp.R, slack)
 }
 
-// circleCircleBrackets encloses every critical value of the distance from
+// CircleCircleBracketsContext encloses every critical value of the distance from
 // circle 1 to circle 2 (unit normal n2): the P8 cell. The squared
 // stationarity s·(w')² = r2²·(s')² covers every smooth critical point;
 // callers guard the ρ = 0 kink separately (a circle meeting the other's
