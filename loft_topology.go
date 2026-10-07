@@ -12,16 +12,15 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file assembles a loft's paired stations into the flat-triangle solid
-// the payload holds, and builds the Body topology over it.
+// This file adapts the flat-triangle assembly in internal/loftmesh and builds
+// the Body topology over it.
 //
-// assembleLoft produces the vertex and triangle sets — two triangles per wall
-// cell, plus a triangulated cap at each end — and buildLoftTopology turns
+// loftmesh.Assemble produces the vertex and triangle sets — two triangles per
+// wall cell, plus a triangulated cap at each end — and buildLoftTopology turns
 // them into faces, loops, coedges and edges. Every face here is planar
 // BECAUSE the triangles are the thing actually built: the curved solid the
 // paired sections denote is reached through the payload's proven
@@ -85,150 +84,24 @@ type loftAssembly struct {
 // station commits, composed into delta beside the placement's own
 // proofbound.RigidRoundAllow term.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
-	// S13, decided before the first coordinate is lifted into an exact
-	// dyadic: tessellation.OrientationSign lifts the orientation anchor first, so its
-	// finiteness is the gate's first question.
-	anchor := xform.Apply(plane0.Origin)
-	if !proofbound.FiniteVec(anchor) {
-		return loftAssembly{}, errLoftPointUnrepresentable("placed plane origin")
+	records := make([]loftmesh.LoopPair, len(pairs))
+	for i, pair := range pairs {
+		records[i] = loftmesh.LoopPair{V: pair.v, W: pair.w}
 	}
-
-	vIdx := make([][]int, len(pairs))
-	wIdx := make([][]int, len(pairs))
-	var verts []r3.Vec
-	// maxInputAbs tracks the largest |coordinate| over the frame-lifted,
-	// PRE-transform points — the magnitude internal/proofbound/bounds.go's proofbound.RigidRoundAllow reads
-	// the rounding at, never the placed result's (docs/loft-design.md §5,
-	// §12 PR 2a).
-	maxInputAbs := 0.0
-	for i, p := range pairs {
-		if err := ctx.Err(); err != nil {
-			return loftAssembly{}, err
-		}
-		vIdx[i] = make([]int, len(p.v))
-		for j, pt := range p.v {
-			vIdx[i][j] = len(verts)
-			lifted := f0.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
-			placed := xform.Apply(lifted)
-			if !proofbound.FiniteVec(placed) {
-				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the first profile", j, i))
-			}
-			verts = append(verts, placed)
-		}
-		wIdx[i] = make([]int, len(p.w))
-		for j, pt := range p.w {
-			wIdx[i][j] = len(verts)
-			lifted := f1.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
-			placed := xform.Apply(lifted)
-			if !proofbound.FiniteVec(placed) {
-				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the second profile", j, i))
-			}
-			verts = append(verts, placed)
-		}
+	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
+		tris, err := triangulate2DContext(ctx, pts, loops)
+		return tris, wrapLoftTriangulationError(err)
 	}
-
-	var tris [][3]int
-	var cell [][2]int
-	var side []uint8
-	for i, p := range pairs {
-		if err := ctx.Err(); err != nil {
-			return loftAssembly{}, err
-		}
-		n := len(p.v)
-		for j := range n {
-			jn := (j + 1) % n
-			vj, vjn := vIdx[i][j], vIdx[i][jn]
-			wj, wjn := wIdx[i][j], wIdx[i][jn]
-			tris = append(tris, [3]int{vj, vjn, wjn})
-			cell = append(cell, [2]int{i, j})
-			side = append(side, 0)
-			tris = append(tris, [3]int{vj, wjn, wj})
-			cell = append(cell, [2]int{i, j})
-			side = append(side, 1)
-		}
-	}
-	walls := len(tris)
-
-	// Both caps' own triangulation, over each profile's own (u, v) points
-	// and loop index arrays — a fresh index space, mapped back to the shared
-	// vertex table as each triangle comes back.
-	var pts0, pts1 []Point2
-	var loopIdx0, loopIdx1 [][]int
-	var pts0ToV, pts1ToV []int
-	for i, p := range pairs {
-		idx0 := make([]int, len(p.v))
-		for j, pt := range p.v {
-			idx0[j] = len(pts0)
-			pts0 = append(pts0, pt)
-			pts0ToV = append(pts0ToV, vIdx[i][j])
-		}
-		loopIdx0 = append(loopIdx0, idx0)
-
-		idx1 := make([]int, len(p.w))
-		for j, pt := range p.w {
-			idx1[j] = len(pts1)
-			pts1 = append(pts1, pt)
-			pts1ToV = append(pts1ToV, wIdx[i][j])
-		}
-		loopIdx1 = append(loopIdx1, idx1)
-	}
-
-	tris0, err := triangulate2DContext(ctx, pts0, loopIdx0)
+	a, err := loftmesh.Assemble(ctx, records, f0, f1, plane0, xform, stationRound,
+		triangulate, errLoftPointUnrepresentable)
 	if err != nil {
-		return loftAssembly{}, wrapLoftTriangulationError(err)
+		return loftAssembly{}, err
 	}
-	tris1, err := triangulate2DContext(ctx, pts1, loopIdx1)
-	if err != nil {
-		return loftAssembly{}, wrapLoftTriangulationError(err)
-	}
-
-	// capStart reverses each p0 triple (swap 2nd and 3rd); capEnd retains
-	// p1's own triples (§5's cap seeding).
-	for _, t := range tris0 {
-		tris = append(tris, [3]int{pts0ToV[t[0]], pts0ToV[t[2]], pts0ToV[t[1]]})
-	}
-	capStartCount := len(tris0)
-	for _, t := range tris1 {
-		tris = append(tris, [3]int{pts1ToV[t[0]], pts1ToV[t[1]], pts1ToV[t[2]]})
-	}
-
-	reversed := tessellation.OrientationSign(verts, tris, anchor) < 0
-	if reversed {
-		for i, t := range tris {
-			tris[i] = [3]int{t[0], t[2], t[1]}
-		}
-	}
-
-	// placeAllow is zero exactly when xform is the identity transform — an
-	// exact struct comparison, never a tolerance. This fast path is
-	// REQUIRED: without it, every directly-built (unplaced) LineSeg-only loft
-	// whose every station is PINNED would lose the Exact readings §8/§12 PR 1
-	// publishes (docs/loft-design.md §5, §12 PR 2a). delta =
-	// proofbound.AbsSumUpper(stationRound, placeAllow) (a10-plan.md Part 3 PR 6) is NO
-	// LONGER zero exactly when xform is the identity: a curved pair with
-	// interior computed stations carries a positive stationRound whether or
-	// not the body is placed, so does a LineSeg pair holding a station at
-	// a TRIMMED parameter (loftLineCellStations), and so does an untrimmed
-	// ArcSeg pair whose recorded End sits off its own Start's radius
-	// (arcNaturalEndRadialUpper). So the fast path this
-	// comment used to state is now placeAllow's own, while stationRound is
-	// proofbound.AbsSumUpper's other, independent leg — proofbound.AbsSumUpper(0, 0) is exactly 0.0
-	// (proofbound.UpRound never nudges a non-positive value), which is what keeps the
-	// delta of an unplaced LineSeg-only loft whose every station is PINNED
-	// bit-identical to before.
-	placeAllow := 0.0
-	if xform != r3.Identity() {
-		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
-	}
-	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
-
 	return loftAssembly{
-		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
-		reversed: reversed, cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
-		pts0: pts0, pts1: pts1, loopIdx0: loopIdx0, loopIdx1: loopIdx1,
-		delta: delta,
+		verts: a.Verts, tris: a.Tris, walls: a.Walls, capStartCount: a.CapStartCount,
+		reversed: a.Reversed, cell: a.Cell, side: a.Side, vIdx: a.VIdx, wIdx: a.WIdx,
+		pts0: a.Pts0, pts1: a.Pts1, loopIdx0: a.LoopIdx0, loopIdx1: a.LoopIdx1,
+		delta: a.Delta,
 	}, nil
 }
 
