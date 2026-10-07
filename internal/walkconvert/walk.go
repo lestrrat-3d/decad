@@ -12,17 +12,17 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/record"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
 )
 
 type (
-	CurveSegment = record.CurveSegment
-	LineSeg      = record.LineSeg
-	CircleSeg    = record.CircleSeg
-	ArcSeg       = record.ArcSeg
-	Point2       = record.Point2
+	CurveSegment = sectionrecord.CurveSegment
+	LineSeg      = sectionrecord.LineSeg
+	CircleSeg    = sectionrecord.CircleSeg
+	ArcSeg       = sectionrecord.ArcSeg
+	Point2       = sectionrecord.Point2
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 )
 
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
-	return record.NormalizeSegment(segment)
+	return sectionrecord.NormalizeSegment(segment)
 }
 func isFreeformSegment(segment CurveSegment) bool { return curveconvert.IsFreeformSegment(segment) }
 func freeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {

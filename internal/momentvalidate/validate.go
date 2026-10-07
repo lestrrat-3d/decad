@@ -8,23 +8,23 @@ import (
 	"github.com/lestrrat-3d/decad/internal/curveconvert"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/record"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/walkconvert"
 	"github.com/lestrrat-3d/units"
 )
 
 type (
-	Point2          = record.Point2
-	LoopRecord      = record.LoopRecord
-	CurveSegment    = record.CurveSegment
-	LineSeg         = record.LineSeg
-	CircleSeg       = record.CircleSeg
-	ArcSeg          = record.ArcSeg
-	SplineSeg       = record.SplineSeg
-	ClosedSplineSeg = record.ClosedSplineSeg
-	NURBSSeg        = record.NURBSSeg
-	FitSplineSeg    = record.FitSplineSeg
+	Point2          = sectionrecord.Point2
+	LoopRecord      = sectionrecord.LoopRecord
+	CurveSegment    = sectionrecord.CurveSegment
+	LineSeg         = sectionrecord.LineSeg
+	CircleSeg       = sectionrecord.CircleSeg
+	ArcSeg          = sectionrecord.ArcSeg
+	SplineSeg       = sectionrecord.SplineSeg
+	ClosedSplineSeg = sectionrecord.ClosedSplineSeg
+	NURBSSeg        = sectionrecord.NURBSSeg
+	FitSplineSeg    = sectionrecord.FitSplineSeg
 )
 
 // Profile carries the recorded loops without root package methods.
@@ -171,12 +171,12 @@ func growAll(points []Point2, grow func(Point2)) {
 // conversion the build's own survey2d.WalkKind == survey2d.WalkFreeform arm reads
 // (extrude.go's buildLoopSidesAs).
 func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, Plan, error) {
-	segment, err := record.NormalizeSegment(segment)
+	segment, err := sectionrecord.NormalizeSegment(segment)
 	if err != nil {
 		return nil, Point2{}, Plan{}, err
 	}
 	if segment == nil {
-		return nil, Point2{}, Plan{}, record.ErrNilSegment
+		return nil, Point2{}, Plan{}, sectionrecord.ErrNilSegment
 	}
 	if curveconvert.IsFreeformSegment(segment) {
 		return validateFreeformMomentSegment(segment, work)
@@ -205,7 +205,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.Freeform
 			return nil, Point2{}, err
 		}
 	case CircleSeg:
-		radius, err := record.MagnitudeIn(segment.Radius, units.Length, units.Millimeter, "a circle segment's radius")
+		radius, err := sectionrecord.MagnitudeIn(segment.Radius, units.Length, units.Millimeter, "a circle segment's radius")
 		if err != nil {
 			return nil, Point2{}, err
 		}

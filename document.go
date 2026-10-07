@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/record"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -298,7 +298,7 @@ func (b *Body) originProducer() producerID { return b.origin.producer }
 // magnitudeIn validates a magnitude parameter (core §8.1/§12): the right
 // Kind, finite, and non-negative — sense is enumerated, never a sign.
 func magnitudeIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, error) {
-	return record.MagnitudeIn(v, kind, unit, what)
+	return sectionrecord.MagnitudeIn(v, kind, unit, what)
 }
 
 // magnitudeInBounded is magnitudeIn beside the rounding the conversion itself

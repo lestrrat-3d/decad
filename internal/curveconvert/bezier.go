@@ -7,7 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/record"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -17,15 +17,15 @@ import (
 )
 
 type (
-	Point2           = record.Point2
-	CurveSegment     = record.CurveSegment
-	SplineSeg        = record.SplineSeg
-	NURBSSeg         = record.NURBSSeg
-	ClosedSplineSeg  = record.ClosedSplineSeg
-	FitSplineSeg     = record.FitSplineSeg
-	ConicSeg         = record.ConicSeg
-	EllipseSeg       = record.EllipseSeg
-	EllipticalArcSeg = record.EllipticalArcSeg
+	Point2           = sectionrecord.Point2
+	CurveSegment     = sectionrecord.CurveSegment
+	SplineSeg        = sectionrecord.SplineSeg
+	NURBSSeg         = sectionrecord.NURBSSeg
+	ClosedSplineSeg  = sectionrecord.ClosedSplineSeg
+	FitSplineSeg     = sectionrecord.FitSplineSeg
+	ConicSeg         = sectionrecord.ConicSeg
+	EllipseSeg       = sectionrecord.EllipseSeg
+	EllipticalArcSeg = sectionrecord.EllipticalArcSeg
 )
 
 var (
@@ -35,15 +35,15 @@ var (
 )
 
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
-	return record.NormalizeSegment(segment)
+	return sectionrecord.NormalizeSegment(segment)
 }
 func validateNURBSSegmentSizes(segment NURBSSeg) error {
-	return record.ValidateNURBSSegmentSizes(segment)
+	return sectionrecord.ValidateNURBSSegmentSizes(segment)
 }
 func validateNURBSSegmentContent(segment NURBSSeg) error {
-	return record.ValidateNURBSSegmentContent(segment)
+	return sectionrecord.ValidateNURBSSegmentContent(segment)
 }
-func finiteSegmentValue(value float64) bool { return record.FiniteSegmentValue(value) }
+func finiteSegmentValue(value float64) bool { return sectionrecord.FiniteSegmentValue(value) }
 
 func IsFreeformSegment(segment CurveSegment) bool { return isFreeformSegment(segment) }
 func FreeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {

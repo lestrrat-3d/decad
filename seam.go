@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/record"
+	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -339,24 +339,24 @@ func sameChainSnapshot(a, b *sketch.Chain) bool {
 		sameBoundaryLoop(a.Edges, b.Edges)
 }
 
-type loopJoin = record.LoopJoin
+type loopJoin = sketchrecord.LoopJoin
 
 func recordChainSegments(edges []sketch.BoundaryEdge) ([]CurveSegment, error) {
-	return record.RecordChainSegments(edges)
+	return sketchrecord.RecordChainSegments(edges)
 }
 
 func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
-	return record.RecordLoop(name, edges)
+	return sketchrecord.RecordLoop(name, edges)
 }
 
-func recordEdge(edge sketch.BoundaryEdge) (CurveSegment, error) { return record.RecordEdge(edge) }
+func recordEdge(edge sketch.BoundaryEdge) (CurveSegment, error) { return sketchrecord.RecordEdge(edge) }
 
 func edgeJoin(edge sketch.BoundaryEdge, segment CurveSegment) (loopJoin, error) {
-	return record.EdgeJoin(edge, segment)
+	return sketchrecord.EdgeJoin(edge, segment)
 }
 
 func falsifyLoopJoins(name string, joins []loopJoin) error {
-	return record.FalsifyLoopJoins(name, joins)
+	return sketchrecord.FalsifyLoopJoins(name, joins)
 }
 
-func falsifyChainJoins(joins []loopJoin) error { return record.FalsifyChainJoins(joins) }
+func falsifyChainJoins(joins []loopJoin) error { return sketchrecord.FalsifyChainJoins(joins) }

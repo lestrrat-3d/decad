@@ -1,16 +1,16 @@
 package circularmoments
 
-import "github.com/lestrrat-3d/decad/internal/record"
+import "github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 // RecordSegment transfers the recorded fields used by circular proofs.
-func RecordSegment(segment record.CurveSegment) CurveSegment {
+func RecordSegment(segment sectionrecord.CurveSegment) CurveSegment {
 	switch segment := segment.(type) {
-	case record.CircleSeg:
+	case sectionrecord.CircleSeg:
 		return CircleSeg{
 			Center: RecordPoint(segment.Center), Radius: segment.Radius, CCW: segment.CCW,
 			TStart: segment.TStart, TEnd: segment.TEnd,
 		}
-	case record.ArcSeg:
+	case sectionrecord.ArcSeg:
 		return ArcSeg{
 			Center: RecordPoint(segment.Center), Start: RecordPoint(segment.Start), End: RecordPoint(segment.End),
 			TStart: segment.TStart, TEnd: segment.TEnd,
@@ -21,4 +21,4 @@ func RecordSegment(segment record.CurveSegment) CurveSegment {
 }
 
 // RecordPoint transfers a recorded plane-local point to a circular proof.
-func RecordPoint(point record.Point2) Point2 { return Point2{U: point.U, V: point.V} }
+func RecordPoint(point sectionrecord.Point2) Point2 { return Point2{U: point.U, V: point.V} }
