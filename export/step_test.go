@@ -180,6 +180,86 @@ func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
 	}
 }
 
+// TestNewSTEPFileArcPrismsAnalytic writes two arc-bearing prisms through the
+// analytic arm: a half disc of radius 10 swept 5 mm (a convex partial
+// cylinder wall, a planar wall, two caps whose loops are an arc and a line)
+// and a 20×10 plate swept 4 mm with a radius-3 semicircular notch in its top
+// edge (a concave partial wall). Each file carries one CYLINDRICAL_SURFACE,
+// one CIRCLE per arc edge, and uses every EDGE_CURVE exactly twice with
+// opposite senses, which a closed shell whose faces' loops are each oriented
+// about their own face normal requires. Shown to fail with
+// supportsAnalyticPartialWall refusing every wall (both files took the
+// faceted writer) and with partialWallSense's reversal decision inverted
+// (each wall then used its rim and side edges in its neighbours' sense).
+func TestNewSTEPFileArcPrismsAnalytic(t *testing.T) {
+	t.Parallel()
+	build := func(t *testing.T, h float64, draw func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point)) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		draw(s, func(u, v float64) *sketch.Point {
+			p := s.CreatePoint(u, v)
+			s.Fix(p)
+			return p
+		})
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		profiles := s.Profiles()
+		require.Len(t, profiles, 1)
+		body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		require.NoError(t, err)
+		return body
+	}
+	for _, tc := range []struct {
+		name          string
+		h             float64
+		draw          func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point)
+		faces, planes int
+	}{
+		{"half disc", 5, func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point) {
+			c, a, b := fixed(0, 0), fixed(10, 0), fixed(-10, 0)
+			s.CreateArc(c, a, b)
+			s.CreateLine(b, a)
+		}, 4, 3},
+		{"notched plate", 4, func(s *sketch.Sketch, fixed func(u, v float64) *sketch.Point) {
+			p0, p1, p2, p3 := fixed(0, 0), fixed(20, 0), fixed(20, 10), fixed(13, 10)
+			q0, q1, nc := fixed(7, 10), fixed(0, 10), fixed(10, 10)
+			s.CreateLine(p0, p1)
+			s.CreateLine(p1, p2)
+			s.CreateLine(p2, p3)
+			s.CreateArc(nc, q0, p3)
+			s.CreateLine(q0, q1)
+			s.CreateLine(q1, p0)
+		}, 8, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := build(t, tc.h, tc.draw)
+			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+			require.NoError(t, err)
+			counts := map[string]int{}
+			uses := map[step.Reference][]step.Enumeration{}
+			for _, entity := range f.Entities {
+				counts[entity.Name]++
+				if entity.Name == "ORIENTED_EDGE" {
+					edge := entity.Parameters[3].(step.Reference)
+					uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
+				}
+			}
+			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
+			require.Equal(t, tc.planes, counts["PLANE"])
+			require.Equal(t, 1, counts["CYLINDRICAL_SURFACE"])
+			require.Equal(t, 2, counts["CIRCLE"], "one circle per arc edge, top and bottom")
+			for _, senses := range uses {
+				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+			}
+			data, err := f.Marshal()
+			require.NoError(t, err)
+			require.Contains(t, string(data), "analytic decad solid")
+		})
+	}
+}
+
 func TestNewSTEPFileConeUsesFacetedFallback(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()

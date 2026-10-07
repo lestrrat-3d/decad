@@ -464,16 +464,16 @@ ordinary mesh-path operand and export input.
 |---|---|
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a pair outside B1–B8 takes the mesh path over §4.4's mesh |
 | `Body.Placed` / `Duplicate` / `PlacedCopy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
-| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` — modify-reach gains an RX row for the payload. This is STAGED, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims, so a later design can rewrite a planar face's region and re-trim its walls on the same terms modify §2 rewrites a section |
+| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` — modify-reach's RX7 row and its SX16 refusal. This is STAGED, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims, so a later design can rewrite a planar face's region and re-trim its walls on the same terms modify §2 rewrites a section |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |
 | `Verify` tolerance gate | `gateWitnessPrism`'s reader over every body vertex and each swept face's prism-wall witnesses, shrunk by the largest `delta` plus axial term (verification §3) |
 | `Verify` wall survey | staged `Suspect` (`DiagUnsupportedSurveyPayload`): the 2D spanning-disk reduction has no single section to read |
-| `Verify` undercut, minimum radius | per face: exact normal ranges for planes and cylinders (DX7's reading), the tightest concave circular wall radius (DX8's) — both land with the payload |
-| Clearance kernel | a `bodyGeom` arm adding each face's plane or cylinder carrier with its trims, as `addPrismFaces` does for a prism; undecidable cells stay `Suspect` |
+| `Verify` undercut, minimum radius | per face over its own placed frame: a planar face's one outward normal and a swept face's wall-walk normal range, decided exactly as a prism's cap and side are (DX7's reading); the tightest radius over the swept faces whose wall is a circle or arc walked clockwise with the material on its left, each under its own proven radius bound (DX8's), undecided when any face carries a section displacement |
+| Clearance kernel | a `bodyGeom` arm (`addBrepFaces`) adding each face's plane or cylinder carrier with its trims through the builders `addPrismFaces` uses for a prism, each face over its own frame; no model when any face carries a section displacement; the model's displacement is the largest per-face frame and placement rounding and tilt plus the record's largest level displacement; undecidable cells stay `Suspect` |
 | Interference | `analyticBodiesEqual` undecided; the read-only mesh intersection over §4.4 |
 | Tessellate, STL/OBJ/3MF | §4.4 |
-| STEP | the analytic writer where every edge is a `Line3` or a full `Circle3` and every cylindrical wall has two one-circle loops (`docs/step-export-design.md`): a cross-drilled box meets it; a keyway (arc rims) takes the faceted writer until the writer admits `Arc3` edges |
+| STEP | the analytic writer where every edge is a `Line3`, an `Arc3` or a full `Circle3`, and every cylindrical wall is full (two one-circle loops) or partial (one loop of arcs about its axis and lines along it) (`docs/step-export-design.md`): a cross-drilled box and a keyway (arc rims) both meet it |
 | Prism-boolean's class | a brep operand misses G1 and never enters class A; class B's face view covers the co-directional pair of planar faces (§5.2) |
 
 ## 5. The 2D answers, and the 3D computations
@@ -651,6 +651,16 @@ are relations, never literals.
   all-line record whose readings are exact rationals rounded once, and
   within the composed bounds for a circular one. The brep's centroid bound is
   the exact error of that one rounding, so it is at or below the prism's.
+- **brep consumers**, on hand-built records until class B produces one: S1's
+  pull survey hooks only the hole's wall under a pull along +z, nothing
+  along the hole, and the x = 0 face, the floor and the hole's wall under a
+  pull along (1, 0, 1); its concave-radius survey measures 3 mm, a half
+  disc's convex wall is no candidate, and a displaced record is undecided;
+  its clearance rows read 5 mm to a box off its x = 40 wall and 2 mm to a
+  pin threaded through its hole; `Fillet`, `Chamfer` and `Shell` refuse with
+  SX16; the half disc's face view carries the partial cylinder face and arc
+  loops export's analytic STEP arm admits, and that arm's own tests write
+  the half disc and a notched plate with every edge used once in each sense.
 - **Cancellation and the cap** as prism-boolean §15, per scene.
 
 ## 10. Open questions

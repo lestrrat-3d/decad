@@ -604,3 +604,25 @@ func TestBrepFaceViewOfSquareBossUnionMatchesItsMeasurements(t *testing.T) {
 	require.Equal(t, union.area, brep.area)
 	require.Equal(t, union.bounds, brep.bounds)
 }
+
+// TestBrepModifyOpsAreStaged pins modify-reach Table RX's RX7: Fillet,
+// Chamfer and Shell on a brep receiver refuse with ErrUnsupported naming
+// SX16, the staged refusal, and leave the receiver live. Shown to fail with
+// requireNotBrepReceiver's check deleted (each op fell through to the
+// generic "not a prism" refusal, which names no SX16).
+func TestBrepModifyOpsAreStaged(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	body := internalCommitBrep(t, doc, internalCrossDrilledBrep(t))
+	edges := Edges(Convex()).AtLeast(1)
+	_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "SX16")
+	_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "SX16")
+	_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "SX16")
+	require.NoError(t, doc.requireLive(body))
+}

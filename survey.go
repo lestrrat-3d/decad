@@ -955,6 +955,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out = cupUndercuts(b, pl, *cfg.pull)
 		case capBlendPayload:
 			out = capBlendUndercuts(b, pl, *cfg.pull)
+		case brepPayload:
+			out = brepUndercuts(b, pl, *cfg.pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		default:
@@ -1008,6 +1010,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out, ok = cupMinRadius(pl)
 		case capBlendPayload:
 			out, ok = capBlendMinRadius(b, pl)
+		case brepPayload:
+			out, ok = brepMinRadius(pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		default:

@@ -93,6 +93,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload` during migration to `stackedPrismPayload` | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | SX9 | SX9 |
+| **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | SX16 | SX16 |
 
 Definitions:
 
@@ -134,6 +135,7 @@ more specific SX row replaces that base refusal.
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
 | **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
+| **SX16** | any modify op on `brepPayload` | body exists; rewriting a planar face's region and re-trimming its walls is not built. Staged, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims | `ErrUnsupported` |
 
 Gate order:
 
@@ -142,7 +144,7 @@ Gate order:
 | 1. call | base S17/S15/S13-or-S14; option decode; SX1; seed selector S16 unless no-openings |
 | 2. expansion | resolve seed; expand tangent chain; SX2 |
 | 3. reference | resolve asymmetric reference; SX3 |
-| 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10 |
+| 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10/SX16 |
 | 5. existence | base S4/S5/S18/S10; SX6/SX11 |
 | 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13/SX14/SX15 |
 | 7. payload | base S12 until `stackedPrismPayload` lands; BX8 handles that exact case afterward |

@@ -100,6 +100,19 @@ func (bp brepPayload) sectionDelta() float64 {
 	return out
 }
 
+// requireNotBrepReceiver is modify-reach Table RX's RX7 and Table SX's SX16:
+// Fillet, Chamfer and Shell refuse a brep receiver with ErrUnsupported. The
+// refusal is staged, not SX9's permanent exclusion: the faces are analytic
+// carriers with recorded trims, and rewriting a planar face's region and
+// re-trimming its walls is not built yet (docs/general-boolean-design.md
+// §4.5).
+func requireNotBrepReceiver(payload featurePayload, op string) error {
+	if _, ok := payload.(brepPayload); ok {
+		return fmt.Errorf(`%w: this evaluator does not yet rewrite an analytically trimmed (brep) body's faces; it %s a straight prism only (modify-reach SX16)`, ErrUnsupported, op)
+	}
+	return nil
+}
+
 // assignRoles names every face by its index in the record: face(k) for a
 // planar face and wall(k) for a swept one (§4.2).
 func (bp brepPayload) assignRoles() {

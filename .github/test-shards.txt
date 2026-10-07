@@ -1047,3 +1047,8 @@
 3	0.01	TestPrismBooleanReflectedSharedAxisIsIdentity
 3	0.01	TestPrismAmplifiedCutsFallBack
 3	0.01	TestPrismGroupDisplacedToolChargesTheCrossing
+3	0.01	TestBrepUndercutSurveyReadsEveryFace
+3	0.01	TestBrepConcaveRadiusReadsConcaveWalls
+3	0.01	TestBrepArcWallHasTheAnalyticSTEPShape
+3	0.01	TestBrepClearanceReadsItsCarriers
+3	0.01	TestBrepModifyOpsAreStaged

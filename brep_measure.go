@@ -20,7 +20,8 @@ import (
 // reference frame (brepEmbeds): a line contributes an exact rational, a
 // circular wall or region its proven enclosure, and the published float is
 // the sum rounded once. The terms may cancel in value, never in bound — every
-// enclosure's width is carried through the sum.
+// enclosure's width is carried through the sum. The undercut and
+// minimum-radius surveys over the same faces (§4.5) close the file.
 
 // brepRegion is a planar face's region read once: its area enclosure, the
 // published area with its bound, and the upper bound on its area.
@@ -343,4 +344,87 @@ func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 		lo, hi, bound = math.Min(lo, l), math.Max(hi, h), math.Max(bound, b)
 	}
 	return lo, hi, bound, nil
+}
+
+// brepUndercuts surveys a brep body's faces against the pull
+// (docs/general-boolean-design.md §4.5's undercut row, DX7's reading): a
+// planar face carries one normal, its frame's N turned outward, and a swept
+// face sweeps its wall walk's normal range exactly as a prism's side does.
+// Both readings go through the exact three-valued decisions prismUndercuts
+// uses (survey2d.CapNormalDecision, survey2d.WallNormalDecision) over each
+// face's own placed frame, so a straddling face sets undecided without
+// discarding a face already proven to oppose. Every outward normal maps
+// through the placement's linear part, which a reflection maps correctly.
+// The reading is a normal-direction membership, unaffected by a face's
+// displacements, as a prism's is (docs/prism-boolean-design.md §12).
+func brepUndercuts(b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
+	if _, ok := pull.Normalize(); !ok {
+		return undercutOutcome{}
+	}
+	roles := facesByRole(b)
+	faces := []*Face{}
+	undecided := false
+	work := freeform.NewFreeformWork()
+	for _, f := range bp.faces {
+		face := roles[f.role]
+		if face == nil {
+			return undercutOutcome{}
+		}
+		m, ok := newPlacedFrameMap(f.view(bp.xform))
+		if !ok {
+			return undercutOutcome{}
+		}
+		var verdict survey2d.PullVerdict
+		if f.planar() {
+			sign := -1.0
+			if f.outward {
+				sign = 1
+			}
+			verdict, ok = survey2d.CapNormalDecision(m, pull, sign)
+		} else {
+			w, err := walkOf(f.wall, work)
+			if err != nil {
+				return undercutOutcome{}
+			}
+			verdict, ok = survey2d.WallNormalDecision(survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, m, pull)
+		}
+		if !listVerdict(&faces, &undecided, face, verdict, ok) {
+			return undercutOutcome{}
+		}
+	}
+	if undecided && len(faces) == 0 {
+		// Keep an entirely undecided result distinct from a proven all-clear.
+		faces = nil
+	}
+	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
+}
+
+// brepMinRadius is the tightest concave radius over a brep body's faces
+// (§4.5's minimum-radius row, DX8's reading): only a swept face whose wall is
+// a circle or an arc walked clockwise in its own frame, with the material on
+// its left, curves away from the material — a hole's wall, a groove — and
+// its radius is the walk's own, entering the §9.2 aggregate under its own
+// proven radius bound, as prismMinRadius takes a prism side's. Planar faces
+// carry no radius. A record carrying any section displacement leaves the
+// question undecided, as prismMinRadius does: the radius is read off the
+// recorded wall, which the face only denotes within that displacement.
+func brepMinRadius(bp brepPayload) (radiusOutcome, bool) {
+	if bp.sectionDelta() != 0 {
+		return radiusOutcome{}, false
+	}
+	agg := survey2d.MinAggregate()
+	work := freeform.NewFreeformWork()
+	for _, f := range bp.faces {
+		if f.planar() {
+			continue
+		}
+		w, err := walkOf(f.wall, work)
+		if err != nil {
+			return radiusOutcome{}, false
+		}
+		if w.IsCircular() && w.Th1 < w.Th0 {
+			agg.Take(w.Radius, w.RadiusBound)
+		}
+	}
+	return radiusOutcomeOf(agg)
 }
