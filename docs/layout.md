@@ -163,7 +163,7 @@ the rules leave to the byte budget.
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | Reads band-patch tags and placed frames for DX7's normal model. |
 | `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
-| `capblend_admit.go` | Decides by exact rational tests whether `docs/tessellation-reach-design.md` §7's occupied-volume proof covers a cap-blend payload. |
+| `capblend_admit.go` | Adapts cap-band occupied-volume admission. See tessellation-reach §7. |
 
 ### Verification and surveys
 
@@ -296,7 +296,7 @@ the rules leave to the byte budget.
 | `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
-| `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band admission, normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
