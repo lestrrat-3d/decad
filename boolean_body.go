@@ -9,8 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -517,7 +515,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	czF, _ := cz.Float64()
 	// The three coordinates round independently, and the VecMeasurement bound
 	// is a 3D radius (internal/proofbound/bounds.go, proofbound.Radius3D).
-	cenRound := proofbound.Radius3D(math.Max(survey2d.RatAbsDiff(cx, cxF), math.Max(survey2d.RatAbsDiff(cy, cyF), survey2d.RatAbsDiff(cz, czF))))
+	cenRound := proofbound.Radius3D(math.Max(proofbound.RatAbsDiff(cx, cxF), math.Max(proofbound.RatAbsDiff(cy, cyF), proofbound.RatAbsDiff(cz, czF))))
 	centroidBound := proofbound.AbsSumUpper(cenBound, cenRound)
 	body.centroid = VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
@@ -621,7 +619,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []proofbound.Xpt, tris []
 		return Measurement{}, nil, fmt.Errorf(`%w: the boolean result encloses no volume`, ErrBooleanFailed)
 	}
 	volF, _ := volRat.Float64()
-	bound := proofbound.AbsSumUpper(volSymDiff, survey2d.RatAbsDiff(volRat, volF))
+	bound := proofbound.AbsSumUpper(volSymDiff, proofbound.RatAbsDiff(volRat, volF))
 	return Measurement{
 		Value:     units.CubicMillimeters(volF),
 		Exactness: exactnessOf(bound),

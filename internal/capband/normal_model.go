@@ -138,7 +138,7 @@ func PatchNormalModel(in NormalInput) (NormalModel, bool) {
 	invFixed := new(big.Rat).Inv(fixed)
 	// The largest |1/|g(θ)| - 1/fixed| the enclosure allows, taken from whichever
 	// end is further from the fixed length in reciprocal terms.
-	gap := survey2d.RatMax(
+	gap := proofbound.RatMax(
 		new(big.Rat).Sub(new(big.Rat).Inv(length.Lo), invFixed),
 		new(big.Rat).Sub(invFixed, new(big.Rat).Inv(length.Hi)),
 	)
@@ -286,23 +286,23 @@ func HarmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (HarmonicExtre
 		// charges MinHi-MinLo and MaxHi-MaxLo into the allowance DX7 reads, so
 		// its listing test mn+allow < 0 can never fire on a positive true
 		// minimum.
-		ext.MinLo, ext.MinHi = survey2d.RatMin(ext.MinLo, at.Lo), survey2d.RatMin(ext.MinHi, at.Hi)
-		ext.MaxLo, ext.MaxHi = survey2d.RatMax(ext.MaxLo, at.Lo), survey2d.RatMax(ext.MaxHi, at.Hi)
+		ext.MinLo, ext.MinHi = proofbound.RatMin(ext.MinLo, at.Lo), proofbound.RatMin(ext.MinHi, at.Hi)
+		ext.MaxLo, ext.MaxHi = proofbound.RatMax(ext.MaxLo, at.Lo), proofbound.RatMax(ext.MaxHi, at.Hi)
 	}
 
-	sure, maybe := survey2d.WindowReachesDirection(coss, sins, a, b)
+	sure, maybe := proofbound.WindowReachesDirection(coss, sins, a, b)
 	if maybe {
-		ext.MaxHi = survey2d.RatMax(ext.MaxHi, peak.Hi)
+		ext.MaxHi = proofbound.RatMax(ext.MaxHi, peak.Hi)
 	}
 	if sure {
-		ext.MaxLo = survey2d.RatMax(ext.MaxLo, peak.Lo)
+		ext.MaxLo = proofbound.RatMax(ext.MaxLo, peak.Lo)
 	}
-	sure, maybe = survey2d.WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
+	sure, maybe = proofbound.WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
 	if maybe {
-		ext.MinLo = survey2d.RatMin(ext.MinLo, trough.Lo)
+		ext.MinLo = proofbound.RatMin(ext.MinLo, trough.Lo)
 	}
 	if sure {
-		ext.MinHi = survey2d.RatMin(ext.MinHi, trough.Hi)
+		ext.MinHi = proofbound.RatMin(ext.MinHi, trough.Hi)
 	}
 	return ext, true
 }

@@ -93,7 +93,7 @@ func (ra ExtremeAggregate) Resolve() (float64, float64, bool) {
 	if proofbound.IsNonFinite(mid) {
 		return 0, 0, false
 	}
-	bound := math.Max(RatAbsDiff(ra.Lo, mid), RatAbsDiff(ra.Hi, mid))
+	bound := math.Max(proofbound.RatAbsDiff(ra.Lo, mid), proofbound.RatAbsDiff(ra.Hi, mid))
 	if proofbound.IsNonFinite(bound) {
 		return 0, 0, false
 	}

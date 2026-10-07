@@ -477,7 +477,7 @@ func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 					seen++
 					exact := exactCramerRadius(triple)
 					require.NotNil(t, exact)
-					gap := survey2d.RatAbsDiff(exact, r)
+					gap := proofbound.RatAbsDiff(exact, r)
 					require.LessOrEqual(t, gap, rBound,
 						`the published radius interval must contain the exact Cramer answer`)
 					if gap > divisionOnlyRadiusBound(triple) {

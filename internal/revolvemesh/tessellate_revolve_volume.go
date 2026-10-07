@@ -5,8 +5,6 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -195,8 +193,8 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 	total := new(big.Rat)
 	width := big.NewRat(1, n)
 	for i := range n {
-		piece := new(big.Rat).Add(survey2d.RatMax(pAt[i], pAt[i+1]), bulgeP)
-		piece.Add(piece, new(big.Rat).Add(survey2d.RatMax(qAt[i], qAt[i+1]), bulgeQ))
+		piece := new(big.Rat).Add(proofbound.RatMax(pAt[i], pAt[i+1]), bulgeP)
+		piece.Add(piece, new(big.Rat).Add(proofbound.RatMax(qAt[i], qAt[i+1]), bulgeQ))
 		total.Add(total, new(big.Rat).Mul(piece, width))
 	}
 	return total.Mul(total, big.NewRat(1, 2)), nil
@@ -227,8 +225,8 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 func AngularHomotopyBulges(d proofbound.RatInterval, n int64) (*big.Rat, *big.Rat) {
 	dh := new(big.Rat).Set(d.Hi)
 	sq := new(big.Rat).Mul(dh, dh)
-	sinB := survey2d.RatMin(big.NewRat(1, 1), dh)
-	versB := survey2d.RatMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
+	sinB := proofbound.RatMin(big.NewRat(1, 1), dh)
+	versB := proofbound.RatMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
 
 	p := new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), new(big.Rat).Add(
 		new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), sinB),
