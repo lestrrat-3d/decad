@@ -282,133 +282,29 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 		// one. The error return is reserved for cancellation.
 		return false, nil
 	}
-	var capElems []survey2d.SurveyElem
-	maxCoordUpper := 0.0
-	for _, loop := range loops {
-		for _, w := range loop {
-			if err := budget.Step(); err != nil {
-				return false, err
-			}
-			el, ok := walkElem(w.SegmentWalk)
-			if !ok {
-				return false, nil
-			}
-			maxCoordUpper = math.Max(maxCoordUpper, w.CoordUpper)
-			if !pp.surfaceResult {
-				capElems = append(capElems, el)
-			}
-
-			f, ok := prismWallCFace(pp, w.SegmentWalk)
-			if !ok {
-				return false, nil
-			}
-			g.faces = append(g.faces, f)
-		}
+	built, ok, err := clearance.BuildPrismCarriers(budget, prismCarrierFrame(pp), loops, pp.surfaceResult)
+	if err != nil || !ok {
+		return false, err
 	}
+	g.faces = append(g.faces, built.Faces...)
 
-	if !pp.surfaceResult {
-		region := clearance.NewRegion2(capElems)
-		for _, cap := range []struct {
-			z    float64
-			sign float64
-		}{{z: pp.z0, sign: -1}, {z: pp.z1, sign: 1}} {
-			g.faces = append(g.faces, prismPlaneCFace(pp, cap.z, cap.sign, region))
-		}
-	}
 	// g.delta charges the three terms clearance_geom.go's package doc comment
 	// and bodyGeom's own doc comment name: the payload's own frame/placement
-	// point rounding (every anchor, axis point and witness above came from
-	// pp.point), its proven axial displacement (pp.axialDelta — the section's
-	// own sectionDelta is already refused above, but the sweep levels' own
-	// displacement was never charged here before), and the worst per-face
-	// tilt a rounded carrier normal commits (every u, v and n above came from
-	// pp.dir). It is exactly zero for an axis-aligned, unplaced, feature-built
-	// prism, which is what keeps an ordinary extrude's Clearance rows Exact.
-	pointTerm := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	// point rounding (every anchor, axis point and witness came from the
+	// frame's point lift), its proven axial displacement (pp.axialDelta — the
+	// section's own sectionDelta is already refused above), and the worst
+	// per-face tilt a rounded carrier normal commits (every u, v and n came
+	// from the frame's direction lift). It is exactly zero for an axis-aligned,
+	// unplaced, feature-built prism, which keeps its Clearance rows Exact.
+	pointTerm := proofbound.FrameAndPlacementRoundAllow(pp.frame, pp.xform,
+		math.Max(built.CoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
 	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
 	g.carrierDelta = g.delta
 	return true, nil
 }
 
-// prismWallCFace is one prism side's carrier face, over the prism's own
-// frame, placement and sweep interval: a cylinder for a circular walk (its
-// angular window the walk's own, a whole circle's full), a plane rectangle
-// L × h for a line walk with its outward normal the walk's right, turned
-// back for a reflected placement. ok is false for a walk this kernel cannot
-// carry (a zero-length line or a direction that does not normalise).
-func prismWallCFace(pp prismPayload, w survey2d.SegmentWalk) (*clearance.CFace, bool) {
-	nDir := pp.dir(0, 0, 1)
-	h := pp.z1 - pp.z0
-	if w.IsCircular() {
-		f := &clearance.CFace{
-			Kind:   clearance.CkCylinder,
-			Anchor: pp.point(w.CU, w.CV, pp.z0),
-			Axis:   nDir,
-			RefU:   pp.dir(1, 0, 0),
-			RefV:   pp.dir(0, 1, 0),
-			Radius: w.Radius,
-			ZWin:   clearance.NewLinWindow(0, h),
-			Sweep:  clearance.AngWindow{Full: w.Closed},
-		}
-		if !w.Closed {
-			f.Sweep = clearance.NewAngWindow(w.Th0, w.Th1)
-		}
-		top := pp.point(w.CU, w.CV, pp.z1)
-		f.Box = clearance.BoxUnion(clearance.CircleBox(f.Anchor, nDir, w.Radius), clearance.CircleBox(top, nDir, w.Radius))
-		midTh := (w.Th0 + w.Th1) / 2
-		f.Wit = append(f.Wit,
-			pp.point(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (pp.z0+pp.z1)/2),
-			pp.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), pp.z0))
-		return f, true
-	}
-
-	l := math.Hypot(w.EndU-w.StartU, w.EndV-w.StartV)
-	if l == 0 {
-		return nil, false
-	}
-	e1, ok := pp.dir(w.EndU-w.StartU, w.EndV-w.StartV, 0).Normalize()
-	if !ok {
-		return nil, false
-	}
-	tu, tv := w.TanInU, w.TanInV
-	if pp.reflected() {
-		tu, tv = -tu, -tv
-	}
-	nOut, ok := pp.dir(tu, tv, 0).Cross(nDir).Normalize()
-	if !ok {
-		return nil, false
-	}
-	f := &clearance.CFace{
-		Kind: clearance.CkPlane,
-		O:    pp.point(w.StartU, w.StartV, pp.z0),
-		U:    e1,
-		V:    nDir,
-		N:    nOut,
-	}
-	le0, _ := survey2d.LineElem(0, 0, l, 0)
-	le1, _ := survey2d.LineElem(l, 0, l, h)
-	le2, _ := survey2d.LineElem(l, h, 0, h)
-	le3, _ := survey2d.LineElem(0, h, 0, 0)
-	f.Region = clearance.NewRegion2([]survey2d.SurveyElem{le0, le1, le2, le3})
-	f.Box = clearance.BoxOf(f.O, f.O.Add(e1.Scale(l)), f.O.Add(nDir.Scale(h)), f.O.Add(e1.Scale(l)).Add(nDir.Scale(h)))
-	f.Wit = append(f.Wit, f.O.Add(e1.Scale(l/2)).Add(nDir.Scale(h/2)), f.O)
-	return f, true
-}
-
-// prismPlaneCFace is a planar carrier face at level z of the prism's frame,
-// with outward normal sign·N and the given trim region in frame coordinates.
-func prismPlaneCFace(pp prismPayload, z, sign float64, region clearance.Region2) *clearance.CFace {
-	f := &clearance.CFace{
-		Kind:   clearance.CkPlane,
-		O:      pp.point(0, 0, z),
-		U:      pp.dir(1, 0, 0),
-		V:      pp.dir(0, 1, 0),
-		N:      pp.dir(0, 0, 1).Scale(sign),
-		Region: region,
-	}
-	f.Box = clearance.CapBox(f)
-	f.Wit = clearance.CapWitnesses(f)
-	return f
+func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
+	return clearance.PrismCarrierFrame{Frame: pp.frame, Transform: pp.xform, Z0: pp.z0, Z1: pp.z1}
 }
 
 // addBrepFaces builds a brep body's carrier faces from its own record
@@ -461,14 +357,14 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 			if f.outward {
 				sign = 1
 			}
-			face = prismPlaneCFace(pp, f.z0, sign, clearance.NewRegion2(elems))
+			face = clearance.PrismPlaneCarrier(prismCarrierFrame(pp), f.z0, sign, clearance.NewRegion2(elems))
 		} else {
 			w, ok := brepCarrierWalk(f.wall)
 			if !ok {
 				return false, nil
 			}
 			coordUpper = math.Max(coordUpper, w.CoordUpper)
-			if face, ok = prismWallCFace(pp, w); !ok {
+			if face, ok = clearance.PrismWallCarrier(prismCarrierFrame(pp), w); !ok {
 				return false, nil
 			}
 		}
