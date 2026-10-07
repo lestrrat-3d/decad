@@ -78,9 +78,15 @@ type gateRocker struct {
 
 func buildGateRocker(t *testing.T) gateRocker {
 	t.Helper()
+	return buildGateRockerSpan(t, -50, 150)
+}
+
+// buildGateRockerSpan is scene 11 with the gate spanning x ∈ [x0, x1].
+func buildGateRockerSpan(t *testing.T, x0, x1 float64) gateRocker {
+	t.Helper()
 	fb, _ := buildRocker(t, false)
 	g := gateRocker{fourBar: fb}
-	g.gateBody = boxBodyAtZ(t, fb.doc, -50, 72, 150, 82, 19, 10)
+	g.gateBody = boxBodyAtZ(t, fb.doc, x0, 72, x1, 82, 19, 10)
 	var err error
 	g.gate, err = fb.linkage.Ground().Prismatic(r3.NewVec(0, -1, 0), []*decad.Body{g.gateBody})
 	require.NoError(t, err)
@@ -515,4 +521,232 @@ func TestVerifyJointBoxLoopCancellation(t *testing.T) {
 	}
 	require.NotNil(t, completed)
 	require.Greater(t, canceled, 10)
+}
+
+// TestVerifyJointBoxLoopClearReading is §16.8's clear box: scene 11 with the
+// gate over [0, 2] mm. d* is at least 2.6143 over the crank's range, so no
+// configuration collides, and the minimum gap over the box is
+// 72 − 2 − y_c(θ2*) = 0.6143 mm at (θ2*, 2), interior along the crank. The
+// minimum is flat along the crank, but the gap falls linearly along the gate,
+// so the reading meets the default tolerance by refining the gate axis.
+//
+// Measured: 305 centres into 153 leaves, the narrowest 1/2048 of a range.
+//
+// Legs seen to fail when deleted: the dependent's term in τ_half (a leaf's
+// bound exceeds the true gap at its worst configuration); the reading floor
+// past the verdict floor (no leaf is narrower than 1/1024).
+func TestVerifyJointBoxLoopClearReading(t *testing.T) {
+	t.Parallel()
+	truth := 72 - 2 - rockerCornerY(rockerExtremeCrank())
+	require.InDelta(t, 0.6143, truth, 1e-4)
+	g := buildGateRocker(t)
+	report := verifyJointBox(t, g.doc, g.linkage, g.box(0, 90, 0, 2))
+	t.Logf("cells evaluated %d, leaves %d", report.CellsEvaluated, len(report.Cells))
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Equal(t, units.Scalar(1.0/16384), report.ReadingResolution)
+	require.Less(t, report.CellsEvaluated, 16384)
+	narrowest := 1.0
+	for _, cell := range report.Cells {
+		require.Equal(t, decad.CellClear, cell.Outcome)
+		thLo, thHi := degreesOf(t, cell.Cell.Min[0])*math.Pi/180, degreesOf(t, cell.Cell.Max[0])*math.Pi/180
+		dLo, dHi := millimetresOf(t, cell.Cell.Min[3]), millimetresOf(t, cell.Cell.Max[3])
+		narrowest = math.Min(narrowest, math.Min((thHi-thLo)/(math.Pi/2), (dHi-dLo)/2))
+		worst := 72 - dHi - rockerCornerY(rockerNearest(thLo, thHi))
+		require.NotNil(t, cell.Clearance)
+		require.LessOrEqual(t, cell.Clearance.Value.Mag(), worst, `each bound is below the cell's true minimum gap`)
+	}
+	require.Less(t, narrowest, 1.0/1024-1e-9, `the reading refines past the verdict floor`)
+	require.NotNil(t, report.Clearance)
+	gap := report.Clearance.Measurement
+	require.LessOrEqual(t, gap.Value.Mag()-gap.Bound.Mag(), truth)
+	require.GreaterOrEqual(t, gap.Value.Mag()+gap.Bound.Mag(), truth)
+	require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+}
+
+// TestVerifyJointBoxLoopClearMargins is the clear box's margins (§16.8) at a
+// relative tolerance of 0.5, where the reading passes its gate on coarse
+// cells and only a margin's own refinement decides it: 0.5 mm, below the true
+// 0.6143 mm minimum, is met; 0.7 mm is disproven at some centre.
+//
+// Measured: 83 centres for 0.5 mm, 103 for 0.7 mm.
+//
+// Legs seen to fail when deleted: the margin's refinement (both margins read
+// AssessmentUndecided).
+func TestVerifyJointBoxLoopClearMargins(t *testing.T) {
+	t.Parallel()
+	loose := decad.WithMotionTolerance(units.Scalar(0.5))
+	t.Run("a 0.5 mm margin is met", func(t *testing.T) {
+		t.Parallel()
+		g := buildGateRocker(t)
+		report := verifyJointBox(t, g.doc, g.linkage, g.box(0, 90, 0, 2), loose, decad.WithMinClearance(units.Millimeters(0.5)))
+		t.Logf("cells evaluated %d", report.CellsEvaluated)
+		require.Equal(t, decad.AssessmentMet, report.Assessment)
+		require.Equal(t, decad.Sound, report.Status)
+	})
+	t.Run("a 0.7 mm margin is violated", func(t *testing.T) {
+		t.Parallel()
+		g := buildGateRocker(t)
+		report := verifyJointBox(t, g.doc, g.linkage, g.box(0, 90, 0, 2), loose, decad.WithMinClearance(units.Millimeters(0.7)))
+		t.Logf("cells evaluated %d", report.CellsEvaluated)
+		require.Equal(t, decad.AssessmentViolated, report.Assessment)
+		require.Equal(t, decad.Violating, report.Status)
+		violations := 0
+		for _, d := range report.Diagnostics {
+			if d.Code != decad.DiagMotionClearanceViolated {
+				continue
+			}
+			violations++
+			require.NotNil(t, d.Cell, `the violation names the cell whose centre proved it`)
+			require.Less(t, d.Observed.Value.Mag()+d.Observed.Bound.Mag(), 0.7)
+		}
+		require.Positive(t, violations)
+	})
+}
+
+// TestVerifyJointBoxLoopTurnBack is §16.8's turn-back cell: scene 7 without
+// its wall, the crank over [0°, 81.857366°], where the follower returns to its
+// zero-pose angle after dipping to −8.7632°, and a 0.8 mm pin in the
+// follower's layer inside the follower's zero-pose bar — 60 mm along its axis
+// from O4 and 3.5 mm off it along n4 = (−sin θ4, cos θ4) — so the pin is
+// struck at both ends of the range. The root alone is evaluated: its centre,
+// the crank at 40.9287°, turns the follower −8.7314° away from the pin, and
+// the bar's near long edge then stands 8.0955 mm from the pin's nearest
+// corner. The follower's hull over the range is [−8.7632°, 0], so
+// δ = 8.7314° = 0.1524 rad and τ_half ≈ 72.67·0.1524 ≈ 11.1 mm exceeds that
+// gap; half the hull's width would give 5.6 mm, which the gap exceeds.
+//
+// Legs seen to fail when deleted: δ as half the hull's width (the root reads
+// CellClear across a struck pin); the dependent's term in τ_half (likewise).
+func TestVerifyJointBoxLoopTurnBack(t *testing.T) {
+	t.Parallel()
+	fb, _ := buildRocker(t, false)
+	t40 := rockerTheta4(0)
+	ux, uy := math.Cos(t40), math.Sin(t40)
+	cx, cy := rockerGround+60*ux-3.5*uy, 60*uy+3.5*ux
+	pin := boxBodyAtZ(t, fb.doc, cx-0.4, cy-0.4, cx+0.4, cy+0.4, 23.6, 0.8)
+	const top = 81.857366
+	require.InDelta(t, 0, rockerFollowerTurn(top*math.Pi/180), 1e-7, `the follower returns to its zero-pose angle`)
+	report := verifyJointBox(t, fb.doc, fb.linkage, decad.JointBox{{Link: fb.crank, Min: units.Degrees(0), Max: units.Degrees(top)}},
+		decad.WithResolution(units.Scalar(1)))
+	require.Equal(t, 1, report.CellsEvaluated)
+	require.Len(t, report.Cells, 1)
+	root := report.Cells[0]
+	require.Equal(t, decad.CellUndecided, root.Outcome)
+	require.Equal(t, decad.Suspect, report.Status)
+
+	require.InDelta(t, top/2, degreesOf(t, root.Center.Values[0]), 1e-12)
+	th := degreesOf(t, root.Center.Values[0]) * math.Pi / 180
+	centre := rockerFollowerTurn(th)
+	require.InDelta(t, -8.7314*math.Pi/180, centre, 1e-5)
+	require.InDelta(t, centre, root.Center.Values[2].Mag(), 1e-9)
+	dip := rockerFollowerTurn(rockerExtremeCrank())
+	require.InDelta(t, -8.7632*math.Pi/180, dip, 1e-5)
+	require.LessOrEqual(t, root.Cell.Min[2].Mag(), dip)
+	require.GreaterOrEqual(t, root.Cell.Max[2].Mag(), 0.0)
+	require.LessOrEqual(t, root.Cell.Max[2].Mag()-root.Cell.Min[2].Mag(), 1.05*(-dip)+1e-6)
+
+	// The gap at the centre is the pin's nearest corner's offset from the
+	// bar's axis, along the turned bar's normal, less the bar's half-width.
+	t4 := rockerTheta4(th)
+	nx, ny := -math.Sin(t4), math.Cos(t4)
+	gap := math.Inf(1)
+	for _, dx := range []float64{-0.4, 0.4} {
+		for _, dy := range []float64{-0.4, 0.4} {
+			gap = math.Min(gap, nx*(cx+dx-rockerGround)+ny*(cy+dy)-4)
+		}
+	}
+	require.InDelta(t, 8.0955, gap, 1e-4)
+	require.Len(t, root.Clearances, 1)
+	row := root.Clearances[0]
+	require.Same(t, fb.foll, row.A)
+	require.Same(t, pin, row.B)
+	require.InDelta(t, gap, row.Gap.Value.Mag(), 1e-9)
+	require.Less(t, row.Gap.Bound.Mag(), 1e-9)
+}
+
+// TestVerifyJointBoxLoopHeld is §16.8's held loop: scene 11 with the crank
+// held at 30° and the gate over [0, 10] mm at WithResolution(1/64). The loop
+// is held, so its dependents stand still across every cell: the follower at
+// θ4(30°) = 101.9717°, its turn −8.3285° from the zero pose, its corner at
+// y_c = 69.3072, and the boundary at d_30 = 72 − y_c = 2.6928.
+//
+// Measured: 97 centres into 49 leaves.
+//
+// Legs seen to fail when deleted: reading a held driver's loop at the zero
+// pose (the boundary moves to 4.9601, and a clear leaf reaches past d_30).
+func TestVerifyJointBoxLoopHeld(t *testing.T) {
+	t.Parallel()
+	g := buildGateRocker(t)
+	th := math.Pi / 6
+	turn := rockerFollowerTurn(th)
+	require.InDelta(t, -8.3285*math.Pi/180, turn, 1e-5)
+	d30 := 72 - rockerCornerY(th)
+	require.InDelta(t, 2.6928, d30, 1e-4)
+	report := verifyJointBox(t, g.doc, g.linkage, g.box(30, 30, 0, 10), decad.WithResolution(units.Scalar(1.0/64)))
+	t.Logf("cells evaluated %d, leaves %d", report.CellsEvaluated, len(report.Cells))
+	require.Equal(t, decad.Interfering, report.Status)
+	outcomes := map[decad.CellOutcome]int{}
+	for _, cell := range report.Cells {
+		outcomes[cell.Outcome]++
+		dLo, dHi := millimetresOf(t, cell.Cell.Min[3]), millimetresOf(t, cell.Cell.Max[3])
+		dC := millimetresOf(t, cell.Center.Values[3])
+		require.InDelta(t, (dLo+dHi)/2, dC, 1e-12)
+		require.Equal(t, units.Degrees(30), cell.Center.Values[0])
+		switch cell.Outcome {
+		case decad.CellClear:
+			require.LessOrEqual(t, dHi, d30, `a clear leaf stops short of the boundary`)
+			require.LessOrEqual(t, cell.Clearance.Value.Mag(), d30-dHi, `the bound never exceeds the true gap`)
+		case decad.CellColliding, decad.CellBlocked:
+			require.Greater(t, dC, d30)
+		case decad.CellUndecided:
+			require.LessOrEqual(t, dHi-dLo, 10.0/64+1e-12)
+		default:
+			require.Failf(t, `unexpected outcome`, `%s`, cell.Outcome)
+		}
+		require.InDelta(t, turn, cell.Center.Values[2].Mag(), 1e-9)
+		require.Positive(t, cell.Center.Bounds[2].Mag())
+		require.Less(t, cell.Center.Bounds[2].Mag(), 1e-9)
+		require.InDelta(t, turn, cell.Cell.Min[2].Mag(), 1e-9)
+		require.InDelta(t, turn, cell.Cell.Max[2].Mag(), 1e-9)
+	}
+	require.Positive(t, outcomes[decad.CellClear])
+}
+
+// TestVerifyJointBoxLoopBlocked is §16.8's blocked box: scene 11 with the
+// gate cut to x ∈ [60, 120] (area 2600 mm²), the crank over [35°, 42°] and
+// the gate over [8, 10] mm, at WithResolution(1/64). Over that crank range
+// y_c stays within [69.3725, 69.3857], so the corner lies at least 5.37 mm
+// past the gate's underside y = 72 − d ∈ [62, 64], beyond the bar's full
+// width 8·|cos θ4| ≈ 1.61: the overlap is the trapezoidal prism
+// 8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298 mm³, and at the floor the allowance is
+// about ½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57 mm³, so the box resolves into blocked
+// cells.
+//
+// Measured: 83 centres into 42 leaves.
+//
+// Legs seen to fail when deleted: the blocked certificate (no leaf blocks:
+// every cell splits to the floor along both axes, 8191 centres, and reads
+// CellColliding).
+func TestVerifyJointBoxLoopBlocked(t *testing.T) {
+	t.Parallel()
+	g := buildGateRockerSpan(t, 60, 120)
+	report := verifyJointBox(t, g.doc, g.linkage, g.box(35, 42, 8, 10), decad.WithResolution(units.Scalar(1.0/64)))
+	t.Logf("cells evaluated %d, leaves %d", report.CellsEvaluated, len(report.Cells))
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Less(t, report.CellsEvaluated, 512)
+	for _, cell := range report.Cells {
+		require.Equal(t, decad.CellBlocked, cell.Outcome)
+		require.NotEmpty(t, cell.Interferences, `a blocked cell's centre collision is its witness`)
+	}
+	for _, hit := range report.Collisions {
+		require.Same(t, g.foll, hit.A)
+		require.Same(t, g.gateBody, hit.B)
+		th, d := degreesOf(t, hit.Configuration.Values[0])*math.Pi/180, millimetresOf(t, hit.Configuration.Values[3])
+		t4 := rockerTheta4(th)
+		depth := rockerCornerY(th) - (72 - d)
+		require.Greater(t, depth, 8*math.Abs(math.Cos(t4)), `both end corners have crossed`)
+		require.Less(t, hit.Volume.Bound.Mag(), hit.Volume.Value.Mag())
+		require.InDelta(t, 64*(depth-4*math.Abs(math.Cos(t4)))/math.Sin(t4), hit.Volume.Value.Mag(), 1e-6)
+	}
 }

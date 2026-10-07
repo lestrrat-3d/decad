@@ -2528,7 +2528,9 @@ crank-rocker: a few hundred). A stuck cell costs its one refused point ask, whic
 its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `445` centres
 in about `2.3` s, `13` s under the race detector; the one-axis loop box `107` centres in about `2` s, `6` s
 under the race detector; the fold box `21` centres in about `2` s, most of it the decomposition walking the
-refused cells down to the fold. The test file records the counts.
+refused cells down to the fold. Under the race detector the clear box's reading and its two margins take
+about `15` s together, the blocked box `3` s, the held loop `2` s and the turn-back cell `1` s. The test file
+records the counts.
 
 ### 16.8 Required tests
 
@@ -2586,12 +2588,18 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
 
 **The clear box and its reading.** Scene 11 with the gate over `[0, 2]` mm: `d*` is at least `2.6143`, so
 no configuration collides, and the minimum gap over the box is `72 − 2 − 69.3857 = 0.6143` mm at
-`(θ2*, 2)` — interior along the crank, at the gate's end. At `WithMotionTolerance(Scalar(0.05))` and the
-other defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
+`(θ2*, 2)` — interior along the crank, at the gate's end. The minimum is flat along the crank, but the gap
+falls linearly along the gate, so the reading meets the default tolerance by refining the gate axis. At the
+defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
 `72 − d_hi − y_c(θ̂)`; `Clearance` enclosing `0.6143` with `ToleranceSatisfied`; `ReadingResolution`
-`1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (the test
-file records it). `WithMinClearance` `0.5` mm reads `AssessmentMet`; `0.7` mm `AssessmentViolated` with a
-`DiagMotionClearanceViolated` whose `Cell` is set.
+`1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (measured:
+`305` centres into `153` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
+where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`83`
+centres) and `0.7` mm `AssessmentViolated` (`103` centres) with a `DiagMotionClearanceViolated` whose
+`Cell` is set. Red when the dependent's term is dropped from `τ_half` (a leaf's bound exceeds the true gap
+at its worst configuration), when the reading stops at the verdict floor (no leaf is narrower than
+`1/1024`; the gate is met there at `357` centres), and when the margin's refinement is dropped (both
+margins read `AssessmentUndecided`).
 
 **The one-axis loop box.** Scene 7's linkage and wall (`y ∈ [68.5, 78.5]`), the crank alone over
 `[0°, 90°]`, at `WithResolution(Scalar(1.0/64))`. The corner is inside the wall for `θ2 ∈ (12.6250°,
@@ -2608,19 +2616,23 @@ colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though 
 
 **The turn-back cell.** Scene 7 without the wall, the crank over `[0°, 81.857366°]` — the follower returns
 to `θ4(0)` at the range's end (§15.10) — and a `0.8` mm pin in the follower's layer (`z ∈ [23.6, 24.4]`)
-centred on the follower's top corner at the zero pose, `(79.4658, 67.0399)`, so the pin is struck at both
-ends of the range. At `WithResolution(Scalar(1))`, the root alone: its centre `40.9287°` has the corner
-`10.67` mm from the pin's centre, a gap of about `10` mm; the follower's hull over the range is
-`[−8.7632°, 0]` from `θ4(0)` and its centre value `−8.7314°`, so `δ = 8.7314° = 0.15240` rad and the
-pair's `τ_half` is about `11.1` mm. Assert `CellUndecided`. Red when `δ` is half the hull's width — `5.6` mm, and the root
-reads `CellClear` across a struck pin — and when the dependent's term is dropped.
+inside the follower's zero-pose bar, centred `60` mm along its axis from `O4` and `3.5` mm off it along
+`n4 = (−sin θ4, cos θ4)`, so the pin is struck at both ends of the range. At `WithResolution(Scalar(1))`,
+the root alone: its centre `40.9287°` turns the follower `−8.7314°` away from the pin, and the bar's near
+long edge stands `8.0955` mm from the pin's nearest corner, the gap row's value within `1e-9`; the
+follower's hull over the range is `[−8.7632°, 0]` from `θ4(0)`, so `δ = 8.7314° = 0.15240` rad and the
+pair's `τ_half` is about `11.1` mm. Assert `CellUndecided`. Red when `δ` is half the hull's width — `5.6`
+mm, and the root reads `CellClear` across a struck pin — and when the dependent's term is dropped. A pin on
+the corner itself is no fixture for the leg: the bar's trailing edge passes within `2.2` mm of it at the
+centre, under either `τ_half`.
 
 **The held loop.** Scene 11 with the crank over `[30°, 30°]` and the gate over `[0, 10]`, at
 `WithResolution(Scalar(1.0/64))`: the follower stands at `θ4(30°) = 101.9717°`, `y_c = 69.3072`, and the
 boundary is `d_30 = 2.6928`. Assert every `CellClear` leaf has `d_hi ≤ d_30` and every colliding or blocked
 leaf's centre `d_c > d_30`; every leaf's `Center.Values[2]` is within `1e-9` rad of `θ4(30°) − θ4(0) =
-−8.3285°` with `Bounds[2]` positive and below `1e-9`, and `Cell.Min[2]`, `Cell.Max[2]` within `1e-9` of it.
-Red when a held driver's loop stands at the zero pose: the boundary is then `4.9601`.
+−8.3285°` with `Bounds[2]` positive and below `1e-9`, and `Cell.Min[2]`, `Cell.Max[2]` within `1e-9` of it
+(measured: `97` centres into `49` leaves). Red when a held driver's loop stands at the zero pose: the
+boundary is then `4.9601`, and a clear leaf's bound exceeds its true gap.
 
 **The fold box.** Scene 9's four-bar (ground `100`, crank `50`, coupler `60`, follower `50`), the crank
 over `[0°, 90°]`, no static body, at the defaults. The loop folds at `s_fold = 0.974528`. Assert `Suspect`;
@@ -2638,8 +2650,9 @@ stays within `[69.3725, 69.3857]`, so the corner's depth below the underside `y 
 least `5.37` mm, past the bar's full width `8·|cos θ4| ≈ 1.61`, and the overlap is the trapezoidal prism
 `8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298` mm³; at the floor the allowance is about
 `½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57` mm³. Assert every leaf `CellBlocked`, no undecided or colliding leaf,
-`CellsEvaluated` below `512`. Red when the blocked certificate is dropped: the run then splits to the
-floor, exhausts the budget and reads `CellColliding` with `DiagJointBoxBudgetExhausted`.
+`CellsEvaluated` below `512` (measured: `83` centres into `42` leaves), and every collision's `Volume` the
+trapezoidal prism within `1e-6`. Red when the blocked certificate is dropped: every cell then splits to the
+floor along both axes, `8191` centres, each leaf `CellColliding`.
 
 **Standing tests.** Errors, one subtest per row of §16.6: a box listing the crank and the follower, a
 box listing the coupler, the flat four-bar of scene 9 (`E0` refuses,
