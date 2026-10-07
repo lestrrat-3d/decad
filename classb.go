@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -369,95 +369,14 @@ func classBAxisAligned(p ProfileRecord) bool {
 	return true
 }
 
-// classBBox is a segment's outward box in its own record's plane
-// coordinates, as exact rationals.
-type classBBox struct{ lo, hi [2]*big.Rat }
+type classBBox = classbgeom.Box2
+type box3 = classbgeom.Box3
 
-// classBSegmentBox bounds one natural-range segment in its own plane: a line
-// by its endpoints, a circle or an arc by its whole circle, with an arc's
-// computed radius rounded outward by its proven bound.
-func classBSegmentBox(seg CurveSegment) (classBBox, error) {
-	rat := proofarith.FloatRat
-	switch s := seg.(type) {
-	case LineSeg:
-		b := classBBox{}
-		for i, pair := range [2][2]float64{{s.Start.U, s.End.U}, {s.Start.V, s.End.V}} {
-			lo, hi := pair[0], pair[1]
-			if lo > hi {
-				lo, hi = hi, lo
-			}
-			b.lo[i], b.hi[i] = rat(lo), rat(hi)
-		}
-		return b, nil
-	default:
-		w, err := walkOf(seg, freeform.NewFreeformWork())
-		if err != nil {
-			return classBBox{}, err
-		}
-		r := rat(proofbound.UpRound(proofbound.AbsSumUpper(w.Radius, w.RadiusBound)))
-		if r == nil {
-			return classBBox{}, fmt.Errorf(`%w: a circular segment states no finite radius`, ErrNotFinite)
-		}
-		c := [2]*big.Rat{rat(w.CU), rat(w.CV)}
-		b := classBBox{}
-		for i := range c {
-			b.lo[i] = new(big.Rat).Sub(c[i], r)
-			b.hi[i] = new(big.Rat).Add(c[i], r)
-		}
-		return b, nil
-	}
-}
-
-// classBApart reports whether two closed intervals are separated by an exact
-// comparison.
-func classBApart(alo, ahi, blo, bhi *big.Rat) bool {
-	return ahi.Cmp(blo) < 0 || bhi.Cmp(alo) < 0
-}
-
-// box3 is an exact axis-aligned box in reference coordinates.
-type box3 struct{ lo, hi [3]*big.Rat }
-
-// apart reports whether two boxes are separated along some axis.
-func (a box3) apart(b box3) bool {
-	for k := range 3 {
-		if classBApart(a.lo[k], a.hi[k], b.lo[k], b.hi[k]) {
-			return true
-		}
-	}
-	return false
-}
-
-// classBPlace lifts a plane box and a level interval through one frame's map
-// onto the reference axes: local axis i lands on axis[i], and a negative sign
-// swaps that axis's two ends.
+func classBSegmentBox(seg CurveSegment) (classBBox, error) { return classbgeom.SegmentBox(seg) }
 func classBPlace(b classBBox, zlo, zhi *big.Rat, axis [3]int, sign [3]float64) box3 {
-	lo := [3]*big.Rat{b.lo[0], b.lo[1], zlo}
-	hi := [3]*big.Rat{b.hi[0], b.hi[1], zhi}
-	var placed box3
-	for i := range 3 {
-		k := axis[i]
-		if sign[i] > 0 {
-			placed.lo[k], placed.hi[k] = lo[i], hi[i]
-			continue
-		}
-		placed.lo[k], placed.hi[k] = new(big.Rat).Neg(hi[i]), new(big.Rat).Neg(lo[i])
-	}
-	return placed
+	return classbgeom.Place(b, zlo, zhi, axis, sign)
 }
-
-// classBUnion is the smallest box holding both.
-func classBUnion(a, b classBBox) classBBox {
-	out := a
-	for i := range 2 {
-		if b.lo[i].Cmp(out.lo[i]) < 0 {
-			out.lo[i] = b.lo[i]
-		}
-		if b.hi[i].Cmp(out.hi[i]) > 0 {
-			out.hi[i] = b.hi[i]
-		}
-	}
-	return out
-}
+func classBUnion(a, b classBBox) classBBox { return classbgeom.Union(a, b) }
 
 // classBFaceBox is one face of X as a reference box, widened by its level
 // displacements: a planar face by its outer loop's segments at its level, a
@@ -467,22 +386,7 @@ func classBFaceBox(f brepFace, e brepEmbed) (box3, error) {
 	if f.planar() {
 		segs = f.region.Outer.Segments
 	}
-	var plane classBBox
-	for i, seg := range segs {
-		b, err := classBSegmentBox(seg)
-		if err != nil {
-			return box3{}, err
-		}
-		if i == 0 {
-			plane = b
-			continue
-		}
-		plane = classBUnion(plane, b)
-	}
-	rat := proofarith.FloatRat
-	zlo := new(big.Rat).Sub(rat(f.z0), rat(f.z0Delta))
-	zhi := new(big.Rat).Add(rat(f.z1), rat(f.z1Delta))
-	return classBPlace(plane, zlo, zhi, e.axis, e.sign), nil
+	return classbgeom.FaceBox(segs, f.z0, f.z1, f.z0Delta, f.z1Delta, e.axis, e.sign)
 }
 
 // classBCurvedApart is B7: every curved wall of X and every curved wall of Y
@@ -520,7 +424,7 @@ func classBCurvedApart(ctx context.Context, cp classBPair) (bool, error) {
 	}
 	for _, a := range xs {
 		for _, b := range ys {
-			if !a.apart(b) {
+			if !a.Apart(b) {
 				return false, nil
 			}
 		}
@@ -528,33 +432,14 @@ func classBCurvedApart(ctx context.Context, cp classBPair) (bool, error) {
 	return true, nil
 }
 
-// classBPlane is one planar face's carrier in reference coordinates: the plane
-// x[axis] == level.
-type classBPlane struct {
-	axis  int
-	level *big.Rat
-}
+type classBPlane = classbgeom.Plane
 
 // classBRecordPlanes lists the planes of one record's straight walls: a line
 // runs along one in-plane axis, so its plane holds the other in-plane
 // coordinate fixed. axis and sign place the record's local axes on the
 // reference's.
 func classBRecordPlanes(p ProfileRecord, axis [3]int, sign [3]float64) []classBPlane {
-	var out []classBPlane
-	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		for _, seg := range loop.Segments {
-			line, ok := seg.(LineSeg)
-			if !ok {
-				continue
-			}
-			if line.Start.U == line.End.U {
-				out = append(out, classBPlane{axis: axis[0], level: proofarith.FloatRat(sign[0]*line.Start.U + 0)})
-				continue
-			}
-			out = append(out, classBPlane{axis: axis[1], level: proofarith.FloatRat(sign[1]*line.Start.V + 0)})
-		}
-	}
-	return out
+	return classbgeom.RecordPlanes(append([]LoopRecord{p.Outer}, p.Holes...), axis, sign)
 }
 
 // classBNoCoplanarFaces is B8: no planar face or straight wall of X lies in
@@ -564,21 +449,21 @@ func classBNoCoplanarFaces(ctx context.Context, cp classBPair) (bool, error) {
 	for fi, f := range cp.x.faces {
 		e := cp.embeds[fi]
 		if f.planar() {
-			xs = append(xs, classBPlane{axis: e.axis[2], level: proofarith.FloatRat(e.sign[2]*f.z0 + 0)})
+			xs = append(xs, classBPlane{Axis: e.axis[2], Level: proofarith.FloatRat(e.sign[2]*f.z0 + 0)})
 			continue
 		}
 		xs = append(xs, classBRecordPlanes(classBFaceRecord(f), e.axis, e.sign)...)
 	}
 	ys := classBRecordPlanes(cp.y.profile, cp.axis, cp.sign)
 	for _, z := range []float64{cp.y.z0, cp.y.z1} {
-		ys = append(ys, classBPlane{axis: cp.axis[2], level: proofarith.FloatRat(cp.sign[2]*z + 0)})
+		ys = append(ys, classBPlane{Axis: cp.axis[2], Level: proofarith.FloatRat(cp.sign[2]*z + 0)})
 	}
 	for _, a := range xs {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
 		for _, b := range ys {
-			if a.axis == b.axis && a.level.Cmp(b.level) == 0 {
+			if a.Axis == b.Axis && a.Level.Cmp(b.Level) == 0 {
 				return false, nil
 			}
 		}
@@ -645,7 +530,7 @@ func classBThroughReach(ctx context.Context, cp classBPair) (classBThrough, bool
 		if err != nil {
 			return classBThrough{}, false, err
 		}
-		if b.apart(tube) {
+		if b.Apart(tube) {
 			continue
 		}
 		slab, ok := classBAcross(f, e, d)
