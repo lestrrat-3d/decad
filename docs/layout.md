@@ -268,7 +268,7 @@ the rules leave to the byte budget.
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
-| `internal/prismcells/` | Sketch cell classification, matching, merge, cut bounds and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
+| `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Interval enclosures for cap contour points, offset carrier intersections and miter locus speed. See `docs/modify-reach-design.md` §8.3-§8.4. |
 | `internal/capband/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
