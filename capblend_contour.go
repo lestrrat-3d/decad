@@ -72,8 +72,7 @@ func ivAxisSpread(iv proofbound.RatInterval, c float64) (*big.Rat, bool) {
 	return capcontour.AxisSpread(iv, c)
 }
 
-func ivExactPoint(u, v float64) (ivPoint, bool) { return capcontour.ExactPoint(u, v) }
-func ivUnion(a, b ivPoint) ivPoint              { return capcontour.Union(a, b) }
+func ivUnion(a, b ivPoint) ivPoint { return capcontour.Union(a, b) }
 func intervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
 	return capcontour.IntervalHull(a, b)
 }
