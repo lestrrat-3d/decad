@@ -875,6 +875,7 @@
 2	6.21	TestVerifyJointBoxLoopProjection
 2	2.33	TestVerifyJointBoxTwoArms
 2	2.27	TestVerifyLinkageDeclaredJointContact
+2	0.61	TestVerifyLinkageExclusionsTakeTheLarger
 2	3.29	TestVerifyLinkageLoopCrossingZero
 2	8.08	TestVerifyLinkageLoopSliderPin
 2	0.06	TestVerifyLinkageSweptBoxCoversAncestorTravel

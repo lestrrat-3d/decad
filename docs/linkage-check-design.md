@@ -936,7 +936,10 @@ several moving groups (§12 PR 1). The steps that differ:
    bodies. A link-link pair is settled the same way when the two bodies' swept boxes, each grown by its own
    link's travel from the zero pose, separate. The travel is measured from the zero pose, not from `s = 0`,
    for the reason motion §6 step 3 gives: a joint whose `From` is `80°` has moved before the drive begins.
-   A pair the swept boxes leave is then tried by the layer exclusion (§5.7). A declared pair is excluded
+   Every pair is also tried by the layer exclusion (§5.7), and a pair both settle keeps the larger of
+   their two proven lower bounds: a swept box grows by the link's reach in every direction, so a layer
+   the joints keep exactly can prove more — the Scotch yoke's yoke and block, `2` mm apart along `Z`,
+   whose swept boxes separate along `Y` by about `1.54`. A declared pair is excluded
    on the same terms: a pair proven apart over the whole drive is proven free of overlap too.
 5. **Evaluate, bisect and publish** as motion §6 steps 4–7, with `τ` per pair from §5.2, the projection
    bound per pair from §5.8 read off each pose once and serving both intervals it ends, and the declared

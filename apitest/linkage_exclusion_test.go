@@ -255,3 +255,48 @@ func TestVerifyLinkageHeldLinks(t *testing.T) {
 		require.NotNil(t, first)
 	})
 }
+
+// TestVerifyLinkageExclusionsTakeTheLarger pins docs/linkage-check-design.md
+// §6 step 4: a pair both the swept-box exclusion and the layer exclusion
+// (§5.7) settle keeps the larger of their two proven lower bounds.
+//
+//   - Against a static body: a block x ∈ [0, 5], y ∈ [−2, 2], z ∈ [10, 18]
+//     turning 0° → 10° about Z through the origin over a table z ∈ [−10, 0].
+//     Its swept box, grown by its reach in every direction, clears the table
+//     by less than 10 mm; the layer exclusion proves the exact 10. The one
+//     interval certifies at 10.
+//   - Between two links: the Scotch yoke of §15.10 (yoke along X, the block
+//     along Y on it, the crank) driven at the block 0 → 4 mm. The yoke's and
+//     the block's layers stand 2 mm apart along Z; their swept boxes, each
+//     grown by its link's reach, separate along Y by about 1.54 mm. Every link
+//     pair is settled, the closest at the layer's exact 2, and the one interval
+//     certifies at 2.
+//
+// Legs seen to fail when deleted: the larger bound against a static body (the
+// interval reads the swept box's 9.06); and between two links (it reads 1.54).
+func TestVerifyLinkageExclusionsTakeTheLarger(t *testing.T) {
+	t.Parallel()
+	t.Run("against a static body", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		block := boxBodyAtZ(t, doc, 0, -2, 5, 2, 10, 8)
+		boxBodyAtZ(t, doc, -50, -50, 50, 50, -10, 10)
+		l := decad.NewLinkage()
+		turn, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{block})
+		require.NoError(t, err)
+		report := verifyLinkage(t, doc, l, decad.Drive{{Link: turn, From: units.Degrees(0), To: units.Degrees(10)}})
+		require.Equal(t, decad.Sound, report.Status)
+		require.Len(t, report.Intervals, 1)
+		require.Equal(t, decad.IntervalClear, report.Intervals[0].Outcome)
+		require.Equal(t, 10.0, report.Intervals[0].Clearance.Value.Mag(), `the layer's exact 10 mm`)
+	})
+	t.Run("between two links", func(t *testing.T) {
+		t.Parallel()
+		lp := scotchYoke(t)
+		report := verifyLinkage(t, lp.doc, lp.l, decad.Drive{{Link: lp.links[1], From: units.Millimeters(0), To: units.Millimeters(4)}})
+		require.Equal(t, decad.Sound, report.Status)
+		require.Len(t, report.Intervals, 1)
+		require.Equal(t, decad.IntervalClear, report.Intervals[0].Outcome)
+		require.Equal(t, 2.0, report.Intervals[0].Clearance.Value.Mag(), `the layer's exact 2 mm`)
+	})
+}
