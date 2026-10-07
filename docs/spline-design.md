@@ -512,7 +512,7 @@ same "full domain" cause every other Tier A kind reports.
 **R16.** `geom.NewFitInterpolant` returns `ErrNonFiniteFitInterpolant` when
 finite fit coordinates give a cumulative chord parameter or a span coefficient
 that leaves float64 range, or a parameter that stalls. The fit points
-themselves are finite — checked by `spline_fit.go`'s own scan immediately
+themselves are finite — checked by `internal/curveconvert/fit.go`'s scan immediately
 before the call, since `record.go`'s validation runs only at JSON decode and a
 caller-built `ProfileRecord` reaches this reduction without ever passing
 through it — so this is `ErrUnsupported` — the curve exists, described by
@@ -545,7 +545,7 @@ bound that already speaks for the rounding.
 
 Rational coefficient size grows with degree and span count. Charge every span,
 every coefficient product and every integral term against a `freeformWork`
-counter (`spline_bezier.go`), and refuse as R7 when it runs out. NEVER widen to a
+counter (`internal/freeform/spline_bezier.go`), and refuse as R7 when it runs out. NEVER widen to a
 float path to stay inside the budget.
 
 The exact-rational counter is the RECORD's, not each segment's. One

@@ -58,15 +58,8 @@ type FitSplineSeg = record.FitSplineSeg
 type ConicSeg = record.ConicSeg
 
 func cloneLoopRecord(loop LoopRecord) LoopRecord  { return record.CloneLoopRecord(loop) }
-func finiteSegmentValue(value float64) bool       { return record.FiniteSegmentValue(value) }
 func validateNURBSSegment(segment NURBSSeg) error { return record.ValidateNURBSSegment(segment) }
-func validateNURBSSegmentSizes(segment NURBSSeg) error {
-	return record.ValidateNURBSSegmentSizes(segment)
-}
-func validateNURBSSegmentContent(segment NURBSSeg) error {
-	return record.ValidateNURBSSegmentContent(segment)
-}
-func validateSegment(segment CurveSegment) error { return record.ValidateSegment(segment) }
+func validateSegment(segment CurveSegment) error  { return record.ValidateSegment(segment) }
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
 	return record.NormalizeSegment(segment)
 }

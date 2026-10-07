@@ -85,8 +85,8 @@ the rules leave to the byte budget.
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_circular.go` | Maps recorded circle and arc segments to `internal/circularmoments/` for exact rational enclosures. |
-| `spline_bezier.go` | Builds a recorded free-form curve's exact Bézier spans and reconstruction over `internal/freeform/`'s reduction and work budget. See `docs/spline-design.md` §5.1. |
-| `spline_fit.go` | Converts a recorded `FitSplineSeg` into Bézier spans over `internal/freeform/`'s fit reduction. See `docs/spline-design.md` §5.1.2. |
+| `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/curveconvert/`. See `docs/spline-design.md` §5.1. |
+| `spline_fit.go` | Adapts fit-spline conversion from `internal/curveconvert/`. See `docs/spline-design.md` §5.1.2. |
 | `spline_moments.go` | `addFreeformTo` folds `internal/freeform/`'s exact span moments into a region's integrals. See `docs/spline-design.md` §5.1. |
 
 ### Features
@@ -252,6 +252,7 @@ the rules leave to the byte budget.
 | `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/record/` | Curve records, validation, fragment recording and join checks. See `docs/sketch-seam-design.md`. |
+| `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
