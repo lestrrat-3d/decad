@@ -268,7 +268,7 @@ the rules leave to the byte budget.
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
-| `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
+| `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset interval bounds. See modify-reach §8.3-§8.4. |
