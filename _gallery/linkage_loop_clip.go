@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -127,27 +126,4 @@ func crankRockerScene(ctx context.Context) (*linkageScene, error) {
 		{name: "wall", body: wall, color: navy},
 	}
 	return scene, nil
-}
-
-// scheduleTrack is the TransformTrack of one link of a looped linkage: At(t)
-// reads the drive fraction s from a Dimensionless channel and returns the
-// link's world pose from the schedule's PoseAt, the same certified chain
-// VerifyLinkage reads every pose through.
-type scheduleTrack struct {
-	schedule *decad.Schedule
-	index    int // the link's position in Linkage.Links()
-	fraction *kinetograph.Channel
-}
-
-// At returns the link's pose at the drive fraction fraction.At(t).
-func (k *scheduleTrack) At(t time.Duration) (r3.Transform, error) {
-	s, err := k.fraction.At(t)
-	if err != nil {
-		return r3.Transform{}, fmt.Errorf("schedule track: %w", err)
-	}
-	pose, err := k.schedule.PoseAt(context.Background(), s)
-	if err != nil {
-		return r3.Transform{}, fmt.Errorf("schedule track at %s: %w", s, err)
-	}
-	return pose.Poses[k.index], nil
 }

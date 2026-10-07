@@ -170,7 +170,7 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 	if err != nil {
 		return nil, render.Style{}, err
 	}
-	nodes, err := s.linkNodes(rig, scene, fraction)
+	nodes, err := s.linkNodes(scene, fraction)
 	if err != nil {
 		return nil, render.Style{}, err
 	}
@@ -193,7 +193,7 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 		if part.link != nil {
 			node = nodes[part.link]
 		}
-		if part.link == nil || s.schedule != nil {
+		if part.link == nil {
 			if err := scene.AddPart(part.name, node, part.body); err != nil {
 				return nil, render.Style{}, err
 			}
@@ -231,34 +231,30 @@ func (s *linkageScene) clip(report *decad.LinkageReport, length time.Duration,
 	return clip, style, nil
 }
 
-// linkNodes is one driven node per link directly under the rig's root: for a
-// tree linkage kinetograph's AddLinkage, which also adds every link body as a
-// part, and for a looped one a scheduleTrack per link, whose bodies the
-// caller adds.
-func (s *linkageScene) linkNodes(rig *kinetograph.Rig, scene *kinetograph.Scene,
+// linkNodes is one driven node per link directly under the rig's root, with
+// every link body added as a part: kinetograph's AddLinkage, reading
+// Linkage.PoseAt, for a tree linkage, and its AddSchedule, reading the
+// scene's Schedule.PoseAt, for a looped one.
+func (s *linkageScene) linkNodes(scene *kinetograph.Scene,
 	fraction *kinetograph.Channel) (map[*decad.Link]*kinetograph.Node, error) {
+	names := make(map[*decad.Body]string)
+	for _, part := range s.parts {
+		names[part.body] = part.name
+	}
+	var linkNodes []*kinetograph.Node
+	var err error
+	if s.schedule == nil {
+		linkNodes, err = scene.AddLinkage(s.linkage, s.drive, fraction, names)
+	} else {
+		linkNodes, err = scene.AddSchedule(s.schedule, fraction, names)
+	}
+	if err != nil {
+		return nil, err
+	}
 	links := s.linkage.Links()
 	nodes := make(map[*decad.Link]*kinetograph.Node, len(links))
-	if s.schedule == nil {
-		names := make(map[*decad.Body]string)
-		for _, part := range s.parts {
-			names[part.body] = part.name
-		}
-		linkNodes, err := scene.AddLinkage(s.linkage, s.drive, fraction, names)
-		if err != nil {
-			return nil, err
-		}
-		for i, link := range links {
-			nodes[link] = linkNodes[i]
-		}
-		return nodes, nil
-	}
 	for i, link := range links {
-		node, err := rig.Root().Driven(&scheduleTrack{schedule: s.schedule, index: i, fraction: fraction})
-		if err != nil {
-			return nil, err
-		}
-		nodes[link] = node
+		nodes[link] = linkNodes[i]
 	}
 	return nodes, nil
 }
@@ -311,7 +307,7 @@ type linkageOptions struct {
 // decad.Schedule. It first runs VerifyLinkage over the drive at
 // a resolution of 1/256, then films the same drive at 64 frames per second,
 // one driven node per link — kinetograph's AddLinkage reading Linkage.PoseAt
-// for the arm, a track reading the schedule's PoseAt for the rocker — so
+// for the arm, its AddSchedule reading the schedule's PoseAt for the rocker — so
 // frame i of the drive shows the pose VerifyLinkage evaluates at s = i/256.
 // From the frame of the report's first collision on, the colliding body is
 // drawn in coral. The drive runs 4 s and the clip holds its end for 1 s more.
