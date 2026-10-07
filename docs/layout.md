@@ -130,7 +130,7 @@ the rules leave to the byte budget.
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and option parsing, angular-extent resolution. Readings: the other `revolve_*.go` files. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
-| `revolve_extent.go` | Revolve extent readings over `internal/revolveangle/` bounds. See evaluator §6. |
+| `revolve_extent.go` | Adapts revolve extents over `internal/revolveaxis/` and `internal/revolveangle/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's doc comments. |
 | `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |
@@ -272,7 +272,7 @@ the rules leave to the byte budget.
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, record gates, and through reach. See general-boolean §3 B. |
 | `internal/brepgeom/` | BRep joins, validation, frame maps and topology. See general-boolean §4. |
-| `internal/revolveaxis/` | Axis input resolution, walks, side and contact gates, snap charges and radial envelopes. See evaluator §6. |
+| `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
