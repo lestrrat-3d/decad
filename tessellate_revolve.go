@@ -1204,8 +1204,8 @@ func revolveCellSlack(b revolvemesh.RevolveBasis3Iv, angular revolvemesh.Revolve
 	if dz == nil || drho == nil {
 		return 0, errRevolveCellSlack
 	}
-	lenSq := proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.PointInterval(dz)), survey2d.IntervalSquare(proofbound.PointInterval(drho)))
-	meridian, ok := survey2d.IntervalSqrt(lenSq)
+	lenSq := proofbound.IntervalAdd(proofbound.IntervalSquare(proofbound.PointInterval(dz)), proofbound.IntervalSquare(proofbound.PointInterval(drho)))
+	meridian, ok := proofbound.IntervalSqrt(lenSq)
 	if !ok {
 		return 0, errRevolveCellSlack
 	}

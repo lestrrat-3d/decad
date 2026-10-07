@@ -928,7 +928,7 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.minHi, ext.minLo)), tc.tightBelow)
 			require.Less(t, proofbound.RatFloatUp(new(big.Rat).Sub(ext.maxHi, ext.maxLo)), tc.tightBelow)
 
-			amp, okAmp := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
+			amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(tc.a, tc.a), proofbound.RatMul(tc.b, tc.b))))
 			require.True(t, okAmp)
 			if tc.interior {
 				// The stationary points are reached, so both extremes are the

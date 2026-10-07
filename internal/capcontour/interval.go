@@ -100,12 +100,12 @@ func UnitVec(x, y float64) (Point, bool) {
 	if n2.Sign() == 0 {
 		return Point{}, false
 	}
-	l, ok := survey2d.IntervalSqrt(proofbound.PointInterval(n2))
+	l, ok := proofbound.IntervalSqrt(proofbound.PointInterval(n2))
 	if !ok || l.Lo.Sign() <= 0 {
 		return Point{}, false
 	}
-	u, okU := survey2d.IntervalQuo(proofbound.PointInterval(rx), l)
-	v, okV := survey2d.IntervalQuo(proofbound.PointInterval(ry), l)
+	u, okU := proofbound.IntervalQuo(proofbound.PointInterval(rx), l)
+	v, okV := proofbound.IntervalQuo(proofbound.PointInterval(ry), l)
 	if !okU || !okV {
 		return Point{}, false
 	}
@@ -203,7 +203,7 @@ func lineLine(a, b Carrier) ([]Point, bool) {
 		proofbound.IntervalMul(proofbound.IntervalSub(b.P.U, a.P.U), b.Dir.V),
 		proofbound.IntervalMul(proofbound.IntervalSub(b.P.V, a.P.V), b.Dir.U),
 	)
-	s, ok := survey2d.IntervalQuo(num, den)
+	s, ok := proofbound.IntervalQuo(num, den)
 	if !ok {
 		return nil, false
 	}
@@ -217,15 +217,15 @@ func lineCircle(l, c Carrier) ([]Point, bool) {
 	fx := proofbound.IntervalSub(l.P.U, c.C.U)
 	fy := proofbound.IntervalSub(l.P.V, c.C.V)
 	bb := proofbound.IntervalAdd(proofbound.IntervalMul(fx, l.Dir.U), proofbound.IntervalMul(fy, l.Dir.V))
-	cc := proofbound.IntervalSub(proofbound.IntervalAdd(survey2d.IntervalSquare(fx), survey2d.IntervalSquare(fy)), survey2d.IntervalSquare(c.R))
-	disc := proofbound.IntervalSub(survey2d.IntervalSquare(bb), cc)
+	cc := proofbound.IntervalSub(proofbound.IntervalAdd(proofbound.IntervalSquare(fx), proofbound.IntervalSquare(fy)), proofbound.IntervalSquare(c.R))
+	disc := proofbound.IntervalSub(proofbound.IntervalSquare(bb), cc)
 	if disc.Hi.Sign() < 0 {
 		// The exact carriers miss each other entirely: the float solve reached
 		// a root of a system that has none, so there is no denoted point to
 		// enclose.
 		return nil, false
 	}
-	sq, ok := survey2d.IntervalSqrt(disc)
+	sq, ok := proofbound.IntervalSqrt(disc)
 	if !ok {
 		return nil, false
 	}
@@ -243,28 +243,28 @@ func lineCircle(l, c Carrier) ([]Point, bool) {
 func circleCircle(a, b Carrier) ([]Point, bool) {
 	dx := proofbound.IntervalSub(b.C.U, a.C.U)
 	dy := proofbound.IntervalSub(b.C.V, a.C.V)
-	dsq := proofbound.IntervalAdd(survey2d.IntervalSquare(dx), survey2d.IntervalSquare(dy))
-	dist, ok := survey2d.IntervalSqrt(dsq)
+	dsq := proofbound.IntervalAdd(proofbound.IntervalSquare(dx), proofbound.IntervalSquare(dy))
+	dist, ok := proofbound.IntervalSqrt(dsq)
 	if !ok || dist.Lo.Sign() <= 0 {
 		return nil, false
 	}
-	mid, okMid := survey2d.IntervalQuo(
-		proofbound.IntervalSub(proofbound.IntervalAdd(dsq, survey2d.IntervalSquare(a.R)), survey2d.IntervalSquare(b.R)),
+	mid, okMid := proofbound.IntervalQuo(
+		proofbound.IntervalSub(proofbound.IntervalAdd(dsq, proofbound.IntervalSquare(a.R)), proofbound.IntervalSquare(b.R)),
 		proofbound.IntervalScale(dist, big.NewRat(2, 1)),
 	)
 	if !okMid {
 		return nil, false
 	}
-	h2 := proofbound.IntervalSub(survey2d.IntervalSquare(a.R), survey2d.IntervalSquare(mid))
+	h2 := proofbound.IntervalSub(proofbound.IntervalSquare(a.R), proofbound.IntervalSquare(mid))
 	if h2.Hi.Sign() < 0 {
 		return nil, false
 	}
-	h, okH := survey2d.IntervalSqrt(h2)
+	h, okH := proofbound.IntervalSqrt(h2)
 	if !okH {
 		return nil, false
 	}
-	along, okA := survey2d.IntervalQuo(mid, dist)
-	across, okC := survey2d.IntervalQuo(h, dist)
+	along, okA := proofbound.IntervalQuo(mid, dist)
+	across, okC := proofbound.IntervalQuo(h, dist)
 	if !okA || !okC {
 		return nil, false
 	}
@@ -301,8 +301,8 @@ func NearestTo(cands []Point, corner Point) (Point, bool) {
 	d2 := make([]proofbound.RatInterval, len(cands))
 	for i, c := range cands {
 		d2[i] = proofbound.IntervalAdd(
-			survey2d.IntervalSquare(proofbound.IntervalSub(c.U, corner.U)),
-			survey2d.IntervalSquare(proofbound.IntervalSub(c.V, corner.V)),
+			proofbound.IntervalSquare(proofbound.IntervalSub(c.U, corner.U)),
+			proofbound.IntervalSquare(proofbound.IntervalSub(c.V, corner.V)),
 		)
 	}
 	best := d2[0].Hi
@@ -411,13 +411,13 @@ func miterConstraintRow(w survey2d.SideWalk, c Carrier, foot Point) (Point, *big
 	}
 	dx := proofbound.IntervalSub(foot.U, c.C.U)
 	dy := proofbound.IntervalSub(foot.V, c.C.V)
-	distSq := proofbound.IntervalAdd(survey2d.IntervalSquare(dx), survey2d.IntervalSquare(dy))
-	dist, ok := survey2d.IntervalSqrt(distSq)
+	distSq := proofbound.IntervalAdd(proofbound.IntervalSquare(dx), proofbound.IntervalSquare(dy))
+	dist, ok := proofbound.IntervalSqrt(distSq)
 	if !ok || dist.Lo.Sign() <= 0 {
 		return Point{}, nil, false
 	}
-	ux, okU := survey2d.IntervalQuo(dx, dist)
-	uy, okV := survey2d.IntervalQuo(dy, dist)
+	ux, okU := proofbound.IntervalQuo(dx, dist)
+	uy, okV := proofbound.IntervalQuo(dy, dist)
 	if !okU || !okV {
 		return Point{}, nil, false
 	}
@@ -474,12 +474,12 @@ func CircleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV flo
 	if det.Lo.Sign() <= 0 && det.Hi.Sign() >= 0 {
 		return 0, false
 	}
-	pu, okU := survey2d.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.V, rhsA), proofbound.IntervalScale(rowA.V, rhsB)), det)
-	pv, okV := survey2d.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.U, rhsB), proofbound.IntervalScale(rowB.U, rhsA)), det)
+	pu, okU := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowB.V, rhsA), proofbound.IntervalScale(rowA.V, rhsB)), det)
+	pv, okV := proofbound.IntervalQuo(proofbound.IntervalSub(proofbound.IntervalScale(rowA.U, rhsB), proofbound.IntervalScale(rowB.U, rhsA)), det)
 	if !okU || !okV {
 		return 0, false
 	}
-	mag, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(pu), survey2d.IntervalSquare(pv)))
+	mag, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(pu), proofbound.IntervalSquare(pv)))
 	if !ok {
 		return 0, false
 	}
@@ -588,7 +588,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	inside := InsideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
-	delta0 := proofbound.IntervalSub(survey2d.IntervalSquare(proofbound.PointInterval(radius)), survey2d.IntervalSquare(alpha))
+	delta0 := proofbound.IntervalSub(proofbound.IntervalSquare(proofbound.PointInterval(radius)), proofbound.IntervalSquare(alpha))
 	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
 
 	// Delta1 == 0 EXACTLY (both ends of its own enclosure) is the persistent-
@@ -601,7 +601,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	// every tangent-filleted corner in this codebase's own test fixtures —
 	// to be worth the tighter bound.
 	if delta1.Lo.Sign() == 0 && delta1.Hi.Sign() == 0 {
-		nMagUpper := proofbound.RatSqrtUp(proofbound.IntervalAbsUpper(proofbound.IntervalAdd(survey2d.IntervalSquare(frame.n.U), survey2d.IntervalSquare(frame.n.V))))
+		nMagUpper := proofbound.RatSqrtUp(proofbound.IntervalAbsUpper(proofbound.IntervalAdd(proofbound.IntervalSquare(frame.n.U), proofbound.IntervalSquare(frame.n.V))))
 		if proofbound.IsNonFinite(nMagUpper) {
 			return 0, false
 		}

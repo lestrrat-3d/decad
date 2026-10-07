@@ -194,13 +194,13 @@ func radialLengthEnclosure(offset, qu, qv survey2d.IvVec3) (proofbound.RatInterv
 	half := big.NewRat(1, 2)
 	uSq, vSq := survey2d.IvVec3NormSq(qu), survey2d.IvVec3NormSq(qv)
 	base := proofbound.IntervalAdd(survey2d.IvVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
-	skew, okSkew := survey2d.IntervalSqrt(proofbound.IntervalAdd(
-		survey2d.IntervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
-		survey2d.IntervalSquare(survey2d.IvVec3Dot(qu, qv)),
+	skew, okSkew := proofbound.IntervalSqrt(proofbound.IntervalAdd(
+		proofbound.IntervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
+		proofbound.IntervalSquare(survey2d.IvVec3Dot(qu, qv)),
 	))
-	eccentric, okEcc := survey2d.IntervalSqrt(proofbound.IntervalAdd(
-		survey2d.IntervalSquare(survey2d.IvVec3Dot(offset, qu)),
-		survey2d.IntervalSquare(survey2d.IvVec3Dot(offset, qv)),
+	eccentric, okEcc := proofbound.IntervalSqrt(proofbound.IntervalAdd(
+		proofbound.IntervalSquare(survey2d.IvVec3Dot(offset, qu)),
+		proofbound.IntervalSquare(survey2d.IvVec3Dot(offset, qv)),
 	))
 	if !okSkew || !okEcc {
 		return proofbound.RatInterval{}, false
@@ -210,7 +210,7 @@ func radialLengthEnclosure(offset, qu, qv survey2d.IvVec3) (proofbound.RatInterv
 	if squared.Lo.Sign() <= 0 {
 		return proofbound.RatInterval{}, false
 	}
-	length, ok := survey2d.IntervalSqrt(squared)
+	length, ok := proofbound.IntervalSqrt(squared)
 	if !ok || length.Lo.Sign() <= 0 {
 		return proofbound.RatInterval{}, false
 	}
@@ -251,7 +251,7 @@ func HarmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (HarmonicExtre
 	if width.Sign() < 0 {
 		return HarmonicExtremes{}, false
 	}
-	amp, okAmp := survey2d.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
+	amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return HarmonicExtremes{}, false
 	}

@@ -265,7 +265,7 @@ var ErrRevolveAngularHomotopy = fmt.Errorf(`%w: a revolve cell's angular homotop
 func RevolveCellSweptVolume(lo, hi RevMeridian, angular *big.Rat) *big.Rat {
 	third := big.NewRat(1, 3)
 	quad := proofbound.IntervalScale(proofbound.IntervalAdd(
-		proofbound.IntervalAdd(survey2d.IntervalSquare(lo.RhoIv), survey2d.IntervalSquare(hi.RhoIv)),
+		proofbound.IntervalAdd(proofbound.IntervalSquare(lo.RhoIv), proofbound.IntervalSquare(hi.RhoIv)),
 		proofbound.IntervalMul(lo.RhoIv, hi.RhoIv),
 	), third)
 	axial := proofbound.IntervalAbsUpper(proofbound.IntervalSub(hi.ZIv, lo.ZIv))

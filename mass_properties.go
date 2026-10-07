@@ -7,8 +7,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -252,9 +250,9 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	rhoH := new(big.Rat).Mul(rho, h)
 	massIv := proofbound.IntervalScale(a, rhoH)
-	mu2OverA, _ := survey2d.IntervalQuo(proofbound.IntervalMul(mu, mu), a)
-	mv2OverA, _ := survey2d.IntervalQuo(proofbound.IntervalMul(mv, mv), a)
-	mumvOverA, _ := survey2d.IntervalQuo(proofbound.IntervalMul(mu, mv), a)
+	mu2OverA, _ := proofbound.IntervalQuo(proofbound.IntervalMul(mu, mu), a)
+	mv2OverA, _ := proofbound.IntervalQuo(proofbound.IntervalMul(mv, mv), a)
+	mumvOverA, _ := proofbound.IntervalQuo(proofbound.IntervalMul(mu, mv), a)
 	cuu := proofbound.IntervalSub(section[3], mu2OverA)
 	cuv := proofbound.IntervalSub(section[4], mumvOverA)
 	cvv := proofbound.IntervalSub(section[5], mv2OverA)

@@ -28,12 +28,12 @@ func WalkPointEnclosure(u, v float64, bound proofbound.WalkEndBound) (Point, boo
 
 // ivUnitOf encloses the unit vector of every vector its argument encloses.
 func ivUnitOf(p Point) (Point, bool) {
-	l, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(p.U), survey2d.IntervalSquare(p.V)))
+	l, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(p.U), proofbound.IntervalSquare(p.V)))
 	if !ok || l.Lo.Sign() <= 0 {
 		return Point{}, false
 	}
-	u, okU := survey2d.IntervalQuo(p.U, l)
-	v, okV := survey2d.IntervalQuo(p.V, l)
+	u, okU := proofbound.IntervalQuo(p.U, l)
+	v, okV := proofbound.IntervalQuo(p.V, l)
 	return Point{U: u, V: v}, okU && okV
 }
 
@@ -138,7 +138,7 @@ func CircularWalkEndGap(w survey2d.SideWalk) (float64, bool) {
 		if !ok {
 			return false
 		}
-		d, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.IntervalSub(p.U, c.U)), survey2d.IntervalSquare(proofbound.IntervalSub(p.V, c.V))))
+		d, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(proofbound.IntervalSub(p.U, c.U)), proofbound.IntervalSquare(proofbound.IntervalSub(p.V, c.V))))
 		if !ok {
 			return false
 		}

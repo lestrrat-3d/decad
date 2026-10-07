@@ -6,7 +6,6 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -188,7 +187,7 @@ func chordUpper2(a, b Point) float64 {
 // capThAllow's own proven enclosure of the true window (an proofbound.Atan2Interval
 // bracket on the patch's own offset feet, or proofbound.PiLower/proofbound.PiUpper for the
 // structurally whole-turn circle; capblend_contour.go/capblend_geom.go) — and
-// the square root, rounded outward by survey2d.IntervalSqrt. Interval arithmetic is
+// the square root, rounded outward by proofbound.IntervalSqrt. Interval arithmetic is
 // inclusion-monotonic, so the composed product [dth−dthAllow, dth+dthAllow] ×
 // [R0+R1] × [slant] encloses the true A whatever the platform's Hypot, Atan2
 // or Sincos returned: nowhere here is an ulp contract on any of them assumed.
@@ -214,7 +213,7 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 		return math.Inf(1)
 	}
 	rdR := new(big.Rat).Sub(rR1, rR0)
-	slantIv, ok := survey2d.IntervalSqrt(proofbound.IntervalAdd(survey2d.IntervalSquare(proofbound.PointInterval(rdR)), survey2d.IntervalSquare(proofbound.PointInterval(rH))))
+	slantIv, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(proofbound.PointInterval(rdR)), proofbound.IntervalSquare(proofbound.PointInterval(rH))))
 	if !ok {
 		return math.Inf(1)
 	}

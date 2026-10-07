@@ -185,7 +185,7 @@ func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 	if width.Sign() < 0 {
 		return nil, nil, nil, nil, false
 	}
-	amp, okAmp := IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
+	amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return nil, nil, nil, nil, false
 	}

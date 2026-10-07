@@ -178,10 +178,10 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 	var center [3]proofbound.RatInterval
 	var central [3][3]proofbound.RatInterval
 	for i, origin := range []*big.Rat{proofarith.FloatRat(anchor.X), proofarith.FloatRat(anchor.Y), proofarith.FloatRat(anchor.Z)} {
-		offset, _ := survey2d.IntervalQuo(firstIV[i], volumeIV)
+		offset, _ := proofbound.IntervalQuo(firstIV[i], volumeIV)
 		center[i] = proofbound.IntervalAdd(proofbound.PointInterval(origin), offset)
 		for j := i; j < 3; j++ {
-			shift, _ := survey2d.IntervalQuo(proofbound.IntervalMul(firstIV[i], firstIV[j]), volumeIV)
+			shift, _ := proofbound.IntervalQuo(proofbound.IntervalMul(firstIV[i], firstIV[j]), volumeIV)
 			central[i][j] = proofbound.IntervalSub(secondIV[i][j], shift)
 		}
 	}

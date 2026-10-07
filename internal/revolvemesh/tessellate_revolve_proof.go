@@ -423,7 +423,7 @@ func LinearWeightPrimitive(alpha, beta, t *big.Rat, weight int) *big.Rat {
 // themselves enclosed — the |A × B| the held facet's own Jacobian is.
 func IvTwoTriangleArea(p0, p1, p2 survey2d.IvVec3) (proofbound.RatInterval, bool) {
 	n := survey2d.IvVec3Cross(survey2d.IvVec3Sub(p1, p0), survey2d.IvVec3Sub(p2, p0))
-	return survey2d.IntervalSqrt(survey2d.IvVec3NormSq(n))
+	return proofbound.IntervalSqrt(survey2d.IvVec3NormSq(n))
 }
 
 // RevolveAuditTri is one triangle's exact lift, held for the whole audit: its
