@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -22,7 +23,9 @@ import (
 // the subdivision that proves a box of joint values clear cell by cell. It
 // runs motion_verify.go's engine — the same groups, pairs, per-pose kernel and
 // pair walk VerifyLinkage runs — at each cell's centre, and reads the chain
-// bounds linkage_bound.go proves over the whole box.
+// bounds linkage_bound.go proves over the whole box. A closed loop is varied
+// at its driver alone (§16): linkage_loop.go answers each cell's asks for its
+// dependent joints, and this file charges them into the cell's certificate.
 
 // JointBox is a box of joint values (docs/linkage-check-design.md §14.1). A
 // listed joint ranges over [Min, Max] when Min < Max and holds at Min when
@@ -55,10 +58,15 @@ func WithCellBudget(cells int) JointBoxOption {
 	return jointBoxOption{option.New(identCellBudget{}, cells)}
 }
 
-// JointConfiguration is one point of joint space: every link's joint value
-// and world pose, in Linkage.Links() order.
+// JointConfiguration is one point of joint space: every link's joint value,
+// its proven half-width and its world pose, in Linkage.Links() order. Bounds
+// is zero, in the value's own unit, for every joint whose value is stated;
+// a loop's dependent joint carries the float midpoint of its certified
+// enclosure in Values and the half-width in Bounds, so Values[k] ± Bounds[k]
+// encloses the exact value (docs/linkage-check-design.md §16.3).
 type JointConfiguration struct {
 	Values []units.Value
+	Bounds []units.Value
 	Poses  []r3.Transform
 }
 
@@ -66,15 +74,16 @@ type JointConfiguration struct {
 // one per link in Links() order (docs/linkage-check-design.md §14.1). It
 // composes exactly as PoseAt composes — PoseAt is Configuration of a drive's
 // values at s — so a renderer drawing a cell and VerifyJointBox evaluating its
-// centre read the same transform.
+// centre read the same transform. Every Bounds entry is zero.
 //
 // It refuses a nil linkage or a value count other than len(Links())
 // (ErrDegenerate); a value of the wrong Kind for its joint (ErrUnitKind); a
 // non-finite value (ErrNotFinite); a value outside its joint's declared
 // limits (ErrDegenerate, naming the link); and a pose r3 cannot represent
 // (ErrNotFinite). A linkage with a loop is ErrUnsupported: a dependent
-// joint's value is not the caller's to state (docs/linkage-check-design.md
-// §15.8).
+// joint's value is not the caller's to state. A looped linkage's
+// configuration is a drive whose every sweep holds, posed by Linkage.PoseAt
+// or Schedule.PoseAt (docs/linkage-check-design.md §16.1).
 func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error) {
 	if l == nil {
 		return JointConfiguration{}, fmt.Errorf(`%w: a nil linkage has no link to pose`, ErrDegenerate)
@@ -103,7 +112,7 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 	if err != nil {
 		return JointConfiguration{}, err
 	}
-	return JointConfiguration{Values: slices.Clone(values), Poses: poses}, nil
+	return JointConfiguration{Values: slices.Clone(values), Bounds: zeroBounds(values), Poses: poses}, nil
 }
 
 // JointBoxReport is what VerifyJointBox returns
@@ -248,15 +257,26 @@ type JointBoxCollision struct {
 // cell left uncertified reads CellUndecided and makes the report Suspect,
 // never Sound.
 //
+// A closed loop (Linkage.Close) is varied at its driver alone: the box lists
+// at most one joint of each loop, whose parent is the loop's common link, and
+// every other joint of the loop follows it (docs/linkage-check-design.md
+// §16). Each cell reads the loop's dependent joints from sketch's certified
+// enclosures, as VerifyLinkage reads a drive's intervals: their enclosure at
+// the centre is charged into the pose deviation, and the distance from it to
+// the far end of their hull over the cell into τ_half. A cell sketch cannot
+// enclose is never CellClear or CellBlocked.
+//
 // The options are VerifyLinkage's (WithMotionTolerance, WithResolution,
 // WithMinClearance) plus WithCellBudget. Every body of every link, and every
 // body a declared joint contact names, MUST be a live body of d. A nil
 // context, document or linkage, a linkage with no link, a box with no varying
-// joint, a range with Min > Max, a link named twice, a range end outside a
-// joint's declared limits and a budget below 1 are ErrDegenerate; a linkage
-// with a loop is ErrUnsupported (docs/linkage-check-design.md §15.8). Validation
-// precedes cancellation; after it a canceled context returns ctx.Err() and no
-// report.
+// joint, a range with Min > Max, a link named twice, two joints of one loop,
+// a range end outside a joint's declared limits, a dependent joint whose
+// certified hull is not proven inside its limits, and a budget below 1 are
+// ErrDegenerate; a loop joint whose parent is not the loop's common link, and
+// a loop whose zero pose sketch cannot enclose, are ErrUnsupported.
+// Validation precedes cancellation; after it a canceled context returns
+// ctx.Err() and no report.
 func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox, opts ...JointBoxOption) (*JointBoxReport, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control joint-box verification`, ErrDegenerate)
@@ -266,9 +286,6 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	}
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
-	}
-	if len(l.loops) > 0 {
-		return nil, errLoopNotStated()
 	}
 	spec, axes, err := l.resolveBox(box)
 	if err != nil {
@@ -289,6 +306,15 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	cfg, budget, err := resolveJointBoxOptions(opts)
 	if err != nil {
 		return nil, err
+	}
+	if len(spec.loops) > 0 {
+		// docs/linkage-check-design.md §16.2: each loop axis is the drive
+		// Min → Max; its scenes, its zero pose and its certifiable set, down
+		// to the verdict floor, before any cell, so a dependent's reach enters
+		// the bounds.
+		if err := spec.prepareLoops(ctx, cfg.resolutionP.Base); err != nil {
+			return nil, err
+		}
 	}
 	bounds, ok := readLinkBounds(spec, frames)
 	if !ok {
@@ -375,10 +401,16 @@ func (l *Linkage) resolveBox(box JointBox) (*linkageSpec, []int, error) {
 		jt.listed, jt.values, jt.points = true, []units.Value{rg.Min, rg.Max}, []motionbound.MotionParam{pMin, pMax}
 		varying[link.index] = c < 0
 	}
+	// A loop is varied at its driver alone, its range the one-segment drive
+	// Min → Max (docs/linkage-check-design.md §16.1, §16.2).
+	if err := l.resolveLoops(spec, "box"); err != nil {
+		return nil, nil, err
+	}
 	// Both ends inside a joint's limits put the whole range inside them; an
-	// unlisted joint holds 0.
+	// unlisted joint holds 0. A loop's dependent is held to its certified hull
+	// instead, once the decomposition has read it.
 	for k, jt := range spec.joints {
-		if jt.limits == nil {
+		if jt.limits == nil || jt.dep != nil {
 			continue
 		}
 		for _, v := range jt.values {
@@ -480,6 +512,15 @@ type boxCell struct {
 	// the pair the reading and the margin split for; nil when that bound is
 	// an excluded pair's, which no split changes.
 	low *[2]int
+	// A looped linkage's cell (docs/linkage-check-design.md §16.3): delta is,
+	// per dependent joint, δ_j, the distance from the centre's enclosure to
+	// the far end of the dependent's hull over the cell, zero for a held
+	// loop's. gate is the refusal that left the cell's centre or a hull
+	// unread, empty otherwise, and gateLoop the loop that refused: such a
+	// cell has no δ_j, so no pair of it has a τ_half.
+	delta    map[int]*big.Rat
+	gate     string
+	gateLoop *loopDrive
 }
 
 // centre is the fraction of joint k's range at the cell's centre.
@@ -615,10 +656,7 @@ func (b *boxRun) nextReadingSplit() (int, int) {
 // floor, with the largest share of the travel of the pair that attained a
 // clear cell's bound; ties go to the earliest link, −1 when none is wide.
 func (b *boxRun) readingAxis(c *boxCell, wide func(*boxCell, int) bool) int {
-	share := make(map[int]*big.Rat, len(b.axes))
-	for _, t := range b.pairTerms(c, c.low[0], c.low[1]) {
-		share[t.joint] = t.value
-	}
+	share := b.pairShares(c, c.low[0], c.low[1])
 	axis := -1
 	var top *big.Rat
 	for _, k := range b.axes {
@@ -690,30 +728,56 @@ func (b *boxRun) evaluate(c *boxCell) error {
 		return err
 	}
 	spec := b.dr.spec
-	values := make([]units.Value, len(spec.joints))
-	params := make([]motionbound.MotionParam, len(spec.joints))
 	c.cell = JointCell{Min: make([]units.Value, len(spec.joints)), Max: make([]units.Value, len(spec.joints))}
 	for k, jt := range spec.joints {
-		f := c.centre(k)
-		values[k], params[k] = jt.label(f), jointParam(jt, f)
 		c.cell.Min[k], c.cell.Max[k] = jt.label(c.lo[k]), jt.label(c.hi[k])
 	}
-	poses, err := spec.posesOf(values)
-	if err != nil {
-		return err
-	}
-	ideals := idealPosesOf(spec, b.dr.frames, params)
-	groups := make([]motionGroupPose, len(poses))
-	for k := range poses {
-		groups[k] = motionGroupPose{
-			pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k],
-			fixed: b.dr.standing[k] == linkFixed, constant: b.dr.standing[k] == linkConstant,
+	var values, bounds []units.Value
+	var poses []r3.Transform
+	var ideals []motionbound.IdealPose
+	if len(spec.loops) == 0 {
+		values = make([]units.Value, len(spec.joints))
+		params := make([]motionbound.MotionParam, len(spec.joints))
+		for k, jt := range spec.joints {
+			f := c.centre(k)
+			values[k], params[k] = jt.label(f), jointParam(jt, f)
 		}
+		var err error
+		if poses, err = spec.posesOf(values); err != nil {
+			return err
+		}
+		bounds, ideals = zeroBounds(values), idealPosesOf(spec, b.dr.frames, params)
+	} else {
+		lp, err := b.loopCentre(c)
+		if err != nil {
+			return err
+		}
+		values, bounds, poses, ideals = lp.values, lp.bounds, lp.poses, lp.ideals
 	}
-	mp := r.newPose(groups, units.Value{}, "the configuration "+formatValues(values))
-	mp.cell = &c.cell
-	if err := r.runPairs(mp); err != nil {
-		return err
+	var mp *motionPose
+	if c.gate != "" && poses == nil {
+		// docs/linkage-check-design.md §16.3: an unbuildable centre has no
+		// pose; it evaluates no pair and carries no row.
+		mp = &motionPose{
+			cell: &c.cell, unbuildable: errors.New(c.gate), pairs: make([][]motionPairPose, len(r.movers)),
+			result: PoseResult{Interferences: []Interference{}, Clearances: []Clearance{}, Diagnostics: []Diagnostic{}},
+		}
+		for i := range r.movers {
+			mp.pairs[i] = make([]motionPairPose, len(r.pairs[i]))
+		}
+	} else {
+		groups := make([]motionGroupPose, len(poses))
+		for k := range poses {
+			groups[k] = motionGroupPose{
+				pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k], bound: bounds[k],
+				fixed: b.dr.standing[k] == linkFixed, constant: b.dr.standing[k] == linkConstant,
+			}
+		}
+		mp = r.newPose(groups, units.Value{}, "the configuration "+formatValues(values))
+		mp.cell = &c.cell
+		if err := r.runPairs(mp); err != nil {
+			return err
+		}
 	}
 	c.pose = mp
 	b.evaluated = append(b.evaluated, c)
@@ -722,7 +786,84 @@ func (b *boxRun) evaluate(c *boxCell) error {
 	return nil
 }
 
-// classify sets a cell's outcome from its evaluated centre.
+// loopCentre reads a looped linkage's cell (docs/linkage-check-design.md
+// §16.2, §16.3): the centre's pose, each dependent at its enclosure's float
+// midpoint and its ideal pose over the whole enclosure M_j, then per loop the
+// hull H_j of each dependent over the cell's loop-axis range, δ_j =
+// max(h_hi − m_lo, m_hi − h_lo) and the cell's published range for the
+// dependent, H_j's ends rounded outward. A held loop's dependents stand
+// still across the cell: δ_j is zero and the range is M_j. A refused centre
+// returns no pose and gates the cell; a refused hull gates it and publishes
+// the dependent's range as zero values.
+func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
+	spec := b.dr.spec
+	fracs := make([]*big.Rat, len(spec.joints))
+	for k := range fracs {
+		fracs[k] = c.centre(k)
+	}
+	lp, err := spec.loopPosesOf(b.run.ctx, b.dr.frames, fracs)
+	var ub *unbuildableError
+	if errors.As(err, &ub) {
+		c.gate, c.gateLoop = ub.Error(), ub.loop
+		for _, ld := range spec.loops {
+			for _, d := range ld.deps {
+				c.cell.Min[d], c.cell.Max[d] = units.Value{}, units.Value{}
+			}
+		}
+		return loopPose{}, nil
+	}
+	if err != nil {
+		return loopPose{}, err
+	}
+	c.delta = make(map[int]*big.Rat)
+	for _, ld := range spec.loops {
+		var hulls []proofbound.RatInterval
+		if !ld.held {
+			hulls, err = ld.cellHulls(b.run.ctx, c.lo[ld.driver], c.hi[ld.driver])
+			if errors.As(err, &ub) {
+				if c.gate == "" {
+					c.gate, c.gateLoop = ub.Error(), ld
+				}
+				for _, d := range ld.deps {
+					c.cell.Min[d], c.cell.Max[d] = units.Value{}, units.Value{}
+				}
+				continue
+			}
+			if err != nil {
+				return loopPose{}, err
+			}
+		}
+		for j, d := range ld.deps {
+			m := valueInterval(lp.lo[d], lp.hi[d])
+			h, delta := m, new(big.Rat)
+			if hulls != nil {
+				h, delta = hulls[j], dependentDelta(m, hulls[j])
+			}
+			c.delta[d] = delta
+			unit := lp.values[d].Unit()
+			c.cell.Min[d], c.cell.Max[d] = units.New(proofbound.RatFloatDown(h.Lo), unit), units.New(proofbound.RatFloatUp(h.Hi), unit)
+		}
+	}
+	return lp, nil
+}
+
+// dependentDelta is δ_j of docs/linkage-check-design.md §16.3: with the
+// dependent's exact value at the centre inside m and its exact value anywhere
+// in the cell inside the hull h, the farthest the two can lie apart,
+// max(h_hi − m_lo, m_hi − h_lo). It is the hull's whole width where the
+// centre sits at an end of it, as over a monotone stretch, and never half the
+// width, which the centre need not split.
+func dependentDelta(m, h proofbound.RatInterval) *big.Rat {
+	delta := new(big.Rat).Sub(h.Hi, m.Lo)
+	if other := new(big.Rat).Sub(m.Hi, h.Lo); other.Cmp(delta) > 0 {
+		delta = other
+	}
+	return delta
+}
+
+// classify sets a cell's outcome from its evaluated centre. A gated cell
+// (docs/linkage-check-design.md §16.3) is never CellClear or CellBlocked: it
+// is CellColliding when its centre collides and CellUndecided otherwise.
 func (b *boxRun) classify(c *boxCell) {
 	r := b.run
 	mp := c.pose
@@ -732,6 +873,13 @@ func (b *boxRun) classify(c *boxCell) {
 				c.held = append(c.held, [2]int{i, k})
 			}
 		}
+	}
+	if c.gate != "" {
+		c.outcome = CellUndecided
+		if len(c.held) > 0 {
+			c.outcome = CellColliding
+		}
+		return
 	}
 	if len(c.held) > 0 {
 		c.outcome = CellColliding
@@ -779,7 +927,8 @@ func (b *boxRun) classify(c *boxCell) {
 }
 
 // jointTerm is one joint's share w_i·span_i(C) of a pair's travel over a
-// cell (docs/linkage-check-design.md §14.3).
+// cell (docs/linkage-check-design.md §14.3), charged to the axis whose
+// halving shrinks it: the joint itself, or a loop dependent's driver.
 type jointTerm struct {
 	joint int
 	value *big.Rat
@@ -796,21 +945,46 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []jointTerm {
 	return append(mine, theirs...)
 }
 
+// pairShares sums pair k of mover i's terms per axis: each axis's share of
+// the pair's travel across cell c. A tree's pair names each joint once; a
+// loop's driver also carries the terms of its dependents on the pair's path.
+func (b *boxRun) pairShares(c *boxCell, i, k int) map[int]*big.Rat {
+	out := make(map[int]*big.Rat)
+	for _, t := range b.pairTerms(c, i, k) {
+		if cur, ok := out[t.joint]; ok {
+			cur.Add(cur, t.value)
+			continue
+		}
+		out[t.joint] = new(big.Rat).Set(t.value)
+	}
+	return out
+}
+
 // branchTerms is pairTerms split by body: the terms that move mover i's own
 // body, and those that move its partner's — none for a static partner.
+//
+// A loop's dependent joint j (docs/linkage-check-design.md §16.3) moves at
+// most δ_j from its exact value at the centre to its value anywhere in the
+// cell, the whole one-sided distance and not half the hull, so its share is
+// 2·w_j·δ_j — twice its part of τ_half, as a stated joint's w_i·span_i is —
+// charged to its loop's driver, whose halving shrinks the hull. Only a cell
+// with every δ_j read reaches here: a gated cell has no pair travel.
 func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 	r, dr := b.run, b.dr
-	span := func(joint int) *big.Rat {
+	span := func(joint int) (int, *big.Rat) {
 		jt := dr.spec.joints[joint]
-		return jointParam(jt, c.lo[joint]).SpanUpper(jointParam(jt, c.hi[joint]))
+		if jt.dep != nil {
+			return jt.dep.driver, new(big.Rat).Mul(c.delta[joint], big.NewRat(2, 1))
+		}
+		return joint, jointParam(jt, c.lo[joint]).SpanUpper(jointParam(jt, c.hi[joint]))
 	}
 	terms := func(bound linkBound, below int, out []jointTerm) []jointTerm {
 		for n := below; n < len(bound.path); n++ {
-			term := span(bound.path[n])
+			axis, term := span(bound.path[n])
 			if bound.rho[n] != nil {
 				term.Mul(term, bound.rho[n])
 			}
-			out = append(out, jointTerm{joint: bound.path[n], value: term})
+			out = append(out, jointTerm{joint: axis, value: term})
 		}
 		return out
 	}
@@ -877,6 +1051,11 @@ func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 // joint, among those wider than the resolution, with the largest share
 // w_i·span_i of the travel of any pair that held the cell back; ties go to
 // the earliest link.
+//
+// A gated cell (docs/linkage-check-design.md §16.4) has no pair travel to
+// rank: it splits along the refusing loop's driver, the one axis a split
+// changes, while that axis is wider than the resolution and its range meets
+// some stretch the decomposition certified; otherwise it is stuck.
 func (b *boxRun) splitAxis(c *boxCell) int {
 	switch {
 	case c.outcome == CellColliding:
@@ -884,11 +1063,18 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 	default:
 		return -1
 	}
+	if c.gate != "" {
+		ld := c.gateLoop
+		if ld == nil || ld.held || !b.wide(c, ld.driver) || !ld.meetsCertified(c.lo[ld.driver], c.hi[ld.driver]) {
+			return -1
+		}
+		return ld.driver
+	}
 	best := make(map[int]*big.Rat, len(b.axes))
 	for _, pair := range c.held {
-		for _, t := range b.pairTerms(c, pair[0], pair[1]) {
-			if cur, ok := best[t.joint]; !ok || t.value.Cmp(cur) > 0 {
-				best[t.joint] = t.value
+		for joint, v := range b.pairShares(c, pair[0], pair[1]) {
+			if cur, ok := best[joint]; !ok || v.Cmp(cur) > 0 {
+				best[joint] = v
 			}
 		}
 	}
@@ -926,11 +1112,16 @@ func (b *boxRun) wideForReading(c *boxCell, k int) bool {
 	return width.Cmp(b.run.cfg.readingP.Base) > 0
 }
 
-// configuration is the joint configuration a cell's centre was evaluated at.
+// configuration is the joint configuration a cell's centre was evaluated at:
+// the zero JointConfiguration for an unbuildable centre.
 func (c *boxCell) configuration() JointConfiguration {
-	conf := JointConfiguration{Values: make([]units.Value, len(c.pose.groups)), Poses: make([]r3.Transform, len(c.pose.groups))}
+	if c.pose.unbuildable != nil {
+		return JointConfiguration{}
+	}
+	n := len(c.pose.groups)
+	conf := JointConfiguration{Values: make([]units.Value, n), Bounds: make([]units.Value, n), Poses: make([]r3.Transform, n)}
 	for k, g := range c.pose.groups {
-		conf.Values[k], conf.Poses[k] = g.value, g.pose
+		conf.Values[k], conf.Bounds[k], conf.Poses[k] = g.value, g.bound, g.pose
 	}
 	return conf
 }
@@ -986,11 +1177,15 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		case c.outcome != CellClear:
 			allClear, met = false, false
 			if c.outcome == CellUndecided {
+				msg := fmt.Sprintf("the joint cell %s is neither certified clear nor bounded by a proven collision", formatCell(c.cell))
+				if c.gate != "" {
+					msg += ": " + c.gate
+				}
 				own = append(own, b.cellFinding(c, Diagnostic{
 					Code:    DiagMotionUndecidedInterval,
 					Status:  Suspect,
 					Reading: ReadingNone,
-					Message: fmt.Sprintf("the joint cell %s is neither certified clear nor bounded by a proven collision", formatCell(c.cell)),
+					Message: msg,
 				}))
 			}
 		case r.cfg.minimumMM != nil && !r.meetsMinimum(c.clearance):
@@ -1083,7 +1278,7 @@ func formatCell(c JointCell) string {
 }
 
 // errLoopNotStated is the refusal of a looped linkage where every joint's
-// value is the caller's to state (docs/linkage-check-design.md §15.8).
+// value is the caller's to state (docs/linkage-check-design.md §16.1).
 func errLoopNotStated() error {
-	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from the drive, so it cannot be posed or boxed joint by joint`, ErrUnsupported)
+	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from its driver, so it cannot be posed joint by joint; pose a drive whose every sweep holds instead`, ErrUnsupported)
 }

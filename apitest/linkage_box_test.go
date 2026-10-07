@@ -425,6 +425,8 @@ func TestLinkageConfiguration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pose.Values, same.Values)
 	require.Equal(t, pose.Poses, same.Poses, `PoseAt is Configuration of the drive's values`)
+	require.Equal(t, pose.Bounds, same.Bounds, `every stated value has a zero half-width`)
+	require.Equal(t, []units.Value{units.Degrees(0), units.Degrees(0)}, same.Bounds, `in the value's own unit`)
 
 	limited := decad.NewLinkage()
 	_, err = limited.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{a.upper}, decad.WithJointLimits(units.Degrees(-10), units.Degrees(10)))

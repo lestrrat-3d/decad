@@ -551,7 +551,7 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		}
 		jt.listed, jt.values, jt.points = true, values, points
 	}
-	if err := l.resolveLoops(spec); err != nil {
+	if err := l.resolveLoops(spec, "drive"); err != nil {
 		return nil, err
 	}
 	// q(s) is linear within each segment, so a drive keeps a joint inside its

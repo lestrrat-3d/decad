@@ -151,6 +151,7 @@
 0	0.01	TestVerifyEffectiveRequestRecorded
 0	0.60	TestVerifyJointBoxBudget
 0	0.02	TestVerifyJointBoxErrors
+0	12.66	TestVerifyJointBoxLoopGate
 0	17.87	TestVerifyLinkageLoopFold
 0	2.86	TestVerifyLinkageLoopHeldDriver
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
@@ -301,6 +302,7 @@
 1	1.86	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
 1	0.12	TestVerifyJointBoxCancellation
 1	0.48	TestVerifyJointBoxClearReading
+1	5.96	TestVerifyJointBoxLoopNonMutationAndDeterminism
 1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
 1	0.01	TestVerifyLinkageErrors
 1	2.35	TestVerifyLinkageLoopCrossingZeroMixed
@@ -864,6 +866,7 @@
 2	0.00	TestVerifyExactlyTangentPairStaysUndecided
 2	0.05	TestVerifyInterferenceRowsKeepDocumentPairOrder
 2	10.21	TestVerifyJointBoxBlocked
+2	5.96	TestVerifyJointBoxLoopOneAxis
 2	2.27	TestVerifyLinkageDeclaredJointContact
 2	3.29	TestVerifyLinkageLoopCrossingZero
 2	8.08	TestVerifyLinkageLoopSliderPin
@@ -1034,6 +1037,7 @@
 3	0.01	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	12.76	TestVerifyGearScaleOverArrangementCapStaysSuspect
 3	5.06	TestVerifyJointBoxCrane
+3	5.54	TestVerifyJointBoxLoopFold
 3	10.18	TestVerifyLinkageLoopFoldOutAndBack
 3	8.27	TestVerifyLinkageLoopPinBetweenSamples
 3	0.52	TestVerifyLinkageLoopSlideDriven
@@ -1182,6 +1186,7 @@
 4	0.01	TestVerifyDiagnosticsBeyondTolerance
 4	0.03	TestVerifyFacetedMultiRegionPairStaysAsBefore
 4	0.16	TestVerifyIsNonMutating
+4	5.36	TestVerifyJointBoxLoopCancellation
 4	2.75	TestVerifyJointBoxNonMutationAndDeterminism
 4	1.25	TestVerifyLinkageAgreesWithVerifyMotion
 4	0.68	TestVerifyLinkageCancellation
@@ -1331,6 +1336,8 @@
 5	0.01	TestVerifyCapBlendChamferAreaVolumeCentroidAllPass
 5	0.02	TestVerifyClearanceCancellationInsideSturmChainBuild
 5	0.01	TestVerifyDiagnosticsUnsupportedPairStagedContact
+5	5.22	TestVerifyJointBoxLoopCrossingZero
+5	1.63	TestVerifyJointBoxLoopErrors
 5	5.00	TestVerifyJointBoxOneJoint
 5	0.18	TestVerifyLinkageCrane
 5	0.21	TestVerifyLinkageFoldingArm

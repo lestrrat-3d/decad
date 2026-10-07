@@ -252,3 +252,147 @@ func TestJointBoxBlockedAllowance(t *testing.T) {
 		})
 	}
 }
+
+// TestJointBoxDependentDelta pins δ_j of docs/linkage-check-design.md §16.3
+// on hand-made enclosures: with the centre's enclosure M at an end of the
+// hull H, as over a stretch where the dependent is monotone, δ is the hull's
+// whole width; with M in its middle, half of it, plus M's own width on the
+// far side.
+//
+// Legs seen to fail when deleted: δ as half the hull's width (the end case
+// reads 1/2); δ as §15.5's two-sided travel term (the end case reads 2).
+func TestJointBoxDependentDelta(t *testing.T) {
+	t.Parallel()
+	iv := func(lo, hi *big.Rat) proofbound.RatInterval { return proofbound.IntervalOwned(lo, hi) }
+	h := iv(new(big.Rat), big.NewRat(1, 1))
+	eps := big.NewRat(1, 1_000_000_000)
+	cases := []struct {
+		name string
+		m    proofbound.RatInterval
+		want *big.Rat
+	}{
+		{"at the lower end", iv(new(big.Rat), eps), big.NewRat(1, 1)},
+		{"at the upper end", iv(new(big.Rat).Sub(big.NewRat(1, 1), eps), big.NewRat(1, 1)), big.NewRat(1, 1)},
+		{"in the middle", iv(big.NewRat(1, 2), big.NewRat(1, 2)), big.NewRat(1, 2)},
+		{"in the middle, wide", iv(new(big.Rat).Sub(big.NewRat(1, 2), eps), new(big.Rat).Add(big.NewRat(1, 2), eps)), new(big.Rat).Add(big.NewRat(1, 2), eps)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := dependentDelta(tc.m, h)
+			require.Zero(t, tc.want.Cmp(got), `δ is %s, want %s`, got.FloatString(12), tc.want.FloatString(12))
+		})
+	}
+}
+
+// internalRockerTheta4 is scene 7's follower angle from the ground line at
+// crank angle th2, on the branch with the coupler pin above the ground line.
+func internalRockerTheta4(th2 float64) float64 {
+	d := math.Sqrt(100*100 + 30*30 - 2*100*30*math.Cos(th2))
+	phi := math.Atan2(30*math.Sin(th2), 30*math.Cos(th2)-100)
+	beta := math.Acos((70*70 + d*d - 80*80) / (2 * 70 * d))
+	return math.Mod(phi-beta+2*math.Pi, 2*math.Pi)
+}
+
+// rockerGateBoxRun is internalRocker with a gate, x ∈ [−50, 150],
+// y ∈ [72, 82], z ∈ [19, 29], on a prismatic joint under the ground along
+// (0, −1, 0), read into a joint-box run over the crank's [0°, 90°] and the
+// gate's [0, 5] mm: scene 11 of §16.8 with the follower a box and the gate's
+// range halved.
+func rockerGateBoxRun(t *testing.T) *boxRun {
+	t.Helper()
+	l, crank := internalRocker(t)
+	doc := crank.bodies[0].doc
+	gate, err := l.Ground().Prismatic(r3.NewVec(0, -1, 0), []*Body{internalBoxBodyAtZ(t, doc, -50, 72, 150, 82, 19, 10)})
+	require.NoError(t, err)
+	spec, axes, err := l.resolveBox(JointBox{
+		{Link: crank, Min: units.Degrees(0), Max: units.Degrees(90)},
+		{Link: gate, Min: units.Millimeters(0), Max: units.Millimeters(5)},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{0, 3}, axes)
+	frames, ok := linkageFrames(spec)
+	require.True(t, ok)
+	cfg, budget, err := resolveJointBoxOptions(nil)
+	require.NoError(t, err)
+	require.NoError(t, spec.prepareLoops(t.Context(), cfg.resolutionP.Base))
+	bounds, ok := readLinkBounds(spec, frames)
+	require.True(t, ok)
+	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
+	return &boxRun{run: run, dr: run.drive.(*linkageDriver), axes: axes, budget: budget}
+}
+
+// TestJointBoxLoopSplitAxis pins the driver-axis attribution of
+// docs/linkage-check-design.md §16.4 at the root of a gate box: the
+// (follower, gate) pair's travel is the follower's dependent term, charged to
+// the crank as 2·ρ·δ, and the gate's 5 mm. The follower turns over
+// [−8.7632°, 3.0248°] while the crank's centre at 45° puts it near the low
+// end, so δ ≈ 0.2 rad and, with the follower box's ρ = √(30² + 4²), the
+// crank's share is about 12 mm: a root the pair holds back splits along the
+// crank, although the crank is not on the pair's path.
+//
+// Legs seen to fail when deleted: charging the dependent's term to its own
+// joint, which is no axis (the crank carries no share, and the root would
+// split along the gate); the dependent's term itself (the crank's share is
+// zero).
+func TestJointBoxLoopSplitAxis(t *testing.T) {
+	t.Parallel()
+	b := rockerGateBoxRun(t)
+	r := b.run
+	require.Equal(t, 3, r.pairs[2][0].other, `the follower's first pair is the gate`)
+	root := &boxCell{lo: make([]*big.Rat, 4), hi: make([]*big.Rat, 4)}
+	for k := range 4 {
+		root.lo[k], root.hi[k] = new(big.Rat), new(big.Rat)
+	}
+	root.hi[0], root.hi[3] = big.NewRat(1, 1), big.NewRat(1, 1)
+	require.NoError(t, b.evaluate(root))
+	require.Empty(t, root.gate)
+
+	delta := root.delta[2]
+	require.NotNil(t, delta)
+	t40, t4c := internalRockerTheta4(0), internalRockerTheta4(math.Pi/4)
+	low, high := internalRockerTheta4(38.5727*math.Pi/180)-t40, internalRockerTheta4(81.857366*math.Pi/180)-t40
+	high = math.Max(high, internalRockerTheta4(math.Pi/2)-t40)
+	high = math.Max(high, 0)
+	centre := t4c - t40
+	trueDelta := math.Max(high-centre, centre-low)
+	require.GreaterOrEqual(t, linkRatFloat(t, delta), trueDelta-1e-9, `δ covers the follower's farthest value over the cell`)
+	require.LessOrEqual(t, linkRatFloat(t, delta), trueDelta+0.05*(high-low)+1e-6, `δ is the hull's reach, not more`)
+
+	rho := b.dr.bounds[2].rho[0]
+	require.InDelta(t, math.Sqrt(30*30+4*4), linkRatFloat(t, rho), 1e-9)
+	shares := b.pairShares(root, 2, 0)
+	require.Contains(t, shares, 0, `the crank carries the follower's term`)
+	want := new(big.Rat).Mul(delta, big.NewRat(2, 1))
+	want.Mul(want, rho)
+	require.Zero(t, want.Cmp(shares[0]), `the crank carries 2·ρ·δ`)
+	require.Zero(t, big.NewRat(5, 1).Cmp(shares[3]), `the gate carries its span`)
+	require.Len(t, shares, 2)
+	require.Greater(t, linkRatFloat(t, shares[0]), 5.0)
+
+	root.outcome, root.held = CellUndecided, [][2]int{{2, 0}}
+	require.Equal(t, 0, b.splitAxis(root))
+}
+
+// TestJointBoxStuckRule pins docs/linkage-check-design.md §16.4's stuck rule
+// on a hand-built decomposition that certified [0, 1/2] of the loop axis and
+// refused the rest: a gated cell inside the refused stretch is left unsplit,
+// one straddling it splits along the loop axis, one meeting the certified
+// stretch at a point only is left unsplit, and one at the floor is not split.
+//
+// Legs seen to fail when deleted: the stuck rule (the cell inside the refused
+// stretch splits).
+func TestJointBoxStuckRule(t *testing.T) {
+	t.Parallel()
+	ld := &loopDrive{driver: 0, certified: [][2]*big.Rat{{new(big.Rat), big.NewRat(1, 2)}}}
+	b := &boxRun{run: &motionRun{cfg: motionConfig{resolutionP: motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, 64)}}}, axes: []int{0}}
+	gated := func(lo, hi *big.Rat) *boxCell {
+		return &boxCell{lo: []*big.Rat{lo}, hi: []*big.Rat{hi}, outcome: CellUndecided, gate: "refused", gateLoop: ld}
+	}
+	require.Equal(t, -1, b.splitAxis(gated(big.NewRat(3, 4), big.NewRat(1, 1))), `a cell inside the refused stretch is stuck`)
+	require.Equal(t, 0, b.splitAxis(gated(big.NewRat(1, 4), big.NewRat(3, 4))), `a cell straddling it splits along the loop axis`)
+	require.Equal(t, -1, b.splitAxis(gated(big.NewRat(1, 2), big.NewRat(1, 1))), `meeting the certified stretch at a point is meeting none of it`)
+	require.Equal(t, -1, b.splitAxis(gated(big.NewRat(31, 64), big.NewRat(1, 2))), `a cell at the floor is not split`)
+	colliding := gated(big.NewRat(1, 4), big.NewRat(3, 4))
+	colliding.outcome = CellColliding
+	require.Equal(t, 0, b.splitAxis(colliding), `a gated colliding cell splits along the loop axis too`)
+}

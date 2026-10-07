@@ -277,7 +277,7 @@ func TestVerifyLinkageLoopDependentLimits(t *testing.T) {
 	limited := func(t *testing.T, lo, hi float64) fourBar {
 		doc := decad.New()
 		z := r3.NewVec(0, 0, 1)
-		fb := buildFourBarOpen(t, doc, rockerGround, rockerCrank, rockerCoupler, rockerFollower, z, decad.WithJointLimits(units.Degrees(lo), units.Degrees(hi)))
+		fb := buildFourBarOpen(t, doc, z, decad.WithJointLimits(units.Degrees(lo), units.Degrees(hi)))
 		var err error
 		fb.loop, err = fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), z)
 		require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestVerifyLinkageLoopDependentLimits(t *testing.T) {
 func TestVerifyLinkageLoopFoldOutAndBack(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	fb := buildFourBar(t, doc, foldGround, foldCrank, foldCoupler, foldFollower)
+	fb := buildFourBar(t, doc, foldCrank, foldCoupler, foldFollower)
 	sIn := math.Acos(0.04) * 180 / math.Pi / 200
 	require.InDelta(t, 0.438538, sIn, 1e-6)
 	sOut := 1 - sIn
