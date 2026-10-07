@@ -9,25 +9,22 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveproof"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
 // This file is docs/tessellation-design.md §13's increments T2 and T3
 // (docs/tessellation-reach-design.md §6, R3 and R4): revolve tessellation. It
-// assembles the mesh — the meridian samples, the one global angular sequence,
-// the rings, the cylinder/cone/plane/sphere/torus cells, the poles and apexes,
-// the partial caps and the full-turn cycles — while
-// tessellate_revolve_proof.go proves it, tessellate_revolve_arc.go owns
-// everything a CIRCULAR meridian generator needs that a straight one does not,
-// and tessellate_revolve_volume.go proves §11's occupied-volume bound the mesh
-// boolean reads.
+// assembles the meridian samples, global angular sequence, rings, cells, poles
+// and caps. internal/revolveproof computes envelopes, budgets, cell area slack
+// and volume bounds. tessellate_revolve_proof.go wires the facet audits, and
+// tessellate_revolve_arc.go handles circular meridian generators.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
 // revolveLoopWalks' own requireAnalyticWalk: those cells are §13's increment
@@ -49,16 +46,6 @@ import (
 //     failing meridian walk in payload order, or the one global angular count,
 //     and refuses when the fixed budget runs out. It never snaps, welds, drops
 //     a facet, or rounds a near-axis ring onto the axis (§12).
-
-// maxFacetsPerMesh, maxFacetWorkPerCall are docs/tessellation-design.md §3's
-// two per-call facet ceilings, beside internal/proofbound/budget.go's proofbound.MaxFacetPairTestsPerCall.
-// Every one of them is checked with unsigned integer arithmetic BEFORE the
-// allocation or audit it governs, so an over-budget request refuses rather
-// than building the thing that would have blown the budget.
-const (
-	maxFacetsPerMesh    = 65_536
-	maxFacetWorkPerCall = 262_144
-)
 
 // maxRevolveRefinements caps how many times one call may refine a count and
 // rebuild (docs/tessellation-design.md §3: refinement is deterministic and
@@ -415,7 +402,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// chord pair — across loops and WITHIN one loop — clear of the two sagitta
 	// tubes the analytic-to-chord homotopy moves inside.
 	sectionPts, sectionLoops, sectionSag := revolveSectionPoints(loopMesh)
-	if err := requireLoopClearance(ctx, sectionPts, sectionLoops, loopMaxSagitta(sectionSag)); err != nil {
+	if err := requireLoopClearance(ctx, sectionPts, sectionLoops, revolveproof.LoopMaxSagitta(sectionSag)); err != nil {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 	if err := requireWalkClearance(ctx, sectionPts, sectionLoops, sectionSag); err != nil {
@@ -560,7 +547,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			if !proofs {
 				continue
 			}
-			slack, err := revolveCellSlack(p.ideal, angular, lo, hi, coord)
+			slack, err := revolveproof.CellSlack(p.ideal, angular, lo, hi, coord)
 			if err != nil {
 				return nil, err
 			}
@@ -876,69 +863,15 @@ func axisIncidenceReason(bothAxis bool) string {
 	return "two off-axis segments"
 }
 
-// revolveExtents is docs/tessellation-design.md §8's ρ and |z| envelope over
-// every loop, read from the WALKS rather than from a chording of them: a
-// straight generator attains both at its endpoints, and a circular one at its
-// endpoints plus every cardinal point its own parameter interval contains. A
-// cardinal point needs no trig — the four of them are (cU ± r, cV) and
-// (cU, cV ± r) exactly — so this envelope carries no library assumption.
-//
-// A section with no material off the axis is an invariant failure the builder's
-// own area gate already refuses.
+// revolveExtents adapts the resolved meridian walks to the envelope reader.
 func revolveExtents(loops []revolveWalks) (float64, float64, error) {
-	rhoMax, zAbsMax := 0.0, 0.0
-	see := func(z, rho float64) error {
-		if proofbound.IsNonFinite(rho) || proofbound.IsNonFinite(z) {
-			return fmt.Errorf(`%w: a revolve meridian sample is not finite`, ErrUnsupported)
-		}
-		rhoMax = math.Max(rhoMax, rho)
-		zAbsMax = math.Max(zAbsMax, math.Abs(z))
-		return nil
-	}
-	for _, r := range loops {
-		for _, w := range r.walks {
-			for _, p := range revolveWalkExtremes(w.SegmentWalk) {
-				if err := see(p[0], p[1]); err != nil {
-					return 0, 0, err
-				}
-			}
-		}
-	}
-	if rhoMax <= 0 {
-		return 0, 0, fmt.Errorf(`%w: the recorded region lies entirely on the revolve axis, so it sweeps no solid`, ErrDegenerate)
-	}
-	return rhoMax, zAbsMax, nil
+	return revolveproof.Extents(revolveWalkView(loops))
 }
 
-// revolveWalkExtremes lists the (z, ρ) points where one walk can attain either
-// envelope: its two endpoints, plus, for a circular walk, each cardinal point
-// its own angular interval contains.
-func revolveWalkExtremes(w survey2d.SegmentWalk) [][2]float64 {
-	out := [][2]float64{{w.StartU, w.StartV}, {w.EndU, w.EndV}}
-	if !w.IsCircular() {
-		return out
-	}
-	span := math.Abs(w.Th1 - w.Th0)
-	lo := math.Min(w.Th0, w.Th1)
-	cardinals := [4][2]float64{
-		{w.CU + w.Radius, w.CV},
-		{w.CU, w.CV + w.Radius},
-		{w.CU - w.Radius, w.CV},
-		{w.CU, w.CV - w.Radius},
-	}
-	for q, p := range cardinals {
-		// The cardinal's own angle is q·π/2; shift it into [lo, lo+2π) and keep
-		// it when the walk's interval reaches that far.
-		d := math.Mod(float64(q)*math.Pi/2-lo, 2*math.Pi)
-		if d < 0 {
-			d += 2 * math.Pi
-		}
-		if d <= span {
-			out = append(out, p)
-		}
-	}
-	return out
-}
+type revolveWalkView []revolveWalks
+
+func (loops revolveWalkView) Len() int                        { return len(loops) }
+func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].walks }
 
 // revolveCapSegmentArea is the circular-segment area ONE partial cap's curved
 // trim omits (docs/tessellation-design.md §10.2): the chorded meridian region
@@ -958,103 +891,26 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 	return total
 }
 
-// revolvePreflightFacets charges docs/tessellation-design.md §3's per-mesh and
-// cumulative facet ceilings with unsigned integer arithmetic, BEFORE a single
-// facet is allocated. The cap triangles are counted from Euler's own identity
-// for a polygon with holes — n + 2h − 2 triangles for n boundary samples and h
-// holes — so the charge covers the whole mesh rather than its walls alone.
-//
-// The cumulative counters live on the call's revolveWork and are never reset by
-// a refinement retry, so a sequence of attempts is charged the sum of what each
-// of them asked for.
-//
-// sheet omits the cap charge for a PARTIAL sweep, docs/surface-design.md
-// §4.1's own build never triangulates one: charging it anyway would refuse a
-// sheet at a finer tolerance than its own mesh actually needs. A full
-// revolution already charges no cap for a solid, so sheet changes nothing
-// there.
-//
-// audit says whether this build will run the facet-contact audit. §3 charges
-// proofbound.MaxFacetPairTestsPerCall only when it will: that ceiling bounds the work one
-// all-pairs audit may do, and a build that runs no pair predicate does none of
-// that work. The facet and facet-work ceilings bound ALLOCATION instead and are
-// charged either way. This is why the tolerance a VerifyAll revolve refuses for
-// the pair ceiling alone is met at VerifyNone — the refusal was a work budget,
-// never a statement that the geometry could not be meshed.
+// revolvePreflightFacets adapts the builder's loops to the facet budget.
 func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bool, work *revolveWork) error {
-	var walls, samples uint64
-	for _, lm := range loops {
-		n := len(lm.samples)
-		for j, s := range lm.samples {
-			if lm.resolved.kinds[s.Walk] == wallAxis {
-				continue
-			}
-			per := uint64(2)
-			if s.OnAxis || lm.samples[(j+1)%n].OnAxis {
-				per = 1
-			}
-			step, ok := mulChecked(per, uint64(nPhi))
-			if !ok {
-				return errRevolveFacetCeiling
-			}
-			walls, ok = addChecked(walls, step)
-			if !ok {
-				return errRevolveFacetCeiling
-			}
-		}
-		var ok bool
-		samples, ok = addChecked(samples, uint64(n))
-		if !ok {
-			return errRevolveFacetCeiling
-		}
+	state := revolveproof.FacetWork{Facets: work.facets, Pairs: work.pairs}
+	if err := revolveproof.PreflightFacets(revolveFacetLoops(loops), nPhi, full, sheet, audit, &state); err != nil {
+		return err
 	}
-	// A full revolution emits no cap at all; a partial sweep emits both,
-	// unless it is a sheet, which emits neither.
-	caps := uint64(0)
-	if !full && !sheet && samples+2*uint64(len(loops)) >= 4 {
-		caps = 2 * (samples + 2*uint64(len(loops)) - 4)
-	}
-	total, ok := addChecked(walls, caps)
-	if !ok || total > maxFacetsPerMesh {
-		return errRevolveFacetCeiling
-	}
-	spent, ok := addChecked(work.facets, total)
-	if !ok || spent > maxFacetWorkPerCall {
-		return errRevolveFacetCeiling
-	}
-	charged := work.pairs
-	if audit {
-		// The facet-pair audit's own ceiling, charged here rather than at the
-		// audit: §3 requires the conservative F·(F−1)/2 to be checked before
-		// the audit starts, and checking it before the ALLOCATION is strictly
-		// earlier.
-		pairs, ok := proofbound.WallChoose2(total)
-		if !ok {
-			return errRevolveFacetCeiling
-		}
-		charged, ok = addChecked(work.pairs, pairs)
-		if !ok || charged > proofbound.MaxFacetPairTestsPerCall {
-			return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, ErrUnsupported, total, proofbound.MaxFacetPairTestsPerCall)
-		}
-	}
-	work.facets, work.pairs = spent, charged
+	work.facets, work.pairs = state.Facets, state.Pairs
 	return nil
 }
 
-var errRevolveFacetCeiling = fmt.Errorf(`%w: this chord tolerance asks for more than %d facets in one revolve mesh`, ErrUnsupported, maxFacetsPerMesh)
+type revolveFacetLoops []revLoopMesh
 
-func addChecked(a, b uint64) (uint64, bool) {
-	sum := a + b
-	return sum, sum >= a
+func (loops revolveFacetLoops) Len() int                                { return len(loops) }
+func (loops revolveFacetLoops) Samples(i int) []revolvemesh.RevMeridian { return loops[i].samples }
+func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
+	return loops[i].resolved.kinds[walk] == wallAxis
 }
 
-func mulChecked(a, b uint64) (uint64, bool) {
-	if a == 0 || b == 0 {
-		return 0, true
-	}
-	product := a * b
-	return product, product/a == b
-}
+func addChecked(a, b uint64) (uint64, bool) { return revolveproof.AddChecked(a, b) }
+func mulChecked(a, b uint64) (uint64, bool) { return revolveproof.MulChecked(a, b) }
 
 // emitRevolveCell writes one meridian cell's facets across the whole angular
 // sequence (docs/tessellation-design.md §9's cell table).
@@ -1141,98 +997,6 @@ func revolveSectionPoints(loops []revLoopMesh) ([]Point2, [][]int, [][]float64) 
 	}
 	return pts, loopIdx, loopSag
 }
-
-// loopMaxSagitta reduces the per-chord sagittas to the per-loop figure the
-// cross-loop clearance gate reads.
-func loopMaxSagitta(sag [][]float64) []float64 {
-	out := make([]float64, len(sag))
-	for i, loop := range sag {
-		for _, s := range loop {
-			out[i] = math.Max(out[i], s)
-		}
-	}
-	return out
-}
-
-// revolveCellSlack is one meridian cell's Ecell
-// (docs/tessellation-design.md §10.2), stated ONCE for the cell and multiplied
-// by the angular count by the caller.
-//
-// One evaluation answers for every angular interval because the ideal samples
-// at interval l are the EXACT rotation, about the axis by l·dφ, of those at
-// interval 0. A rotation is an isometry, so the true patch and the held facets
-// alike are congruent across intervals and their area densities are equal — the
-// enclosures differ in width alone, and this reads interval 0's.
-//
-// A STRAIGHT generator's densities collapse to a difference that is linear in
-// the meridian parameter, so its cell is decomposed in closed form
-// (revolvemesh.RevolveCellAreaSlack, tess §15's T2 choice). A CIRCULAR generator's does
-// not, so its cell takes certified interval subdivision instead
-// (revolvemesh.RevolveArcCellSlack, tess §15's T3 choice). coord is the composed coordinate
-// displacement, which the circular arms widen their meridian model by.
-func revolveCellSlack(b revolvemesh.RevolveBasis3Iv, angular revolvemesh.RevolveAngular, lo, hi revolvemesh.RevMeridian, coord float64) (float64, error) {
-	corner := func(s revolvemesh.RevMeridian, l int) proofbound.IvVec3 {
-		return revolvemesh.RevolveIdealPoint(b, s.ZIv, s.RhoIv, angular.CosIv[l], angular.SinIv[l])
-	}
-	p00, p01 := corner(lo, 0), corner(lo, 1)
-	p10, p11 := corner(hi, 0), corner(hi, 1)
-	if lo.Arc != nil {
-		switch {
-		case lo.OnAxis:
-			area, ok := revolvemesh.IvTwoTriangleArea(p00, p10, p11)
-			if !ok {
-				return 0, revolvemesh.ErrRevolveArcCellSlack
-			}
-			return revolvemesh.RevolveArcFanSlack(*lo.Arc, true, angular.Step, area, coord)
-		case hi.OnAxis:
-			area, ok := revolvemesh.IvTwoTriangleArea(p00, p10, p01)
-			if !ok {
-				return 0, revolvemesh.ErrRevolveArcCellSlack
-			}
-			return revolvemesh.RevolveArcFanSlack(*lo.Arc, false, angular.Step, area, coord)
-		default:
-			lowHalf, ok0 := revolvemesh.IvTwoTriangleArea(p00, p10, p11)
-			highHalf, ok1 := revolvemesh.IvTwoTriangleArea(p00, p11, p01)
-			if !ok0 || !ok1 {
-				return 0, revolvemesh.ErrRevolveArcCellSlack
-			}
-			return revolvemesh.RevolveArcCellSlack(*lo.Arc, angular.Step, [2]proofbound.RatInterval{lowHalf, highHalf}, coord)
-		}
-	}
-
-	dz, drho := proofarith.FloatRat(hi.Z-lo.Z), proofarith.FloatRat(hi.Rho-lo.Rho)
-	if dz == nil || drho == nil {
-		return 0, errRevolveCellSlack
-	}
-	lenSq := proofbound.IntervalAdd(proofbound.IntervalSquare(proofbound.PointInterval(dz)), proofbound.IntervalSquare(proofbound.PointInterval(drho)))
-	meridian, ok := proofbound.IntervalSqrt(lenSq)
-	if !ok {
-		return 0, errRevolveCellSlack
-	}
-	switch {
-	case lo.OnAxis:
-		area, ok := revolvemesh.IvTwoTriangleArea(p00, p10, p11)
-		if !ok {
-			return 0, errRevolveCellSlack
-		}
-		return revolvemesh.RevolveFanAreaSlack(hi.Rho, true, meridian, angular.Step, area), nil
-	case hi.OnAxis:
-		area, ok := revolvemesh.IvTwoTriangleArea(p00, p10, p01)
-		if !ok {
-			return 0, errRevolveCellSlack
-		}
-		return revolvemesh.RevolveFanAreaSlack(lo.Rho, false, meridian, angular.Step, area), nil
-	default:
-		lowHalf, ok0 := revolvemesh.IvTwoTriangleArea(p00, p10, p11)
-		highHalf, ok1 := revolvemesh.IvTwoTriangleArea(p00, p11, p01)
-		if !ok0 || !ok1 {
-			return 0, errRevolveCellSlack
-		}
-		return revolvemesh.RevolveCellAreaSlack(lo.Rho, hi.Rho, meridian, angular.Step, [2]proofbound.RatInterval{lowHalf, highHalf}), nil
-	}
-}
-
-var errRevolveCellSlack = fmt.Errorf(`%w: a revolve cell states no enclosure of the area its held facets and the patch they stand for differ by`, ErrUnsupported)
 
 // publishRevolveProof writes docs/tessellation-design.md §2's proof record for
 // the assembled mesh: §10.1's per-face two-sided displacement, §10.2's area
