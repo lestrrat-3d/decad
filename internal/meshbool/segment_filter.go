@@ -19,7 +19,7 @@ import (
 // differences, so its sign is invariant under scaling by a positive
 // denominator, and the exactness guarantee is unchanged. A point is reduced
 // to its canonical form only at vertex emission (proof.Xpt.Key), because welding is
-// by exact identity (boolean_mesh.go's StitchFacetsContext) and a homogeneous
+// by exact identity (mesh_stitch.go's StitchFacetsContext) and a homogeneous
 // point has many spellings. A sign decided exactly is a topology decision
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
