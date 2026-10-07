@@ -1036,3 +1036,4 @@
 3	0.01	TestPrismReflectedOperandChargesItsWalk
 3	0.01	TestPrismBooleanReflectedSharedAxisIsIdentity
 3	0.01	TestPrismAmplifiedCutsFallBack
+3	0.01	TestPrismGroupDisplacedToolChargesTheCrossing

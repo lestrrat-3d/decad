@@ -100,8 +100,8 @@ placement a float composition the caller never asked for, orthonormalised by
 | STL/OBJ/3MF | read the mesh |
 | `Verify` validity, surveys, tolerance gate | per payload, unchanged; measured `Sound` on prism, revolve, fillet result |
 | Clearance kernel | `clearance_geom.go` reads `reflected()`; measured T3 |
-| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection still reroutes there (prism-boolean §3.4) and reaches the mesh path's coplanar refusal: `Suspect` (T2) |
-| `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M2 and M3 still refuse: their outlines share collinear walls (A3), and M3's also cross under a nonidentity re-expression, which prism-boolean §3.4 reroutes until A6 |
+| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls have no charge, so it reaches the mesh path's coplanar refusal: `Suspect` |
+| `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M2 and M3 still refuse, on the mesh path: their outlines share collinear walls (A3), which A6's crossing charge cannot bound |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
 | `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `contact_sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
 | Loft | `loftPayload.placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |

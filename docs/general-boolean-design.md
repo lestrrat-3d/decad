@@ -193,7 +193,10 @@ edge on its operand's material side, read by the same `Reversed` against
 authored-sense comparison the crossing classifier reads. A cell with none is
 an enclosed void, and the pair takes the mesh path. A group operand needs
 the partner's interval exactly (prism-boolean §3.2's `Union` row), and a
-result whose survivors close into one loop is a prism.
+result whose survivors close into one loop is a prism. A group scene whose
+cuts carry a displaced operand's displacement (a placed group, for one)
+takes A6's crossing charge on both the `Cut` crossing sub-case and the
+`Union` merge, and falls back to the mesh path where A6 does.
 
 #### A6 — the crossing-sensitivity charge
 
