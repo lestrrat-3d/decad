@@ -1,4 +1,4 @@
-package decad
+package record
 
 import (
 	"errors"
