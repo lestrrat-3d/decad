@@ -221,7 +221,7 @@ the rules leave to the byte budget.
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
-| `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, measurements integrated exactly with composed bounds. See `docs/evaluator-design.md` §9. |
+| `boolean_body.go` | Builds faceted topology and measurements from an audited mesh. See `docs/evaluator-design.md` §9. |
 
 ### Output
 
@@ -251,6 +251,7 @@ the rules leave to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
+| `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
