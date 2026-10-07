@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -318,17 +319,17 @@ func TestCapStationBoundEnclosesTheStationItDenotes(t *testing.T) {
 	const cU, cV, r = 3.0, -7.0, 8.0
 	theta := 0.9
 	held := Point2{U: cU + r*math.Cos(theta), V: cV + r*math.Sin(theta)}
-	bound := capStationBound(cU, cV, r, theta, held.U, held.V)
+	bound := tessellation.CapStationBound(cU, cV, r, theta, held.U, held.V)
 	require.True(t, bound.Derivable())
 	require.LessOrEqual(t, proofbound.WalkEndBoundAllow(bound), 1e-12,
 		`the station's own evaluation rounds at the coordinate's scale`)
 
 	// A held pair moved well off the circle must be caught by the same reading.
-	off := capStationBound(cU, cV, r, theta, held.U+1e-6, held.V)
+	off := tessellation.CapStationBound(cU, cV, r, theta, held.U+1e-6, held.V)
 	require.Greater(t, off.U, 5e-7, `a displaced station is measured, not excused`)
 
-	require.False(t, capStationBound(cU, cV, r, math.Inf(1), held.U, held.V).Derivable())
-	require.False(t, capStationBound(cU, cV, math.NaN(), theta, held.U, held.V).Derivable())
+	require.False(t, tessellation.CapStationBound(cU, cV, r, math.Inf(1), held.U, held.V).Derivable())
+	require.False(t, tessellation.CapStationBound(cU, cV, math.NaN(), theta, held.U, held.V).Derivable())
 }
 
 // TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand is the proof's own
