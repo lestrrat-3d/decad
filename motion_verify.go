@@ -166,57 +166,14 @@ func resolveMotion(m Motion) (motionSpec, error) {
 // base unit, it returns the smallest positive resolution in From's unit
 // accepted by WithResolution and reports clamped so the check uses that floor.
 func (s motionDomain) defaultResolution() (units.Value, bool) {
-	var d *big.Rat
-	if s.quantity == units.Length {
-		// The exact base-unit difference survives conversion that could round
-		// two distinct endpoints to the same float in From's unit.
-		d = new(big.Rat).Sub(s.toP.Base, s.fromP.Base)
-		d.Abs(d)
-		d.Quo(d, proofarith.FloatRat(s.from.Unit().Factor()))
-	} else {
-		from := proofarith.FloatRat(s.from.Mag())
-		toMag, err := s.to.In(s.from.Unit())
-		to := proofarith.FloatRat(toMag)
-		if err != nil || from == nil || to == nil {
-			return units.New(0, s.from.Unit()), false
-		}
-		d = new(big.Rat).Sub(to, from)
-		d.Abs(d)
-	}
-	mag, _ := d.Quo(d, big.NewRat(1024, 1)).Float64()
-	base, _ := units.BaseUnit(s.paramKind())
-	reported := units.New(mag, s.from.Unit())
-	converted, err := reported.In(base)
-	if mag > 0 && err == nil && converted > 0 {
-		return reported, false
-	}
-	// A positive exact floor can underflow in From's unit or its base unit.
-	// Binary search positive finite float bits for the first value whose base
-	// conversion is nonzero, which is also the first WithResolution accepts.
-	low, high := uint64(0), math.Float64bits(1)
-	for high-low > 1 {
-		mid := low + (high-low)/2
-		candidate := units.New(math.Float64frombits(mid), s.from.Unit())
-		converted, err := candidate.In(base)
-		if err != nil || converted == 0 {
-			low = mid
-			continue
-		}
-		high = mid
-	}
-	return units.New(math.Float64frombits(high), s.from.Unit()), true
+	return motionbound.DefaultResolution(s.quantity, s.from, s.to, s.fromP, s.toP)
 }
 
 // defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
 // exact rationals: never zero for a validated motion, and exactly one
 // dyadic step of depth ten whatever units From and To were stated in.
 func (s motionDomain) defaultResolutionParam() motionbound.MotionParam {
-	part := func(a, b *big.Rat) *big.Rat {
-		d := new(big.Rat).Sub(b, a)
-		d.Abs(d)
-		return d.Quo(d, big.NewRat(1024, 1))
-	}
-	return motionbound.MotionParam{Turn: part(s.fromP.Turn, s.toP.Turn), Base: part(s.fromP.Base, s.toP.Base)}
+	return motionbound.DefaultResolutionParam(s.fromP, s.toP)
 }
 
 // label is the published parameter of the pose at fraction f of the path:
@@ -227,24 +184,7 @@ func (s motionDomain) defaultResolutionParam() motionbound.MotionParam {
 // motionbound.PoseDeviation charges whatever separates the pose PoseAt builds from this
 // label and the ideal pose at f.
 func (s motionDomain) label(f *big.Rat) units.Value {
-	switch {
-	case f.Sign() == 0:
-		return s.from
-	case f.Cmp(big.NewRat(1, 1)) == 0:
-		return s.to
-	}
-	from := proofarith.FloatRat(s.from.Mag())
-	toMag, err := s.to.In(s.from.Unit())
-	to := proofarith.FloatRat(toMag)
-	if err != nil || from == nil || to == nil {
-		// Unreachable for a validated motion, whose endpoints both convert;
-		// the exact parameter still governs every bound if it were reached.
-		return s.from
-	}
-	d := new(big.Rat).Sub(to, from)
-	d.Mul(d, f)
-	mag, _ := d.Add(d, from).Float64()
-	return units.New(mag, s.from.Unit())
+	return motionbound.DomainLabel(s.from, s.to, f)
 }
 
 // resolve validates a Between for VerifyMotion (docs/motion-check-design.md

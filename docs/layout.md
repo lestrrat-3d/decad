@@ -200,7 +200,7 @@ the rules leave to the byte budget.
 | `survey.go` | Adapts analytic payloads to wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
-| `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the shared pose engine. See `docs/motion-check-design.md`. |
+| `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the shared pose engine over `internal/motionbound/` domain readings. See motion-check §2–§6. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
@@ -292,7 +292,7 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
-| `internal/motionbound/` | Exact motion parameters, ordering, poses and sweeps. |
+| `internal/motionbound/` | Exact motion parameters, domain resolution and labels, ordering, poses and sweeps. |
 | `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
