@@ -153,7 +153,7 @@
 0	0.02	TestVerifyJointBoxErrors
 0	12.66	TestVerifyJointBoxLoopGate
 0	0.89	TestVerifyJointBoxTiltedPendulum
-0	17.87	TestVerifyLinkageLoopFold
+0	31.40	TestVerifyLinkageLoopFold
 0	2.86	TestVerifyLinkageLoopHeldDriver
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
 0	0.29	TestVerifyMotionBetweenTranslationAgreesWithPrismatic
@@ -1394,3 +1394,4 @@
 3	0.16	TestVerifyMotionProjectionScrewSlide
 3	0.01	TestVerifyMotionProjectionAlongAWall
 3	0.50	TestVerifyMotionProjectionPendulum
+3	43.09	TestVerifyLinkageLoopManyTurns

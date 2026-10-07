@@ -381,7 +381,12 @@ const foldCrank, foldCoupler, foldFollower = 50.0, 60.0, 50.0
 // Legs seen to fail when deleted: refusing an interval whose cell sketch
 // refused or whose end it could not enclose — the last interval then reads
 // IntervalClear; and treating an unbuildable pose as not built — the run then
-// publishes a pose past the fold.
+// publishes a pose past the fold. The fold statement of §15.6: stating it at
+// all (every finding then carries sketch's own words, in the scene's terms);
+// Fold.Lo as its lower end (Reached in its place widens the interval to about
+// 3e-8); the side's sign (the mirrored side and the backward slide then read
+// a positive fold); the probe's offset (the coupler then reads acos(−0.6),
+// 126.87°); the slide's millimetres.
 func TestVerifyLinkageLoopFold(t *testing.T) {
 	t.Parallel()
 	sFold := math.Acos(0.04) / (math.Pi / 2)
@@ -411,16 +416,60 @@ func TestVerifyLinkageLoopFold(t *testing.T) {
 		require.Equal(t, decad.DiagMotionUndecidedInterval, diag.Code)
 		require.Equal(t, tail.From, *diag.At)
 		require.Contains(t, diag.Message, `the loop closing links 1 and 2`)
-		require.Contains(t, diag.Message, `not certified`)
+		requireFold(t, diag.Message, 0, math.Acos(0.04), "rad")
 
 		sched, err := fb.linkage.Schedule(t.Context(), drive)
 		require.NoError(t, err)
 		_, err = sched.PoseAt(t.Context(), units.Scalar(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorIs(t, err, sketch.ErrNotCertified)
+		var fold *sketch.FoldError
+		require.ErrorAs(t, err, &fold, `the refusal is sketch's proven fold`)
+		requireFold(t, err.Error(), 0, math.Acos(0.04), "rad")
 		_, err = fb.linkage.PoseAt(drive, units.Scalar(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorIs(t, err, sketch.ErrNotCertified)
+		require.ErrorAs(t, err, &fold)
+	})
+	// foldOf is the one finding of a drive that runs into the fold and does
+	// not return. The statement reads the same at any floor, so the drive is
+	// checked at a coarse one.
+	foldOf := func(t *testing.T, doc *decad.Document, l *decad.Linkage, drive decad.Drive) string {
+		t.Helper()
+		report := verifyLinkage(t, doc, l, drive, decad.WithResolution(units.Scalar(1.0/8)))
+		require.Equal(t, decad.Suspect, report.Status)
+		require.Equal(t, decad.IntervalUndecided, report.Intervals[len(report.Intervals)-1].Outcome)
+		require.Len(t, report.Diagnostics, 1)
+		return report.Diagnostics[0].Message
+	}
+	t.Run("the fold on the mirrored side", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		fb := buildFourBar(t, doc, foldCrank, foldCoupler, foldFollower)
+		requireFold(t, foldOf(t, doc, fb.linkage, fb.crankDrive(units.Degrees(-90))), 0, -math.Acos(0.04), "rad")
+	})
+	t.Run("the fold of a driver below Common", func(t *testing.T) {
+		t.Parallel()
+		// The coupler's angle from the crank is φ = acos(0.6) + q at the zero
+		// pose's B = (86, 48); B = e^{iθ2}·(50 + 60·e^{iφ}) meets the
+		// follower's circle only while |B| ≥ 50, that is cos φ ≥ −0.6.
+		doc := decad.New()
+		fb := buildFourBar(t, doc, foldCrank, foldCoupler, foldFollower)
+		drive := decad.Drive{{Link: fb.couplerLk, From: units.Degrees(0), To: units.Degrees(90)}}
+		want := math.Acos(-0.6) - math.Acos(0.6)
+		require.InDelta(t, 73.739795, want*180/math.Pi, 1e-6)
+		requireFold(t, foldOf(t, doc, fb.linkage, drive), 1, want, "rad")
+	})
+	t.Run("the fold of a slide at its dead centres", func(t *testing.T) {
+		t.Parallel()
+		px := math.Sqrt(5500)
+		for _, c := range []struct {
+			to, want float64
+		}{{40, 110 - px}, {-30, 50 - px}} {
+			doc, l, slider := buildSlideDriven(t)
+			drive := decad.Drive{{Link: slider, From: units.Millimeters(0), To: units.Millimeters(c.to)}}
+			requireFold(t, foldOf(t, doc, l, drive), 2, c.want, "mm")
+		}
 	})
 	t.Run("the flat four-bar refuses its zero pose", func(t *testing.T) {
 		t.Parallel()

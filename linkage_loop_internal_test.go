@@ -522,3 +522,39 @@ func TestLoopMixedCrossing(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, spans, 3)
 }
+
+// TestLoopFoldStatement pins the pieces of a fold's statement and a long
+// ask's budget (docs/linkage-check-design.md §15.3, §15.6) that no public
+// fixture reaches exactly: the fold's interval printed with both ends rounded
+// outward, so the printed interval holds the exact one, and the piece budget
+// scaled by the whole turns an angular range spans.
+//
+// Legs seen to fail when deleted: rounding up an end that is not a whole
+// number of decimals (1/3's upper end then prints as its lower); the slide's
+// exemption (a slide's range then takes a turn-scaled budget).
+func TestLoopFoldStatement(t *testing.T) {
+	t.Parallel()
+	t.Run("the printed ends are rounded outward", func(t *testing.T) {
+		t.Parallel()
+		third := big.NewRat(1, 3)
+		require.Equal(t, "0.333333333333", decimalDown(third))
+		require.Equal(t, "0.333333333334", decimalUp(third))
+		minus := new(big.Rat).Neg(third)
+		require.Equal(t, "-0.333333333334", decimalDown(minus))
+		require.Equal(t, "-0.333333333333", decimalUp(minus))
+		exact := big.NewRat(3, 4)
+		require.Equal(t, "0.750000000000", decimalDown(exact), `an end of fewer decimals prints as itself`)
+		require.Equal(t, "0.750000000000", decimalUp(exact))
+	})
+	t.Run("the piece budget grows with the turns spanned", func(t *testing.T) {
+		t.Parallel()
+		angle, slide := &loopScene{}, &loopScene{slideDriver: true}
+		_, ok := angle.pieceBudget(1, 1+2*math.Pi)
+		require.False(t, ok, `one turn keeps sketch's default`)
+		budget, ok := angle.pieceBudget(0, 2.5*2*math.Pi)
+		require.True(t, ok)
+		require.Equal(t, 3*loopPiecesPerTurn, budget, `two and a half turns round up to three`)
+		_, ok = slide.pieceBudget(0, 100)
+		require.False(t, ok, `a slide's range is a length, not turns`)
+	})
+}

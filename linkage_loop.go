@@ -577,6 +577,13 @@ type loopScene struct {
 	// and κ·|Dir| for an anchored slide (docs/linkage-check-design.md §15.2).
 	// The driver's target is offset + |q|.
 	offset proofbound.RatInterval
+	// side is the side of the plane the scene reads (1 where the driver's
+	// value is −|q|), driverLink the driver's position in Linkage.Links(), and
+	// slideDriver reports a prismatic driver, whose value is a length. A
+	// proven fold is stated in the driver's own terms through them.
+	side        int
+	driverLink  int
+	slideDriver bool
 }
 
 // zero is the driver range E0 asks: the floats outward from offset's ends.
@@ -1058,7 +1065,12 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 			return nil, err
 		}
 	}
-	return ld.buildSceneOn(ctx, spec, sceneFlip{mirror: mirror, halfTurn: halfTurn, ahead: ahead}, zero)
+	sc, err := ld.buildSceneOn(ctx, spec, sceneFlip{mirror: mirror, halfTurn: halfTurn, ahead: ahead}, zero)
+	if err != nil {
+		return nil, err
+	}
+	sc.side, sc.driverLink, sc.slideDriver = side, driverLink.index, !spec.joints[ld.driver].revolute
+	return sc, nil
 }
 
 // sceneFlip is how one side's scene differs from the loop's own: the
@@ -1516,6 +1528,9 @@ func encloseFresh(ctx context.Context, lo, hi float64, pred *loopAsk) (*loopAsk,
 	}
 	sc := pred.scene
 	opts := append(slices.Clone(sc.opts), sketch.WithContinuation(pred.enc))
+	if budget, ok := sc.pieceBudget(lo, hi); ok {
+		opts = append(opts, sketch.WithMaxPieces(budget))
+	}
 	enc, err := sc.sk.Enclose(ctx, sc.driver, lo, hi, opts...)
 	if err != nil {
 		if cerr := ctx.Err(); cerr != nil {
@@ -1523,6 +1538,10 @@ func encloseFresh(ctx context.Context, lo, hi float64, pred *loopAsk) (*loopAsk,
 		}
 		if loopInvariant(err) {
 			return nil, err
+		}
+		var fold *sketch.FoldError
+		if errors.As(err, &fold) {
+			err = sc.foldRefusal(fold, err)
 		}
 		return &loopAsk{err: err}, nil
 	}
@@ -1554,6 +1573,85 @@ func encloseFresh(ctx context.Context, lo, hi float64, pred *loopAsk) (*loopAsk,
 		ask.turns[j] = pred.turns[j] + shift
 	}
 	return ask, nil
+}
+
+// loopPiecesPerTurn is the piece budget an ask states per whole turn its
+// angular driver range spans (docs/linkage-check-design.md §15.9): sketch's
+// default budget, which one turn of the crank-rocker uses about 1400 of.
+const loopPiecesPerTurn = 4096
+
+// pieceBudget is the piece budget for an ask over the scene values [lo, hi]:
+// loopPiecesPerTurn per whole turn the range spans, rounded up, for an
+// angular driver whose range spans more than one turn. ok is false where
+// sketch's default serves: a range within one turn, or a slide's.
+func (sc *loopScene) pieceBudget(lo, hi float64) (int, bool) {
+	turns := math.Ceil((hi - lo) / (2 * math.Pi))
+	if sc.slideDriver || !(turns > 1) {
+		return 0, false
+	}
+	return loopPiecesPerTurn * int(min(turns, 1<<20)), true
+}
+
+// loopFoldError is sketch's proof that the branch an ask followed turns back
+// (docs/linkage-check-design.md §15.6), restated in the driver's own terms:
+// the driver's value at the fold lies in [lo, hi], radians or millimetres,
+// and a drive from the zero pose that does not reverse never carries it past
+// that interval. It unwraps to sketch's *FoldError.
+type loopFoldError struct {
+	link   int
+	lo, hi *big.Rat
+	unit   string
+	cause  error
+}
+
+func (e *loopFoldError) Error() string {
+	limit := decimalUp(e.hi)
+	if e.hi.Sign() <= 0 {
+		limit = decimalDown(e.lo)
+	}
+	return fmt.Sprintf(`the mechanism folds: on the zero pose's branch link %d's joint turns back at a value in [%s, %s] %s, and driven from the zero pose without reversing it never passes %s %s`,
+		e.link, decimalDown(e.lo), decimalUp(e.hi), e.unit, limit, e.unit)
+}
+
+func (e *loopFoldError) Unwrap() error { return e.cause }
+
+// foldRefusal states sketch's fold in the driver's terms: the scene's driving
+// value is offset + |q|, so |q| at the fold lies in [Fold.Lo − offset.Hi,
+// Fold.Hi − offset.Lo], negated on the side where the driver's value is −|q|.
+func (sc *loopScene) foldRefusal(fold *sketch.FoldError, cause error) error {
+	lo, hi := proofarith.FloatRat(fold.Fold.Lo), proofarith.FloatRat(fold.Fold.Hi)
+	if lo == nil || hi == nil {
+		return cause
+	}
+	lo.Sub(lo, sc.offset.Hi)
+	hi.Sub(hi, sc.offset.Lo)
+	if sc.side == 1 {
+		lo, hi = hi.Neg(hi), lo.Neg(lo)
+	}
+	unit := "rad"
+	if sc.slideDriver {
+		unit = "mm"
+	}
+	return &loopFoldError{link: sc.driverLink, lo: lo, hi: hi, unit: unit, cause: cause}
+}
+
+// foldDigits is how many decimals a fold's bounds are printed to, each
+// rounded outward.
+const foldDigits = 12
+
+// decimalDown and decimalUp print x to foldDigits decimals, rounded down and
+// up, so a printed interval holds the exact one.
+func decimalDown(x *big.Rat) string { return decimalRounded(x, false) }
+func decimalUp(x *big.Rat) string   { return decimalRounded(x, true) }
+
+func decimalRounded(x *big.Rat, up bool) string {
+	scale := new(big.Int).Exp(big.NewInt(10), big.NewInt(foldDigits), nil)
+	scaled := new(big.Rat).Mul(x, new(big.Rat).SetInt(scale))
+	q, m := new(big.Int).DivMod(scaled.Num(), scaled.Denom(), new(big.Int))
+	if up && m.Sign() != 0 {
+		q.Add(q, big.NewInt(1))
+	}
+	return new(big.Rat).SetFrac(q, scale).FloatString(foldDigits)
 }
 
 // turnsOverlap reports whether f shifted by m whole turns can meet l: false

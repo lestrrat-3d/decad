@@ -304,14 +304,16 @@ func TestVerifyJointBoxLoopOneAxis(t *testing.T) {
 // s_fold = 0.974528, past which sketch certifies nothing: a cell whose hull
 // holds the fold is gated, a centre past it is unbuildable, and a cell whose
 // range meets no stretch the decomposition certified is stuck, published as
-// it stands.
+// it stands. sketch proves the fold, and every leaf past it states it: the
+// crank turns back at acos(0.04).
 //
 // Measured: 21 centres into 11 leaves.
 //
 // Legs seen to fail when deleted: the hull gate (the root's hull spans the
 // fold, every pair is settled, and the root reads CellClear and the report
 // Sound); the stuck rule (every leaf past the fold splits to the floor, 67
-// centres against the 64 this test allows).
+// centres against the 64 this test allows); the fold statement (each finding
+// past the fold then carries sketch's own words, in the scene's terms).
 func TestVerifyJointBoxLoopFold(t *testing.T) {
 	t.Parallel()
 	sFold := math.Acos(0.04) / (math.Pi / 2)
@@ -336,14 +338,15 @@ func TestVerifyJointBoxLoopFold(t *testing.T) {
 		require.Equal(t, decad.DiagMotionUndecidedInterval, diag.Code)
 		require.NotNil(t, diag.Cell)
 		require.Contains(t, diag.Message, `the loop closing links 1 and 2`)
-		require.Contains(t, diag.Message, `not certified`)
 		require.Zero(t, cell.Cell.Min[1], `a refused hull publishes no range for the dependent`)
 		if lo <= sFold && sFold <= hi {
 			holding++
+			require.Contains(t, diag.Message, `not certified`)
 			require.LessOrEqual(t, hi-lo, floor+1e-12, `the leaf holding the fold is at the floor`)
 			continue
 		}
 		require.Greater(t, lo, sFold)
+		requireFold(t, diag.Message, 0, math.Acos(0.04), "rad")
 		require.Equal(t, decad.JointConfiguration{}, cell.Center, `a centre past the fold is unbuildable`)
 		require.Empty(t, cell.Clearances)
 		require.Empty(t, cell.Interferences)

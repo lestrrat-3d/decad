@@ -310,7 +310,8 @@ func TestVerifyLinkageLoopDependentLimits(t *testing.T) {
 // defaults: the crank enters the fold at 87.707557° on the way out and leaves
 // it on the way back, so no pose lies in [0.438538, 0.561462], the two ends
 // read the zero pose, and one undecided interval holds that stretch with every
-// other interval clear.
+// other interval clear. Its finding states the fold sketch proves: the crank
+// turns back at acos(0.04).
 func TestVerifyLinkageLoopFoldOutAndBack(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -340,4 +341,40 @@ func TestVerifyLinkageLoopFoldOutAndBack(t *testing.T) {
 		undecided++
 	}
 	require.Equal(t, 1, undecided)
+	require.Len(t, report.Diagnostics, 1)
+	requireFold(t, report.Diagnostics[0].Message, 0, math.Acos(0.04), "rad")
+}
+
+// TestVerifyLinkageLoopManyTurns is §15.10's many-turn drive: scene 7's
+// crank-rocker without a wall, the crank turned 0° → 3690°, ten and a quarter
+// turns, to 64.40 rad, past the 64 rad sketch's series covers without
+// reducing by whole turns. Every pair is settled by the layer exclusion, so
+// the report reads the loop alone: Sound from its two endpoints, the one
+// interval certified by the whole-drive cell of about 14500 pieces.
+//
+// Leg seen to fail when deleted: the piece budget scaled by the turns an ask
+// spans (the whole-drive cell then exhausts sketch's default 4096 pieces and
+// the report reads Suspect). The coupler's ten turns come from sketch's own
+// readings, which a continued enclosure carries on from its predecessor's, so
+// the whole-turn shift of §15.3 is zero here and no leg of this test.
+func TestVerifyLinkageLoopManyTurns(t *testing.T) {
+	t.Parallel()
+	fb, _ := buildRocker(t, false)
+	report := verifyLinkage(t, fb.doc, fb.linkage, fb.crankDrive(units.Degrees(3690)))
+	require.Equal(t, decad.Sound, report.Status)
+	require.Len(t, report.Poses, 2)
+	require.Len(t, report.Intervals, 1)
+	require.Equal(t, decad.IntervalClear, report.Intervals[0].Outcome)
+	turned := 3690 * math.Pi / 180
+	require.Greater(t, turned, 64.0)
+	end := report.Poses[1].Pose
+	require.InDelta(t, 3.0248, (rockerTheta4(math.Pi/2)-rockerTheta4(0))*180/math.Pi, 1e-4)
+	requireRockerValues(t, []decad.LinkagePose{report.Poses[0].Pose, end}, func(s float64) float64 { return s * turned })
+	coupler := rockerCouplerAngle(math.Pi/2) - rockerCouplerAngle(0) - turned
+	require.InDelta(t, -64.922380, coupler, 1e-6)
+	require.InDelta(t, coupler, end.Values[1].Mag(), 1e-9, `the coupler's turn from the crank, ten turns and more`)
+	for _, k := range []int{1, 2} {
+		require.Positive(t, end.Bounds[k].Mag())
+		require.Less(t, end.Bounds[k].Mag(), 1e-9)
+	}
 }

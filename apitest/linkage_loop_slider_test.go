@@ -190,6 +190,26 @@ func TestVerifyLinkageLoopSliderPin(t *testing.T) {
 	})
 }
 
+// buildSlideDriven is the slider-crank driven at its slide: the crank along
+// +Y at the zero pose, A = (0, 30), so the slider pin P = (√5500, 0) sits off
+// the dead centre. It returns the document, the linkage and the slider.
+func buildSlideDriven(t *testing.T) (*decad.Document, *decad.Linkage, *decad.Link) {
+	t.Helper()
+	px := math.Sqrt(5500)
+	doc := decad.New()
+	l := decad.NewLinkage()
+	z := r3.NewVec(0, 0, 1)
+	crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, -3, 0, 3, 30, 0, 8)})
+	require.NoError(t, err)
+	rod, err := crank.Revolute(r3.NewVec(0, 30, 0), z, []*decad.Body{barBody(t, doc, [2]float64{0, 30}, [2]float64{px, 0}, 10)})
+	require.NoError(t, err)
+	slider, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, px-5, -5, px+5, 5, 20, 8)})
+	require.NoError(t, err)
+	_, err = l.Close(rod, slider, r3.NewVec(px, 0, 0), z)
+	require.NoError(t, err)
+	return doc, l, slider
+}
+
 // TestVerifyLinkageLoopSlideDriven drives a slider-crank at its slide. The
 // crank stands along +Y at the zero pose, A = (0, 30), so the slider pin
 // P = (√5500, 0) is off the dead centre and the rod's length √6400 = 80 is
@@ -213,18 +233,8 @@ func TestVerifyLinkageLoopSlideDriven(t *testing.T) {
 	for _, slide := range []float64{5, -5} {
 		t.Run(units.Millimeters(slide).String(), func(t *testing.T) {
 			t.Parallel()
-			doc := decad.New()
-			l := decad.NewLinkage()
-			z := r3.NewVec(0, 0, 1)
-			crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, -3, 0, 3, 30, 0, 8)})
-			require.NoError(t, err)
-			rod, err := crank.Revolute(r3.NewVec(0, 30, 0), z, []*decad.Body{barBody(t, doc, [2]float64{0, 30}, [2]float64{px, 0}, 10)})
-			require.NoError(t, err)
-			slider, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, px-5, -5, px+5, 5, 20, 8)})
-			require.NoError(t, err)
-			lp, err := l.Close(rod, slider, r3.NewVec(px, 0, 0), z)
-			require.NoError(t, err)
-			bars := lp.Bars()
+			_, l, slider := buildSlideDriven(t)
+			bars := l.Loops()[0].Bars()
 			require.Len(t, bars, 2)
 			require.Equal(t, decad.Approximate, bars[1].Length.Exactness, `the rod's length is reached from an irrational pin`)
 			require.InDelta(t, 80, bars[1].Length.Value.Mag(), 1e-12)
