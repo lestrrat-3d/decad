@@ -75,14 +75,7 @@ func jointReach(jt linkJoint) *big.Rat {
 	if jt.dep != nil {
 		return new(big.Rat).Set(jt.depReach)
 	}
-	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
-	var out *big.Rat
-	for _, p := range jt.points {
-		if m := zero.SpanUpper(p); out == nil || m.Cmp(out) > 0 {
-			out = m
-		}
-	}
-	return out
+	return linkagebound.JointReach(jt.points)
 }
 
 // jointParam is joint jt's exact value at the fraction s: its segment's
@@ -101,32 +94,9 @@ func jointParam(jt linkJoint, s *big.Rat) motionbound.MotionParam {
 // certificate's two one-sided bounds need. With no waypoint inside it is the
 // span of the two ends.
 func jointSpan(jt linkJoint, sa, sb *big.Rat) *big.Rat {
-	lo, hi := sa, sb
-	if lo.Cmp(hi) > 0 {
-		lo, hi = hi, lo
-	}
-	n := len(jt.points) - 1
-	sum := new(big.Rat)
-	prev := jointParam(jt, lo)
-	for j := 1; j < n; j++ {
-		w := big.NewRat(int64(j), int64(n))
-		if w.Cmp(lo) <= 0 || w.Cmp(hi) >= 0 {
-			continue
-		}
-		sum.Add(sum, prev.SpanUpper(jt.points[j]))
-		prev = jt.points[j]
-	}
-	return sum.Add(sum, prev.SpanUpper(jointParam(jt, hi)))
-}
-
-// sqrtUpRat is proofbound.RatSqrtUp read back as an exact rational; nil when
-// the root overflows.
-func sqrtUpRat(q *big.Rat) *big.Rat {
-	return proofarith.FloatRat(proofbound.RatSqrtUp(q))
-}
-
-func axisSq(a motionbound.RatVec) *big.Rat {
-	return proofbound.RatAdd(proofbound.RatMul(a[0], a[0]), proofbound.RatMul(a[1], a[1]), proofbound.RatMul(a[2], a[2]))
+	return linkagebound.JointSpan(jt.points, sa, sb, func(s *big.Rat) motionbound.MotionParam {
+		return jointParam(jt, s)
+	})
 }
 
 // linkRestBox is the per-axis union of a link's bodies' Bounds boxes, each
@@ -199,36 +169,13 @@ func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *bi
 	})
 }
 
-// pathTravel is the telescoping sum of docs/linkage-check-design.md §5.2 over
-// the joints on b's path from position below on: ρ_{ik}·span(i) for a
-// revolute joint i and span(i) for a prismatic one, span(i) a proven upper
-// bound on joint i's travel. span MUST return a fresh rational, or nil when
-// it has no bound, and the sum is then nil.
+// pathTravel sums joint travel below the shared ancestor.
 func pathTravel(b linkBound, below int, span func(joint int) *big.Rat) *big.Rat {
-	sum := new(big.Rat)
-	for n := below; n < len(b.path); n++ {
-		term := span(b.path[n])
-		if term == nil {
-			return nil
-		}
-		if b.rho[n] != nil {
-			term.Mul(term, b.rho[n])
-		}
-		sum.Add(sum, term)
-	}
-	return sum
+	return linkagebound.PathTravel(b.path, b.rho, below, span)
 }
 
-// commonDepth is the number of leading path entries two links share: the
-// position on each path of the first joint below their lowest common
-// ancestor, which is the ground when it is 0.
-func commonDepth(a, b []int) int {
-	n := 0
-	for n < len(a) && n < len(b) && a[n] == b[n] {
-		n++
-	}
-	return n
-}
+// commonDepth counts the leading joints shared by two paths.
+func commonDepth(a, b []int) int { return linkagebound.CommonDepth(a, b) }
 
 // idealPosesAt is every link's ideal pose at the exact fraction s
 // (docs/linkage-check-design.md §5.1): its joint's ideal motion at the exact
@@ -324,130 +271,35 @@ func ratZero(v motionbound.RatVec) bool {
 	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
 }
 
-// layerKeeps reports whether joint jt, at any value, preserves a·x for every
-// point x (docs/linkage-check-design.md §5.7): a revolute whose axis is
-// exactly parallel to a, or a prismatic whose direction is exactly
-// perpendicular to it.
-func layerKeeps(jt linkJoint, f motionbound.MotionFrame, a motionbound.RatVec) bool {
-	if jt.revolute {
-		return ratZero(ratCross(a, f.Axis))
-	}
-	return ratDot(a, f.Axis).Sign() == 0
-}
-
-// layerAxes is §5.7's candidate directions for a relative path: the axis of
-// its first moving revolute when it has one, and otherwise the coordinate
-// axes and the cross product of its first two non-parallel slides. Each is
-// admitted only when every joint on the path keeps it. A joint holding 0 is
-// passed over; a path of such joints admits every coordinate axis.
-func layerAxes(spec *linkageSpec, frames []motionbound.MotionFrame, path []int) []motionbound.RatVec {
-	var moving []int
-	for _, i := range path {
-		if !heldAtZeroJoint(spec.joints[i]) {
-			moving = append(moving, i)
-		}
-	}
-	var candidates []motionbound.RatVec
-	for _, i := range moving {
-		if spec.joints[i].revolute {
-			candidates = []motionbound.RatVec{frames[i].Axis}
-			break
-		}
-	}
-	if candidates == nil {
-		one, zero := big.NewRat(1, 1), new(big.Rat)
-		candidates = []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
-		for n, i := range moving {
-			for _, j := range moving[n+1:] {
-				if c := ratCross(frames[i].Axis, frames[j].Axis); !ratZero(c) {
-					candidates = append(candidates, c)
-					break
-				}
-			}
-		}
-	}
-	var out []motionbound.RatVec
-	for _, a := range candidates {
-		keeps := true
-		for _, i := range moving {
-			if !layerKeeps(spec.joints[i], frames[i], a) {
-				keeps = false
-				break
-			}
-		}
-		if keeps {
-			out = append(out, a)
-		}
-	}
-	return out
-}
-
-// layerExtent is a body's a-extent at the zero pose: the least and greatest
-// exact a·x over the eight corners of its Bounds box inflated by its Bound.
+// layerExtent reads a body's inflated rest box and delegates its exact a-extents.
 func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
 	boxLo, boxHi, ok := boxCornersExact(b.bounds, new(big.Rat))
 	if !ok {
 		return nil, nil, false
 	}
-	for n, x := range linkagebound.BoxCorners(boxLo, boxHi) {
-		v := ratDot(a, x)
-		if n == 0 || v.Cmp(lo) < 0 {
-			lo = v
-		}
-		if n == 0 || v.Cmp(hi) > 0 {
-			hi = v
-		}
-	}
+	lo, hi = linkagebound.LayerExtent(boxLo, boxHi, a)
 	return lo, hi, true
 }
 
-// layerLower is §5.7's exclusion for a pair whose relative path is path: the
-// largest proven lower bound w/|a| over the admitted directions a whose
-// extents separate the two bodies by w > 0, rounded down; ok is false when no
-// direction separates them.
+// layerLower applies the exact layer exclusion to the root linkage bodies.
 func layerLower(spec *linkageSpec, frames []motionbound.MotionFrame, path []int, x, y *Body) (float64, bool) {
-	best := 0.0
-	for _, a := range layerAxes(spec, frames, path) {
+	joints := make([]linkagebound.LayerJoint, len(spec.joints))
+	for _, i := range path {
+		jt := spec.joints[i]
+		joints[i] = linkagebound.LayerJoint{
+			Axis: frames[i].Axis, Revolute: jt.revolute, HeldAtZero: heldAtZeroJoint(jt),
+		}
+	}
+	return linkagebound.LayerLower(joints, path, func(a motionbound.RatVec) (xLo, xHi, yLo, yHi *big.Rat, ok bool) {
 		xLo, xHi, okX := layerExtent(x, a)
 		yLo, yHi, okY := layerExtent(y, a)
-		if !okX || !okY {
-			continue
-		}
-		w := new(big.Rat).Sub(yLo, xHi)
-		if alt := new(big.Rat).Sub(xLo, yHi); alt.Cmp(w) > 0 {
-			w = alt
-		}
-		if w.Sign() <= 0 {
-			continue
-		}
-		norm := sqrtUpRat(axisSq(a))
-		if norm == nil {
-			continue
-		}
-		if lower := proofbound.RatFloatDown(w.Quo(w, norm)); lower > best {
-			best = lower
-		}
-	}
-	return best, best > 0
+		return xLo, xHi, yLo, yHi, okX && okY
+	})
 }
 
-// sweptBoxesLower is the swept-box exclusion between two exact boxes: the
-// largest strictly positive per-axis gap, rounded down; ok is false when the
-// boxes do not separate.
+// sweptBoxesLower reads the exact swept-box exclusion.
 func sweptBoxesLower(aLo, aHi, bLo, bHi motionbound.RatVec) (float64, bool) {
-	var best *big.Rat
-	for i := range 3 {
-		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLo[i], aHi[i]), new(big.Rat).Sub(aLo[i], bHi[i])} {
-			if gap.Sign() > 0 && (best == nil || gap.Cmp(best) > 0) {
-				best = gap
-			}
-		}
-	}
-	if best == nil {
-		return 0, false
-	}
-	lower := proofbound.RatFloatDown(best)
-	return lower, lower > 0
+	return linkagebound.SweptBoxesLower(aLo, aHi, bLo, bHi)
 }
 
 // cornerReading is one body's docs/linkage-check-design.md §5.8 reading at
@@ -580,33 +432,11 @@ func (s projectionSide) extents() (up, down [3]*big.Rat) {
 	return s.boundSide().Extents()
 }
 
-// jointStep is Δq_i of docs/linkage-check-design.md §5.8's segment term for
-// joint jt between the fractions sa < sb: the enclosure, widened to floats,
-// of q(sb) − q(sa) in the base unit, 2π·Δturn + Δbase with π over its
-// enclosure. ok is false when a waypoint lies strictly inside (sa, sb) at
-// which the joint's schedule bends — its two neighbouring segments differ in
-// turn or in base, so q is not one affine function of s across it — or when
-// an end overflows. A waypoint on the straight line through its neighbours at
-// equal shares bends nothing (§2.3).
+// jointStep reads a joint's signed interval step when no interior waypoint bends it.
 func jointStep(jt linkJoint, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
-	n := len(jt.points) - 1
-	for j := 1; j < n; j++ {
-		w := big.NewRat(int64(j), int64(n))
-		if w.Cmp(sa) <= 0 || w.Cmp(sb) >= 0 {
-			continue
-		}
-		prev, at, next := jt.points[j-1], jt.points[j], jt.points[j+1]
-		bent := new(big.Rat).Sub(at.Turn, prev.Turn).Cmp(new(big.Rat).Sub(next.Turn, at.Turn)) != 0 ||
-			new(big.Rat).Sub(at.Base, prev.Base).Cmp(new(big.Rat).Sub(next.Base, at.Base)) != 0
-		if bent {
-			return proofbound.RatInterval{}, false
-		}
-	}
-	a, b := jointParam(jt, sa), jointParam(jt, sb)
-	turn := new(big.Rat).Sub(b.Turn, a.Turn)
-	base := new(big.Rat).Sub(b.Base, a.Base)
-	step := proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base))
-	return roundOut(step)
+	return linkagebound.JointStep(jt.points, sa, sb, func(s *big.Rat) motionbound.MotionParam {
+		return jointParam(jt, s)
+	})
 }
 
 func projectionLower(a, b projectionSide) *big.Rat {
