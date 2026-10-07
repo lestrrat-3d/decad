@@ -280,7 +280,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, ordering, poses and sweeps. |
-| `internal/linkagebound/` | Link reach, projections and driver sub-segments. See linkage §15.8. |
+| `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |

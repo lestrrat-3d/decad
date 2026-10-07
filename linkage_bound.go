@@ -316,17 +316,9 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 	return out
 }
 
-func ratDot(a, b motionbound.RatVec) *big.Rat {
-	return proofbound.RatAdd(proofbound.RatMul(a[0], b[0]), proofbound.RatMul(a[1], b[1]), proofbound.RatMul(a[2], b[2]))
-}
+func ratDot(a, b motionbound.RatVec) *big.Rat { return linkagebound.Dot(a, b) }
 
-func ratCross(a, b motionbound.RatVec) motionbound.RatVec {
-	return motionbound.RatVec{
-		new(big.Rat).Sub(proofbound.RatMul(a[1], b[2]), proofbound.RatMul(a[2], b[1])),
-		new(big.Rat).Sub(proofbound.RatMul(a[2], b[0]), proofbound.RatMul(a[0], b[2])),
-		new(big.Rat).Sub(proofbound.RatMul(a[0], b[1]), proofbound.RatMul(a[1], b[0])),
-	}
-}
+func ratCross(a, b motionbound.RatVec) motionbound.RatVec { return linkagebound.Cross(a, b) }
 
 func ratZero(v motionbound.RatVec) bool {
 	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0

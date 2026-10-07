@@ -1956,7 +1956,8 @@ over a range of the driver's value, and consumes what it returns — the enclose
 joint, charged into `η` at a pose and into `τ` over an interval. decad computes no 2D answer itself and
 admits no pose on a float solve; every check it runs on what `sketch` returns can only refuse. Everything
 in §1–§8 holds for a looped linkage unless this section says otherwise; the kernel, the certificate, the
-bisection and the report vocabulary are unchanged. `linkage_loop.go` owns this section's code.
+bisection and the report vocabulary are unchanged. `linkage_loop.go` owns the scene and schedule;
+`internal/linkagebound/` owns the loop frame and chain calculations.
 
 ### 15.1 Vocabulary
 
