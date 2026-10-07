@@ -934,6 +934,7 @@
 5	5.38	TestFloatRatMatchesSetFloat64
 5	0.77	TestFreeformArcLengthBracketEnclosesAndNarrows
 5	0.20	TestHarmonicWindowRangeEnclosesInteriorExtremes
+5	0.01	TestJointBoxBlockedAllowance
 5	0.01	TestLinkageBallReading
 5	0.34	TestLoftArcWedgeAreaOracleAtGrowingRadius
 5	0.26	TestLoftArcWedgeBoxSoundness

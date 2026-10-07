@@ -1099,8 +1099,10 @@ replaces it on the colliding side, and the floor brackets the boundary on the cl
 **The blocked certificate.** The overlap volume of two bodies changes, along any path in joint space, at a
 rate bounded by each body's surface area times its speed: the derivative of `vol(M_a ∩ M_b)` is the
 integral over the part of `∂M_a` inside `M_b` of the normal velocity, plus the same for `M_b`, so
-`|Δvol| ≤ A_a·(travel of a) + A_b·(travel of b)`, with `A` the proven upper bound on the body's area at
-rest (`motionMover.area`; a rigid motion preserves it). On the straight joint-space segment from `m` to
+`|Δvol| ≤ A_a·(travel of a) + A_b·(travel of b)`, with `A` a proven upper bound on the body's area at
+rest, which a rigid motion preserves: `motionMover.area`, the body's own certified area enclosure
+`Area.Value + Area.Bound` rounded up. An area below the true one is unsound here, since it lets a cell block
+that a configuration can clear. On the straight joint-space segment from `m` to
 `q`, a point of link `k` moves at speed at most `Σ_i w_i·|q̇_i|` — the instantaneous form of the
 telescoping bound, the velocity under joint `i` alone being `|q̇_i|·dist(y, axis_i) ≤ |q̇_i|·ρ_{ik}` with the
 prefix an isometry — so its travel is at most `τ_half`. A pair whose transferred collision at the centre
@@ -1208,11 +1210,13 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
 - **Two joints.** Scene 6 (§14.8): the crane's boom under the mast's quarter turn (`ρ ≈ 91`) and a `30`
   mm slide, so `τ_half` at the root is `½·(91·(4π/9) + 30) ≈ 79` mm. At `WithResolution(Scalar(1.0/64))`
   the leaves number at most `4096`; the estimate is a few hundred clear leaves, about `90` undecided leaves
-  along the boundary curve, and the colliding side split until the blocked certificate closes — about
-  `1000`–`2000` centres, `3`–`6` s. The test records the measured count. Without the blocked certificate
-  every colliding cell splits to the floor: measured, `2953` centres into `1477` leaves, about `16` s, the
-  overlap-volume proof at each colliding centre taking nine tenths of it; at `Scalar(1.0/16)`, `239`
-  centres in about `1` s.
+  along the boundary curve, and the colliding side split to the floor. The blocked certificate does not
+  shorten that: the boom's overlap never exceeds about `2100` mm³ against an area of `2200` mm², so a
+  colliding cell blocks only once its `τ_half` falls under about `0.9` mm, near `1/128` of the `θ` range,
+  below this floor. Measured: `2953` centres into `1477` leaves (`88` clear, `98` undecided, `1291`
+  colliding), about `15` s and `1` GB, and `70` s under the race detector, the overlap-volume proof at each
+  colliding centre taking nine tenths of it; at `Scalar(1.0/16)`, `239` centres in about `1` s. The test
+  runs at `Scalar(1.0/16)` for that cost.
 - **Three joints.** The three-joint arm of §10 over three quarter turns has `τ_half ≈ 236` mm at the root;
   a `10` mm gap everywhere needs cells of about `1/24` per axis, `24³ ≈ 14000` leaves and twice that many
   centres, at the edge of the default budget: the default run reaches depth `14`, about `1/20` per axis,
@@ -1236,14 +1240,16 @@ colliding region is therefore `{y(θ, d) > 62}`, closed toward larger `θ` and `
 one curve `d*(θ) = (62 − 5·cos θ)/sin θ − 60`, from `θ* = asin(62/√(90² + 5²)) − atan(5/90) ≈ 40.29°` at
 `d = 30` to `d* ≈ 2.075` at `θ = 80°`. The `(mast, boom)` pair is settled by the layer exclusion along `Z`
 and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, wall)` alone. At
-`WithResolution(Scalar(1.0/64))` assert:
+`WithResolution(Scalar(1.0/16))` — §14.7 gives the cost at `1/64` — assert:
 
 - `Status` is `Interfering`; the leaves tile the box: their fraction extents sum to `1` and no two overlap;
   every leaf's `Center` is the midpoint of its `Cell`.
 - Every `CellClear` leaf has `y < 62` at its `(Max θ, Max d)` corner — monotonicity makes that corner the
   whole cell's worst — and its `Clearance.Value` at or below `62 − y` there, the true minimum gap over the
   cell. This is the leg that goes red when `τ_half` is halved again or a joint's term is dropped from it.
-- Every `CellBlocked` leaf has `y > 62` at its `(Min θ, Min d)` corner; every `CellColliding` leaf has
+- Every `CellBlocked` leaf has `y > 62` at its `(Min θ, Min d)` corner — none blocks at this floor, and
+  the leg that charges the certificate too small an area goes red here, a cell straddling the curve
+  reading blocked; every `CellColliding` leaf has
   `y > 62` at its centre; every `CellUndecided` and `CellColliding` leaf is at the floor along both
   joints; and an undecided leaf's centre lies within its own `τ_half` of the boundary,
   `|62 − y| ≤ ½·(ρ·Δθ + Δd)` with `ρ = 35 + √675 + 30` the ball reading. Within one cell's width of the
@@ -1270,8 +1276,9 @@ leaf narrower than `1/64`; red when a stated resolution leaves the reading floor
 **The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
 so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
 overlap `100·20/sin θ ≈ 2071` mm³ against a boom area of `2200` mm², so the blocked certificate closes
-once `τ_half` falls under about `0.9` mm — cells of `1/32` along `θ` and `1/8` along `d`. Assert every leaf
-`CellBlocked`, `CellsEvaluated` below `1024`, no undecided or merely colliding leaf. Red when the blocked
+once `τ_half` falls under about `0.9` mm — cells of `1/32` along `θ` and `1/8` along `d`; measured, `255`
+centres into `128` leaves. Assert every leaf `CellBlocked`, `CellsEvaluated` below `1024`, no undecided or
+merely colliding leaf. Red when the blocked
 certificate is dropped: the run then splits to the floor, exhausts the budget, and reads `CellColliding`
 with `DiagJointBoxBudgetExhausted`.
 
@@ -1304,12 +1311,11 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | PR | lands | still `Suspect` after it |
 |---|---|---|
 | 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
-| 2 | the blocked certificate and `CellBlocked`; scene 6 at `Scalar(1.0/64)` with its blocked assertions, and the blocked box | a clear box's whole-box reading at the default floor |
+| 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions, still at `Scalar(1.0/16)` (§14.7), the blocked box, and the blocked allowance pinned per moving body | a clear box's whole-box reading at the default floor |
 | 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis whose gate needs the budget |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
-one report, with scene 6's closed-form region as its acceptance. The `JointBoxReport` of PR 1 carries
-`CellBlocked` in the enumeration and never returns it. This section ships in PR 1.
+one report, with scene 6's closed-form region as its acceptance. This section ships in PR 1.
 
 ### 14.10 Settled points
 

@@ -9,6 +9,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -178,8 +180,10 @@ const (
 	// evaluated pair has disjoint interiors at a proven positive gap, and
 	// every declared pair is free of transferred overlap at the centre.
 	CellClear
-	// CellBlocked — at EVERY configuration of the cell some pair overlaps.
-	// Reserved: this evaluator does not yet prove it, and never returns it.
+	// CellBlocked — at EVERY configuration of the cell some pair overlaps:
+	// a collision at the centre whose proven volume exceeds what the bodies'
+	// travel across the cell can sweep away (docs/linkage-check-design.md
+	// §14.3). The centre's collisions are its witnesses.
 	CellBlocked
 	// CellColliding — a proven collision sits at the centre; nothing is
 	// claimed about the rest of the cell.
@@ -523,9 +527,10 @@ func (b *boxRun) split(c *boxCell, axis int) (*boxCell, *boxCell, error) {
 }
 
 // evaluate runs the pair procedure at cell c's centre and classifies the
-// cell from it (docs/linkage-check-design.md §14.3, §14.4 step 4): colliding
-// when some pair collides there, clear when every pair certifies the cell,
-// undecided otherwise.
+// cell from it (docs/linkage-check-design.md §14.3, §14.4 step 4): blocked
+// when a collision there survives every configuration of the cell, else
+// colliding when some pair collides there, clear when every pair certifies
+// the cell, undecided otherwise.
 func (b *boxRun) evaluate(c *boxCell) error {
 	r := b.run
 	if err := r.ctx.Err(); err != nil {
@@ -576,6 +581,15 @@ func (b *boxRun) classify(c *boxCell) {
 	}
 	if len(c.held) > 0 {
 		c.outcome = CellColliding
+		for _, hit := range mp.collisions {
+			for _, pair := range c.held {
+				i, k := pair[0], pair[1]
+				if hit.Moving == r.movers[i].body && hit.Static == r.partner(i, k) && b.blocks(c, i, k, hit.Volume) {
+					c.outcome = CellBlocked
+					return
+				}
+			}
+		}
 		return
 	}
 	lowest, ok := r.certifyPairs(func(i, k int) *big.Rat {
@@ -615,6 +629,13 @@ type jointTerm struct {
 // motionbound.MotionParam.SpanUpper of its exact values at the cell's two
 // ends; a joint that does not vary spans 0.
 func (b *boxRun) pairTerms(c *boxCell, i, k int) []jointTerm {
+	mine, theirs := b.branchTerms(c, i, k)
+	return append(mine, theirs...)
+}
+
+// branchTerms is pairTerms split by body: the terms that move mover i's own
+// body, and those that move its partner's — none for a static partner.
+func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 	r, dr := b.run, b.dr
 	span := func(joint int) *big.Rat {
 		jt := dr.spec.joints[joint]
@@ -630,14 +651,23 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []jointTerm {
 		}
 		return out
 	}
-	mine := dr.bounds[r.movers[i].group]
+	own := dr.bounds[r.movers[i].group]
 	other := r.pairs[i][k].other
 	if other < 0 {
-		return terms(mine, 0, nil)
+		return terms(own, 0, nil), nil
 	}
-	theirs := dr.bounds[r.movers[other].group]
-	below := commonDepth(mine.path, theirs.path)
-	return terms(theirs, below, terms(mine, below, nil))
+	partner := dr.bounds[r.movers[other].group]
+	below := commonDepth(own.path, partner.path)
+	return terms(own, below, nil), terms(partner, below, nil)
+}
+
+// halfSum is half the sum of a body's joint terms: its τ_half.
+func halfSum(terms []jointTerm) *big.Rat {
+	sum := new(big.Rat)
+	for _, t := range terms {
+		sum.Add(sum, t.value)
+	}
+	return sum.Quo(sum, big.NewRat(2, 1))
 }
 
 // halfTravel is τ_half(C) of docs/linkage-check-design.md §14.3 for pair k of
@@ -645,11 +675,36 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []jointTerm {
 // the pair's distance changes from the cell's centre to any configuration of
 // the cell, since no joint lies farther than half its span from the centre.
 func (b *boxRun) halfTravel(c *boxCell, i, k int) *big.Rat {
-	sum := new(big.Rat)
-	for _, t := range b.pairTerms(c, i, k) {
-		sum.Add(sum, t.value)
+	return halfSum(b.pairTerms(c, i, k))
+}
+
+// blocks reports whether pair k of mover i, which collides at cell c's centre
+// with the published volume, overlaps at every configuration of the cell
+// (docs/linkage-check-design.md §14.3, the blocked certificate). Along the
+// straight joint-space segment from the centre to any configuration of the
+// cell a body moves at most its own τ_half, and the overlap volume changes at
+// a rate no larger than each body's surface area times its speed, so it loses
+// at most SweptVolumeAllow(τ_half, A) per moving body. The cell is blocked
+// when the volume's proven lower end, Value − Bound rounded down, strictly
+// exceeds that sum, compared over exact rationals. A is the mover's proven
+// upper bound on its area at rest (motionMover.area), which a rigid motion
+// preserves; a static partner moves nothing and is charged nothing.
+func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
+	r := b.run
+	value, bound := proofarith.FloatRat(volume.Value.Base()), proofarith.FloatRat(volume.Bound.Base())
+	if value == nil || bound == nil {
+		return false
 	}
-	return sum.Quo(sum, big.NewRat(2, 1))
+	lower := proofbound.RatFloatDown(new(big.Rat).Sub(value, bound))
+	mine, theirs := b.branchTerms(c, i, k)
+	allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(halfSum(mine)), r.movers[i].area)
+	if other := r.pairs[i][k].other; other >= 0 {
+		allow = proofbound.AbsSumUpper(allow, proofbound.SweptVolumeAllow(proofbound.RatFloatUp(halfSum(theirs)), r.movers[other].area))
+	}
+	if proofbound.IsNonFinite(allow) || proofbound.IsNonFinite(lower) {
+		return false
+	}
+	return proofarith.FloatRat(lower).Cmp(proofarith.FloatRat(allow)) > 0
 }
 
 // splitAxis is the joint a cell splits along (docs/linkage-check-design.md

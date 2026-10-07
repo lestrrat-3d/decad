@@ -854,6 +854,7 @@
 2	0.00	TestVerifyExactBodyPassesZeroTolerance
 2	0.00	TestVerifyExactlyTangentPairStaysUndecided
 2	0.05	TestVerifyInterferenceRowsKeepDocumentPairOrder
+2	10.21	TestVerifyJointBoxBlocked
 2	2.27	TestVerifyLinkageDeclaredJointContact
 2	0.06	TestVerifyLinkageSweptBoxCoversAncestorTravel
 2	0.37	TestVerifyLinkageSweptBoxExclusion

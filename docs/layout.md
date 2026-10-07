@@ -42,7 +42,7 @@ the rules leave to the byte budget.
 | `docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies: the bound model, boolean composition, readings, the chain-depth gate and the PR plan. |
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
-| `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
+| `docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
 | `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`: links, joints, drives, boxes, contacts, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
@@ -196,9 +196,9 @@ the rules leave to the byte budget.
 | `survey.go` | Maps prism, revolve, and cup payloads to analytic wall, undercut, and min-radius readers. An undecided answer reads `Suspect`. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
-| `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the engine shared with `VerifyLinkage`. See `docs/motion-check-design.md`. |
+| `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the shared pose engine. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
-| `linkage.go` / `linkage_verify.go` | `Document.VerifyLinkage`. See `docs/linkage-check-design.md`. |
+| `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See `docs/linkage-check-design.md`. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_bound.go` | The chain travel bound. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
@@ -258,7 +258,7 @@ the rules leave to the byte budget.
 | `internal/cappatch/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
-| `internal/motionbound/` | Exact motion parameters, poses and interval travel bounds behind `VerifyMotion`, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
+| `internal/motionbound/` | Exact motion parameters, poses and travel bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
 | `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit, the rounding that keeps a held mesh embedded, and near-contact witnesses. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance carriers, angle and line windows, 2D trim regions, ray crossings, boxes, spine and ruling helpers, and the degeneracy oracle. See `docs/clearance-design.md`. |
