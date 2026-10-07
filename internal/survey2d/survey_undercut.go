@@ -164,7 +164,7 @@ func CapNormalDecision(m PlacedFrameMap, pull r3.Vec, sign float64) (PullVerdict
 //
 // The window is cut into four arcs and searched for each of the two critical
 // directions (a, b) and (-a, -b) with capblend_normal.go's
-// WindowReachesDirection, called unmodified: the same robust cross-product
+// proofbound.WindowReachesDirection, called unmodified: the same robust cross-product
 // containment test that function already proves sound against a 200k-sample
 // brute force, rather than a second implementation of the same idea.
 // wholeTurn (the walk's own structural flag, SideWalk.closed) skips the
@@ -209,23 +209,23 @@ func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 			minLo, minHi, maxLo, maxHi = at.Lo, at.Hi, at.Lo, at.Hi
 			continue
 		}
-		minLo, minHi = RatMin(minLo, at.Lo), RatMin(minHi, at.Hi)
-		maxLo, maxHi = RatMax(maxLo, at.Lo), RatMax(maxHi, at.Hi)
+		minLo, minHi = proofbound.RatMin(minLo, at.Lo), proofbound.RatMin(minHi, at.Hi)
+		maxLo, maxHi = proofbound.RatMax(maxLo, at.Lo), proofbound.RatMax(maxHi, at.Hi)
 	}
 
-	sure, maybe := WindowReachesDirection(coss, sins, a, b)
+	sure, maybe := proofbound.WindowReachesDirection(coss, sins, a, b)
 	if maybe {
-		maxHi = RatMax(maxHi, peakHi)
+		maxHi = proofbound.RatMax(maxHi, peakHi)
 	}
 	if sure {
-		maxLo = RatMax(maxLo, peakLo)
+		maxLo = proofbound.RatMax(maxLo, peakLo)
 	}
-	sure, maybe = WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
+	sure, maybe = proofbound.WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
 	if maybe {
-		minLo = RatMin(minLo, troughLo)
+		minLo = proofbound.RatMin(minLo, troughLo)
 	}
 	if sure {
-		minHi = RatMin(minHi, troughHi)
+		minHi = proofbound.RatMin(minHi, troughHi)
 	}
 	return minLo, minHi, maxLo, maxHi, true
 }

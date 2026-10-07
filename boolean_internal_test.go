@@ -12,8 +12,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -762,7 +760,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		require.Equal(t, 1.0, body.centroid.Value.X)
 		trueCenterX := new(big.Rat).Add(big.NewRat(1, 1),
 			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54)))
-		round := proofbound.Radius3D(survey2d.RatAbsDiff(trueCenterX, body.centroid.Value.X))
+		round := proofbound.Radius3D(proofbound.RatAbsDiff(trueCenterX, body.centroid.Value.X))
 		volume := new(big.Rat).Quo(new(big.Rat).SetFloat64(width), big.NewRat(6, 1))
 		allowance := facetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
 		wantBound := new(big.Rat).Add(new(big.Rat).SetFloat64(round), new(big.Rat).SetFloat64(allowance))

@@ -96,7 +96,7 @@ func oldRevolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope pr
 	prev := at(0)
 	for i := range revolvemesh.RevolveArcIntegralSteps {
 		next := at(i + 1)
-		piece := new(big.Rat).Add(survey2d.RatMax(prev, next), extra)
+		piece := new(big.Rat).Add(proofbound.RatMax(prev, next), extra)
 		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
 		prev = next
 	}

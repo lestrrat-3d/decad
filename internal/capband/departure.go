@@ -8,7 +8,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -317,7 +316,7 @@ func ConeDeparture(sinH, cosH proofbound.RatInterval, originVec, axisVec r3.Vec,
 			return 0, false
 		}
 		arms++
-		tangent = survey2d.RatMax(tangent, new(big.Rat).Quo(
+		tangent = proofbound.RatMax(tangent, new(big.Rat).Quo(
 			proofbound.RatMul(cosMax, proofbound.RatAdd(proofbound.RatMul(d.rho.Hi, sigma), d.offset)),
 			d.armLo,
 		))
@@ -451,7 +450,7 @@ func capDirectrixEnclose(ref DirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, orig
 		}
 		out.rho = capcontour.IntervalHull(out.rho, rho)
 		out.z = capcontour.IntervalHull(out.z, zv)
-		out.armLo = survey2d.RatMin(out.armLo, arm.Lo)
+		out.armLo = proofbound.RatMin(out.armLo, arm.Lo)
 	}
 	return out, true
 }
@@ -489,7 +488,7 @@ func capRulingSkew(b PatchBuilt, side, capped capDirectrix, ahat, origin proofbo
 			return nil, false
 		}
 		cross := proofbound.IvVec3Dot(ahat, proofbound.IvVec3Cross(qs, qc))
-		skew = survey2d.RatMax(skew, new(big.Rat).Quo(proofbound.IntervalAbsUpper(cross), dot.Lo))
+		skew = proofbound.RatMax(skew, new(big.Rat).Quo(proofbound.IntervalAbsUpper(cross), dot.Lo))
 	}
 	return skew, true
 }

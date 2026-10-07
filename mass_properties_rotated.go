@@ -278,8 +278,8 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 
 	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
 	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
-	alongAxis.Add(alongAxis, survey2d.RatMax(d0, d1))
-	return e, survey2d.RatMax(inPlane, alongAxis), nil
+	alongAxis.Add(alongAxis, proofbound.RatMax(d0, d1))
+	return e, proofbound.RatMax(inPlane, alongAxis), nil
 }
 
 // prismRotation is the exact rational matrix taking frame-local (u, v, n)

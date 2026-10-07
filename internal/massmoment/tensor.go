@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // RotateTensor forms M T Mᵀ entry by entry over exact rational
@@ -50,7 +49,7 @@ func TensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
 	largest := new(big.Rat)
 	for i := range t {
 		for j := range t[i] {
-			largest = survey2d.RatMax(largest, proofbound.IntervalAbsUpper(t[i][j]))
+			largest = proofbound.RatMax(largest, proofbound.IntervalAbsUpper(t[i][j]))
 		}
 	}
 	return largest

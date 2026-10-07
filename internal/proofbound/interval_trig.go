@@ -137,3 +137,30 @@ func radSinCosIntervalUncached(x *big.Rat) (RatInterval, RatInterval, bool) {
 	slop := new(big.Rat).Mul(twoPi.Hi, gap)
 	return IntervalWiden(sin, slop), IntervalWiden(cos, slop), true
 }
+
+// WindowReachesDirection decides, over arcs each shorter than a half turn,
+// whether the direction (dx, dy) lies inside the window the given cosines and
+// sines bound. It returns the proven answer first and the possible one second,
+// and never collapses the two: a straddling cross product leaves the direction
+// possible but unproven, which is exactly the case an extreme may only widen an
+// enclosure with rather than fix an end of it.
+//
+// A zero direction — the constant form, a = b = 0 — makes both cross products
+// exactly zero and so reads as proven inside, which is right: every azimuth
+// attains the constant.
+func WindowReachesDirection(coss, sins []RatInterval, dx, dy *big.Rat) (bool, bool) {
+	sure, maybe := false, false
+	for j := 0; j+1 < len(coss); j++ {
+		// The cross product of the arc's start with the direction, then of the
+		// direction with the arc's end: both non-negative places it between them.
+		from := IntervalSub(IntervalScale(coss[j], dy), IntervalScale(sins[j], dx))
+		to := IntervalSub(IntervalScale(sins[j+1], dx), IntervalScale(coss[j+1], dy))
+		if from.Lo.Sign() >= 0 && to.Lo.Sign() >= 0 {
+			sure = true
+		}
+		if from.Hi.Sign() >= 0 && to.Hi.Sign() >= 0 {
+			maybe = true
+		}
+	}
+	return sure, maybe
+}

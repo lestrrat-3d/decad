@@ -175,6 +175,6 @@ func heightArmBound(height PrismHeight) float64 {
 		return math.Inf(1)
 	}
 	h := height.Z1 - height.Z0
-	subErr := RatAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
+	subErr := proofbound.RatAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
 	return proofbound.AbsSumUpper(height.Z0Delta, height.Z1Delta, subErr)
 }

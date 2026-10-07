@@ -6,8 +6,6 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -694,10 +692,10 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		offset := new(big.Rat).Quo(new(big.Rat).SetFloat64(tiny), big.NewRat(4, 1))
 		exact := new(big.Rat).Add(big.NewRat(1, 1), offset)
 		require.Equal(t, tiny, proofarith.RationalFloatError(exact, 1))
-		got := survey2d.RatAbsDiff(exact, 1)
+		got := proofbound.RatAbsDiff(exact, 1)
 		require.Positive(t, got)
 		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(offset), 0)
-		require.Zero(t, survey2d.RatAbsDiff(big.NewRat(1, 1), 1))
+		require.Zero(t, proofbound.RatAbsDiff(big.NewRat(1, 1), 1))
 	})
 
 	t.Run("faceted centroid", func(t *testing.T) {
