@@ -340,8 +340,8 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 | File | Owns |
 |---|---|
 | `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, rings, poles, cells, partial caps, orientation, and the assembled mesh's own audits (tess §8, §9) |
-| `tessellate_revolve_proof.go` | The angular sequence's certified trig, `deltaC`/`deltaR`, the tolerance split, the always-run per-facet positive-area check, the verification-gated facet-pair audit that carries both coordinate homotopies, the vertex-link audit, and `Ecell` (tess §8, §9, §10) |
-| `tessellate_revolve_volume.go` (R5) | `Mmeridian`, per-cell `Icell`, `Mconstruct`, `Mround`, `volSymDiff_revolve` (tess §11) |
+| `tessellate_revolve_proof.go` | Certified trig, `deltaC`/`deltaR`, the tolerance split, facet and vertex-link audits (tess §8–§10) |
+| `internal/revolveproof/` | Meridian envelopes, facet budgets, `Ecell`, `Mmeridian`, and `volSymDiff_revolve` composition (tess §8–§11) |
 
 ### Shared with the builder
 
@@ -407,7 +407,7 @@ case, and `doc.go`'s support map with them.
 
 ### R5 (T4)
 
-`tessellate_revolve_volume.go` owns all four of tess §11's stages; tess §15 records the `Icell` choice and
+`internal/revolveproof/volume.go` computes the §11 bounds; tess §15 records the `Icell` choice and
 its derivation, and is the authority on both.
 
 - `Mmeridian = sweepAngle * Σ_c |∫_{S_c} ρ dA|`: each circular walk's slivers charged their own proven total

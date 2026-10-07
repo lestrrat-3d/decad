@@ -229,10 +229,10 @@ the rules leave to the byte budget.
 | `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, loop assembly over `internal/tessellation/`'s chord bounds, payload dispatch, and sheet audit mapping. See `docs/tessellation-design.md`. |
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
-| `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's doc comment. |
+| `tessellate_revolve.go` | Builds revolve rings, cells, poles and caps. See tessellation §8–§10. |
 | `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
 | `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
-| `tessellate_revolve_volume.go` | Revolve mesh occupied-volume proof. See the file's doc comment. |
+| `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
@@ -266,6 +266,7 @@ the rules leave to the byte budget.
 | `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
 | `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
+| `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
