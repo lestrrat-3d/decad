@@ -129,8 +129,10 @@ type MirrorFace struct{ Body *Body; Face FaceSelector }
 
 `MirrorFace.Face` resolves through `SelectFaces(Body)` under the implicit
 exactly-one rule of core §9: zero or several faces is `ErrCardinality` with
-`Expected "exactly 1"`, a non-planar face is `ErrDegenerate`, another
-document's body `ErrForeignBody`, a retired one `ErrRetiredBody`. With
+`Expected "exactly 1"`, a non-planar face is `ErrDegenerate`, a flat face
+with no analytic `Plane` surface (a mesh-boolean `Faceted` face) is
+`ErrUnsupported`, another document's body `ErrForeignBody`, a retired one
+`ErrRetiredBody`. With
 `WithJoin` (§4.2) the selector may name several coplanar faces, and the
 cardinality rule is `AtLeast(1)` with every face proven coplanar (§5.1).
 Resolving the plane does not consume `Body`. The plane is the face's own
@@ -445,8 +447,10 @@ Every test asserts computed geometry; bounds are asserted as relations
   payloads whose source is, and a `Tessellate` whose signed volume is
   positive. The prism and cup cases assert `Exact` volume.
 - **`MirrorFace`**: a 20×10×10 box mirrored across its wall x = 20 by
-  `Faces(Planar(), Facing(+x))` lands the image at x ∈ [20, 40]; across a
-  cap: `ErrDegenerate`; the L prism of §2, whose `Facing(+x)` resolves two
+  `Faces(Planar(), Facing(+x))` lands the image at x ∈ [20, 40]; across its
+  top cap, at z ∈ [10, 20] (only the join's J2 refuses a cap); across a
+  cylinder's curved face: `ErrDegenerate`; across a `Faceted` flat face:
+  `ErrUnsupported`; the L prism of §2, whose `Facing(+x)` resolves two
   walls, without `WithJoin`: `ErrCardinality` with `Expected "exactly 1"`.
 - **Join, one wall**: the L (area 175 mm², height 10) joined across its wall
   x = 0 (`Faces(Planar(), Facing(−x))`, y ∈ [0, 20]) yields one lump of
@@ -464,8 +468,9 @@ Every test asserts computed geometry; bounds are asserted as relations
   with two pockets, `Exact` 1872 mm³, two slabs, one interface with two
   exposed floor records, and the stacked audit passing on the re-derived
   exposed records.
-- **Join refusals**: `MirrorFrame` → `ErrUnsupported`; a loop crossing the
-  line (the wall a sub-segment of a longer carrier, J4) → `ErrUnsupported`;
+- **Join refusals**: `MirrorFrame` → `ErrUnsupported`; a cap → J2's
+  `ErrDegenerate`; a loop crossing the line (the wall a sub-segment of a
+  longer carrier, J4) → `ErrUnsupported`;
   an arc bulging past the line (J5) → `ErrUnsupported`, with the test
   asserting the arc's endpoints are both on the material side so the bulge
   is the only cause; a receiver with `sectionDelta > 0` → `ErrUnsupported`.

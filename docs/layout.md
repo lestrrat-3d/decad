@@ -66,7 +66,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `doc.go` | Package doc: scope, the evaluator support-and-refusal map, and the layering contract (`decad -> sketch -> r3 -> units`). |
-| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError`, whose `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
+| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError` with its failure `Code`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
@@ -95,8 +95,9 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
+| `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See `docs/evaluator-design.md` §3. |
 | `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
+| `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
@@ -142,7 +143,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | `Body.Fillet` rewrites a straight prism's section with a tangent arc at each selected corner and rebuilds through `evalPrism`. It owns the `cornerBlend` Chamfer reuses. See `docs/modify-design.md` §6. |
-| `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
+| `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, the §5 audit wrapper run on it, and a cup's offset displacement proof. See `docs/modify-design.md` §7-§9. |

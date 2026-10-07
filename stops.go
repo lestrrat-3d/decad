@@ -166,9 +166,10 @@ func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
 	return b, nil
 }
 
-// selectStopFace resolves the stop's face selector against the named body
-// under the implicit exactly-one of core §12/§9, reported through the same
-// SelectionError as a direct SelectFaces (selection_error.go). The rule turns
+// selectImpliedOneFace resolves a ToFace, ToFaceAngular or MirrorFace face
+// selector against the named body under the implicit exactly-one of core
+// §12/§9, reported through the same SelectionError as a direct SelectFaces
+// (selection_error.go); what names the caller in the messages. The rule turns
 // on one distinction — did the selector's OWN explicit assertion fail? A
 // failed explicit assertion (ErrCardinality from SelectFaces) is preserved
 // unchanged, its Expected reflecting the caller's own assertion; the implicit
@@ -186,13 +187,13 @@ func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
 // not a resolvable query: it is rejected as ErrDegenerate before SelectFaces
 // runs, so every count-not-one that reaches impliedOneFace is a concrete query
 // and cannot miss its SelectionError.
-func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
+func selectImpliedOneFace(body *Body, sel FaceSelector, what string) (*Face, error) {
 	q, ok := sel.(*FaceQuery)
 	switch {
 	case sel == nil:
-		return nil, fmt.Errorf(`%w: the stop names no face selector`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: %s names no face selector`, ErrDegenerate, what)
 	case !ok:
-		return nil, fmt.Errorf(`%w: the stop's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
+		return nil, fmt.Errorf(`%w: %s's face selector is not a decad face query (%T)`, ErrDegenerate, what, sel)
 	case q == nil:
 		return nil, errNilSelector
 	}
@@ -247,7 +248,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	face, err := selectStopFace(body, tf.Face)
+	face, err := selectImpliedOneFace(body, tf.Face, "the stop")
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -468,7 +469,7 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	if err != nil {
 		return 0, 0, err
 	}
-	face, err := selectStopFace(body, tfa.Face)
+	face, err := selectImpliedOneFace(body, tfa.Face, "the stop")
 	if err != nil {
 		return 0, 0, err
 	}
