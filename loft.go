@@ -373,11 +373,11 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 		if err != nil {
 			return nil, nil, err
 		}
-		// SL4 first, in loftSameKindGate's own three-way form, so a mixed-kind
+		// SL4 first, in loftmesh.SameKindGate's own three-way form, so a mixed-kind
 		// pairing and an opposite-sense circular pairing each keep the sentinel
 		// and the wording Loft already gives them. Loop index 0: a chain takes
 		// the outer-loop convention throughout (docs/surface-design.md §13.4).
-		if err := loftSameKindGate(c0.Segments[j], c1.Segments[j], 0, j, j); err != nil {
+		if err := loftmesh.SameKindGate(c0.Segments[j], c1.Segments[j], 0, j, j); err != nil {
 			return nil, nil, err
 		}
 		// SL7: this increment rules a LineSeg pair alone. A same-kind circular
@@ -385,7 +385,7 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 		// generator states each COMPUTED station's own position only within its
 		// own stationRound, and §16.2's side gate is stated on the two PLANES
 		// rather than on a station for exactly that reason.
-		if loftPairTypeOf(c0.Segments[j]) != loftPairLine {
+		if loftmesh.PairTypeOf(c0.Segments[j]) != loftmesh.PairLine {
 			return nil, nil, fmt.Errorf(
 				`%w: LoftChain rules a LineSeg pair only; segment %d is a curved pair, whose stations have no side proof yet (docs/loft-design.md §16.2)`,
 				ErrUnsupported, j)
@@ -394,7 +394,7 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 		walks1[j] = w1
 	}
 
-	if loftPlanesCoincide(pl0, pl1) {
+	if loftmesh.PlanesCoincide(pl0, pl1) {
 		return nil, nil, fmt.Errorf(`%w: the two chains lie in the same geometric plane; the ribbon has zero area by construction`, ErrDegenerate)
 	}
 	if err := chainLoftPlaneSideGate(pl0, pl1); err != nil {
@@ -429,7 +429,7 @@ func validateChainLoftRecords(c0, c1 ChainRecord, pl0, pl1 PlaneRecord, work0, w
 // sitting within its own stationRound of the point the record denotes — an
 // admission gate resting on a bound, which CLAUDE.md forbids outright.
 //
-// The caller reaches this gate only after loftPlanesCoincide has refused the
+// The caller reaches this gate only after loftmesh.PlanesCoincide has refused the
 // coplanar pose (S5), so a parallel pair that survives that refusal has a
 // strictly nonzero offset and the sign below can only be positive or negative.
 func chainLoftPlaneSideGate(pl0, pl1 PlaneRecord) error {
