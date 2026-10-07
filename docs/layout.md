@@ -118,7 +118,7 @@ the rules leave to the byte budget.
 | `sweep_composite.go` | Composite Sweep join topology, its boundary audit and a surface result's cap omission. See `docs/sweep-design.md` PR 4 and surface §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
-| `sweep_mitre.go` | `WithMitredJoins`/`WithSectionScale`, Table SM's entry gates, the mitred payload, placement and restatement. See `docs/sweep-design.md` §16. |
+| `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
 | `sweep_mitre_build.go` | Adapts mitred construction, rounding and SM8 audit. See sweep §16.3–§16.4. |
 | `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See `docs/sweep-design.md` §16.5–§16.6. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
@@ -273,7 +273,7 @@ the rules leave to the byte budget.
 | `internal/revolveaxis/` | Axis input resolution, walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
-| `internal/sweepmitre/` | Exact mitred construction and measurement math. See sweep §16.3–§16.6. |
+| `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |

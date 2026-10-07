@@ -172,11 +172,7 @@ func sweepRatVecOf(v r3.Vec) sweepRatVec { return sweeparc.VecOf(v) }
 
 func sweepRatFromDyadic(v proofarith.DyV3) sweepRatVec { return sweeparc.FromDyadic(v) }
 
-func sweepRatAdd(vectors ...sweepRatVec) sweepRatVec { return sweeparc.Add(vectors...) }
-
 func sweepRatSub(a, b sweepRatVec) sweepRatVec { return sweeparc.Sub(a, b) }
-
-func sweepRatScale(v sweepRatVec, scale *big.Rat) sweepRatVec { return sweeparc.Scale(v, scale) }
 
 func sweepRatDot(a, b sweepRatVec) *big.Rat { return sweeparc.Dot(a, b) }
 
