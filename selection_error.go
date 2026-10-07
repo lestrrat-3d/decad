@@ -329,12 +329,12 @@ func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
 }
 
 // impliedOneFace builds the implicit exactly-one SelectionError a ToFace /
-// ToFaceAngular stop reports when its selector resolves to a count that is not
-// one (core §9). Expected is rewritten to "exactly 1" and Actual is the
-// resolved count, preserving the resolution's Kind, Query, Body and Residuals.
-// It takes the concrete *FaceQuery: the implicit-one callers gate the selector
-// to the built-in variant (selectStopFace) before ever reaching here, so this
-// path cannot miss a SelectionError.
+// ToFaceAngular stop or a MirrorFace reports when its selector resolves to a
+// count that is not one (core §9). Expected is rewritten to "exactly 1" and
+// Actual is the resolved count, preserving the resolution's Kind, Query, Body
+// and Residuals. It takes the concrete *FaceQuery: the implicit-one callers
+// gate the selector to the built-in variant (selectImpliedOneFace) before ever
+// reaching here, so this path cannot miss a SelectionError.
 func impliedOneFace(body *Body, q *FaceQuery, actual int) error {
 	return q.selectionError(body, actual, expectedExactlyOne, ErrCardinality)
 }

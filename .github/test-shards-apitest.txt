@@ -548,6 +548,11 @@
 2	0.00	TestMeasurement
 2	0.00	TestMinRadiusAnnularRevolveStaysExact
 2	0.00	TestMinRadiusPlainBlockNil
+2	0.20	TestMirrorFaceResolvesAPlane
+2	0.01	TestMirrorFrameGates
+2	0.25	TestMirroredCopyEveryPayload
+2	0.01	TestMirroredCopyFlipsTheLsFacing
+2	0.01	TestMirroredRetiresTheReceiver
 2	0.00	TestMotionPoseAt
 2	0.01	TestMultiSegmentFreeformRegionRoundsOnce
 2	0.00	TestNURBSCurveSealsIntoCurve
