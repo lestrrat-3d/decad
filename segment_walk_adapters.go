@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -46,10 +45,6 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) survey2d
 
 func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 	return boundarywalk.LineWalkBounds(seg, held)
-}
-
-func dySqrtIntervalError(lengthSquared proofarith.Dyadic, held float64) float64 {
-	return boundarywalk.DySqrtIntervalError(lengthSquared, held)
 }
 
 func ratL1Upper(values ...*big.Rat) float64 { return boundarywalk.RatL1Upper(values...) }
