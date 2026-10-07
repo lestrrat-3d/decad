@@ -8,7 +8,7 @@ import (
 )
 
 // This file is the float pre-test in front of the revolve facet-contact
-// audit's exact predicates (tessellate_revolve_proof.go). The audit reads
+// audit's exact predicates (revolve_contact_audit.go). The audit reads
 // every sign and every separating-axis gap over Dyadic arithmetic, and most of
 // those readings are far from their thresholds. Each one is first enclosed
 // here in a float interval rounded outward at every step, so the interval
