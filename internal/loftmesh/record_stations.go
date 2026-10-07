@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/circularmoments"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -22,7 +22,7 @@ func (b loftCircularBounder) BoundAt(t *big.Rat, u, v float64) proofbound.WalkEn
 }
 
 func RecordCircularSide(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment) LoftCircularSide {
-	radius, sweep, enclosed := circularmoments.WalkEnclosures(circularmoments.RecordSegment(seg))
+	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	tStart, dt, rangeOK := CircularSegmentRange(seg)
 	return LoftCircularSide{
 		Walk: w, Radius: radius, Sweep: sweep, Enclosed: enclosed,
@@ -272,7 +272,7 @@ func CircularCellPoints(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.Cu
 // under the division.
 func PerCellArcUpper(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk, m int) float64 {
 	if ns, err := sectionrecord.NormalizeSegment(seg); err == nil {
-		if iv, ok := circularmoments.LengthInterval(circularmoments.RecordSegment(ns)); ok {
+		if iv, ok := circularbounds.LengthInterval(circularbounds.RecordSegment(ns)); ok {
 			return proofbound.UpRound(proofbound.RatFloatUp(iv.Hi) / float64(m))
 		}
 	}
@@ -370,10 +370,10 @@ func ArcNaturalEndRadialUpper(seg sectionrecord.CurveSegment) float64 {
 	if !ok || (arc.TStart != 1 && arc.TEnd != 1) {
 		return 0
 	}
-	dx0 := circularmoments.ExactCoordinateDelta(arc.Start.U, arc.Center.U)
-	dy0 := circularmoments.ExactCoordinateDelta(arc.Start.V, arc.Center.V)
-	dx1 := circularmoments.ExactCoordinateDelta(arc.End.U, arc.Center.U)
-	dy1 := circularmoments.ExactCoordinateDelta(arc.End.V, arc.Center.V)
+	dx0 := circularbounds.ExactCoordinateDelta(arc.Start.U, arc.Center.U)
+	dy0 := circularbounds.ExactCoordinateDelta(arc.Start.V, arc.Center.V)
+	dx1 := circularbounds.ExactCoordinateDelta(arc.End.U, arc.Center.U)
+	dy1 := circularbounds.ExactCoordinateDelta(arc.End.V, arc.Center.V)
 	r0 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
 	r1 := new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
 
@@ -418,7 +418,7 @@ func CircularSegmentRange(seg sectionrecord.CurveSegment) (*big.Rat, *big.Rat, b
 	if start == nil {
 		return nil, nil, false
 	}
-	return start, circularmoments.ExactCoordinateDelta(tEnd, tStart), true
+	return start, circularbounds.ExactCoordinateDelta(tEnd, tStart), true
 }
 
 // CertifiedSagittaUpper delegates the station proof to internal/tessellation.
@@ -426,7 +426,7 @@ func CertifiedSagittaUpper(seg sectionrecord.CurveSegment, m int) float64 {
 	if m <= 0 {
 		return math.Inf(1)
 	}
-	radius, sweep, enclosed := circularmoments.WalkEnclosures(circularmoments.RecordSegment(seg))
+	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	return LoftCertifiedSagittaUpper(radius, sweep, enclosed, m)
 }
 
@@ -435,6 +435,6 @@ func CertifiedChordLower(seg sectionrecord.CurveSegment, m int) float64 {
 	if m <= 0 {
 		return 0
 	}
-	radius, sweep, enclosed := circularmoments.WalkEnclosures(circularmoments.RecordSegment(seg))
+	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	return LoftCertifiedChordLower(radius, sweep, enclosed, m)
 }

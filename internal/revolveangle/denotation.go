@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularmoments"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
@@ -130,12 +130,12 @@ func (d Angle) SinCosFor(held float64) (sin, cos proofbound.RatInterval, ok bool
 		sin, cos, ok = proofbound.RadSinCosInterval(d.Rad)
 		return sin, cos, ok
 	case d.Valid() && d.Rad.Sign() == 0:
-		// circularmoments.QuarterTurnSinCos is zero-width at every
+		// circularbounds.QuarterTurnSinCos is zero-width at every
 		// quarter-turn boundary (0/±1 exactly, no series at all) and falls
 		// back to proofbound.TurnSinCosInterval otherwise, so a quarter, half or
 		// three-quarter turn stays exact rather than carrying
 		// proofbound.TurnSinCosInterval's own fixed per-call series margin.
-		sin, cos = circularmoments.QuarterTurnSinCos(d.Turn)
+		sin, cos = circularbounds.QuarterTurnSinCos(d.Turn)
 		return sin, cos, true
 	default:
 		r := proofarith.FloatRat(held)

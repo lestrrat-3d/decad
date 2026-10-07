@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/circularmoments"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -191,8 +191,8 @@ func TrimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 		return 0, 0, err
 	}
 	if line, ok := seg.(LineSeg); ok {
-		du := boundarywalk.RatL1Upper(circularmoments.ExactCoordinateDelta(line.End.U, line.Start.U))
-		dv := boundarywalk.RatL1Upper(circularmoments.ExactCoordinateDelta(line.End.V, line.Start.V))
+		du := boundarywalk.RatL1Upper(circularbounds.ExactCoordinateDelta(line.End.U, line.Start.U))
+		dv := boundarywalk.RatL1Upper(circularbounds.ExactCoordinateDelta(line.End.V, line.Start.V))
 		return proofbound.CutDisplacementAllow(du), proofbound.CutDisplacementAllow(dv), nil
 	}
 	speed, err := CarrierSpeedUpper(seg)
