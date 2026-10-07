@@ -213,7 +213,7 @@ func TestBooleanBoundSoundnessAxisAligned(t *testing.T) {
 	// classifier: an axis ray from a seed point can graze the coplanar faces of
 	// an axis-aligned mesh, and when ALL SIX axis directions are ambiguous the
 	// boolean refuses LOUDLY (ErrBooleanFailed) rather than guess — a sound,
-	// documented refusal, never a wrong answer (internal/meshbool/boolean_exact.go). So a refusal
+	// documented refusal, never a wrong answer (internal/meshbool/parity_mesh.go). So a refusal
 	// here is acceptable and the document must stay untouched; the strict
 	// "a clean transversal pair is never spuriously refused" guarantee lives in
 	// the rotated loop below, where the classifier's rays are non-degenerate.

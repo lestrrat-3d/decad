@@ -1162,8 +1162,8 @@ only in shared edges and shared vertices — each must produce the expected
 classification above. Every cap triangle is also tested against every wall
 triangle and every triangle of the opposite cap.
 
-Every pair is tested with `internal/meshbool/boolean_exact.go`'s existing adaptive
-triangle/triangle predicate and `boolean_mesh.go`'s `triTriClassify` — the
+Every pair is tested with `boolean_mesh.go`'s `triTriClassify` and the adaptive
+orientation predicates in `internal/proof/orientation.go` — the
 identical exact machinery the mesh boolean already uses to decide whether two
 triangles are disjoint, share a point, share a segment, or overlap in a 2-D
 region. Two flat triangles need no bracket, no interval subdivision, and no
