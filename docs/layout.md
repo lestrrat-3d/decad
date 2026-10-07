@@ -108,10 +108,10 @@ the rules leave to the byte budget.
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
-| `stitch_weld.go` | Adapts held Stitch vertices and edges to Table J's class and pair grouping. See surface §6.2. |
-| `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
-| `stitch_flux.go` | Stitch's curved-face gate, topology adapter and mass sum. See `docs/surface-design.md` §6.4. |
-| `unstitch.go` | `Unstitch`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
+| `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
+| `stitch.go` | `Stitch` evaluator and rebuilt topology. See surface §6.4. |
+| `stitch_flux.go` | Stitch curved-face mass adapter. See surface §6.4. |
+| `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | `Document.Extrude`: the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's doc comment. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication and Revolve reuse. See `docs/sweep-design.md` PR 3. |
@@ -243,7 +243,7 @@ the rules leave to the byte budget.
 | `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
-| `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
+| `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | Maps cap points and expected chording errors between `Point2` and `internal/triangulation/`; `cross2` serves root mesh clearance. |
@@ -301,7 +301,7 @@ the rules leave to the byte budget.
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
-| `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
+| `internal/stitchflux/` | Stitch bounded scalars and flux. See surface §6.4. |
 | `internal/stitchweld/` | Exact Stitch vertex classes and weld pairs. See surface §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
