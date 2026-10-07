@@ -487,7 +487,8 @@ term:
   two being anything a reading's own bound speaks about. So a circular patch
   charges the WHOLE distance from its recovered coefficients to the model
   enclosed exactly from the tag's and the placed frame's own held numbers
-  (`capblend_normal.go`), which covers all three at once and estimates no
+  (`internal/capband/normal_model.go`), which covers all three at once and
+  estimates no
   mechanism separately, beside that model's own proven departure from a single
   harmonic. Its window is then read through a proven enclosure of the recovered
   form's own extremes rather than a float evaluation of them, and each
