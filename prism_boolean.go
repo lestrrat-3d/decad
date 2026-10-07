@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -20,14 +21,17 @@ import (
 // shared-axis offset planes, routed entirely through sketch (§4) rather than
 // through the mesh boolean (evaluator-design §9). The entry gate (§3) is reject-only and never
 // surfaces an error on a miss — the caller falls back to the unchanged mesh
-// path exactly as it did before this file existed. A sketch-split boundary
-// also reroutes before resolution accepts a candidate whenever either input
+// path exactly as it did before this file existed. Where either input
 // carries a section displacement, a consumed source segment's own walk
 // computed a coordinate (§7's δ_walk, walkChargeOf), or B's re-expression is
-// nonidentity: any of the three can amplify at the cut. A split boundary the
-// reroute admits still charges the cut parameters' OWN rounding into the
-// result's section displacement (§7, prismcells.CutDelta) — a merged section
-// built from fragments is never exact, whatever the operands were. A
+// nonidentity, every crossing the arrangement cuts can amplify that
+// displacement by 1/sin θ, and docs/general-boolean-design.md §3 A6 charges
+// it (prismSceneDelta.chargeCrossings, prismcells.CrossingCharge). Such a
+// pair never refuses: a crossing too close to tangent to bound, or any later
+// analytic failure, sends it to the mesh path (prismAmplifiedFallback). Every cut also charges the cut
+// parameters' OWN rounding into the result's section displacement (§7,
+// prismcells.CutDelta) — a merged section built from fragments is never
+// exact, whatever the operands were. A
 // consumed source segment whose own recorded range is narrower than its
 // natural domain enters the private scene at a WALKED endpoint the boolean
 // itself computed (buildPrismScene's own doc comment) rather than at the
@@ -67,12 +71,11 @@ import (
 
 // tryPrismBoolean attempts the analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
-// MUST fall back to the unchanged mesh path with no error surfaced. That
-// includes a split arranged boundary when either input carries a section
-// displacement, either input carries a walk charge, or B's re-expression is
-// nonidentity — any one of the three alone. A non-nil err means the
-// bounded analytic resolution reached a genuine refusal (§3.4) — the caller
-// MUST propagate it rather than reroute to the mesh path.
+// MUST fall back to the unchanged mesh path with no error surfaced. A
+// non-nil err means the bounded analytic resolution reached a genuine
+// refusal (§3.4), and the caller MUST propagate it rather than reroute to
+// the mesh path. A pair whose cuts carry an amplified displacement never
+// refuses: it falls back (prismAmplifiedFallback).
 //
 // G1-G4 (admitPrismPairBudget) and the work cap are shared, unchanged, by
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
@@ -255,8 +258,9 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 		return prismPayload{}, false, nil // §4.4: this topology is unresolved
 	}
 
-	// Point of no return (§3.4): every further problem is a genuine refusal.
-	if err := auditPrismMergeSection(budget, pa, merged); err != nil {
+	// Point of no return (§3.4): every further problem is a genuine refusal,
+	// unless the cuts carry an amplified displacement (prismAmplifiedFallback).
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 	result := prismPayload{
@@ -274,15 +278,11 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 		// (sceneDelta.b) besides. On top of both, every surviving CUT
 		// fragment names its endpoints by a freshly rounded parameter this
 		// union did not have before it ran, so cutDelta stands even where the
-		// two operands carried nothing at all. A chained union must not
-		// discard any of the four.
-		sectionDelta: proofbound.AbsSumUpper(
-			max(
-				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
-				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
-			),
-			cutDelta,
-		),
+		// two operands carried nothing at all, and every cut the inputs'
+		// displacement can move carries A6's crossing charge
+		// (sceneDelta.crossing). A chained union must not discard any of
+		// the five.
+		sectionDelta: sceneDelta.merged(pa, pb, reexpress, cutDelta),
 	}
 	return result, true, nil
 }
@@ -509,14 +509,16 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // allowance any surviving fragment's own cut parameters owe, zero when every
 // survivor is a whole edge.
 //
+// sceneDelta also carries the crossing charge (prismSceneDelta.crossing) for
+// every cut the arrangement made.
+//
 // resolved=false (err always nil in that case) means the pair's topology is
-// unresolved (§4.4), or a split boundary can amplify either input's section
-// displacement, either operand's own walk charge, or B's nonidentity
-// re-expression (§3.4): the caller falls back to the mesh path with no
-// error. A non-nil error — including ctx cancellation surfacing through
-// budget — is always genuine and must propagate.
+// unresolved (§4.4), or a cut carries an amplified displacement the crossing
+// charge cannot bound or the merge then fails on: the caller falls back to
+// the mesh path with no error. A non-nil error — including ctx cancellation
+// surfacing through budget — is genuine and must propagate.
 func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
-	s, _, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
+	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
@@ -536,19 +538,11 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	if len(profiles) == 0 {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
-		if err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-		}
-		if split {
-			// A coordinate error in re-expressed B, either source section's
-			// existing displacement, or either operand's own walk charge can
-			// move an intersection by delta/sin(theta). This increment has no
-			// certified lower crossing-angle bound, so it cannot record the
-			// fragment with an honest displacement bound.
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
-		}
+	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
+	// cut is charged the input displacement it amplifies; a crossing too
+	// close to tangent for that charge sends the pair to the mesh path.
+	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil || !ok {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 
 	// Union, hole-free operands (G6): select every returned cell — by
@@ -557,7 +551,7 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	// crossing sub-case (prism_boolean_crossing.go) reuses over its OWN,
 	// narrower selected cell set.
 	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
-	if err != nil {
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
@@ -642,8 +636,78 @@ func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 // actually consumed from operand A and from operand B, tracked separately
 // because B's own charge composes BEFORE the re-expression's rounding
 // (prismReexpression.delta), matching every other §7 term's own ordering.
+//
+// crossing is docs/general-boolean-design.md §3 A6's crossing charge
+// (prismcells.CrossingCharge): the largest distance an input displacement
+// can move a crossing the arrangement cut. It is zero when neither operand
+// brings a displacement, and on every path that cuts nothing.
+//
+// amplified records that the arrangement cut something while an operand
+// brought a displacement: the case prism-boolean §3.4 charges. Such a pair
+// never refuses on the analytic path; every problem past the charge sends it
+// to the mesh path instead (prismAmplifiedFallback).
 type prismSceneDelta struct {
-	a, b float64
+	a, b      float64
+	crossing  float64
+	amplified bool
+}
+
+// incoming is §7's two incoming displacements: operand A's own section
+// displacement with its walk charge, and operand B's with its walk charge
+// and the re-expression's rounding.
+func (d prismSceneDelta) incoming(pa, pb prismPayload, reexpress *prismReexpression) (float64, float64) {
+	return proofbound.AbsSumUpper(pa.sectionDelta, d.a), proofbound.AbsSumUpper(pb.sectionDelta, d.b, reexpress.delta)
+}
+
+// chargeCrossings sets d.amplified and d.crossing from the arrangement's
+// returned cells. ok=false (err always nil then) means a crossing has no
+// proven charge — too close to tangent, or not settling — and the caller
+// falls back to the mesh path. A non-nil error is cancellation.
+func (d *prismSceneDelta) chargeCrossings(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, pa, pb prismPayload, reexpress *prismReexpression) (bool, error) {
+	inA, inB := d.incoming(pa, pb, reexpress)
+	if inA == 0 && inB == 0 {
+		return true, nil
+	}
+	split, err := prismProfilesHaveSplitBoundary(budget, profiles)
+	if err != nil {
+		return false, err
+	}
+	if !split {
+		return true, nil
+	}
+	d.amplified = true
+	crossing, ok, err := prismcells.CrossingCharge(budget, tags, profiles, inA, inB)
+	if err != nil || !ok {
+		return false, err
+	}
+	d.crossing = crossing
+	return true, nil
+}
+
+// prismAmplifiedFallback is the routing rule for a pair whose cuts carry an
+// amplified input displacement (prismSceneDelta.amplified): an error from
+// the analytic resolution past the charge does not refuse the boolean, it
+// sends the pair to the mesh path (fallBack=true, err=nil). Cancellation
+// always propagates, and a pair that is not amplified keeps its error.
+func prismAmplifiedFallback(amplified bool, err error) (bool, error) {
+	if err == nil {
+		return false, nil
+	}
+	if !amplified || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false, err
+	}
+	return true, nil
+}
+
+// merged is the section displacement of a section assembled from cut
+// fragments (§7, with A6's amplified crossing term):
+// up(max(δ_A + δ_walkA, δ_B + δ_walkB + δ_reexpress, crossing) + δ_cut).
+// An uncut stretch of either operand's boundary moves by that operand's own
+// incoming term, a cut endpoint by the crossing charge, and every fragment
+// endpoint additionally by its own cut parameter's rounding.
+func (d prismSceneDelta) merged(pa, pb prismPayload, reexpress *prismReexpression, cutDelta float64) float64 {
+	inA, inB := d.incoming(pa, pb, reexpress)
+	return proofbound.AbsSumUpper(max(inA, inB, d.crossing), cutDelta)
 }
 
 // buildPrismScene is §4.1's scene construction: one private sketch.Sketch

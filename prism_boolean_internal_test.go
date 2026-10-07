@@ -388,11 +388,15 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 	require.True(t, ok, "a hole-free pair otherwise identical clears G6")
 }
 
-// TestPrismUnionReexpressedSplitFallsBack keeps a nonidentity coordinate
-// re-expression from publishing a section bound for a shallow sketch-cut edge.
-// A transverse cut can magnify the coordinate error by the crossing angle, so
-// the current analytic path must route this pair through the mesh evaluator.
-func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
+// TestPrismUnionReexpressedSplitChargesTheCrossing is A6's crossing charge
+// (docs/general-boolean-design.md §3 A6) on a nonidentity re-expression: B's
+// lower edge, rotated by θ = 0.01, crosses A's top edge at that angle, so
+// B's re-expression rounding δ_B can move the crossing by δ_B/sin θ. The
+// union builds, its sectionDelta covers δ_B/0.01 (sin 0.01 < 0.01), and its
+// volume bound contains the exact residual against A ∪ B taken over
+// math/big.Rat from the two records and B's stored placement. Shown to fail
+// with prismSceneDelta.merged's crossing term deleted.
+func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
@@ -436,17 +440,94 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	}
 	require.True(t, split, "the overlapping rectangles must produce a split boundary")
 
-	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	_, inB := prismSceneDelta{}.incoming(pa, pb, reexpression)
+	require.Positive(t, inB)
+
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
-	require.False(t, ok, "a re-expressed arrangement with a split boundary must fall back")
+	require.True(t, ok, "A6 charges the shallow crossing instead of rerouting it")
+	require.GreaterOrEqual(t, result.sectionDelta, inB/0.01,
+		"the crossing at sin θ < 0.01 can move by δ_B/sin θ")
+
+	// A ∪ B = A + B − A ∩ B, with B's corners placed exactly through its
+	// stored basis.
+	basisOf := rotation.Basis()
+	place := func(u, v float64) [2]*big.Rat {
+		x := ratAddMul(prismRatOf(t, u), prismRatOf(t, basisOf.EX.X), prismRatOf(t, v), prismRatOf(t, basisOf.EY.X))
+		y := ratAddMul(prismRatOf(t, u), prismRatOf(t, basisOf.EX.Y), prismRatOf(t, v), prismRatOf(t, basisOf.EY.Y))
+		return [2]*big.Rat{x, y}
+	}
+	square := [][2]*big.Rat{ratXY(0, 0), ratXY(10, 0), ratXY(10, 10), ratXY(0, 10)}
+	band := [][2]*big.Rat{place(-5, 9.9), place(15, 9.9), place(15, 11.9), place(-5, 11.9)}
+	area := new(big.Rat).Add(ratPolygonArea(square), ratPolygonArea(band))
+	area.Sub(area, ratPolygonArea(ratConvexClip(band, square)))
+	truth := new(big.Rat).Mul(area, prismRatOf(t, 10))
+	body, err := evalPrismContext(t.Context(), New(), 1, result, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	residual := prismExactResidual(t, body.volume.Value.Base(), truth)
+	require.LessOrEqualf(t, residual, body.volume.Bound.Base(),
+		"the published volume bound %g must contain the true error %g", body.volume.Bound.Base(), residual)
 }
 
-// TestPrismUnionDisplacedSourceSplitFallsBack covers a chained union whose
-// second re-expression is identity. The first union carries its own section
-// displacement from re-expressing a containing operand. A shallow crossing in
-// the second union must still fall back: moving the prior section can move the
-// new trim by that displacement divided by the crossing sine.
-func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
+// ratXY lifts an exact float point.
+func ratXY(u, v float64) [2]*big.Rat {
+	return [2]*big.Rat{new(big.Rat).SetFloat64(u), new(big.Rat).SetFloat64(v)}
+}
+
+// ratAddMul is a·b + c·d over rationals.
+func ratAddMul(a, b, c, d *big.Rat) *big.Rat {
+	x := new(big.Rat).Mul(a, b)
+	return x.Add(x, new(big.Rat).Mul(c, d))
+}
+
+// ratPolygonArea is a simple polygon's signed area, exactly.
+func ratPolygonArea(poly [][2]*big.Rat) *big.Rat {
+	total := new(big.Rat)
+	for i := range poly {
+		p, q := poly[i], poly[(i+1)%len(poly)]
+		total.Add(total, new(big.Rat).Sub(new(big.Rat).Mul(p[0], q[1]), new(big.Rat).Mul(q[0], p[1])))
+	}
+	return total.Mul(total, big.NewRat(1, 2))
+}
+
+// ratConvexClip clips poly by the counter-clockwise convex polygon clip
+// (Sutherland–Hodgman), exactly: the test's own oracle for a convex overlap.
+func ratConvexClip(poly, clip [][2]*big.Rat) [][2]*big.Rat {
+	side := func(a, b, p [2]*big.Rat) *big.Rat {
+		x := new(big.Rat).Mul(new(big.Rat).Sub(b[0], a[0]), new(big.Rat).Sub(p[1], a[1]))
+		return x.Sub(x, new(big.Rat).Mul(new(big.Rat).Sub(b[1], a[1]), new(big.Rat).Sub(p[0], a[0])))
+	}
+	out := poly
+	for i := range clip {
+		a, b := clip[i], clip[(i+1)%len(clip)]
+		in := out
+		out = nil
+		for j := range in {
+			p, q := in[j], in[(j+1)%len(in)]
+			sp, sq := side(a, b, p), side(a, b, q)
+			if sp.Sign() >= 0 {
+				out = append(out, p)
+			}
+			if sp.Sign()*sq.Sign() < 0 {
+				t := new(big.Rat).Quo(sp, new(big.Rat).Sub(sp, sq))
+				out = append(out, [2]*big.Rat{
+					new(big.Rat).Add(p[0], new(big.Rat).Mul(t, new(big.Rat).Sub(q[0], p[0]))),
+					new(big.Rat).Add(p[1], new(big.Rat).Mul(t, new(big.Rat).Sub(q[1], p[1]))),
+				})
+			}
+		}
+	}
+	return out
+}
+
+// TestPrismUnionDisplacedSourceSplitChargesTheCrossing covers a chained union
+// whose second re-expression is identity. The first union carries its own
+// section displacement from re-expressing a containing operand. A shallow
+// crossing (slope 0.01) in the second union can move by that displacement
+// divided by the crossing sine, and A6 charges it: the union builds with a
+// sectionDelta of at least δ_A/0.01. Shown to fail with
+// prismSceneDelta.merged's crossing term deleted.
+func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	inner := prismPayload{
@@ -486,9 +567,11 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
-	_, ok, err = tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: first}, &Body{payload: shallow})
+	second, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: first}, &Body{payload: shallow})
 	require.NoError(t, err)
-	require.False(t, ok, "a split boundary with an uncertain source must fall back before recordEdge")
+	require.True(t, ok, "A6 charges the shallow crossing instead of rerouting it")
+	require.GreaterOrEqual(t, second.sectionDelta, first.sectionDelta/0.01,
+		"the crossing at sin θ < 0.01 can move by δ_A/sin θ")
 }
 
 // TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect covers
@@ -1600,14 +1683,13 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 	})
 }
 
-// TestPrismUnionTrimmedSourceSplitBoundaryFallsBack is task fu143's own
-// split-boundary reroute test (task 5's condition change), mirroring the
-// existing TestPrismUnionDisplacedSourceSplitFallsBack: the trimmed-source
-// operand A from prismSplitLeftCellBody, unioned with a box that genuinely
-// overlaps its right wall (the split line itself), must fall back to the
-// mesh path with no error rather than record a fragment whose crossing
-// A's own walk charge could amplify.
-func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
+// TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing pins A6 on a
+// walk charge alone: the trimmed-source operand A from
+// prismSplitLeftCellBody, unioned with a box that crosses its right wall
+// square, builds analytically, and its sectionDelta covers A's walk
+// charge. Shown to fail with resolvePrismUnion's former
+// split-boundary reroute restored.
+func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	a := prismSplitLeftCellBody(t, doc)
@@ -1630,9 +1712,10 @@ func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
 
-	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
-	require.False(t, ok, "a split boundary with a nonzero walk charge must fall back")
+	require.True(t, ok, "A6 charges the crossing instead of rerouting it")
+	require.GreaterOrEqual(t, result.sectionDelta, sceneDelta.a)
 }
 
 // This file is docs/prism-boolean-design.md §14 PR3's own required property
@@ -1860,11 +1943,11 @@ func TestPrismOverlapVolumeCancellationLeavesDocumentUntouched(t *testing.T) {
 }
 
 // TestPrismOverlapVolumeRegressionFallbacks is §15's regression row over
-// prismOverlapVolume specifically: a non-coplanar pair, a reflected
-// placement whose image crosses A, and a pair carrying a free-form segment each take the exact
-// silent-fallback path they take through tryPrismBoolean/
-// admitPrismIntersectPair today — this reading shares that gate unchanged
-// (Task 1) rather than restating it.
+// prismOverlapVolume specifically: a non-coplanar pair and a pair carrying a
+// free-form segment each take the exact silent-fallback path they take
+// through tryPrismBoolean/admitPrismIntersectPair today — this reading
+// shares that gate unchanged (Task 1) rather than restating it. A reflected operand whose image crosses
+// A is measured, through the same gate and A6's crossing charge.
 func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -1887,18 +1970,20 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		require.False(t, ok, "G3: a non-coplanar pair must never admit")
 	})
 
-	t.Run("reflected crossing operand", func(t *testing.T) {
-		// B's image across x = 0 is [5, 15]², which crosses A. A reflection is
-		// a nonidentity re-expression, so the split boundary reroutes the
-		// pair (§3.4) until docs/general-boolean-design.md's A6 charges it.
+	t.Run("reflected crossing operand is measured", func(t *testing.T) {
+		// B's image across x = 0 is [5, 15]², which crosses A in [5, 10]².
+		// A reflection is a nonidentity re-expression, and
+		// docs/general-boolean-design.md's A6 charges the square crossings it
+		// can move instead of rerouting the pair.
 		pb := pa
 		pb.profile = ProfileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
 		pb.xform = prismMirrorAcrossX(t, 0)
 		a := &Body{doc: doc, payload: pa}
 		b := &Body{doc: doc, payload: pb}
-		_, ok, err := prismOverlapVolume(t.Context(), a, b)
+		got, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
-		require.False(t, ok, "§3.4: a reflected operand whose image crosses A must reroute")
+		require.True(t, ok)
+		require.InDelta(t, 250.0, got.Value.Base(), got.Bound.Base())
 	})
 
 	t.Run("free-form segment", func(t *testing.T) {

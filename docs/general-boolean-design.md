@@ -98,7 +98,7 @@ admits takes it unchanged.
 | A3 | two operands sharing a wall: collinear coincident line carriers (box beside box, a mirrored half beside its source) | W1–W4, W6, S12c, M2 | waits on `sketch` (§7); the mirror join (mirror §5) covers the symmetric case without it |
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
-| A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge — the cases prism-boolean §3.4 reroutes | P1, S9 (45° in plane), rotated and translated overlaps | `prismPayload` carrying a certified crossing-sensitivity charge (§3.3) |
+| A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
 
 #### A1 — stacked union
 
@@ -168,9 +168,9 @@ rounding per coordinate; a reflection adds no term. Interference's read-only
 twin (`evaluateAnalyticIntersect`) and the overlap-area reading share the
 same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
-Prism-boolean §3.4's split-boundary reroute still applies: a reflection is a
-nonidentity re-expression, so a one-sided reflected pair whose outlines
-cross (M3, T2) reroutes until A6 charges the crossing (§9).
+A one-sided reflection is a nonidentity re-expression, so a reflected pair
+whose outlines cross takes A6's crossing charge. M3 and T2 still refuse:
+their outlines share collinear walls, which A3 waits on (§9).
 
 #### A5 — multi-region operands and results
 
@@ -193,34 +193,78 @@ edge on its operand's material side, read by the same `Reversed` against
 authored-sense comparison the crossing classifier reads. A cell with none is
 an enclosed void, and the pair takes the mesh path. A group operand needs
 the partner's interval exactly (prism-boolean §3.2's `Union` row), and a
-result whose survivors close into one loop is a prism.
+result whose survivors close into one loop is a prism. A group scene whose
+cuts carry a displaced operand's displacement (a placed group, for one)
+takes A6's crossing charge on both the `Cut` crossing sub-case and the
+`Union` merge, and falls back to the mesh path where A6 does.
 
 #### A6 — the crossing-sensitivity charge
 
-Prism-boolean §3.4 reroutes any scene with a `Partial` edge when an input
-displacement exists, because an input displacement `δ_in` moves a transverse
-cut by up to `δ_in / sin θ`. This class charges it instead:
+An input displacement moves every cut the arrangement makes: two recorded
+carriers crossing at `O` at an angle `θ`, whose denoted carriers sit within
+`δ1` and `δ2` of them, meet at a point `P*` with
+`|P* − O| ≤ (δ1 + δ2)/sin θ_low + min(δ1, δ2)`. The proof: take `Q1`, `Q2`
+on the recorded carriers nearest `P*`, so `|Q1 − Q2| ≤ δ1 + δ2`; inside a
+ball around `O` where every tangent of one carrier makes an angle of at
+least `θ_low` (mod π) with every tangent of the other, `Q1 − O` and
+`Q2 − O` are sums of each carrier's own tangents, so
+`|Q1 − Q2| ≥ max(|Q1 − O|, |Q2 − O|)·sin θ_low`. This class charges that
+distance instead of prism-boolean §3.4 rerouting the pair
+(`prismcells.CrossingCharge`, `internal/prismcells/crossing.go`):
 
-- the two carriers meeting at a cut are known from the scene's tags; their
-  tangent directions at the cut are, for a `LineSeg`, the recorded
-  `End − Start` (exact rationals); for an `ArcSeg`/`CircleSeg`, the
-  tangent at the certified cut parameter `t`, an enclosure over
-  `[t − ε, t + ε]` with `ε` prism-boolean §7's `cutParamUlps`, through
-  `internal/proofbound`'s certified trig;
-- `sin θ_low` is a certified lower bound on `|sin θ|` over those enclosures
-  (exact for line/line);
-- the fragment's displacement is `up(δ_in / sin θ_low) + δ_cut`, with
-  `δ_in` the larger of the two operands' incoming terms
-  (`δ_A + δ_walkA`, `δ_B + δ_walkB + δ_reexpress`), and this replaces the
-  `max(...) + δ_cut` of prism-boolean §7's formula on every fragment the
-  arrangement cut;
-- a pair with `sin θ_low` below verification §4's diameter-anchored noise
-  floor is refused (`ErrUnsupported`): near-tangent crossings are the band
-  the charge cannot bound. Reject-only: the floor refuses and admits nothing.
+- a cut is an arranged vertex (an edge's walk end in its `Polyline`, matched
+  by exact equality) where some incident edge's parameter is one the
+  arrangement computed (a `Partial` edge's non-natural end, or any end of a
+  `Partial` circle). Every pair of distinct entities incident at a cut is
+  charged, whichever face walks them, so a pair adjacent only through the
+  unbounded face, which no returned cell walks, is charged too. A vertex
+  where only recorded vertices meet is not a cut (prism-boolean §4.4's
+  known limit). A touch from outside is not arranged as a vertex at all:
+  `sketch` returns the two outlines as separate cells, and every point a
+  displacement moves across either boundary there lies within that
+  operand's own displacement of the other's recorded wall, inside the
+  section displacement's tube;
+- each side's displacement is its operand's incoming term: `δ_A + δ_walkA`
+  for A, `δ_B + δ_walkB + δ_reexpress` for B. Both zero charges nothing;
+- `sin θ_low` is a certified lower bound on `|sin θ|` between any tangent of
+  one recorded carrier and any tangent of the other at points within `ρ` of
+  a junction point held exactly: a line side's exact rational point at its
+  recorded parameter (within its `δ_cut` of `O`), or a circular walk's
+  endpoint with its walk-end bound added. It is exact rational arithmetic
+  with outward-rounded square roots: `|d1 × d2|/(|d1||d2|)` for two lines,
+  `(|d·(p − C)|/|d| − ρ)/R` for a line and a circle (a circle's tangent is
+  perpendicular to its radius), `(|a1 × a2| − ρ(|a1| + |a2|) − ρ²)/(R1 R2)`
+  for two circles, and zero for a circle read over a ball wider than half
+  its radius;
+- `ρ` starts at the junction point's own error, then widens to hold twice
+  the distance the first bound charges; the second bound is accepted only
+  when the distance it charges fits that ball, and otherwise the crossing
+  has no charge;
+- the largest charge over every cut of every returned cell is `crossing`,
+  and the section displacement becomes
+  `up(max(δ_A + δ_walkA, δ_B + δ_walkB + δ_reexpress, crossing) + δ_cut)`;
+- a cut with `sin θ_low` not above the dimensionless noise floor
+  `ε = 1e-9` of verification §4 (`sectionaudit.ContactEps`) has no charge,
+  nor does a bound that does not settle or an edge that does not record.
+  Neither check admits anything. `sketch` itself declines to certify a
+  line/line cut much shallower than `sin θ ≈ 1e-8` (`TExact = false`), so
+  the floor is reached through tangent junctions, whose bound is zero;
+- a pair whose cuts carry an input displacement never refuses on the
+  analytic path: a crossing with no charge, and any merge, audit or
+  recording failure after the charge (RB1–RB9), sends it to the mesh path
+  with no error (`prismAmplifiedFallback`), as prism-boolean §4.4 does for
+  every topology it leaves unresolved. Cancellation still propagates, and a
+  pair that brings no displacement keeps its §9 refusals.
 
-With A6 a rotated tooth (P1) builds analytically with a bound of a few ulps
-times `1/sin θ`, `Approximate`; `Fillet` on that result refuses (prism-boolean
-§13's displaced-receiver rule), as it does for every cut-bearing merge.
+With A6 a rotated tooth whose root sits inside the hub builds analytically
+with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
+result refuses (prism-boolean §13's displaced-receiver rule), as it does for
+every cut-bearing merge. P1's own tooth does not build. Its root arc lies on
+the hub's circle, so where the arc ends it meets the hub circle tangentially
+(a coincident carrier, which `sketch` merges), and that junction's bound is
+zero: the pair falls back to the mesh path. A chain of teeth also stops at the
+second tooth on prism-boolean §4.1's trimmed-circular refusal, since the
+first union trims the hub circle.
 
 ### Class B — perpendicular prism pairs with planar contacts
 
@@ -491,7 +535,8 @@ to two records); §10 records it as an open question.
   (prism-boolean §3.4's point of no return): a refusal past the gate is an
   error the caller branches on. A topology the scene leaves unresolved is not
   a refusal: prism-boolean §4.4 sends it to the mesh path, and A1's crossing
-  interface is one.
+  interface is one. Nor is a pair whose cuts carry an input displacement
+  (A6): it builds with its crossing charge or takes the mesh path.
 
 ## 9. Test plan
 
@@ -521,19 +566,28 @@ are relations, never literals.
   the cylinder reports one `Interference` row of `π·1.5²·10`. A scene test
   reads `prismcells.Classify` on a reflected box crossing a box and finds
   the exact areas 75, 25 and 75 for A-only, both and B-only. M3 (the L
-  unioned with its image across x = 15) and T2 stay on the mesh path's
-  coplanar refusal: the image crosses the L, a reflection is a nonidentity
-  re-expression, and §3.4 of prism-boolean reroutes a split boundary under
-  one until A6 charges it; the two outlines also share collinear walls at
-  y = 0 and y = 5, which A3 waits on (`sketch` reports the arrangement of
-  the same two outlines drawn directly as an invalid region).
+  unioned with its image across x = 15) and T2 fall back to the mesh path's
+  coplanar refusal: the two outlines share collinear walls at y = 0 and
+  y = 5, which meet at a sine of zero, and `sketch` reports that arrangement
+  as an invalid region, which A3 waits on.
 - **A5 N-hole cut**: mirror §8's N-hole test, and the disjoint `Union` of
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
-- **A6 rotated tooth**: P1's hub and six teeth build analytically; the
-  published bound on each union contains the exact rational residual against
-  the union of the recorded sections, and the test asserts
-  `sin θ_low` for the tooth's two crossings is above the floor; a tooth
-  rotated to graze the hub tangentially refuses with `ErrUnsupported`.
+- **A6 crossing charge**: a Ø40 hub unioned with a 7×3 tooth rooted inside
+  it and placed by `RotationAround` through 60° builds analytically within
+  its bound of the closed form; P1's own tooth, its root arc on the hub
+  circle, falls back to the mesh path, as does the same tooth cut from the
+  hub by a taller tool; S9 (a box intersected
+  with the same box rotated 45°) builds an octagonal prism whose bound
+  contains the exact rational residual against the two recorded squares;
+  the charge covers `(δ + δ)/sin θ` when both operands bring `δ`, the floor
+  leaves a junction whose sine bound is not above `ε` uncharged, an outside
+  touch is arranged with no cut, and an amplified pair's RB9 (fu141's
+  overshooting quadrilateral crossed by a box) falls back while the same
+  quadrilateral's uncut merge keeps refusing; the
+  formerly rerouted fixtures (a nonidentity shallow crossing, a displaced
+  chain, a walk charge, a placed `Verify` pair) build or measure with a
+  section displacement covering the input displacement over the crossing
+  sine.
 - **B cross-drill**: S1 builds a `brepPayload` with 7 faces (6 planar, 1
   circular wall), volume within its bound of `16000 − 9π·20`, bound below
   1e-9 mm³, `Lumps` one, every edge on two faces, the two walls at y = 0 and
@@ -600,8 +654,8 @@ Each PR ships code and tests; this document ships with PR 1.
    and crossing sub-case, the disjoint `Union` to a one-slab group, with
    mirror §11 PR 4.
 4. **A6 crossing-sensitivity charge.** Certified `sin θ_low`, the amplified
-   fragment charge replacing §3.4's reroute, the noise-floor refusal, P1 and
-   S9 fixtures.
+   fragment charge replacing §3.4's reroute, the noise-floor refusal, the
+   rotated-tooth and S9 fixtures.
 5. **`brepPayload` foundation.** The record, the face view of prism and
    stacked payloads, topology and roles, measurements, tessellation with the
    occupied-volume proof, placement, `Verify` validity and the tolerance

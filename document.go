@@ -183,12 +183,11 @@ type featurePayload interface {
 // invalid and is ErrDegenerate. A canceled context stops the rebuild before
 // the document changes. The motion composes onto the placement this body already carries,
 // and it is that ACCUMULATED placement, never t alone, that the analytic
-// interference reading compares against a coplanar partner's: where the two
-// differ, an otherwise admitted crossing overlap reroutes away from that
-// reading (docs/prism-boolean-design.md §3.4), while motions composing back to
-// the partner's own placement leave it available. Seating both sections in one
-// sketch clears that cause alone — a section displacement or a walk charge on
-// either operand reroutes the pair however it was placed.
+// booleans and interference reading compare against a coplanar partner's:
+// where the two differ, the partner's coordinates are re-expressed and every
+// crossing they cut is charged that rounding over the crossing angle
+// (docs/prism-boolean-design.md §3.4), while motions composing back to the
+// partner's own placement leave the re-expression the identity.
 func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
