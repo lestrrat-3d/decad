@@ -594,6 +594,7 @@
 2	0.02	TestPatternCopiesStacked
 2	0.02	TestPatternCopiesUnionStack
 2	0.05	TestPatternedCircularGroup
+2	0.01	TestPatternedEnclosedVoidTakesMeshPath
 2	0.05	TestPatternedFallsBackToUnion
 2	0.05	TestPatternedGates
 2	0.05	TestPatternedLinearGroup

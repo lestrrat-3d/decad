@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,6 +57,26 @@ func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 		volume, verr := got.Volume()
 		require.NoError(t, verr)
 		require.InDelta(t, 980.0+20, volumeMM(t, volume), boundMM3(t, volume), "the union's volume, void left empty")
+	}
+	requireMeshPathVerdict(t, err)
+}
+
+// Patterned's rule 3 combines overlapping instances by Union. The C shape
+// below has slanted arms so no two copies share a carrier line. Its copy
+// 5 mm along x overlaps the first copy's arms, and the copy's spine closes
+// the first copy's notch into a 16/3 mm² cell between x = 3 and 5, so the
+// chained Union meets the same void and returns the mesh path's verdict.
+func TestPatternedEnclosedVoidTakesMeshPath(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	c := polyPrismBody(t, doc, [][2]float64{{0, 0}, {6, 1}, {6, 4}, {3, 3.5}, {3, 6.5}, {6, 6}, {6, 9}, {0, 10}}, 1)
+	got, err := c.Patterned(t.Context(), decad.LinearPattern{Dir: patternX, Step: units.Millimeters(5), Count: 2})
+	if err == nil {
+		volume, verr := got.Volume()
+		require.NoError(t, verr)
+		// Two 46.5 mm² sections less their 6 mm² overlap; filling the void
+		// would publish 87 + 16/3.
+		require.InDelta(t, 87.0, volumeMM(t, volume), boundMM3(t, volume), "the union's volume, void left empty")
 	}
 	requireMeshPathVerdict(t, err)
 }
