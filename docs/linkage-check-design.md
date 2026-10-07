@@ -1363,7 +1363,7 @@ type LinkageLoop struct { /* private */ }
 func (lp *LinkageLoop) Common() *Link          // the two links' lowest common ancestor: the ground for a four-bar
 func (lp *LinkageLoop) Links() []*Link         // every link on the loop but Common, in Linkage.Links() order
 func (lp *LinkageLoop) Closure() RevoluteJoint // Center and Axis as stated; Limits nil
-func (lp *LinkageLoop) Bars() []LoopBar        // Common's bar first, then Links() order (§15.2)
+func (lp *LinkageLoop) Bars() []LoopBar        // Common's bar first, then Links() order; none for a slide (§15.2)
 
 // LoopBar is the length the private scene holds a link's two loop pins at:
 // the exact distance between them in the loop's plane. Length.Value is the
@@ -1382,9 +1382,12 @@ The type is `LinkageLoop`, not `Loop`: `Loop` is the topology's face boundary (`
 joints of every link in `Links()` and the closure. `Common` may be `a` or `b` itself — `Close(L4, L1)`
 on a chain `ground → L1 → L2 → L3 → L4` has `Common = L1` — or the ground, as in §15.10's four-bar, two
 branches off the ground. Each link of `Links()` has exactly two **loop pins**: its own joint and the joint
-of the next link along the loop (the closure for the two links `a` and `b`). The link's **bar** is the
-segment between them, and `Common`'s bar joins its two pins: the first joint on each side, or the closure
-on a side with no link.
+of the next link along the loop (the closure for the two links `a` and `b`). A revolute link's **bar** is
+the segment between them, and `Common`'s bar joins its two pins: the first joint on each side, or the
+closure on a side with no link. A loop holds at most one prismatic joint, the **slide**, a child of
+`Common`: its loop pins are its **rail**, the line through its next pin's zero-pose position along its
+`Dir`, and that next pin, which rides the rail. A slide has no bar, and neither has `Common` on a loop with
+a slide, since one of `Common`'s loop pins is then the rail.
 
 **A drive names the driver.** A `Drive` lists at most one joint of a loop. That joint is the loop's
 **driver** for the drive, and every other joint of the loop is dependent; a drive that lists two joints of
@@ -1392,7 +1395,8 @@ one loop is `ErrDegenerate`, since the second value cannot be stated. A drive th
 listed joint holds `0`, holds the loop at the zero pose, where every joint value is `0`: its links are the
 tree's held links (§6 step 2) and no scene is built. v1 takes a driver only when its parent is `Common`,
 so that its reference line (§15.2) is fixed in the scene: a four-bar is driven at the crank or at the
-follower, and a drive listing the coupler's joint is `ErrUnsupported`.
+follower, a slider-crank at the crank or at the slide, and a drive listing the coupler's joint is
+`ErrUnsupported`.
 
 **Admission.** `Close` refuses, in this order, and every test is an exact rational comparison with no
 tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
@@ -1402,7 +1406,8 @@ tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
 | nil `l`, nil or parentless `a` or `b`, `a == b`, a link of another linkage | `ErrDegenerate` |
 | a non-finite `center` or `axis` component | `ErrNotFinite` |
 | a zero `axis` | `ErrDegenerate` |
-| `axis` not exactly parallel to a coordinate axis (`X`, `Y` or `Z`, either sense); a loop revolute's `Axis` not exactly parallel to `axis`; a prismatic joint on the loop (L2, §15.11) | `ErrUnsupported`, naming the joint |
+| `axis` not exactly parallel to a coordinate axis (`X`, `Y` or `Z`, either sense); a loop revolute's `Axis` not exactly parallel to `axis`; a loop prismatic's `Dir` not exactly along a coordinate axis, or not exactly perpendicular to `axis` | `ErrUnsupported`, naming the joint |
+| a second prismatic joint on the loop; a loop prismatic whose parent is not `Common` | `ErrUnsupported` |
 | a tree joint already on another loop (two loops may share `Common` and nothing else) | `ErrUnsupported` |
 | two loop pins of one link coincident in the loop's plane, `Common`'s two included | `ErrDegenerate` |
 
@@ -1419,16 +1424,21 @@ else, as `prism_boolean.go` builds a scene from recorded sections. The scene is 
 `sketch` type crosses decad's API.
 
 **Frame.** The plane is `r3.NewFrame(origin, u, v)` with `origin` the world origin and `u`, `v` two unit
-coordinate axes: for the closure axis `±e_i`, `u = e_{i+1}` and `v = ±e_{i+2}` (indices mod 3), so that
-`u × v` is the closure axis's direction `n` — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`, `(Y, Z)` for `+X`,
-`(Z, X)` for `+Y`. `Frame.ToLocal` of a world point is then two of its coordinates copied exactly, every
+coordinate axes with `u × v` the closure axis's direction `n`. An all-revolute loop about `±e_i` takes
+`u = e_{i+1}` and `v = ±e_{i+2}` (indices mod 3) — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`, `(Y, Z)` for `+X`,
+`(Z, X)` for `+Y`. A loop with a slide takes `u` along the slide's own sense of its coordinate axis and
+`v = n × u`, so the slide's displacement is its pin's `u`-coordinate change. `Frame.ToLocal` of a world
+point is then two of its coordinates copied exactly, every
 pin's plane position the caller's own floats; the third coordinate, the pin's height along `n`, is
 dropped, because a rotation about an axis parallel to `n` moves a point within its own height. r3 does the
 frame arithmetic; decad picks the axes.
 
 **Points and lines.** Each loop pin is one `*sketch.Point` at its zero-pose plane position, shared by the
-two links it joins. `Common`'s two pins are fixed (`Sketch.Fix`), and `Common`'s line joins them. Each link
-of `Links()` is a `Line` from its own pin to its next pin and a `NewDistance` between them.
+two links it joins. `Common`'s two pins are fixed (`Sketch.Fix`), and `Common`'s line joins them. Each
+revolute link of `Links()` is a `Line` from its own pin to its next pin and a `NewDistance` between them.
+A slide's rail is the fixed line from a fixed point `P₀` at its next pin's zero-pose position to a fixed
+point one millimetre along `u`, and its next pin `P` is free with `NewPointOnLine(P, rail)`; the rail is
+the slide's line and `Common`'s, and `Common`'s other pin is fixed.
 
 **The bars are the document's.** A bar's exact length is the root of the exact rational squared distance
 `L²` between its two pins in the plane, which is in general irrational. Each `NewDistance` carries the
@@ -1438,26 +1448,32 @@ one, and the scene describes the document's own loop. `LoopBar.Length` publishes
 up-rounded root, `Bound` the one-float gap down to the lower root, `Exact` with a zero `Bound` when `L²` is a
 float's square. Nothing about the bars is left uncharged.
 
-**Dimensions.** The driver, with parent `Common`, is stated against a fixed reference: the fixed line from
-its `Center` to a fixed point at its next pin's zero-pose position, and the driving `NewAngle(ref, bar, 0)`
-from that line to the driver's bar. At the zero pose the angle reads exactly `0`, so the driver's target IS
+**Dimensions.** The driver, with parent `Common`, is stated against a fixed reference. A revolute driver
+takes the fixed line from its `Center` to a fixed point at its next pin's zero-pose position, and the
+driving `NewAngle(ref, bar, 0)` from that line to the driver's bar; a slide takes the driving
+`NewHorizontalDistance(P₀, P, 0)`. At the zero pose either reads exactly `0`, so the driver's target IS
 the joint value in the scene's sense. Every dependent joint carries a driven dimension
-(`SetDriven(true)`), `NewAngle(parentLine, bar)` from its parent's line — `Common`'s line for a child of
-`Common` — to its own. The closure has no dimension. Only kinds `Enclose` certifies are used: coincident
-points (by sharing), fixed points, distance, angle. `Sketch.Solve` runs once after construction so each
-driven dimension's target is its zero-pose reading, the whole-turn reference `Enclose` shifts a driven
-angle toward.
+(`SetDriven(true)`): `NewAngle(parentLine, bar)` from its parent's line — `Common`'s line for a child of
+`Common`, the rail for a child of the slide — to its own, or for a dependent slide
+`NewHorizontalDistance(P₀, P)`. The closure has no dimension. Only kinds `Enclose` certifies are used:
+coincident points (by sharing), fixed points, point-on-line, distance, horizontal distance, angle.
+`Sketch.Solve` runs once after construction so each driven dimension's target is its zero-pose reading,
+the whole-turn reference `Enclose` shifts a driven angle toward; a horizontal distance is never read
+modulo anything, and its whole-turn count (§15.3) stays `0`.
 
 **Signs and the scene's side.** A loop revolute's `Axis` is exactly parallel to `n` with sense `s_k = ±1`
 (the sign of the exact dot product). A right-handed rotation by `q` about `+n` is a counterclockwise turn
 by `q` in `(u, v)`, so a joint's value `q_k` appears in the scene as `s_k·q_k`, and a driven angle's
-reading maps back as `s_k·(reading − reading₀)` (§15.4). `Enclose` solves at the range's lower end and
+reading maps back as `s_k·(reading − reading₀)` (§15.4); a slide's `s_k` is the sense of its `Dir` against
+`u`. `Enclose` solves at the range's lower end and
 continues upward only (`WithContinuation` requires `lo == prev.Range().Hi`), and the branch decad states is
 the zero pose, so every chain of enclosures starts at the driver value `0` and grows toward larger values.
 The scene is therefore built on the side of the plane that makes the driver's scene value `|q|`: for a
-drive that takes the driver's value negative in the scene, `v` is negated (the mirror image, normal `−n`,
-every `s_k` flipped), and readings map back through the mirrored signs. Both sides describe one mechanism
-and seed at the same zero pose. One drive in v1 keeps its driver on one side of `0` (§15.6), so it builds
+drive that takes a revolute driver's value negative in the scene, `v` is negated (the mirror image, normal
+`−n`, every revolute `s_k` flipped), and for a slide driven backward `u` and `v` are both negated (a half
+turn in the plane, the same normal, the slide's `s_k` flipped); readings map back through that side's
+signs. Every side describes one mechanism and seeds at the same zero pose. One drive in v1 keeps its driver
+on one side of `0` (§15.6), so it builds
 one scene.
 
 **The zero pose, `E0`, and the one falsifier.** The first call on the scene is `Enclose(ctx, driver, 0, 0)`
@@ -1525,11 +1541,13 @@ A dependent revolute's **value** at `s` is `θ_k(s) = s_k·(2π·turns + reading
 interval difference of the point ask's `Driven` hull and `E0`'s over exact rationals
 (`[lo − hi₀, hi − lo₀]`, the sign applied by swapping ends), so `θ_k(0)` is an interval around `0` of
 twice the box width and the value at every other `s` is the joint's turn from the zero pose. The joint's
-`MotionParam` pair is the turn and the two radian endpoints. The driver's value is the stated `q(s)`,
-exact.
+`MotionParam` pair is the turn and the two radian endpoints. A dependent slide's value is
+`s_k·(reading(s) − reading₀)` in millimetres, its `MotionParam` pair the two millimetre endpoints. The
+driver's value is the stated `q(s)`, exact.
 
-**The float pose is built at the label**, `units.New(mid, units.Radian)` with `mid` the float nearest the
-interval's midpoint; `LinkagePose.Values[k]` carries it, as every stated joint carries its own label
+**The float pose is built at the label**, `units.New(mid, units.Radian)` — `units.Millimeter` for a slide —
+with `mid` the float nearest the interval's midpoint; `LinkagePose.Values[k]` carries it, as every stated
+joint carries its own label
 (§2.3). The labels of every link — stated or dependent — go through `linkageSpec.posesOf`, the one pose
 builder `PoseAt`, `Configuration`, `VerifyLinkage` and `VerifyJointBox` share, so a loop adds no second
 place a pose is composed. **The ideal pose is the joint's rotation by the whole interval**:
@@ -1689,7 +1707,8 @@ pieces (`0.4` s). The decomposition asks a certifiable drive as one cell. A pose
 `d` new cells and one point, and the cells of one depth tile the drive once, so a verification that
 reaches depth `d` everywhere asks about `d` times the full-range work. Measured: scene 7 at
 `WithResolution(Scalar(1.0/256))` evaluates `37` poses in about `0.4` s; scene 9 at the defaults evaluates
-`8` poses in about `0.7` s, most of it the decomposition walking the refused cells down to the fold. The
+`8` poses in about `0.7` s, most of it the decomposition walking the refused cells down to the fold; scene
+8 at `WithResolution(Scalar(1.0/256))` evaluates `10` poses in about `0.1` s. The
 kernel cost per pose is §10's. `sketch` refuses an angle target beyond `±64` rad, so a crank driven more
 than ten turns reads undecided past that; §15.10 does not test it.
 
@@ -1760,24 +1779,40 @@ on the corner at the follower's minimum, `(89.919184, 69.385713)`. At `WithResol
 `Suspect` and the one interval `IntervalUndecided`. Red when `|Δq_k|` is the span of the interval's ends:
 the follower's ends agree, the interval certifies, and the report reads `Sound` with two poses.
 
-**Scene 8 — the slider-crank and an end stop** (L2). Crank `x ∈ [0, 30], y ∈ [−3, 3], z ∈ [0, 8]` about
-`Z` through the origin; rod `x ∈ [30, 110], y ∈ [−3, 3], z ∈ [10, 18]` under the crank on a revolute through
+**Scene 8 — the slider-crank and an end stop.** Crank `x ∈ [0, 30], y ∈ [−3, 3], z ∈ [0, 8]` about `Z`
+through the origin; rod `x ∈ [30, 110], y ∈ [−3, 3], z ∈ [10, 18]` under the crank on a revolute through
 `A = (30, 0, 0)`; slider block `x ∈ [105, 115], y ∈ [−5, 5], z ∈ [20, 28]` under the ground on a prismatic
-along `+X`; `Close(rod, slider, (110, 0, 0), +Z)`. The slider pin is `x(θ) = 30·cos θ + √(6400 − 900·sin² θ)`.
-A stop `x ∈ [60, 70], y ∈ [−20, 20], z ∈ [19, 29]` sits in the slider's layer. The crank turns `0° → 90°`.
+along `+X`; `Close(rod, slider, (110, 0, 0), +Z)`. The slider pin is `x(θ) = 30·cos θ + √(6400 − 900·sin² θ)`
+and the rod's angle from `+X` is `−asin(30·sin θ / 80)`. A stop `x ∈ [60, 70], y ∈ [−20, 20], z ∈ [19, 29]`
+sits in the slider's layer. The crank turns `0° → 90°`.
 
+- `Bars()` lists the crank's and the rod's bars, `30` and `80`, both `Exact`: no bar for `Common` or the
+  slide.
 - The block's left face `x − 5` reaches `70` at `cos θ = 1/36`, `θ* = 88.408246°`, `s* = 0.982314`. At
   `WithResolution(Scalar(1.0/256))` assert `Interfering`, the first `LinkCollision` on `(slider, stop)` at
   the grid point `252/256`, where `x = 74.901876` and the overlap is `80·(75 − x) = 7.849912` mm³, within
-  `1e-6`; every `IntervalClear` interval ends at or below `s*`.
-- Every pose's `Values[2]` is within `1e-6` of `x(θ) − 110` mm with `Bounds[2]` below `1e-9`; `Values[1]`
-  (the rod's turn from the crank) is within `1e-6` of the closed form `−θ − asin(30·sin θ / 80)`.
-- The pin leg for a prismatic dependent: the stop replaced by a `2 × 2 × 2` mm pin at `x ∈ [85, 87]` in
-  the slider's layer, the crank driven `0° → 180°`; the block's left face passes `x = 86` at
-  `θ = 59.380079°`, `s = 0.329889`, between the grid points `1/4` and `1/2` of `WithResolution(Scalar(1.0/4))`,
-  across which the slider moves `24.19` mm. Assert `Suspect` with `[1/4, 1/2]` `IntervalUndecided`, and
-  `Interfering` at `WithResolution(Scalar(1.0/1024))` with the first `Collision.At` within `2/1024` above
-  `s`. Red when the prismatic dependent's term is dropped.
+  `1e-6`, with `Bound` below `Value`; every collision past `s*`; every `IntervalClear` interval ends at or
+  below `s*`.
+- Every pose's `Values[2]` is in millimetres and within `1e-9` of `x(θ) − 110` with `Bounds[2]` below
+  `1e-9`; `Values[1]` (the rod's turn from the crank) is within `1e-9` of `−θ − asin(30·sin θ / 80)`. The
+  crank driven `0° → −90°` reads the same closed forms at `θ = −90°` on the mirrored side.
+- Red when the rail is dropped (the slider pin is free in the plane and `E0` refuses), and when a slide's
+  value is read in radians.
+- The pin leg for a prismatic dependent: the stop replaced by a `2 × 2 × 2` mm pin at `x ∈ [85, 87]`,
+  `y ∈ [−1, 1]`, `z ∈ [23, 25]`, the crank driven `0° → 180°`; the block's left face passes `x = 86` at
+  `cos θ = 2781/5460`, `θ = 59.380079°`, `s = 0.329889`, between the grid points `1/4` and `1/2` of
+  `WithResolution(Scalar(1.0/4))`, across which the slider moves `24.19` mm. Assert `Suspect` with
+  `[1/4, 1/2]` `IntervalUndecided` and no collision, and `Interfering` at `WithResolution(Scalar(1.0/1024))`
+  with the first `Collision.At` above the contact onset — the face reaching the pin's far face `x = 87`,
+  `cos θ = 2964/5520`, `s = 0.319574` — and within `2/1024` of it. Red when the prismatic dependent's term
+  is dropped: the slider's travel is then nothing and `[1/4, 1/2]` certifies.
+- The slide as the driver: a slider-crank whose crank stands along `+Y` at the zero pose, `A = (0, 30)`,
+  so the slider pin `P = (√5500, 0)` sits off the dead centre and the rod's bar is reached from an
+  irrational pin (`Approximate`, within `1e-12` of `80`). The slide driven `0 → 5` mm and `0 → −5` mm: at
+  `s = 0`, `1/2` and `1` the crank reads `φ − 90°` within `1e-9`, `φ` the root near `90°` of
+  `30·cos φ + √(6400 − 900·sin² φ) = √5500 + d`, and the rod its closed-form turn from the crank; the slide
+  carries its stated value with a zero `Bound`. Red when the half-turned side is dropped: the backward slide
+  is then asked as a forward one.
 
 **Scene 9 — the fold.** The non-Grashof four-bar: ground `100`, crank `50`, coupler `60`, follower `50`,
 in scene 7's layout with `A = (50, 0)` and the closed-form `B` at `θ2 = 0` (`θ4 = 106.2602°`), no static
@@ -1802,7 +1837,8 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
 
 **Standing tests.** Errors, one subtest per row of §15.1's and §15.6's tables: a nil link, the ground, one
 link twice, a link of another linkage, a non-finite center, a zero axis, an axis tilted by `1e-9` from
-`Z`, a loop revolute about `(0, 1e-12, 1)`, a prismatic joint on the loop, a second closure on the
+`Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure axis, a slide along `(1, 1e-12, 0)`,
+a slide under a link that is not `Common`, two slides on one loop, a second closure on the
 coupler, a closure coincident with a pin in the plane, a drive listing crank and follower, a drive listing
 the coupler, a driver with `Via`, held off `0`, or crossing `0`, a dependent with limits, a schedule pose
 outside `[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
@@ -1823,7 +1859,12 @@ leaves the interval refused with `sketch`'s cause — red when the gate's refusa
 public fixture shows, since a real chain refuses the point at a refused cell's end too; and pin the scene's
 frame: for each of the six axis senses and both scene sides, `U` and `V` are unit coordinate axes bit for
 bit, `U × V` is the closure axis times the side, and a pin's plane position is the caller's coordinates bit
-for bit. The reach guard of §15.5 is not a leg any fixture can fail: the decomposition reads the reach from
+for bit; for a loop with a slide, for each of the four slide directions perpendicular to the axis and on
+the half-turned side too, `U` is the slide's sense, negated on the half-turned side. A slide's reading
+sense `s_k` against `u` is not a leg any fixture can fail: `u` is the slide's own sense on every side a
+dependent slide is read on, since a loop holds one slide and only a slide driver half-turns the scene; nor
+is the zero whole-turn count of a horizontal distance, whose continued readings agree to the boxes' width.
+The reach guard of §15.5 is not a leg any fixture can fail: the decomposition reads the reach from
 the same canonical asks every later pose and interval reads.
 
 `.github/test-shards.txt` and `.github/test-shards-apitest.txt` are updated for every test and example,
@@ -1834,7 +1875,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | PR | lands | still refused or `Suspect` after it |
 |---|---|---|
 | L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `VerifyJointBox` and `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
-| L2 | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turn scene side (`u` and `v` both negated) for a prismatic driver; `Close`'s prismatic rows (more than one prismatic on the loop, one whose parent is not `Common`, the closure on a prismatic link's rail, a slide not exactly perpendicular to the closure axis or not along a coordinate axis); scene 8 | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
+| L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 | `Via` on a loop's driver: sub-segments at zero crossings with a scene side each, the waypoint and crossing cuts of §15.5, held drivers; limits on a dependent, checked against its whole-drive hull at the schedule's construction (`ErrDegenerate` naming the link and the hull; the hull is wider than the exact value set by the pieces' slack, so a drive that reaches a limit exactly is refused); scene 9's out-and-back drive and scene 5 over a loop | a tilted loop |
 | L4 | a loop about any axis: the frame any `r3.Frame` about the closure axis, each pin stated to `Enclose` as the outward-rounded box of its exact plane position (`WithFixedBox`, sketch #155) and each free pin's seed at its float, §15.1's coordinate-axis row gone, the falsifier taking each pin's box | — |
 
@@ -1844,8 +1885,9 @@ scene 7's closed-form onset as its acceptance. The `_gallery` linkage clip of a 
 
 ### 15.12 Settled points, and what sketch #155 unblocked
 
-A loop is a tree plus a revolute closure; the drive names the driver, whose parent is the loop's common
-link; every other loop joint is dependent and its value is read from `sketch`'s certified enclosure, never
+A loop is a tree plus a revolute closure, holding at most one prismatic joint, a child of the common
+link that rides its next pin along a fixed rail; the drive names the driver, whose parent is the loop's
+common link; every other loop joint is dependent and its value is read from `sketch`'s certified enclosure, never
 from a float solve (§15.1, §15.4). The public type is `LinkageLoop`, since `Loop` is the topology's. The
 scene is built in an exact frame over coordinate axes from the document's own pins, with every bar stated
 as the interval around its exact length, so every claim is about the document's loop; the document's pins
