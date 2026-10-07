@@ -119,13 +119,30 @@ differ; its exposed records are decided by the clean-nesting structural match
 prism-boolean §4.2 already runs: the smaller region's outer must reproduce
 whole as a hole of the larger region's cell, in which case the exposed
 record is the larger region with that hole, and the smaller region is the
-material on both sides. A boss whose footprint crosses the plate's outline
-at the interface (the match finds `Partial` edges) is an unresolved topology
-in prism-boolean §4.4's sense and takes the mesh path with no error: the
-exposed floor would need the per-cell classification with a split boundary,
-which A6 admits later. The mesh path builds a rooted crossing boss as a
-`Faceted` body and refuses one standing on the plate's top as a coplanar
-contact, as it did before this class. Stacked §2.2's I5 reads, for
+material on both sides. A boss whose footprint crosses the plate's outline,
+or sits flush with it (a wall of each on one carrier), meets it at the
+interface with `Partial` edges, and that interface is an unresolved topology
+in prism-boolean §4.4's sense: the pair takes the mesh path with no error.
+The 2D answer is not what is missing. `Classify` resolves the interface
+scene's cells, through A3's shared-span reading where the walls are flush,
+and the cells on one side only are the exposed floor or ceiling. What the
+stacked payload cannot state is the result's topology:
+
+- an interface patch is bounded by whole column rings (stacked §3), while
+  this floor's boundary takes part of the plate's ring and part of the
+  boss's, so the rings would have to split at the vertices where the two
+  outlines meet;
+- a flush wall is one plane on both sides of the interface, across the
+  plate's column and the boss's, and evaluator §3's canonicalization makes
+  that one face, while a stacked wall is one column's segment swept over
+  that column's own slabs.
+
+Building either needs a topology this class does not have: split column rings
+with cross-column planar walls in the stacked payload, or the A1 result as a
+`brepPayload` (§4) whose merged wall is a planar face in its own frame, as
+class B's per-face scenes record a notched wall. The mesh path builds a
+rooted crossing boss as a `Faceted` body and refuses one standing on the
+plate's top as a coplanar contact, as it did before this class. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
 exposure records the match derives, and the implementation PR changes that
@@ -700,7 +717,10 @@ are relations, never literals.
 - **A1 fallback**: a rooted boss whose footprint crosses the plate's outline
   takes the mesh path, a `Faceted` result whose volume bound contains the
   closed form, with the test asserting the interface match reports a
-  `Partial` edge.
+  `Partial` edge. A square boss standing flush in the plate's corner is a
+  silent miss too, with the test asserting that the interface scene's cells
+  resolve through the shared-span reading and that its plate-only cells are
+  the exposed floor's 1500 mm².
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
   cut by a same-plane Ø3 cylinder inside its leg (M5) builds analytically,
   `Approximate`, volume within its bound of `1750 − π·1.5²·10`; the same
