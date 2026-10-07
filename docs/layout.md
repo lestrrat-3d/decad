@@ -225,7 +225,7 @@ the rules leave to the byte budget.
 | `stacked_union.go` | Unequal-interval `Union` as stacked slabs. See general-boolean A1. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
-| `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and readings. See general-boolean §4. |
+| `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission adapters. See general-boolean §3 B. |
 | `classb_crossing.go` / `classb_canonical.go` | Class-B crossing and keyed vertices. See general-boolean §5, §10. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates; `internal/prismcells/` record adapters. See surface-intersection §2–§3. |
@@ -271,7 +271,7 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, record gates, and through reach. See general-boolean §3 B. |
-| `internal/brepgeom/` | BRep frame maps and topology builds. See general-boolean §4. |
+| `internal/brepgeom/` | BRep joins, validation, frame maps and topology. See general-boolean §4. |
 | `internal/revolveaxis/` | Axis input resolution, walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
