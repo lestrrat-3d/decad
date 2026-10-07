@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -39,60 +40,15 @@ import (
 // request's RestSpeed on both sides of the plane (§10.8), and publishes the
 // depth those bounds allow.
 
-// planarMotion is one body's exact first-order rigid motion in world
-// coordinates. A path that does not rotate has a zero omega, and its center
-// is its first start vertex, so every distance below stays defined.
-type planarMotion struct {
-	velocity motionbound.RatVec // mm/s
-	omega    motionbound.RatVec // rad/s
-	center   motionbound.RatVec // world pivot at the start
-	rotating bool               // omega is nonzero
-	omegaSq  *big.Rat           // exact |ω|²
-	omegaUp  *big.Rat           // upper bound on |ω|
-	rho      *big.Rat           // upper bound on the largest start-vertex distance from center
-}
+// planarMotion is the sweep's exact first-order rigid motion.
+type planarMotion = planarsweep.Motion
 
 func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
-	if p.path.screw != nil || len(p.startPoints) == 0 {
-		return planarMotion{}, false
-	}
-	m := planarMotion{omega: motionbound.RatVec{new(big.Rat), new(big.Rat), new(big.Rat)},
-		omegaSq: new(big.Rat), omegaUp: new(big.Rat)}
-	if p.path.drift == nil {
-		for k := range 3 {
-			m.velocity[k] = new(big.Rat).Quo(p.path.delta[k].Rat(), p.path.duration)
-		}
-		m.center = ratOfDyV3(p.startPoints[0])
-	} else {
-		for k := range 3 {
-			if p.velocity[k] == nil || p.frame.Axis[k] == nil || p.frame.Center[k] == nil {
-				return planarMotion{}, false
-			}
-			m.velocity[k] = new(big.Rat).Set(p.velocity[k])
-			m.omega[k] = new(big.Rat).Set(p.frame.Axis[k])
-			m.center[k] = new(big.Rat).Set(p.frame.Center[k])
-		}
-		m.rotating = true
-		m.omegaSq = ratDot3(m.omega, m.omega)
-		up, ok := ratSqrtUpRat(m.omegaSq)
-		if !ok {
-			return planarMotion{}, false
-		}
-		m.omegaUp = up
-	}
-	rhoSq := new(big.Rat)
-	for _, v := range p.startPoints {
-		d := ratSub3(ratOfDyV3(v), m.center)
-		if sq := ratDot3(d, d); sq.Cmp(rhoSq) > 0 {
-			rhoSq = sq
-		}
-	}
-	rho, ok := ratSqrtUpRat(rhoSq)
-	if !ok {
-		return planarMotion{}, false
-	}
-	m.rho = rho
-	return m, true
+	return planarsweep.MotionOf(planarsweep.MotionInput{
+		Points: p.startPoints, Delta: p.path.delta, Duration: p.path.duration,
+		Velocity: p.velocity, Frame: p.frame,
+		Drift: p.path.drift != nil, Screw: p.path.screw != nil,
+	})
 }
 
 // planarSupport is one support plane of the touching pair. Paths index the
@@ -186,15 +142,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 			support.motionM, support.motionS = motions[m], motions[s]
 			support.pathM, support.pathS = M, S
 			support.duration = r.a.path.duration
-			support.rates = make([]*big.Rat, len(M.startPoints))
-			relative := ratSub3(support.motionM.velocity, support.motionS.velocity)
-			normal := ratOfDyV3(n)
-			for i, v := range M.startPoints {
-				p := ratOfDyV3(v)
-				rate := ratAdd3(relative, ratCross3(support.motionM.omega, ratSub3(p, support.motionM.center)))
-				rate = ratSub3(rate, ratCross3(support.motionS.omega, ratSub3(p, support.motionS.center)))
-				support.rates[i] = ratDot3(normal, rate)
-			}
+			support.rates = planarsweep.Rates(M.startPoints, n, support.motionM, support.motionS)
 			support.spin = spinM
 			support.rested = restedVertices(&support, rest)
 			out = append(out, support)
@@ -337,106 +285,20 @@ func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req Contac
 	return support, true, nil
 }
 
-// vertexSpins returns, for every start vertex p of a path, an upper bound on
-// |ω|·|ω×(p − c)|, the magnitude of p's second derivative under the path's
-// drift: p(u) = c + v·u + R(ωu)·(p − c), so p”(u) = R(ωu)·(ω×(ω×(p − c))),
-// whose length |ω|·|ω×(p − c)| holds for every u (§10.8). Each factor is
-// rounded up. A path that does not rotate has a zero spin at every vertex.
 func vertexSpins(p *rotationalSweepPath, motion planarMotion) ([]*big.Rat, bool) {
-	out := make([]*big.Rat, len(p.startPoints))
-	for i, v := range p.startPoints {
-		if !motion.rotating {
-			out[i] = new(big.Rat)
-			continue
-		}
-		arm := ratCross3(motion.omega, ratSub3(ratOfDyV3(v), motion.center))
-		armUp, ok := ratSqrtUpRat(ratDot3(arm, arm))
-		if !ok {
-			return nil, false
-		}
-		out[i] = proofbound.RatMul(motion.omegaUp, armUp)
-	}
-	return out, true
+	return planarsweep.VertexSpins(p.startPoints, motion)
 }
 
-// restedVertices returns the support's lifted vertices that §10.8 rests under
-// a rest speed: those whose exact start rate satisfies h'(0) >= −rest·|n|_lo,
-// so they close on the plane no faster than rest, or rise. A zero rest speed
-// rests none.
 func restedVertices(s *planarSupport, rest *big.Rat) map[int]struct{} {
-	if rest.Sign() <= 0 || len(s.lifted) == 0 {
-		return nil
-	}
-	floor := new(big.Rat).Neg(proofbound.RatMul(rest, s.nLow))
-	out := make(map[int]struct{})
-	for _, index := range s.lifted {
-		if s.rates[index].Cmp(floor) >= 0 {
-			out[index] = struct{}{}
-		}
-	}
-	return out
+	return planarsweep.RestedVertices(s.lifted, s.rates, s.nLow, rest)
 }
 
-// curvature returns K_p for every M vertex p, for the unnormalized heights
-// over [0, t] seconds: half of |n| times the §10.2 bound on the second
-// derivative of p's height,
-//
-//	|ω_M|·|ω_M×(p − c_M)| + |ω_S|²·ρ_S                     from p'' and q''
-//	+ 2·|ω_S|·(|v_M − v_S| + |ω_M|·ρ_M + |ω_S|·ρ_S)       from 2·n'·(p' − q')
-//	+ |ω_S|²·D,  D = ρ_M + ρ_S + |c_M − c_S| + |v_M − v_S|·t   from n''·(p − q)
-//
-// with q the foot of S's pivot on the plane: it moves rigidly with S, lies
-// within ρ_S of the pivot (the plane holds an S vertex), and stays within D of
-// every M vertex. The p” term is p's own (vertexSpins, §10.8), at most §10.2's
-// |ω_M|²·ρ_M; the S terms stay global. The terms are nondecreasing in t, so
-// K_p(t) covers [0, t].
 func (s *planarSupport) curvature(t *big.Rat) ([]*big.Rat, bool) {
-	m, o := s.motionM, s.motionS
-	relative := ratSub3(m.velocity, o.velocity)
-	speed, okSpeed := ratSqrtUpRat(ratDot3(relative, relative))
-	offset := ratSub3(m.center, o.center)
-	distance, okDistance := ratSqrtUpRat(ratDot3(offset, offset))
-	if !okSpeed || !okDistance {
-		return nil, false
-	}
-	shared := proofbound.RatMul(o.omegaSq, o.rho)
-	lever := proofbound.RatAdd(speed, proofbound.RatMul(m.omegaUp, m.rho), proofbound.RatMul(o.omegaUp, o.rho))
-	shared.Add(shared, proofbound.RatMul(big.NewRat(2, 1), o.omegaUp, lever))
-	reach := proofbound.RatAdd(m.rho, o.rho, distance, proofbound.RatMul(speed, t))
-	shared.Add(shared, proofbound.RatMul(o.omegaSq, reach))
-	half := proofbound.RatMul(s.nHigh, big.NewRat(1, 2))
-	out := make([]*big.Rat, len(s.spin))
-	for i, spin := range s.spin {
-		out[i] = proofbound.RatMul(proofbound.RatAdd(shared, spin), half)
-	}
-	return out, true
+	return planarsweep.Curvature(s.motionM, s.motionS, s.spin, s.nHigh, t)
 }
 
-// clearAt reports whether every vertex outside the contact set, the lifted
-// set's included (§10.5), keeps a positive height through [0, t]:
-// h(0) + h'(0)·u − K_p·u² is concave and positive at u = 0, so its value at t
-// decides the whole span. A lifted vertex that would reach the plane inside
-// the slice therefore ends a band track before it does. Under rest a rested
-// vertex (§10.8) is skipped: a band track holds it on both sides of the plane
-// (depthAt). A departure passes rest false, so every vertex outside its
-// contact set stays positive, rested or not: it claims strict separation.
 func (s *planarSupport) clearAt(t *big.Rat, k []*big.Rat, rest bool) bool {
-	contact := 0
-	for i, height := range s.heights {
-		if contact < len(s.contact) && s.contact[contact] == i {
-			contact++
-			continue
-		}
-		if _, rested := s.rested[i]; rest && rested {
-			continue
-		}
-		value := proofbound.RatAdd(height, proofbound.RatMul(s.rates[i], t))
-		value.Sub(value, proofbound.RatMul(k[i], t, t))
-		if value.Sign() <= 0 {
-			return false
-		}
-	}
-	return true
+	return planarsweep.ClearAt(s.heights, s.rates, s.contact, s.rested, t, k, rest)
 }
 
 // column is §10.6's column test through fraction f. The box spans every M
@@ -462,34 +324,8 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	return planar.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
 }
 
-// depthAt is the band's unnormalized depth at elapsed time t under the
-// per-vertex curvature k, read over [0, t], the largest of three bounds:
-// r·t + K_p·t² over the contact set, r the largest contact rate magnitude;
-// h0 + |h'(0)|·t + K_p·t² over the rested set (§10.8); and
-// h0 + max(0, h'(0))·t + K_p·t² over the rest of the lifted set (§10.5). A
-// contact vertex's height lies in [−(r·t + K_p·t²), r·t + K_p·t²] and a rested
-// vertex's in [−(h0 + |h'(0)|·t + K_p·t²), h0 + |h'(0)|·t + K_p·t²], both by
-// Taylor's theorem; any other lifted vertex, which clearAt keeps above the
-// plane, lies in (0, h0 + max(0, h'(0))·t + K_p·t²].
 func (s *planarSupport) depthAt(t *big.Rat, k []*big.Rat, rate *big.Rat) *big.Rat {
-	depth := new(big.Rat)
-	for _, index := range s.contact {
-		contact := proofbound.RatAdd(proofbound.RatMul(rate, t), proofbound.RatMul(k[index], t, t))
-		if contact.Cmp(depth) > 0 {
-			depth = contact
-		}
-	}
-	for _, index := range s.lifted {
-		lifted := proofbound.RatAdd(s.heights[index], proofbound.RatMul(k[index], t, t))
-		_, rested := s.rested[index]
-		if rested || s.rates[index].Sign() > 0 {
-			lifted.Add(lifted, proofbound.RatMul(new(big.Rat).Abs(s.rates[index]), t))
-		}
-		if lifted.Cmp(depth) > 0 {
-			depth = lifted
-		}
-	}
-	return depth
+	return planarsweep.DepthAt(s.heights, s.rates, s.contact, s.lifted, s.rested, t, k, rate)
 }
 
 // gridHorizon returns the largest fraction m/2^depth in (0, 1] at which holds
@@ -684,7 +520,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 	}
 	for i := range supports {
 		support := &supports[i]
-		if support.motionS.rotating || support.pathS.path.drift != nil || support.pathS.delta.Sign() != 0 {
+		if support.motionS.Rotating || support.pathS.path.drift != nil || support.pathS.delta.Sign() != 0 {
 			continue
 		}
 		face, ok := planarSupportFace(support)

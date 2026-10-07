@@ -312,21 +312,21 @@ type rollingCoefficients struct {
 func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficients, bool) {
 	motionM, okM := planarMotionOf(&r.paths[r.m])
 	motionS, okS := planarMotionOf(&r.paths[r.s])
-	if !okM || !okS || motionS.rotating || proofarith.DyCmp(r.cylinder.gram, rulingGramLimit) > 0 {
+	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.gram, rulingGramLimit) > 0 {
 		return rollingCoefficients{}, false
 	}
 	radius := r.cylinder.radius.Rat()
 	normal := ratOfDyV3(support.normal)
-	relative := ratSub3(motionM.velocity, motionS.velocity)
+	relative := ratSub3(motionM.Velocity, motionS.Velocity)
 	out := rollingCoefficients{rate: new(big.Rat), quadratic: new(big.Rat), constant: new(big.Rat),
 		alpha: new(big.Rat).Abs(support.alpha.Rat())}
 	for i, c := range r.paths[r.m].startPoints {
-		lever := ratCross3(motionM.omega, ratSub3(ratOfDyV3(c), motionM.center))
+		lever := ratCross3(motionM.Omega, ratSub3(ratOfDyV3(c), motionM.Center))
 		rate := ratDot3(normal, ratAdd3(relative, lever))
 		if rate.Abs(rate).Cmp(out.rate) > 0 {
 			out.rate = rate
 		}
-		curvature, ok := ratSqrtUpRat(proofbound.RatMul(motionM.omegaSq, ratDot3(lever, lever)))
+		curvature, ok := ratSqrtUpRat(proofbound.RatMul(motionM.OmegaSq, ratDot3(lever, lever)))
 		if !ok {
 			return rollingCoefficients{}, false
 		}
@@ -339,8 +339,8 @@ func (r *rollingPairSweep) coefficients(support rulingPlane) (rollingCoefficient
 	}
 	// β² = |ω|²·|ã|² − (ω·ã)², exact.
 	axis := ratOfDyV3(r.cylinder.columns[r.cylinder.axis])
-	along := ratDot3(motionM.omega, axis)
-	tiltSq := new(big.Rat).Sub(proofbound.RatMul(motionM.omegaSq, ratDot3(axis, axis)), proofbound.RatMul(along, along))
+	along := ratDot3(motionM.Omega, axis)
+	tiltSq := new(big.Rat).Sub(proofbound.RatMul(motionM.OmegaSq, ratDot3(axis, axis)), proofbound.RatMul(along, along))
 	tilt, ok := ratSqrtUpRat(tiltSq)
 	if !ok {
 		return rollingCoefficients{}, false
