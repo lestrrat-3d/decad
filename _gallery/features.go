@@ -58,33 +58,42 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot renders one mitred Sweep along a path that turns in two planes.
+// sweepShot renders one Sweep along a short rise and a rounded bend.
 func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	body, err := mitredDuct(ctx, 120)
+	body, err := roundedDuct(ctx, 20, 90)
 	if err != nil {
 		return nil, err
 	}
 	return oneModel(ctx, body, cyan, chord)
 }
 
-// mitredDuct sweeps a square along up to 120mm of a three-span spatial path.
-// Every partial path is one real Sweep body with the same recorded section.
-func mitredDuct(ctx context.Context, length float64) (*decad.Body, error) {
+// roundedDuct approximates a circular bend with short mitred path segments.
+// Every partial path builds one Sweep body from the same recorded section.
+func roundedDuct(ctx context.Context, rise, turnDegrees float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-34, -24, -26, -16))
 	if err != nil {
 		return nil, err
 	}
-	segments := []decad.PathSegment{
-		decad.LineTo{End: r3.NewVec(-30, -20, min(length, 30))},
+	start := r3.NewVec(-30, -20, 0)
+	bendStart := r3.NewVec(-30, -20, rise)
+	segments := []decad.PathSegment{decad.LineTo{End: bendStart}}
+	pivot := r3.NewVec(0, -20, rise)
+	for angle := 5.0; angle < turnDegrees; angle += 5 {
+		rotation, err := r3.RotationAround(pivot, r3.NewVec(0, 1, 0), units.Degrees(angle))
+		if err != nil {
+			return nil, fmt.Errorf("rotate bend point: %w", err)
+		}
+		segments = append(segments, decad.LineTo{End: rotation.Apply(bendStart)})
 	}
-	if length > 30 {
-		segments = append(segments, decad.LineTo{End: r3.NewVec(-30+min(length-30, 50), -20, 30)})
+	if turnDegrees > 0 {
+		rotation, err := r3.RotationAround(pivot, r3.NewVec(0, 1, 0), units.Degrees(turnDegrees))
+		if err != nil {
+			return nil, fmt.Errorf("rotate bend end: %w", err)
+		}
+		segments = append(segments, decad.LineTo{End: rotation.Apply(bendStart)})
 	}
-	if length > 80 {
-		segments = append(segments, decad.LineTo{End: r3.NewVec(20, -20+min(length-80, 40), 30)})
-	}
-	path, err := decad.NewPath(r3.NewVec(-30, -20, 0), segments...)
+	path, err := decad.NewPath(start, segments...)
 	if err != nil {
 		return nil, fmt.Errorf("record duct path: %w", err)
 	}

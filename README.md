@@ -65,8 +65,8 @@ meshes decad tessellates.
 </tr>
 <tr>
 <td>
-<img src="docs/images/features/sweep.gif" alt="One square section follows a three-segment 3D path" width="320"><br>
-<strong>Sweep</strong> moves one solved profile along a 3D path with two mitred bends.
+<img src="docs/images/features/sweep.gif" alt="One square section rises and follows a rounded bend" width="320"><br>
+<strong>Sweep</strong> carries one profile around a bend made from short mitred path segments.
 </td>
 <td>
 <img src="docs/images/features/loft.gif" alt="A transition duct grows between two offset rectangles" width="320"><br>

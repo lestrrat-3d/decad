@@ -165,7 +165,10 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, blue, chord)
 	case "sweep":
-		body, err := mitredDuct(ctx, float64(stage+1)*120/featureAnimationSteps)
+		const riseSteps = 6
+		rise := min(float64(stage+1)*20/riseSteps, 20)
+		turn := float64(max(stage-riseSteps+1, 0)) * 90 / (featureAnimationSteps - riseSteps)
+		body, err := roundedDuct(ctx, rise, turn)
 		if err != nil {
 			return nil, err
 		}
