@@ -54,28 +54,8 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
-	if l == nil {
-		return nil, fmt.Errorf(`%w: a nil linkage has no link to move`, ErrDegenerate)
-	}
-	if len(l.links) == 0 {
-		return nil, fmt.Errorf(`%w: a linkage with no link moves nothing`, ErrDegenerate)
-	}
-	for _, link := range l.links {
-		for _, b := range link.bodies {
-			if err := d.requireLive(b); err != nil {
-				return nil, err
-			}
-			if b.payload == nil {
-				return nil, fmt.Errorf(`%w: this evaluator cannot move a body it did not build`, ErrUnsupported)
-			}
-		}
-	}
-	for _, c := range l.contacts {
-		for _, b := range []*Body{c.A, c.B} {
-			if err := d.requireLive(b); err != nil {
-				return nil, err
-			}
-		}
+	if err := d.requireLinkage(l); err != nil {
+		return nil, err
 	}
 	spec, err := l.resolveDrive(drive)
 	if err != nil {

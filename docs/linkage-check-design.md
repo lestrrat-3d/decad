@@ -982,7 +982,7 @@ type JointBoxReport struct {
     Collisions        []JointBoxCollision // every proven collision at every evaluated centre, in evaluation order
     Clearance         *ScalarReading    // the minimum gap over the whole box; nil unless every cell is CellClear
     Assessment        Assessment        // against WithMinClearance
-    Diagnostics       []Diagnostic      // per leaf its centre's findings then its own, in cell order; then split cells' collisions; then the budget's; then the reading's
+    Diagnostics       []Diagnostic      // per leaf its centre's findings then its own, in cell order; then split cells' collisions and violations; then the budget's; then the reading's
     Status            Status
 }
 
@@ -1051,8 +1051,9 @@ joint-box report: a cell has no scalar parameter.
 `Cells` lists the leaves of the subdivision and nothing else, so they tile the box exactly, as
 `Intervals` tile `[0, 1]`. A split cell's centre is gone from `Cells`, but a collision proven there is a
 fact the caller asked for, so `Collisions` keeps every transferred collision at every evaluated centre, and
-`Diagnostics` keeps their `DiagMotionCollision` findings; a split cell's other centre findings are not
-published, because its leaves carry their own.
+`Diagnostics` keeps their `DiagMotionCollision` findings. A margin disproven at a split cell's centre is
+kept the same way, as its `DiagMotionClearanceViolated`, so a `Violated` assessment always carries its
+finding. A split cell's other centre findings are not published, because its leaves carry their own.
 
 ### 14.3 What a cell proves
 
@@ -1208,7 +1209,10 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   mm slide, so `τ_half` at the root is `½·(91·(4π/9) + 30) ≈ 79` mm. At `WithResolution(Scalar(1.0/64))`
   the leaves number at most `4096`; the estimate is a few hundred clear leaves, about `90` undecided leaves
   along the boundary curve, and the colliding side split until the blocked certificate closes — about
-  `1000`–`2000` centres, `3`–`6` s. The test records the measured count.
+  `1000`–`2000` centres, `3`–`6` s. The test records the measured count. Without the blocked certificate
+  every colliding cell splits to the floor: measured, `2953` centres into `1477` leaves, about `16` s, the
+  overlap-volume proof at each colliding centre taking nine tenths of it; at `Scalar(1.0/16)`, `239`
+  centres in about `1` s.
 - **Three joints.** The three-joint arm of §10 over three quarter turns has `τ_half ≈ 236` mm at the root;
   a `10` mm gap everywhere needs cells of about `1/24` per axis, `24³ ≈ 14000` leaves and twice that many
   centres, at the edge of the default budget: the default run reaches depth `14`, about `1/20` per axis,
@@ -1240,8 +1244,11 @@ and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, w
   whole cell's worst — and its `Clearance.Value` at or below `62 − y` there, the true minimum gap over the
   cell. This is the leg that goes red when `τ_half` is halved again or a joint's term is dropped from it.
 - Every `CellBlocked` leaf has `y > 62` at its `(Min θ, Min d)` corner; every `CellColliding` leaf has
-  `y > 62` at its centre; every `CellUndecided` leaf, grown by its own width along each axis, has `y < 62`
-  at its lower corner and `y > 62` at its upper one — the boundary curve passes within one cell of it.
+  `y > 62` at its centre; every `CellUndecided` and `CellColliding` leaf is at the floor along both
+  joints; and an undecided leaf's centre lies within its own `τ_half` of the boundary,
+  `|62 − y| ≤ ½·(ρ·Δθ + Δd)` with `ρ = 35 + √675 + 30` the ball reading. Within one cell's width of the
+  curve is not the claim: near `θ = 80°` the tip rises only about `5` mm per radian of `θ`, while `ρ`
+  charges the whole boom's travel, so a floor cell a full width clear of the curve can stay undecided.
 - Every `JointBoxCollision` has `y > 62` at its configuration; where the corner's depth `δ = y − 62` is
   below `10·cos θ`, `50·sin θ` and `20`, so that only the one corner has crossed, its `Volume` is the
   triangular prism `10·δ²/(2·sin θ·cos θ)` within `1e-6`, `Bound` below `Value`; at least one collision is
@@ -1275,14 +1282,15 @@ evaluated. At `WithCellBudget(1)`: one leaf, the whole box, its centre `(40°, 1
 
 **One varying joint.** Scene 2's elbow as the box `[0°, 180°]` with the shoulder unlisted: `Interfering`;
 every `CellClear` leaf ends at or below `s* ≈ 0.6844` of the range, every `CellBlocked` leaf begins above
-it, and the `(A, B)` declared pair raises no finding. The leg that a held joint contributes nothing to
-`τ_half` while its value enters the balls: scene 4b's blade held at `180°` on its own joint, the hub's
-joint the one varying joint over `[0°, 90°]`, at `WithResolution(Scalar(1.0/900))` reads `Interfering`
-with a witness within `0.41/90` of `31/64` of the range.
+it, and the `(A, B)` declared pair raises no finding. A held joint contributes nothing to `τ_half`, while
+the link it holds is still read where it holds it: scene 4b's blade held at `180°` on its own joint, the
+hub's joint the one varying joint over `[0°, 90°]`, at `WithResolution(Scalar(1.0/900))` reads
+`Interfering` with a witness within `0.41/90` of `31/64` of the range, and goes red, the cell around the pin
+certified clear, when the revolute ball's radius is dropped from `ρ_{ik}`.
 
 **Standing tests.** Errors, one subtest per row of §14.6 and per shared row of §8; non-mutation and
 determinism; cancellation; pose deviation charged at a centre; `Configuration` pinned against scene 1's
-closed-form point and against `PoseAt` at `s = 1/3`. Internal tests in `linkage_internal_test.go` pin
+closed-form point and against `PoseAt` at `s = 1/3`. Internal tests in `linkage_box_internal_test.go` pin
 `τ_half` for scene 6's root against `½·(ρ·(4π/9) + 30)` with `ρ` the ball reading, each joint's term red
 when dropped; the split-axis choice (the `θ` axis first at the root, since `91·(4π/9) > 30`); the
 shallowest-first order on a hand-built tree; and the blocked allowance as `A·τ_half` per moving body, red
@@ -1295,9 +1303,9 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still `Suspect` after it |
 |---|---|---|
-| 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box; scene 6's verdict and tiling assertions, its example, the one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
-| 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions and the blocked box; the budget tests | a clear box's whole-box reading at the default floor |
-| 3 | step 6: the whole-box reading, the reading floor, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis whose gate needs the budget |
+| 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
+| 2 | the blocked certificate and `CellBlocked`; scene 6 at `Scalar(1.0/64)` with its blocked assertions, and the blocked box | a clear box's whole-box reading at the default floor |
+| 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis whose gate needs the budget |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
 one report, with scene 6's closed-form region as its acceptance. The `JointBoxReport` of PR 1 carries

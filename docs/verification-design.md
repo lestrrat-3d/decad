@@ -236,6 +236,8 @@ type Diagnostic struct {
                                 // Bound or the spec's own Kind; nil when the reason states none
     At          *units.Value    // the motion parameter a VerifyMotion finding concerns (docs/motion-check-design.md
                                 // §4.1); nil on every diagnostic Verify emits
+    Cell        *JointCell      // the joint cell a VerifyJointBox finding concerns (docs/linkage-check-design.md
+                                // §14.2); nil on every diagnostic Verify, VerifyMotion and VerifyLinkage emit
     Message     string          // human-readable; NEVER the branch key
 }
 

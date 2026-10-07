@@ -314,15 +314,28 @@ func motionPoseError(err error) error {
 	return fmt.Errorf(`%w: the pose is not representable: %w`, ErrNotFinite, err)
 }
 
-// MotionOption configures VerifyMotion and VerifyLinkage.
-type MotionOption interface {
+// JointBoxOption configures VerifyJointBox (docs/linkage-check-design.md
+// §14.1). Every MotionOption is one, so WithMotionTolerance, WithResolution
+// and WithMinClearance pass to VerifyJointBox unchanged; WithCellBudget is the
+// box's own.
+type JointBoxOption interface {
 	option.Interface
+	jointBoxOption()
+}
+
+// MotionOption configures VerifyMotion and VerifyLinkage. It embeds
+// JointBoxOption, so a MotionOption also configures VerifyJointBox, while a
+// JointBoxOption of the box's own, WithCellBudget, does not compile as a
+// MotionOption.
+type MotionOption interface {
+	JointBoxOption
 	motionOption()
 }
 
 type motionOption struct{ option.Interface }
 
-func (motionOption) motionOption() {}
+func (motionOption) motionOption()   {}
+func (motionOption) jointBoxOption() {}
 
 type identMotionTolerance struct{}
 type identResolution struct{}

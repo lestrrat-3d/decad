@@ -39,6 +39,7 @@
 0	0.73	TestFreeformPrismProofRecordCoversItsOwnChording
 0	20.44	TestHeldGateCertifiesEachUnionsRimCeiling
 0	0.06	TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans
+0	0.01	TestJointBoxHalfTravel
 0	0.01	TestLinkageIdealPoseComposesTheChain
 0	0.11	TestLoftArcWedgeReadingsApproximateWithPositiveBounds
 0	0.01	TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit
@@ -99,6 +100,7 @@
 1	2.12	TestFreeformArcLengthRelativeWidthVariesWithTheSpan
 1	0.24	TestFreeformArcLengthReportsPositiveBound
 1	0.02	TestFreeformWalkRefusedByAnalyticConsumers
+1	0.01	TestJointBoxSplitAxis
 1	0.01	TestLoftArcPairDriftedEndChargesRadialResidual
 1	0.06	TestLoftArcToFitSplineStillRefusesS3
 1	0.10	TestLoftChordCalibrationTrueOutlineIsTheChordedTwin
@@ -154,6 +156,7 @@
 2	0.01	TestDisplacedCupCentroidMoment
 2	0.02	TestEvalPrismContinuesCallerFreeformWork
 2	0.01	TestFreeformCoincidentControlNetRefused
+2	0.81	TestJointBoxShallowestFirst
 2	0.02	TestLinkagePairGapCarriesBothDeviations
 2	0.14	TestLoftArcWedgeAreaBoundEnclosesConvergedReference
 2	0.12	TestLoftArcWedgeMatchesExtrudeOracle
@@ -799,6 +802,7 @@
 3	0.00	TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile
 3	0.00	TestValidateLoftRecordsSameKindCircularPairIsAdmitted
 3	0.00	TestValidateLoftRecordsSegmentCountMismatch
+3	0.04	TestVerifyJointBoxKeepsTheNextProducerIdentity
 3	0.00	TestVerifyLinkageRefusesABodyItDidNotBuild
 3	1.42	TestVerifyMeshesEachBodyOnce
 3	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
@@ -906,6 +910,7 @@
 4	5.94	TestTriTriClassifyFilterAgreesWithTheExactPath
 4	0.27	TestUnmeteredWalksAreNeverReused
 4	0.02	TestUnstitchChamferBandNormalAtBoundCoversSource
+4	0.00	TestVerifyJointBoxRefusesABodyItDidNotBuild
 4	0.01	TestVerifyPublishExactZeroWall
 4	0.01	TestVerifyPublishUndercutFacesOrderedByBody
 4	0.03	TestWholeSegmentWalkStatesTheRecordedEndpoints
