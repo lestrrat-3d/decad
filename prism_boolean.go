@@ -9,7 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -420,6 +420,10 @@ type prismSharedAxis struct {
 	shift *big.Rat
 }
 
+func prismPlacementOf(p prismPayload) prismplacement.Operand {
+	return prismplacement.Operand{Frame: p.frame, Xform: p.xform, Z0: p.z0, Z1: p.z1}
+}
+
 // prismSharedAxisOf decides G3's shared-axis arm over the stored floats taken
 // exactly. B's denoted prism {X(oB + uU + vV + zN)} is then
 // {X(oA + uU + vV + (z+s)N)} term for term, with no orthonormality assumption
@@ -429,32 +433,8 @@ type prismSharedAxis struct {
 // No float arithmetic is performed — dvSub, dvCross, dyadic.rat and
 // big.Rat.Quo are exact.
 func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
-	if pa.xform != pb.xform || pa.frame.U() != pb.frame.U() || pa.frame.V() != pb.frame.V() {
-		return prismSharedAxis{}
-	}
-	oa, ob, n := pa.frame.Origin(), pb.frame.Origin(), pa.frame.N()
-	if !proofbound.FiniteVec(oa) || !proofbound.FiniteVec(ob) || !proofbound.FiniteVec(n) {
-		return prismSharedAxis{}
-	}
-	d := proofarith.DvSub(proofarith.DyVec(ob), proofarith.DyVec(oa))
-	nd := proofarith.DyVec(n)
-	if !proofarith.DvIsZero(proofarith.DvCross(d, nd)) {
-		return prismSharedAxis{}
-	}
-	// d = s·N exactly, so any component with N_i != 0 gives s; the largest
-	// |N_i| is chosen, and a zero there (no valid frame has a zero normal)
-	// refuses the arm so the quotient stays total.
-	comps := [3]float64{n.X, n.Y, n.Z}
-	i := 0
-	for j := 1; j < len(comps); j++ {
-		if math.Abs(comps[j]) > math.Abs(comps[i]) {
-			i = j
-		}
-	}
-	if comps[i] == 0 {
-		return prismSharedAxis{}
-	}
-	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].Rat(), nd[i].Rat())}
+	axis := prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb))
+	return prismSharedAxis{ok: axis.OK, shift: axis.Shift}
 }
 
 // prismZShift is G5's shift s as an exact rational (§3.1): the shared-axis
@@ -462,22 +442,14 @@ func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
 // product G3 required to be exactly 0.0. No float operation is performed.
 // Every op's G5 check, and Intersect's result interval, read this SAME shift.
 func prismZShift(pa, pb prismPayload) *big.Rat {
-	if sa := prismSharedAxisOf(pa, pb); sa.ok {
-		return sa.shift
-	}
-	return new(big.Rat)
+	return prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb))
 }
 
 // prismShiftedInterval is operand B's [z0, z1] re-expressed onto operand A's
 // axis exactly: floatRat(z) + s per end. ok is false when a level does not
 // lift (non-finite), which every G5 check treats as a miss.
 func prismShiftedInterval(pa, pb prismPayload) (*big.Rat, *big.Rat, bool) {
-	b0, b1 := proofarith.FloatRat(pb.z0), proofarith.FloatRat(pb.z1)
-	if b0 == nil || b1 == nil {
-		return nil, nil, false
-	}
-	shift := prismZShift(pa, pb)
-	return b0.Add(b0, shift), b1.Add(b1, shift), true
+	return prismplacement.ShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
 }
 
 // prismShiftedIntervalAdmitted is prismShiftedInterval for a pair G5 already
@@ -495,12 +467,7 @@ func prismShiftedIntervalAdmitted(pa, pb prismPayload) (*big.Rat, *big.Rat) {
 // re-expressed onto operand A's normal axis by prismShiftedInterval, and Union
 // requires the two intervals to match exactly, compared as rationals.
 func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
-	a0, a1 := proofarith.FloatRat(pa.z0), proofarith.FloatRat(pa.z1)
-	z0, z1, ok := prismShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
-		return false
-	}
-	return a0.Cmp(z0) == 0 && a1.Cmp(z1) == 0
+	return prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb))
 }
 
 // resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
@@ -867,45 +834,15 @@ type prismReexpression struct {
 // the transpose, r3.Transform's own contract — and a Frame is orthonormal, so
 // every step here is a dot product, never a solve.
 func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
-	// Equal frames under one placement are the arm's d = 0 case. They are
-	// tested on their own too, because prismSharedAxisOf refuses a frame
-	// whose stored normal is zero, and two bit-identical frames are the
-	// identity map whatever their normal holds.
-	if (pa.frame == pb.frame && pa.xform == pb.xform) || prismSharedAxisOf(pa, pb).ok {
-		return &prismReexpression{identity: true}, nil
-	}
-	fail := func(err error) (*prismReexpression, error) {
-		return nil, fmt.Errorf(`decad: the operands' relative placement has no rigid composition: %w`, err)
-	}
-	m, err := r3.FromFrame(pb.frame)
+	re, err := prismplacement.Compose(prismPlacementOf(pa), prismPlacementOf(pb))
 	if err != nil {
-		return fail(err)
-	}
-	if m, err = m.Then(pb.xform); err != nil {
-		return fail(err)
-	}
-	invA, err := pa.xform.Inverse()
-	if err != nil {
-		return fail(err)
-	}
-	if m, err = m.Then(invA); err != nil {
-		return fail(err)
-	}
-	toWorldA, err := r3.FromFrame(pa.frame)
-	if err != nil {
-		return fail(err)
-	}
-	invFrameA, err := toWorldA.Inverse()
-	if err != nil {
-		return fail(err)
-	}
-	if m, err = m.Then(invFrameA); err != nil {
-		return fail(err)
+		return nil, err
 	}
 	return &prismReexpression{
-		relative:   m,
-		reflection: m.IsReflection(),
-		transAbs:   proofbound.VecMaxAbs(m.Translation()),
+		relative:   re.Map,
+		identity:   re.Identity,
+		reflection: re.Reflection,
+		transAbs:   re.TransAbs,
 	}, nil
 }
 
@@ -983,10 +920,7 @@ func rewindLoop(budget *proofbound.WorkBudget, loop LoopRecord, mapPoint func(Po
 // ~40·u·|translation|, where proofbound.RigidRoundAllow's 16 ulps at 2·|input| +
 // |translation|, read as a 3D radius, allow ~110·u·|input| + ~55·u·|translation|.
 func (re *prismReexpression) point(p Point2) Point2 {
-	if re.identity {
-		return p
-	}
-	out := re.relative.Apply(r3.NewVec(p.U, p.V, 0))
-	re.delta = math.Max(re.delta, proofbound.RigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.transAbs))
-	return Point2{U: out.X, V: out.Y}
+	return prismplacement.Point(prismplacement.Relative{
+		Map: re.relative, Identity: re.identity, TransAbs: re.transAbs,
+	}, &re.delta, p)
 }
