@@ -108,7 +108,7 @@ the rules leave to the byte budget.
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
-| `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
+| `stitch_weld.go` | Adapts held Stitch vertices and edges to Table J's class and pair grouping. See surface §6.2. |
 | `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `stitch_flux.go` | Stitch's curved-face gate, topology adapter and mass sum. See `docs/surface-design.md` §6.4. |
 | `unstitch.go` | `Unstitch`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
@@ -302,6 +302,7 @@ the rules leave to the byte budget.
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
+| `internal/stitchweld/` | Stitch vertex classes and free-edge pair grouping by exact held keys. See surface §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |

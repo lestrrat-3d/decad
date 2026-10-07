@@ -171,11 +171,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// The single held vertex table, placed under the composed motion ONCE —
 	// never per operand (docs/surface-design.md's "recorded weld" decision).
 	maxInputAbs := 0.0
-	for _, p := range plan.table.verts {
+	for _, p := range plan.table.Vertices {
 		maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(p))
 	}
-	verts := make([]r3.Vec, len(plan.table.verts))
-	for i, p := range plan.table.verts {
+	verts := make([]r3.Vec, len(plan.table.Vertices))
+	for i, p := range plan.table.Vertices {
 		v := xform.Apply(p)
 		if !proofbound.FiniteVec(v) {
 			return nil, fmt.Errorf(`%w: a placed stitch vertex is not representable`, ErrUnsupported)
@@ -199,7 +199,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// class is zero-bound, which is every case this evaluator admitted
 	// before this increment.
 	maxClassBound := 0.0
-	for _, b := range plan.table.boundByClass {
+	for _, b := range plan.table.Bounds {
 		maxClassBound = max(maxClassBound, b)
 	}
 	massDelta := delta
@@ -504,11 +504,11 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if nv, ok := newVertByClass[class]; ok {
 			return nv
 		}
-		bound := plan.table.boundByClass[class]
+		bound := plan.table.Bounds[class]
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.denotByClass[class].compose(xform)}
+		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.Tokens[class].compose(xform)}
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
