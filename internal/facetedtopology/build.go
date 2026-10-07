@@ -11,9 +11,9 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-type Edge[F comparable] struct {
+type Edge struct {
 	Vertices        []int
-	Faces           [2]F
+	Faces           [2]int
 	Convex          bool
 	Bound           float64
 	Length          float64
@@ -21,43 +21,43 @@ type Edge[F comparable] struct {
 	LengthUnbounded bool
 }
 
-type Coedge[F comparable] struct {
-	Edge    *Edge[F]
+type Coedge struct {
+	Edge    *Edge
 	Forward bool
 }
 
-type Loop[F comparable] struct {
-	Coedges []Coedge[F]
+type Loop struct {
+	Coedges []Coedge
 	Outer   bool
 }
 
-type Result[F comparable] struct {
-	Edges     []*Edge[F]
-	FaceLoops map[F][]*Loop[F]
+type Result struct {
+	Edges     []*Edge
+	FaceLoops map[int][]*Loop
 }
 
 // Build traces the boundary chains and loops of an audited faceted mesh.
-func Build[F comparable](
+func Build(
 	ctx context.Context,
 	verts []r3.Vec,
 	tris [][3]int,
-	facetFace []F,
-	facePlanar map[F]bool,
+	facetFace []int,
+	facePlanar map[int]bool,
 	vertexBound []float64,
-) (Result[F], error) {
-	var result Result[F]
+) (Result, error) {
+	var result Result
 	err := build(ctx, verts, tris, facetFace, facePlanar, vertexBound, &result)
 	return result, err
 }
 
-func build[F comparable](
+func build(
 	ctx context.Context,
 	verts []r3.Vec,
 	tris [][3]int,
-	facetFace []F,
-	facePlanar map[F]bool,
+	facetFace []int,
+	facePlanar map[int]bool,
 	vertexBound []float64,
-	result *Result[F],
+	result *Result,
 ) error {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
@@ -92,7 +92,7 @@ func build[F comparable](
 
 	// Undirected boundary edges with their face pair and exact hinge sign.
 	type hingeInfo struct {
-		fa, fb F
+		fa, fb int
 		sign   int
 	}
 	hinges := map[[2]int]hingeInfo{}
@@ -150,7 +150,7 @@ func build[F comparable](
 
 	type chainRec struct {
 		verts []int
-		edge  *Edge[F]
+		edge  *Edge
 	}
 	chainOf := map[[2]int]int{} // undirected mesh edge → chain index
 	posInChain := map[[2]int]int{}
@@ -186,10 +186,10 @@ func build[F comparable](
 		// roots, and the last ulp is not free — so an all-planar rim reports
 		// Approximate rather than an Exact it cannot back.
 		lengthBound := proofbound.ChainLengthBound(nSegs, bound, length)
-		e := &Edge[F]{
+		e := &Edge{
 			Vertices:    path,
 			Bound:       bound,
-			Faces:       [2]F{info.fa, info.fb},
+			Faces:       [2]int{info.fa, info.fb},
 			Convex:      info.sign < 0,
 			Length:      length,
 			LengthBound: lengthBound,
@@ -289,7 +289,7 @@ func build[F comparable](
 	// The area-weighted normal of each face's own facets. A face is ONE patch,
 	// and a patch of a PLANAR source is coplanar, so this is that plane's
 	// outward normal (scaled by twice the patch's area).
-	faceNormal := map[F]r3.Vec{}
+	faceNormal := map[int]r3.Vec{}
 	for i, t := range tris {
 		if err := budget.Step(); err != nil {
 			return err
@@ -303,8 +303,8 @@ func build[F comparable](
 	// facet fans, then group consecutive halfedges by chain into coedges.
 	// loopMoment is each loop's closed-polygon area vector Σ vᵢ × vᵢ₊₁ (twice
 	// the signed area), which is what decides outer from hole on a planar face.
-	loopMoment := map[*Loop[F]]r3.Vec{}
-	faceLoops := map[F][]*Loop[F]{}
+	loopMoment := map[*Loop]r3.Vec{}
+	faceLoops := map[int][]*Loop{}
 	visited := map[[2]int]struct{}{}
 	nextBoundary := func(h [2]int) ([2]int, error) {
 		cur := h
@@ -368,7 +368,7 @@ func build[F comparable](
 				}
 				cur = nxt
 			}
-			loop := &Loop[F]{}
+			loop := &Loop{}
 			firstChain, lastChain := -1, -1
 			for _, he := range cycle {
 				if err := budget.Step(); err != nil {
@@ -387,7 +387,7 @@ func build[F comparable](
 					firstChain = ci
 				}
 				forward := chains[ci].verts[posInChain[key]] == he[0]
-				loop.Coedges = append(loop.Coedges, Coedge[F]{Edge: chains[ci].edge, Forward: forward})
+				loop.Coedges = append(loop.Coedges, Coedge{Edge: chains[ci].edge, Forward: forward})
 			}
 			// The walk starts at whichever halfedge the facet scan reached
 			// first, which can sit in the MIDDLE of a chain — and then that one
@@ -475,8 +475,8 @@ func build[F comparable](
 	return budget.Err()
 }
 
-func collectFaces[F comparable](facetFace []F) map[F]struct{} {
-	out := map[F]struct{}{}
+func collectFaces(facetFace []int) map[int]struct{} {
+	out := map[int]struct{}{}
 	for _, f := range facetFace {
 		out[f] = struct{}{}
 	}

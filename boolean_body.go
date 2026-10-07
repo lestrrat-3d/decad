@@ -688,7 +688,21 @@ func buildFacetedTopology(
 	facePlanar map[*Face]bool,
 	vertexBound []float64,
 ) error {
-	plan, err := facetedtopology.Build(ctx, verts, tris, facetFace, facePlanar, vertexBound)
+	faceID := map[*Face]int{}
+	faces := []*Face{}
+	facetID := make([]int, len(facetFace))
+	planarID := map[int]bool{}
+	for i, f := range facetFace {
+		id, ok := faceID[f]
+		if !ok {
+			id = len(faces)
+			faceID[f] = id
+			faces = append(faces, f)
+			planarID[id] = facePlanar[f]
+		}
+		facetID[i] = id
+	}
+	plan, err := facetedtopology.Build(ctx, verts, tris, facetID, planarID, vertexBound)
 	if err != nil {
 		return err
 	}
@@ -701,13 +715,13 @@ func buildFacetedTopology(
 		vertexObj[vi] = v
 		return v
 	}
-	edgeObj := map[*facetedtopology.Edge[*Face]]*Edge{}
+	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
 			curve:           FacetedCurve{Bound: units.Millimeters(chain.Bound)},
 			start:           vertexOf(chain.Vertices[0]),
 			end:             vertexOf(chain.Vertices[len(chain.Vertices)-1]),
-			faces:           []*Face{chain.Faces[0], chain.Faces[1]},
+			faces:           []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
 			convex:          chain.Convex,
 			length:          chain.Length,
 			lengthBound:     chain.LengthBound,
@@ -715,7 +729,8 @@ func buildFacetedTopology(
 		}
 		edgeObj[chain] = e
 	}
-	for f, loops := range plan.FaceLoops {
+	for fi, loops := range plan.FaceLoops {
+		f := faces[fi]
 		for _, planned := range loops {
 			loop := &Loop{outer: planned.Outer}
 			for _, ce := range planned.Coedges {
