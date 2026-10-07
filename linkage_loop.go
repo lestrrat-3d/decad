@@ -2301,6 +2301,12 @@ func (s *Schedule) Drive() Drive {
 	return slices.Clone(s.drive)
 }
 
+// Linkage returns the linkage the schedule was built on. LinkagePose.Values
+// and Poses from PoseAt follow its Links() order.
+func (s *Schedule) Linkage() *Linkage {
+	return s.linkage
+}
+
 // PoseAt returns every link's joint value, its proven half-width and its
 // world pose at the fraction at (docs/linkage-check-design.md §15.4, §15.7).
 // For a tree linkage it is Linkage.PoseAt with zero Bounds. For a drive that

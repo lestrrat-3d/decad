@@ -2215,6 +2215,7 @@ type Schedule struct { /* private */ }
 func (l *Linkage) Schedule(ctx context.Context, d Drive) (*Schedule, error)
 func (s *Schedule) PoseAt(ctx context.Context, at units.Value) (LinkagePose, error)
 func (s *Schedule) Drive() Drive
+func (s *Schedule) Linkage() *Linkage
 ```
 
 `Schedule` validates the drive as `PoseAt` does (§2.4) and §15.6's rows, then for each loop the drive moves
@@ -2229,7 +2230,8 @@ rule and `Enclose` is deterministic on the same state. `PoseAt` is safe for conc
 schedule serialises the asks on each scene behind a mutex (`Enclose` must not run concurrently on one
 sketch), and the cache is read under it. An `at` outside `[0, 1]` is legal for a tree linkage as before and
 `ErrUnsupported` for a drive that moves a loop, since the chain is built over the drive; an `at` whose
-point ask is refused is `ErrUnsupported` wrapping `sketch`'s error.
+point ask is refused is `ErrUnsupported` wrapping `sketch`'s error. `Drive` and `Linkage` return what
+the schedule was built from, so a caller holding only a schedule finds a link's index in `Linkage().Links()`.
 
 `Linkage.PoseAt(d, at)` is unchanged for a tree linkage and for a drive that moves no loop. For a drive
 that moves a loop it builds a one-shot schedule under `context.Background()`, calls `PoseAt` on it and
