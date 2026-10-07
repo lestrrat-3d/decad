@@ -1,4 +1,4 @@
-package circularmoments
+package circularbounds
 
 import (
 	"math"

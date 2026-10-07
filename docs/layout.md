@@ -84,7 +84,7 @@ the rules leave to the byte budget.
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
 | `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
 | `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
-| `moments_circular.go` | Maps recorded circle and arc segments to `internal/circularmoments/` for exact rational enclosures. |
+| `moments_circular.go` | Maps recorded circle and arc segments to `internal/circularbounds/` for exact rational enclosures. |
 | `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/splinebezier/`. See `docs/spline-design.md` §5.1. |
 | `spline_fit.go` | Adapts fit-spline conversion from `internal/splinebezier/`. See `docs/spline-design.md` §5.1.2. |
 | `spline_moments.go` | `addFreeformTo` folds `internal/freeform/`'s exact span moments into a region's integrals. See `docs/spline-design.md` §5.1. |
@@ -270,7 +270,7 @@ the rules leave to the byte budget.
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
-| `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
+| `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, trim walks, and Trim/Extend record helpers. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |

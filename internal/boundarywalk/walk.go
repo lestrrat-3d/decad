@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularmoments"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -45,15 +45,15 @@ func freeformEndpointBounds(spans []freeform.BezierSpan, reversed bool, start, e
 }
 func isFitSplineSeg(segment CurveSegment) bool { return splinebezier.IsFitSplineSeg(segment) }
 func circularEndpointInterval(segment CurveSegment, t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
-	return circularmoments.EndpointInterval(circularmoments.RecordSegment(segment), t)
+	return circularbounds.EndpointInterval(circularbounds.RecordSegment(segment), t)
 }
 func circularWalkEnclosures(segment CurveSegment) (proofbound.RatInterval, proofbound.RatInterval, bool) {
-	return circularmoments.WalkEnclosures(circularmoments.RecordSegment(segment))
+	return circularbounds.WalkEnclosures(circularbounds.RecordSegment(segment))
 }
 func circularLengthInterval(segment CurveSegment) (proofbound.RatInterval, bool) {
-	return circularmoments.LengthInterval(circularmoments.RecordSegment(segment))
+	return circularbounds.LengthInterval(circularbounds.RecordSegment(segment))
 }
-func exactCoordinateDelta(a, b float64) *big.Rat { return circularmoments.ExactCoordinateDelta(a, b) }
+func exactCoordinateDelta(a, b float64) *big.Rat { return circularbounds.ExactCoordinateDelta(a, b) }
 func lerp2(start, end Point2, t float64) (float64, float64) {
 	switch t {
 	case 0:

@@ -1,4 +1,4 @@
-package circularmoments
+package circularbounds
 
 import "github.com/lestrrat-3d/decad/internal/sectionrecord"
 

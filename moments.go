@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularmoments"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentline"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -794,7 +794,7 @@ func (ig *regionIntegrals) addCircular(
 	sin1, cos1 := math.Sincos(th1)
 	dth := th1 - th0
 	area := 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
-	held := circularmoments.EvaluateFloat(
+	held := circularbounds.EvaluateFloat(
 		circularPoint(c), r, th0, th1, radiusUpper, sweepUpper, area,
 		areaProof, haveAreaProof, muProof, mvProof, haveMomentProof,
 		muuProof, muvProof, mvvProof, haveSecondMomentProof, order,
