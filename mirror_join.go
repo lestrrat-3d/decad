@@ -80,6 +80,11 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if b.Kind() == BodySheet {
 		return nil, fmt.Errorf(`%w: a mirror join builds a solid and does not accept a sheet body`, ErrUnsupported)
 	}
+	if sp, ok := b.payload.(stackedPrismPayload); ok && sp.isGroup() {
+		// A prism group's lumps are separate regions, which this join does
+		// not splice one by one.
+		return nil, fmt.Errorf(`%w: a mirror join does not rewrite a prism group (J1)`, ErrUnsupported)
+	}
 	walls, err := d.resolveJoinWalls(b, plane)
 	if err != nil {
 		return nil, err

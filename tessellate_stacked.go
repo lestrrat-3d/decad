@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -75,8 +76,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		first, last := sp.slabs[col.start], sp.slabs[col.end]
 		cl, err := chordLoop(ctx, col.loop, budget, last.z1-first.z0, work, nil, col.loopIndex,
 			func(w survey2d.SideWalk) (*Face, error) {
-				return faceOfRole(fmt.Sprintf("slab(%d).region(0).side(%d,%d)",
-					col.start, col.loopIndex, w.Segs[0]))
+				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
+					col.start, col.region, col.loopIndex, w.Segs[0]))
 			})
 		if err != nil {
 			return nil, err
@@ -126,11 +127,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	// column runs CCW, a hole column CW. A patch triangulates its outer CCW and
 	// its holes CW, so a ring whose column winding differs from the role it
 	// plays in the patch is read reversed; a -N patch flips its triangles.
-	emitPatch := func(role string, loops []stackedPatchLoop, reverseFace bool, axial float64) error {
-		face, err := faceOfRole(role)
-		if err != nil {
-			return err
-		}
+	emitPatch := func(face *Face, loops []stackedPatchLoop, reverseFace bool, axial float64) error {
 		var points []Point2
 		var vertices []int
 		var indexLoops [][]int
@@ -178,19 +175,33 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		faceAxial[face] = axial
 		return nil
 	}
-	capLoops := func(slabColumns []int, top bool) []stackedPatchLoop {
-		loops := make([]stackedPatchLoop, len(slabColumns))
-		for i, ci := range slabColumns {
-			loops[i] = stackedPatchLoop{column: ci, top: top, outer: columns[ci].loopIndex == 0}
+	capLoops := func(slabColumns []int, region int, top bool) []stackedPatchLoop {
+		var loops []stackedPatchLoop
+		for _, ci := range slabColumns {
+			if columns[ci].region != region {
+				continue
+			}
+			loops = append(loops, stackedPatchLoop{column: ci, top: top, outer: columns[ci].loopIndex == 0})
 		}
 		return loops
 	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	if err := emitPatch(roleCapStart, capLoops(bySlab[0], false), true, first.z0Delta); err != nil {
-		return nil, err
-	}
-	if err := emitPatch(roleCapEnd, capLoops(bySlab[len(bySlab)-1], true), false, last.z1Delta); err != nil {
-		return nil, err
+	for _, end := range []struct {
+		slab    int
+		role    string
+		top     bool
+		reverse bool
+		axial   float64
+	}{{0, roleCapStart, false, true, first.z0Delta}, {len(sp.slabs) - 1, roleCapEnd, true, false, last.z1Delta}} {
+		for r := range sp.slabs[end.slab].regions {
+			face, err := stackedCapFace(b, sp, faceOfRole, end.role, end.slab, r)
+			if err != nil {
+				return nil, err
+			}
+			if err := emitPatch(face, capLoops(bySlab[end.slab], r, end.top), end.reverse, end.axial); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for k := range sp.interfaces {
 		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
@@ -198,7 +209,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 		for _, patch := range patches {
-			if err := emitPatch(patch.role, patch.loops, !patch.floor, sp.slabs[k].z1Delta); err != nil {
+			face, err := faceOfRole(patch.role)
+			if err != nil {
+				return nil, err
+			}
+			if err := emitPatch(face, patch.loops, !patch.floor, sp.slabs[k].z1Delta); err != nil {
 				return nil, err
 			}
 		}
@@ -276,4 +291,44 @@ func stackedHoleColumn(columns []stackedColumn, candidates []int, hole LoopRecor
 		}
 	}
 	return 0, fmt.Errorf(`%w: an exposed patch has no wall column`, ErrDegenerate)
+}
+
+// stackedCapFace is the cap face with the given role over one region. A
+// stack has one cap of each role. A prism group has one per region under the
+// same role, so its cap is the one sharing an edge with a wall the build
+// named for that region (slab(k).region(r).side(i,j)).
+func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*Face, error), role string, slab, region int) (*Face, error) {
+	if !sp.isGroup() {
+		return faceOfRole(role)
+	}
+	prefix := fmt.Sprintf("slab(%d).region(%d).", slab, region)
+	for _, face := range b.Faces() {
+		if !faceHasRole(face, role) {
+			continue
+		}
+		for _, l := range face.loops {
+			for _, ce := range l.coedges {
+				for _, nb := range ce.edge.faces {
+					if nb == face {
+						continue
+					}
+					for _, origin := range nb.origins {
+						if strings.HasPrefix(origin.Role, prefix) {
+							return face, nil
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf(`%w: a prism group has no %s face for region %d`, ErrDegenerate, role, region)
+}
+
+func faceHasRole(face *Face, role string) bool {
+	for _, origin := range face.origins {
+		if origin.Role == role {
+			return true
+		}
+	}
+	return false
 }

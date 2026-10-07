@@ -218,11 +218,12 @@ the rules leave to the byte budget.
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See `docs/evaluator-design.md` §9. |
 | `prism_boolean.go` | Analytic Union/Cut/Intersect of co-directional coplanar or offset-plane prisms. See `docs/prism-boolean-design.md`. |
-| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting resolution. See `docs/prism-boolean-design.md` §4.2. |
+| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting resolution. See prism-boolean §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Builds and audits stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
+| `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
 | `stacked_union.go` | Unequal-interval `Union` as stacked slabs. See general-boolean A1. |
-| `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See `docs/prism-boolean-design.md` §4.2. |
+| `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and measurements. See general-boolean §4. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |

@@ -1145,6 +1145,11 @@
 4	0.11	TestPlanarManifoldCornerThroughTrayFloor
 4	0.04	TestPlanarManifoldNonConvexGuest
 4	0.01	TestPlanarUnionAreaBoundIsTiny
+4	0.01	TestPrismGroupCutNotchesTheEdge
+4	0.01	TestPrismGroupDisjointUnion
+4	0.06	TestPrismGroupSixHoleCut
+4	0.01	TestPrismGroupUnionLeavesAnEnclosedVoidToTheMeshPath
+4	0.01	TestPrismGroupUnionMergesOneLump
 4	0.01	TestPrismIntersectG5FallsBackOnDisjointZIntervals
 4	0.02	TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean
 4	0.06	TestPrismUnionDownstreamFilletAndWallSurvey

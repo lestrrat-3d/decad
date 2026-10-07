@@ -380,8 +380,14 @@ func prismProfileIsAnalytic(budget *proofbound.WorkBudget, p ProfileRecord) (boo
 const prismMaxArrangementSegments = 4096
 
 func prismSceneWithinWorkCap(budget *proofbound.WorkBudget, pa, pb prismPayload) (int, bool, error) {
+	return prismRegionsWithinWorkCap(budget, pa.profile, pb.profile)
+}
+
+// prismRegionsWithinWorkCap is prismSceneWithinWorkCap over every region a
+// private scene will hold, a prism group's lumps included.
+func prismRegionsWithinWorkCap(budget *proofbound.WorkBudget, profiles ...ProfileRecord) (int, bool, error) {
 	segments := 0
-	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
+	for _, profile := range profiles {
 		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 			for _, seg := range loop.Segments {
 				if err := budget.Step(); err != nil {
@@ -688,6 +694,15 @@ type prismSceneDelta struct {
 // accumulated into the returned prismSceneDelta, the largest such charge over
 // each operand's own consumed segments (§7's δ_walk).
 func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
+	return buildPrismSceneRegions(budget, []ProfileRecord{pa.profile}, []ProfileRecord{pb.profile}, reexpress)
+}
+
+// buildPrismSceneRegions is buildPrismScene over operands that hold several
+// regions: a prism group (docs/general-boolean-design.md §3 A5) enters as
+// one region per lump, each loop tagged with its region index
+// (prismcells.Origin.Region). A prism is the one-region case. Entities are
+// deduplicated within an operand only, as for a single region.
+func buildPrismSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []ProfileRecord, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
@@ -709,7 +724,7 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 
 	// mapPt is the identity for operand A, and for an operand B whose record
 	// was already re-expressed and re-wound (prismReexpression.rewound).
-	addOperand := func(profile ProfileRecord, isB bool, mapPt func(Point2) Point2) error {
+	addOperand := func(profile ProfileRecord, isB bool, region int, mapPt func(Point2) Point2) error {
 		type entityKey struct {
 			kind    uint8 // 1 = line, 2 = whole circle, 3 = arc (incl. a partial circle)
 			a, b, c Point2
@@ -728,7 +743,7 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		for li, loop := range loops {
 			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
 			tag := func(ent sketch.Entity, authoredReversed bool) {
-				tags[ent] = prismcells.Origin{IsB: isB, Hole: hole, AuthoredReversed: authoredReversed}
+				tags[ent] = prismcells.Origin{IsB: isB, Region: region, Hole: hole, AuthoredReversed: authoredReversed}
 			}
 			for _, seg := range loop.Segments {
 				if err := budget.Step(); err != nil {
@@ -803,12 +818,16 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		return nil
 	}
 
-	if err := addOperand(pa.profile, false, nil); err != nil {
-		return nil, nil, prismSceneDelta{}, err
+	for r, region := range regionsA {
+		if err := addOperand(region, false, r, nil); err != nil {
+			return nil, nil, prismSceneDelta{}, err
+		}
 	}
 	if !reexpress.reflection {
-		if err := addOperand(pb.profile, true, reexpress.point); err != nil {
-			return nil, nil, prismSceneDelta{}, err
+		for r, region := range regionsB {
+			if err := addOperand(region, true, r, reexpress.point); err != nil {
+				return nil, nil, prismSceneDelta{}, err
+			}
 		}
 		return s, tags, sceneDelta, nil
 	}
@@ -817,13 +836,15 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 	// Every entity, and every tag's AuthoredReversed, then reads the re-wound
 	// record, whose segments are all whole and already in A's frame. The
 	// narrowed LineSegs it replaced by their walked endpoints charge here.
-	rewound, walkCharge, err := reexpress.rewound(budget, pb.profile)
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, err
-	}
-	sceneDelta.b = math.Max(sceneDelta.b, walkCharge)
-	if err := addOperand(rewound, true, nil); err != nil {
-		return nil, nil, prismSceneDelta{}, err
+	for r, region := range regionsB {
+		rewound, walkCharge, err := reexpress.rewound(budget, region)
+		if err != nil {
+			return nil, nil, prismSceneDelta{}, err
+		}
+		sceneDelta.b = math.Max(sceneDelta.b, walkCharge)
+		if err := addOperand(rewound, true, r, nil); err != nil {
+			return nil, nil, prismSceneDelta{}, err
+		}
 	}
 	return s, tags, sceneDelta, nil
 }

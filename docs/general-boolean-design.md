@@ -185,6 +185,16 @@ survivors) becomes a one-slab multi-region stacked payload instead of
 "unresolved → mesh path" (prism-boolean §4.4). Prism-boolean §4.5's
 overlap-area reading is unchanged.
 
+Select-all keeps every bounded cell, which is the union only when no cell is
+material of neither operand. Hole-free operands can still enclose such a
+cell between them (two C shapes facing each other, or four bars in a ring),
+so A5's `Union` first requires every cell to carry at least one boundary
+edge on its operand's material side, read by the same `Reversed` against
+authored-sense comparison the crossing classifier reads. A cell with none is
+an enclosed void, and the pair takes the mesh path. A group operand needs
+the partner's interval exactly (prism-boolean §3.2's `Union` row), and a
+result whose survivors close into one loop is a prism.
+
 #### A6 — the crossing-sensitivity charge
 
 Prism-boolean §3.4 reroutes any scene with a `Partial` edge when an input

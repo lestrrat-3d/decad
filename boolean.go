@@ -268,6 +268,16 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			d.commit(body, a, b)
 			return body, nil
 		}
+		// docs/general-boolean-design.md §3 A5: a prism-group operand, or
+		// survivors that close into several disjoint loops.
+		if payload, ok, err := tryPrismGroupUnion(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			return commitAnalyticBoolean(ctx, d, a, b, payload)
+		}
 	}
 	if op == meshbool.OpCut {
 		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
@@ -303,6 +313,15 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			d.commit(body, a, b)
 			return body, nil
+		}
+		// docs/general-boolean-design.md §3 A5: a prism-group tool.
+		if pp, ok, err := tryPrismGroupCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			return commitAnalyticBoolean(ctx, d, a, b, pp)
 		}
 	}
 
@@ -1034,4 +1053,28 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 		return 0
 	}
 	return proofbound.AbsSumUpper(res.deltaCPrior, res.deltaRPrior)
+}
+
+// commitAnalyticBoolean evaluates an analytic boolean's result payload under
+// a fresh producer identity and commits it in place of both operands.
+func commitAnalyticBoolean(ctx context.Context, d *Document, a, b *Body, payload featurePayload) (*Body, error) {
+	ref := d.nextProducerID()
+	var body *Body
+	var err error
+	switch p := payload.(type) {
+	case prismPayload:
+		body, err = evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
+	case stackedPrismPayload:
+		body, err = evalStackedContext(ctx, d, ref, p)
+	default:
+		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, ErrUnsupported, payload)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(body, a, b)
+	return body, nil
 }

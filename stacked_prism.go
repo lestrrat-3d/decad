@@ -71,6 +71,17 @@ func (sp stackedPrismPayload) outerPrism() prismPayload {
 func (sp stackedPrismPayload) outerRuns() ([]prismPayload, error) {
 	base := sp.outerPrism()
 	var runs []prismPayload
+	if sp.isGroup() {
+		// A prism group's regions are disjoint lumps over one interval: one
+		// run per region.
+		slab := sp.slabs[0]
+		for _, region := range slab.regions {
+			run := base
+			run.profile = ProfileRecord{Outer: region.Outer}
+			runs = append(runs, run)
+		}
+		return runs, nil
+	}
 	for k, slab := range sp.slabs {
 		if k > 0 {
 			same, err := loopRecordsEqual(nil, sp.slabs[k-1].regions[0].Outer, slab.regions[0].Outer)
@@ -246,7 +257,41 @@ func stackedInterfaces(ctx context.Context, slabs []prismSlab, prior []prismSlab
 
 // falsifyStackedPayload refuses any record whose interfaces cannot be built
 // from whole, shared loop columns. It is run before topology and chording.
+// isGroup reports whether the payload is a prism group
+// (docs/mirror-pattern-design.md §6.3): one slab holding two or more regions.
+func (sp stackedPrismPayload) isGroup() bool {
+	return len(sp.slabs) == 1 && len(sp.slabs[0].regions) >= 2
+}
+
+// falsifyPrismGroup is §2.2's I1/I2 reading for a prism group: one slab with
+// two or more non-empty regions over a finite interval, and no interface.
+// That the regions are pairwise disjoint is proven when the group is built,
+// by sketch's arrangement of every region's outer (provePrismRegionsDisjoint);
+// this audit compares records and proves no geometry.
+func falsifyPrismGroup(ctx context.Context, sp stackedPrismPayload) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(sp.interfaces) != 0 {
+		return fmt.Errorf(`%w: a prism group has one slab and no interface`, ErrUnsupported)
+	}
+	slab := sp.slabs[0]
+	if math.IsNaN(slab.z0) || math.IsNaN(slab.z1) ||
+		math.IsInf(slab.z0, 0) || math.IsInf(slab.z1, 0) || slab.z0 >= slab.z1 {
+		return fmt.Errorf(`%w: slab 0 has an empty interval`, ErrDegenerate)
+	}
+	for r, region := range slab.regions {
+		if len(region.Outer.Segments) == 0 {
+			return fmt.Errorf(`%w: region %d of the prism group has no outer loop`, ErrDegenerate, r)
+		}
+	}
+	return nil
+}
+
 func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {
+	if sp.isGroup() {
+		return falsifyPrismGroup(ctx, sp)
+	}
 	if len(sp.slabs) < 2 || len(sp.interfaces) != len(sp.slabs)-1 {
 		return fmt.Errorf(`%w: a stacked prism needs two slabs and one interface between each pair`, ErrUnsupported)
 	}
@@ -434,6 +479,7 @@ func stackedPatchArea(ctx context.Context, sectionDelta float64, columns []stack
 type stackedColumn struct {
 	loop       LoopRecord
 	start, end int
+	region     int
 	loopIndex  int
 	bottom     []coedge
 	top        []coedge
@@ -450,6 +496,17 @@ func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]int, error) {
 	var columns []stackedColumn
 	bySlab := make([][]int, len(sp.slabs))
 	for k, slab := range sp.slabs {
+		if sp.isGroup() {
+			// One slab, so no column continues: each region's loops start
+			// their own columns, tagged with the region.
+			for r, region := range slab.regions {
+				for i, loop := range stackedLoops(region) {
+					bySlab[k] = append(bySlab[k], len(columns))
+					columns = append(columns, stackedColumn{loop: loop, start: k, end: k, region: r, loopIndex: i})
+				}
+			}
+			continue
+		}
 		loops := stackedLoops(slab.regions[0])
 		bySlab[k] = make([]int, len(loops))
 		for i, loop := range loops {
@@ -503,40 +560,53 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		}
 		for _, face := range wallFaces {
 			for i := range face.origins {
-				face.origins[i].Role = fmt.Sprintf("slab(%d).region(0).%s", col.start, face.origins[i].Role)
+				face.origins[i].Role = fmt.Sprintf("slab(%d).region(%d).%s", col.start, col.region, face.origins[i].Role)
 			}
 		}
 		col.bottom, col.top, col.perimeter = bottom, top, perimeter
 		faces = append(faces, wallFaces...)
 	}
 
-	regionArea := make([]proofbound.BoundedScalar, len(sp.slabs))
-	regionCentroid := make([]r3.Vec, len(sp.slabs))
-	regionCentroidBound := make([]float64, len(sp.slabs))
+	// One part per (slab, region): a stack has one region per slab, a prism
+	// group one slab with a region per lump.
+	type stackedPart struct {
+		slab, region  int
+		area          proofbound.BoundedScalar
+		centroid      r3.Vec
+		centroidBound float64
+	}
+	var parts []stackedPart
 	for k, slab := range sp.slabs {
-		ig, err := slab.regions[0].evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
-		if err != nil {
-			return nil, err
+		for r, region := range slab.regions {
+			ig, err := region.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
+			if err != nil {
+				return nil, err
+			}
+			if ig.area <= 0 {
+				return nil, fmt.Errorf(`%w: slab %d region %d has no material area`, ErrDegenerate, k, r)
+			}
+			perimeter := proofbound.BoundedScalar{}
+			walks := 0
+			for _, ci := range bySlab[k] {
+				if columns[ci].region != r {
+					continue
+				}
+				perimeter = proofbound.BoundedAdd(perimeter, columns[ci].perimeter)
+				walks += len(columns[ci].loop.Segments)
+			}
+			part := stackedPart{slab: k, region: r}
+			part.area = proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(ig.areaBound,
+				proofbound.SectionDisplacementArea(sp.sectionDelta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))))
+			u := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
+			v := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+			u.Bound = proofbound.AbsSumUpper(u.Bound, sp.sectionDelta)
+			v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
+			mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.z0, slab.z0Delta),
+				proofbound.MeasuredScalar(slab.z1, slab.z1Delta)), proofbound.ExactScalar(2))
+			part.centroid = base.point(u.Value, v.Value, mid.Value)
+			part.centroidBound = prismPointBound(base, u, v, mid)
+			parts = append(parts, part)
 		}
-		if ig.area <= 0 {
-			return nil, fmt.Errorf(`%w: slab %d has no material area`, ErrDegenerate, k)
-		}
-		perimeter := proofbound.BoundedScalar{}
-		walks := 0
-		for _, ci := range bySlab[k] {
-			perimeter = proofbound.BoundedAdd(perimeter, columns[ci].perimeter)
-			walks += len(columns[ci].loop.Segments)
-		}
-		regionArea[k] = proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(ig.areaBound,
-			proofbound.SectionDisplacementArea(sp.sectionDelta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))))
-		u := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
-		v := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
-		u.Bound = proofbound.AbsSumUpper(u.Bound, sp.sectionDelta)
-		v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
-		mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.z0, slab.z0Delta),
-			proofbound.MeasuredScalar(slab.z1, slab.z1Delta)), proofbound.ExactScalar(2))
-		regionCentroid[k] = base.point(u.Value, v.Value, mid.Value)
-		regionCentroidBound[k] = prismPointBound(base, u, v, mid)
 	}
 
 	newPlane := func(z, axial float64, flip bool, role string, area proofbound.BoundedScalar) (*Face, error) {
@@ -548,24 +618,47 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 			body: body, area: area.Value, areaBound: area.Bound,
 			axialDelta: axial, hasAxialDelta: true}, nil
 	}
+	// One bottom cap per region of the first slab and one top cap per region
+	// of the last, all under the prism's own roles, so CapStart(group)
+	// selects every lump's bottom face (docs/mirror-pattern-design.md §6.3).
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	capStart, err := newPlane(first.z0, first.z0Delta, true, roleCapStart, regionArea[0])
-	if err != nil {
-		return nil, err
+	var planar []*Face
+	capArea := proofbound.BoundedScalar{}
+	for _, part := range parts {
+		for _, end := range []struct {
+			slab int
+			z, d float64
+			flip bool
+			role string
+			top  bool
+		}{{0, first.z0, first.z0Delta, true, roleCapStart, false}, {len(sp.slabs) - 1, last.z1, last.z1Delta, false, roleCapEnd, true}} {
+			if part.slab != end.slab {
+				continue
+			}
+			f, err := newPlane(end.z, end.d, end.flip, end.role, part.area)
+			if err != nil {
+				return nil, err
+			}
+			for _, ci := range bySlab[end.slab] {
+				col := columns[ci]
+				if col.region != part.region {
+					continue
+				}
+				coedges := col.bottom
+				if end.top {
+					coedges = col.top
+				}
+				f.loops = append(f.loops, &Loop{coedges: coedges, outer: col.loopIndex == 0})
+			}
+			if len(planar) == 0 {
+				capArea = part.area
+			} else {
+				capArea = proofbound.BoundedAdd(capArea, part.area)
+			}
+			planar = append(planar, f)
+		}
 	}
-	capEnd, err := newPlane(last.z1, last.z1Delta, false, roleCapEnd, regionArea[len(regionArea)-1])
-	if err != nil {
-		return nil, err
-	}
-	for _, ci := range bySlab[0] {
-		col := columns[ci]
-		capStart.loops = append(capStart.loops, &Loop{coedges: col.bottom, outer: col.loopIndex == 0})
-	}
-	for _, ci := range bySlab[len(bySlab)-1] {
-		col := columns[ci]
-		capEnd.loops = append(capEnd.loops, &Loop{coedges: col.top, outer: col.loopIndex == 0})
-	}
-	planar := []*Face{capStart, capEnd}
+	capCount := len(planar)
 	for k := range sp.interfaces {
 		z, axial := sp.slabs[k].z1, sp.slabs[k].z1Delta
 		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
@@ -598,14 +691,15 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	body.lumps = sheetLumps(faces)
 
 	volume := proofbound.BoundedScalar{}
-	area := proofbound.BoundedAdd(regionArea[0], regionArea[len(regionArea)-1])
+	area := capArea
 	var moment [3]proofbound.BoundedScalar
-	for k, slab := range sp.slabs {
+	for _, part := range parts {
+		slab := sp.slabs[part.slab]
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(slab.z1, slab.z1Delta), proofbound.MeasuredScalar(slab.z0, slab.z0Delta))
-		mass := proofbound.BoundedMul(regionArea[k], height)
+		mass := proofbound.BoundedMul(part.area, height)
 		volume = proofbound.BoundedAdd(volume, mass)
-		point := regionCentroid[k]
-		pointBound := regionCentroidBound[k]
+		point := part.centroid
+		pointBound := part.centroidBound
 		for i, value := range []float64{point.X, point.Y, point.Z} {
 			moment[i] = proofbound.BoundedAdd(moment[i], proofbound.BoundedMul(mass, proofbound.MeasuredScalar(value, pointBound)))
 		}
@@ -615,7 +709,7 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(b.z1, b.z1Delta), proofbound.MeasuredScalar(a.z0, a.z0Delta))
 		area = proofbound.BoundedAdd(area, proofbound.BoundedMul(col.perimeter, height))
 	}
-	for _, face := range planar[2:] {
+	for _, face := range planar[capCount:] {
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.area, face.areaBound))
 	}
 	if volume.Value <= 0 {

@@ -221,7 +221,7 @@ fallback to `Union`:
 
 | # | Condition | Sentinel |
 |---|---|---|
-| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload` whose slabs share one outer loop (a union-built stack does not), and the receiver is a solid. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach; a sheet has no union to build) |
+| J1 | The receiver's payload is `prismPayload` or `stackedPrismPayload` whose slabs share one outer loop (a union-built stack does not) and hold one region each (a prism group does not), and the receiver is a solid. | `ErrUnsupported` (a revolve, loft, sweep, cup, cap blend or faceted receiver joins through `MirroredCopy` + `Union`, with that boolean's own reach; a sheet has no union to build) |
 | J2 | The plane is a `MirrorFace` of the receiver itself, its selector resolves to at least one face, and every selected face is a planar WALL of the receiver — a face whose role is `side(i, j)` (or `slab(k).region(0).side(i, j)`) over a `LineSeg`. | `ErrUnsupported` for a `MirrorFrame` or another body's face (the join needs the mirror line as a recorded carrier, §5.2); `ErrCardinality` with `Expected "at least 1"` for no face; `ErrDegenerate` for a cap or a curved wall |
 | J3 | Every selected wall's segment lies on ONE line: the exact rational cross product of each segment's recorded endpoints against the first's is zero (`internal/proof`). | `ErrDegenerate` |
 | J4 | Every selected segment is WHOLE (`TStart`/`TEnd` the natural domain). | `ErrUnsupported` (a fragment of a longer carrier would mirror a wall the record does not state whole) |
@@ -440,7 +440,7 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | `Union(group, other)` / `Intersect` | general-boolean class A5; until it lands, the mesh path over the group's own tessellation (stacked §6) |
 | `Patterned` of a group (a grid) | the frame-keeping arm applies to every region at once; the disjointness scene holds `Count_1 · Count_2` outers |
 | `Mirrored` / `MirroredCopy` | reflection in `xform` (§3) |
-| `WithJoin` | J1 admits it; every region is spliced or mirrored by §5.2 |
+| `WithJoin` | `ErrUnsupported` (J1): the join does not splice a group's lumps one by one |
 | `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` (modify-reach RX3 / SX10 for a stacked receiver), as today |
 | `Verify` surveys, clearance, tolerance gate | stacked §6 |
 | `Tessellate`, STL/OBJ/3MF/STEP | stacked §5; STEP refuses several shells (`docs/step-export-design.md`) and a group has `Count`, so STEP of a group is `ErrUnsupported` until that writer takes several solids |
