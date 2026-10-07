@@ -264,32 +264,9 @@ func classBFaceRecord(f brepFace) ProfileRecord {
 	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{f.wall}}}
 }
 
-// classBNaturalRecord reports whether every segment is a line, circle or arc
-// recorded over its natural range, walked either way: a line or an arc over
-// [0, 1] or [1, 0], a circle over one whole turn.
+// classBNaturalRecord adapts a root profile to the internal record gate.
 func classBNaturalRecord(p ProfileRecord) bool {
-	natural := func(t0, t1 float64) bool { return (t0 == 0 && t1 == 1) || (t0 == 1 && t1 == 0) }
-	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		for _, seg := range loop.Segments {
-			switch s := seg.(type) {
-			case LineSeg:
-				if !natural(s.TStart, s.TEnd) {
-					return false
-				}
-			case ArcSeg:
-				if !natural(s.TStart, s.TEnd) {
-					return false
-				}
-			case CircleSeg:
-				if !natural(s.TStart, s.TEnd) {
-					return false
-				}
-			default:
-				return false
-			}
-		}
-	}
-	return true
+	return classbgeom.NaturalRecord(append([]LoopRecord{p.Outer}, p.Holes...))
 }
 
 // classBShiftedTool re-expresses Y's record into g, Y's axes at the reference
@@ -299,74 +276,19 @@ func classBNaturalRecord(p ProfileRecord) bool {
 // nothing: a datum plane and its CreateOffsetPlane at a float distance meet
 // that, and a pair whose sums would round misses.
 func classBShiftedTool(ref r3.Frame, y prismPayload, g r3.Frame) (prismPayload, bool) {
-	ox, oy := ref.Origin(), y.frame.Origin()
-	diff := [3]*big.Rat{
-		new(big.Rat).Sub(proofarith.FloatRat(oy.X), proofarith.FloatRat(ox.X)),
-		new(big.Rat).Sub(proofarith.FloatRat(oy.Y), proofarith.FloatRat(ox.Y)),
-		new(big.Rat).Sub(proofarith.FloatRat(oy.Z), proofarith.FloatRat(ox.Z)),
-	}
-	var shift [3]*big.Rat
-	for i, axis := range [3]r3.Vec{g.U(), g.V(), g.N()} {
-		shift[i] = proofbound.RatAdd(
-			proofbound.RatMul(diff[0], proofarith.FloatRat(axis.X)),
-			proofbound.RatMul(diff[1], proofarith.FloatRat(axis.Y)),
-			proofbound.RatMul(diff[2], proofarith.FloatRat(axis.Z)),
-		)
-	}
-	ok := true
-	move := func(value float64, i int) float64 {
-		exact := new(big.Rat).Add(proofarith.FloatRat(value), shift[i])
-		held, _ := exact.Float64()
-		if proofarith.RationalFloatError(exact, held) != 0 {
-			ok = false
-		}
-		return held
-	}
-	point := func(p Point2) Point2 { return Point2{U: move(p.U, 0), V: move(p.V, 1)} }
 	loops := append([]LoopRecord{y.profile.Outer}, y.profile.Holes...)
-	moved := make([]LoopRecord, len(loops))
-	for li, loop := range loops {
-		for _, seg := range loop.Segments {
-			switch s := seg.(type) {
-			case LineSeg:
-				s.Start, s.End = point(s.Start), point(s.End)
-				seg = s
-			case ArcSeg:
-				s.Center, s.Start, s.End = point(s.Center), point(s.Start), point(s.End)
-				seg = s
-			case CircleSeg:
-				s.Center = point(s.Center)
-				seg = s
-			}
-			moved[li].Segments = append(moved[li].Segments, seg)
-		}
-	}
+	moved, z0, z1, ok := classbgeom.ShiftedRecord(ref, y.frame, g, loops, y.z0, y.z1)
 	out := y
 	out.frame = g
 	out.profile = ProfileRecord{Outer: moved[0], Holes: moved[1:]}
-	out.z0, out.z1 = move(y.z0, 2), move(y.z1, 2)
+	out.z0, out.z1 = z0, z1
 	out.walks = nil
 	return out, ok
 }
 
-// classBAxisAligned is B6 for one record. The other operand's normal lies on
-// a reference axis (B4), and every face frame's axes are reference axes, so a
-// line runs along or across it exactly when one of its two coordinate
-// differences is zero. Circles and arcs have no direction and pass.
+// classBAxisAligned adapts a root profile to the internal record gate.
 func classBAxisAligned(p ProfileRecord) bool {
-	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		for _, seg := range loop.Segments {
-			line, ok := seg.(LineSeg)
-			if !ok {
-				continue
-			}
-			du, dv := line.End.U-line.Start.U, line.End.V-line.Start.V
-			if du != 0 && dv != 0 {
-				return false
-			}
-		}
-	}
-	return true
+	return classbgeom.AxisAligned(append([]LoopRecord{p.Outer}, p.Holes...))
 }
 
 type classBBox = classbgeom.Box2
@@ -474,12 +396,7 @@ func classBNoCoplanarFaces(ctx context.Context, cp classBPair) (bool, error) {
 // classBSlab is one face of X across d that Y's tube meets: the face's index,
 // its level along d in reference coordinates and that level's displacement,
 // and the side its outward normal points to along d (+1 or −1).
-type classBSlab struct {
-	face       int
-	level      float64
-	levelDelta float64
-	outward    int
-}
+type classBSlab = classbgeom.Slab
 
 // classBThrough is the reach of an admitted pair: one slab (rooted) or two,
 // ordered by level (through).
@@ -537,74 +454,28 @@ func classBThroughReach(ctx context.Context, cp classBPair) (classBThrough, bool
 		if !ok {
 			return classBThrough{}, false, nil
 		}
-		slab.face = fi
+		slab.Face = fi
 		slabs = append(slabs, slab)
 	}
 	if len(slabs) == 0 || len(slabs) > 2 {
-		return classBThrough{}, false, nil
-	}
-	if len(slabs) == 2 && slabs[1].level < slabs[0].level {
-		slabs[0], slabs[1] = slabs[1], slabs[0]
-	}
-	if len(slabs) == 2 && (!(slabs[0].level < slabs[1].level) || slabs[0].outward != -1 || slabs[1].outward != 1) {
 		return classBThrough{}, false, nil
 	}
 	// Y's interval along d in reference coordinates, its level displacements
 	// as inward margins.
 	lowY := cp.xLocalOfY(0, 0, cp.y.z0)[d]
 	highY := cp.xLocalOfY(0, 0, cp.y.z1)[d]
-	lowDelta, highDelta := cp.y.z0Delta, cp.y.z1Delta
-	if lowY > highY {
-		lowY, highY = highY, lowY
-		lowDelta, highDelta = highDelta, lowDelta
-	}
-	b0 := new(big.Rat).Add(rat(lowY), rat(lowDelta))
-	b1 := new(big.Rat).Sub(rat(highY), rat(highDelta))
-	for _, s := range slabs {
-		lo := new(big.Rat).Sub(rat(s.level), rat(s.levelDelta))
-		hi := new(big.Rat).Add(rat(s.level), rat(s.levelDelta))
-		if b0.Cmp(lo) >= 0 || hi.Cmp(b1) >= 0 {
-			return classBThrough{}, false, nil
-		}
+	if !classbgeom.QualifySlabs(slabs, lowY, highY, cp.y.z0Delta, cp.y.z1Delta) {
+		return classBThrough{}, false, nil
 	}
 	return classBThrough{slabs: slabs}, true, nil
 }
 
-// classBAcross reads one face of X as a face across d: a planar face whose
-// normal lies on d, at its level, outward per its flag; or a straight wall
-// whose line holds d constant, at that coordinate, outward to the right of
-// its walk. Anything else is not across d.
+// classBAcross adapts one face to the internal through-reach classifier.
 func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
-	if f.planar() {
-		if e.axis[2] != d {
-			return classBSlab{}, false
-		}
-		out := int(e.sign[2])
-		if !f.outward {
-			out = -out
-		}
-		return classBSlab{level: e.sign[2]*f.z0 + 0, levelDelta: f.z0Delta, outward: out}, true
-	}
-	line, ok := f.wall.(LineSeg)
-	if !ok {
-		return classBSlab{}, false
-	}
-	start, end := [2]float64{line.Start.U, line.Start.V}, [2]float64{line.End.U, line.End.V}
-	for i := range 2 {
-		if e.axis[i] != d || start[i] != end[i] {
-			continue
-		}
-		// The wall runs along local axis 1−i. The material lies on the left
-		// of its walk, so the outward normal is its right: (t_v, −t_u).
-		t := [2]float64{end[0] - start[0], end[1] - start[1]}
-		right := [2]float64{t[1], -t[0]}
-		sign := 1
-		if right[i]*e.sign[i] < 0 {
-			sign = -1
-		}
-		return classBSlab{level: e.sign[i]*start[i] + 0, outward: sign}, true
-	}
-	return classBSlab{}, false
+	return classbgeom.Across(classbgeom.AcrossFace{
+		Planar: f.planar(), Wall: f.wall, Z0: f.z0, Z0Delta: f.z0Delta,
+		Outward: f.outward, Axis: e.axis, Sign: e.sign,
+	}, d)
 }
 
 // classBSlabFace is one slab face rebuilt in g: its region before Y's
@@ -626,13 +497,13 @@ type classBSlabFace struct {
 // the plane's orientation, the loops are walked back (rewindLoop), as a
 // reflected record is.
 func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (classBSlabFace, error) {
-	f := cp.x.faces[s.face]
-	e := cp.embeds[s.face]
+	f := cp.x.faces[s.Face]
+	e := cp.embeds[s.Face]
 	toG := func(u, v, z float64) [3]float64 { return cp.yLocalOfX(e.canon(u, v, z)) }
 	out := classBSlabFace{
-		level:      cp.sign[2]*s.level + 0,
-		levelDelta: s.levelDelta,
-		outward:    float64(s.outward)*cp.sign[2] > 0,
+		level:      cp.sign[2]*s.Level + 0,
+		levelDelta: s.LevelDelta,
+		outward:    float64(s.Outward)*cp.sign[2] > 0,
 	}
 	if !f.planar() {
 		line, ok := f.wall.(LineSeg)
@@ -761,7 +632,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	// Point of no return (prism-boolean §3.4).
 	drop := map[int]struct{}{}
 	for _, s := range reach.slabs {
-		drop[s.face] = struct{}{}
+		drop[s.Face] = struct{}{}
 	}
 	out := brepPayload{xform: cp.x.xform}
 	for fi, f := range cp.x.faces {
