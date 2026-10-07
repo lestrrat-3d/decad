@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -18,11 +19,6 @@ import (
 type thickenAxisDir struct{ u, v int }
 
 type thickenExactPoint struct{ u, v *big.Rat }
-
-type thickenAxisJoin struct {
-	arc              bool
-	m, before, after thickenExactPoint
-}
 
 func thickenAxisSection(ctx context.Context, profile ProfileRecord, side ThickenSide,
 	amount float64, budget *proofbound.WorkBudget, radial *thickenRadial) (thickenSection, error) {
@@ -85,46 +81,15 @@ func thickenAxisSection(ctx context.Context, profile ProfileRecord, side Thicken
 }
 
 func thickenAxisDirections(loop cornerLoop, budget *proofbound.WorkBudget) ([]thickenAxisDir, error) {
-	n := len(loop.walks)
-	if n < 4 {
-		return nil, fmt.Errorf(`%w: an axis-parallel prism loop needs at least four walks`, ErrUnsupported)
+	dirs, err := thickenaxis.AxisDirections(loop.walks, budget)
+	if err != nil {
+		return nil, err
 	}
-	dirs := make([]thickenAxisDir, n)
-	for i, w := range loop.walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		next := loop.walks[(i+1)%n]
-		if w.StartBound.U != 0 || w.StartBound.V != 0 || w.EndBound.U != 0 || w.EndBound.V != 0 {
-			return nil, fmt.Errorf(`%w: a source line endpoint has an unresolved coordinate bound`, ErrUnsupported)
-		}
-		if w.EndU != next.StartU || w.EndV != next.StartV {
-			return nil, fmt.Errorf(`%w: the prism loop has no exact adjacent joins`, ErrUnsupported)
-		}
-		switch {
-		case w.StartU == w.EndU && w.StartV < w.EndV:
-			dirs[i] = thickenAxisDir{v: 1}
-		case w.StartU == w.EndU && w.StartV > w.EndV:
-			dirs[i] = thickenAxisDir{v: -1}
-		case w.StartV == w.EndV && w.StartU < w.EndU:
-			dirs[i] = thickenAxisDir{u: 1}
-		case w.StartV == w.EndV && w.StartU > w.EndU:
-			dirs[i] = thickenAxisDir{u: -1}
-		default:
-			return nil, fmt.Errorf(`%w: the prism loop is not axis-parallel`, ErrUnsupported)
-		}
-		if proofarith.FloatRat(w.StartU) == nil || proofarith.FloatRat(w.StartV) == nil ||
-			proofarith.FloatRat(w.EndU) == nil || proofarith.FloatRat(w.EndV) == nil {
-			return nil, fmt.Errorf(`%w: a prism boundary coordinate is not finite`, ErrUnsupported)
-		}
+	out := make([]thickenAxisDir, len(dirs))
+	for i, d := range dirs {
+		out[i] = thickenAxisDir{u: d.U(), v: d.V()}
 	}
-	for i := range dirs {
-		p, q := dirs[(i+n-1)%n], dirs[i]
-		if p.u*q.v-p.v*q.u == 0 {
-			return nil, fmt.Errorf(`%w: a prism corner is not a right angle`, ErrUnsupported)
-		}
-	}
-	return dirs, nil
+	return out, nil
 }
 
 func thickenAxisOffset(budget *proofbound.WorkBudget, source ProfileRecord, loop cornerLoop,
@@ -144,86 +109,11 @@ func thickenAxisOffset(budget *proofbound.WorkBudget, source ProfileRecord, loop
 
 func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated LoopRecord,
 	sense int, amount float64, budget *proofbound.WorkBudget) error {
-	n := len(dirs)
-	t := proofarith.FloatRat(amount)
-	joins := make([]thickenAxisJoin, n)
-	for i := range dirs {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return err
-		}
-		prev, cur := dirs[(i+n-1)%n], dirs[i]
-		turn := prev.u*cur.v - prev.v*cur.u
-		vertex := loop.walks[i]
-		j := &joins[i]
-		j.arc = turn == -sense
-		j.before = thickenExactOffset(vertex.StartU, vertex.StartV, sense*(-prev.v), sense*prev.u, t)
-		j.after = thickenExactOffset(vertex.StartU, vertex.StartV, sense*(-cur.v), sense*cur.u, t)
-		j.m = thickenExactOffset(vertex.StartU, vertex.StartV,
-			sense*(-prev.v-cur.v), sense*(prev.u+cur.u), t)
+	axisDirs := make([]thickenaxis.AxisDir, len(dirs))
+	for i, d := range dirs {
+		axisDirs[i] = thickenaxis.NewAxisDir(d.u, d.v)
 	}
-	idx := 0
-	for i := range dirs {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return err
-		}
-		if idx >= len(generated.Segments) {
-			return fmt.Errorf(`%w: the offset dropped a line walk`, ErrUnsupported)
-		}
-		line, ok := generated.Segments[idx].(LineSeg)
-		if !ok || line.TStart != 0 || line.TEnd != 1 {
-			return fmt.Errorf(`%w: the offset line is not the generated walk`, ErrUnsupported)
-		}
-		start, end := joins[i].m, joins[(i+1)%n].m
-		if joins[i].arc {
-			start = joins[i].after
-		}
-		if joins[(i+1)%n].arc {
-			end = joins[(i+1)%n].before
-		}
-		if !thickenPointIsExact(line.Start, start) || !thickenPointIsExact(line.End, end) {
-			return fmt.Errorf(`%w: a generated offset line coordinate is rounded`, ErrUnsupported)
-		}
-		idx++
-		corner := (i + 1) % n
-		if !joins[corner].arc {
-			continue
-		}
-		if idx >= len(generated.Segments) {
-			return fmt.Errorf(`%w: the offset dropped a corner arc`, ErrUnsupported)
-		}
-		arc, ok := generated.Segments[idx].(ArcSeg)
-		if !ok {
-			return fmt.Errorf(`%w: the offset corner is not an arc`, ErrUnsupported)
-		}
-		before, after := joins[corner].before, joins[corner].after
-		if sense > 0 {
-			before, after = after, before
-		}
-		v := loop.walks[corner]
-		center := thickenExactOffset(v.StartU, v.StartV, 0, 0, t)
-		if !thickenPointIsExact(arc.Center, center) ||
-			!thickenPointIsExact(arc.Start, before) || !thickenPointIsExact(arc.End, after) ||
-			(sense < 0 && (arc.TStart != 0 || arc.TEnd != 1)) ||
-			(sense > 0 && (arc.TStart != 1 || arc.TEnd != 0)) {
-			return fmt.Errorf(`%w: a generated corner arc coordinate is rounded`, ErrUnsupported)
-		}
-		idx++
-	}
-	if idx != len(generated.Segments) {
-		return fmt.Errorf(`%w: the offset added an unexpected feature`, ErrUnsupported)
-	}
-	return nil
-}
-
-func thickenExactOffset(u, v float64, du, dv int, t *big.Rat) thickenExactPoint {
-	return thickenExactPoint{
-		u: new(big.Rat).Add(proofarith.FloatRat(u), new(big.Rat).Mul(big.NewRat(int64(du), 1), t)),
-		v: new(big.Rat).Add(proofarith.FloatRat(v), new(big.Rat).Mul(big.NewRat(int64(dv), 1), t)),
-	}
-}
-
-func thickenPointIsExact(got Point2, want thickenExactPoint) bool {
-	return proofarith.RationalFloatError(want.u, got.U) == 0 && proofarith.RationalFloatError(want.v, got.V) == 0
+	return thickenaxis.CertifyAxisOffset(loop.walks, axisDirs, generated, sense, amount, budget)
 }
 
 // thickenAffine is an exact coordinate a+bτ. Every axis-line endpoint and
