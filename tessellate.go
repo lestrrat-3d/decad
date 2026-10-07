@@ -1815,154 +1815,56 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 	return tessellation.ChordSagitta(radius, sweep, n)
 }
 
-// requireLoopClearance rejects a profile whose chorded loops come within
-// their combined chord bounds of one another. Each chorded loop lies within
-// its own sagitta of the true curve, so a polyline clearance beyond the two
-// bounds PROVES the true loops are disjoint; anything closer — a hole
-// tangent to the outline, or two holes touching — is a pinch this mesh
-// cannot prove it represents, and is refused.
+// sectionPoints maps root plane coordinates to the shared section proof.
+func sectionPoints(pts []Point2) []tessellation.SectionPoint {
+	out := make([]tessellation.SectionPoint, len(pts))
+	for i, p := range pts {
+		out[i] = tessellation.SectionPoint{U: p.U, V: p.V}
+	}
+	return out
+}
+
+// requireLoopClearance maps the first cross-loop clearance failure to the
+// caller's typed tessellation refusal.
 func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
-	floor, err := sectionClearanceFloor(ctx, pts)
-	if err != nil {
+	failure, failed, err := tessellation.SectionLoopClearance(ctx, sectionPoints(pts), loopIdx, loopSag)
+	if err != nil || !failed {
 		return err
 	}
-	for i := range loopIdx {
-		for j := i + 1; j < len(loopIdx); j++ {
-			chordGate := loopSag[i] + loopSag[j]
-			gate := chordGate + floor
-			d, err := loopPolylineDistance(ctx, pts, loopIdx[i], loopIdx[j])
-			if err != nil {
-				return err
-			}
-			if d <= gate {
-				msg := fmt.Sprintf(
-					`cap boundary loops %d and %d have measured distance %s; distance must exceed the required clearance gate %s`,
-					i, j, units.Millimeters(d), units.Millimeters(gate),
-				)
-				// Chording can only lower the gate toward floor. When the
-				// measured gap does not exceed floor, no finer retry can pass.
-				if d > floor && chordGate > 0 {
-					msg += `; retry with a finer chord tolerance to reduce the gate`
-				}
-				return &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)}
-			}
-		}
+	gate := failure.ChordGate + failure.Floor
+	msg := fmt.Sprintf(
+		`cap boundary loops %d and %d have measured distance %s; distance must exceed the required clearance gate %s`,
+		failure.LoopA, failure.LoopB, units.Millimeters(failure.Distance), units.Millimeters(gate),
+	)
+	if failure.Distance > failure.Floor && failure.ChordGate > 0 {
+		msg += `; retry with a finer chord tolerance to reduce the gate`
 	}
-	return nil
+	return &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)}
 }
 
-// sectionClearanceFloor is the round-off floor both section clearance gates
-// read, in two translation-honest parts: 1e-9 of the geometry's own span
-// (coordinates carry ~1e-9-relative noise at their own scale, and a span is
-// translation-invariant), plus a few ulps of the largest coordinate magnitude —
-// the arithmetic's actual rounding, which grows with distance from the origin
-// without ever inflating the floor by the position itself.
-func sectionClearanceFloor(ctx context.Context, pts []Point2) (float64, error) {
-	minU, maxU := math.Inf(1), math.Inf(-1)
-	minV, maxV := math.Inf(1), math.Inf(-1)
-	maxAbs := 0.0
-	budget := proofbound.NewWorkBudget(ctx)
-	for _, p := range pts {
-		if err := budget.Step(); err != nil {
-			return 0, err
-		}
-		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
-		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
-		maxAbs = math.Max(maxAbs, math.Max(math.Abs(p.U), math.Abs(p.V)))
-	}
-	span := math.Hypot(maxU-minU, maxV-minV)
-	return 1e-9*span + 4*(math.Nextafter(maxAbs, math.Inf(1))-maxAbs), nil
-}
-
-// requireWalkClearance is the INTRA-loop half of
-// docs/tessellation-design.md §9's meridian section proof, beside
-// requireLoopClearance's cross-loop half: every non-adjacent chord pair WITHIN
-// one loop must clear the two sagitta tubes its own two walks prove, plus the
-// same scale-anchored float floor.
-//
-// It is what carries the analytic-to-chord homotopy Hm for a curved generator.
-// Each moving point of a chorded walk stays inside that walk's own upward-
-// rounded sagitta tube, so two chords whose polylines clear the summed tubes
-// have disjoint tubes, and every intermediate section on the homotopy is
-// therefore as simple and as nested as the chorded one. A static polyline test
-// alone would not say that, which is why the gate is the summed tubes and not
-// the measured gap.
-//
-// Chords sharing a sample are ADJACENT and are skipped: they are required to
-// meet there, and the loop's own turn is what decides that junction. A straight
-// walk contributes a zero tube, so a section of straight generators alone
-// reduces to the endpoint clearance R3 already ran.
-//
-// sag is parallel to loopIdx: sag[i][k] is the proven sagitta of the chord
-// leaving sample loopIdx[i][k].
+// requireWalkClearance maps the first within-loop clearance failure to the
+// indexed refusal that deterministic meridian refinement reads.
 func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
-	floor, err := sectionClearanceFloor(ctx, pts)
-	if err != nil {
+	failure, failed, err := tessellation.SectionWalkClearance(ctx, sectionPoints(pts), loopIdx, sag)
+	if err != nil || !failed {
 		return err
 	}
-	budget := proofbound.NewWorkBudget(ctx)
-	for i, idx := range loopIdx {
-		m := len(idx)
-		if m < 4 {
-			continue
-		}
-		for a := range m {
-			for b := a + 2; b < m; b++ {
-				if err := budget.Step(); err != nil {
-					return err
-				}
-				if a == 0 && b == m-1 {
-					continue
-				}
-				chordGate := sag[i][a] + sag[i][b]
-				gate := chordGate + floor
-				d := segSegDistance(
-					pts[idx[a]], pts[idx[(a+1)%m]],
-					pts[idx[b]], pts[idx[(b+1)%m]],
-				)
-				if d > gate {
-					continue
-				}
-				msg := fmt.Sprintf(
-					`chords %d and %d of section loop %d have measured distance %s; distance must exceed the required clearance gate %s`,
-					a, b, i, units.Millimeters(d), units.Millimeters(gate),
-				)
-				if d > floor && chordGate > 0 {
-					msg += `; retry with a finer chord tolerance to reduce the gate`
-				}
-				return &sectionClearanceError{
-					err:  &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)},
-					loop: i, a: a, b: b,
-				}
-			}
-		}
+	gate := failure.ChordGate + failure.Floor
+	msg := fmt.Sprintf(
+		`chords %d and %d of section loop %d have measured distance %s; distance must exceed the required clearance gate %s`,
+		failure.ChordA, failure.ChordB, failure.Loop, units.Millimeters(failure.Distance), units.Millimeters(gate),
+	)
+	if failure.Distance > failure.Floor && failure.ChordGate > 0 {
+		msg += `; retry with a finer chord tolerance to reduce the gate`
 	}
-	return nil
-}
-
-// loopPolylineDistance is the minimum distance between two closed sample
-// polylines.
-func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float64, error) {
-	best := math.Inf(1)
-	budget := proofbound.NewWorkBudget(ctx)
-	for i := range a {
-		a0, a1 := pts[a[i]], pts[a[(i+1)%len(a)]]
-		for j := range b {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-			b0, b1 := pts[b[j]], pts[b[(j+1)%len(b)]]
-			best = math.Min(best, segSegDistance(a0, a1, b0, b1))
-		}
+	return &sectionClearanceError{
+		err:  &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)},
+		loop: failure.Loop, a: failure.ChordA, b: failure.ChordB,
 	}
-	return best, nil
 }
 
 // sectionClearanceError names the two chords requireWalkClearance refused and
-// the loop they belong to, so a caller that can refine one of them knows which
-// one to refine (docs/tessellation-design.md §3: refinement is deterministic).
-// It wraps the ordinary tessellationExpectedError, so a caller that cannot
-// refine reads exactly the refusal it would have read without it.
+// the loop they belong to, so deterministic refinement can choose them.
 type sectionClearanceError struct {
 	err        error
 	loop, a, b int
@@ -1972,40 +1874,9 @@ func (e *sectionClearanceError) Error() string { return e.err.Error() }
 func (e *sectionClearanceError) Unwrap() error { return e.err }
 
 // tessellationExpectedError marks a valid operand whose requested chording
-// cannot prove its topology. Public Tessellate still exposes ErrDegenerate
-// through Unwrap; read-only interference treats it as an undecided pair.
+// cannot prove its topology. Public Tessellate exposes ErrDegenerate through
+// Unwrap; read-only interference treats it as an undecided pair.
 type tessellationExpectedError struct{ err error }
 
 func (e *tessellationExpectedError) Error() string { return e.err.Error() }
 func (e *tessellationExpectedError) Unwrap() error { return e.err }
-
-// segSegDistance is the minimum distance between two 2D segments.
-func segSegDistance(a0, a1, b0, b1 Point2) float64 {
-	if segmentsCross(a0, a1, b0, b1) {
-		return 0
-	}
-	d := math.Min(pointSegDistance(a0, b0, b1), pointSegDistance(a1, b0, b1))
-	d = math.Min(d, pointSegDistance(b0, a0, a1))
-	return math.Min(d, pointSegDistance(b1, a0, a1))
-}
-
-// segmentsCross reports whether the two segments properly intersect.
-func segmentsCross(a0, a1, b0, b1 Point2) bool {
-	d1 := cross2(b0, b1, a0)
-	d2 := cross2(b0, b1, a1)
-	d3 := cross2(a0, a1, b0)
-	d4 := cross2(a0, a1, b1)
-	return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-		((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
-}
-
-// pointSegDistance is the distance from p to segment (s0, s1).
-func pointSegDistance(p, s0, s1 Point2) float64 {
-	du, dv := s1.U-s0.U, s1.V-s0.V
-	l2 := du*du + dv*dv
-	t := 0.0
-	if l2 > 0 {
-		t = math.Min(1, math.Max(0, ((p.U-s0.U)*du+(p.V-s0.V)*dv)/l2))
-	}
-	return math.Hypot(p.U-(s0.U+t*du), p.V-(s0.V+t*dv))
-}
