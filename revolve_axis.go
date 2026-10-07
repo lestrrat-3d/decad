@@ -13,7 +13,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -39,242 +38,38 @@ type axisLine2 struct {
 }
 
 // finiteAxisValues reports whether every derived axis value is representable.
-// Axis inputs are checked before arithmetic, but subtracting finite endpoints
-// or transforming a finite world point can still overflow.
 func finiteAxisValues(values ...float64) bool {
-	for _, value := range values {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return false
-		}
-	}
-	return true
+	return revolveaxis.FiniteAxisValues(values...)
 }
 
-// axisInPlane resolves an axis variant into plane-local coordinates,
-// validating it non-degenerate and coplanar with the profile plane
-// (docs/evaluator-design.md §6).
+// axisInPlane reads the public axis variant and adapts its resolved coordinates.
 func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
-	switch a := a.(type) {
+	var input revolveaxis.AxisInput
+	switch value := a.(type) {
 	case SketchLine:
-		for _, c := range []float64{a.Start.U, a.Start.V, a.End.U, a.End.V} {
-			if math.IsNaN(c) || math.IsInf(c, 0) {
-				return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis endpoint is not finite`, ErrNotFinite)
-			}
+		input = revolveaxis.SketchLine{
+			StartU: value.Start.U, StartV: value.Start.V,
+			EndU: value.End.U, EndV: value.End.V,
 		}
-		du, dv := a.End.U-a.Start.U, a.End.V-a.Start.V
-		if !finiteAxisValues(du, dv) {
-			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis delta is not finite`, ErrNotFinite)
-		}
-		scale := math.Max(math.Abs(du), math.Abs(dv))
-		if scale == 0 {
-			return axisLine2{}, fmt.Errorf(`%w: a zero-length sketch line names no axis`, ErrDegenerate)
-		}
-		scaledU, scaledV := du/scale, dv/scale
-		l := math.Hypot(scaledU, scaledV)
-		if !finiteAxisValues(l) {
-			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis length is not finite`, ErrNotFinite)
-		}
-		dU, dV := scaledU/l, scaledV/l
-		if !finiteAxisValues(dU, dV) {
-			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis direction is not finite`, ErrNotFinite)
-		}
-		// Recover the held length for exact direction-bound checks. An overflowing
-		// magnitude falls back to the conservative direction bound.
-		l = scale * l
-		dUBound, dVBound := sketchAxisDirectionBounds(a, l, dU, dV)
-		return axisLine2{
-			aU: a.Start.U, aV: a.Start.V,
-			dU: dU, dV: dV,
-			dUBound: dUBound,
-			dVBound: dVBound,
-		}, nil
 	case ConstructionAxis:
-		for _, c := range []float64{a.Origin.X, a.Origin.Y, a.Origin.Z, a.Dir.X, a.Dir.Y, a.Dir.Z} {
-			if math.IsNaN(c) || math.IsInf(c, 0) {
-				return axisLine2{}, fmt.Errorf(`%w: a construction axis component is not finite`, ErrNotFinite)
-			}
-		}
-		dir, ok := a.Dir.Normalize()
-		if !ok {
-			return axisLine2{}, fmt.Errorf(`%w: a zero-direction construction axis names no axis`, ErrDegenerate)
-		}
-		if !finiteAxisValues(dir.X, dir.Y, dir.Z) {
-			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis direction is not finite`, ErrNotFinite)
-		}
-		local := frame.ToLocal(a.Origin)
-		if !finiteAxisValues(local.X, local.Y, local.Z) {
-			return axisLine2{}, fmt.Errorf(`%w: a construction axis has non-finite plane-local coordinates`, ErrNotFinite)
-		}
-		localLen := local.Len()
-		if !finiteAxisValues(localLen) {
-			return axisLine2{}, fmt.Errorf(`%w: a construction axis plane-local length is not finite`, ErrNotFinite)
-		}
-		scale := math.Max(1, localLen)
-		if math.Abs(local.Z) > 1e-9*scale {
-			return axisLine2{}, fmt.Errorf(`%w: the revolve axis does not lie in the profile plane`, ErrDegenerate)
-		}
-		du, dv, dn := dir.Dot(frame.U()), dir.Dot(frame.V()), dir.Dot(frame.N())
-		if !finiteAxisValues(du, dv, dn) {
-			return axisLine2{}, fmt.Errorf(`%w: a construction axis has a non-finite plane-local direction`, ErrNotFinite)
-		}
-		if math.Abs(dn) > 1e-9 {
-			return axisLine2{}, fmt.Errorf(`%w: the revolve axis does not lie in the profile plane`, ErrDegenerate)
-		}
-		l := math.Hypot(du, dv)
-		if !finiteAxisValues(l) {
-			return axisLine2{}, fmt.Errorf(`%w: a construction axis plane-local direction length is not finite`, ErrNotFinite)
-		}
-		if l == 0 {
-			return axisLine2{}, fmt.Errorf(`%w: a construction axis has no direction in the profile plane`, ErrDegenerate)
-		}
-		dU, dV := du/l, dv/l
-		if !finiteAxisValues(dU, dV) {
-			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis plane-local direction is not finite`, ErrNotFinite)
-		}
-		// The anchor's plane-local coordinates take the ROUNDING their own
-		// projection committed (internal/proofbound/bounds.go's proofbound.ExactFrameLocalRound), measured
-		// exactly against the frame and the world origin as the exact leaves
-		// they are — zero for an exactly representable projection, and never
-		// the anchor's own distance from the frame origin, which bounds the
-		// coordinate's magnitude and not its error. The magnitude envelope
-		// survives only as the fallback for a component no rational holds.
-		anchorUpper := proofbound.AbsSumUpper(
-			a.Origin.X, a.Origin.Y, a.Origin.Z,
-			frame.Origin().X, frame.Origin().Y, frame.Origin().Z,
-		)
-		aUBound := math.Min(
-			proofbound.ExactFrameLocalRound(frame, a.Origin, frame.U(), local.X),
-			proofbound.ConservativeValueError(local.X, anchorUpper),
-		)
-		aVBound := math.Min(
-			proofbound.ExactFrameLocalRound(frame, a.Origin, frame.V(), local.Y),
-			proofbound.ConservativeValueError(local.Y, anchorUpper),
-		)
-		// The bracket needs the axis direction's raw, PRE-normalize exact
-		// rational dot products against the frame's in-plane axes: rawDU,
-		// rawDV = a.Dir·frame.U(), a.Dir·frame.V(). dU/dV above take TWO
-		// normalize steps — a.Dir.Normalize() in 3D, then Hypot(du,dv)
-		// re-normalizes the projected pair to unit length within the plane
-		// — and algebraically the two steps' magnitudes cancel:
-		// du = rawDU/|a.Dir|, dv = rawDV/|a.Dir|, so
-		// l = Hypot(du,dv) = sqrt(rawDU²+rawDV²)/|a.Dir|, and dU = du/l =
-		// rawDU/sqrt(rawDU²+rawDV²) with |a.Dir| gone. The exact closed
-		// form these two steps compute is exactly the du/dv shape the
-		// SketchLine arm bounds, whatever frame.N() component a.Dir
-		// carries — the coplanarity gate above rejects a direction the
-		// N component makes materially non-planar, but the bracket below
-		// needs no such assumption to be sound.
-		rawDU, rawDV := ratVecDot(a.Dir, frame.U()), ratVecDot(a.Dir, frame.V())
-		var dUBound, dVBound float64
-		if rawDU == nil || rawDV == nil {
-			dUBound, dVBound = proofbound.ConservativeValueError(dU, 1), proofbound.ConservativeValueError(dV, 1)
-		} else {
-			dUBound, dVBound = axisDirectionSqrtBracket(rawDU, rawDV, dU, dV)
-		}
-		if (dU == 0 || math.Abs(dU) == 1) &&
-			(dV == 0 || math.Abs(dV) == 1) &&
-			dU*dU+dV*dV == 1 {
-			dUBound, dVBound = 0, 0
-		}
-		return axisLine2{
-			aU: local.X, aV: local.Y,
-			aUBound: aUBound,
-			aVBound: aVBound,
-			dU:      dU, dV: dV,
-			dUBound: dUBound,
-			dVBound: dVBound,
-		}, nil
+		input = revolveaxis.ConstructionAxis{Origin: value.Origin, Dir: value.Dir}
 	default:
-		// EdgeAxis is gated before extent resolution; any other variant is
-		// staged, never guessed.
 		return axisLine2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
+	line, err := revolveaxis.AxisInPlane(input, frame)
+	if err != nil {
+		return axisLine2{}, err
+	}
+	return axisLine2{
+		aU: line.AU, aV: line.AV,
+		aUBound: line.AUBound, aVBound: line.AVBound,
+		dU: line.DU, dV: line.DV,
+		dUBound: line.DUBound, dVBound: line.DVBound,
+	}, nil
 }
 
-// ratVecDot is the exact rational dot product of two r3.Vec, each component
-// read as the exact rational value its own float64 bit pattern denotes
-// (floatRat). It returns nil only for a non-finite component; every caller
-// here has already validated its vectors finite.
-func ratVecDot(a, b r3.Vec) *big.Rat {
-	ax, ay, az := proofarith.FloatRat(a.X), proofarith.FloatRat(a.Y), proofarith.FloatRat(a.Z)
-	bx, by, bz := proofarith.FloatRat(b.X), proofarith.FloatRat(b.Y), proofarith.FloatRat(b.Z)
-	if ax == nil || ay == nil || az == nil || bx == nil || by == nil || bz == nil {
-		return nil
-	}
-	sum := new(big.Rat).Mul(ax, bx)
-	sum.Add(sum, new(big.Rat).Mul(ay, by))
-	sum.Add(sum, new(big.Rat).Mul(az, bz))
-	return sum
-}
-
-func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (float64, float64) {
-	u0, v0 := proofarith.FloatRat(a.Start.U), proofarith.FloatRat(a.Start.V)
-	u1, v1 := proofarith.FloatRat(a.End.U), proofarith.FloatRat(a.End.V)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
-		return proofbound.ConservativeValueError(heldU, 1), proofbound.ConservativeValueError(heldV, 1)
-	}
-	du := new(big.Rat).Sub(u1, u0)
-	dv := new(big.Rat).Sub(v1, v0)
-	fallbackU, fallbackV := axisDirectionSqrtBracket(du, dv, heldU, heldV)
-	length := proofarith.FloatRat(heldLength)
-	if length == nil || length.Sign() == 0 {
-		return fallbackU, fallbackV
-	}
-	lengthSquared := new(big.Rat).Add(
-		new(big.Rat).Mul(du, du),
-		new(big.Rat).Mul(dv, dv),
-	)
-	if new(big.Rat).Mul(length, length).Cmp(lengthSquared) != 0 {
-		return fallbackU, fallbackV
-	}
-	// The held length already proves an exact rational quotient for each
-	// component: a Pythagorean or axis-aligned length that lands exactly
-	// keeps a zero bound even where the sqrt bracket above cannot collapse
-	// to a point (its own float division still rounds).
-	exactComponent := func(delta *big.Rat, held, fallback float64) float64 {
-		exact := new(big.Rat).Quo(delta, length)
-		heldRat := proofarith.FloatRat(held)
-		if heldRat != nil && exact.Cmp(heldRat) == 0 {
-			return 0
-		}
-		return fallback
-	}
-	return exactComponent(du, heldU, fallbackU), exactComponent(dv, heldV, fallbackV)
-}
-
-// axisDirectionSqrtBracket proves how far the held unit-direction components
-// heldU, heldV — each dU = du/L, dV = dv/L with L = sqrt(du²+dv²) — can sit
-// from the axis's own exact direction, through the same sqrt bracket the
-// straight-prism campaign proved (internal/boundarywalk/walk.go's lineWalkBounds /
-// dySqrtIntervalError): L² = du²+dv² is exact rational arithmetic, and
-// proofbound.RatSqrtDown/proofbound.RatSqrtUp (internal/freeform/spline_length.go) bracket its root by exact
-// comparison, without assuming any libm accuracy from the division that
-// produced the held float. du and dv are the axis's own exact-rational
-// leaves — a SketchLine's endpoint coordinate differences, or a
-// ConstructionAxis's exact rational dot products of its held direction
-// against the frame's in-plane axes. A degenerate direction, or a component
-// the bracket cannot confirm sits as tightly as this proof can show, keeps
-// proofbound.ConservativeValueError's magnitude envelope: math.Min only ever shrinks
-// it, never replaces it with a wider answer.
 func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, float64) {
-	fallbackU, fallbackV := proofbound.ConservativeValueError(heldU, 1), proofbound.ConservativeValueError(heldV, 1)
-	lengthSquared := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-	if lengthSquared.Sign() == 0 {
-		return fallbackU, fallbackV
-	}
-	sqrtIv, ok := survey2d.IntervalSqrt(proofbound.PointInterval(lengthSquared))
-	if !ok {
-		return fallbackU, fallbackV
-	}
-	uBound := fallbackU
-	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(du), sqrtIv); ok {
-		uBound = math.Min(fallbackU, proofbound.IntervalFloatError(enc, heldU))
-	}
-	vBound := fallbackV
-	if enc, ok := survey2d.IntervalQuo(proofbound.PointInterval(dv), sqrtIv); ok {
-		vBound = math.Min(fallbackV, proofbound.IntervalFloatError(enc, heldV))
-	}
-	return uBound, vBound
+	return revolveaxis.AxisDirectionSqrtBracket(du, dv, heldU, heldV)
 }
 
 // axisFrame is the revolve axis as a proper plane-local frame with the
