@@ -43,8 +43,8 @@ type clipOptions struct {
 //     the round, its top cap loop takes a chamfer, then verifyPin's pin drops
 //     into the bore and the camera tilts up to show the clearance around it.
 //   - shapes (12.5 to 20 s): a camera dollies past a shelf of six parts, each
-//     turning once: the revolve, sweep, loft, free-form, shell and surface
-//     thumbnails' bodies.
+//     turning once: the revolve, loft, free-form, shell and surface gallery
+//     bodies and a curved duct.
 //   - wordmark (19.5 to 24 s): the hero's five letters drop onto its shelled
 //     backing plate between its peg and dome, and a light slides across the
 //     name from left to right.

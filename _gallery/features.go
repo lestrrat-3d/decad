@@ -58,29 +58,72 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot carries a square section through two orthogonal bend planes,
-// drawn as the three spans ductSpans builds.
+// sweepShot renders one Sweep along a rise, two rounded bends, and a straight run.
 func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	spans, err := ductSpans(ctx)
+	body, err := curvedDuct(ctx, 20, 90, 30, 90)
 	if err != nil {
 		return nil, err
 	}
-	models := make([]solidlens.Model, 0, len(spans))
-	for _, body := range spans {
-		spanModels, modelErr := oneModel(ctx, body, cyan, chord)
-		if modelErr != nil {
-			return nil, modelErr
-		}
-		models = append(models, spanModels...)
-	}
-	return models, nil
+	return oneModel(ctx, body, cyan, chord)
 }
 
-// ductSpans sweeps a 12mm square section along an arc, a line and a second
-// arc in another plane. The current Sweep payload deliberately stages
-// tessellation, so it returns the two Revolve spans and the intervening
-// Extrude that fill the same space, after the real composite Sweep has passed
-// its topology, measurement, and contact audits.
+// curvedDuct approximates two circular bends with short mitred path segments.
+// Every partial path builds one Sweep body from the same recorded section.
+func curvedDuct(ctx context.Context, rise, firstTurn, run, secondTurn float64) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-34, -24, -26, -16))
+	if err != nil {
+		return nil, err
+	}
+	start := r3.NewVec(-30, -20, 0)
+	bendStart := r3.NewVec(-30, -20, rise)
+	segments := []decad.PathSegment{decad.LineTo{End: bendStart}}
+	appendBend := func(start, pivot, axis r3.Vec, degrees float64) (r3.Vec, error) {
+		end := start
+		for angle := 5.0; angle < degrees; angle += 5 {
+			rotation, err := r3.RotationAround(pivot, axis, units.Degrees(angle))
+			if err != nil {
+				return r3.Vec{}, fmt.Errorf("rotate bend point: %w", err)
+			}
+			segments = append(segments, decad.LineTo{End: rotation.Apply(start)})
+		}
+		if degrees > 0 {
+			rotation, err := r3.RotationAround(pivot, axis, units.Degrees(degrees))
+			if err != nil {
+				return r3.Vec{}, fmt.Errorf("rotate bend end: %w", err)
+			}
+			end = rotation.Apply(start)
+			segments = append(segments, decad.LineTo{End: end})
+		}
+		return end, nil
+	}
+	bendEnd, err := appendBend(bendStart, r3.NewVec(0, -20, rise), r3.NewVec(0, 1, 0), firstTurn)
+	if err != nil {
+		return nil, err
+	}
+	if run > 0 {
+		bendEnd = bendEnd.Add(r3.NewVec(run, 0, 0))
+		segments = append(segments, decad.LineTo{End: bendEnd})
+	}
+	if secondTurn > 0 {
+		_, err = appendBend(bendEnd, bendEnd.Add(r3.NewVec(0, 20, 0)), r3.NewVec(0, 0, 1), secondTurn)
+		if err != nil {
+			return nil, err
+		}
+	}
+	path, err := decad.NewPath(start, segments...)
+	if err != nil {
+		return nil, fmt.Errorf("record duct path: %w", err)
+	}
+	body, err := decad.New().Sweep(ctx, s, profile, path, decad.WithMitredJoins())
+	if err != nil {
+		return nil, fmt.Errorf("sweep duct: %w", err)
+	}
+	return body, nil
+}
+
+// ductSpans supplies the landing clip's curved shelf part. The composite
+// arc Sweep's tessellation is staged, so that clip draws equivalent spans.
 func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-46, -6, -34, 6))
@@ -187,6 +230,10 @@ func revolveShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // ringBody revolves a circle of radius 14mm, 38mm off the axis, into a flat
 // torus.
 func ringBody(ctx context.Context) (*decad.Body, error) {
+	return ringBodyAtAngle(ctx, 360)
+}
+
+func ringBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the ring lies flat.
 	s, err := w.CreateSketch(w.XZ())
@@ -205,7 +252,11 @@ func ringBody(ctx context.Context) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	ring, err := decad.New().Revolve(s, profile, axis, decad.FullRevolution{}) //nolint:contextcheck
+	var extent decad.AngularExtent = decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along}
+	if angle == 360 {
+		extent = decad.FullRevolution{}
+	}
+	ring, err := decad.New().Revolve(s, profile, axis, extent) //nolint:contextcheck
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
@@ -225,16 +276,24 @@ func loftShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error)
 // loftDuct lofts an 84×60mm rectangle into a 36×28mm one, offset along X,
 // 46mm above it.
 func loftDuct(ctx context.Context) (*decad.Body, error) {
+	return loftDuctAtHeight(ctx, 46)
+}
+
+// loftDuctAtHeight caps the final loft at height. Its top rectangle follows
+// the corresponding section of the final ruled walls.
+func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	bottom, bottomProfile, err := sketchLoops(ctx, w, w.XY(), rectangle(-42, -30, 42, 30))
 	if err != nil {
 		return nil, err
 	}
-	topPlane, err := w.CreateOffsetPlane(w.XY(), 46)
+	topPlane, err := w.CreateOffsetPlane(w.XY(), height)
 	if err != nil {
 		return nil, err
 	}
-	top, topProfile, err := sketchLoops(ctx, w, topPlane, rectangle(-4, -14, 32, 14))
+	t := height / 46
+	topSection := rectangle(-42+38*t, -30+16*t, 42-10*t, 30-16*t)
+	top, topProfile, err := sketchLoops(ctx, w, topPlane, topSection)
 	if err != nil {
 		return nil, err
 	}
@@ -299,13 +358,17 @@ func shellShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error
 // trayBody shells a 92×64×34mm block through its top face, leaving a 7mm
 // wall.
 func trayBody(ctx context.Context) (*decad.Body, error) {
+	return trayBodyAtThickness(ctx, 7)
+}
+
+func trayBodyAtThickness(ctx context.Context, thickness float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	block, err := prism(ctx, doc, w, w.XY(), 34, rectangle(-46, -32, 46, 32))
 	if err != nil {
 		return nil, err
 	}
-	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(7))
+	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness))
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}
@@ -322,9 +385,8 @@ func booleanShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 	return oneModel(ctx, plate, violet, chord)
 }
 
-// freeformShot extrudes a section whose curved wall is a fit spline, closed by
-// a straight chord: a blade the evaluator measures exactly rather than
-// approximating.
+// freeformShot extrudes a section bounded by two fit splines: a blade the
+// evaluator measures exactly rather than approximating.
 func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	blade, err := bladeBody(ctx)
 	if err != nil {
@@ -333,23 +395,29 @@ func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, er
 	return oneModel(ctx, blade, coral, chord)
 }
 
-// bladeBody extrudes 30mm a section bounded by a fit spline through five
-// points and the straight chord between its ends.
+// bladeBody extrudes a 30mm section bounded by two fit splines.
 func bladeBody(ctx context.Context) (*decad.Body, error) {
+	return bladeBodyAtShape(ctx, 30, 1)
+}
+
+// bladeBodyAtShape scales the section's Y coordinates before extruding it.
+func bladeBodyAtShape(ctx context.Context, height, profileScale float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		return nil, err
 	}
-	fit := make([]*sketch.Point, 0, 5)
-	for _, p := range []point{{-46, 14}, {-26, -6}, {0, -14}, {26, -6}, {46, 14}} {
-		fit = append(fit, s.CreatePoint(p.x, p.y))
-	}
-	s.Fix(fit[0])
-	if _, err := s.CreateFitSpline(fit...); err != nil {
+	start := s.CreatePoint(-48, 0)
+	end := s.CreatePoint(48, 0)
+	s.Fix(start)
+	upper := []*sketch.Point{start, s.CreatePoint(-10, 28*profileScale), end}
+	if _, err := s.CreateFitSpline(upper...); err != nil {
 		return nil, err
 	}
-	s.CreateLine(fit[len(fit)-1], fit[0])
+	lower := []*sketch.Point{end, s.CreatePoint(12, -22*profileScale), start}
+	if _, err := s.CreateFitSpline(lower...); err != nil {
+		return nil, err
+	}
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
@@ -359,7 +427,7 @@ func bladeBody(ctx context.Context) (*decad.Body, error) {
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
 	blade, err := decad.New().Extrude(s, profile, //nolint:contextcheck
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
 	}
@@ -384,6 +452,10 @@ func surfaceShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // axis 26mm behind the origin and keeps only the swept wall. It refuses a
 // result that is not an open sheet (requireSheet).
 func dishBody(ctx context.Context) (*decad.Body, error) {
+	return dishBodyAtAngle(ctx, 150)
+}
+
+func dishBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the dish stands
 	// upright and its axis is vertical. Offsetting that plane carries the axis
@@ -416,7 +488,7 @@ func dishBody(ctx context.Context) (*decad.Body, error) {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
 	dish, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
-		decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along},
+		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	if err != nil {
 		return nil, fmt.Errorf("revolve the dish: %w", err)
@@ -443,8 +515,7 @@ func requireSheet(body *decad.Body) error {
 	return nil
 }
 
-// verifyShot poses the question verification answers: a pin standing in a bore
-// it must not touch, with the clearance ring visible all the way round.
+// verifyShot renders a pin inside a larger bore with radial clearance.
 func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
@@ -465,7 +536,6 @@ func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 	if err != nil {
 		return nil, err
 	}
-
 	housingModel, err := oneModel(ctx, housing, gold, chord)
 	if err != nil {
 		return nil, err

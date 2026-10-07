@@ -49,24 +49,80 @@ runs an impact and reports the rebound.
 
 ## What it builds
 
-Every part below is a decad body, rendered from the triangle mesh decad itself
-tessellates.
+Each animation shows intermediate decad bodies rendered from the triangle
+meshes decad tessellates.
 
-| | |
-|---|---|
-| <img src="docs/images/features/extrude.png" alt="An L-shaped angle bracket, one sketched section swept straight upward" width="320"><br>**Extrude** sweeps a solved 2D profile straight into a solid. | <img src="docs/images/features/revolve.png" alt="A flat ring, the solid swept by a circle offset from the axis" width="320"><br>**Revolve** spins a profile about an axis, so a curved generator gives a curved solid. |
-| <img src="docs/images/features/sweep.png" alt="A square duct following a 3D path with bends in two orthogonal planes" width="320"><br>**Sweep** moves one solved profile along a tangent 3D path through multiple bend planes. | <img src="docs/images/features/loft.png" alt="A transition duct narrowing from a large rectangle to a smaller offset one" width="320"><br>**Loft** rules a wall between two profiles on different planes. |
-| <img src="docs/images/features/freeform.png" alt="A blade section whose curved front wall is a spline, extruded into a solid" width="320"><br>**Free-form profiles** carry spline walls, measured exactly rather than approximated. | <img src="docs/images/features/fillet.png" alt="A rectangular plate whose four upright edges are rounded" width="320"><br>**Fillet** rounds selected edges into tangent arcs. |
-| <img src="docs/images/features/chamfer.png" alt="A rectangular plate whose four upright edges are cut back to flat bevels" width="320"><br>**Chamfer** cuts selected edges back to a straight bevel. | <img src="docs/images/features/cap-chamfer.png" alt="A rectangular plate whose whole top rim is bevelled" width="320"><br>**Cap-loop chamfer** bevels a whole rim, the lead-in a bore or a lid needs. |
-| <img src="docs/images/features/shell.png" alt="An open tray: a block with its top face removed and its walls left one thickness" width="320"><br>**Shell** hollows a solid into a wall of one thickness. | <img src="docs/images/features/boolean.png" alt="A flange plate with one large central bore and two smaller bolt holes drilled through it" width="320"><br>**Union, Cut and Intersect** combine two bodies explicitly, never folded into a feature. |
-| <img src="docs/images/features/verify.png" alt="A round pin standing inside a larger bore, clearance visible all the way round" width="320"><br>**Verify** proves the gap between two bodies, so a fit is checked before anything is cut. | <img src="docs/images/features/surface.png" alt="A curved open dish of no thickness, its inner side shaded apart from its outer one" width="320"><br>**Surface result** keeps a feature's swept walls and omits the faces that exist only to close the solid, leaving a sheet body. |
+<table>
+<tr>
+<td>
+<img src="docs/images/features/extrude.gif" alt="An L-shaped profile rises into an angle bracket" width="320"><br>
+<strong>Extrude</strong> sweeps a solved 2D profile straight into a solid.
+</td>
+<td>
+<img src="docs/images/features/revolve.gif" alt="A circular profile turns around an axis into a ring" width="320"><br>
+<strong>Revolve</strong> spins a profile about an axis, so a curved generator gives a curved solid.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/features/sweep.gif" alt="One square section rises, turns, extends, and turns again" width="320"><br>
+<strong>Sweep</strong> carries one profile along a path with two rounded bends and a straight run.
+</td>
+<td>
+<img src="docs/images/features/loft.gif" alt="A transition duct grows between two offset rectangles" width="320"><br>
+<strong>Loft</strong> rules a wall between two profiles on different planes.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/features/freeform.gif" alt="Two curved spline edges form a leaf-shaped section before it rises into a solid" width="320"><br>
+<strong>Free-form profiles</strong> shape a section with fit splines; Extrude carries those curves into the solid walls.
+</td>
+<td>
+<img src="docs/images/features/fillet.gif" alt="A plate's four upright edges gradually round over" width="320"><br>
+<strong>Fillet</strong> rounds selected edges into tangent arcs.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/features/chamfer.gif" alt="A plate's four upright edges become flat bevels" width="320"><br>
+<strong>Chamfer</strong> cuts selected edges back to a straight bevel.
+</td>
+<td>
+<img src="docs/images/features/cap-chamfer.gif" alt="A plate's top rim gains a bevel" width="320"><br>
+<strong>Cap-loop chamfer</strong> bevels a whole rim, the lead-in a bore or a lid needs.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/features/shell.gif" alt="A shallow cavity widens into an open tray" width="320"><br>
+<strong>Shell</strong> hollows a solid into a wall of one thickness.
+</td>
+<td>
+<img src="docs/images/features/boolean.gif" alt="Three fixed cylinders cut a central bore and two bolt holes into a box" width="320"><br>
+<strong>Union, Cut and Intersect</strong> combine two bodies explicitly, never folded into a feature.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/features/verify.png" alt="A pin standing inside a larger bore with clearance all around" width="320"><br>
+<strong>Verify</strong> reports whether bodies interfere and measures their gap when clearance is requested.
+</td>
+<td>
+<img src="docs/images/features/surface.gif" alt="A curved open dish grows as its profile revolves" width="320"><br>
+<strong>Surface result</strong> keeps a feature's swept walls and omits the faces that exist only to close the solid,
+leaving a sheet body.
+</td>
+</tr>
+</table>
 
-Regenerate the still images with `cd _gallery && go run .`. From `_gallery`,
+Regenerate the gallery GIFs with `cd _gallery && go run . features` (requires
+`ffmpeg`). The still images can be regenerated with `go run .`. From `_gallery`,
 regenerate the animated hero with `go run . hero > hero-assemble.sh && sh hero-assemble.sh`.
 Its letters assemble, a light crosses them, the finished logo holds for ten
 seconds, and the letters lift away before the loop repeats.
 
-The landing-page clip animates these parts and the wordmark. Render it with
+The landing-page clip animates several gallery parts, a curved duct, and the wordmark. Render it with
 `cd _gallery && go run . clip > assemble.sh && sh assemble.sh`: the program
 writes each shot's PNG frames under `_gallery/out/` and prints the two ffmpeg
 commands, which the script runs to write `out/decad-landing.mp4` and
