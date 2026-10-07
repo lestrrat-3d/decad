@@ -262,7 +262,7 @@ the rules leave to the byte budget.
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis and oriented box proofs, patches, clips and bounded witnesses. |
-| `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
+| `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |

@@ -474,28 +474,6 @@ func rulingColumn(c *placedCylinder, S *rotationalSweepPath, unit, origin proofa
 	return planar.PlanarColumnClear(&solid, unit, origin, lo, hi, poll)
 }
 
-// holdsBox reports whether a closed box in the face's projected coordinates
-// lies inside the face: it meets no bounding edge and has a corner inside one
-// of the face's triangles.
-func (face *planarFace) holdsBox(lo, hi [2]*big.Rat) bool {
-	inside := false
-	for _, tri := range face.tris {
-		if planarPointInTriangle(lo, tri) {
-			inside = true
-			break
-		}
-	}
-	if !inside {
-		return false
-	}
-	for _, edge := range face.edges {
-		if planarSegmentMeetsBox(edge[0], edge[1], lo, hi) {
-			return false
-		}
-	}
-	return true
-}
-
 // clearsBand reports whether a touch or band of half-width w on the plane is
 // the pair's only contact: on a face-local plane the lateral clearance must
 // exceed w, so no material of S in front of the plane lies within the band; a
@@ -627,12 +605,12 @@ func classifyPlacedRuling(ctx context.Context, report *ContactReport) (bool, err
 // so dropping its axis projects onto the plane exactly.
 func placedRulingFootInside(c *placedCylinder, plane *rulingPlane, lateral *big.Rat) bool {
 	var lo, hi [2]*big.Rat
-	for slot, axis := range [2]int{(plane.face.drop + 1) % 3, (plane.face.drop + 2) % 3} {
+	for slot, axis := range [2]int{(plane.face.Drop + 1) % 3, (plane.face.Drop + 2) % 3} {
 		a, b := c.centers[0][axis].Rat(), c.centers[1][axis].Rat()
 		lo[slot] = new(big.Rat).Sub(proofbound.RatMin(a, b), lateral)
 		hi[slot] = new(big.Rat).Add(proofbound.RatMax(a, b), lateral)
 	}
-	return plane.face.holdsBox(lo, hi)
+	return plane.face.HoldsBox(lo, hi)
 }
 
 // publishPlacedRulingManifold publishes the two lowest rim points of a placed
@@ -669,11 +647,11 @@ func publishPlacedRulingManifold(report *ContactReport, c *placedCylinder, plane
 	if cylinderFirst {
 		faces = report.B.Faces()
 	}
-	if plane.face.id < 0 || plane.face.id >= len(faces) {
+	if plane.face.ID < 0 || plane.face.ID >= len(faces) {
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
-	faceS := faces[plane.face.id]
+	faceS := faces[plane.face.ID]
 	bound := proofbound.RatFloatUp(separation)
 	points := make([]ContactPoint, 0, len(rims))
 	for _, rim := range rims {
