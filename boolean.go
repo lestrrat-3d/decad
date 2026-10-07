@@ -628,7 +628,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
-	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.xverts, payload.tris, payload.volSymDiff)
+	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.XVerts, payload.tris, payload.volSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
