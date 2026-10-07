@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -201,4 +202,53 @@ func TestVerifyJointBoxRefusesABodyItDidNotBuild(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Nil(t, report)
 	require.Equal(t, before, doc.Bodies())
+}
+
+// TestJointBoxBlockedAllowance pins the blocked certificate's allowance
+// (docs/linkage-check-design.md §14.3): each moving body of the colliding pair
+// is charged SweptVolumeAllow of its own τ_half and its proven area upper
+// bound, and a static partner nothing. The boom's area is 2·(50·10 + 50·10 +
+// 10·10) = 2200 mm². On a cell of a quarter of each range, the boom against
+// the static wall is charged its whole path's τ_half; against the mast, which
+// shares the turn as their common ancestor, only the slide's half span, 15/4
+// mm. A volume whose proven lower end exceeds the allowance blocks, and one
+// equal to it does not.
+//
+// Legs seen to fail when deleted: charging the moving body (the equal volume
+// blocks); charging the static partner an area (the volume just above no
+// longer blocks); charging the moving partner of a link-link pair (the equal
+// volume blocks).
+func TestJointBoxBlockedAllowance(t *testing.T) {
+	t.Parallel()
+	b := craneBoxRun(t, defaultCellBudget)
+	r := b.run
+	area := r.movers[1].area
+	require.InDelta(t, 2200, area, 1e-6)
+	require.GreaterOrEqual(t, area, 2200.0, `the area is a proven upper bound`)
+	quarter := &boxCell{lo: []*big.Rat{new(big.Rat), new(big.Rat)}, hi: []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 4)}}
+	volume := func(v float64) Measurement {
+		return Measurement{Value: units.CubicMillimeters(v), Exactness: Approximate, Bound: units.CubicMillimeters(0)}
+	}
+	cases := []struct {
+		name   string
+		mover  int
+		pair   int
+		travel *big.Rat
+	}{
+		{"against the static wall", 1, 0, b.halfTravel(quarter, 1, 0)},
+		{"against the mast", 0, 1, big.NewRat(15, 4)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(tc.travel), area)
+			if tc.mover == 0 {
+				// The mast's own share is 0; the two bodies' terms are summed
+				// rounding up.
+				allow = proofbound.AbsSumUpper(0, allow)
+			}
+			require.Positive(t, allow)
+			require.False(t, b.blocks(quarter, tc.mover, tc.pair, volume(allow)), `an equal volume never blocks`)
+			require.True(t, b.blocks(quarter, tc.mover, tc.pair, volume(math.Nextafter(allow, math.Inf(1)))))
+		})
+	}
 }

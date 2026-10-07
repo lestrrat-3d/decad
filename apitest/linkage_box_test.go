@@ -131,14 +131,17 @@ func requireTiles(t *testing.T, cells []craneCell) {
 // has τ_half = ½·(ρ·Δθ + Δd), and an undecided cell's centre lies within that
 // reach of the boundary.
 //
-// Every colliding cell splits to the floor until the blocked certificate
-// lands (§14.9 PR 2), so this runs at WithResolution(1/16): 239 centres
-// evaluated, 120 leaves. At WithResolution(1/64) the same check evaluates
-// 2953 centres into 1477 leaves.
+// A colliding centre blocks its cell only once the cell's τ_half falls under
+// about 0.9 mm, near 1/128 of the θ range, so at any floor down to 1/64 every
+// colliding cell splits to the floor and none blocks. This runs at
+// WithResolution(1/16): 239 centres evaluated, 120 leaves. At
+// WithResolution(1/64) the same check evaluates 2953 centres into 1477
+// leaves, about 15 s, 70 s under the race detector.
 //
 // Legs seen to fail when deleted: halving τ_half again, and dropping the
 // prismatic joint's term from it (a clear leaf's bound exceeds the true gap
-// at its worst corner).
+// at its worst corner); charging the blocked certificate a too-small area
+// (a floor cell straddling the boundary reads blocked with a clear corner).
 func TestVerifyJointBoxCrane(t *testing.T) {
 	t.Parallel()
 	c := buildCraneBox(t, 62)
@@ -176,6 +179,10 @@ func TestVerifyJointBoxCrane(t *testing.T) {
 			require.NotNil(t, cell.Clearance)
 			require.Positive(t, cell.Clearance.Value.Mag())
 			require.LessOrEqual(t, cell.Clearance.Value.Mag(), 62-worst, `the cell's bound never exceeds its true minimum gap`)
+		case decad.CellBlocked:
+			require.Greater(t, boomTipY(cc.thLo, cc.dLo), 62.0, `a blocked cell holds no clear configuration`)
+			require.Nil(t, cell.Clearance)
+			require.NotEmpty(t, cell.Interferences, `a blocked cell's centre collision is its witness`)
 		case decad.CellColliding:
 			require.Greater(t, boomTipY(thC, dC), 62.0)
 			require.LessOrEqual(t, (cc.thHi-cc.thLo)/80, res, `a colliding cell splits to the floor`)
@@ -219,6 +226,40 @@ func TestVerifyJointBoxCrane(t *testing.T) {
 	}
 }
 
+// TestVerifyJointBoxBlocked is §14.8's blocked box: scene 6's crane over
+// θ ∈ [70°, 80°], d ∈ [25, 30] mm. The tip's lowest point over the box,
+// y(70°, 25) ≈ 81.6, lies past the wall's face y = 62, so every configuration
+// collides; near the centre the boom passes through the whole 20 mm wall,
+// an overlap of about 100·20/sin θ ≈ 2071 mm³ against a boom area of
+// 2200 mm². The blocked certificate closes once a cell's τ_half falls under
+// about 0.9 mm, so the box resolves into blocked cells long before the
+// default floor.
+//
+// Measured: 255 centres into 128 leaves.
+//
+// Legs seen to fail when deleted: the blocked certificate (the run splits to
+// the floor, exhausts the budget and reads every leaf CellColliding).
+func TestVerifyJointBoxBlocked(t *testing.T) {
+	t.Parallel()
+	c := buildCraneBox(t, 62)
+	report := verifyJointBox(t, c.doc, c.linkage, decad.JointBox{
+		{Link: c.turn, Min: units.Degrees(70), Max: units.Degrees(80)},
+		{Link: c.extend, Min: units.Millimeters(25), Max: units.Millimeters(30)},
+	})
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Less(t, report.CellsEvaluated, 1024)
+	require.Greater(t, report.CellsEvaluated, 1, `the root alone does not block`)
+	for _, cell := range report.Cells {
+		require.Equal(t, decad.CellBlocked, cell.Outcome)
+		require.Nil(t, cell.Clearance)
+		require.NotEmpty(t, cell.Interferences)
+	}
+	for _, d := range report.Diagnostics {
+		require.NotEqual(t, decad.DiagJointBoxBudgetExhausted, d.Code)
+		require.NotEqual(t, decad.DiagMotionUndecidedInterval, d.Code)
+	}
+}
+
 // TestVerifyJointBoxBudget: scene 6 at the default resolution under a cell
 // budget. A budget of 16 evaluates at most 16 centres, raises
 // DiagJointBoxBudgetExhausted once, and leaves the box examined level by
@@ -254,7 +295,7 @@ func TestVerifyJointBoxBudget(t *testing.T) {
 		}
 		held := 0
 		for _, cell := range report.Cells {
-			if cell.Outcome == decad.CellClear {
+			if cell.Outcome == decad.CellClear || cell.Outcome == decad.CellBlocked {
 				continue
 			}
 			held++
@@ -310,6 +351,9 @@ func TestVerifyJointBoxOneJoint(t *testing.T) {
 			switch cell.Outcome {
 			case decad.CellClear:
 				require.LessOrEqual(t, hi, phiStar)
+			case decad.CellBlocked:
+				colliding++
+				require.Greater(t, lo, phiStar)
 			case decad.CellColliding:
 				colliding++
 				require.Greater(t, (lo+hi)/2, phiStar)
