@@ -101,7 +101,7 @@ the rules leave to the byte budget.
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
-| `patch_body.go` | `Body.Patch`: splits a free-edge selection into closed chains, proves each planar and fills it with a face. See `docs/surface-design.md` §5.2. |
+| `patch_body.go` | `Body.Patch` adapters, orientation and face build. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
@@ -248,12 +248,13 @@ the rules leave to the byte budget.
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
-| `internal/proof/` | Exact dyadic and homogeneous point arithmetic, distance, rational and shared-denominator intervals, float rounding, and tests. |
+| `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact axis and oriented box contact proofs. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
+| `internal/patchchain/` | Closed-chain partition and exact plane proof for `Body.Patch`. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch edge conversion and join checks. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
