@@ -34,9 +34,6 @@ func (d angleDenotation) scale(k *big.Rat) angleDenotation {
 func (d angleDenotation) enclosure() (proofbound.RatInterval, bool) {
 	return d.toAngle().Enclosure()
 }
-func (d angleDenotation) enclosureFor(held float64) (proofbound.RatInterval, bool) {
-	return d.toAngle().EnclosureFor(held)
-}
 func (d angleDenotation) sinCosFor(held float64) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	return d.toAngle().SinCosFor(held)
 }

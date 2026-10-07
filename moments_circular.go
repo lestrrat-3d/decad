@@ -40,10 +40,6 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 	return circularmoments.OffsetEndpointInterval(circularSegment(seg), rt, radiusOffset)
 }
 
-func quarterTurnSinCos(t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
-	return circularmoments.QuarterTurnSinCos(t)
-}
-
 func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
 	frame := circularmoments.NewAxisFrame(ax.aU, ax.aV, ax.aUBound, ax.aVBound, ax.dU, ax.dV, ax.dUBound, ax.dVBound)
 	return circularmoments.AxisMomentInterval(circularSegment(seg), frame)
