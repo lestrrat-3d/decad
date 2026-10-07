@@ -7,12 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -439,83 +434,8 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // this arm's structural (0, false, nil) answer, which states only that the
 // recorded section gives this arm nothing to read.
 func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
-	work := freeform.NewFreeformWork()
-	sawFreeform := false
-	ownBound := 0.0
-	var pts []r3.Vec
-
-	addWitness := func(u, v float64, bound proofbound.WalkEndBound) bool {
-		allow := proofbound.WalkEndBoundAllow(bound)
-		if proofbound.IsNonFinite(allow) {
-			return false
-		}
-		ownBound = math.Max(ownBound, allow)
-		pts = append(pts, pp.point(u, v, pp.z0), pp.point(u, v, pp.z1))
-		return true
-	}
-
-	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
-		for _, seg := range loop.Segments {
-			if err := ctx.Err(); err != nil {
-				return 0, false, err
-			}
-			seg, err := normalizeSegment(seg)
-			if err != nil {
-				// normalizeSegment reads no ctx and so never observes
-				// cancellation; every error it can return is a structural
-				// refusal of the recorded segment itself, read here as "no
-				// arm" rather than a hard failure.
-				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
-			}
-			w, err := walkOf(seg, work)
-			if err != nil {
-				// Likewise walkOf: it reads the record's own freeform.FreeformWork
-				// counter, never ctx, so its error is always a build-time
-				// refusal (an R-table sentinel) this arm reads as "no arm"
-				// rather than propagates.
-				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
-			}
-			if w.Kind != survey2d.WalkFreeform {
-				if !addWitness(w.StartU, w.StartV, w.StartBound) || !addWitness(w.EndU, w.EndV, w.EndBound) {
-					return 0, false, nil
-				}
-				continue
-			}
-			sawFreeform = true
-			for _, span := range w.Spans {
-				if len(span) == 0 {
-					return 0, false, nil
-				}
-				for _, cp := range [2]freeform.RatPoint{span[0], span[len(span)-1]} {
-					held, ok := point2Of(cp)
-					if !ok {
-						return 0, false, nil
-					}
-					bound := proofbound.WalkEndBound{
-						U: proofarith.RationalFloatError(cp.U, held.U),
-						V: proofarith.RationalFloatError(cp.V, held.V),
-					}
-					if !addWitness(held.U, held.V, bound) {
-						return 0, false, nil
-					}
-				}
-			}
-		}
-	}
-	if !sawFreeform {
-		return 0, false, nil
-	}
-
-	d, ok, err := pointSetDiameterContext(ctx, pts)
-	if err != nil {
-		return 0, false, err
-	}
-	if !ok {
-		return 0, false, nil
-	}
-	displacement := proofbound.AbsSumUpper(pp.sectionDelta, pp.axialDelta(), ownBound)
-	d, ok = lowerDiameterForDisplacement(d, displacement)
-	return d, ok, nil
+	return diameter.FreeformSection(ctx, pp.profile.Outer, pp.profile.Holes,
+		pp.z0, pp.z1, pp.sectionDelta, pp.point, pp.axialDelta)
 }
 
 // fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
