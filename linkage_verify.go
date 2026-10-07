@@ -162,8 +162,10 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 // engine's (docs/linkage-check-design.md §6 steps 2 and 4): a held link's
 // pair against a static body, or two held links' pair, is not formed; a
 // link-link pair whose swept boxes separate is excluded; and any pair the
-// layer exclusion (§5.7) settles is excluded. A pair an operand's validity
-// already decided is left as it stands.
+// layer exclusion (§5.7) settles is excluded. A pair settled both ways keeps
+// the larger of the two proven lower bounds, including a pair the engine's
+// swept box against a static body settled already. A pair an operand's
+// validity already decided is left as it stands.
 func (dr *linkageDriver) settlePairs(swept []motionSweptBox) {
 	r := dr.run
 	for i, mv := range r.movers {
@@ -175,7 +177,16 @@ func (dr *linkageDriver) settlePairs(swept []motionSweptBox) {
 				*pair = motionPair{other: other, unformed: true, declared: pair.declared}
 				continue
 			}
-			if pair.invalid || pair.excluded {
+			if pair.invalid {
+				continue
+			}
+			if pair.excluded {
+				// The swept-box exclusion against a static body settled the
+				// pair already; the layer exclusion's bound is a second proven
+				// lower bound on the same distance, and the larger serves.
+				if lower, ok := dr.settled(i, other, k, swept); ok && lower > pair.lower {
+					pair.lower = lower
+				}
 				continue
 			}
 			lower, ok := dr.settled(i, other, k, swept)
@@ -187,23 +198,25 @@ func (dr *linkageDriver) settlePairs(swept []motionSweptBox) {
 	}
 }
 
-// settled tries the link-link swept-box exclusion, then the layer exclusion,
-// on pair k of mover i.
+// settled tries the layer exclusion and, for a link-link pair, the swept-box
+// exclusion on pair k of mover i: each a proven lower bound on the pair's
+// distance over the whole drive or box, so the larger serves.
 func (dr *linkageDriver) settled(i, other, k int, swept []motionSweptBox) (float64, bool) {
 	r := dr.run
 	mine := dr.bounds[r.movers[i].group]
 	if other < 0 {
 		return layerLower(dr.spec, dr.frames, mine.path, r.movers[i].body, r.statics[k].body)
 	}
-	if swept[i].ok && swept[other].ok {
-		if lower, ok := sweptBoxesLower(swept[i].lo, swept[i].hi, swept[other].lo, swept[other].hi); ok {
-			return lower, true
-		}
-	}
 	theirs := dr.bounds[r.movers[other].group]
 	below := commonDepth(mine.path, theirs.path)
 	path := append(slices.Clone(mine.path[below:]), theirs.path[below:]...)
-	return layerLower(dr.spec, dr.frames, path, r.movers[i].body, r.movers[other].body)
+	best, settled := layerLower(dr.spec, dr.frames, path, r.movers[i].body, r.movers[other].body)
+	if swept[i].ok && swept[other].ok {
+		if lower, ok := sweptBoxesLower(swept[i].lo, swept[i].hi, swept[other].lo, swept[other].hi); ok && lower > best {
+			best, settled = lower, true
+		}
+	}
+	return best, settled
 }
 
 // linkageDriver drives the engine's groups, one per link, along a drive.
