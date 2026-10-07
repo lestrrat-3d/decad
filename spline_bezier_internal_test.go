@@ -11,8 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -23,7 +21,7 @@ import (
 // agreement to machine precision. Any indexing, knot or basis mistake shows up
 // here rather than as a quietly wrong area.
 
-func evalSpans(t *testing.T, spans []survey2d.BezierSpan, at float64) (float64, float64) {
+func evalSpans(t *testing.T, spans []freeform.BezierSpan, at float64) (float64, float64) {
 	t.Helper()
 	require.NotEmpty(t, spans)
 	// Spans partition [0, 1] evenly in the converted parameter.
@@ -64,7 +62,7 @@ type floatBezierSpan [][2]float64
 
 type floatBezierSpans []floatBezierSpan
 
-func floatBezierSpanOf(span survey2d.BezierSpan) floatBezierSpan {
+func floatBezierSpanOf(span freeform.BezierSpan) floatBezierSpan {
 	got := make(floatBezierSpan, len(span))
 	for i, point := range span {
 		got[i][0], _ = point.U.Float64()
@@ -73,7 +71,7 @@ func floatBezierSpanOf(span survey2d.BezierSpan) floatBezierSpan {
 	return got
 }
 
-func floatBezierSpansOf(spans []survey2d.BezierSpan) floatBezierSpans {
+func floatBezierSpansOf(spans []freeform.BezierSpan) floatBezierSpans {
 	got := make(floatBezierSpans, len(spans))
 	for i, span := range spans {
 		got[i] = floatBezierSpanOf(span)
@@ -133,7 +131,7 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 
 // evalSpanExact is de Casteljau over exact rationals on ONE span, at a rational
 // local parameter. It rounds nothing, so its result is comparable by Cmp.
-func evalSpanExact(span survey2d.BezierSpan, at *big.Rat) (*big.Rat, *big.Rat) {
+func evalSpanExact(span freeform.BezierSpan, at *big.Rat) (*big.Rat, *big.Rat) {
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {

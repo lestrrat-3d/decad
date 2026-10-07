@@ -3,10 +3,9 @@ package decad
 import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-func fitSplineBezierSpans(segment FitSplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func fitSplineBezierSpans(segment FitSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return splinebezier.FitSplineBezierSpans(segment, work)
 }
 

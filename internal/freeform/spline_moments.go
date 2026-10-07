@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // FreeformSpanCeiling is the span length, in control points, past which
@@ -47,7 +46,7 @@ func FreeformSpanCost(controls int) uint64 {
 // the conversion samples or reconstructs the curve, since the ceiling exists
 // precisely because the public ProfileRecord methods take no context and cannot
 // be cancelled.
-func ChargeFreeformSpans(spans []survey2d.BezierSpan, work *FreeformWork) error {
+func ChargeFreeformSpans(spans []BezierSpan, work *FreeformWork) error {
 	for _, span := range spans {
 		if err := work.Step(FreeformSpanCost(len(span))); err != nil {
 			return err
@@ -103,7 +102,7 @@ func BinomialRat(n, k int) *big.Rat {
 }
 
 // SpanCoordinatePolys returns one span's u(t) and v(t) in monomial form.
-func SpanCoordinatePolys(span survey2d.BezierSpan) (polynomial.RatPoly, polynomial.RatPoly) {
+func SpanCoordinatePolys(span BezierSpan) (polynomial.RatPoly, polynomial.RatPoly) {
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {
@@ -125,7 +124,7 @@ func SpanCoordinatePolys(span survey2d.BezierSpan) (polynomial.RatPoly, polynomi
 //	∫u² dA = ⅓∮u³ dv
 //	∫v² dA = −⅓∮v³ du
 //	∫uv dA = ½∮u²v dv
-func ExactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order MomentIntegralOrder) ExactMoments {
+func ExactFreeformMoments(spans []BezierSpan, reversed bool, order MomentIntegralOrder) ExactMoments {
 	half := big.NewRat(1, 2)
 	var third *big.Rat
 	if order >= MomentSecondOrder {
@@ -190,7 +189,7 @@ func PolyThirdMoments(u, v polynomial.RatPoly) [4]*big.Rat {
 // control points, before regionIntegrals.add shifts them to the walk anchor,
 // because the third-order sum is kept about the origin. reversed negates
 // every term, as it does in ExactFreeformMoments.
-func FreeformThirdMoments(spans []survey2d.BezierSpan, reversed bool) [4]*big.Rat {
+func FreeformThirdMoments(spans []BezierSpan, reversed bool) [4]*big.Rat {
 	out := [4]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)}
 	for _, span := range spans {
 		u, v := SpanCoordinatePolys(span)

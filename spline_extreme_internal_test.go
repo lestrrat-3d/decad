@@ -9,8 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -23,13 +21,13 @@ import (
 // consumer reads through must refuse exactly where the bracket carries a
 // nonzero bound while leaving every analytic reading untouched.
 
-// ratSpan builds a survey2d.BezierSpan directly from plane-local coordinates, for
+// ratSpan builds a freeform.BezierSpan directly from plane-local coordinates, for
 // tests that exercise the bracket machinery itself rather than the record
 // conversion spline_bezier.go already owns and tests.
-func ratSpan(uv [][2]float64) survey2d.BezierSpan {
-	span := make(survey2d.BezierSpan, len(uv))
+func ratSpan(uv [][2]float64) freeform.BezierSpan {
+	span := make(freeform.BezierSpan, len(uv))
 	for i, p := range uv {
-		span[i] = survey2d.RatPoint{U: polynomial.MustRatOf(p[0]), V: polynomial.MustRatOf(p[1])}
+		span[i] = freeform.RatPoint{U: polynomial.MustRatOf(p[0]), V: polynomial.MustRatOf(p[1])}
 	}
 	return span
 }
@@ -38,7 +36,7 @@ func ratSpan(uv [][2]float64) survey2d.BezierSpan {
 // evaluated by an independent de Casteljau (evalSpans, spline_bezier_internal_test.go)
 // rather than through any of the bracket's own machinery — the falsifier a
 // bracket that understated its enclosure could not survive.
-func denseSpanExtreme(t *testing.T, spans []survey2d.BezierSpan, gu, gv float64, samples int) (lo, hi float64) {
+func denseSpanExtreme(t *testing.T, spans []freeform.BezierSpan, gu, gv float64, samples int) (lo, hi float64) {
 	t.Helper()
 	floatSpans := floatBezierSpansOf(spans)
 	lo, hi = math.Inf(1), math.Inf(-1)

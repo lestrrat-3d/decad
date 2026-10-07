@@ -9,8 +9,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -77,7 +75,7 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	}
 
 	t.Run("freeform", func(t *testing.T) {
-		spans := []survey2d.BezierSpan{{
+		spans := []freeform.BezierSpan{{
 			{U: big.NewRat(0, 1), V: big.NewRat(0, 1)},
 			{U: big.NewRat(1, 1), V: big.NewRat(2, 1)},
 			{U: big.NewRat(3, 1), V: big.NewRat(0, 1)},

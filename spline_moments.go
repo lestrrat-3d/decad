@@ -5,8 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -32,7 +30,7 @@ import (
 //
 // The chain arrives already converted, re-anchored and CHARGED by the
 // record-level preflight, so nothing here consults the work counter.
-func (ig *regionIntegrals) addFreeformTo(spans []survey2d.BezierSpan, reversed bool, order freeform.MomentIntegralOrder) {
+func (ig *regionIntegrals) addFreeformTo(spans []freeform.BezierSpan, reversed bool, order freeform.MomentIntegralOrder) {
 	exact := freeform.ExactFreeformMoments(spans, reversed, order)
 	if extent := freeform.FreeformControlExtent(spans); extent > ig.coordUpper {
 		ig.coordUpper = extent

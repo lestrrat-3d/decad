@@ -7,8 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -70,7 +68,7 @@ const FreeformLengthDepth = 10
 // never refuses otherwise: the square-root seeds work at every scale a finite
 // coordinate can reach (proofbound.RatSqrtSeed), so a valid curve is never turned away for
 // being merely small or large.
-func FreeformArcLength(spans []survey2d.BezierSpan, work *FreeformWork) (float64, float64, error) {
+func FreeformArcLength(spans []BezierSpan, work *FreeformWork) (float64, float64, error) {
 	lo, hi := 0.0, 0.0
 	for _, span := range spans {
 		if err := work.Step(FreeformBracketCost(len(span))); err != nil {
@@ -154,7 +152,7 @@ func FreeformBracketCost(controls int) uint64 {
 //
 // The span is re-expressed once, here, into the split form below; every level
 // under it works in that form and only the leaves come back out as rationals.
-func SpanLengthBracket(span survey2d.BezierSpan, depth int) (float64, float64) {
+func SpanLengthBracket(span BezierSpan, depth int) (float64, float64) {
 	// Unmetered on purpose: FreeformArcLength has already charged this whole
 	// span's subtree through FreeformBracketCost, and a nil counter is exactly
 	// how FreeformWork.step spells "already accounted for". The error a metered
@@ -235,7 +233,7 @@ func (s DyadicSpan) SpanWidth() int {
 // counter cannot cover it. A nil counter is unmetered, which is what the
 // fixed-depth arc-length bracket passes under its own FreeformBracketCost
 // preflight.
-func DyadicSpanOf(w *FreeformWork, span survey2d.BezierSpan) (DyadicSpan, error) {
+func DyadicSpanOf(w *FreeformWork, span BezierSpan) (DyadicSpan, error) {
 	if err := w.Step(DyadicSpanOfCharge(span)); err != nil {
 		return DyadicSpan{}, err
 	}

@@ -8,8 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -45,7 +43,7 @@ import (
 // P(t) = gu·u(t) + gv·v(t), one per control point of span. A linear
 // functional of a Bézier curve is the same-degree Bézier of the functional
 // applied to each control point — no conversion, no rounding.
-func SpanDirectionalValues(span survey2d.BezierSpan, gu, gv *big.Rat) []*big.Rat {
+func SpanDirectionalValues(span BezierSpan, gu, gv *big.Rat) []*big.Rat {
 	out := make([]*big.Rat, len(span))
 	for i, p := range span {
 		v := new(big.Rat).Mul(gu, p.U)
@@ -212,7 +210,7 @@ func DirectionRats(gu, gv float64) (*big.Rat, *big.Rat, error) {
 // rational allocates. It therefore takes the direction as the two FLOATS its
 // caller holds, never as rationals a caller would have had to allocate ahead
 // of this charge.
-func SpanExtremeEnclosureContext(ctx context.Context, span survey2d.BezierSpan, gu, gv float64, work *FreeformWork) (polynomial.RatIv, polynomial.RatIv, error) {
+func SpanExtremeEnclosureContext(ctx context.Context, span BezierSpan, gu, gv float64, work *FreeformWork) (polynomial.RatIv, polynomial.RatIv, error) {
 	if err := work.Step(FreeformExtremeCost(len(span))); err != nil {
 		return polynomial.RatIv{}, polynomial.RatIv{}, err
 	}

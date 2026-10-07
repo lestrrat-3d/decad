@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -14,6 +13,17 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch/geom"
 )
+
+// RatPoint is a plane-local coordinate over exact rationals — Point2's exact
+// counterpart, in millimetres by the same core §5.2 convention.
+type RatPoint struct{ U, V *big.Rat }
+
+// BezierSpan is one polynomial Bézier piece of a converted free-form curve:
+// its control points in order, so its degree is len(BezierSpan)-1. A Bézier
+// interpolates its first and last control point exactly, which is why
+// consecutive spans join on a shared coordinate value and the chain's first and
+// last control points ARE the recorded curve's own endpoints.
+type BezierSpan []RatPoint
 
 // FreeformWorkLimit is the fixed ceiling on ONE RECORD's free-form conversion,
 // integration and length-bracket work, in charged units (one scanned or copied
@@ -239,17 +249,17 @@ func ClampedUniformKnots(n int) []*big.Rat {
 }
 
 // RatWeighted returns (Σ wᵢ·pᵢ)/den exactly. Callers pass equal-length slices.
-func RatWeighted(points []survey2d.RatPoint, weights []int64, den int64) survey2d.RatPoint {
-	axis := func(get func(survey2d.RatPoint) *big.Rat) *big.Rat {
+func RatWeighted(points []RatPoint, weights []int64, den int64) RatPoint {
+	axis := func(get func(RatPoint) *big.Rat) *big.Rat {
 		out := new(big.Rat)
 		for i, point := range points {
 			out.Add(out, new(big.Rat).Mul(get(point), big.NewRat(weights[i], 1)))
 		}
 		return out.Quo(out, big.NewRat(den, 1))
 	}
-	return survey2d.RatPoint{
-		U: axis(func(p survey2d.RatPoint) *big.Rat { return p.U }),
-		V: axis(func(p survey2d.RatPoint) *big.Rat { return p.V }),
+	return RatPoint{
+		U: axis(func(p RatPoint) *big.Rat { return p.U }),
+		V: axis(func(p RatPoint) *big.Rat { return p.V }),
 	}
 }
 
@@ -268,7 +278,7 @@ func RatWeighted(points []survey2d.RatPoint, weights []int64, den int64) survey2
 // there to bound.
 //
 // Every arithmetic step is rational, so the extracted spans are the curve.
-func ClampedBezierSpans(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat) ([]survey2d.BezierSpan, error) {
+func ClampedBezierSpans(degree int, ctrl []RatPoint, knots []*big.Rat) ([]BezierSpan, error) {
 	if degree < 1 {
 		return nil, fmt.Errorf(`%w: a B-spline degree must be at least 1, got %d`, decaderr.ErrDegenerate, degree)
 	}
@@ -292,9 +302,9 @@ func ClampedBezierSpans(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat) 
 	if err != nil {
 		return nil, err
 	}
-	spans := make([]survey2d.BezierSpan, count)
+	spans := make([]BezierSpan, count)
 	for j := range count {
-		span := make(survey2d.BezierSpan, degree+1)
+		span := make(BezierSpan, degree+1)
 		copy(span, ctrl[j*degree:j*degree+degree+1])
 		spans[j] = span
 	}
@@ -330,7 +340,7 @@ func ClampedBezierSpans(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat) 
 // knot vector over-clamped past degree+1 at an end, whose extra repeat leaves a
 // dead control point and no discontinuity anywhere — so it is this evaluator's
 // own stride precondition failing on a curve that exists: [ErrUnsupported].
-func BezierSliceCount(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat) (int, error) {
+func BezierSliceCount(degree int, ctrl []RatPoint, knots []*big.Rat) (int, error) {
 	values, runs, starts := InteriorKnotRuns(degree, len(ctrl), knots)
 	for i, run := range runs {
 		if run == degree {
@@ -371,7 +381,7 @@ func BezierSliceCount(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat) (i
 // knot occupying indices j+1..j+m are the recorded control points P_j and
 // P_{j+m−degree}; the curve breaks apart exactly when those two coordinates
 // differ, which is an exact comparison over rationals.
-func BrokenKnot(degree int, ctrl []survey2d.RatPoint, start, run int) bool {
+func BrokenKnot(degree int, ctrl []RatPoint, start, run int) bool {
 	left, right := start-1, start-1+run-degree
 	if left < 0 || right < 0 || left >= len(ctrl) || right >= len(ctrl) {
 		// No pair of recorded limits to compare, so nothing is proven broken.
@@ -515,7 +525,7 @@ func KnotMultiplicity(knots []*big.Rat, target *big.Rat) int {
 // InsertKnot inserts target once by Boehm's algorithm. The three control-point
 // ranges are the standard ones: unchanged below the affected window, a rational
 // convex blend inside it, and shifted above it.
-func InsertKnot(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat, target *big.Rat) ([]survey2d.RatPoint, []*big.Rat, error) {
+func InsertKnot(degree int, ctrl []RatPoint, knots []*big.Rat, target *big.Rat) ([]RatPoint, []*big.Rat, error) {
 	span := -1
 	for i := degree; i < len(ctrl); i++ {
 		if knots[i].Cmp(target) <= 0 && target.Cmp(knots[i+1]) < 0 {
@@ -527,7 +537,7 @@ func InsertKnot(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat, target *
 	}
 	multiplicity := KnotMultiplicity(knots, target)
 
-	out := make([]survey2d.RatPoint, len(ctrl)+1)
+	out := make([]RatPoint, len(ctrl)+1)
 	for i := 0; i <= span-degree; i++ {
 		out[i] = ctrl[i]
 	}
@@ -538,7 +548,7 @@ func InsertKnot(degree int, ctrl []survey2d.RatPoint, knots []*big.Rat, target *
 		}
 		alpha := new(big.Rat).Quo(new(big.Rat).Sub(target, knots[i]), denominator)
 		beta := new(big.Rat).Sub(big.NewRat(1, 1), alpha)
-		out[i] = survey2d.RatPoint{
+		out[i] = RatPoint{
 			U: new(big.Rat).Add(new(big.Rat).Mul(alpha, ctrl[i].U), new(big.Rat).Mul(beta, ctrl[i-1].U)),
 			V: new(big.Rat).Add(new(big.Rat).Mul(alpha, ctrl[i].V), new(big.Rat).Mul(beta, ctrl[i-1].V)),
 		}
@@ -638,7 +648,7 @@ func FreeformChords(count int) uint64 {
 // the point of use lands after the sketch reconstruction the ceiling exists to
 // precede, so a chain that fits the budget everywhere except its re-anchoring
 // would run minutes of uncancellable work before refusing.
-func ChargeFreeformShift(spans []survey2d.BezierSpan, work *FreeformWork) error {
+func ChargeFreeformShift(spans []BezierSpan, work *FreeformWork) error {
 	for _, span := range spans {
 		if err := work.Step(CostMul(2, uint64(len(span)))); err != nil {
 			return err
@@ -652,9 +662,9 @@ func ChargeFreeformShift(spans []survey2d.BezierSpan, work *FreeformWork) error 
 // freeformEndpoints rounds the pair it returns and freeformEndpointBounds
 // measures that rounding, and the two readings must never disagree about which
 // control point an end is.
-func FreeformEndControls(spans []survey2d.BezierSpan, reversed bool) (survey2d.RatPoint, survey2d.RatPoint, bool) {
+func FreeformEndControls(spans []BezierSpan, reversed bool) (RatPoint, RatPoint, bool) {
 	if len(spans) == 0 || len(spans[0]) == 0 || len(spans[len(spans)-1]) == 0 {
-		return survey2d.RatPoint{}, survey2d.RatPoint{}, false
+		return RatPoint{}, RatPoint{}, false
 	}
 	first := spans[0][0]
 	last := spans[len(spans)-1][len(spans[len(spans)-1])-1]
@@ -689,7 +699,7 @@ type EndTangents struct {
 // A reversed walk enters where the curve leaves, so both the order and the sign
 // of the two legs flip. IEEE negation is exact, so each bound rides along with
 // the leg it belongs to.
-func FreeformEndTangents(spans []survey2d.BezierSpan, reversed bool) (EndTangents, error) {
+func FreeformEndTangents(spans []BezierSpan, reversed bool) (EndTangents, error) {
 	if len(spans) == 0 {
 		return EndTangents{}, fmt.Errorf(`%w: a converted free-form curve holds no span`, decaderr.ErrDegenerate)
 	}
@@ -697,7 +707,7 @@ func FreeformEndTangents(spans []survey2d.BezierSpan, reversed bool) (EndTangent
 	if len(first) < 2 || len(last) < 2 {
 		return EndTangents{}, fmt.Errorf(`%w: a converted free-form span holds fewer than two control points`, decaderr.ErrDegenerate)
 	}
-	leg := func(from, to survey2d.RatPoint, degree int) (float64, float64, float64, bool) {
+	leg := func(from, to RatPoint, degree int) (float64, float64, float64, bool) {
 		scale := big.NewRat(int64(degree), 1)
 		du := new(big.Rat).Mul(scale, new(big.Rat).Sub(to.U, from.U))
 		dv := new(big.Rat).Mul(scale, new(big.Rat).Sub(to.V, from.V))
@@ -729,7 +739,7 @@ func FreeformEndTangents(spans []survey2d.BezierSpan, reversed bool) (EndTangent
 // FreeformControlExtent is an upper envelope on |u|+|v| over the curve, read
 // off the control points. The convex hull property makes it a PROVEN envelope
 // for the curve itself, not just for its control net.
-func FreeformControlExtent(spans []survey2d.BezierSpan) float64 {
+func FreeformControlExtent(spans []BezierSpan) float64 {
 	extent := 0.0
 	for _, span := range spans {
 		for _, point := range span {

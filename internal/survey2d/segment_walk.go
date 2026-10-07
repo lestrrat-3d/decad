@@ -1,6 +1,7 @@
 package survey2d
 
 import (
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -133,7 +134,7 @@ type SegmentWalk struct {
 	// chain through freeformBezierSpans and hands it that private copy, never a
 	// walk. A caller that hands it one of THESE chains instead has no test that
 	// would fail. Re-anchor a copy, or convert afresh.
-	Spans    []BezierSpan
+	Spans    []freeform.BezierSpan
 	Reversed bool
 	// fitInterpolated is set only for a WalkFreeform walk whose chain came
 	// from FitSplineSeg's §5.1.2 conversion (spline_fit.go's isFitSplineSeg,
