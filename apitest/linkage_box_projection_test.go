@@ -46,7 +46,7 @@ func radiansOf(t *testing.T, v units.Value) float64 {
 // (|Y| ≤ 10), 160 − X is its distance from the face, an upper bound on the
 // gap.
 //
-// Measured: 419 centres into 210 leaves, where the travel bound alone
+// Measured: 417 centres into 209 leaves, where the travel bound alone
 // exhausts the default budget of 16384 and reads Suspect (§14.7).
 //
 // Legs seen to fail when deleted: the projection bound (the budget runs out
@@ -228,7 +228,7 @@ func rectGap(p, q [4][2]float64) float64 {
 // bound is checked against the exact distance between the two arms'
 // outlines at its centre.
 //
-// Measured: 283 centres into 142 leaves.
+// Measured: 263 centres into 132 leaves.
 //
 // Legs seen to fail when deleted: the partner's expansion (a leaf's bound
 // exceeds the gap at its centre).

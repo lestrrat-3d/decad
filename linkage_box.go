@@ -489,6 +489,9 @@ type boxRun struct {
 	upper       *motionPose
 	upperHi     *float64
 	anyViolated bool
+	// statics holds each static body's point reading for the cell form's
+	// projection bounds, read once per call.
+	statics map[cellReadingKey]cornerBounds
 }
 
 // boxCell is one cell of the subdivision: per link, the fractions lo and hi
@@ -950,7 +953,7 @@ func (b *boxRun) classify(c *boxCell) {
 	}
 	var lowBound *big.Rat
 	var low *[2]int
-	readings := make(map[[2]int]cornerBounds)
+	readings := make(map[cellReadingKey]cornerBounds)
 	lowest, ok := r.certifyPairs(func(i, k int) *big.Rat {
 		pp := mp.pairs[i][k]
 		if !pp.hasGap {
@@ -1006,7 +1009,7 @@ func (b *boxRun) classify(c *boxCell) {
 // a gated cell, or a box cannot be read exactly. readings
 // keeps each mover's corner reading at the centre for the cell's other
 // pairs.
-func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]cornerBounds) (*big.Rat, map[int]*big.Rat) {
+func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKey]cornerBounds) (*big.Rat, map[int]*big.Rat) {
 	r, dr := b.run, b.dr
 	other := r.pairs[i][k].other
 	below := dr.pairDepth(i, other)
@@ -1015,7 +1018,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 	if other >= 0 {
 		theirs = dr.pathOf(other, below)
 	}
-	side := func(m int, bound linkBound) (projectionSide, bool) {
+	side := func(m int, bound linkBound, hull bool) (projectionSide, bool) {
 		h := make([]*big.Rat, 0, len(bound.path)-below)
 		for _, j := range bound.path[below:] {
 			jt := dr.spec.joints[j]
@@ -1036,11 +1039,11 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 			}
 			h = append(h, half)
 		}
-		key := [2]int{m, below}
+		key := cellReadingKey{mover: m, below: below, hull: hull}
 		corners, ok := readings[key]
 		if !ok {
-			lo, hi, okBox := boxCornersExact(r.movers[m].body.bounds, new(big.Rat))
-			if !okBox {
+			points, okPoints := bodyPoints(r.movers[m].body, hull)
+			if !okPoints {
 				return projectionSide{}, false
 			}
 			params := make([]motionbound.MotionParam, len(dr.spec.joints))
@@ -1053,43 +1056,189 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]corner
 				}
 				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
 			}
-			if corners, ok = roundCorners(readCorners(dr.spec, dr.frames, params, bound, below, lo, hi)); !ok {
+			if corners, ok = roundCorners(readPoints(dr.spec, dr.frames, params, bound, below, points)); !ok {
 				return projectionSide{}, false
 			}
 			readings[key] = corners
 		}
 		return projectionSide{corners: corners, h: h, rem: projectionRemainder(bound, below, h)}, true
 	}
-	a, ok := side(i, mine)
-	if !ok {
-		return nil, nil
-	}
-	var p projectionSide
-	if other < 0 {
-		lo, hi, okBox := boxCornersExact(r.statics[k].body.bounds, new(big.Rat))
-		if !okBox {
-			return nil, nil
+	partner := func(hull bool) (projectionSide, bool) {
+		if other >= 0 {
+			return side(other, theirs, hull)
 		}
-		if p.corners, ok = roundCorners(staticCorners(lo, hi)); !ok {
-			return nil, nil
-		}
-	} else if p, ok = side(other, theirs); !ok {
-		return nil, nil
+		corners, ok := b.staticReading(k, hull)
+		return projectionSide{corners: corners}, ok
 	}
-	bound := projectionLower(a, p)
-	shares := make(map[int]*big.Rat)
-	axis, sense := attainedDirection(a, p, bound)
 	axisOf := func(joint int) int {
 		if ld := dr.spec.joints[joint].dep; ld != nil {
 			return ld.driver
 		}
 		return joint
 	}
+	a, ok := side(i, mine, false)
+	if !ok {
+		return nil, nil
+	}
+	p, ok := partner(false)
+	if !ok {
+		return nil, nil
+	}
+	bound := projectionLower(a, p)
+	shares := make(map[int]*big.Rat)
+	axis, sense := attainedDirection(a, p, bound)
 	addProjectionShares(shares, a, mine, below, axis, sense, axisOf)
 	if other >= 0 {
 		addProjectionShares(shares, p, theirs, below, axis, -sense, axisOf)
 	}
-	return bound, shares
+	// The hull bound (§5.8): the same expansion over each body's hull points
+	// along every candidate direction, the larger of the two serving.
+	ah, okA := side(i, mine, true)
+	ph, okP := partner(true)
+	if !okA || !okP {
+		return bound, shares
+	}
+	hull := projectionLowerHull(ah, ph)
+	if hull == nil || hull.Cmp(bound) <= 0 {
+		return bound, shares
+	}
+	n, norm, hullSense := hullAttained(ah, ph, hull)
+	shares = make(map[int]*big.Rat)
+	addHullShares(shares, ah, mine, below, n, norm, hullSense, axisOf)
+	if other >= 0 {
+		addHullShares(shares, ph, theirs, below, n, norm, -hullSense, axisOf)
+	}
+	return hull, shares
+}
+
+// cellReadingKey names one corner reading at a cell's centre: a mover's
+// body under the joints on its path from position below on, read at its box
+// corners or at its hull points (bodyHullPoints).
+type cellReadingKey struct {
+	mover, below int
+	hull         bool
+}
+
+// staticReading is static body k's point reading — its hull points when hull
+// is set and it has them, else its box corners — rounded outward, read once
+// per call and kept.
+func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
+	key := cellReadingKey{mover: k, below: -1, hull: hull}
+	if got, ok := b.statics[key]; ok {
+		return got, true
+	}
+	points, ok := bodyPoints(b.run.statics[k].body, hull)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	reading, ok := roundCorners(points)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	if b.statics == nil {
+		b.statics = make(map[cellReadingKey]cornerBounds)
+	}
+	b.statics[key] = reading
+	return reading, true
+}
+
+// hullAttained is the direction n, an upper bound on |n|, and the sense,
+// ±1, along which projectionLowerHull attained bound: the first, in its own
+// order, whose L_n equals it. Sense +1 is the numerator that charges a's
+// extent along n, −1 the one that charges it along −n.
+func hullAttained(a, p projectionSide, bound *big.Rat) (motionbound.RatVec, *big.Rat, int) {
+	one, zero := big.NewRat(1, 1), new(big.Rat)
+	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
+	dirs = append(dirs, faceNormals(a.corners)...)
+	dirs = append(dirs, faceNormals(p.corners)...)
+	pads := new(big.Rat)
+	for _, pad := range []*big.Rat{a.corners.pad, p.corners.pad} {
+		if pad != nil {
+			pads.Add(pads, pad)
+		}
+	}
+	for _, n := range dirs {
+		sq := axisSq(n)
+		normUp := sqrtUpRat(sq)
+		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
+		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
+			continue
+		}
+		aUp, aDown := a.extentsAlong(n, normUp)
+		pUp, pDown := p.extentsAlong(n, normUp)
+		for _, cand := range []struct {
+			sense int
+			num   *big.Rat
+		}{
+			{1, new(big.Rat).Neg(new(big.Rat).Add(pDown, aUp))},
+			{-1, new(big.Rat).Neg(new(big.Rat).Add(pUp, aDown))},
+		} {
+			sense, num := cand.sense, cand.num
+			norm := normDown
+			if num.Sign() > 0 {
+				norm = normUp
+			}
+			l := num.Quo(num, norm)
+			if l.Sub(l, pads).Cmp(bound) == 0 {
+				return n, normUp, sense
+			}
+		}
+	}
+	return dirs[0], one, 1
+}
+
+// addHullShares is addProjectionShares along any direction n with |n| at
+// most norm: at the point attaining the body's extent along sense·n, each
+// joint i on its relative path takes |n·v_{i,c}|·h_i/norm + Σ_j B_ij·h_i·h_j,
+// charged to axisOf(i). The shares decide cost alone, never soundness.
+func addHullShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below int, n motionbound.RatVec, norm *big.Rat, sense int, axisOf func(int) int) {
+	if len(s.h) == 0 {
+		return
+	}
+	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
+		sum := proofbound.PointInterval(new(big.Rat))
+		for d := range 3 {
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(p[d], n[d]))
+		}
+		return sum
+	}
+	attained, top := -1, (*big.Rat)(nil)
+	for c := range s.corners.hi {
+		pos := dot([3]proofbound.RatInterval{
+			proofbound.IntervalOwned(s.corners.lo[c][0], s.corners.hi[c][0]),
+			proofbound.IntervalOwned(s.corners.lo[c][1], s.corners.hi[c][1]),
+			proofbound.IntervalOwned(s.corners.lo[c][2], s.corners.hi[c][2]),
+		})
+		v := new(big.Rat).Set(pos.Hi)
+		if sense < 0 {
+			v.Neg(pos.Lo)
+		}
+		for j, vel := range s.corners.vel[c] {
+			term := ivAbsUpper(dot(vel))
+			v.Add(v, term.Mul(term, s.h[j]))
+		}
+		if top == nil || v.Cmp(top) > 0 {
+			attained, top = c, v
+		}
+	}
+	for j := range s.h {
+		share := ivAbsUpper(dot(s.corners.vel[attained][j]))
+		share.Mul(share, s.h[j])
+		share.Quo(share, norm)
+		for m := range s.h {
+			lo, hi := min(j, m), max(j, m)
+			if w := secondDerivativeBound(bound, below+lo, below+hi); w != nil {
+				term := new(big.Rat).Mul(w, s.h[j])
+				share.Add(share, term.Mul(term, s.h[m]))
+			}
+		}
+		joint := axisOf(bound.path[below+j])
+		if cur, ok := shares[joint]; ok {
+			cur.Add(cur, share)
+			continue
+		}
+		shares[joint] = share
+	}
 }
 
 // attainedDirection is the coordinate axis and sense, ±1, of the direction

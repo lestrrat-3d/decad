@@ -152,6 +152,7 @@
 0	0.60	TestVerifyJointBoxBudget
 0	0.02	TestVerifyJointBoxErrors
 0	12.66	TestVerifyJointBoxLoopGate
+0	0.89	TestVerifyJointBoxTiltedPendulum
 0	17.87	TestVerifyLinkageLoopFold
 0	2.86	TestVerifyLinkageLoopHeldDriver
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
@@ -1196,6 +1197,7 @@
 4	5.36	TestVerifyJointBoxLoopCancellation
 4	8.56	TestVerifyJointBoxLoopClearMargins
 4	2.75	TestVerifyJointBoxNonMutationAndDeterminism
+4	6.15	TestVerifyJointBoxSlotKeepsItsBox
 4	0.99	TestVerifyLinkageAgreesWithVerifyMotion
 4	0.68	TestVerifyLinkageCancellation
 4	16.61	TestVerifyLinkageLoopCrankRocker
