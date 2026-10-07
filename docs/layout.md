@@ -186,8 +186,8 @@ the rules leave to the byte budget.
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
-| `contact_oriented_patch.go` | Exact co-oriented oblique face patch and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
-| `contact_clipped_patch.go` | Exact horizontal clip of a rotated source-box face on an axis-aligned one. See `docs/contact-geometry-design.md` §4. |
+| `contact_oriented_patch.go` | Publishes oblique box patches from `internal/pair/box/` geometry. See contact geometry §4. |
+| `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path, including centered rotating sphere drift. See the contact designs. |
 | `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial and circular-sidewall contact and sweeps. See the contact designs. |
 | `contact_analytic_manifold.go` | Ruling contacts: clearance certificates and placed poses. See `docs/contact-geometry-design.md` §4.5. |
@@ -261,7 +261,7 @@ the rules leave to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/pair/` | Shared contact relation and reading types. |
-| `internal/pair/box/` | Exact axis and oriented box contact proofs. |
+| `internal/pair/box/` | Exact axis and oriented box proofs, patches, clips and bounded witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
