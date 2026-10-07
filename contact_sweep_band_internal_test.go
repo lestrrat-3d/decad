@@ -159,12 +159,12 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 			support.pathM, support.pathS = M, S
 			support.duration = r.a.path.duration
 			support.rates = make([]*big.Rat, len(M.startPoints))
-			relative := ratSub3(support.motionM.velocity, support.motionS.velocity)
+			relative := ratSub3(support.motionM.Velocity, support.motionS.Velocity)
 			normal := ratOfDyV3(n)
 			for i, v := range M.startPoints {
 				p := ratOfDyV3(v)
-				rate := ratAdd3(relative, ratCross3(support.motionM.omega, ratSub3(p, support.motionM.center)))
-				rate = ratSub3(rate, ratCross3(support.motionS.omega, ratSub3(p, support.motionS.center)))
+				rate := ratAdd3(relative, ratCross3(support.motionM.Omega, ratSub3(p, support.motionM.Center)))
+				rate = ratSub3(rate, ratCross3(support.motionS.Omega, ratSub3(p, support.motionS.Center)))
 				support.rates[i] = ratDot3(normal, rate)
 			}
 			support.spin = spinM

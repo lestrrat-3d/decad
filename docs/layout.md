@@ -296,6 +296,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, domain resolution and labels, ordering, poses and sweeps. |
+| `internal/planarsweep/` | Planar sweep motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
