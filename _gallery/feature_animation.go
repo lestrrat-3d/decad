@@ -71,7 +71,11 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 		}
 		scene := featureScene(models...)
 		for i := range scene.Models {
-			scene.Models[i].Edges = solidlens.Outline(edgeColor)
+			edge := edgeColor
+			if name == "boolean" && i > 0 {
+				edge.A *= scene.Models[i].Material.Color.A
+			}
+			scene.Models[i].Edges = solidlens.Outline(edge)
 		}
 		path := filepath.Join(frames, fmt.Sprintf("%s_%03d.png", name, stage))
 		file, err := os.Create(path) //nolint:gosec
@@ -229,47 +233,43 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 	}
 }
 
-// booleanAnimationModels lowers all three cutters together, then lifts them
-// away to leave the completed flange in view.
+// booleanAnimationModels holds all three cutters in place while their holes
+// deepen together, then fades the cutters to reveal the completed flange.
 func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) ([]solidlens.Model, error) {
 	const (
-		plungeEnd      = 14
-		withdrawEnd    = 21
-		startBottom    = 30.0
-		endBottom      = -holeClearance
-		withdrawBottom = 80.0
-		toolLength     = 48.0
+		cutStart   = 2
+		cutEnd     = 16
+		toolBottom = -holeClearance
+		toolLength = 48.0
 	)
 
-	bottom := startBottom
-	if stage <= plungeEnd {
-		bottom += (endBottom - startBottom) * float64(stage) / plungeEnd
-	} else {
-		bottom = endBottom + (withdrawBottom-endBottom)*float64(stage-plungeEnd)/(withdrawEnd-plungeEnd)
-	}
-
 	shape := flangeShape{height: flangeThickness, depths: make(map[string]float64, len(drills))}
-	if stage <= plungeEnd && bottom < flangeThickness {
-		for _, d := range drills {
-			shape.depths[d.name] = flangeThickness - bottom
-		}
-	} else if stage > plungeEnd {
+	if stage >= cutEnd {
 		shape = throughFlange()
+	} else if stage > cutStart {
+		depth := flangeThickness * float64(stage-cutStart) / (cutEnd - cutStart)
+		for _, d := range drills {
+			shape.depths[d.name] = depth
+		}
 	}
 	plate, err := flangeBody(ctx, shape)
 	if err != nil {
 		return nil, err
 	}
 	models, err := oneModel(ctx, plate, violet, chord)
-	if err != nil || stage >= withdrawEnd {
+	if err != nil || stage == featureAnimationSteps-1 {
 		return models, err
 	}
 
 	w := sketch.NewWorld()
 	doc := decad.New()
-	plane, err := w.CreateOffsetPlane(w.XY(), bottom)
+	plane, err := w.CreateOffsetPlane(w.XY(), toolBottom)
 	if err != nil {
 		return nil, err
+	}
+	opacity := 1.0
+	if stage > cutEnd {
+		opacity = float64(featureAnimationSteps-1-stage) / (featureAnimationSteps - 1 - cutEnd)
 	}
 	for _, d := range drills {
 		tool, err := cylinder(ctx, doc, w, plane, point{d.x, 0}, d.radius,
@@ -281,6 +281,7 @@ func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) (
 		if err != nil {
 			return nil, err
 		}
+		toolModels[0].Material.Color.A = opacity
 		models = append(models, toolModels...)
 	}
 	return models, nil
