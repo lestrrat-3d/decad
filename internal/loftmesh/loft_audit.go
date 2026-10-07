@@ -292,7 +292,7 @@ const (
 // exact fallback), so the common case — the two triangles' planes are not
 // near-tangent to one another — never touches big.Rat at all.
 //
-// This is deliberately NOT meshbool.TriTriMissesFilter (internal/meshbool/boolean_exact.go): that
+// This is deliberately NOT meshbool.TriTriMissesFilter (internal/meshbool/triangle_filter.go): that
 // filter's own doc comment requires na/nb to be proof.Xpt.vec() — the
 // correctly-rounded float64 conversion of the pair's EXACT rational
 // normal — with meshbool.FivRounded's extra ulp of margin calibrated for exactly
