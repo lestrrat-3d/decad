@@ -533,6 +533,8 @@
 3	1.98	TestMeshMassLadderRefinesUntilPositive
 3	0.00	TestMidpointSplitCreatesAKnownZeroJoint
 3	0.00	TestMintCurveNeverRepeats
+3	0.01	TestMirrorJoinChargesTheReflectionRounding
+3	0.00	TestMirrorJoinCircleImageKeepsItsSense
 3	0.54	TestMitredSweepReadingsEncloseExactValues
 3	0.00	TestMitredSweepRequireWallsRefuses
 3	0.00	TestMitredSweepSpanLengthLower

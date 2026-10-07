@@ -143,7 +143,33 @@ type loopJoinSource uint8
 const (
 	recordJoinSource loopJoinSource = iota
 	sketchNodeJoinSource
+	// walkJoinSource is an endpoint the evaluator computed from a recorded
+	// segment — a narrowed line's walked end. Two such points, or one beside a
+	// record endpoint, come from different arithmetic, so they compare with
+	// the range falsifier's tolerance rather than bit for bit.
+	walkJoinSource
 )
+
+// RecordedJoin states one segment of a loop decad assembled itself from
+// recorded segments, with no sketch arrangement behind it: start and end are
+// the segment's walk ends, computedStart and computedEnd mark an end the
+// evaluator computed (a narrowed line's walked end) rather than one the
+// record states, and closed marks a whole closed curve. A junction of two
+// stated ends compares exactly; a junction with a computed end compares with
+// the range falsifier's tolerance. FalsifyLoopJoins only ever rejects.
+func RecordedJoin(start, end Point2, computedStart, computedEnd, closed bool) LoopJoin {
+	source := func(computed bool) loopJoinSource {
+		if computed {
+			return walkJoinSource
+		}
+		return recordJoinSource
+	}
+	return LoopJoin{
+		start:  loopJoinPoint{point: start, source: source(computedStart)},
+		end:    loopJoinPoint{point: end, source: source(computedEnd)},
+		closed: closed,
+	}
+}
 
 // edgeJoin reads one boundary edge's junction coordinates, taking each side
 // from the party that owns it.
@@ -293,9 +319,10 @@ func falsifyLoopJoins(name string, joins []LoopJoin) error {
 // loopJoinPointsAgree compares two points from one source exactly. A mixed
 // source pair compares the record's defining point to the sketch cut node that
 // a certified fragment already exposed to falsifyRange, so it shares that
-// check's relative tolerance.
+// check's relative tolerance. Two walked ends come from two different
+// carriers' arithmetic and take the same tolerance.
 func loopJoinPointsAgree(a, b loopJoinPoint) bool {
-	if a.source == b.source {
+	if a.source == b.source && a.source != walkJoinSource {
 		return a.point == b.point
 	}
 	return pointsWithinFalsifyTolerance(a.point, b.point)

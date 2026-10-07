@@ -32,7 +32,9 @@ type MirrorFrame struct {
 // failed assertion of the selector's own is returned unchanged. A curved face
 // is ErrDegenerate. A flat face with no analytic [Plane] surface, such as a
 // mesh-boolean [Faceted] face, states no exact plane and is ErrUnsupported.
-// The mirror plane is the face's own Plane.Frame.
+// The mirror plane is the face's own Plane.Frame. Under [WithJoin], Body must
+// be the receiver and Face may name several walls on one line: zero faces is
+// ErrCardinality with Expected "at least 1".
 type MirrorFace struct {
 	Body *Body
 	Face FaceSelector
@@ -42,9 +44,7 @@ type MirrorFace struct {
 func (MirrorFrame) mirrorPlane() {}
 func (MirrorFace) mirrorPlane()  {}
 
-// MirrorOption configures [Body.Mirrored]. The option group exists so the
-// join of docs/mirror-pattern-design.md §5 can be added without changing the
-// signature; no option is accepted today.
+// MirrorOption configures [Body.Mirrored]. [WithJoin] is the one option.
 type MirrorOption interface {
 	option.Interface
 	mirrorOption()
@@ -64,15 +64,26 @@ var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 // evaluator did not build is ErrUnsupported, and a canceled context stops the
 // rebuild before the document changes — plus the plane's own resolution (see
 // [MirrorFrame] and [MirrorFace]). A nil plane or a nil option is
-// ErrDegenerate. A refused call leaves the document unchanged.
+// ErrDegenerate. With [WithJoin] it returns the union of the receiver and its
+// image instead, on the class WithJoin states. A refused call leaves the
+// document unchanged.
 func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
 	}
+	join := false
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
+		// MirrorOption carries one variant, so this is an if rather than a
+		// single-case type switch.
+		if _, ok := o.Ident().(identMirrorJoin); ok {
+			join = true
+		}
+	}
+	if join {
+		return b.mirroredJoin(ctx, plane)
 	}
 	t, err := b.mirrorTransform(plane)
 	if err != nil {

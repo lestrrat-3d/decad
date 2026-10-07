@@ -550,6 +550,11 @@
 2	0.00	TestMinRadiusPlainBlockNil
 2	0.20	TestMirrorFaceResolvesAPlane
 2	0.01	TestMirrorFrameGates
+2	0.02	TestMirrorJoinKeepsHolesAndTheirImages
+2	0.01	TestMirrorJoinOneWallMakesATee
+2	0.05	TestMirrorJoinRefusals
+2	0.02	TestMirrorJoinStackedPlate
+2	0.01	TestMirrorJoinTwoWallsMakesARing
 2	0.25	TestMirroredCopyEveryPayload
 2	0.01	TestMirroredCopyFlipsTheLsFacing
 2	0.01	TestMirroredRetiresTheReceiver

@@ -942,62 +942,95 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 // point charges each mapped coordinate's rounding into re.delta exactly as
 // the unreflected path does. A reflection adds no rounding term of its own.
 func (re *prismReexpression) rewound(budget *proofbound.WorkBudget, profile ProfileRecord) (ProfileRecord, float64, error) {
-	charge := 0.0
-	rewindLoop := func(loop LoopRecord) (LoopRecord, error) {
-		n := len(loop.Segments)
-		out := make([]CurveSegment, n)
-		for i, seg := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return LoopRecord{}, err
-			}
-			var mapped CurveSegment
-			switch s := seg.(type) {
-			case LineSeg:
-				start, end, tStart, tEnd := s.Start, s.End, s.TStart, s.TEnd
-				if !prismcells.WholeSegmentRange(tStart, tEnd) {
-					w, err := walkOf(s, nil)
-					if err != nil {
-						return LoopRecord{}, err
-					}
-					c, err := walkChargeOf(s, w)
-					if err != nil {
-						return LoopRecord{}, err
-					}
-					charge = math.Max(charge, c)
-					start, end = Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
-					tStart, tEnd = 0, 1
-				}
-				mapped = LineSeg{Start: re.point(end), End: re.point(start), TStart: tStart, TEnd: tEnd}
-			case ArcSeg:
-				if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
-					return LoopRecord{}, fmt.Errorf(`%w: a reflected operand's trimmed arc cannot be re-wound`, ErrUnsupported)
-				}
-				mapped = ArcSeg{Center: re.point(s.Center), Start: re.point(s.End), End: re.point(s.Start), TStart: s.TStart, TEnd: s.TEnd}
-			case CircleSeg:
-				if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
-					return LoopRecord{}, fmt.Errorf(`%w: a reflected operand's trimmed circle cannot be re-wound`, ErrUnsupported)
-				}
-				mapped = CircleSeg{Center: re.point(s.Center), Radius: s.Radius, CCW: s.CCW, TStart: s.TStart, TEnd: s.TEnd}
-			default:
-				return LoopRecord{}, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
-			}
-			out[n-1-i] = mapped
-		}
-		return LoopRecord{Segments: out}, nil
-	}
-	outer, err := rewindLoop(profile.Outer)
+	mapPoint := func(p Point2) (Point2, error) { return re.point(p), nil }
+	outer, charge, err := rewindLoop(budget, profile.Outer, mapPoint)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
 	result := ProfileRecord{Outer: outer}
 	for _, hole := range profile.Holes {
-		rewoundHole, err := rewindLoop(hole)
+		rewoundHole, holeCharge, err := rewindLoop(budget, hole, mapPoint)
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
+		charge = math.Max(charge, holeCharge)
 		result.Holes = append(result.Holes, rewoundHole)
 	}
 	return result, charge, nil
+}
+
+// rewindLoop is rewound's per-loop rule over any point map: the loop's
+// segments in reverse order, each mapped by mapPoint and walked the other
+// way, beside the largest walk charge a narrowed line's walked endpoints
+// owe. It is the whole re-winding for a reflected map, and the mirror join
+// (mirror_join.go) runs it with its own exact reflection, so the two
+// constructions share one statement of the rule. mapPoint owns its own
+// rounding charge.
+func rewindLoop(budget *proofbound.WorkBudget, loop LoopRecord, mapPoint func(Point2) (Point2, error)) (LoopRecord, float64, error) {
+	charge := 0.0
+	n := len(loop.Segments)
+	out := make([]CurveSegment, n)
+	for i, seg := range loop.Segments {
+		if err := budget.Step(); err != nil {
+			return LoopRecord{}, 0, err
+		}
+		pts := func(in ...Point2) ([]Point2, error) {
+			mapped := make([]Point2, len(in))
+			for k, p := range in {
+				m, err := mapPoint(p)
+				if err != nil {
+					return nil, err
+				}
+				mapped[k] = m
+			}
+			return mapped, nil
+		}
+		var mapped CurveSegment
+		switch s := seg.(type) {
+		case LineSeg:
+			start, end, tStart, tEnd := s.Start, s.End, s.TStart, s.TEnd
+			if !prismcells.WholeSegmentRange(tStart, tEnd) {
+				w, err := walkOf(s, nil)
+				if err != nil {
+					return LoopRecord{}, 0, err
+				}
+				c, err := walkChargeOf(s, w)
+				if err != nil {
+					return LoopRecord{}, 0, err
+				}
+				charge = math.Max(charge, c)
+				start, end = Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
+				tStart, tEnd = 0, 1
+			}
+			p, err := pts(end, start)
+			if err != nil {
+				return LoopRecord{}, 0, err
+			}
+			mapped = LineSeg{Start: p[0], End: p[1], TStart: tStart, TEnd: tEnd}
+		case ArcSeg:
+			if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
+				return LoopRecord{}, 0, fmt.Errorf(`%w: a reflected operand's trimmed arc cannot be re-wound`, ErrUnsupported)
+			}
+			p, err := pts(s.Center, s.End, s.Start)
+			if err != nil {
+				return LoopRecord{}, 0, err
+			}
+			mapped = ArcSeg{Center: p[0], Start: p[1], End: p[2], TStart: s.TStart, TEnd: s.TEnd}
+		case CircleSeg:
+			if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
+				return LoopRecord{}, 0, fmt.Errorf(`%w: a reflected operand's trimmed circle cannot be re-wound`, ErrUnsupported)
+			}
+			p, err := pts(s.Center)
+			if err != nil {
+				return LoopRecord{}, 0, err
+			}
+			mapped = CircleSeg{Center: p[0], Radius: s.Radius, CCW: s.CCW, TStart: s.TStart, TEnd: s.TEnd}
+		default:
+			return LoopRecord{}, 0, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
+		}
+		out[n-1-i] = mapped
+	}
+	return LoopRecord{Segments: out}, charge, nil
 }
 
 // point re-expresses one of operand B's plane-local points into operand A's
