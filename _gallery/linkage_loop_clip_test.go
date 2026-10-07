@@ -4,112 +4,129 @@ import (
 	"math"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lestrrat-3d/kinetograph/render"
 )
 
 // These tests run the crank-rocker, a closed loop, through the real
 // producers and the real viewer: decad's VerifyLinkage and Schedule,
-// kinetograph's schedule tracks (Scene.AddSchedule), and two rendered frames.
+// kinetograph's schedule tracks (Scene.AddSchedule), and four rendered
+// frames.
 //
-// Each leg was seen red by breaking what it guards: the schedule tracks read
-// through a drive fraction perturbed to 1 + 1e-12 at the drive's end fail the
-// bit-identical pose leg at frame 1; and a hit colour of gold fails the pixel
-// leg at frame 36.
+// Each leg was seen red by breaking what it guards: the clip driven to one
+// grid step past the turnaround fails the proven-clear leg; the nodes driven
+// by a linear channel while the clip reports the eased one fails the
+// bit-identical pose leg; a hit colour of
+// gold fails the pixel leg at frame 192; the stop's angle moved to 144.6°
+// fails the volume leg; and the coupler pins set on their bores' centres fail
+// the joint-contact leg.
 
-// TestLinkageLoopClipMatchesSchedule asserts that every link's part in the
-// crank-rocker's clip takes exactly the transform the scene's Schedule
-// returns at the frame's drive fraction, frame i of the drive reading
-// s = i/256, and that the follower — a dependent joint — turns as the
-// four-bar's construction says: θ4(θ2) − θ4(0) within 1e-9 rad of its pose's
-// own rotation.
+// TestLinkageLoopClipMatchesSchedule asserts that the crank-rocker's clip
+// shows only poses the check proves clear, each exactly as the scene's
+// Schedule builds it: every frame's drive fraction lies in [0, s], s the end
+// of the stretch from 0 that VerifyLinkage proves clear, and every link's
+// part takes the schedule's transform at that fraction bit for bit. The
+// follower — a dependent joint — turns as the four-bar's construction says:
+// θ4(θ2) − θ4(0), with θ2 = 360°·s, within 1e-9 rad of its pose's own
+// rotation.
 func TestLinkageLoopClipMatchesSchedule(t *testing.T) {
 	t.Parallel()
 	scene, err := crankRockerScene(t.Context())
 	require.NoError(t, err)
-	clip, _, err := scene.clip(nil, linkageClipLength, smokeWidth, smokeHeight)
+	report, err := scene.verify(t.Context())
 	require.NoError(t, err)
-
-	links := scene.linkage.Links()
-	byName := make(map[string]int)
-	for _, part := range scene.parts {
-		if part.link != nil {
-			byName[part.name] = slices.Index(links, part.link)
-		}
+	turn, err := turnaroundOf(report)
+	require.NoError(t, err)
+	clip, _, fraction, err := scene.clip(turn, linkageClipLength, smokeWidth, smokeHeight)
+	require.NoError(t, err)
+	poseAt := func(s float64) (decad.LinkagePose, error) {
+		return scene.schedule.PoseAt(t.Context(), units.Scalar(s))
 	}
-	for _, c := range []struct {
-		frame int
-		s     float64
-	}{{0, 0}, {1, 1.0 / 256}, {36, 36.0 / 256}, {110, 110.0 / 256}, {256, 1}, {300, 1}} {
-		frame, err := clip.Frame(t.Context(), c.frame)
-		require.NoError(t, err)
-		want, err := scene.schedule.PoseAt(t.Context(), units.Scalar(c.s))
-		require.NoError(t, err)
-		found := 0
-		for _, pose := range frame.Poses {
-			index, ok := byName[pose.Name]
-			if !ok {
-				continue
-			}
-			found++
-			require.Equal(t, transformBits(want.Poses[index]), transformBits(pose.Transform),
-				"part %s at frame %d", pose.Name, c.frame)
-		}
-		require.Equal(t, len(byName), found, "frame %d", c.frame)
+	requireClipPoses(t, scene, clip, fraction, turn, provenClear(report), poseAt)
 
-		follower := want.Poses[byName["follower"]].Basis().EX
-		turn := math.Atan2(follower.Y, follower.X)
-		th2 := c.s * math.Pi / 2
-		require.InDelta(t, rockerTheta4(th2)-rockerTheta4(0), turn, 1e-9, "frame %d", c.frame)
+	require.Equal(t, "follower", scene.parts[2].name)
+	follower := slices.Index(scene.linkage.Links(), scene.parts[2].link)
+	require.GreaterOrEqual(t, follower, 0)
+	for _, i := range []int{0, 100, int(linkageHoldStart / (time.Second / linkageFPS)), 300} {
+		at, err := fraction.At(clip.FrameTime(i))
+		require.NoError(t, err)
+		want, err := poseAt(at.Mag())
+		require.NoError(t, err)
+		ex := want.Poses[follower].Basis().EX
+		th2 := at.Mag() * 2 * math.Pi
+		require.InDelta(t, rockerTheta4(th2)-rockerTheta4(0), math.Atan2(ex.Y, ex.X), 1e-9, "frame %d", i)
 	}
 }
 
-// TestLinkageLoopClipMarksFirstCollision asserts the crank-rocker's verdict
-// against its closed form and the frame the clip marks against the verdict.
-// The follower's top corner B − 4·n4, n4 = (−sin θ4, cos θ4), sits at
-// y = 70·sin θ4 − 4·cos θ4 and rises past the wall's face y = 68.5 at
-// θ2 = 12.625006°, s₁ = 0.140278; at 1/256 the first collision is the first
-// grid point past it, 36/256, and the clip draws the follower in the hit
-// colour from frame 36 on.
-func TestLinkageLoopClipMarksFirstCollision(t *testing.T) {
+// TestLinkageLoopClipTurnsAtTheStop asserts the crank-rocker's verdict and
+// its turnaround against their closed form, and the flash against the
+// turnaround.
+// The stop's face lies along the follower's leading flank at θc = 144.5°, and
+// the follower first reaches θc at the crank angle the four-bar puts the
+// coupler pin at B = O4 + 70·(cos θc, sin θc):
+//
+//	θ2* = atan2(B) + acos((30² + |B|² − 80²)/(2·30·|B|)) ≈ 167.62°,  s* = θ2*/360° ≈ 0.4656
+//
+// At 1/256 the first collision is the first grid point past it, 120/256.
+// The check proves every interval clear up to 118/256 and leaves
+// [118/256, 119/256], where the follower's flank closes on the stop's face
+// nearly parallel, undecided, so the clip turns at 118/256 and holds frames
+// 192 to 224 there, with the follower and the stop in the hit colour.
+// At the first collision the follower has turned δ = θ4 − θc past the face, and the flank's
+// overlap with the stop, from u1 = 30 to u2 = 60 mm along the follower and
+// 6 mm deep along Z, is the wedge between the two lines, both 8 mm off the
+// pivot:
+//
+//	V = 6·((u2 − u1)·8·(1/cos δ − 1) + tan δ·(u2² − u1²)/2)
+func TestLinkageLoopClipTurnsAtTheStop(t *testing.T) {
 	t.Parallel()
 	scene, err := crankRockerScene(t.Context())
 	require.NoError(t, err)
 	report, err := scene.verify(t.Context())
 	require.NoError(t, err)
 
-	top := func(s float64) float64 {
-		th4 := rockerTheta4(s * math.Pi / 2)
-		return rockerFollower*math.Sin(th4) - rockerHalf*math.Cos(th4)
-	}
-	require.Less(t, top(35.0/256), rockerWallFace)
-	require.Greater(t, top(36.0/256), rockerWallFace)
+	thetaC := rockerStopDeg * math.Pi / 180
+	sStar := rockerTheta2(thetaC) / (2 * math.Pi)
+	require.InDelta(t, thetaC, rockerTheta4(2*math.Pi*sStar), 1e-12)
+	require.Greater(t, sStar, 119.0/256)
+	require.Less(t, sStar, 120.0/256)
+	require.Less(t, rockerTheta4(2*math.Pi*119/256), thetaC)
+	require.Greater(t, rockerTheta4(2*math.Pi*120/256), thetaC)
 
 	require.Equal(t, decad.Interfering, report.Status)
 	require.NotEmpty(t, report.Collisions)
 	first := report.Collisions[0]
-	follower, wall := scene.parts[2].body, scene.parts[3].body
+	follower, stop := scene.parts[2].body, scene.parts[3].body
 	require.Same(t, follower, first.A)
-	require.Same(t, wall, first.B)
-	require.Equal(t, 36.0/256, first.At.Mag())
+	require.Same(t, stop, first.B)
+	require.Equal(t, 120.0/256, first.At.Mag())
+	delta := rockerTheta4(2*math.Pi*first.At.Mag()) - thetaC
+	u1, u2 := rockerStopFrom, rockerStopTo
+	volume := rockerThick * ((u2-u1)*rockerEnd*(1/math.Cos(delta)-1) + math.Tan(delta)*(u2*u2-u1*u1)/2)
+	require.InDelta(t, volume, first.Volume.Value.Base(), first.Volume.Bound.Base())
+	require.Less(t, first.Volume.Bound.Base(), first.Volume.Value.Base())
 
-	clip, style, err := scene.clip(report, linkageClipLength, smokeWidth, smokeHeight)
+	// The four pins are measured in their bores at every pose the check
+	// evaluates.
+	requireJointGaps(t, scene, report, 4)
+
+	// The turnaround is the end of the proven-clear stretch, short of s*, and
+	// nothing between it and the first collision is proven clear.
+	require.Equal(t, 118.0/256, provenClear(report))
+	turn, err := turnaroundOf(report)
 	require.NoError(t, err)
-	marked, err := firstFrameAt(clip, first.At.Mag())
+	require.Equal(t, provenClear(report), turn.s)
+	require.LessOrEqual(t, turn.s, sStar)
+	require.Less(t, sStar, turn.hit.At.Mag())
+	require.Same(t, first.A, turn.hit.A)
+
+	clip, style, _, err := scene.clip(turn, linkageClipLength, smokeWidth, smokeHeight)
 	require.NoError(t, err)
-	require.Equal(t, 36, marked)
-	renderer, err := render.New(t.Context(), clip, style)
-	require.NoError(t, err)
-	for _, c := range []struct {
-		frame int
-		tint  bool
-	}{{marked - 1, false}, {marked, true}} {
-		img, err := renderer.Frame(t.Context(), c.frame)
-		require.NoError(t, err)
-		require.Equal(t, c.tint, hitTinted(img) > 0, "frame %d", c.frame)
-	}
+	holdFirst, holdLast := requireFlash(t, scene, clip, style, turn)
+	require.Equal(t, 192, holdFirst)
+	require.Equal(t, 224, holdLast)
+	requireFlashPixels(t, clip, style, holdFirst, holdLast)
 }

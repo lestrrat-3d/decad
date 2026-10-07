@@ -234,8 +234,11 @@ own placement as `Body.Placed` composes, `placement.Then(Pose_k)`. `PoseAt` is t
 built, so a renderer above and the verifier below evaluate the same transform from the same inputs; a
 `TransformTrack` for `kinetograph` is one `PoseAt` call per frame: `kinetograph.LinkageTrack`, which
 `Scene.AddLinkage` puts on one driven node per link under the rig's root, reading the drive fraction from a
-`Dimensionless` channel. The `_gallery` module's `linkage` subcommand films §11's scene 1 that way, and its
-test asserts each node's transform equals `PoseAt`'s bit for bit.
+`Dimensionless` channel. The `_gallery` module's `linkage` subcommand films §11's scene 1 that way, built as
+a pinned arm on a base plate (slot-shaped links, a post, an elbow pin, a stop block in place of the wall).
+It drives the arm out to the end of the stretch from `s = 0` that the report proves clear and back, and its
+test asserts that no frame's fraction passes that end and that each node's transform equals `PoseAt`'s at
+the frame's fraction bit for bit.
 
 `PoseAt` refuses a drive naming a link of another linkage or a link twice (`ErrDegenerate`), a sweep whose
 `From`, `To` or `Via` value has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite
@@ -2657,11 +2660,13 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | T1 (`go.mod` and `_gallery/go.mod` pinned to sketch `5a4d9762` (`certify Enclose past ten turns and through folds (#156)`); `linkage_loop.go`: `pieceBudget`, `loopFoldError`) | a driver over any number of turns, each ask's piece budget scaled by the turns it spans (§15.3); a proven fold stated in the driver's terms in every finding and `PoseAt` error it reaches (§15.6); the many-turn drive, scene 9's fold statements on a drive, a box, a mirrored side, a driver below `Common` and a slide | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
-scene 7's closed-form onset as its acceptance. The `_gallery` module films scene 7 with its wall
+scene 7's closed-form onset as its acceptance. The `_gallery` module films scene 7's four-bar built as a
+pinned mechanism (slot-shaped bars, posts, pins and a stop block) and driven a full crank turn
 (`go run . linkage -scene rocker`): each link's node is driven by a track that reads `Schedule.PoseAt`,
 the chain `VerifyLinkage` poses every check through, and its test asserts every node's transform equal to
 the schedule's pose bit for bit, the follower's turn within `1e-9` rad of `θ4(θ2) − θ4(0)`, and the clip
-marking the report's first collision, `36/256`, from frame `36` on.
+turning back at `118/256`, the end of the stretch the report proves clear, short of its first collision at
+`120/256`.
 
 ### 15.12 Settled points, and what sketch #155 and #156 supply
 

@@ -48,11 +48,12 @@
 // follow the subcommand; runDynamics documents them.
 //
 // The linkage subcommand films a mechanism decad verifies: `go run . linkage`
-// runs Document.VerifyLinkage over a two-link folding arm swinging into a
-// wall, then renders the same drive with one kinetograph driven node per link
-// under out/, the colliding link turning coral from the frame of the first
-// collision the check proves. Its flags (-out, -width, -height, -workers,
-// -smoke) follow the subcommand; runLinkage documents them.
+// runs Document.VerifyLinkage over a pinned two-link folding arm swinging
+// into a stop block, then renders the drive out to the last pose the check
+// proves clear and back, with one kinetograph driven node per link under
+// out/; the colliding link and the stop flash coral while the clip holds at
+// that pose. Its flags (-scene, -out, -width, -height, -workers, -smoke)
+// follow the subcommand; runLinkage documents them.
 //
 // The motion subcommand writes the GIFs of the README's "Motion and
 // collisions" section under docs/images/motion: `go run . motion` films the
