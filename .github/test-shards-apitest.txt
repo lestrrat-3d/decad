@@ -297,6 +297,7 @@
 1	0.02	TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided
 1	1.86	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
 1	0.12	TestVerifyJointBoxCancellation
+1	0.48	TestVerifyJointBoxClearReading
 1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
 1	0.01	TestVerifyLinkageErrors
 1	0.19	TestVerifyLinkageNearMissBetweenSamples

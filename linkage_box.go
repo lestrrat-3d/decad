@@ -108,19 +108,24 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 // budget's finding; then the whole-box reading's. It is empty exactly when
 // Status is Sound, and Status is the worst Diagnostic.Status in it.
 type JointBoxReport struct {
-	Request        JointBoxRequest     // the validated effective settings, including defaults
-	Linkage        *Linkage            // the linkage as given
-	Box            JointBox            // the box as stated
-	Links          []*Link             // Linkage.Links() order
-	Against        []*Body             // every static body, in Document.Bodies() order
-	JointContacts  []DiagnosticPair    // every declared joint contact, in declaration order
-	Cells          []JointCellResult   // the leaves of the subdivision, in cell order; they tile the box
-	CellsEvaluated int                 // every centre evaluated, split cells included
-	Collisions     []JointBoxCollision // every proven collision at every evaluated centre, in evaluation order then pair order
-	Clearance      *ScalarReading      // the minimum gap over the whole box; nil unless every cell is CellClear
-	Assessment     Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
-	Diagnostics    []Diagnostic        // per leaf its centre's findings then its own; then split centres'; then the budget's and the reading's
-	Status         Status              // Unverified on a zero value; VerifyJointBox always returns a decided status
+	Request JointBoxRequest // the validated effective settings, including defaults
+	// ReadingResolution is the floor the whole-box Clearance reading refines
+	// to, per axis: Request.Resolution when WithResolution was stated, and
+	// units.Scalar(1.0/16384) otherwise, while the verdict stops at
+	// Request.Resolution (docs/linkage-check-design.md §14.1).
+	ReadingResolution units.Value
+	Linkage           *Linkage            // the linkage as given
+	Box               JointBox            // the box as stated
+	Links             []*Link             // Linkage.Links() order
+	Against           []*Body             // every static body, in Document.Bodies() order
+	JointContacts     []DiagnosticPair    // every declared joint contact, in declaration order
+	Cells             []JointCellResult   // the leaves of the subdivision, in cell order; they tile the box
+	CellsEvaluated    int                 // every centre evaluated, split cells included
+	Collisions        []JointBoxCollision // every proven collision at every evaluated centre, in evaluation order then pair order
+	Clearance         *ScalarReading      // the minimum gap over the whole box; nil unless every cell is CellClear
+	Assessment        Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
+	Diagnostics       []Diagnostic        // per leaf its centre's findings then its own; then split centres'; then the budget's and the reading's
+	Status            Status              // Unverified on a zero value; VerifyJointBox always returns a decided status
 }
 
 // Passed reports whether the report is Sound. It returns false for a nil
@@ -414,6 +419,12 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 	if err != nil {
 		return motionConfig{}, 0, err
 	}
+	if !cfg.stated {
+		// Unstated, the reading refines past the verdict floor to its own,
+		// per axis, as a drive's does (docs/linkage-check-design.md §3, §14.1).
+		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
+		cfg.readingP = &reading
+	}
 	return cfg, budget, nil
 }
 
@@ -432,6 +443,11 @@ type boxRun struct {
 	// unsplit counts the cells it held.
 	exhausted bool
 	unsplit   int
+	// upper is the centre holding the smallest gap upper end, upperHi that
+	// end; anyViolated: some centre disproves the margin.
+	upper       *motionPose
+	upperHi     *float64
+	anyViolated bool
 }
 
 // boxCell is one cell of the subdivision: per link, the fractions lo and hi
@@ -451,6 +467,10 @@ type boxCell struct {
 	held  [][2]int
 	stuck bool
 	split bool
+	// low is the evaluated pair whose bound is the clear cell's Clearance,
+	// the pair the reading and the margin split for; nil when that bound is
+	// an excluded pair's, which no split changes.
+	low *[2]int
 }
 
 // centre is the fraction of joint k's range at the cell's centre.
@@ -459,11 +479,11 @@ func (c *boxCell) centre(k int) *big.Rat {
 	return mid.Quo(mid, big.NewRat(2, 1))
 }
 
-// subdivide evaluates the whole box's centre, then splits for the verdict
-// (docs/linkage-check-design.md §14.4 steps 3-5 and 7): level by level, each
-// splittable cell of the level in cell order replaced in place by its two
-// halves, lower half first, until no cell is splittable or the budget stops
-// the split.
+// subdivide evaluates the whole box's centre, then splits for the verdict and
+// for the readings (docs/linkage-check-design.md §14.4 steps 3-7): the verdict
+// first, and once no cell is splittable for it, one split at a time for the
+// whole-box reading or the margin, the verdict resuming on the halves, until
+// neither asks for a split or the budget stops it.
 func (b *boxRun) subdivide() error {
 	n := len(b.dr.spec.joints)
 	root := &boxCell{lo: make([]*big.Rat, n), hi: make([]*big.Rat, n)}
@@ -477,14 +497,51 @@ func (b *boxRun) subdivide() error {
 		return err
 	}
 	b.leaves = []*boxCell{root}
-	for level := 0; ; level++ {
+	for {
+		if err := b.splitForVerdict(); err != nil {
+			return err
+		}
+		if b.exhausted {
+			break
+		}
+		n, axis := b.nextReadingSplit()
+		if n < 0 {
+			break
+		}
+		if len(b.evaluated)+2 > b.budget {
+			b.exhausted = true
+			b.unsplit++
+			break
+		}
+		lower, upper, err := b.split(b.leaves[n], axis)
+		if err != nil {
+			return err
+		}
+		b.leaves = slices.Insert(slices.Delete(b.leaves, n, n+1), n, lower, upper)
+	}
+	return b.run.ctx.Err()
+}
+
+// splitForVerdict is §14.4 step 5: level by level from the shallowest
+// splittable cell, each splittable cell of the level in cell order replaced in
+// place by its two halves, lower half first, until no cell is splittable or
+// the budget stops the split.
+func (b *boxRun) splitForVerdict() error {
+	for {
+		level := -1
+		for _, c := range b.leaves {
+			if b.splitAxis(c) >= 0 && (level < 0 || c.depth < level) {
+				level = c.depth
+			}
+		}
+		if level < 0 {
+			return nil
+		}
 		next := make([]*boxCell, 0, len(b.leaves))
-		more := false
 		for _, c := range b.leaves {
 			axis := b.splitAxis(c)
 			if c.depth != level || axis < 0 {
 				next = append(next, c)
-				more = more || axis >= 0
 				continue
 			}
 			if b.exhausted || len(b.evaluated)+2 > b.budget {
@@ -498,14 +555,101 @@ func (b *boxRun) subdivide() error {
 				return err
 			}
 			next = append(next, lower, upper)
-			more = true
 		}
 		b.leaves = next
-		if b.exhausted || !more {
-			break
+		if b.exhausted {
+			return nil
 		}
 	}
-	return b.run.ctx.Err()
+}
+
+// nextReadingSplit is §14.4 step 6: the leaf to split for the readings and
+// the axis to split it along, or −1. The leaf is the clear cell holding the
+// smallest lower bound, ties in cell order. It splits while every leaf is
+// clear and the whole-box reading fails the tolerance gate, along an axis
+// wider than the reading floor; and while a requested margin is neither proven
+// by that bound nor disproven by some centre, along an axis wider than the
+// verdict floor. The axis is the one with the largest share of the travel of
+// the pair that attained the bound.
+func (b *boxRun) nextReadingSplit() (int, int) {
+	r := b.run
+	allClear, smallest := true, -1
+	for n, c := range b.leaves {
+		if c.outcome != CellClear {
+			allClear = false
+			continue
+		}
+		if c.clearance != nil && (smallest < 0 || c.clearance.Value.Base() < b.leaves[smallest].clearance.Value.Base()) {
+			smallest = n
+		}
+	}
+	if smallest < 0 || b.leaves[smallest].low == nil {
+		return -1, -1
+	}
+	c := b.leaves[smallest]
+	if allClear {
+		if axis := b.readingAxis(c, b.wideForReading); axis >= 0 {
+			if reading, _ := r.pathClearance(b.upperPoses(), c.clearance, "whole-box"); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
+				return smallest, axis
+			}
+		}
+	}
+	if r.cfg.minimumMM != nil && !b.anyViolated && !r.meetsMinimum(c.clearance) {
+		if axis := b.readingAxis(c, b.wide); axis >= 0 {
+			return smallest, axis
+		}
+	}
+	return -1, -1
+}
+
+// readingAxis is the varying joint, among those wide reports wider than its
+// floor, with the largest share of the travel of the pair that attained a
+// clear cell's bound; ties go to the earliest link, −1 when none is wide.
+func (b *boxRun) readingAxis(c *boxCell, wide func(*boxCell, int) bool) int {
+	share := make(map[int]*big.Rat, len(b.axes))
+	for _, t := range b.pairTerms(c, c.low[0], c.low[1]) {
+		share[t.joint] = t.value
+	}
+	axis := -1
+	var top *big.Rat
+	for _, k := range b.axes {
+		if !wide(c, k) {
+			continue
+		}
+		v := share[k]
+		if v == nil {
+			v = new(big.Rat)
+		}
+		if axis < 0 || v.Cmp(top) > 0 {
+			axis, top = k, v
+		}
+	}
+	return axis
+}
+
+// upperPoses is the evaluated centre holding the smallest proven upper end
+// of any pair's gap, the first in evaluation order on a tie, or none: all the
+// whole-box reading takes from the centres besides the leaves' bounds, so the
+// reading over it is the reading over every centre.
+func (b *boxRun) upperPoses() []*motionPose {
+	if b.upper == nil {
+		return nil
+	}
+	return []*motionPose{b.upper}
+}
+
+// note keeps the running facts the readings consult about every evaluated
+// centre: the smallest gap upper end and whether some margin is disproven.
+func (b *boxRun) note(mp *motionPose) {
+	b.anyViolated = b.anyViolated || mp.violated
+	for _, row := range mp.pairs {
+		for _, pp := range row {
+			if pp.hasGap && (b.upperHi == nil || pp.hi < *b.upperHi) {
+				hi := pp.hi
+				b.upper, b.upperHi = mp, &hi
+			}
+		}
+	}
 }
 
 // split halves cell c along joint axis, evaluating both halves' centres.
@@ -564,6 +708,7 @@ func (b *boxRun) evaluate(c *boxCell) error {
 	}
 	c.pose = mp
 	b.evaluated = append(b.evaluated, c)
+	b.note(mp)
 	b.classify(c)
 	return nil
 }
@@ -592,6 +737,8 @@ func (b *boxRun) classify(c *boxCell) {
 		}
 		return
 	}
+	var lowBound *big.Rat
+	var low *[2]int
 	lowest, ok := r.certifyPairs(func(i, k int) *big.Rat {
 		pp := mp.pairs[i][k]
 		if !pp.hasGap {
@@ -601,7 +748,11 @@ func (b *boxRun) classify(c *boxCell) {
 		if lo.Cmp(tau) <= 0 {
 			return nil
 		}
-		return lo.Sub(lo, tau)
+		bound := lo.Sub(lo, tau)
+		if lowBound == nil || bound.Cmp(lowBound) < 0 {
+			lowBound, low = bound, &[2]int{i, k}
+		}
+		return bound
 	}, func(i, k int) {
 		if !r.pairs[i][k].evaluated() {
 			c.stuck = true
@@ -613,6 +764,9 @@ func (b *boxRun) classify(c *boxCell) {
 		return
 	}
 	c.outcome, c.clearance = CellClear, lowerBoundMeasurement(lowest)
+	if lowBound != nil && lowBound.Cmp(lowest) == 0 {
+		c.low = low
+	}
 }
 
 // jointTerm is one joint's share w_i·span_i(C) of a pair's travel over a
@@ -753,6 +907,16 @@ func (b *boxRun) wide(c *boxCell, k int) bool {
 	return width.Cmp(b.run.cfg.resolutionP.Base) > 0
 }
 
+// wideForReading reports whether cell c's span along joint k is wider than
+// the reading floor: its own when unstated, else the resolution.
+func (b *boxRun) wideForReading(c *boxCell, k int) bool {
+	if b.run.cfg.readingP == nil {
+		return b.wide(c, k)
+	}
+	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
+	return width.Cmp(b.run.cfg.readingP.Base) > 0
+}
+
 // configuration is the joint configuration a cell's centre was evaluated at.
 func (c *boxCell) configuration() JointConfiguration {
 	conf := JointConfiguration{Values: make([]units.Value, len(c.pose.groups)), Poses: make([]r3.Transform, len(c.pose.groups))}
@@ -773,15 +937,16 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 			MinClearance:      r.cfg.minimum,
 			CellBudget:        b.budget,
 		},
-		Linkage:        l,
-		Box:            slices.Clone(box),
-		Links:          l.Links(),
-		Against:        []*Body{},
-		JointContacts:  l.JointContacts(),
-		Cells:          make([]JointCellResult, 0, len(b.leaves)),
-		CellsEvaluated: len(b.evaluated),
-		Collisions:     []JointBoxCollision{},
-		Diagnostics:    []Diagnostic{},
+		ReadingResolution: readingResolution(r.cfg),
+		Linkage:           l,
+		Box:               slices.Clone(box),
+		Links:             l.Links(),
+		Against:           []*Body{},
+		JointContacts:     l.JointContacts(),
+		Cells:             make([]JointCellResult, 0, len(b.leaves)),
+		CellsEvaluated:    len(b.evaluated),
+		Collisions:        []JointBoxCollision{},
+		Diagnostics:       []Diagnostic{},
 	}
 	for _, st := range r.statics {
 		report.Against = append(report.Against, st.body)
@@ -858,7 +1023,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 			Code:    DiagJointBoxBudgetExhausted,
 			Status:  Suspect,
 			Reading: ReadingNone,
-			Message: fmt.Sprintf("the cell budget of %d centres stopped the subdivision with %d cells still wider than the resolution left undecided or colliding", b.budget, b.unsplit),
+			Message: fmt.Sprintf("the cell budget of %d centres stopped the subdivision with %d cells left unsplit that its floors would still have split", b.budget, b.unsplit),
 		})
 	}
 	switch {
