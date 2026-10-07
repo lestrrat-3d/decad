@@ -159,7 +159,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 		return nil, ErrRevolveAngularHomotopy
 	}
 	one := proofbound.PointInterval(big.NewRat(1, 1))
-	sinD, cosD, ok := survey2d.RadSinCosSpan(d)
+	sinD, cosD, ok := proofbound.RadSinCosSpan(d)
 	if !ok {
 		return nil, ErrRevolveAngularHomotopy
 	}
@@ -172,7 +172,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 	cosAt := make([]proofbound.RatInterval, n+1)
 	for i := int64(0); i <= n; i++ {
 		u := big.NewRat(i, n)
-		sin, cos, ok := survey2d.RadSinCosSpan(proofbound.IntervalScale(d, u))
+		sin, cos, ok := proofbound.RadSinCosSpan(proofbound.IntervalScale(d, u))
 		if !ok {
 			return nil, ErrRevolveAngularHomotopy
 		}

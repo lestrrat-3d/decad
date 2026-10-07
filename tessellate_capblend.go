@@ -745,7 +745,7 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 // capStationBound is the certified plane-local gap between a cap-contour sample
 // the build HOLDS and the point that sample's own station denotes on the held
 // offset circle: centre plus radius times the sine and cosine of one exact
-// float angle, each enclosed through normal_bound.go's survey2d.RadSinCosInterval.
+// float angle, each enclosed through proofbound.RadSinCosInterval.
 //
 // It is chordStationBound's cap-level twin, and it answers a different question
 // only because the curve is different: a cap contour is a curve this evaluator
@@ -764,7 +764,7 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.Wal
 	if rt == nil || rr == nil || ru == nil || rv == nil {
 		return underivable
 	}
-	sin, cos, ok := survey2d.RadSinCosInterval(rt)
+	sin, cos, ok := proofbound.RadSinCosInterval(rt)
 	if !ok {
 		return underivable
 	}

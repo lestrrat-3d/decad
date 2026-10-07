@@ -121,7 +121,7 @@ func LoftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]LoftStation, []LoftSta
 // its proofbound.Atan2Interval swept angle, a CircleSeg's recorded radius and exact
 // rational turn — never from the walk's held math.Hypot radius and math.Atan2
 // angles, neither of which the walk can enclose (extrude.go's circularWalk).
-// survey2d.RadSinCosSpan supplies the sine of the enclosed cell half-angle, and the
+// proofbound.RadSinCosSpan supplies the sine of the enclosed cell half-angle, and the
 // squaring goes through proofbound.IntervalMul, whose four-corner upper end dominates
 // max x² over the span whatever the span's sign.
 //
@@ -136,7 +136,7 @@ func LoftCertifiedSagittaUpper(radius, sweep proofbound.RatInterval, enclosed bo
 		return math.Inf(1)
 	}
 	half := proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m)))
-	sin, _, ok := survey2d.RadSinCosSpan(half)
+	sin, _, ok := proofbound.RadSinCosSpan(half)
 	if !ok {
 		return math.Inf(1)
 	}
@@ -175,7 +175,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 		return 0
 	}
 	half := proofbound.IntervalScale(sweep, big.NewRat(1, 2*int64(m)))
-	sin, _, ok := survey2d.RadSinCosSpan(half)
+	sin, _, ok := proofbound.RadSinCosSpan(half)
 	if !ok {
 		return 0
 	}

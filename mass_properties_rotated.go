@@ -90,7 +90,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	widen.Mul(widen, massmoment.TensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
-			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
+			world[i][j] = proofbound.IntervalWiden(world[i][j], widen)
 		}
 	}
 
@@ -177,11 +177,11 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (massmoment.Moment
 		}
 		re := new(big.Rat).Mul(r, e)
 		r2e := new(big.Rat).Mul(r, re)
-		volume = survey2d.IntervalWiden(volume, e)
+		volume = proofbound.IntervalWiden(volume, e)
 		for i := range first {
-			first[i] = survey2d.IntervalWiden(first[i], re)
+			first[i] = proofbound.IntervalWiden(first[i], re)
 			for j := range second[i] {
-				second[i][j] = survey2d.IntervalWiden(second[i][j], r2e)
+				second[i][j] = proofbound.IntervalWiden(second[i][j], r2e)
 			}
 		}
 	}

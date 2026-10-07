@@ -69,3 +69,19 @@ func IntervalSqrt(a RatInterval) (RatInterval, bool) {
 	}
 	return Interval(rlo, rhi), true
 }
+
+// IntervalWiden grows an enclosure by a non-negative rational on both ends.
+func IntervalWiden(a RatInterval, w *big.Rat) RatInterval {
+	return Interval(new(big.Rat).Sub(a.Lo, w), new(big.Rat).Add(a.Hi, w))
+}
+
+// RatFloorGrid rounds a rational DOWN onto the 2⁻ˢʰⁱᶠᵗ grid, so the result is
+// never above the input and sits within 2⁻ˢʰⁱᶠᵗ of it. Rounding down in one
+// direction only is what lets the caller charge the whole gap from one end.
+func RatFloorGrid(x *big.Rat, shift uint) *big.Rat {
+	scale := new(big.Int).Lsh(big.NewInt(1), shift)
+	num := new(big.Int).Mul(x.Num(), scale)
+	// Denom is positive for every big.Rat, so Div is the floor.
+	q := new(big.Int).Div(num, x.Denom())
+	return new(big.Rat).SetFrac(q, scale)
+}

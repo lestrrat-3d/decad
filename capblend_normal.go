@@ -52,7 +52,7 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 		if rHalf == nil {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
-		sin, cos, ok := survey2d.RadSinCosInterval(rHalf)
+		sin, cos, ok := proofbound.RadSinCosInterval(rHalf)
 		if !ok {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
@@ -80,25 +80,25 @@ func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtre
 
 func newPlacedFrameMap(pp prismPayload) (survey2d.PlacedFrameMap, bool) {
 	basis := pp.xform.Basis()
-	ex, okX := survey2d.IvVec3Of(basis.EX)
-	ey, okY := survey2d.IvVec3Of(basis.EY)
-	ez, okZ := survey2d.IvVec3Of(basis.EZ)
-	translation, okT := survey2d.IvVec3Of(pp.xform.Translation())
-	origin, okO := survey2d.IvVec3Of(pp.frame.Origin())
-	u, okU := survey2d.IvVec3Of(pp.frame.U())
-	v, okV := survey2d.IvVec3Of(pp.frame.V())
-	n, okN := survey2d.IvVec3Of(pp.frame.N())
+	ex, okX := proofbound.IvVec3Of(basis.EX)
+	ey, okY := proofbound.IvVec3Of(basis.EY)
+	ez, okZ := proofbound.IvVec3Of(basis.EZ)
+	translation, okT := proofbound.IvVec3Of(pp.xform.Translation())
+	origin, okO := proofbound.IvVec3Of(pp.frame.Origin())
+	u, okU := proofbound.IvVec3Of(pp.frame.U())
+	v, okV := proofbound.IvVec3Of(pp.frame.V())
+	n, okN := proofbound.IvVec3Of(pp.frame.N())
 	if !okX || !okY || !okZ || !okT || !okO || !okU || !okV || !okN {
 		return survey2d.PlacedFrameMap{}, false
 	}
-	place := func(local survey2d.IvVec3) survey2d.IvVec3 {
-		return survey2d.IvVec3Add(
-			survey2d.IvVec3Mul(ex, local[0]),
-			survey2d.IvVec3Add(survey2d.IvVec3Mul(ey, local[1]), survey2d.IvVec3Mul(ez, local[2])),
+	place := func(local proofbound.IvVec3) proofbound.IvVec3 {
+		return proofbound.IvVec3Add(
+			proofbound.IvVec3Mul(ex, local[0]),
+			proofbound.IvVec3Add(proofbound.IvVec3Mul(ey, local[1]), proofbound.IvVec3Mul(ez, local[2])),
 		)
 	}
 	return survey2d.PlacedFrameMap{
-		Origin: survey2d.IvVec3Add(place(origin), translation),
+		Origin: proofbound.IvVec3Add(place(origin), translation),
 		Du:     place(u),
 		Dv:     place(v),
 		Dn:     place(n),

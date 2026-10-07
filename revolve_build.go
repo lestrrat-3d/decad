@@ -602,7 +602,7 @@ func junctionRadiusInterval(rho, rhoBound float64) (proofbound.RatInterval, bool
 	if r == nil || b == nil {
 		return proofbound.RatInterval{}, false
 	}
-	return survey2d.IntervalWiden(proofbound.PointInterval(r), b), true
+	return proofbound.IntervalWiden(proofbound.PointInterval(r), b), true
 }
 
 // revJunction is one junction between consecutive walks: the shared point in

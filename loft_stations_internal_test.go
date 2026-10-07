@@ -594,7 +594,7 @@ func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
 	t.Helper()
 	radius, sweep, ok := circularWalkEnclosures(seg)
 	require.True(t, ok)
-	sin, _, ok := survey2d.RadSinCosSpan(proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m))))
+	sin, _, ok := proofbound.RadSinCosSpan(proofbound.IntervalScale(sweep, big.NewRat(1, 4*int64(m))))
 	require.True(t, ok)
 	require.Positive(t, sin.Lo.Sign(), "the cell half-angle must be enclosed strictly inside the first quadrant for its sine's lower end to be a bound")
 	s := proofbound.IntervalMul(proofbound.IntervalScale(radius, big.NewRat(2, 1)), proofbound.IntervalMul(sin, sin))

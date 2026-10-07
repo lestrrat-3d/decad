@@ -101,13 +101,13 @@ func DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2 *big.Rat) PullVer
 // the caller's pull are both held floats. ok is false on any non-finite
 // input or a failed enclosure.
 func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict, bool) {
-	pv, okP := IvVec3Of(pull)
+	pv, okP := proofbound.IvVec3Of(pull)
 	if !okP {
 		return PullUndecided, false
 	}
-	pull2 := IvVec3NormSq(pv).Lo
-	du := IvVec3Dot(m.Du, pv).Lo
-	dv := IvVec3Dot(m.Dv, pv).Lo
+	pull2 := proofbound.IvVec3NormSq(pv).Lo
+	du := proofbound.IvVec3Dot(m.Du, pv).Lo
+	dv := proofbound.IvVec3Dot(m.Dv, pv).Lo
 
 	if !w.IsCircular() {
 		tu, tv := proofarith.FloatRat(w.TanInU), proofarith.FloatRat(w.TanInV)
@@ -142,14 +142,14 @@ func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict,
 // rather than assuming a unit reading, exactly as the wall reader compares
 // against a wall's own tangent length squared.
 func CapNormalDecision(m PlacedFrameMap, pull r3.Vec, sign float64) (PullVerdict, bool) {
-	pv, okP := IvVec3Of(pull)
+	pv, okP := proofbound.IvVec3Of(pull)
 	rSign := proofarith.FloatRat(sign)
 	if !okP || rSign == nil {
 		return PullUndecided, false
 	}
-	pull2 := IvVec3NormSq(pv).Lo
-	scale2 := IvVec3NormSq(m.Dn).Lo
-	num := new(big.Rat).Mul(rSign, IvVec3Dot(m.Dn, pv).Lo)
+	pull2 := proofbound.IvVec3NormSq(pv).Lo
+	scale2 := proofbound.IvVec3NormSq(m.Dn).Lo
+	num := new(big.Rat).Mul(rSign, proofbound.IvVec3Dot(m.Dn, pv).Lo)
 	return DecideRationalComponent(num, scale2, pull2), true
 }
 
@@ -199,7 +199,7 @@ func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
 	for j := range arcs + 1 {
 		theta := new(big.Rat).Add(rlo, proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
-		sin, cos, okT := RadSinCosInterval(theta)
+		sin, cos, okT := proofbound.RadSinCosInterval(theta)
 		if !okT {
 			return nil, nil, nil, nil, false
 		}
