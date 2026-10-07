@@ -81,7 +81,7 @@ const RevolveAngularIntegralSteps = 64
 // term is what keeps a fixed budget worth spending.
 //
 // Nothing here calls math.Sin or math.Cos, and nothing here compares against π:
-// RadSinCosSpan reduces through internal/proofbound/moments_trig.go's own certified series.
+// RadSinCosSpan reduces through internal/proofbound/turn_trig.go's own certified series.
 //
 // The reading is a pure function of the exact step, and a suite that
 // tessellates many revolves on one angular plan asks for the same step again

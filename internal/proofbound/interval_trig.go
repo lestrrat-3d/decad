@@ -7,7 +7,7 @@ import (
 )
 
 // TurnGridShift is the dyadic grid the radian-to-turn conversion lands on
-// before moments_trig.go's series runs. π's own in-tree bounds carry
+// before turn_trig.go's series runs. π's own in-tree bounds carry
 // seventy-odd digits, so the quotient by 2π is a rational nothing needs to
 // square that wide; rounding it down to a 2⁻⁹⁶ grid and charging the whole
 // gap back through the sine's own Lipschitz constant keeps the series input

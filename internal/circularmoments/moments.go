@@ -99,7 +99,7 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (proofbound.RatInterval, bool) {
 // this bracket stays a proof about the recorded arc rather than about a
 // float-shifted copy of it.
 //
-// A CircleSeg's fractional-turn arm (internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval)
+// A CircleSeg's fractional-turn arm (internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval)
 // covers a trimmed fragment the same way the whole-turn fast path covers a
 // full sweep: every non-trig factor (the radius, the recentred centre
 // coordinates, the swept angle) is an exact rational, and only the endpoint
@@ -315,7 +315,7 @@ func circularWalkEnclosures(seg CurveSegment) (proofbound.RatInterval, proofboun
 // product of circularWalkEnclosures' two brackets: an arc's length IS its radius
 // times its swept angle, and a length has no cross-term to bracket, so unlike
 // circularAreaInterval and circularFirstMomentInterval it never needed
-// internal/proofbound/moments_trig.go's endpoint sine/cosine enclosure to admit a trimmed fragment.
+// internal/proofbound/turn_trig.go's endpoint sine/cosine enclosure to admit a trimmed fragment.
 func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 	r, sweep, ok := circularWalkEnclosures(seg)
 	if !ok {
@@ -333,7 +333,7 @@ func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 // coordinate the record states.
 //
 // A CircleSeg's point at t is Center + r·(cos 2πt, sin 2πt) for the recorded
-// centre and radius, so the turn is exactly rational and internal/proofbound/moments_trig.go's
+// centre and radius, so the turn is exactly rational and internal/proofbound/turn_trig.go's
 // proofbound.TurnSinCosInterval encloses the pair with no π-comparison anywhere. A whole
 // multiple of a quarter turn does not even need the series: its sine and cosine
 // are 0 or ±1 exactly (quarterTurnSinCos), which is what keeps a whole circle's
@@ -592,7 +592,7 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 // moment over a whole period cancels exactly, leaving mu = c.U·r²·π·dt and
 // mv = c.V·r²·π·dt (dt the signed turn count). A fractional turn instead
 // restates addCircular's own mu/mv closed forms (moments.go:1511/1516) with
-// every sine/cosine factor enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval
+// every sine/cosine factor enclosed by internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval
 // and every other factor — the radius, the recentred centre coordinates, the
 // swept angle — taken as an exact rational: the same substitution
 // circularAreaInterval's fractional arm makes, one order higher.
@@ -778,7 +778,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // (dt the signed turn count) — the disc's own second moments about its
 // centre, shifted by the parallel-axis theorem. A fractional turn instead
 // restates addCircular's own muu/muv/mvv formulas with every sine/cosine
-// factor enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval, and every
+// factor enclosed by internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval, and every
 // higher trig multiple — sin(2θ), cos(2θ), sin(4θ) — taken as an exact
 // DOUBLE-ANGLE algebraic combination of that same enclosure (sin2θ = 2·sinθ·cosθ,
 // cos2θ = cos²θ−sin²θ, sin4θ = 2·sin2θ·cos2θ): no new transcendental is ever

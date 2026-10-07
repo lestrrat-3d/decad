@@ -333,7 +333,7 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   with `|p| ≤ R0`, the two images differ by at most `η_k = ‖B(C_k) − B(T*(s_k))·B(P0)‖_F · R0 + |t(C_k) −
   (B(T*(s_k))·t(P0) + t*(s_k))|`, every term a rational interval: the float matrices are read exactly off
   `Basis()`/`Translation()`, the ideal rotation's sine and cosine are enclosed by `turnSinCosInterval`
-  (`internal/proofbound/moments_trig.go`) for a degree-stated angle, which is an exact rational turn, and through
+  (`internal/proofbound/turn_trig.go`) for a degree-stated angle, which is an exact rational turn, and through
   `internal/proofbound/rat_interval.go`'s `π` enclosures for a radian-stated one; `R0` is the mover's record-coordinate radius
   read off its payload envelope (`prism_payload.go`'s profile envelopes and the axial extent for a prism, the
   revolve's generator envelope and radius for a revolve). `η_k` is then subtracted from `lo_k` exactly as
