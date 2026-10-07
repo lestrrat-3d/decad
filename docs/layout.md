@@ -209,7 +209,7 @@ the rules leave to the byte budget.
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift over source boxes or exact planar bodies. See contact-sweep design. |
 | `contact_sweep_memo.go` | Adapts `internal/sweepmemo/` to sweep paths and body radius readings. See contact-sweep §7. |
-| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.6, §10.8. |
+| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Planar and rolling sweep adapters. See multibody-dynamics §10.2–§10.6, §10.8. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
 ### Booleans
@@ -301,7 +301,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, poses and sweeps. |
-| `internal/planarsweep/` | Planar sweep motion, vertex rates, curvature and depth bounds. |
+| `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
