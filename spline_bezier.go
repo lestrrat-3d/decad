@@ -6,8 +6,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 )
 
-func isFreeformSegment(segment CurveSegment) bool { return splinebezier.IsFreeformSegment(segment) }
-
 func freeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]freeform.BezierSpan, bool, error) {
 	return splinebezier.FreeformBezierSpans(segment, work)
 }
@@ -26,10 +24,6 @@ func nurbsBezierSpans(segment NURBSSeg, work *freeform.FreeformWork) ([]freeform
 
 func closedSplineBezierSpans(segment ClosedSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return splinebezier.ClosedSplineBezierSpans(segment, work)
-}
-
-func shiftFreeformSpans(spans []freeform.BezierSpan, anchor Point2) error {
-	return splinebezier.ShiftFreeformSpans(spans, anchor)
 }
 
 func freeformEndpoints(spans []freeform.BezierSpan, reversed bool) (Point2, Point2, error) {

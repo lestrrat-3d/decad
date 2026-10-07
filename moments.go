@@ -6,10 +6,9 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentline"
-	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/momentregion"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -20,15 +19,15 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the mass-property engine of docs/evaluator-design.md §4:
-// decad integrating its OWN records. sketch decides topology and
-// admissibility; once a region is recorded, its areas and moments are decad's
-// job, computed by closed-form boundary integrals (Green's theorem) per
-// segment kind. Line and Tier A free-form walks (docs/spline-design.md Table F)
-// integrate to exact rationals, so a region built only from them is published
-// as its own rational rounded ONCE and retains a zero bound wherever that
-// rational is representable; circular evaluations have no exact rational and
-// carry outward bounds instead. Every other free-form kind is unsupported.
+// This file adapts recorded regions to the mass-property engine of
+// docs/evaluator-design.md §4. sketch decides topology and admissibility;
+// internal/momentregion integrates admitted records by closed-form boundary
+// integrals (Green's theorem). Line and Tier A free-form walks
+// (docs/spline-design.md Table F) integrate to exact rationals, so a region
+// built only from them is published as its own rational rounded ONCE and
+// retains a zero bound wherever that rational is representable; circular
+// evaluations have no exact rational and carry outward bounds instead.
+// Every other free-form kind is unsupported.
 //
 // Three sibling files carry the machinery this engine integrates with, each
 // with its own doc comment: internal/proofbound/bounded.go the bounded-scalar arithmetic every
@@ -241,23 +240,19 @@ type regionIntegrals struct {
 	thirdDead bool
 }
 
-// addThird folds one segment's third-order contribution into the region's
-// sum, or retires the sum for good when the segment has none.
-func (ig *regionIntegrals) addThird(terms [4]proofbound.RatInterval, ok bool) {
-	if ig.thirdDead {
-		return
-	}
-	if !ok {
-		ig.thirdDead = true
-		ig.third = [4]proofbound.RatInterval{}
-		return
-	}
-	if ig.third[0].Lo == nil {
-		ig.third = terms
-		return
-	}
-	for i := range ig.third {
-		ig.third[i] = proofbound.IntervalAdd(ig.third[i], terms[i])
+func (ig *regionIntegrals) state() momentregion.State {
+	return momentregion.State{
+		CoordUpper: &ig.coordUpper,
+		Fields: [6]momentregion.Field{
+			{Value: &ig.area, Bound: &ig.areaBound},
+			{Value: &ig.mu, Bound: &ig.muBound},
+			{Value: &ig.mv, Bound: &ig.mvBound},
+			{Value: &ig.muu, Bound: &ig.muuBound},
+			{Value: &ig.muv, Bound: &ig.muvBound},
+			{Value: &ig.mvv, Bound: &ig.mvvBound},
+		},
+		Exact: &ig.exact, ExactDead: &ig.exactDead,
+		Third: &ig.third, ThirdDead: &ig.thirdDead,
 	}
 }
 
@@ -265,27 +260,11 @@ func (ig *regionIntegrals) addThird(terms [4]proofbound.RatInterval, ok bool) {
 // boundary contribution had an enclosure. It is only populated by an
 // integration run at freeform.MomentThirdOrder.
 func (ig regionIntegrals) thirdMoments() ([4]proofbound.RatInterval, bool) {
-	if ig.thirdDead || ig.third[0].Lo == nil {
-		return [4]proofbound.RatInterval{}, false
-	}
-	return ig.third, true
-}
-
-func accumulateMoment(value, bound *float64, term, termBound float64) {
-	next := *value + term
-	*bound = proofbound.AbsSumUpper(*bound, termBound, proofarith.AddRoundError(*value, term, next))
-	*value = next
+	return ig.state().ThirdMoments()
 }
 
 func (ig regionIntegrals) isFinite(order freeform.MomentIntegralOrder) bool {
-	switch order {
-	case freeform.MomentAreaOrder:
-		return freeform.FiniteMomentValues(ig.area)
-	case freeform.MomentFirstOrder:
-		return freeform.FiniteMomentValues(ig.area, ig.mu, ig.mv)
-	default:
-		return freeform.FiniteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
-	}
+	return ig.state().IsFinite(order)
 }
 
 func (r ProfileRecord) integralsBudget(budget *proofbound.WorkBudget) (regionIntegrals, error) {
@@ -405,76 +384,12 @@ func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order
 // Only where a contribution has no exact rational at all — a circular walk,
 // whose integral carries π — does the float sum decide, as it always has.
 func (ig *regionIntegrals) requirePositiveArea() error {
-	if !ig.exactDead && ig.exact.Complete() {
-		if ig.exact.Area.Sign() > 0 {
-			return nil
-		}
-		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
-	}
-	if ig.area <= 0 {
-		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
-	}
-	return nil
+	return ig.state().RequirePositiveArea()
 }
 
-// shiftPoint re-references one recorded coordinate to the walk anchor in
-// float64. It conditions the FLOAT evaluation only: every exact rational
-// subtracts the anchor over rationals instead, because fl(p−anchor) rounds and
-// an exact result taken over rounded coordinates is the exact answer for a
-// different region (see regionIntegrals.add).
-func shiftPoint(point, anchor Point2) Point2 {
-	return Point2{U: point.U - anchor.U, V: point.V - anchor.V}
-}
-
-// shiftPoints translates a control-point slice into a fresh slice, leaving the
-// caller's recorded segment untouched.
+// translateMomentIntegrals restores the profile origin on a copy of the sum.
 func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order freeform.MomentIntegralOrder) regionIntegrals {
-	if !ig.exactDead {
-		ig.exact = translateExactMoments(ig.exact, anchor, order)
-	}
-	if order == freeform.MomentAreaOrder {
-		return ig
-	}
-	area := proofbound.MeasuredScalar(ig.area, ig.areaBound)
-	mu := proofbound.MeasuredScalar(ig.mu, ig.muBound)
-	mv := proofbound.MeasuredScalar(ig.mv, ig.mvBound)
-	if order >= freeform.MomentSecondOrder {
-		two := proofbound.ExactScalar(2)
-		anchorU := proofbound.ExactScalar(anchor.U)
-		anchorV := proofbound.ExactScalar(anchor.V)
-		muu := proofbound.BoundedAdd(
-			proofbound.MeasuredScalar(ig.muu, ig.muuBound),
-			proofbound.BoundedAdd(
-				proofbound.BoundedMul(proofbound.BoundedMul(two, anchorU), mu),
-				proofbound.BoundedMul(proofbound.BoundedMul(anchorU, anchorU), area),
-			),
-		)
-		muv := proofbound.BoundedAdd(
-			proofbound.MeasuredScalar(ig.muv, ig.muvBound),
-			proofbound.BoundedAdd(
-				proofbound.BoundedMul(anchorV, mu),
-				proofbound.BoundedAdd(
-					proofbound.BoundedMul(anchorU, mv),
-					proofbound.BoundedMul(proofbound.BoundedMul(anchorU, anchorV), area),
-				),
-			),
-		)
-		mvv := proofbound.BoundedAdd(
-			proofbound.MeasuredScalar(ig.mvv, ig.mvvBound),
-			proofbound.BoundedAdd(
-				proofbound.BoundedMul(proofbound.BoundedMul(two, anchorV), mv),
-				proofbound.BoundedMul(proofbound.BoundedMul(anchorV, anchorV), area),
-			),
-		)
-		ig.muu, ig.muuBound = muu.Value, muu.Bound
-		ig.muv, ig.muvBound = muv.Value, muv.Bound
-		ig.mvv, ig.mvvBound = mvv.Value, mvv.Bound
-	}
-	mu = proofbound.BoundedAdd(mu, proofbound.BoundedMul(proofbound.ExactScalar(anchor.U), area))
-	mv = proofbound.BoundedAdd(mv, proofbound.BoundedMul(proofbound.ExactScalar(anchor.V), area))
-	ig.mu, ig.muBound = mu.Value, mu.Bound
-	ig.mv, ig.mvBound = mv.Value, mv.Bound
-	ig.coordUpper = math.Max(ig.coordUpper, proofbound.AbsSumUpper(anchor.U, anchor.V))
+	ig.state().Translate(anchor, order)
 	return ig
 }
 
@@ -496,146 +411,7 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order freeform.
 // converted and charged (moments_validate.go), so this pass converts nothing and
 // charges nothing.
 func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2, order freeform.MomentIntegralOrder) error {
-	segment, err := normalizeSegment(segment)
-	if err != nil {
-		return err
-	}
-	if order == freeform.MomentThirdOrder {
-		// Before the switch: the free-form arm below shifts its spans to the
-		// anchor in place, and the third-order sum is kept about the origin.
-		ig.addThird(segmentThirdMoments(segment, plan))
-	}
-	switch segment := segment.(type) {
-	case LineSeg:
-		ig.addLine(segment, anchor, order)
-		return nil
-	case CircleSeg:
-		if segment.Radius.Kind() != units.Length {
-			return fmt.Errorf(`%w: a circle segment's radius must be a %s, got %s`, ErrUnitKind, units.Length, segment.Radius.Kind())
-		}
-		radius, err := segment.Radius.In(units.Millimeter)
-		if err != nil {
-			return fmt.Errorf(`%w: a circle segment's radius is not representable: %s`, ErrNotFinite, err)
-		}
-		if segment.CCW != (segment.TStart < segment.TEnd) {
-			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
-		}
-		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
-		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		var muuProof, muvProof, mvvProof proofbound.RatInterval
-		var haveSecondMomentProof bool
-		if order >= freeform.MomentSecondOrder {
-			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
-		}
-		segment.Center = shiftPoint(segment.Center, anchor)
-		// The arrangement's normalized t is the angle 2π·t from +u
-		// (geom.BoundaryEdge); the recorded range order is the walk.
-		ig.addCircular(
-			segment.Center,
-			radius,
-			2*math.Pi*segment.TStart,
-			2*math.Pi*segment.TEnd,
-			math.Abs(radius),
-			proofbound.CircularSweepUpper(segment.TStart, segment.TEnd),
-			areaProof,
-			haveAreaProof,
-			muProof,
-			mvProof,
-			haveMomentProof,
-			muuProof,
-			muvProof,
-			mvvProof,
-			haveSecondMomentProof,
-			order,
-		)
-		return nil
-	case ArcSeg:
-		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
-		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		var muuProof, muvProof, mvvProof proofbound.RatInterval
-		var haveSecondMomentProof bool
-		if order >= freeform.MomentSecondOrder {
-			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
-		}
-		segment.Center = shiftPoint(segment.Center, anchor)
-		segment.Start = shiftPoint(segment.Start, anchor)
-		segment.End = shiftPoint(segment.End, anchor)
-		radius := math.Hypot(segment.Start.U-segment.Center.U, segment.Start.V-segment.Center.V)
-		a0 := math.Atan2(segment.Start.V-segment.Center.V, segment.Start.U-segment.Center.U)
-		a1 := math.Atan2(segment.End.V-segment.Center.V, segment.End.U-segment.Center.U)
-		sweep := math.Mod(a1-a0, 2*math.Pi)
-		if sweep <= 0 {
-			sweep += 2 * math.Pi
-		}
-		// normalized t maps to angle = a0 + t·sweep; the range order is the walk.
-		ig.addCircular(
-			segment.Center,
-			radius,
-			a0+segment.TStart*sweep,
-			a0+segment.TEnd*sweep,
-			arcRadiusUpper(segment),
-			proofbound.CircularSweepUpper(segment.TStart, segment.TEnd),
-			areaProof,
-			haveAreaProof,
-			muProof,
-			mvProof,
-			haveMomentProof,
-			muuProof,
-			muvProof,
-			mvvProof,
-			haveSecondMomentProof,
-			order,
-		)
-		return nil
-	default:
-		// A free-form kind with no converted chain is one the preflight could
-		// not convert, so this evaluator has no integral for it.
-		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
-			return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
-		}
-		// The chain was converted from the RECORDED control points, so shifting
-		// it here over rationals keeps the spans the recorded curve.
-		if err := shiftFreeformSpans(plan.spans, anchor); err != nil {
-			return err
-		}
-		ig.addFreeformTo(plan.spans, plan.reversed, order)
-		return nil
-	}
-}
-
-// segmentThirdMoments encloses one normalized segment's third-order
-// contribution about the plane origin: a line and a converted Tier A chain
-// exactly, from their recorded coordinates, and a circular walk through
-// circularThirdMomentInterval. Any other segment, and a circular walk that
-// enclosure does not admit, answers false.
-func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]proofbound.RatInterval, bool) {
-	var exact [4]*big.Rat
-	switch segment := segment.(type) {
-	case LineSeg:
-		u0 := ratLerp(segment.Start.U, segment.End.U, segment.TStart)
-		v0 := ratLerp(segment.Start.V, segment.End.V, segment.TStart)
-		u1 := ratLerp(segment.Start.U, segment.End.U, segment.TEnd)
-		v1 := ratLerp(segment.Start.V, segment.End.V, segment.TEnd)
-		if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
-			return [4]proofbound.RatInterval{}, false
-		}
-		exact = freeform.PolyThirdMoments(
-			polynomial.RatPoly{u0, new(big.Rat).Sub(u1, u0)},
-			polynomial.RatPoly{v0, new(big.Rat).Sub(v1, v0)},
-		)
-	case CircleSeg, ArcSeg:
-		return circularThirdMomentInterval(segment)
-	default:
-		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
-			return [4]proofbound.RatInterval{}, false
-		}
-		exact = freeform.FreeformThirdMoments(plan.spans, plan.reversed)
-	}
-	var out [4]proofbound.RatInterval
-	for i, value := range exact {
-		out[i] = proofbound.PointInterval(value)
-	}
-	return out, true
+	return ig.state().AddSegment(segment, momentregion.Plan{Spans: plan.spans, Reversed: plan.reversed}, anchor, order)
 }
 
 // addAnalytic accumulates one line, circle or arc segment about the given
@@ -651,81 +427,7 @@ func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, ancho
 	return ig.add(segment, plan, anchor, order)
 }
 
-// addLine folds a recorded line's neutral integral into the region sums.
-func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order freeform.MomentIntegralOrder) {
-	shifted := seg
-	shifted.Start = shiftPoint(seg.Start, anchor)
-	shifted.End = shiftPoint(seg.End, anchor)
-	u0, v0 := lerp2(shifted.Start, shifted.End, shifted.TStart)
-	u1, v1 := lerp2(shifted.Start, shifted.End, shifted.TEnd)
-	_, _, coordUpper := lineWalkBounds(shifted, math.Hypot(u1-u0, v1-v0))
-	ig.coordUpper = math.Max(ig.coordUpper, coordUpper)
-
-	line := momentline.Line{
-		Start:  momentline.Point{U: seg.Start.U, V: seg.Start.V},
-		End:    momentline.Point{U: seg.End.U, V: seg.End.V},
-		TStart: seg.TStart, TEnd: seg.TEnd,
-	}
-	values, bounds, exact := momentline.Evaluate(line, momentline.Point{U: anchor.U, V: anchor.V}, order)
-	for i, field := range ig.heldFields() {
-		if order < freeform.MomentSecondOrder && i >= 3 {
-			break
-		}
-		accumulateMoment(field.value, field.bound, values[i], bounds[i])
-	}
-	ig.addExact(exact)
-}
-
-func newExactMoments() freeform.ExactMoments {
-	return freeform.ExactMoments{
-		Area: new(big.Rat),
-		Mu:   new(big.Rat),
-		Mv:   new(big.Rat),
-		Muu:  new(big.Rat),
-		Muv:  new(big.Rat),
-		Mvv:  new(big.Rat),
-	}
-}
-
-// heldFields pairs each accumulated float moment with its bound, in the same
-// order freeform.ExactMoments.fields uses, so a rational and its published float are
-// never matched up by hand at a call site.
-func (ig *regionIntegrals) heldFields() [6]struct{ value, bound *float64 } {
-	return [6]struct{ value, bound *float64 }{
-		{&ig.area, &ig.areaBound},
-		{&ig.mu, &ig.muBound},
-		{&ig.mv, &ig.mvBound},
-		{&ig.muu, &ig.muuBound},
-		{&ig.muv, &ig.muvBound},
-		{&ig.mvv, &ig.mvvBound},
-	}
-}
-
-// addExact folds one segment's exact contribution into the region-level
-// rational accumulator.
-func (ig *regionIntegrals) addExact(exact freeform.ExactMoments) {
-	if ig.exactDead {
-		return
-	}
-	if !exact.Complete() {
-		ig.dropExact()
-		return
-	}
-	if !ig.exact.Complete() {
-		ig.exact = newExactMoments()
-	}
-	running := ig.exact.Fields()
-	for i, term := range exact.Fields() {
-		running[i].Add(running[i], term)
-	}
-}
-
-// dropExact retires the region-level rational accumulator for good: once one
-// contribution has no exact rational, the region's own sum has none either.
-func (ig *regionIntegrals) dropExact() {
-	ig.exactDead = true
-	ig.exact = freeform.ExactMoments{}
-}
+func newExactMoments() freeform.ExactMoments { return momentregion.NewExactMoments() }
 
 // publishExact replaces the per-segment float accumulation with the region's
 // own exact rational rounded ONCE, and the bound with that single rounding —
@@ -745,27 +447,7 @@ func (ig *regionIntegrals) dropExact() {
 // properties, Centroid's bounded-quotient fallback — is interval arithmetic,
 // which asks only that each input interval encloses the truth.
 func (ig *regionIntegrals) publishExact() {
-	if ig.exactDead || !ig.exact.Complete() {
-		return
-	}
-	exact := ig.exact.Fields()
-	for i, field := range ig.heldFields() {
-		held, _ := exact[i].Float64()
-		if proofbound.IsNonFinite(held) {
-			// No float64 holds this moment, so it has no single rounding to
-			// publish; its own float accumulation and proven bound stand, and a
-			// non-finite accumulation is refused by the order's finiteness check
-			// rather than reported.
-			continue
-		}
-		*field.value = held
-		*field.bound = proofarith.RationalFloatError(exact[i], held)
-	}
-}
-
-// translateExactMoments shifts exact integrals to the profile origin.
-func translateExactMoments(exact freeform.ExactMoments, anchor Point2, order freeform.MomentIntegralOrder) freeform.ExactMoments {
-	return momentline.TranslateExactMoments(exact, momentline.Point{U: anchor.U, V: anchor.V}, order)
+	ig.state().PublishExact()
 }
 
 func ratScale(value *big.Rat, num, den int64) *big.Rat {
@@ -774,40 +456,6 @@ func ratScale(value *big.Rat, num, den int64) *big.Rat {
 
 func ratLerp(start, end, t float64) *big.Rat {
 	return momentline.RatLerp(start, end, t)
-}
-
-// addCircular folds a bounded circular integral into the region sums.
-func (ig *regionIntegrals) addCircular(
-	c Point2,
-	r, th0, th1, radiusUpper, sweepUpper float64,
-	areaProof proofbound.RatInterval,
-	haveAreaProof bool,
-	muProof, mvProof proofbound.RatInterval,
-	haveMomentProof bool,
-	muuProof, muvProof, mvvProof proofbound.RatInterval,
-	haveSecondMomentProof bool,
-	order freeform.MomentIntegralOrder,
-) {
-	// Keep the area expression here so the independent section audit and this
-	// integrator produce the same float bits on every supported platform.
-	sin0, cos0 := math.Sincos(th0)
-	sin1, cos1 := math.Sincos(th1)
-	dth := th1 - th0
-	area := 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
-	held := circularbounds.EvaluateFloat(
-		circularPoint(c), r, th0, th1, radiusUpper, sweepUpper, area,
-		areaProof, haveAreaProof, muProof, mvProof, haveMomentProof,
-		muuProof, muvProof, mvvProof, haveSecondMomentProof, order,
-	)
-	ig.coordUpper = math.Max(ig.coordUpper, held.CoordUpper)
-	// Circular integrals have no exact rational because they contain π and trig terms.
-	ig.dropExact()
-	for i, field := range ig.heldFields() {
-		if order < freeform.MomentSecondOrder && i >= 3 {
-			break
-		}
-		accumulateMoment(field.value, field.bound, held.Values[i], held.Bounds[i])
-	}
 }
 
 // lerp2 returns the point at parameter t on the segment start→end.
@@ -830,13 +478,7 @@ func (ig *regionIntegrals) addCircular(
 // admits on its proximity threshold would fail the seam's loop-closure
 // falsifier at RecordProfile.
 func lerp2(start, end Point2, t float64) (float64, float64) {
-	switch t {
-	case 0:
-		return start.U, start.V
-	case 1:
-		return end.U, end.V
-	}
-	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+	return momentregion.Lerp2(start, end, t)
 }
 
 func arcRadiusUpper(seg ArcSeg) float64 {
