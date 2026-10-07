@@ -316,29 +316,9 @@ func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *
 	}
 }
 
-// lineLinePerp is the common perpendicular critical between a segment carrier
-// and a spine line — for lines the oracle has already proven NOT parallel. The
-// solve still owes a guard: cancellation can drive the denominator to zero (or
-// the feet to infinity) on a pair the oracle only just separated, and a
-// non-finite foot is no critical at all. ok is false there — the caller owes
-// an enclosure, never a fabricated critical.
 func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (clearance.SpineCrit, bool) {
-	rel := b.Sub(a)
-	uv := u.Dot(v)
-	den := 1 - uv*uv
-	if !(den > 0) {
-		return clearance.SpineCrit{}, false
-	}
-	ru := rel.Dot(u)
-	rv := rel.Dot(v)
-	s := (ru - uv*rv) / den
-	t := (uv*ru - rv) / den
-	fa := a.Add(u.Scale(s))
-	fb := b.Add(v.Scale(t))
-	if !proofbound.FiniteVec(fa) || !proofbound.FiniteVec(fb) {
-		return clearance.SpineCrit{}, false
-	}
-	return clearance.ExactCrit(fa, fb), true
+	e := k.spineEngine()
+	return e.LineLinePerp(a, u, b, v)
 }
 
 // circleOffsetFE: a circular edge against a cylinder, sphere or torus face —
