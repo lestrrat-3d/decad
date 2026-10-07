@@ -436,7 +436,7 @@ cutting code:
    cell the rational arrangement cannot close is an expected undecided contact
    outcome, never a guessed keep/drop.
 
-This section owes the hidden-tangency gate (`facesNearMiss`, `boolean.go`;
+This section owes the hidden-tangency gate (`meshbool.FacesNearMiss`, `internal/meshbool/depth_witness.go`;
 `docs/evaluator-design.md` §9) a **constraint**, not a permission. That gate
 returns `near = false` for the whole face pair on the first facet pair it
 classifies as a positive-area coplanar overlap, deferring the pair to the mesh

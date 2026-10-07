@@ -358,7 +358,7 @@ func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
 			t.Parallel()
 			bmA, bmB := tetra(1, beta), tetra(-1, 0)
 			bmA.Gate = tc.gate
-			near, err := facesNearMiss(t.Context(), bmA, all, bmB, all, slack, meshbool.NewContactMemo(bmA, bmB))
+			near, err := meshbool.FacesNearMiss(t.Context(), bmA, all, bmB, all, slack, meshbool.NewContactMemo(bmA, bmB))
 			if tc.gate > 0 && tc.gate < beta {
 				var coarse *meshbool.CoarseHeldContactError
 				require.ErrorAs(t, err, &coarse)

@@ -295,7 +295,7 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 		require.Equal(t, meshbool.ContactRegion, classify(t, ta, tb).Kind)
 
 		bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
-		near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, meshbool.NewContactMemo(bmA, bmB))
+		near, err := meshbool.FacesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, meshbool.NewContactMemo(bmA, bmB))
 		require.NoError(t, err)
 		// The gate answers "no near miss" for the whole face pair without
 		// proving one: the pair is left to the mesh pass's own refusal of an
@@ -358,7 +358,7 @@ func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
 		`the distance routine reads the crossing pair as far apart, so it can never be the gate's first question`)
 
 	bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
-	near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, slack, meshbool.NewContactMemo(bmA, bmB))
+	near, err := meshbool.FacesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, slack, meshbool.NewContactMemo(bmA, bmB))
 	require.NoError(t, err)
 	require.True(t, near, `a proven crossing the gate cannot certify deeper than the slack stays undecidable`)
 }
@@ -475,10 +475,10 @@ func TestProximityGateWalksPastCornerSamples(t *testing.T) {
 	require.NotEmpty(t, pairs, `the walls come within the bound, so the gate has face pairs to decide`)
 	walkOnly := 0
 	for _, fp := range pairs {
-		sampled, err := deepWitnessInside(t.Context(), bmA, fp.nc.CloseA, bmB, fp.slack)
+		sampled, err := meshbool.DeepWitnessInside(t.Context(), bmA, fp.nc.CloseA, bmB, fp.slack)
 		require.NoError(t, err)
 		if !sampled {
-			sampled, err = deepWitnessInside(t.Context(), bmB, fp.nc.CloseB, bmA, fp.slack)
+			sampled, err = meshbool.DeepWitnessInside(t.Context(), bmB, fp.nc.CloseB, bmA, fp.slack)
 			require.NoError(t, err)
 		}
 		walked, err := meshbool.SpanWitness(t.Context(), bmA, bmB, fp.nc.Spans, fp.slack)
@@ -533,7 +533,7 @@ func TestProximityGateWalkAdmitsNoGraze(t *testing.T) {
 				deep, err := meshbool.SpanWitness(t.Context(), bmA, bmB, fp.nc.Spans, fp.slack)
 				require.NoError(t, err)
 				require.False(t, deep, `the walk certifies no point deeper than the bound inside the other solid`)
-				deep, err = provenDepthExceeds(t.Context(), bmA, fp.nc.CloseA, bmB, fp.nc.CloseB, fp.nc.Spans, fp.slack)
+				deep, err = meshbool.ProvenDepthExceeds(t.Context(), bmA, fp.nc.CloseA, bmB, fp.nc.CloseB, fp.nc.Spans, fp.slack)
 				require.NoError(t, err)
 				require.False(t, deep)
 			}
