@@ -994,3 +994,4 @@
 5	0.02	TestWallKernelInradiusAggregatesRivalCandidates
 5	0.01	TestWideSpanIntegrationRefusesBeforeExpanding
 5	0.09	TestXHPAgreesWithTheRationalOrientSign
+3	0.19	TestLoopAnchorPassed

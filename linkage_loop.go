@@ -46,9 +46,13 @@ type LinkageLoop struct {
 	// coordinate axis it lies along, or -1 for a tilted loop.
 	normal motionbound.RatVec
 	coord  int
-	// slide is the loop's one prismatic link, nil for an all-revolute loop.
-	// Its parent is Common; its loop pins are its rail and its next pin.
+	// slide is the loop's primary slide: the first prismatic link in Links()
+	// order whose parent is Common, nil when there is none. Its rail is the
+	// scene's u axis. Every other prismatic loop link is anchored
+	// (docs/linkage-check-design.md §15.2), and kappa holds each one's κ.
 	slide *Link
+	kappa map[*Link]*big.Rat
+	reach float64 // four times the loop's perimeter at the zero pose
 	bars  []loopBar
 }
 
@@ -84,9 +88,9 @@ func (lp *LinkageLoop) Links() []*Link { return slices.Clone(lp.links) }
 func (lp *LinkageLoop) Closure() RevoluteJoint { return lp.closure }
 
 // Bars returns the length the loop's private scene holds each link's two loop
-// pins apart at: Common's bar first, then Links() order. A loop with a
-// prismatic joint lists no bar for Common or for the sliding link, whose loop
-// pins include the slide's rail.
+// pins apart at: Common's bar first, then Links() order. A slide has no bar,
+// and neither has a link one of whose loop pins is a slide's rail: Common
+// beside a slide, or a revolute link whose next link slides.
 func (lp *LinkageLoop) Bars() []LoopBar {
 	out := make([]LoopBar, len(lp.bars))
 	for n, bar := range lp.bars {
@@ -114,9 +118,9 @@ func (l *Linkage) Loops() []*LinkageLoop {
 // axis component (ErrNotFinite); the zero axis (ErrDegenerate); a loop
 // revolute whose axis is not exactly parallel to axis, or a loop prismatic
 // whose direction is not exactly perpendicular to it (ErrUnsupported, naming
-// the joint); a second prismatic joint on the loop, or one whose parent is not
-// the loop's common link (ErrUnsupported); a loop joint already on another
-// loop (ErrUnsupported); and two loop pins of one link coincident in the
+// the joint); two consecutive loop slides along exactly parallel directions
+// (ErrDegenerate); a loop joint already on another loop (ErrUnsupported); and
+// two loop pins of one link coincident in the
 // loop's plane (ErrDegenerate).
 func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 	if l == nil {
@@ -165,16 +169,15 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		}
 	}
 	for _, k := range lp.links {
-		if _, ok := k.joint.(PrismaticJoint); !ok {
+		if !isSlide(k) {
 			continue
 		}
-		if lp.slide != nil {
-			return nil, fmt.Errorf(`%w: links %d and %d both slide on the loop, and a loop holds one prismatic joint`, ErrUnsupported, lp.slide.index, k.index)
+		if k.parent == lp.common && lp.slide == nil {
+			lp.slide = k
 		}
-		if k.parent != lp.common {
-			return nil, fmt.Errorf(`%w: link %d slides on a link that is not the loop's common link`, ErrUnsupported, k.index)
+		if k.parent != lp.common && isSlide(k.parent) && ratZero(ratCross(slideDir(k), slideDir(k.parent))) {
+			return nil, fmt.Errorf(`%w: links %d and %d slide in a row along parallel directions, which slides the loop with no driver`, ErrDegenerate, k.parent.index, k.index)
 		}
-		lp.slide = k
 	}
 	for _, other := range l.loops {
 		for _, k := range lp.links {
@@ -188,6 +191,7 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		return nil, err
 	}
 	lp.bars = bars
+	lp.readKappa()
 	l.loops = append(l.loops, lp)
 	return lp, nil
 }
@@ -286,7 +290,11 @@ func (lp *LinkageLoop) commonPins() (r3.Vec, r3.Vec) {
 // plane: their difference with the component along the closure axis n
 // dropped, |d|² − (d·n)²/|n|².
 func (lp *LinkageLoop) planeSq(p, q r3.Vec) *big.Rat {
-	pd, qd := ratVecExact(p), ratVecExact(q)
+	return lp.planeSqRat(ratVecExact(p), ratVecExact(q))
+}
+
+// planeSqRat is planeSq between two exact points.
+func (lp *LinkageLoop) planeSqRat(pd, qd motionbound.RatVec) *big.Rat {
 	var d motionbound.RatVec
 	for i := range 3 {
 		d[i] = new(big.Rat).Sub(pd[i], qd[i])
@@ -299,16 +307,165 @@ func (lp *LinkageLoop) planeSq(p, q r3.Vec) *big.Rat {
 
 // linkNext is loop link k's next pin along its side of the loop.
 func (lp *LinkageLoop) linkNext(k *Link) r3.Vec {
-	side := lp.sideA
-	if !slices.Contains(side, k) {
-		side = lp.sideB
-	}
+	side := lp.sideOf(k)
 	return lp.nextPin(side, slices.Index(side, k))
 }
 
+// sideOf is the side of the loop k lies on.
+func (lp *LinkageLoop) sideOf(k *Link) []*Link {
+	if slices.Contains(lp.sideA, k) {
+		return lp.sideA
+	}
+	return lp.sideB
+}
+
+// nextLink is the link after k along its side of the loop, nil for the side's
+// last link, whose next pin is the closure.
+func (lp *LinkageLoop) nextLink(k *Link) *Link {
+	side := lp.sideOf(k)
+	if n := slices.Index(side, k); n+1 < len(side) {
+		return side[n+1]
+	}
+	return nil
+}
+
+// isSlide reports whether k's joint is prismatic.
+func isSlide(k *Link) bool {
+	_, ok := k.joint.(PrismaticJoint)
+	return ok
+}
+
+// slideDir is a slide's Dir, read exactly.
+func slideDir(k *Link) motionbound.RatVec {
+	j, _ := k.joint.(PrismaticJoint)
+	return ratVecExact(j.Dir)
+}
+
+// anchored reports whether k is a loop slide other than the primary one,
+// whose rail is held by an anchor (docs/linkage-check-design.md §15.2).
+func (lp *LinkageLoop) anchored(k *Link) bool {
+	return isSlide(k) && k != lp.slide
+}
+
+// besideRail reports whether k's next link slides, so that k's second loop
+// pin is that slide's rail.
+func (lp *LinkageLoop) besideRail(k *Link) bool {
+	next := lp.nextLink(k)
+	return next != nil && isSlide(next)
+}
+
+// commonRail reports whether either side's first link slides, so that one of
+// Common's loop pins is a rail.
+func (lp *LinkageLoop) commonRail() bool {
+	return len(lp.sideA) > 0 && isSlide(lp.sideA[0]) || len(lp.sideB) > 0 && isSlide(lp.sideB[0])
+}
+
+// riderAt is slide k's rider's zero-pose position P₀: the first revolute pin
+// after k along its side of the loop, or the closure.
+func (lp *LinkageLoop) riderAt(k *Link) r3.Vec {
+	for next := lp.nextLink(k); next != nil; next = lp.nextLink(next) {
+		if !isSlide(next) {
+			return next.pin()
+		}
+	}
+	return lp.closure.Center
+}
+
+// featureAt is loop link k's zero-pose position along the loop: its pin, or a
+// slide's rider's P₀.
+func (lp *LinkageLoop) featureAt(k *Link) r3.Vec {
+	if isSlide(k) {
+		return lp.riderAt(k)
+	}
+	return k.pin()
+}
+
+// readKappa reads the loop's reach — four times its perimeter, the sum of the
+// plane distances between consecutive loop features at the zero pose — and
+// picks κ for every anchored slide (docs/linkage-check-design.md §15.2): the
+// scale that carries its Dir to the reach, doubled until neither anchor
+// meets a revolute parent's pin in the plane. κ only places the anchor; no
+// claim depends on its value.
+func (lp *LinkageLoop) readKappa() {
+	var at []r3.Vec
+	for _, k := range lp.sideA {
+		at = append(at, lp.featureAt(k))
+	}
+	at = append(at, lp.closure.Center)
+	for _, k := range slices.Backward(lp.sideB) {
+		at = append(at, lp.featureAt(k))
+	}
+	perimeter := 1.0
+	for n := range at {
+		perimeter += proofbound.RatSqrtUp(lp.planeSq(at[n], at[(n+1)%len(at)]))
+	}
+	lp.reach = 4 * perimeter
+	lp.kappa = make(map[*Link]*big.Rat)
+	for _, k := range lp.links {
+		if !lp.anchored(k) {
+			continue
+		}
+		kappa := lp.scaleFor(slideDir(k))
+		for k.parent != lp.common && !isSlide(k.parent) && (lp.anchorMeets(k, kappa, false) || lp.anchorMeets(k, kappa, true)) {
+			kappa.Mul(kappa, big.NewRat(2, 1))
+		}
+		lp.kappa[k] = kappa
+	}
+}
+
+// scaleFor is the least power of two λ with λ·|dir| at least the loop's
+// reach.
+func (lp *LinkageLoop) scaleFor(dir motionbound.RatVec) *big.Rat {
+	_, exp := math.Frexp(lp.reach / proofbound.RatSqrtDown(ratDot(dir, dir)))
+	return new(big.Rat).SetFloat64(math.Ldexp(1, exp))
+}
+
+// ratStep is p + λ·dir, exactly.
+func ratStep(p, dir motionbound.RatVec, lambda *big.Rat) motionbound.RatVec {
+	var out motionbound.RatVec
+	for i := range 3 {
+		out[i] = new(big.Rat).Mul(lambda, dir[i])
+		out[i].Add(out[i], p[i])
+	}
+	return out
+}
+
+// anchorMeets reports whether slide k's anchor at κ meets its revolute
+// parent's pin in the plane.
+func (lp *LinkageLoop) anchorMeets(k *Link, kappa *big.Rat, ahead bool) bool {
+	return lp.planeSqRat(ratVecExact(k.parent.pin()), lp.anchorAtKappa(k, kappa, ahead)).Sign() == 0
+}
+
+// anchorAt is anchored slide k's anchor A = P₀ − κ·Dir, or P₀ + κ·Dir ahead
+// of its rider (docs/linkage-check-design.md §15.2), exactly.
+func (lp *LinkageLoop) anchorAt(k *Link, ahead bool) motionbound.RatVec {
+	return lp.anchorAtKappa(k, lp.kappa[k], ahead)
+}
+
+func (lp *LinkageLoop) anchorAtKappa(k *Link, kappa *big.Rat, ahead bool) motionbound.RatVec {
+	p0, dir := ratVecExact(lp.riderAt(k)), slideDir(k)
+	var out motionbound.RatVec
+	for i := range 3 {
+		step := new(big.Rat).Mul(kappa, dir[i])
+		if ahead {
+			out[i] = step.Add(p0[i], step)
+			continue
+		}
+		out[i] = step.Sub(p0[i], step)
+	}
+	return out
+}
+
+// anchorLength encloses κ·|Dir|, anchored slide k's reading from its anchor
+// at the zero pose, between the two floats around its exact root.
+func (lp *LinkageLoop) anchorLength(k *Link) proofbound.RatInterval {
+	sq := lp.planeSqRat(lp.anchorAt(k, false), ratVecExact(lp.riderAt(k)))
+	return proofbound.IntervalOwned(proofarith.FloatRat(proofbound.RatSqrtDown(sq)), proofarith.FloatRat(proofbound.RatSqrtUp(sq)))
+}
+
 // readBars reads every bar of the loop: Common's, then each revolute loop
-// link's in Links() order. A loop with a slide has no bar for Common, whose
-// second loop pin is the slide's rail, nor for the slide, whose own is.
+// link's in Links() order. A slide has no bar, nor has a link one of whose
+// loop pins is a slide's rail.
 // Two pins of one link coincident in the plane are refused.
 func (lp *LinkageLoop) readBars() ([]loopBar, error) {
 	bar := func(link *Link, own, next r3.Vec) (loopBar, error) {
@@ -323,7 +480,7 @@ func (lp *LinkageLoop) readBars() ([]loopBar, error) {
 		return loopBar{link: link, own: own, next: next, down: down, up: up}, nil
 	}
 	var out []loopBar
-	if lp.slide == nil {
+	if !lp.commonRail() {
 		pa, pb := lp.commonPins()
 		common, err := bar(lp.common, pa, pb)
 		if err != nil {
@@ -332,7 +489,7 @@ func (lp *LinkageLoop) readBars() ([]loopBar, error) {
 		out = append(out, common)
 	}
 	for _, k := range lp.links {
-		if k == lp.slide {
+		if isSlide(k) || lp.besideRail(k) {
 			continue
 		}
 		b, err := bar(k, k.pin(), lp.linkNext(k))
@@ -406,17 +563,19 @@ type loopScene struct {
 	plane      loopPlane
 	sk         *sketch.Sketch
 	driver     sketch.Dimension
-	driven     []sketch.Dimension // per dependent: an angle, or a slide's horizontal distance
+	driven     []sketch.Dimension // per dependent: an angle, the primary slide's horizontal distance, or an anchored slide's distance
 	angular    []bool             // per dependent: its reading is an angle, read modulo a turn
-	signs      []int              // per dependent: the sense of its axis against the scene's normal, or of its slide against u
+	anchored   []bool             // per dependent: an anchored slide, its reading a distance from its anchor
+	signs      []int              // per dependent: its axis's sense against the scene's normal, the primary slide's against u, or +1
 	opts       []sketch.EncloseOption
 	pins       []scenePin
 	e0         *loopAsk
 	e0Readings []sketch.Interval // per dependent: its reading at the zero pose
 	// offset is the driver's scene reading at the zero pose: exactly 0 for a
-	// driver whose parent is Common, and for one below it the enclosure of
-	// r₀ a probe scene read (docs/linkage-check-design.md §15.2). The
-	// driver's target is offset + |q|.
+	// revolute driver whose parent is Common or the primary slide, the
+	// enclosure of r₀ a probe scene read for a revolute driver below Common,
+	// and κ·|Dir| for an anchored slide (docs/linkage-check-design.md §15.2).
+	// The driver's target is offset + |q|.
 	offset proofbound.RatInterval
 }
 
@@ -486,9 +645,6 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		}
 		k := listed[0]
 		jt := spec.joints[k]
-		if !jt.revolute && jt.link.parent != lp.common {
-			return fmt.Errorf(`%w: a %s moves link %d, a slide of a loop whose parent is not the loop's common link`, ErrUnsupported, noun, k)
-		}
 		if heldAtZeroJoint(jt) {
 			continue
 		}
@@ -724,7 +880,8 @@ func (ld *loopDrive) sides() [2]bool {
 
 // sceneSide is the frame flip side reads on: for a revolute driver the side
 // whose normal makes the driver's scene value |q|, the mirror image when its
-// axis turns against that; for a slide the half-turned side for q ≤ 0.
+// axis turns against that; for the primary slide the half-turned side for
+// q ≤ 0. An anchored slide driver keeps the loop's own frame on both sides.
 func (ld *loopDrive) sceneSide(side int, slide bool) (mirror, halfTurn bool) {
 	if slide {
 		return false, side == 1
@@ -746,12 +903,12 @@ type loopPlane struct {
 	uLen, vLen proofbound.RatInterval // enclosures of |u| and |v|
 }
 
-// sceneFrame is the loop's plane on one side. u is the slide's own direction
-// on a loop with a slide, e_{i+1} on an all-revolute loop about ±e_i, and
+// sceneFrame is the loop's plane on one side. u is the primary slide's own
+// direction on a loop with one, e_{i+1} on any other loop about ±e_i, and
 // otherwise n × e_m for the coordinate axis e_m along which n has its
 // smallest component; v = n × u, with n the closure axis, negated by mirror.
 // halfTurn negates both under the same normal. On a coordinate-axis loop
-// whose slide, if any, runs along a coordinate axis, the float frame's U and
+// whose primary slide, if any, runs along a coordinate axis, the float frame's U and
 // V are unit coordinate axes, so a pin's float plane position is two of its
 // own coordinates.
 func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (loopPlane, error) {
@@ -821,7 +978,11 @@ func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (loopPlane, error) {
 // rational intervals; each is one exact value where the plane's axis has a
 // float length and the quotient is exact, as on a coordinate-axis loop.
 func (pl loopPlane) coords(p r3.Vec) (proofbound.RatInterval, proofbound.RatInterval) {
-	pr := ratVecExact(p)
+	return pl.coordsRat(ratVecExact(p))
+}
+
+// coordsRat is coords of an exact point.
+func (pl loopPlane) coordsRat(pr motionbound.RatVec) (proofbound.RatInterval, proofbound.RatInterval) {
 	return ratQuoInterval(ratDot(pr, pl.u), pl.uLen), ratQuoInterval(ratDot(pr, pl.v), pl.vLen)
 }
 
@@ -871,22 +1032,40 @@ func floatBox(iv proofbound.RatInterval) sketch.Interval {
 // (docs/linkage-check-design.md §15.2): one point per loop pin at its exact
 // plane position, Common's pins fixed; a line and a distance per revolute
 // loop link between its two pins, the distance's target the interval around
-// the exact length; for a slide, a fixed rail along u through its next pin's
-// zero-pose position, that pin held on it; the driver's angle from a fixed
-// reference line along its zero-pose bar, or a slide driver's horizontal
-// distance from its zero-pose point; and a driven angle per dependent from
-// its parent's line to its own, or a dependent slide's horizontal distance.
+// the exact length; for the primary slide, a fixed rail along u through its
+// rider's zero-pose position, the rider held on it; for every other slide,
+// an anchored rail held rigid on its parent by exact distances, its rider on
+// it; the driver's angle from a fixed reference line along its zero-pose
+// line, from its parent's line offset by r₀ below Common, the primary slide's
+// horizontal distance from its zero-pose point, or an anchored slide's
+// distance from its anchor; and a driven reading per dependent: an angle
+// from its parent's line to its own, the primary slide's horizontal
+// distance, or an anchored slide's distance from its anchor.
 func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int) (*loopScene, error) {
-	mirror, halfTurn := ld.sceneSide(side, spec.joints[ld.driver].link == ld.loop.slide)
-	zero := proofbound.PointInterval(new(big.Rat))
+	lp := ld.loop
 	driverLink := spec.joints[ld.driver].link
-	if driverLink != ld.loop.slide && driverLink.parent != ld.loop.common {
+	mirror, halfTurn := ld.sceneSide(side, driverLink == lp.slide)
+	zero := proofbound.PointInterval(new(big.Rat))
+	ahead := false
+	switch {
+	case lp.anchored(driverLink):
+		// One frame on both sides; the anchor moves ahead for q ≤ 0.
+		mirror, halfTurn, ahead = false, false, side == 1
+		zero = lp.anchorLength(driverLink)
+	case driverLink != lp.slide && driverLink.parent != lp.common:
 		var err error
 		if zero, err = ld.probeOffset(ctx, spec, mirror, halfTurn); err != nil {
 			return nil, err
 		}
 	}
-	return ld.buildSceneOn(ctx, spec, mirror, halfTurn, zero)
+	return ld.buildSceneOn(ctx, spec, sceneFlip{mirror: mirror, halfTurn: halfTurn, ahead: ahead}, zero)
+}
+
+// sceneFlip is how one side's scene differs from the loop's own: the
+// frame's mirror image or half turn, and an anchored slide driver's anchor
+// ahead of its rider.
+type sceneFlip struct {
+	mirror, halfTurn, ahead bool
 }
 
 // probeOffset reads r₀, the zero-pose angle a revolute driver below Common
@@ -908,7 +1087,13 @@ func (ld *loopDrive) probeOffset(ctx context.Context, spec *linkageSpec, mirror,
 	if probe.driver < 0 || j < 0 {
 		return proofbound.RatInterval{}, fmt.Errorf(`%w: a loop has no joint on its common link to read its driver's reference by`, ErrUnsupported)
 	}
-	sc, err := probe.buildSceneOn(ctx, spec, mirror, halfTurn, proofbound.PointInterval(new(big.Rat)))
+	zero := proofbound.PointInterval(new(big.Rat))
+	if lp.anchored(spec.joints[probe.driver].link) {
+		// Unreachable: Common's first loop child, if it slides, is the
+		// primary slide. An anchored probe would read from its anchor.
+		zero = lp.anchorLength(spec.joints[probe.driver].link)
+	}
+	sc, err := probe.buildSceneOn(ctx, spec, sceneFlip{mirror: mirror, halfTurn: halfTurn}, zero)
 	if err != nil {
 		return proofbound.RatInterval{}, err
 	}
@@ -919,11 +1104,11 @@ func (ld *loopDrive) probeOffset(ctx context.Context, spec *linkageSpec, mirror,
 	return proofbound.IntervalOwned(proofarith.FloatRat(r.Lo), proofarith.FloatRat(r.Hi)), nil
 }
 
-// buildSceneOn is buildScene on the side mirror and halfTurn flip to, the
-// driver's zero-pose reading offset.
-func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror, halfTurn bool, offset proofbound.RatInterval) (*loopScene, error) {
+// buildSceneOn is buildScene on the side flip describes, the driver's
+// zero-pose reading offset.
+func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, flip sceneFlip, offset proofbound.RatInterval) (*loopScene, error) {
 	lp := ld.loop
-	plane, err := lp.sceneFrame(mirror, halfTurn)
+	plane, err := lp.sceneFrame(flip.mirror, flip.halfTurn)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: a loop's plane frame: %w`, ErrNotFinite, err)
 	}
@@ -971,8 +1156,51 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror
 		fix(p, x, y)
 		return p
 	}
+	// newPin is a free point of the scene at the exact zero-pose position at
+	// that no other feature shares — an anchored rail's points, a rider
+	// between two slides — listed for the falsifier like every pin.
+	newPin := func(at motionbound.RatVec) *sketch.Point {
+		f := ratVecFloat(at)
+		local := plane.frame.ToLocal(f)
+		x, y := plane.coordsRat(at)
+		pin := scenePin{p: sk.CreatePoint(local.X, local.Y), at: f, u: x, v: y}
+		sc.pins = append(sc.pins, pin)
+		return pin.p
+	}
+	fixedAt := func(at motionbound.RatVec) *sketch.Point {
+		local := plane.frame.ToLocal(ratVecFloat(at))
+		x, y := plane.coordsRat(at)
+		p := sk.CreatePoint(local.X, local.Y)
+		fix(p, x, y)
+		return p
+	}
 	lines := make(map[*Link]*sketch.Line)
 	var cons []sketch.Constraint
+	// hold keeps p and q at the exact plane distance between pa and pb, stated
+	// like a bar: its target the interval between the floats around the root.
+	hold := func(p, q *sketch.Point, pa, pb motionbound.RatVec) error {
+		sq := lp.planeSqRat(pa, pb)
+		down, up := proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq)
+		if proofbound.IsNonFinite(up) || !(down > 0) {
+			return fmt.Errorf(`%w: a loop rail's distance is not representable`, ErrNotFinite)
+		}
+		dist := sketch.NewDistance(p, q, up)
+		cons = append(cons, dist)
+		sc.opts = append(sc.opts, sketch.WithTargetRange(dist, down, up))
+		return nil
+	}
+	riders := make(map[*Link]*sketch.Point)
+	rider := func(k *Link) *sketch.Point {
+		if p, ok := riders[k]; ok {
+			return p
+		}
+		p := point(lp.riderAt(k))
+		if lp.besideRail(k) {
+			p = newPin(ratVecExact(lp.riderAt(k)))
+		}
+		riders[k] = p
+		return p
+	}
 	var commonLine *sketch.Line
 	var railStart, slider *sketch.Point
 	if lp.slide == nil {
@@ -981,21 +1209,26 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror
 		fixPin(pa)
 		fixPin(pb)
 	} else {
-		// The slide's rail is the fixed line through its next pin's zero-pose
-		// position along u; that pin rides it. The rail is the line Common's
-		// other pin, and the slide's children, measure their angles from.
-		pin := lp.linkNext(lp.slide)
-		slider = point(pin)
+		// The primary slide's rail is the fixed line through its rider's
+		// zero-pose position along u; the rider rides it. The rail is the
+		// line Common's other pin, and the slide's children, measure their
+		// angles from.
+		pin := lp.riderAt(lp.slide)
+		slider = rider(lp.slide)
 		railStart = fixed(pin, 0)
 		commonLine = sk.CreateLine(railStart, fixed(pin, 1))
 		lines[lp.slide] = commonLine
 		cons = append(cons, sketch.NewPointOnLine(slider, commonLine))
-		pa, pb := lp.commonPins()
-		other := pa
+		other := lp.sideA
 		if len(lp.sideA) > 0 && lp.sideA[0] == lp.slide {
-			other = pb
+			other = lp.sideB
 		}
-		fixPin(other)
+		switch {
+		case len(other) == 0:
+			fixPin(lp.closure.Center)
+		case !isSlide(other[0]):
+			fixPin(other[0].pin())
+		}
 	}
 	for _, bar := range lp.bars {
 		if bar.link == lp.common {
@@ -1007,6 +1240,60 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror
 		cons = append(cons, dist)
 		sc.opts = append(sc.opts, sketch.WithTargetRange(dist, bar.down, bar.up))
 	}
+	driverLink := spec.joints[ld.driver].link
+	anchors := make(map[*Link]*sketch.Point)
+	lineAt := make(map[*Link][2]motionbound.RatVec) // a rail-held link's line ends at the zero pose
+	for _, k := range lp.links {
+		if !lp.anchored(k) {
+			continue
+		}
+		p0 := ratVecExact(lp.riderAt(k))
+		at := lp.anchorAt(k, flip.ahead && k == driverLink)
+		var a *sketch.Point
+		var rail *sketch.Line
+		par := k.parent
+		switch {
+		case par == lp.common:
+			a = fixedAt(at)
+			rail = sk.CreateLine(a, fixedAt(p0))
+		case isSlide(par):
+			// The parent's rider X lies on this rail at P₀; a second point Z
+			// of the parent on its own rail, at the anchor's scale, fixes the
+			// parent's turn.
+			x := rider(par)
+			zAt := ratStep(p0, slideDir(par), lp.scaleFor(slideDir(par)))
+			z := newPin(zAt)
+			a = newPin(at)
+			cons = append(cons, sketch.NewPointOnLine(z, lines[par]))
+			if err := errors.Join(hold(x, z, p0, zAt), hold(x, a, p0, at), hold(z, a, zAt, at)); err != nil {
+				return nil, err
+			}
+			rail = sk.CreateLine(a, x)
+		default:
+			// The parent's frame is its pin O and a point C off the rail at
+			// the anchor's scale. The rail's two points, A and B = 2P₀ − A
+			// on the rider's other side, are each held to both, by
+			// triangles that stay well shaped wherever O lies.
+			o, oAt := point(par.pin()), ratVecExact(par.pin())
+			perp := ratCross(lp.normal, slideDir(k))
+			cAt := ratStep(oAt, perp, lp.scaleFor(perp))
+			var bAt motionbound.RatVec
+			for i := range 3 {
+				bAt[i] = new(big.Rat).Sub(new(big.Rat).Add(p0[i], p0[i]), at[i])
+			}
+			c := newPin(cAt)
+			a = newPin(at)
+			b := newPin(bAt)
+			if err := errors.Join(hold(o, c, oAt, cAt), hold(o, a, oAt, at), hold(c, a, cAt, at), hold(o, b, oAt, bAt), hold(c, b, cAt, bAt)); err != nil {
+				return nil, err
+			}
+			rail = sk.CreateLine(a, b)
+			lines[par], lineAt[par] = rail, [2]motionbound.RatVec{at, bAt}
+		}
+		anchors[k] = a
+		lines[k] = rail
+		cons = append(cons, sketch.NewPointOnLine(rider(k), rail))
+	}
 	parentLine := func(k *Link) *sketch.Line {
 		if k.parent == lp.common {
 			return commonLine
@@ -1014,43 +1301,58 @@ func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror
 		return lines[k.parent]
 	}
 	n := lp.normal
-	if mirror {
+	if flip.mirror {
 		n = ratNeg(n)
 	}
 	senseOf := func(k int) int {
 		if spec.joints[k].revolute {
 			return ratDot(ratVecExact(spec.joints[k].axis), n).Sign()
 		}
+		if lp.anchored(spec.joints[k].link) {
+			return 1
+		}
 		return ratDot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
 	}
-	driverLink := spec.joints[ld.driver].link
+	mid, _ := intervalMidpoint(offset).Float64()
 	switch {
 	case driverLink == lp.slide:
 		sc.driver = sketch.NewHorizontalDistance(railStart, slider, 0)
+	case lp.anchored(driverLink):
+		sc.driver = sketch.NewDistance(anchors[driverLink], rider(driverLink), mid)
+	case driverLink.parent == lp.common && lp.besideRail(driverLink):
+		ends := lineAt[driverLink]
+		refLine := sk.CreateLine(fixedAt(ends[0]), fixedAt(ends[1]))
+		sc.driver = sketch.NewAngle(refLine, lines[driverLink], 0)
 	case driverLink.parent == lp.common:
 		next := lp.linkNext(driverLink)
 		refLine := sk.CreateLine(point(driverLink.pin()), fixed(next, 0))
 		sc.driver = sketch.NewAngle(refLine, lines[driverLink], 0)
 	default:
 		// Below Common the driver turns from its parent's line, offset r₀.
-		mid, _ := intervalMidpoint(offset).Float64()
 		sc.driver = sketch.NewAngle(parentLine(driverLink), lines[driverLink], mid)
 	}
 	cons = append(cons, sc.driver)
 	for _, d := range ld.deps {
 		link := spec.joints[d].link
 		var dim sketch.Dimension
-		if link == lp.slide {
+		switch {
+		case link == lp.slide:
 			h := sketch.NewHorizontalDistance(railStart, slider, 0)
 			h.SetDriven(true)
 			dim = h
-		} else {
+		case lp.anchored(link):
+			r, _ := intervalMidpoint(lp.anchorLength(link)).Float64()
+			dist := sketch.NewDistance(anchors[link], rider(link), r)
+			dist.SetDriven(true)
+			dim = dist
+		default:
 			a := sketch.NewAngle(parentLine(link), lines[link], 0)
 			a.SetDriven(true)
 			dim = a
 		}
 		sc.driven = append(sc.driven, dim)
-		sc.angular = append(sc.angular, link != lp.slide)
+		sc.angular = append(sc.angular, !isSlide(link))
+		sc.anchored = append(sc.anchored, lp.anchored(link))
 		sc.signs = append(sc.signs, senseOf(d))
 		cons = append(cons, dim)
 	}
@@ -1113,6 +1415,26 @@ func (sc *loopScene) askZero(ctx context.Context) error {
 			return fmt.Errorf(`%w: the loop's zero-pose enclosure reads no value for a dependent joint`, ErrUnsupported)
 		}
 		sc.e0Readings = append(sc.e0Readings, r)
+	}
+	if err := sc.anchorsAhead(enc); err != nil {
+		return fmt.Errorf(`%w: %w`, ErrUnsupported, err)
+	}
+	return nil
+}
+
+// anchorsAhead refuses an enclosure that does not prove every anchored
+// slide's reading positive over its whole range
+// (docs/linkage-check-design.md §15.2): only then has the slide's rider kept
+// to its side of the anchor, so that the reading less its zero-pose reading is
+// the slide's displacement.
+func (sc *loopScene) anchorsAhead(enc *sketch.Enclosure) error {
+	for j, d := range sc.driven {
+		if !sc.anchored[j] {
+			continue
+		}
+		if r, ok := enc.Driven(d); !ok || !(r.Lo > 0) {
+			return fmt.Errorf(`%w: a slide's reading from its anchor is not proven positive`, sketch.ErrNotCertified)
+		}
 	}
 	return nil
 }
@@ -1203,6 +1525,9 @@ func encloseFresh(ctx context.Context, lo, hi float64, pred *loopAsk) (*loopAsk,
 			return nil, err
 		}
 		return &loopAsk{err: err}, nil
+	}
+	if err := sc.anchorsAhead(enc); err != nil {
+		return &loopAsk{err: err}, nil //nolint:nilerr // a refused ask is recorded, not returned
 	}
 	ask := &loopAsk{scene: sc, enc: enc, turns: make([]int64, len(sc.driven))}
 	prevPieces, pieces := pred.enc.Pieces(), enc.Pieces()

@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -165,22 +166,100 @@ func TestLoopZeroPoseFalsifier(t *testing.T) {
 			return internalRockerUnder(t, internalTilt(t), r3.NewVec(1, 1, 1))
 		})
 	})
+	t.Run("an anchored rail on a turning crank", func(t *testing.T) {
+		t.Parallel()
+		requireFalsifierPins(t, func(t *testing.T) (*Linkage, *Link) {
+			l, links := internalRockingBlock(t)
+			return l, links[2]
+		}, units.Degrees(30), 6, `O2, O4, the pin, the frame point C, the anchor A and B`)
+	})
+}
+
+// internalRockingBlock is the public tests' rocking block off the pivot: a
+// block sliding along (2, 1) on a crank about the origin, its pin at
+// (54, 32) on a rocker of length 40 about (30, 0). Its links: the crank, the
+// block, the rocker.
+func internalRockingBlock(t *testing.T) (*Linkage, []*Link) {
+	t.Helper()
+	z := r3.NewVec(0, 0, 1)
+	doc := New()
+	l := NewLinkage()
+	crank, err := l.Ground().Revolute(r3.Vec{}, z, []*Body{internalBoxBodyAtZ(t, doc, 0, -4, 30, 4, 0, 8)})
+	require.NoError(t, err)
+	block, err := crank.Prismatic(r3.NewVec(2, 1, 0), []*Body{internalBoxBodyAtZ(t, doc, 50, 28, 58, 36, 10, 8)})
+	require.NoError(t, err)
+	rocker, err := l.Ground().Revolute(r3.NewVec(30, 0, 0), z, []*Body{internalBoxBodyAtZ(t, doc, 30, -4, 54, 4, 20, 8)})
+	require.NoError(t, err)
+	_, err = l.Close(block, rocker, r3.NewVec(54, 32, 0), z)
+	require.NoError(t, err)
+	return l, []*Link{crank, block, rocker}
+}
+
+// TestLoopAnchorPassed pins docs/linkage-check-design.md §15.2's anchored
+// reading on the elliptic trammel — a bar of 50 from (40, 0) on a slide along
+// X to (0, 30) on a slide along Y — with the Y slide's anchor moved to 1 mm
+// behind its rider. Driving the X slide 0 → 8 mm takes the Y slide down by
+// 16 mm, past the anchor near 0.73 mm of X travel: the report is not Sound,
+// one of its diagnostics names the anchor, and every evaluated pose still
+// reads the Y slide at its closed form √(2500 − (40 + q)²) − 30.
+//
+// Leg seen to fail when deleted: the anchor's positivity check (the chain
+// reads the folded distance past the anchor, and poses there read the Y
+// slide's displacement with the wrong sign).
+func TestLoopAnchorPassed(t *testing.T) {
+	t.Parallel()
+	z := r3.NewVec(0, 0, 1)
+	doc := New()
+	l := NewLinkage()
+	sx, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{internalBoxBodyAtZ(t, doc, 38, -2, 42, 2, 0, 8)})
+	require.NoError(t, err)
+	bar, err := sx.Revolute(r3.NewVec(40, 0, 0), z, []*Body{internalBoxBodyAtZ(t, doc, 18, 13, 22, 17, 10, 8)})
+	require.NoError(t, err)
+	sy, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*Body{internalBoxBodyAtZ(t, doc, -2, 28, 2, 32, 20, 8)})
+	require.NoError(t, err)
+	lp, err := l.Close(bar, sy, r3.NewVec(0, 30, 0), z)
+	require.NoError(t, err)
+	require.Contains(t, lp.kappa, sy)
+	lp.kappa[sy] = big.NewRat(1, 1)
+	report, err := doc.VerifyLinkage(t.Context(), l, Drive{{Link: sx, From: units.Millimeters(0), To: units.Millimeters(8)}})
+	require.NoError(t, err)
+	require.NotEqual(t, Sound, report.Status)
+	named := false
+	for _, d := range report.Diagnostics {
+		named = named || strings.Contains(d.Message, "anchor")
+	}
+	require.True(t, named, `a diagnostic names the anchor`)
+	require.NotEmpty(t, report.Poses)
+	for _, p := range report.Poses {
+		x := 40 + 8*p.Pose.At.Mag()
+		got, err := p.Pose.Values[2].In(units.Millimeter)
+		require.NoError(t, err)
+		require.InDelta(t, math.Sqrt(2500-x*x)-30, got, 1e-9, "the Y slide at s = %v", p.Pose.At.Mag())
+	}
 }
 
 func requireFalsifier(t *testing.T, rocker func(t *testing.T) (*Linkage, *Link)) {
 	t.Helper()
-	build := func(t *testing.T) *loopScene {
-		l, crank := rocker(t)
-		spec, err := l.resolveDrive(Drive{{Link: crank, From: units.Degrees(0), To: units.Degrees(90)}})
+	requireFalsifierPins(t, rocker, units.Degrees(90), 4, `O2, O4, A and B`)
+}
+
+// requireFalsifierPins builds the scene of the drive 0 → to of the link
+// build returns and asserts the zero-pose falsifier admits it as built and
+// refuses each of its pins moved by 1e-6 mm.
+func requireFalsifierPins(t *testing.T, build func(t *testing.T) (*Linkage, *Link), to units.Value, pins int, which string) {
+	t.Helper()
+	scene := func(t *testing.T) *loopScene {
+		l, link := build(t)
+		spec, err := l.resolveDrive(Drive{{Link: link, From: units.New(0, to.Unit()), To: to}})
 		require.NoError(t, err)
 		sc, err := spec.loops[0].buildScene(t.Context(), spec, 0)
 		require.NoError(t, err)
 		return sc
 	}
-	require.NoError(t, build(t).askZero(t.Context()))
-	for n := range 4 {
-		sc := build(t)
-		require.Len(t, sc.pins, 4, `O2, O4, A and B`)
+	require.NoError(t, scene(t).askZero(t.Context()))
+	for n := range pins {
+		sc := scene(t)
+		require.Len(t, sc.pins, pins, which)
 		pin := &sc.pins[n]
 		shift := big.NewRat(1, 1000000)
 		pin.v = proofbound.IntervalOwned(new(big.Rat).Add(pin.v.Lo, shift), new(big.Rat).Add(pin.v.Hi, shift))

@@ -524,24 +524,6 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		{"a slide not exactly perpendicular to the closure axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
 			return sliderCrankOpen(t, doc, l, r3.NewVec(1, 0, 1e-12))
 		}},
-		{"a slide under a link that is not the common one", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
-			crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8)})
-			require.NoError(t, err)
-			slide, err := crank.Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, 25, -3, 35, 3, 10, 8)})
-			require.NoError(t, err)
-			follower, err := l.Ground().Revolute(r3.NewVec(100, 0, 0), z, []*decad.Body{boxBodyAtZ(t, doc, 30, -3, 100, 3, 20, 8)})
-			require.NoError(t, err)
-			return slide, follower
-		}},
-		{"two slides on the loop", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
-			first, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 8)})
-			require.NoError(t, err)
-			rod, err := first.Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 60, 3, 10, 8)})
-			require.NoError(t, err)
-			second, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*decad.Body{boxBodyAtZ(t, doc, 55, -5, 65, 5, 20, 8)})
-			require.NoError(t, err)
-			return rod, second
-		}},
 	}
 	for _, row := range slideRows {
 		t.Run(row.name, func(t *testing.T) {
@@ -554,6 +536,20 @@ func TestLinkageLoopRefusals(t *testing.T) {
 			require.Empty(t, l.Loops())
 		})
 	}
+	t.Run("two consecutive slides along X and -X", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		l := decad.NewLinkage()
+		first, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, 20, -10, 40, 10, 0, 8)})
+		require.NoError(t, err)
+		second, err := first.Prismatic(r3.NewVec(-1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, 25, -5, 35, 5, 10, 8)})
+		require.NoError(t, err)
+		crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 30, 3, 20, 8)})
+		require.NoError(t, err)
+		_, err = l.Close(second, crank, r3.NewVec(30, 0, 0), z)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Empty(t, l.Loops())
+	})
 	t.Run("a second closure on the coupler", func(t *testing.T) {
 		t.Parallel()
 		fb, _ := buildRocker(t, false)

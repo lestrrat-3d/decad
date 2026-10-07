@@ -967,14 +967,9 @@ a sheet, a resolution floor reached — none is an error; each is a finding that
 
 ## 9. Deferred, and the condition for each
 
-### 9.1 Loops with two sliders, or a slide below the common link
-
-A planar loop is §15, about any axis and driven at any revolute joint. What §15 refuses with
-`ErrUnsupported` is a loop with two prismatic joints, or one whose slide's parent is another loop link:
-each needs a slide's displacement measured along a rail that is not the scene's `u`, which the next
-increment states as a distance from an anchor point rigidly on the rail. Until then a caller who knows a
-dependent value in closed form states it as its own sweep of a tree, and the report speaks for that stated
-motion, not for closure (§5.6).
+Nothing in this design is deferred. A planar loop is §15, about any axis, with any number of slides on
+any parents, and driven at any of its joints; what the check declines by design is listed in §1, §13 and
+§14.10.
 
 ## 10. Cost
 
@@ -1845,7 +1840,7 @@ type LinkageLoop struct { /* private */ }
 func (lp *LinkageLoop) Common() *Link          // the two links' lowest common ancestor: the ground for a four-bar
 func (lp *LinkageLoop) Links() []*Link         // every link on the loop but Common, in Linkage.Links() order
 func (lp *LinkageLoop) Closure() RevoluteJoint // Center and Axis as stated; Limits nil
-func (lp *LinkageLoop) Bars() []LoopBar        // Common's bar first, then Links() order; none for a slide (§15.2)
+func (lp *LinkageLoop) Bars() []LoopBar        // Common's bar first, then Links() order; none beside a rail (§15.2)
 
 // LoopBar is the length the private scene holds a link's two loop pins at:
 // the exact distance between them in the loop's plane. Length.Value is the
@@ -1864,12 +1859,17 @@ The type is `LinkageLoop`, not `Loop`: `Loop` is the topology's face boundary (`
 joints of every link in `Links()` and the closure. `Common` may be `a` or `b` itself — `Close(L4, L1)`
 on a chain `ground → L1 → L2 → L3 → L4` has `Common = L1` — or the ground, as in §15.10's four-bar, two
 branches off the ground. Each link of `Links()` has exactly two **loop pins**: its own joint and the joint
-of the next link along the loop (the closure for the two links `a` and `b`). A revolute link's **bar** is
-the segment between them, and `Common`'s bar joins its two pins: the first joint on each side, or the
-closure on a side with no link. A loop holds at most one prismatic joint, the **slide**, a child of
-`Common`: its loop pins are its **rail**, the line through its next pin's zero-pose position along its
-`Dir`, and that next pin, which rides the rail. A slide has no bar, and neither has `Common` on a loop with
-a slide, since one of `Common`'s loop pins is then the rail.
+of the next link along the loop (the closure for the two links `a` and `b`). A prismatic loop link is a
+**slide**, and a loop may hold any number of them, each on any parent. A slide's joint is its **rail**, a
+line rigid on its parent along its `Dir`, and its **rider**, a point rigid on the slide that rides the
+rail. The rider's zero-pose position `P₀` is the first revolute pin after the slide along its side of the
+loop, or the closure. When the next link is not a slide, the rider is that pin itself. Every slide of a run
+of consecutive slides has its rail through that same `P₀`, so each rail of the run passes through the
+rider of the slide before it. A slide's loop pins are its rail and its rider, so a slide has no bar. Where a
+revolute link's next link slides, that link's loop pins are its own pin and the rail, and it has no bar
+either. A revolute link's **bar** is the segment between its two loop pins when both are pins. `Common`'s
+bar joins its two pins when it has two: the first joint on each side, or the closure on a side with no
+link. A side whose first link slides gives `Common` that slide's rail instead.
 
 **A drive names the driver.** A `Drive` lists at most one joint of a loop. That joint is the loop's
 **driver** for the drive, and every other joint of the loop is dependent; a drive that lists two joints of
@@ -1877,8 +1877,7 @@ one loop is `ErrDegenerate`, since the second value cannot be stated. A drive th
 listed joint holds `0`, holds the loop at the zero pose, where every joint value is `0`: its links are the
 tree's held links (§6 step 2) and no scene is built. The driver's sweep may carry `Via` values, hold a
 nonzero value, or cross `0` (§15.8). Any revolute joint of the loop may drive it — a four-bar at the
-crank, the coupler or the follower — and a slide whose parent is `Common`; a drive listing a slide
-whose parent is another loop link is `ErrUnsupported` (§9.1).
+crank, the coupler or the follower — and so may any slide.
 
 **Admission.** `Close` refuses, in this order, and every test is an exact rational comparison with no
 tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
@@ -1889,7 +1888,7 @@ tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
 | a non-finite `center` or `axis` component | `ErrNotFinite` |
 | a zero `axis` | `ErrDegenerate` |
 | a loop revolute's `Axis` not exactly parallel to `axis`; a loop prismatic's `Dir` not exactly perpendicular to `axis` | `ErrUnsupported`, naming the joint |
-| a second prismatic joint on the loop; a loop prismatic whose parent is not `Common` | `ErrUnsupported` |
+| two consecutive loop slides whose `Dir`s are exactly parallel, which together slide the loop with no driver | `ErrDegenerate` |
 | a tree joint already on another loop (two loops may share `Common` and nothing else) | `ErrUnsupported` |
 | two loop pins of one link coincident in the loop's plane, `Common`'s two included | `ErrDegenerate` |
 
@@ -1906,17 +1905,18 @@ else, as `prism_boolean.go` builds a scene from recorded sections. The scene is 
 `sketch` type crosses decad's API.
 
 **Frame.** The plane's axes are `u* = u/|u|` and `v* = v/|v|`, with `u` and `v` exact rational directions,
-`v = n × u` for the closure axis `n` as stated, so `u* × v* = n/|n|` exactly. A loop with a slide takes `u`
-the slide's own `Dir`, so the slide's displacement is its pin's `u*`-coordinate change. An all-revolute
-loop about `±e_i` takes `u = e_{i+1}`, so `v*` is `±e_{i+2}` — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`,
-`(Y, Z)` for `+X`, `(Z, X)` for `+Y` — and any other all-revolute loop takes `u = n × e_m`, `e_m` the
+`v = n × u` for the closure axis `n` as stated, so `u* × v* = n/|n|` exactly. A loop with a slide whose
+parent is `Common` takes `u` the `Dir` of the first such slide in `Links()` order, the **primary** slide,
+so its displacement is its rider's `u*`-coordinate change. Any other loop about `±e_i` takes
+`u = e_{i+1}`, so `v*` is `±e_{i+2}` — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`,
+`(Y, Z)` for `+X`, `(Z, X)` for `+Y` — and any other loop without a primary slide takes `u = n × e_m`, `e_m` the
 coordinate axis along which `n` has its smallest component. Each of these `u` is a float vector read
 exactly, and `v` is formed from it in exact rational arithmetic. A pin `p`'s plane position is
 `(p·u/|u|, p·v/|v|)`: `p·u` and `p·v` are exact rationals, and `|u|` and `|v|` lie between the two floats
 around their exact roots (`proofbound.RatSqrtDown`, `RatSqrtUp`), so each coordinate is enclosed in a
 rational interval about `1e-16` of its size wide. The third coordinate, the pin's height along `n`, is
 dropped, because a rotation about an axis parallel to `n` moves a point within its own height. On a
-coordinate-axis loop whose slide, if any, runs along a coordinate axis, `|u|` and `|v|` are exact and
+coordinate-axis loop whose primary slide, if any, runs along a coordinate axis, `|u|` and `|v|` are exact and
 each enclosure is one float, two of the pin's own coordinates. The float positions the scene's points are
 created at come from `r3.NewFrame(origin, u, v)`'s `ToLocal`; they seed the solves and claim nothing.
 
@@ -1927,9 +1927,32 @@ over the outward-rounded float box `x × y` of the enclosure, so every claim hol
 the box and so for the exact one. `Common`'s two pins are fixed (`Sketch.Fix`), and `Common`'s line joins
 them. Each revolute link of `Links()` is a `Line` from its own pin to its next pin and a `NewDistance`
 between them.
-A slide's rail is the fixed line from a fixed point `P₀` at its next pin's zero-pose position to a fixed
-point one millimetre along `u`, and its next pin `P` is free with `NewPointOnLine(P, rail)`; the rail is
-the slide's line and `Common`'s, and `Common`'s other pin is fixed.
+The primary slide's rail is the fixed line from a fixed point `P₀` at its rider's zero-pose position to a
+fixed point one millimetre along `u`. Its rider `P` is free with `NewPointOnLine(P, rail)`. The rail is
+the slide's line and `Common`'s, and `Common`'s pin, if it has one, is fixed.
+
+Every other slide's rail is **anchored**: a line rigid on its parent through its **anchor**
+`A = P₀ − κ·Dir`. The loop's **reach** is four times its perimeter, the sum of the plane distances between
+consecutive loop features at the zero pose. For a direction `w`, `λ_w` is the least power of two with
+`λ_w·|w|` at least the reach. `κ` is `λ_Dir`, doubled while either `P₀ ∓ κ·Dir` meets a revolute parent's
+pin in the plane. Every point below is an exact rational point of the document's pins and directions, so
+every distance between two of them is the root of an exact rational. A parent holds the rail as follows:
+
+- On `Common`, the rail is `Line(A, B)` through `A` and `B` at `P₀`, both fixed.
+- A revolute parent with pin `O` carries a frame point `C = O + λ_w·w`, `w = n × Dir`, off the rail at the
+  reach's scale. The rail is `Line(A, B)` with `B = 2P₀ − A` on the rider's other side, and the five
+  distances `OC`, `OA`, `CA`, `OB` and `CB` hold `A` and `B` to the frame. Each triangle has two sides near
+  the reach and a third the frame's own, so it stays well shaped wherever `O` lies, on the rail's line
+  included, and continuity keeps its sense.
+- A slide parent holds the rail as `Line(A, X)`. `X` is the parent's rider, which lies on this rail at
+  `P₀` by the run's construction. The parent also carries a second point `Z = P₀ + λ_d·d` on its own rail,
+  `d` its `Dir`, and the three distances `XZ`, `XA` and `ZA` hold `A` to it. That triangle is degenerate
+  exactly when the two `Dir`s are parallel, which `Close` refuses.
+
+Each distance is stated like a bar: its target is the interval between the floats around its exact root.
+A slide's rider rides its rail with `NewPointOnLine`, and the rail is the slide's line. A revolute link
+whose next link slides takes that slide's rail as its own line. A revolute link whose parent slides
+measures its angle from the parent's line, which turns with the slide.
 
 **The bars are the document's.** A bar's exact length is the root of the exact rational squared distance
 `L² = |d|² − (d·n)²/|n|²` between its two pins in the plane, `d` their difference, which is in general
@@ -1940,10 +1963,13 @@ up-rounded root, `Bound` the one-float gap down to the lower root, `Exact` with 
 float's square. Nothing about the bars is left uncharged.
 
 **Dimensions.** A driver whose parent is `Common` is stated against a fixed reference. A revolute driver
-takes the fixed line from its `Center` to a fixed point at its next pin's zero-pose position, and the
-driving `NewAngle(ref, bar, 0)` from that line to the driver's bar; a slide takes the driving
-`NewHorizontalDistance(P₀, P, 0)`. At the zero pose either reads exactly `0`, so the driver's target IS
-the joint value in the scene's sense. A revolute driver whose parent is another loop link has no fixed
+takes a fixed copy of its own line at the zero pose and the driving `NewAngle(ref, line, 0)` from that copy
+to its line. The primary slide takes the driving `NewHorizontalDistance(P₀, P, 0)`. At the zero pose either
+reads exactly `0`, so the driver's target IS the joint value in the scene's sense. An anchored slide
+driver takes the driving `NewDistance(A, P)`. Its zero-pose reading is the exact `κ·|Dir|`, which lies
+between the floats around its root. The anchor sits behind `P₀` on the side where `q ≥ 0` and ahead of it,
+at `A = P₀ + κ·Dir`, on the side where `q ≤ 0`, so on either side the target `κ·|Dir| + |q|` grows with
+`|q|`. Every ask is placed by that offset as for a revolute driver below `Common`, described next. A revolute driver whose parent is another loop link has no fixed
 reference: its parent turns. It takes the driving `NewAngle(parentLine, bar)` from its parent's line, as
 a dependent of that parent would, whose zero-pose reading `r₀` is the angle between two of the
 document's lines — irrational in general, and a 2D answer decad does not compute. `sketch` reads it: a
@@ -1954,25 +1980,36 @@ ask on the scene asks the floats outward from `r₀`'s ends plus `q`'s, `E0` ask
 approach starts at its upper end, so every claim covers the exact `r₀ + |q|` and the chain's continuity
 rule holds. The driver's value is the stated `q`, exact, as for any driver. Every dependent joint carries a driven dimension
 (`SetDriven(true)`): `NewAngle(parentLine, bar)` from its parent's line — `Common`'s line for a child of
-`Common`, the rail for a child of the slide — to its own, or for a dependent slide
-`NewHorizontalDistance(P₀, P)`. The closure has no dimension. Only kinds `Enclose` certifies are used:
+`Common`, the parent's line for any other — to its own. A dependent primary slide carries
+`NewHorizontalDistance(P₀, P)`, and a dependent anchored slide carries `NewDistance(A, P)` with its anchor
+behind `P₀`. The closure has no dimension. Only kinds `Enclose` certifies are used:
 coincident points (by sharing), fixed points, point-on-line, distance, horizontal distance, angle.
 `Sketch.Solve` runs once after construction so each driven dimension's target is its zero-pose reading,
 the whole-turn reference `Enclose` shifts a driven angle toward; a horizontal distance is never read
 modulo anything, and its whole-turn count (§15.3) stays `0`.
 
+**An anchored reading is a displacement only on its own side of the anchor.** `|AP|` equals
+`κ·|Dir| + q` while `P` stays ahead of `A` along `Dir`, and it folds back if `P` passes `A`. Every chain
+of enclosures from `E0` to an ask covers the whole path the mechanism takes from the zero pose to that
+ask's driver values. So when each enclosure on that chain reads `|AP|` with a positive lower end, `|AP|`
+never reaches `0` on the path, `P` stays on the side of `A` it started on, and `reading − reading₀` is the
+displacement. An ask whose `|AP|` reading is not proven positive is refused with
+`sketch.ErrNotCertified`, and so is every ask continued from it. The check reads only `sketch`'s certified
+interval and can only refuse. `κ` places the anchor at the reach, four perimeters away, so the refusal is
+rare and never silent.
+
 **Signs and the scene's side.** A loop revolute's `Axis` is exactly parallel to `n` with sense `s_k = ±1`
 (the sign of the exact dot product). A right-handed rotation by `q` about `+n` is a counterclockwise turn
 by `q` in `(u, v)`, so a joint's value `q_k` appears in the scene as `s_k·q_k`, and a driven angle's
-reading maps back as `s_k·(reading − reading₀)` (§15.4); a slide's `s_k` is the sense of its `Dir` against
-`u`. `Enclose` solves at the range's lower end and
+reading maps back as `s_k·(reading − reading₀)` (§15.4). The primary slide's `s_k` is the sense of its
+`Dir` against `u`, and an anchored slide's is `+1`, since its reading grows as it slides along `Dir`. `Enclose` solves at the range's lower end and
 continues upward only (`WithContinuation` requires `lo == prev.Range().Hi`), and the branch decad states is
 the zero pose, so every chain of enclosures starts at the driver value `0` and grows toward larger values.
 The scene is therefore built on the side of the plane that makes the driver's scene value `|q|`: for a
 drive that takes a revolute driver's value negative in the scene, `v` is negated (the mirror image, normal
-`−n`, every revolute `s_k` flipped), and for a slide driven backward `u` and `v` are both negated (a half
-turn in the plane, the same normal, the slide's `s_k` flipped); readings map back through that side's
-signs. Every side describes one mechanism and seeds at the same zero pose. A drive builds the scene for
+`−n`, every revolute `s_k` flipped). For the primary slide driven backward `u` and `v` are both negated (a
+half turn in the plane, the same normal, the slide's `s_k` flipped). An anchored slide driver keeps one
+frame on both sides and moves its anchor ahead instead. Readings map back through that side's signs. Every side describes one mechanism and seeds at the same zero pose. A drive builds the scene for
 every side its sub-segments read (§15.8): one for a driver that keeps one side of `0`, both for one that
 crosses it.
 
@@ -2424,6 +2461,34 @@ equal to every evaluated pose; and the joint box over the coupler `[0°, 30°]` 
 every leaf's centre at the closed forms. Red when the probe's offset is dropped: the driver is then asked
 at the angle `0` from the crank's line, which the document's pins do not hold, and the falsifier refuses.
 
+**Slides anywhere.** Three loops, each driven at every joint in both senses, every link on its own layer
+so each drive reads `Sound`; every pose's values lie within `1e-9` of the closed forms, each dependent's
+`Bounds` positive and below `1e-9`, the listed joint carrying its stated value, and `Schedule.PoseAt`
+equals every evaluated pose.
+
+- The **elliptic trammel**: a bar of `50` from `A = (40, 0)` on the primary slide along `X` to
+  `B = (0, 30)` on a slide along `Y` anchored on `Common`. With `A = (x, 0)` and `B = (0, y)`,
+  `x² + y² = 2500`, and the bar's turn is `atan2(y, −x) − atan2(30, −40)`. The slide along `X` is driven
+  `±8` mm, the bar `±20°` (a revolute driver below a slide), the slide along `Y` `±12` mm.
+- The **rocking block**: a crank about the origin carries a block sliding along `Dir`, its pin at
+  `(54, 32)` on a rocker of `40` about `(30, 0)`. Along `(27, 16)` the rail passes through the crank's
+  pivot; along `(2, 1)` it misses it by `2√5`. With `F` the rail's foot from the pivot and `t` the pin's
+  place along the rail, `|B|² = |F|² + t²`; the rocker places `B`, the block's travel is `t − t₀`, and the
+  crank's turn is `arg B − arg(F + t·d)`. The crank is driven `±8°`, the block `±3` mm, the rocker `±15°`.
+- The **Scotch yoke**: a crank of `30` about the origin, its pin at `(18, 24)`, in a block that slides
+  along `Y` on a yoke that slides along `X`. The yoke reads `x − 18` and the block `y − 24` for the pin at
+  `(x, y)` on the crank's circle. The yoke is driven `±6` mm, the block `±4` mm, the crank `±20°`. The joint
+  box over the block `[−4, 4]` mm reads `Sound` with every leaf's centre at the closed forms.
+
+Red when the anchor of a backward slide driver stays behind its rider (every such drive refuses), when
+any one of the rocking block's five frame distances or the yoke's `ZA` is dropped (the rail turns or
+slides free and `E0` refuses), and when an anchored dependent's sense is `−1`. An internal test moves the trammel's
+anchor along `Y` to `1` mm behind its rider and drives the slide along `X` `0 → 8` mm, which takes the
+other slide `16` mm down and past it: the report is not `Sound`, a diagnostic names the anchor, and every
+evaluated pose reads the slide along `Y` at `√(2500 − x²) − 30`. Red when the positivity check is deleted:
+the chain then reads the folded distance past the anchor. The zero-pose falsifier refuses each of the
+rocking block's six scene pins, the rail frame's three among them, moved by `1e-6` mm.
+
 **Drives over a loop.** Scene 7's crank-rocker without a wall; every assertion on a dependent value is the
 closed form at the crank angle the drive states, within `1e-9`, at every pose the check evaluates and at
 every `k/16` of a schedule, with each non-dyadic boundary added.
@@ -2461,7 +2526,7 @@ every `k/16` of a schedule, with each non-dyadic boundary added.
 **Standing tests.** Errors, one subtest per row of §15.1's and §15.6's tables: a nil link, the ground, one
 link twice, a link of another linkage, a non-finite center, a zero axis, a closure axis tilted by `1e-9`
 from the loop's revolutes about `Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure
-axis, a slide along `(1, 0, 1e-12)`, a slide under a link that is not `Common`, two slides on one loop, a
+axis, a slide along `(1, 0, 1e-12)`, two consecutive slides along `X` and `−X`, a
 second closure on the coupler, a closure coincident with a pin in the plane, a drive listing crank and
 follower, a schedule pose outside `[0, 1]`, `Configuration` on scene 7's
 linkage; and a drive listing no loop
@@ -2494,7 +2559,7 @@ on every side, `u ⟂ v`, `u × v` along the side's normal, `u` along the slide'
 enclosures each below `1e-12` wide with `x² + y²` holding the pin's exact squared distance from the axis
 — red when the coordinates are not divided by `|u|` and `|v|`. A slide's reading
 sense `s_k` against `u` is not a leg any fixture can fail: `u` is the slide's own sense on every side a
-dependent slide is read on, since a loop holds one slide and only a slide driver half-turns the scene; nor
+dependent primary slide is read on, since only the primary slide's own drive half-turns the scene; nor
 is the zero whole-turn count of a horizontal distance, whose continued readings agree to the boxes' width.
 The reach guard of §15.5 is not a leg any fixture can fail: the decomposition reads the reach from
 the same canonical asks every later pose and interval reads.
@@ -2509,7 +2574,8 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
-| L5 (`linkage_loop.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | a loop with two slides, or a slide below `Common` (§9.1) |
+| L5 (`linkage_loop.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | slides anywhere (L6) |
+| L6 (`linkage_loop.go`: anchored rails, `riderAt`, `readKappa`, `anchorsAhead`) | any number of slides on any parents, each slide driven or dependent (§15.1–§15.2); the trammel, the rocking block, the Scotch yoke and the anchor's positivity | — |
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with

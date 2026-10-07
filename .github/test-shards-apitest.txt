@@ -1384,3 +1384,8 @@
 1	0.38	TestVerifyLinkageTiltedPendulum
 0	0.93	TestVerifyLinkageLoopDrivenAtTheCoupler
 1	0.40	TestVerifyJointBoxLoopOverTheCoupler
+1	14.22	TestVerifyLinkageLoopRockingBlock
+0	7.94	TestVerifyLinkageLoopRockingBlockOffset
+3	4.48	TestVerifyLinkageLoopScotchYoke
+0	0.25	TestVerifyLinkageLoopTrammel
+3	0.64	TestVerifyJointBoxLoopSlides
