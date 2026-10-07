@@ -791,7 +791,7 @@ func operandSymDiff(m *Mesh) (float64, error) {
 // other. A face pair whose facets stay FARTHER apart than b hides no touch and
 // is decided. Within b the gate decides the pair by the INTERPENETRATION DEPTH
 // of the two facet sets: a held meet is admitted only when the facets provably
-// cross with a signed depth strictly GREATER than b (provenDepthExceeds). Then
+// cross with a signed depth strictly GREATER than b (meshbool.ProvenDepthExceeds). Then
 // A's true surface (within δA of its facets) and B's (within δB of its) still
 // overlap even after each is pulled back toward its own interior by its own
 // bound, so the true patches provably cross and the contact is real. The chord
@@ -840,7 +840,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *mes
 			// both sides of that comparison are float-computed: pad the
 			// threshold so the rounding can only ever ADD a refusal, never
 			// drop one. A relative 1e-9 is nothing against any real clearance.
-			near, err := facesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
+			near, err := meshbool.FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
 			if err != nil {
 				return err
 			}
@@ -850,107 +850,6 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *mes
 		}
 	}
 	return nil
-}
-
-// facesNearMiss reports whether two faces' facet sets come within slack of each
-// other in a way this evaluator cannot decide (docs/evaluator-design.md §9). When
-// the facets stay farther than slack apart everywhere, no touch can be hiding and
-// the pair is decided (near = false). When they come within slack — meeting or
-// not — the pair is decided only if the facet sets provably INTERPENETRATE deeper
-// than b = slack (provenDepthExceeds); a bare touch, a shallow meet at depth ≤ b,
-// or a non-meeting near-miss stays undecidable (near = true). A coplanar
-// face-on-face overlap is a tangency the exact mesh pass refuses as an
-// unclassifiable contact (BooleanUnsupportedContact / ErrUnsupported), so it is
-// left to that verdict rather than pre-empted here. That deferral is sound only
-// while that refusal happens: docs/interference-design.md §5.2 states what must
-// settle such a pair before the refusal is removed.
-func facesNearMiss(ctx context.Context, bmA *meshbool.BoolMesh, fis []int, bmB *meshbool.BoolMesh, fjs []int, slack float64, memo *meshbool.ContactMemo) (bool, error) {
-	nc, deferred, err := meshbool.GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
-	if err != nil || deferred {
-		return false, err
-	}
-	if len(nc.CloseA) == 0 {
-		return false, nil // the facets stay clear of each other: nothing hides
-	}
-	// A restating operand's facets within the slack are where the pair meets
-	// it, so the local chain-depth gate reads them before any depth question
-	// is asked (docs/faceted-vertex-bounds-design.md §5).
-	if err := meshbool.RefuseCoarseHeldContact(bmA, 0, nc.CloseA); err != nil {
-		return false, err
-	}
-	if err := meshbool.RefuseCoarseHeldContact(bmB, 1, nc.CloseB); err != nil {
-		return false, err
-	}
-	deep, err := provenDepthExceeds(ctx, bmA, nc.CloseA, bmB, nc.CloseB, nc.Spans, slack)
-	if err != nil {
-		return false, err
-	}
-	return !deep, nil
-}
-
-// provenDepthExceeds is the reject-only depth discriminator behind the meet
-// admission (docs/evaluator-design.md §9, docs/tessellation-design.md §11 step
-// 4). It reports true ONLY when it has PROVEN that the two facet sets
-// interpenetrate by a signed depth strictly greater than b: a concrete point of
-// one operand's held facets, certified STRICTLY inside the other operand's solid,
-// whose certified lower-bound distance to that solid's boundary exceeds b. Then
-// even after each true surface is pulled back toward its own interior by its own
-// bound the two still cross, so the true patches provably interpenetrate and the
-// held meet is real. When it cannot prove such a witness it returns false and the
-// meet is treated as undecidable and refused upstream — over-refuse, never
-// over-admit.
-//
-// It looks for a witness in two places: the fixed sample points of every
-// contacting facet (deepWitnessInside), then points on each contact segment's
-// two facets walked inward from that segment (meshbool.SpanWitness). Both only nominate
-// candidates; meshbool.DeepWitnessAt alone certifies one.
-func provenDepthExceeds(ctx context.Context, bmA *meshbool.BoolMesh, closeA []int, bmB *meshbool.BoolMesh, closeB []int, spans []meshbool.ContactSpan, b float64) (bool, error) {
-	deep, err := deepWitnessInside(ctx, bmA, closeA, bmB, b)
-	if err != nil || deep {
-		return deep, err
-	}
-	deep, err = deepWitnessInside(ctx, bmB, closeB, bmA, b)
-	if err != nil || deep {
-		return deep, err
-	}
-	return meshbool.SpanWitness(ctx, bmA, bmB, spans, b)
-}
-
-// deepWitnessInside reports whether any held-facet sample point of m's
-// contacting facets is PROVEN to lie strictly inside the other operand's solid
-// deeper than b. The candidates are each facet's vertices, edge midpoints and
-// centroid: a facet's deepest penetration need not fall on a mesh vertex (a rod
-// pierces a plate through the interior of its wall facets), so the midpoints and
-// centroid are sampled too. Reject-only: sampling and the facet cap can only
-// miss a witness and refuse, never admit a shallow meet.
-func deepWitnessInside(ctx context.Context, m *meshbool.BoolMesh, closeFacets []int, other *meshbool.BoolMesh, b float64) (bool, error) {
-	all := meshbool.AllFacets(other)
-	for n, i := range closeFacets {
-		if n >= meshbool.MaxDepthWitnessFacets {
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		tri := m.Tris[i]
-		for _, p := range facetSamplePoints(m.Xverts[tri[0]], m.Xverts[tri[1]], m.Xverts[tri[2]]) {
-			deep, err := meshbool.DeepWitnessAt(ctx, p, other, all, b)
-			if err != nil || deep {
-				return deep, err
-			}
-		}
-	}
-	return false, nil
-}
-
-// facetSamplePoints returns the exact candidate interior witnesses of one held
-// facet: its three corners, its three edge midpoints and its centroid. Every one
-// is an exact rational, so the parity test that reads it decides strict
-// containment without rounding.
-func facetSamplePoints(a, b, c proofbound.Xpt) []proofbound.Xpt {
-	one, two := big.NewInt(1), big.NewInt(2)
-	mid := func(p, q proofbound.Xpt) proofbound.Xpt { return meshbool.Xlerp(p, q, one, two) }
-	return []proofbound.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), meshbool.XCentroid(a, b, c)}
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord
