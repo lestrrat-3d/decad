@@ -14,10 +14,11 @@ type FloatMomentValues struct {
 }
 
 // EvaluateFloat evaluates a circular path about center from th0 to th1.
-// The returned bounds enclose the circular integral's float evaluation.
+// area is the caller's float Green's-theorem term; the returned bounds enclose
+// that value and the remaining moment evaluations.
 func EvaluateFloat(
 	c Point2,
-	r, th0, th1, radiusUpper, sweepUpper float64,
+	r, th0, th1, radiusUpper, sweepUpper, area float64,
 	areaProof proofbound.RatInterval,
 	haveAreaProof bool,
 	muProof, mvProof proofbound.RatInterval,
@@ -33,8 +34,6 @@ func EvaluateFloat(
 	absR, absU, absV, absDth := radiusUpper, math.Abs(c.U), math.Abs(c.V), sweepUpper
 	out.CoordUpper = proofbound.AbsSumUpper(c.U, c.V, absR, absR)
 
-	// A = ½ ∫ (u v′ − v u′) dθ = ½ [r²·θ + c_u·r·sin θ + c_v·r·cos θ]
-	area := 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
 	areaScale := 0.5 * (absR*absR*absDth + 2*absU*absR + 2*absV*absR)
 
 	intCos := sin1 - sin0

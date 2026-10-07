@@ -787,8 +787,14 @@ func (ig *regionIntegrals) addCircular(
 	haveSecondMomentProof bool,
 	order freeform.MomentIntegralOrder,
 ) {
+	// Keep the area expression here so the independent section audit and this
+	// integrator produce the same float bits on every supported platform.
+	sin0, cos0 := math.Sincos(th0)
+	sin1, cos1 := math.Sincos(th1)
+	dth := th1 - th0
+	area := 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
 	held := circularmoments.EvaluateFloat(
-		circularPoint(c), r, th0, th1, radiusUpper, sweepUpper,
+		circularPoint(c), r, th0, th1, radiusUpper, sweepUpper, area,
 		areaProof, haveAreaProof, muProof, mvProof, haveMomentProof,
 		muuProof, muvProof, mvvProof, haveSecondMomentProof, order,
 	)
