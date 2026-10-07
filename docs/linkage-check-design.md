@@ -39,13 +39,23 @@ The layering rule holds: `decad -> sketch -> r3 -> units`. Every joint pose is `
 `r3.Translation`, composed with `Transform.Then`; decad hand-rolls no rotation. v1 imports nothing new from
 `sketch` for a tree, which drives every joint explicitly; a looped linkage imports `sketch.Enclose` (§15).
 
-| Out of scope for v1 | Where it goes |
+| Beyond one drive of a tree | Where it is |
 |---|---|
 | Closed loops (a four-bar, a slider-crank) | §15: a tree plus a closure joint, the dependent joints read from `sketch.Enclose` |
 | A box of joint values (a multi-DOF workspace sweep) | §14: `VerifyJointBox`, a second entry point over the same travel bound |
-| Screw, cylindrical, spherical and planar joints; a joint driven by a caller-supplied transform | a later addition to the sealed `Joint` set |
+| Screw, cylindrical, planar and spherical joints | composed from revolutes and prismatics, below |
+| A joint driven by a caller-supplied transform | refused by design: no travel bound can be proven for an arbitrary transform, and §5.2 needs one |
 | Dynamics, forces, time | the `dynamics` subpackage |
-| Drawing the mechanism | a module above decad that calls `Linkage.PoseAt` (§2.4) |
+| Drawing the mechanism | a module above decad that calls `Linkage.PoseAt` or `Schedule.PoseAt` (§2.4, §15.7) |
+
+**Composite joints are chains.** The sealed `Joint` set is revolute and prismatic, and every other
+lower-pair joint is a short chain of them, each intermediate link carrying at least one body as every
+link does (§2.1): a **cylindrical** joint is a revolute and a prismatic along the same axis, the
+intermediate link holding, say, the sleeve; a **screw** is that pair driven by two sweeps whose waypoints
+keep the pitch's ratio, so that, both being linear within each segment (§2.3), the ratio holds at every
+`s`; a **planar** joint is two prismatics along perpendicular directions in the plane and a revolute about
+its normal; and a **spherical** joint is three revolutes about mutually perpendicular axes through one
+centre. Each composition's travel and projection bounds are §5's over the chain, with nothing added.
 
 ## 2. The vocabulary
 
@@ -954,21 +964,14 @@ a sheet, a resolution floor reached — none is an error; each is a finding that
 
 ## 9. Deferred, and the condition for each
 
-### 9.1 Loops with two sliders, and loops driven below the common link
+### 9.1 Loops with two sliders, or a slide below the common link
 
-A planar loop is §15, about any axis. What §15 refuses with `ErrUnsupported` waits on named conditions: a
-loop with two prismatic joints, or a prismatic joint below the common link, waits on a scene dimension that
-measures a displacement along a second direction; a loop driven at a joint whose parent is not the common
-link waits on a reference for the driving angle that moves with the parent. Until then a caller who knows a
+A planar loop is §15, about any axis and driven at any revolute joint. What §15 refuses with
+`ErrUnsupported` is a loop with two prismatic joints, or one whose slide's parent is another loop link:
+each needs a slide's displacement measured along a rail that is not the scene's `u`, which the next
+increment states as a distance from an anchor point rigidly on the rail. Until then a caller who knows a
 dependent value in closed form states it as its own sweep of a tree, and the report speaks for that stated
 motion, not for closure (§5.6).
-
-### 9.2 A box of joint values
-
-Proving every configuration in `[Min_1, Max_1] × … × [Min_n, Max_n]` clear is §5.2's travel bound over
-cells of joint space instead of intervals of one parameter. It is a second entry point,
-`VerifyJointBox`, designed in §14 and landing as §14.9's increments; it changes nothing in §1–§8.
-
 
 ## 10. Cost
 
@@ -1256,7 +1259,12 @@ direction and slides perpendicular to it, with the two bodies' extents along tha
 separated, is settled before any pose by an exact layer exclusion (§5.7). A drive passes
 through waypoints stated per joint as `Via` values, each segment an equal share of `s`, and an interval
 holding a waypoint takes each joint's travel on both sides of it (§2.3, §5.2). The options and the report
-vocabulary are `VerifyMotion`'s (§3, §4).
+vocabulary are `VerifyMotion`'s (§3, §4). The joint set is revolute and prismatic, every other lower pair
+a chain of them, and a joint moved by a caller's transform is refused, since no travel bound covers it
+(§1). Nothing continuous is claimed about a declared joint contact, and two bodies of one link form no
+pair (§4, §5.4, §5.6): both are the caller's stated scope. A link body with no record radius — a stitched
+payload — under a path with a revolute joint leaves `η` unbounded and its pairs undecided, exactly as
+`VerifyMotion`'s stitched mover (§5.3).
 
 ## 14. The joint box
 
@@ -1854,10 +1862,9 @@ a slide, since one of `Common`'s loop pins is then the rail.
 one loop is `ErrDegenerate`, since the second value cannot be stated. A drive that lists none, or whose
 listed joint holds `0`, holds the loop at the zero pose, where every joint value is `0`: its links are the
 tree's held links (§6 step 2) and no scene is built. The driver's sweep may carry `Via` values, hold a
-nonzero value, or cross `0` (§15.8). v1 takes a driver only when its parent is `Common`,
-so that its reference line (§15.2) is fixed in the scene: a four-bar is driven at the crank or at the
-follower, a slider-crank at the crank or at the slide, and a drive listing the coupler's joint is
-`ErrUnsupported`.
+nonzero value, or cross `0` (§15.8). Any revolute joint of the loop may drive it — a four-bar at the
+crank, the coupler or the follower — and a slide whose parent is `Common`; a drive listing a slide
+whose parent is another loop link is `ErrUnsupported` (§9.1).
 
 **Admission.** `Close` refuses, in this order, and every test is an exact rational comparison with no
 tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
@@ -1918,11 +1925,20 @@ one, and the scene describes the document's own loop. `LoopBar.Length` publishes
 up-rounded root, `Bound` the one-float gap down to the lower root, `Exact` with a zero `Bound` when `L²` is a
 float's square. Nothing about the bars is left uncharged.
 
-**Dimensions.** The driver, with parent `Common`, is stated against a fixed reference. A revolute driver
+**Dimensions.** A driver whose parent is `Common` is stated against a fixed reference. A revolute driver
 takes the fixed line from its `Center` to a fixed point at its next pin's zero-pose position, and the
 driving `NewAngle(ref, bar, 0)` from that line to the driver's bar; a slide takes the driving
 `NewHorizontalDistance(P₀, P, 0)`. At the zero pose either reads exactly `0`, so the driver's target IS
-the joint value in the scene's sense. Every dependent joint carries a driven dimension
+the joint value in the scene's sense. A revolute driver whose parent is another loop link has no fixed
+reference: its parent turns. It takes the driving `NewAngle(parentLine, bar)` from its parent's line, as
+a dependent of that parent would, whose zero-pose reading `r₀` is the angle between two of the
+document's lines — irrational in general, and a 2D answer decad does not compute. `sketch` reads it: a
+**probe** scene, the same scene on the same side with the loop driven by a joint whose parent is
+`Common` and this angle driven, answers `r₀` as its `E0` reading, an interval about `1e-15` wide that holds
+the exact angle, after the probe's own falsifier has run. The driver's target is then `r₀ + |q|`: every
+ask on the scene asks the floats outward from `r₀`'s ends plus `q`'s, `E0` asks `[r₀]` itself, and the
+approach starts at its upper end, so every claim covers the exact `r₀ + |q|` and the chain's continuity
+rule holds. The driver's value is the stated `q`, exact, as for any driver. Every dependent joint carries a driven dimension
 (`SetDriven(true)`): `NewAngle(parentLine, bar)` from its parent's line — `Common`'s line for a child of
 `Common`, the rail for a child of the slide — to its own, or for a dependent slide
 `NewHorizontalDistance(P₀, P)`. The closure has no dimension. Only kinds `Enclose` certifies are used:
@@ -1947,6 +1963,7 @@ every side its sub-segments read (§15.8): one for a driver that keeps one side 
 crosses it.
 
 **The zero pose, `E0`, and the one falsifier.** The first call on the scene is `Enclose(ctx, driver, 0, 0)`
+— over the floats around `r₀` for a driver below `Common`, the same for its probe at `0` —
 with the bars' target ranges and the fixed boxes: one piece, a box around the seed in which the exact
 solution at driver value `0` is the only one for every bar length in its interval and every fixed position
 in its box, and for each driven dimension the interval `reading₀` of its zero-pose value. `reading₀` is the
@@ -2129,7 +2146,6 @@ The errors added to §8, all before `ctx` is read:
 | Condition | Error |
 |---|---|
 | a drive listing two joints of one loop | `ErrDegenerate` |
-| a drive listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
 | `E0` refused as the table above says, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
 | a dependent joint whose whole-drive hull is not proven inside its limits (§15.5) | `ErrDegenerate`, after the decomposition reads the hull |
 | a looped linkage given to `Linkage.Configuration` (§16.1) | `ErrUnsupported` |
@@ -2384,6 +2400,16 @@ perpendicular to it. No pin's plane position is a float, so every fixed point is
   rail's two points are not pins, so the falsifier has no pin to refuse. The boxes are what makes the
   scene the document's; the falsifier only refuses.
 
+**Driven at the coupler.** Scene 7's crank-rocker without a wall, its drive listing the coupler's joint,
+whose parent is the crank, `0° → 30°` and `0° → −30°`. With the crank-coupler angle `φ = φ₀ + q_c`, the pin
+`B = e^{iθ2}·(r + l·e^{iφ})` lies on the circle of radius `|r + l·e^{iφ}|` about `O2` and on the
+follower's circle about `O4`, which fixes `B` on the branch above the ground line and then `θ2` and `θ4`.
+Assert `Sound` and every pose's crank and follower values within `1e-9` rad of those closed forms, each
+with a positive `Bounds` below `1e-9`, the coupler carrying its stated value, and `Schedule.PoseAt`
+equal to every evaluated pose; and the joint box over the coupler `[0°, 30°]` (§16) reading `Sound` with
+every leaf's centre at the closed forms. Red when the probe's offset is dropped: the driver is then asked
+at the angle `0` from the crank's line, which the document's pins do not hold, and the falsifier refuses.
+
 **Drives over a loop.** Scene 7's crank-rocker without a wall; every assertion on a dependent value is the
 closed form at the crank angle the drive states, within `1e-9`, at every pose the check evaluates and at
 every `k/16` of a schedule, with each non-dyadic boundary added.
@@ -2423,7 +2449,7 @@ link twice, a link of another linkage, a non-finite center, a zero axis, a closu
 from the loop's revolutes about `Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure
 axis, a slide along `(1, 0, 1e-12)`, a slide under a link that is not `Common`, two slides on one loop, a
 second closure on the coupler, a closure coincident with a pin in the plane, a drive listing crank and
-follower, a drive listing the coupler, a schedule pose outside `[0, 1]`, `Configuration` on scene 7's
+follower, a schedule pose outside `[0, 1]`, `Configuration` on scene 7's
 linkage; and a drive listing no loop
 joint standing every link at the zero pose with zero `Bounds`. Non-mutation of the document and
 determinism of two reports as motion §9 test 7; cancellation at every depth of the check, inside an
@@ -2469,6 +2495,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
+| L5 (`linkage_loop.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | a loop with two slides, or a slide below `Common` (§9.1) |
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
@@ -2492,7 +2519,11 @@ continued from a canonical predecessor rooted at the zero pose, carries a whole-
 and poses and intervals share one cached chain (§15.3, §15.7). A dependent's travel is the two-sided hull
 bound, which doubles where the joint turns back, and its reach is the decomposition's hull, held against
 every later read (§15.5). A refusal is a finding, except at the zero pose, where it is an error; an
-unbuildable pose is not evaluated and its interval is undecided (§15.6). A drive over a loop is cut into
+unbuildable pose is not evaluated and its interval is undecided (§15.6). A loop whose zero pose is
+singular — the flat four-bar, its coupler and follower along the ground line — is refused: its zero pose
+names no branch, so no chain could be rooted there, and the caller states the mechanism at a zero pose
+off the singularity. Any revolute joint of a loop may drive it, a driver below `Common` measured from its
+parent's line by the offset a probe scene reads (§15.2). A drive over a loop is cut into
 sub-segments at its waypoints and its zero crossings, each with its own chain and side, an irrational
 crossing at two rational cuts around a straddle read from both sides' branches, and a dependent with
 limits is held to its whole-drive hull (§15.5, §15.8). The joint box over a loop reads the same chain per
@@ -2676,7 +2707,6 @@ nothing about a branch of the loop other than the zero pose's (§15.3).
 | Condition | Error |
 |---|---|
 | a box listing two joints of one loop | `ErrDegenerate` |
-| a box listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
 | `E0` refused, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
 | a dependent's decomposition hull not proven inside its limits | `ErrDegenerate`, after the decomposition |
 | `Linkage.Configuration` on a looped linkage (§16.1) | `ErrUnsupported` |
@@ -2829,8 +2859,8 @@ least `5.37` mm, past the bar's full width `8·|cos θ4| ≈ 1.61`, and the over
 trapezoidal prism within `1e-6`. Red when the blocked certificate is dropped: every cell then splits to the
 floor along both axes, `8191` centres, each leaf `CellColliding`.
 
-**Standing tests.** Errors, one subtest per row of §16.6: a box listing the crank and the follower, a
-box listing the coupler, the flat four-bar of scene 9 (`E0` refuses,
+**Standing tests.** Errors, one subtest per row of §16.6: a box listing the crank and the follower, the
+flat four-bar of scene 9 (`E0` refuses,
 `ErrUnsupported` wrapping `sketch.ErrUnderconstrained`), follower limits `[−5°, 5°]` under the crank over
 `[0°, 90°]` (`ErrDegenerate` naming link `2`) and `[−10°, 5°]` admitted, `Configuration` on scene 7's
 linkage. The crank over `[−30°, 60°]`, crossing `0` at the non-dyadic `1/3`, and over `[−30°, 1 rad]`,

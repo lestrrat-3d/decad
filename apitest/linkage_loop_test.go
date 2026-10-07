@@ -574,9 +574,6 @@ func TestLinkageLoopRefusals(t *testing.T) {
 				{Link: fb.follow, From: units.Degrees(0), To: units.Degrees(3)},
 			}
 		}, decad.ErrDegenerate},
-		{"the coupler stated", func(fb fourBar) decad.Drive {
-			return decad.Drive{{Link: fb.couplerLk, From: units.Degrees(0), To: units.Degrees(10)}}
-		}, decad.ErrUnsupported},
 	}
 	for _, row := range driveRows {
 		t.Run(row.name, func(t *testing.T) {
