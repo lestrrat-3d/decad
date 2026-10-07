@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -117,11 +118,11 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 		polygon = append(polygon, [2]*big.Rat{corner[0].Rat(), corner[1].Rat()})
 	}
 	for axis := range 2 {
-		polygon = clipHorizontalPolygon(polygon, axis, base.lo[axis].Rat(), false)
-		polygon = clipHorizontalPolygon(polygon, axis, base.hi[axis].Rat(), true)
+		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.lo[axis].Rat(), false)
+		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.hi[axis].Rat(), true)
 	}
-	polygon = deduplicateHorizontalPolygon(polygon)
-	if len(polygon) < 3 || horizontalPolygonDoubleArea(polygon).Sign() == 0 {
+	polygon = pairbox.DeduplicateHorizontalPolygon(polygon)
+	if len(polygon) < 3 || pairbox.HorizontalPolygonDoubleArea(polygon).Sign() == 0 {
 		return false
 	}
 	if !baseIsA {
@@ -154,65 +155,4 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	report.Manifold = &ContactManifold{Points: points}
 	report.Reason = ContactNoReason
 	return true
-}
-
-// clipHorizontalPolygon retains one closed half-plane using exact rational
-// intersections. The clipping order fixes a stable source-feature order.
-func clipHorizontalPolygon(polygon [][2]*big.Rat, axis int, limit *big.Rat, upper bool) [][2]*big.Rat {
-	if len(polygon) == 0 {
-		return nil
-	}
-	inside := func(vertex [2]*big.Rat) bool {
-		cmp := vertex[axis].Cmp(limit)
-		return upper && cmp <= 0 || !upper && cmp >= 0
-	}
-	intersection := func(from, to [2]*big.Rat) [2]*big.Rat {
-		fraction := new(big.Rat).Quo(new(big.Rat).Sub(limit, from[axis]),
-			new(big.Rat).Sub(to[axis], from[axis]))
-		other := 1 - axis
-		result := from
-		result[axis] = new(big.Rat).Set(limit)
-		result[other] = new(big.Rat).Add(from[other],
-			new(big.Rat).Mul(fraction, new(big.Rat).Sub(to[other], from[other])))
-		return result
-	}
-	output := make([][2]*big.Rat, 0, len(polygon)+2)
-	from := polygon[len(polygon)-1]
-	fromInside := inside(from)
-	for _, to := range polygon {
-		toInside := inside(to)
-		if fromInside != toInside {
-			output = append(output, intersection(from, to))
-		}
-		if toInside {
-			output = append(output, to)
-		}
-		from, fromInside = to, toInside
-	}
-	return output
-}
-
-func deduplicateHorizontalPolygon(polygon [][2]*big.Rat) [][2]*big.Rat {
-	unique := make([][2]*big.Rat, 0, len(polygon))
-	for _, point := range polygon {
-		if len(unique) == 0 || point[0].Cmp(unique[len(unique)-1][0]) != 0 ||
-			point[1].Cmp(unique[len(unique)-1][1]) != 0 {
-			unique = append(unique, point)
-		}
-	}
-	if len(unique) > 1 && unique[0][0].Cmp(unique[len(unique)-1][0]) == 0 &&
-		unique[0][1].Cmp(unique[len(unique)-1][1]) == 0 {
-		unique = unique[:len(unique)-1]
-	}
-	return unique
-}
-
-func horizontalPolygonDoubleArea(polygon [][2]*big.Rat) *big.Rat {
-	area := new(big.Rat)
-	for i, point := range polygon {
-		next := polygon[(i+1)%len(polygon)]
-		area.Add(area, new(big.Rat).Sub(new(big.Rat).Mul(point[0], next[1]),
-			new(big.Rat).Mul(point[1], next[0])))
-	}
-	return area
 }
