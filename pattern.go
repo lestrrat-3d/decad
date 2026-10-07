@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -67,31 +68,54 @@ func (CircularPattern) patternSpec() {}
 // in its plane, so a pattern of integer-millimetre holes stays Exact. Its
 // readings carry the motion's rounding as a section displacement.
 func (b *Body) PatternCopies(ctx context.Context, spec PatternSpec) ([]*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
-	}
-	if b == nil || b.doc == nil {
-		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
-	}
-	d := b.doc
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	rp, err := resolvePattern(spec)
+	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
-	if b.payload == nil {
-		return nil, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
+	out, err := rp.buildInstances(ctx, d, d.nextProducerID(), b.payload, keeping)
+	if err != nil {
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	d.commitMany(out)
+	return out, nil
+}
+
+// patternReceiver runs the gates PatternCopies and Patterned share, then
+// decides §4.3's frame-keeping arm for the receiver.
+func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document, resolvedPattern, bool, error) {
+	if ctx == nil {
+		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
+	}
+	if b == nil || b.doc == nil {
+		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	d := b.doc
+	if err := d.requireLive(b); err != nil {
+		return nil, resolvedPattern{}, false, err
+	}
+	rp, err := resolvePattern(spec)
+	if err != nil {
+		return nil, resolvedPattern{}, false, err
+	}
+	if b.payload == nil {
+		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, resolvedPattern{}, false, err
+	}
 	keeping, err := rp.keepsFrame(proofbound.NewWorkBudget(ctx), b.payload)
 	if err != nil {
-		return nil, err
+		return nil, resolvedPattern{}, false, err
 	}
-	base := d.nextProducerID()
+	return d, rp, keeping, nil
+}
+
+// buildInstances builds instances 1..Count−1 under the producer identities
+// base, base+1, ..., registering none of them.
+func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base producerID, payload featurePayload, keeping bool) ([]*Body, error) {
 	out := make([]*Body, 0, rp.count-1)
 	for i := 1; i < rp.count; i++ {
 		if err := ctx.Err(); err != nil {
@@ -99,20 +123,17 @@ func (b *Body) PatternCopies(ctx context.Context, spec PatternSpec) ([]*Body, er
 		}
 		ref := base + producerID(i-1)
 		var body *Body
+		var err error
 		if keeping {
-			body, err = rp.frameKeepingInstance(ctx, d, ref, b.payload, i)
+			body, err = rp.frameKeepingInstance(ctx, d, ref, payload, i)
 		} else {
-			body, err = rp.placedInstance(ctx, d, ref, b.payload, i)
+			body, err = rp.placedInstance(ctx, d, ref, payload, i)
 		}
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, body)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commitMany(out)
 	return out, nil
 }
 
@@ -481,6 +502,14 @@ func moveRegion(budget *proofbound.WorkBudget, region ProfileRecord, mv pointMot
 	return out, delta, nil
 }
 
+// instanceMotion is instance i's in-plane motion of the frame-keeping arm.
+func (rp resolvedPattern) instanceMotion(frame r3.Frame, xform r3.Transform, i int) (pointMotion, error) {
+	if rp.circular {
+		return rp.circularMotion(frame, xform, i), nil
+	}
+	return rp.linearMotion(frame, xform, i)
+}
+
 // withPatternDelta adds an instance's motion charge to the receiver's own
 // section displacement; a zero charge keeps it bit for bit.
 func withPatternDelta(sectionDelta, delta float64) float64 {
@@ -496,14 +525,9 @@ func withPatternDelta(sectionDelta, delta float64) float64 {
 func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
-	var mv pointMotion
-	if rp.circular {
-		mv = rp.circularMotion(frame, xform, i)
-	} else {
-		var err error
-		if mv, err = rp.linearMotion(frame, xform, i); err != nil {
-			return nil, err
-		}
+	mv, err := rp.instanceMotion(frame, xform, i)
+	if err != nil {
+		return nil, err
 	}
 	switch p := payload.(type) {
 	case prismPayload:
@@ -553,4 +577,143 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 	default:
 		return nil, fmt.Errorf(`%w: a %T receiver has no frame-keeping pattern instance`, ErrUnsupported, payload)
 	}
+}
+
+// Patterned returns ONE body holding every instance of spec, the receiver
+// included, and retires the receiver (docs/mirror-pattern-design.md §4.3,
+// §6.1). Its gates are PatternCopies'. The instances combine by the first
+// rule that applies:
+//
+//  1. A straight prism or a prism group on the frame-keeping arm whose
+//     instances sketch proves pairwise disjoint becomes one prism group: a
+//     one-slab stacked prism holding every instance's regions on the
+//     receiver's frame and interval. No boolean runs.
+//  2. Any other receiver whose instances are proven disjoint is
+//     ErrUnsupported: no payload holds disjoint lumps of it. Use
+//     PatternCopies and keep the instances as separate bodies.
+//  3. Otherwise the instances combine by Union in index order,
+//     Union(Union(b0, b1), b2) …, each with that boolean's own gates and
+//     refusals, and a refusal is returned as that Union's error.
+//
+// Every instance and every intermediate result is built before anything is
+// registered, so a refusal or a canceled context leaves the document
+// unchanged and the receiver live.
+func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error) {
+	d, rp, keeping, err := b.patternReceiver(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	base := d.nextProducerID()
+	if keeping && b.Kind() != BodySheet {
+		sp, ok, err := rp.patternGroup(ctx, b.payload)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			body, err := evalStackedContext(ctx, d, base, sp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commitSpan(body, 1, b)
+			return body, nil
+		}
+	}
+	instances, err := rp.buildInstances(ctx, d, base, b.payload, keeping)
+	if err != nil {
+		return nil, err
+	}
+	ref := base + producerID(len(instances))
+	acc := b
+	for _, inst := range instances {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		acc, err = booleanBody(ctx, meshbool.OpUnion, acc, inst, ref)
+		if err != nil {
+			return nil, err
+		}
+		ref++
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commitSpan(acc, ref-base, b)
+	return acc, nil
+}
+
+// patternGroup is §6.1's rules 1 and 2 on the frame-keeping arm. For a prism
+// or a prism group it moves every region into every instance (§6.2) and asks
+// provePrismRegionsDisjoint, sketch's structural read of every outer, whether
+// they are pairwise disjoint; proven, the group is the one-slab stacked prism
+// over all of them (ok), and not proven is a silent miss to rule 3. A
+// multi-slab stack proven disjoint the same way, over its one outer loop, is
+// rule 2's ErrUnsupported. A union-built stack, whose outer changes between
+// slabs, is not tried.
+//
+// The group's section displacement is the receiver's own plus the largest
+// instance δ_pattern, and at least the disjointness scene's walk charge, as a
+// group Union's is (prism_group.go).
+func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePayload) (stackedPrismPayload, bool, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	frame, xform, _, _ := patternFrameOf(payload)
+	var regions []ProfileRecord
+	var slab prismSlab
+	var sectionDelta float64
+	multiSlab := false
+	switch p := payload.(type) {
+	case prismPayload:
+		regions = []ProfileRecord{p.profile}
+		slab = prismSlab{z0: p.z0, z1: p.z1, z0Delta: p.z0Delta, z1Delta: p.z1Delta}
+		sectionDelta = p.sectionDelta
+	case stackedPrismPayload:
+		if p.isGroup() {
+			regions = p.slabs[0].regions
+			slab = p.slabs[0]
+			sectionDelta = p.sectionDelta
+			break
+		}
+		runs, err := p.outerRuns()
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		if len(runs) != 1 {
+			return stackedPrismPayload{}, false, nil
+		}
+		regions = []ProfileRecord{{Outer: p.slabs[0].regions[0].Outer}}
+		multiSlab = true
+	default:
+		return stackedPrismPayload{}, false, nil
+	}
+	all := append([]ProfileRecord(nil), regions...)
+	delta := 0.0
+	for i := 1; i < rp.count; i++ {
+		mv, err := rp.instanceMotion(frame, xform, i)
+		if err != nil {
+			return stackedPrismPayload{}, false, err
+		}
+		for _, region := range regions {
+			moved, charge, err := moveRegion(budget, region, mv)
+			if err != nil {
+				return stackedPrismPayload{}, false, err
+			}
+			all = append(all, moved)
+			delta = math.Max(delta, charge)
+		}
+	}
+	disjoint, walk, err := provePrismRegionsDisjoint(ctx, budget, all)
+	if err != nil || !disjoint {
+		return stackedPrismPayload{}, false, err
+	}
+	if multiSlab {
+		return stackedPrismPayload{}, false, fmt.Errorf(`%w: the pattern's instances are disjoint stacked prisms, and no payload holds several lumps of a multi-slab stack; use PatternCopies to keep them as separate bodies`, ErrUnsupported)
+	}
+	slab.regions = all
+	return stackedPrismPayload{
+		slabs: []prismSlab{slab},
+		frame: frame, xform: xform,
+		sectionDelta: math.Max(withPatternDelta(sectionDelta, delta), walk),
+	}, true, nil
 }

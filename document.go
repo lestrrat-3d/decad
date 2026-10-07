@@ -128,6 +128,22 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 	d.bodies = append(d.bodies, produced...)
 }
 
+// commitSpan is commit for an operation that evaluated several bodies under
+// span consecutive producer identities, from nextProducerID on, and keeps
+// only produced: Patterned builds its instances and every intermediate Union
+// before registering the last one. Advancing past the whole span keeps every
+// identity those transient bodies minted roles under unique, so a later
+// producer never repeats one a result's provenance can carry.
+func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
+	d.nextProducer += span
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range consumed {
+		d.retire(c)
+	}
+	d.bodies = append(d.bodies, produced)
+}
+
 // retire removes a body from the live set. The body itself is untouched —
 // retiring is a change of document membership, not of the body (core §6).
 // The caller holds mu.

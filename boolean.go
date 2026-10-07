@@ -210,6 +210,24 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	body, err := booleanBody(ctx, op, a, b, d.nextProducerID())
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(body, a, b)
+	return body, nil
+}
+
+// booleanBody builds a boolean's result body under producer identity ref
+// without touching the document: no operand is retired and nothing is
+// registered. performBoolean commits what it returns; Patterned's Union
+// fallback (pattern.go) chains it over instances not yet registered and
+// commits only the last result. a and b MUST belong to one document.
+func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
+	d := a.doc
 	// Table X (docs/surface-design.md §11): a sheet operand in either position
 	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
 	// falls through to tryPrismBoolean below, which type-asserts prismPayload
@@ -237,7 +255,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 		}
 		return nil, err
 	} else if ok {
-		ref := d.nextProducerID()
 		body, err := evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err
@@ -245,7 +262,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		d.commit(body, a, b)
 		return body, nil
 	}
 	if op == meshbool.OpUnion {
@@ -257,7 +273,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			return nil, err
 		} else if ok {
-			ref := d.nextProducerID()
 			body, err := evalStackedContext(ctx, d, ref, sp)
 			if err != nil {
 				return nil, err
@@ -265,7 +280,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			d.commit(body, a, b)
 			return body, nil
 		}
 		// docs/general-boolean-design.md §3 A5: a prism-group operand, or
@@ -276,7 +290,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			return nil, err
 		} else if ok {
-			return commitAnalyticBoolean(ctx, d, a, b, payload)
+			return analyticBooleanBody(ctx, d, ref, payload)
 		}
 	}
 	if op == meshbool.OpCut {
@@ -286,7 +300,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			return nil, err
 		} else if ok {
-			ref := d.nextProducerID()
 			body, err := evalStackedContext(ctx, d, ref, sp)
 			if err != nil {
 				return nil, err
@@ -294,7 +307,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			d.commit(body, a, b)
 			return body, nil
 		}
 		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
@@ -303,7 +315,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			return nil, err
 		} else if ok {
-			ref := d.nextProducerID()
 			body, err := evalStackedContext(ctx, d, ref, sp)
 			if err != nil {
 				return nil, err
@@ -311,7 +322,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			d.commit(body, a, b)
 			return body, nil
 		}
 		// docs/general-boolean-design.md §3 A5: a prism-group tool.
@@ -321,7 +331,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 			}
 			return nil, err
 		} else if ok {
-			return commitAnalyticBoolean(ctx, d, a, b, pp)
+			return analyticBooleanBody(ctx, d, ref, pp)
 		}
 	}
 
@@ -330,7 +340,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 		return nil, asBooleanError(op, err)
 	}
 
-	ref := d.nextProducerID()
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
 	if err != nil {
 		return nil, asBooleanError(op, err)
@@ -343,7 +352,6 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, a, b)
 	return body, nil
 }
 
@@ -1055,26 +1063,15 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 	return proofbound.AbsSumUpper(res.deltaCPrior, res.deltaRPrior)
 }
 
-// commitAnalyticBoolean evaluates an analytic boolean's result payload under
-// a fresh producer identity and commits it in place of both operands.
-func commitAnalyticBoolean(ctx context.Context, d *Document, a, b *Body, payload featurePayload) (*Body, error) {
-	ref := d.nextProducerID()
-	var body *Body
-	var err error
+// analyticBooleanBody evaluates an analytic boolean's result payload under
+// producer identity ref, without committing it.
+func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, payload featurePayload) (*Body, error) {
 	switch p := payload.(type) {
 	case prismPayload:
-		body, err = evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
+		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
 	case stackedPrismPayload:
-		body, err = evalStackedContext(ctx, d, ref, p)
+		return evalStackedContext(ctx, d, ref, p)
 	default:
 		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, ErrUnsupported, payload)
 	}
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, a, b)
-	return body, nil
 }

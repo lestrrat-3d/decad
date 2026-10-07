@@ -331,16 +331,27 @@ that applies:
 1. **Proven pairwise disjoint, co-directional prism receiver** (§4.3's
    frame-keeping arm): the result is a one-slab `stackedPrismPayload` whose
    slab holds `Count` regions, one per instance, on the receiver's frame and
-   interval — the prism group of §6.3. No boolean runs.
+   interval — the prism group of §6.3. A prism group receiver patterns every
+   region at once. No boolean runs, and the result takes one producer
+   identity.
 2. **Proven pairwise disjoint, any other receiver**: `ErrUnsupported` in this
-   design. A multi-lump body of revolves, lofts or faceted lumps needs a group
-   payload no consumer reads today; the caller uses `PatternCopies` and keeps
-   the instances as separate bodies, which `Verify` reports on individually.
+   design. A multi-lump body of revolves, lofts, faceted lumps or multi-slab
+   stacks needs a group payload no consumer reads today; the caller uses
+   `PatternCopies` and keeps the instances as separate bodies, which `Verify`
+   reports on individually. The proof is the §6.3 scene, so the rule reaches
+   a cut-built stack on the frame-keeping arm, over its one outer loop; a
+   union-built stack, whose outer changes between slabs, and every receiver
+   off that arm, are not proven and take rule 3.
 3. **Not proven disjoint**: the instances are combined by `Union` in index
    order — `Union(Union(b0, b1), b2)` … — each with that boolean's own gates
    and refusals, unchanged. A refusal propagates as that `Union`'s error, and
    the document is unchanged: every instance is built and combined before the
-   receiver is retired and the result registered.
+   receiver is retired and the result registered. The result's producer
+   identity is the last `Union`'s, and the document reserves one identity for
+   every instance and every intermediate result, so no later body repeats
+   one a faceted result's provenance can carry. Disjoint co-directional
+   instances that reach this rule still combine into a group, through
+   general-boolean class A5's disjoint `Union`.
 
 Rule 3 is where touching instances land (a pattern of pegs sharing walls),
 and it inherits general-boolean class A3's dependency on `sketch` for
@@ -528,14 +539,18 @@ Every test asserts computed geometry; bounds are asserted as relations
   fail with the group tool replaced by six `PlacedCopy` cuts (which publish a
   positive `sectionDelta`).
 - **Overlapping instances**: a 15 mm peg at 10 mm steps: the disjointness
-  scene reports `Partial` edges, the test asserts that premise, and
-  `Patterned` returns `Union`'s own result for the pair.
+  scene does not prove the pair disjoint, the test asserts that premise, and
+  `Patterned` returns exactly what `Union` returns for the receiver and the
+  instance `PatternCopies` builds — today RB1, since the two pegs' long
+  walls are collinear carriers (class A3). Two Ø6 discs crossing about the
+  origin join into one lump the same way.
 - **Touching instances**: a 10 mm peg at 10 mm steps: `Patterned` returns
-  `Union`'s RB1 refusal today, pinned so the behaviour changes only when
-  class A3 lands.
-- **Non-co-directional**: a peg patterned along +z: three `PlacedCopy`
-  instances and, for `Patterned`, `Union`'s own result (a 20 mm column by
-  the mesh path's coplanar refusal, pinned).
+  `Union`'s RB1 refusal today, pinned to `Union`'s own outcome so the
+  behaviour changes only when class A3 lands.
+- **Non-co-directional**: a 5 mm peg patterned along +z at 5 mm: a
+  `PlacedCopy` instance and, for `Patterned`, `Union`'s own result: the
+  mesh path's coplanar refusal, since the instance's own placement keeps the
+  pair off the analytic stacked union, pinned.
 - **Cancellation**: a context cancelled during the disjointness arrangement
   returns `ctx.Err()` with the receiver live and nothing registered.
 
