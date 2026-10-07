@@ -218,7 +218,7 @@ the rules leave to the byte budget.
 | `stacked_prism.go` | Builds and audits stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
-| `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
+| `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
 | `boolean_body.go` | Builds faceted topology and measurements from an audited mesh. See `docs/evaluator-design.md` §9. |
 
@@ -271,7 +271,7 @@ the rules leave to the byte budget.
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
-| `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
+| `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, trim walks, and Trim/Extend record helpers. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
