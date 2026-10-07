@@ -58,18 +58,18 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot renders one Sweep along a short rise and a rounded bend.
+// sweepShot renders one Sweep along a rise, two rounded bends, and a straight run.
 func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	body, err := roundedDuct(ctx, 20, 90)
+	body, err := curvedDuct(ctx, 20, 90, 30, 90)
 	if err != nil {
 		return nil, err
 	}
 	return oneModel(ctx, body, cyan, chord)
 }
 
-// roundedDuct approximates a circular bend with short mitred path segments.
+// curvedDuct approximates two circular bends with short mitred path segments.
 // Every partial path builds one Sweep body from the same recorded section.
-func roundedDuct(ctx context.Context, rise, turnDegrees float64) (*decad.Body, error) {
+func curvedDuct(ctx context.Context, rise, firstTurn, run, secondTurn float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-34, -24, -26, -16))
 	if err != nil {
@@ -78,20 +78,38 @@ func roundedDuct(ctx context.Context, rise, turnDegrees float64) (*decad.Body, e
 	start := r3.NewVec(-30, -20, 0)
 	bendStart := r3.NewVec(-30, -20, rise)
 	segments := []decad.PathSegment{decad.LineTo{End: bendStart}}
-	pivot := r3.NewVec(0, -20, rise)
-	for angle := 5.0; angle < turnDegrees; angle += 5 {
-		rotation, err := r3.RotationAround(pivot, r3.NewVec(0, 1, 0), units.Degrees(angle))
-		if err != nil {
-			return nil, fmt.Errorf("rotate bend point: %w", err)
+	appendBend := func(start, pivot, axis r3.Vec, degrees float64) (r3.Vec, error) {
+		end := start
+		for angle := 5.0; angle < degrees; angle += 5 {
+			rotation, err := r3.RotationAround(pivot, axis, units.Degrees(angle))
+			if err != nil {
+				return r3.Vec{}, fmt.Errorf("rotate bend point: %w", err)
+			}
+			segments = append(segments, decad.LineTo{End: rotation.Apply(start)})
 		}
-		segments = append(segments, decad.LineTo{End: rotation.Apply(bendStart)})
+		if degrees > 0 {
+			rotation, err := r3.RotationAround(pivot, axis, units.Degrees(degrees))
+			if err != nil {
+				return r3.Vec{}, fmt.Errorf("rotate bend end: %w", err)
+			}
+			end = rotation.Apply(start)
+			segments = append(segments, decad.LineTo{End: end})
+		}
+		return end, nil
 	}
-	if turnDegrees > 0 {
-		rotation, err := r3.RotationAround(pivot, r3.NewVec(0, 1, 0), units.Degrees(turnDegrees))
+	bendEnd, err := appendBend(bendStart, r3.NewVec(0, -20, rise), r3.NewVec(0, 1, 0), firstTurn)
+	if err != nil {
+		return nil, err
+	}
+	if run > 0 {
+		bendEnd = bendEnd.Add(r3.NewVec(run, 0, 0))
+		segments = append(segments, decad.LineTo{End: bendEnd})
+	}
+	if secondTurn > 0 {
+		_, err = appendBend(bendEnd, bendEnd.Add(r3.NewVec(0, 20, 0)), r3.NewVec(0, 0, 1), secondTurn)
 		if err != nil {
-			return nil, fmt.Errorf("rotate bend end: %w", err)
+			return nil, err
 		}
-		segments = append(segments, decad.LineTo{End: rotation.Apply(bendStart)})
 	}
 	path, err := decad.NewPath(start, segments...)
 	if err != nil {

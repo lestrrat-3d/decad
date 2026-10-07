@@ -22,6 +22,7 @@ const (
 	featureAnimationSteps      = 24
 	featureAnimationHoldFrames = 12
 	featureAnimationFPS        = 12
+	sweepAnimationSteps        = 48
 )
 
 // runFeatureAnimations renders each feature's intermediate decad bodies and
@@ -64,7 +65,11 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 	if err := os.MkdirAll(frames, 0o755); err != nil {
 		return err
 	}
-	for stage := range featureAnimationSteps {
+	steps := featureAnimationSteps
+	if name == "sweep" {
+		steps = sweepAnimationSteps
+	}
+	for stage := range steps {
 		models, err := featureAnimationModels(ctx, name, stage, units.Millimeters(0.08))
 		if err != nil {
 			return fmt.Errorf("stage %d: %w", stage, err)
@@ -95,12 +100,12 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 			return closeErr
 		}
 	}
-	finalPath := filepath.Join(frames, fmt.Sprintf("%s_%03d.png", name, featureAnimationSteps-1))
+	finalPath := filepath.Join(frames, fmt.Sprintf("%s_%03d.png", name, steps-1))
 	finalPNG, err := os.ReadFile(finalPath) //nolint:gosec
 	if err != nil {
 		return err
 	}
-	for frame := featureAnimationSteps; frame < featureAnimationSteps+featureAnimationHoldFrames; frame++ {
+	for frame := steps; frame < steps+featureAnimationHoldFrames; frame++ {
 		path := filepath.Join(frames, fmt.Sprintf("%s_%03d.png", name, frame))
 		if err := os.WriteFile(path, finalPNG, 0o644); err != nil {
 			return err
@@ -113,7 +118,7 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-loglevel", "error", "-framerate",
 		strconv.Itoa(featureAnimationFPS), "-i", input,
 		"-filter_complex", filter, "-map", "[v]", "-frames:v",
-		strconv.Itoa(featureAnimationSteps+featureAnimationHoldFrames), "-loop", "0", output) //nolint:gosec
+		strconv.Itoa(steps+featureAnimationHoldFrames), "-loop", "0", output) //nolint:gosec
 	if ffmpegOutput, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("encode GIF: %w: %s", err, ffmpegOutput)
 	}
@@ -165,10 +170,27 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, blue, chord)
 	case "sweep":
-		const riseSteps = 6
-		rise := min(float64(stage+1)*20/riseSteps, 20)
-		turn := float64(max(stage-riseSteps+1, 0)) * 90 / (featureAnimationSteps - riseSteps)
-		body, err := roundedDuct(ctx, rise, turn)
+		const (
+			riseSteps       = 6
+			firstTurnSteps  = 18
+			runSteps        = 6
+			secondTurnSteps = 18
+		)
+		rise, firstTurn, run, secondTurn := 20.0, 0.0, 0.0, 0.0
+		switch {
+		case stage < riseSteps:
+			rise = float64(stage+1) * 20 / riseSteps
+		case stage < riseSteps+firstTurnSteps:
+			firstTurn = float64(stage-riseSteps+1) * 90 / firstTurnSteps
+		case stage < riseSteps+firstTurnSteps+runSteps:
+			firstTurn = 90
+			run = float64(stage-riseSteps-firstTurnSteps+1) * 30 / runSteps
+		default:
+			firstTurn = 90
+			run = 30
+			secondTurn = float64(stage-riseSteps-firstTurnSteps-runSteps+1) * 90 / secondTurnSteps
+		}
+		body, err := curvedDuct(ctx, rise, firstTurn, run, secondTurn)
 		if err != nil {
 			return nil, err
 		}
