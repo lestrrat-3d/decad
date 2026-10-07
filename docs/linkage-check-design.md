@@ -733,7 +733,12 @@ exactly through the payload's own frame and placement, read as the exact rationa
 another such set. The payload's own displacement bounds — the section's and each level's (§5.3,
 `prismPayload`) — move the denoted body off that exact image by at most `4·√3` times the largest, the
 charge `prismPointBound` already makes through the two near-orthonormal maps, and that **pad** is a ball
-around every hull point, worth `pad` along any unit `n`. A tilted block, the rotated bar of a tilted loop,
+around every hull point, worth `pad` along any unit `n`. The hull points themselves lie inside the body's
+rest box inflated by its `Bound`: the box's extremes bracket the same exact image of the recorded section,
+and its `Bound` adds the displacements on top. So `ρ`, read from that box's corners, bounds every hull
+point's distance from a joint's centre, and the remainder's `B_ij` needs no pad; a body point within the
+pad of a hull point stays within it at every configuration, which the pad on the extents already charges.
+A tilted block, the rotated bar of a tilted loop,
 a wall set off the coordinate axes: each is read at its own vertices, not at the corners of the box around
 it. Every other payload keeps its box corners.
 
@@ -892,7 +897,10 @@ each of its ends, which is at least the minimum over it.
   an outer loop with an arc is read at its start points. The internal test pins a block's eight hull
   points exactly, a displaced level's pad of `4·√3` times the displacement, and two blocks `10` mm apart
   read `10` by the hull bound and `9.25` padded by `0.5` and `0.25`; red when the pad or the pads in the
-  bound are dropped.
+  bound are dropped. A second internal test pins the containment `ρ` relies on: every hull point of a box,
+  of a box turned about `Z` and lifted, of a box turned about `(1, 1, 1)`, and of a union whose section
+  carries a positive displacement lies inside the body's rest box inflated by its `Bound`, compared
+  exactly; red when the top level is lifted by the pad.
 - **Agreement with `VerifyMotion`** (§11) is restated. At the endpoints alone, on motion §9's fixtures 1,
   2 and 4, neither bound certifies the one interval and the two reports agree in every reading.
   Bisected, `VerifyMotion` keeps the travel bound alone and the linkage certifies some intervals sooner
@@ -967,9 +975,24 @@ a sheet, a resolution floor reached — none is an error; each is a finding that
 
 ## 9. Deferred, and the condition for each
 
-Nothing in this design is deferred. A planar loop is §15, about any axis, with any number of slides on
-any parents, and driven at any of its joints; what the check declines by design is listed in §1, §13 and
-§14.10.
+A planar loop is §15, about any axis, with any number of slides on any parents, and driven at any of its
+joints; what the check declines by design is listed in §1, §13 and §14.10. What remains deferred waits on
+`sketch`.
+
+### 9.1 What waits on `sketch`
+
+Two answers are `sketch`'s to give, and `Enclose` does not give them today. The hand-off
+`.tmp/decad-handoff-enclose-turns-and-folds.md` in the `sketch` repository asks for both, with proof
+obligations. Each stays recorded here until `sketch` ships it and decad consumes it.
+
+- **Angles past `±64` rad.** `sketch` refuses a sine or cosine argument beyond `64` rad, so a loop whose
+  driver turns more than about ten turns from the zero pose reads undecided past that (§15.9), and so does
+  a box over such a range. The condition: `Enclose` reduces an angle by whole turns before its series,
+  with the claim unchanged.
+- **A certified fold.** `Enclose` proves nothing about a fold. A drive or a box that reaches one refuses
+  the cell holding it and reads undecided from there (§15.6, §16.3); decad never reports that the
+  mechanism cannot reach a driver value. The condition: `Enclose` answers a fold as a typed refusal that
+  carries the fold's enclosure and a certificate that the followed branch turns back inside it.
 
 ## 10. Cost
 
@@ -2615,8 +2638,8 @@ cell (§16).
 for two additions to `Enclose`, and both landed in `821a4460`: `WithTargetRange`, a dimension's target as
 an interval with every claim holding for every target in it, which §15.2 states every bar with and which
 makes the zero-pose falsifier valid; and `WithFixedBox`, a fixed point as a box, which §15.2 states every
-fixed point of a tilted loop with, since its plane position is then irrational. Nothing in this section
-waits on `sketch`.
+fixed point of a tilted loop with, since its plane position is then irrational. Two later answers wait on
+`sketch`: angles past `±64` rad and a certified fold (§9.1).
 
 ## 16. The joint box over a closed loop
 
