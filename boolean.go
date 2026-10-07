@@ -333,6 +333,16 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		} else if ok {
 			return analyticBooleanBody(ctx, d, ref, pp)
 		}
+		// docs/general-boolean-design.md §3 class B: a perpendicular prism
+		// pair builds a brep body. Same contract as above.
+		if bp, ok, err := tryClassBCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			return analyticBooleanBody(ctx, d, ref, bp)
+		}
 	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)
@@ -1071,6 +1081,8 @@ func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, paylo
 		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
 	case stackedPrismPayload:
 		return evalStackedContext(ctx, d, ref, p)
+	case brepPayload:
+		return evalBrepContext(ctx, d, ref, p)
 	default:
 		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, ErrUnsupported, payload)
 	}

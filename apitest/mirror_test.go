@@ -407,7 +407,9 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, walls, 1)
 		require.Len(t, walls[0].Origins(), 1)
-		drill := sc.cylinder(t, sc.w.XZ(), 10, 10, 3, decad.Symmetric{D: units.Millimeters(30)})
+		// The hole breaks out through the plate's top, which keeps the pair
+		// off the analytic class-B reach and on the mesh path.
+		drill := sc.cylinder(t, sc.w.XZ(), 10, 18, 3, decad.Symmetric{D: units.Millimeters(30)})
 		drilled, err := decad.Cut(t.Context(), plate, drill)
 		require.NoError(t, err)
 		// The mesh path keeps the plate's wall role on the flat faceted face

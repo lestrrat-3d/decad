@@ -115,7 +115,7 @@ the rules leave to the byte budget.
 | `extrude.go` | `Document.Extrude`: the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's doc comment. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication and Revolve reuse. See `docs/sweep-design.md` PR 3. |
-| `sweep_composite.go` | Composite Sweep shared join topology, its manifold-with-boundary audit, and the outer-cap omission a surface result takes. See `docs/sweep-design.md` PR 4, `docs/surface-design.md` §4. |
+| `sweep_composite.go` | Composite Sweep join topology, its boundary audit and a surface result's cap omission. See `docs/sweep-design.md` PR 4 and surface §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
 | `sweep_mitre.go` | `WithMitredJoins`/`WithSectionScale`, Table SM's entry gates, the mitred payload, placement and restatement. See `docs/sweep-design.md` §16. |
@@ -226,6 +226,7 @@ the rules leave to the byte budget.
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and measurements. See general-boolean §4. |
+| `classb_cut.go` | Perpendicular prism `Cut` into a brep body. See general-boolean §3 B. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
 | `boolean_body.go` | Builds faceted topology and measurements from an audited mesh. See `docs/evaluator-design.md` §9. |
