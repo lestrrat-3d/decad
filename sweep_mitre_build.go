@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -159,89 +159,41 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 }
 
 // mitredSpanLengthLower is λ_j of §16.3: the lower endpoint of the certified
-// enclosure of the span's length, read at float64 precision as the largest
-// float whose square does not exceed the exact squared length
-// (proofarith.DySqrtDown). The precision is fixed by that type, so the join
-// plane never depends on a platform's sqrt or on FMA contraction.
+// enclosure of the span's length, independent of platform sqrt or FMA.
 func mitredSpanLengthLower(start, end r3.Vec) (*big.Rat, error) {
-	d := proofarith.DvSub(proofarith.DyVec(end), proofarith.DyVec(start))
-	lambda := proofarith.DySqrtDown(proofarith.DvDot(d, d))
-	if !(lambda > 0) || math.IsInf(lambda, 0) {
-		return nil, fmt.Errorf(`%w: the span's length has no positive float lower bound`, ErrUnsupported)
-	}
-	return proofarith.FloatRat(lambda), nil
+	return sweepmitre.SpanLengthLower(start, end)
 }
 
 // mitredFactor is f_k with f_0 = 1.
 func mitredFactor(factors []float64, k int) *big.Rat {
-	if k == 0 {
-		return big.NewRat(1, 1)
-	}
-	return proofarith.FloatRat(factors[k-1])
+	return sweepmitre.Factor(factors, k)
 }
 
-// mitredLift is the recorded point (u, v) lifted to O + u·U + v·V over the
-// plane record's floats, held as the exact rational that sum is.
+// mitredLift holds the recorded plane-local point as exact rationals.
 func mitredLift(plane PlaneRecord, p Point2) sweepRatVec {
-	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-	return sweepRatAdd(sweepRatVecOf(plane.Origin), sweepRatScale(sweepRatVecOf(plane.U), u), sweepRatScale(sweepRatVecOf(plane.V), v))
+	return sweepmitre.Lift(plane, p)
 }
 
-// mitredRequireWalls is SM7 over one span: every wall quad p, q, q', p' has a
-// nonzero exact area vector (q' − p) × (p' − q), and no two vertices of the
-// span's end section coincide.
+// mitredRequireWalls enforces SM7 over one span.
 func mitredRequireWalls(k int, loopIdx [][]int, from, to mitredSection) error {
-	for i, idx := range loopIdx {
-		m := len(idx)
-		for j := range m {
-			p, q := from[idx[j]], from[idx[(j+1)%m]]
-			pn, qn := to[idx[j]], to[idx[(j+1)%m]]
-			if sweepRatIsZero(sweepRatCross(sweepRatSub(qn, p), sweepRatSub(pn, q))) {
-				return mitredSpanError(ErrDegenerate, k, i, j, "segment %d: its wall quad has zero area")
-			}
-		}
-	}
-	seen := make(map[string]int, len(to))
-	for v, p := range to {
-		key := p[0].RatString() + "," + p[1].RatString() + "," + p[2].RatString()
-		if _, dup := seen[key]; dup {
-			return fmt.Errorf(`%w: mitred sweep span %d's end section has two coincident vertices`, ErrDegenerate, k)
-		}
-		seen[key] = v
-	}
-	return nil
+	return sweepmitre.RequireWalls(k, loopIdx, from, to)
 }
 
-// mitredPlace applies the accumulated placement to a rational point exactly:
-// a Transform's basis and translation entries are floats, hence rationals.
+// mitredPlace applies the accumulated placement to a rational point exactly.
 func mitredPlace(xform r3.Transform, p sweepRatVec) sweepRatVec {
-	if xform == r3.Identity() {
-		return p
-	}
-	basis := xform.Basis()
-	return sweepRatAdd(
-		sweepRatScale(sweepRatVecOf(basis.EX), p[0]),
-		sweepRatScale(sweepRatVecOf(basis.EY), p[1]),
-		sweepRatScale(sweepRatVecOf(basis.EZ), p[2]),
-		sweepRatVecOf(xform.Translation()),
-	)
+	return sweepmitre.Place(xform, p)
 }
 
 // mitredRound rounds one rational coordinate to its nearest float and
 // returns the exact gap.
 func mitredRound(r *big.Rat) (float64, *big.Rat, bool) {
-	f, _ := r.Float64()
-	if math.IsInf(f, 0) || math.IsNaN(f) {
-		return 0, nil, false
-	}
-	gap := new(big.Rat).Sub(r, proofarith.FloatRat(f))
-	return f, gap.Abs(gap), true
+	return sweepmitre.Round(r)
 }
 
-// evalMitredSweep builds the body for one payload record: §16.3's
-// construction, the exact placement, the single rounding, the assembled
-// triangle set and its orientation, SM8's crossing audit, Table BM's
-// topology and §16.6's readings. The first build and every placement run it.
+// evalMitredSweep builds the body for one payload record: §16.3's exact
+// construction and placement, the single rounding, the triangle set and
+// orientation, SM8's crossing audit, Table BM's topology and §16.6's
+// readings. The first build and every placement run it.
 func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitredSweepPayload) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
