@@ -1777,8 +1777,8 @@ exception. Lifted points follow the exact points, in support-plane order and the
 query orders publish the same set reversed (§9.5). Several planes (a box against a tray floor and a wall)
 publish per plane with their own normals, as §9.3's last row does. Two oriented source boxes take this path
 for a touch, a shallow overlap or a gap within the band, as §9.4's last paragraph routes their edge and vertex
-touches today: the box patches certify exact touches and know no band. `internal/pair/planar/planar_manifold.go`
-gains `PlanarSupportSets`, which takes the two snapshots, their support planes and the band and returns the lifted
+touches today: the box patches certify exact touches and know no band. `internal/pair/planar/planar_support_sets.go`
+defines `PlanarSupportSets`, which takes the two snapshots, their support planes and the band and returns the lifted
 points with their exact heights; `contact_faceted_manifold.go` maps and publishes them.
 
 **`SweepPair`.** A §9 pair whose first sample is `Touching`, or `ContactBand` from this path, continues under
