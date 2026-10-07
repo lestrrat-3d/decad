@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -210,13 +209,6 @@ func (k *pairKernel) captureSpine(e *spine.Engine) {
 func (k *pairKernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, win clearance.AngWindow) ([]clearance.SpineCrit, bool) {
 	e := k.spineEngine()
 	out, ok := e.PointCircleCrits(p, c, axis, refU, refV, rad, win)
-	k.captureSpine(e)
-	return out, ok
-}
-
-func (k *pairKernel) lineCircleBracketCrits(cp freeform.CircleParam, center, refU, refV, la, ld r3.Vec) ([]clearance.SpineCrit, bool) {
-	e := k.spineEngine()
-	out, ok := e.LineCircleBracketCrits(cp, center, refU, refV, la, ld)
 	k.captureSpine(e)
 	return out, ok
 }
