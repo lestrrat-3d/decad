@@ -3,8 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentvalidate"
@@ -12,9 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-3d/units"
 )
 
 // momentPreflight is one whole ProfileRecord's preflight: the checked record,
@@ -384,61 +379,6 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work 
 	return pre, nil
 }
 
-type momentEntityKey struct {
-	kind   uint8
-	first  Point2
-	second Point2
-	third  Point2
-	radius float64
-	// control identifies a free-form entity by its own defining data, which
-	// no fixed number of Point2 fields can hold.
-	control string
-}
-
-// analyticEntityKey is the interning key momentRecordScene builds an analytic
-// segment's entity under, read off the segment's own defining data in constant
-// time. Both that scene and reconstructionOf's chord count share it, so the
-// charge cannot drift from the set of entities the arrangement actually holds.
-//
-// It reports false for every free-form kind. Those key on freeformEntityKey,
-// which walks all the control points and allocates a string per segment — a pass
-// the reconstruction charge must PRECEDE rather than run — so the chord count
-// leaves them un-interned and counts each fragment for itself.
-func analyticEntityKey(segment CurveSegment) (momentEntityKey, bool) {
-	switch segment := segment.(type) {
-	case LineSeg:
-		return momentEntityKey{kind: 1, first: segment.Start, second: segment.End}, true
-	case CircleSeg:
-		radius, _ := segment.Radius.In(units.Millimeter)
-		return momentEntityKey{kind: 2, first: segment.Center, radius: radius}, true
-	case ArcSeg:
-		return momentEntityKey{
-			kind:   3,
-			first:  segment.Center,
-			second: segment.Start,
-			third:  segment.End,
-		}, true
-	default:
-		return momentEntityKey{}, false
-	}
-}
-
-// freeformEntityKey renders a free-form segment's defining data as a key. It
-// keys on the entity's OWN fields — control points, and a NURBS's degree, knots
-// and weights — so two recorded segments dedupe exactly when they name the same
-// entity.
-func freeformEntityKey(kind uint8, points []Point2, extra ...float64) momentEntityKey {
-	var b strings.Builder
-	for _, point := range points {
-		fmt.Fprintf(&b, "%v,%v;", point.U, point.V)
-	}
-	b.WriteByte('|')
-	for _, value := range extra {
-		fmt.Fprintf(&b, "%v;", value)
-	}
-	return momentEntityKey{kind: kind, control: b.String()}
-}
-
 // momentRecordMatchesSketch asks sketch whether the recorded segments form the
 // recorded region. It builds the scene, arranges it once to list the candidate
 // profiles, and authenticates each candidate through RecordProfile.
@@ -454,7 +394,7 @@ func freeformEntityKey(kind uint8, points []Point2, extra ...float64) momentEnti
 // loop is never free.
 func momentRecordMatchesSketch(record ProfileRecord, work *freeform.FreeformWork, arrangement uint64) (bool, error) {
 	record = normalizeReconstructionWeights(record)
-	s, built := momentRecordScene(record)
+	s, built := momentvalidate.RecordScene(momentProfile(record))
 	if !built {
 		return false, nil
 	}
@@ -467,182 +407,9 @@ func momentRecordMatchesSketch(record ProfileRecord, work *freeform.FreeformWork
 			return false, err
 		}
 		candidate, _, err := RecordProfile(s, profile)
-		if err == nil && momentRecordsEqual(record, candidate) {
+		if err == nil && momentvalidate.RecordsEqual(momentProfile(record), momentProfile(candidate)) {
 			return true, nil
 		}
 	}
 	return false, nil
-}
-
-// momentRecordScene builds the sketch entities the record names, deduplicating
-// the ones several segments share. It reports whether every entity was created:
-// an entity sketch declines to build is a record that does not reconstruct, so
-// the answer above is a no-match rather than a failure to report.
-func momentRecordScene(record ProfileRecord) (*sketch.Sketch, bool) {
-	world := sketch.NewWorld()
-	s, err := world.CreateSketch(world.XY())
-	if err != nil {
-		return nil, false
-	}
-
-	interned := make(map[Point2]*sketch.Point)
-	point := func(value Point2) *sketch.Point {
-		if existing, ok := interned[value]; ok {
-			return existing
-		}
-		created := s.CreatePoint(value.U, value.V)
-		interned[value] = created
-		return created
-	}
-	points := func(values []Point2) []*sketch.Point {
-		out := make([]*sketch.Point, len(values))
-		for i, value := range values {
-			out[i] = point(value)
-		}
-		return out
-	}
-	entities := make(map[momentEntityKey]struct{})
-	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
-		for _, segment := range loop.Segments {
-			switch segment := segment.(type) {
-			case LineSeg:
-				key, _ := analyticEntityKey(segment)
-				if _, ok := entities[key]; !ok {
-					s.CreateLine(point(segment.Start), point(segment.End))
-					entities[key] = struct{}{}
-				}
-			case CircleSeg:
-				key, _ := analyticEntityKey(segment)
-				if _, ok := entities[key]; !ok {
-					s.CreateCircle(point(segment.Center), key.radius)
-					entities[key] = struct{}{}
-				}
-			case ArcSeg:
-				key, _ := analyticEntityKey(segment)
-				if _, ok := entities[key]; !ok {
-					s.CreateArc(point(segment.Center), point(segment.Start), point(segment.End))
-					entities[key] = struct{}{}
-				}
-			case SplineSeg:
-				key := freeformEntityKey(4, segment.Control)
-				if _, ok := entities[key]; !ok {
-					if _, err := s.CreateSpline(points(segment.Control)...); err != nil {
-						return nil, false
-					}
-					entities[key] = struct{}{}
-				}
-			case ClosedSplineSeg:
-				key := freeformEntityKey(5, segment.Control)
-				if _, ok := entities[key]; !ok {
-					if _, err := s.CreateClosedSpline(points(segment.Control)...); err != nil {
-						return nil, false
-					}
-					entities[key] = struct{}{}
-				}
-			case NURBSSeg:
-				extra := append([]float64{float64(segment.Degree)}, segment.Knots...)
-				extra = append(extra, segment.Weights...)
-				key := freeformEntityKey(6, segment.Control, extra...)
-				if _, ok := entities[key]; !ok {
-					if _, err := s.CreateNURBS(segment.Degree, points(segment.Control), segment.Weights, segment.Knots); err != nil {
-						return nil, false
-					}
-					entities[key] = struct{}{}
-				}
-			case FitSplineSeg:
-				key := freeformEntityKey(7, segment.Fit)
-				if _, ok := entities[key]; !ok {
-					if _, err := s.CreateFitSpline(points(segment.Fit)...); err != nil {
-						return nil, false
-					}
-					entities[key] = struct{}{}
-				}
-			default:
-				return nil, false
-			}
-		}
-	}
-	return s, true
-}
-
-func momentRecordsEqual(a, b ProfileRecord) bool {
-	if !momentLoopsEqual(a.Outer, b.Outer) || len(a.Holes) != len(b.Holes) {
-		return false
-	}
-	matched := make([]bool, len(b.Holes))
-	for _, holeA := range a.Holes {
-		found := false
-		for holeIndex, holeB := range b.Holes {
-			if !matched[holeIndex] && momentLoopsEqual(holeA, holeB) {
-				matched[holeIndex] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
-}
-
-func momentLoopsEqual(a, b LoopRecord) bool {
-	if len(a.Segments) != len(b.Segments) {
-		return false
-	}
-	for offset := range b.Segments {
-		equal := true
-		for segmentIndex, segmentA := range a.Segments {
-			if !momentSegmentsEqual(segmentA, b.Segments[(segmentIndex+offset)%len(b.Segments)]) {
-				equal = false
-				break
-			}
-		}
-		if equal {
-			return true
-		}
-	}
-	return false
-}
-
-func momentSegmentsEqual(a, b CurveSegment) bool {
-	switch a := a.(type) {
-	case LineSeg:
-		b, ok := b.(LineSeg)
-		return ok && a == b
-	case CircleSeg:
-		b, ok := b.(CircleSeg)
-		if !ok {
-			return false
-		}
-		radiusA, _ := a.Radius.In(units.Millimeter)
-		radiusB, _ := b.Radius.In(units.Millimeter)
-		return a.Center == b.Center &&
-			radiusA == radiusB &&
-			a.CCW == b.CCW &&
-			a.TStart == b.TStart &&
-			a.TEnd == b.TEnd
-	case ArcSeg:
-		b, ok := b.(ArcSeg)
-		return ok && a == b
-	case SplineSeg:
-		b, ok := b.(SplineSeg)
-		return ok && slices.Equal(a.Control, b.Control) && a.TStart == b.TStart && a.TEnd == b.TEnd
-	case ClosedSplineSeg:
-		b, ok := b.(ClosedSplineSeg)
-		return ok && slices.Equal(a.Control, b.Control) &&
-			a.CCW == b.CCW && a.TStart == b.TStart && a.TEnd == b.TEnd
-	case NURBSSeg:
-		b, ok := b.(NURBSSeg)
-		return ok && a.Degree == b.Degree &&
-			slices.Equal(a.Control, b.Control) &&
-			slices.Equal(a.Knots, b.Knots) &&
-			slices.Equal(a.Weights, b.Weights) &&
-			a.TStart == b.TStart && a.TEnd == b.TEnd
-	case FitSplineSeg:
-		b, ok := b.(FitSplineSeg)
-		return ok && slices.Equal(a.Fit, b.Fit) && a.TStart == b.TStart && a.TEnd == b.TEnd
-	default:
-		return false
-	}
 }
