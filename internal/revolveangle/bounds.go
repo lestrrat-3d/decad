@@ -46,7 +46,7 @@ func Extremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // Angle.SinCosFor, which reads a pure-turn end (a degree-stated
 // extent) through proofbound.TurnSinCosInterval, EXACT at every eighth-turn boundary and
 // never comparing against π, rather than through the radian-space bracket
-// (normal_bound.go's survey2d.RadSinCosInterval, the Cone normal's own primitive) that
+// (proofbound.RadSinCosInterval, the Cone normal's own primitive) that
 // a detour through π would otherwise force even at a quarter turn, and the
 // amplitude √(c0²+c1²) by the rational square-root brackets
 // circularLengthInterval reads an ArcSeg's radius through (proofbound.RatSqrtDown/

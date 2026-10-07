@@ -81,7 +81,8 @@ const PiRoundGuard = 1e-15
 
 // RadianTrigBounds proves sin(x) and cos(x) for a held RADIAN value x built
 // from Go's math.Pi constant, via the same rational bracket
-// (RadSinCosInterval, normal_bound.go) a Cone's half-angle normal reads,
+// (proofbound.RadSinCosInterval in internal/proofbound/interval_trig.go) a
+// Cone's half-angle normal reads,
 // widened by PiRoundGuard. It never trusts math.Sin/math.Cos's own accuracy —
 // only that the enclosure it returns contains the true sine/cosine of x.
 func RadianTrigBounds(x float64) (proofbound.BoundedScalar, proofbound.BoundedScalar) {
@@ -90,12 +91,12 @@ func RadianTrigBounds(x float64) (proofbound.BoundedScalar, proofbound.BoundedSc
 	if xR == nil {
 		return proofbound.MeasuredScalar(heldSin, math.Inf(1)), proofbound.MeasuredScalar(heldCos, math.Inf(1))
 	}
-	sinIv, cosIv, ok := RadSinCosInterval(xR)
+	sinIv, cosIv, ok := proofbound.RadSinCosInterval(xR)
 	if !ok {
 		return proofbound.MeasuredScalar(heldSin, math.Inf(1)), proofbound.MeasuredScalar(heldCos, math.Inf(1))
 	}
 	guard := proofarith.FloatRat(PiRoundGuard)
-	sinIv, cosIv = IntervalWiden(sinIv, guard), IntervalWiden(cosIv, guard)
+	sinIv, cosIv = proofbound.IntervalWiden(sinIv, guard), proofbound.IntervalWiden(cosIv, guard)
 	return proofbound.MeasuredScalar(heldSin, proofbound.IntervalFloatError(sinIv, heldSin)),
 		proofbound.MeasuredScalar(heldCos, proofbound.IntervalFloatError(cosIv, heldCos))
 }

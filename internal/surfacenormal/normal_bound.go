@@ -5,7 +5,6 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -72,23 +71,23 @@ const (
 // the 3D sibling of internal/capcontour's UnitVec, and like it the only
 // widening a held-float input suffers is the length's own outward-rounded
 // square root.
-func UnitVec3(a survey2d.IvVec3) (survey2d.IvVec3, Status) {
-	n2 := survey2d.IvVec3NormSq(a)
+func UnitVec3(a proofbound.IvVec3) (proofbound.IvVec3, Status) {
+	n2 := proofbound.IvVec3NormSq(a)
 	if n2.Hi.Sign() <= 0 {
-		return survey2d.IvVec3{}, Zero
+		return proofbound.IvVec3{}, Zero
 	}
 	if n2.Lo.Sign() <= 0 {
-		return survey2d.IvVec3{}, Unproven
+		return proofbound.IvVec3{}, Unproven
 	}
 	length, ok := proofbound.IntervalSqrt(n2)
 	if !ok || length.Lo.Sign() <= 0 {
-		return survey2d.IvVec3{}, Unproven
+		return proofbound.IvVec3{}, Unproven
 	}
-	var out survey2d.IvVec3
+	var out proofbound.IvVec3
 	for i, comp := range a {
 		q, ok := proofbound.IntervalQuo(comp, length)
 		if !ok {
-			return survey2d.IvVec3{}, Unproven
+			return proofbound.IvVec3{}, Unproven
 		}
 		out[i] = q
 	}
@@ -102,7 +101,7 @@ func UnitVec3(a survey2d.IvVec3) (survey2d.IvVec3, Status) {
 // The sign a reversed face applies is a float negation, which is exact, so
 // the bound is the same for the outward direction and the geometric one and
 // the caller may pass either — as long as both arguments carry the same sign.
-func unitDirAllow(exact survey2d.IvVec3, held r3.Vec) (float64, Status) {
+func unitDirAllow(exact proofbound.IvVec3, held r3.Vec) (float64, Status) {
 	unit, st := UnitVec3(exact)
 	if st != Proven {
 		return 0, st
@@ -132,19 +131,19 @@ func unitDirAllow(exact survey2d.IvVec3, held r3.Vec) (float64, Status) {
 // Writing it with the unit axis matters: the arms spell the projection with
 // the tag's held Axis, which a placement leaves only near-unit, and the
 // difference between the two spellings is part of what this file is charging.
-func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
-	pi, okP := survey2d.IvVec3Of(p)
-	oi, okO := survey2d.IvVec3Of(origin)
-	ai, okA := survey2d.IvVec3Of(axis)
+func axialRadialExact(p, origin, axis r3.Vec) (proofbound.IvVec3, bool) {
+	pi, okP := proofbound.IvVec3Of(p)
+	oi, okO := proofbound.IvVec3Of(origin)
+	ai, okA := proofbound.IvVec3Of(axis)
 	if !okP || !okO || !okA {
-		return survey2d.IvVec3{}, false
+		return proofbound.IvVec3{}, false
 	}
-	rel := survey2d.IvVec3Sub(pi, oi)
-	share, ok := proofbound.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
+	rel := proofbound.IvVec3Sub(pi, oi)
+	share, ok := proofbound.IntervalQuo(proofbound.IvVec3Dot(rel, ai), proofbound.IvVec3NormSq(ai))
 	if !ok {
-		return survey2d.IvVec3{}, false
+		return proofbound.IvVec3{}, false
 	}
-	return survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
+	return proofbound.IvVec3Sub(rel, proofbound.IvVec3Mul(ai, share)), true
 }
 
 // PlaneAllow bounds the Plane arm's own reading. An r3.Frame stores no
@@ -157,12 +156,12 @@ func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
 // held axes cross exactly and give a unit result, which is every axis-aligned
 // frame.
 func PlaneAllow(fr r3.Frame, held r3.Vec) (float64, Status) {
-	u, okU := survey2d.IvVec3Of(fr.U())
-	v, okV := survey2d.IvVec3Of(fr.V())
+	u, okU := proofbound.IvVec3Of(fr.U())
+	v, okV := proofbound.IvVec3Of(fr.V())
 	if !okU || !okV {
 		return 0, Unproven
 	}
-	return unitDirAllow(survey2d.IvVec3Cross(u, v), held)
+	return unitDirAllow(proofbound.IvVec3Cross(u, v), held)
 }
 
 // AxialAllow bounds the Cylinder arm's reading: its exact normal is the
@@ -178,12 +177,12 @@ func AxialAllow(p, origin, axis r3.Vec, held r3.Vec) (float64, Status) {
 // RadialAllow bounds a reading whose exact direction is one held
 // difference — the Sphere arm's centre-to-point.
 func RadialAllow(p, center r3.Vec, held r3.Vec) (float64, Status) {
-	pi, okP := survey2d.IvVec3Of(p)
-	ci, okC := survey2d.IvVec3Of(center)
+	pi, okP := proofbound.IvVec3Of(p)
+	ci, okC := proofbound.IvVec3Of(center)
 	if !okP || !okC {
 		return 0, Unproven
 	}
-	return unitDirAllow(survey2d.IvVec3Sub(pi, ci), held)
+	return unitDirAllow(proofbound.IvVec3Sub(pi, ci), held)
 }
 
 // ConeAllow bounds the Cone arm's reading. The exact normal is
@@ -200,7 +199,7 @@ func ConeAllow(p, origin, axis r3.Vec, half float64, held r3.Vec) (float64, Stat
 	if st != Proven {
 		return 0, st
 	}
-	axisIv, okA := survey2d.IvVec3Of(axis)
+	axisIv, okA := proofbound.IvVec3Of(axis)
 	if !okA {
 		return 0, Unproven
 	}
@@ -212,11 +211,11 @@ func ConeAllow(p, origin, axis r3.Vec, half float64, held r3.Vec) (float64, Stat
 	if rHalf == nil {
 		return 0, Unproven
 	}
-	sin, cos, okT := survey2d.RadSinCosInterval(rHalf)
+	sin, cos, okT := proofbound.RadSinCosInterval(rHalf)
 	if !okT {
 		return 0, Unproven
 	}
-	return unitDirAllow(survey2d.IvVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
+	return unitDirAllow(proofbound.IvVec3Sub(proofbound.IvVec3Mul(rdir, cos), proofbound.IvVec3Mul(adir, sin)), held)
 }
 
 // TorusAllow bounds the Torus arm's reading: the exact direction runs
@@ -232,11 +231,11 @@ func TorusAllow(p, center, axis r3.Vec, major float64, held r3.Vec) (float64, St
 		return 0, st
 	}
 	rMajor := proofarith.FloatRat(major)
-	pi, okP := survey2d.IvVec3Of(p)
-	ci, okC := survey2d.IvVec3Of(center)
+	pi, okP := proofbound.IvVec3Of(p)
+	ci, okC := proofbound.IvVec3Of(center)
 	if rMajor == nil || !okP || !okC {
 		return 0, Unproven
 	}
-	rel := survey2d.IvVec3Sub(pi, ci)
-	return unitDirAllow(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
+	rel := proofbound.IvVec3Sub(pi, ci)
+	return unitDirAllow(proofbound.IvVec3Sub(rel, proofbound.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
 }

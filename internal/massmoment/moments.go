@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // Moments is one solid's V = ∫dV, P_i = ∫q_i dV and Q_ij = ∫q_i·q_j dV
@@ -57,7 +56,7 @@ func Rotate(m Moments, f [3][3]*big.Rat) Moments {
 		for k := range m.First {
 			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m.First[k], f[i][k]))
 		}
-		out.First[i] = survey2d.IntervalWiden(sum, firstWiden)
+		out.First[i] = proofbound.IntervalWiden(sum, firstWiden)
 	}
 	secondWiden := new(big.Rat).Mul(big.NewRat(3, 1), defect)
 	secondWiden.Mul(secondWiden, new(big.Rat).Add(big.NewRat(2, 1), defect))
@@ -65,7 +64,7 @@ func Rotate(m Moments, f [3][3]*big.Rat) Moments {
 	out.Second = RotateTensor(f, m.Second)
 	for i := range out.Second {
 		for j := range out.Second[i] {
-			out.Second[i][j] = survey2d.IntervalWiden(out.Second[i][j], secondWiden)
+			out.Second[i][j] = proofbound.IntervalWiden(out.Second[i][j], secondWiden)
 		}
 	}
 	return out

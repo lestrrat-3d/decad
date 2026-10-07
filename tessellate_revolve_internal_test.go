@@ -298,8 +298,8 @@ func TestRevolveCoordMaxCoversEveryIdealCoordinate(t *testing.T) {
 	}
 }
 
-func mustIvVec(v r3.Vec) survey2d.IvVec3 {
-	out, ok := survey2d.IvVec3Of(v)
+func mustIvVec(v r3.Vec) proofbound.IvVec3 {
+	out, ok := proofbound.IvVec3Of(v)
 	if !ok {
 		panic("decad: test vector is not enclosable")
 	}

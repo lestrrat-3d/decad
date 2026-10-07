@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -50,7 +49,7 @@ import (
 // denote), this falls back to the prior reading over the held floats alone,
 // which reproduces today's construction exactly: a partial sweep's angle
 // φ0 + l·(φ1 − φ0)/n as an exact rational in the payload's own two floats
-// (survey2d.RadSinCosInterval), a full turn starting at zero as l/n of a TURN
+// (proofbound.RadSinCosInterval), a full turn starting at zero as l/n of a TURN
 // (proofbound.TurnSinCosInterval, no π entering at all), and a full turn starting
 // elsewhere as the same radian enclosure over φ0 + 2π·l/n, widened by the 2π
 // enclosure's own (sub-2⁻²⁴⁰) width.
@@ -87,7 +86,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngula
 		case haveDen:
 			angle := proofbound.IntervalAdd(enc0, proofbound.IntervalScale(diff, frac))
 			var ok bool
-			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
+			sinIv, cosIv, ok = proofbound.RadSinCosSpan(angle)
 			if !ok {
 				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
@@ -96,7 +95,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngula
 		case full:
 			angle := proofbound.IntervalAdd(proofbound.PointInterval(r0), proofbound.IntervalScale(proofbound.TwoPiInterval(), frac))
 			var ok bool
-			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
+			sinIv, cosIv, ok = proofbound.RadSinCosSpan(angle)
 			if !ok {
 				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
@@ -105,7 +104,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngula
 		default:
 			angle := new(big.Rat).Add(r0, new(big.Rat).Mul(frac, new(big.Rat).Sub(r1, r0)))
 			var ok bool
-			sinIv, cosIv, ok = survey2d.RadSinCosInterval(angle)
+			sinIv, cosIv, ok = proofbound.RadSinCosInterval(angle)
 			if !ok {
 				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
@@ -134,21 +133,21 @@ func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngula
 // e0 = −dV·U + dU·V and e1 = w × e0. The gap between this and the stored basis
 // is one of the terms deltaC measures.
 func revolveIdealBasis(rp revolvePayload) (revolvemesh.RevolveBasis3Iv, bool) {
-	origin, ok0 := survey2d.IvVec3Of(rp.frame.Origin())
-	fu, ok1 := survey2d.IvVec3Of(rp.frame.U())
-	fv, ok2 := survey2d.IvVec3Of(rp.frame.V())
+	origin, ok0 := proofbound.IvVec3Of(rp.frame.Origin())
+	fu, ok1 := proofbound.IvVec3Of(rp.frame.U())
+	fv, ok2 := proofbound.IvVec3Of(rp.frame.V())
 	aU, aV := proofarith.FloatRat(rp.ax.aU), proofarith.FloatRat(rp.ax.aV)
 	dU, dV := proofarith.FloatRat(rp.ax.dU), proofarith.FloatRat(rp.ax.dV)
 	if !ok0 || !ok1 || !ok2 || aU == nil || aV == nil || dU == nil || dV == nil {
 		return revolvemesh.RevolveBasis3Iv{}, false
 	}
-	scale := func(v survey2d.IvVec3, s *big.Rat) survey2d.IvVec3 {
-		return survey2d.IvVec3Mul(v, proofbound.PointInterval(s))
+	scale := func(v proofbound.IvVec3, s *big.Rat) proofbound.IvVec3 {
+		return proofbound.IvVec3Mul(v, proofbound.PointInterval(s))
 	}
-	a3 := survey2d.IvVec3Add(origin, survey2d.IvVec3Add(scale(fu, aU), scale(fv, aV)))
-	w := survey2d.IvVec3Add(scale(fu, dU), scale(fv, dV))
-	e0 := survey2d.IvVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
-	return revolvemesh.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: survey2d.IvVec3Cross(w, e0)}, true
+	a3 := proofbound.IvVec3Add(origin, proofbound.IvVec3Add(scale(fu, aU), scale(fv, aV)))
+	w := proofbound.IvVec3Add(scale(fu, dU), scale(fv, dV))
+	e0 := proofbound.IvVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
+	return revolvemesh.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: proofbound.IvVec3Cross(w, e0)}, true
 }
 
 // requireVertexLinks is docs/tessellation-design.md §9's construction safety

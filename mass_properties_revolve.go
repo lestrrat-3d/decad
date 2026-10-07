@@ -10,7 +10,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -192,7 +191,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmomen
 	widen.Mul(widen, massmoment.TensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
-			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
+			world[i][j] = proofbound.IntervalWiden(world[i][j], widen)
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -238,7 +237,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmomen
 // value widened by its own bound, both read as exact rationals.
 func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
 	entry := func(m Measurement) proofbound.RatInterval {
-		return survey2d.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
+		return proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(m.Value.Base())), proofarith.FloatRat(m.Bound.Base()))
 	}
 	xy, xz, yz := entry(reading.XY), entry(reading.XZ), entry(reading.YZ)
 	return [3][3]proofbound.RatInterval{

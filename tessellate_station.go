@@ -34,7 +34,7 @@ import (
 // this chording never named.
 //
 // The mechanism per kind is circularEndpointInterval's own: proofbound.TurnSinCosInterval
-// for a CircleSeg's exactly-rational turn, survey2d.RadSinCosSpan over proofbound.Atan2Interval for
+// for a CircleSeg's exactly-rational turn, proofbound.RadSinCosSpan over proofbound.Atan2Interval for
 // an ArcSeg's enclosed angle. Neither ever compares against π.
 //
 // An enclosure the recorded data cannot state, a parameter that is not

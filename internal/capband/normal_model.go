@@ -103,13 +103,13 @@ type NormalModel struct {
 // cap radius, its cap level, and the window start the coefficients are anchored
 // on — and nothing here is sampled at all.
 func PatchNormalModel(in NormalInput) (NormalModel, bool) {
-	pv, okP := survey2d.IvVec3Of(in.Pull)
+	pv, okP := proofbound.IvVec3Of(in.Pull)
 	if !okP {
 		return NormalModel{}, false
 	}
 	sinH, cosH, origin, axis := in.SinH, in.CosH, in.Origin, in.Axis
-	axisIv, okA := survey2d.IvVec3Of(axis)
-	originIv, okO := survey2d.IvVec3Of(origin)
+	axisIv, okA := proofbound.IvVec3Of(axis)
+	originIv, okO := proofbound.IvVec3Of(origin)
 	if !okA || !okO {
 		return NormalModel{}, false
 	}
@@ -123,12 +123,12 @@ func PatchNormalModel(in NormalInput) (NormalModel, bool) {
 	if cU == nil || cV == nil || capZ == nil || radius == nil || th0 == nil {
 		return NormalModel{}, false
 	}
-	perp := func(v survey2d.IvVec3) survey2d.IvVec3 {
-		return survey2d.IvVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
+	perp := func(v proofbound.IvVec3) proofbound.IvVec3 {
+		return proofbound.IvVec3Sub(v, proofbound.IvVec3Mul(ahat, proofbound.IvVec3Dot(v, ahat)))
 	}
-	offset := perp(survey2d.IvVec3Sub(world.Point(cU, cV, capZ), originIv))
-	qu := survey2d.IvVec3Mul(perp(world.Du), proofbound.PointInterval(radius))
-	qv := survey2d.IvVec3Mul(perp(world.Dv), proofbound.PointInterval(radius))
+	offset := perp(proofbound.IvVec3Sub(world.Point(cU, cV, capZ), originIv))
+	qu := proofbound.IvVec3Mul(perp(world.Du), proofbound.PointInterval(radius))
+	qv := proofbound.IvVec3Mul(perp(world.Dv), proofbound.PointInterval(radius))
 
 	length, okLen := radialLengthEnclosure(offset, qu, qv)
 	if !okLen {
@@ -147,9 +147,9 @@ func PatchNormalModel(in NormalInput) (NormalModel, bool) {
 	// window's own start: the survey's recovered form is anchored at th0, and a
 	// model anchored anywhere else would be charged a difference that is only a
 	// change of phase.
-	uComp, vComp := survey2d.IvVec3Dot(qu, pv), survey2d.IvVec3Dot(qv, pv)
-	offComp := survey2d.IvVec3Dot(offset, pv)
-	sin0, cos0, okT := survey2d.RadSinCosInterval(th0)
+	uComp, vComp := proofbound.IvVec3Dot(qu, pv), proofbound.IvVec3Dot(qv, pv)
+	offComp := proofbound.IvVec3Dot(offset, pv)
+	sin0, cos0, okT := proofbound.RadSinCosInterval(th0)
 	if !okT {
 		return NormalModel{}, false
 	}
@@ -161,7 +161,7 @@ func PatchNormalModel(in NormalInput) (NormalModel, bool) {
 		sign = big.NewRat(-1, 1)
 	}
 	scale := proofbound.IntervalScale(cosH, new(big.Rat).Mul(sign, invFixed))
-	axial := proofbound.IntervalScale(proofbound.IntervalMul(sinH, survey2d.IvVec3Dot(ahat, pv)), sign)
+	axial := proofbound.IntervalScale(proofbound.IntervalMul(sinH, proofbound.IvVec3Dot(ahat, pv)), sign)
 	return NormalModel{
 		A: proofbound.IntervalMul(scale, anchoredU),
 		B: proofbound.IntervalMul(scale, anchoredV),
@@ -190,17 +190,17 @@ func PatchNormalModel(in NormalInput) (NormalModel, bool) {
 // It refuses rather than clamp where the enclosure reaches zero: a length that
 // is not proven positive gives the patch no radial direction, so there is no
 // normal to state a range for.
-func radialLengthEnclosure(offset, qu, qv survey2d.IvVec3) (proofbound.RatInterval, bool) {
+func radialLengthEnclosure(offset, qu, qv proofbound.IvVec3) (proofbound.RatInterval, bool) {
 	half := big.NewRat(1, 2)
-	uSq, vSq := survey2d.IvVec3NormSq(qu), survey2d.IvVec3NormSq(qv)
-	base := proofbound.IntervalAdd(survey2d.IvVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
+	uSq, vSq := proofbound.IvVec3NormSq(qu), proofbound.IvVec3NormSq(qv)
+	base := proofbound.IntervalAdd(proofbound.IvVec3NormSq(offset), proofbound.IntervalScale(proofbound.IntervalAdd(uSq, vSq), half))
 	skew, okSkew := proofbound.IntervalSqrt(proofbound.IntervalAdd(
 		proofbound.IntervalSquare(proofbound.IntervalScale(proofbound.IntervalSub(uSq, vSq), half)),
-		proofbound.IntervalSquare(survey2d.IvVec3Dot(qu, qv)),
+		proofbound.IntervalSquare(proofbound.IvVec3Dot(qu, qv)),
 	))
 	eccentric, okEcc := proofbound.IntervalSqrt(proofbound.IntervalAdd(
-		proofbound.IntervalSquare(survey2d.IvVec3Dot(offset, qu)),
-		proofbound.IntervalSquare(survey2d.IvVec3Dot(offset, qv)),
+		proofbound.IntervalSquare(proofbound.IvVec3Dot(offset, qu)),
+		proofbound.IntervalSquare(proofbound.IvVec3Dot(offset, qv)),
 	))
 	if !okSkew || !okEcc {
 		return proofbound.RatInterval{}, false
@@ -265,7 +265,7 @@ func HarmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (HarmonicExtre
 	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
 	var ext HarmonicExtremes
 	for j := range arcs + 1 {
-		sin, cos, ok := survey2d.RadSinCosInterval(proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
+		sin, cos, ok := proofbound.RadSinCosInterval(proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
 		if !ok {
 			return HarmonicExtremes{}, false
 		}

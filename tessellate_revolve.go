@@ -425,12 +425,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// radials[l] is the ideal radial direction at angular index l, the term
 	// of revolvemesh.RevolveIdealPoint's sum that every ring shares; the pole's covers
 	// every angle at once.
-	radials := make([]survey2d.IvVec3, angular.Samples)
+	radials := make([]proofbound.IvVec3, angular.Samples)
 	for l := range angular.Samples {
-		radials[l] = survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.E0, angular.CosIv[l]), survey2d.IvVec3Mul(p.ideal.E1, angular.SinIv[l]))
+		radials[l] = proofbound.IvVec3Add(proofbound.IvVec3Mul(p.ideal.E0, angular.CosIv[l]), proofbound.IvVec3Mul(p.ideal.E1, angular.SinIv[l]))
 	}
 	poleIv := proofbound.Interval(minusOneRat(), oneRat())
-	poleRadial := survey2d.IvVec3Add(survey2d.IvVec3Mul(p.ideal.E0, poleIv), survey2d.IvVec3Mul(p.ideal.E1, poleIv))
+	poleRadial := proofbound.IvVec3Add(proofbound.IvVec3Mul(p.ideal.E0, poleIv), proofbound.IvVec3Mul(p.ideal.E1, poleIv))
 	for li := range loopMesh {
 		for si := range loopMesh[li].samples {
 			s := &loopMesh[li].samples[si]
@@ -439,7 +439,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				count = 1
 			}
 			s.Ring = make([]int, count)
-			axial := survey2d.IvVec3Mul(p.ideal.W, s.ZIv)
+			axial := proofbound.IvVec3Mul(p.ideal.W, s.ZIv)
 			// docs/tessellation-design.md §9's ring-collapse detection, run
 			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
 			// vertices coincide is not an axis sample, and §12 forbids merging
@@ -463,7 +463,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 					// EVERY angle, so its enclosure must cover them all.
 					radial = poleRadial
 				}
-				ideal := survey2d.IvVec3Add(p.ideal.A3, survey2d.IvVec3Add(axial, survey2d.IvVec3Mul(radial, s.RhoIv)))
+				ideal := proofbound.IvVec3Add(p.ideal.A3, proofbound.IvVec3Add(axial, proofbound.IvVec3Mul(radial, s.RhoIv)))
 				gapC := proofbound.Radius3D(max(
 					proofbound.IntervalFloatError(ideal[0], local.X),
 					proofbound.IntervalFloatError(ideal[1], local.Y),

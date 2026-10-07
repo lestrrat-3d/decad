@@ -268,7 +268,7 @@ the rules leave to the byte budget.
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
-| `internal/proofbound/` | Bounded scalars, rational interval arithmetic, work budget, and certified trig. See file comments. |
+| `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularmoments/` | Circular moment values and enclosures over neutral records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
@@ -276,7 +276,7 @@ the rules leave to the byte budget.
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/capband/` | Cap-band normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
-| `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
+| `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall and undercut readers, and section walk and Bézier carriers. See `docs/verification-design.md` §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, poses, sweeps, and trig memo. See motion design. |

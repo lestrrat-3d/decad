@@ -7,7 +7,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // CellSlack is one meridian cell's Ecell
@@ -27,7 +26,7 @@ import (
 // (revolvemesh.RevolveArcCellSlack, tess §15's T3 choice). coord is the composed coordinate
 // displacement, which the circular arms widen their meridian model by.
 func CellSlack(b revolvemesh.RevolveBasis3Iv, angular revolvemesh.RevolveAngular, lo, hi revolvemesh.RevMeridian, coord float64) (float64, error) {
-	corner := func(s revolvemesh.RevMeridian, l int) survey2d.IvVec3 {
+	corner := func(s revolvemesh.RevMeridian, l int) proofbound.IvVec3 {
 		return revolvemesh.RevolveIdealPoint(b, s.ZIv, s.RhoIv, angular.CosIv[l], angular.SinIv[l])
 	}
 	p00, p01 := corner(lo, 0), corner(lo, 1)

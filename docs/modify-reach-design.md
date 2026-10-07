@@ -573,8 +573,9 @@ trigonometric endpoint terms. NEVER use quadrature to claim Exact.
 A trigonometric endpoint term is ENCLOSED, never trusted from `math`. A `Cone`
 patch's volume flux and first moments are evaluated over exact rationals with
 the sine and cosine of each held float angle read through the certified radian
-enclosure (`normal_bound.go`'s `radSinCosInterval`, `internal/proofbound/moments_trig.go`'s series
-underneath it), so the published bound is the enclosure's reach from the held
+enclosure (`internal/proofbound/interval_trig.go`'s `RadSinCosInterval`, over
+`internal/proofbound/moments_trig.go`'s series), so the published bound is the
+enclosure's reach from the held
 value — the same `intervalFloatError` discipline every certified circular
 bracket already publishes — and it neither grows with the arc centre's
 distance from the plane-local origin nor with the term's own magnitude. The

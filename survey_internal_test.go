@@ -1441,7 +1441,7 @@ func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, p
 	if w.IsCircular() {
 		return nil, nil, nil, false
 	}
-	pv, okP := survey2d.IvVec3Of(pull)
+	pv, okP := proofbound.IvVec3Of(pull)
 	if !okP {
 		return nil, nil, nil, false
 	}
@@ -1449,11 +1449,11 @@ func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, p
 	if tu == nil || tv == nil {
 		return nil, nil, nil, false
 	}
-	du := survey2d.IvVec3Dot(m.Du, pv).Lo
-	dv := survey2d.IvVec3Dot(m.Dv, pv).Lo
+	du := proofbound.IvVec3Dot(m.Du, pv).Lo
+	dv := proofbound.IvVec3Dot(m.Dv, pv).Lo
 	num = new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
 	scale2 = proofbound.RatAdd(proofbound.RatMul(tu, tu), proofbound.RatMul(tv, tv))
-	pull2 = survey2d.IvVec3NormSq(pv).Lo
+	pull2 = proofbound.IvVec3NormSq(pv).Lo
 	return num, scale2, pull2, true
 }
 
