@@ -137,7 +137,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 	}
 	classOriginal := map[int]*Vertex{}
-	for v, class := range sp.plan.table.class {
+	for v, class := range sp.plan.table.Classes {
 		original, ok := originalVertexOf[v]
 		if !ok {
 			return nil, nil, "a welded vertex has no original identity"
@@ -147,7 +147,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 		classOriginal[class] = original
 	}
-	if len(originalVertexOf) != len(sp.plan.table.class) {
+	if len(originalVertexOf) != len(sp.plan.table.Classes) {
 		return nil, nil, "an unstitched vertex is absent from the weld plan"
 	}
 	groupOriginal := map[int]*Edge{}
@@ -230,7 +230,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		switch direct.payload.(type) {
 		case revolvePayload:
 			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
-				len(sp.plan.table.class) != len(sp.plan.table.verts) {
+				len(sp.plan.table.Classes) != len(sp.plan.table.Vertices) {
 				return refuse("this evaluator cannot reuse source chording after a stitch weld")
 			}
 			sourceBody = direct
