@@ -301,37 +301,9 @@ func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget,
 		return nil, nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 
-	targetOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
-	if err != nil {
+	match, resolved, err := prismcells.MatchCut(budget, tags, profiles, len(target.profile.Holes))
+	if err != nil || !resolved {
 		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	wantHoles := make([]map[sketch.Entity]struct{}, 0, len(target.profile.Holes)+1)
-	for i := range target.profile.Holes {
-		hs, err := prismcells.LoopEntitySet(budget, tags, false, i)
-		if err != nil {
-			return nil, nil, nil, prismSceneDelta{}, false, err
-		}
-		wantHoles = append(wantHoles, hs)
-	}
-	toolOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	wantHoles = append(wantHoles, toolOuter) // the tool's own solid, as one new hole
-
-	match, resolved, err := prismcells.FindLoopMatch(budget, profiles, targetOuter, wantHoles)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	if !resolved {
-		return nil, nil, nil, prismSceneDelta{}, false, nil
-	}
-	if !match.Valid {
-		// RB1, matching the Union path's own behaviour: a candidate region
-		// the result depends on reports an invalid arrangement. Cut's matched
-		// profile is both its nesting proof and its result, so this one check
-		// covers both claims.
-		return nil, nil, nil, prismSceneDelta{}, false, prismcells.InvalidRegionError("cut")
 	}
 	return s, match, tags, sceneDelta, true, nil
 }
@@ -371,75 +343,11 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 		return nil, nil, prismSceneDelta{}, false, false, nil
 	}
 
-	aOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
-	if err != nil {
+	match, nestedIsB, resolved, err = prismcells.MatchIntersect(budget, tags, profiles, len(pb.profile.Holes))
+	if err != nil || !resolved {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
-	bOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-
-	// The one-hole arm keeps A hole-free and needs only B-inside-A. The
-	// hole-free arm searches in both directions as before.
-	//
-	// The proof cell carries the whole weight of the nesting claim, so its own
-	// validity is checked exactly like the result cell's below: a cell sketch
-	// reports degenerate proves nothing about which operand encloses which,
-	// and reading a nesting off it would bless an arrangement sketch has
-	// already disowned. That is RB1's "a candidate region the result depends
-	// on", and this path depends on two.
-	proofBNested, bNested, err := prismcells.FindLoopMatch(budget, profiles, aOuter, []map[sketch.Entity]struct{}{bOuter})
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if bNested && !proofBNested.Valid {
-		return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
-	}
-	aNested := false
-	if len(pb.profile.Holes) == 0 {
-		proofANested, matched, err := prismcells.FindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
-		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, false, err
-		}
-		if matched && !proofANested.Valid {
-			return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
-		}
-		aNested = matched
-	}
-	if bNested == aNested {
-		// Both directions match (should not occur for a genuine pair) or
-		// neither does (a disjoint or crossing pair, or any other topology
-		// this increment does not cover): unresolved, §4.4.
-		return nil, nil, prismSceneDelta{}, false, false, nil
-	}
-
-	// The nested operand's own region is a SEPARATE s.Profiles() candidate
-	// from the nesting proof above. B may carry one hole in the new arm.
-	wantOuter, nested := aOuter, false
-	var wantHoles []map[sketch.Entity]struct{}
-	if bNested {
-		wantOuter, nested = bOuter, true
-		for i := range pb.profile.Holes {
-			hole, err := prismcells.LoopEntitySet(budget, tags, true, i)
-			if err != nil {
-				return nil, nil, prismSceneDelta{}, false, false, err
-			}
-			wantHoles = append(wantHoles, hole)
-		}
-	}
-	result, resultResolved, err := prismcells.FindLoopMatch(budget, profiles, wantOuter, wantHoles)
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if !resultResolved {
-		return nil, nil, prismSceneDelta{}, false, false, nil
-	}
-	if !result.Valid {
-		// RB1, matching the Union/Cut paths' own behaviour.
-		return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
-	}
-	return s, result, sceneDelta, nested, true, nil
+	return s, match, sceneDelta, nestedIsB, true, nil
 }
 
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement
