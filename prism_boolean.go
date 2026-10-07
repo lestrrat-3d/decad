@@ -492,7 +492,7 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	if err := budget.Err(); err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
@@ -524,6 +524,9 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	}
 	if !voidFree {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+	}
+	if ok, err := sceneDelta.sharedSpansBounded(budget, profiles); err != nil || !ok {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
 	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
@@ -582,6 +585,24 @@ func mergePrismCells(budget *proofbound.WorkBudget, selected []*sketch.Profile, 
 // prismProfilesHaveSplitBoundary keeps the existing root test seam.
 func prismProfilesHaveSplitBoundary(budget *proofbound.WorkBudget, profiles []*sketch.Profile) (bool, error) {
 	return prismcells.HasSplitBoundary(budget, profiles)
+}
+
+// prismCellProfiles is prismProfilesContext for a path that classifies and
+// merges the scene's cells: it restates each cell's line runs at the
+// vertices other cells report on the same line (prismcells.SplitRuns), so a
+// span two operands share names one edge key in every cell walking it. A
+// circular run it cannot restate returns no profile at all, which every
+// caller reads as a scene with no cell to resolve: the mesh path.
+func prismCellProfiles(ctx context.Context, budget *proofbound.WorkBudget, s *sketch.Sketch) ([]*sketch.Profile, error) {
+	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, err
+	}
+	split, resolved, err := prismcells.SplitRuns(budget, profiles)
+	if err != nil || !resolved {
+		return nil, err
+	}
+	return split, nil
 }
 
 // prismProfilesContext makes sketch's synchronous arrangement observable to a
@@ -656,10 +677,20 @@ func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 // brought a displacement: the case prism-boolean §3.4 charges. Such a pair
 // never refuses on the analytic path; every problem past the charge sends it
 // to the mesh path instead (prismAmplifiedFallback).
+//
+// shared is the scene's coincident spans (docs/general-boolean-design.md
+// §3 A3); sharedWidth is how far the result's record of a span can sit from
+// either operand's true wall there: the gap between the two recorded
+// entities plus both incoming displacements, zero for two exact walls drawn
+// on one carrier. sharedDisplaced records that an incoming displacement is
+// part of it.
 type prismSceneDelta struct {
-	a, b      float64
-	crossing  float64
-	amplified bool
+	a, b            float64
+	crossing        float64
+	amplified       bool
+	shared          prismcells.CoincidentReading
+	sharedWidth     float64
+	sharedDisplaced bool
 }
 
 // incoming is §7's two incoming displacements: operand A's own section
@@ -669,12 +700,28 @@ func (d prismSceneDelta) incoming(pa, pb prismPayload, reexpress *prismReexpress
 	return proofbound.AbsSumUpper(pa.sectionDelta, d.a), proofbound.AbsSumUpper(pb.sectionDelta, d.b, reexpress.delta)
 }
 
-// chargeCrossings sets d.amplified and d.crossing from the arrangement's
-// returned cells. ok=false (err always nil then) means a crossing has no
-// proven charge — too close to tangent, or not settling — and the caller
-// falls back to the mesh path. A non-nil error is cancellation.
+// chargeCrossings sets d.amplified, d.shared, d.sharedWidth and d.crossing
+// from the arrangement's returned cells. d.crossing is the larger of two
+// terms: A6's crossing charge (prismcells.CrossingCharge) for every cut an
+// operand's displacement can move, and, where two operands' coincident lines
+// share a span sketch resolved (prismcells.CoincidentEdges), sharedWidth:
+// the result records the span on one operand's line, and the other
+// operand's true wall sits within that width of it. That covers a span the
+// result keeps as boundary; sharedSpansBounded refuses the rest. ok=false
+// (err always nil then) means a crossing or a span has no proven charge, and
+// the caller falls back to the mesh path. A non-nil error is cancellation.
 func (d *prismSceneDelta) chargeCrossings(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, pa, pb prismPayload, reexpress *prismReexpression) (bool, error) {
 	inA, inB := d.incoming(pa, pb, reexpress)
+	coincident, ok, err := prismcells.CoincidentEdges(budget, tags, profiles)
+	if err != nil || !ok {
+		return false, err
+	}
+	d.shared = coincident
+	if len(coincident.Spans) > 0 {
+		d.sharedWidth = proofbound.AbsSumUpper(coincident.Gap(), inA, inB)
+		d.sharedDisplaced = inA > 0 || inB > 0
+		d.crossing = max(d.crossing, d.sharedWidth)
+	}
 	if inA == 0 && inB == 0 {
 		return true, nil
 	}
@@ -690,8 +737,31 @@ func (d *prismSceneDelta) chargeCrossings(budget *proofbound.WorkBudget, tags ma
 	if err != nil || !ok {
 		return false, err
 	}
-	d.crossing = crossing
+	d.crossing = max(d.crossing, crossing)
 	return true, nil
+}
+
+// sharedSpansBounded reports whether the section displacement covers every
+// coincident span of a selection.
+//
+// sketch's identity gate decides that the two recorded entities of a span
+// are one carrier (prism-boolean §4.1: that decision is sketch's to make),
+// so the section the two records denote has one wall there, with no sliver
+// between two walls. A span the result keeps as boundary (exactly one
+// selected cell beside it) is recorded on the named entity, which
+// sharedWidth, in d.crossing, covers for either operand's wall.
+//
+// An incoming displacement is different: it says the operands' TRUE walls
+// can sit up to sharedWidth apart, leaving a sliver the result does not
+// record. On a boundary span that moves the boundary by at most sharedWidth,
+// which is charged. A span inside the result or outside it would leave the
+// sliver away from every recorded edge, where no displacement covers it, so
+// a displaced pair with such a span takes the mesh path.
+func (d prismSceneDelta) sharedSpansBounded(budget *proofbound.WorkBudget, selected []*sketch.Profile) (bool, error) {
+	if !d.sharedDisplaced {
+		return true, nil
+	}
+	return d.shared.OnBoundary(budget, selected)
 }
 
 // prismAmplifiedFallback is the routing rule for a pair whose cuts carry an

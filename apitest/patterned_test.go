@@ -133,11 +133,12 @@ func outcomeOf(t *testing.T, b *decad.Body, err error) unionOutcome {
 // prove disjoint combine by Union, and Patterned returns exactly what Union
 // returns for the receiver and the instance PatternCopies builds from the same
 // spec on a twin document. Two discs crossing about the origin join; pegs that
-// overlap or share a wall reach the collinear-carrier refusal until
-// general-boolean class A3 lands; pegs stacked end to end along their own
+// overlap or share a wall join analytically through general-boolean class A3,
+// into one prism of 625 or 500 mm³; pegs stacked end to end along their own
 // sweep (the non-co-directional row) instance through PlacedCopy, whose
 // placement keeps them off the analytic stacked union, and reach the mesh
-// path's coplanar refusal. A refusal leaves the
+// path's coplanar refusal. The two peg rows fail on a sketch that leaves
+// coincident line carriers unresolved. A refusal leaves the
 // document unchanged and the receiver live.
 func TestPatternedFallsBackToUnion(t *testing.T) {
 	t.Parallel()
@@ -145,16 +146,17 @@ func TestPatternedFallsBackToUnion(t *testing.T) {
 		Name  string
 		Build func(*testing.T, *mirrorScene) *decad.Body
 		Spec  decad.PatternSpec
+		Want  float64 // the joined volume in mm³ where A3 builds it analytically, else 0
 	}{
 		{Name: "crossing discs", Spec: decad.CircularPattern{Axis: patternZ, Count: 2},
 			Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 				return sc.cylinder(t, sc.w.XY(), 2, 0, 3, mirrorAlong(5))
 			}},
-		{Name: "overlapping pegs", Spec: decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 2},
+		{Name: "overlapping pegs", Spec: decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 2}, Want: 625,
 			Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 				return sc.box(t, sc.w.XY(), 0, 0, 15, 5, mirrorAlong(5))
 			}},
-		{Name: "pegs sharing a wall", Spec: decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 2},
+		{Name: "pegs sharing a wall", Spec: decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 2}, Want: 500,
 			Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 				return sc.box(t, sc.w.XY(), 0, 0, 10, 5, mirrorAlong(5))
 			}},
@@ -177,12 +179,18 @@ func TestPatternedFallsBackToUnion(t *testing.T) {
 			receiver := tc.Build(t, sc)
 			got, err := receiver.Patterned(t.Context(), tc.Spec)
 			require.Equal(t, want, outcomeOf(t, got, err))
+			if tc.Want > 0 {
+				require.NoError(t, err)
+			}
 			if err != nil {
 				require.Equal(t, []*decad.Body{receiver}, sc.doc.Bodies(), "a refused Union leaves the receiver live")
 				return
 			}
 			require.Equal(t, []*decad.Body{got}, sc.doc.Bodies())
 			require.Len(t, got.Lumps(), 1)
+			if tc.Want > 0 {
+				requireAnalyticVolume(t, got, tc.Want)
+			}
 		})
 	}
 }

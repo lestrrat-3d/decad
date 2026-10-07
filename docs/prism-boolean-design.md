@@ -439,8 +439,8 @@ G5 overlapping sweep intervals, work cap,
 The crossing classifier does not admit this arm.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
-implemented for the direct-edge case (`prism_boolean_crossing.go`); the
-coincident-carrier extension below stays staged (§4.4).** When operand B's
+implemented (`prism_boolean_crossing.go`), with the coincident-carrier
+extension below.** When operand B's
 boundary genuinely crosses operand A's (a bore that pokes outside the hub, or
 a general-position overlap), neither `Union`'s select-all rule (only sound
 because `Union` wants *every* cell) nor the clean-nesting structural match
@@ -469,18 +469,23 @@ unchanged; `prismcells.Classify` floods this from every directly-classified
 cell.
 For a cell touching only one operand directly but adjoining a **coincident
 carrier** (the tooth-only cell of the gear's shared-arc case, which the
-merged edge names under only one operand's entity) — decad would additionally
-need to identify, from its **own** recorded segment data (comparing
-`Point2`/radius fields for exact equality after §4.1's re-expression — the
-same discipline `momentRecordScene`'s dedup key already applies, an algebraic
-comparison of decad's own numbers, never a geometric one), which of its own
-segments across the two operands describe the same carrier, and derive the
-fixed relative orientation between the two operands' authored senses for that
-shared carrier once, structurally, from their own recorded windings — never
-from evaluating a point against either curve. This extension is not yet
-built: a cell reachable only through a coincident carrier is unresolved today
-(§4.4), the same outcome as any other cell the propagation above cannot
-reach at all (isolated from every operand boundary by an unclassified path).
+merged edge names under only one operand's entity), the shared span is a
+boundary of BOTH operands. `prismcells.CoincidentEdges`
+(`internal/prismcells/coincident.go`) reads which edges those are from
+`sketch`'s own report, never from evaluating a point against either curve:
+`sketch` withdraws the span from the losing entity as a window its fragments
+do not cover, and the partner is the one entity of the other operand with
+fragment ends at both window ends (`docs/general-boolean-design.md` §3 A3).
+The cell walking the span takes both operands' readings directly — its own
+entity's flag comparison, and the partner's through the fixed relative
+direction of the two entities — and `Classify` never propagates either
+operand's membership across it. Read as an edge of the named operand alone,
+the span is one the other operand's propagation may cross: the tooth-only
+cell then inherits "inside the hub" from the hub's cell across the tooth's
+own root arc, so `Intersect(hub, tooth)` would publish the whole tooth
+(220.84 mm³ for the §15 tooth) and `Verify` would report the touching pair
+`Interfering`. A
+window no single partner explains leaves the scene unresolved (§4.4).
 
 ### 4.3 Assembly output
 
@@ -513,7 +518,8 @@ regardless of who authored the input curves it was cut from.
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Intersect` with a holed operand outside §3.1's one-hole clean-nesting arm | G6, mesh path; the result may require several regions or a split boundary |
-| `Cut`/`Intersect` crossing sub-case reachable only through a coincident carrier named under one operand's own entity (§4.2's own further extension) | not yet built (`prism_boolean_crossing.go`), mesh path |
+| A shared span `prismcells.CoincidentEdges` cannot attribute to one partner, or a cell walking a circular run past another cell's vertex | unresolved, mesh path (`docs/general-boolean-design.md` §3 A3) |
+| A displaced pair whose shared span lies inside or outside the result | mesh path: the true walls can part, and no recorded edge bounds the sliver (`docs/general-boolean-design.md` §3 A3) |
 | A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path; the clean-nesting path above still covers a holed target whose tool does not touch it |
 | A `Cut`/`Intersect` selection covering two or more disjoint regions (a multi-region coplanar overlap) | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2); `docs/general-boolean-design.md` §3 A5 builds a prism group when the loops are proven disjoint. `Verify` answers the pair through its disjoint/overlap partition (`docs/verification-design.md` §1) rather than through §4.5 |
@@ -788,7 +794,9 @@ carriers crossing at an angle `θ`, displaced by `δ1` and `δ2`, meet up to
 `(δ1 + δ2)/sin θ + min(δ1, δ2)` from where the recorded carriers meet.
 `docs/general-boolean-design.md` §3 A6 states that bound per cut over a
 certified lower bound on `sin θ` and calls the largest one `crossing`
-(`prismcells.CrossingCharge`). It is about amplifying an INPUT uncertainty;
+(`prismcells.CrossingCharge`); a span two operands share enters `crossing`
+too, as its width bound (`docs/general-boolean-design.md` §3 A3). It is about
+amplifying an INPUT uncertainty;
 it does nothing about the cut's own rounding, which is why `δ_cut` is
 charged as well.
 
@@ -1147,11 +1155,10 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    per-op cell selection. Tests: two overlapping (not coincident-carrier)
    prisms cut/intersect correctly against the mesh path's own answer on the
    same pair (property test, volumes agree within the analytic path's
-   tighter bound). Two pieces of the general mechanism (§4.2) remain: a cell
-   reachable only through a coincident carrier is still unresolved (silent
-   mesh-path fallback, not a refusal), and G6's `Union` arm still excludes a
-   holed operand (its `Cut` tool arm stands regardless, §13) — a holed hub
-   unions with a tooth correctly once that lands.
+   tighter bound). A cell reachable only through a coincident carrier reads
+   it through `docs/general-boolean-design.md` §3 A3. G6's `Union` arm still
+   excludes a holed operand (its `Cut` tool arm stands regardless, §13) — a
+   holed hub unions with a tooth correctly once that lands.
 4. **PR4 — interference wiring + docs.** Public boolean calls use the analytic
    path when a pair qualifies, pinned by direct construction tests on admitted
    coplanar pairs. `interference.go`'s `measuredInterference` reaches the same
@@ -1199,8 +1206,10 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - The rotated-tooth case (§3.3): a placement built via `RotationAround` at
   `n = 17` correctly falls back to the mesh path (G3 miss, no error). The
   same model built via a hand-constructed `FromBasis` placement clears G3, and
-  its root arc on the hub circle meets that circle tangentially, which §3.4's
-  crossing charge cannot bound, so it falls back to the mesh path. The test
+  its root arc shares the hub circle as a span `Union` keeps inside its
+  result while the placement displaces the tooth, which no charge covers
+  (`docs/general-boolean-design.md` §3 A3), so it falls back to the mesh
+  path. The test
   must cover
   several counts from §3.3's inexact set rather than `n = 17` alone, since the
   inexact counts are the majority and a single-count test reads as though they

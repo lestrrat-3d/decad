@@ -167,12 +167,13 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 
 // TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot is the P1 tooth
 // of general-boolean §2: its root arc lies on the hub's own circle. Placed by
-// RotationAround through 60°, the arc and the hub circle meet tangentially
-// where the arc ends, so no positive sine bound exists there and A6 has no
-// charge for that crossing. The pair falls back to the mesh path instead of
-// refusing on the analytic one, and the error it reports is the mesh path's
-// own proximity refusal. Shown to fail with CrossingCharge's declining
-// crossing turned into an ErrUnsupported refusal.
+// RotationAround through 60°, the arc shares the hub circle as one carrier
+// (general-boolean §3 A3) while the placement displaces the tooth, and Union
+// keeps that shared arc inside its result, where the two true walls can part
+// and no charge covers the sliver between them. The pair falls back to the
+// mesh path instead of refusing on the analytic one, and the error it
+// reports is the mesh path's own proximity refusal. Shown to fail with that
+// fallback (prismSceneDelta.sharedSpansBounded) always admitting the span.
 func TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

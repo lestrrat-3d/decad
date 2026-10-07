@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -183,29 +184,46 @@ func TestVerifyLinkageDeclaredJointContact(t *testing.T) {
 		}
 		require.Equal(t, 12.0, report.Poses[0].Clearances[0].Gap.Value.Mag())
 	})
-	t.Run("a declared pair's touching or undecided outcome publishes nothing", func(t *testing.T) {
+	t.Run("a declared pair's touching outcome publishes nothing", func(t *testing.T) {
 		t.Parallel()
-		// A block resting on a slab's top face touches it, and a block sunk
-		// 1 mm into a slab across their shared face plane x = 0 overlaps it
-		// by a volume the read-only proof cannot measure. Each slides along
-		// +Y, keeping that plane shared. Declared, neither pair publishes a
-		// row or a finding.
-		for _, z0 := range []float64{0, -1} {
-			doc := decad.New()
-			block := boxBodyAtZ(t, doc, 0, -5, 10, 5, z0, 10)
-			slab := boxBodyAtZ(t, doc, 0, -20, 40, 20, -10, 10)
-			l := decad.NewLinkage()
-			slide, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*decad.Body{block})
-			require.NoError(t, err)
-			require.NoError(t, l.DeclareJointContact(block, slab))
-			report := verifyLinkage(t, doc, l, decad.Drive{{Link: slide, From: units.Millimeters(0), To: units.Millimeters(4)}})
-			require.Equal(t, decad.Sound, report.Status, "z0 = %v", z0)
-			require.Empty(t, report.Diagnostics)
-			require.Empty(t, report.Collisions)
-			for _, p := range report.Poses {
-				require.Empty(t, p.Clearances)
-				require.Empty(t, p.Interferences)
-			}
+		// A block resting on a slab's top face touches it, sharing the face
+		// plane x = 0 with it, and slides along +Y. Declared, the pair
+		// publishes no row and no finding.
+		doc := decad.New()
+		block := boxBodyAtZ(t, doc, 0, -5, 10, 5, 0, 10)
+		slab := boxBodyAtZ(t, doc, 0, -20, 40, 20, -10, 10)
+		l := decad.NewLinkage()
+		slide, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*decad.Body{block})
+		require.NoError(t, err)
+		require.NoError(t, l.DeclareJointContact(block, slab))
+		report := verifyLinkage(t, doc, l, decad.Drive{{Link: slide, From: units.Millimeters(0), To: units.Millimeters(4)}})
+		require.Equal(t, decad.Sound, report.Status)
+		require.Empty(t, report.Diagnostics)
+		require.Empty(t, report.Collisions)
+		for _, p := range report.Poses {
+			require.Empty(t, p.Clearances)
+			require.Empty(t, p.Interferences)
+		}
+	})
+	t.Run("a declared pair's proven overlap across a shared wall collides", func(t *testing.T) {
+		t.Parallel()
+		// The same block sunk 1 mm into the slab, still sharing the face
+		// plane x = 0. The two outlines' walls on x = 0 are one carrier
+		// (docs/general-boolean-design.md §3 A3), so the overlap is the
+		// exact 10 × 10 × 1 slab of the block and, declared or not, a proven
+		// overlap is a collision (docs/linkage-check-design.md §5.4).
+		doc := decad.New()
+		block := boxBodyAtZ(t, doc, 0, -5, 10, 5, -1, 10)
+		slab := boxBodyAtZ(t, doc, 0, -20, 40, 20, -10, 10)
+		l := decad.NewLinkage()
+		slide, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*decad.Body{block})
+		require.NoError(t, err)
+		require.NoError(t, l.DeclareJointContact(block, slab))
+		report := verifyLinkage(t, doc, l, decad.Drive{{Link: slide, From: units.Millimeters(0), To: units.Millimeters(4)}})
+		require.Equal(t, decad.Interfering, report.Status)
+		require.NotEmpty(t, report.Collisions)
+		for _, c := range report.Collisions {
+			decadtest.Measures(t, "sunk block overlap", c.Volume, units.CubicMillimeters(100))
 		}
 	})
 	t.Run("a declared sheet pair publishes nothing", func(t *testing.T) {

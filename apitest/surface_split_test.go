@@ -190,7 +190,12 @@ func TestSurfaceSplitOutsideRibbonDoesNotSeparate(t *testing.T) {
 	require.Equal(t, before, d.Bodies())
 }
 
-func TestSurfaceSplitCoincidentBoundaryRefusesInvalidCell(t *testing.T) {
+// TestSurfaceSplitCoincidentBoundarySeparatesNothing is a ribbon drawn
+// exactly along the block's bottom wall. sketch resolves the ribbon's line
+// and the wall as one carrier (docs/general-boolean-design.md §3 A3), so the
+// target's one cell is unchanged and the split is RS7: the tool separates
+// nothing.
+func TestSurfaceSplitCoincidentBoundarySeparatesNothing(t *testing.T) {
 	t.Parallel()
 	d := decad.New()
 	target := splitBlock(t, d)
@@ -210,7 +215,7 @@ func TestSurfaceSplitCoincidentBoundaryRefusesInvalidCell(t *testing.T) {
 	before := d.Bodies()
 	pieces, err := d.Split(t.Context(), target, tool)
 	require.Nil(t, pieces)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "unchanged target cell is invalid")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "tool separates no part of the target")
 	require.Equal(t, before, d.Bodies())
 }

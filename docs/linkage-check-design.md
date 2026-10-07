@@ -1157,9 +1157,10 @@ triangular prism `9.5·d²/(2·(−cos φ)·sin φ)` mm³, asserted within `1e-6
 no interval clear and raises a finding naming `(A, B)`. A declared pair's other outcomes are pinned on
 their own fixtures: the motion arm swinging away from a block `12` mm past its tip in its own layer,
 declared, publishes its gap row at every pose and nothing else, so a `15` mm `WithMinClearance` raises no
-finding and reads `AssessmentMet`; a block resting on a slab, and a
-block sunk `1` mm into one across a shared face plane, each sliding along that plane, publish no row and
-no finding; a block sliding inside a declared sheet raises no `DiagUnsupportedPairSheet`, which the
+finding and reads `AssessmentMet`; a block resting on a slab, sliding along a face plane it shares with
+the slab, publishes no row and no finding, while the same block sunk `1` mm into the slab is a proven
+`100` mm³ overlap, since the shared plane's walls are one carrier (`docs/general-boolean-design.md` §3
+A3), and so a `LinkCollision`; a block sliding inside a declared sheet raises no `DiagUnsupportedPairSheet`, which the
 undeclared pair raises at every pose. The leg that a declared pair is still proven for overlap is pinned
 separately: a
 `10` mm cube on a prismatic joint sliding `0 → 5` mm along `X`, sunk `1` mm into a static slab
