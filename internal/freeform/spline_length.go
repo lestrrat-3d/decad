@@ -134,7 +134,7 @@ var ErrFreeformLengthDegenerate = fmt.Errorf(
 //
 // Saturating arithmetic keeps the estimate an UPPER bound at every size, so an
 // oversized span refuses at FreeformWorkLimit instead of wrapping to a small
-// charge (spline_bezier.go).
+// charge (work_budget.go).
 func FreeformBracketCost(controls int) uint64 {
 	if controls < 2 {
 		return 0

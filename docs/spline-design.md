@@ -545,7 +545,7 @@ bound that already speaks for the rounding.
 
 Rational coefficient size grows with degree and span count. Charge every span,
 every coefficient product and every integral term against a `freeformWork`
-counter (`internal/freeform/spline_bezier.go`), and refuse as R7 when it runs out. NEVER widen to a
+counter (`internal/freeform/work_budget.go`), and refuse as R7 when it runs out. NEVER widen to a
 float path to stay inside the budget.
 
 The exact-rational counter is the RECORD's, not each segment's. One
