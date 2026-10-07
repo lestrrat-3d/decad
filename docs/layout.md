@@ -302,7 +302,7 @@ the rules leave to the byte budget.
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
-| `internal/stitchweld/` | Stitch vertex classes and free-edge pair grouping by exact held keys. See surface §6.2. |
+| `internal/stitchweld/` | Exact Stitch vertex classes and weld pairs. See surface §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
