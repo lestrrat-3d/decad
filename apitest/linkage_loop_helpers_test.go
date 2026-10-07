@@ -2,6 +2,8 @@ package apitest_test
 
 import (
 	"math"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -125,4 +127,35 @@ func buildFourBar(t *testing.T, doc *decad.Document, r, l, f float64) fourBar {
 // crankDrive turns the crank from 0 to to.
 func (fb fourBar) crankDrive(to units.Value) decad.Drive {
 	return decad.Drive{{Link: fb.crank, From: units.Degrees(0), To: to}}
+}
+
+// foldStatement matches the fold a refusal states in the driver's own terms
+// (docs/linkage-check-design.md §15.6): the driver's link, the interval its
+// value at the fold lies in, and the value it is said never to pass.
+var foldStatement = regexp.MustCompile(`link (\d+)'s joint turns back at a value in \[(-?[0-9.]+), (-?[0-9.]+)\] (rad|mm), and driven from the zero pose without reversing it never passes (-?[0-9.]+) (rad|mm)`)
+
+// requireFold asserts that msg states a fold of link's joint whose interval,
+// in unit, holds the closed-form fold value want and is under 1e-10 wide, and
+// that the joint is said never to pass the interval's end farther from 0.
+func requireFold(t *testing.T, msg string, link int, want float64, unit string) {
+	t.Helper()
+	m := foldStatement.FindStringSubmatch(msg)
+	require.NotNil(t, m, `the message states a fold: %s`, msg)
+	require.Equal(t, strconv.Itoa(link), m[1], `the fold names the driver's link`)
+	require.Equal(t, unit, m[4])
+	require.Equal(t, unit, m[6])
+	number := func(text string) float64 {
+		v, err := strconv.ParseFloat(text, 64)
+		require.NoError(t, err)
+		return v
+	}
+	lo, hi, limit := number(m[2]), number(m[3]), number(m[5])
+	require.LessOrEqual(t, lo, want, `the fold's interval holds the closed form`)
+	require.GreaterOrEqual(t, hi, want, `the fold's interval holds the closed form`)
+	require.Less(t, hi-lo, 1e-10)
+	outer := hi
+	if want < 0 {
+		outer = lo
+	}
+	require.Equal(t, outer, limit, `the joint is said never to pass the interval's outer end`)
 }

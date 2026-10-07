@@ -996,3 +996,4 @@
 5	0.09	TestXHPAgreesWithTheRationalOrientSign
 3	0.19	TestLoopAnchorPassed
 0	0.01	TestLinkageHullPointsInsideRestBox
+0	0.01	TestLoopFoldStatement

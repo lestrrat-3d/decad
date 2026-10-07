@@ -3,7 +3,7 @@
 How `Document.VerifyLinkage` answers "does any link of this mechanism hit a fixture, or another link, while
 the joints move?" without changing the document: where the capability sits (§1), the linkage vocabulary
 (§2), the entry point (§3), the report (§4), what a pose and an interval prove for a chain of joints (§5),
-the procedure (§6), coverage (§7), errors (§8), what is deferred and why (§9), cost (§10), required tests
+the procedure (§6), coverage (§7), errors (§8), what is deferred (§9), cost (§10), required tests
 (§11), increments (§12), settled points (§13), the joint-box check `Document.VerifyJointBox`, which
 proves a whole box of joint values clear cell by cell (§14), and closed loops — a four-bar, a
 slider-crank — whose dependent joints are read from `sketch`'s certified enclosure (§15), and the joint
@@ -976,26 +976,11 @@ pose, as motion §7 states for a mover.
 The constructor refusals of §2.1 and §2.2 apply at construction. An undecided pair, an unsupported payload,
 a sheet, a resolution floor reached — none is an error; each is a finding that reads `Suspect`.
 
-## 9. Deferred, and the condition for each
+## 9. Deferred
 
-A planar loop is §15, about any axis, with any number of slides on any parents, and driven at any of its
-joints; what the check declines by design is listed in §1, §13 and §14.10. What remains deferred waits on
-`sketch`.
-
-### 9.1 What waits on `sketch`
-
-Two answers are `sketch`'s to give, and `Enclose` does not give them today. The hand-off
-`.tmp/decad-handoff-enclose-turns-and-folds.md` in the `sketch` repository asks for both, with proof
-obligations. Each stays recorded here until `sketch` ships it and decad consumes it.
-
-- **Angles past `±64` rad.** `sketch` refuses a sine or cosine argument beyond `64` rad, so a loop whose
-  driver turns more than about ten turns from the zero pose reads undecided past that (§15.9), and so does
-  a box over such a range. The condition: `Enclose` reduces an angle by whole turns before its series,
-  with the claim unchanged.
-- **A certified fold.** `Enclose` proves nothing about a fold. A drive or a box that reaches one refuses
-  the cell holding it and reads undecided from there (§15.6, §16.3); decad never reports that the
-  mechanism cannot reach a driver value. The condition: `Enclose` answers a fold as a typed refusal that
-  carries the fold's enclosure and a certificate that the followed branch turns back inside it.
+Nothing. A planar loop is §15, about any axis, with any number of slides on any parents, driven at any of
+its joints, through any number of turns (§15.3), and into a fold that `sketch` proves (§15.6); what the
+check declines by design is listed in §1, §13 and §14.10.
 
 ## 10. Cost
 
@@ -2097,15 +2082,24 @@ they coincide on the whole overlap. decad consumes this consequence of `sketch`'
 nothing about the geometry itself; the hull of the point at `s_a`, the cell and the point at `s_b` is
 therefore an enclosure of the dependent's whole value set over `[s_a, s_b]` (§15.5).
 
-**Whole turns.** `Enclose` reads a driven angle modulo `2π`, its first piece within half a turn of the
-target at call time and each later piece within half a turn of the one before. Every call's target is the
-zero-pose reading, so a dependent that turns more than half a turn from the zero pose reads, in a fresh
-call, a representative a whole turn away from its predecessor's. Each enclosure therefore carries a whole
+**Whole turns.** `Enclose` reads a driven angle modulo `2π`, each piece within half a turn of the one
+before. Its first piece lies within half a turn of the target at call time, which is the zero-pose reading,
+or, in a call continued from a predecessor, of the predecessor's last piece. Each enclosure carries a whole
 turn count per dependent, its predecessor's plus the integer `m` that brings its first piece's reading
-next to its predecessor's last; a reading shifted by `m` turns that is proven disjoint from the
-predecessor's, for every `π` in its enclosure, disproves the continuation and refuses the ask. A
-dependent's value is then `2π·turns + reading − reading₀`, a turn and a radian interval, as a
-`MotionParam` carries an angle.
+next to its predecessor's last. While `sketch` seeds a continued call from its predecessor, as it does,
+`m` is `0` and a dependent's reading itself runs on past a turn (§15.10's many-turn drive); the count keeps
+the chain right should a call read a representative a whole turn away. A reading shifted by `m` turns that
+is proven disjoint from the predecessor's, for every `π` in its enclosure, disproves the continuation and
+refuses the ask. A dependent's value is then `2π·turns + reading − reading₀`, a turn and a radian interval,
+as a `MotionParam` carries an angle.
+
+**A driver over many turns.** `Enclose` reduces an angle past `64` rad by whole turns before its series,
+up to `2^40` rad, with its claim unchanged, so a revolute driver may run any number of turns from the zero
+pose. A cell over many turns needs pieces in proportion: the crank-rocker uses about `1400` a turn, and
+`sketch`'s default budget of `4096` pieces would refuse the decomposition's whole-drive cell past about
+three turns. Each ask whose range spans more than one turn of an angular driver therefore states
+`WithMaxPieces` of `4096` per whole turn it spans, rounded up (`pieceBudget`); every other ask keeps the
+default. The budget decides only how far `sketch` works before it refuses, never what it claims.
 
 ### 15.4 What a pose proves
 
@@ -2196,16 +2190,43 @@ refuses the call or claims less, never more:
 | `sketch` refusal | At `E0` | At any later ask |
 |---|---|---|
 | `ErrUnderconstrained`, `ErrRedundant` (DOF with the driver held — a loop whose Jacobian is singular at the zero pose, a loop of two links) | `ErrUnsupported`, wrapping the sketch error so `errors.Is` finds both | the ask is refused |
-| `ErrNotConverged`, `ErrNotCertified` (no configuration, the Krawczyk test did not close, a fold inside the range, the piece budget) | `ErrUnsupported` | the ask is refused |
+| `ErrNotConverged`, `ErrNotCertified` (no configuration, the Krawczyk test did not close, a fold `sketch` could not prove, the piece budget) | `ErrUnsupported` | the ask is refused |
+| `*FoldError`, wrapping `ErrNotCertified`: the branch is proven to turn back inside the range | `ErrUnsupported` | the ask is refused, and its refusal states the fold (below) |
 | `ErrUncertifiedConstraint`, `ErrForeignHandle`, `ErrNonFiniteGeometry` | an invariant failure: that error, no report | the same |
 | `ctx.Err()` | `ctx.Err()`, no report | the same; never cached |
 
 A refused point ask leaves its pose **unbuildable**, and a refused cell ask its interval undecided.
 `Enclose` never returns `ErrUncertifiedConstraint` on a scene decad built, because §15.2 uses certified
-kinds only; the row is the invariant's statement. `sketch` does not prove folds: the non-Grashof four-bar
-driven into its fold refuses the cell holding the fold, and every point past it is continued from that
-cell and refused with its cause, `ErrNotCertified`; decad reports both as the rows say, never as a proven
-fold.
+kinds only; the row is the invariant's statement.
+
+**A proven fold.** The non-Grashof four-bar driven into its fold (scene 9) cannot be carried past it: the
+branch from the zero pose reaches a largest crank angle and turns back. Where an ask's pieces stop short
+of its range's end there, `Enclose` returns `*sketch.FoldError`. It proves that the branch the ask
+continued is certified up to `Reached`, that past `Reached` it reaches a largest driving value inside
+`Fold`, and that no continuous path of solutions from the branch's solution at `Reached` that keeps the
+driving value at or above `Reached` passes `Fold.Hi`. Every chain of §15.3 starts at the zero pose and
+runs with `|q|` growing, so a drive from the zero pose that does not reverse never carries the driver past
+`Fold.Hi`, for every bar length and fixed position the scene's intervals hold (§15.2): the claim is about
+the document's loop. On `E0` it is `ErrUnsupported`, as any `ErrNotCertified` is.
+
+decad keeps such an ask refused, and every ask continued from it refused with the same cause, exactly as
+the second row does: the poses past the fold stay unbuildable, and the intervals and cells around them
+undecided. The refusal is restated in the driver's own terms (`loopFoldError`). The scene's driving value
+is `offset + |q|` (§15.2), so `|q|` at the fold lies in `[Fold.Lo − offset.Hi, Fold.Hi − offset.Lo]`. It is
+negated on the side where the driver's value is `−|q|`, and is in radians, or millimetres for a slide.
+Every finding, and every `PoseAt` error, that the refusal reaches names the loop, the driver's link and
+that interval, printed to twelve decimals and rounded outward. It says that a drive from the zero pose
+that does not reverse never carries the joint past the interval's outer end. A refusal of any other kind
+— the piece budget, a solve that does not converge, the anchor's positivity or the reach guard — keeps its
+own cause and states no fold.
+
+The report adds no outcome, status or code for a fold. Past it the drive names joint values the zero
+pose's branch never reaches, so the check's question, whether a link meets anything along the drive, has
+no answer there, clear or colliding. `IntervalUndecided` claims nothing and stays true, and the report
+reads `Suspect`. The finding carries the proven reason. Between `Reached` and `Fold.Hi` the branch exists
+but `sketch` does not certify it as a function of the driver, so that stretch is undecided for the
+ordinary reason, inside the same merged interval. Nothing past a fold is ever clear: no pose is built
+there, and no interval or cell there passes the gate (§15.5, §16.3).
 
 **An unbuildable pose is not evaluated, and an interval that ends at it is undecided.** §6's bisection is
 unchanged except where a pose it asks for is unbuildable: the interval is `IntervalUndecided` and is
@@ -2215,8 +2236,8 @@ merge into one `IntervalUndecided`. `Poses` therefore lists every pose the loop 
 `Intervals` still tile `[0, 1]`, and an interval may end at a parameter that has no pose — exactly one such
 interval ends at `1` when the drive leaves the certifiable range and does not return. Each undecided
 interval raises `DiagMotionUndecidedInterval` with `At` its `From`, and the `Message` of one the loop
-refused names the loop by its two closed links and carries `sketch`'s cause; no new `DiagnosticCode` is
-added. A refusal is never an error from `VerifyLinkage` after validation.
+refused names the loop by its two closed links and carries `sketch`'s cause, a proven fold stated as above;
+no new `DiagnosticCode` is added. A refusal is never an error from `VerifyLinkage` after validation.
 
 The errors added to §8, all before `ctx` is read:
 
@@ -2256,7 +2277,8 @@ rule and `Enclose` is deterministic on the same state. `PoseAt` is safe for conc
 schedule serialises the asks on each scene behind a mutex (`Enclose` must not run concurrently on one
 sketch), and the cache is read under it. An `at` outside `[0, 1]` is legal for a tree linkage as before and
 `ErrUnsupported` for a drive that moves a loop, since the chain is built over the drive; an `at` whose
-point ask is refused is `ErrUnsupported` wrapping `sketch`'s error. `Drive` and `Linkage` return what
+point ask is refused is `ErrUnsupported` wrapping `sketch`'s error — past a proven fold, the fold stated
+as §15.6 states it, so `errors.As` finds `*sketch.FoldError`. `Drive` and `Linkage` return what
 the schedule was built from, so a caller holding only a schedule finds a link's index in `Linkage().Links()`.
 
 `Linkage.PoseAt(d, at)` is unchanged for a tree linkage and for a drive that moves no loop. For a drive
@@ -2319,8 +2341,13 @@ reaches depth `d` everywhere asks about `d` times the full-range work. Measured:
 kernel cost per pose is §10's. A tilted loop costs the scene nothing measurable, but on a tilted
 mechanism the links' axis-aligned `Bounds()` boxes overlap along `n`, so the layer exclusion (§5.7)
 settles no pair and the pair kernel evaluates every one: scene 10's tilted scene 7 evaluates `113` poses
-in about `1.5` s, and its tilted scene 8 `254` poses in about `2` s. `sketch` refuses an angle target beyond `±64` rad, so a crank driven more
-than ten turns reads undecided past that; §15.10 does not test it.
+in about `1.5` s, and its tilted scene 8 `254` poses in about `2` s.
+
+A drive over many turns pays for its whole-drive cell, about `1400` pieces a turn on the crank-rocker
+(§15.3): the crank-rocker turned `0° → 3690°`, `10.25` turns, evaluates `2` poses in about `7` s and about
+`45` s under the race detector, nearly all of it that one cell of about `14500` pieces. A pose at depth `d`
+then costs about `d` times that, as above. A fold costs each cell that runs into it the certificate of
+§15.6, which adds about `15%` to scene 9's checks.
 
 ### 15.10 Required tests
 
@@ -2442,11 +2469,26 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
   `s_fold = 0.974528`; the last pose's `At` within one verdict floor below it — measured `997/1024 =
   0.973633`; the last interval is `IntervalUndecided` from the last pose to `1`, with no pose at `1`; the
   report's one diagnostic is that interval's `DiagMotionUndecidedInterval`, with `At` its `From` and a
-  `Message` naming the loop and `sketch`'s refusal; every earlier interval is `IntervalClear` (the layer
-  exclusion settles every pair, so the certificate is about the loop alone). Red when a pose past the fold
-  is built from certified values (a pose at `998/1024` is then published).
-- `Schedule.PoseAt(ctx, Scalar(1))` on that drive is `ErrUnsupported` and `errors.Is` finds
-  `sketch.ErrNotCertified`, the cause of the cell holding the fold; `Linkage.PoseAt` agrees.
+  `Message` naming the loop and stating the fold; every earlier interval is `IntervalClear` (the layer
+  exclusion settles every pair, so the certificate is about the loop alone). The fold's interval in that
+  `Message` holds `acos(0.04) = 1.530785652` rad, is under `1e-10` rad wide, and its upper end is the
+  value the joint is said never to pass. Red when a pose past the fold is built from certified values (a
+  pose at `998/1024` is then published), and when `Reached` stands for `Fold.Lo` (the interval is then
+  about `3e-8` rad wide).
+- `Schedule.PoseAt(ctx, Scalar(1))` on that drive is `ErrUnsupported`, `errors.Is` finds
+  `sketch.ErrNotCertified` and `errors.As` a `*sketch.FoldError`, the cause of the cell holding the fold,
+  and its message states the same interval; `Linkage.PoseAt` agrees.
+- Driven `0° → −90°`, on the mirrored side: the interval holds `−acos(0.04)`, and the joint is said never
+  to pass its lower end. Red when the side's sign is dropped.
+- Driven at the coupler `0° → 90°`, a driver below `Common` read from the crank's line through the probe's
+  offset (§15.2): the coupler's angle from the crank is `φ = φ₀ + q` with `φ₀ = acos(0.6) = 53.130102°`,
+  and the pin `B = e^{iθ2}·(50 + 60·e^{iφ})` lies on the follower's circle only while `|B| ≥ 50`, that is
+  `cos φ ≥ −0.6`. The fold is at `q = acos(−0.6) − acos(0.6) = 73.739795°`, which the interval holds. Red
+  when the offset is not subtracted (the interval then holds `126.869898°`).
+- Scene 8's slide-driven slider-crank driven `0 → 40` mm and `0 → −30` mm, into its two dead centres at
+  `x = 110` and `x = 50`: the interval, in millimetres, holds `110 − √5500 = 35.838015` and
+  `50 − √5500 = −24.161985`, the second on the half-turned side. Red when the unit is radians, and, for the
+  backward slide, when the side's sign is dropped.
 - The flat four-bar — ground `100`, crank `30`, coupler `40`, follower `30`, `A = (30, 0)` and
   `B = (70, 0)`, so coupler and follower lie along the ground line at the zero pose and the loop's
   Jacobian is singular there: `E0` refuses, and `VerifyLinkage`, `Schedule` and `PoseAt` return
@@ -2456,7 +2498,7 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
   leaves it at `0.561462`. Assert `Suspect`; poses at `0` and `1` both read every dependent `Value` within
   `1e-9` of `0`; no pose lies in `[0.438538, 0.561462]`; exactly one interval is not `IntervalClear`, an
   `IntervalUndecided` from at or below `0.438538` to at or above `0.561462`, merged across the unbuildable
-  poses between.
+  poses between, whose finding states the fold at `acos(0.04)`.
 
 **Scene 10 — the tilted loop.** Scenes 7 and 8 carried by the rotation that takes `X` to `(1, −1, 0)/√2`
 and `Z` to `(1, 1, 1)/√3` (`r3.FromFrame` of the frame `u = (1, −1, 0)`, `v = (1, 1, −2)`): each body built
@@ -2550,6 +2592,13 @@ every `k/16` of a schedule, with each non-dyadic boundary added.
   `[−10°, −1°]`, which exclude the zero pose, admit the crank `20° → 50°`. Red when the hull check is
   deleted (the first drive is admitted), and when a dependent is held to the `0` of an unlisted joint (the
   last is refused).
+- **Many turns.** The crank `0° → 3690°`, ten and a quarter turns, to `64.40` rad, past the `64` rad that
+  `sketch`'s series covers without reduction: `Sound` at the defaults, the two endpoints and one
+  `IntervalClear` interval; at `s = 1` the follower reads its closed form at `90°`, `3.0248°`, and the
+  coupler its turn from the crank, `θ3(90°) − θ3(0) − 3690° = −64.922380` rad, each within `1e-9` with a
+  positive `Bounds` below `1e-9`. Red when the piece budget is not scaled by the turns: the whole-drive cell
+  is refused and the report reads `Suspect`. The coupler's ten turns are `sketch`'s own readings, which a
+  continued enclosure carries on from its predecessor's, so §15.3's whole-turn shift is zero on this chain.
 
 **Standing tests.** Errors, one subtest per row of §15.1's and §15.6's tables: a nil link, the ground, one
 link twice, a link of another linkage, a non-finite center, a zero axis, a closure axis tilted by `1e-9`
@@ -2599,12 +2648,13 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still refused or `Suspect` after it |
 |---|---|---|
-| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
+| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to the sketch that adds `WithTargetRange` and `WithFixedBox` (#155); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
 | L5 (`linkage_loop.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | slides anywhere (L6) |
 | L6 (`linkage_loop.go`: anchored rails, `riderAt`, `readKappa`, `anchorsAhead`) | any number of slides on any parents, each slide driven or dependent (§15.1–§15.2); the trammel, the rocking block, the Scotch yoke and the anchor's positivity | — |
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
+| T1 (`go.mod` and `_gallery/go.mod` pinned to sketch `5a4d9762` (`certify Enclose past ten turns and through folds (#156)`); `linkage_loop.go`: `pieceBudget`, `loopFoldError`) | a driver over any number of turns, each ask's piece budget scaled by the turns it spans (§15.3); a proven fold stated in the driver's terms in every finding and `PoseAt` error it reaches (§15.6); the many-turn drive, scene 9's fold statements on a drive, a box, a mirrored side, a driver below `Common` and a slide | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
 scene 7's closed-form onset as its acceptance. The `_gallery` module films scene 7 with its wall
@@ -2613,7 +2663,7 @@ the chain `VerifyLinkage` poses every check through, and its test asserts every 
 the schedule's pose bit for bit, the follower's turn within `1e-9` rad of `θ4(θ2) − θ4(0)`, and the clip
 marking the report's first collision, `36/256`, from frame `36` on.
 
-### 15.12 Settled points, and what sketch #155 supplies
+### 15.12 Settled points, and what sketch #155 and #156 supply
 
 A loop is a tree plus a revolute closure about any axis, holding at most one prismatic joint, a child of
 the common link that rides its next pin along a fixed rail perpendicular to the axis; the drive names the
@@ -2627,8 +2677,9 @@ continued from a canonical predecessor rooted at the zero pose, carries a whole-
 and poses and intervals share one cached chain (§15.3, §15.7). A dependent's travel is the two-sided hull
 bound, which doubles where the joint turns back, and its reach is the decomposition's hull, held against
 every later read (§15.5). A refusal is a finding, except at the zero pose, where it is an error; an
-unbuildable pose is not evaluated and its interval is undecided (§15.6). A loop whose zero pose is
-singular — the flat four-bar, its coupler and follower along the ground line — is refused: its zero pose
+unbuildable pose is not evaluated and its interval is undecided (§15.6). A fold `sketch` proves is such a
+refusal, stated in the driver's own terms, and adds no outcome to the report (§15.6). A loop whose zero
+pose is singular — the flat four-bar, its coupler and follower along the ground line — is refused: its zero pose
 names no branch, so no chain could be rooted there, and the caller states the mechanism at a zero pose
 off the singularity. Any revolute joint of a loop may drive it, a driver below `Common` measured from its
 parent's line by the offset a probe scene reads (§15.2). A drive over a loop is cut into
@@ -2641,8 +2692,10 @@ cell (§16).
 for two additions to `Enclose`, and both landed in `821a4460`: `WithTargetRange`, a dimension's target as
 an interval with every claim holding for every target in it, which §15.2 states every bar with and which
 makes the zero-pose falsifier valid; and `WithFixedBox`, a fixed point as a box, which §15.2 states every
-fixed point of a tilted loop with, since its plane position is then irrational. Two later answers wait on
-`sketch`: angles past `±64` rad and a certified fold (§9.1).
+fixed point of a tilted loop with, since its plane position is then irrational.
+`.tmp/decad-handoff-enclose-turns-and-folds.md` asked for two more, and both landed in `5a4d9762`: the
+whole-turn reduction of an angle past `64` rad, which lets a driver run any number of turns (§15.3); and
+`*FoldError`, the proof that a branch turns back, which decad states as §15.6 says.
 
 ## 16. The joint box over a closed loop
 
@@ -2761,12 +2814,16 @@ budget, a reading past a dependent's reach (§15.5) — has no `δ_j`, so no pai
 is neither `CellClear` nor `CellBlocked` whatever its pairs prove, even when every pair was settled before
 any cell: the claim that the cell's configurations lie on the zero-pose branch is `sketch`'s, and it was
 refused. Such a cell is `CellColliding` when its centre collides and `CellUndecided` otherwise, with the
-loop's finding (§16.4). This is §15.5's interval gate over a cell.
+loop's finding (§16.4). This is §15.5's interval gate over a cell. A cell past a fold carries the
+refusal its asks inherit, and where that is the fold `sketch` proved, its finding states it as §15.6 does:
+the box's loop axis is a drive (§16.2), so the claim that no drive from the zero pose carries the driver
+past the fold holds over the box's driver range alike. The cell that holds the fold is gated by whichever
+refusal its asks meet first, the fold or the reach guard, and no cell at or past the fold is clear.
 
 **An unbuildable centre.** A cell whose centre's point ask is refused has no pose: it is `CellUndecided`,
 its `Center` is the zero `JointConfiguration`, it carries no row, and its finding names the loop and
-`sketch`'s cause. It counts in `CellsEvaluated` and against the budget, as the split that produced it
-spent them.
+`sketch`'s cause, a proven fold stated as §15.6 states it. It counts in `CellsEvaluated` and against the
+budget, as the split that produced it spent them.
 
 **Reach, exclusions, limits.** A dependent's reach `m_j` is the decomposition's hull (§15.5) and enters
 the balls, the swept-box reach and the layer exclusion as §14.3 states them for a held or varying joint;
@@ -2805,8 +2862,8 @@ guard, and the gate makes it undecided.
 ### 16.5 What is never claimed
 
 §14.5 and §15.6 hold, and in addition: nothing about a cell whose hull or centre `sketch` refused, beyond
-a collision proven at its centre; nothing about a dependent's value outside the hull its cell publishes;
-nothing about a branch of the loop other than the zero pose's (§15.3).
+a collision proven at its centre and a fold its finding states; nothing about a dependent's value outside
+the hull its cell publishes; nothing about a branch of the loop other than the zero pose's (§15.3).
 
 ### 16.6 Errors
 
@@ -2942,7 +2999,8 @@ boundary is then `4.9601`, and a clear leaf's bound exceeds its true gap.
 over `[0°, 90°]`, no static body, at the defaults. The loop folds at `s_fold = 0.974528`. Assert `Suspect`;
 no collision; every `CellClear` leaf's range ends at or below `s_fold`; the leaf holding `s_fold` is
 undecided and at the floor; every leaf past it is undecided with a zero `Center`, no row, and a finding
-whose `Cell` is set and whose `Message` names the loop and `sketch`'s refusal; some such leaf is wider
+whose `Cell` is set and whose `Message` names the loop and states the fold, its interval holding
+`acos(0.04)` and under `1e-10` rad wide; some such leaf is wider
 than the verdict floor; `CellsEvaluated` is below `64` (measured: `21` centres into `11` leaves). Red when
 the hull gate is dropped — the root's hull spans the fold, every pair is settled, and the root reads
 `CellClear` and the report `Sound` — and when a stuck cell splits to the floor: every leaf past the fold is
