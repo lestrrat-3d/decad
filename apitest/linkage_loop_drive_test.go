@@ -153,6 +153,32 @@ func TestVerifyLinkageLoopCrossingZero(t *testing.T) {
 	require.InDelta(t, 0, third.Values[2].Mag(), 1e-12, `the crossing is the zero pose`)
 }
 
+// TestVerifyLinkageLoopCrossingZeroMixed drives scene 7's crank from −30°, a
+// whole-turn fraction, to 1 rad, across 0 at the irrational
+// s₀ = (π/6)/(1 + π/6). The segment is cut at two rationals bracketing s₀:
+// the stretch below reads on the mirrored scene, the one above on the scene's
+// own side, each chain starting at its cut, and the straddle between the cuts
+// holds both sides' values near the zero pose. Every pose reads the closed
+// form at its own crank angle.
+//
+// Leg seen to fail when deleted: reading each stretch on its own side — the
+// stretch below s₀ then reads the follower at +30° where the crank stands at
+// −30°.
+func TestVerifyLinkageLoopCrossingZeroMixed(t *testing.T) {
+	t.Parallel()
+	fb, _ := buildRocker(t, false)
+	drive := decad.Drive{{Link: fb.crank, From: units.Degrees(-30), To: units.Radians(1)}}
+	report := verifyLinkage(t, fb.doc, fb.linkage, drive, decad.WithResolution(units.Scalar(1.0/16)))
+	require.Equal(t, decad.Sound, report.Status)
+	th2 := func(s float64) float64 { return -math.Pi/6 + s*(1+math.Pi/6) }
+	requireRockerValues(t, reportPoses(report), th2)
+	s0 := (math.Pi / 6) / (1 + math.Pi/6)
+	poses := schedulePoses(t, fb.linkage, drive, sixteenths(s0)...)
+	requireRockerValues(t, poses, th2)
+	require.InDelta(t, 14.583238, poses[0].Values[2].Mag()*180/math.Pi, 1e-6)
+	require.InDelta(t, 0, poses[len(poses)-1].Values[2].Mag(), 1e-12, `the float nearest s₀ stands at the zero pose`)
+}
+
 // TestVerifyLinkageLoopSlideCrossingZero drives TestVerifyLinkageLoopSlideDriven's
 // slider-crank at its slide from −5 to +5 mm, across 0 at s = 1/2: the
 // backward stretch on the half-turned scene, the forward one on the scene's

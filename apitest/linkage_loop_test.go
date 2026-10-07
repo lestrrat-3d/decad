@@ -453,8 +453,7 @@ func TestVerifyLinkageLoopFold(t *testing.T) {
 }
 
 // TestLinkageLoopRefusals is one subtest per row of
-// docs/linkage-check-design.md §15.1's and §15.6's tables, and per refusal L1
-// holds back for a later increment.
+// docs/linkage-check-design.md §15.1's and §15.6's tables.
 func TestLinkageLoopRefusals(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
@@ -490,7 +489,7 @@ func TestLinkageLoopRefusals(t *testing.T) {
 			_, err := fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), r3.Vec{})
 			return err
 		}, decad.ErrDegenerate},
-		{"an axis tilted 1e-9 from Z", func(_ *testing.T, fb fourBar) error {
+		{"a closure axis tilted 1e-9 from the loop's revolutes", func(_ *testing.T, fb fourBar) error {
 			_, err := fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), r3.NewVec(1e-9, 0, 1))
 			return err
 		}, decad.ErrUnsupported},
@@ -522,8 +521,8 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		{"a slide along the closure axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
 			return sliderCrankOpen(t, doc, l, r3.NewVec(0, 0, 1))
 		}},
-		{"a slide off every coordinate axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
-			return sliderCrankOpen(t, doc, l, r3.NewVec(1, 1e-12, 0))
+		{"a slide not exactly perpendicular to the closure axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
+			return sliderCrankOpen(t, doc, l, r3.NewVec(1, 0, 1e-12))
 		}},
 		{"a slide under a link that is not the common one", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
 			crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8)})
@@ -577,9 +576,6 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		}, decad.ErrDegenerate},
 		{"the coupler stated", func(fb fourBar) decad.Drive {
 			return decad.Drive{{Link: fb.couplerLk, From: units.Degrees(0), To: units.Degrees(10)}}
-		}, decad.ErrUnsupported},
-		{"a driver crossing 0 between waypoints in mixed terms", func(fb fourBar) decad.Drive {
-			return decad.Drive{{Link: fb.crank, From: units.Degrees(-10), To: units.Radians(0.2)}}
 		}, decad.ErrUnsupported},
 	}
 	for _, row := range driveRows {
