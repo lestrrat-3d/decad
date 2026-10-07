@@ -80,11 +80,11 @@ func TestTessellateDefaultsToVerifyAll(t *testing.T) {
 func TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	// The second box is placed up to z = 4, so the analytic paths' shared-axis
-	// gate declines the pair and the result is a FACETED body — the
+	// The second box crosses the first's outline at a different height, so the
+	// analytic paths decline the pair and the result is a FACETED body — the
 	// restatement this test is about.
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := translated(t, boxBody(t, doc, 5, 5, 15, 15, 8), 0, 0, 4)
+	b := boxBodyAtZ(t, doc, 5, 5, 15, 15, 4, 8)
 	fused, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	_, faceted := fused.Edges()[0].Curve().(decad.FacetedCurve)

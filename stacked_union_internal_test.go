@@ -87,8 +87,9 @@ func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 	require.Equal(t, stackedNestNone, m.nest)
 	require.True(t, m.split, "the interface scene reports a Partial edge where the boss crosses the outline")
 
+	// prism-boolean §4.4: an unresolved topology is a silent miss.
 	_, ok, err := tryStackedUnion(t.Context(), plate, crossing)
-	require.ErrorIs(t, err, ErrUnsupported)
+	require.NoError(t, err)
 	require.False(t, ok)
 }
 

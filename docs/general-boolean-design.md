@@ -119,11 +119,12 @@ prism-boolean §4.2 already runs: the smaller region's outer must reproduce
 whole as a hole of the larger region's cell, in which case the exposed
 record is the larger region with that hole, and the smaller region is the
 material on both sides. A boss whose footprint crosses the plate's outline
-at the interface (the match finds `Partial` edges) is refused with
-`ErrUnsupported`: the exposed floor would need the per-cell classification
-with a split boundary, which A6 admits later. The same refusal covers a
-rooted boss crossing the outline, whose merged slab meets the plate's slab
-along partly coincident walls. Stacked §2.2's I5 reads, for
+at the interface (the match finds `Partial` edges) is an unresolved topology
+in prism-boolean §4.4's sense and takes the mesh path with no error: the
+exposed floor would need the per-cell classification with a split boundary,
+which A6 admits later. The mesh path builds a rooted crossing boss as a
+`Faceted` body and refuses one standing on the plate's top as a coplanar
+contact, as it did before this class. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
 exposure records the match derives, and the implementation PR changes that
@@ -443,7 +444,9 @@ to two records); §10 records it as an open question.
   analytic result, not a looser gate.
 - **Fall back to the mesh path after a scene has been built and refused**
   (prism-boolean §3.4's point of no return): a refusal past the gate is an
-  error the caller branches on.
+  error the caller branches on. A topology the scene leaves unresolved is not
+  a refusal: prism-boolean §4.4 sends it to the mesh path, and A1's crossing
+  interface is one.
 
 ## 9. Test plan
 
@@ -458,9 +461,10 @@ are relations, never literals.
   extruded 20) gives three slabs and the same volume. Two equal boxes stacked
   edge-to-edge give `Exact` volume and I5's equal-outer column of one wall
   per side.
-- **A1 refusal**: a boss whose footprint crosses the plate's outline is
-  `ErrUnsupported` (not a mesh fallback), with the test asserting the
-  interface match reports a `Partial` edge.
+- **A1 fallback**: a rooted boss whose footprint crosses the plate's outline
+  takes the mesh path, a `Faceted` result whose volume bound contains the
+  closed form, with the test asserting the interface match reports a
+  `Partial` edge.
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
   cut by a same-plane Ø3 cylinder inside its leg (M5) builds analytically,
   `Approximate`, volume within its bound of `1750 − π·1.5²·10`; the same

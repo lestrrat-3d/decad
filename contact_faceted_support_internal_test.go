@@ -9,23 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// facetedUnionPartner is the box [5, 15]² × [4, 12], drawn on XY and placed
-// up by 4. Its placement misses the analytic union's shared-axis gate, so its
-// union with an unplaced box keeps the mesh path and yields a faceted result.
-func facetedUnionPartner(t *testing.T, doc *Document) *Body {
-	t.Helper()
-	box := internalBoxBody(t, doc, 5, 5, 15, 15, 8)
-	lift, err := r3.Translation(r3.NewVec(0, 0, 4))
-	require.NoError(t, err)
-	placed, err := box.Placed(t.Context(), lift)
-	require.NoError(t, err)
-	return placed
-}
-
 func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := facetedUnionPartner(t, doc)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	mesh, err := union.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
@@ -161,7 +149,8 @@ func TestFacetedAxisSupportRefusesTwoLowestFaces(t *testing.T) {
 func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := facetedUnionPartner(t, doc)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	tool := internalOffsetBox(t, doc, 2, 2, 4, 4, -2,
@@ -184,7 +173,8 @@ func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 func TestContactPairRealFacetedUnionOnFloor(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := facetedUnionPartner(t, doc)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
@@ -244,7 +234,8 @@ func TestContactPairRealFacetedUnionOnFloor(t *testing.T) {
 func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := facetedUnionPartner(t, doc)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,

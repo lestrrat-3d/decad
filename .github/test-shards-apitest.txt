@@ -1321,7 +1321,7 @@
 5	0.01	TestShellCupWallContextCancellationDuringOffset
 5	0.03	TestShellTubeInwardBox
 5	0.01	TestSolidBodiesReportSolidKindAndNoFreeBoundary
-5	0.03	TestStackedUnionBossCrossingPlateOutlineRefuses
+5	0.03	TestStackedUnionCrossingBossTakesMeshPath
 5	0.05	TestStackedUnionBossOnPlate
 5	0.01	TestStackedUnionEqualBoxesStacked
 5	0.05	TestStackedUnionFlangeOnShaft

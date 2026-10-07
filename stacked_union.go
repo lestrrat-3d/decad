@@ -27,9 +27,10 @@ import (
 // on the two operands' outer prisms, G4 and G6 (hole-free) on every slab
 // region, prism-boolean's trimmed-circular refusal, and the interval relation
 // `z0_b' <= z1_a && z0_a <= z1_b'` over big.Rat. Past that point an
-// unresolved topology (a disjoint overlap, a cell the match cannot find)
-// still falls back to the mesh path, as prism-boolean §4.4 states, while an
-// interface whose footprints cross (a split boundary) is ErrUnsupported.
+// unresolved topology still falls back to the mesh path, as prism-boolean
+// §4.4 states: a disjoint overlap, a cell the match cannot find, and an
+// interface whose footprints cross (a split boundary), whose exposed face
+// would need a per-cell classification this evaluator does not run.
 
 // stackedUnionOperand is one operand of the stacked union read as slabs: a
 // prism is one slab over its own interval; a stacked prism is its own slabs.
@@ -358,8 +359,8 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord
 // A's frame. Equal outers expose nothing. Otherwise the clean-nesting match
 // must find the narrower outer whole as a hole of the wider region's cell:
 // the wider side alone holds the exposed record, the wider region with the
-// narrower outer reversed as its hole. A split boundary at the interface is
-// ErrUnsupported; any other miss is unresolved and falls back.
+// narrower outer reversed as its hole. Any other outcome, a split boundary
+// included, is unresolved and falls back to the mesh path.
 func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper ProfileRecord) (prismSlabInterface, bool, error) {
 	same, err := loopRecordsEqual(st.budget, lower.Outer, upper.Outer)
 	if err != nil {
@@ -393,11 +394,8 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 		}
 		return prismSlabInterface{upperExposed: exposed}, true, nil
 	}
-	if m.split {
-		return prismSlabInterface{}, false, fmt.Errorf(
-			`%w: one union operand's footprint crosses the other's outline at a slab interface; the exposed face there needs a per-cell classification of a split boundary, which this evaluator does not run`,
-			ErrUnsupported)
-	}
+	// A crossing (m.split) or any other unmatched pair: prism-boolean §4.4's
+	// unresolved topology, a silent fallback.
 	return prismSlabInterface{}, false, nil
 }
 

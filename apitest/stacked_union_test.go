@@ -164,15 +164,36 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 	requireMeshWatertightAt(t, chained, 0.05)
 }
 
-func TestStackedUnionBossCrossingPlateOutlineRefuses(t *testing.T) {
+// A boss whose footprint crosses the plate's outline makes an interface the
+// clean-nesting match cannot resolve, so the union takes the mesh path.
+func TestStackedUnionCrossingBossTakesMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
-	boss := circleBodyAtZ(t, doc, 18, 5, 10, 15)
+	// Rooted at z = 5, centre 2 mm inside the plate's x = 20 wall.
+	boss := circleBodyAtZ(t, doc, 18, 5, 5, 20)
 
-	_, err := decad.Union(t.Context(), plate, boss)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "crosses the other's outline at a slab interface")
+	got, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	require.True(t, anyFaceIsFaceted(got))
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	// The plate, the boss above it, and the boss's circular segment past
+	// x = 20 over z = 5..10: r²·acos(d/r) − d·√(r² − d²) with r = 5, d = 2.
+	segment := 25*math.Acos(0.4) - 2*math.Sqrt(21)
+	want := 16000 + 25*15*math.Pi + 5*segment
+	require.Positive(t, boundMM3(t, volume))
+	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-want), boundMM3(t, volume))
+
+	// Standing on the plate's top, the same crossing boss shares the plate's
+	// top plane, which the mesh path refuses as a coplanar contact.
+	doc = decad.New()
+	plate = boxBody(t, doc, -20, -20, 20, 20, 10)
+	boss = circleBodyAtZ(t, doc, 18, 5, 10, 15)
+	_, err = decad.Union(t.Context(), plate, boss)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 	require.Len(t, doc.Bodies(), 2, "a refused union consumes neither operand")
 }
 
