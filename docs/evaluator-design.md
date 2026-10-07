@@ -866,7 +866,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   interference design.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6, answered outright on this evaluator's own payloads
-  (`survey.go`/`internal/survey2d/survey2d.go`): prism/revolve wall reduces exactly to the 2D
+  (`survey.go`, `internal/survey2d/`, `internal/revolvesurvey/`): prism/revolve wall reduces exactly to the 2D
   spanning-disk problem (a prism's profile with the height as the vertical
   fit; a revolve's meridian section, mirrored for a full turn). `Verify`
   passes one shared work counter through the prism/revolve survey; candidate

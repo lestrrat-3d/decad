@@ -400,6 +400,11 @@ func (ax axisFrame) classify(w survey2d.SegmentWalk) wallKind {
 	return wallCone
 }
 
+// IsAxis reports whether a meridian walk sweeps no face.
+func (ax axisFrame) IsAxis(w survey2d.SegmentWalk) bool {
+	return ax.classify(w) == wallAxis
+}
+
 // resolveAxisSide orients the axis so the recorded region lies on its
 // non-negative-ρ side, enforcing the §6 half-plane and contact rules: a
 // region with boundary on both sides of the axis is rejected, as is a curve
