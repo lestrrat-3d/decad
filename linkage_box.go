@@ -72,10 +72,15 @@ type JointConfiguration struct {
 // (ErrDegenerate); a value of the wrong Kind for its joint (ErrUnitKind); a
 // non-finite value (ErrNotFinite); a value outside its joint's declared
 // limits (ErrDegenerate, naming the link); and a pose r3 cannot represent
-// (ErrNotFinite).
+// (ErrNotFinite). A linkage with a loop is ErrUnsupported: a dependent
+// joint's value is not the caller's to state (docs/linkage-check-design.md
+// §15.8).
 func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error) {
 	if l == nil {
 		return JointConfiguration{}, fmt.Errorf(`%w: a nil linkage has no link to pose`, ErrDegenerate)
+	}
+	if len(l.loops) > 0 {
+		return JointConfiguration{}, errLoopNotStated()
 	}
 	if len(values) != len(l.links) {
 		return JointConfiguration{}, fmt.Errorf(`%w: a configuration names one value per link, %d here, got %d`, ErrDegenerate, len(l.links), len(values))
@@ -248,7 +253,8 @@ type JointBoxCollision struct {
 // body a declared joint contact names, MUST be a live body of d. A nil
 // context, document or linkage, a linkage with no link, a box with no varying
 // joint, a range with Min > Max, a link named twice, a range end outside a
-// joint's declared limits and a budget below 1 are ErrDegenerate. Validation
+// joint's declared limits and a budget below 1 are ErrDegenerate; a linkage
+// with a loop is ErrUnsupported (docs/linkage-check-design.md §15.8). Validation
 // precedes cancellation; after it a canceled context returns ctx.Err() and no
 // report.
 func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox, opts ...JointBoxOption) (*JointBoxReport, error) {
@@ -260,6 +266,9 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	}
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
+	}
+	if len(l.loops) > 0 {
+		return nil, errLoopNotStated()
 	}
 	spec, axes, err := l.resolveBox(box)
 	if err != nil {
@@ -1071,4 +1080,10 @@ func formatCell(c JointCell) string {
 		parts[k] = fmt.Sprintf("[%s, %s]", c.Min[k], c.Max[k])
 	}
 	return strings.Join(parts, " × ")
+}
+
+// errLoopNotStated is the refusal of a looped linkage where every joint's
+// value is the caller's to state (docs/linkage-check-design.md §15.8).
+func errLoopNotStated() error {
+	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from the drive, so it cannot be posed or boxed joint by joint`, ErrUnsupported)
 }

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -407,8 +408,27 @@ type motionGroupPose struct {
 	ideals   []motionbound.IdealPose
 	stretch  float64
 	value    units.Value
+	bound    units.Value // value's proven half-width; zero for a stated joint
 	fixed    bool
 	constant bool
+}
+
+// motionIntervalGate is a driver that can refuse an interval before any pair
+// is read: a linkage drive whose loop cannot be enclosed over it
+// (docs/linkage-check-design.md §15.6). intervalGate returns the refusal's
+// message, empty when the interval may be certified; a refused interval is
+// IntervalUndecided whatever its pairs prove.
+type motionIntervalGate interface {
+	intervalGate(a, b *motionPose) string
+}
+
+// errPoseUnbuildable is what a driver's posesAt returns, wrapped, for a pose
+// it cannot build because a loop cannot be enclosed there
+// (docs/linkage-check-design.md §15.6): the pose is not evaluated, and every
+// interval ending at it is IntervalUndecided.
+type errPoseUnbuildable interface {
+	error
+	unbuildable()
 }
 
 type motionMover struct {
@@ -494,6 +514,9 @@ type motionPose struct {
 	pairs      [][]motionPairPose
 	findings   []Diagnostic // this pose's findings, in report order
 	collisions []Collision
+	// unbuildable is why the driver could not build the pose; nil for a pose
+	// it built. An unbuildable pose evaluates no pair.
+	unbuildable error
 }
 
 // motionPlaced is one mover's transient placement at one pose, with the pose
@@ -684,6 +707,7 @@ func maxRat(a, b *big.Rat) *big.Rat {
 type motionSpan struct {
 	outcome   IntervalOutcome
 	clearance *Measurement
+	note      string // why a driver refused the interval, appended to its finding
 }
 
 // refine evaluates the two endpoints and bisects (§6), returning the poses in
@@ -738,6 +762,11 @@ func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int 
 	allClear := true
 	smallest := -1
 	for k, span := range spans {
+		if poses[k].unbuildable != nil && poses[k+1].unbuildable != nil {
+			// Never bisected: no pose between two unbuildable ones is asked.
+			allClear = false
+			continue
+		}
 		startHits, endHits := len(poses[k].collisions) > 0, len(poses[k+1].collisions) > 0
 		onset := span.outcome == IntervalColliding && startHits != endHits
 		if (span.outcome == IntervalUndecided || onset) && r.wide(poses[k], poses[k+1]) {
@@ -806,7 +835,12 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	param := r.dom.fromP.Lerp(r.dom.toP, f)
 	groups, err := r.drive.posesAt(f, at, param)
 	if err != nil {
-		return nil, err
+		var ub errPoseUnbuildable
+		if !errors.As(err, &ub) {
+			return nil, err
+		}
+		return &motionPose{f: f, param: param, where: at, unbuildable: err,
+			result: PoseResult{At: at}, pairs: make([][]motionPairPose, len(r.movers))}, nil
 	}
 	mp := r.newPose(groups, at, at)
 	mp.f, mp.param = f, param
@@ -1190,6 +1224,18 @@ func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res 
 // envelope's minimum over the interval, (lo_a + lo_b − τ)/2, is rounded down
 // to the float the Clearance publishes.
 func (r *motionRun) intervalVerdict(a, b *motionPose) motionSpan {
+	for _, p := range []*motionPose{a, b} {
+		if p.unbuildable != nil {
+			return motionSpan{outcome: IntervalUndecided, note: p.unbuildable.Error()}
+		}
+	}
+	if !r.collides(a) && !r.collides(b) {
+		if gate, ok := r.drive.(motionIntervalGate); ok {
+			if note := gate.intervalGate(a, b); note != "" {
+				return motionSpan{outcome: IntervalUndecided, note: note}
+			}
+		}
+	}
 	outcome, clearance := r.intervalOutcome(a, b)
 	return motionSpan{outcome: outcome, clearance: clearance}
 }
@@ -1326,8 +1372,17 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConc
 	violated := anyViolated(poses)
 	allClear, met := true, true
 	var lowest *Measurement
-	for k, span := range spans {
-		a, b := poses[k], poses[k+1]
+	for k := 0; k < len(spans); k++ {
+		span := spans[k]
+		a := poses[k]
+		// An unbuildable pose inside the path is no interval end: the
+		// intervals on its two sides merge into one undecided interval
+		// (docs/linkage-check-design.md §15.6). The path's own ends stay.
+		for poses[k+1].unbuildable != nil && k+2 < len(poses) {
+			k++
+			span = motionSpan{outcome: IntervalUndecided, note: firstNote(span.note, spans[k].note)}
+		}
+		b := poses[k+1]
 		interval := MotionInterval{From: a.result.At, To: b.result.At, Outcome: span.outcome, Clearance: span.clearance}
 		c.intervals = append(c.intervals, interval)
 		if span.outcome != IntervalClear {
@@ -1338,11 +1393,15 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConc
 		}
 		switch {
 		case span.outcome == IntervalUndecided:
+			msg := fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.result.At, b.result.At)
+			if span.note != "" {
+				msg += ": " + span.note
+			}
 			c.diagnostics = append(c.diagnostics, withAt(Diagnostic{
 				Code:    DiagMotionUndecidedInterval,
 				Status:  Suspect,
 				Reading: ReadingNone,
-				Message: fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.result.At, b.result.At),
+				Message: msg,
 			}, a.result.At))
 		case span.outcome == IntervalClear && r.cfg.minimumMM != nil && !r.meetsMinimum(span.clearance):
 			met = false
@@ -1383,6 +1442,16 @@ func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionConc
 	}
 	c.status = worstStatus(c.diagnostics)
 	return c
+}
+
+// firstNote is the first non-empty note.
+func firstNote(notes ...string) string {
+	for _, n := range notes {
+		if n != "" {
+			return n
+		}
+	}
+	return ""
 }
 
 // worstStatus is verification §6's worst-wins aggregate over a report's

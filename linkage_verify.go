@@ -83,8 +83,17 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
 		cfg.readingP = &reading
 	}
-	bounds, ok := readLinkBounds(spec, frames)
-	if !ok {
+	var bounds []linkBound
+	if len(spec.loops) == 0 {
+		if bounds, ok = readLinkBounds(spec, frames); !ok {
+			return nil, linkageBoundsError()
+		}
+	} else if err := spec.prepareLoops(ctx, cfg.resolutionP.Base); err != nil {
+		// docs/linkage-check-design.md §15.7: a driven loop's scene, its zero
+		// pose and its certifiable set, down to the verdict floor, before
+		// any pose; a dependent's reach enters the bounds.
+		return nil, err
+	} else if bounds, ok = readLinkBounds(spec, frames); !ok {
 		return nil, linkageBoundsError()
 	}
 	if err := ctx.Err(); err != nil {
@@ -204,20 +213,48 @@ type linkageDriver struct {
 // function Linkage.PoseAt calls — and its ideal pose over exact rationals.
 // Every ideal linear part is a product of exactly orthogonal rotations, so
 // the stretch base is 1.
+//
+// A drive that moves a loop builds each dependent at its certified
+// enclosure's midpoint and its ideal pose over the whole enclosure
+// (docs/linkage-check-design.md §15.4); a pose its loop cannot be enclosed at
+// is unbuildable.
 func (dr *linkageDriver) posesAt(f *big.Rat, _ units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
-	values, poses, err := dr.spec.posesAt(f)
-	if err != nil {
+	var (
+		values, bounds []units.Value
+		poses          []r3.Transform
+		ideals         []motionbound.IdealPose
+		err            error
+	)
+	if len(dr.spec.loops) == 0 {
+		if values, poses, err = dr.spec.posesAt(f); err != nil {
+			return nil, err
+		}
+		bounds = zeroBounds(values)
+		ideals = idealPosesAt(dr.spec, dr.frames, param.Base)
+	} else if values, bounds, poses, ideals, err = dr.spec.loopPosesAt(dr.run.ctx, dr.frames, f); err != nil {
 		return nil, err
 	}
-	ideals := idealPosesAt(dr.spec, dr.frames, param.Base)
 	out := make([]motionGroupPose, len(poses))
 	for k := range poses {
 		out[k] = motionGroupPose{
-			pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k],
+			pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k], bound: bounds[k],
 			fixed: dr.standing[k] == linkFixed, constant: dr.standing[k] == linkConstant,
 		}
 	}
 	return out, nil
+}
+
+// intervalGate reads every driven loop's dependents over the interval
+// between two poses, for travel to consume (docs/linkage-check-design.md
+// §15.5); an interval a loop cannot be enclosed over is refused with sketch's
+// cause.
+func (dr *linkageDriver) intervalGate(a, b *motionPose) string {
+	for _, ld := range dr.spec.loops {
+		if _, err := ld.intervalSpans(dr.run.ctx, a.f, b.f); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
 }
 
 // travel is the chain travel bound of docs/linkage-check-design.md §5.2 for
@@ -258,9 +295,15 @@ func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, 
 		Status:            c.status,
 	}
 	for _, pose := range poses {
-		lp := LinkagePose{At: pose.result.At, Values: make([]units.Value, len(pose.groups)), Poses: make([]r3.Transform, len(pose.groups))}
+		if pose.unbuildable != nil {
+			// docs/linkage-check-design.md §15.6: a pose the loop could not
+			// be enclosed at is not evaluated and not published.
+			continue
+		}
+		n := len(pose.groups)
+		lp := LinkagePose{At: pose.result.At, Values: make([]units.Value, n), Bounds: make([]units.Value, n), Poses: make([]r3.Transform, n)}
 		for g, gp := range pose.groups {
-			lp.Values[g], lp.Poses[g] = gp.value, gp.pose
+			lp.Values[g], lp.Bounds[g], lp.Poses[g] = gp.value, gp.bound, gp.pose
 		}
 		report.Poses = append(report.Poses, LinkagePoseResult{
 			Pose:          lp,

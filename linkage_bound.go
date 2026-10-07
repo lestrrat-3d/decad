@@ -72,6 +72,9 @@ func linkageFrames(spec *linkageSpec) ([]motionbound.MotionFrame, bool) {
 // exactly for a length, and 0 for an unlisted joint. q(s) is linear within
 // each segment, so every value the drive visits lies within it.
 func jointReach(jt linkJoint) *big.Rat {
+	if jt.dep != nil {
+		return new(big.Rat).Set(jt.depReach)
+	}
 	zero := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat)}
 	var out *big.Rat
 	for _, p := range jt.points {
@@ -292,20 +295,32 @@ func ownJointBall(jt linkJoint, f motionbound.MotionFrame, lo, hi motionbound.Ra
 // bound on how far any point of link k moves, relative to the links at and
 // above its ancestor L, while the fraction runs from a to b — the telescoping
 // sum over the joints on its path strictly below L of ρ_{ik}·|Δq_i| for a
-// revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan. below is the position on the path of the
-// first joint below L: 0 when L is the ground.
+// revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan, or for a
+// loop's dependent by dependentSpan over the readings intervalGate took; nil
+// when a dependent's readings are missing. below is the position on the path
+// of the first joint below L: 0 when L is the ground.
 func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *big.Rat {
-	return pathTravel(b, below, func(joint int) *big.Rat { return jointSpan(spec.joints[joint], sa, sb) })
+	return pathTravel(b, below, func(joint int) *big.Rat {
+		jt := spec.joints[joint]
+		if jt.dep == nil {
+			return jointSpan(jt, sa, sb)
+		}
+		return jt.dep.span(joint, sa, sb)
+	})
 }
 
 // pathTravel is the telescoping sum of docs/linkage-check-design.md §5.2 over
 // the joints on b's path from position below on: ρ_{ik}·span(i) for a
 // revolute joint i and span(i) for a prismatic one, span(i) a proven upper
-// bound on joint i's travel. span MUST return a fresh rational.
+// bound on joint i's travel. span MUST return a fresh rational, or nil when
+// it has no bound, and the sum is then nil.
 func pathTravel(b linkBound, below int, span func(joint int) *big.Rat) *big.Rat {
 	sum := new(big.Rat)
 	for n := below; n < len(b.path); n++ {
 		term := span(b.path[n])
+		if term == nil {
+			return nil
+		}
 		if b.rho[n] != nil {
 			term.Mul(term, b.rho[n])
 		}
@@ -376,6 +391,9 @@ const (
 // heldAtZeroJoint reports whether a joint's value is exactly 0 at every s:
 // every waypoint is 0.
 func heldAtZeroJoint(jt linkJoint) bool {
+	if jt.dep != nil {
+		return false
+	}
 	for _, p := range jt.points {
 		if p.Turn.Sign() != 0 || p.Base.Sign() != 0 {
 			return false
@@ -394,7 +412,7 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 			if !heldAtZeroJoint(jt) {
 				zero = false
 			}
-			if jt.listed && jt.moves() {
+			if (jt.listed || jt.dep != nil) && jt.moves() {
 				held = false
 			}
 		}

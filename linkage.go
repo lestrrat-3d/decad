@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"slices"
@@ -33,6 +34,7 @@ type Linkage struct {
 	links    []*Link
 	member   map[*Body]*Link // the link every listed body belongs to
 	contacts []DiagnosticPair
+	loops    []*LinkageLoop // in Close order (linkage_loop.go)
 }
 
 // NewLinkage returns a linkage holding the ground link alone.
@@ -351,8 +353,15 @@ type JointSweep struct {
 
 // LinkagePose is every link's pose at one parameter value.
 type LinkagePose struct {
-	At     units.Value    // the Dimensionless fraction s
-	Values []units.Value  // each link's joint value at s, in Linkage.Links() order
+	At units.Value // the Dimensionless fraction s
+	// Values is each link's joint value at s, in Linkage.Links() order: the
+	// stated value, or for a loop's dependent joint the float midpoint of its
+	// certified enclosure (docs/linkage-check-design.md §15.4).
+	Values []units.Value
+	// Bounds is each value's proven half-width, in its Kind: Values[k] ±
+	// Bounds[k] holds the exact joint value. It is zero for every joint whose
+	// value the drive states.
+	Bounds []units.Value
 	Poses  []r3.Transform // each link's world pose at s, in the same order
 }
 
@@ -378,6 +387,12 @@ type LinkagePose struct {
 // (ErrNotFinite). An at outside [0, 1] is legal: PoseAt takes no range, the
 // first segment's line extends below 0 and the last's above 1, and a drive
 // whose every sweep holds is legal here.
+//
+// A drive that moves a loop (docs/linkage-check-design.md §15) is answered by
+// a one-shot Schedule under context.Background(), with Schedule.PoseAt's
+// refusals: its loop rows, an at outside [0, 1], and an at the loop cannot be
+// enclosed at (ErrUnsupported). A renderer that wants one pose per frame
+// calls Schedule once instead.
 func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	spec, err := l.resolveDrive(d)
 	if err != nil {
@@ -390,11 +405,13 @@ func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	if !ok {
 		return LinkagePose{}, fmt.Errorf(`%w: the pose fraction is not representable`, ErrNotFinite)
 	}
-	values, poses, err := spec.posesAt(p.Base)
-	if err != nil {
-		return LinkagePose{}, err
+	if len(spec.loops) > 0 {
+		ctx := context.Background()
+		if err := spec.prepareLoops(ctx, big.NewRat(1, linkageScheduleFloor)); err != nil {
+			return LinkagePose{}, err
+		}
 	}
-	return LinkagePose{At: at, Values: values, Poses: poses}, nil
+	return spec.poseAt(context.Background(), at, p.Base)
 }
 
 // LinkageReport is what VerifyLinkage returns (docs/linkage-check-design.md
@@ -460,7 +477,8 @@ type LinkCollision struct {
 // linkageSpec is a linkage and a drive read into one joint per link.
 type linkageSpec struct {
 	linkage *Linkage
-	joints  []linkJoint // Linkage.Links() order
+	joints  []linkJoint  // Linkage.Links() order
+	loops   []*loopDrive // every loop the drive moves (linkage_loop.go)
 }
 
 // linkJoint is one link's joint under a drive: its axis or direction, and
@@ -479,6 +497,12 @@ type linkJoint struct {
 	// points their exact denotations; an unlisted joint holds 0 at two.
 	values []units.Value
 	points []motionbound.MotionParam
+	// dep is the driven loop whose dependent this joint is, nil for a joint
+	// whose value the drive states (docs/linkage-check-design.md §15); its
+	// values and points are then a hold at 0 nobody reads, and depReach is
+	// its proven reach over the certified drive.
+	dep      *loopDrive
+	depReach *big.Rat
 }
 
 // resolveDrive validates d against l (docs/linkage-check-design.md §2.4).
@@ -546,6 +570,9 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 				ErrDegenerate, k, v, w, jt.limits.Min, jt.limits.Max)
 		}
 	}
+	if err := l.resolveLoops(spec); err != nil {
+		return nil, err
+	}
 	return spec, nil
 }
 
@@ -579,8 +606,11 @@ func (jt *linkJoint) holdAtZero(kind units.Kind, unit units.Unit) {
 }
 
 // moves reports whether the joint's schedule changes its value anywhere: some
-// waypoint differs from the first.
+// waypoint differs from the first. A driven loop's dependent moves.
 func (jt linkJoint) moves() bool {
+	if jt.dep != nil {
+		return true
+	}
 	for _, v := range jt.values[1:] {
 		if !sameMotionValue(jt.values[0], v) {
 			return true

@@ -43,7 +43,7 @@ the rules leave to the byte budget.
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
-| `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`: links, joints, drives, boxes, contacts, the chain travel bound. |
+| `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`: links, joints, drives, boxes, contacts, loops, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
@@ -200,6 +200,7 @@ the rules leave to the byte budget.
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See `docs/linkage-check-design.md`. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
+| `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | The chain travel bound. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
@@ -211,8 +212,8 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See the file's doc comment and `docs/evaluator-design.md` §9. |
-| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar or offset-plane prisms, ahead of the mesh path. See the file's doc comment and `docs/prism-boolean-design.md`. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See `docs/evaluator-design.md` §9. |
+| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar or offset-plane prisms, ahead of the mesh path. See `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match: the whole-loop tag-map search resolving a clean bore/nested pair. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_boolean_blind.go` | Admits blind and spanning Cuts through sketch's whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Builds and audits stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
@@ -220,7 +221,7 @@ the rules leave to the byte budget.
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
-| `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, measurements integrated exactly with composed bounds. See the file's doc comment and `docs/evaluator-design.md` §9. |
+| `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, measurements integrated exactly with composed bounds. See `docs/evaluator-design.md` §9. |
 
 ### Output
 
