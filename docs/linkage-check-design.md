@@ -235,8 +235,10 @@ built, so a renderer above and the verifier below evaluate the same transform fr
 `TransformTrack` for `kinetograph` is one `PoseAt` call per frame: `kinetograph.LinkageTrack`, which
 `Scene.AddLinkage` puts on one driven node per link under the rig's root, reading the drive fraction from a
 `Dimensionless` channel. The `_gallery` module's `linkage` subcommand films §11's scene 1 that way, built as
-a pinned arm on a base plate (slot-shaped links, a post, an elbow pin, a stop block in place of the wall),
-and its test asserts each node's transform equals `PoseAt`'s bit for bit.
+a pinned arm on a base plate (slot-shaped links, a post, an elbow pin, a stop block in place of the wall).
+It drives the arm out to the end of the stretch from `s = 0` that the report proves clear and back, and its
+test asserts that no frame's fraction passes that end and that each node's transform equals `PoseAt`'s at
+the frame's fraction bit for bit.
 
 `PoseAt` refuses a drive naming a link of another linkage or a link twice (`ErrDegenerate`), a sweep whose
 `From`, `To` or `Via` value has the wrong `Kind` for its joint (`ErrUnitKind`) or is non-finite
@@ -2663,7 +2665,8 @@ pinned mechanism (slot-shaped bars, posts, pins and a stop block) and driven a f
 (`go run . linkage -scene rocker`): each link's node is driven by a track that reads `Schedule.PoseAt`,
 the chain `VerifyLinkage` poses every check through, and its test asserts every node's transform equal to
 the schedule's pose bit for bit, the follower's turn within `1e-9` rad of `θ4(θ2) − θ4(0)`, and the clip
-marking the report's first collision, `120/256`, from frame `120` on.
+turning back at `118/256`, the end of the stretch the report proves clear, short of its first collision at
+`120/256`.
 
 ### 15.12 Settled points, and what sketch #155 and #156 supply
 

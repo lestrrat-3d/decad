@@ -39,16 +39,15 @@ type motionClip struct {
 // motionClips are the GIFs `go run . motion` writes, in README order. Each
 // caption in the README states only what the scene's tests assert:
 //
-//   - arm: TestLinkageClipMarksFirstCollision (linkage_clip_test.go).
-//   - rocker: TestLinkageLoopClipMarksFirstCollision and
+//   - arm: TestLinkageClipTurnsAtTheStop (linkage_clip_test.go).
+//   - rocker: TestLinkageLoopClipTurnsAtTheStop and
 //     TestLinkageLoopClipMatchesSchedule (linkage_loop_clip_test.go).
 //   - tumble: TestTumbleTimeline (dynamics_clip_test.go).
 //   - parts-bin: TestPartsBinTimeline (dynamics_clip_test.go).
 //
-// The linkage clips run at 64 fps, so frame i shows the drive fraction
-// i/256. Each GIF keeps every fourth frame, so each keeps the frame of its
-// first collision, 92 for the arm and 120 for the rocker;
-// TestMotionClipsKeepTheMarkedFrame checks this.
+// The linkage clips run at 64 fps and each GIF keeps every fourth frame, so
+// each keeps the first and last frames of the hold at the turnaround;
+// TestMotionClipsKeepTheTurnaround checks this.
 var motionClips = []motionClip{
 	{name: "arm", build: linkageMotion(foldingArmScene, 0), stride: 4},
 	{name: "rocker", build: linkageMotion(crankRockerScene, 0), stride: 4},
@@ -69,8 +68,9 @@ func motionFOV(camera *kinetograph.Camera, degrees float64) {
 }
 
 // linkageMotion builds a linkage scene, runs VerifyLinkage over its drive and
-// films it as the linkage subcommand does, the colliding body turning coral
-// from the frame of the first proven collision. fov is passed to motionFOV.
+// films it as the linkage subcommand does: out to the turnaround the check
+// proves clear and back, the first collision's bodies flashing coral at the
+// turnaround. fov is passed to motionFOV.
 func linkageMotion(build func(context.Context) (*linkageScene, error),
 	fov float64) func(context.Context, int, int) (*kinetograph.Clip, render.Style, error) {
 	return func(ctx context.Context, width, height int) (*kinetograph.Clip, render.Style, error) {
@@ -83,7 +83,12 @@ func linkageMotion(build func(context.Context) (*linkageScene, error),
 		if err != nil {
 			return nil, render.Style{}, err
 		}
-		return scene.clip(report, linkageClipLength, width, height)
+		turn, err := turnaroundOf(report)
+		if err != nil {
+			return nil, render.Style{}, err
+		}
+		clip, style, _, err := scene.clip(turn, linkageClipLength, width, height)
+		return clip, style, err
 	}
 }
 
