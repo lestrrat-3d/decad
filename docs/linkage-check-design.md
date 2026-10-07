@@ -1374,7 +1374,10 @@ so one reading serves every cell. Since `|q_i − m_i| ≤ (b_i − a_i)/2`,
 bounds the travel of every point of the link from the centre to any configuration of the cell. For a pair
 the sum runs, as in §5.2, over the joints strictly below the two links' lowest common ancestor on each
 branch, each body with its own `ρ`; a (link body, static) pair sums every joint on the body's path. A held
-joint has `span_i = 0` and contributes nothing; its value still enters the balls, as a held sweep's does.
+joint has `span_i = 0` and contributes nothing; its value still enters the balls, as a held sweep's does. A
+body symmetric about its own joint's axis (§5.2) takes its relative path without that joint, in `τ_half`,
+in the blocked allowance and in the projection bound's expansion and remainder alike
+(`linkageDriver.pathOf`).
 
 **The centre certificate.** With `lo_m` the proven lower end of the pair's gap at the centre after `η`
 (§5.1), the 1-Lipschitz fact of motion §5.2 gives `gap(q) ≥ lo_m − τ_half` for every `q` in `C`: the
@@ -1636,6 +1639,17 @@ leaves.
 two arms' outlines at its centre, and `CellsEvaluated` below the budget (measured: `283` centres into
 `142` leaves); red when the partner's expansion is dropped from a link-link pair.
 
+**The symmetric body in a box.** §11's disc of radius `5` beside a wall `7` mm away, spinning over
+`[0°, 90°]` on a revolute about `Z` under a carriage that slides `[0, 20]` mm along `Y`, the wall long
+enough that the gap is `7` mm throughout the box. On its own axis the box reads `Sound` from its root alone,
+one `CellClear` leaf whose bound is the exact `7`; red when the cell form charges the disc's own joint (the
+root's projection bound then charges the box corner's sweep and the box splits along the spin). `1e-9` mm
+off its axis the rule keeps the joint: the root does not certify and the box splits along the spin, every
+clear leaf's bound at or below `7` (red, the root certifying, when the rule's centre test is skipped).
+Tumbling about `X` through its centre against a wall along `Y`, the disc keeps its joint: every clear
+leaf's bound sits at or below the gap `12 − 5·(cos θ + sin θ)` at its least over the leaf (red when the
+direction test is skipped).
+
 **The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
 so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
 overlap `100·20/sin θ ≈ 2071` mm³ against a boom area of `2200` mm², so the blocked certificate closes
@@ -1679,6 +1693,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | P1 (`linkage_bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `motion_verify.go`: `motionDriver` gains an optional projection bound per pair and interval, `intervalOutcome` takes the larger of the two bounds, `singleMotion` supplies none so `VerifyMotion` is bit-identical; `linkage_verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14 and the internal tests of §5.8; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
 | P1b (`linkage_bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage_verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the segment term's internal test; the measured counts re-recorded | as after P1 |
 | S1 (`linkage_bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage_verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
+| S2 (`linkage_box.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
