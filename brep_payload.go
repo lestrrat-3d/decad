@@ -207,99 +207,13 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 	return bp, nil
 }
 
-// brepJoinLoop makes every junction of a loop one point. A boolean's cut
-// fragment records its carrier and a narrowed range, and the two fragments
-// meeting at a cut walk to that cut at two different floats — a line's lerp
-// and a circle's cosine — so the brep's pairing by record identity (§4.2)
-// would not meet them. Each junction takes one of the two: a line's point,
-// whose fixed coordinate the lerp keeps exact, else the lexicographically
-// smaller, so a loop and its reversal choose alike. Every segment is then
-// rewritten between its two junctions: a line whole, a circular fragment as
-// an arc pinned there about its recorded centre. Both walked points sit
-// within the record's own section displacement of the crossing they denote,
-// plus their walk's rounding, so the rewrite moves the boundary by at most
-// that rounding beyond the record's displacement; allow is its largest
-// value, zero when every junction already met. A whole closed segment is left
-// alone.
-func brepJoinLoop(loop LoopRecord) (LoopRecord, float64, error) {
-	n := len(loop.Segments)
-	if n < 2 {
-		return loop, 0, nil
-	}
-	for _, seg := range loop.Segments {
-		switch seg.(type) {
-		case LineSeg, CircleSeg, ArcSeg:
-		default:
-			// A free-form loop has no brep face (falsifyBrepPayload refuses it),
-			// so it has nothing to join.
-			return loop, 0, nil
-		}
-	}
-	walks := make([]survey2d.SegmentWalk, n)
-	for i, seg := range loop.Segments {
-		w, err := walkOf(seg, nil)
-		if err != nil {
-			return LoopRecord{}, 0, err
-		}
-		walks[i] = w
-	}
-	joins := make([]Point2, n)
-	allow := 0.0
-	met := true
-	for i := range n {
-		j := (i + 1) % n
-		end := Point2{U: walks[i].EndU, V: walks[i].EndV}
-		start := Point2{U: walks[j].StartU, V: walks[j].StartV}
-		if end == start {
-			joins[i] = end
-			continue
-		}
-		met = false
-		pick, bound := end, walks[i].EndBound
-		switch {
-		case walks[j].IsLine() && !walks[i].IsLine():
-			pick, bound = start, walks[j].StartBound
-		case walks[i].IsLine() && !walks[j].IsLine():
-		case start.U < end.U || (start.U == end.U && start.V < end.V):
-			pick, bound = start, walks[j].StartBound
-		}
-		joins[i] = pick
-		allow = math.Max(allow, proofbound.WalkEndBoundAllow(bound))
-	}
-	if met {
-		return loop, 0, nil
-	}
-	out := LoopRecord{Segments: make([]CurveSegment, n)}
-	for i, w := range walks {
-		from, to := joins[(i+n-1)%n], joins[i]
-		if w.IsLine() {
-			out.Segments[i] = LineSeg{Start: from, End: to, TStart: 0, TEnd: 1}
-			continue
-		}
-		out.Segments[i] = arcSegment(Point2{U: w.CU, V: w.CV}, from, to, w.Th1 > w.Th0)
-	}
-	return out, allow, nil
-}
-
-// brepJoinProfile is brepJoinLoop over every loop of a region.
+// brepJoinProfile adapts a region to brepgeom.JoinProfile.
 func brepJoinProfile(p ProfileRecord) (ProfileRecord, float64, error) {
-	outer, allow, err := brepJoinLoop(p.Outer)
-	if err != nil {
-		return ProfileRecord{}, 0, err
-	}
-	out := ProfileRecord{Outer: outer}
-	for _, hole := range p.Holes {
-		joined, a, err := brepJoinLoop(hole)
-		if err != nil {
-			return ProfileRecord{}, 0, err
-		}
-		out.Holes = append(out.Holes, joined)
-		allow = math.Max(allow, a)
-	}
-	return out, allow, nil
+	joined, allow, err := brepgeom.JoinProfile(brepgeom.Profile{Outer: p.Outer, Holes: p.Holes})
+	return ProfileRecord{Outer: joined.Outer, Holes: joined.Holes}, allow, err
 }
 
-// brepJoinStacked is brepJoinLoop over every region and exposed record of a
+// brepJoinStacked joins every region and exposed record of a
 // stack, charging the largest allow to its section displacement. Equal loops
 // join alike, so the columns stackedColumns derives are unchanged.
 func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
@@ -372,68 +286,18 @@ func brepEmbeds(faces []brepFace) ([]brepEmbed, error) {
 // or repeated, or a segment other than a line, a circle or an arc (§3 B2). It
 // runs before topology and before chording, and repairs nothing.
 func falsifyBrepPayload(ctx context.Context, bp brepPayload) error {
-	if len(bp.faces) == 0 {
-		return fmt.Errorf(`%w: a brep payload holds no face`, ErrDegenerate)
-	}
-	roles := make(map[string]struct{}, len(bp.faces))
-	finite := func(values ...float64) bool {
-		for _, v := range values {
-			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return false
-			}
+	return brepgeom.ValidateFaces(ctx, len(bp.faces), func(i int) brepgeom.FaceRecord {
+		f := bp.faces[i]
+		var region *brepgeom.Profile
+		if f.region != nil {
+			region = &brepgeom.Profile{Outer: f.region.Outer, Holes: f.region.Holes}
 		}
-		return true
-	}
-	for fi, f := range bp.faces {
-		if err := ctx.Err(); err != nil {
-			return err
+		return brepgeom.FaceRecord{
+			Frame: f.frame, Region: region, Wall: f.wall,
+			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
+			Delta: f.delta, Role: f.role,
 		}
-		if !f.frame.IsValid() {
-			return fmt.Errorf(`%w: brep face %d has no valid frame`, ErrDegenerate, fi)
-		}
-		if f.planar() == (f.wall != nil) {
-			return fmt.Errorf(`%w: brep face %d must carry exactly one of a region and a wall`, ErrDegenerate, fi)
-		}
-		if !finite(f.z0, f.z1, f.z0Delta, f.z1Delta, f.delta) || f.z0Delta < 0 || f.z1Delta < 0 || f.delta < 0 {
-			return fmt.Errorf(`%w: brep face %d has a non-finite level or a negative displacement`, ErrDegenerate, fi)
-		}
-		if f.role == "" {
-			return fmt.Errorf(`%w: brep face %d has no role`, ErrDegenerate, fi)
-		}
-		if _, seen := roles[f.role]; seen {
-			return fmt.Errorf(`%w: brep role %q names two faces`, ErrDegenerate, f.role)
-		}
-		roles[f.role] = struct{}{}
-		var segs []CurveSegment
-		if f.planar() {
-			if f.z0 != f.z1 || f.z0Delta != f.z1Delta {
-				return fmt.Errorf(`%w: planar brep face %d has two levels`, ErrDegenerate, fi)
-			}
-			for _, loop := range append([]LoopRecord{f.region.Outer}, f.region.Holes...) {
-				if len(loop.Segments) == 0 {
-					return fmt.Errorf(`%w: planar brep face %d has an empty loop`, ErrDegenerate, fi)
-				}
-				segs = append(segs, loop.Segments...)
-			}
-		} else {
-			if !(f.z0 < f.z1) {
-				return fmt.Errorf(`%w: swept brep face %d has an empty interval`, ErrDegenerate, fi)
-			}
-			segs = []CurveSegment{f.wall}
-		}
-		for _, seg := range segs {
-			seg, err := normalizeSegment(seg)
-			if err != nil {
-				return err
-			}
-			switch seg.(type) {
-			case LineSeg, CircleSeg, ArcSeg:
-			default:
-				return fmt.Errorf(`%w: a brep face carries lines, circles and arcs only, not %T`, ErrUnsupported, seg)
-			}
-		}
-	}
-	return nil
+	})
 }
 
 // brepPart names which boundary piece of its face an edge use is.

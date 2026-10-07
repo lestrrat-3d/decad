@@ -398,7 +398,7 @@ body, as every payload does.
 
 A boolean's cut fragment records its carrier and a narrowed range, so two
 fragments meeting at a cut walk to it at two different floats. The face view
-joins each such junction first (`brepJoinLoop`): it takes the line's walked
+joins each such junction first (`brepgeom.JoinLoop`): it takes the line's walked
 point, whose fixed coordinate the lerp keeps exact, else the lexicographically
 smaller one, so a loop and its reversal choose alike, and rewrites each
 segment between its two junctions, a circular fragment as an arc pinned
