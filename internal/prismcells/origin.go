@@ -17,7 +17,10 @@ import (
 // walk of the entity runs backwards relative to the entity's own natural
 // parameterization — the fixed fact buildPrismScene computes once at creation
 // time that Classify later compares against a returned edge's own
-// Reversed flag, never a geometric test.
+// Reversed flag, never a geometric test. For an operand B whose relative map
+// is a reflection, it is read off the re-wound record buildPrismScene builds
+// B from (docs/general-boolean-design.md §3 A4), whose loops keep the
+// "outer CCW, holes CW" convention the comparison assumes.
 type Origin struct {
 	IsB              bool
 	Hole             int
