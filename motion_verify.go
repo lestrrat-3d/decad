@@ -805,7 +805,7 @@ func (m *singleMotion) remainder(i int, h *big.Rat) *big.Rat {
 		return nil
 	}
 	if f.Kind == motionbound.MotionBetween {
-		theta := paramUpper(f.Theta)
+		theta := motionbound.ParamUpper(f.Theta)
 		w.Mul(w, theta.Mul(theta, theta))
 	}
 	rem := new(big.Rat).Mul(h, h)
@@ -844,7 +844,7 @@ func (m *singleMotion) moverPoints(pose *motionPose, i int, hull bool) (cornerBo
 		case motionbound.MotionRevolute:
 			v = ivCross(unit, motionbound.IvVecSub(x, centre))
 		default:
-			theta := proofbound.IntervalOwned(paramLower(f.Theta), paramUpper(f.Theta))
+			theta := proofbound.IntervalOwned(motionbound.ParamLower(f.Theta), motionbound.ParamUpper(f.Theta))
 			turn := ivCross(unit, motionbound.IvVecSub(x, centre))
 			for d := range 3 {
 				v[d] = proofbound.IntervalAdd(proofbound.IntervalMul(turn[d], theta), proofbound.IntervalScale(unit[d], f.Slide))

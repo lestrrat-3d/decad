@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -678,146 +679,21 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 	return nil
 }
 
-// driverSubs cuts a loop driver's schedule into sub-segments
-// (docs/linkage-check-design.md §15.8): each segment once, or twice at the
-// fraction where its driver value crosses 0. That fraction is exact when both
-// of the segment's waypoints are whole turns, or both radians or lengths.
-// Between waypoints stated in mixed terms it depends on π, and the segment is
-// cut three times instead: up to a rational cut below the crossing, the
-// straddle holding it, and on from a rational cut above it (crossingCuts).
-// A sub-segment holding the driver at 0 is read on any side a moving one
-// uses.
+// driverSubs adapts the exact schedule cuts to the root loop scene.
 func driverSubs(jt linkJoint) ([]loopSub, error) {
-	n := len(jt.points) - 1
-	signs := make([]int, len(jt.values))
-	for w, v := range jt.values {
-		c, ok := paramCompare(v, units.New(0, v.Unit()))
-		if !ok {
-			return nil, fmt.Errorf(`%w: the sign of link %d's waypoint %s cannot be decided`, ErrUnsupported, jt.link.index, v)
-		}
-		signs[w] = c
+	subs, err := linkagebound.DriverSubsegments(jt.points, jt.values, jt.link.index)
+	if err != nil {
+		return nil, err
 	}
-	side := func(sign int) int {
-		if sign < 0 {
-			return 1
-		}
-		return 0
-	}
-	var subs []loopSub
-	add := func(sub loopSub) {
-		sub.idx = len(subs)
-		subs = append(subs, sub)
-	}
-	for j := range n {
-		a, b := big.NewRat(int64(j), int64(n)), big.NewRat(int64(j+1), int64(n))
-		pa, pb := jt.points[j], jt.points[j+1]
-		sa, sb := signs[j], signs[j+1]
-		switch {
-		case pa.Turn.Cmp(pb.Turn) == 0 && pa.Base.Cmp(pb.Base) == 0:
-			add(loopSub{lo: a, hi: b, near: a, nearZero: sa == 0, held: true, side: side(sa)})
-		case sa*sb < 0:
-			var num, den *big.Rat
-			switch {
-			case pa.Turn.Sign() == 0 && pb.Turn.Sign() == 0:
-				num, den = pa.Base, new(big.Rat).Sub(pa.Base, pb.Base)
-			case pa.Base.Sign() == 0 && pb.Base.Sign() == 0:
-				num, den = pa.Turn, new(big.Rat).Sub(pa.Turn, pb.Turn)
-			default:
-				lo, hi, ok := crossingCuts(pa, pb, a, b, sa)
-				if !ok {
-					return nil, fmt.Errorf(`%w: link %d's driver crosses 0 between waypoints %s and %s stated in mixed terms, where the crossing cannot be bracketed`,
-						ErrUnsupported, jt.link.index, jt.values[j], jt.values[j+1])
-				}
-				add(loopSub{lo: a, hi: lo, near: lo, side: side(sa)})
-				add(loopSub{lo: new(big.Rat).Set(lo), hi: hi, near: new(big.Rat).Set(lo), side: side(sa), straddle: true})
-				add(loopSub{lo: new(big.Rat).Set(hi), hi: b, near: new(big.Rat).Set(hi), side: side(sb)})
-				continue
-			}
-			t := new(big.Rat).Quo(num, den)
-			s0 := new(big.Rat).Sub(b, a)
-			s0.Mul(s0, t).Add(s0, a)
-			add(loopSub{lo: a, hi: s0, near: s0, nearZero: true, side: side(sa)})
-			add(loopSub{lo: new(big.Rat).Set(s0), hi: b, near: new(big.Rat).Set(s0), nearZero: true, side: side(sb)})
-		default:
-			sign := sa + sb
-			sub := loopSub{lo: a, hi: b, near: a, side: side(sign)}
-			// The near end has the smaller |q|: the smaller value of a
-			// positive stretch, the larger of a negative one.
-			ends, ok := paramCompare(jt.values[j], jt.values[j+1])
-			if !ok {
-				return nil, fmt.Errorf(`%w: link %d's waypoints %s and %s cannot be ordered`, ErrUnsupported, jt.link.index, jt.values[j], jt.values[j+1])
-			}
-			if ends*sign > 0 {
-				sub.near = b
-			}
-			sub.nearZero = (sub.near == a && sa == 0) || (sub.near == b && sb == 0)
-			add(sub)
+	out := make([]loopSub, len(subs))
+	for i, sub := range subs {
+		out[i] = loopSub{
+			idx: sub.Idx, lo: sub.Lo, hi: sub.Hi, near: sub.Near,
+			nearZero: sub.NearZero, held: sub.Held, side: sub.Side,
+			straddle: sub.Straddle,
 		}
 	}
-	// A stretch that holds 0 needs a zero pose, which every side's E0 is;
-	// it takes a side some moving stretch uses.
-	used := -1
-	for _, sub := range subs {
-		if !sub.held || !sub.nearZero {
-			used = sub.side
-			break
-		}
-	}
-	for n := range subs {
-		if subs[n].held && subs[n].nearZero && used >= 0 {
-			subs[n].side = used
-		}
-	}
-	return subs, nil
-}
-
-// crossingCuts brackets the irrational fraction where a driver crosses 0
-// between waypoints pa at a and pb at b stated in mixed terms: two rationals
-// lo < hi inside (a, b), the driver's value at lo proven to have pa's sign sa
-// and at hi pb's, for every π in its enclosure. The crossing's local
-// fraction q_a/(q_a − q_b) is read at both ends of π's enclosure, the two
-// readings widened outward by their gap, and the signs then checked exactly;
-// ok is false when a check fails.
-func crossingCuts(pa, pb motionbound.MotionParam, a, b *big.Rat, sa int) (*big.Rat, *big.Rat, bool) {
-	twoPi := proofbound.TwoPiInterval()
-	var ts []*big.Rat
-	for _, tp := range []*big.Rat{twoPi.Lo, twoPi.Hi} {
-		qa := new(big.Rat).Mul(pa.Turn, tp)
-		qa.Add(qa, pa.Base)
-		qb := new(big.Rat).Mul(pb.Turn, tp)
-		qb.Add(qb, pb.Base)
-		den := new(big.Rat).Sub(qa, qb)
-		if den.Sign() == 0 {
-			return nil, nil, false
-		}
-		ts = append(ts, new(big.Rat).Quo(qa, den))
-	}
-	tlo, thi := ts[0], ts[1]
-	if tlo.Cmp(thi) > 0 {
-		tlo, thi = thi, tlo
-	}
-	gap := new(big.Rat).Sub(thi, tlo)
-	tlo = new(big.Rat).Sub(tlo, gap)
-	thi = new(big.Rat).Add(thi, gap)
-	at := func(t *big.Rat) *big.Rat {
-		out := new(big.Rat).Sub(b, a)
-		return out.Add(out.Mul(out, t), a)
-	}
-	lo, hi := at(tlo), at(thi)
-	if lo.Cmp(a) <= 0 || hi.Cmp(b) >= 0 || lo.Cmp(hi) >= 0 {
-		return nil, nil, false
-	}
-	signed := func(t *big.Rat, want int) bool {
-		q := pa.Lerp(pb, t)
-		if want < 0 {
-			return paramUpper(q).Sign() < 0
-		}
-		return paramLower(q).Sign() > 0
-	}
-	if !signed(tlo, sa) || !signed(thi, -sa) {
-		return nil, nil, false
-	}
-	return lo, hi, true
+	return out, nil
 }
 
 // increasing reports that a sub-segment's chain runs toward larger fractions.
@@ -1470,7 +1346,7 @@ func loopInvariant(err error) bool {
 // the side where it is never negative (docs/linkage-check-design.md §15.3).
 func (ld *loopDrive) sceneValue(side int, s *big.Rat) (float64, float64) {
 	q := jointParam(ld.driverJt, s)
-	lo, hi := paramLower(q), paramUpper(q)
+	lo, hi := motionbound.ParamLower(q), motionbound.ParamUpper(q)
 	if hi.Sign() <= 0 {
 		lo, hi = hi.Neg(hi), lo.Neg(lo)
 	}
@@ -1479,28 +1355,6 @@ func (ld *loopDrive) sceneValue(side int, s *big.Rat) (float64, float64) {
 	}
 	off := ld.scenes[side].offset
 	return proofbound.RatFloatDown(lo.Add(lo, off.Lo)), proofbound.RatFloatUp(hi.Add(hi, off.Hi))
-}
-
-// paramLower and paramUpper bound 2π·turn + base from below and above, π at
-// its enclosure's ends.
-func paramLower(p motionbound.MotionParam) *big.Rat {
-	twoPi := proofbound.TwoPiInterval()
-	f := twoPi.Lo
-	if p.Turn.Sign() < 0 {
-		f = twoPi.Hi
-	}
-	out := new(big.Rat).Mul(p.Turn, f)
-	return out.Add(out, p.Base)
-}
-
-func paramUpper(p motionbound.MotionParam) *big.Rat {
-	twoPi := proofbound.TwoPiInterval()
-	f := twoPi.Hi
-	if p.Turn.Sign() < 0 {
-		f = twoPi.Lo
-	}
-	out := new(big.Rat).Mul(p.Turn, f)
-	return out.Add(out, p.Base)
 }
 
 // enclose asks sketch for the enclosure of [lo, hi] on pred's scene,
@@ -1660,8 +1514,8 @@ func decimalRounded(x *big.Rat, up bool) string {
 // configuration, so a proven gap disproves the continuation.
 func turnsOverlap(f sketch.Interval, m int64, l sketch.Interval) bool {
 	turn := big.NewRat(m, 1)
-	shiftLo := paramLower(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Lo)})
-	shiftHi := paramUpper(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Hi)})
+	shiftLo := motionbound.ParamLower(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Lo)})
+	shiftHi := motionbound.ParamUpper(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Hi)})
 	return shiftLo.Cmp(proofarith.FloatRat(l.Hi)) <= 0 && proofarith.FloatRat(l.Lo).Cmp(shiftHi) <= 0
 }
 
@@ -1839,7 +1693,7 @@ func (ld *loopDrive) value(ask *loopAsk, j int) (motionbound.MotionParam, motion
 
 // valueInterval is a value range as one rational radian interval.
 func valueInterval(lo, hi motionbound.MotionParam) proofbound.RatInterval {
-	return proofbound.IntervalOwned(paramLower(lo), paramUpper(hi))
+	return proofbound.IntervalOwned(motionbound.ParamLower(lo), motionbound.ParamUpper(hi))
 }
 
 // hull is the smallest interval holding every one given.
@@ -1977,7 +1831,7 @@ func (ld *loopDrive) checkLimits(spec *linkageSpec) error {
 		lo, okLo := motionbound.ExactMotionParam(jt.limits.Min)
 		hi, okHi := motionbound.ExactMotionParam(jt.limits.Max)
 		inside := okLo && okHi && j < len(ld.hulls) &&
-			ld.hulls[j].Lo.Cmp(paramUpper(lo)) >= 0 && ld.hulls[j].Hi.Cmp(paramLower(hi)) <= 0
+			ld.hulls[j].Lo.Cmp(motionbound.ParamUpper(lo)) >= 0 && ld.hulls[j].Hi.Cmp(motionbound.ParamLower(hi)) <= 0
 		if inside {
 			continue
 		}
