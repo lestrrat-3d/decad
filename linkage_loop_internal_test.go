@@ -152,39 +152,79 @@ func TestLoopZeroPoseFalsifier(t *testing.T) {
 }
 
 // TestLoopSceneFrame: for each of the six closure axis senses and both scene
-// signs, the scene's frame has U and V equal to unit coordinate axes bit for
-// bit, its normal is the closure axis times the sign, and a pin's plane
-// position is the caller's own coordinates bit for bit.
+// sides, the scene's frame has U and V equal to unit coordinate axes bit for
+// bit, U × V is the closure axis, flipped on the mirrored side, and a pin's
+// plane position is the caller's own coordinates bit for bit. A loop with a
+// slide takes U along the slide's own sense — for each of the four slide
+// directions perpendicular to the closure axis — and the half-turned side
+// negates U and V under the same normal.
 func TestLoopSceneFrame(t *testing.T) {
 	t.Parallel()
 	pin := r3.NewVec(1.1, -2.3, 3.7)
 	coords := [3]float64{pin.X, pin.Y, pin.Z}
+	requireUnitAxes := func(t *testing.T, frame r3.Frame) {
+		t.Helper()
+		for _, e := range []r3.Vec{frame.U(), frame.V()} {
+			ones := 0
+			for _, c := range []float64{e.X, e.Y, e.Z} {
+				require.True(t, c == 0 || c == 1 || c == -1)
+				if c != 0 {
+					ones++
+				}
+			}
+			require.Equal(t, 1, ones)
+		}
+	}
+	// along is the exact coordinate of p along the unit coordinate axis e.
+	along := func(p, e r3.Vec) float64 {
+		for i, c := range []float64{e.X, e.Y, e.Z} {
+			if c != 0 {
+				return c * [3]float64{p.X, p.Y, p.Z}[i]
+			}
+		}
+		return 0
+	}
 	for axis := range 3 {
 		for _, sense := range []int{1, -1} {
-			for _, sigma := range []int{1, -1} {
-				lp := &LinkageLoop{axis: axis, sense: sense}
-				frame, err := lp.sceneFrame(sigma)
-				require.NoError(t, err)
-				u, v := frame.U(), frame.V()
-				for _, e := range []r3.Vec{u, v} {
-					ones := 0
-					for _, c := range []float64{e.X, e.Y, e.Z} {
-						require.True(t, c == 0 || c == 1 || c == -1)
-						if c != 0 {
-							ones++
-						}
-					}
-					require.Equal(t, 1, ones)
+			for _, mirror := range []bool{false, true} {
+				normal := sense
+				if mirror {
+					normal = -sense
 				}
-				require.Equal(t, unitAxis(axis, sense*sigma), u.Cross(v))
+				lp := &LinkageLoop{axis: axis, sense: sense}
+				frame, err := lp.sceneFrame(mirror, false)
+				require.NoError(t, err)
+				requireUnitAxes(t, frame)
+				require.Equal(t, unitAxis(axis, normal), frame.U().Cross(frame.V()))
 				local := frame.ToLocal(pin)
 				iu, iv := (axis+1)%3, (axis+2)%3
 				require.Equal(t, coords[iu], local.X)
 				wantV := coords[iv]
-				if sense*sigma < 0 {
+				if normal < 0 {
 					wantV = -wantV
 				}
 				require.Equal(t, wantV, local.Y)
+
+				for _, slideAxis := range []int{(axis + 1) % 3, (axis + 2) % 3} {
+					for _, dir := range []int{1, -1} {
+						for _, halfTurn := range []bool{false, true} {
+							slide := &Link{joint: PrismaticJoint{Dir: unitAxis(slideAxis, dir)}}
+							lp := &LinkageLoop{axis: axis, sense: sense, slide: slide}
+							frame, err := lp.sceneFrame(mirror, halfTurn)
+							require.NoError(t, err)
+							requireUnitAxes(t, frame)
+							require.Equal(t, unitAxis(axis, normal), frame.U().Cross(frame.V()))
+							wantU := unitAxis(slideAxis, dir)
+							if halfTurn {
+								wantU = wantU.Scale(-1)
+							}
+							require.Equal(t, wantU, frame.U())
+							local := frame.ToLocal(pin)
+							require.Equal(t, along(pin, frame.U()), local.X)
+							require.Equal(t, along(pin, frame.V()), local.Y)
+						}
+					}
+				}
 			}
 		}
 	}

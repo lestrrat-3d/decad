@@ -515,19 +515,46 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		_, err := fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), z)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
-	t.Run("a prismatic joint on the loop", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		l := decad.NewLinkage()
-		crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8)})
-		require.NoError(t, err)
-		rod, err := crank.Revolute(r3.NewVec(30, 0, 0), z, []*decad.Body{boxBodyAtZ(t, doc, 30, -3, 110, 3, 10, 8)})
-		require.NoError(t, err)
-		slider, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, 105, -5, 115, 5, 20, 8)})
-		require.NoError(t, err)
-		_, err = l.Close(rod, slider, r3.NewVec(110, 0, 0), z)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
+	slideRows := []struct {
+		name  string
+		build func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link)
+	}{
+		{"a slide along the closure axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
+			return sliderCrankOpen(t, doc, l, r3.NewVec(0, 0, 1))
+		}},
+		{"a slide off every coordinate axis", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
+			return sliderCrankOpen(t, doc, l, r3.NewVec(1, 1e-12, 0))
+		}},
+		{"a slide under a link that is not the common one", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
+			crank, err := l.Ground().Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8)})
+			require.NoError(t, err)
+			slide, err := crank.Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, 25, -3, 35, 3, 10, 8)})
+			require.NoError(t, err)
+			follower, err := l.Ground().Revolute(r3.NewVec(100, 0, 0), z, []*decad.Body{boxBodyAtZ(t, doc, 30, -3, 100, 3, 20, 8)})
+			require.NoError(t, err)
+			return slide, follower
+		}},
+		{"two slides on the loop", func(t *testing.T, doc *decad.Document, l *decad.Linkage) (*decad.Link, *decad.Link) {
+			first, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*decad.Body{boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 8)})
+			require.NoError(t, err)
+			rod, err := first.Revolute(r3.Vec{}, z, []*decad.Body{boxBodyAtZ(t, doc, 0, -3, 60, 3, 10, 8)})
+			require.NoError(t, err)
+			second, err := l.Ground().Prismatic(r3.NewVec(0, 1, 0), []*decad.Body{boxBodyAtZ(t, doc, 55, -5, 65, 5, 20, 8)})
+			require.NoError(t, err)
+			return rod, second
+		}},
+	}
+	for _, row := range slideRows {
+		t.Run(row.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			l := decad.NewLinkage()
+			a, b := row.build(t, doc, l)
+			_, err := l.Close(a, b, r3.NewVec(60, 0, 0), z)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Empty(t, l.Loops())
+		})
+	}
 	t.Run("a second closure on the coupler", func(t *testing.T) {
 		t.Parallel()
 		fb, _ := buildRocker(t, false)
