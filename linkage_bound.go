@@ -642,25 +642,16 @@ func staticCorners(lo, hi motionbound.RatVec) cornerReading {
 
 // staticPoints is the reading of points no joint moves, with no velocity.
 func staticPoints(points []motionbound.RatVec) cornerReading {
-	out := cornerReading{pos: make([]motionbound.IvVec, len(points)), vel: make([][]motionbound.IvVec, len(points))}
-	for c, x := range points {
-		out.pos[c] = motionbound.PointVec(x)
-	}
-	return out
+	r := linkagebound.StaticPoints(points)
+	return cornerReading{pos: r.Pos, vel: r.Vel, pad: r.Pad, prismK: r.PrismK}
 }
 
-// applyIdeal maps an enclosed point through an ideal pose,
-// x ↦ rot·(x − pivot) + pivot + shift.
 func applyIdeal(p motionbound.IdealPose, x motionbound.IvVec) motionbound.IvVec {
-	return motionbound.IvVecAdd(motionbound.IvVecAdd(p.Rot.Apply(motionbound.IvVecSub(x, p.Pivot)), p.Pivot), p.Shift)
+	return linkagebound.ApplyIdeal(p, x)
 }
 
-// ivCross is the cross product a × b over rational intervals.
 func ivCross(a, b motionbound.IvVec) motionbound.IvVec {
-	term := func(i, j int) proofbound.RatInterval {
-		return proofbound.IntervalSub(proofbound.IntervalMul(a[i], b[j]), proofbound.IntervalMul(a[j], b[i]))
-	}
-	return motionbound.IvVec{term(1, 2), term(2, 0), term(0, 1)}
+	return linkagebound.IvCross(a, b)
 }
 
 // readCorners is docs/linkage-check-design.md §5.8's reading of one body of
@@ -678,45 +669,16 @@ func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []m
 	return readPoints(spec, frames, params, b, below, staticPoints(corners[:]))
 }
 
-// readPoints is readCorners over any static point reading: each point mapped
-// through the relative pose and given its velocity under each joint.
+// readPoints maps a static point reading through the link's relative joint path.
 func readPoints(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) cornerReading {
-	type jointAt struct {
-		revolute    bool
-		unit, pivot motionbound.IvVec
+	revolute := make([]bool, len(spec.joints))
+	for i := range revolute {
+		revolute[i] = spec.joints[i].revolute
 	}
-	joints := make([]jointAt, 0, len(b.path)-below)
-	var pose *motionbound.IdealPose
-	for _, i := range b.path[below:] {
-		f := frames[i]
-		var unit motionbound.IvVec
-		for d := range 3 {
-			unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
-		}
-		pivot := motionbound.PointVec(f.Center)
-		ideal := f.At(params[i])
-		if pose != nil {
-			unit = pose.Rot.Apply(unit)
-			pivot = applyIdeal(*pose, pivot)
-			ideal = ideal.Then(*pose)
-		}
-		joints = append(joints, jointAt{revolute: spec.joints[i].revolute, unit: unit, pivot: pivot})
-		pose = &ideal
-	}
-	for c := range out.pos {
-		if pose != nil {
-			out.pos[c] = applyIdeal(*pose, out.pos[c])
-		}
-		out.vel[c] = make([]motionbound.IvVec, len(joints))
-		for n, j := range joints {
-			if !j.revolute {
-				out.vel[c][n] = j.unit
-				continue
-			}
-			out.vel[c][n] = ivCross(j.unit, motionbound.IvVecSub(out.pos[c], j.pivot))
-		}
-	}
-	return out
+	r := linkagebound.ReadPoints(frames, params, b.path, revolute, below, linkagebound.Reading{
+		Pos: out.pos, Vel: out.vel, Pad: out.pad, PrismK: out.prismK,
+	})
+	return cornerReading{pos: r.Pos, vel: r.Vel, pad: r.Pad, prismK: r.PrismK}
 }
 
 func secondDerivativeBound(b linkBound, m, n int) *big.Rat {
@@ -746,41 +708,16 @@ type cornerBounds struct {
 // roundOut widens an enclosure to the floats around it, read back as exact
 // rationals; ok is false when an end overflows a float.
 func roundOut(iv proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	lo := proofarith.FloatRat(proofbound.RatFloatDown(iv.Lo))
-	hi := proofarith.FloatRat(proofbound.RatFloatUp(iv.Hi))
-	if lo == nil || hi == nil {
-		return proofbound.RatInterval{}, false
-	}
-	return proofbound.IntervalOwned(lo, hi), true
+	return linkagebound.RoundOut(iv)
 }
 
 // roundCorners rounds a corner reading outward (cornerBounds); ok is false
 // when a value overflows a float.
 func roundCorners(r cornerReading) (cornerBounds, bool) {
-	out := cornerBounds{
-		lo: make([][3]*big.Rat, len(r.pos)), hi: make([][3]*big.Rat, len(r.pos)),
-		vel: make([][][3]proofbound.RatInterval, len(r.pos)), pad: r.pad, prismK: r.prismK,
-	}
-	for c := range r.pos {
-		for d := range 3 {
-			iv, ok := roundOut(r.pos[c][d])
-			if !ok {
-				return cornerBounds{}, false
-			}
-			out.lo[c][d], out.hi[c][d] = iv.Lo, iv.Hi
-		}
-		out.vel[c] = make([][3]proofbound.RatInterval, len(r.vel[c]))
-		for n, v := range r.vel[c] {
-			for d := range 3 {
-				iv, ok := roundOut(v[d])
-				if !ok {
-					return cornerBounds{}, false
-				}
-				out.vel[c][n][d] = iv
-			}
-		}
-	}
-	return out, true
+	b, ok := linkagebound.RoundCorners(linkagebound.Reading{
+		Pos: r.pos, Vel: r.vel, Pad: r.pad, PrismK: r.prismK,
+	})
+	return cornerBounds{lo: b.Lo, hi: b.Hi, vel: b.Vel, pad: b.Pad, prismK: b.PrismK}, ok
 }
 
 // projectionSide is one body of a pair as docs/linkage-check-design.md §5.8
