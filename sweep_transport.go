@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -74,8 +75,8 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span holds no circular carrier`, ErrDegenerate)
 	}
 	arc := *record.arc
-	axisExact, status := ivVec3Unit(sweepRatIntervalVec(arc.axis))
-	if status != normalProven {
+	axisExact, status := surfacenormal.UnitVec3(sweepRatIntervalVec(arc.axis))
+	if status != surfacenormal.Proven {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified axis direction`, ErrUnsupported)
 	}
 	sin, cos, ok := record.arcAngle.sinCosFor(record.arcPhi)

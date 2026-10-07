@@ -94,7 +94,6 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
-| `normal_bound.go` | The proof behind every `Face.NormalAt` bound, per surface arm. See the file's doc comment. |
 | `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
@@ -272,6 +271,7 @@ the rules leave to the byte budget.
 | `internal/clearance/` | Clearance carriers, angle and line windows, 2D trim regions, ray crossings, boxes, spine and ruling helpers, and the degeneracy oracle. See `docs/clearance-design.md`. |
 | `internal/clearancespine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
+| `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; race shards run `race-binary`'s root and `apitest` binaries. `codeql.yml`. `test-shards*.txt` assign each test a shard. |

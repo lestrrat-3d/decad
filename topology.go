@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -532,7 +533,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	switch s := f.surface.(type) {
 	case Plane:
 		n := s.Frame.N()
-		allow, st := planeNormalAllow(s.Frame, n)
+		allow, st := surfacenormal.PlaneAllow(s.Frame, n)
 		return f.normalMeasurement(n, sign, allow, st, "the frame of this plane names no direction")
 	case Cylinder:
 		rel := p.Sub(s.Origin)
@@ -541,7 +542,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
 		}
-		allow, st := axialNormalAllow(p, s.Origin, s.Axis, dir)
+		allow, st := surfacenormal.AxialAllow(p, s.Origin, s.Axis, dir)
 		return f.normalMeasurement(dir, sign, allow, st, "a point on the cylinder axis has no normal")
 	case Cone:
 		rel := p.Sub(s.Origin)
@@ -557,14 +558,14 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		// The wall leans outward by the half angle along the growth axis, so
 		// the geometric normal tilts against it by the same angle.
 		n := dir.Scale(math.Cos(half)).Sub(s.Axis.Scale(math.Sin(half)))
-		allow, st := coneNormalAllow(p, s, half, n)
+		allow, st := surfacenormal.ConeAllow(p, s.Origin, s.Axis, half, n)
 		return f.normalMeasurement(n, sign, allow, st, "the cone apex has no normal")
 	case Sphere:
 		dir, ok := p.Sub(s.Center).Normalize()
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
 		}
-		allow, st := radialNormalAllow(p, s.Center, dir)
+		allow, st := surfacenormal.RadialAllow(p, s.Center, dir)
 		return f.normalMeasurement(dir, sign, allow, st, "the sphere center has no normal")
 	case Torus:
 		major, err := s.Major.In(units.Millimeter)
@@ -582,7 +583,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the tube center has no normal`, ErrDegenerate)
 		}
-		allow, st := torusNormalAllow(p, s, major, dir)
+		allow, st := surfacenormal.TorusAllow(p, s.Center, s.Axis, major, dir)
 		return f.normalMeasurement(dir, sign, allow, st, "the tube center has no normal")
 	default:
 		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
@@ -593,11 +594,11 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 // own outward sign. It combines the arm's proof against its tagged surface and
 // the face's own departure from that tag by triangle inequality. The sign is
 // exact, so it never changes the bound.
-func (f *Face) normalMeasurement(dir r3.Vec, sign, allow float64, st normalStatus, degenerate string) (VecMeasurement, error) {
+func (f *Face) normalMeasurement(dir r3.Vec, sign, allow float64, st surfacenormal.Status, degenerate string) (VecMeasurement, error) {
 	switch st {
-	case normalZero:
+	case surfacenormal.Zero:
 		return VecMeasurement{}, fmt.Errorf(`%w: %s`, ErrDegenerate, degenerate)
-	case normalUnproven:
+	case surfacenormal.Unproven:
 		return VecMeasurement{}, fmt.Errorf(`%w: this normal's own direction is not proven away from zero, so no bound covers it`, ErrUnsupported)
 	}
 	if allow != 0 || f.normalBound != 0 {

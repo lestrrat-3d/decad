@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -29,8 +30,8 @@ import (
 //     point's own rounding divided by the patch's radius, so the gap grows with
 //     the distance from the frame origin to the patch and shrinks with the
 //     patch's own size. No reading's own bound covers that: `Face.NormalAt`
-//     bounds the normal at the point it is HANDED (normal_bound.go), and
-//     `coneNormalAllow` encloses the exact normal at that same held point.
+//     bounds the normal at the point it is HANDED (internal/surfacenormal), and
+//     `surfacenormal.ConeAllow` encloses the exact normal at that same held point.
 //   - The recovery also treats the patch's cap circle as a perfect circle about
 //     the Cone's own axis. The placed frame's image of a plane-local circle is a
 //     rounded near-circle about a rounded near-axis, so the component along it
@@ -50,7 +51,7 @@ import (
 // Neither is a residual gate and no small number here admits anything: the
 // enclosure IS the exact answer, built from held numbers in rational arithmetic,
 // so a zero width records that two computations agree EXACTLY. That is the same
-// discipline normal_bound.go states for the arm bounds themselves.
+// discipline internal/surfacenormal states for the arm bounds themselves.
 
 // capPatchModel is one circular patch's own exact normal-component model. The
 // component, against the pull, of the outward unit normal of the surface the
@@ -74,7 +75,7 @@ type capPatchModel struct {
 // coincide), whose exact outward normal at a point is
 // σ·(r̂·cos h - â·sin h) with r̂ the exact unit direction from the axis to the
 // point, â the axis's own exact unit direction, h the held half angle and σ the
-// face's outward sign — the same exact answer normal_bound.go's `coneNormalAllow`
+// face's outward sign — the same exact answer `surfacenormal.ConeAllow`
 // judges an arm's reading against, so the model states what the FACE claims and
 // never a second geometry of this file's own.
 //
@@ -109,8 +110,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !okA || !okO {
 		return capPatchModel{}, false
 	}
-	ahat, st := ivVec3Unit(axisIv)
-	if st != normalProven {
+	ahat, st := surfacenormal.UnitVec3(axisIv)
+	if st != surfacenormal.Proven {
 		return capPatchModel{}, false
 	}
 	world, okM := newPlacedFrameMap(pl)
