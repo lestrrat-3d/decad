@@ -130,7 +130,7 @@ the rules leave to the byte budget.
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's doc comments. |
 | `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
-| `loft_pairing.go` | Root adapter and station-pair assembly for Table P. |
+| `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
@@ -264,7 +264,7 @@ the rules leave to the byte budget.
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
-| `internal/loftmesh/` | Loft pairing gates, stations, mass sums, mesh proofs, and restatement. |
+| `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |

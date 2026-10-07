@@ -185,10 +185,6 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWa
 	return loftChordFraction * math.Max(u0, u1), nil
 }
 
-func loftCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeform.FreeformWork) ([]Point2, []Point2, float64, []float64, float64, error) {
-	return loftmesh.RecordCellStations(w0, w1, seg0, seg1, target, work0, work1)
-}
-
 func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
 	return loftmesh.LineCellPoints(w0, w1)
 }
