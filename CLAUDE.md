@@ -13,8 +13,8 @@ models a part here and proves it sound — watertight, correct volume, no
 interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
-**Current state: the public API is landing incrementally against approved
-designs.** Unshipped APIs remain design-only.
+**The public API lands incrementally against approved designs; unshipped
+APIs are design-only.**
 `docs/api-design.md` is the core contract for the whole surface.
 `docs/layout.md` lists every companion design and every root file with what
 each owns.
@@ -31,7 +31,8 @@ each owns.
 | Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
 | STEP export | `docs/step-export-design.md` |
 | Free-form geometry or per-kind dispatch | `docs/spline-design.md` |
-| `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
+| `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md`, `docs/general-boolean-design.md` |
+| Mirror, pattern, `Placed`/`PlacedCopy` | `docs/mirror-pattern-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
 | `stackedPrismPayload`, blind `Cut`, slabs | `docs/stacked-prism-design.md` |
 | Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
@@ -92,16 +93,14 @@ each owns.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`,
     `Transform`).
   - `github.com/lestrrat-3d/units` — typed quantities (`Value`, `Kind`).
-    decad's model inputs and `Measurement` quantities are `units.Value`, the
-    same module `sketch` uses for its dimensions, so there is no parallel unit
-    system to reconcile.
+    decad's inputs and `Measurement`s are `units.Value`, the module `sketch`
+    uses too, so no parallel unit system exists.
   - `github.com/lestrrat-3d/step` — AP214; `export` package only.
   - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
     by feature options.
   - `github.com/stretchr/testify/require` — assertions, **test code only**.
     NEVER import from production code.
-  - `_gallery` module ALONE; nothing under the root module imports these, and
-    the root `go.mod`/`go.sum` never list them:
+  - `_gallery` module ALONE; the root `go.mod`/`go.sum` never list them:
     - `github.com/lestrrat-3d/solidlens` — pure-Go mesh rasterizer; README
       images.
     - `github.com/lestrrat-3d/kinetograph` — animates decad bodies; landing
