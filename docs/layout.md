@@ -197,10 +197,10 @@ the rules leave to the byte budget.
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the shared pose engine. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
-| `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See `docs/linkage-check-design.md`. |
+| `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
-| `linkage_bound.go` | The chain travel and projection bounds. See its doc comment. |
+| `linkage_bound.go` | Chain travel and projection readings. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_memo.go` | Sweep run and sweep radius memos. See `docs/contact-sweep-design.md` §7. |
@@ -277,7 +277,8 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
-| `internal/motionbound/` | Exact motion parameters, poses, sweep bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
+| `internal/motionbound/` | Exact motion parameters, poses, sweeps, and trig memo. See motion design. |
+| `internal/linkagebound/` | Linkage projections. See linkage §5.8. |
 | `internal/freeform/` | Exact free-form arithmetic and bounds. See `docs/spline-design.md`. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance geometry and degeneracy checks. See `docs/clearance-design.md`. |
