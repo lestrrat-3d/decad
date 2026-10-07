@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -49,7 +50,7 @@ type FilletOption interface {
 // offset intersection is rejected below it (S5). The section is decad's own
 // exact geometry, so this only absorbs float noise, never an admission on a
 // residual.
-const filletTol = 1e-9
+const filletTol = sectionaudit.Tolerance
 
 // Fillet rounds the selected lateral edges of a straight prism with a tangent
 // arc of radius r, returning the new body and retiring the receiver
@@ -605,21 +606,7 @@ func lineCircle(l offCurve, cx, cy, r float64) [][2]float64 {
 
 // circleCircle intersects two circles.
 func circleCircle(c0x, c0y, r0, c1x, c1y, r1 float64) [][2]float64 {
-	dx, dy := c1x-c0x, c1y-c0y
-	dsq := dx*dx + dy*dy
-	d := math.Sqrt(dsq)
-	if d <= filletTol || d > r0+r1+filletTol || d < math.Abs(r0-r1)-filletTol {
-		return nil
-	}
-	a := (dsq + r0*r0 - r1*r1) / (2 * d)
-	h2 := r0*r0 - a*a
-	if h2 < 0 {
-		h2 = 0
-	}
-	h := math.Sqrt(h2)
-	mx, my := c0x+a*dx/d, c0y+a*dy/d
-	ox, oy := -dy/d*h, dx/d*h
-	return [][2]float64{{mx + ox, my + oy}, {mx - ox, my - oy}}
+	return sectionaudit.CircleCircle(c0x, c0y, r0, c1x, c1y, r1)
 }
 
 // footOn returns the tangent foot of the center on a carrier: the perpendicular

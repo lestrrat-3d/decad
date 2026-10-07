@@ -261,6 +261,9 @@ there is no rewrite that skips it. Where the op that produced the rewrite has a
 row of its own for what a test catches, that row is the one the refusal cites;
 the shell has one, and §8 says which.
 
+`internal/sectionaudit/` computes signed area, crossing, contact and nesting.
+The root audit orders those checks with each modify op's own cutback rules.
+
 **Every modify audit is cancellable with bounded work.** `Fillet`,
 `Chamfer`, and `Shell` create one `workBudget` for their
 pre-commit cancellation path. Fillet and Chamfer share it through profile

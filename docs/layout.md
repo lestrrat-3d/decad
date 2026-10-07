@@ -141,7 +141,7 @@ the rules leave to the byte budget.
 |---|---|
 | `fillet.go` | `Body.Fillet` rewrites a straight prism's section with a tangent arc at each selected corner and rebuilds through `evalPrism`. It owns the `cornerBlend` Chamfer reuses. See `docs/modify-design.md` §6. |
 | `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
-| `fillet_audit.go` | Fillet, Chamfer and Shell section audits. See `docs/modify-design.md` §5. |
+| `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, the §5 audit wrapper run on it, and a cup's offset displacement proof. See `docs/modify-design.md` §7-§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-co-directional-prism body a one-cap `Shell` builds, with Exact mass properties and roles. See `docs/modify-design.md` §9; clearance stays staged (§12 D6). |
@@ -254,6 +254,7 @@ the rules leave to the byte budget.
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
+| `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch edge conversion and join checks. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
