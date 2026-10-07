@@ -682,12 +682,12 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 	remF := linkRatFloat(t, rem)
 	require.InDelta(t, math.Sqrt(50*50+5*5)*hf*hf/2, remF, 1e-9)
 
-	ca, ok := dr.cornersAt(a, 0, b0, 0)
+	ca, ok := dr.cornersAt(a, 0, b0, 0, false)
 	require.True(t, ok)
 	up, _ := projectionSide{corners: ca, h: h, seg: stepsFrom(steps, false), rem: rem}.extents()
 	require.InDelta(t, -40+5*hf+remF, linkRatFloat(t, up[1]), 1e-9)
 
-	cb, ok := dr.cornersAt(b, 0, b0, 0)
+	cb, ok := dr.cornersAt(b, 0, b0, 0, false)
 	require.True(t, ok)
 	up, _ = projectionSide{corners: cb, h: h, seg: stepsFrom(steps, true), rem: rem}.extents()
 	require.InDelta(t, 5*math.Sin(hf)-40*math.Cos(hf)+remF, linkRatFloat(t, up[1]), 1e-9)
@@ -709,4 +709,49 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 	require.True(t, ok, `a waypoint on the straight line at an equal share bends nothing`)
 	require.InDelta(t, math.Pi/4, linkRatFloat(t, step.Lo), 1e-15)
 	require.InDelta(t, math.Pi/4, linkRatFloat(t, step.Hi), 1e-15)
+}
+
+// TestLinkageHullPoints pins docs/linkage-check-design.md §5.8's hull points
+// and the hull bound's pads. A block x ∈ [0, 10], y ∈ [0, 4], z ∈ [0, 3]
+// reads its eight vertices exactly, four bottom then four top, with no pad;
+// a level displaced by 0.25 mm pads every point by 4·√3·0.25 rounded up. Two
+// blocks 10 mm apart along X are 10 mm apart by the hull bound, and padded
+// by 0.5 and 0.25 mm, 9.25 mm.
+//
+// Legs seen to fail when deleted: the pad (the displaced level reads zero),
+// and the pads in the bound (the padded pair reads 10).
+func TestLinkageHullPoints(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	block := internalBoxBody(t, doc, 0, 0, 10, 4, 3)
+	points, pad, k, ok := bodyHullPoints(block)
+	require.True(t, ok)
+	require.Equal(t, 4, k)
+	require.Len(t, points, 8)
+	require.Zero(t, pad.Sign())
+	for n, p := range points {
+		x, y, z := linkRatFloat(t, p[0]), linkRatFloat(t, p[1]), linkRatFloat(t, p[2])
+		require.True(t, x == 0 || x == 10, "point %d x", n)
+		require.True(t, y == 0 || y == 4, "point %d y", n)
+		require.Equal(t, float64(3*(n/4)), z, "point %d: bottom four, then top four", n)
+	}
+
+	pp := block.payload.(prismPayload)
+	pp.z1Delta = 0.25
+	_, pad, _, ok = bodyHullPoints(&Body{payload: pp})
+	require.True(t, ok)
+	require.InDelta(t, 4*math.Sqrt(3)*0.25, linkRatFloat(t, pad), 1e-12)
+	require.GreaterOrEqual(t, linkRatFloat(t, pad), 4*math.Sqrt(3)*0.25)
+
+	far := internalBoxBody(t, doc, 20, 0, 30, 4, 3)
+	side := func(b *Body, pad *big.Rat) projectionSide {
+		reading, ok := bodyPoints(b, true)
+		require.True(t, ok)
+		reading.pad = pad
+		bounds, ok := roundCorners(reading)
+		require.True(t, ok)
+		return projectionSide{corners: bounds}
+	}
+	require.Zero(t, projectionLowerHull(side(block, nil), side(far, nil)).Cmp(big.NewRat(10, 1)))
+	require.Zero(t, projectionLowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
 }

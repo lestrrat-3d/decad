@@ -40,6 +40,7 @@
 0	20.44	TestHeldGateCertifiesEachUnionsRimCeiling
 0	0.06	TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans
 0	0.01	TestJointBoxHalfTravel
+0	0.01	TestLinkageHullPoints
 0	0.01	TestLinkageIdealPoseComposesTheChain
 0	0.06	TestLinkageSecondDerivativeBound
 0	0.11	TestLoftArcWedgeReadingsApproximateWithPositiveBounds

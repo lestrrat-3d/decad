@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -287,4 +288,76 @@ func TestVerifyLinkageOutAndBackPin(t *testing.T) {
 			require.Same(t, pin, hit.B)
 		}
 	})
+}
+
+// TestVerifyLinkageTiltedPendulum pins docs/linkage-check-design.md §5.8's
+// hull points and directions: scene 13's pendulum and its wall carried by
+// tiltToDiagonal, the joint about the tilt of Z through the origin. Every
+// distance is the untilted scene's, so the gap is
+// g(θ) = 20 − 5·sin θ + 40·cos θ, falling to 15 at the drive's end, but the
+// wall is met along the tilt of Y, no coordinate direction, and both bodies'
+// boxes stand far outside them. Read at their own vertices and along the
+// wall's face normal, the bound is second order again: at
+// WithMotionTolerance(1e-5) the report reads Sound, the reading encloses 15,
+// and every IntervalClear interval sits at or below g at its ends.
+//
+// Leg seen to fail when deleted: the hull bound (the box corners and the
+// coordinate directions leave the reading beyond tolerance at the reading
+// floor, Suspect).
+func TestVerifyLinkageTiltedPendulum(t *testing.T) {
+	t.Parallel()
+	ts := newTiltedScene(t)
+	doc := decad.New()
+	block := ts.place(boxBodyAtZ(t, doc, -5, -50, 5, -40, 0, 10))
+	ts.place(boxBodyAtZ(t, doc, -100, 20, 100, 40, -10, 30))
+	l := decad.NewLinkage()
+	swing, err := l.Ground().Revolute(r3.Vec{}, ts.tilt.ApplyDir(zAxis), []*decad.Body{block})
+	require.NoError(t, err)
+	report := verifyLinkage(t, doc, l, decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}},
+		decad.WithMotionTolerance(units.Scalar(1e-5)))
+	t.Logf("poses %d narrowest %v status %v", len(report.Poses), narrowest(report), report.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	requireReadingEncloses(t, report, 15)
+	g := func(s float64) float64 {
+		th := s * math.Pi / 2
+		return 20 - 5*math.Sin(th) + 40*math.Cos(th)
+	}
+	requireIntervalsBelow(t, report, func(s float64) float64 { return g(s) + 1e-9 }, nil)
+}
+
+// TestVerifyLinkageSlotKeepsItsBox pins the line-segment test of
+// docs/linkage-check-design.md §5.8's hull points: a slot, cap centres
+// (0, 45) and (0, 85) with radius 5, z ∈ [0, 10], stands on a revolute joint
+// about Z through the origin and rocks −20° → 20° under a wall
+// x ∈ [−100, 100], y ∈ [95, 105], z ∈ [−10, 20]. Its top cap reaches
+// y = 85·cos θ + 5, so the gap 90 − 85·cos θ is smallest, 5 mm, upright at
+// s = 1/2 — a flat minimum the reading refines around — while the hull of its
+// segments' start points stops 5 mm lower there: an outer loop with an arc
+// is read at its box corners, the report reads Sound, the reading encloses
+// 5, and every IntervalClear interval sits at or below the gap at its ends.
+//
+// Leg seen to fail when deleted: the line-segment test (the start points
+// alone are read, and an interval's bound near the minimum rises above the
+// gap).
+func TestVerifyLinkageSlotKeepsItsBox(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	_, err = s.CreateSlot(0, 45, 0, 85, 5)
+	require.NoError(t, err)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	slot, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	boxBodyAtZ(t, doc, -100, 95, 100, 105, -10, 30)
+	l := decad.NewLinkage()
+	rock, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{slot})
+	require.NoError(t, err)
+	report := verifyLinkage(t, doc, l, decad.Drive{{Link: rock, From: units.Degrees(-20), To: units.Degrees(20)}})
+	require.NotEmpty(t, report.Intervals)
+	gap := func(s float64) float64 { return 90 - 85*math.Cos((-20+40*s)*math.Pi/180) }
+	requireIntervalsBelow(t, report, gap, nil)
+	requireReadingEncloses(t, report, 5)
 }
