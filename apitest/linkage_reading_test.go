@@ -51,9 +51,10 @@ func narrowest(report *decad.LinkageReport) float64 {
 //     the layer exclusion at a proven 2 mm, against a 3 mm minimum read
 //     AssessmentUndecided with no interval narrower than 1/1024.
 //   - A constant gap the layer rule cannot settle still stops: a disc of
-//     radius 5 spinning 0° → 90° about its own axis beside a wall in its
-//     layer, 7 mm away, ties every interval for the smallest bound, so the
-//     reading refines all of them. The travel is 5·√2·(π/2)·Δs, and the gate
+//     radius 5 spinning 0° → 90° about an axis 1e-9 mm off its own, which
+//     the symmetry rule therefore keeps, beside a wall in its layer, 7 mm
+//     away, ties every interval for the smallest bound, so the reading
+//     refines all of them. The travel is 5·√2·(π/2)·Δs, and the gate
 //     admits 7e-3 mm at Δs = 1/512 but not at 1/256: 513 poses, Sound.
 //
 // Legs seen to fail when deleted: the reading floor (the arm stops at
@@ -101,14 +102,18 @@ func TestVerifyLinkageReadingFloor(t *testing.T) {
 		disc := discBodySymmetric(t, doc, 0, 5, 5)
 		boxBodyAtZ(t, doc, 12, -20, 22, 20, -10, 20)
 		l := decad.NewLinkage()
-		spin, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{disc})
+		// 1e-9 mm off the disc's own axis, so the symmetry rule (§5.2) keeps
+		// the joint and the gap stays constant to that width.
+		spin, err := l.Ground().Revolute(r3.NewVec(1e-9, 0, 0), zAxis, []*decad.Body{disc})
 		require.NoError(t, err)
 		report := verifyLinkage(t, doc, l, decad.Drive{{Link: spin, From: units.Degrees(0), To: units.Degrees(90)}})
 		require.Equal(t, decad.Sound, report.Status)
 		require.Len(t, report.Poses, 513)
 		require.Equal(t, 1.0/512, narrowest(report))
 		requireDriveReadingCovers(t, report)
-		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), 7.0)
-		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 7.0)
+		// The disc's centre swings 1e-9 mm toward the wall at the end.
+		minimum := 7 - 1e-9
+		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), minimum)
+		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), minimum)
 	})
 }

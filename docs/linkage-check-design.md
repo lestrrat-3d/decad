@@ -435,6 +435,25 @@ pair, `L` is the ground and the sum runs over every joint on the path. A joint w
 (every waypoint equal) has `|Δq_i| = 0` and contributes nothing to any `τ`; its `m_i = |From_i|` still
 enters the balls, because the link sits displaced by it.
 
+**A body symmetric about its own joint.** A body `B` of link `k` that every rotation about joint `k`'s axis
+line carries onto itself does not move under that joint: `J_k(q)·B = B` for every `q`, so
+`T_k(q)·B = T_parent(q)·B` at every configuration. For such a body joint `k` leaves its relative path —
+from `τ` here and from the projection bound's expansion and remainder (§5.8) — whenever the pair's lowest
+common ancestor lies above link `k`; when the partner hangs below link `k`, joint `k` is common to both
+and is dropped already. A disc spinning about its own axis beside a wall then has no travel at all over
+the drive, and the pair certifies its whole drive from the two ends. Every other quantity stands: `ρ_{ik}`
+is still read over the link's rest box, an upper bound whatever the body does, the swept box is still
+grown by the link's whole reach, and `η` still charges the float pose the kernel measures against the
+ideal one (§5.1).
+
+The test is exact and admits only a body proven symmetric, in two shapes whose geometry is exact under a
+cardinal frame and a placement that permutes and signs the coordinate axes: a solid prism whose profile is
+one whole circle, with no taper and no offset faces (the source cylinder of contact geometry §4), and a
+solid full revolve of any meridian about an axis the record states exactly. Joint `k` must be a revolute
+whose `Axis` is exactly parallel to the body's axis and whose `Center` lies exactly on that axis line,
+both exact rational cross products that vanish. A body off its joint's axis by any amount, a placement
+the exact reader cannot follow, or any other payload keeps joint `k`.
+
 **The certificate.** With `τ` so formed, `(lo_a + lo_b − τ(s_b − s_a))/2` is a proven lower bound on
 the pair's gap at every parameter of the interval — the **travel bound** — with `lo` the proven lower ends
 of the two endpoint gap intervals after `η` (§5.1); it is positive exactly when `lo_a + lo_b > τ(s_b −
@@ -671,15 +690,15 @@ closes once `Rem(|Δq|)` falls under about `rel·gap/2`.
 
 **Where it is loose, and what still holds.** The bound is as tight as the two boxes are along `n`. A body
 whose extreme along `n` lies inside its box corner's image is charged the corner: a disc or a cylinder
-turning about its own axis keeps every point within its radius `r` of the axis while its box corner
-sweeps a circle of radius `r·√2`, so between the quarter turns `sep_n` falls short of the gap by up to
-`(√2 − 1)·r`, the travel bound is the larger, and the pair pays §10's linear cost as before — §11's disc
-beside a wall evaluates `513` poses either way. A partner met along a direction off the coordinate axes,
+turning about an axis near its own but not on it — so §5.2's symmetry rule does not drop the joint —
+keeps every point within about its radius `r` of the axis while its box corner sweeps a circle of radius
+`r·√2`, so between the quarter turns `sep_n` falls short of the gap by up to `(√2 − 1)·r`, the travel
+bound is the larger, and the pair pays §10's linear cost as before — §11's disc `1e-9` mm off its axis
+evaluates `513` poses either way, while the same disc on its axis evaluates `2`. A partner met along a direction off the coordinate axes,
 a tilted wall, is charged its box corner the same way. In both the certificate is still the larger of
 two proven bounds, so no interval or cell reads worse than under the travel bound alone. A tighter support
 of a body along `n`, read from the clearance kernel's own carriers, and the kernel's closest-point
-direction as a seventh candidate `n`, are later tightenings that change no soundness argument; so is a
-rule that a full-turn revolve on its own joint axis is invariant under that joint. A pair whose relative
+direction as a seventh candidate `n`, are later tightenings that change no soundness argument. A pair whose relative
 path holds a dependent joint (§15) takes the travel bound alone: its value at a pose is an enclosure and
 its travel over an interval the hull bound of §15.5, both of which the expansion could consume through
 `MotionFrame.AtRange`, and that extension is a later increment.
@@ -930,7 +949,9 @@ floor then serves a tighter tolerance and the pairs that certificate leaves loos
 coarse reads `Suspect` with a `DiagMeasurementBeyondTolerance` on it. A minimum that holds along the drive —
 a pair whose gap does not change — makes every interval tie for the smallest bound, step 6 refines all of
 them, and the cost is linear in `1/Δs`: at most `16385` poses at the default reading floor, and fewer where
-the gate is met sooner (a disc of radius `5` spinning a quarter turn `7` mm from a wall: `513` poses). The layer
+the gate is met sooner (a disc of radius `5` spinning a quarter turn `7` mm from a wall about an axis
+`1e-9` mm off its own: `513` poses). A body symmetric about its own joint (§5.2) has no travel under it, so
+the same disc on its axis certifies the whole drive from its two ends. The layer
 exclusion (§5.7) settles the common case of that shape, a stacked planar mechanism, before any pose:
 scene 1 without the wall, and the same arms over a table, each evaluate the two endpoints and read
 `Sound` at every resolution. A constant gap the rule cannot settle — a link turning about an axis that
@@ -1112,8 +1133,18 @@ when the reading floor is dropped. At the defaults the projection bound closes i
 verdict floor (§5.8). At `WithResolution(Scalar(1.0/64))` it reads `Suspect` with no interval narrower than
 `1/64`; red when a stated resolution leaves the reading floor at its default. Scene 1's arms against a
 `3` mm margin read `AssessmentUndecided` with no interval narrower than `1/1024`; red when the margin
-refines to the reading floor. The quarter-turn disc beside a wall evaluates exactly `513` poses and reads
-`Sound`, its reading enclosing the true `7` mm.
+refines to the reading floor. The quarter-turn disc beside a wall, turning about an axis `1e-9` mm off
+its own, evaluates exactly `513` poses and reads `Sound`, its reading enclosing the true `7` mm.
+
+**The symmetry rule (§5.2).** The same disc turning about its own axis evaluates `2` poses, one
+`IntervalClear` interval, `Sound`, its reading enclosing `7` mm; red when the rule is dropped (`513`
+poses). Each of the rule's admission tests is pinned by a body it must not admit, whose closed-form gap
+every `IntervalClear` interval's bound must sit at or below at its ends: the disc on a joint about `Z`
+through `(0, 3, 0)`, `3` mm off its axis, whose gap `7 − 3·sin θ` falls to `4`, red when the centre test
+is skipped; and the disc on a joint about `X` through its centre, tumbling, whose top reaches
+`5·(cos θ + sin θ)` toward a wall along `Y` `7` mm away, red when the direction test is skipped. A full
+revolve — a cone about `X` — turning on its own axis `5` mm below a wall is admitted: its one interval is
+`IntervalClear` in `2` poses, red when the rule is dropped.
 
 **Standing tests.** Errors, one subtest per row of §8 and per constructor refusal of §2; non-mutation and
 determinism as motion §9 test 7; cancellation; pose deviation charged (a joint centre at `(1e6, 0, 0)`
@@ -1647,6 +1678,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis, or a flat minimum, whose gate needs more than the budget |
 | P1 (`linkage_bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `motion_verify.go`: `motionDriver` gains an optional projection bound per pair and interval, `intervalOutcome` takes the larger of the two bounds, `singleMotion` supplies none so `VerifyMotion` is bit-identical; `linkage_verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14 and the internal tests of §5.8; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
 | P1b (`linkage_bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage_verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the segment term's internal test; the measured counts re-recorded | as after P1 |
+| S1 (`linkage_bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage_verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,

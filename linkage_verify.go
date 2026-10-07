@@ -151,6 +151,10 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 	}
 	run.formPairs(swept)
 	dr.settlePairs(swept)
+	dr.symmetric = make([]bool, len(run.movers))
+	for i, mv := range run.movers {
+		dr.symmetric[i] = symmetricAboutJoint(mv.body, spec.joints[mv.group], frames[mv.group])
+	}
 	return run
 }
 
@@ -209,6 +213,10 @@ type linkageDriver struct {
 	standing []linkStanding // per link, §6 step 2
 	frames   []motionbound.MotionFrame
 	bounds   []linkBound
+	// symmetric marks, per mover, a body its own link's joint does not move
+	// (docs/linkage-check-design.md §5.2): that joint leaves the body's
+	// relative path in travel and projection.
+	symmetric []bool
 	// corners holds every corner reading the projection bound has read
 	// (docs/linkage-check-design.md §5.8), once per pose, body and relative
 	// path, so a pose's reading serves both intervals it ends.
@@ -277,15 +285,40 @@ func (dr *linkageDriver) intervalGate(a, b *motionPose) string {
 // move both bodies by one rigid motion.
 func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat {
 	r := dr.run
-	mine := dr.bounds[r.movers[i].group]
 	other := r.pairs[i][k].other
-	if other < 0 {
-		return chainTravel(dr.spec, mine, 0, a.Base, b.Base)
+	below := dr.pairDepth(i, other)
+	tau := chainTravel(dr.spec, dr.pathOf(i, below), below, a.Base, b.Base)
+	if other < 0 || tau == nil {
+		return tau
 	}
-	theirs := dr.bounds[r.movers[other].group]
-	below := commonDepth(mine.path, theirs.path)
-	tau := chainTravel(dr.spec, mine, below, a.Base, b.Base)
-	return tau.Add(tau, chainTravel(dr.spec, theirs, below, a.Base, b.Base))
+	theirs := chainTravel(dr.spec, dr.pathOf(other, below), below, a.Base, b.Base)
+	if theirs == nil {
+		return nil
+	}
+	return tau.Add(tau, theirs)
+}
+
+// pairDepth is the position on each path of the first joint below the
+// lowest common ancestor of mover i's link and its partner's: 0 against a
+// static body (other < 0).
+func (dr *linkageDriver) pairDepth(i, other int) int {
+	if other < 0 {
+		return 0
+	}
+	r := dr.run
+	return commonDepth(dr.bounds[r.movers[i].group].path, dr.bounds[r.movers[other].group].path)
+}
+
+// pathOf is mover m's link reading for a pair whose relative path starts at
+// position below: the link's own, or, for a body its own joint does not move
+// (docs/linkage-check-design.md §5.2), the same without that joint when the
+// joint lies on the relative path.
+func (dr *linkageDriver) pathOf(m, below int) linkBound {
+	b := dr.bounds[dr.run.movers[m].group]
+	if dr.symmetric[m] && below < len(b.path) {
+		return withoutOwnJoint(b)
+	}
+	return b
 }
 
 // projection is the projection bound of docs/linkage-check-design.md §5.8
@@ -301,13 +334,12 @@ func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 // cannot be read exactly.
 func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 	r := dr.run
-	mine := dr.bounds[r.movers[i].group]
 	other := r.pairs[i][k].other
-	below := 0
+	below := dr.pairDepth(i, other)
+	mine := dr.pathOf(i, below)
 	var theirs linkBound
 	if other >= 0 {
-		theirs = dr.bounds[r.movers[other].group]
-		below = commonDepth(mine.path, theirs.path)
+		theirs = dr.pathOf(other, below)
 	}
 	hMine, ok := dr.projectionSpans(mine, below, a.f, b.f)
 	if !ok {

@@ -601,9 +601,10 @@ func TestLinkageProjectionBoundHandSum(t *testing.T) {
 }
 
 // TestLinkageProjectionLeavesTheDiscToTheTravelBound: a disc of radius 5
-// spinning a quarter turn about its own axis beside a wall 7 mm away keeps
-// its gap, but its box corner sweeps a circle of radius 5·√2, so the
-// projection bound sits up to (√2 − 1)·5 below the gap and the travel bound
+// spinning a quarter turn about an axis 1e-9 mm off its own beside a wall
+// 7 mm away keeps its gap to that width, but its box corner sweeps a circle
+// of radius 5·√2, so the projection bound sits up to (√2 − 1)·5 below the
+// gap and the travel bound
 // is the larger on every interval. Every interval's published bound is the
 // travel bound, bit for bit, and the run evaluates the 513 poses the travel
 // bound alone evaluates.
@@ -616,7 +617,9 @@ func TestLinkageProjectionLeavesTheDiscToTheTravelBound(t *testing.T) {
 	disc := internalDiscBody(t, doc, 5, 10)
 	internalBoxBodyAtZ(t, doc, 12, -20, 22, 20, -5, 20)
 	l := NewLinkage()
-	spin, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{disc})
+	// 1e-9 mm off the disc's own axis, so the symmetry rule (§5.2) keeps the
+	// joint and the box corner sweeps as the doc comment says.
+	spin, err := l.Ground().Revolute(r3.NewVec(1e-9, 0, 0), r3.NewVec(0, 0, 1), []*Body{disc})
 	require.NoError(t, err)
 	run := linkageRunOf(t, doc, l, Drive{{Link: spin, From: units.Degrees(0), To: units.Degrees(90)}})
 	run.cfg.readingP = &motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, linkageReadingFloor)}

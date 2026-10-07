@@ -1374,3 +1374,4 @@
 1	0.33	TestVerifyLinkagePendulum
 2	0.22	TestVerifyLinkageTwoArms
 2	0.05	TestVerifyLinkageOutAndBackPin
+1	0.50	TestVerifyLinkageSymmetricBody
