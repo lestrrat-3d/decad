@@ -101,7 +101,7 @@ the rules leave to the byte budget.
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
-| `patch_body.go` | `Body.Patch` adapters, orientation and face build. See `docs/surface-design.md` §5.2. |
+| `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
@@ -254,7 +254,7 @@ the rules leave to the byte budget.
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
-| `internal/patchchain/` | Closed-chain partition and exact plane proof for `Body.Patch`. See surface §5.2. |
+| `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch edge conversion and join checks. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
