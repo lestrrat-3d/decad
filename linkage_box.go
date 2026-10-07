@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1086,10 +1087,10 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	}
 	bound := projectionLower(a, p)
 	shares := make(map[int]*big.Rat)
-	axis, sense := attainedDirection(a, p, bound)
-	addProjectionShares(shares, a, mine, below, axis, sense, axisOf)
+	axis, sense := linkagebound.AttainedDirection(a.boundSide(), p.boundSide(), bound)
+	linkagebound.AddAxisShares(shares, a.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf), axis, sense)
 	if other >= 0 {
-		addProjectionShares(shares, p, theirs, below, axis, -sense, axisOf)
+		linkagebound.AddAxisShares(shares, p.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf), axis, -sense)
 	}
 	// The hull bound (§5.8): the same expansion over each body's hull points
 	// along every candidate direction, the larger of the two serving.
@@ -1102,11 +1103,11 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if hull == nil || hull.Cmp(bound) <= 0 {
 		return bound, shares
 	}
-	n, norm, hullSense := hullAttained(ah, ph, hull)
+	n, norm, hullSense := linkagebound.HullAttained(ah.boundSide(), ph.boundSide(), hull)
 	shares = make(map[int]*big.Rat)
-	addHullShares(shares, ah, mine, below, n, norm, hullSense, axisOf)
+	linkagebound.AddHullShares(shares, ah.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf), n, norm, hullSense)
 	if other >= 0 {
-		addHullShares(shares, ph, theirs, below, n, norm, -hullSense, axisOf)
+		linkagebound.AddHullShares(shares, ph.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf), n, norm, -hullSense)
 	}
 	return hull, shares
 }
@@ -1142,161 +1143,14 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 	return reading, true
 }
 
-// hullAttained is the direction n, an upper bound on |n|, and the sense,
-// ±1, along which projectionLowerHull attained bound: the first, in its own
-// order, whose L_n equals it. Sense +1 is the numerator that charges a's
-// extent along n, −1 the one that charges it along −n.
-func hullAttained(a, p projectionSide, bound *big.Rat) (motionbound.RatVec, *big.Rat, int) {
-	one, zero := big.NewRat(1, 1), new(big.Rat)
-	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
-	dirs = append(dirs, faceNormals(a.corners)...)
-	dirs = append(dirs, faceNormals(p.corners)...)
-	pads := new(big.Rat)
-	for _, pad := range []*big.Rat{a.corners.pad, p.corners.pad} {
-		if pad != nil {
-			pads.Add(pads, pad)
-		}
+// projectionAxes maps the relative path's joints to the split axes used by
+// the projection share calculation.
+func projectionAxes(b linkBound, below int, axisOf func(int) int) []int {
+	axes := make([]int, len(b.path)-below)
+	for n, joint := range b.path[below:] {
+		axes[n] = axisOf(joint)
 	}
-	for _, n := range dirs {
-		sq := axisSq(n)
-		normUp := sqrtUpRat(sq)
-		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
-		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
-			continue
-		}
-		aUp, aDown := a.extentsAlong(n, normUp)
-		pUp, pDown := p.extentsAlong(n, normUp)
-		for _, cand := range []struct {
-			sense int
-			num   *big.Rat
-		}{
-			{1, new(big.Rat).Neg(new(big.Rat).Add(pDown, aUp))},
-			{-1, new(big.Rat).Neg(new(big.Rat).Add(pUp, aDown))},
-		} {
-			sense, num := cand.sense, cand.num
-			norm := normDown
-			if num.Sign() > 0 {
-				norm = normUp
-			}
-			l := num.Quo(num, norm)
-			if l.Sub(l, pads).Cmp(bound) == 0 {
-				return n, normUp, sense
-			}
-		}
-	}
-	return dirs[0], one, 1
-}
-
-// addHullShares is addProjectionShares along any direction n with |n| at
-// most norm: at the point attaining the body's extent along sense·n, each
-// joint i on its relative path takes |n·v_{i,c}|·h_i/norm + Σ_j B_ij·h_i·h_j,
-// charged to axisOf(i). The shares decide cost alone, never soundness.
-func addHullShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below int, n motionbound.RatVec, norm *big.Rat, sense int, axisOf func(int) int) {
-	if len(s.h) == 0 {
-		return
-	}
-	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
-		sum := proofbound.PointInterval(new(big.Rat))
-		for d := range 3 {
-			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(p[d], n[d]))
-		}
-		return sum
-	}
-	attained, top := -1, (*big.Rat)(nil)
-	for c := range s.corners.hi {
-		pos := dot([3]proofbound.RatInterval{
-			proofbound.IntervalOwned(s.corners.lo[c][0], s.corners.hi[c][0]),
-			proofbound.IntervalOwned(s.corners.lo[c][1], s.corners.hi[c][1]),
-			proofbound.IntervalOwned(s.corners.lo[c][2], s.corners.hi[c][2]),
-		})
-		v := new(big.Rat).Set(pos.Hi)
-		if sense < 0 {
-			v.Neg(pos.Lo)
-		}
-		for j, vel := range s.corners.vel[c] {
-			term := ivAbsUpper(dot(vel))
-			v.Add(v, term.Mul(term, s.h[j]))
-		}
-		if top == nil || v.Cmp(top) > 0 {
-			attained, top = c, v
-		}
-	}
-	for j := range s.h {
-		share := ivAbsUpper(dot(s.corners.vel[attained][j]))
-		share.Mul(share, s.h[j])
-		share.Quo(share, norm)
-		for m := range s.h {
-			lo, hi := min(j, m), max(j, m)
-			if w := secondDerivativeBound(bound, below+lo, below+hi); w != nil {
-				term := new(big.Rat).Mul(w, s.h[j])
-				share.Add(share, term.Mul(term, s.h[m]))
-			}
-		}
-		joint := axisOf(bound.path[below+j])
-		if cur, ok := shares[joint]; ok {
-			cur.Add(cur, share)
-			continue
-		}
-		shares[joint] = share
-	}
-}
-
-// attainedDirection is the coordinate axis and sense, ±1, of the direction
-// n = sense·e_axis along which projectionLower attained bound: the first, in
-// projectionLower's own order, whose separation equals it.
-func attainedDirection(a, p projectionSide, bound *big.Rat) (int, int) {
-	aUp, aDown := a.extents()
-	pUp, pDown := p.extents()
-	for d := range 3 {
-		if new(big.Rat).Neg(new(big.Rat).Add(pDown[d], aUp[d])).Cmp(bound) == 0 {
-			return d, 1
-		}
-		if new(big.Rat).Neg(new(big.Rat).Add(pUp[d], aDown[d])).Cmp(bound) == 0 {
-			return d, -1
-		}
-	}
-	return 0, 1
-}
-
-// addProjectionShares adds one body's shares of a projection bound's defect
-// along sense·e_axis (docs/linkage-check-design.md §5.8, the split axis): at
-// the corner attaining the body's extent along that direction, each joint i
-// on its relative path takes |n·v_{i,c}|·h_i + Σ_j B_ij·h_i·h_j, the part of
-// the first-order term and the remainder that halving h_i removes, charged
-// to axisOf(i): the joint itself, or a loop dependent's driver. A body with
-// no joint, a static partner, takes nothing.
-func addProjectionShares(shares map[int]*big.Rat, s projectionSide, bound linkBound, below, axis, sense int, axisOf func(int) int) {
-	if len(s.h) == 0 {
-		return
-	}
-	attained, top := -1, (*big.Rat)(nil)
-	for c := range s.corners.hi {
-		up, down := s.firstOrder(c, axis)
-		v := up.Add(up, s.corners.hi[c][axis])
-		if sense < 0 {
-			v = down.Sub(down, s.corners.lo[c][axis])
-		}
-		if top == nil || v.Cmp(top) > 0 {
-			attained, top = c, v
-		}
-	}
-	for n := range s.h {
-		share := ivAbsUpper(s.corners.vel[attained][n][axis])
-		share.Mul(share, s.h[n])
-		for m := range s.h {
-			lo, hi := min(n, m), max(n, m)
-			if w := secondDerivativeBound(bound, below+lo, below+hi); w != nil {
-				term := new(big.Rat).Mul(w, s.h[n])
-				share.Add(share, term.Mul(term, s.h[m]))
-			}
-		}
-		joint := axisOf(bound.path[below+n])
-		if cur, ok := shares[joint]; ok {
-			cur.Add(cur, share)
-			continue
-		}
-		shares[joint] = share
-	}
+	return axes
 }
 
 // jointTerm is one joint's share w_i·span_i(C) of a pair's travel over a
