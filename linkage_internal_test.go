@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -795,4 +796,64 @@ func TestLinkageHullPoints(t *testing.T) {
 	}
 	require.Zero(t, projectionLowerHull(side(block, nil), side(far, nil)).Cmp(big.NewRat(10, 1)))
 	require.Zero(t, projectionLowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
+}
+
+// TestLinkageHullPointsInsideRestBox pins the containment
+// docs/linkage-check-design.md §5.8's remainder relies on: every hull point
+// of a body lies inside its rest box inflated by its Bound, compared exactly,
+// so ρ read from that box's corners bounds the hull point's distance from a
+// joint's centre. The bodies are a box, a box turned about Z and lifted, a box
+// turned about (1, 1, 1), and a union whose section carries a positive
+// displacement, whose pad then exceeds its box's Bound.
+//
+// The test guards a property, not a term, so no leg can be deleted. It was
+// seen to fail with the top level lifted by the pad: the union's top hull
+// points then leave its box, whose Bound is about a seventh of the pad.
+func TestLinkageHullPointsInsideRestBox(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	z := r3.NewVec(0, 0, 1)
+	block := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
+	turn, err := r3.RotationAround(r3.NewVec(5, 5, 0), z, units.Radians(0.3))
+	require.NoError(t, err)
+	up, err := r3.Translation(r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	lifted, err := turn.Then(up)
+	require.NoError(t, err)
+	turned, err := internalBoxBody(t, doc, 5, 5, 15, 15, 7).PlacedCopy(t.Context(), lifted)
+	require.NoError(t, err)
+	tilt, err := r3.RotationAround(r3.NewVec(3, -2, 1), r3.NewVec(1, 1, 1), units.Radians(0.7))
+	require.NoError(t, err)
+	tilted, err := internalBoxBody(t, doc, 0, 0, 10, 10, 5).PlacedCopy(t.Context(), tilt)
+	require.NoError(t, err)
+	frame := canonicalPrismFrame(t)
+	inner := prismPayload{profile: ProfileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
+	const shift = 1e8
+	far, err := r3.Translation(r3.NewVec(shift, 0, 0))
+	require.NoError(t, err)
+	containing := prismPayload{profile: ProfileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, frame: frame, z0: 0, z1: 10, xform: far}
+	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Positive(t, union.sectionDelta)
+	unionBox, err := prismBoundsContext(t.Context(), union, nil, nil)
+	require.NoError(t, err)
+	for name, body := range map[string]*Body{
+		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
+		"a displaced union": {payload: union, bounds: unionBox},
+	} {
+		points, pad, _, ok := bodyHullPoints(body)
+		require.True(t, ok, name)
+		lo, hi, ok := boxCornersExact(body.bounds, new(big.Rat))
+		require.True(t, ok, name)
+		for n, p := range points {
+			for i := range 3 {
+				require.True(t, lo[i].Cmp(p[i]) <= 0 && p[i].Cmp(hi[i]) <= 0, "%s: hull point %d axis %d", name, n, i)
+			}
+		}
+		if name == "a displaced union" {
+			bound := proofarith.FloatRat(body.bounds.Bound.Base())
+			require.Positive(t, pad.Cmp(bound), `the pad exceeds the box's Bound, so the containment is not the pad's doing`)
+		}
+	}
 }
