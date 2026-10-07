@@ -270,7 +270,7 @@ the rules leave to the byte budget.
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
 | `internal/prismcells/` | Sketch cell classification, matching, merge, cut and walk charges, and trim walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
-| `internal/capcontour/` | Interval enclosures for cap contour points, offset carrier intersections and miter locus speed. See `docs/modify-reach-design.md` §8.3-§8.4. |
+| `internal/capcontour/` | Interval bounds for cap contours, shell offsets and miter loci. See `docs/modify-reach-design.md` §8.3-§8.4. |
 | `internal/capband/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
