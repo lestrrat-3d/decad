@@ -405,8 +405,8 @@ than deferred to a mesh refusal. A crossing pair whose operands carry a
 section displacement or walk charge, or whose re-expression is nonidentity (a
 gear moved with `Body.Placed`), is measured too: that document's §3.4 charges
 each crossing the displacement it can amplify
-(`docs/general-boolean-design.md` §3 A6), and refuses one too close to
-tangent to bound, which reads `Suspect` here. A pair neither analytic
+(`docs/general-boolean-design.md` §3 A6), and sends one too close to
+tangent to bound to the mesh path below. A pair neither analytic
 path admits still falls back to `evaluateBoolean`'s read-only mesh
 intersection unchanged, so this section still governs every coplanar pair the
 mesh path receives:

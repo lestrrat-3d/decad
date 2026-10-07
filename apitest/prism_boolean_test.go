@@ -287,8 +287,8 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 // (docs/general-boolean-design.md §3) charges the crossings its
 // re-expression can move. The tooth's root arc lies on the hub's own circle,
 // though, so where the arc meets the hub circle the two carriers are
-// tangent: no positive sine bound exists, and the noise floor refuses the
-// pair with ErrUnsupported.
+// tangent: no positive sine bound exists, the crossing has no charge, and
+// the pair falls back to the mesh path, whose proximity refusal it reports.
 func TestPrismUnionRotatedToothFallback(t *testing.T) {
 	t.Parallel()
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
@@ -313,7 +313,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
-	t.Run("hand-built FromBasis refuses at the tangent root arc", func(t *testing.T) {
+	t.Run("hand-built FromBasis falls back at the tangent root arc", func(t *testing.T) {
 		theta := 2 * math.Pi * float64(k) / float64(n)
 		cos, sin := math.Cos(theta), math.Sin(theta)
 		basis := r3.Basis{
@@ -325,7 +325,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		require.NoError(t, err)
 		_, err = build(t, tr)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "too close to tangent")
+		require.ErrorContains(t, err, "held facets come within the chord tolerance")
 	})
 }
 

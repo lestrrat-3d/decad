@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -25,8 +26,9 @@ import (
 // computed a coordinate (§7's δ_walk, walkChargeOf), or B's re-expression is
 // nonidentity, every crossing the arrangement cuts can amplify that
 // displacement by 1/sin θ, and docs/general-boolean-design.md §3 A6 charges
-// it (prismSceneDelta.chargeCrossings, prismcells.CrossingCharge), refusing a
-// crossing too close to tangent to bound. Every cut also charges the cut
+// it (prismSceneDelta.chargeCrossings, prismcells.CrossingCharge). Such a
+// pair never refuses: a crossing too close to tangent to bound, or any later
+// analytic failure, sends it to the mesh path (prismAmplifiedFallback). Every cut also charges the cut
 // parameters' OWN rounding into the result's section displacement (§7,
 // prismcells.CutDelta) — a merged section built from fragments is never
 // exact, whatever the operands were. A
@@ -71,9 +73,9 @@ import (
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. A
 // non-nil err means the bounded analytic resolution reached a genuine
-// refusal (§3.4) — a near-tangent crossing A6's charge cannot bound among
-// them — and the caller MUST propagate it rather than reroute to the mesh
-// path.
+// refusal (§3.4), and the caller MUST propagate it rather than reroute to
+// the mesh path. A pair whose cuts carry an amplified displacement never
+// refuses: it falls back (prismAmplifiedFallback).
 //
 // G1-G4 (admitPrismPairBudget) and the work cap are shared, unchanged, by
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
@@ -256,8 +258,9 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 		return prismPayload{}, false, nil // §4.4: this topology is unresolved
 	}
 
-	// Point of no return (§3.4): every further problem is a genuine refusal.
-	if err := auditPrismMergeSection(budget, pa, merged); err != nil {
+	// Point of no return (§3.4): every further problem is a genuine refusal,
+	// unless the cuts carry an amplified displacement (prismAmplifiedFallback).
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 	result := prismPayload{
@@ -510,10 +513,10 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // every cut the arrangement made.
 //
 // resolved=false (err always nil in that case) means the pair's topology is
-// unresolved (§4.4): the caller falls back to the mesh path with no error. A
-// non-nil error — including ctx cancellation surfacing through budget, and
-// a near-tangent crossing the crossing charge refuses — is always genuine
-// and must propagate.
+// unresolved (§4.4), or a cut carries an amplified displacement the crossing
+// charge cannot bound or the merge then fails on: the caller falls back to
+// the mesh path with no error. A non-nil error — including ctx cancellation
+// surfacing through budget — is genuine and must propagate.
 func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
@@ -535,23 +538,24 @@ func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, p
 	if len(profiles) == 0 {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
+	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
+	// cut is charged the input displacement it amplifies; a crossing too
+	// close to tangent for that charge sends the pair to the mesh path.
+	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil || !ok {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+	}
+
 	// Union, hole-free operands (G6): select every returned cell — by
 	// construction there is no bounded cell that is material of neither
 	// operand (§4.2). mergePrismCells is the shared merge/chain tail the
 	// crossing sub-case (prism_boolean_crossing.go) reuses over its OWN,
 	// narrower selected cell set.
 	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
-	if err != nil {
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
-	}
-	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
-	// cut is charged the input displacement it amplifies, or refused when
-	// its angle is too close to tangent for that charge to stand.
-	if err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	return merged, sceneDelta, cutDelta, true, nil
 }
@@ -637,9 +641,15 @@ func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 // (prismcells.CrossingCharge): the largest distance an input displacement
 // can move a crossing the arrangement cut. It is zero when neither operand
 // brings a displacement, and on every path that cuts nothing.
+//
+// amplified records that the arrangement cut something while an operand
+// brought a displacement: the case prism-boolean §3.4 charges. Such a pair
+// never refuses on the analytic path; every problem past the charge sends it
+// to the mesh path instead (prismAmplifiedFallback).
 type prismSceneDelta struct {
-	a, b     float64
-	crossing float64
+	a, b      float64
+	crossing  float64
+	amplified bool
 }
 
 // incoming is §7's two incoming displacements: operand A's own section
@@ -649,15 +659,44 @@ func (d prismSceneDelta) incoming(pa, pb prismPayload, reexpress *prismReexpress
 	return proofbound.AbsSumUpper(pa.sectionDelta, d.a), proofbound.AbsSumUpper(pb.sectionDelta, d.b, reexpress.delta)
 }
 
-// chargeCrossings sets d.crossing from the arrangement's returned cells.
-func (d *prismSceneDelta) chargeCrossings(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, pa, pb prismPayload, reexpress *prismReexpression) error {
+// chargeCrossings sets d.amplified and d.crossing from the arrangement's
+// returned cells. ok=false (err always nil then) means a crossing has no
+// proven charge — too close to tangent, or not settling — and the caller
+// falls back to the mesh path. A non-nil error is cancellation.
+func (d *prismSceneDelta) chargeCrossings(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, pa, pb prismPayload, reexpress *prismReexpression) (bool, error) {
 	inA, inB := d.incoming(pa, pb, reexpress)
-	crossing, err := prismcells.CrossingCharge(budget, tags, profiles, inA, inB)
+	if inA == 0 && inB == 0 {
+		return true, nil
+	}
+	split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if !split {
+		return true, nil
+	}
+	d.amplified = true
+	crossing, ok, err := prismcells.CrossingCharge(budget, tags, profiles, inA, inB)
+	if err != nil || !ok {
+		return false, err
 	}
 	d.crossing = crossing
-	return nil
+	return true, nil
+}
+
+// prismAmplifiedFallback is the routing rule for a pair whose cuts carry an
+// amplified input displacement (prismSceneDelta.amplified): an error from
+// the analytic resolution past the charge does not refuse the boolean, it
+// sends the pair to the mesh path (fallBack=true, err=nil). Cancellation
+// always propagates, and a pair that is not amplified keeps its error.
+func prismAmplifiedFallback(amplified bool, err error) (bool, error) {
+	if err == nil {
+		return false, nil
+	}
+	if !amplified || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false, err
+	}
+	return true, nil
 }
 
 // merged is the section displacement of a section assembled from cut

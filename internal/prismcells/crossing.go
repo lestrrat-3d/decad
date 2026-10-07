@@ -21,9 +21,10 @@ import (
 // carriers that cross at an angle θ, displaced by δ1 and δ2, meet up to
 // (δ1 + δ2)/sin θ from where the recorded carriers meet. The charge states
 // that distance for every crossing the arrangement cut, with sin θ bounded
-// below by exact rational arithmetic on the recorded carriers, and refuses a
-// crossing whose bound falls below the dimensionless noise floor ε of
-// docs/verification-design.md §4 (sectionaudit.ContactEps).
+// below by exact rational arithmetic on the recorded carriers. A crossing
+// whose bound is not above the dimensionless noise floor ε of
+// docs/verification-design.md §4 (sectionaudit.ContactEps) has no charge;
+// the caller then takes the mesh path.
 //
 // The argument, for one crossing O of recorded carriers γ1 and γ2 and its
 // denoted twin P* (within δ1 of γ1 and δ2 of γ2): take Q1 on γ1 and Q2 on
@@ -32,74 +33,138 @@ import (
 // of γ2, Q1 − O is a sum of γ1's tangents and Q2 − O of γ2's, so
 // |Q1 − Q2| ≥ max(|Q1 − O|, |Q2 − O|)·sin θ_low. Hence
 // |P* − O| ≤ (δ1 + δ2)/sin θ_low + min(δ1, δ2). sinLower bounds sin θ_low
-// over a ball around the recorded junction point, and CrossingCharge widens
+// over a ball around the recorded junction point, and junctionCharge widens
 // that ball until it holds the whole distance it charges.
-
-// CrossingCharge is the largest crossing displacement over every junction
-// of every returned cell where the arrangement cut a carrier and two
-// distinct entities meet. deltaA and deltaB are each operand's incoming
-// coordinate displacement (§7's δ_A + δ_walkA and δ_B + δ_walkB +
-// δ_reexpress). Both zero charges nothing and reads no junction.
 //
-// It returns decaderr.ErrUnsupported when a crossing's certified sin θ_low
-// is not positive or falls below sectionaudit.ContactEps: a near-tangent
-// crossing amplifies an input displacement by an amount this charge cannot
-// bound. That check only refuses. A recorded edge sketch reports uncertified
-// is sketchrecord.RecordEdge's own refusal.
-func CrossingCharge(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile, deltaA, deltaB float64) (float64, error) {
+// The charge is read per arranged VERTEX, not per pair of consecutive edges
+// in a returned cell. sketch returns only the bounded cells, so a pair of
+// edges adjacent around a vertex only through the unbounded face would never
+// be walked consecutively by any returned loop. Every pair of distinct
+// entities incident at a cut vertex is charged instead, whichever face walks
+// them.
+//
+// A touch from outside has no vertex at all. When B's apex touches A's wall
+// from outside, or B's edge passes exactly through A's corner from outside,
+// sketch arranges the two outlines as separate cells with no cut and no
+// shared vertex (TestCrossingChargeOutsideTouchIsNoCut), so nothing is
+// charged, and nothing needs to be: a point the displacement moves across
+// either boundary there lies within δ_B of B's recorded boundary, which lies
+// outside A, so the segment to it crosses A's recorded wall within δ_B. Every
+// such point therefore lies within δ_B of A's recorded wall, which bounds
+// every selected region the touch borders, inside the tube of half-width
+// sectionDelta ≥ δ_B that prism-boolean §7 already charges around the
+// recorded boundary.
+
+// CrossingCharge is the largest crossing displacement over every arranged
+// vertex where the arrangement cut a carrier, taken over every pair of
+// distinct entities incident there. Vertices are the walk ends sketch
+// reports in each edge's Polyline, matched by exact equality, the same
+// vertex identity ChainClosedSurvivors reads. deltaA and deltaB are each
+// operand's incoming coordinate displacement (§7's δ_A + δ_walkA and
+// δ_B + δ_walkB + δ_reexpress). Both zero charges nothing and reads nothing.
+//
+// ok=false (err always nil then) means a crossing has no charge: its
+// certified sin θ_low is not above sectionaudit.ContactEps, its bound does
+// not settle within the region it charges, or one of its edges does not
+// record (an uncertified fragment). The caller falls back to the mesh path.
+// A non-nil error is the budget's own (cancellation).
+func CrossingCharge(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile, deltaA, deltaB float64) (float64, bool, error) {
 	if deltaA == 0 && deltaB == 0 {
-		return 0, nil
+		return 0, true, nil
 	}
-	charge := 0.0
+	type endKey struct {
+		entity sketch.Entity
+		t      float64
+	}
+	vertices := map[[2]float64][]vertexEnd{}
+	seen := map[endKey]struct{}{}
 	for _, p := range profiles {
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
-			for i, e1 := range loop {
+			for _, e := range loop {
 				if err := budget.Step(); err != nil {
-					return 0, err
+					return 0, false, err
 				}
-				e2 := loop[(i+1)%len(loop)]
-				if e1.Entity == e2.Entity {
+				if len(e.Polyline) == 0 {
+					return 0, false, nil
+				}
+				seg, t0, t1, ok := recordedRange(e)
+				if !ok {
+					return 0, false, nil
+				}
+				for _, end := range []vertexEnd{
+					{edge: e, seg: seg, t: t0, atStart: true},
+					{edge: e, seg: seg, t: t1},
+				} {
+					k := endKey{entity: e.Entity, t: end.t}
+					if _, dup := seen[k]; dup {
+						continue
+					}
+					seen[k] = struct{}{}
+					at := e.Polyline[len(e.Polyline)-1]
+					if end.atStart {
+						at = e.Polyline[0]
+					}
+					vertices[at] = append(vertices[at], end)
+				}
+			}
+		}
+	}
+	charge := 0.0
+	for _, ends := range vertices {
+		cut := false
+		for _, end := range ends {
+			cut = cut || cutAt(end.edge, end.seg, end.t)
+		}
+		if !cut {
+			continue // recorded vertices meeting: nothing here was computed
+		}
+		for i := range ends {
+			for j := i + 1; j < len(ends); j++ {
+				if err := budget.Step(); err != nil {
+					return 0, false, err
+				}
+				if ends[i].edge.Entity == ends[j].edge.Entity {
 					continue
 				}
-				c, err := junctionCharge(tags, e1, e2, deltaA, deltaB)
-				if err != nil {
-					return 0, err
+				c, ok := junctionCharge(tags, ends[i], ends[j], deltaA, deltaB)
+				if !ok {
+					return 0, false, nil
 				}
 				charge = math.Max(charge, c)
 			}
 		}
 	}
-	return charge, nil
+	return charge, true, nil
 }
 
-// junctionCharge is CrossingCharge for the junction where e1's walk ends and
-// e2's walk starts. A junction where neither side was cut is two recorded
-// vertices meeting, which the arrangement computed nothing for, and charges
-// nothing here.
-func junctionCharge(tags map[sketch.Entity]Origin, e1, e2 sketch.BoundaryEdge, deltaA, deltaB float64) (float64, error) {
-	seg1, err := sketchrecord.RecordEdge(e1)
+// recordedRange records e and reads its recorded parameter range. ok=false
+// means the edge does not record (an uncertified fragment, which
+// sketchrecord.RecordEdge refuses) and so has no charge.
+func recordedRange(e sketch.BoundaryEdge) (CurveSegment, float64, float64, bool) {
+	seg, err := sketchrecord.RecordEdge(e)
 	if err != nil {
-		return 0, err
+		return nil, 0, 0, false
 	}
-	seg2, err := sketchrecord.RecordEdge(e2)
-	if err != nil {
-		return 0, err
-	}
-	end1, err := walkEndParam(seg1)
-	if err != nil {
-		return 0, err
-	}
-	start2, err := walkStartParam(seg2)
-	if err != nil {
-		return 0, err
-	}
-	if !cutAt(e1, seg1, end1) && !cutAt(e2, seg2, start2) {
-		return 0, nil
-	}
-	o1, ok1 := tags[e1.Entity]
-	o2, ok2 := tags[e2.Entity]
+	t0, t1, err := SegmentParamRange(seg)
+	return seg, t0, t1, err == nil
+}
+
+// vertexEnd is one edge's walk end at an arranged vertex: the edge, its
+// recorded segment, the recorded parameter at that end, and which end.
+type vertexEnd struct {
+	edge    sketch.BoundaryEdge
+	seg     CurveSegment
+	t       float64
+	atStart bool
+}
+
+// junctionCharge is the crossing displacement for two distinct entities
+// meeting at one arranged vertex. ok=false means no charge could be proven.
+func junctionCharge(tags map[sketch.Entity]Origin, a, b vertexEnd, deltaA, deltaB float64) (float64, bool) {
+	o1, ok1 := tags[a.edge.Entity]
+	o2, ok2 := tags[b.edge.Entity]
 	if !ok1 || !ok2 {
-		return 0, fmt.Errorf(`decad: a crossing junction traces to an entity the scene did not create`)
+		return 0, false
 	}
 	d1, d2 := deltaA, deltaA
 	if o1.IsB {
@@ -109,69 +174,46 @@ func junctionCharge(tags map[sketch.Entity]Origin, e1, e2 sketch.BoundaryEdge, d
 		d2 = deltaB
 	}
 	if d1 == 0 && d2 == 0 {
-		return 0, nil
+		return 0, true
 	}
 
-	pt, pointErr, err := junctionPoint(e1, seg1, end1, e2, seg2, start2)
+	pt, pointErr, err := junctionPoint(a, b)
 	if err != nil {
-		return 0, err
+		return 0, false
 	}
 	reach := proofbound.AbsSumUpper(d1, d2)
 
 	// sin θ_low over the ball that holds the recorded crossing O, then over a
 	// ball twice the distance that first bound charges; the second bound is
 	// accepted only when the distance it charges fits the ball it read.
-	s0, err := sinLower(seg1, seg2, pt, pointErr)
-	if err != nil {
-		return 0, err
-	}
-	if err := refuseNearTangent(s0); err != nil {
-		return 0, err
+	s0, err := sinLower(a.seg, b.seg, pt, pointErr)
+	if err != nil || !aboveNoiseFloor(s0) {
+		return 0, false
 	}
 	far0 := proofbound.DivUpper(reach, s0)
 	rho := proofbound.AbsSumUpper(pointErr, far0, far0)
-	s1, err := sinLower(seg1, seg2, pt, rho)
-	if err != nil {
-		return 0, err
-	}
-	if err := refuseNearTangent(s1); err != nil {
-		return 0, err
+	s1, err := sinLower(a.seg, b.seg, pt, rho)
+	if err != nil || !aboveNoiseFloor(s1) {
+		return 0, false
 	}
 	far1 := proofbound.DivUpper(reach, s1)
 	if far1 > 2*far0 || math.IsInf(far1, 1) {
-		return 0, fmt.Errorf(`%w: a crossing's angle bound does not settle within the region it charges (sin θ ≥ %g, then %g)`,
-			decaderr.ErrUnsupported, s0, s1)
+		return 0, false
 	}
-	return proofbound.AbsSumUpper(far1, math.Min(d1, d2)), nil
+	return proofbound.AbsSumUpper(far1, math.Min(d1, d2)), true
 }
 
-// refuseNearTangent is A6's noise-floor refusal: a crossing whose certified
-// sin θ_low is not above ε = sectionaudit.ContactEps
-// (docs/verification-design.md §4's floor for a dimensionless quantity).
-func refuseNearTangent(s float64) error {
-	if s > sectionaudit.ContactEps {
-		return nil
-	}
-	return fmt.Errorf(`%w: two carriers cross at an angle whose proven sine (%g) is not above the noise floor %g, so an input displacement moves the crossing by an amount this evaluator cannot bound; the pair is too close to tangent`,
-		decaderr.ErrUnsupported, s, sectionaudit.ContactEps)
-}
-
-// walkEndParam and walkStartParam are the recorded parameters a segment's
-// walk ends and starts at (record.go: the walk runs TStart → TEnd).
-func walkEndParam(seg CurveSegment) (float64, error) {
-	_, t1, err := SegmentParamRange(seg)
-	return t1, err
-}
-
-func walkStartParam(seg CurveSegment) (float64, error) {
-	t0, _, err := SegmentParamRange(seg)
-	return t0, err
+// aboveNoiseFloor is A6's noise floor: a crossing's certified sin θ_low must
+// be above ε = sectionaudit.ContactEps (docs/verification-design.md §4's
+// floor for a dimensionless quantity) for its displacement to be charged.
+func aboveNoiseFloor(s float64) bool {
+	return s > sectionaudit.ContactEps
 }
 
 // cutAt reports whether the arrangement computed the parameter t at which
-// e's walk meets the junction. A whole edge computed nothing. A circle has
-// no vertex, so every end of a Partial circle edge is a cut; a line or arc
-// end is a cut unless it sits on its entity's own recorded bound.
+// e's walk meets the vertex. A whole edge computed nothing. A circle has no
+// vertex, so every end of a Partial circle edge is a cut; a line or arc end
+// is a cut unless it sits on its entity's own recorded bound.
 func cutAt(e sketch.BoundaryEdge, seg CurveSegment, t float64) bool {
 	if !e.Partial {
 		return false
@@ -186,27 +228,32 @@ func cutAt(e sketch.BoundaryEdge, seg CurveSegment, t float64) bool {
 // distance from the crossing O the two recorded carriers state. A line side
 // gives P̂ as the exact rational point at its recorded parameter, within its
 // own cut allowance (CutDelta) of O; with no line side, the first circular
-// walk's float endpoint stands in, adding the walk's own endpoint bound.
-func junctionPoint(e1 sketch.BoundaryEdge, seg1 CurveSegment, end1 float64, e2 sketch.BoundaryEdge, seg2 CurveSegment, start2 float64) ([2]*big.Rat, float64, error) {
-	if l, ok := seg1.(LineSeg); ok {
-		return lineJunctionPoint(e1, l, end1)
+// walk's float end at the vertex stands in, adding the walk's own endpoint
+// bound.
+func junctionPoint(a, b vertexEnd) ([2]*big.Rat, float64, error) {
+	if l, ok := a.seg.(LineSeg); ok {
+		return lineJunctionPoint(a.edge, l, a.t)
 	}
-	if l, ok := seg2.(LineSeg); ok {
-		return lineJunctionPoint(e2, l, start2)
+	if l, ok := b.seg.(LineSeg); ok {
+		return lineJunctionPoint(b.edge, l, b.t)
 	}
-	w, err := boundarywalk.WalkOf(seg1, nil)
+	w, err := boundarywalk.WalkOf(a.seg, nil)
 	if err != nil {
 		return [2]*big.Rat{}, 0, err
 	}
-	u, v := proofarith.FloatRat(w.EndU), proofarith.FloatRat(w.EndV)
+	pu, pv, bound := w.EndU, w.EndV, w.EndBound
+	if a.atStart {
+		pu, pv, bound = w.StartU, w.StartV, w.StartBound
+	}
+	u, v := proofarith.FloatRat(pu), proofarith.FloatRat(pv)
 	if u == nil || v == nil {
 		return [2]*big.Rat{}, 0, fmt.Errorf(`%w: a crossing junction's walked point is not finite`, decaderr.ErrUnsupported)
 	}
-	cut, err := CutDelta(e1, seg1)
+	cut, err := CutDelta(a.edge, a.seg)
 	if err != nil {
 		return [2]*big.Rat{}, 0, err
 	}
-	return [2]*big.Rat{u, v}, proofbound.AbsSumUpper(cut, proofbound.WalkEndBoundAllow(w.EndBound)), nil
+	return [2]*big.Rat{u, v}, proofbound.AbsSumUpper(cut, proofbound.WalkEndBoundAllow(bound)), nil
 }
 
 func lineJunctionPoint(e sketch.BoundaryEdge, l LineSeg, t float64) ([2]*big.Rat, float64, error) {

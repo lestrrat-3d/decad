@@ -253,10 +253,12 @@ silent fallback stops being available:
    own recorded range narrows its natural domain), or B's re-expression is
    nonidentity, any of the three can move a transverse cut by its
    displacement divided by the crossing sine. `docs/general-boolean-design.md`
-   §3 A6 charges that movement at every cut once the resolution has found its
-   candidate (`prismcells.CrossingCharge`), and refuses a crossing whose proven
-   sine is not above verification §4's dimensionless noise floor with
-   `ErrUnsupported`. `Body.Placed` is the ordinary way a pair reaches the
+   §3 A6 charges that movement at every cut (`prismcells.CrossingCharge`).
+   Such a pair never refuses: a crossing whose proven sine is not above
+   verification §4's dimensionless noise floor has no charge, and that, or
+   any later merge, audit or recording failure, sends it to the mesh path
+   with no error (`prismAmplifiedFallback`), exactly as an unresolved
+   topology does. `Body.Placed` is the ordinary way a pair reaches the
    re-expression cause, and it reaches it through the ACCUMULATED placement
    rather than through the motion any one call received:
    `newPrismReexpression` reports the identity exactly when G3's shared-axis
@@ -491,6 +493,7 @@ regardless of who authored the input curves it was cut from.
 | Shape | Where it stands |
 |---|---|
 | Antiparallel, tilted, or non-analytic-segment pairs | G1–G4, mesh path, unchanged |
+| A displaced pair whose operands' recorded vertices meet exactly, with no cut there | Known limit: §3.4's crossing charge reads cut vertices only, so a vertex where two recorded vertices meet is charged nothing, though the operands' displacements can open a crossing within `(δ_A + δ_B)/sin θ` of it; the result carries only §7's incoming terms there |
 | A parallel-offset pair outside G3's shared-axis arm: the operands carry different accumulated placements (one of them `Placed`, even along the shared normal), their frames' `U`/`V` differ in the stored bits (an offset of a tilted base plane re-normalises `U` one ulp apart), or the origin difference has an in-plane component (`CreatePlaneFromFrame` with an origin off A's axis) | G3, mesh path. The shared-axis arm could later admit an equal-rotation pair whose placements differ by a pure translation along `N`, by the same exact `d × N == 0` test over `(tB + oB) − (tA + oA)`; not built, since it changes the routing of every existing `Placed`-along-normal fixture |
 | A tool plane whose normal is genuinely reversed (a frame built with `V` flipped, so `N` opposes the target's), whichever way the tool is extruded | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry. A tool sketched on a same-normal offset plane above the target and extruded `Against` is not this case: `Extrude` keeps the sketch frame and records the negative interval `[−D, 0]`, so the shared-axis arm admits it with the exact shift (G3, G5) |
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
@@ -596,7 +599,8 @@ unsupported. A genuinely overlapping pair whose arrangement splits a
 boundary, where either operand carries a prior section displacement or walk
 charge or B's re-expression is nonidentity, is measured: §3.4's crossing
 charge enters each cell's displacement (§7), and a crossing too close to
-tangent for that charge refuses (`ErrUnsupported`). The reading never publishes a
+tangent for that charge, or a cell such a pair cannot record, declines the
+reading to the mesh path. The reading never publishes a
 zero-volume overlap and never turns a contact into a row;
 `docs/interference-design.md` §6's positive-volume gate judges what it does
 publish, unchanged.
@@ -1189,7 +1193,8 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   `n = 17` correctly falls back to the mesh path (G3 miss, no error). The
   same model built via a hand-constructed `FromBasis` placement clears G3, and
   its root arc on the hub circle meets that circle tangentially, which §3.4's
-  crossing charge refuses (`ErrUnsupported`). The test must cover
+  crossing charge cannot bound, so it falls back to the mesh path. The test
+  must cover
   several counts from §3.3's inexact set rather than `n = 17` alone, since the
   inexact counts are the majority and a single-count test reads as though they
   were rare.

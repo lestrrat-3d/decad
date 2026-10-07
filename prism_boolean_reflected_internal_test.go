@@ -295,3 +295,133 @@ func TestPrismBooleanReflectedSharedAxisIsIdentity(t *testing.T) {
 	require.Positive(t, one.sectionDelta, "the reflected re-expression rounds the tool's coordinates")
 	require.Len(t, one.profile.Holes, 1)
 }
+
+// prismToothBody extrudes a gear tooth over [z0, z0+h]: an arc of radius 20
+// about the origin from −0.1 to 0.1 rad, closed by two radial flanks and an
+// outer chord at radius 25. Its root arc lies on a radius-20 hub's circle.
+func prismToothBody(t *testing.T, doc *Document, z0, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	p1 := s.CreatePoint(20*math.Cos(-0.1), 20*math.Sin(-0.1))
+	p2 := s.CreatePoint(20*math.Cos(0.1), 20*math.Sin(0.1))
+	p3 := s.CreatePoint(25*math.Cos(0.1), 25*math.Sin(0.1))
+	p4 := s.CreatePoint(25*math.Cos(-0.1), 25*math.Sin(-0.1))
+	s.Fix(p1)
+	s.CreateArc(center, p1, p2)
+	s.CreateLine(p2, p3)
+	s.CreateLine(p3, p4)
+	s.CreateLine(p4, p1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// prismOvershootQuadBody draws a quadrilateral as four lines overshooting
+// each corner by over times the side, so every recorded boundary segment is
+// a Partial fragment (apitest's overshootQuadBody, fu141's reproduction), and
+// extrudes the largest cell prismFixtureHeight mm.
+func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, over float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	n := len(corners)
+	for i := range n {
+		a, b := corners[i], corners[(i+1)%n]
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		p := s.CreatePoint(a[0]-over*dx, a[1]-over*dy)
+		q := s.CreatePoint(b[0]+over*dx, b[1]+over*dy)
+		s.Fix(p)
+		s.Fix(q)
+		s.CreateLine(p, q)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profs := s.Profiles()
+	best := 0
+	for i, p := range profs {
+		if p.Area > profs[best].Area {
+			best = i
+		}
+	}
+	body, err := doc.Extrude(s, profs[best], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestPrismAmplifiedCutsFallBack pins A6's routing for a pair whose cuts
+// carry an amplified input displacement: it never refuses on the analytic
+// path.
+//
+//   - A tooth whose root arc lies on the hub circle, rotated 60°, meets the
+//     hub circle tangentially: the crossing has no charge, and Union and a
+//     Cut whose tool is taller than the hub both return ok=false with no
+//     error, so the caller takes the mesh path. So does the L of
+//     docs/mirror-pattern-design.md §2 unioned with its image across x = 15,
+//     whose shared collinear walls meet at a sine of zero.
+//   - fu141's overshooting quadrilateral, whose fragments carry a walk
+//     charge, restates one corner as two whole segments that do not
+//     bit-match. Unioned with a box strictly inside it, nothing is cut, and
+//     the merge refuses with RB9. Unioned with a box crossing its right
+//     wall, the cuts carry the walk charge, the crossings are charged, and
+//     the same RB9 sends the pair to the mesh path instead.
+//
+// Shown to fail with prismAmplifiedFallback returning every error (the
+// crossing quadrilateral returned RB9), and with CrossingCharge's decline
+// turned into an error (the tooth returned ErrUnsupported).
+func TestPrismAmplifiedCutsFallBack(t *testing.T) {
+	t.Parallel()
+	turn, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name  string
+		op    meshbool.OperationKind
+		z0, h float64
+	}{
+		{"tangent root, union", meshbool.OpUnion, 0, prismFixtureHeight},
+		{"tangent root, cut by a taller tool", meshbool.OpCut, -5, 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := New()
+			hub := prismReflectDiscBody(t, doc, 0, 0, 20)
+			tooth, err := prismToothBody(t, doc, tc.z0, tc.h).Placed(t.Context(), turn)
+			require.NoError(t, err)
+			_, ok, err := tryPrismBoolean(t.Context(), tc.op, hub, tooth)
+			require.NoError(t, err)
+			require.False(t, ok)
+		})
+	}
+
+	t.Run("collinear walls under a reflection", func(t *testing.T) {
+		doc := New()
+		l := internalPolyPrismBody(t, doc, [][2]float64{{0, 0}, {20, 0}, {20, 5}, {5, 5}, {5, 20}, {0, 20}}, prismFixtureHeight)
+		image, err := l.PlacedCopy(t.Context(), prismMirrorAcrossX(t, 15))
+		require.NoError(t, err)
+		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, l, image)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
+	t.Run("a merge that cuts nothing refuses RB9", func(t *testing.T) {
+		doc := New()
+		quad := prismOvershootQuadBody(t, doc, corners, 0.13)
+		_, _, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, quad, prismRectBody(t, doc, -1, -1, 1, 1))
+		require.ErrorIs(t, err, ErrUnrecordableProfile)
+	})
+	t.Run("the same RB9 on an amplified cut falls back", func(t *testing.T) {
+		doc := New()
+		quad := prismOvershootQuadBody(t, doc, corners, 0.13)
+		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, quad, prismRectBody(t, doc, 8, -1, 12, 1))
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+}

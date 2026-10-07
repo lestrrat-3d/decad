@@ -40,9 +40,10 @@ import (
 // to the mesh path unchanged. A non-nil err is a genuine refusal past §3.4's
 // point of no return: the arrangement work cap (RB7, wrapped so
 // measuredInterference reads it exactly as evaluateAnalyticIntersect's own
-// RB7 wrapping), a crossing too close to tangent for A6's charge, a
-// recordEdge rejection or a non-closing cell loop (RB8/RB9), or the caller's
-// own cancellation.
+// RB7 wrapping), a recordEdge rejection or a non-closing cell loop
+// (RB8/RB9) on cuts that carry no amplified displacement, or the caller's
+// own cancellation. A crossing too close to tangent for A6's charge declines
+// silently.
 func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, error) {
 	// Entry (§4.5's own "Entry" paragraph): Intersect's own preamble, shared
 	// and unchanged via Task 1's extracted helper — G1-G4, the
@@ -100,9 +101,10 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		// prismcells.CutDelta sequence mergePrismCells already uses — no
 		// count, drop or chain, since a cell is already one loop in
 		// sketch's own order. RB8/RB9 propagate here, exactly as they do on
-		// the body path.
+		// the body path, unless the cuts carry an amplified displacement
+		// (prismAmplifiedFallback), which sends the pair to the mesh path.
 		cellProfile, cutDelta, err := recordPrismOverlapCell(budget, p.Outer)
-		if err != nil {
+		if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
 			return Measurement{}, false, err
 		}
 

@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -101,39 +100,101 @@ func TestCrossingChargeSumsBothDisplacements(t *testing.T) {
 	t.Parallel()
 	const slope, delta = 0.1, 1e-12
 	profiles, tags := crossingScene(t, slope)
-	charge, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, delta, delta)
+	charge, ok, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, delta, delta)
 	require.NoError(t, err)
+	require.True(t, ok)
 	sinUpper := slope / math.Sqrt(1+slope*slope) * (1 + 1e-12)
 	require.GreaterOrEqual(t, charge, 2*delta/sinUpper)
 	require.LessOrEqual(t, charge, 2*delta/(sinUpper*(1-1e-9))+1.01*delta)
 
-	one, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, delta, 0)
+	one, ok, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, delta, 0)
 	require.NoError(t, err)
+	require.True(t, ok)
 	require.GreaterOrEqual(t, one, delta/sinUpper)
 	require.Less(t, one, charge)
 }
 
-// TestCrossingChargeRefusesNearTangent pins A6's noise-floor refusal: a
-// proven sine at the floor ε refuses with ErrUnsupported and one above it
-// does not. sketch already declines to certify a line/line cut whose sine is
-// below about 1e-8 (TExact = false, which RecordEdge refuses), so the floor
-// is reached through a tangent junction, whose sine bound is zero; the
-// shallowest certified crossing, a sine of about 1e-6, is charged its
+// TestCrossingChargeDeclinesNearTangent pins A6's noise floor: a proven
+// sine at the floor ε has no charge and one above it does. sketch already
+// declines to certify a line/line cut whose sine is below about 1e-8
+// (TExact = false, which RecordEdge refuses and CrossingCharge declines), so
+// the floor is reached through a tangent junction, whose sine bound is zero;
+// the shallowest certified crossing, a sine of about 1e-6, is charged its
 // amplified displacement instead. Shown to fail with the floor in
-// refuseNearTangent deleted.
-func TestCrossingChargeRefusesNearTangent(t *testing.T) {
+// aboveNoiseFloor deleted.
+func TestCrossingChargeDeclinesNearTangent(t *testing.T) {
 	t.Parallel()
-	require.ErrorIs(t, refuseNearTangent(sectionaudit.ContactEps), decaderr.ErrUnsupported)
-	require.ErrorIs(t, refuseNearTangent(0), decaderr.ErrUnsupported)
-	require.NoError(t, refuseNearTangent(2*sectionaudit.ContactEps))
+	require.False(t, aboveNoiseFloor(sectionaudit.ContactEps))
+	require.False(t, aboveNoiseFloor(0))
+	require.True(t, aboveNoiseFloor(2*sectionaudit.ContactEps))
 
 	const slope, delta = 1e-6, 1e-12
 	profiles, tags := crossingScene(t, slope)
-	charge, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, 0, delta)
+	charge, ok, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, 0, delta)
 	require.NoError(t, err)
+	require.True(t, ok)
 	require.GreaterOrEqual(t, charge, delta/(slope*(1+1e-9)))
 
-	none, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, 0, 0)
+	none, ok, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, 0, 0)
 	require.NoError(t, err)
+	require.True(t, ok)
 	require.Zero(t, none, "no displacement, no charge")
+
+	uncertified, tagsU := crossingScene(t, 1e-10)
+	_, ok, err = CrossingCharge(proofbound.NewWorkBudget(t.Context()), tagsU, uncertified, 0, delta)
+	require.NoError(t, err)
+	require.False(t, ok, "an uncertified cut has no charge, and the caller falls back")
+}
+
+// TestCrossingChargeOutsideTouchIsNoCut pins the premise of crossing.go's
+// outside-touch argument: a wedge B whose apex touches A's top wall at
+// (5, 10) from outside, and a triangle whose edge passes exactly through A's
+// corner from outside, are each arranged by sketch as two separate cells
+// with no cut and no shared vertex, so there is no crossing to charge, and
+// the charge is zero. A displaced apex can still dip into A, but every point
+// it moves lies within δ_B of A's recorded wall, inside the section
+// displacement's own tube. If sketch ever cuts at an outside touch, the
+// split assertion below fails, and CrossingCharge's vertex reading then
+// charges the pair like any other cut.
+func TestCrossingChargeOutsideTouchIsNoCut(t *testing.T) {
+	t.Parallel()
+	for _, wedge := range [][][2]float64{
+		{{5, 10}, {15, 11}, {15, 12}},
+		{{0, 11}, {20, 9}, {20, 15}},
+	} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		tags := map[sketch.Entity]Origin{}
+		poly := func(isB bool, pts ...[2]float64) {
+			ps := make([]*sketch.Point, len(pts))
+			for i, p := range pts {
+				ps[i] = s.CreatePoint(p[0], p[1])
+				s.Fix(ps[i])
+			}
+			for i := range ps {
+				tags[s.CreateLine(ps[i], ps[(i+1)%len(ps)])] = Origin{IsB: isB, Hole: -1}
+			}
+		}
+		poly(false, [2]float64{0, 0}, [2]float64{10, 0}, [2]float64{10, 10}, [2]float64{0, 10})
+		poly(true, wedge...)
+		_, err = s.Solve(context.Background())
+		require.NoError(t, err)
+		profiles := s.Profiles()
+
+		split, err := HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
+		require.NoError(t, err)
+		require.False(t, split, "an outside touch must not be arranged as a cut")
+		require.Len(t, profiles, 2)
+		for _, p := range profiles {
+			first := tags[p.Outer[0].Entity].IsB
+			for _, e := range p.Outer {
+				require.Equal(t, first, tags[e.Entity].IsB, "each cell is one operand's own outline")
+			}
+		}
+		charge, ok, err := CrossingCharge(proofbound.NewWorkBudget(t.Context()), tags, profiles, 1e-12, 1e-12)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Zero(t, charge)
+	}
 }

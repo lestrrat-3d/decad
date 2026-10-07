@@ -209,10 +209,18 @@ least `θ_low` (mod π) with every tangent of the other, `Q1 − O` and
 distance instead of prism-boolean §3.4 rerouting the pair
 (`prismcells.CrossingCharge`, `internal/prismcells/crossing.go`):
 
-- a cut is a junction of two consecutive edges of a returned cell, from
-  distinct entities, where either edge's parameter at the junction is one
-  the arrangement computed (a `Partial` edge's non-natural end, or any end of
-  a `Partial` circle). A junction of two recorded vertices is not a cut;
+- a cut is an arranged vertex (an edge's walk end in its `Polyline`, matched
+  by exact equality) where some incident edge's parameter is one the
+  arrangement computed (a `Partial` edge's non-natural end, or any end of a
+  `Partial` circle). Every pair of distinct entities incident at a cut is
+  charged, whichever face walks them, so a pair adjacent only through the
+  unbounded face, which no returned cell walks, is charged too. A vertex
+  where only recorded vertices meet is not a cut (prism-boolean §4.4's
+  known limit). A touch from outside is not arranged as a vertex at all:
+  `sketch` returns the two outlines as separate cells, and every point a
+  displacement moves across either boundary there lies within that
+  operand's own displacement of the other's recorded wall, inside the
+  section displacement's tube;
 - each side's displacement is its operand's incoming term: `δ_A + δ_walkA`
   for A, `δ_B + δ_walkB + δ_reexpress` for B. Both zero charges nothing;
 - `sin θ_low` is a certified lower bound on `|sin θ|` between any tangent of
@@ -227,18 +235,23 @@ distance instead of prism-boolean §3.4 rerouting the pair
   its radius;
 - `ρ` starts at the junction point's own error, then widens to hold twice
   the distance the first bound charges; the second bound is accepted only
-  when the distance it charges fits that ball, and otherwise the pair is
-  refused;
+  when the distance it charges fits that ball, and otherwise the crossing
+  has no charge;
 - the largest charge over every cut of every returned cell is `crossing`,
   and the section displacement becomes
   `up(max(δ_A + δ_walkA, δ_B + δ_walkB + δ_reexpress, crossing) + δ_cut)`;
 - a cut with `sin θ_low` not above the dimensionless noise floor
-  `ε = 1e-9` of verification §4 (`sectionaudit.ContactEps`) is refused with
-  `ErrUnsupported`, as is a bound that does not settle. Reject-only: neither
-  check admits anything. `sketch` itself declines to certify a line/line cut
-  much shallower than `sin θ ≈ 1e-8` (`TExact = false`, refused at
-  recording), so the floor is reached through tangent junctions, whose bound
-  is zero.
+  `ε = 1e-9` of verification §4 (`sectionaudit.ContactEps`) has no charge,
+  nor does a bound that does not settle or an edge that does not record.
+  Neither check admits anything. `sketch` itself declines to certify a
+  line/line cut much shallower than `sin θ ≈ 1e-8` (`TExact = false`), so
+  the floor is reached through tangent junctions, whose bound is zero;
+- a pair whose cuts carry an input displacement never refuses on the
+  analytic path: a crossing with no charge, and any merge, audit or
+  recording failure after the charge (RB1–RB9), sends it to the mesh path
+  with no error (`prismAmplifiedFallback`), as prism-boolean §4.4 does for
+  every topology it leaves unresolved. Cancellation still propagates, and a
+  pair that brings no displacement keeps its §9 refusals.
 
 With A6 a rotated tooth whose root sits inside the hub builds analytically
 with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
@@ -246,7 +259,7 @@ result refuses (prism-boolean §13's displaced-receiver rule), as it does for
 every cut-bearing merge. P1's own tooth does not build. Its root arc lies on
 the hub's circle, so where the arc ends it meets the hub circle tangentially
 (a coincident carrier, which `sketch` merges), and that junction's bound is
-zero: the pair refuses at the floor. A chain of teeth also stops at the
+zero: the pair falls back to the mesh path. A chain of teeth also stops at the
 second tooth on prism-boolean §4.1's trimmed-circular refusal, since the
 first union trims the hub circle.
 
@@ -519,7 +532,8 @@ to two records); §10 records it as an open question.
   (prism-boolean §3.4's point of no return): a refusal past the gate is an
   error the caller branches on. A topology the scene leaves unresolved is not
   a refusal: prism-boolean §4.4 sends it to the mesh path, and A1's crossing
-  interface is one.
+  interface is one. Nor is a pair whose cuts carry an input displacement
+  (A6): it builds with its crossing charge or takes the mesh path.
 
 ## 9. Test plan
 
@@ -549,19 +563,24 @@ are relations, never literals.
   the cylinder reports one `Interference` row of `π·1.5²·10`. A scene test
   reads `prismcells.Classify` on a reflected box crossing a box and finds
   the exact areas 75, 25 and 75 for A-only, both and B-only. M3 (the L
-  unioned with its image across x = 15) refuses with RB1 and T2 reads
-  `Suspect`: the two outlines share collinear walls at y = 0 and y = 5, and
-  `sketch` reports that arrangement as an invalid region, which A3 waits on.
+  unioned with its image across x = 15) and T2 fall back to the mesh path's
+  coplanar refusal: the two outlines share collinear walls at y = 0 and
+  y = 5, which meet at a sine of zero, and `sketch` reports that arrangement
+  as an invalid region, which A3 waits on.
 - **A5 N-hole cut**: mirror §8's N-hole test, and the disjoint `Union` of
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
 - **A6 crossing charge**: a Ø40 hub unioned with a 7×3 tooth rooted inside
   it and placed by `RotationAround` through 60° builds analytically within
   its bound of the closed form; P1's own tooth, its root arc on the hub
-  circle, refuses at the floor with `ErrUnsupported`; S9 (a box intersected
+  circle, falls back to the mesh path, as does the same tooth cut from the
+  hub by a taller tool; S9 (a box intersected
   with the same box rotated 45°) builds an octagonal prism whose bound
   contains the exact rational residual against the two recorded squares;
-  the charge covers `(δ + δ)/sin θ` when both operands bring `δ`, and the
-  floor refuses a junction whose sine bound is not above `ε`; the
+  the charge covers `(δ + δ)/sin θ` when both operands bring `δ`, the floor
+  leaves a junction whose sine bound is not above `ε` uncharged, an outside
+  touch is arranged with no cut, and an amplified pair's RB9 (fu141's
+  overshooting quadrilateral crossed by a box) falls back while the same
+  quadrilateral's uncut merge keeps refusing; the
   formerly rerouted fixtures (a nonidentity shallow crossing, a displaced
   chain, a walk charge, a placed `Verify` pair) build or measure with a
   section displacement covering the input displacement over the crossing

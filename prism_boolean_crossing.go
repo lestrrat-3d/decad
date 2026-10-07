@@ -68,8 +68,9 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 		return prismPayload{}, false, nil
 	}
 
-	// Point of no return (§3.4): every further problem is a genuine refusal.
-	if err := auditPrismMergeSection(budget, target, merged); err != nil {
+	// Point of no return (§3.4): every further problem is a genuine refusal,
+	// unless the cuts carry an amplified displacement (prismAmplifiedFallback).
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 
@@ -110,7 +111,7 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 		return prismPayload{}, false, nil
 	}
 
-	if err := auditPrismMergeSection(budget, pa, merged); err != nil {
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 
@@ -139,8 +140,9 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 // above: resolvePrismCrossingCells's selection (scene, classification,
 // per-op keep, crossing charge), then mergePrismCells's assembly
 // (prism_boolean.go). resolved=false (err always nil in that case) is silent
-// fallback. A near-tangent crossing A6's charge refuses is a genuine error.
-// opName feeds mergePrismCells's own RB1 message.
+// fallback, which includes a near-tangent crossing A6's charge cannot bound
+// and a merge failure on cuts that carry an amplified displacement. opName
+// feeds mergePrismCells's own RB1 message.
 func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
@@ -151,7 +153,7 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 	}
 
 	merged, cutDelta, mergedResolved, err := mergePrismCells(budget, selected, opName)
-	if err != nil {
+	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !mergedResolved {
@@ -172,9 +174,8 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 // (prismOverlapVolume, prism_overlap.go) is the second, sharing this exact
 // selection so it never re-derives §4.2's classification.
 //
-// resolved=false (err always nil in that case) is silent fallback (§4.4). A
-// crossing the charge refuses as too close to tangent is a genuine
-// ErrUnsupported.
+// resolved=false (err always nil in that case) is silent fallback (§4.4),
+// including a crossing too close to tangent for A6's charge.
 func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool) (selected []*sketch.Profile, sceneDelta prismSceneDelta, resolved bool, err error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
@@ -206,10 +207,9 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 		return nil, prismSceneDelta{}, false, err
 	}
 	// docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
-	// operands' incoming displacement can move is charged, or the pair is
-	// refused as too close to tangent. It runs once the classification has
-	// resolved, so a topology this sub-case does not cover still falls back.
-	if err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil {
+	// operands' incoming displacement can move is charged, and a crossing too
+	// close to tangent for that charge sends the pair to the mesh path.
+	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil || !ok {
 		return nil, prismSceneDelta{}, false, err
 	}
 	return selected, sceneDelta, true, nil

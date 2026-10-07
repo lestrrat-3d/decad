@@ -1434,4 +1434,4 @@
 2	0.01	TestVerifyReflectedOperandMeasuresInterference
 2	0.01	TestPrismIntersectRotatedBoxBuildsAnalyticOctagon
 2	0.01	TestPrismUnionRotatedToothBuildsAnalytic
-2	0.01	TestPrismUnionToothOnHubCircleRefusesAtTheTangentRoot
+2	0.01	TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot

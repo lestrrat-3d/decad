@@ -15,8 +15,9 @@ import (
 // This file is docs/general-boolean-design.md §3 A6's public-API suite: a
 // pair whose re-expression or prior displacement meets a split boundary
 // (prism-boolean §3.4) builds analytically, its crossings charged the
-// displacement they can amplify, and a tangent crossing refuses. The
-// charge's own mechanics are internal/prismcells/crossing_internal_test.go's.
+// displacement they can amplify, and a tangent crossing falls back to the
+// mesh path. The charge's own mechanics are
+// internal/prismcells/crossing_internal_test.go's.
 
 // zRotation is RotationAround the world z axis through the origin.
 func zRotation(t *testing.T, angle units.Value) r3.Transform {
@@ -164,15 +165,15 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 	decadtest.Measures(t, "hub and rotated tooth", vol, units.CubicMillimeters(10*(400*math.Pi+outside)))
 }
 
-// TestPrismUnionToothOnHubCircleRefusesAtTheTangentRoot is the P1 tooth of
-// general-boolean §2: its root arc lies on the hub's own circle. Placed by
+// TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot is the P1 tooth
+// of general-boolean §2: its root arc lies on the hub's own circle. Placed by
 // RotationAround through 60°, the arc and the hub circle meet tangentially
-// where the arc ends, so no positive sine bound exists there, and A6's
-// noise floor refuses the pair with ErrUnsupported rather than charge a
-// crossing it cannot bound. Shown to fail with the noise-floor refusal
-// deleted from the crossing charge: the unbounded charge then refused with
-// a different message.
-func TestPrismUnionToothOnHubCircleRefusesAtTheTangentRoot(t *testing.T) {
+// where the arc ends, so no positive sine bound exists there and A6 has no
+// charge for that crossing. The pair falls back to the mesh path instead of
+// refusing on the analytic one, and the error it reports is the mesh path's
+// own proximity refusal. Shown to fail with CrossingCharge's declining
+// crossing turned into an ErrUnsupported refusal.
+func TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	hub := hubBody(t, doc, 20, 10)
@@ -182,5 +183,6 @@ func TestPrismUnionToothOnHubCircleRefusesAtTheTangentRoot(t *testing.T) {
 
 	_, err = decad.Union(t.Context(), hub, tooth)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "too close to tangent")
+	require.ErrorContains(t, err, "held facets come within the chord tolerance",
+		"the mesh path's own refusal, reached by falling back")
 }

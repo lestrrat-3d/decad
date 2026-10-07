@@ -295,14 +295,14 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	// Neither holds the other whole: prism-boolean §4.2's select-all merge,
 	// with §3.4's crossing charge on every cut a displaced source can move
 	// (docs/general-boolean-design.md §3 A6).
+	if ok, err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil || !ok {
+		return ProfileRecord{}, false, err
+	}
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
-	if err != nil || !resolved {
+	if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, err); fallBack || err != nil || !resolved {
 		return ProfileRecord{}, false, err
 	}
-	if err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil {
-		return ProfileRecord{}, false, err
-	}
-	if err := auditPrismMergeSection(st.budget, pa, merged); err != nil {
+	if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, auditPrismMergeSection(st.budget, pa, merged)); fallBack || err != nil {
 		return ProfileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)
