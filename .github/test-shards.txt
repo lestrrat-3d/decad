@@ -929,6 +929,7 @@
 5	0.01	TestCircularStationChainStartsAtThePinnedEnd
 5	0.02	TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct
 5	0.03	TestContactPairBoundedFacetedFloorStrictClear
+5	0.00	TestDependentSpan
 5	0.01	TestDisplacedCupMesh
 5	0.02	TestFacetedAxisSupportProvesRealUnionFloorFace
 5	5.38	TestFloatRatMatchesSetFloat64
@@ -946,9 +947,14 @@
 5	0.01	TestLoftStationCapAdmitsAPairInsideItsShare
 5	0.24	TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair
 5	0.13	TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference
+5	0.42	TestLoopCanonicalChain
+5	0.44	TestLoopIntervalGate
+5	0.00	TestLoopSceneFrame
+5	0.03	TestLoopZeroPoseFalsifier
 5	4.44	TestMeshBooleanWorkerCountsProduceIdenticalResults
 5	0.06	TestMeshMassFirstMomentLegCoversQuarterTurn
 5	0.03	TestMeshMassReadsARevolveTheAnalyticPathRefuses
+5	0.00	TestMotionFrameAtRange
 5	0.01	TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone
 5	0.07	TestOffsetSectionDeltaEnclosesDenotedOffset
 5	5.49	TestPairStationsOverCapRefuses

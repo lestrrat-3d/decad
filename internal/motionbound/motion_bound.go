@@ -519,6 +519,43 @@ func (mf MotionFrame) At(p MotionParam) IdealPose {
 	}
 }
 
+// AtRange is the ideal pose for every parameter between lo and hi at once
+// (docs/linkage-check-design.md §15.4): a revolute's Rodrigues matrix built
+// from ParamSinCos(lo) widened on both sides by lo.SpanUpper(hi) — sine and
+// cosine are 1-Lipschitz in the angle — and a prismatic's translation by the
+// interval [lo, hi] of base millimetres along its unit direction. Every member
+// of the enclosure is the joint's motion at some value in [lo, hi] or a
+// superset's, so a pose deviation charged against it covers the motion at
+// every value of the range. AtRange(p, p) is At(p). A between has no range
+// form and answers At(lo).
+func (mf MotionFrame) AtRange(lo, hi MotionParam) IdealPose {
+	if lo.Turn.Cmp(hi.Turn) == 0 && lo.Base.Cmp(hi.Base) == 0 {
+		return mf.At(lo)
+	}
+	zero := proofbound.PointInterval(new(big.Rat))
+	switch mf.Kind {
+	case MotionPrismatic:
+		pose := mf.At(lo)
+		lower, upper := lo.Base, hi.Base
+		if lower.Cmp(upper) > 0 {
+			lower, upper = upper, lower
+		}
+		along := proofbound.Interval(lower, upper)
+		for i := range 3 {
+			pose.Shift[i] = proofbound.IntervalMul(proofbound.IntervalScale(mf.Unit, mf.Axis[i]), along)
+		}
+		return pose
+	case MotionRevolute:
+		width := lo.SpanUpper(hi)
+		widen := func(iv proofbound.RatInterval) proofbound.RatInterval {
+			return proofbound.IntervalOwned(new(big.Rat).Sub(iv.Lo, width), new(big.Rat).Add(iv.Hi, width))
+		}
+		sin, cos := ParamSinCos(lo)
+		return IdealPose{Rot: mf.Rotation(widen(sin), widen(cos)), Pivot: PointVec(mf.Center), Shift: IvVec{zero, zero, zero}}
+	}
+	return mf.At(lo)
+}
+
 // statedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
 // read exactly: what η_To of docs/motion-check-design.md §5.1 charges the
 // s = 1 pose against, beside the ideal end T*(1).

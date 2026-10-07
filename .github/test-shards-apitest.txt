@@ -151,6 +151,7 @@
 0	0.01	TestVerifyEffectiveRequestRecorded
 0	0.60	TestVerifyJointBoxBudget
 0	0.02	TestVerifyJointBoxErrors
+0	17.87	TestVerifyLinkageLoopFold
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
 0	0.29	TestVerifyMotionBetweenTranslationAgreesWithPrismatic
 0	0.85	TestVerifyMotionCancellation
@@ -215,6 +216,7 @@
 1	0.04	TestFreeformPrismSelectorNeverMatchesEdge
 1	0.16	TestFreeformPrismUndercutsUndecided
 1	0.01	TestIntersectOverlappingCubes
+1	1.60	TestLinkageLoopRefusals
 1	0.01	TestLoftPlacedFaceAreaSumMatchesBodyArea
 1	0.01	TestLoftPlacementDoesNotRerunTheSeamGates
 1	0.01	TestMassPropertiesDisplacedLevelBox
@@ -300,6 +302,7 @@
 1	0.48	TestVerifyJointBoxClearReading
 1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
 1	0.01	TestVerifyLinkageErrors
+1	5.56	TestVerifyLinkageLoopNonMutationAndDeterminism
 1	0.19	TestVerifyLinkageNearMissBetweenSamples
 1	0.71	TestVerifyMitredSweepMeetingPrismArmIsNotSound
 1	0.43	TestVerifyMotionNonMutationAndDeterminism
@@ -1024,6 +1027,8 @@
 3	0.01	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	12.76	TestVerifyGearScaleOverArrangementCapStaysSuspect
 3	5.06	TestVerifyJointBoxCrane
+3	8.27	TestVerifyLinkageLoopPinBetweenSamples
+3	0.60	TestVerifyLinkageLoopTurnBack
 3	0.05	TestVerifyLinkageWaypointReach
 3	0.18	TestVerifyLinkageWaypoints
 3	0.60	TestVerifyMitredSweepUnderPrismArmIsDisjoint
@@ -1171,6 +1176,7 @@
 4	2.75	TestVerifyJointBoxNonMutationAndDeterminism
 4	1.25	TestVerifyLinkageAgreesWithVerifyMotion
 4	0.68	TestVerifyLinkageCancellation
+4	16.61	TestVerifyLinkageLoopCrankRocker
 4	0.02	TestVerifyLinkagePoseDeviationIsCharged
 4	3.04	TestVerifyMotionBetweenClearPath
 4	0.30	TestVerifyMotionBetweenKnownCollision
@@ -1321,6 +1327,8 @@
 5	0.06	TestVerifyLinkageHeldLinks
 5	0.62	TestVerifyLinkageLayerExclusion
 5	0.44	TestVerifyLinkageLinkSweptBoxExclusion
+5	9.62	TestVerifyLinkageLoopCancellation
+5	0.73	TestVerifyLinkageLoopMirroredAxes
 5	0.30	TestVerifyLinkageNonMutationAndDeterminism
 5	0.66	TestVerifyMitredBranchUnionUnderPrismArmIsDisjoint
 5	0.26	TestVerifyMotionBetweenNearMissBetweenSamples
