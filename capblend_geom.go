@@ -25,11 +25,8 @@ import (
 // wall, and a Cone whose apex is the original corner for a reflex corner's
 // extra offset arc.
 
-// capOffsetJoins computes one loop's per-corner offset joins exactly as
-// shell_offset.go's offsetLoopBudget does — reusing offsetCarrier,
-// intersectOffsets and offsetRadius unchanged — but returns the joins
-// themselves rather than the flattened segment list, so the caller can pair
-// each patch with the ORIGINAL wall or corner it descends from.
+// capOffsetJoins returns the shared Shell offset joins after checking the
+// cap band's circular walls. The caller pairs each join with its source wall.
 func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
 	walks := cl.walks
 	n := len(walks)
@@ -46,44 +43,7 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 			}
 		}
 	}
-	joins := make([]cornerJoin, n)
-	for i := range n {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		prev := walks[(i+n-1)%n]
-		cur := walks[i]
-		vU, vV := cur.StartU, cur.StartV
-		aox, aoy, la := normalize2(prev.TanOutU, prev.TanOutV)
-		bix, biy, lb := normalize2(cur.TanInU, cur.TanInV)
-		if la == 0 || lb == 0 {
-			return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
-		}
-		cross := aox*biy - aoy*bix
-		pA := Point2{U: vU + d*(-aoy), V: vV + d*aox}
-		pB := Point2{U: vU + d*(-biy), V: vV + d*bix}
-		if math.Abs(cross) > shellTol && cross < 0 {
-			// Reflex corner (sign(cross) == -1 == -s, s = +1 inward): an arc
-			// of radius d about the corner — the extra offset connector this
-			// evaluator patches with a Cone apex (§8.3).
-			joins[i] = cornerJoin{arc: true, vU: vU, vV: vV, pA: pA, pB: pB}
-			continue
-		}
-		if math.Abs(cross) <= shellTol && aox*bix+aoy*biy > 0 {
-			// G1 join: the same dead-zone rule and the same point as
-			// offsetLoopBudget's (modify §7).
-			joins[i] = cornerJoin{g1: true, vU: vU, vV: vV, m: pB}
-			continue
-		}
-		offA := offsetCarrier(prev, 1, d)
-		offB := offsetCarrier(cur, 1, d)
-		mx, my, err := intersectOffsets(offA, offB, vU, vV)
-		if err != nil {
-			return nil, errOffsetTopology
-		}
-		joins[i] = cornerJoin{vU: vU, vV: vV, m: Point2{U: mx, V: my}}
-	}
-	return joins, nil
+	return offsetJoinsBudget(budget, walks, 1, d)
 }
 
 // capBandRadius is the ONE place a circular cap-band wall's cap-level offset

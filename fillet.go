@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -542,71 +543,23 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 
 // normalize2 returns the unit vector and length of (x, y).
 func normalize2(x, y float64) (float64, float64, float64) {
-	l := math.Hypot(x, y)
-	if l == 0 {
-		return 0, 0, 0
-	}
-	return x / l, y / l, l
+	return offset2d.Normalize(x, y)
 }
 
 // intersectOffsets intersects two offset curves and returns the root nearest
 // the corner (px, py). No intersection is S5 — no blend of that radius exists.
 func intersectOffsets(a, b offCurve, px, py float64) (float64, float64, error) {
-	var cands [][2]float64
-	switch {
-	case a.isLine && b.isLine:
-		cands = lineLine(a, b)
-	case a.isLine && !b.isLine:
-		cands = lineCircle(a, b.cx, b.cy, b.rr)
-	case !a.isLine && b.isLine:
-		cands = lineCircle(b, a.cx, a.cy, a.rr)
-	default:
-		cands = circleCircle(a.cx, a.cy, a.rr, b.cx, b.cy, b.rr)
-	}
-	if len(cands) == 0 {
-		return 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, ErrDegenerate)
-	}
-	best, bestD := cands[0], math.Inf(1)
-	for _, c := range cands {
-		dd := (c[0]-px)*(c[0]-px) + (c[1]-py)*(c[1]-py)
-		if dd < bestD {
-			bestD, best = dd, c
+	toCurve := func(c offCurve) offset2d.Curve {
+		return offset2d.Curve{
+			IsLine: c.isLine, PX: c.px, PY: c.py, DX: c.dx, DY: c.dy,
+			CX: c.cx, CY: c.cy, Radius: c.rr,
 		}
 	}
-	return best[0], best[1], nil
-}
-
-// lineLine intersects two lines (point + unit dir); parallel lines yield none.
-func lineLine(a, b offCurve) [][2]float64 {
-	den := a.dx*b.dy - a.dy*b.dx
-	if math.Abs(den) <= filletTol {
-		return nil
+	x, y, ok := offset2d.Intersect(toCurve(a), toCurve(b), px, py)
+	if !ok {
+		return 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, ErrDegenerate)
 	}
-	s := ((b.px-a.px)*b.dy - (b.py-a.py)*b.dx) / den
-	return [][2]float64{{a.px + s*a.dx, a.py + s*a.dy}}
-}
-
-// lineCircle intersects a line (point + unit dir) with a circle.
-func lineCircle(l offCurve, cx, cy, r float64) [][2]float64 {
-	// |P + s·d − C|² = r², d unit: s² + 2 s (P−C)·d + |P−C|² − r² = 0.
-	fx, fy := l.px-cx, l.py-cy
-	bb := fx*l.dx + fy*l.dy
-	cc := fx*fx + fy*fy - r*r
-	disc := bb*bb - cc
-	if disc < 0 {
-		return nil
-	}
-	sq := math.Sqrt(math.Max(disc, 0))
-	var out [][2]float64
-	for _, s := range []float64{-bb + sq, -bb - sq} {
-		out = append(out, [2]float64{l.px + s*l.dx, l.py + s*l.dy})
-	}
-	return out
-}
-
-// circleCircle intersects two circles.
-func circleCircle(c0x, c0y, r0, c1x, c1y, r1 float64) [][2]float64 {
-	return sectionaudit.CircleCircle(c0x, c0y, r0, c1x, c1y, r1)
+	return x, y, nil
 }
 
 // footOn returns the tangent foot of the center on a carrier: the perpendicular
