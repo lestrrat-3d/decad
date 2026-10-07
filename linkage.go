@@ -551,11 +551,15 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		}
 		jt.listed, jt.values, jt.points = true, values, points
 	}
+	if err := l.resolveLoops(spec); err != nil {
+		return nil, err
+	}
 	// q(s) is linear within each segment, so a drive keeps a joint inside its
 	// limits exactly when every waypoint lies inside them; an unlisted joint
-	// holds 0.
+	// holds 0. A driven loop's dependent is held to its whole-drive hull
+	// instead, once the schedule has read it (linkage_loop.go).
 	for k, jt := range spec.joints {
-		if jt.limits == nil {
+		if jt.limits == nil || jt.dep != nil {
 			continue
 		}
 		for w, v := range jt.values {
@@ -569,9 +573,6 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 			return nil, fmt.Errorf(`%w: the drive takes link %d's joint to %s at waypoint %d, outside its limits [%s, %s]`,
 				ErrDegenerate, k, v, w, jt.limits.Min, jt.limits.Max)
 		}
-	}
-	if err := l.resolveLoops(spec); err != nil {
-		return nil, err
 	}
 	return spec, nil
 }
@@ -609,7 +610,7 @@ func (jt *linkJoint) holdAtZero(kind units.Kind, unit units.Unit) {
 // waypoint differs from the first. A driven loop's dependent moves.
 func (jt linkJoint) moves() bool {
 	if jt.dep != nil {
-		return true
+		return !jt.dep.held
 	}
 	for _, v := range jt.values[1:] {
 		if !sameMotionValue(jt.values[0], v) {

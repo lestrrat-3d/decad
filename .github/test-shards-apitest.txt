@@ -152,6 +152,7 @@
 0	0.60	TestVerifyJointBoxBudget
 0	0.02	TestVerifyJointBoxErrors
 0	17.87	TestVerifyLinkageLoopFold
+0	2.86	TestVerifyLinkageLoopHeldDriver
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
 0	0.29	TestVerifyMotionBetweenTranslationAgreesWithPrismatic
 0	0.85	TestVerifyMotionCancellation
@@ -302,7 +303,9 @@
 1	0.48	TestVerifyJointBoxClearReading
 1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
 1	0.01	TestVerifyLinkageErrors
+1	3.82	TestVerifyLinkageLoopDependentLimits
 1	5.56	TestVerifyLinkageLoopNonMutationAndDeterminism
+1	0.89	TestVerifyLinkageLoopOutAndBack
 1	1.56	TestVerifyLinkageLoopSliderCrank
 1	0.19	TestVerifyLinkageNearMissBetweenSamples
 1	0.71	TestVerifyMitredSweepMeetingPrismArmIsNotSound
@@ -861,6 +864,7 @@
 2	0.05	TestVerifyInterferenceRowsKeepDocumentPairOrder
 2	10.21	TestVerifyJointBoxBlocked
 2	2.27	TestVerifyLinkageDeclaredJointContact
+2	3.29	TestVerifyLinkageLoopCrossingZero
 2	8.08	TestVerifyLinkageLoopSliderPin
 2	0.06	TestVerifyLinkageSweptBoxCoversAncestorTravel
 2	0.37	TestVerifyLinkageSweptBoxExclusion
@@ -1029,6 +1033,7 @@
 3	0.01	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	12.76	TestVerifyGearScaleOverArrangementCapStaysSuspect
 3	5.06	TestVerifyJointBoxCrane
+3	10.18	TestVerifyLinkageLoopFoldOutAndBack
 3	8.27	TestVerifyLinkageLoopPinBetweenSamples
 3	0.52	TestVerifyLinkageLoopSlideDriven
 3	0.60	TestVerifyLinkageLoopTurnBack
@@ -1332,6 +1337,8 @@
 5	0.44	TestVerifyLinkageLinkSweptBoxExclusion
 5	9.62	TestVerifyLinkageLoopCancellation
 5	0.73	TestVerifyLinkageLoopMirroredAxes
+5	0.33	TestVerifyLinkageLoopSlideCrossingZero
+5	3.64	TestVerifyLinkageLoopWaypoints
 5	0.30	TestVerifyLinkageNonMutationAndDeterminism
 5	0.66	TestVerifyMitredBranchUnionUnderPrismArmIsDisjoint
 5	0.26	TestVerifyMotionBetweenNearMissBetweenSamples

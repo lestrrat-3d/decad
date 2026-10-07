@@ -111,7 +111,7 @@ func TestLoopCanonicalChain(t *testing.T) {
 	require.NoError(t, spec.prepare(t.Context()))
 	ld := spec.loops[0]
 	ld.mu.Lock()
-	ask, err := ld.point(t.Context(), big.NewRat(5, 8))
+	ask, err := ld.point(t.Context(), ld.subs[0], big.NewRat(5, 8))
 	ld.mu.Unlock()
 	require.NoError(t, err)
 	require.NoError(t, ask.err)
@@ -120,7 +120,7 @@ func TestLoopCanonicalChain(t *testing.T) {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	require.Equal(t, []string{"a", "c0,1/2", "c1/2,5/8", "p0", "p1/2", "p5/8"}, keys)
+	require.Equal(t, []string{"0:a", "0:c0,1/2", "0:c1/2,5/8", "0:p0", "0:p1/2", "0:p5/8"}, keys)
 }
 
 // TestLoopZeroPoseFalsifier: the document's pins are exact solutions of the
@@ -133,21 +133,21 @@ func TestLoopCanonicalChain(t *testing.T) {
 // record is then admitted.
 func TestLoopZeroPoseFalsifier(t *testing.T) {
 	t.Parallel()
-	build := func(t *testing.T) *loopDrive {
+	build := func(t *testing.T) *loopScene {
 		l, crank := internalRocker(t)
 		spec, err := l.resolveDrive(Drive{{Link: crank, From: units.Degrees(0), To: units.Degrees(90)}})
 		require.NoError(t, err)
-		ld := spec.loops[0]
-		require.NoError(t, ld.buildScene(t.Context(), spec))
-		return ld
+		sc, err := spec.loops[0].buildScene(t.Context(), spec, 0)
+		require.NoError(t, err)
+		return sc
 	}
 	require.NoError(t, build(t).askZero(t.Context()))
 	for n := range 4 {
-		ld := build(t)
-		require.Len(t, ld.scene.pins, 4, `O2, O4, A and B`)
-		pin := &ld.scene.pins[n]
+		sc := build(t)
+		require.Len(t, sc.pins, 4, `O2, O4, A and B`)
+		pin := &sc.pins[n]
 		pin.v = new(big.Rat).Add(pin.v, big.NewRat(1, 1000000))
-		require.ErrorIs(t, ld.askZero(t.Context()), ErrUnsupported)
+		require.ErrorIs(t, sc.askZero(t.Context()), ErrUnsupported)
 	}
 }
 
@@ -249,7 +249,8 @@ func TestLoopIntervalGate(t *testing.T) {
 	half, end := big.NewRat(1, 2), big.NewRat(3, 4)
 	dr := &linkageDriver{run: &motionRun{ctx: t.Context()}, spec: spec}
 	require.Empty(t, dr.intervalGate(&motionPose{f: half}, &motionPose{f: end}), `a certified cell passes`)
-	require.Len(t, ld.spans[loopSpanKey(half, end)], 2)
-	ld.asks["c0,1/2"] = &loopAsk{err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)}
+	require.Len(t, ld.spans[loopSpanKey(half, end)], 1, `one piece`)
+	require.Len(t, ld.spans[loopSpanKey(half, end)][0], 2, `two dependents`)
+	ld.asks["0:c0,1/2"] = &loopAsk{err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)}
 	require.Contains(t, dr.intervalGate(&motionPose{f: new(big.Rat)}, &motionPose{f: half}), `injected`)
 }
