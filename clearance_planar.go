@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -68,7 +69,7 @@ func planarPairAdmits(a, b *Body) bool {
 //     exact material-side claim; a touch within a band stays undecided;
 //   - a held overlap is pairOverlapping at δ = 0, and otherwise only through
 //     a vertex proven deeper than δ inside the other solid
-//     (pair.PlanarDeepVertex), which survives any displacement within δ.
+//     (planar.PlanarDeepVertex), which survives any displacement within δ.
 //
 // The pair diameter the §7 gate reads is interferencePairDiameter's, the
 // same reading the interference path forms for this pair. The verdict never
@@ -93,7 +94,7 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 	if err != nil || !okB {
 		return pairResult{}, false, err
 	}
-	result, err := pair.ClassifyPlanar(&sa, &sb, budget.Step)
+	result, err := planar.ClassifyPlanar(&sa, &sb, budget.Step)
 	if err != nil {
 		return pairResult{}, false, err
 	}
@@ -119,7 +120,7 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 		if delta.Sign() == 0 {
 			return pairResult{verdict: pairOverlapping, diam: diam}, true, nil
 		}
-		deep, err := pair.PlanarDeepVertex(&sa, &sb, delta, budget.Step)
+		deep, err := planar.PlanarDeepVertex(&sa, &sb, delta, budget.Step)
 		if err != nil {
 			return pairResult{}, false, err
 		}

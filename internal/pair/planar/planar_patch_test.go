@@ -1,4 +1,4 @@
-package pair_test
+package planar_test
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -30,26 +31,26 @@ import (
 
 func rat(num, den int64) *big.Rat { return big.NewRat(num, den) }
 
-func p2(x, y float64) pair.Point2 {
-	return pair.Point2{X: new(big.Rat).SetFloat64(x), Y: new(big.Rat).SetFloat64(y)}
+func p2(x, y float64) planar.Point2 {
+	return planar.Point2{X: new(big.Rat).SetFloat64(x), Y: new(big.Rat).SetFloat64(y)}
 }
 
 // crossAt is the exact crossing of lines pq and uw.
-func crossAt(p, q, u, w pair.Point2) pair.Point2 {
-	sub := func(a, b pair.Point2) pair.Point2 {
-		return pair.Point2{X: new(big.Rat).Sub(a.X, b.X), Y: new(big.Rat).Sub(a.Y, b.Y)}
+func crossAt(p, q, u, w planar.Point2) planar.Point2 {
+	sub := func(a, b planar.Point2) planar.Point2 {
+		return planar.Point2{X: new(big.Rat).Sub(a.X, b.X), Y: new(big.Rat).Sub(a.Y, b.Y)}
 	}
-	cross := func(a, b pair.Point2) *big.Rat {
+	cross := func(a, b planar.Point2) *big.Rat {
 		out := new(big.Rat).Mul(a.X, b.Y)
 		return out.Sub(out, new(big.Rat).Mul(a.Y, b.X))
 	}
 	d, e := sub(q, p), sub(w, u)
 	t := new(big.Rat).Quo(cross(sub(u, p), e), cross(d, e))
-	return pair.Point2{X: new(big.Rat).Add(p.X, new(big.Rat).Mul(t, d.X)),
+	return planar.Point2{X: new(big.Rat).Add(p.X, new(big.Rat).Mul(t, d.X)),
 		Y: new(big.Rat).Add(p.Y, new(big.Rat).Mul(t, d.Y))}
 }
 
-func requireSamePoints(t *testing.T, want, got []pair.Point2) {
+func requireSamePoints(t *testing.T, want, got []planar.Point2) {
 	t.Helper()
 	require.Len(t, got, len(want))
 	for _, w := range want {
@@ -63,17 +64,17 @@ func requireSamePoints(t *testing.T, want, got []pair.Point2) {
 	}
 }
 
-var hexagon = []pair.Point2{p2(0, 0), p2(5.75, -10), p2(17.25, -10), p2(23, 0), p2(17.25, 10), p2(5.75, 10)}
+var hexagon = []planar.Point2{p2(0, 0), p2(5.75, -10), p2(17.25, -10), p2(23, 0), p2(17.25, 10), p2(5.75, 10)}
 
 // tiltedSquare is a square turned in the plane with exact dyadic corners:
 // (0,-17) + a·(17.25,10) + b·(-10,17.25) for a, b in {0, 1}.
-var tiltedSquare = []pair.Point2{p2(0, -17), p2(17.25, -7), p2(7.25, 10.25), p2(-10, 0.25)}
+var tiltedSquare = []planar.Point2{p2(0, -17), p2(17.25, -7), p2(7.25, 10.25), p2(-10, 0.25)}
 
 func TestClipConvexHexagonOverhang(t *testing.T) {
-	got, err := pair.ClipConvex(hexagon, tiltedSquare, noPoll)
+	got, err := planar.ClipConvex(hexagon, tiltedSquare, noPoll)
 	require.NoError(t, err)
 	h, f := hexagon, tiltedSquare
-	want := []pair.Point2{h[0], h[1], crossAt(h[1], h[2], f[0], f[1]), f[1],
+	want := []planar.Point2{h[0], h[1], crossAt(h[1], h[2], f[0], f[1]), f[1],
 		crossAt(h[4], h[5], f[1], f[2]), crossAt(h[4], h[5], f[2], f[3]), crossAt(h[5], h[0], f[2], f[3])}
 	requireSamePoints(t, want, got)
 	// The double area by the shoelace over the hand-computed corners, in
@@ -84,25 +85,25 @@ func TestClipConvexHexagonOverhang(t *testing.T) {
 		area.Add(area, new(big.Rat).Sub(new(big.Rat).Mul(p.X, q.Y), new(big.Rat).Mul(p.Y, q.X)))
 	}
 	require.Positive(t, area.Sign())
-	require.Zero(t, area.Cmp(pair.DoubleArea(got)))
+	require.Zero(t, area.Cmp(planar.DoubleArea(got)))
 }
 
 func TestClipConvexEitherWinding(t *testing.T) {
-	reverse := func(polygon []pair.Point2) []pair.Point2 {
-		out := make([]pair.Point2, len(polygon))
+	reverse := func(polygon []planar.Point2) []planar.Point2 {
+		out := make([]planar.Point2, len(polygon))
 		for i, p := range polygon {
 			out[len(polygon)-1-i] = p
 		}
 		return out
 	}
-	want, err := pair.ClipConvex(hexagon, tiltedSquare, noPoll)
+	want, err := planar.ClipConvex(hexagon, tiltedSquare, noPoll)
 	require.NoError(t, err)
-	for _, tc := range []struct{ subject, clip []pair.Point2 }{
+	for _, tc := range []struct{ subject, clip []planar.Point2 }{
 		{reverse(hexagon), tiltedSquare},
 		{hexagon, reverse(tiltedSquare)},
 		{reverse(hexagon), reverse(tiltedSquare)},
 	} {
-		got, err := pair.ClipConvex(tc.subject, tc.clip, noPoll)
+		got, err := planar.ClipConvex(tc.subject, tc.clip, noPoll)
 		require.NoError(t, err)
 		requireSamePoints(t, want, got)
 	}
@@ -110,17 +111,17 @@ func TestClipConvexEitherWinding(t *testing.T) {
 
 func TestClipConvexThirdCrossing(t *testing.T) {
 	// The triangle's edge y = 3x crosses the box's edge y = 1 at x = 1/3.
-	got, err := pair.ClipConvex([]pair.Point2{p2(0, 0), p2(8, 0), p2(1, 3)},
-		[]pair.Point2{p2(0, 0), p2(4, 0), p2(4, 1), p2(0, 1)}, noPoll)
+	got, err := planar.ClipConvex([]planar.Point2{p2(0, 0), p2(8, 0), p2(1, 3)},
+		[]planar.Point2{p2(0, 0), p2(4, 0), p2(4, 1), p2(0, 1)}, noPoll)
 	require.NoError(t, err)
-	requireSamePoints(t, []pair.Point2{p2(0, 0), p2(4, 0), p2(4, 1), {X: rat(1, 3), Y: rat(1, 1)}}, got)
-	require.Zero(t, pair.DoubleArea(got).Cmp(rat(23, 3)))
+	requireSamePoints(t, []planar.Point2{p2(0, 0), p2(4, 0), p2(4, 1), {X: rat(1, 3), Y: rat(1, 1)}}, got)
+	require.Zero(t, planar.DoubleArea(got).Cmp(rat(23, 3)))
 }
 
 func TestClipConvexPolls(t *testing.T) {
 	stop := errors.New("stop")
 	calls := 0
-	_, err := pair.ClipConvex(hexagon, tiltedSquare, func() error {
+	_, err := planar.ClipConvex(hexagon, tiltedSquare, func() error {
 		calls++
 		if calls == 5 {
 			return stop
@@ -133,9 +134,9 @@ func TestClipConvexPolls(t *testing.T) {
 func TestPlaneFrameDropsLargestAxis(t *testing.T) {
 	// The wall x + z/4 = 10 is nearly vertical: z is its smallest normal
 	// component, so the frame drops x and lifts every point exactly.
-	frame := pair.NewPlaneFrame(vec(1, 0, 0.25), vec(10, 0, 0))
+	frame := planar.NewPlaneFrame(vec(1, 0, 0.25), vec(10, 0, 0))
 	require.Equal(t, 0, frame.K)
-	at := pair.Point3{rat(9, 1), rat(3, 1), rat(4, 1)}
+	at := planar.Point3{rat(9, 1), rat(3, 1), rat(4, 1)}
 	lifted := frame.Lift(frame.Project(at))
 	for axis := range 3 {
 		require.Zero(t, lifted[axis].Cmp(at[axis]))
@@ -144,7 +145,7 @@ func TestPlaneFrameDropsLargestAxis(t *testing.T) {
 
 // facedBox is boxSolid with one face id per box face, numbered as boxTris
 // lists them: x-, x+, y-, y+, z-, z+.
-func facedBox(lo, hi [3]float64) pair.PlanarSolid {
+func facedBox(lo, hi [3]float64) planar.PlanarSolid {
 	s := boxSolid(lo, hi)
 	for i := range s.Tris {
 		s.Faces = append(s.Faces, i/2)
@@ -155,7 +156,7 @@ func facedBox(lo, hi [3]float64) pair.PlanarSolid {
 // splitBottomEdge adds a vertex at the middle of a facedBox's edge from
 // corner 0 to corner 1, splitting the two triangles that hold it, as a
 // Boolean's mesh leaves a vertex inside a straight face edge.
-func splitBottomEdge(s pair.PlanarSolid) pair.PlanarSolid {
+func splitBottomEdge(s planar.PlanarSolid) planar.PlanarSolid {
 	mid := vec(0, 0, 0)
 	for axis := range 3 {
 		mid[axis] = proof.DyShift(proof.DyAdd(s.Verts[0][axis], s.Verts[1][axis]), -1)
@@ -185,34 +186,34 @@ func TestPlanarTouchManifoldFacePatch(t *testing.T) {
 	// vertex in the middle of one edge, which is no corner of the patch.
 	a := facedBox([3]float64{0, 0, 0}, [3]float64{4, 4, 1})
 	b := splitBottomEdge(facedBox([3]float64{1, 1, 1}, [3]float64{3, 3, 2}))
-	ok, err := pair.CheckPlanarSolid(&b, noPoll)
+	ok, err := planar.CheckPlanarSolid(&b, noPoll)
 	require.NoError(t, err)
 	require.True(t, ok)
-	result, err := pair.ClassifyPlanar(&a, &b, noPoll)
+	result, err := planar.ClassifyPlanar(&a, &b, noPoll)
 	require.NoError(t, err)
 	require.Equal(t, pair.Touching, result.Relation)
-	manifold, err := pair.PlanarTouchManifold(&a, &b, result.Contacts, true, true, noPoll)
+	manifold, err := planar.PlanarTouchManifold(&a, &b, result.Contacts, true, true, noPoll)
 	require.NoError(t, err)
 	require.Equal(t, pair.NoReason, manifold.Reason)
-	var got []pair.Point2
+	var got []planar.Point2
 	for _, point := range manifold.Points {
 		require.Equal(t, point.OnA, point.OnB)
 		require.Zero(t, point.OnA[2].Cmp(rat(1, 1)))
-		require.Equal(t, pair.FeatureFacet, point.A.Kind)
+		require.Equal(t, planar.FeatureFacet, point.A.Kind)
 		require.Equal(t, []int{5}, point.A.Faces)
 		require.Equal(t, []int{4}, point.B.Faces)
 		require.Zero(t, point.Normal[0].Sign())
 		require.Zero(t, point.Normal[1].Sign())
 		require.Positive(t, point.Normal[2].Sign(), "the normal leaves A toward B")
-		got = append(got, pair.Point2{X: point.OnA[0], Y: point.OnA[1]})
+		got = append(got, planar.Point2{X: point.OnA[0], Y: point.OnA[1]})
 	}
-	requireSamePoints(t, []pair.Point2{p2(1, 1), p2(3, 1), p2(3, 3), p2(1, 3)}, got)
+	requireSamePoints(t, []planar.Point2{p2(1, 1), p2(3, 1), p2(3, 3), p2(1, 3)}, got)
 }
 
 func TestPlanarPenetrationManifold(t *testing.T) {
 	a := facedBox([3]float64{0, 0, 0}, [3]float64{4, 4, 1})
 	b := facedBox([3]float64{1, 1, 0.75}, [3]float64{2, 2, 3})
-	points, err := pair.PlanarPenetrationManifold(&a, &b, noPoll)
+	points, err := planar.PlanarPenetrationManifold(&a, &b, noPoll)
 	require.NoError(t, err)
 	require.Len(t, points, 4)
 	for _, point := range points {
@@ -229,16 +230,16 @@ func TestPlanarManifoldsPoll(t *testing.T) {
 	stop := errors.New("stop")
 	a := facedBox([3]float64{0, 0, 0}, [3]float64{4, 4, 1})
 	b := splitBottomEdge(facedBox([3]float64{1, 1, 1}, [3]float64{3, 3, 2}))
-	result, err := pair.ClassifyPlanar(&a, &b, noPoll)
+	result, err := planar.ClassifyPlanar(&a, &b, noPoll)
 	require.NoError(t, err)
 	sunk := facedBox([3]float64{1, 1, 0.75}, [3]float64{2, 2, 3})
 	runs := map[string]func(poll func() error) error{
 		"touch": func(poll func() error) error {
-			_, err := pair.PlanarTouchManifold(&a, &b, result.Contacts, true, true, poll)
+			_, err := planar.PlanarTouchManifold(&a, &b, result.Contacts, true, true, poll)
 			return err
 		},
 		"penetration": func(poll func() error) error {
-			_, err := pair.PlanarPenetrationManifold(&a, &sunk, poll)
+			_, err := planar.PlanarPenetrationManifold(&a, &sunk, poll)
 			return err
 		},
 	}
@@ -264,9 +265,9 @@ func TestPlanarManifoldsPoll(t *testing.T) {
 // facedWedge is a prism along y over [y0, y1] whose section, in (x, z), is
 // the triangle (1, 0.75), (2, 2), (0, 2): its lower edge points down. Its
 // faces are the two caps and the three sides.
-func facedWedge(y0, y1 float64) pair.PlanarSolid {
+func facedWedge(y0, y1 float64) planar.PlanarSolid {
 	section := [][2]float64{{1, .75}, {2, 2}, {0, 2}}
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	for _, y := range []float64{y0, y1} {
 		for _, p := range section {
 			s.Verts = append(s.Verts, vec(p[0], y, p[1]))
@@ -285,7 +286,7 @@ func TestPlanarPenetrationManifoldEdge(t *testing.T) {
 	// each with its foot on the face, at depth 1/4, in both orders.
 	floor := facedBox([3]float64{0, 0, 0}, [3]float64{4, 4, 1})
 	wedge := facedWedge(1, 2)
-	ok, err := pair.CheckPlanarSolid(&wedge, noPoll)
+	ok, err := planar.CheckPlanarSolid(&wedge, noPoll)
 	require.NoError(t, err)
 	require.True(t, ok, "the wedge is a closed outward-wound solid")
 	for order := range 2 {
@@ -293,7 +294,7 @@ func TestPlanarPenetrationManifoldEdge(t *testing.T) {
 		if order == 1 {
 			a, b = wedge, floor
 		}
-		points, err := pair.PlanarPenetrationManifold(&a, &b, noPoll)
+		points, err := planar.PlanarPenetrationManifold(&a, &b, noPoll)
 		require.NoError(t, err)
 		require.Len(t, points, 2, "order %d", order)
 		var ys []float64
@@ -314,9 +315,9 @@ func TestPlanarPenetrationManifoldEdge(t *testing.T) {
 			require.Zero(t, point.Separation.BoundMM)
 			require.Equal(t, normal, point.Normal[2].Sign())
 			require.Zero(t, point.Normal[0].Sign())
-			require.Equal(t, pair.FeatureFacet, floorFeature.Kind)
+			require.Equal(t, planar.FeatureFacet, floorFeature.Kind)
 			require.Equal(t, []int{5}, floorFeature.Faces)
-			require.Equal(t, pair.FeatureEdge, wedgeFeature.Kind)
+			require.Equal(t, planar.FeatureEdge, wedgeFeature.Kind)
 			require.Equal(t, []int{2, 4}, wedgeFeature.Faces, "the sides through the lower edge")
 		}
 		require.ElementsMatch(t, []float64{1, 2}, ys)
@@ -325,7 +326,7 @@ func TestPlanarPenetrationManifoldEdge(t *testing.T) {
 	// The same wedge reaching past the floor's y = 4 rim publishes only the
 	// part of its edge whose feet lie on the face: y from 3 to 4.
 	past := facedWedge(3, 5)
-	points, err := pair.PlanarPenetrationManifold(&floor, &past, noPoll)
+	points, err := planar.PlanarPenetrationManifold(&floor, &past, noPoll)
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 	var ys []float64

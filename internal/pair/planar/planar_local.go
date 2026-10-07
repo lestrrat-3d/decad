@@ -1,4 +1,4 @@
-package pair
+package planar
 
 import "github.com/lestrrat-3d/decad/internal/proof"
 

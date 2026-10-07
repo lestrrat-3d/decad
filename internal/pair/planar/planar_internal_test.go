@@ -1,4 +1,4 @@
-package pair
+package planar
 
 import (
 	"math/rand/v2"

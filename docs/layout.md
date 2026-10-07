@@ -174,7 +174,7 @@ the rules leave to the byte budget.
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred sweeps and faceted results: interference design §3.2. |
-| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, each body's report memo. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
+| `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. Box classification lives in `internal/pair/box/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_pair.go` | Planar admission, convexity and the bands. See `docs/multibody-dynamics-design.md` §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
@@ -249,7 +249,9 @@ the rules leave to the byte budget.
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
-| `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
+| `internal/pair/` | Shared contact relation and reading types. |
+| `internal/pair/box/` | Exact axis and oriented box contact proofs. |
+| `internal/pair/planar/` | Planar solid relations, gaps, patches, and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/sketchrecord/` | Sketch edge conversion and join checks. |

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -22,14 +23,14 @@ import (
 type planarEntry struct {
 	point      ContactPoint
 	keyA, keyB [2]int
-	onA, onB   pair.Point3
+	onA, onB   planar.Point3
 }
 
 // planarPatchManifold converts the kernel's exact points to a public
 // manifold, or reports why it is withheld: a feature without one source
 // identity (AmbiguousFeature), a witness ball over PointResolution
 // (PointTooCoarse), or a normal angle over NormalResolution (NoNormalProof).
-func planarPatchManifold(req ContactRequest, points []pair.PatchPoint,
+func planarPatchManifold(req ContactRequest, points []planar.PatchPoint,
 	features *planarFeatureMap) (*ContactManifold, ContactReason) {
 	entries := make([]planarEntry, 0, len(points))
 	for _, p := range points {
@@ -88,7 +89,7 @@ func compareKey(x, y [2]int) int {
 	return x[1] - y[1]
 }
 
-func comparePoint3(x, y pair.Point3) int {
+func comparePoint3(x, y planar.Point3) int {
 	for axis := range 3 {
 		if c := x[axis].Cmp(y[axis]); c != 0 {
 			return c

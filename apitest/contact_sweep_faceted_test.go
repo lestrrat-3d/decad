@@ -20,7 +20,7 @@ import (
 //   - the pose deviation (pointDeviation's vertex distance bound):
 //     TestSweepPairPlanarTumblingWedge's separated samples publish gaps
 //     whose enclosures miss the closed-form ideal gap;
-//   - the deep-vertex margin: internal/pair/planar_depth_test.go's vertex at
+//   - the deep-vertex margin: internal/pair/planar/planar_depth_test.go's vertex at
 //     depth 2 is accepted at margin 2.
 //
 // The search, the §4.3 travel certificate and the vertex-span hull reuse the

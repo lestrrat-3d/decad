@@ -9,12 +9,12 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
@@ -460,8 +460,8 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 		lo[axis] = new(big.Rat).Sub(lo[axis], survey2d.RatMax(shift, new(big.Rat)))
 		hi[axis] = new(big.Rat).Sub(hi[axis], survey2d.RatMin(shift, new(big.Rat)))
 	}
-	solid := pair.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
-	return pair.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
+	solid := planar.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
+	return planar.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
 }
 
 // depthAt is the band's unnormalized depth at elapsed time t under the
@@ -744,7 +744,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 // published one adds 2δ.
 func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFace,
 	end, heldDepth, rate *big.Rat) (*SweepContactTrack, bool, error) {
-	solids := [2]*pair.PlanarSolid{r.a.solid, r.b.solid}
+	solids := [2]*planar.PlanarSolid{r.a.solid, r.b.solid}
 	features, err := newPlanarFeatureMap(r.a.body, r.b.body, solids[0], solids[1])
 	if err != nil {
 		return nil, false, err
@@ -752,7 +752,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	if solids[support.s].Faces == nil || solids[support.m].Faces == nil {
 		return nil, false, nil
 	}
-	featureS, ok := features.feature(support.s, pair.PatchFeature{Kind: pair.FeatureFacet,
+	featureS, ok := features.feature(support.s, planar.PatchFeature{Kind: planar.FeatureFacet,
 		Faces: []int{face.id}})
 	if !ok {
 		return nil, false, nil
@@ -768,7 +768,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	for _, set := range [2][]int{support.contact, support.lifted} {
 		from := len(entries)
 		for _, index := range set {
-			feature, ok := features.feature(support.m, pair.PatchFeature{Kind: pair.FeatureVertex,
+			feature, ok := features.feature(support.m, planar.PatchFeature{Kind: planar.FeatureVertex,
 				Faces: vertexFaceIDs(solids[support.m], index)})
 			if !ok {
 				return nil, false, nil
@@ -829,7 +829,7 @@ func (r *rotationalPairSweep) solidTriVertex(support *planarSupport) int {
 }
 
 // vertexFaceIDs lists the distinct face ids of the triangles holding vertex v.
-func vertexFaceIDs(solid *pair.PlanarSolid, v int) []int {
+func vertexFaceIDs(solid *planar.PlanarSolid, v int) []int {
 	var ids []int
 	for t, tri := range solid.Tris {
 		if tri[0] != v && tri[1] != v && tri[2] != v {

@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -222,7 +222,7 @@ func sampleLowerGap(sample *SweepSample) *big.Rat {
 // the same vertices through the query pose, and the held body is their hull's
 // subset, so they bound its deviation (pointDeviation) and its coordinate span
 // (cornerSpan); the true body lies within δ of that hull.
-func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarSolid,
+func preparePlanarSweepPath(body *Body, path affinePairPath, solid *planar.PlanarSolid,
 	delta proofarith.Dyadic) (rotationalSweepPath, bool) {
 	prepared, ok := prepareSweepMotion(body, path)
 	if !ok {
@@ -243,7 +243,7 @@ func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarS
 // with both deviations charged; an overlap transfers only through a vertex of
 // one body that lies inside the other farther than both deviations and both
 // held displacements at the rounded poses from its boundary
-// (pair.PlanarDeepVertex); a touch cannot survive a nonzero deviation and
+// (planar.PlanarDeepVertex); a touch cannot survive a nonzero deviation and
 // stays undecided. A §10.4 band transfers with both deviations added to its
 // width and its manifold dropped, as a touch's would be. The ideal pose is a
 // rigid motion, so it moves each true body within its δ of its held one; the
@@ -282,9 +282,9 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 		margin := proofarith.DyAdd(proofarith.MustDyOf(etaA), proofarith.MustDyOf(etaB))
 		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.delta, planarPoseScale(poseA)))
 		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarPoseScale(poseB)))
-		a := pair.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
-		b := pair.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
-		deep, err := pair.PlanarDeepVertex(&a, &b, margin, budget.Step)
+		a := planar.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
+		b := planar.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
+		deep, err := planar.PlanarDeepVertex(&a, &b, margin, budget.Step)
 		if err != nil {
 			return SweepEvent{}, err
 		}

@@ -351,7 +351,7 @@ touch despite positive placement rounding and occupied-volume bounds. It does
 not admit an arbitrary positive-bound Boolean or any rotated placement.
 
 For two admitted rational boxes, compare all three axis intervals exactly.
-`internal/pair` owns that interval classification and the bounded face-patch
+`internal/pair/box` owns that interval classification and the bounded face-patch
 calculation. The root contact path admits source bodies, maps face slots back
 to original `*Face` values, and publishes the typed report.
 A positive gap on any axis excludes contact, but a global minimum distance

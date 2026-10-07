@@ -1,10 +1,11 @@
-package pair_test
+package planar_test
 
 import (
 	"errors"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -46,8 +47,8 @@ func vec(x, y, z float64) proof.DyV3 { return proof.DyV3{dy(x), dy(y), dy(z)} }
 func noPoll() error { return nil }
 
 // boxSolid is an axis box with outward-wound triangles.
-func boxSolid(lo, hi [3]float64) pair.PlanarSolid {
-	var s pair.PlanarSolid
+func boxSolid(lo, hi [3]float64) planar.PlanarSolid {
+	var s planar.PlanarSolid
 	for i := range 8 {
 		p := lo
 		for axis := range 3 {
@@ -75,7 +76,7 @@ func boxTris(base int) [][3]int {
 }
 
 // hollowSolid is a box with an inward-wound cavity shell.
-func hollowSolid(lo, hi, cavityLo, cavityHi [3]float64) pair.PlanarSolid {
+func hollowSolid(lo, hi, cavityLo, cavityHi [3]float64) planar.PlanarSolid {
 	outer := boxSolid(lo, hi)
 	cavity := boxSolid(cavityLo, cavityHi)
 	outer.Verts = append(outer.Verts, cavity.Verts...)
@@ -87,8 +88,8 @@ func hollowSolid(lo, hi, cavityLo, cavityHi [3]float64) pair.PlanarSolid {
 
 // hullSolid winds the given faces of a convex polytope outward, using the
 // vertex centroid as an interior reference.
-func hullSolid(points [][3]float64, faces [][3]int) pair.PlanarSolid {
-	var s pair.PlanarSolid
+func hullSolid(points [][3]float64, faces [][3]int) planar.PlanarSolid {
+	var s planar.PlanarSolid
 	var c [3]float64
 	for _, p := range points {
 		s.Verts = append(s.Verts, vec(p[0], p[1], p[2]))
@@ -111,9 +112,9 @@ func hullSolid(points [][3]float64, faces [][3]int) pair.PlanarSolid {
 var tetraFaces = [][3]int{{0, 1, 2}, {0, 1, 3}, {0, 2, 3}, {1, 2, 3}}
 
 // lSolid is the L-shaped prism [0,2]×[0,1] ∪ [0,1]×[0,2], z in [z0, z1].
-func lSolid(z0, z1 float64) pair.PlanarSolid {
+func lSolid(z0, z1 float64) planar.PlanarSolid {
 	section := [][2]float64{{0, 0}, {2, 0}, {2, 1}, {1, 1}, {1, 2}, {0, 2}}
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	for _, z := range []float64{z0, z1} {
 		for _, p := range section {
 			s.Verts = append(s.Verts, vec(p[0], p[1], z))
@@ -130,16 +131,16 @@ func lSolid(z0, z1 float64) pair.PlanarSolid {
 	return s
 }
 
-func classify(t *testing.T, a, b pair.PlanarSolid) pair.PlanarResult {
+func classify(t *testing.T, a, b planar.PlanarSolid) planar.PlanarResult {
 	t.Helper()
-	for _, s := range []*pair.PlanarSolid{&a, &b} {
-		ok, err := pair.CheckPlanarSolid(s, noPoll)
+	for _, s := range []*planar.PlanarSolid{&a, &b} {
+		ok, err := planar.CheckPlanarSolid(s, noPoll)
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	forward, err := pair.ClassifyPlanar(&a, &b, noPoll)
+	forward, err := planar.ClassifyPlanar(&a, &b, noPoll)
 	require.NoError(t, err)
-	reversed, err := pair.ClassifyPlanar(&b, &a, noPoll)
+	reversed, err := planar.ClassifyPlanar(&b, &a, noPoll)
 	require.NoError(t, err)
 	require.Equal(t, forward.Relation, reversed.Relation, "reversal keeps the relation")
 	require.Equal(t, forward.Gap, reversed.Gap, "reversal keeps the gap")
@@ -149,13 +150,13 @@ func classify(t *testing.T, a, b pair.PlanarSolid) pair.PlanarResult {
 
 func TestCheckPlanarSolidAudits(t *testing.T) {
 	box := boxSolid([3]float64{0, 0, 0}, [3]float64{1, 1, 1})
-	ok, err := pair.CheckPlanarSolid(&box, noPoll)
+	ok, err := planar.CheckPlanarSolid(&box, noPoll)
 	require.NoError(t, err)
 	require.True(t, ok)
 
 	open := box
 	open.Tris = box.Tris[:11]
-	ok, err = pair.CheckPlanarSolid(&open, noPoll)
+	ok, err = planar.CheckPlanarSolid(&open, noPoll)
 	require.NoError(t, err)
 	require.False(t, ok, "a missing triangle leaves unmatched directed edges")
 
@@ -164,28 +165,28 @@ func TestCheckPlanarSolidAudits(t *testing.T) {
 	for _, tri := range box.Tris {
 		inverted.Tris = append(inverted.Tris, [3]int{tri[0], tri[2], tri[1]})
 	}
-	ok, err = pair.CheckPlanarSolid(&inverted, noPoll)
+	ok, err = planar.CheckPlanarSolid(&inverted, noPoll)
 	require.NoError(t, err)
 	require.False(t, ok, "an inward-wound box has negative signed volume")
 
 	stop := errors.New("stop")
-	_, err = pair.CheckPlanarSolid(&box, func() error { return stop })
+	_, err = planar.CheckPlanarSolid(&box, func() error { return stop })
 	require.ErrorIs(t, err, stop)
 }
 
 func TestPlanarConvexCertificate(t *testing.T) {
 	box := boxSolid([3]float64{0, 0, 0}, [3]float64{1, 2, 3})
-	convex, err := pair.PlanarConvex(&box, noPoll)
+	convex, err := planar.PlanarConvex(&box, noPoll)
 	require.NoError(t, err)
 	require.True(t, convex)
 
 	l := lSolid(0, 1)
-	convex, err = pair.PlanarConvex(&l, noPoll)
+	convex, err = planar.PlanarConvex(&l, noPoll)
 	require.NoError(t, err)
 	require.False(t, convex, "the L section's reflex corner puts a vertex in front of a wall")
 
 	hollow := hollowSolid([3]float64{0, 0, 0}, [3]float64{4, 4, 4}, [3]float64{1, 1, 1}, [3]float64{3, 3, 3})
-	convex, err = pair.PlanarConvex(&hollow, noPoll)
+	convex, err = planar.PlanarConvex(&hollow, noPoll)
 	require.NoError(t, err)
 	require.False(t, convex, "a cavity wall faces the outer vertices")
 }
@@ -228,9 +229,9 @@ func TestClassifyPlanarTouching(t *testing.T) {
 	result := classify(t, box, apex)
 	require.Equal(t, pair.Touching, result.Relation)
 	require.Equal(t, &pair.ScalarReading{}, result.Gap)
-	require.Contains(t, result.Contacts, pair.PlanarContact{
-		A: pair.PlanarFeature{Kind: pair.FeatureFacet, Facet: 10},
-		B: pair.PlanarFeature{Kind: pair.FeatureVertex, Vertex: 0},
+	require.Contains(t, result.Contacts, planar.PlanarContact{
+		A: planar.PlanarFeature{Kind: planar.FeatureFacet, Facet: 10},
+		B: planar.PlanarFeature{Kind: planar.FeatureVertex, Vertex: 0},
 	}, "the apex lands inside the top face's first triangle")
 
 	// Edge across edge: two wedges whose ridges cross at right angles.
@@ -238,9 +239,9 @@ func TestClassifyPlanarTouching(t *testing.T) {
 	upper := hullSolid([][3]float64{{0, -1, 0}, {0, 1, 0}, {-1, 0, 1}, {1, 0, 1}}, tetraFaces)
 	result = classify(t, lower, upper)
 	require.Equal(t, pair.Touching, result.Relation)
-	require.Equal(t, []pair.PlanarContact{{
-		A: pair.PlanarFeature{Kind: pair.FeatureEdge, Edge: [2]int{0, 1}},
-		B: pair.PlanarFeature{Kind: pair.FeatureEdge, Edge: [2]int{0, 1}},
+	require.Equal(t, []planar.PlanarContact{{
+		A: planar.PlanarFeature{Kind: planar.FeatureEdge, Edge: [2]int{0, 1}},
+		B: planar.PlanarFeature{Kind: planar.FeatureEdge, Edge: [2]int{0, 1}},
 	}}, result.Contacts)
 
 	// Face on face: opposed coplanar patches.
@@ -260,13 +261,13 @@ func TestClassifyPlanarTouching(t *testing.T) {
 // trayCornerSolid is one closed tray corner: a [0,3]² floor slab for z in
 // [-1, 0] under an L-shaped wall pair rising to z = 2, leaving the notch
 // [1,3]×[1,3] open above the floor.
-func trayCornerSolid() pair.PlanarSolid {
+func trayCornerSolid() planar.PlanarSolid {
 	pts := [][3]float64{
 		{0, 0, -1}, {3, 0, -1}, {3, 3, -1}, {0, 3, -1}, // 0-3 bottom square
 		{0, 0, 2}, {3, 0, 2}, {3, 1, 2}, {1, 1, 2}, {1, 3, 2}, {0, 3, 2}, // 4-9 L top
 		{3, 1, 0}, {1, 1, 0}, {1, 3, 0}, {3, 3, 0}, // 10-13 notch floor
 	}
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	for _, p := range pts {
 		s.Verts = append(s.Verts, vec(p[0], p[1], p[2]))
 	}
@@ -339,10 +340,10 @@ func TestClassifyPlanarRejectsSaddleTouch(t *testing.T) {
 
 // prismAlongY extrudes a section given in (x, z), its first vertex seeing
 // every other one, along y over [y0, y1], winding the result outward.
-func prismAlongY(t *testing.T, section [][2]float64, y0, y1 float64) pair.PlanarSolid {
+func prismAlongY(t *testing.T, section [][2]float64, y0, y1 float64) planar.PlanarSolid {
 	t.Helper()
 	n := len(section)
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	for _, y := range []float64{y0, y1} {
 		for _, p := range section {
 			s.Verts = append(s.Verts, vec(p[0], y, p[1]))
@@ -355,7 +356,7 @@ func prismAlongY(t *testing.T, section [][2]float64, y0, y1 float64) pair.Planar
 		j := (i + 1) % n
 		s.Tris = append(s.Tris, [3]int{i, n + j, j}, [3]int{i, n + i, n + j})
 	}
-	if ok, err := pair.CheckPlanarSolid(&s, noPoll); err == nil && ok {
+	if ok, err := planar.CheckPlanarSolid(&s, noPoll); err == nil && ok {
 		return s
 	}
 	for i, tri := range s.Tris {
@@ -420,9 +421,9 @@ func TestClassifyPlanarUnprovableOverlapsStayUndecided(t *testing.T) {
 
 // pittedCubeSolid is the cube [0,8]³ with a square pyramidal pit in each
 // face: rim [3,5]² on the face, apex 2 deep at the face's center.
-func pittedCubeSolid(t *testing.T) pair.PlanarSolid {
+func pittedCubeSolid(t *testing.T) planar.PlanarSolid {
 	t.Helper()
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	index := make(map[[3]float64]int)
 	at := func(p [3]float64) int {
 		if i, ok := index[p]; ok {
@@ -460,7 +461,7 @@ func pittedCubeSolid(t *testing.T) pair.PlanarSolid {
 			}
 		}
 	}
-	ok, err := pair.CheckPlanarSolid(&s, noPoll)
+	ok, err := planar.CheckPlanarSolid(&s, noPoll)
 	require.NoError(t, err)
 	require.True(t, ok)
 	return s
@@ -471,7 +472,7 @@ func TestClassifyPlanarPollsAndStops(t *testing.T) {
 	b := boxSolid([3]float64{0, 0, 3}, [3]float64{1, 1, 4})
 	stop := errors.New("stop")
 	calls := 0
-	_, err := pair.ClassifyPlanar(&a, &b, func() error {
+	_, err := planar.ClassifyPlanar(&a, &b, func() error {
 		calls++
 		if calls > 50 {
 			return stop
@@ -483,7 +484,7 @@ func TestClassifyPlanarPollsAndStops(t *testing.T) {
 
 // crossingSets gathers what the crossings name: the faces of tray's
 // triangles, the box's edges, and the tray's edges.
-func crossingSets(t *testing.T, result pair.PlanarResult, tray pair.PlanarSolid) (map[int]struct{},
+func crossingSets(t *testing.T, result planar.PlanarResult, tray planar.PlanarSolid) (map[int]struct{},
 	map[[2]int]struct{}, map[[2]int]struct{}) {
 	t.Helper()
 	faces := make(map[int]struct{})
@@ -544,11 +545,11 @@ func TestClassifyPlanarRecordsCrossings(t *testing.T) {
 	}
 	require.Equal(t, map[[2]int]struct{}{{12, 14}: {}}, trayEdges, "the floor's diagonal")
 
-	reversed, err := pair.ClassifyPlanar(&tray, &box, noPoll)
+	reversed, err := planar.ClassifyPlanar(&tray, &box, noPoll)
 	require.NoError(t, err)
 	require.Len(t, reversed.Crossings, len(result.Crossings))
 	for _, crossing := range reversed.Crossings {
-		require.Contains(t, result.Crossings, pair.PlanarCrossing{A: crossing.B, B: crossing.A})
+		require.Contains(t, result.Crossings, planar.PlanarCrossing{A: crossing.B, B: crossing.A})
 	}
 
 	// Below the floor and past the wall x = 12, the corner crosses both.

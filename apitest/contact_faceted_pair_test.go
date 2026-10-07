@@ -16,7 +16,7 @@ import (
 // are read as exact dyadics, so each relation below is decided exactly.
 //
 // The kernel's certificate legs are shown to fail at the snapshot level in
-// internal/pair/planar_test.go. At this level, each of these was shown to
+// internal/pair/planar/planar_test.go. At this level, each of these was shown to
 // fail: removing the planar dispatch from ContactPair (every case reads
 // Undecided); skipping the convexity lookup, or certifying every body convex
 // (the hollow shell in the tray's corner loses ContactNonConvex); certifying

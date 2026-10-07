@@ -1,10 +1,11 @@
-package pair
+package planar
 
 import (
 	"math/big"
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -69,7 +70,7 @@ func PlanarFacePenetrationGrown(a, b *PlanarSolid, crossings []PlanarCrossing, c
 		return PlanarManifold{}, nil
 	}
 	var published []PlanarManifold
-	reason := NoReason
+	reason := pair.NoReason
 	for _, mIsA := range []bool{true, false} {
 		if mIsA && !convexA || !mIsA && !convexB {
 			continue
@@ -84,7 +85,7 @@ func PlanarFacePenetrationGrown(a, b *PlanarSolid, crossings []PlanarCrossing, c
 		}
 		if got.Points != nil {
 			published = append(published, got)
-		} else if got.Reason != NoReason {
+		} else if got.Reason != pair.NoReason {
 			reason = got.Reason
 		}
 	}
@@ -94,7 +95,7 @@ func PlanarFacePenetrationGrown(a, b *PlanarSolid, crossings []PlanarCrossing, c
 	case 0:
 		return PlanarManifold{Reason: reason}, nil
 	default:
-		return PlanarManifold{Reason: AmbiguousFeature}, nil
+		return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 	}
 }
 
@@ -124,7 +125,7 @@ func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool, g
 			case h < 0:
 				h = face
 			case face != h:
-				return PlanarManifold{Reason: AmbiguousFeature}, nil
+				return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 			}
 		}
 	}
@@ -193,7 +194,7 @@ func facePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, mIsA bool, g
 	if !ok {
 		return PlanarManifold{}, nil
 	}
-	separation := ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
+	separation := pair.ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
 	points, err := shallowSupport(host, h, guest, n, level, plane, separation, poll)
 	if err != nil || points == nil {
 		return PlanarManifold{}, err

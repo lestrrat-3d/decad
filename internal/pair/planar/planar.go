@@ -1,8 +1,9 @@
-package pair
+package planar
 
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -95,9 +96,9 @@ type PlanarCrossing struct {
 // certified crossing behind an Overlapping relation; it is empty when the
 // overlap was proven by nesting alone.
 type PlanarResult struct {
-	Relation  Relation
-	Reason    Reason
-	Gap       *ScalarReading
+	Relation  pair.Relation
+	Reason    pair.Reason
+	Gap       *pair.ScalarReading
 	Contacts  []PlanarContact
 	Crossings []PlanarCrossing
 	// Nearest names the candidate pair that set the distance scan's
@@ -221,7 +222,7 @@ func (k *planarKernel) classify() (PlanarResult, error) {
 		return PlanarResult{}, err
 	}
 	if len(k.crossed) > 0 {
-		return PlanarResult{Relation: Overlapping, Crossings: k.crossed}, nil
+		return PlanarResult{Relation: pair.Overlapping, Crossings: k.crossed}, nil
 	}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		inside, decided, err := k.shellsInside(side[0], side[1])
@@ -229,10 +230,10 @@ func (k *planarKernel) classify() (PlanarResult, error) {
 			return PlanarResult{}, err
 		}
 		if !decided {
-			return PlanarResult{Reason: AmbiguousFeature}, nil
+			return PlanarResult{Reason: pair.AmbiguousFeature}, nil
 		}
 		if inside {
-			return PlanarResult{Relation: Overlapping}, nil
+			return PlanarResult{Relation: pair.Overlapping}, nil
 		}
 	}
 	if err := k.distances(); err != nil {
@@ -241,14 +242,14 @@ func (k *planarKernel) classify() (PlanarResult, error) {
 	if k.best.num.Sign() > 0 {
 		gap, ok := fracSqrtReading(k.best)
 		if !ok {
-			return PlanarResult{Reason: NoGapProof}, nil
+			return PlanarResult{Reason: pair.NoGapProof}, nil
 		}
-		return PlanarResult{Relation: Separated, Gap: &gap}, nil
+		return PlanarResult{Relation: pair.Separated, Gap: &gap}, nil
 	}
 	if len(k.sites) == 0 {
 		// A zero minimum always comes with a recorded site; without one the
 		// contact set is unknown.
-		return PlanarResult{Reason: AmbiguousFeature}, nil
+		return PlanarResult{Reason: pair.AmbiguousFeature}, nil
 	}
 	for i := range k.sites {
 		if err := poll(); err != nil {
@@ -263,14 +264,14 @@ func (k *planarKernel) classify() (PlanarResult, error) {
 			return PlanarResult{}, err
 		}
 		if !separated {
-			return PlanarResult{Reason: AmbiguousFeature}, nil
+			return PlanarResult{Reason: pair.AmbiguousFeature}, nil
 		}
 	}
 	contacts := make([]PlanarContact, 0, len(k.sites))
 	for _, site := range k.sites {
 		contacts = append(contacts, site.contact)
 	}
-	return PlanarResult{Relation: Touching, Gap: &ScalarReading{}, Contacts: contacts}, nil
+	return PlanarResult{Relation: pair.Touching, Gap: &pair.ScalarReading{}, Contacts: contacts}, nil
 }
 
 // planarPrep holds one solid's derived exact data: outward normals, per
@@ -360,7 +361,7 @@ func fracCmp(x, y frac) int {
 // fracSqrtReading encloses sqrt(num/den) between two floats, each proven by an
 // exact comparison of its square, and publishes their midpoint with an
 // outward half-width. An exactly representable root has a zero bound.
-func fracSqrtReading(x frac) (ScalarReading, bool) {
+func fracSqrtReading(x frac) (pair.ScalarReading, bool) {
 	squareAtMost := func(f float64) bool {
 		d, ok := proof.DyOf(f)
 		return ok && proof.DyCmp(proof.DyMul(proof.DyMul(d, d), x.den), x.num) <= 0
@@ -371,7 +372,7 @@ func fracSqrtReading(x frac) (ScalarReading, bool) {
 	}
 	seed := proof.DySqrtSeed(x.num) / proof.DySqrtSeed(x.den)
 	if !finite(seed) || seed <= 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	lo, hi := seed, seed
 	for range proof.SqrtAdjustLimit {
@@ -387,14 +388,14 @@ func fracSqrtReading(x frac) (ScalarReading, bool) {
 		hi = math.Nextafter(hi, math.Inf(1))
 	}
 	if !squareAtMost(lo) || !squareAtLeast(hi) || lo <= 0 || !finite(hi) {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	if lo == hi {
-		return ScalarReading{ValueMM: lo}, true
+		return pair.ScalarReading{ValueMM: lo}, true
 	}
 	value := lo + (hi-lo)/2
 	bound := proof.ProvenUpRound(math.Max(value-lo, hi-value))
-	return ScalarReading{ValueMM: value, BoundMM: bound}, finite(value) && finite(bound)
+	return pair.ScalarReading{ValueMM: value, BoundMM: bound}, finite(value) && finite(bound)
 }
 
 // hpoint is the exact point x/w with w > 0. Contact points on two crossing
