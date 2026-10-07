@@ -751,7 +751,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		return nil, false, nil
 	}
 	featureS, ok := features.feature(support.s, planar.PatchFeature{Kind: planar.FeatureFacet,
-		Faces: []int{face.id}})
+		Faces: []int{face.ID}})
 	if !ok {
 		return nil, false, nil
 	}
@@ -767,7 +767,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		from := len(entries)
 		for _, index := range set {
 			feature, ok := features.feature(support.m, planar.PatchFeature{Kind: planar.FeatureVertex,
-				Faces: vertexFaceIDs(solids[support.m], index)})
+				Faces: planar.VertexFaceIDs(solids[support.m], index)})
 			if !ok {
 				return nil, false, nil
 			}
@@ -826,93 +826,12 @@ func (r *rotationalPairSweep) solidTriVertex(support *planarSupport) int {
 	return solid.Tris[support.tri][0]
 }
 
-// vertexFaceIDs lists the distinct face ids of the triangles holding vertex v.
-func vertexFaceIDs(solid *planar.PlanarSolid, v int) []int {
-	var ids []int
-	for t, tri := range solid.Tris {
-		if tri[0] != v && tri[1] != v && tri[2] != v {
-			continue
-		}
-		if id := solid.Faces[t]; !slices.Contains(ids, id) {
-			ids = append(ids, id)
-		}
-	}
-	sort.Ints(ids)
-	return ids
-}
+// planarFace carries the exact planar face selected by the sweep.
+type planarFace struct{ planar.SupportFace }
 
-// planarFace is the part of S on its support plane: the S triangles lying in
-// it, projected to the plane's frame by dropping the axis of n's largest
-// component, with the edges that bound their union.
-type planarFace struct {
-	id    int
-	drop  int
-	tris  [][3][2]*big.Rat
-	edges [][2][2]*big.Rat
-}
-
-// planarSupportFace collects S's triangles on the support plane. They must
-// all belong to one face of S, which the manifold names.
 func planarSupportFace(s *planarSupport) (planarFace, bool) {
-	solid := s.pathS.solid
-	if solid.Faces == nil {
-		return planarFace{}, false
-	}
-	drop := 0
-	for k := 1; k < 3; k++ {
-		if proofarith.DyCmp(proofarith.DyAbs(s.normal[k]), proofarith.DyAbs(s.normal[drop])) > 0 {
-			drop = k
-		}
-	}
-	project := func(v proofarith.DyV3) [2]*big.Rat {
-		i, j := (drop+1)%3, (drop+2)%3
-		return [2]*big.Rat{v[i].Rat(), v[j].Rat()}
-	}
-	face := planarFace{id: -1, drop: drop}
-	directed := make(map[[2]int]struct{})
-	var held [][3]int
-	for t, tri := range solid.Tris {
-		onPlane := true
-		for _, v := range tri {
-			if proofarith.DvDot(s.normal, proofarith.DvSub(s.pathS.startPoints[v], s.origin)).Sign() != 0 {
-				onPlane = false
-				break
-			}
-		}
-		if !onPlane {
-			continue
-		}
-		a := s.pathS.startPoints[tri[0]]
-		n := proofarith.DvCross(proofarith.DvSub(s.pathS.startPoints[tri[1]], a),
-			proofarith.DvSub(s.pathS.startPoints[tri[2]], a))
-		if proofarith.DvDot(n, s.normal).Sign() <= 0 {
-			return planarFace{}, false
-		}
-		if face.id >= 0 && solid.Faces[t] != face.id {
-			return planarFace{}, false
-		}
-		face.id = solid.Faces[t]
-		held = append(held, tri)
-		face.tris = append(face.tris, [3][2]*big.Rat{project(s.pathS.startPoints[tri[0]]),
-			project(s.pathS.startPoints[tri[1]]), project(s.pathS.startPoints[tri[2]])})
-		for i := range 3 {
-			directed[[2]int{tri[i], tri[(i+1)%3]}] = struct{}{}
-		}
-	}
-	if face.id < 0 {
-		return planarFace{}, false
-	}
-	for _, tri := range held {
-		for i := range 3 {
-			from, to := tri[i], tri[(i+1)%3]
-			if _, shared := directed[[2]int{to, from}]; shared {
-				continue
-			}
-			face.edges = append(face.edges, [2][2]*big.Rat{project(s.pathS.startPoints[from]),
-				project(s.pathS.startPoints[to])})
-		}
-	}
-	return face, true
+	face, ok := planar.BuildSupportFace(s.pathS.solid, s.pathS.startPoints, s.normal, s.origin)
+	return planarFace{face}, ok
 }
 
 // contains reports whether, through fraction f, the foot of every contact
@@ -924,7 +843,7 @@ func planarSupportFace(s *planarSupport) (planarFace, bool) {
 // no bounding edge and has a corner in a face triangle lies inside the face.
 func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func() error) (bool, error) {
 	spans := s.pathM.cornerSpan(new(big.Rat), f)
-	i, j := (face.drop+1)%3, (face.drop+2)%3
+	i, j := (face.Drop+1)%3, (face.Drop+2)%3
 	for _, index := range slices.Concat(s.contact, s.lifted) {
 		if err := poll(); err != nil {
 			return false, err
@@ -937,65 +856,11 @@ func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func(
 			lo[slot] = proofbound.RatAdd(span.Lo, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(depth))
 			hi[slot] = proofbound.RatAdd(span.Hi, new(big.Rat).Neg(shiftLo), depth)
 		}
-		inside := false
-		for _, tri := range face.tris {
-			if planarPointInTriangle(lo, tri) {
-				inside = true
-				break
-			}
-		}
-		if !inside {
+		if !face.HoldsBox(lo, hi) {
 			return false, nil
-		}
-		for _, edge := range face.edges {
-			if planarSegmentMeetsBox(edge[0], edge[1], lo, hi) {
-				return false, nil
-			}
 		}
 	}
 	return true, nil
-}
-
-func planarOrient(a, b, c [2]*big.Rat) int {
-	left := new(big.Rat).Mul(new(big.Rat).Sub(b[0], a[0]), new(big.Rat).Sub(c[1], a[1]))
-	right := new(big.Rat).Mul(new(big.Rat).Sub(b[1], a[1]), new(big.Rat).Sub(c[0], a[0]))
-	return left.Cmp(right)
-}
-
-// planarPointInTriangle tests the closed triangle in either winding.
-func planarPointInTriangle(p [2]*big.Rat, tri [3][2]*big.Rat) bool {
-	sign := planarOrient(tri[0], tri[1], tri[2])
-	if sign == 0 {
-		return false
-	}
-	for k := range 3 {
-		if planarOrient(tri[k], tri[(k+1)%3], p)*sign < 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// planarSegmentMeetsBox is the separating-axis test of a segment and a closed
-// axis-aligned box: the two box axes and the segment's normal.
-func planarSegmentMeetsBox(a, b, lo, hi [2]*big.Rat) bool {
-	for axis := range 2 {
-		if proofbound.RatMax(a[axis], b[axis]).Cmp(lo[axis]) < 0 || proofbound.RatMin(a[axis], b[axis]).Cmp(hi[axis]) > 0 {
-			return false
-		}
-	}
-	positive, negative := false, false
-	for _, corner := range [4][2]*big.Rat{{lo[0], lo[1]}, {hi[0], lo[1]}, {lo[0], hi[1]}, {hi[0], hi[1]}} {
-		switch planarOrient(a, b, corner) {
-		case 1:
-			positive = true
-		case -1:
-			negative = true
-		default:
-			return true
-		}
-	}
-	return positive && negative
 }
 
 // planarManifoldAt publishes the track's manifold at an exact fraction. Each

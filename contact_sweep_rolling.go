@@ -480,7 +480,7 @@ func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) b
 		lo[slot] = proofbound.RatAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
 		hi[slot] = proofbound.RatAdd(high, new(big.Rat).Neg(shiftLo), growth)
 	}
-	return support.face.holdsBox(lo, hi)
+	return support.face.HoldsBox(lo, hi)
 }
 
 // track builds the public track. The start manifold ContactPair published
@@ -490,10 +490,10 @@ func (r *rollingPairSweep) track(first *SweepSample, support rulingPlane,
 	coefficients rollingCoefficients, end, depth *big.Rat) (*SweepContactTrack, bool, error) {
 	S, M := &r.paths[r.s], &r.paths[r.m]
 	faces := S.body.Faces()
-	if support.face.id < 0 || support.face.id >= len(faces) {
+	if support.face.ID < 0 || support.face.ID >= len(faces) {
 		return nil, false, nil
 	}
-	featureS := ContactFeature{Face: faces[support.face.id]}
+	featureS := ContactFeature{Face: faces[support.face.ID]}
 	featureM := ContactFeature{Face: r.cylinder.wall}
 	if first.Ideal.Manifold != nil {
 		for _, point := range first.Ideal.Manifold.Points {
