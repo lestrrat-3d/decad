@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -843,63 +844,12 @@ type projectionSide struct {
 	rem     *big.Rat
 }
 
-// firstOrder is the side's first-order terms at corner c along axis d: a
-// proven upper bound on how far the expansion moves x[d] (up) and −x[d]
-// (down) over the interval. The segment term's sum is linear in the
-// fraction t ∈ [0, 1] of the step, so its largest value is at t = 0 or 1:
-// max(0, Σ) along x[d] and max(0, −Σ) along −x[d], each over the enclosure
-// of Σ. The box form charges |v[d]|·h along both.
 func (s projectionSide) firstOrder(c, d int) (up, down *big.Rat) {
-	if s.seg != nil {
-		sum := proofbound.PointInterval(new(big.Rat))
-		for n, v := range s.corners.vel[c] {
-			sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(v[d], s.seg[n]))
-		}
-		up, down = new(big.Rat), new(big.Rat)
-		if sum.Hi.Sign() > 0 {
-			up.Set(sum.Hi)
-		}
-		if sum.Lo.Sign() < 0 {
-			down.Neg(sum.Lo)
-		}
-		return up, down
-	}
-	lin := new(big.Rat)
-	for n, v := range s.corners.vel[c] {
-		if s.h[n].Sign() == 0 {
-			continue
-		}
-		term := ivAbsUpper(v[d])
-		lin.Add(lin, term.Mul(term, s.h[n]))
-	}
-	return lin, new(big.Rat).Set(lin)
+	return s.boundSide().FirstOrder(c, d)
 }
 
-// extents are proven upper bounds on x[axis] (up) and on −x[axis] (down)
-// over the body at every parameter of the interval, per axis: the largest
-// over its corners of the corner's coordinate end plus its first-order term,
-// then the remainder.
 func (s projectionSide) extents() (up, down [3]*big.Rat) {
-	for c := range s.corners.hi {
-		for d := range 3 {
-			linUp, linDown := s.firstOrder(c, d)
-			hi := linUp.Add(linUp, s.corners.hi[c][d])
-			lo := linDown.Sub(linDown, s.corners.lo[c][d])
-			if up[d] == nil || hi.Cmp(up[d]) > 0 {
-				up[d] = hi
-			}
-			if down[d] == nil || lo.Cmp(down[d]) > 0 {
-				down[d] = lo
-			}
-		}
-	}
-	if s.rem != nil {
-		for d := range 3 {
-			up[d].Add(up[d], s.rem)
-			down[d].Add(down[d], s.rem)
-		}
-	}
-	return up, down
+	return s.boundSide().Extents()
 }
 
 // jointStep is Δq_i of docs/linkage-check-design.md §5.8's segment term for
@@ -931,27 +881,8 @@ func jointStep(jt linkJoint, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
 	return roundOut(step)
 }
 
-// projectionLower is the largest L_n of docs/linkage-check-design.md §5.8
-// over the six coordinate directions n = ±e_axis: the partner's least extent
-// along n less the body's greatest. Along +e_axis that is −b.down − a.up,
-// along −e_axis −b.up − a.down. The distance between two sets is at least
-// the separation of their projections onto any unit vector, so each L_n is
-// a proven lower bound on the pair's gap at every parameter of the interval.
 func projectionLower(a, b projectionSide) *big.Rat {
-	aUp, aDown := a.extents()
-	bUp, bDown := b.extents()
-	var best *big.Rat
-	for d := range 3 {
-		for _, l := range []*big.Rat{
-			new(big.Rat).Neg(new(big.Rat).Add(bDown[d], aUp[d])),
-			new(big.Rat).Neg(new(big.Rat).Add(bUp[d], aDown[d])),
-		} {
-			if best == nil || l.Cmp(best) > 0 {
-				best = l
-			}
-		}
-	}
-	return best
+	return linkagebound.Lower(a.boundSide(), b.boundSide())
 }
 
 // bodySymmetryAxis is the exact axis line of a body that every rotation
@@ -1088,137 +1019,24 @@ func bodyHullPoints(b *Body) (points []motionbound.RatVec, pad *big.Rat, k int, 
 	return points, pad, k, true
 }
 
-// faceNormals is docs/linkage-check-design.md §5.8's candidate directions
-// read off a point reading: for a prism's hull points, its extrusion
-// direction and each side face's normal, the cross product of the side's
-// bottom edge with that direction; for box corners, the three edge
-// directions at the first corner. Each is formed in float from the readings'
-// lower ends and read exactly: any fixed nonzero vector serves as n, so none
-// needs a proof, and a zero or non-finite one is skipped.
+func (s projectionSide) boundSide() linkagebound.Side {
+	return linkagebound.Side{
+		Corners: linkagebound.Bounds{
+			Lo: s.corners.lo, Hi: s.corners.hi, Vel: s.corners.vel,
+			Pad: s.corners.pad, PrismK: s.corners.prismK,
+		},
+		H: s.h, Seg: s.seg, Rem: s.rem,
+	}
+}
+
 func faceNormals(c cornerBounds) []motionbound.RatVec {
-	at := func(n int) r3.Vec {
-		f := func(q *big.Rat) float64 { v, _ := q.Float64(); return v }
-		return r3.NewVec(f(c.lo[n][0]), f(c.lo[n][1]), f(c.lo[n][2]))
-	}
-	var vecs []r3.Vec
-	switch {
-	case c.prismK >= 3 && len(c.lo) == 2*c.prismK:
-		k := c.prismK
-		axis := at(k).Sub(at(0))
-		vecs = append(vecs, axis)
-		for n := range k {
-			edge := at((n + 1) % k).Sub(at(n))
-			vecs = append(vecs, edge.Cross(axis))
-		}
-	case len(c.lo) == 8:
-		vecs = append(vecs, at(1).Sub(at(0)), at(2).Sub(at(0)), at(4).Sub(at(0)))
-	}
-	var out []motionbound.RatVec
-	for _, v := range vecs {
-		if r, ok := motionbound.RatVecOf(v); ok && !ratZero(r) {
-			out = append(out, r)
-		}
-	}
-	return out
+	return linkagebound.FaceNormals(linkagebound.Bounds{Lo: c.lo, Hi: c.hi, Vel: c.vel, Pad: c.pad, PrismK: c.prismK})
 }
 
-// extentsAlong is projectionSide.extents along any nonzero direction n:
-// proven upper bounds on n·x (up) and on −n·x (down) over the body at every
-// parameter of the interval, before its pad. The remainder bounds a vector,
-// so it is charged Rem·norm, norm an upper bound on |n|.
 func (s projectionSide) extentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.Rat) {
-	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
-		sum := proofbound.PointInterval(new(big.Rat))
-		for d := range 3 {
-			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(p[d], n[d]))
-		}
-		return sum
-	}
-	for c := range s.corners.hi {
-		pos := dot([3]proofbound.RatInterval{
-			proofbound.IntervalOwned(s.corners.lo[c][0], s.corners.hi[c][0]),
-			proofbound.IntervalOwned(s.corners.lo[c][1], s.corners.hi[c][1]),
-			proofbound.IntervalOwned(s.corners.lo[c][2], s.corners.hi[c][2]),
-		})
-		linUp, linDown := new(big.Rat), new(big.Rat)
-		if s.seg != nil {
-			sum := proofbound.PointInterval(new(big.Rat))
-			for j, v := range s.corners.vel[c] {
-				sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(dot(v), s.seg[j]))
-			}
-			if sum.Hi.Sign() > 0 {
-				linUp.Set(sum.Hi)
-			}
-			if sum.Lo.Sign() < 0 {
-				linDown.Neg(sum.Lo)
-			}
-		} else {
-			for j, v := range s.corners.vel[c] {
-				if s.h[j].Sign() == 0 {
-					continue
-				}
-				term := ivAbsUpper(dot(v))
-				linUp.Add(linUp, term.Mul(term, s.h[j]))
-			}
-			linDown.Set(linUp)
-		}
-		hi := linUp.Add(linUp, pos.Hi)
-		lo := linDown.Sub(linDown, pos.Lo)
-		if up == nil || hi.Cmp(up) > 0 {
-			up = hi
-		}
-		if down == nil || lo.Cmp(down) > 0 {
-			down = lo
-		}
-	}
-	if s.rem != nil {
-		rem := new(big.Rat).Mul(s.rem, norm)
-		up.Add(up, rem)
-		down.Add(down, rem)
-	}
-	return up, down
+	return s.boundSide().ExtentsAlong(n, norm)
 }
 
-// projectionLowerHull is docs/linkage-check-design.md §5.8's hull bound for
-// a pair whose two sides read hull points: the largest L_n over the six
-// coordinate directions and every face normal of either side, each
-// numerator divided by |n| rounded up when positive and down otherwise, less
-// both pads; nil when no direction can be normed.
 func projectionLowerHull(a, b projectionSide) *big.Rat {
-	one, zero := big.NewRat(1, 1), new(big.Rat)
-	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
-	dirs = append(dirs, faceNormals(a.corners)...)
-	dirs = append(dirs, faceNormals(b.corners)...)
-	pads := new(big.Rat)
-	for _, p := range []*big.Rat{a.corners.pad, b.corners.pad} {
-		if p != nil {
-			pads.Add(pads, p)
-		}
-	}
-	var best *big.Rat
-	for _, n := range dirs {
-		sq := axisSq(n)
-		normUp := sqrtUpRat(sq)
-		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
-		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
-			continue
-		}
-		aUp, aDown := a.extentsAlong(n, normUp)
-		bUp, bDown := b.extentsAlong(n, normUp)
-		for _, num := range []*big.Rat{
-			new(big.Rat).Neg(new(big.Rat).Add(bDown, aUp)),
-			new(big.Rat).Neg(new(big.Rat).Add(bUp, aDown)),
-		} {
-			norm := normDown
-			if num.Sign() > 0 {
-				norm = normUp
-			}
-			l := num.Quo(num, norm)
-			l.Sub(l, pads)
-			if best == nil || l.Cmp(best) > 0 {
-				best = l
-			}
-		}
-	}
-	return best
+	return linkagebound.LowerHull(a.boundSide(), b.boundSide())
 }
