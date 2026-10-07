@@ -157,7 +157,7 @@ the rules leave to the byte budget.
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and assembles bounded area/volume readings over `internal/capband/`. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: a band patch's own exact normal-component model, enclosed over rational intervals. See the file's doc comment. |
-| `capblend_departure.go` | Bounds built band-patch departure from its published surface. See its doc comment. |
+| `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
 | `capblend_admit.go` | Decides by exact rational tests whether `docs/tessellation-reach-design.md` §7's occupied-volume proof covers a cap-blend payload. |
 
 ### Verification and surveys
@@ -273,7 +273,7 @@ the rules leave to the byte budget.
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset interval bounds. See modify-reach §8.3-§8.4. |
 | `internal/lengthbound/` | Exact edge and cap arc bounds. See modify-reach §8.4. |
-| `internal/capband/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
+| `internal/capband/` | Cap-band departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |

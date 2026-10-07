@@ -449,7 +449,7 @@ term:
   numbers the body itself publishes — the directrices' own `Arc3` centres, axes
   and radii or their own straight endpoints, the rulings' own endpoint vertices,
   and the tag's own frame, origin, axis, radius and half angle — in exact
-  rational arithmetic, and `capblend_departure.go` owns the derivation. Two
+  rational arithmetic, and `internal/capband/departure.go` owns the derivation. Two
   independent things separate the built surface from the tag and the one bound
   covers both. The two windows' SKEW is the first, and it is the CIRCULAR
   patch's alone: a non-tangential corner trims the cap directrix narrower than
@@ -537,7 +537,7 @@ only the skew half, and the placement's own independent rounding of every
 emitted coordinate leaves the other half in place on any placed band. So a
 coinciding window alone no longer answers DX8. Only a patch whose own stamped
 departure (`capblend_geom.go`'s `f.normalBound`, derived in
-`capblend_departure.go`) is an exact zero does — an axis-aligned `Plane` patch
+`internal/capband/departure.go`) is an exact zero does — an axis-aligned `Plane` patch
 of an unplaced band reaches that, and nothing else does. `Face.NormalAt` and DX7
 already read that same stamp; DX8 now reads it too, rather than assuming a
 coinciding window buys back what only a zero stamp proves. A later PR could win
