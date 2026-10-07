@@ -78,7 +78,7 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, per region. See `docs/spline-design.md` §5.2. |
+| `moments.go` / `moments_validate.go` | Integrates records and checks sketch topology. See `docs/evaluator-design.md` §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
@@ -255,6 +255,7 @@ the rules leave to the byte budget.
 | `internal/record/` | Curve records, validation, fragment recording and join checks. See `docs/sketch-seam-design.md`. |
 | `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/walkconvert/` | Bounded walks and coalescing over recorded segments. |
+| `internal/momentvalidate/` | Checks moment record fields and whole-circle regions. See `docs/spline-design.md` §5.2. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |

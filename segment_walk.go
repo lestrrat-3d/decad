@@ -38,7 +38,7 @@ import (
 // which need a placed cap frame a free-form wall genuinely cannot represent.
 //
 // The one call site that reaches walkOf without this gate is
-// moments_validate.go's validateMomentWalk: it runs only after every
+// internal/momentvalidate/validate.go's validateMomentWalk: it runs only after every
 // free-form segment kind has already been diverted to the exact integrator
 // (spline_bezier.go/spline_moments.go), so a free-form segment never reaches
 // it. This is deliberate, not a missed gate — adding one here would be dead

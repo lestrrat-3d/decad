@@ -425,14 +425,6 @@ func shiftPoint(point, anchor Point2) Point2 {
 
 // shiftPoints translates a control-point slice into a fresh slice, leaving the
 // caller's recorded segment untouched.
-func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
-	out := make([]Point2, len(points))
-	for i, point := range points {
-		out[i] = shift(point)
-	}
-	return out
-}
-
 func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order freeform.MomentIntegralOrder) regionIntegrals {
 	if !ig.exactDead {
 		ig.exact = translateExactMoments(ig.exact, anchor, order)
