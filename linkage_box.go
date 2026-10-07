@@ -968,7 +968,8 @@ func (b *boxRun) classify(c *boxCell) {
 // cellProjection is docs/linkage-check-design.md §5.8's cell form for pair k
 // of mover i over cell c (§14.3): each body's inflated box read at the
 // centre's ideal poses under the joints on its relative path — the joints
-// strictly below a link-link pair's lowest common ancestor — and expanded to
+// strictly below a link-link pair's lowest common ancestor, less a symmetric
+// body's own joint (linkageDriver.pathOf, §5.2) — and expanded to
 // second order in h_i, half of each joint's span across the cell rounded up
 // to a float; the largest separation along the six coordinate directions.
 // It returns the bound and each axis's share of its defect, or nil when
@@ -978,13 +979,12 @@ func (b *boxRun) classify(c *boxCell) {
 // pairs.
 func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[[2]int]cornerBounds) (*big.Rat, map[int]*big.Rat) {
 	r, dr := b.run, b.dr
-	mine := dr.bounds[r.movers[i].group]
 	other := r.pairs[i][k].other
-	below := 0
+	below := dr.pairDepth(i, other)
+	mine := dr.pathOf(i, below)
 	var theirs linkBound
 	if other >= 0 {
-		theirs = dr.bounds[r.movers[other].group]
-		below = commonDepth(mine.path, theirs.path)
+		theirs = dr.pathOf(other, below)
 	}
 	side := func(m int, bound linkBound) (projectionSide, bool) {
 		h := make([]*big.Rat, 0, len(bound.path)-below)
@@ -1136,7 +1136,9 @@ func (b *boxRun) pairShares(c *boxCell, i, k int) map[int]*big.Rat {
 }
 
 // branchTerms is pairTerms split by body: the terms that move mover i's own
-// body, and those that move its partner's — none for a static partner.
+// body, and those that move its partner's — none for a static partner. A
+// body symmetric about its own joint's axis takes its path without that
+// joint (linkageDriver.pathOf, docs/linkage-check-design.md §5.2).
 //
 // A loop's dependent joint j (docs/linkage-check-design.md §16.3) moves at
 // most δ_j from its exact value at the centre to its value anywhere in the
@@ -1163,14 +1165,12 @@ func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 		}
 		return out
 	}
-	own := dr.bounds[r.movers[i].group]
 	other := r.pairs[i][k].other
+	below := dr.pairDepth(i, other)
 	if other < 0 {
-		return terms(own, 0, nil), nil
+		return terms(dr.pathOf(i, below), below, nil), nil
 	}
-	partner := dr.bounds[r.movers[other].group]
-	below := commonDepth(own.path, partner.path)
-	return terms(own, below, nil), terms(partner, below, nil)
+	return terms(dr.pathOf(i, below), below, nil), terms(dr.pathOf(other, below), below, nil)
 }
 
 // halfSum is half the sum of a body's joint terms: its τ_half.

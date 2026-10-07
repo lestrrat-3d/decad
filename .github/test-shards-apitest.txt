@@ -1043,6 +1043,7 @@
 3	5.06	TestVerifyJointBoxCrane
 3	6.85	TestVerifyJointBoxLoopClearReading
 3	5.54	TestVerifyJointBoxLoopFold
+3	0.15	TestVerifyJointBoxSymmetricBody
 3	10.18	TestVerifyLinkageLoopFoldOutAndBack
 3	8.27	TestVerifyLinkageLoopPinBetweenSamples
 3	0.52	TestVerifyLinkageLoopSlideDriven
