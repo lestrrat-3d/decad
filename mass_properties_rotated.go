@@ -9,9 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -50,52 +48,17 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	volume, first, second := moments.Volume, moments.First, moments.Second
-
-	// Centroidal second moment S = Q - P Pᵀ/V and the local inertia
-	// ρ(trace(S)δ - S), all from the one V, P, Q enclosure (dynamic-mass §3).
-	var central [3][3]proofbound.RatInterval
-	for i := range central {
-		for j := range central[i] {
-			shift, _ := proofbound.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
-			central[i][j] = proofbound.IntervalSub(second[i][j], shift)
-		}
+	local, rho, eigenLower, err := massmoment.PrismLocalInertia(moments, density)
+	if err != nil {
+		return MassProperties{}, err
 	}
-	trace := proofbound.IntervalAdd(proofbound.IntervalAdd(central[0][0], central[1][1]), central[2][2])
-	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
-	var local [3][3]proofbound.RatInterval
-	for i := range local {
-		for j := range local[i] {
-			term := proofbound.IntervalNeg(central[i][j])
-			if i == j {
-				term = proofbound.IntervalSub(trace, central[i][j])
-			}
-			local[i][j] = proofbound.IntervalScale(term, rho)
-		}
-	}
-	// Every tensor in the local box has its smallest eigenvalue at or above
-	// the Gershgorin lower bound; a rotation keeps the eigenvalues.
-	eigenLower := massmoment.GershgorinLower(local)
-	if eigenLower.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
-	}
-
 	basis, err := prismRotation(pp)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	world := massmoment.RotateTensor(basis, local)
-	widen := new(big.Rat).Mul(big.NewRat(3, 1), massmoment.OrthonormalityDefect(basis))
-	widen.Mul(widen, new(big.Rat).Add(big.NewRat(2, 1), massmoment.OrthonormalityDefect(basis)))
-	widen.Mul(widen, massmoment.TensorMagnitude(local))
-	for i := range world {
-		for j := range world[i] {
-			world[i][j] = proofbound.IntervalWiden(world[i][j], widen)
-		}
-	}
-
+	world := massmoment.RotatePrismInertia(basis, local)
 	result := MassProperties{Center: center}
-	result.Mass, err = massIntervalReading(proofbound.IntervalScale(volume, rho), units.Kilogram)
+	result.Mass, err = massIntervalReading(proofbound.IntervalScale(moments.Volume, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -146,62 +109,17 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (massmoment.Moment
 	if err != nil {
 		return massmoment.Moments{}, err
 	}
-	a, mu, mv := section[0], section[1], section[2]
-	if a.Lo.Sign() <= 0 {
-		return massmoment.Moments{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
-	}
-	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
-	if z0 == nil || z1 == nil {
-		return massmoment.Moments{}, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
-	}
-	h := new(big.Rat).Sub(z1, z0)
-	if h.Sign() <= 0 {
-		return massmoment.Moments{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
-	}
-
-	// The axial interval is symmetric about zm, so every first or mixed
-	// moment in z vanishes exactly.
-	zero := proofbound.PointInterval(new(big.Rat))
-	volume := proofbound.IntervalScale(a, h)
-	first := [3]proofbound.RatInterval{proofbound.IntervalScale(mu, h), proofbound.IntervalScale(mv, h), zero}
-	h3Over12 := new(big.Rat).Quo(new(big.Rat).Mul(h, new(big.Rat).Mul(h, h)), big.NewRat(12, 1))
-	second := [3][3]proofbound.RatInterval{
-		{proofbound.IntervalScale(section[3], h), proofbound.IntervalScale(section[4], h), zero},
-		{proofbound.IntervalScale(section[4], h), proofbound.IntervalScale(section[5], h), zero},
-		{zero, zero, proofbound.IntervalScale(a, h3Over12)},
-	}
-	if pp.sectionDelta > 0 || pp.z0Delta > 0 || pp.z1Delta > 0 {
-		e, r, err := prismOccupiedVolumeError(ctx, pp, a, h)
-		if err != nil {
-			return massmoment.Moments{}, err
-		}
-		re := new(big.Rat).Mul(r, e)
-		r2e := new(big.Rat).Mul(r, re)
-		volume = proofbound.IntervalWiden(volume, e)
-		for i := range first {
-			first[i] = proofbound.IntervalWiden(first[i], re)
-			for j := range second[i] {
-				second[i][j] = proofbound.IntervalWiden(second[i][j], r2e)
-			}
-		}
-	}
-	if volume.Lo.Sign() <= 0 {
-		return massmoment.Moments{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
-	}
-	if err := ctx.Err(); err != nil {
-		return massmoment.Moments{}, err
-	}
-	return massmoment.Moments{Volume: volume, First: first, Second: second}, nil
+	return massmoment.PrismVolumeMoments(ctx, section, pp.z0, pp.z1,
+		pp.sectionDelta > 0 || pp.z0Delta > 0 || pp.z1Delta > 0,
+		func(area proofbound.RatInterval, h *big.Rat) (*big.Rat, *big.Rat, error) {
+			return prismOccupiedVolumeError(ctx, pp, area, h)
+		})
 }
 
 // prismMidLevel is zm = (z0 + z1)/2, the anchor level of prismVolumeMoments,
 // as an exact rational.
 func prismMidLevel(pp prismPayload) (*big.Rat, error) {
-	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
-	if z0 == nil || z1 == nil {
-		return nil, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
-	}
-	return new(big.Rat).Quo(new(big.Rat).Add(z0, z1), big.NewRat(2, 1)), nil
+	return massmoment.PrismMidLevel(pp.z0, pp.z1)
 }
 
 // prismSectionMoments reads the section's area, first and second moments as
@@ -286,25 +204,7 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 // directions to world directions: the placement basis times the frame axes,
 // both read from the held floats. Column k is the image of local axis k.
 func prismRotation(pp prismPayload) ([3][3]*big.Rat, error) {
-	basis := pp.xform.Basis()
-	placement := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
-	frame := [3]r3.Vec{pp.frame.U(), pp.frame.V(), pp.frame.N()}
-	var out [3][3]*big.Rat
-	for i := range out {
-		for k := range out[i] {
-			sum := new(big.Rat)
-			for l := range placement {
-				entry := proofarith.FloatRat(revolvemesh.VecComponent(placement[l], i))
-				axis := proofarith.FloatRat(revolvemesh.VecComponent(frame[k], l))
-				if entry == nil || axis == nil {
-					return out, fmt.Errorf("%w: prism orientation is not finite", ErrNotFinite)
-				}
-				sum.Add(sum, entry.Mul(entry, axis))
-			}
-			out[i][k] = sum
-		}
-	}
-	return out, nil
+	return massmoment.PrismRotation(pp.frame, pp.xform)
 }
 
 func nonNegativeFinite(value float64) bool {

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -123,73 +124,13 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	firstLine, ok := pp.profile.Outer.Segments[0].(LineSeg)
-	if !ok {
-		return MassProperties{}, fmt.Errorf("%w: box section is not a line loop", ErrUnsupported)
-	}
-	first := firstLine.Start
-	minU, maxU, minV, maxV := first.U, first.U, first.V, first.V
-	for _, segment := range pp.profile.Outer.Segments {
-		if err := ctx.Err(); err != nil {
-			return MassProperties{}, err
-		}
-		line, ok := segment.(LineSeg)
-		if !ok {
-			return MassProperties{}, fmt.Errorf("%w: box section is not a line loop", ErrUnsupported)
-		}
-		point := line.Start
-		if line.TStart == 1 {
-			point = line.End
-		}
-		minU, maxU = math.Min(minU, point.U), math.Max(maxU, point.U)
-		minV, maxV = math.Min(minV, point.V), math.Max(maxV, point.V)
-	}
-	u := proofarith.DySubScalar(proofarith.MustDyOf(maxU), proofarith.MustDyOf(minU))
-	v := proofarith.DySubScalar(proofarith.MustDyOf(maxV), proofarith.MustDyOf(minV))
-	z := proofarith.DySubScalar(proofarith.MustDyOf(pp.z1), proofarith.MustDyOf(pp.z0))
-	if u.Sign() <= 0 || v.Sign() <= 0 || z.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: source box has no positive volume", ErrUnsupported)
-	}
-	densityBase := proofarith.DyMul(proofarith.MustDyOf(density.Mag()), proofarith.MustDyOf(density.Unit().Factor()))
-	mass := proofarith.DyMul(densityBase, proofarith.DyMul(u, proofarith.DyMul(v, z)))
-	if mass.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: mass is not positive", ErrUnsupported)
-	}
-
-	var dimensions [3]proofarith.Dyadic
-	for i, axis := range []r3.Vec{
-		pp.xform.ApplyDir(pp.frame.U()),
-		pp.xform.ApplyDir(pp.frame.V()),
-		pp.xform.ApplyDir(pp.frame.N()),
-	} {
-		dimension := []proofarith.Dyadic{u, v, z}[i]
-		switch {
-		case math.Abs(axis.X) == 1 && axis.Y == 0 && axis.Z == 0:
-			dimensions[0] = dimension
-		case axis.X == 0 && math.Abs(axis.Y) == 1 && axis.Z == 0:
-			dimensions[1] = dimension
-		case axis.X == 0 && axis.Y == 0 && math.Abs(axis.Z) == 1:
-			dimensions[2] = dimension
-		default:
-			return MassProperties{}, fmt.Errorf("%w: box orientation has no exact cardinal axes", ErrUnsupported)
-		}
-	}
-	squared := [3]proofarith.Dyadic{}
-	for i, length := range dimensions {
-		squared[i] = proofarith.DyMul(length, length)
-	}
-	inertia := func(a, c proofarith.Dyadic) *big.Rat {
-		numerator := proofarith.DyMul(mass, proofarith.DyAdd(a, c))
-		return new(big.Rat).Quo(numerator.Rat(), big.NewRat(12, 1))
-	}
-	readings := [3]*big.Rat{
-		inertia(squared[1], squared[2]),
-		inertia(squared[0], squared[2]),
-		inertia(squared[0], squared[1]),
+	mass, readings, err := massmoment.CardinalBoxMoments(ctx, pp.profile.Outer.Segments, pp.z0, pp.z1,
+		pp.frame, pp.xform, density)
+	if err != nil {
+		return MassProperties{}, err
 	}
 	result := MassProperties{Center: b.centroid}
-	var err error
-	result.Mass, err = massReading(mass.Rat(), units.Kilogram)
+	result.Mass, err = massReading(mass, units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
