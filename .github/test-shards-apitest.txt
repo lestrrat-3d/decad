@@ -304,6 +304,7 @@
 1	0.12	TestVerifyJointBoxCancellation
 1	0.48	TestVerifyJointBoxClearReading
 1	2.79	TestVerifyJointBoxLoopBlocked
+1	1.57	TestVerifyJointBoxLoopDependentSlide
 1	5.96	TestVerifyJointBoxLoopNonMutationAndDeterminism
 1	0.20	TestVerifyJointBoxPendulumUnderSlide
 1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
