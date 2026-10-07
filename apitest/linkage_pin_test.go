@@ -16,12 +16,20 @@ import (
 // off concentric in the float ones, which the clearance kernel's windowed
 // nested cell (docs/clearance-design.md §4) measures at every pose.
 //
-// Legs seen red, each by breaking what it guards: deleting the windowed face
-// cell, or the edge tier's windowed reading of the bore's rims against the
-// pin, leaves the pinned elbow's row missing from s = 1/4 on. The filled bore
-// stays undecided even when the windowed cells admit a lower bound at or
-// below the kernel's tolerance, since the pair's own lower bound must clear
-// that tolerance too; the face-level band test is the leg that goes red there
+// The pin turns about its own joint, so the pair is a constant pair
+// (docs/linkage-check-design.md §5.9): it is evaluated once, on the two
+// bodies as they stand, and every pose reads that one outcome.
+//
+// Legs seen red, each by breaking what it guards: dropping the symmetry test
+// from the constant-pair rule leaves the pinned elbow's and the static post's
+// rows Approximate with bounds near 1e-11, and the jammed pin's volume
+// measured again at s = 1, a few ulps off the one at s = 0; and deleting the
+// windowed face cell, or the edge tier's windowed reading of the bore's rims
+// against the pin, leaves the pin under two stacked joints without its row
+// from s = 1/4 on. The filled bore stays undecided even when the windowed
+// cells admit a lower bound at or below the kernel's tolerance, since the
+// pair's own lower bound must clear that tolerance too; the face-level band
+// test is the leg that goes red there
 // (internal/clearance/facepair/cells_test.go).
 
 // holedBar extrudes the rectangle (x0, y0)-(x1, y1) with a circular hole of
@@ -169,13 +177,44 @@ func TestVerifyLinkagePinnedElbow(t *testing.T) {
 			pinHit = pinHit || c.A == e.pin
 		}
 		require.True(t, pinHit, `P reaches the wall at an evaluated pose`)
-		for i, rows := range pairRows(e.report, e.arm, e.pin) {
-			at := e.report.Poses[i].Pose.At.Mag()
+		requireExactRows(t, e.report, e.arm, e.pin, 0.5)
+		requireNoFindingNames(t, e.report, e.arm, e.pin)
+	})
+	t.Run("two stacked joints", func(t *testing.T) {
+		t.Parallel()
+		// The pin hangs from a wrist joint on the elbow's own axis, under an
+		// elbow link that carries a block above both bars: the pin turns
+		// 0° → −45° on each, so its relative path holds two moving joints,
+		// the pair is not constant, and every pose measures the pin through
+		// the kernel's windowed nested cell.
+		doc := decad.New()
+		arm := holedBar(t, doc, -14, -14, 62, 14, 48, 0, 5.5, 0, 8)
+		pin := pinPrism(t, doc, 48, 0, 5, -1, 10)
+		block := boxBodyAtZ(t, doc, 46, -2, 50, 2, 20, 2)
+		boxBodyAtZ(t, doc, -100, 38, 150, 58, -10, 50)
+		l := decad.NewLinkage()
+		shoulder, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{arm})
+		require.NoError(t, err)
+		elbow, err := shoulder.Revolute(r3.NewVec(48, 0, 0), zAxis, []*decad.Body{block})
+		require.NoError(t, err)
+		wrist, err := elbow.Revolute(r3.NewVec(48, 0, 0), zAxis, []*decad.Body{pin})
+		require.NoError(t, err)
+		require.NoError(t, l.DeclareJointContact(arm, pin))
+		drive := decad.Drive{
+			{Link: shoulder, From: units.Degrees(0), To: units.Degrees(90)},
+			{Link: elbow, From: units.Degrees(0), To: units.Degrees(-45)},
+			{Link: wrist, From: units.Degrees(0), To: units.Degrees(-45)},
+		}
+		report, err := doc.VerifyLinkage(t.Context(), l, drive, decad.WithResolution(units.Scalar(1.0/256)))
+		require.NoError(t, err)
+		require.NotEmpty(t, report.Poses)
+		for i, rows := range pairRows(report, arm, pin) {
+			at := report.Poses[i].Pose.At.Mag()
 			require.Lenf(t, rows, 1, `the pin's row at s = %v`, at)
 			require.InDeltaf(t, 0.5, rows[0].Gap.Value.Base(), 1e-9, `s = %v`, at)
 			require.LessOrEqualf(t, rows[0].Gap.Bound.Base(), 1e-9, `s = %v`, at)
 		}
-		requireNoFindingNames(t, e.report, e.arm, e.pin)
+		requireNoFindingNames(t, report, arm, pin)
 	})
 	t.Run("jammed", func(t *testing.T) {
 		t.Parallel()
@@ -186,6 +225,7 @@ func TestVerifyLinkagePinnedElbow(t *testing.T) {
 		e := verifyPinnedElbow(t, 5.6)
 		require.Equal(t, decad.Interfering, e.report.Status)
 		want := 8 * e.jammedArea
+		var once *decad.Measurement
 		for _, p := range e.report.Poses {
 			found := false
 			for _, c := range e.report.Collisions {
@@ -194,6 +234,10 @@ func TestVerifyLinkagePinnedElbow(t *testing.T) {
 				}
 				found = true
 				require.InDeltaf(t, want, c.Volume.Value.Base(), c.Volume.Bound.Base(), `s = %v`, p.Pose.At.Mag())
+				if once == nil {
+					once = &c.Volume
+				}
+				require.Equalf(t, *once, c.Volume, `the volume is measured once and serves s = %v`, p.Pose.At.Mag())
 			}
 			require.Truef(t, found, `the jammed pin collides at s = %v`, p.Pose.At.Mag())
 		}
@@ -211,8 +255,8 @@ func TestVerifyLinkagePinnedElbow(t *testing.T) {
 
 // TestVerifyLinkagePinOnStaticPost is scene 8 without the elbow: P static, A
 // on a shoulder revolute about Z through (48, 0, 0), the bore on the joint.
-// One RotationAround fixes the bore's centre bit for bit, and every pose
-// reads the pin's row at 0.5.
+// The static post is symmetric about the joint, so the pair is constant and
+// every pose reads the exact 0.5.
 func TestVerifyLinkagePinOnStaticPost(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -227,11 +271,19 @@ func TestVerifyLinkagePinOnStaticPost(t *testing.T) {
 	report, err := doc.VerifyLinkage(t.Context(), l, drive, decad.WithResolution(units.Scalar(1.0/256)))
 	require.NoError(t, err)
 	require.NotEmpty(t, report.Poses)
-	for i, rows := range pairRows(report, arm, post) {
-		at := report.Poses[i].Pose.At.Mag()
-		require.Lenf(t, rows, 1, `the post's row at s = %v`, at)
-		require.InDeltaf(t, 0.5, rows[0].Gap.Value.Base(), 1e-9, `s = %v`, at)
-		require.LessOrEqualf(t, rows[0].Gap.Bound.Base(), 1e-9, `s = %v`, at)
-	}
+	requireExactRows(t, report, arm, post, 0.5)
 	requireNoFindingNames(t, report, arm, post)
+}
+
+// requireExactRows asserts every evaluated pose of the report carries one
+// Clearance row for the pair, Exact at gap with a zero Bound.
+func requireExactRows(t *testing.T, report *decad.LinkageReport, a, b *decad.Body, gap float64) {
+	t.Helper()
+	for i, rows := range pairRows(report, a, b) {
+		at := report.Poses[i].Pose.At.Mag()
+		require.Lenf(t, rows, 1, `the pair's row at s = %v`, at)
+		require.Equalf(t, decad.Exact, rows[0].Gap.Exactness, `s = %v`, at)
+		require.Equalf(t, gap, rows[0].Gap.Value.Base(), `s = %v`, at)
+		require.Zerof(t, rows[0].Gap.Bound.Base(), `s = %v`, at)
+	}
 }

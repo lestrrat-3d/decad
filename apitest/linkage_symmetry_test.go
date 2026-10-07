@@ -18,7 +18,8 @@ import (
 //
 //   - About its own axis the disc does not move: the one interval [0, 1]
 //     certifies from its two ends with the exact 7 mm, and the report reads
-//     Sound in 2 poses.
+//     Sound in 2 poses. Its pair with the wall is a constant pair (§5.9),
+//     read once as the two bodies stand: both poses carry the Exact 7 mm.
 //   - About Z through (0, 3, 0), 3 mm off its axis, the rule must not apply:
 //     the disc's centre sits at (3·sin θ, 3 − 3·cos θ), so the gap is
 //     7 − 3·sin θ and falls to 4. Every IntervalClear interval's bound sits
@@ -27,12 +28,14 @@ import (
 //     y = 5·(cos θ + sin θ), so against a wall y ∈ [12, 22] the gap
 //     12 − 5·(cos θ + sin θ) falls to 12 − 5·√2. The rule must not apply.
 //   - A full revolve, a cone about X, turning about its own axis 5 mm below a
-//     wall: the rule applies and [0, 1] certifies from its two ends.
+//     wall: the rule applies and [0, 1] certifies from its two ends, and the
+//     constant pair carries one row, the same at both poses.
 //
 // Legs seen to fail when deleted: the rule (the disc on its axis refines to
 // 513 poses); the centre test (the 3 mm-off disc certifies 7 mm, above its
-// gap of 4); and the direction test (the tumbling disc certifies its rest
-// gap 7 mm, above 12 − 5·√2).
+// gap of 4); the direction test (the tumbling disc certifies its rest gap
+// 7 mm, above 12 − 5·√2); and the constant-pair rule's symmetry test (the
+// disc's and the cone's rows at s = 1 read the turned placement, Approximate).
 func TestVerifyLinkageSymmetricBody(t *testing.T) {
 	t.Parallel()
 	quarter := func(link *decad.Link) decad.Drive {
@@ -42,7 +45,7 @@ func TestVerifyLinkageSymmetricBody(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		disc := discBodySymmetric(t, doc, 0, 5, 5)
-		boxBodyAtZ(t, doc, 12, -20, 22, 20, -10, 20)
+		wall := boxBodyAtZ(t, doc, 12, -20, 22, 20, -10, 20)
 		l := decad.NewLinkage()
 		spin, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{disc})
 		require.NoError(t, err)
@@ -53,6 +56,9 @@ func TestVerifyLinkageSymmetricBody(t *testing.T) {
 		require.Equal(t, decad.IntervalClear, report.Intervals[0].Outcome)
 		require.Equal(t, 7.0, report.Intervals[0].Clearance.Value.Mag(), `no travel: the exact 7 mm at both ends`)
 		requireReadingEncloses(t, report, 7)
+		// A constant pair (§5.9): one evaluation of the disc as it stands
+		// serves both poses.
+		requireExactRows(t, report, disc, wall, 7)
 	})
 	t.Run("a disc off its own axis keeps its joint", func(t *testing.T) {
 		t.Parallel()
@@ -110,5 +116,10 @@ func TestVerifyLinkageSymmetricBody(t *testing.T) {
 		require.Equal(t, decad.IntervalClear, report.Intervals[0].Outcome)
 		require.LessOrEqual(t, report.Intervals[0].Clearance.Value.Mag(), 5.0)
 		require.Greater(t, report.Intervals[0].Clearance.Value.Mag(), 0.0)
+		// A constant pair (§5.9): the cone's one reading as it stands, the
+		// same row at both poses.
+		require.Len(t, report.Poses[0].Clearances, 1)
+		require.Len(t, report.Poses[1].Clearances, 1)
+		require.Equal(t, report.Poses[0].Clearances[0].Gap, report.Poses[1].Clearances[0].Gap)
 	})
 }

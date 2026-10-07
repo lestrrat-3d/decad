@@ -155,7 +155,51 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 	for i, mv := range run.movers {
 		dr.symmetric[i] = symmetricAboutJoint(mv.body, spec.joints[mv.group], frames[mv.group])
 	}
+	dr.markConstantPairs()
 	return run
+}
+
+// markConstantPairs marks every evaluated pair whose relation is the same at
+// every configuration (docs/linkage-check-design.md §5.9): its relative path —
+// every joint on the mover's path against a static body, the joints strictly
+// below the two links' lowest common ancestor against another link's body —
+// holds exactly one joint that does not hold 0, a revolute, and one of the
+// two bodies is symmetric about that joint's axis line (symmetricAboutJoint,
+// the exact test of §5.2). The engine evaluates such a pair once, on the
+// bodies as they stand.
+func (dr *linkageDriver) markConstantPairs() {
+	r := dr.run
+	for i, mv := range r.movers {
+		for k := range r.pairs[i] {
+			pair := &r.pairs[i][k]
+			if !pair.evaluated() {
+				continue
+			}
+			mine := dr.bounds[mv.group].path
+			var theirs []int
+			below := 0
+			if pair.other >= 0 {
+				theirs = dr.bounds[r.movers[pair.other].group].path
+				below = commonDepth(mine, theirs)
+			}
+			joint := -1
+			moving := 0
+			for _, path := range [][]int{mine[below:], theirs[min(below, len(theirs)):]} {
+				for _, j := range path {
+					if heldAtZeroJoint(dr.spec.joints[j]) {
+						continue
+					}
+					joint = j
+					moving++
+				}
+			}
+			if moving != 1 || !dr.spec.joints[joint].revolute {
+				continue
+			}
+			jt, frame := dr.spec.joints[joint], dr.frames[joint]
+			pair.constant = symmetricAboutJoint(mv.body, jt, frame) || symmetricAboutJoint(r.partner(i, k), jt, frame)
+		}
+	}
 }
 
 // settlePairs applies the linkage's own pair standings on top of the

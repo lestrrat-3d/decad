@@ -1200,6 +1200,11 @@ func (b *boxRun) pairShares(c *boxCell, i, k int) map[int]*big.Rat {
 // with every δ_j read reaches here: a gated cell has no pair travel.
 func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []jointTerm) {
 	r, dr := b.run, b.dr
+	if r.pairs[i][k].once != nil {
+		// A constant pair (docs/linkage-check-design.md §5.9) moves nothing
+		// relative to its partner: no joint carries a term.
+		return nil, nil
+	}
 	span := func(joint int) (int, *big.Rat) {
 		jt := dr.spec.joints[joint]
 		if jt.dep != nil {
