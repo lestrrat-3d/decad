@@ -229,7 +229,7 @@ the rules leave to the byte budget.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, loop assembly, payload dispatch and sheet audit mapping. See tessellation design. |
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
-| `tessellate_revolve.go` | Builds revolve rings, cells, poles and caps. See tessellation §8–§10. |
+| `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
 | `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
@@ -265,7 +265,7 @@ the rules leave to the byte budget.
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/tessellation/` | Chord bounds and samples, section clearance, and mesh audits. |
 | `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
-| `internal/revolvemesh/` | Revolve mesh construction and proofs. |
+| `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |

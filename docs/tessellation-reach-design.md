@@ -339,7 +339,8 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 
 | File | Owns |
 |---|---|
-| `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, rings, poles, cells, partial caps, orientation, and the assembled mesh's own audits (tess §8, §9) |
+| `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
+| `internal/revolvemesh/revolve_ring.go` | Ring vertex emission, indices, and construction and placement rounding measurements (tess §8, §9) |
 | `tessellate_revolve_proof.go` | Certified trig, `deltaC`/`deltaR`, the tolerance split, facet and vertex-link audits (tess §8–§10) |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, `Ecell`, `Mmeridian`, and `volSymDiff_revolve` composition (tess §8–§11) |
 

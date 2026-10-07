@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/r3"
 )
 
 // This file is docs/tessellation-design.md §13's increments T2 and T3
@@ -417,80 +416,19 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, err
 	}
 
-	// Rings. Every sample's vertices are evaluated UNPLACED, measured against
-	// the ideal enclosure, then placed once and measured again — §8's two
-	// stages, apart.
+	// Rings share their meridian samples with the cell builder, so the
+	// emitted vertex indices stay attached to the same samples.
 	budget := proofbound.NewWorkBudget(ctx)
-	deltaC, deltaR := 0.0, 0.0
-	// radials[l] is the ideal radial direction at angular index l, the term
-	// of revolvemesh.RevolveIdealPoint's sum that every ring shares; the pole's covers
-	// every angle at once.
-	radials := make([]proofbound.IvVec3, angular.Samples)
-	for l := range angular.Samples {
-		radials[l] = proofbound.IvVec3Add(proofbound.IvVec3Mul(p.ideal.E0, angular.CosIv[l]), proofbound.IvVec3Mul(p.ideal.E1, angular.SinIv[l]))
-	}
-	poleIv := proofbound.Interval(minusOneRat(), oneRat())
-	poleRadial := proofbound.IvVec3Add(proofbound.IvVec3Mul(p.ideal.E0, poleIv), proofbound.IvVec3Mul(p.ideal.E1, poleIv))
+	samples := make([][]revolvemesh.RevMeridian, len(loopMesh))
 	for li := range loopMesh {
-		for si := range loopMesh[li].samples {
-			s := &loopMesh[li].samples[si]
-			count := angular.Samples
-			if s.OnAxis {
-				count = 1
-			}
-			s.Ring = make([]int, count)
-			axial := proofbound.IvVec3Mul(p.ideal.W, s.ZIv)
-			// docs/tessellation-design.md §9's ring-collapse detection, run
-			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
-			// vertices coincide is not an axis sample, and §12 forbids merging
-			// it into a pole. Both stages are compared because either can
-			// collapse a ring the other keeps apart.
-			var prevLocal, prevPlaced r3.Vec
-			var firstLocal, firstPlaced r3.Vec
-			for l := range count {
-				if err := budget.Step(); err != nil {
-					return nil, err
-				}
-				cos, sin := angular.Cos[l], angular.Sin[l]
-				local := p.basis.A3.Add(p.basis.W.Scale(s.Z)).Add(p.basis.E0.Scale(cos).Add(p.basis.E1.Scale(sin)).Scale(s.Rho))
-				placed := rp.xform.Apply(local)
-				if !proofbound.FiniteVec(local) || !proofbound.FiniteVec(placed) {
-					return nil, fmt.Errorf(`%w: a revolve mesh vertex is not finite`, ErrUnsupported)
-				}
-				radial := radials[l]
-				if s.OnAxis {
-					// A pole's single vertex stands for the ideal sample at
-					// EVERY angle, so its enclosure must cover them all.
-					radial = poleRadial
-				}
-				ideal := proofbound.IvVec3Add(p.ideal.A3, proofbound.IvVec3Add(axial, proofbound.IvVec3Mul(radial, s.RhoIv)))
-				gapC := proofbound.Radius3D(max(
-					proofbound.IntervalFloatError(ideal[0], local.X),
-					proofbound.IntervalFloatError(ideal[1], local.Y),
-					proofbound.IntervalFloatError(ideal[2], local.Z),
-				))
-				gapR := revolvemesh.ExactRigidPointRound(rp.xform, local, placed)
-				if proofbound.IsNonFinite(gapC) || proofbound.IsNonFinite(gapR) {
-					return nil, fmt.Errorf(`%w: a revolve mesh vertex states no bound on the rounding its own construction committed`, ErrUnsupported)
-				}
-				deltaC = math.Max(deltaC, gapC)
-				deltaR = math.Max(deltaR, gapR)
-				if l == 0 {
-					firstLocal, firstPlaced = local, placed
-				} else if !s.OnAxis && (local == prevLocal || placed == prevPlaced) {
-					return nil, errRevolveRingCollapse
-				}
-				prevLocal, prevPlaced = local, placed
-				s.Ring[l] = len(mesh.vertices)
-				mesh.vertices = append(mesh.vertices, placed)
-			}
-			// A full turn closes onto its own first vertex, so the wrap is the
-			// one adjacent pair the walk above never compared.
-			if rp.full && !s.OnAxis && count > 1 && (prevLocal == firstLocal || prevPlaced == firstPlaced) {
-				return nil, errRevolveRingCollapse
-			}
-		}
+		samples[li] = loopMesh[li].samples
 	}
+	vertices, deltaC, deltaR, err := revolvemesh.EmitRings(
+		samples, angular, p.basis, p.ideal, rp.xform, rp.full, budget)
+	if err != nil {
+		return nil, err
+	}
+	mesh.vertices = vertices
 	if deltaC > p.deltaCPrior || deltaR > p.deltaRPrior {
 		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, ErrUnsupported)
 	}
@@ -667,11 +605,6 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	}
 	return mesh, nil
 }
-
-func oneRat() *big.Rat      { return big.NewRat(1, 1) }
-func minusOneRat() *big.Rat { return big.NewRat(-1, 1) }
-
-var errRevolveRingCollapse = fmt.Errorf(`%w: a revolve ring at a positive radius collapses onto itself at this angular count, and docs/tessellation-design.md §9 forbids merging it into a pole; retry with a coarser tolerance`, ErrUnsupported)
 
 // revFaceExtent is what one source face's own §10.1 bound reads: the largest
 // radius any of its cells reaches, which sets its angular displacement, and the
