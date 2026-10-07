@@ -144,45 +144,28 @@ func (ax axisFrame) walkCharged(
 }
 
 // wallKind classifies what one boundary walk sweeps.
-type wallKind int
+type wallKind = revolveaxis.WallKind
 
 const (
 	// wallAxis is a line lying along the axis: it sweeps a zero-area set
 	// and emits no face — the neighboring segments' faces close the solid.
-	wallAxis wallKind = iota
+	wallAxis = revolveaxis.WallAxis
 	// wallCylinder is a line parallel to the axis.
-	wallCylinder
+	wallCylinder = revolveaxis.WallCylinder
 	// wallPlane is a line perpendicular to the axis: a planar annulus, or a
 	// disk when it reaches the axis.
-	wallPlane
+	wallPlane = revolveaxis.WallPlane
 	// wallCone is an inclined line; an endpoint on the axis is its apex.
-	wallCone
+	wallCone = revolveaxis.WallCone
 	// wallSphere is a circular walk whose center lies on the axis.
-	wallSphere
+	wallSphere = revolveaxis.WallSphere
 	// wallTorus is a circular walk whose center lies off the axis.
-	wallTorus
+	wallTorus = revolveaxis.WallTorus
 )
 
 // classify names the surface of revolution one axis-coordinate walk sweeps.
 func (ax axisFrame) classify(w survey2d.SegmentWalk) wallKind {
-	if w.IsCircular() {
-		if math.Abs(w.CV) <= ax.snapTol {
-			return wallSphere
-		}
-		return wallTorus
-	}
-	if w.StartV == 0 && w.EndV == 0 {
-		return wallAxis
-	}
-	dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
-	l := math.Hypot(dz, dr)
-	if math.Abs(dr) <= 1e-9*l {
-		return wallCylinder
-	}
-	if math.Abs(dz) <= 1e-9*l {
-		return wallPlane
-	}
-	return wallCone
+	return revolveaxis.Classify(w, ax.snapTol)
 }
 
 // IsAxis reports whether a meridian walk sweeps no face.

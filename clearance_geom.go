@@ -514,170 +514,33 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		}
 		return false, err
 	}
-	b := rp.basis()
-	a3p := rp.xform.Apply(b.A3)
-	wp := rp.xform.ApplyDir(b.W)
-	e0p := rp.xform.ApplyDir(b.E0)
-	e1p := rp.xform.ApplyDir(b.E1)
-	sweep := clearance.AngWindow{Full: rp.full}
-	if !rp.full {
-		sweep = clearance.NewAngWindow(rp.phi0, rp.phi1)
-	}
-	midPhi := (rp.phi0 + rp.phi1) / 2
-	onAxis := func(z float64) r3.Vec { return a3p.Add(wp.Scale(z)) }
-
-	var capElems []survey2d.SurveyElem
-	maxAxisRadiusUpper := 0.0
+	var walls []clearance.RevolveWall
 	for _, loop := range loops {
 		for _, w := range loop {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			kind := rp.ax.classify(w.SegmentWalk)
-			if el, ok := walkElem(w.SegmentWalk); ok {
-				capElems = append(capElems, el)
-			}
-			maxAxisRadiusUpper = math.Max(maxAxisRadiusUpper, w.AxisRadiusUpper)
-			switch kind {
-			case wallAxis:
-				continue
-			case wallCylinder:
-				r := (w.StartV + w.EndV) / 2
-				f := &clearance.CFace{
-					Kind: clearance.CkCylinder, Anchor: a3p, Axis: wp, RefU: e0p, RefV: e1p,
-					Radius: r, ZWin: clearance.NewLinWindow(w.StartU, w.EndU), Sweep: sweep,
-				}
-				f.Box = clearance.BoxUnion(clearance.CircleBox(onAxis(w.StartU), wp, r), clearance.CircleBox(onAxis(w.EndU), wp, r))
-				f.Wit = append(f.Wit, rp.point(b, (w.StartU+w.EndU)/2, r, midPhi), rp.point(b, w.StartU, r, rp.phi0))
-				g.faces = append(g.faces, f)
-			case wallPlane:
-				rlo := math.Min(w.StartV, w.EndV)
-				rhi := math.Max(w.StartV, w.EndV)
-				sign := 1.0
-				if w.TanInV < 0 {
-					sign = -1
-				}
-				f := &clearance.CFace{
-					Kind: clearance.CkPlane,
-					O:    onAxis(w.StartU),
-					U:    e0p, V: e1p,
-					N: wp.Scale(sign),
-				}
-				f.Region = clearance.AnnularRegion(rlo, rhi, rp.phi0, rp.phi1, rp.full)
-				f.Box = clearance.CapBox(f)
-				f.Wit = clearance.CapWitnesses(f)
-				g.faces = append(g.faces, f)
-			case wallCone:
-				dz, dr := w.EndU-w.StartU, w.EndV-w.StartV
-				apexZ := w.StartU - w.StartV*dz/dr
-				growth := 1.0
-				if dz*dr < 0 {
-					growth = -1
-				}
-				f := &clearance.CFace{
-					Kind:   clearance.CkCone,
-					Anchor: onAxis(apexZ),
-					Axis:   wp.Scale(growth),
-					RefU:   e0p, RefV: e1p,
-					Half:  math.Atan2(math.Abs(dr), math.Abs(dz)),
-					ZWin:  clearance.NewLinWindow(math.Abs(w.StartU-apexZ), math.Abs(w.EndU-apexZ)),
-					Sweep: sweep,
-				}
-				f.Box = clearance.BoxUnion(clearance.CircleBox(onAxis(w.StartU), wp, w.StartV), clearance.CircleBox(onAxis(w.EndU), wp, w.EndV))
-				f.Wit = append(f.Wit, rp.point(b, (w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, midPhi))
-				g.faces = append(g.faces, f)
-				if w.StartV <= 0 || w.EndV <= 0 {
-					// The apex sits on the trimmed face: a surface singular
-					// point, synthesized as a vertex-like candidate (§3).
-					g.verts = append(g.verts, onAxis(apexZ))
-				}
-			case wallSphere:
-				f := &clearance.CFace{
-					Kind:   clearance.CkSphere,
-					Anchor: onAxis(w.CU),
-					Axis:   wp,
-					RefU:   e0p, RefV: e1p,
-					Radius: w.Radius,
-					Merid:  clearance.AngWindow{Full: w.Closed},
-					Sweep:  sweep,
-				}
-				if !w.Closed {
-					f.Merid = clearance.NewAngWindow(w.Th0, w.Th1)
-				}
-				f.Box = [2]r3.Vec{
-					f.Anchor.Sub(r3.NewVec(w.Radius, w.Radius, w.Radius)),
-					f.Anchor.Add(r3.NewVec(w.Radius, w.Radius, w.Radius)),
-				}
-				midTh := (w.Th0 + w.Th1) / 2
-				f.Wit = append(f.Wit, rp.point(b, w.CU+w.Radius*math.Cos(midTh), math.Max(0, w.Radius*math.Sin(midTh)), midPhi))
-				g.faces = append(g.faces, f)
-			case wallTorus:
-				f := &clearance.CFace{
-					Kind:   clearance.CkTorus,
-					Anchor: onAxis(w.CU),
-					Axis:   wp,
-					RefU:   e0p, RefV: e1p,
-					Radius:  w.Radius,
-					Major:   w.CV,
-					Merid:   clearance.AngWindow{Full: w.Closed},
-					Sweep:   sweep,
-					Spindle: w.Radius >= w.CV-clearance.ClrAngTol*math.Max(1, w.CV),
-				}
-				if !w.Closed {
-					f.Merid = clearance.NewAngWindow(w.Th0, w.Th1)
-				}
-				spineBox := clearance.CircleBox(f.Anchor, wp, f.Major)
-				pad := r3.NewVec(w.Radius, w.Radius, w.Radius)
-				f.Box = [2]r3.Vec{spineBox[0].Sub(pad), spineBox[1].Add(pad)}
-				midTh := (w.Th0 + w.Th1) / 2
-				f.Wit = append(f.Wit, rp.point(b, w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), midPhi))
-				g.faces = append(g.faces, f)
-				// A spindle patch reaching the axis at a walk endpoint has a
-				// singular axis-collapse point there, synthesized like a cone
-				// apex (§3).
-				if !w.Closed && w.StartV == 0 {
-					g.verts = append(g.verts, onAxis(w.CU+w.Radius*math.Cos(w.Th0)))
-				}
-				if !w.Closed && w.EndV == 0 {
-					g.verts = append(g.verts, onAxis(w.CU+w.Radius*math.Cos(w.Th1)))
-				}
-			}
+			walls = append(walls, clearance.RevolveWall{Walk: w, Kind: rp.ax.classify(w.SegmentWalk)})
 		}
 	}
+	built := clearance.BuildRevolveCarriers(clearance.RevolveCarrierInput{
+		Basis: rp.basis(), Transform: rp.xform, Full: rp.full,
+		Phi0: rp.phi0, Phi1: rp.phi1, Walls: walls,
+	})
+	g.faces = append(g.faces, built.Faces...)
+	g.verts = append(g.verts, built.Vertices...)
 
-	if !rp.full {
-		region := clearance.NewRegion2(capElems)
-		for _, cap := range []struct {
-			phi  float64
-			sign float64
-		}{{phi: rp.phi0, sign: -1}, {phi: rp.phi1, sign: 1}} {
-			sin, cos := math.Sincos(cap.phi)
-			radial := e0p.Scale(cos).Add(e1p.Scale(sin))
-			vel := e0p.Scale(-sin).Add(e1p.Scale(cos))
-			f := &clearance.CFace{
-				Kind:   clearance.CkPlane,
-				O:      a3p,
-				U:      wp,
-				V:      radial,
-				N:      vel.Scale(cap.sign),
-				Region: region,
-			}
-			f.Box = clearance.CapBox(f)
-			f.Wit = clearance.CapWitnesses(f)
-			g.faces = append(g.faces, f)
-		}
-	}
 	// g.delta mirrors addPrismFaces' own three terms, over this payload's own
 	// axis-symmetric construction: the frame/placement point rounding every
-	// anchor, axis point and witness above took through rp.point/onAxis, the
-	// angular displacement scaled by the radial envelope every such point can
-	// carry it at (the same reading verify_gate.go's own bodyGateDiameter
-	// arm takes for the identical displacement), and the worst per-face tilt
-	// a rounded wallPlane/cap carrier normal commits. It is exactly zero for
-	// an axis-aligned, unplaced, full-turn revolve, which is what keeps an
-	// ordinary revolve's Clearance rows Exact.
-	pointTerm := revolveVertexFrameLiftAllow(rp, maxAxisRadiusUpper)
-	angularTerm := proofbound.ProductUpper(maxAxisRadiusUpper, rp.angularDelta())
+	// anchor, axis point and witness took through the placed basis, the angular
+	// displacement scaled by the radial envelope every such point can carry it
+	// at (the same reading verify_gate.go's own bodyGateDiameter arm takes for
+	// the identical displacement), and the worst per-face tilt a rounded
+	// wallPlane/cap carrier normal commits. It is exactly zero for an
+	// axis-aligned, unplaced, full-turn revolve, which keeps an ordinary
+	// revolve's Clearance rows Exact.
+	pointTerm := revolveVertexFrameLiftAllow(rp, built.AxisRadiusUpper)
+	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.angularDelta())
 	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.frame, rp.xform)
 	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)
 	g.carrierDelta = g.delta
