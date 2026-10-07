@@ -67,13 +67,12 @@ the rules leave to the byte budget.
 | `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError`, whose `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
-| `record.go` | Sketch profile, chain, loop and curve records; NURBS validation. See `docs/sketch-seam-design.md` §2. |
+| `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
 | `seam.go` | `RecordProfile`/`RecordChain`, `TExact` admission and record checks. See `docs/sketch-seam-design.md` §1, §7. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | Linear and angular extent types; `ToFace`/`ToFaceAngular` references. See `docs/api-design.md` §8.1. |
 | `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicate conjunction and `Exactly`/`AtLeast` cardinality over live topology; a failure returns a `SelectionError`. See `docs/api-design.md` §9. |
 | `selection_error.go` | `SelectionError` (wraps `ErrNoMatch`/`ErrCardinality`) and the canonical `*Query.String()` rendering it and a verification `Diagnostic` both reuse. See `docs/api-design.md` §9. |
-| `codec_error.go` | Internal path-aware validation errors for structural curve records. |
 
 ### Mass properties and free-form curves
 
@@ -252,6 +251,7 @@ the rules leave to the byte budget.
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
+| `internal/record/` | Curve records and validation. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, faceted measurement bounds, the work budget, certified trig/`atan`/π enclosures and exact rational helpers. See each file's doc comment. |
@@ -262,7 +262,7 @@ the rules leave to the byte budget.
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
 | `internal/motionbound/` | Exact motion parameters, poses, sweep bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
-| `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit, the rounding that keeps a held mesh embedded, and near-contact witnesses. See `docs/evaluator-design.md` §9. |
+| `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance carriers, angle and line windows, 2D trim regions, ray crossings, boxes, spine and ruling helpers, and the degeneracy oracle. See `docs/clearance-design.md`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
