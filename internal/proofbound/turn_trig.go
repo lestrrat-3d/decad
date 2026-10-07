@@ -2,14 +2,8 @@ package proofbound
 
 import "math/big"
 
-// This file is moments.go's certified sine/cosine primitive: a proven
-// enclosure of sin(2*pi*t) and cos(2*pi*t) for an exact rational TURN t,
-// used by circularAreaInterval and circularFirstMomentInterval to bracket a
-// CircleSeg fragment whose recorded range is not a whole number of turns —
-// the case those two functions' whole-turn fast paths do not cover, and the
-// only reason a trimmed circular walk ever fell back to
-// ConservativeValueError's body-scale envelope instead of a bracket
-// proportional to the actual error.
+// This file encloses sin(2*pi*t) and cos(2*pi*t) for an exact rational turn t.
+// The bounds support circular moments, sweep endpoints, and radial geometry.
 //
 // The construction works entirely in TURN space rather than angle space, in
 // four steps, each its own proof obligation:

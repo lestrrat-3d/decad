@@ -11,7 +11,7 @@ import (
 //
 // Every constant here is a PROVEN enclosure rather than a rounded literal, so
 // a value computed through these operations encloses the true answer no
-// matter how the float arithmetic beside it rounded. moments_trig.go owns the
+// matter how the float arithmetic beside it rounded. turn_trig.go owns the
 // sine/cosine enclosure of an exact turn, which is proven without ever
 // comparing against pi and so does not belong here.
 
@@ -136,7 +136,7 @@ func FixedDivUp(a *big.Int, d int64) *big.Int {
 }
 
 // AtanSmallInterval bounds atan(x) for |x| <= 1/2, evaluating the same
-// 64-term alternating Maclaurin series moments_trig.go's TrigFixedSeries
+// 64-term alternating Maclaurin series turn_trig.go's TrigFixedSeries
 // uses for sin/cos, on the same fixed-point 2^-TrigFixedBits grid, rather
 // than over big.Rat: a big.Rat pays a GCD normalization per operation, which
 // dominates cost at this series' 10^4-bit numerators.

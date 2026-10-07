@@ -21,7 +21,7 @@ import (
 //
 //   - the exact denotation of a motion parameter (motionbound.MotionParam) and of the
 //     ideal pose it names (motionbound.IdealPose), with the ideal rotation's sine and
-//     cosine enclosed by internal/proofbound/moments_trig.go's proofbound.TurnSinCosInterval; for a Between,
+//     cosine enclosed by internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval; for a Between,
 //     the exact screw of the parameters r3 read, composed onto the exact
 //     From, and the stated To read exactly (motionbound.MotionFrame);
 //   - η, the proven distance between the float pose the kernel measured and
