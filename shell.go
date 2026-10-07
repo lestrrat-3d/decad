@@ -194,7 +194,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if s > 0 {
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius. A contained disk can certify success;
-		// otherwise internal/survey2d/survey2d.go computes the same reading Wall.Minimum answers.
+		// otherwise internal/survey2d/wall_kernel.go computes the same reading Wall.Minimum answers.
 		inradius, enough, err := sectionInradius(offsetBudget, pp.profile, tmm, tDelta)
 		if err != nil {
 			return nil, err
@@ -342,7 +342,7 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 }
 
 // sectionInradius proves the requested thickness fits, or returns the largest
-// inscribed disk of a recorded section from internal/survey2d/survey2d.go
+// inscribed disk of a recorded section from internal/survey2d/wall_kernel.go
 // (docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
 // checks the candidate-family count before entering the kernel and shares one
 // fixed work budget across its streamed generation and validation. An

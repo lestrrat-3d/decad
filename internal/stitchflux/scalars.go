@@ -96,7 +96,7 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // states "Go deliberately gives Sin, Cos, Atan2 and Hypot no public ulp
 // contract, so a result computed through them never trusts this helper's
 // roundoff budget on its own" — the same posture capblend_moments.go and
-// internal/survey2d/survey2d.go state independently, and proofbound.BoundedSqrt honors even for
+// internal/survey2d/wall_kernel.go state independently, and proofbound.BoundedSqrt honors even for
 // math.Sqrt, which IEEE 754 DOES guarantee correctly rounded. The
 // natural-looking fix — compose tan from boundedSin/proofbound.BoundedCos and run it
 // through proofbound.BoundedQuotient — was tried and fails outright:

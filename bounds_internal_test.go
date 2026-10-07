@@ -286,7 +286,7 @@ func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 		})
 	}
 
-	// proofbound.BoundedHypot (internal/survey2d/survey2d.go) reads two exact leaves through this same arm,
+	// proofbound.BoundedHypot (internal/survey2d/wall_candidates.go) reads two exact leaves through this same arm,
 	// which is how a straight meridian's own tangent reaches it in
 	// revolveMinRadius.
 	h := proofbound.BoundedHypot(10, 0)
