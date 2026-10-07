@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +16,7 @@ import (
 // sweep frame is orthonormal to within an ulp, too close for a float
 // reading to see the widening, so the scaled matrix makes each leg visible.
 //
-// Legs shown to fail (each deleted in rotateVolumeMoments, this fixture
+// Legs shown to fail (each deleted in massmoment.Rotate, this fixture
 // watched go red, then restored):
 //   - the first-moment widening d·‖P‖₁: R·P escapes f·P;
 //   - the second-moment widening 3·d·(2+d)·m: R·Q·Rᵀ escapes f·Q·fᵀ.
@@ -36,39 +36,39 @@ func TestRotateVolumeMomentsChargesDefect(t *testing.T) {
 
 	// The box [-1, 1] × [-2, 2] × [-3, 3] moved to (1, 2, 3), so every first
 	// and second moment is nonzero.
-	box := volumeMoments{volume: proofbound.PointInterval(big.NewRat(48, 1))}
-	for i := range box.first {
-		box.first[i] = proofbound.PointInterval(new(big.Rat))
-		for j := range box.second[i] {
-			box.second[i][j] = proofbound.PointInterval(new(big.Rat))
+	box := massmoment.Moments{Volume: proofbound.PointInterval(big.NewRat(48, 1))}
+	for i := range box.First {
+		box.First[i] = proofbound.PointInterval(new(big.Rat))
+		for j := range box.Second[i] {
+			box.Second[i][j] = proofbound.PointInterval(new(big.Rat))
 		}
 	}
 	for i, half := range []int64{1, 2, 3} {
-		box.second[i][i] = proofbound.PointInterval(big.NewRat(48*half*half, 3))
+		box.Second[i][i] = proofbound.PointInterval(big.NewRat(48*half*half, 3))
 	}
-	local := shiftVolumeMoments(box, [3]*big.Rat{big.NewRat(1, 1), big.NewRat(2, 1), big.NewRat(3, 1)})
+	local := massmoment.Shift(box, [3]*big.Rat{big.NewRat(1, 1), big.NewRat(2, 1), big.NewRat(3, 1)})
 	exact := func(iv proofbound.RatInterval) *big.Rat {
 		require.Zero(t, iv.Lo.Cmp(iv.Hi))
 		return iv.Lo
 	}
 
-	got := rotateVolumeMoments(local, f)
-	require.Zero(t, got.volume.Lo.Cmp(exact(local.volume)))
+	got := massmoment.Rotate(local, f)
+	require.Zero(t, got.Volume.Lo.Cmp(exact(local.Volume)))
 	for i := range 3 {
 		want := new(big.Rat)
 		for k := range 3 {
-			want.Add(want, new(big.Rat).Mul(r[i][k], exact(local.first[k])))
+			want.Add(want, new(big.Rat).Mul(r[i][k], exact(local.First[k])))
 		}
-		requireIntervalContains(t, got.first[i], want)
+		requireIntervalContains(t, got.First[i], want)
 		for j := range 3 {
 			want := new(big.Rat)
 			for k := range 3 {
 				for l := range 3 {
 					term := new(big.Rat).Mul(r[i][k], r[j][l])
-					want.Add(want, term.Mul(term, exact(local.second[k][l])))
+					want.Add(want, term.Mul(term, exact(local.Second[k][l])))
 				}
 			}
-			requireIntervalContains(t, got.second[i][j], want)
+			requireIntervalContains(t, got.Second[i][j], want)
 		}
 	}
 }
