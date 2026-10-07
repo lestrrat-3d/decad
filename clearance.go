@@ -301,7 +301,7 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 			if fb.O.Sub(fa.O).Dot(fa.N) != 0 {
 				continue // not exactly coplanar
 			}
-			rel, _, err := k.coplanarRelation(budget, fa, fb)
+			rel, _, err := clearance.CoplanarRelation(budget, fa, fb)
 			if err != nil {
 				return false, err
 			}
