@@ -1,7 +1,6 @@
 package proof
 
 import (
-	"encoding/binary"
 	"math/big"
 
 	"github.com/lestrrat-3d/r3"
@@ -20,36 +19,6 @@ func XptOf(v r3.Vec) Xpt { return Xpt(XhpStripTwosOwned(XhpOf(v))) }
 
 // Vec rounds the exact point to the nearest float64 coordinates.
 func (p Xpt) Vec() r3.Vec { return XhpVec(Xhp(p)) }
-
-// Key is the exact identity of the point: two points weld exactly when their
-// CANONICAL homogeneous coordinates are identical — stitching by shared exact
-// vertices, never by distance (docs/evaluator-design.md §9). A homogeneous
-// point has many spellings, so the raw fields are never compared directly;
-// XhpCanon collapses every spelling of one coordinate to one four-tuple
-// before the key is built.
-func (p Xpt) Key() string {
-	c := XhpCanon(Xhp(p))
-	return ExactIntsKey(c.X, c.Y, c.Z, c.W)
-}
-
-// ExactIntsKey encodes signed integers without decimal conversion. Each value
-// carries its sign and byte length, so adjacent magnitudes cannot collide.
-func ExactIntsKey(values ...*big.Int) string {
-	size := 9 * len(values)
-	for _, v := range values {
-		size += (v.BitLen() + 7) / 8
-	}
-	buf := make([]byte, 0, size)
-	for _, v := range values {
-		buf = append(buf, byte(v.Sign()+1))
-		n := (v.BitLen() + 7) / 8
-		buf = binary.LittleEndian.AppendUint64(buf, uint64(n))
-		start := len(buf)
-		buf = buf[:start+n]
-		v.FillBytes(buf[start:])
-	}
-	return string(buf)
-}
 
 // Xsub is a − b, exact, with the common power of two stripped on return (the
 // growth control every construction pays — see XhpStripTwosOwned).
