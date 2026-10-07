@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
@@ -43,17 +42,8 @@ type mitredConstruction struct {
 	anchor   sweepRatVec
 }
 
-// mitredSpanError names the span, loop and vertex (or segment) a Table SM row
-// refused on, so the caller knows which part of the path or section to
-// repair (§16.4's SM6 note).
-func mitredSpanError(sentinel error, span, loop, index int, what string) error {
-	return fmt.Errorf(`%w: mitred sweep span %d, loop %d, %s`, sentinel, span, loop, fmt.Sprintf(what, index))
-}
-
-// constructMitredSweep runs §16.3 over the payload's record: it lifts the
-// recorded profile, states every join plane, maps each section onto the next
-// through its span's wall lines, and refuses on SM5, SM6 and SM7 per span in
-// path order. Nothing is placed or rounded here.
+// constructMitredSweep triangulates the recorded profile once, then adapts
+// its spans to §16.3's exact section construction.
 func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredConstruction, error) {
 	pts2, loopIdx, err := mitredSweepLoops(mp.profile)
 	if err != nil {
@@ -63,115 +53,25 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	if err != nil {
 		return mitredConstruction{}, wrapLoftTriangulationError(err)
 	}
-
-	records := mp.path.records
-	n := len(records)
-	if len(mp.factors) != n {
-		return mitredConstruction{}, fmt.Errorf(`%w: the mitred sweep records %d factors for %d spans`, ErrDegenerate, len(mp.factors), n)
+	spans := make([]sweepmitre.Span, len(mp.path.records))
+	for k, record := range mp.path.records {
+		spans[k] = sweepmitre.Span{Start: record.start, End: record.end}
 	}
-	points := make([]sweepRatVec, n+1)
-	dirs := make([]sweepRatVec, n)
-	lambdas := make([]*big.Rat, n)
-	points[0] = sweepRatVecOf(records[0].start)
-	for k, record := range records {
-		points[k+1] = sweepRatVecOf(record.end)
-		dirs[k] = sweepRatSub(points[k+1], points[k])
-		lambda, err := mitredSpanLengthLower(record.start, record.end)
-		if err != nil {
-			return mitredConstruction{}, fmt.Errorf(`mitred sweep span %d: %w`, k, err)
-		}
-		lambdas[k] = lambda
+	built, err := sweepmitre.Construct(ctx, mp.plane, pts2, loopIdx, spans, mp.factors)
+	if err != nil {
+		return mitredConstruction{}, err
 	}
-
-	// The section planes of the table in §16.3: Π_0's normal is the profile
-	// plane's own, every join plane's is the length-weighted sum of its two
-	// span directions, and Π_N's is the last span's direction.
-	normals := make([]sweepRatVec, n+1)
-	normals[0] = sweepRatFromDyadic(proofarith.DvCross(proofarith.DyVec(mp.plane.U), proofarith.DyVec(mp.plane.V)))
-	normals[n] = dirs[n-1]
-
-	section := make(mitredSection, len(pts2))
-	for v, p := range pts2 {
-		section[v] = mitredLift(mp.plane, p)
+	sections := make([]mitredSection, len(built.Sections))
+	for k, section := range built.Sections {
+		sections[k] = mitredSection(section)
 	}
-	sections := []mitredSection{section}
-
-	one := big.NewRat(1, 1)
-	for k := range n {
-		if err := ctx.Err(); err != nil {
-			return mitredConstruction{}, err
-		}
-		if k+1 < n {
-			// SM5: two exactly reversed consecutive spans have no join plane.
-			if sweepRatIsZero(sweepRatCross(dirs[k], dirs[k+1])) && sweepRatDot(dirs[k], dirs[k+1]).Sign() < 0 {
-				return mitredConstruction{}, fmt.Errorf(`%w: mitred sweep spans %d and %d run exactly back along each other and have no join plane`, ErrDegenerate, k, k+1)
-			}
-			normals[k+1] = sweepRatAdd(sweepRatScale(dirs[k], lambdas[k+1]), sweepRatScale(dirs[k+1], lambdas[k]))
-		}
-		// SM6's span-level arm: the span must leave its start plane forward
-		// and reach its end plane forward. Every wall line's direction
-		// differs from d_k by a vector in the start plane, so the first sign
-		// is every wall line's own; the second puts the span's apex beyond
-		// the end plane, which is what makes the per-vertex apex test below
-		// the only way a wall line can meet that plane coming back.
-		if sweepRatDot(normals[k], dirs[k]).Sign() <= 0 {
-			return mitredConstruction{}, fmt.Errorf(`%w: mitred sweep span %d does not leave its start section plane forward`, ErrDegenerate, k)
-		}
-		if sweepRatDot(normals[k+1], dirs[k]).Sign() <= 0 {
-			return mitredConstruction{}, fmt.Errorf(`%w: mitred sweep span %d does not reach its end section plane forward`, ErrDegenerate, k)
-		}
-
-		ratio := new(big.Rat).Quo(mitredFactor(mp.factors, k+1), mitredFactor(mp.factors, k))
-		ratioLess := ratio.Cmp(one) < 0
-		shrink := new(big.Rat).Sub(one, ratio)
-		grow := new(big.Rat).Neg(shrink)
-		end := normals[k+1]
-		next := make(mitredSection, len(section))
-		for i, idx := range loopIdx {
-			for j, v := range idx {
-				p := section[v]
-				w := sweepRatAdd(dirs[k], sweepRatScale(sweepRatSub(p, points[k]), grow))
-				nw := sweepRatDot(end, w)
-				if nw.Sign() == 0 {
-					return mitredConstruction{}, mitredSpanError(ErrDegenerate, k, i, j,
-						"vertex %d: its wall line is parallel to the end section plane")
-				}
-				s := sweepRatDot(end, sweepRatSub(points[k+1], p))
-				s.Quo(s, nw)
-				if s.Sign() <= 0 {
-					return mitredConstruction{}, mitredSpanError(ErrDegenerate, k, i, j,
-						"vertex %d: its wall line meets the end section plane at or behind its start")
-				}
-				if ratioLess && new(big.Rat).Mul(s, shrink).Cmp(one) >= 0 {
-					return mitredConstruction{}, mitredSpanError(ErrDegenerate, k, i, j,
-						"vertex %d: its wall line meets the end section plane at or past the span's apex; lengthen the span, shrink the section or weaken the taper")
-				}
-				next[v] = sweepRatAdd(p, sweepRatScale(w, s))
-			}
-		}
-		if err := mitredRequireWalls(k, loopIdx, section, next); err != nil {
-			return mitredConstruction{}, err
-		}
-		section = next
-		sections = append(sections, section)
-	}
-	return mitredConstruction{sections: sections, loopIdx: loopIdx, capTris: capTris, anchor: points[0]}, nil
+	return mitredConstruction{sections: sections, loopIdx: loopIdx, capTris: capTris, anchor: built.Anchor}, nil
 }
 
 // mitredSpanLengthLower is λ_j of §16.3: the lower endpoint of the certified
 // enclosure of the span's length, independent of platform sqrt or FMA.
 func mitredSpanLengthLower(start, end r3.Vec) (*big.Rat, error) {
 	return sweepmitre.SpanLengthLower(start, end)
-}
-
-// mitredFactor is f_k with f_0 = 1.
-func mitredFactor(factors []float64, k int) *big.Rat {
-	return sweepmitre.Factor(factors, k)
-}
-
-// mitredLift holds the recorded plane-local point as exact rationals.
-func mitredLift(plane PlaneRecord, p Point2) sweepRatVec {
-	return sweepmitre.Lift(plane, p)
 }
 
 // mitredRequireWalls enforces SM7 over one span.

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -15,8 +16,9 @@ import (
 // This file is docs/sweep-design.md §16's mitred polyline sweep: the two
 // options that select it, the gates Table SM states ahead of the build, the
 // payload that records it, its placement, and its exact-restatement
-// tessellation (Table DM rows DM2 and DM7). sweep_mitre_build.go owns the
-// §16.3 construction, Table BM's topology and §16.6's four readings.
+// tessellation (Table DM rows DM2 and DM7). internal/sweepmitre constructs
+// §16.3's exact sections; sweep_mitre_build.go adapts them to Table BM's
+// topology and §16.6's four readings.
 
 type identMitredJoins struct{}
 
@@ -74,75 +76,14 @@ func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
 	return out, nil
 }
 
-// mitredSweepLoops is Table SM row SM2: every segment of every loop must be a
-// LineSeg walked whole, so each section vertex is a recorded point. It
-// returns the recorded walk-start point of every segment, loop by loop, and
-// the per-loop index arrays the cap triangulator reads. A LineSeg trimmed at
-// a cut parameter, or a junction whose two recorded points disagree, states
-// no exact polygon vertex and is refused as unsupported.
+// mitredSweepLoops adapts SM2's whole-line profile gate to its record.
 func mitredSweepLoops(profile ProfileRecord) ([]Point2, [][]int, error) {
-	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
-	var pts []Point2
-	var loopIdx [][]int
-	for i, loop := range loops {
-		n := len(loop.Segments)
-		starts := make([]Point2, n)
-		ends := make([]Point2, n)
-		for j, raw := range loop.Segments {
-			segment, err := normalizeSegment(raw)
-			if err != nil {
-				return nil, nil, err
-			}
-			line, ok := segment.(LineSeg)
-			if !ok {
-				return nil, nil, fmt.Errorf(`%w: a mitred or scaled sweep supports line profile segments only; loop %d segment %d is %T`, ErrUnsupported, i, j, segment)
-			}
-			switch {
-			case line.TStart == 0 && line.TEnd == 1:
-				starts[j], ends[j] = line.Start, line.End
-			case line.TStart == 1 && line.TEnd == 0:
-				starts[j], ends[j] = line.End, line.Start
-			default:
-				return nil, nil, fmt.Errorf(`%w: a mitred or scaled sweep needs whole profile lines; loop %d segment %d is trimmed`, ErrUnsupported, i, j)
-			}
-		}
-		idx := make([]int, n)
-		for j := range n {
-			if ends[j] != starts[(j+1)%n] {
-				return nil, nil, fmt.Errorf(`%w: loop %d segment %d does not end exactly where the next one starts`, ErrUnsupported, i, j)
-			}
-			idx[j] = len(pts)
-			pts = append(pts, starts[j])
-		}
-		loopIdx = append(loopIdx, idx)
-	}
-	return pts, loopIdx, nil
+	return sweepmitre.Loops(profile.Outer, profile.Holes)
 }
 
-// mitredSweepPreflight is Table SM row SM10, decided from counts alone before
-// any rational is built: the span ceiling, then F·(F−1)/2 over Table BM's
-// held triangle count F against the fixed facet-pair ceiling.
+// mitredSweepPreflight applies SM10's span and facet-pair ceilings.
 func mitredSweepPreflight(loopIdx [][]int, spans int) error {
-	if spans > maxSweepSpansPerCall {
-		return fmt.Errorf(`%w: a mitred sweep exceeds the fixed span ceiling of %d`, ErrUnsupported, maxSweepSpansPerCall)
-	}
-	segments := uint64(0)
-	for _, idx := range loopIdx {
-		segments += uint64(len(idx))
-	}
-	holes := uint64(len(loopIdx) - 1)
-	// A polygon with h holes and S boundary vertices triangulates into
-	// S + 2h − 2 triangles; each cap holds one such triangulation.
-	if segments > math.MaxUint32 {
-		return fmt.Errorf(`%w: the mitred sweep's triangle count overflows`, ErrUnsupported)
-	}
-	capTris := segments + 2*holes - 2
-	walls := 2 * uint64(spans) * segments
-	pairs, ok := proofbound.WallChoose2(walls + 2*capTris)
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the mitred sweep crossing audit exceeds its fixed facet-pair ceiling`, ErrUnsupported)
-	}
-	return nil
+	return sweepmitre.Preflight(loopIdx, spans, maxSweepSpansPerCall)
 }
 
 // sweepMitred runs Table SM's gates in §5's order and builds the body. The
