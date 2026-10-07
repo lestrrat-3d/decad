@@ -1,0 +1,532 @@
+package loftmesh
+
+import (
+	"fmt"
+	"math"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/lengthbound"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
+)
+
+// MassAccumulator is docs/loft-design.md §8's tetrahedron-sum kernel. It
+// streams one outward-oriented triangle of T at a time — a wall or a cap
+// triangulation triangle — anchored at anchor (p0's own PlaneRecord.Origin).
+// Volume, Centroid and Bounds fold every triangle handed to Add; Area's wall
+// contribution folds only the triangles whose wall flag is true, since a
+// cap's own contribution is the exact rational shoelace area of the SAME
+// polygon its triangulation was built from (loft_build.go's
+// capPolygonAreaRat), never the sum of its triangulation's own float areas.
+type MassAccumulator struct {
+	anchor  proofbound.Xpt
+	anchorF r3.Vec
+
+	// delta is the placement's own proven displacement of every held vertex
+	// from the exact placed image of the recorded sections (loft_build.go's
+	// loftPayload.delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
+	// unplaced LineSeg-only body. Every extra term below is gated on
+	// delta > 0, so an unplaced LineSeg-only loft's published measurements
+	// stay bit-identical to PR 1's.
+	delta float64
+
+	// sectionDelta is loft_build.go's loftPayload.sectionDelta: the proven
+	// upper bound, as a MAX over cells, on how far a BUILT CHORD point sits
+	// from the recorded curve it chords, AS A SET (a10-plan.md Part 3 PR 6) —
+	// zero for a LineSeg-only pairing. It is delta's independent twin
+	// (loftPayload's own doc comment), never composed as if it were delta.
+	// It is ALSO never internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper (or
+	// proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundaryMomentResidualAllow/
+	// proofbound.ChordedBoundarySeamAllow's) own matchedDeltaUpper obligation — a
+	// STRONGER, PARAMETER-MATCHED quantity sectionMatchedDelta below carries
+	// instead — and that includes the cap-area tube
+	// (proofbound.SectionDisplacementArea), whose own §5.2 row names the matched term
+	// because a held cap polygon's vertices are displaced as well as chorded.
+	// sectionDelta's OWN remaining spend is Bounds.Bound, a SET-distance
+	// reading, and the terms below that read it are gated on sectionDelta > 0
+	// exactly as the delta-driven terms are gated on delta > 0.
+	sectionDelta float64
+
+	// sectionMatchedDelta is docs/loft-design.md §5.2's own matchedDelta term,
+	// composed by evalLoft as proofbound.AbsSumUpper(sectionDelta, delta) over that
+	// table's sectionDelta and delta rows: how far one point of a HELD chord
+	// sits from the point the recorded curve denotes at the SAME arc-length
+	// parameter. It is a DIFFERENT, strictly stronger quantity than
+	// sectionDelta's own SET-distance sagitta and never interchangeable with
+	// it, and it is not the sagitta with a new name either — the delta leg is
+	// what charges the computed station's own displacement, which the sagitta
+	// leaves out (§5.2's matchedDelta paragraph). Every composed reading that
+	// needs "the SAME parameter-matched displacement leg (a)'s own
+	// obligation" — internal/proofbound/bounds.go's own phrase, repeated verbatim on
+	// proofbound.ChordedBoundaryVolumeResidualAllow, proofbound.ChordedBoundaryMomentResidualAllow and
+	// proofbound.ChordedBoundarySeamAllow's own doc comments — reads this field, never
+	// sectionDelta. It stays exactly 0 on a build with no chorded cell at all
+	// (a LineSeg-only pairing), whose held triangle pair IS the boundary §5
+	// gives it and whose vertex displacement the delta-keyed legs above
+	// already charge.
+	sectionMatchedDelta float64
+
+	// chorded holds the corrections and residuals computeLoftChordedAllow derives from the
+	// composed sectionMatchedDelta and the delta above (loft_build.go): every
+	// field stays
+	// its zero value unless evalLoft calls computeLoftChordedAllow, which it
+	// does only when sectionDelta > 0 or sectionMatchedDelta > 0.
+	Chorded LoftChordedAllow
+
+	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
+	// six times the signed volume (docs/loft-design.md §8).
+	Vol6 *big.Rat
+	// momX/momY/momZ are Σ vol6_tri · Σ(A-anchor, B-anchor, C-anchor), the
+	// first-moment accumulator the centroid divides by 4·vol6.
+	MomX, MomY, MomZ *big.Rat
+
+	haveBounds bool
+	lo, hi     r3.Vec // componentwise extremes over every held vertex
+
+	// coordUpper is a proven upper bound on |u|, |v| and |z| over the body's
+	// own material relative to anchor: the max |v-anchor|_inf over every held
+	// vertex (internal/proofbound/bounds.go's proofbound.SweptMomentAllow reads it widened by delta at the
+	// point of use, since the true vertex may sit up to delta further out).
+	CoordUpper float64
+	// distUpper is coordUpper's Euclidean twin (a10-plan.md Part 3 PR 6): the
+	// max |v-anchor| (3D distance, not inf-norm) over every held vertex —
+	// computeLoftChordedAllow's own posUpper reading, tighter than
+	// proofbound.Radius3D(coordUpper) since it never assumes the three per-axis
+	// extremes land on one vertex at once.
+	DistUpper float64
+
+	// perturbAreaSum is Σ proofbound.PerturbedTriangleAreaAllow(...) over EVERY triangle
+	// of T — walls and caps alike — the extra area the payload's own delta
+	// can add on top of the held triangle areas area() already sums. That
+	// per-TRIANGLE role is all of it: a chorded wall cell's held-to-denoted
+	// SURFACE step is proofbound.CellStationShiftAreaAllow's leg of areaExcess instead,
+	// area()'s own composition site and proofbound.CellChordCurveAreaAllow's (internal/proofbound/bounds.go)
+	// owning the split. It stays exactly 0 when delta is 0.
+	PerturbAreaSum float64
+
+	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
+	// bounds WallTriangleArea returns; wallAreaAbs is an upper bound on
+	// Σ|term|, the scale proofbound.SumSlop's summation proof reads; wallAreaSlack is an
+	// upper bound on Σ (upper − lower), the enclosure width each triangle's
+	// own area contributes. The three are what make the published bound a
+	// proof rather than an estimate.
+	//
+	// Each of the two proof terms is an UPPER bound and is nudged outward once
+	// per term, so each diverges upward from the value it speaks for and can
+	// SATURATE at +Inf while wallAreaSum is still finite. A saturated term has
+	// stopped being a proven scale, and area() publishes an infinite bound
+	// rather than the zero proofbound.SumSlop reports for a non-finite absSum.
+	WallAreaSum   float64
+	WallAreaAbs   float64
+	WallAreaSlack float64
+	WallTerms     int // term count proofbound.SumSlop needs to bound that sum
+}
+
+// NewMassAccumulator opens a fresh accumulator anchored at the loft's
+// first profile plane origin (docs/loft-design.md §8), carrying the
+// payload's own proven placement displacement delta (§12 PR 2a), the
+// SET-distance sagitta sectionDelta, and §5.2's own composed PARAMETER-MATCHED
+// term sectionMatchedDelta (a10-plan.md Part 3 PR 6/PR 9) — all three zero for
+// an unplaced LineSeg-only body.
+func NewMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta float64) *MassAccumulator {
+	return &MassAccumulator{
+		anchor:              proofbound.XptOf(anchor),
+		anchorF:             anchor,
+		delta:               delta,
+		sectionDelta:        sectionDelta,
+		sectionMatchedDelta: sectionMatchedDelta,
+		Vol6:                new(big.Rat),
+		MomX:                new(big.Rat),
+		MomY:                new(big.Rat),
+		MomZ:                new(big.Rat),
+	}
+}
+
+// Add folds one outward-oriented triangle (A, B, C) of T into the volume,
+// centroid and bounds accumulators, and — when wall is true — into the area
+// accumulator's float sum and that sum's two proof terms. Every vertex
+// coordinate is a float64, hence an exact rational (internal/freeform/clearance_poly.go's
+// take-the-floats-exactly discipline); the volume and centroid sums round
+// nothing until publication, and the area sum's own terms are the endpoints
+// of a proven per-triangle enclosure rather than a float evaluation.
+func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
+	m.AddTriangle(a, b, c, wall, [3]int{}, nil)
+}
+
+// AddTriangle keeps Add's triangle fold unchanged. Only evalLoft supplies
+// indices and a cache, so repeated references to one assembled vertex reuse
+// its exact Euclidean upper distance.
+func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []LoftVertexDistance) {
+	sa := proofbound.Xsub(proofbound.XptOf(a), m.anchor)
+	sb := proofbound.Xsub(proofbound.XptOf(b), m.anchor)
+	sc := proofbound.Xsub(proofbound.XptOf(c), m.anchor)
+
+	triVol6 := proofbound.XdotRat(sa, meshbool.Xcross(sb, sc))
+	m.Vol6.Add(m.Vol6, triVol6)
+
+	saX, saY, saZ := meshbool.XhpRat(proofbound.Xhp(sa))
+	sbX, sbY, sbZ := meshbool.XhpRat(proofbound.Xhp(sb))
+	scX, scY, scZ := meshbool.XhpRat(proofbound.Xhp(sc))
+	sumX := proofbound.RatAdd(saX, sbX, scX)
+	sumY := proofbound.RatAdd(saY, sbY, scY)
+	sumZ := proofbound.RatAdd(saZ, sbZ, scZ)
+	m.MomX.Add(m.MomX, new(big.Rat).Mul(triVol6, sumX))
+	m.MomY.Add(m.MomY, new(big.Rat).Mul(triVol6, sumY))
+	m.MomZ.Add(m.MomZ, new(big.Rat).Mul(triVol6, sumZ))
+
+	m.foldBounds(a)
+	m.foldBounds(b)
+	m.foldBounds(c)
+	if distances == nil {
+		m.FoldCoordUpper(a)
+		m.FoldCoordUpper(b)
+		m.FoldCoordUpper(c)
+	} else {
+		m.FoldCoordUpperCached(a, &distances[indices[0]])
+		m.FoldCoordUpperCached(b, &distances[indices[1]])
+		m.FoldCoordUpperCached(c, &distances[indices[2]])
+	}
+
+	if m.delta > 0 {
+		m.PerturbAreaSum = proofbound.UpRound(m.PerturbAreaSum + proofbound.PerturbedTriangleAreaAllow(a, b, c, m.delta))
+	}
+
+	if !wall {
+		return
+	}
+	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
+	// rationals, so the already-lifted vertices serve the area bracket too.
+	lo, hi := WallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
+	m.WallAreaSum += lo
+	m.WallAreaAbs = proofbound.UpRound(m.WallAreaAbs + lo)
+	m.WallAreaSlack = proofbound.UpRound(m.WallAreaSlack + proofbound.UpRound(hi-lo))
+	m.WallTerms++
+}
+
+// foldBounds extends the componentwise extreme box over one held vertex.
+// Comparing held coordinates introduces no rounding of its own, so the box is
+// exactly as good as the vertex set it is taken over: exact on an unplaced
+// body (docs/loft-design.md §5) and within delta of the true extreme on a
+// placed one, which is what bounds() publishes.
+func (m *MassAccumulator) foldBounds(p r3.Vec) {
+	if !m.haveBounds {
+		m.lo, m.hi = p, p
+		m.haveBounds = true
+		return
+	}
+	m.lo = r3.Vec{X: math.Min(m.lo.X, p.X), Y: math.Min(m.lo.Y, p.Y), Z: math.Min(m.lo.Z, p.Z)}
+	m.hi = r3.Vec{X: math.Max(m.hi.X, p.X), Y: math.Max(m.hi.Y, p.Y), Z: math.Max(m.hi.Z, p.Z)}
+}
+
+// FoldCoordUpper extends CoordUpper over one held vertex's own inf-norm
+// distance from anchor, and distUpper (a10-plan.md Part 3 PR 6) over its
+// own EUCLIDEAN distance from anchor — a tighter reading than
+// proofbound.Radius3D(coordUpper) by up to sqrt(3), since the inf-norm bound assumes
+// the per-axis extremes are simultaneously achieved at one vertex, which a
+// real point set rarely does. computeLoftChordedAllow reads distUpper for
+// proofbound.ChordedBoundarySeamAllow's own posUpper obligation.
+//
+// distUpper is PROVEN by exact rational arithmetic, the SAME mechanism
+// computeLoftChordedAllow's own h1Upper reading already uses
+// (ratSquaredDistance3/proofbound.RatSqrtUp): p and anchorF are both float64, hence
+// both exact rationals, so ratSquaredDistance3 is the true squared distance
+// with no rounding of its own, and proofbound.RatSqrtUp brackets its root by exact
+// comparison, proven whatever the platform's own sqrt does. An earlier
+// version of this function instead nudged r3.Vec.Len()'s own float64
+// result outward by a single proofbound.UpRound — one ulp — which does not cover
+// Len()'s own composed rounding (Sub, two nested Hypot calls each with
+// their own error) and so was not actually proven to enclose the true
+// distance; the exact-rational route replaces that single-ulp guess with a
+// derivation this function's own callers can trust the same way h1Upper's
+// already is. A vertex or anchor coordinate ratSquaredDistance3 cannot read
+// as an exact rational (non-finite) answers +Inf here rather than silently
+// dropping the widening — the same "absent bound must never read as small"
+// rule this file's other terms already follow.
+func (m *MassAccumulator) FoldCoordUpper(p r3.Vec) {
+	d := p.Sub(m.anchorF)
+	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
+	dist := math.Inf(1)
+	if d2 := lengthbound.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+		dist = proofbound.RatSqrtUp(d2)
+	}
+	m.DistUpper = max(m.DistUpper, dist)
+}
+
+// FoldCoordUpperCached performs the same per-reference maxima as
+// FoldCoordUpper. The distance is computed when this assembled vertex index
+// is first referenced, so unused vertices never affect the measurements.
+func (m *MassAccumulator) FoldCoordUpperCached(p r3.Vec, entry *LoftVertexDistance) {
+	d := p.Sub(m.anchorF)
+	m.CoordUpper = max(m.CoordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
+	if !entry.Ready {
+		entry.Upper = math.Inf(1)
+		if d2 := lengthbound.RatSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+			entry.Upper = proofbound.RatSqrtUp(d2)
+		}
+		entry.Ready = true
+	}
+	m.DistUpper = max(m.DistUpper, entry.Upper)
+}
+
+// Volume returns Σvol6/6 plus the exact bilinear-patch correction, rounded
+// to float64 exactly once. Its caller derives Exactness from the single rounding's
+// proven error — Exact exactly when the published rational is representable
+// in cubic millimetres, never unconditionally (docs/loft-design.md §8,
+// spline design §3's Tier A rule).
+//
+// A placement (delta > 0, §12 PR 2a) widens that bound by
+// internal/proofbound/bounds.go's proofbound.SweptVolumeAllow(delta, areaUpper), areaUpper the SAME
+// whole-mesh proofbound.PerturbedAreaUpper the identity fast path never reaches — this
+// is the term that closes the measured 1.82e-12 gap a naive re-lift-and-round
+// implementation misses: every held vertex is exact ONLY under the identity
+// transform, and a general rigid motion rounds inside its own products and
+// sums.
+func (m *MassAccumulator) Volume(verts []r3.Vec, tris [][3]int) (float64, float64) {
+	vol := new(big.Rat).Quo(m.Vol6, big.NewRat(6, 1))
+	if m.Chorded.TwistVolumeCorrection != nil {
+		vol.Add(vol, m.Chorded.TwistVolumeCorrection)
+	}
+	value, _ := vol.Float64()
+	bound := proofarith.RationalFloatError(vol, value)
+	if m.delta > 0 {
+		areaUpper := proofbound.PerturbedAreaUpper(verts, tris, m.delta)
+		bound = proofbound.AbsSumUpper(bound, proofbound.SweptVolumeAllow(m.delta, areaUpper))
+	}
+	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		bound = proofbound.AbsSumUpper(bound, proofbound.ChordedBoundaryVolumeResidualAllow(
+			m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
+			m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow,
+		))
+	}
+	return value, bound
+}
+
+// Centroid returns anchor + Σmoment/(4·Σvol6) after
+// applying the exact bilinear-patch corrections to both the volume and first
+// moments. Each coordinate rounds once. Its bound is proofbound.Radius3D of the largest
+// per-coordinate rounding error, and a loft with zero corrected volume has no
+// centroid.
+//
+// A placement (delta > 0) and a curved pairing (sectionDelta > 0 or
+// sectionMatchedDelta > 0) each widen one COMBINED volume allowance epsV and
+// one COMBINED first-moment allowance epsM before either is spent: delta's
+// own leg is proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow, and the curved pairing's leg
+// is proofbound.ChordedBoundaryVolumeResidualAllow/proofbound.ChordedBoundaryMomentResidualAllow,
+// both composed
+// from sectionMatchedDelta — the PARAMETER-MATCHED quantity those two
+// helpers' own doc comments oblige, never sectionDelta, whose SET-distance
+// sagitta is spent on Bounds instead. The two legs are mechanically distinct (a vertex displaced versus
+// a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
+// but each publishes a volume and a first-moment allowance over the SAME
+// anchored accumulator, so ONE clearance test and ONE PlacedCentroidAllow
+// quotient composition — moments.go's proofbound.BoundedQuotient formula, specialized to
+// whichever allowances are active — cover both. A non-positive clearance (the
+// combined volume allowance is not smaller than the held volume) leaves the
+// quotient's denominator with nothing left to divide by, so the centroid is
+// unstateable — refused decaderr.ErrUnsupported (Table S, S12) rather than published
+// with a bound nobody could use. This gate is reachable on an UNPLACED body
+// under a curved pairing alone (a10-plan.md Part 3 PR 6): delta's own fast
+// path (delta == 0) does not imply epsV == 0, and EITHER section quantity on
+// its own reaches it, since a free-form cell can carry a positive
+// matchedDelta at an exactly-zero sagitta (internal/freeform/spline_sagitta.go's own
+// counterexample).
+func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float64, error) {
+	vol6 := new(big.Rat).Set(m.Vol6)
+	momX := new(big.Rat).Set(m.MomX)
+	momY := new(big.Rat).Set(m.MomY)
+	momZ := new(big.Rat).Set(m.MomZ)
+	if m.Chorded.TwistVolumeCorrection != nil {
+		vol6.Add(vol6, new(big.Rat).Mul(big.NewRat(6, 1), m.Chorded.TwistVolumeCorrection))
+		momX.Add(momX, m.Chorded.TwistMomentCorrection[0])
+		momY.Add(momY, m.Chorded.TwistMomentCorrection[1])
+		momZ.Add(momZ, m.Chorded.TwistMomentCorrection[2])
+	}
+	if vol6.Sign() == 0 {
+		return r3.Vec{}, 0, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, decaderr.ErrDegenerate)
+	}
+	denom := new(big.Rat).Mul(big.NewRat(4, 1), vol6)
+	anchorX, anchorY, anchorZ := meshbool.XhpRat(proofbound.Xhp(m.anchor))
+	cx := new(big.Rat).Add(anchorX, new(big.Rat).Quo(momX, denom))
+	cy := new(big.Rat).Add(anchorY, new(big.Rat).Quo(momY, denom))
+	cz := new(big.Rat).Add(anchorZ, new(big.Rat).Quo(momZ, denom))
+
+	fx, _ := cx.Float64()
+	fy, _ := cy.Float64()
+	fz, _ := cz.Float64()
+	bx := proofarith.RationalFloatError(cx, fx)
+	by := proofarith.RationalFloatError(cy, fy)
+	bz := proofarith.RationalFloatError(cz, fz)
+
+	if m.delta > 0 || m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		vol := new(big.Rat).Quo(vol6, big.NewRat(6, 1))
+		volValue, _ := vol.Float64()
+
+		epsV, epsM := 0.0, 0.0
+		if m.delta > 0 {
+			areaUpper := proofbound.PerturbedAreaUpper(verts, tris, m.delta)
+			epsV = proofbound.AbsSumUpper(epsV, proofbound.SweptVolumeAllow(m.delta, areaUpper))
+			epsM = proofbound.AbsSumUpper(epsM, proofbound.SweptMomentAllow(m.delta, areaUpper, m.CoordUpper+m.delta))
+		}
+		if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+			epsV = proofbound.AbsSumUpper(epsV, proofbound.ChordedBoundaryVolumeResidualAllow(
+				m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
+				m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow,
+			))
+			epsM = proofbound.AbsSumUpper(epsM, proofbound.ChordedBoundaryMomentResidualAllow(
+				m.sectionMatchedDelta, m.Chorded.WallAreaUpper,
+				m.Chorded.CapVolumeUpper, m.Chorded.SeamAllow, m.Chorded.MaxTwistOffsetUpper, m.CoordUpper,
+			))
+		}
+
+		clearance := math.Nextafter(math.Abs(volValue)-epsV, math.Inf(-1))
+		if clearance <= 0 {
+			return r3.Vec{}, 0, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, decaderr.ErrUnsupported)
+		}
+		bx = proofbound.AbsSumUpper(bx, PlacedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
+		by = proofbound.AbsSumUpper(by, PlacedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
+		bz = proofbound.AbsSumUpper(bz, PlacedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
+	}
+
+	bound := proofbound.Radius3D(math.Max(bx, math.Max(by, bz)))
+
+	return r3.NewVec(fx, fy, fz), bound, nil
+}
+
+// Bounds returns the componentwise min/max over every held vertex. Bound
+// is proofbound.AbsSumUpper(delta, sectionDelta) — NON-NEGOTIABLE (a10-plan.md Part 3
+// PR 6): a chorded curved section's TRUE curve bulges OUTSIDE the station
+// polygon this box is taken over, so a box carrying only delta UNDERSTATES
+// the true box, and Verify's box-disjointness (Table D row D3) reads Bounds
+// to prove pairs disjoint — understating it is unsound in the one direction
+// that matters. For an unplaced LineSeg-only body both terms are exactly
+// zero, proofbound.AbsSumUpper(0, 0) is exactly 0.0 (proofbound.UpRound never nudges a
+// non-positive value), and Exactness stays Exact — bit-identical to before
+// this field existed. The second return is false only when add has never
+// been called.
+func (m *MassAccumulator) Bounds() (r3.Vec, r3.Vec, float64, bool) {
+	if !m.haveBounds {
+		return r3.Vec{}, r3.Vec{}, 0, false
+	}
+	bound := proofbound.AbsSumUpper(m.delta, m.sectionDelta)
+	return m.lo, m.hi, bound, true
+}
+
+// Area returns the two caps' exact rational shoelace areas plus a mixed wall
+// reading: held triangle areas for LineSeg cells and certified bilinear-patch
+// midpoints for chorded cells.
+//
+// The Exactness is the CONSTANT Approximate — docs/loft-design.md §8's
+// "Area is never Exact", spline design §3's arc-length asymmetry — and is
+// never derived from the published bound. A triangle's own area is a square
+// root of a rational and is generically irrational, so no arithmetic on the
+// bound can make the reading exactly representable; a bound that reaches zero
+// says only that the bound arithmetic ran out of scale to state (proofbound.SumSlop
+// underflowing on a subnormal wall triangle, a saturated wallAreaAbs), which
+// is a fact about the proof term and not about the value.
+//
+// Bound is proven independently, and every one of its base four terms is
+// charged at the magnitude where its own rounding happens:
+//
+//   - wallAreaSlack — Σ over the triangles of the exact-rational cross-norm
+//     bracket's own width, so each triangle's area is charged at ITS OWN
+//     scale, never at the held total's;
+//   - proofbound.SumSlop over wallAreaAbs — the summation loop that added those terms;
+//   - capBound — the caps' exact rational rounding once into float64;
+//   - addBound — the final wall+cap addition's own rounding, exact.
+//
+// wallBound owns the first two and answers +Inf where either has saturated,
+// since neither is a proven scale any more. A curved pairing (sectionDelta >
+// 0) adds the bilinear integration enclosure, computeLoftChordedAllow's own
+// two-leg wall residual, and capAreaExcess (the SAME cap
+// chord-versus-curve gap capVolumeUpper folds into Volume, spent here as an
+// area rather than a volume) — both documented at the composition below. A
+// displaced build (delta > 0) adds perturbAreaSum, the held triangles' and the
+// caps' own per-triangle placement allowance; the wall's own held-to-denoted
+// SURFACE step is a leg of areaExcess, not of that sum, and the composition
+// site below owns the split.
+func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
+	capTotal := new(big.Rat)
+	for _, ca := range capAreas {
+		if ca != nil {
+			capTotal.Add(capTotal, ca)
+		}
+	}
+	capFloat, _ := capTotal.Float64()
+	capBound := proofarith.RationalFloatError(capTotal, capFloat)
+
+	wallValue := m.WallAreaSum
+	wallBound := m.wallBound()
+	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		corrected := wallValue + m.Chorded.AreaCorrection
+		wallBound = proofbound.AbsSumUpper(
+			wallBound,
+			m.Chorded.AreaCorrectionBound,
+			m.Chorded.BilinearAreaBound,
+			proofarith.AddRoundError(wallValue, m.Chorded.AreaCorrection, corrected),
+		)
+		wallValue = corrected
+	}
+	value := wallValue + capFloat
+	addBound := proofarith.AddRoundError(wallValue, capFloat, value)
+	bound := proofbound.AbsSumUpper(wallBound, capBound, addBound)
+	// The per-triangle allowance covers both directions at once: the base wall
+	// accumulator is over held triangles and the cap term is the denoted region's
+	// exact rational, and the two differ by at most this sum
+	// (docs/loft-design.md §12 PR 2a). That TRIANGLE-level role is the whole
+	// of what it is proven for. The wall's own SURFACE step from the held
+	// corners to the stations they denote is a different quantity of the same
+	// shape, charged by proofbound.CellStationShiftAreaAllow inside areaExcess below;
+	// proofbound.CellChordCurveAreaAllow's own composition section owns that
+	// split. The gate stays delta > 0, and an unplaced LineSeg-only loft's
+	// Area stays bit-identical to PR 1's.
+	if m.delta > 0 {
+		bound = proofbound.AbsSumUpper(bound, m.PerturbAreaSum)
+	}
+	// A curved pairing's own two-leg wall residual PLUS its own cap
+	// chord-versus-curve excess (a10-plan.md Part 3 PR 6,
+	// computeLoftChordedAllow's own doc comment): the corrected wall value above
+	// uses bilinear patches, and the true wall surface a circular cell denotes
+	// differs by at most areaExcess; capFloat
+	// above is capPolygonAreaRat, the built polygon's own exact rational, and
+	// the region the loft's construction actually denotes is the CURVED
+	// region proofbound.SectionDisplacementArea bounds the gap to on EITHER cap
+	// (capAreaExcess) — the identical gap capVolumeUpper folds into the
+	// Volume leg via a plane-offset division that Area, having no such
+	// offset, spends unfolded. Both are gated on sectionDelta > 0 OR
+	// sectionMatchedDelta > 0 — never sectionDelta alone — so a free-form
+	// cell whose matchedDelta is positive at an exactly-zero sagitta
+	// (internal/freeform/spline_sagitta.go's own counterexample) still has its wall and cap
+	// excess charged; an unplaced LineSeg-only loft, where both are exactly
+	// 0, stays bit-identical to PR 1's.
+	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		bound = proofbound.AbsSumUpper(bound, m.Chorded.AreaExcess, m.Chorded.CapAreaExcess)
+	}
+
+	return value, bound
+}
+
+// wallBound is the wall summation's own share of area's proven bound: the
+// per-triangle enclosure widths beside the summation loop's slop.
+//
+// Both held terms are upper bounds nudged outward once per triangle, so either
+// can SATURATE at +Inf on a wall set whose areas approach float64's own
+// ceiling, while the plain sum they speak for stays finite by rounding whole
+// triangles away. proofbound.SumSlop answers a non-finite absSum with 0 — correct for a
+// helper that cannot invent a scale, and fatal here, because that term is the
+// ONLY cover the wall loop's rounding has: the slack is exactly 0 whenever
+// every triangle's own area is representable, so the two together would leave
+// a saturated sum publishing a ZERO bound over mass it has already swallowed.
+//
+// A saturated term is not a small bound, it is the absence of a proven scale,
+// and the error it stands for here runs past MaxFloat64 — so the honest answer
+// is +Inf. Any finite substitute would be a guess, which is what this kernel's
+// proven-bound discipline exists to prevent (docs/loft-design.md §8).
+func (m *MassAccumulator) wallBound() float64 {
+	if proofbound.IsNonFinite(m.WallAreaAbs) || proofbound.IsNonFinite(m.WallAreaSlack) {
+		return math.Inf(1)
+	}
+	return proofbound.AbsSumUpper(m.WallAreaSlack, proofbound.SumSlop(m.WallTerms, m.WallAreaAbs))
+}

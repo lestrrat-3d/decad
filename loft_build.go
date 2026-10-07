@@ -384,12 +384,12 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// so no measurement below is ever composed from a substituted value.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
 		chorded, err := computeLoftChordedAllow(
-			pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper, a.reversed,
+			pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed,
 		)
 		if err != nil {
 			return nil, err
 		}
-		mass.chorded = chorded
+		mass.Chorded = chorded
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)
@@ -492,22 +492,22 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 	return loftMeshProof{
 		facetDeparture: proofbound.AbsSumUpper(
 			chordCellDeltaUpper(sectionMatchedDelta, a.delta),
-			m.chorded.MaxTwistOffsetUpper,
+			m.Chorded.MaxTwistOffsetUpper,
 		),
 		areaSlack: proofbound.AbsSumUpper(
-			m.perturbAreaSum,
-			m.chorded.TwistAreaAllow,
-			m.chorded.AreaExcess,
-			m.chorded.CapAreaExcess,
+			m.PerturbAreaSum,
+			m.Chorded.TwistAreaAllow,
+			m.Chorded.AreaExcess,
+			m.Chorded.CapAreaExcess,
 		),
 		volSymDiff: proofbound.AbsSumUpper(
 			proofbound.SweptVolumeAllow(a.delta, proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta)),
 			proofbound.ChordedBoundaryVolumeAllow(
 				matchedDelta,
-				m.chorded.WallAreaUpper,
-				m.chorded.TwistVolumeUpper,
-				m.chorded.CapVolumeUpper,
-				m.chorded.SeamAllow,
+				m.Chorded.WallAreaUpper,
+				m.Chorded.TwistVolumeUpper,
+				m.Chorded.CapVolumeUpper,
+				m.Chorded.SeamAllow,
 			),
 		),
 	}

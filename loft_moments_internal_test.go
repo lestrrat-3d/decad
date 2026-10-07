@@ -56,14 +56,14 @@ func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
 			cached.addTriangle(verts[tri[0]], verts[tri[1]], verts[tri[2]], true, tri, cache)
 		}
 		for _, pair := range [][2]*big.Rat{
-			{uncached.vol6, cached.vol6}, {uncached.momX, cached.momX},
-			{uncached.momY, cached.momY}, {uncached.momZ, cached.momZ},
+			{uncached.Vol6, cached.Vol6}, {uncached.MomX, cached.MomX},
+			{uncached.MomY, cached.MomY}, {uncached.MomZ, cached.MomZ},
 		} {
 			require.Zero(t, pair[0].Cmp(pair[1]))
 		}
-		require.Equal(t, math.Float64bits(uncached.coordUpper), math.Float64bits(cached.coordUpper))
-		require.Equal(t, math.Float64bits(uncached.distUpper), math.Float64bits(cached.distUpper))
-		require.Equal(t, math.Float64bits(uncached.perturbAreaSum), math.Float64bits(cached.perturbAreaSum))
+		require.Equal(t, math.Float64bits(uncached.CoordUpper), math.Float64bits(cached.CoordUpper))
+		require.Equal(t, math.Float64bits(uncached.DistUpper), math.Float64bits(cached.DistUpper))
+		require.Equal(t, math.Float64bits(uncached.PerturbAreaSum), math.Float64bits(cached.PerturbAreaSum))
 		for i, entry := range cache {
 			require.Equal(t, i < 4, entry.Ready, "only referenced vertices receive a distance")
 		}
@@ -102,12 +102,12 @@ func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
 	far := r3.NewVec(math.MaxFloat64, 1, 0)
 	entry := new(loftmesh.LoftVertexDistance)
 	for range 2 {
-		uncached.foldCoordUpper(far)
-		cached.foldCoordUpperCached(far, entry)
+		uncached.FoldCoordUpper(far)
+		cached.FoldCoordUpperCached(far, entry)
 	}
 	require.True(t, entry.Ready)
 	require.True(t, math.IsInf(entry.Upper, 1))
-	require.Equal(t, math.Float64bits(uncached.distUpper), math.Float64bits(cached.distUpper))
+	require.Equal(t, math.Float64bits(uncached.DistUpper), math.Float64bits(cached.DistUpper))
 }
 
 // TestLoftMassAccumulatorBoxIsExact reproduces a closed box's closed-form
@@ -461,14 +461,14 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 	// The fixture is only meaningful while it really does saturate the scale
 	// without saturating the sum, and while no triangle's own bracket has any
 	// width of its own to carry the bound.
-	require.Equal(t, 8, m.wallTerms)
-	require.True(t, math.IsInf(m.wallAreaAbs, 1),
+	require.Equal(t, 8, m.WallTerms)
+	require.True(t, math.IsInf(m.WallAreaAbs, 1),
 		"the fixture must drive the summation scale to +Inf")
-	require.False(t, math.IsInf(m.wallAreaSum, 1),
+	require.False(t, math.IsInf(m.WallAreaSum, 1),
 		"the fixture must leave the summed value finite")
-	require.Equal(t, 0.0, m.wallAreaSlack,
+	require.Equal(t, 0.0, m.WallAreaSlack,
 		"every triangle area here is exactly representable, so the enclosure slack must be 0")
-	require.Equal(t, 0.0, proofbound.SumSlop(m.wallTerms, m.wallAreaAbs),
+	require.Equal(t, 0.0, proofbound.SumSlop(m.WallTerms, m.WallAreaAbs),
 		"sumSlop reports nothing for a saturated scale — the hole this test guards")
 
 	area := m.area()
@@ -669,7 +669,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 
 	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
-	m.chorded = chorded
+	m.Chorded = chorded
 	m.add(vLo, vHi, wHi, true)
 	m.add(vLo, wHi, wLo, true)
 
@@ -702,11 +702,11 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// full accumulator call.
 	wrongMoment := proofbound.ChordedBoundaryMomentResidualAllow(
 		sectionDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper,
-		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.coordUpper,
+		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.CoordUpper,
 	)
 	rightMoment := proofbound.ChordedBoundaryMomentResidualAllow(
 		sectionMatchedDelta, chorded.WallAreaUpper, chorded.CapVolumeUpper,
-		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.coordUpper,
+		chorded.SeamAllow, chorded.MaxTwistOffsetUpper, m.CoordUpper,
 	)
 	require.Greater(t, rightMoment, wrongMoment, "the fixture must actually distinguish the two candidate moment terms")
 }
@@ -797,7 +797,7 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	// And the published measurement the legs feed: Volume's own chorded term
 	// must dominate what the sagitta-alone reading would publish.
 	m := newLoftMassAccumulator(anchor, delta, chordToCurve, matched)
-	m.chorded = got
+	m.Chorded = got
 	m.add(vLo, vHi, wHi, true)
 	m.add(vLo, wHi, wLo, true)
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}

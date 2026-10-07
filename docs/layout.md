@@ -133,7 +133,7 @@ the rules leave to the byte budget.
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused, never matched to the nearest. See §5, §5.1. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
-| `loft_moments.go` | Computes loft mass properties and chord proofs. See `docs/loft-design.md` §8, §12. |
+| `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Modify
 
@@ -263,7 +263,7 @@ the rules leave to the byte budget.
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
-| `internal/loftmesh/` | Loft stations, mesh proofs, and payload restatement. |
+| `internal/loftmesh/` | Loft stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |

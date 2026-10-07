@@ -314,7 +314,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 			for _, t := range tris {
 				acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
 			}
-			if acc.vol6.Sign() < 0 {
+			if acc.Vol6.Sign() < 0 {
 				// §5's whole-shell orientation step, re-decided fresh from
 				// this placed triangle set every time: the derived
 				// combinatorial orientation is consistent either way it
@@ -408,7 +408,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
 	}
 	if acc != nil && delta > 0 {
-		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.perturbAreaSum)
+		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.PerturbAreaSum)
 	}
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaAcc.Value),
