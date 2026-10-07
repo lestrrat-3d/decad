@@ -74,7 +74,7 @@ the rules leave to the byte budget.
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | Linear and angular extent types; `ToFace`/`ToFaceAngular` references. See `docs/api-design.md` §8.1. |
 | `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicates and cardinality; a failure is a `SelectionError`. See `docs/api-design.md` §9. |
-| `selection_error.go` | `SelectionError` (wraps `ErrNoMatch`/`ErrCardinality`) and the canonical `*Query.String()` rendering it and a verification `Diagnostic` both reuse. See `docs/api-design.md` §9. |
+| `selection_error.go` | `SelectionError` and the shared `*Query.String()` rendering. See `docs/api-design.md` §9. |
 
 ### Mass properties and free-form curves
 
@@ -145,7 +145,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet section rewrite and build. Owns `cornerBlend` for Chamfer. See modify §6. |
-| `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
+| `chamfer.go` | `Body.Chamfer` over `cornerBlend`; cap loops route to `capblend.go`. See `docs/modify-design.md` §7. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
@@ -224,6 +224,7 @@ the rules leave to the byte budget.
 | `stacked_union.go` | Unequal-interval `Union` as stacked slabs. See general-boolean A1. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
+| `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and measurements. See general-boolean §4. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
 | `boolean_body.go` | Builds faceted topology and measurements from an audited mesh. See `docs/evaluator-design.md` §9. |
@@ -234,6 +235,7 @@ the rules leave to the byte budget.
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, loop assembly, payload dispatch and sheet audit mapping. See tessellation design. |
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
+| `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
@@ -242,7 +244,7 @@ the rules leave to the byte budget.
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
-| `tessellate_capblend.go` | `tessellateCapBlend`: the cap-loop chamfer mesh and one shared chord count per wall walk; `internal/tessellation/` emits its rings. See `docs/tessellation-reach-design.md` §7. |
+| `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | Maps cap points and expected chording errors between `Point2` and `internal/triangulation/`; `cross2` serves root mesh clearance. |
 | `export/` | STL, OBJ, and 3MF mesh writers and the analytic/faceted AP214 writer. See `docs/step-export-design.md` and `docs/3mf-export-design.md`. |
 
