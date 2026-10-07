@@ -369,12 +369,6 @@ func TestVerifyJointBoxLoopErrors(t *testing.T) {
 		})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
-	t.Run("a box listing the coupler", func(t *testing.T) {
-		t.Parallel()
-		fb, _ := buildRocker(t, false)
-		_, err := fb.doc.VerifyJointBox(t.Context(), fb.linkage, decad.JointBox{{Link: fb.couplerLk, Min: units.Degrees(0), Max: units.Degrees(10)}})
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
 	t.Run("the flat four-bar refuses its zero pose", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()

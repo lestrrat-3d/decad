@@ -413,6 +413,16 @@ type loopScene struct {
 	pins       []scenePin
 	e0         *loopAsk
 	e0Readings []sketch.Interval // per dependent: its reading at the zero pose
+	// offset is the driver's scene reading at the zero pose: exactly 0 for a
+	// driver whose parent is Common, and for one below it the enclosure of
+	// r₀ a probe scene read (docs/linkage-check-design.md §15.2). The
+	// driver's target is offset + |q|.
+	offset proofbound.RatInterval
+}
+
+// zero is the driver range E0 asks: the floats outward from offset's ends.
+func (sc *loopScene) zero() (float64, float64) {
+	return proofbound.RatFloatDown(sc.offset.Lo), proofbound.RatFloatUp(sc.offset.Hi)
 }
 
 // scenePin is one loop pin's sketch point, its world position, and the
@@ -476,8 +486,8 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		}
 		k := listed[0]
 		jt := spec.joints[k]
-		if jt.link.parent != lp.common {
-			return fmt.Errorf(`%w: a %s moves link %d of a loop, whose parent is not the loop's common link`, ErrUnsupported, noun, k)
+		if !jt.revolute && jt.link.parent != lp.common {
+			return fmt.Errorf(`%w: a %s moves link %d, a slide of a loop whose parent is not the loop's common link`, ErrUnsupported, noun, k)
 		}
 		if heldAtZeroJoint(jt) {
 			continue
@@ -867,8 +877,52 @@ func floatBox(iv proofbound.RatInterval) sketch.Interval {
 // distance from its zero-pose point; and a driven angle per dependent from
 // its parent's line to its own, or a dependent slide's horizontal distance.
 func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int) (*loopScene, error) {
+	mirror, halfTurn := ld.sceneSide(side, spec.joints[ld.driver].link == ld.loop.slide)
+	zero := proofbound.PointInterval(new(big.Rat))
+	driverLink := spec.joints[ld.driver].link
+	if driverLink != ld.loop.slide && driverLink.parent != ld.loop.common {
+		var err error
+		if zero, err = ld.probeOffset(ctx, spec, mirror, halfTurn); err != nil {
+			return nil, err
+		}
+	}
+	return ld.buildSceneOn(ctx, spec, mirror, halfTurn, zero)
+}
+
+// probeOffset reads r₀, the zero-pose angle a revolute driver below Common
+// is measured by on the scene flipped by mirror and halfTurn
+// (docs/linkage-check-design.md §15.2): the same scene driven by a loop joint
+// whose parent is Common, at 0, with that angle driven, answers it as its E0
+// reading after its own falsifier has run.
+func (ld *loopDrive) probeOffset(ctx context.Context, spec *linkageSpec, mirror, halfTurn bool) (proofbound.RatInterval, error) {
 	lp := ld.loop
-	mirror, halfTurn := ld.sceneSide(side, spec.joints[ld.driver].link == lp.slide)
+	probe := &loopDrive{loop: lp, driver: -1}
+	for _, k := range lp.links {
+		if probe.driver < 0 && k.parent == lp.common {
+			probe.driver = k.index
+			continue
+		}
+		probe.deps = append(probe.deps, k.index)
+	}
+	j := slices.Index(probe.deps, ld.driver)
+	if probe.driver < 0 || j < 0 {
+		return proofbound.RatInterval{}, fmt.Errorf(`%w: a loop has no joint on its common link to read its driver's reference by`, ErrUnsupported)
+	}
+	sc, err := probe.buildSceneOn(ctx, spec, mirror, halfTurn, proofbound.PointInterval(new(big.Rat)))
+	if err != nil {
+		return proofbound.RatInterval{}, err
+	}
+	if err := sc.askZero(ctx); err != nil {
+		return proofbound.RatInterval{}, err
+	}
+	r := sc.e0Readings[j]
+	return proofbound.IntervalOwned(proofarith.FloatRat(r.Lo), proofarith.FloatRat(r.Hi)), nil
+}
+
+// buildSceneOn is buildScene on the side mirror and halfTurn flip to, the
+// driver's zero-pose reading offset.
+func (ld *loopDrive) buildSceneOn(ctx context.Context, spec *linkageSpec, mirror, halfTurn bool, offset proofbound.RatInterval) (*loopScene, error) {
+	lp := ld.loop
 	plane, err := lp.sceneFrame(mirror, halfTurn)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: a loop's plane frame: %w`, ErrNotFinite, err)
@@ -878,7 +932,7 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 	if err != nil {
 		return nil, fmt.Errorf(`%w: a loop's scene: %w`, ErrUnsupported, err)
 	}
-	sc := &loopScene{plane: plane, sk: sk}
+	sc := &loopScene{plane: plane, sk: sk, offset: offset}
 	// fix grounds p at the exact plane position x × y: a fixed box around it
 	// where either coordinate is not one float, as on a tilted loop.
 	fix := func(p *sketch.Point, x, y proofbound.RatInterval) {
@@ -970,12 +1024,17 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 		return ratDot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
 	}
 	driverLink := spec.joints[ld.driver].link
-	if driverLink == lp.slide {
+	switch {
+	case driverLink == lp.slide:
 		sc.driver = sketch.NewHorizontalDistance(railStart, slider, 0)
-	} else {
+	case driverLink.parent == lp.common:
 		next := lp.linkNext(driverLink)
 		refLine := sk.CreateLine(point(driverLink.pin()), fixed(next, 0))
 		sc.driver = sketch.NewAngle(refLine, lines[driverLink], 0)
+	default:
+		// Below Common the driver turns from its parent's line, offset r₀.
+		mid, _ := intervalMidpoint(offset).Float64()
+		sc.driver = sketch.NewAngle(parentLine(driverLink), lines[driverLink], mid)
 	}
 	cons = append(cons, sc.driver)
 	for _, d := range ld.deps {
@@ -1029,7 +1088,8 @@ func (s *linkageSpec) prepare(ctx context.Context) error {
 
 // askZero asks E0 and runs the zero-pose falsifier on it.
 func (sc *loopScene) askZero(ctx context.Context) error {
-	enc, err := sc.sk.Enclose(ctx, sc.driver, 0, 0, sc.opts...)
+	lo, hi := sc.zero()
+	enc, err := sc.sk.Enclose(ctx, sc.driver, lo, hi, sc.opts...)
 	if err != nil {
 		if cerr := ctx.Err(); cerr != nil {
 			return cerr
@@ -1074,7 +1134,7 @@ func loopInvariant(err error) bool {
 // sceneValue is the driver's scene value at the exact fraction s, as the two
 // floats around it: |q(s)| in radians or millimetres, each sub-segment read on
 // the side where it is never negative (docs/linkage-check-design.md §15.3).
-func (ld *loopDrive) sceneValue(s *big.Rat) (float64, float64) {
+func (ld *loopDrive) sceneValue(side int, s *big.Rat) (float64, float64) {
 	q := jointParam(ld.driverJt, s)
 	lo, hi := paramLower(q), paramUpper(q)
 	if hi.Sign() <= 0 {
@@ -1083,7 +1143,8 @@ func (ld *loopDrive) sceneValue(s *big.Rat) (float64, float64) {
 	if lo.Sign() < 0 {
 		lo = new(big.Rat)
 	}
-	return proofbound.RatFloatDown(lo), proofbound.RatFloatUp(hi)
+	off := ld.scenes[side].offset
+	return proofbound.RatFloatDown(lo.Add(lo, off.Lo)), proofbound.RatFloatUp(hi.Add(hi, off.Hi))
 }
 
 // paramLower and paramUpper bound 2π·turn + base from below and above, π at
@@ -1253,7 +1314,7 @@ func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopA
 		if err != nil {
 			return nil, err
 		}
-		lo, hi := ld.sceneValue(s)
+		lo, hi := ld.sceneValue(sub.side, s)
 		return ld.enclose(ctx, askKey(sub, "p", s), lo, hi, approach)
 	}
 	key := askKey(sub, "p", s)
@@ -1264,7 +1325,7 @@ func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopA
 	if err != nil {
 		return nil, err
 	}
-	lo, hi := ld.sceneValue(s)
+	lo, hi := ld.sceneValue(sub.side, s)
 	return ld.enclose(ctx, key, lo, hi, cell)
 }
 
@@ -1301,8 +1362,9 @@ func (ld *loopDrive) askHull(asks []*loopAsk, j int) proofbound.RatInterval {
 
 // approach is the enclosure from the zero pose to sub's near-end driver value.
 func (ld *loopDrive) approach(ctx context.Context, sub loopSub) (*loopAsk, error) {
-	lo, _ := ld.sceneValue(sub.near)
-	return ld.enclose(ctx, askKey(sub, "a"), 0, lo, ld.scenes[sub.side].e0)
+	lo, _ := ld.sceneValue(sub.side, sub.near)
+	_, zero := ld.scenes[sub.side].zero()
+	return ld.enclose(ctx, askKey(sub, "a"), zero, lo, ld.scenes[sub.side].e0)
 }
 
 // cell is the cell ask from start to end in sub's chain order, continued from
@@ -1320,8 +1382,8 @@ func (ld *loopDrive) cell(ctx context.Context, sub loopSub, start, end *big.Rat)
 	if err != nil {
 		return nil, err
 	}
-	_, lo := ld.sceneValue(start)
-	hi, _ := ld.sceneValue(end)
+	_, lo := ld.sceneValue(sub.side, start)
+	hi, _ := ld.sceneValue(sub.side, end)
 	return ld.enclose(ctx, key, lo, hi, from)
 }
 
