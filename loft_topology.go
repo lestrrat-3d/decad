@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -321,7 +320,7 @@ func junctionApex(tri [3]int, a, b int) int {
 	return tri[0]
 }
 
-// junctionConvex decides a rung or diagonal edge's convexity: meshbool.OrientSign(A,
+// junctionConvex decides a rung or diagonal edge's convexity: proofarith.OrientSign(A,
 // B, C, D) < 0, where (A, B, C) is primary's own outward-wound vertex order
 // and D is other's apex — design O3, pinned against the box fixture: a
 // standard box's vertical edge (a rung) is a genuine convex corner, and this
@@ -329,7 +328,7 @@ func junctionApex(tri [3]int, a, b int) int {
 // (flat) edge: docs/loft-design.md §5's rule for a flat rung or diagonal.
 func junctionConvex(verts []r3.Vec, primary, other [3]int, a, b int) bool {
 	apex := junctionApex(other, a, b)
-	return meshbool.OrientSign(verts[primary[0]], verts[primary[1]], verts[primary[2]], verts[apex]) < 0
+	return proofarith.OrientSign(verts[primary[0]], verts[primary[1]], verts[primary[2]], verts[apex]) < 0
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its

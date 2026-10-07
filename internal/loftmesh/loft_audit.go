@@ -18,7 +18,7 @@ import (
 // This file is the build-time crossing audit of docs/loft-design.md §6: the
 // gate that proves a loft's assembled wall-and-cap triangle set is manifold
 // and watertight by construction rather than merely by convention. It reuses
-// internal/meshbool/boolean_exact.go's adaptive exact predicates and boolean_mesh.go's
+// internal/proof/orientation.go's adaptive exact predicates and boolean_mesh.go's
 // meshbool.TriTriClassify unchanged — the same machinery the mesh boolean already uses
 // to decide whether two triangles are disjoint, share a point, share a
 // segment, or overlap in a 2-D region — and adds no bracket engine of its
@@ -51,7 +51,7 @@ import (
 // exist.
 func TriangleCollapsed(verts []r3.Vec, tri [3]int) bool {
 	a, b, c := proof.XptOf(verts[tri[0]]), proof.XptOf(verts[tri[1]]), proof.XptOf(verts[tri[2]])
-	n := meshbool.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
 }
 
@@ -120,7 +120,7 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	for i, tri := range tris {
 		d.Corners[i] = LoftTriCorners(verts, tri)
 		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
-		d.Norms[i] = meshbool.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
+		d.Norms[i] = proof.Xcross(proof.Xsub(d.Xtris[i][1], d.Xtris[i][0]), proof.Xsub(d.Xtris[i][2], d.Xtris[i][0]))
 		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
 		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
 		for j, p := range d.Xtris[i] {
@@ -278,15 +278,15 @@ const (
 // LoftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
 // for a zero-shared-vertex pair whose bounding boxes DO overlap: it
 // reproduces meshbool.TriTriClassify's OWN opening move (boolean_mesh.go) —
-// meshbool.AllOneSide(meshbool.OrientSign(...)) against each triangle's plane — over nothing
+// meshbool.AllOneSide(proof.OrientSign(...)) against each triangle's plane — over nothing
 // but the two triangles' float corners, so it can prove "one triangle sits
 // strictly on one side of the other's plane, and so the pair cannot touch at
 // all" without ever building the exact-rational lift AuditLoftPair pays for
-// on every call. It calls the IDENTICAL meshbool.OrientSign and meshbool.AllOneSide functions
+// on every call. It calls the IDENTICAL proof.OrientSign and meshbool.AllOneSide functions
 // meshbool.TriTriClassify itself calls first, on the IDENTICAL float corners, so it
 // cannot disagree with meshbool.TriTriClassify's own verdict for the cases it
 // decides — a proof here is the same proof there, just reached before the
-// exact lift is built. meshbool.OrientSign is itself adaptive (its own doc comment:
+// exact lift is built. proof.OrientSign is itself adaptive (its own doc comment:
 // a float evaluation whose forward error provably cannot cross zero decides
 // the generic case, and only a genuinely ambiguous determinant pays the
 // exact fallback), so the common case — the two triangles' planes are not
@@ -303,14 +303,14 @@ const (
 func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 	var sb [3]int
 	for i := range 3 {
-		sb[i] = meshbool.OrientSign(ta[0], ta[1], ta[2], tb[i])
+		sb[i] = proof.OrientSign(ta[0], ta[1], ta[2], tb[i])
 	}
 	if meshbool.AllOneSide(sb) {
 		return true
 	}
 	var sa [3]int
 	for i := range 3 {
-		sa[i] = meshbool.OrientSign(tb[0], tb[1], tb[2], ta[i])
+		sa[i] = proof.OrientSign(tb[0], tb[1], tb[2], ta[i])
 	}
 	return meshbool.AllOneSide(sa)
 }
@@ -358,7 +358,7 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 //  6. Therefore triangle i ∩ triangle j = E — precisely the contact this
 //     pair's recorded adjacency expects — and §6's shared-edge rule admits it.
 //
-// The sign is exact rational arithmetic (meshbool.XdotSign), never a float tolerance,
+// The sign is exact rational arithmetic (proof.XdotSign), never a float tolerance,
 // so step 3 is a proof and not an estimate. A ZERO sign proves nothing about
 // step 3 and takes no shortcut: the coplanar branch below keeps deciding that
 // case through TriTriCoplanarSharedEdge, which is what still refuses two
@@ -399,7 +399,7 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if sharedCount == 2 {
 		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
 		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
-		if meshbool.XdotSign(na, proof.Xsub(apex, edgeA)) == 0 {
+		if proof.XdotSign(na, proof.Xsub(apex, edgeA)) == 0 {
 			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
 				return LoftPairClassified, nil
 			}

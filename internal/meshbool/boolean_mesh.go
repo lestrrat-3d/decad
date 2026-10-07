@@ -312,7 +312,7 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 		signsB = *sb
 	} else {
 		for i := range 3 {
-			signsB[i] = OrientSignPrepared(ta[0], ta[1], ta[2], tb[i], xta[0], xtb[i], na)
+			signsB[i] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[i], xta[0], xtb[i], na)
 		}
 	}
 	if AllOneSide(signsB) {
@@ -322,7 +322,7 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 		signsA = *sa
 	} else {
 		for i := range 3 {
-			signsA[i] = OrientSignPrepared(tb[0], tb[1], tb[2], ta[i], xtb[0], xta[i], nb)
+			signsA[i] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[i], xtb[0], xta[i], nb)
 		}
 	}
 	if AllOneSide(signsA) {
@@ -372,7 +372,7 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 	if len(ptsA) > 2 || len(ptsB) > 2 {
 		return out, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
 	}
-	dir := Xcross(na, nb)
+	dir := proof.Xcross(na, nb)
 	loA, hiA := OrderOnLine(ptsA, dir)
 	loB, hiB := OrderOnLine(ptsB, dir)
 	lo, hi := loA, hiA
@@ -540,7 +540,7 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 // SinSquared is the exact sin²θ of the angle between two facet planes:
 // |na × nb|² / (|na|²·|nb|²).
 func SinSquared(na, nb proof.Xpt) *big.Rat {
-	c := Xcross(na, nb)
+	c := proof.Xcross(na, nb)
 	num := proof.XdotRat(c, c)
 	den := new(big.Rat).Mul(proof.XdotRat(na, na), proof.XdotRat(nb, nb))
 	if den.Sign() == 0 {
@@ -580,7 +580,7 @@ func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt 
 	dens := [3]*big.Int{}
 	val := func(i int) (*big.Int, *big.Int) {
 		if nums[i] == nil {
-			nums[i], dens[i] = OrientNum(xo[0], xo[1], xo[2], xt[i])
+			nums[i], dens[i] = proof.OrientNum(xo[0], xo[1], xo[2], xt[i])
 		}
 		return nums[i], dens[i]
 	}
@@ -595,7 +595,7 @@ func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt 
 			nj, dj := val(j)
 			tn := new(big.Int).Mul(ni, dj)
 			td := new(big.Int).Sub(tn, new(big.Int).Mul(nj, di))
-			out = append(out, Xlerp(xt[i], xt[j], tn, td))
+			out = append(out, proof.Xlerp(xt[i], xt[j], tn, td))
 		}
 	}
 	return out
@@ -639,7 +639,7 @@ func PointOnTri(p proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) bool {
 }
 
 func PlaneSide(a, b, p, n proof.Xpt) int {
-	return XdotSign(Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
+	return proof.XdotSign(proof.Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
 }
 
 func PointOnSegment3D(a, b, p proof.Xpt) bool {
@@ -1021,8 +1021,8 @@ func EdgeCrosses(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, bool, error)
 	tt := m.Tris[twin]
 	apex := m.Verts[tri[0]+tri[1]+tri[2]-u-v]
 	apexTwin := m.Verts[tt[0]+tt[1]+tt[2]-u-v]
-	s0 := OrientSign(partner[0], partner[1], partner[2], apex)
-	s1 := OrientSign(partner[0], partner[1], partner[2], apexTwin)
+	s0 := proof.OrientSign(partner[0], partner[1], partner[2], apex)
+	s1 := proof.OrientSign(partner[0], partner[1], partner[2], apexTwin)
 	return key, s0*s1 < 0, nil
 }
 
@@ -1225,7 +1225,7 @@ func CutCornerBound(m *BoolMesh, i int, cornerKeys [3]string, key string, rims m
 // parity.
 func ClassifyRegion(ctx context.Context, reg CutRegion, other *BoolMesh) (bool, error) {
 	if reg.HasAnchor {
-		switch s := OrientSignMixed(reg.Partner[0], reg.Partner[1], reg.Partner[2], reg.Probe); {
+		switch s := proof.OrientSignMixed(reg.Partner[0], reg.Partner[1], reg.Partner[2], reg.Probe); {
 		case s < 0:
 			return true, nil
 		case s > 0:
@@ -1758,7 +1758,7 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 func OnSegmentInterior3(a, b, p proof.Xpt) bool {
 	d := proof.Xsub(b, a)
 	ap := proof.Xsub(p, a)
-	cr := Xcross(d, ap)
+	cr := proof.Xcross(d, ap)
 	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return false
 	}
@@ -1980,7 +1980,7 @@ func TriangulatePlanarPolygon(ctx context.Context, verts []proof.Xpt, poly []int
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		cand := Xcross(proof.Xsub(verts[poly[i]], verts[poly[0]]), proof.Xsub(verts[poly[i+1]], verts[poly[0]]))
+		cand := proof.Xcross(proof.Xsub(verts[poly[i]], verts[poly[0]]), proof.Xsub(verts[poly[i+1]], verts[poly[0]]))
 		if cand.X.Sign() != 0 || cand.Y.Sign() != 0 || cand.Z.Sign() != 0 {
 			n = cand
 			found = true

@@ -70,7 +70,7 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 			plane := loftmesh.NewLoftExactPlane(tc.anchor, tc.normal)
 			var want [3]int
 			for i, p := range tc.other {
-				want[i] = meshbool.XdotSign(tc.normal, proof.Xsub(p, tc.anchor))
+				want[i] = proof.XdotSign(tc.normal, proof.Xsub(p, tc.anchor))
 			}
 			require.Equal(t, want, loftmesh.TrianglePlaneSigns(plane, tc.other))
 		})
@@ -137,8 +137,8 @@ func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
 	tb := loftmesh.LoftTriCorners(verts, upper0)
 	xta := loftmesh.LoftXTriCorners(verts, lower0)
 	xtb := loftmesh.LoftXTriCorners(verts, upper0)
-	na := meshbool.Xcross(proof.Xsub(xta[1], xta[0]), proof.Xsub(xta[2], xta[0]))
-	nb := meshbool.Xcross(proof.Xsub(xtb[1], xtb[0]), proof.Xsub(xtb[2], xtb[0]))
+	na := proof.Xcross(proof.Xsub(xta[1], xta[0]), proof.Xsub(xta[2], xta[0]))
+	nb := proof.Xcross(proof.Xsub(xtb[1], xtb[0]), proof.Xsub(xtb[2], xtb[0]))
 	contact, err := meshbool.TriTriClassify(ta, tb, xta, xtb, na, nb)
 	require.NoError(t, err)
 	require.Equal(t, meshbool.ContactRegion, contact.Kind,
@@ -389,7 +389,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //     than a gap in the fixtures: a pair sharing a recorded vertex INDEX
 //     shares the identical coordinate there, so (a) meshbool.BoxesOverlap's own <=
 //     always reports the two boxes overlapping at that point (equality
-//     satisfies <=, on every axis), and (b) meshbool.OrientSign against the OTHER
+//     satisfies <=, on every axis), and (b) proof.OrientSign against the OTHER
 //     triangle's plane, evaluated at that shared vertex, is the signed
 //     volume of a tetrahedron with a repeated point — exactly zero, every
 //     time — so meshbool.AllOneSide (which demands all three signs strictly

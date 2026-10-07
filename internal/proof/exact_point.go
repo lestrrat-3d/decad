@@ -68,6 +68,24 @@ func XdotRat(a, b Xpt) *big.Rat {
 	return new(big.Rat).SetFrac(XdotNum(a, b), den)
 }
 
+// Xcross is a × b, exact, stripped the same way as Xsub.
+func Xcross(a, b Xpt) Xpt {
+	return Xpt(XhpStripTwosOwned(XhpCross(Xhp(a), Xhp(b))))
+}
+
+// XdotSign is the sign of a·b, decided as a plain integer sign: the shared
+// denominator a.w·b.w is always positive, so the numerator's sign IS the
+// dot product's sign.
+func XdotSign(a, b Xpt) int { return XdotNum(a, b).Sign() }
+
+// Xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
+// stripped on return — the growth control that keeps a chain of lerps from
+// growing its denominator multiplicatively at every link (measured: 14113
+// bits unreduced at lerp depth 6, 462 bits stripped after every step).
+func Xlerp(a, b Xpt, tn, td *big.Int) Xpt {
+	return Xpt(XhpStripTwosOwned(XhpLerp(Xhp(a), Xhp(b), tn, td)))
+}
+
 // Xhp is an exact 3D point in homogeneous integer form: (x, y, z) is an
 // integer numerator triple over one shared positive denominator w — the point
 // it denotes is (x/w, y/w, z/w). big.Int carries no normalisation step of its

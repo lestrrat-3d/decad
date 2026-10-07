@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -163,7 +162,7 @@ func (m *MassAccumulator) AddTriangle(a, b, c r3.Vec, wall bool, indices [3]int,
 	sb := proofarith.Xsub(proofarith.XptOf(b), m.anchor)
 	sc := proofarith.Xsub(proofarith.XptOf(c), m.anchor)
 
-	triVol6 := proofarith.XdotRat(sa, meshbool.Xcross(sb, sc))
+	triVol6 := proofarith.XdotRat(sa, proofarith.Xcross(sb, sc))
 	m.Vol6.Add(m.Vol6, triVol6)
 
 	saX, saY, saZ := proofarith.XhpRat(proofarith.Xhp(sa))

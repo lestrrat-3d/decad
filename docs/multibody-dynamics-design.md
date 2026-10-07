@@ -1148,7 +1148,7 @@ tessellator's cap triangulation of its recorded section, accepted only after an 
 cap triangle is counterclockwise; with the closed-mesh audit, that proves the triangles tile the section
 exactly. The tests are:
 
-- a certified transversal crossing of two facets (`internal/meshbool/boolean_exact.go`'s predicates) proves `Overlapping`;
+- a certified transversal crossing of two facets (`internal/proof/orientation.go`'s predicates) proves `Overlapping`;
   the kernel records every crossing it finds, an edge of one body through a facet of the other or two
   coplanar facets of positive overlap, as `PlanarResult.Crossings`, each naming the facet and the edge's
   two facets, so §9.6 can tell which faces a shallow overlap passes through;

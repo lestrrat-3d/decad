@@ -104,6 +104,6 @@ func DeepWitnessInside(ctx context.Context, m *BoolMesh, closeFacets []int, othe
 // containment without rounding.
 func facetSamplePoints(a, b, c proof.Xpt) []proof.Xpt {
 	one, two := big.NewInt(1), big.NewInt(2)
-	mid := func(p, q proof.Xpt) proof.Xpt { return Xlerp(p, q, one, two) }
+	mid := func(p, q proof.Xpt) proof.Xpt { return proof.Xlerp(p, q, one, two) }
 	return []proof.Xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), XCentroid(a, b, c)}
 }

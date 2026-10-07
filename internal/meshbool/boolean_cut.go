@@ -494,7 +494,7 @@ func (tc *TriCutter) SplitEdgesAtU(c *big.Rat) error {
 			new(big.Rat).Set(c),
 			new(big.Rat).Add(tc.Verts[e.A].P2.V, new(big.Rat).Mul(t, new(big.Rat).Sub(tc.Verts[e.B].P2.V, tc.Verts[e.A].P2.V))),
 		)
-		p3 := Xlerp(tc.Verts[e.A].P3, tc.Verts[e.B].P3, t.Num(), t.Denom())
+		p3 := proof.Xlerp(tc.Verts[e.A].P3, tc.Verts[e.B].P3, t.Num(), t.Denom())
 		mid := tc.AddVert(p2, p3, true)
 		out = append(out,
 			CutEdge{A: e.A, B: mid, Partner: e.Partner, ViaParity: e.ViaParity},
@@ -532,7 +532,7 @@ func (tc *TriCutter) SplitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 			new(big.Rat).Set(c),
 			new(big.Rat).Add(tc.Verts[vi].P2.V, new(big.Rat).Mul(t, new(big.Rat).Sub(tc.Verts[vj].P2.V, tc.Verts[vi].P2.V))),
 		)
-		p3 := Xlerp(tc.Verts[vi].P3, tc.Verts[vj].P3, t.Num(), t.Denom())
+		p3 := proof.Xlerp(tc.Verts[vi].P3, tc.Verts[vj].P3, t.Num(), t.Denom())
 		mid := tc.AddVert(p2, p3, true)
 		left = append(left, mid)
 		right = append(right, mid)

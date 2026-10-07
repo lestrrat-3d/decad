@@ -156,7 +156,7 @@ func TestFacetCutCancellationIsBounded(t *testing.T) {
 		proof.XptOf(r3.NewVec(10, 0, 0)),
 		proof.XptOf(r3.NewVec(0, 10, 0)),
 	}
-	normal := meshbool.Xcross(proof.Xsub(tri[1], tri[0]), proof.Xsub(tri[2], tri[0]))
+	normal := proof.Xcross(proof.Xsub(tri[1], tri[0]), proof.Xsub(tri[2], tri[0]))
 	seg := meshbool.Xseg{
 		A: proof.XptOf(r3.NewVec(1, 1, 0)),
 		B: proof.XptOf(r3.NewVec(2, 1, 0)),

@@ -301,7 +301,7 @@ func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proof.Xpt, proof.Xpt) {
 	f := [3]r3.Vec{e.h.Verts[t[0]], e.h.Verts[t[1]], e.h.Verts[t[2]]}
 	x := [3]proof.Xpt{e.lift(t[0]), e.lift(t[1]), e.lift(t[2])}
 	if !e.normOK[i] {
-		e.norm[i] = Xcross(proof.Xsub(x[1], x[0]), proof.Xsub(x[2], x[0]))
+		e.norm[i] = proof.Xcross(proof.Xsub(x[1], x[0]), proof.Xsub(x[2], x[0]))
 		e.fnorm[i] = e.norm[i].Vec()
 		e.normOK[i] = true
 	}
@@ -619,11 +619,11 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 // float filter first, then f's cached exact normal.
 func (e *heldEmbedding) planeSign(f, p int) int {
 	t, v := e.h.Tris[f], e.h.Verts
-	if s, certain := OrientSignFloat(v[t[0]], v[t[1]], v[t[2]], v[p]); certain {
+	if s, certain := proof.OrientSignFloat(v[t[0]], v[t[1]], v[t[2]], v[p]); certain {
 		return s
 	}
 	_, x, n := e.facet(f)
-	return XdotSign(n, proof.Xsub(e.lift(p), x[0]))
+	return proof.XdotSign(n, proof.Xsub(e.lift(p), x[0]))
 }
 
 // facetFailures returns the facets j that facet i meets improperly, and

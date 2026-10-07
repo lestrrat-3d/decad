@@ -30,7 +30,7 @@ func heldMeshFolds(t *testing.T, verts []r3.Vec, tris [][3]int) []string {
 	norms := make([]proof.Xpt, len(tris))
 	boxes := make([][2]r3.Vec, len(tris))
 	for i, tri := range tris {
-		norms[i] = meshbool.Xcross(proof.Xsub(x[tri[1]], x[tri[0]]), proof.Xsub(x[tri[2]], x[tri[0]]))
+		norms[i] = proof.Xcross(proof.Xsub(x[tri[1]], x[tri[0]]), proof.Xsub(x[tri[2]], x[tri[0]]))
 		boxes[i] = meshbool.TriBox(verts, tri)
 	}
 	corners := func(i int) ([3]r3.Vec, [3]proof.Xpt) {

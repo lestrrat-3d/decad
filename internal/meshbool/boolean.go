@@ -235,7 +235,7 @@ func SpanWitness(ctx context.Context, bmA, bmB *BoolMesh, spans []ContactSpan, b
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		mid := Xlerp(s.P0, s.P1, one, two)
+		mid := proof.Xlerp(s.P0, s.P1, one, two)
 		deep, err := WalkFacetFromSpan(ctx, mid, bmA, s.I, bmB, s.J, allB, b)
 		if err != nil || deep {
 			return deep, err
@@ -259,7 +259,7 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 	one := big.NewInt(1)
 	for _, vi := range m.Tris[fi] {
 		c := m.Xverts[vi]
-		if XdotSign(normal, proof.Xsub(c, origin)) >= 0 {
+		if proof.XdotSign(normal, proof.Xsub(c, origin)) >= 0 {
 			continue
 		}
 		// The float length only decides when to stop halving. Stopping early
@@ -272,7 +272,7 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 			if reach*(1+1e-6) <= b {
 				break
 			}
-			p := Xlerp(mid, c, one, den)
+			p := proof.Xlerp(mid, c, one, den)
 			deep, err := DeepWitnessAt(ctx, p, other, all, b)
 			if err != nil || deep {
 				return deep, err
