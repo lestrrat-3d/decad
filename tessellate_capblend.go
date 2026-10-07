@@ -654,11 +654,6 @@ func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm 
 	return nil
 }
 
-// capStationBound keeps the root tests on the same cap-station enclosure.
-func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.WalkEndBound {
-	return tessellation.CapStationBound(cU, cV, radius, theta, heldU, heldV)
-}
-
 // capBlendCornerLocusGap is how far a MITER corner's built ruling — an Edge
 // tagged Line3, straight from the cap-level foot down to the original corner —
 // can sit from the conic miter locus it stands for
