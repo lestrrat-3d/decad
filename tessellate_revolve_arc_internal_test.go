@@ -84,7 +84,7 @@ var revolveArcGrid = func() oldRevolveArcGridData {
 func oldRevolveArcAbsIntegral(scaledRho []proofbound.RatInterval, held, slope proofbound.RatInterval, extra *big.Rat, weight int) *big.Rat {
 	at := func(i int) *big.Rat {
 		f := proofbound.IntervalSub(scaledRho[i], proofbound.IntervalAdd(held, proofbound.IntervalScale(slope, revolveArcGrid.t[i])))
-		return tessellation.IntervalAbsUpper(f)
+		return proofbound.IntervalAbsUpper(f)
 	}
 	weights := &revolveArcGrid.weights[tessellation.RevolveWeightOne]
 	switch weight {

@@ -11,7 +11,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -44,7 +43,7 @@ func InitialFrame(frame r3.Frame) (Frame, error) {
 
 // Line transports a frame along one recorded straight span.
 func Line(current Frame, start, end r3.Vec) (Frame, error) {
-	deltaExact := tessellation.IvVec3Sub(mustIVVec3Of(end), mustIVVec3Of(start))
+	deltaExact := survey2d.IvVec3Sub(mustIVVec3Of(end), mustIVVec3Of(start))
 	originExact := survey2d.IvVec3Add(current.OriginExact, deltaExact)
 	if exact, ok := exactSweepTransportFrame(
 		originExact,
@@ -93,13 +92,13 @@ func TransportArc(current Frame, arc Arc) (Frame, error) {
 		return survey2d.IvVec3Add(
 			survey2d.IvVec3Mul(vector, cos),
 			survey2d.IvVec3Add(
-				survey2d.IvVec3Mul(tessellation.IvVec3Cross(axisExact, vector), sin),
+				survey2d.IvVec3Mul(survey2d.IvVec3Cross(axisExact, vector), sin),
 				survey2d.IvVec3Mul(axisExact, proofbound.IntervalMul(oneMinusCos, survey2d.IvVec3Dot(axisExact, vector))),
 			),
 		)
 	}
 	rotatePoint := func(point survey2d.IvVec3) survey2d.IvVec3 {
-		return survey2d.IvVec3Add(centerExact, rotateDirection(tessellation.IvVec3Sub(point, centerExact)))
+		return survey2d.IvVec3Add(centerExact, rotateDirection(survey2d.IvVec3Sub(point, centerExact)))
 	}
 
 	originExact := rotatePoint(current.OriginExact)

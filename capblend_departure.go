@@ -4,8 +4,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -232,13 +230,13 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	if !okU || !okV || !okS || !okC {
 		return 0, false
 	}
-	n := tessellation.IvVec3Cross(tagU, tagV)
+	n := survey2d.IvVec3Cross(tagU, tagV)
 
 	// The bilinear patch's own normal N(u, v) = C0 + u·Cu + v·Cv, exactly.
-	p0 := tessellation.IvVec3Sub(a1, a0)
-	dp := tessellation.IvVec3Sub(tessellation.IvVec3Sub(b1, b0), p0)
-	r0 := tessellation.IvVec3Sub(b0, a0)
-	c0, cu, cv := tessellation.IvVec3Cross(p0, r0), tessellation.IvVec3Cross(p0, dp), tessellation.IvVec3Cross(dp, r0)
+	p0 := survey2d.IvVec3Sub(a1, a0)
+	dp := survey2d.IvVec3Sub(survey2d.IvVec3Sub(b1, b0), p0)
+	r0 := survey2d.IvVec3Sub(b0, a0)
+	c0, cu, cv := survey2d.IvVec3Cross(p0, r0), survey2d.IvVec3Cross(p0, dp), survey2d.IvVec3Cross(dp, r0)
 
 	// |N| from below: the constant term's own length, less what the two affine
 	// terms can take from it anywhere in the unit square.
@@ -258,9 +256,9 @@ func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	// normal is taken on each exact coefficient BEFORE anything is bounded, so
 	// the cancellation the near-planar quad carries survives into the answer.
 	crossSq := new(big.Rat)
-	k0, ku, kv := tessellation.IvVec3Cross(n, c0), tessellation.IvVec3Cross(n, cu), tessellation.IvVec3Cross(n, cv)
+	k0, ku, kv := survey2d.IvVec3Cross(n, c0), survey2d.IvVec3Cross(n, cu), survey2d.IvVec3Cross(n, cv)
 	for i := range 3 {
-		comp := proofbound.RatAdd(tessellation.IntervalAbsUpper(k0[i]), tessellation.IntervalAbsUpper(ku[i]), tessellation.IntervalAbsUpper(kv[i]))
+		comp := proofbound.RatAdd(proofbound.IntervalAbsUpper(k0[i]), proofbound.IntervalAbsUpper(ku[i]), proofbound.IntervalAbsUpper(kv[i]))
 		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
 	}
 	crossLen, okX := survey2d.IntervalSqrt(proofbound.PointInterval(crossSq))
@@ -330,9 +328,9 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 
 	half := big.NewRat(1, 2)
 	sigmaSq := new(big.Rat).Mul(sigma, sigma)
-	cosMax := tessellation.IntervalAbsUpper(cosH)
+	cosMax := proofbound.IntervalAbsUpper(cosH)
 	kappa := func(d capDirectrix) *big.Rat {
-		return tessellation.IntervalAbsUpper(proofbound.IntervalSub(
+		return proofbound.IntervalAbsUpper(proofbound.IntervalSub(
 			proofbound.IntervalMul(cosH, proofbound.IntervalSub(d.rho, proofbound.PointInterval(tagRadius))),
 			proofbound.IntervalMul(sinH, d.z),
 		))
@@ -465,9 +463,9 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 		return capDirectrix{}, false
 	}
 
-	rel := tessellation.IvVec3Sub(centerIv, origin)
+	rel := survey2d.IvVec3Sub(centerIv, origin)
 	zc := survey2d.IvVec3Dot(rel, ahat)
-	offset, okOff := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
+	offset, okOff := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, zc))))
 	if !okOff {
 		return capDirectrix{}, false
 	}
@@ -482,11 +480,11 @@ func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, o
 		if !ok {
 			return capDirectrix{}, false
 		}
-		relV := tessellation.IvVec3Sub(vIv, origin)
+		relV := survey2d.IvVec3Sub(vIv, origin)
 		zv := survey2d.IvVec3Dot(relV, ahat)
-		rho, okRho := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(tessellation.IvVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
-		armRel := tessellation.IvVec3Sub(vIv, centerIv)
-		arm, okArm := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(tessellation.IvVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
+		rho, okRho := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(relV, survey2d.IvVec3Mul(ahat, zv))))
+		armRel := survey2d.IvVec3Sub(vIv, centerIv)
+		arm, okArm := survey2d.IntervalSqrt(survey2d.IvVec3NormSq(survey2d.IvVec3Sub(armRel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(armRel, ahat)))))
 		if !okRho || !okArm {
 			return capDirectrix{}, false
 		}
@@ -529,8 +527,8 @@ func capRulingSkew(b capPatchBuilt, side, capped capDirectrix, ahat, origin surv
 		if dot.Lo.Sign() <= 0 {
 			return nil, false
 		}
-		cross := survey2d.IvVec3Dot(ahat, tessellation.IvVec3Cross(qs, qc))
-		skew = survey2d.RatMax(skew, new(big.Rat).Quo(tessellation.IntervalAbsUpper(cross), dot.Lo))
+		cross := survey2d.IvVec3Dot(ahat, survey2d.IvVec3Cross(qs, qc))
+		skew = survey2d.RatMax(skew, new(big.Rat).Quo(proofbound.IntervalAbsUpper(cross), dot.Lo))
 	}
 	return skew, true
 }
@@ -542,8 +540,8 @@ func capAxisPerp(p r3.Vec, ahat, origin survey2d.IvVec3) (survey2d.IvVec3, bool)
 	if !ok {
 		return survey2d.IvVec3{}, false
 	}
-	rel := tessellation.IvVec3Sub(pIv, origin)
-	return tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(rel, ahat))), true
+	rel := survey2d.IvVec3Sub(pIv, origin)
+	return survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(rel, ahat))), true
 }
 
 // capAxesParallel decides, in exact arithmetic on the two held vectors alone,
@@ -558,7 +556,7 @@ func capAxesParallel(a, b r3.Vec) bool {
 	if !oka || !okb {
 		return false
 	}
-	cross := tessellation.IvVec3Cross(av, bv)
+	cross := survey2d.IvVec3Cross(av, bv)
 	for _, c := range cross {
 		if c.Lo.Sign() != 0 || c.Hi.Sign() != 0 {
 			return false

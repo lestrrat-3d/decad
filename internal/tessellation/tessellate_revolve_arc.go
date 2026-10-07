@@ -347,7 +347,7 @@ func IntervalAbsSpan(a proofbound.RatInterval) proofbound.RatInterval {
 	if a.Hi.Sign() <= 0 {
 		return proofbound.IntervalNeg(a)
 	}
-	return proofbound.Interval(new(big.Rat), IntervalAbsUpper(a))
+	return proofbound.Interval(new(big.Rat), proofbound.IntervalAbsUpper(a))
 }
 
 var ErrRevolveStationEnclosure = fmt.Errorf(`%w: a revolve meridian chord station states no enclosure of the axis coordinates its record denotes`, decaderr.ErrUnsupported)

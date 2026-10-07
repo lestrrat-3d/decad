@@ -7,11 +7,29 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // Point is a rational-interval enclosure of one plane-local (u, v) point.
 type Point struct{ U, V proofbound.RatInterval }
+
+// InsideSignOf reads a circular wall's walked sense: positive when its
+// material lies inside the circle and negative when it lies outside.
+func InsideSignOf(w survey2d.SideWalk) *big.Rat {
+	if w.Th1 < w.Th0 {
+		return big.NewRat(-1, 1)
+	}
+	return big.NewRat(1, 1)
+}
+
+// CapWallRadiusOffset is the exact cap contour radius change, -insideSign*d.
+// A non-finite setback has no rational offset and returns nil.
+func CapWallRadiusOffset(w survey2d.SideWalk, d float64) *big.Rat {
+	rd := proofarith.FloatRat(d)
+	if rd == nil {
+		return nil
+	}
+	return new(big.Rat).Neg(new(big.Rat).Mul(InsideSignOf(w), rd))
+}
 
 // ExactPoint lifts a pair of float64 coordinates, which are exact rationals.
 func ExactPoint(u, v float64) (Point, bool) {
@@ -567,7 +585,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	w0u := new(big.Rat).Sub(anchorU, cx)
 	w0v := new(big.Rat).Sub(anchorV, cy)
 	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(proofbound.PointInterval(w0u), frame.n.U), proofbound.IntervalMul(proofbound.PointInterval(w0v), frame.n.V))
-	inside := tessellation.InsideSignOf(circle)
+	inside := InsideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
 	delta0 := proofbound.IntervalSub(survey2d.IntervalSquare(proofbound.PointInterval(radius)), survey2d.IntervalSquare(alpha))
@@ -583,7 +601,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	// every tangent-filleted corner in this codebase's own test fixtures —
 	// to be worth the tighter bound.
 	if delta1.Lo.Sign() == 0 && delta1.Hi.Sign() == 0 {
-		nMagUpper := proofbound.RatSqrtUp(tessellation.IntervalAbsUpper(proofbound.IntervalAdd(survey2d.IntervalSquare(frame.n.U), survey2d.IntervalSquare(frame.n.V))))
+		nMagUpper := proofbound.RatSqrtUp(proofbound.IntervalAbsUpper(proofbound.IntervalAdd(survey2d.IntervalSquare(frame.n.U), survey2d.IntervalSquare(frame.n.V))))
 		if proofbound.IsNonFinite(nMagUpper) {
 			return 0, false
 		}
@@ -614,7 +632,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	if sqrtLower <= 0 || proofbound.IsNonFinite(sqrtLower) {
 		return 0, false
 	}
-	delta1Upper := tessellation.IntervalAbsUpper(delta1)
+	delta1Upper := proofbound.IntervalAbsUpper(delta1)
 	delta1UpperF, exact := delta1Upper.Float64()
 	if !exact {
 		delta1UpperF = math.Nextafter(delta1UpperF, math.Inf(1))

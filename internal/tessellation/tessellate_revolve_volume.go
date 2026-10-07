@@ -159,7 +159,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 		return nil, ErrRevolveAngularHomotopy
 	}
 	one := proofbound.PointInterval(big.NewRat(1, 1))
-	sinD, cosD, ok := RadSinCosSpan(d)
+	sinD, cosD, ok := survey2d.RadSinCosSpan(d)
 	if !ok {
 		return nil, ErrRevolveAngularHomotopy
 	}
@@ -172,7 +172,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 	cosAt := make([]proofbound.RatInterval, n+1)
 	for i := int64(0); i <= n; i++ {
 		u := big.NewRat(i, n)
-		sin, cos, ok := RadSinCosSpan(proofbound.IntervalScale(d, u))
+		sin, cos, ok := survey2d.RadSinCosSpan(proofbound.IntervalScale(d, u))
 		if !ok {
 			return nil, ErrRevolveAngularHomotopy
 		}
@@ -188,7 +188,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 			proofbound.IntervalScale(proofbound.IntervalSub(one, cosB), u),
 		))
 		q := proofbound.IntervalSub(proofbound.IntervalMul(sinA, versD), proofbound.IntervalMul(sinD, versA))
-		pAt[i], qAt[i] = IntervalAbsUpper(p), IntervalAbsUpper(q)
+		pAt[i], qAt[i] = proofbound.IntervalAbsUpper(p), proofbound.IntervalAbsUpper(q)
 	}
 
 	bulgeP, bulgeQ := AngularHomotopyBulges(d, n)
@@ -268,6 +268,6 @@ func RevolveCellSweptVolume(lo, hi RevMeridian, angular *big.Rat) *big.Rat {
 		proofbound.IntervalAdd(survey2d.IntervalSquare(lo.RhoIv), survey2d.IntervalSquare(hi.RhoIv)),
 		proofbound.IntervalMul(lo.RhoIv, hi.RhoIv),
 	), third)
-	axial := IntervalAbsUpper(proofbound.IntervalSub(hi.ZIv, lo.ZIv))
-	return new(big.Rat).Mul(new(big.Rat).Mul(axial, IntervalAbsUpper(quad)), angular)
+	axial := proofbound.IntervalAbsUpper(proofbound.IntervalSub(hi.ZIv, lo.ZIv))
+	return new(big.Rat).Mul(new(big.Rat).Mul(axial, proofbound.IntervalAbsUpper(quad)), angular)
 }

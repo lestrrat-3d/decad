@@ -29,6 +29,18 @@ func IvVec3Add(a, b IvVec3) IvVec3 {
 	return IvVec3{proofbound.IntervalAdd(a[0], b[0]), proofbound.IntervalAdd(a[1], b[1]), proofbound.IntervalAdd(a[2], b[2])}
 }
 
+func IvVec3Sub(a, b IvVec3) IvVec3 {
+	return IvVec3{proofbound.IntervalSub(a[0], b[0]), proofbound.IntervalSub(a[1], b[1]), proofbound.IntervalSub(a[2], b[2])}
+}
+
+func IvVec3Cross(a, b IvVec3) IvVec3 {
+	return IvVec3{
+		proofbound.IntervalSub(proofbound.IntervalMul(a[1], b[2]), proofbound.IntervalMul(a[2], b[1])),
+		proofbound.IntervalSub(proofbound.IntervalMul(a[2], b[0]), proofbound.IntervalMul(a[0], b[2])),
+		proofbound.IntervalSub(proofbound.IntervalMul(a[0], b[1]), proofbound.IntervalMul(a[1], b[0])),
+	}
+}
+
 func IvVec3Mul(a IvVec3, s proofbound.RatInterval) IvVec3 {
 	return IvVec3{proofbound.IntervalMul(a[0], s), proofbound.IntervalMul(a[1], s), proofbound.IntervalMul(a[2], s)}
 }
@@ -81,6 +93,21 @@ func RadSinCosInterval(x *big.Rat) (proofbound.RatInterval, proofbound.RatInterv
 	sin, cos, ok := radSinCosIntervalUncached(x)
 	radSinCosMemo.put(key, radSinCosEntry{sin: sin, cos: cos, ok: ok})
 	return sin, cos, ok
+}
+
+// RadSinCosSpan encloses sine and cosine over a rational radian interval.
+// Both functions are 1-Lipschitz, so the interval width widens the reading
+// at its lower endpoint without assuming monotonicity over the span.
+func RadSinCosSpan(x proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
+	width := new(big.Rat).Sub(x.Hi, x.Lo)
+	if width.Sign() < 0 {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	sin, cos, ok := RadSinCosInterval(x.Lo)
+	if !ok {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	return IntervalWiden(sin, width), IntervalWiden(cos, width), true
 }
 
 // radSinCosMemoCap bounds the memo. The whole apitest suite reads about nine

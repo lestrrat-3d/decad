@@ -45,7 +45,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 	t.Parallel()
 	// An arc states three pinned points and no angle at all, so its station goes
-	// through proofbound.Atan2Interval and tessellation.RadSinCosSpan. The enclosure is wider than a
+	// through proofbound.Atan2Interval and survey2d.RadSinCosSpan. The enclosure is wider than a
 	// circle's, but it is finite and it is positive — never a silent zero.
 	seg := ArcSeg{
 		Center: Point2{U: 0, V: 0},
