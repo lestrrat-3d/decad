@@ -99,7 +99,7 @@ meshes decad tessellates.
 <strong>Shell</strong> hollows a solid into a wall of one thickness.
 </td>
 <td>
-<img src="docs/images/features/boolean.gif" alt="A central bore and two bolt holes are cut into a flange" width="320"><br>
+<img src="docs/images/features/boolean.gif" alt="Three cylinders lower together through a box, cutting a central bore and two bolt holes" width="320"><br>
 <strong>Union, Cut and Intersect</strong> combine two bodies explicitly, never folded into a feature.
 </td>
 </tr>

@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"image/png"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,7 +78,11 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 		if err != nil {
 			return err
 		}
-		err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
+		if name == "boolean" && len(models) > 1 {
+			err = renderBooleanFrame(ctx, file, scene)
+		} else {
+			err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
+		}
 		closeErr := file.Close()
 		if err != nil {
 			return err
@@ -109,6 +115,33 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 	}
 	fmt.Fprintf(os.Stderr, "%s: %s\n", name, output)
 	return nil
+}
+
+// renderBooleanFrame blends the cutters over the plate so the holes remain
+// visible while all three tools pass through them.
+func renderBooleanFrame(ctx context.Context, writer io.Writer, scene solidlens.Scene) error {
+	settings := solidlens.Settings{Width: 480, Height: 360}
+	plateScene := scene
+	plateScene.Models = scene.Models[:1]
+	plate, err := solidlens.Render(ctx, plateScene, settings)
+	if err != nil {
+		return err
+	}
+	toolScene := scene
+	toolScene.Models = scene.Models[1:]
+	toolScene.Background = solidlens.Color{}
+	tools, err := solidlens.Render(ctx, toolScene, settings)
+	if err != nil {
+		return err
+	}
+	for offset := 0; offset < len(plate.Pix); offset += 4 {
+		alpha := 0.45 * float64(tools.Pix[offset+3]) / 255
+		for channel := range 3 {
+			plate.Pix[offset+channel] = uint8(float64(plate.Pix[offset+channel])*(1-alpha) +
+				float64(tools.Pix[offset+channel])*alpha + 0.5)
+		}
+	}
+	return png.Encode(writer, plate)
 }
 
 func featureAnimationModels(ctx context.Context, name string, stage int, chord units.Value) ([]solidlens.Model, error) {
@@ -182,22 +215,7 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		}
 		return oneModel(ctx, body, blue, chord)
 	case "boolean":
-		shape := flangeShape{height: flangeThickness, depths: map[string]float64{}}
-		for i, drill := range drills {
-			start := i * featureAnimationSteps / len(drills)
-			local := stage - start
-			switch {
-			case local >= featureAnimationSteps/len(drills)-1:
-				shape.depths[drill.name] = flangeThickness + holeClearance
-			case local > 0:
-				shape.depths[drill.name] = float64(local) * 2.3
-			}
-		}
-		body, err := flangeBody(ctx, shape)
-		if err != nil {
-			return nil, err
-		}
-		return oneModel(ctx, body, violet, chord)
+		return booleanAnimationModels(ctx, stage, chord)
 	case "verify":
 		return verifyAnimationModels(ctx, stage, chord)
 	case "surface":
@@ -209,6 +227,63 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 	default:
 		return nil, fmt.Errorf("unknown feature %q", name)
 	}
+}
+
+// booleanAnimationModels lowers all three cutters together, then lifts them
+// away to leave the completed flange in view.
+func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) ([]solidlens.Model, error) {
+	const (
+		plungeEnd      = 14
+		withdrawEnd    = 21
+		startBottom    = 30.0
+		endBottom      = -holeClearance
+		withdrawBottom = 80.0
+		toolLength     = 48.0
+	)
+
+	bottom := startBottom
+	if stage <= plungeEnd {
+		bottom += (endBottom - startBottom) * float64(stage) / plungeEnd
+	} else {
+		bottom = endBottom + (withdrawBottom-endBottom)*float64(stage-plungeEnd)/(withdrawEnd-plungeEnd)
+	}
+
+	shape := flangeShape{height: flangeThickness, depths: make(map[string]float64, len(drills))}
+	if stage <= plungeEnd && bottom < flangeThickness {
+		for _, d := range drills {
+			shape.depths[d.name] = flangeThickness - bottom
+		}
+	} else if stage > plungeEnd {
+		shape = throughFlange()
+	}
+	plate, err := flangeBody(ctx, shape)
+	if err != nil {
+		return nil, err
+	}
+	models, err := oneModel(ctx, plate, violet, chord)
+	if err != nil || stage >= withdrawEnd {
+		return models, err
+	}
+
+	w := sketch.NewWorld()
+	doc := decad.New()
+	plane, err := w.CreateOffsetPlane(w.XY(), bottom)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range drills {
+		tool, err := cylinder(ctx, doc, w, plane, point{d.x, 0}, d.radius,
+			decad.Distance{D: units.Millimeters(toolLength), Dir: decad.Along})
+		if err != nil {
+			return nil, err
+		}
+		toolModels, err := oneModel(ctx, tool, gold, chord)
+		if err != nil {
+			return nil, err
+		}
+		models = append(models, toolModels...)
+	}
+	return models, nil
 }
 
 func verifyAnimationModels(ctx context.Context, stage int, chord units.Value) ([]solidlens.Model, error) {
