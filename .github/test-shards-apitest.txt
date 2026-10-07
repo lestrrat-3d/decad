@@ -593,6 +593,12 @@
 2	0.02	TestPatternCopiesNonCoDirectional
 2	0.02	TestPatternCopiesStacked
 2	0.02	TestPatternCopiesUnionStack
+2	0.05	TestPatternedCircularGroup
+2	0.05	TestPatternedFallsBackToUnion
+2	0.05	TestPatternedGates
+2	0.05	TestPatternedLinearGroup
+2	0.05	TestPatternedNHoleCut
+2	0.05	TestPatternedRefusesDisjointStacks
 2	0.00	TestPlaced
 2	0.00	TestPlacedCopy
 2	0.00	TestPlacedCopyPreservesChamferRoles

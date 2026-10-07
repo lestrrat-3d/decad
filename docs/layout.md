@@ -99,7 +99,7 @@ the rules leave to the byte budget.
 | `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
 | `mirror_join.go` | `WithJoin`: the mirror join's admission, exact reflection, record splice and audit. See `docs/mirror-pattern-design.md` §5. |
-| `pattern.go` | `PatternCopies` and its specs: frame-keeping instance records with `δ_pattern`, or `PlacedCopy`. See `docs/mirror-pattern-design.md` §6.2. |
+| `pattern.go` | `PatternCopies`, `Patterned`, specs: frame-keeping records with `δ_pattern`, or `PlacedCopy`. See `docs/mirror-pattern-design.md` §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
