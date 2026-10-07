@@ -1391,3 +1391,6 @@
 3	4.48	TestVerifyLinkageLoopScotchYoke
 0	0.25	TestVerifyLinkageLoopTrammel
 3	0.64	TestVerifyJointBoxLoopSlides
+3	0.16	TestVerifyMotionProjectionScrewSlide
+3	0.01	TestVerifyMotionProjectionAlongAWall
+3	0.50	TestVerifyMotionProjectionPendulum

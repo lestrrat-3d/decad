@@ -301,13 +301,16 @@ func TestVerifyMotionClearSwingEndpoints(t *testing.T) {
 }
 
 // TestVerifyMotionClearSwingBisected is §9 test 2's bisected part: the same
-// swing refined on the dyadic grid of 90°. A certified interval's Clearance
-// sits below the true gap by up to τ/2 = 25 mm × Δθ, so the whole-path
-// reading's half-width is about 12.5 mm × Δθ against a gate of 0.01 mm at
-// rel = 1e-3 on the 10 mm minimum: WithResolution(0.01°) reaches it, the
-// default floor of 90°/1024 does not.
+// swing refined on the dyadic grid of 90°. Under the travel bound a certified
+// interval's Clearance sits below the true gap by up to τ/2 = 25 mm × Δθ, so
+// the whole-path reading's half-width is about 12.5 mm × Δθ against a gate of
+// 0.01 mm at rel = 1e-3 on the 10 mm minimum: WithResolution(0.01°) reaches
+// it. The projection bound (§5.2) sits about ½·50·Δθ² below the flat minimum,
+// so the default floor of 90°/1024 reaches it too, and a gate of 1e-6 mm at
+// rel = 1e-7 is past it.
 //
-// Legs seen to fail when deleted: refinement for the reading (the 0.01° run's
+// Legs seen to fail when deleted: the projection bound (the default floor's
+// reading stays beyond tolerance); refinement for the reading (the 0.01° run's
 // Clearance stays coarse and fails the gate); refinement for the margin (under
 // the loose gate the 9 mm margin stays undecided); and the halving of the
 // lower envelope's minimum (interval lower bounds rise above their endpoints'
@@ -406,10 +409,21 @@ func TestVerifyMotionClearSwingBisected(t *testing.T) {
 		require.Equal(t, decad.ReadingGap, undecided[0].Reading)
 		require.Less(t, undecided[0].Observed.Value.Mag(), 10.0)
 	})
-	t.Run("the default floor leaves the reading beyond tolerance", func(t *testing.T) {
+	t.Run("the default floor closes the reading", func(t *testing.T) {
 		t.Parallel()
 		report := run(t)
 		require.Equal(t, units.Degrees(90.0/1024), report.Request.Resolution)
+		requireLowerBounds(t, report)
+		require.Equal(t, decad.Sound, report.Status)
+		require.Empty(t, report.Diagnostics)
+		require.NotNil(t, report.Clearance)
+		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+		require.LessOrEqual(t, report.Clearance.Value.Mag()-report.Clearance.Bound.Mag(), 10.0)
+		require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 10.0)
+	})
+	t.Run("a tolerance finer than the floor's reading leaves it beyond tolerance", func(t *testing.T) {
+		t.Parallel()
+		report := run(t, decad.WithMotionTolerance(units.Scalar(1e-7)))
 		requireLowerBounds(t, report)
 		require.Equal(t, decad.Suspect, report.Status, `Sound in verdict, but the reading is coarse`)
 		require.NotNil(t, report.Clearance)

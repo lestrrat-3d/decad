@@ -542,7 +542,7 @@ type motionPlaced struct {
 // compares the static bodies against.
 func (r *motionRun) setup(moving []*Body) {
 	r.dom = r.spec.motionDomain
-	r.drive = singleMotion{r: r}
+	r.drive = &singleMotion{r: r}
 	r.readBodies([][]*Body{moving})
 	r.stretch, r.stretchEnd = 1, 1
 	if r.spec.kind == motionbound.MotionBetween {
@@ -670,10 +670,22 @@ func (r *motionRun) partner(i, k int) *Body {
 	return r.statics[k].body
 }
 
-// singleMotion drives VerifyMotion's one group along its Motion.
-type singleMotion struct{ r *motionRun }
+// singleMotion drives VerifyMotion's one group along its Motion. points
+// keeps each mover's projection reading at each pose, read once.
+type singleMotion struct {
+	r      *motionRun
+	points map[motionPointsKey]cornerBounds
+}
 
-func (m singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
+// motionPointsKey names one mover's projection reading at one pose: its box
+// corners, or its hull points.
+type motionPointsKey struct {
+	pose  *motionPose
+	mover int
+	hull  bool
+}
+
+func (m *singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
 	r := m.r
 	pose, err := r.spec.motion.PoseAt(at)
 	if err != nil {
@@ -693,13 +705,165 @@ func (m singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.Moti
 
 // travel is τ of docs/motion-check-design.md §5.2 for mover i: every pair of
 // one group's mover has a static partner, which does not move.
-func (m singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
+func (m *singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
 	return motionbound.MoverTravel(m.r.spec.frame, m.r.movers[i].rho, a, b)
 }
 
-// projection is nil: VerifyMotion certifies an interval by the travel bound
-// alone (docs/linkage-check-design.md §5.8).
-func (singleMotion) projection(int, int, *motionPose, *motionPose) *big.Rat { return nil }
+// projection is the projection bound of docs/linkage-check-design.md §5.8
+// for pair k of mover i over the interval between poses a and b, the motion
+// read as one joint whose value is the motion's parameter
+// (docs/motion-check-design.md §5.2): the mover's points — its box corners,
+// then its hull points — posed at each end and expanded to second order in
+// the parameter along the interval's own step, the static partner's points
+// as they stand. The parameter is affine in the fraction over the whole path,
+// so the segment term always serves. It is the largest bound any end and
+// reading gives, nil when none can be read.
+func (m *singleMotion) projection(i, k int, a, b *motionPose) *big.Rat {
+	r := m.r
+	if r.pairs[i][k].other >= 0 {
+		// Unreachable: VerifyMotion moves one group, whose movers pair only
+		// with static bodies.
+		return nil
+	}
+	span := a.param.SpanUpper(b.param)
+	step, ok := motionStep(a.param, b.param)
+	if !ok {
+		return nil
+	}
+	var best *big.Rat
+	for _, hull := range []bool{false, true} {
+		partner, ok := m.staticPoints(k, hull)
+		if !ok {
+			continue
+		}
+		for n, end := range []*motionPose{a, b} {
+			mine, ok := m.moverPoints(end, i, hull)
+			if !ok {
+				continue
+			}
+			rem := m.remainder(i, span)
+			if rem == nil && r.spec.frame.Kind != motionbound.MotionPrismatic {
+				continue
+			}
+			side := projectionSide{corners: mine, h: []*big.Rat{span}, seg: stepsFrom([]proofbound.RatInterval{step}, n == 1), rem: rem}
+			var l *big.Rat
+			if hull {
+				l = projectionLowerHull(side, projectionSide{corners: partner})
+			} else {
+				l = projectionLower(side, projectionSide{corners: partner})
+			}
+			if l != nil && (best == nil || l.Cmp(best) > 0) {
+				best = l
+			}
+		}
+	}
+	return best
+}
+
+// motionStep is the parameter's signed change from a to b, 2π·Δturn + Δbase
+// with π over its enclosure, widened to the floats around it.
+func motionStep(a, b motionbound.MotionParam) (proofbound.RatInterval, bool) {
+	turn := new(big.Rat).Sub(b.Turn, a.Turn)
+	base := new(big.Rat).Sub(b.Base, a.Base)
+	return roundOut(proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base)))
+}
+
+// remainder is Rem = ½·B·h² of docs/linkage-check-design.md §5.8 for mover
+// i over a parameter span h (docs/motion-check-design.md §5.2): B bounds
+// the second derivative of every point's position in the parameter, a
+// point's distance from the axis — at most ρ_max, read from the box that
+// holds every hull point too — per radian² for a Revolute, θ² times it for a
+// Between, and nothing for a Prismatic, which moves every point along a
+// straight line. nil when ρ_max is not finite, or for a Prismatic.
+func (m *singleMotion) remainder(i int, h *big.Rat) *big.Rat {
+	f := m.r.spec.frame
+	if f.Kind == motionbound.MotionPrismatic {
+		return nil
+	}
+	w := proofarith.FloatRat(m.r.movers[i].rho)
+	if w == nil {
+		return nil
+	}
+	if f.Kind == motionbound.MotionBetween {
+		theta := paramUpper(f.Theta)
+		w.Mul(w, theta.Mul(theta, theta))
+	}
+	rem := new(big.Rat).Mul(h, h)
+	rem.Mul(rem, w)
+	return rem.Quo(rem, big.NewRat(2, 1))
+}
+
+// moverPoints is mover i's projection reading at a pose: its points posed by
+// the motion's ideal pose there, each with its velocity per unit of the
+// parameter — k × (x − c) per radian for a Revolute, the unit direction per
+// millimetre for a Prismatic, θ·k × (x − c) + d·k per unit fraction for a
+// Between — rounded outward, read once and kept.
+func (m *singleMotion) moverPoints(pose *motionPose, i int, hull bool) (cornerBounds, bool) {
+	key := motionPointsKey{pose: pose, mover: i, hull: hull}
+	if got, ok := m.points[key]; ok {
+		return got, true
+	}
+	points, ok := bodyPoints(m.r.movers[i].body, hull)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	f := m.r.spec.frame
+	ideal := f.At(pose.param)
+	var unit motionbound.IvVec
+	for d := range 3 {
+		unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
+	}
+	centre := motionbound.PointVec(f.Center)
+	for c := range points.pos {
+		x := applyIdeal(ideal, points.pos[c])
+		points.pos[c] = x
+		var v motionbound.IvVec
+		switch f.Kind {
+		case motionbound.MotionPrismatic:
+			v = unit
+		case motionbound.MotionRevolute:
+			v = ivCross(unit, motionbound.IvVecSub(x, centre))
+		default:
+			theta := proofbound.IntervalOwned(paramLower(f.Theta), paramUpper(f.Theta))
+			turn := ivCross(unit, motionbound.IvVecSub(x, centre))
+			for d := range 3 {
+				v[d] = proofbound.IntervalAdd(proofbound.IntervalMul(turn[d], theta), proofbound.IntervalScale(unit[d], f.Slide))
+			}
+		}
+		points.vel[c] = []motionbound.IvVec{v}
+	}
+	reading, ok := roundCorners(points)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	if m.points == nil {
+		m.points = make(map[motionPointsKey]cornerBounds)
+	}
+	m.points[key] = reading
+	return reading, true
+}
+
+// staticPoints is static body k's projection reading: its box corners, or
+// its hull points.
+func (m *singleMotion) staticPoints(k int, hull bool) (cornerBounds, bool) {
+	key := motionPointsKey{mover: -1 - k, hull: hull}
+	if got, ok := m.points[key]; ok {
+		return got, true
+	}
+	points, ok := bodyPoints(m.r.statics[k].body, hull)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	reading, ok := roundCorners(points)
+	if !ok {
+		return cornerBounds{}, false
+	}
+	if m.points == nil {
+		m.points = make(map[motionPointsKey]cornerBounds)
+	}
+	m.points[key] = reading
+	return reading, true
+}
 
 // maxRat is the larger of two optional rationals; a nil (unbounded) operand
 // wins.
