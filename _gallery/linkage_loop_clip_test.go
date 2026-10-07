@@ -13,12 +13,13 @@ import (
 )
 
 // These tests run the crank-rocker, a closed loop, through the real
-// producers and the real viewer: decad's VerifyLinkage and Schedule, the
-// clip's schedule tracks, and two rendered frames.
+// producers and the real viewer: decad's VerifyLinkage and Schedule,
+// kinetograph's schedule tracks (Scene.AddSchedule), and two rendered frames.
 //
-// Each leg was seen red by breaking what it guards: a track reading
-// Linkage.PoseAt's link order shifted by one fails the bit-identical pose leg;
-// and a hit colour of gold fails the pixel leg at frame 36.
+// Each leg was seen red by breaking what it guards: the schedule tracks read
+// through a drive fraction perturbed to 1 + 1e-12 at the drive's end fail the
+// bit-identical pose leg at frame 1; and a hit colour of gold fails the pixel
+// leg at frame 36.
 
 // TestLinkageLoopClipMatchesSchedule asserts that every link's part in the
 // crank-rocker's clip takes exactly the transform the scene's Schedule
