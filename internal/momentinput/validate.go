@@ -46,9 +46,6 @@ var (
 func ScaleForValidation(profile Profile, anchor Point2) (Profile, error) {
 	return scaleMomentRecordForValidation(profile, anchor)
 }
-func ValidateSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, Plan, error) {
-	return validateMomentSegment(segment, work)
-}
 func ValidateFreeformSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, Plan, error) {
 	return validateFreeformMomentSegment(segment, work)
 }

@@ -43,7 +43,7 @@ type momentPreflight struct {
 	// Storage sized by the recorded segment count would be forced by an
 	// untrusted record ahead of the first per-segment charge, which is the one
 	// thing that can refuse it.
-	plans map[[2]int]freeformPlan
+	plans map[[2]int]momentinput.Plan
 	// work is the record's own work state, still open — and it is the
 	// OPERATION's where one was handed in, so a caller that spent part of either
 	// ceiling on this record earlier reads what is left rather than a fresh one
@@ -82,11 +82,6 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 	return profileFromMoment(scaled), err
 }
 
-func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
-	checked, start, plan, err := momentinput.ValidateSegment(segment, work)
-	return checked, start, freeformPlan{spans: plan.Spans, reversed: plan.Reversed}, err
-}
-
 func validateFreeformMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	checked, start, plan, err := momentinput.ValidateFreeformSegment(segment, work)
 	return checked, start, freeformPlan{spans: plan.Spans, reversed: plan.Reversed}, err
@@ -104,7 +99,8 @@ func normalizeReconstructionWeights(record ProfileRecord) ProfileRecord {
 // the preflight recorded no plan for — every line, arc and circle — reads the
 // zero plan, which is what the moments pass integrates from its own closed form.
 func (p momentPreflight) planAt(loopIndex, segmentIndex int) freeformPlan {
-	return p.plans[[2]int{loopIndex, segmentIndex}]
+	plan := p.plans[[2]int{loopIndex, segmentIndex}]
+	return freeformPlan{spans: plan.Spans, reversed: plan.Reversed}
 }
 
 // validateMomentRecord normalizes and checks the fields the integrator reads,
@@ -262,121 +258,18 @@ func validateMomentFieldsContext(ctx context.Context, work *freeform.FreeformWor
 	return validateMomentFieldsWithPoll(ctx.Err, record, work)
 }
 
-// work holds the counters this record spends. It is a parameter rather than a
-// local because each ceiling is the RECORD's across a whole operation: an
-// evaluator that already charged this record's conversion passes the same work
-// state back in, so a later phase spends what is left instead of a fresh ceiling.
 func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work *freeform.FreeformWork) (momentPreflight, error) {
-	loops := append([]LoopRecord{record.Outer}, record.Holes...)
-	normalized := make([]LoopRecord, len(loops))
-	// Plan storage is minted on the first segment that converts, so a record
-	// naming none allocates none (see momentPreflight.plans).
-	var plans map[[2]int]freeformPlan
-	if work == nil {
-		// One work state for the whole record: each ceiling bounds the record's
-		// total work in its own cost model, never each segment's own.
-		work = freeform.NewFreeformWork()
-	}
-	var anchor Point2
-	freeform := false
-	for loopIndex := range normalized {
-		if poll != nil {
-			if err := poll(); err != nil {
-				return momentPreflight{}, err
-			}
-		}
-		loop := record.Outer
-		if loopIndex > 0 {
-			loop = record.Holes[loopIndex-1]
-		}
-		if len(loop.Segments) == 0 {
-			return momentPreflight{}, fmt.Errorf(
-				`decad: profile loop %d is invalid: %w: a recorded loop holds no segments`,
-				loopIndex,
-				ErrDegenerate,
-			)
-		}
-		normalized[loopIndex].Segments = make([]CurveSegment, len(loop.Segments))
-		for segmentIndex, segment := range loop.Segments {
-			if poll != nil {
-				if err := poll(); err != nil {
-					return momentPreflight{}, err
-				}
-			}
-			checked, start, plan, err := validateMomentSegment(segment, work)
-			if err != nil {
-				return momentPreflight{}, fmt.Errorf(
-					`decad: profile loop %d segment %d is invalid: %w`,
-					loopIndex,
-					segmentIndex,
-					err,
-				)
-			}
-			normalized[loopIndex].Segments[segmentIndex] = checked
-			if len(plan.spans) > 0 {
-				if plans == nil {
-					plans = make(map[[2]int]freeformPlan)
-				}
-				plans[[2]int{loopIndex, segmentIndex}] = plan
-			}
-			freeform = freeform || isFreeformSegment(checked)
-			if loopIndex == 0 && segmentIndex == 0 {
-				anchor = start
-			}
-		}
-	}
-	pre := momentPreflight{
-		record: ProfileRecord{Outer: normalized[0], Holes: normalized[1:]},
-		anchor: anchor,
-		plans:  plans,
-		work:   work,
-	}
-	if !freeform {
-		return pre, nil
-	}
-	// The reconstruction's charge is the record's, so it is levied here — once,
-	// over the whole scene that pass will arrange — rather than per segment. It
-	// comes after the per-segment charges because those bound the conversion each
-	// segment has ALREADY run above, and it comes before validateMomentRecord asks
-	// sketch anything at all, which is what the ceiling is for: the public
-	// ProfileRecord methods take no context, so a charge levied after the
-	// reconstruction bounds nothing it was added to bound.
-	//
-	// The placement is checkable, and the claim is that every charge precedes the
-	// arrangement it pays for. This record-wide charge sits ahead of both
-	// arrangements validation always runs; each candidate's own re-arrangement is
-	// charged immediately before its RecordProfile call
-	// (momentRecordMatchesSketch); and every free-form conversion is charged
-	// before its rational lift (spline_bezier.go). What runs AHEAD of this charge
-	// is the loop above, and each segment in it levies its own size-derived linear
-	// floor before scanning its own arrays, so that loop is bounded by this same
-	// ceiling rather than excluded from it. Its ORDER is what
-	// docs/spline-design.md §5.2 requires: a segment's tier is decided before its
-	// CONVERSION charge, so hoisting a record-wide charge ahead of per-segment
-	// validation would hand a valid rational NURBS the R7 ceiling instead of its
-	// own Table R reason.
-	//
-	// A record with a large analytic prefix is expensive on its own account, not
-	// because of this charge. 500,000 line segments plus one minimal spline take
-	// 2.641 s and 1,976,749 KiB here, against 2.541 s and 1,961,167 KiB with this
-	// charge removed, and either way the refusal lands at the same trailing
-	// segment after the same full scan. That cost is extrude.go's lineWalkBounds
-	// doing big.Rat arithmetic through walkOf, once per segment, which no charge
-	// placement here changes. An analytic-only record returns above without
-	// levying this charge, and validateMomentRecord levies the identical amount
-	// on the identical counter instead. That split is not a second ceiling — only
-	// one of the two ever fires for a given record. Its reason is the exact
-	// whole-circle certificate, which validateMomentRecord answers from disk
-	// containment alone and which runs no arrangement at all, so charging it here
-	// would refuse a record no reconstruction ever reads. No free-form record can
-	// reach that certificate, so the free-form charge stays here, where it also
-	// covers an evaluator preflight that never calls validateMomentRecord.
-	arrangement, err := chargeReconstruction(pre.record, work)
+	pre, err := momentinput.ValidateFieldsWithPoll(poll, momentProfile(record), work)
 	if err != nil {
-		return momentPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)
+		return momentPreflight{}, err
 	}
-	pre.arrangement = arrangement
-	return pre, nil
+	return momentPreflight{
+		record:      profileFromMoment(pre.Record),
+		anchor:      pre.Anchor,
+		plans:       pre.Plans,
+		work:        pre.Work,
+		arrangement: pre.Arrangement,
+	}, nil
 }
 
 // momentRecordMatchesSketch asks sketch whether the recorded segments form the
