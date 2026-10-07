@@ -239,12 +239,9 @@ func point2SeparationUpper(a, b sectionrecord.Point2) float64 {
 	return boundarywalk.RatL1Upper(new(big.Rat).Sub(bu, au), new(big.Rat).Sub(bv, av))
 }
 
-// HasSplitBoundary reports whether sketch narrowed any
-// arranged boundary edge. Such a cut falls back before recordEdge can publish
-// a trim when either source carries a section displacement, either source
-// carries a walk charge, or B's re-expression is nonidentity — any one of the
-// three alone — because that uncertainty may be amplified by the crossing
-// angle (prism-boolean-design §3.4, §7).
+// HasSplitBoundary reports whether sketch narrowed any arranged boundary
+// edge: whether the arrangement cut anything, which is where an input
+// displacement can be amplified by a crossing angle (CrossingCharge).
 func HasSplitBoundary(budget *proofbound.WorkBudget, profiles []*sketch.Profile) (bool, error) {
 	for _, profile := range profiles {
 		if err := budget.Step(); err != nil {

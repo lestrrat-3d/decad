@@ -633,12 +633,12 @@
 3	0.00	TestPrismUnionArrangementCapRejectsLargeLineOnlyScene
 3	0.00	TestPrismUnionChargesEachWalkExactlyOnce
 3	0.00	TestPrismUnionCleanOperandsMergedLoopClosesExactly
-3	0.00	TestPrismUnionDisplacedSourceSplitFallsBack
+3	0.00	TestPrismUnionDisplacedSourceSplitChargesTheCrossing
 3	0.00	TestPrismUnionMergedLoopJunctionsClose
 3	0.00	TestPrismUnionPreservesEndDisplacements
-3	0.00	TestPrismUnionReexpressedSplitFallsBack
+3	0.00	TestPrismUnionReexpressedSplitChargesTheCrossing
 3	0.00	TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint
-3	0.00	TestPrismUnionTrimmedSourceSplitBoundaryFallsBack
+3	0.00	TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing
 3	0.00	TestPrismWallAnalyticSectionRegression
 3	0.00	TestPrismWallFreeformSectionPropagatesCancellation
 3	0.00	TestPrismWallSubToleranceWebIsUndecided

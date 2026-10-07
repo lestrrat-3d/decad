@@ -371,8 +371,8 @@ func TestMotionCollisionTransferWidensTheBound(t *testing.T) {
 // refuses to call a collision. A 0.008 mm-deep corner overlap at a pivot
 // 2e9 mm away is measured positive at the float pose, but its proven lower
 // end does not clear the allowance the pose's η charges; and an overlap the
-// read-only proof cannot measure at all — the block sharing the arm's cap
-// planes, a contact it refuses — has no volume to carry. Each reads
+// read-only proof cannot measure at all — a revolved block sharing the
+// arm's cap planes, a contact it refuses — has no volume to carry. Each reads
 // DiagUndecidedInterference at the pose, never a Collision, and leaves the
 // interval undecided.
 //
@@ -413,7 +413,22 @@ func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
 		t.Parallel()
 		doc := New()
 		arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
-		block := internalBoxBody(t, doc, -100, 40, 100, 60, 10)
+		// A revolved disc of radius 8 about (25, 40): G1 keeps a revolve off
+		// the analytic paths, so the shared cap planes reach the mesh path's
+		// coplanar refusal.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XZ())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 8, 10)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		disc, err := doc.Revolve(s, s.Profiles()[0], SketchLine{End: Point2{V: 1}}, FullRevolution{})
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.NewVec(25, 40, 0))
+		require.NoError(t, err)
+		block, err := disc.Placed(t.Context(), move)
+		require.NoError(t, err)
 		swing := Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(45)}
 		requireUndecided(t, doc, arm, block, swing)
 	})

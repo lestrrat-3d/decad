@@ -84,16 +84,10 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 		z1:      target.z1,
 		z0Delta: target.z0Delta,
 		z1Delta: target.z1Delta,
-		// §7's formula, unchanged from Union's own: this path assembles a
-		// merged loop exactly like Union's, so it carries the same four
-		// displacement terms, cutDelta included.
-		sectionDelta: proofbound.AbsSumUpper(
-			max(
-				proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-				proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
-			),
-			cutDelta,
-		),
+		// §7's formula with A6's crossing term, Union's own: this path
+		// assembles a merged loop exactly like Union's, so it carries the
+		// same displacement terms, cutDelta and the crossing charge included.
+		sectionDelta: sceneDelta.merged(target, tool, reexpress, cutDelta),
 	}
 	return result, true, nil
 }
@@ -129,30 +123,24 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
 
 	result := prismPayload{
-		profile: merged,
-		frame:   pa.frame,
-		xform:   pa.xform,
-		z0:      z0,
-		z1:      z1,
-		z0Delta: z0Delta,
-		z1Delta: z1Delta,
-		sectionDelta: proofbound.AbsSumUpper(
-			max(
-				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
-				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
-			),
-			cutDelta,
-		),
+		profile:      merged,
+		frame:        pa.frame,
+		xform:        pa.xform,
+		z0:           z0,
+		z1:           z1,
+		z0Delta:      z0Delta,
+		z1Delta:      z1Delta,
+		sectionDelta: sceneDelta.merged(pa, pb, reexpress, cutDelta),
 	}
 	return result, true, nil
 }
 
 // resolvePrismCrossing is the shared resolution shape behind both builders
-// above: resolvePrismCrossingCells's selection (scene, split-boundary reroute,
-// classification, per-op keep), then mergePrismCells's assembly
+// above: resolvePrismCrossingCells's selection (scene, classification,
+// per-op keep, crossing charge), then mergePrismCells's assembly
 // (prism_boolean.go). resolved=false (err always nil in that case) is silent
-// fallback throughout — every check here runs before §3.4's point of no
-// return. opName feeds mergePrismCells's own RB1 message.
+// fallback. A near-tangent crossing A6's charge refuses is a genuine error.
+// opName feeds mergePrismCells's own RB1 message.
 func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
@@ -174,9 +162,9 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 
 // resolvePrismCrossingCells is §4.2's crossing sub-case selection alone, the
 // first half of resolvePrismCrossing's own shape: build the private scene,
-// apply §3.4's split-boundary reroute (identical to Union's and the
-// clean-nesting path's own), classify every cell (prismcells.Classify), and
-// select the op's own subset (keep) — stopping short of mergePrismCells's
+// classify every cell (prismcells.Classify), select the op's own subset
+// (keep), and charge every crossing the operands' incoming displacement can
+// move (A6, prismSceneDelta.chargeCrossings) — stopping short of mergePrismCells's
 // assembly tail, which requires the selected cells to chain into one closed
 // loop and so cannot answer a multi-region selection at all
 // (docs/prism-boolean-design.md §4.4). resolvePrismCrossing above is this
@@ -184,8 +172,9 @@ func resolvePrismCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa
 // (prismOverlapVolume, prism_overlap.go) is the second, sharing this exact
 // selection so it never re-derives §4.2's classification.
 //
-// resolved=false (err always nil in that case) is silent fallback throughout
-// (§4.4) — every check here runs before §3.4's point of no return.
+// resolved=false (err always nil in that case) is silent fallback (§4.4). A
+// crossing the charge refuses as too close to tangent is a genuine
+// ErrUnsupported.
 func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool) (selected []*sketch.Profile, sceneDelta prismSceneDelta, resolved bool, err error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
@@ -204,21 +193,6 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 	if len(profiles) == 0 {
 		return nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
-		if err != nil {
-			return nil, prismSceneDelta{}, false, err
-		}
-		if split {
-			// Mirrors Union's and the clean-nesting path's own reroute
-			// (§3.4): a coordinate error in re-expressed B, either source
-			// section's existing displacement, or either operand's own walk
-			// charge can move a crossing by delta/sin(theta), which this
-			// increment has no certified lower bound for.
-			return nil, prismSceneDelta{}, false, nil
-		}
-	}
-
 	matterA, matterB, resolved, err := prismcells.Classify(budget, tags, profiles)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
@@ -229,6 +203,13 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 
 	selected, err = prismcells.Select(budget, profiles, matterA, matterB, keep)
 	if err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	// docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
+	// operands' incoming displacement can move is charged, or the pair is
+	// refused as too close to tangent. It runs once the classification has
+	// resolved, so a topology this sub-case does not cover still falls back.
+	if err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
 	return selected, sceneDelta, true, nil

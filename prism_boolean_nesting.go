@@ -83,8 +83,9 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // natural domain still entered buildPrismScene's private scene at a walked
 // endpoint the boolean computed, and that charge (§7's δ_walk,
 // prism_boolean.go's walkChargeOf) composes into both ops' own sectionDelta
-// here, and into the split-boundary reroute condition, exactly as it does on
-// Union's own merge path.
+// here, exactly as it does on Union's own merge path. A scene with a split
+// boundary never matches (some entity is not whole), so it reaches the
+// crossing sub-case, which charges its crossings (A6).
 
 // resolveAndBuildPrismCut runs Cut's clean-nesting structural match (§4.2)
 // first and, once it finds a unique candidate, authenticates it and builds
@@ -299,15 +300,6 @@ func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget,
 	if len(profiles) == 0 {
 		return nil, nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	if target.sectionDelta != 0 || tool.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
-		if err != nil {
-			return nil, nil, nil, prismSceneDelta{}, false, err
-		}
-		if split {
-			return nil, nil, nil, prismSceneDelta{}, false, nil // §3.4, mirroring Union's own reroute
-		}
-	}
 
 	targetOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
@@ -377,15 +369,6 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	}
 	if len(profiles) == 0 {
 		return nil, nil, prismSceneDelta{}, false, false, nil
-	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
-		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, false, err
-		}
-		if split {
-			return nil, nil, prismSceneDelta{}, false, false, nil
-		}
 	}
 
 	aOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)

@@ -40,8 +40,9 @@ import (
 // to the mesh path unchanged. A non-nil err is a genuine refusal past §3.4's
 // point of no return: the arrangement work cap (RB7, wrapped so
 // measuredInterference reads it exactly as evaluateAnalyticIntersect's own
-// RB7 wrapping), a recordEdge rejection or a non-closing cell loop (RB8/RB9),
-// or the caller's own cancellation.
+// RB7 wrapping), a crossing too close to tangent for A6's charge, a
+// recordEdge rejection or a non-closing cell loop (RB8/RB9), or the caller's
+// own cancellation.
 func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, error) {
 	// Entry (§4.5's own "Entry" paragraph): Intersect's own preamble, shared
 	// and unchanged via Task 1's extracted helper — G1-G4, the
@@ -105,16 +106,10 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			return Measurement{}, false, err
 		}
 
-		// §7's formula, byte-identical to
+		// §7's formula with A6's crossing term, byte-identical to
 		// resolveAndBuildPrismIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
-		sectionDelta := proofbound.AbsSumUpper(
-			max(
-				proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
-				proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
-			),
-			cutDelta,
-		)
+		sectionDelta := sceneDelta.merged(pa, pb, reexpress, cutDelta)
 		pp := prismPayload{
 			profile:      cellProfile,
 			frame:        pa.frame,

@@ -283,8 +283,12 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 // a defect introduced by it.
 //
 // A hand-built r3.FromBasis placement (literal-zero z components) stays
-// exactly planar for the same n, k and clears G3. Its re-expression still
-// creates split boundaries, so §3.4 now routes it through the mesh path too.
+// exactly planar for the same n, k and clears G3, and A6
+// (docs/general-boolean-design.md §3) charges the crossings its
+// re-expression can move. The tooth's root arc lies on the hub's own circle,
+// though, so where the arc meets the hub circle the two carriers are
+// tangent: no positive sine bound exists, and the noise floor refuses the
+// pair with ErrUnsupported.
 func TestPrismUnionRotatedToothFallback(t *testing.T) {
 	t.Parallel()
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
@@ -309,7 +313,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
-	t.Run("hand-built FromBasis falls back after a re-expressed split", func(t *testing.T) {
+	t.Run("hand-built FromBasis refuses at the tangent root arc", func(t *testing.T) {
 		theta := 2 * math.Pi * float64(k) / float64(n)
 		cos, sin := math.Cos(theta), math.Sin(theta)
 		basis := r3.Basis{
@@ -321,6 +325,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		require.NoError(t, err)
 		_, err = build(t, tr)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "too close to tangent")
 	})
 }
 
@@ -428,12 +433,10 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 // per-mechanism scale, never the large, accumulating meshBound a chained mesh
 // boolean would compose.
 //
-// A chain whose FIRST result already cut is a different story, and the second
-// arm pins it: §3.4 reroutes a split scene whose source carries a displacement,
-// because a cut can amplify that displacement by an unbounded 1/sin θ, and the
-// mesh path it reroutes to refuses the shared cap plane (§8's consequence 2,
-// outside the admitted class). Reaching such a chain analytically needs a
-// displacement the cut can be proven not to amplify, which is separate work.
+// A chain whose FIRST result already cut carries that cut's displacement into
+// the second, and the second arm pins it: the next cut can amplify it by
+// 1/sin θ, which docs/general-boolean-design.md §3 A6 charges, so the chain
+// still builds analytically — 210 mm² over 10 mm, within its bound.
 func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -462,8 +465,14 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	cutFirst, err := decad.Union(t.Context(), cutA, cutB)
 	require.NoError(t, err)
 	cutC := boxBody(t, cutDoc, 8, 4, 18, 14, 10)
-	_, err = decad.Union(t.Context(), cutFirst, cutC)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	cutSecond, err := decad.Union(t.Context(), cutFirst, cutC)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(cutSecond), "A6 keeps a chain through a prior cut analytic")
+	cutVol, err := cutSecond.Volume()
+	require.NoError(t, err)
+	require.Less(t, boundMM3(t, cutVol), 1e-9)
+	// 3·100 − (A∩B 25 + A∩C 12 + B∩C 63) + A∩B∩C 10 = 210 mm².
+	decadtest.Measures(t, "chained union through a prior cut", cutVol, units.CubicMillimeters(2100.0))
 }
 
 // TestPrismUnionDownstreamFilletAndWallSurvey is §8's "analytic identity

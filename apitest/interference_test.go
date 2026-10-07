@@ -486,16 +486,14 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 	requireDocumentUnchanged(t, doc, before)
 }
 
-// This file pins docs/prism-boolean-design.md §3.4's split-boundary reroute
-// as it reaches Verify's interference reading (§4.5, shared with the
-// crossing sub-case's own selection, prism_boolean_crossing.go's
+// This file pins docs/prism-boolean-design.md §3.4's crossing charge as it
+// reaches Verify's interference reading (§4.5, shared with the crossing
+// sub-case's own selection, prism_boolean_crossing.go's
 // resolvePrismCrossingCells): a coplanar pair whose 2D outlines genuinely
-// cross is measured only while none of the reroute's three independent
+// cross is measured whether or not one of the charge's three independent
 // causes fires — a section displacement on either operand, a walk charge on
 // either operand, or a nonidentity re-expression between the two frames.
-// Each cause is pinned on its own here, because each alone is enough to
-// reroute the pair to the mesh path, whose own coplanar contact refusal
-// (docs/interference-design.md §5.2) then leaves it undecided.
+// Each cause is pinned on its own here.
 //
 // crossingBoxPair builds box A [0,10]x[0,10] against box B [5,15]x[5,15],
 // both 5 mm tall: a single 5x5 mm crossing overlap over the shared 5 mm
@@ -511,8 +509,8 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 // a line through (5,-2)-(5,14), so its bottom and top walls are Partial
 // fragments whose narrowed range makes buildPrismScene compute their shared
 // corner instead of reading it off the record (§7's walk charge). Nothing is
-// placed and nothing is displaced: the pair is fully seated and reroutes on
-// the walk charge alone.
+// placed and nothing is displaced: the pair is fully seated and carries the
+// walk charge alone.
 
 func crossingBoxPairSeated(t *testing.T, doc *decad.Document) (a, b *decad.Body) {
 	t.Helper()
@@ -577,7 +575,7 @@ func splitCellBody(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 	return body
 }
 
-func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
+func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 	t.Parallel()
 	t.Run("seated section resolves through the analytic reading", func(t *testing.T) {
 		doc := decad.New()
@@ -601,24 +599,28 @@ func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
 		requireDocumentUnchanged(t, doc, before)
 	})
 
-	t.Run("placed section stays undecided", func(t *testing.T) {
+	// A6 (docs/general-boolean-design.md §3) charges the crossings a
+	// nonidentity re-expression can move, so a placed section is measured
+	// as the seated one is. Shown to fail with the §3.4 split-boundary
+	// reroute restored in resolvePrismCrossingCells.
+	t.Run("placed section resolves through the crossing charge", func(t *testing.T) {
 		doc := decad.New()
-		crossingBoxPairPlaced(t, doc)
+		a, b := crossingBoxPairPlaced(t, doc)
 		before := snapshotDocument(t, doc)
 
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Empty(t, report.Interferences,
-			"a nonidentity re-expression reroutes the pair before either analytic path can measure it")
-		require.Equal(t, decad.Suspect, report.Status)
+		require.Equal(t, decad.Interfering, report.Status)
+		require.Len(t, report.Interferences, 1)
 
-		d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
-		require.True(t, ok, "the rerouted pair reaches the mesh path's own staged coplanar contact")
-		require.Equal(t, decad.Suspect, d.Status)
-		require.NotNil(t, d.Pair)
+		row := report.Interferences[0]
+		require.Same(t, a, row.A)
+		require.Same(t, b, row.B)
+		require.InDelta(t, 125.0, row.Volume.Value.Base(), row.Volume.Bound.Base())
+		require.Greater(t, row.Volume.Value.Base()-row.Volume.Bound.Base(), 0.0)
 
-		_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-		require.False(t, broad, "the placed pair no longer emits the deprecated broad compatibility code")
+		_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+		require.False(t, contact, "the placed pair no longer falls back to the mesh path's coplanar refusal")
 		requireDocumentUnchanged(t, doc, before)
 	})
 
@@ -650,18 +652,19 @@ func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
 	})
 }
 
-// TestVerifySeatedWalkChargedPairStaysUndecided pins §3.4's walk-charge cause
-// on its own: both operands are drawn seated in their own sketch, so the
-// re-expression is the identity and no placement is ever applied, yet the pair
-// still reroutes because operand A's section was trimmed out of a larger sketch
-// arrangement and its consumed walls carry a walk charge (§7's delta_walk).
-// The control arm draws the IDENTICAL footprint as a plain rectangle — no
-// trim, no walk charge — and the same overlap is measured, so the difference
-// between the two arms is the walk charge and nothing else. That this exact
-// fixture yields a positive delta_walk under an identity re-expression is
-// pinned white-box by TestPrismUnionTrimmedSourceSplitBoundaryFallsBack
-// (prism_boolean_internal_test.go), over the same split-cell section.
-func TestVerifySeatedWalkChargedPairStaysUndecided(t *testing.T) {
+// TestVerifySeatedWalkChargedPairIsMeasured pins A6 on a walk charge alone:
+// both operands are drawn seated in their own sketch, so the re-expression is
+// the identity and no placement is ever applied, but operand A's section was
+// trimmed out of a larger sketch arrangement and its consumed walls carry a
+// walk charge (§7's delta_walk), which the crossings with B can amplify.
+// docs/general-boolean-design.md §3 A6 charges that, so the pair is measured
+// like the control arm, which draws the IDENTICAL footprint as a plain
+// rectangle. That this fixture yields a positive delta_walk under an identity
+// re-expression is pinned white-box by
+// TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing
+// (prism_boolean_internal_test.go). Shown to fail with the §3.4 split-boundary
+// reroute restored in resolvePrismCrossingCells.
+func TestVerifySeatedWalkChargedPairIsMeasured(t *testing.T) {
 	t.Parallel()
 	const h = 5.0
 	// [1,5]x[0,10] against [4,6]x[3,7]: one crossing region [4,5]x[3,7],
@@ -686,21 +689,23 @@ func TestVerifySeatedWalkChargedPairStaysUndecided(t *testing.T) {
 		requireDocumentUnchanged(t, doc, before)
 	})
 
-	t.Run("the walk-charged seated pair stays undecided", func(t *testing.T) {
+	t.Run("the walk-charged seated pair is measured", func(t *testing.T) {
 		doc := decad.New()
-		splitCellBody(t, doc, h)
-		boxBody(t, doc, 4, 3, 6, 7, h)
+		a := splitCellBody(t, doc, h)
+		b := boxBody(t, doc, 4, 3, 6, 7, h)
 		before := snapshotDocument(t, doc)
 
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Empty(t, report.Interferences,
-			"a seated pair still reroutes on either operand's own walk charge")
-		require.Equal(t, decad.Suspect, report.Status)
+		require.Equal(t, decad.Interfering, report.Status)
+		require.Len(t, report.Interferences, 1)
 
-		d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
-		require.True(t, ok, "the rerouted pair reaches the mesh path's own staged coplanar contact")
-		require.Equal(t, decad.Suspect, d.Status)
+		row := report.Interferences[0]
+		require.Same(t, a, row.A)
+		require.Same(t, b, row.B)
+		require.InDelta(t, wantVolume, row.Volume.Value.Base(), row.Volume.Bound.Base()+1e-9)
+		_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+		require.False(t, contact, "A6 charges the walk charge's crossings instead of rerouting the pair")
 		requireDocumentUnchanged(t, doc, before)
 	})
 }

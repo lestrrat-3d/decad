@@ -299,7 +299,7 @@
 1	0.03	TestUnionSweepDisplacementChangesEnclosedSolid
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
 1	0.01	TestVerifyCoincidentPairIsInterfering
-1	0.02	TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided
+1	0.02	TestVerifyCrossingPairSeatedAndPlacedResolve
 1	1.86	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
 1	0.12	TestVerifyJointBoxCancellation
 1	0.48	TestVerifyJointBoxClearReading
@@ -1080,7 +1080,7 @@
 3	0.25	TestVerifyMotionKnownCollisionAngle
 3	0.01	TestVerifyMotionPoseDeviationIsCharged
 3	0.01	TestVerifyPlateWithHole
-3	0.03	TestVerifySeatedWalkChargedPairStaysUndecided
+3	0.03	TestVerifySeatedWalkChargedPairIsMeasured
 3	0.01	TestVertexAxisAlignedUnplacedBoundStaysZero
 3	0.01	TestWallCubeSound
 3	0.02	TestWallReadingBoundIsOnTheSpanningDiameter
@@ -1432,3 +1432,6 @@
 2	0.01	TestPrismCutBothReflectedSharedAxis
 2	0.01	TestPrismUnionReflectedOperandInsideBox
 2	0.01	TestVerifyReflectedOperandMeasuresInterference
+2	0.01	TestPrismIntersectRotatedBoxBuildsAnalyticOctagon
+2	0.01	TestPrismUnionRotatedToothBuildsAnalytic
+2	0.01	TestPrismUnionToothOnHubCircleRefusesAtTheTangentRoot

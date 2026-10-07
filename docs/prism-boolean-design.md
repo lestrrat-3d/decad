@@ -79,8 +79,7 @@ already proved.
 non-admitted `Union` pair — wrong payload class, planes that are neither the
 same nor a shared-axis offset (G3), a segment kind
 outside the admitted set, an unequal z-interval for `Union` that
-`docs/general-boolean-design.md` §3 A1 does not stack, an arranged
-boundary §3.4's split-boundary reroute catches, or a topology this
+`docs/general-boolean-design.md` §3 A1 does not stack, or a topology this
 increment's region resolution does not cover — takes the
 unchanged mesh path, with **zero
 behavior change**: no new error, no new refusal text, nothing a caller not
@@ -227,8 +226,8 @@ consequence is that a circular pattern built with `r3.RotationAround` alone
 silently under-triggers this design at most step counts, falling back to the
 unchanged, working mesh path. That is a missed optimization rather than a new
 failure mode, but it is the common case and not the exception. A consumer can
-use `FromBasis` to clear G3, but §3.4 still routes any re-expressed arrangement
-with a split boundary to the mesh path. **The r3 upstream ask is filed** at
+use `FromBasis` to clear G3, and the crossings its re-expression can move are
+then charged as §3.4 states. **The r3 upstream ask is filed** at
 `r3/.tmp/decad-axis-exact-rotation-ask/`, requesting a rotation constructor
 whose result leaves a plane perpendicular to its axis exactly perpendicular.
 This design does not block on it: nothing here requires it, and nothing here
@@ -248,30 +247,26 @@ silent fallback stops being available:
    builds the private scene, arranges it, and attempts to resolve a unique
    candidate result. **A pair whose topology this increment's resolution logic
    does not cover (§4.4) is treated exactly like a stage-1 gate miss: silent
-   fallback, no error.** The same routing rule applies before a candidate is
-   accepted when `sketch` returns any `Partial` boundary edge and either
-   source carries a nonzero section displacement, either source carries a
-   nonzero walk charge (§7's `δ_walk` — a consumed segment whose own recorded
-   range narrows its natural domain), or B's re-expression is nonidentity:
-   any of the three can move a transverse cut by its displacement divided by
-   the crossing sine, and this increment carries no certified
-   crossing-sensitivity bound. **The three causes are independent, and any one
-   of them reroutes the pair on its own.** `Body.Placed` is the ordinary way a
-   pair reaches the re-expression cause, and it reaches it through the
-   ACCUMULATED placement rather than through the motion any one call received:
+   fallback, no error.** When `sketch` returns any `Partial` boundary edge
+   and either source carries a nonzero section displacement, either source
+   carries a nonzero walk charge (§7's `δ_walk` — a consumed segment whose
+   own recorded range narrows its natural domain), or B's re-expression is
+   nonidentity, any of the three can move a transverse cut by its
+   displacement divided by the crossing sine. `docs/general-boolean-design.md`
+   §3 A6 charges that movement at every cut once the resolution has found its
+   candidate (`prismcells.CrossingCharge`), and refuses a crossing whose proven
+   sine is not above verification §4's dimensionless noise floor with
+   `ErrUnsupported`. `Body.Placed` is the ordinary way a pair reaches the
+   re-expression cause, and it reaches it through the ACCUMULATED placement
+   rather than through the motion any one call received:
    `newPrismReexpression` reports the identity exactly when G3's shared-axis
    arm holds — `pa.xform == pb.xform`, bit-identical `U`/`V`, and a frame-origin
    difference that is exactly a multiple of the shared `N` (a coplanar pair on
    one frame is that arm with `d = 0`) — and `Placed` composes its
    motion onto the transform its receiver already carries instead of replacing
-   it. A placement therefore reroutes the pair when it leaves a nonidentity map
-   RELATIVE to an untouched partner — one operand moved and the other left
-   alone, the ordinary case — while a sequence of motions composing back to the
-   partner's own accumulated placement leaves that map the identity again.
-   Drawing the mating section already seated in its final position keeps the
-   re-expression the identity, and keeps that cause alone: a seated pair still
-   reroutes on either source's own section displacement and on either operand's
-   own walk charge, so seating is no general escape from this routing.
+   it. A sequence of motions composing back to the partner's own accumulated
+   placement leaves that map the identity again, and the identity charges no
+   re-expression term.
    Every other capacity, arrangement, candidate-validity, or assembly-audit
    problem is a genuine refusal (§9's table), **never** a reroute to the mesh
    path. An admitted-then-failed pair
@@ -430,7 +425,7 @@ and B's whole outer loop as its only hole. A second cell must reproduce B's
 whole outer and hole loops. Both cells must report `Valid`, and the result
 cell alone becomes the payload's section. The proof cell excludes a disjoint
 pair; the result cell preserves the void in B. The existing G3 plane gate,
-G5 overlapping sweep intervals, split-boundary reroute, work cap,
+G5 overlapping sweep intervals, work cap,
 `RecordProfile` authentication, and per-end bound selection apply unchanged.
 The crossing classifier does not admit this arm.
 
@@ -537,8 +532,8 @@ decision.
 (`admitPrismPairBudget`), the trimmed-circular refusal
 (`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
 z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
-§3.4's split-boundary reroute, `prismcells.Classify`, and `prismcells.Select`
-under `Intersect`'s own `keep`. The reading begins where `mergePrismCells`
+`prismcells.Classify`, `prismcells.Select` under `Intersect`'s own `keep`,
+and §3.4's crossing charge. The reading begins where `mergePrismCells`
 would have been called, and replaces only that tail.
 
 **Selection.** The measured set is the arrangement's own bounded cells that
@@ -597,23 +592,11 @@ whose arrangement puts no cell on both operands' material sides — is
 unresolved: the reading answers nothing and the pair falls back to the mesh
 path, whose coplanar refusal leaves it undecided, unchanged. So is a selected
 cell whose own section the region integrals refuse as degenerate or
-unsupported. So, sharing the crossing sub-case's own selection
-(`resolvePrismCrossingCells`, `prism_boolean_crossing.go`), is any pair §3.4's
-split-boundary reroute catches: a genuinely overlapping pair whose arrangement
-would split at least one boundary, where either operand carries a prior
-section displacement or walk charge, or where B's re-expression into A's
-frame is nonidentity. Those causes are independent, and any one of them is
-enough on its own. Drawing both sections already seated in their sketch clears
-the re-expression cause and only that one: a seated pair whose own section
-carries a displacement, or whose consumed segments carry a walk charge —
-`buildPrismScene` charges one for every consumed segment whose recorded range
-narrows its natural domain — reroutes exactly as a placed pair does. A pair
-where one operand reached its overlapping position through `Body.Placed` — the
-ordinary way a caller moves a mating part into position — raises the
-re-expression cause whenever that placement leaves its accumulated transform
-different from the partner's. Whichever cause fires, the pair falls back to
-the mesh path's own coplanar refusal exactly like the exactly-tangent case
-above, undecided rather than measured. The reading never publishes a
+unsupported. A genuinely overlapping pair whose arrangement splits a
+boundary, where either operand carries a prior section displacement or walk
+charge or B's re-expression is nonidentity, is measured: §3.4's crossing
+charge enters each cell's displacement (§7), and a crossing too close to
+tangent for that charge refuses (`ErrUnsupported`). The reading never publishes a
 zero-volume overlap and never turns a contact into a row;
 `docs/interference-design.md` §6's positive-volume gate judges what it does
 publish, unchanged.
@@ -789,19 +772,19 @@ included, and never off the walk's own closed-ness: that flag is
 decided within a tolerance of a full turn, and a decad-side tolerance that
 can ACCEPT is the admission gate the reject-only rule forbids.
 
-A pre-existing source displacement can additionally AMPLIFY at a cut, by
-`δ/sin θ` for a crossing angle `θ` this design cannot bound below. Section 3.4
-therefore routes any scene with a `Partial` boundary edge to the mesh path
-before it records a fragment whenever either source carries a nonzero
-section displacement, either source carries a nonzero `δ_walk`, or the
-re-expression is nonidentity. That reroute is about amplifying an INPUT
-uncertainty; it does nothing about the cut's own rounding, which is why
-`δ_cut` is charged on the fragments the reroute admits.
+A pre-existing source displacement can additionally AMPLIFY at a cut: two
+carriers crossing at an angle `θ`, displaced by `δ1` and `δ2`, meet up to
+`(δ1 + δ2)/sin θ + min(δ1, δ2)` from where the recorded carriers meet.
+`docs/general-boolean-design.md` §3 A6 states that bound per cut over a
+certified lower bound on `sin θ` and calls the largest one `crossing`
+(`prismcells.CrossingCharge`). It is about amplifying an INPUT uncertainty;
+it does nothing about the cut's own rounding, which is why `δ_cut` is
+charged as well.
 
 The rebuilt section therefore carries
 
 ```
-δ = up( max( up(δ_A + δ_walkA), up(δ_B + δ_walkB + δ_reexpress) ) + δ_cut )
+δ = up( max( up(δ_A + δ_walkA), up(δ_B + δ_walkB + δ_reexpress), crossing ) + δ_cut )
 ```
 
 where `up` rounds each positive sum outward. Each operand's own walk charge
@@ -1204,8 +1187,9 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   which is the body the analytic path would have dropped.
 - The rotated-tooth case (§3.3): a placement built via `RotationAround` at
   `n = 17` correctly falls back to the mesh path (G3 miss, no error). The
-  same model built via a hand-constructed `FromBasis` placement clears G3 but
-  falls back on §3.4's re-expressed split-boundary rule. The test must cover
+  same model built via a hand-constructed `FromBasis` placement clears G3, and
+  its root arc on the hub circle meets that circle tangentially, which §3.4's
+  crossing charge refuses (`ErrUnsupported`). The test must cover
   several counts from §3.3's inexact set rather than `n = 17` alone, since the
   inexact counts are the majority and a single-count test reads as though they
   were rare.
@@ -1268,13 +1252,13 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   a merged section retaining a `CircleSeg`/`ArcSeg` reports `Approximate` with
   a bound composed from `moments.go`'s and `internal/proofbound/bounds.go`'s machinery, asserted
   against the closed-form answer.
-- An arranged profile containing a `Partial` boundary edge falls back before a
-  fragment is recorded when either source carries a nonzero section
-  displacement, either source carries a nonzero walk charge (`δ_walk`), or
-  B's re-expression is nonidentity. The focused fixtures must prove the
-  arrangement splits, including an identity second re-expression after a
-  displaced first result, then assert that `tryPrismUnion` returns
-  `ok == false` without an analytic-resolution error.
+- An arranged profile containing a `Partial` boundary edge, where either
+  source carries a nonzero section displacement, either source carries a
+  nonzero walk charge (`δ_walk`), or B's re-expression is nonidentity, builds
+  with §3.4's crossing charge in its section displacement. The focused
+  fixtures must prove the arrangement splits, including an identity second
+  re-expression after a displaced first result, then assert the published
+  displacement covers the input displacement divided by the crossing sine.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
   read `Wall.Minimum` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.
