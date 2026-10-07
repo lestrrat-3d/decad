@@ -43,21 +43,21 @@ func requireSameIdeal(t *testing.T, want, got sweepIdealPose, msg string, args .
 	t.Helper()
 	for i := range 3 {
 		for j := range 3 {
-			require.Zero(t, want.rot.Entry(i, j).Lo.Cmp(got.rot.Entry(i, j).Lo), append([]any{msg}, args...)...)
-			require.Zero(t, want.rot.Entry(i, j).Hi.Cmp(got.rot.Entry(i, j).Hi), append([]any{msg}, args...)...)
+			require.Zero(t, want.Rot.Entry(i, j).Lo.Cmp(got.Rot.Entry(i, j).Lo), append([]any{msg}, args...)...)
+			require.Zero(t, want.Rot.Entry(i, j).Hi.Cmp(got.Rot.Entry(i, j).Hi), append([]any{msg}, args...)...)
 		}
-		require.Zero(t, want.shift[i].Lo.Cmp(got.shift[i].Lo), append([]any{msg}, args...)...)
-		require.Zero(t, want.shift[i].Hi.Cmp(got.shift[i].Hi), append([]any{msg}, args...)...)
+		require.Zero(t, want.Shift[i].Lo.Cmp(got.Shift[i].Lo), append([]any{msg}, args...)...)
+		require.Zero(t, want.Shift[i].Hi.Cmp(got.Shift[i].Hi), append([]any{msg}, args...)...)
 	}
 }
 
 // requireSameSpans asserts two span sets hold the identical rationals.
 func requireSameSpans(t *testing.T, want, got cornerSpans, msg string, args ...any) {
 	t.Helper()
-	require.Equal(t, want.len(), got.len(), append([]any{msg}, args...)...)
-	for index := range want.len() {
+	require.Equal(t, want.Len(), got.Len(), append([]any{msg}, args...)...)
+	for index := range want.Len() {
 		for axis := range 3 {
-			w, g := want.span(index, axis), got.span(index, axis)
+			w, g := want.Span(index, axis), got.Span(index, axis)
 			require.Zero(t, w.Lo.Cmp(g.Lo), append([]any{msg}, args...)...)
 			require.Zero(t, w.Hi.Cmp(g.Hi), append([]any{msg}, args...)...)
 		}
@@ -114,15 +114,15 @@ func TestSweepPathMemoMatchesAfresh(t *testing.T) {
 				got, ok := memoized.idealAt(f)
 				require.Equal(t, wantOK, ok, name)
 				requireSameIdeal(t, want, got, "%s round %d ideal at %v", name, round, f)
-				got.rot.Lo[0][0].SetInt64(12345)
-				got.shift[1].Lo.SetInt64(-7)
+				got.Rot.Lo[0][0].SetInt64(12345)
+				got.Shift[1].Lo.SetInt64(-7)
 
 				for _, p := range []rotationalSweepPath{memoized, swapped} {
 					wantSpans := p.cornerSpanAfresh(span[0], span[1])
 					gotSpans := p.cornerSpan(span[0], span[1])
 					requireSameSpans(t, wantSpans, gotSpans, "%s round %d spans %v", name, round, span)
-					gotSpans.lo[0][0].SetInt64(99)
-					gotSpans.den[2].SetInt64(3)
+					gotSpans.Lo[0][0].SetInt64(99)
+					gotSpans.Den[2].SetInt64(3)
 				}
 
 				// Each fraction reads its own pose, the start pose and two of
@@ -149,32 +149,32 @@ func TestSweepPathMemoMatchesAfresh(t *testing.T) {
 				}
 			}
 		}
-		stats := memoized.memo.stats
-		require.Positive(t, stats.idealHits, name)
-		require.Positive(t, stats.deviationHits, name)
-		require.Positive(t, stats.spanHits, name)
-		require.Positive(t, stats.idealMisses, name)
+		stats := memoized.memo.Stats
+		require.Positive(t, stats.IdealHits, name)
+		require.Positive(t, stats.DeviationHits, name)
+		require.Positive(t, stats.SpanHits, name)
+		require.Positive(t, stats.IdealMisses, name)
 
 		// A poll that fails stops a served reading at the same point a
 		// computed one stops.
 		f := rotationFormFractions()[2][1]
 		_, _, _, err := memoized.pointDeviation(poses[2], f, noSweepPoll)
 		require.NoError(t, err, name)
-		hits := memoized.memo.stats.deviationHits
+		hits := memoized.memo.Stats.DeviationHits
 		stop := countingPoll{failAt: 2}
 		_, _, ok, err := memoized.pointDeviation(poses[2], f, stop.poll)
 		require.ErrorIs(t, err, errPollStop, name)
 		require.False(t, ok, name)
 		require.Equal(t, 2, stop.calls, name)
-		require.Equal(t, hits+1, memoized.memo.stats.deviationHits, "%s: premise: the failing read was served", name)
+		require.Equal(t, hits+1, memoized.memo.Stats.DeviationHits, "%s: premise: the failing read was served", name)
 
 		// A closed memo serves nothing and stores nothing.
-		memoized.memo.close()
+		memoized.memo.Close()
 		got, ok := memoized.idealAt(f)
 		require.True(t, ok, name)
 		want, _ := path.idealAtAfresh(f)
 		requireSameIdeal(t, want, got, "%s closed", name)
-		require.Equal(t, sweepPathMemo{closed: true}, *memoized.memo, name)
+		require.Equal(t, sweepPathMemo{Closed: true}, *memoized.memo, name)
 	}
 }
 
@@ -186,8 +186,8 @@ func TestSweepPathMemoTablesStayBounded(t *testing.T) {
 		_, ok := path.idealAt(big.NewRat(int64(i), sweepMemoCap+3))
 		require.True(t, ok)
 	}
-	require.Len(t, path.memo.ideal, 3, "a full table empties and refills")
-	require.Equal(t, sweepMemoCap+3, path.memo.stats.idealMisses)
+	require.Len(t, path.memo.Ideal, 3, "a full table empties and refills")
+	require.Equal(t, sweepMemoCap+3, path.memo.Stats.IdealMisses)
 }
 
 // rotationalSweepRadiusPerCorner is rotationalSweepRadius before it chose the
@@ -295,9 +295,9 @@ func TestRotationalSweepRadiusMatchesPerCornerForm(t *testing.T) {
 	require.Greater(t, compared, 100)
 	hits := 0
 	for _, body := range bodies {
-		body.sweepRadii.mu.Lock()
-		hits += body.sweepRadii.hits
-		body.sweepRadii.mu.Unlock()
+		body.sweepRadii.Mu.Lock()
+		hits += body.sweepRadii.Hits
+		body.sweepRadii.Mu.Unlock()
 	}
 	require.Greater(t, hits, 100, "the second reads are the memo's")
 
@@ -318,19 +318,19 @@ func TestSweepRadiusMemoEvictsOldest(t *testing.T) {
 	}
 	var memo sweepRadiusMemo
 	for i := range sweepRadiusMemoCap + 3 {
-		memo.store(keyAt(i), float64(i), true)
+		memo.Store(keyAt(i), float64(i), true)
 	}
-	require.Len(t, memo.entries, sweepRadiusMemoCap)
+	require.Len(t, memo.Entries, sweepRadiusMemoCap)
 	for i := range 3 {
-		_, _, hit := memo.load(keyAt(i))
+		_, _, hit := memo.Load(keyAt(i))
 		require.False(t, hit, "entry %d is among the oldest", i)
 	}
-	radius, ok, hit := memo.load(keyAt(sweepRadiusMemoCap + 2))
+	radius, ok, hit := memo.Load(keyAt(sweepRadiusMemoCap + 2))
 	require.True(t, hit)
 	require.True(t, ok)
 	require.Equal(t, float64(sweepRadiusMemoCap+2), radius)
-	memo.store(keyAt(sweepRadiusMemoCap+2), 0, false)
-	radius, _, _ = memo.load(keyAt(sweepRadiusMemoCap + 2))
+	memo.Store(keyAt(sweepRadiusMemoCap+2), 0, false)
+	radius, _, _ = memo.Load(keyAt(sweepRadiusMemoCap + 2))
 	require.Equal(t, float64(sweepRadiusMemoCap+2), radius, "a stored key keeps its first reading")
 }
 
@@ -358,19 +358,19 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 		NormalResolution: units.Degrees(1)}, MaxPoseEvaluations: 256}
 	run := func(open bool) (*SweepReport, sweepMemoStats) {
 		a, b := floorPath, box
-		a.memo, b.memo = &sweepPathMemo{closed: !open}, &sweepPathMemo{closed: !open}
+		a.memo, b.memo = &sweepPathMemo{Closed: !open}, &sweepPathMemo{Closed: !open}
 		sweep := &rotationalPairSweep{doc: floor.doc, a: a, b: b, req: req, resolution: big.NewRat(1, 1<<30),
 			report: &SweepReport{}}
 		report, err := sweep.execute(t.Context())
 		require.NoError(t, err)
-		stats := b.memo.stats
+		stats := b.memo.Stats
 		closeSweepMemos(&a, &b)
 		return report, stats
 	}
 	on, stats := run(true)
 	off, _ := run(false)
 	require.Equal(t, SweepImpactBracket, on.Outcome, "premise: the sweep refines to a bracket")
-	require.Positive(t, stats.idealHits)
-	require.Positive(t, stats.deviationHits)
+	require.Positive(t, stats.IdealHits)
+	require.Positive(t, stats.DeviationHits)
 	require.Equal(t, off, on)
 }

@@ -286,7 +286,7 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 		for _, entry := range []struct {
 			got  proofbound.RatInterval
 			want *big.Rat
-		}{{ideal.rot.Entry(0, 0), cos}, {ideal.rot.Entry(1, 0), sin}, {ideal.rot.Entry(0, 1), new(big.Rat).Neg(sin)}, {ideal.rot.Entry(1, 1), cos}} {
+		}{{ideal.Rot.Entry(0, 0), cos}, {ideal.Rot.Entry(1, 0), sin}, {ideal.Rot.Entry(0, 1), new(big.Rat).Neg(sin)}, {ideal.Rot.Entry(1, 1), cos}} {
 			require.True(t, entry.got.Lo.Cmp(entry.want) <= 0 && entry.want.Cmp(entry.got.Hi) <= 0,
 				"the enclosure holds the true rotation at %d/%d", k, samples)
 		}
@@ -297,7 +297,7 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 		for i := range 3 {
 			for j := range 3 {
 				rounded := proofarith.FloatRat(columns[j][i])
-				enclosure := ideal.rot.Entry(i, j)
+				enclosure := ideal.Rot.Entry(i, j)
 				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.Lo))
 				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, enclosure.Hi)); other.Cmp(far) > 0 {
 					far = other

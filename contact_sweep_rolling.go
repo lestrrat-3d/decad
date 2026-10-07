@@ -456,8 +456,8 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	S := &r.paths[r.s]
 	var lo, hi [3]*big.Rat
 	for axis := range 3 {
-		low, high := corners.hull(axis)
-		axisLow, axisHigh := centers.hull(axis)
+		low, high := corners.Hull(axis)
+		axisLow, axisHigh := centers.Hull(axis)
 		low = proofbound.RatMax(low, new(big.Rat).Sub(axisLow, box.reach))
 		high = proofbound.RatMin(high, new(big.Rat).Add(axisHigh, box.reach))
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
@@ -474,7 +474,7 @@ func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) b
 	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
 	var lo, hi [2]*big.Rat
 	for slot, axis := range [2]int{(support.axis + 1) % 3, (support.axis + 2) % 3} {
-		low, high := spans.hull(axis)
+		low, high := spans.Hull(axis)
 		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
 		shiftLo, shiftHi := proofbound.RatMin(shift, new(big.Rat)), proofbound.RatMax(shift, new(big.Rat))
 		lo[slot] = proofbound.RatAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))

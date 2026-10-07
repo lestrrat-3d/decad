@@ -133,7 +133,7 @@ the rules leave to the byte budget.
 | `revolve_extent.go` | Revolve extent readings over `internal/revolveangle/` bounds. See evaluator §6. |
 | `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's doc comments. |
-| `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
+| `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
@@ -174,7 +174,7 @@ the rules leave to the byte budget.
 | `report.go` | `Verify`'s report types: `Status`, `Diagnostic`, `Interference`, `Clearance` and their enums. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
-| `verify_result.go` | Types `Verify`'s report is written in: `Report`, `BodyReport`, and every per-survey result record. Types and `Passed`/`ForBody` only; `verify_publish.go` builds the values. |
+| `verify_result.go` | Verify report types and accessors; `verify_publish.go` builds their values. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's relation and gap; `sheetSolidPair` decides a sheet pair. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
@@ -208,7 +208,7 @@ the rules leave to the byte budget.
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
-| `contact_sweep_memo.go` | Sweep run and sweep radius memos. See `docs/contact-sweep-design.md` §7. |
+| `contact_sweep_memo.go` | Adapts `internal/sweepmemo/` to sweep paths and body radius readings. See contact-sweep §7. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.6, §10.8. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
@@ -283,7 +283,7 @@ the rules leave to the byte budget.
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/prismextent/` | Prism directional extremes and placement-rounding bounds. See evaluator §5. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
-| `internal/prismcells/` | Sketch cell classification, matching, merge, cut/walk/crossing charges, trim walks, Trim/Extend record helpers. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
+| `internal/prismcells/` | Sketch cell matching, merge/cut charges, and trim walks. See prism-boolean §4.2 and surface-intersection §3. |
 | `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
@@ -293,6 +293,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Exact motion parameters, ordering, poses and sweeps. |
+| `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
@@ -308,4 +309,4 @@ the rules leave to the byte budget.
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
-| `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; race shards run `race-binary`'s root and `apitest` binaries. `codeql.yml`. `test-shards*.txt` assign each test a shard. |
+| `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; `codeql.yml` runs CodeQL; `test-shards*.txt` assign race shards. |
