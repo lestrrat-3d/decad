@@ -171,22 +171,12 @@ func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
 func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, error) {
 	var m [4][4]proofbound.RatInterval
 	slots := [6]*proofbound.RatInterval{&m[0][0], &m[1][0], &m[0][1], &m[2][0], &m[1][1], &m[0][2]}
-	if !ig.exactDead && ig.exact.Complete() {
-		for i, value := range ig.exact.Fields() {
-			*slots[i] = proofbound.PointInterval(value)
-		}
-	} else {
-		values := [6]proofbound.BoundedScalar{
-			{Value: ig.area, Bound: ig.areaBound}, {Value: ig.mu, Bound: ig.muBound}, {Value: ig.mv, Bound: ig.mvBound},
-			{Value: ig.muu, Bound: ig.muuBound}, {Value: ig.muv, Bound: ig.muvBound}, {Value: ig.mvv, Bound: ig.mvvBound},
-		}
-		for i, value := range values {
-			iv, err := massMomentInterval(value)
-			if err != nil {
-				return m, err
-			}
-			*slots[i] = iv
-		}
+	section, err := massmoment.SectionIntervals(sectionMomentInputs(ig))
+	for i, value := range section {
+		*slots[i] = value
+	}
+	if err != nil {
+		return m, err
 	}
 	third, ok := ig.thirdMoments()
 	if !ok {

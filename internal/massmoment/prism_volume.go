@@ -58,3 +58,21 @@ func PrismVolumeMoments(ctx context.Context, section [6]proofbound.RatInterval, 
 	}
 	return Moments{Volume: volume, First: first, Second: second}, nil
 }
+
+// PrismOccupiedError bounds the prism's displaced volume and its coordinate radius.
+func PrismOccupiedError(area proofbound.RatInterval, h *big.Rat, sectionDelta, z0Delta, z1Delta float64,
+	count int, perimeter, coordUpper float64) (*big.Rat, *big.Rat, error) {
+	displaced := proofbound.SectionDisplacementArea(sectionDelta, count, perimeter)
+	if !nonNegativeFinite(displaced) || !nonNegativeFinite(coordUpper) {
+		return nil, nil, fmt.Errorf("%w: prism displacement has no finite occupied-volume bound", decaderr.ErrUnsupported)
+	}
+	d0, d1, delta := proofarith.FloatRat(z0Delta), proofarith.FloatRat(z1Delta), proofarith.FloatRat(sectionDelta)
+	axial := new(big.Rat).Add(d0, d1)
+	e := new(big.Rat).Mul(proofarith.FloatRat(displaced), new(big.Rat).Add(h, axial))
+	e.Add(e, new(big.Rat).Mul(proofbound.IntervalAbsUpper(area), axial))
+
+	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
+	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
+	alongAxis.Add(alongAxis, proofbound.RatMax(d0, d1))
+	return e, proofbound.RatMax(inPlane, alongAxis), nil
+}

@@ -96,7 +96,12 @@ func heldMeshMassProperties(ctx context.Context, bounds Box, anchor r3.Vec, vert
 			return MassProperties{}, err
 		}
 	}
-	if !meshMassReadingsPositive(result) {
+	read := func(m Measurement) proofbound.BoundedScalar {
+		return proofbound.BoundedScalar{Value: m.Value.Base(), Bound: m.Bound.Base()}
+	}
+	if !massmoment.MeshReadingsPositive(read(result.Mass),
+		[3]proofbound.BoundedScalar{read(result.Inertia.XX), read(result.Inertia.YY), read(result.Inertia.ZZ)},
+		[3]proofbound.BoundedScalar{read(result.Inertia.XY), read(result.Inertia.XZ), read(result.Inertia.YZ)}) {
 		return MassProperties{}, errMassIntervalUnproved
 	}
 	if err := ctx.Err(); err != nil {
@@ -175,35 +180,4 @@ func auditMassMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, contactAu
 		return fmt.Errorf("%w: mesh mass crossing audit failed: %v", ErrUnsupported, err)
 	}
 	return nil
-}
-
-// A positive row-dominance margin certifies every tensor in the six rounded
-// component intervals, including the mixed entries, as positive definite.
-func meshMassReadingsPositive(m MassProperties) bool {
-	if m.Mass.Value.Base() <= m.Mass.Bound.Base() {
-		return false
-	}
-	diagonal := [3]Measurement{m.Inertia.XX, m.Inertia.YY, m.Inertia.ZZ}
-	off := [3]Measurement{m.Inertia.XY, m.Inertia.XZ, m.Inertia.YZ}
-	var offUpper [3]*big.Rat
-	for i, v := range off {
-		magnitude := proofarith.FloatRat(v.Value.Base())
-		magnitude.Abs(magnitude)
-		offUpper[i] = new(big.Rat).Add(magnitude, proofarith.FloatRat(v.Bound.Base()))
-	}
-	for i, v := range diagonal {
-		lower := new(big.Rat).Sub(proofarith.FloatRat(v.Value.Base()), proofarith.FloatRat(v.Bound.Base()))
-		switch i {
-		case 0:
-			lower.Sub(lower, offUpper[0]).Sub(lower, offUpper[1])
-		case 1:
-			lower.Sub(lower, offUpper[0]).Sub(lower, offUpper[2])
-		case 2:
-			lower.Sub(lower, offUpper[1]).Sub(lower, offUpper[2])
-		}
-		if lower.Sign() <= 0 {
-			return false
-		}
-	}
-	return true
 }

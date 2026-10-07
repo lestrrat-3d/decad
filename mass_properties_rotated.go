@@ -130,24 +130,23 @@ func prismSectionMoments(ctx context.Context, pp prismPayload) ([6]proofbound.Ra
 	if err != nil {
 		return [6]proofbound.RatInterval{}, err
 	}
-	section := [6]proofbound.RatInterval{}
-	if !ig.exactDead && ig.exact.Complete() {
-		for i, value := range ig.exact.Fields() {
-			section[i] = proofbound.PointInterval(value)
-		}
-		return section, nil
-	}
-	values := [6]proofbound.BoundedScalar{
-		{Value: ig.area, Bound: ig.areaBound}, {Value: ig.mu, Bound: ig.muBound}, {Value: ig.mv, Bound: ig.mvBound},
-		{Value: ig.muu, Bound: ig.muuBound}, {Value: ig.muv, Bound: ig.muvBound}, {Value: ig.mvv, Bound: ig.mvvBound},
-	}
-	for i, value := range values {
-		section[i], err = massMomentInterval(value)
-		if err != nil {
-			return [6]proofbound.RatInterval{}, err
-		}
+	section, err := massmoment.SectionIntervals(sectionMomentInputs(ig))
+	if err != nil {
+		return [6]proofbound.RatInterval{}, err
 	}
 	return section, nil
+}
+
+func sectionMomentInputs(ig regionIntegrals) massmoment.SectionInputs {
+	input := massmoment.SectionInputs{Bounded: [6]proofbound.BoundedScalar{
+		{Value: ig.area, Bound: ig.areaBound}, {Value: ig.mu, Bound: ig.muBound}, {Value: ig.mv, Bound: ig.mvBound},
+		{Value: ig.muu, Bound: ig.muuBound}, {Value: ig.muv, Bound: ig.muvBound}, {Value: ig.mvv, Bound: ig.mvvBound},
+	}}
+	if !ig.exactDead && ig.exact.Complete() {
+		input.ExactAvailable = true
+		input.Exact = ig.exact.Fields()
+	}
+	return input
 }
 
 // prismOccupiedVolumeError bounds the volume of the symmetric difference
@@ -185,19 +184,8 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	if err != nil {
 		return nil, nil, err
 	}
-	displaced := proofbound.SectionDisplacementArea(pp.sectionDelta, count, perimeter)
-	if !nonNegativeFinite(displaced) || !nonNegativeFinite(coordUpper) {
-		return nil, nil, fmt.Errorf("%w: prism displacement has no finite occupied-volume bound", ErrUnsupported)
-	}
-	d0, d1, delta := proofarith.FloatRat(pp.z0Delta), proofarith.FloatRat(pp.z1Delta), proofarith.FloatRat(pp.sectionDelta)
-	axial := new(big.Rat).Add(d0, d1)
-	e := new(big.Rat).Mul(proofarith.FloatRat(displaced), new(big.Rat).Add(h, axial))
-	e.Add(e, new(big.Rat).Mul(proofbound.IntervalAbsUpper(area), axial))
-
-	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
-	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
-	alongAxis.Add(alongAxis, proofbound.RatMax(d0, d1))
-	return e, proofbound.RatMax(inPlane, alongAxis), nil
+	return massmoment.PrismOccupiedError(area, h, pp.sectionDelta, pp.z0Delta, pp.z1Delta,
+		count, perimeter, coordUpper)
 }
 
 // prismRotation is the exact rational matrix taking frame-local (u, v, n)

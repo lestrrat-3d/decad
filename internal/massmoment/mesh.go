@@ -201,3 +201,31 @@ func meshMassExtent(box MeshBounds, anchor r3.Vec, maxMesh [3]*big.Rat) ([3]*big
 func nonNegativeFinite(value float64) bool {
 	return !proofbound.IsNonFinite(value) && value >= 0
 }
+
+// MeshReadingsPositive proves row dominance over the published mass and inertia bounds.
+func MeshReadingsPositive(mass proofbound.BoundedScalar, diagonal, off [3]proofbound.BoundedScalar) bool {
+	if mass.Value <= mass.Bound {
+		return false
+	}
+	var offUpper [3]*big.Rat
+	for i, v := range off {
+		magnitude := proofarith.FloatRat(v.Value)
+		magnitude.Abs(magnitude)
+		offUpper[i] = new(big.Rat).Add(magnitude, proofarith.FloatRat(v.Bound))
+	}
+	for i, v := range diagonal {
+		lower := new(big.Rat).Sub(proofarith.FloatRat(v.Value), proofarith.FloatRat(v.Bound))
+		switch i {
+		case 0:
+			lower.Sub(lower, offUpper[0]).Sub(lower, offUpper[1])
+		case 1:
+			lower.Sub(lower, offUpper[0]).Sub(lower, offUpper[2])
+		case 2:
+			lower.Sub(lower, offUpper[1]).Sub(lower, offUpper[2])
+		}
+		if lower.Sign() <= 0 {
+			return false
+		}
+	}
+	return true
+}

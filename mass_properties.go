@@ -208,14 +208,6 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	return result, nil
 }
 
-func massMomentInterval(value proofbound.BoundedScalar) (proofbound.RatInterval, error) {
-	if proofbound.IsNonFinite(value.Value) || proofbound.IsNonFinite(value.Bound) || value.Bound < 0 {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: section moment has no finite enclosure", ErrNotFinite)
-	}
-	held, bound := proofarith.FloatRat(value.Value), proofarith.FloatRat(value.Bound)
-	return proofbound.IntervalOwned(new(big.Rat).Sub(held, bound), new(big.Rat).Add(held, bound)), nil
-}
-
 func massIntervalReading(iv proofbound.RatInterval, unit units.Unit) (Measurement, error) {
 	if iv.Lo.Cmp(iv.Hi) == 0 {
 		return massReading(iv.Lo, unit)
