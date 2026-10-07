@@ -541,7 +541,8 @@ minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
 the denoted body's diameter, so it can only tighten the gate.
 
 **Every arm publishes through one witness-maximum reader, and that reader
-rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`) is the single
+rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
+`internal/diameter/points.go`) is the single
 site each arm below — the exact carrier model, the `loftPayload` arm, the
 free-form arm, `fallbackGateDiameter`, and the cached `payload.diameter` a
 faceted build stores — hands its witness set to, and what it publishes is the
