@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -37,11 +36,6 @@ type axisLine2 struct {
 	dUBound, dVBound float64
 }
 
-// finiteAxisValues reports whether every derived axis value is representable.
-func finiteAxisValues(values ...float64) bool {
-	return revolveaxis.FiniteAxisValues(values...)
-}
-
 // axisInPlane reads the public axis variant and adapts its resolved coordinates.
 func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 	var input revolveaxis.AxisInput
@@ -66,10 +60,6 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		dU: line.DU, dV: line.DV,
 		dUBound: line.DUBound, dVBound: line.DVBound,
 	}, nil
-}
-
-func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, float64) {
-	return revolveaxis.AxisDirectionSqrtBracket(du, dv, heldU, heldV)
 }
 
 // axisFrame is the revolve axis as a proper plane-local frame with the

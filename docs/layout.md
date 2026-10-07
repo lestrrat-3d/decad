@@ -114,7 +114,7 @@ the rules leave to the byte budget.
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | `Document.Extrude`: the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's doc comment. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
-| `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication and Revolve reuse. See `docs/sweep-design.md` PR 3. |
+| `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_composite.go` | Composite Sweep join topology, its boundary audit and a surface result's cap omission. See `docs/sweep-design.md` PR 4 and surface §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
@@ -271,6 +271,7 @@ the rules leave to the byte budget.
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/revolveaxis/` | Axis input resolution, walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
+| `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |

@@ -98,19 +98,19 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			if err != nil {
 				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
 			}
-			phi, angle, err := sweepArcAngle(record.radiusStart, record.radiusEnd, record.axis)
+			phi, angle, err := sweepArcAngle(record.RadiusStart, record.RadiusEnd, record.Axis)
 			if err != nil {
 				return nil, fmt.Errorf(`path segment %d: %w`, i, err)
 			}
-			for _, coordinate := range record.center {
+			for _, coordinate := range record.Center {
 				if _, _, ok := sweepRatHeld(coordinate); !ok {
 					return nil, fmt.Errorf(`%w: path segment %d has an unrepresentable circular carrier`, ErrUnsupported, i)
 				}
 			}
 			records[i] = pathSegmentRecord{
 				start: current, end: segment.End,
-				tangentIn:  sweepRatCross(record.axis, record.radiusStart),
-				tangentOut: sweepRatCross(record.axis, record.radiusEnd),
+				tangentIn:  sweepRatCross(record.Axis, record.RadiusStart),
+				tangentOut: sweepRatCross(record.Axis, record.RadiusEnd),
 				arc:        &record,
 				arcPhi:     phi,
 				arcAngle:   angle,
