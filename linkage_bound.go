@@ -714,35 +714,47 @@ func projectionRemainder(b linkBound, below int, h []*big.Rat) *big.Rat {
 // cornerBounds is a corner reading rounded outward to floats and read back
 // as exact rationals, so the per-interval sums of docs/linkage-check-design.md
 // §5.8 run over short dyadics rather than the long rationals of composed
-// rotations: each corner coordinate's enclosure widened to the floats around
-// it, and each velocity component's largest magnitude rounded up. Rounding
-// outward only weakens the bound the values enter.
+// rotations: each corner coordinate's enclosure and each velocity
+// component's enclosure widened to the floats around it. Rounding outward
+// only weakens the bound the values enter.
 type cornerBounds struct {
 	lo, hi [8][3]*big.Rat
-	// speed holds, per corner and per joint on the relative path, an upper
-	// bound on each velocity component's magnitude.
-	speed [8][][3]*big.Rat
+	// vel holds, per corner and per joint on the relative path, each
+	// velocity component's enclosure.
+	vel [8][][3]proofbound.RatInterval
+}
+
+// roundOut widens an enclosure to the floats around it, read back as exact
+// rationals; ok is false when an end overflows a float.
+func roundOut(iv proofbound.RatInterval) (proofbound.RatInterval, bool) {
+	lo := proofarith.FloatRat(proofbound.RatFloatDown(iv.Lo))
+	hi := proofarith.FloatRat(proofbound.RatFloatUp(iv.Hi))
+	if lo == nil || hi == nil {
+		return proofbound.RatInterval{}, false
+	}
+	return proofbound.IntervalOwned(lo, hi), true
 }
 
 // roundCorners rounds a corner reading outward (cornerBounds); ok is false
 // when a value overflows a float.
 func roundCorners(r cornerReading) (cornerBounds, bool) {
 	var out cornerBounds
-	down := func(q *big.Rat) *big.Rat { return proofarith.FloatRat(proofbound.RatFloatDown(q)) }
-	up := func(q *big.Rat) *big.Rat { return proofarith.FloatRat(proofbound.RatFloatUp(q)) }
 	for c := range r.pos {
 		for d := range 3 {
-			out.lo[c][d], out.hi[c][d] = down(r.pos[c][d].Lo), up(r.pos[c][d].Hi)
-			if out.lo[c][d] == nil || out.hi[c][d] == nil {
+			iv, ok := roundOut(r.pos[c][d])
+			if !ok {
 				return cornerBounds{}, false
 			}
+			out.lo[c][d], out.hi[c][d] = iv.Lo, iv.Hi
 		}
-		out.speed[c] = make([][3]*big.Rat, len(r.vel[c]))
+		out.vel[c] = make([][3]proofbound.RatInterval, len(r.vel[c]))
 		for n, v := range r.vel[c] {
 			for d := range 3 {
-				if out.speed[c][n][d] = up(ivAbsUpper(v[d])); out.speed[c][n][d] == nil {
+				iv, ok := roundOut(v[d])
+				if !ok {
 					return cornerBounds{}, false
 				}
+				out.vel[c][n][d] = iv
 			}
 		}
 	}
@@ -753,28 +765,61 @@ func roundCorners(r cornerReading) (cornerBounds, bool) {
 // expands it over an interval: its rounded corner reading at one end, the
 // travel bound h of each joint on its relative path over the interval, and
 // the remainder those give. A static body has no joint and no remainder.
+//
+// seg, when set, is the segment term's step from this end: the enclosure of
+// each joint's signed change Δq_i toward the other end of an interval that
+// holds no waypoint, along which every joint moves together on one straight
+// joint-space segment. The first-order term is then max(0, Σ_i v_i[axis]·Δq_i)
+// rather than the box form's Σ_i |v_i[axis]|·h_i.
 type projectionSide struct {
 	corners cornerBounds
 	h       []*big.Rat
+	seg     []proofbound.RatInterval
 	rem     *big.Rat
+}
+
+// firstOrder is the side's first-order terms at corner c along axis d: a
+// proven upper bound on how far the expansion moves x[d] (up) and −x[d]
+// (down) over the interval. The segment term's sum is linear in the
+// fraction t ∈ [0, 1] of the step, so its largest value is at t = 0 or 1:
+// max(0, Σ) along x[d] and max(0, −Σ) along −x[d], each over the enclosure
+// of Σ. The box form charges |v[d]|·h along both.
+func (s projectionSide) firstOrder(c, d int) (up, down *big.Rat) {
+	if s.seg != nil {
+		sum := proofbound.PointInterval(new(big.Rat))
+		for n, v := range s.corners.vel[c] {
+			sum = proofbound.IntervalAdd(sum, proofbound.IntervalMul(v[d], s.seg[n]))
+		}
+		up, down = new(big.Rat), new(big.Rat)
+		if sum.Hi.Sign() > 0 {
+			up.Set(sum.Hi)
+		}
+		if sum.Lo.Sign() < 0 {
+			down.Neg(sum.Lo)
+		}
+		return up, down
+	}
+	lin := new(big.Rat)
+	for n, v := range s.corners.vel[c] {
+		if s.h[n].Sign() == 0 {
+			continue
+		}
+		term := ivAbsUpper(v[d])
+		lin.Add(lin, term.Mul(term, s.h[n]))
+	}
+	return lin, new(big.Rat).Set(lin)
 }
 
 // extents are proven upper bounds on x[axis] (up) and on −x[axis] (down)
 // over the body at every parameter of the interval, per axis: the largest
-// over its corners of the corner's coordinate end plus each joint's
-// first-order term |v[axis]|·h, then the remainder.
+// over its corners of the corner's coordinate end plus its first-order term,
+// then the remainder.
 func (s projectionSide) extents() (up, down [3]*big.Rat) {
 	for c := range s.corners.hi {
 		for d := range 3 {
-			lin := new(big.Rat)
-			for n, speed := range s.corners.speed[c] {
-				if s.h[n].Sign() == 0 {
-					continue
-				}
-				lin.Add(lin, new(big.Rat).Mul(speed[d], s.h[n]))
-			}
-			hi := new(big.Rat).Add(s.corners.hi[c][d], lin)
-			lo := lin.Sub(lin, s.corners.lo[c][d])
+			linUp, linDown := s.firstOrder(c, d)
+			hi := linUp.Add(linUp, s.corners.hi[c][d])
+			lo := linDown.Sub(linDown, s.corners.lo[c][d])
 			if up[d] == nil || hi.Cmp(up[d]) > 0 {
 				up[d] = hi
 			}
@@ -790,6 +835,35 @@ func (s projectionSide) extents() (up, down [3]*big.Rat) {
 		}
 	}
 	return up, down
+}
+
+// jointStep is Δq_i of docs/linkage-check-design.md §5.8's segment term for
+// joint jt between the fractions sa < sb: the enclosure, widened to floats,
+// of q(sb) − q(sa) in the base unit, 2π·Δturn + Δbase with π over its
+// enclosure. ok is false when a waypoint lies strictly inside (sa, sb) at
+// which the joint's schedule bends — its two neighbouring segments differ in
+// turn or in base, so q is not one affine function of s across it — or when
+// an end overflows. A waypoint on the straight line through its neighbours at
+// equal shares bends nothing (§2.3).
+func jointStep(jt linkJoint, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
+	n := len(jt.points) - 1
+	for j := 1; j < n; j++ {
+		w := big.NewRat(int64(j), int64(n))
+		if w.Cmp(sa) <= 0 || w.Cmp(sb) >= 0 {
+			continue
+		}
+		prev, at, next := jt.points[j-1], jt.points[j], jt.points[j+1]
+		bent := new(big.Rat).Sub(at.Turn, prev.Turn).Cmp(new(big.Rat).Sub(next.Turn, at.Turn)) != 0 ||
+			new(big.Rat).Sub(at.Base, prev.Base).Cmp(new(big.Rat).Sub(next.Base, at.Base)) != 0
+		if bent {
+			return proofbound.RatInterval{}, false
+		}
+	}
+	a, b := jointParam(jt, sa), jointParam(jt, sb)
+	turn := new(big.Rat).Sub(b.Turn, a.Turn)
+	base := new(big.Rat).Sub(b.Base, a.Base)
+	step := proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base))
+	return roundOut(step)
 }
 
 // projectionLower is the largest L_n of docs/linkage-check-design.md §5.8

@@ -54,11 +54,14 @@ func requireIntervalsBelow(t *testing.T, report *decad.LinkageReport, gap func(s
 // shrinks with its first power. Where |Y| ≤ 10 the corner faces the post, and
 // 160 − X is the corner's distance from it, an upper bound on the gap.
 //
-// At the defaults the projection bound closes the reading at the verdict
+// At the defaults the projection bound closes the reading before the verdict
 // floor: Sound, the reading enclosing the minimum inside the gate, no interval
-// narrower than 1/1024. Measured: 22 poses, against 251 under the travel bound
-// alone. The reading floor's own leg, a tolerance that refines past the
-// verdict floor, is TestVerifyLinkageReadingFloor's.
+// narrower than 1/1024. The segment term (§5.8) charges the corner's motion
+// along the drive itself, near zero at the minimum though each joint alone
+// moves it, so the bound is second order in the step. Measured: 16 poses,
+// against 251 under the travel bound alone. The reading floor's own leg, a
+// tolerance that refines past the verdict floor, is
+// TestVerifyLinkageReadingFloor's.
 //
 // Leg seen to fail when deleted: the projection bound (the reading refines to
 // 1/16384, some interval narrower than 1/1024).
@@ -232,4 +235,56 @@ func TestVerifyLinkageTwoArms(t *testing.T) {
 		}
 	}
 	require.Equal(t, len(report.Poses), rows, `the arms are evaluated at every pose`)
+}
+
+// TestVerifyLinkageOutAndBackPin pins where docs/linkage-check-design.md
+// §5.8's segment term stops: a blade x ∈ [0, 50], y ∈ [−0.5, 0.5],
+// z ∈ [0, 10] turns about Z through 0° → 10° → 0°, and a 0.8 mm pin at radius
+// 49 and polar angle 9°, z ∈ [4.6, 5.4], sits in its path near the 10°
+// waypoint at s = 1/2. Both ends of the drive stand at 0°, 6.77 mm below the
+// pin, so the one interval of the endpoints alone holds the waypoint, and
+// its joints leave one straight segment: the box form charges the blade's
+// tip its 50 mm per radian over the 20° the joint travels, and the interval
+// stays undecided. At WithResolution(1/8) the pose at the waypoint finds the
+// collision.
+//
+// Leg seen to fail when deleted: the waypoint test of the segment term (the
+// step from 0° to 0° is zero, the remainder alone is charged, and the
+// interval certifies across the collision).
+func TestVerifyLinkageOutAndBackPin(t *testing.T) {
+	t.Parallel()
+	build := func(t *testing.T) (*decad.Document, *decad.Linkage, decad.Drive, *decad.Body, *decad.Body) {
+		t.Helper()
+		doc := decad.New()
+		blade := boxBody(t, doc, 0, -0.5, 50, 0.5, 10)
+		alpha := 9 * math.Pi / 180
+		cx, cy := 49*math.Cos(alpha), 49*math.Sin(alpha)
+		pin := boxBodyAtZ(t, doc, cx-0.4, cy-0.4, cx+0.4, cy+0.4, 4.6, 0.8)
+		l := decad.NewLinkage()
+		turn, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{blade})
+		require.NoError(t, err)
+		return doc, l, decad.Drive{{
+			Link: turn, From: units.Degrees(0), Via: []units.Value{units.Degrees(10)}, To: units.Degrees(0),
+		}}, blade, pin
+	}
+	t.Run("the endpoints alone never certify the waypoint's interval", func(t *testing.T) {
+		t.Parallel()
+		doc, l, drive, _, _ := build(t)
+		report := verifyLinkage(t, doc, l, drive, decad.WithResolution(units.Scalar(1)))
+		require.Equal(t, decad.Suspect, report.Status)
+		require.Len(t, report.Poses, 2)
+		require.Empty(t, report.Collisions)
+		require.Equal(t, decad.IntervalUndecided, report.Intervals[0].Outcome)
+	})
+	t.Run("the pose at the waypoint finds the pin", func(t *testing.T) {
+		t.Parallel()
+		doc, l, drive, blade, pin := build(t)
+		report := verifyLinkage(t, doc, l, drive, decad.WithResolution(units.Scalar(1.0/8)))
+		require.Equal(t, decad.Interfering, report.Status)
+		require.NotEmpty(t, report.Collisions)
+		for _, hit := range report.Collisions {
+			require.Same(t, blade, hit.A)
+			require.Same(t, pin, hit.B)
+		}
+	})
 }

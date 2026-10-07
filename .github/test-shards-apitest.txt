@@ -1366,7 +1366,8 @@
 5	0.01	TestVertexPlacedRevolveBoundEnclosesDisplacement
 5	0.01	TestWallDraftAllowanceBoundary
 5	0.01	TestWallSectorTooTightForItsFlats
-1	4.40	TestVerifyLinkageReadingFloor
-1	0.68	TestVerifyLinkageThreeJointFlatMinimum
+1	3.65	TestVerifyLinkageReadingFloor
+1	0.48	TestVerifyLinkageThreeJointFlatMinimum
 1	0.33	TestVerifyLinkagePendulum
 2	0.22	TestVerifyLinkageTwoArms
+2	0.05	TestVerifyLinkageOutAndBackPin

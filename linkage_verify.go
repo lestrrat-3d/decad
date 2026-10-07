@@ -291,8 +291,10 @@ func (dr *linkageDriver) travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 // projection is the projection bound of docs/linkage-check-design.md §5.8
 // for pair k of mover i over the interval between poses a and b: each body's
 // inflated box expanded from each end to second order in its joints' travel
-// over the interval, the largest separation along the six coordinate
-// directions, the larger of the two ends' readings. A link-link pair drops
+// over the interval — along the drive's own segment when no waypoint lies
+// inside it, over the box of the joints' travel otherwise — the largest
+// separation along the six coordinate directions, the larger of the two
+// ends' readings. A link-link pair drops
 // the joints at and above the two links' lowest common ancestor, as travel
 // does. It is nil when either body's relative path holds a loop's dependent
 // joint, whose value is an enclosure the expansion does not consume, or a box
@@ -322,13 +324,23 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 	if other >= 0 {
 		remTheirs = projectionRemainder(theirs, below, hTheirs)
 	}
+	segMine := dr.projectionSteps(mine, below, a.f, b.f)
+	var segTheirs []proofbound.RatInterval
+	if other >= 0 {
+		segTheirs = dr.projectionSteps(theirs, below, a.f, b.f)
+	}
+	if segMine == nil || (other >= 0 && segTheirs == nil) {
+		segMine, segTheirs = nil, nil
+	}
 	var best *big.Rat
-	for _, end := range []*motionPose{a, b} {
+	for n, end := range []*motionPose{a, b} {
 		cm, ok := dr.cornersAt(end, i, mine, below)
 		if !ok {
 			return nil
 		}
-		side := projectionSide{corners: cm, h: hMine, rem: remMine}
+		// From end b the segment runs backward.
+		backward := n == 1
+		side := projectionSide{corners: cm, h: hMine, seg: stepsFrom(segMine, backward), rem: remMine}
 		var partner projectionSide
 		if other < 0 {
 			lo, hi, ok := boxCornersExact(r.statics[k].body.bounds, new(big.Rat))
@@ -345,7 +357,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 			if !ok {
 				return nil
 			}
-			partner = projectionSide{corners: ct, h: hTheirs, rem: remTheirs}
+			partner = projectionSide{corners: ct, h: hTheirs, seg: stepsFrom(segTheirs, backward), rem: remTheirs}
 		}
 		if l := projectionLower(side, partner); best == nil || l.Cmp(best) > 0 {
 			best = l
@@ -373,6 +385,36 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 		h = append(h, span)
 	}
 	return h, true
+}
+
+// projectionSteps is each joint's segment step Δq_i over [sa, sb] on b's path
+// from position below on (jointStep), for docs/linkage-check-design.md §5.8's
+// segment term; nil when a waypoint lies inside the interval, or a step
+// cannot be read, and the box form serves.
+func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
+	steps := make([]proofbound.RatInterval, 0, len(b.path)-below)
+	for _, i := range b.path[below:] {
+		step, ok := jointStep(dr.spec.joints[i], sa, sb)
+		if !ok {
+			return nil
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
+// stepsFrom is the segment steps read from one end: as they are from the
+// interval's first end, negated from its second, where the segment runs
+// backward. nil stays nil.
+func stepsFrom(steps []proofbound.RatInterval, backward bool) []proofbound.RatInterval {
+	if steps == nil || !backward {
+		return steps
+	}
+	out := make([]proofbound.RatInterval, len(steps))
+	for n, step := range steps {
+		out[n] = proofbound.IntervalNeg(step)
+	}
+	return out
 }
 
 // cornersAt is mover m's corner reading at a pose under the joints on its
