@@ -227,6 +227,7 @@ the rules leave to the byte budget.
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`'s interference path. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B `Cut`/`Union`/`Intersect` of a face view and a perpendicular prism. See general-boolean §3 B. |
+| `classb_crossing.go` / `classb_canonical.go` | Class-B `Cut`'s crossing reach and its keyed vertices. See general-boolean §5, §10. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
 | `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |

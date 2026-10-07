@@ -244,25 +244,22 @@ func TestClassBChain(t *testing.T) {
 	})
 }
 
-// TestClassBBreakingOutHoleWaitsOnCrossings is §9's hole breaking out of the
-// bar's top: a Ø4 hole along y at z = 9 crosses the top face z = 10, so the
-// pin's tube meets three faces and the pair misses the through reach. The
-// crossing reach (§10's keyed crossing table) builds it analytically; until
-// it lands the pair takes the mesh path, whose volume covers the closed form:
-// the bar less the disc's part below the top, 20·(8π/3 + √3).
-func TestClassBBreakingOutHoleWaitsOnCrossings(t *testing.T) {
+// TestClassBBreakingOutHole is §9's hole breaking out of the bar's top: a Ø4
+// hole along y at z = 9 crosses the top face z = 10, so the pair misses the
+// through reach and builds through the crossing reach: the top face splits
+// in two, and the volume is the bar less the disc's part below the top,
+// 20·(8π/3 + √3), within its bound.
+func TestClassBBreakingOutHole(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	bar := internalBoxBody(t, doc, 0, 0, 60, 20, 10)
 	hole := internalBarHole(t, doc, 30, 9)
-	_, ok, err := tryClassB(t.Context(), meshbool.OpCut, bar, hole)
-	require.NoError(t, err)
-	require.False(t, ok, `the top face meets the hole's tube`)
 	got, err := Cut(t.Context(), bar, hole)
 	require.NoError(t, err)
-	requireMeshPathResult(t, got)
+	requireBrep(t, got)
 	want := 12000 - 20*(8*math.Pi/3+math.Sqrt(3))
-	require.InDelta(t, want, got.volume.Value.Base(), got.volume.Bound.Base())
+	require.InDelta(t, want, got.volume.Value.Base(), got.volume.Bound.Base()+1e-9*want)
+	require.Less(t, got.volume.Bound.Base(), 1e-6)
 }
 
 // TestClassBStackedTarget cuts a cross hole under the pocket of a blind-cut

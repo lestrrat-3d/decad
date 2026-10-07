@@ -199,36 +199,6 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 	}
 }
 
-func TestClassBCutKeywayTakesMeshPath(t *testing.T) {
-	t.Parallel()
-	// §9's B2: the key crosses the rod's circle, so its scenes would cut a
-	// circular edge. This increment builds no crossing reach, and the pair
-	// takes the mesh path.
-	doc := New()
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XZ(), -20)
-	require.NoError(t, err)
-	rod := internalClassBTool(t, doc, w, plane, 20, func(s *sketch.Sketch) {
-		c := s.CreatePoint(0, 0)
-		s.Fix(c)
-		s.CreateCircle(c, 10)
-	})
-	key := internalBoxBodyAtZ(t, doc, -2, -1, 2, 41, 0, 12)
-	cp, admitted, err := admitClassBPair(t.Context(), rod, key)
-	require.NoError(t, err)
-	require.True(t, admitted, `B1–B8 admit the keyway`)
-	_, through, err := classBThroughReach(t.Context(), cp)
-	require.NoError(t, err)
-	require.False(t, through)
-	result, err := Cut(t.Context(), rod, key)
-	require.NoError(t, err)
-	requireMeshPathResult(t, result)
-	// π·100·40 − 40·(2·√96 + 100·asin(0.2)), within the mesh's own bound.
-	strip := 2*math.Sqrt(96) + 100*math.Asin(0.2)
-	want := math.Pi*100*40 - 40*strip
-	require.InDelta(t, want, result.volume.Value.Base(), result.volume.Bound.Base())
-}
-
 func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 	t.Parallel()
 	box := func(doc *Document) *Body { return internalBoxBody(t, doc, 0, 0, 40, 20, 20) }

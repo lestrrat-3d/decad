@@ -252,6 +252,7 @@
 3	0.00	TestBoxesDisjointUsesExactInflatedEndpoints
 3	0.01	TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames
 3	0.02	TestBrepFaceViewChargesSectionDisplacement
+3	0.02	TestBrepFaceViewJoinsACrossingBuiltPrism
 3	0.01	TestBrepFaceViewOfAllLinePrismMatchesItsMeasurements
 3	0.01	TestBrepFaceViewOfCircularPrismCoversItsMeasurements
 3	0.01	TestBrepFaceViewOfSquareBossUnionMatchesItsMeasurements
@@ -341,12 +342,15 @@
 3	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
 3	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 3	0.00	TestClampedConversionCostIsQuadratic
-3	0.30	TestClassBBreakingOutHoleWaitsOnCrossings
+3	0.30	TestClassBBreakingOutHole
 3	0.30	TestClassBChain
+3	0.02	TestClassBCrossingBlindCrossHole
+3	0.03	TestClassBCrossingHoleBreakingOut
+3	0.03	TestClassBCrossingKeyway
+3	0.01	TestClassBCrossingToolCrossingAWall
 3	0.02	TestClassBCutCrossDrilledBox
 3	0.01	TestClassBCutCrossSlot
 3	0.02	TestClassBCutExactOffsetPlane
-3	0.10	TestClassBCutKeywayTakesMeshPath
 3	0.30	TestClassBMissesAFaceInsideTheTube
 3	0.30	TestClassBRootedPin
 3	0.30	TestClassBStackedTarget

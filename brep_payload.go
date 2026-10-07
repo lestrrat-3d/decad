@@ -132,6 +132,14 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 	if pp.surfaceResult {
 		return brepPayload{}, fmt.Errorf(`%w: a surface-result prism has no closed face view`, ErrUnsupported)
 	}
+	profile, allow, err := brepJoinProfile(pp.profile)
+	if err != nil {
+		return brepPayload{}, err
+	}
+	pp.profile = profile
+	if allow > 0 {
+		pp.sectionDelta = proofbound.AbsSumUpper(pp.sectionDelta, allow)
+	}
 	bp := brepPayload{xform: pp.xform}
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		for _, seg := range loop.Segments {
@@ -158,6 +166,10 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // audited first, so a stack its own build refuses has no face view either.
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
 	if err := falsifyStackedPayload(ctx, sp); err != nil {
+		return brepPayload{}, err
+	}
+	sp, err := brepJoinStacked(sp)
+	if err != nil {
 		return brepPayload{}, err
 	}
 	columns, _, err := stackedColumns(sp)
@@ -192,6 +204,144 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 	}
 	bp.assignRoles()
 	return bp, nil
+}
+
+// brepJoinLoop makes every junction of a loop one point. A boolean's cut
+// fragment records its carrier and a narrowed range, and the two fragments
+// meeting at a cut walk to that cut at two different floats — a line's lerp
+// and a circle's cosine — so the brep's pairing by record identity (§4.2)
+// would not meet them. Each junction takes one of the two: a line's point,
+// whose fixed coordinate the lerp keeps exact, else the lexicographically
+// smaller, so a loop and its reversal choose alike. Every segment is then
+// rewritten between its two junctions: a line whole, a circular fragment as
+// an arc pinned there about its recorded centre. Both walked points sit
+// within the record's own section displacement of the crossing they denote,
+// plus their walk's rounding, so the rewrite moves the boundary by at most
+// that rounding beyond the record's displacement; allow is its largest
+// value, zero when every junction already met. A whole closed segment is left
+// alone.
+func brepJoinLoop(loop LoopRecord) (LoopRecord, float64, error) {
+	n := len(loop.Segments)
+	if n < 2 {
+		return loop, 0, nil
+	}
+	for _, seg := range loop.Segments {
+		switch seg.(type) {
+		case LineSeg, CircleSeg, ArcSeg:
+		default:
+			// A free-form loop has no brep face (falsifyBrepPayload refuses it),
+			// so it has nothing to join.
+			return loop, 0, nil
+		}
+	}
+	walks := make([]survey2d.SegmentWalk, n)
+	for i, seg := range loop.Segments {
+		w, err := walkOf(seg, nil)
+		if err != nil {
+			return LoopRecord{}, 0, err
+		}
+		walks[i] = w
+	}
+	joins := make([]Point2, n)
+	allow := 0.0
+	met := true
+	for i := range n {
+		j := (i + 1) % n
+		end := Point2{U: walks[i].EndU, V: walks[i].EndV}
+		start := Point2{U: walks[j].StartU, V: walks[j].StartV}
+		if end == start {
+			joins[i] = end
+			continue
+		}
+		met = false
+		pick, bound := end, walks[i].EndBound
+		switch {
+		case walks[j].IsLine() && !walks[i].IsLine():
+			pick, bound = start, walks[j].StartBound
+		case walks[i].IsLine() && !walks[j].IsLine():
+		case start.U < end.U || (start.U == end.U && start.V < end.V):
+			pick, bound = start, walks[j].StartBound
+		}
+		joins[i] = pick
+		allow = math.Max(allow, proofbound.WalkEndBoundAllow(bound))
+	}
+	if met {
+		return loop, 0, nil
+	}
+	out := LoopRecord{Segments: make([]CurveSegment, n)}
+	for i, w := range walks {
+		from, to := joins[(i+n-1)%n], joins[i]
+		if w.IsLine() {
+			out.Segments[i] = LineSeg{Start: from, End: to, TStart: 0, TEnd: 1}
+			continue
+		}
+		out.Segments[i] = arcSegment(Point2{U: w.CU, V: w.CV}, from, to, w.Th1 > w.Th0)
+	}
+	return out, allow, nil
+}
+
+// brepJoinProfile is brepJoinLoop over every loop of a region.
+func brepJoinProfile(p ProfileRecord) (ProfileRecord, float64, error) {
+	outer, allow, err := brepJoinLoop(p.Outer)
+	if err != nil {
+		return ProfileRecord{}, 0, err
+	}
+	out := ProfileRecord{Outer: outer}
+	for _, hole := range p.Holes {
+		joined, a, err := brepJoinLoop(hole)
+		if err != nil {
+			return ProfileRecord{}, 0, err
+		}
+		out.Holes = append(out.Holes, joined)
+		allow = math.Max(allow, a)
+	}
+	return out, allow, nil
+}
+
+// brepJoinStacked is brepJoinLoop over every region and exposed record of a
+// stack, charging the largest allow to its section displacement. Equal loops
+// join alike, so the columns stackedColumns derives are unchanged.
+func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
+	allow := 0.0
+	join := func(p ProfileRecord) (ProfileRecord, error) {
+		out, a, err := brepJoinProfile(p)
+		allow = math.Max(allow, a)
+		return out, err
+	}
+	out := sp
+	out.slabs = make([]prismSlab, len(sp.slabs))
+	for k, slab := range sp.slabs {
+		out.slabs[k] = slab
+		out.slabs[k].regions = make([]ProfileRecord, len(slab.regions))
+		for r, region := range slab.regions {
+			joined, err := join(region)
+			if err != nil {
+				return stackedPrismPayload{}, err
+			}
+			out.slabs[k].regions[r] = joined
+		}
+	}
+	out.interfaces = make([]prismSlabInterface, len(sp.interfaces))
+	for k, boundary := range sp.interfaces {
+		for _, region := range boundary.lowerExposed {
+			joined, err := join(region)
+			if err != nil {
+				return stackedPrismPayload{}, err
+			}
+			out.interfaces[k].lowerExposed = append(out.interfaces[k].lowerExposed, joined)
+		}
+		for _, region := range boundary.upperExposed {
+			joined, err := join(region)
+			if err != nil {
+				return stackedPrismPayload{}, err
+			}
+			out.interfaces[k].upperExposed = append(out.interfaces[k].upperExposed, joined)
+		}
+	}
+	if allow > 0 {
+		out.sectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, allow)
+	}
+	return out, nil
 }
 
 // brepEmbed maps one face frame's local axes onto the reference frame's: local

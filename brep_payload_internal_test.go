@@ -626,3 +626,29 @@ func TestBrepModifyOpsAreStaged(t *testing.T) {
 	require.ErrorContains(t, err, "SX16")
 	require.NoError(t, doc.requireLive(body))
 }
+
+func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	box := internalBoxBody(t, doc, 0, 0, 40, 20, 10)
+	bite := internalCircleBody(t, doc, 40, 5, 0, Distance{D: units.Millimeters(10), Dir: Along})
+	prism, err := Cut(t.Context(), box, bite)
+	require.NoError(t, err)
+	pp, ok := prism.payload.(prismPayload)
+	require.True(t, ok)
+	// The premise: the cut's two fragments walk to their shared corner at
+	// two different floats.
+	joined, _, err := brepJoinProfile(pp.profile)
+	require.NoError(t, err)
+	require.NotEqual(t, pp.profile, joined)
+	brep := internalBrepBody(t, prism)
+	requireClosedTopology(t, brep)
+	require.Len(t, brep.Faces(), len(prism.Faces()))
+	// 40·20·10 less a quarter of a radius-5 disc over the 10 mm height.
+	lo, hi := piEnclosed(big.NewRat(8000, 1), big.NewRat(-125, 2))
+	requireCoversInterval(t, brep.volume, lo, hi)
+	requireCoversInterval(t, prism.volume, lo, hi)
+	for _, f := range brep.payload.(brepPayload).faces {
+		require.GreaterOrEqual(t, f.delta, pp.sectionDelta, `every face keeps the record's own displacement`)
+	}
+}
