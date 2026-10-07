@@ -3,13 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweeparc"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -25,15 +23,8 @@ type sweepArcGeometry struct {
 	den  angleDenotation
 }
 
-type sweepRatVec [3]*big.Rat
-
-type sweepArcRecord struct {
-	center       sweepRatVec
-	radiusStart  sweepRatVec
-	radiusMiddle sweepRatVec
-	radiusEnd    sweepRatVec
-	axis         sweepRatVec
-}
+type sweepRatVec = sweeparc.RatVec
+type sweepArcRecord = sweeparc.Record
 
 func evalArcSweepContext(
 	ctx context.Context,
@@ -121,9 +112,9 @@ func deriveSweepArc(pathRecord pathSegmentRecord, plane PlaneRecord) (sweepArcGe
 		return sweepArcGeometry{}, fmt.Errorf(`%w: a sweep arc path record holds no circular carrier`, ErrDegenerate)
 	}
 	record := *pathRecord.arc
-	centerRat := record.center
-	r0, rm, r1 := record.radiusStart, record.radiusMiddle, record.radiusEnd
-	axisRat := record.axis
+	centerRat := record.Center
+	r0, rm, r1 := record.RadiusStart, record.RadiusMiddle, record.RadiusEnd
+	axisRat := record.Axis
 	tangent := sweepRatCross(axisRat, r0)
 	normalRat := sweepRatFromDyadic(normal)
 	if !sweepRatIsZero(sweepRatCross(tangent, normalRat)) || sweepRatDot(tangent, normalRat).Sign() <= 0 {
@@ -152,202 +143,46 @@ func deriveSweepArc(pathRecord pathSegmentRecord, plane PlaneRecord) (sweepArcGe
 }
 
 func recordSweepArc(start, through, end r3.Vec) (sweepArcRecord, error) {
-	p0, pm, p1 := sweepRatVecOf(start), sweepRatVecOf(through), sweepRatVecOf(end)
-	a, b := sweepRatSub(pm, p0), sweepRatSub(p1, p0)
-	aa, ab, bb := sweepRatDot(a, a), sweepRatDot(a, b), sweepRatDot(b, b)
-	det := new(big.Rat).Sub(
-		new(big.Rat).Mul(aa, bb),
-		new(big.Rat).Mul(ab, ab),
-	)
-	if det.Sign() == 0 {
-		return sweepArcRecord{}, fmt.Errorf(`%w: a sweep arc requires three non-collinear points`, ErrDegenerate)
-	}
-	twoDet := new(big.Rat).Mul(det, big.NewRat(2, 1))
-	alpha := new(big.Rat).Quo(
-		new(big.Rat).Mul(bb, new(big.Rat).Sub(aa, ab)),
-		twoDet,
-	)
-	beta := new(big.Rat).Quo(
-		new(big.Rat).Mul(aa, new(big.Rat).Sub(bb, ab)),
-		twoDet,
-	)
-	centerRat := sweepRatAdd(p0, sweepRatScale(a, alpha), sweepRatScale(b, beta))
-	r0 := sweepRatSub(p0, centerRat)
-	rm := sweepRatSub(pm, centerRat)
-	r1 := sweepRatSub(p1, centerRat)
-	axisRat := sweepRatCross(a, b)
-	return sweepArcRecord{
-		center:       centerRat,
-		radiusStart:  r0,
-		radiusMiddle: rm,
-		radiusEnd:    r1,
-		axis:         axisRat,
-	}, nil
+	return sweeparc.RecordArc(start, through, end)
 }
 
 func sweepArcAxisLine(center, axis sweepRatVec, plane PlaneRecord) (axisLine2, error) {
-	origin := sweepRatVecOf(plane.Origin)
-	u, v := sweepRatVecOf(plane.U), sweepRatVecOf(plane.V)
-	rel := sweepRatSub(center, origin)
-	aUExact, aVExact := sweepRatDot(rel, u), sweepRatDot(rel, v)
-	dURaw, dVRaw := sweepRatDot(axis, u), sweepRatDot(axis, v)
-	lengthSquared := new(big.Rat).Add(
-		new(big.Rat).Mul(dURaw, dURaw),
-		new(big.Rat).Mul(dVRaw, dVRaw),
-	)
-	if lengthSquared.Sign() == 0 {
-		return axisLine2{}, fmt.Errorf(`%w: the sweep arc has no axis direction in the profile plane`, ErrDegenerate)
-	}
-
-	aU, aUBound, ok := sweepRatHeld(aUExact)
-	if !ok {
-		return axisLine2{}, fmt.Errorf(`%w: the sweep arc's axis anchor is outside the representable range`, ErrUnsupported)
-	}
-	aV, aVBound, ok := sweepRatHeld(aVExact)
-	if !ok {
-		return axisLine2{}, fmt.Errorf(`%w: the sweep arc's axis anchor is outside the representable range`, ErrUnsupported)
-	}
-	dU, dV, ok := sweepNormalizedRat2(dURaw, dVRaw, lengthSquared)
-	if !ok {
-		return axisLine2{}, fmt.Errorf(`%w: the sweep arc's axis direction is outside the representable range`, ErrUnsupported)
-	}
-	dUBound, dVBound := axisDirectionSqrtBracket(dURaw, dVRaw, dU, dV)
-	if !finiteAxisValues(aU, aV, aUBound, aVBound, dU, dV, dUBound, dVBound) {
-		return axisLine2{}, fmt.Errorf(`%w: the sweep arc's axis has no finite publication bound`, ErrUnsupported)
+	line, err := sweeparc.AxisLine(center, axis, plane.Origin, plane.U, plane.V)
+	if err != nil {
+		return axisLine2{}, err
 	}
 	return axisLine2{
-		aU: aU, aV: aV,
-		aUBound: aUBound, aVBound: aVBound,
-		dU: dU, dV: dV,
-		dUBound: dUBound, dVBound: dVBound,
+		aU: line.AU, aV: line.AV,
+		aUBound: line.AUBound, aVBound: line.AVBound,
+		dU: line.DU, dV: line.DV,
+		dUBound: line.DUBound, dVBound: line.DVBound,
 	}, nil
 }
 
 func sweepArcAngle(r0, r1, axis sweepRatVec) (float64, angleDenotation, error) {
-	dot := sweepRatDot(r0, r1)
-	cross := sweepRatCross(r0, r1)
-	crossSquared := sweepRatDot(cross, cross)
-	orientation := sweepRatDot(axis, cross).Sign()
-	if dot.Sign() == 0 {
-		if orientation > 0 {
-			return math.Pi / 2, angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 4)}, nil
-		}
-		return 3 * math.Pi / 2, angleDenotation{rad: new(big.Rat), turn: big.NewRat(3, 4)}, nil
-	}
-	if orientation == 0 {
-		if dot.Sign() >= 0 {
-			return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc closes without a directed span`, ErrDegenerate)
-		}
-		return math.Pi, angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 2)}, nil
-	}
-	sinMagnitude, ok := proofbound.IntervalSqrt(proofbound.PointInterval(crossSquared))
-	if !ok || sinMagnitude.Lo.Sign() <= 0 {
-		return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc angle has no finite enclosure`, ErrUnsupported)
-	}
-	positive := sweepPositiveAtan2Span(sinMagnitude, dot)
-	span := positive
-	if orientation < 0 {
-		span = proofbound.IntervalSub(proofbound.TwoPiInterval(), positive)
-	}
-	phiRat := new(big.Rat).Quo(new(big.Rat).Add(span.Lo, span.Hi), big.NewRat(2, 1))
-	phi, _, ok := sweepRatHeld(phiRat)
-	if !ok || phi <= 0 || phi >= 2*math.Pi {
-		return 0, angleDenotation{}, fmt.Errorf(`%w: the sweep arc angle is outside the representable range`, ErrUnsupported)
-	}
-	return phi, angleDenotation{span: &span}, nil
-}
-
-func sweepPositiveAtan2Span(y proofbound.RatInterval, x *big.Rat) proofbound.RatInterval {
-	if x.Sign() >= 0 {
-		return proofbound.Interval(proofbound.Atan2Interval(y.Lo, x, false).Lo, proofbound.Atan2Interval(y.Hi, x, false).Hi)
-	}
-	return proofbound.Interval(proofbound.Atan2Interval(y.Hi, x, false).Lo, proofbound.Atan2Interval(y.Lo, x, false).Hi)
+	phi, angle, err := sweeparc.ArcAngle(r0, r1, axis)
+	return phi, angleFromInternal(angle), err
 }
 
 func sweepRatHeld(value *big.Rat) (float64, float64, bool) {
-	held, _ := value.Float64()
-	if math.IsNaN(held) || math.IsInf(held, 0) {
-		return 0, 0, false
-	}
-	bound := proofarith.RationalFloatError(value, held)
-	return held, bound, !math.IsNaN(bound) && !math.IsInf(bound, 0)
+	return sweeparc.Held(value)
 }
 
-func sweepNormalizedRat2(u, v, lengthSquared *big.Rat) (float64, float64, bool) {
-	const precision = 256
-	length := new(big.Float).SetPrec(precision).SetRat(lengthSquared)
-	length.Sqrt(length)
-	if length.Sign() == 0 {
-		return 0, 0, false
-	}
-	component := func(value *big.Rat) float64 {
-		f := new(big.Float).SetPrec(precision).SetRat(value)
-		f.Quo(f, length)
-		held, _ := f.Float64()
-		return held
-	}
-	heldU, heldV := component(u), component(v)
-	if !finiteAxisValues(heldU, heldV) {
-		return 0, 0, false
-	}
-	return heldU, heldV, true
-}
+func sweepRatVecOf(v r3.Vec) sweepRatVec { return sweeparc.VecOf(v) }
 
-func sweepRatVecOf(v r3.Vec) sweepRatVec {
-	return sweepRatVec{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-}
+func sweepRatFromDyadic(v proofarith.DyV3) sweepRatVec { return sweeparc.FromDyadic(v) }
 
-func sweepRatFromDyadic(v proofarith.DyV3) sweepRatVec {
-	return sweepRatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
-}
+func sweepRatAdd(vectors ...sweepRatVec) sweepRatVec { return sweeparc.Add(vectors...) }
 
-func sweepRatAdd(vectors ...sweepRatVec) sweepRatVec {
-	out := sweepRatVec{new(big.Rat), new(big.Rat), new(big.Rat)}
-	for _, vector := range vectors {
-		for i := range out {
-			out[i].Add(out[i], vector[i])
-		}
-	}
-	return out
-}
+func sweepRatSub(a, b sweepRatVec) sweepRatVec { return sweeparc.Sub(a, b) }
 
-func sweepRatSub(a, b sweepRatVec) sweepRatVec {
-	return sweepRatVec{
-		new(big.Rat).Sub(a[0], b[0]),
-		new(big.Rat).Sub(a[1], b[1]),
-		new(big.Rat).Sub(a[2], b[2]),
-	}
-}
+func sweepRatScale(v sweepRatVec, scale *big.Rat) sweepRatVec { return sweeparc.Scale(v, scale) }
 
-func sweepRatScale(v sweepRatVec, scale *big.Rat) sweepRatVec {
-	return sweepRatVec{
-		new(big.Rat).Mul(v[0], scale),
-		new(big.Rat).Mul(v[1], scale),
-		new(big.Rat).Mul(v[2], scale),
-	}
-}
+func sweepRatDot(a, b sweepRatVec) *big.Rat { return sweeparc.Dot(a, b) }
 
-func sweepRatDot(a, b sweepRatVec) *big.Rat {
-	return proofbound.RatAdd(
-		new(big.Rat).Mul(a[0], b[0]),
-		new(big.Rat).Mul(a[1], b[1]),
-		new(big.Rat).Mul(a[2], b[2]),
-	)
-}
+func sweepRatCross(a, b sweepRatVec) sweepRatVec { return sweeparc.Cross(a, b) }
 
-func sweepRatCross(a, b sweepRatVec) sweepRatVec {
-	component := func(i, j int) *big.Rat {
-		return new(big.Rat).Sub(
-			new(big.Rat).Mul(a[i], b[j]),
-			new(big.Rat).Mul(a[j], b[i]),
-		)
-	}
-	return sweepRatVec{component(1, 2), component(2, 0), component(0, 1)}
-}
-
-func sweepRatIsZero(v sweepRatVec) bool {
-	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
-}
+func sweepRatIsZero(v sweepRatVec) bool { return sweeparc.IsZero(v) }
 
 // finishArcSweepBody restores Table B's own role vocabulary on an arc
 // reduction, which builds through the Revolve evaluator and so mints roles

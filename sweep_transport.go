@@ -73,7 +73,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span holds no circular carrier`, ErrDegenerate)
 	}
 	arc := *record.arc
-	axisExact, status := surfacenormal.UnitVec3(sweepRatIntervalVec(arc.axis))
+	axisExact, status := surfacenormal.UnitVec3(sweepRatIntervalVec(arc.Axis))
 	if status != surfacenormal.Proven {
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified axis direction`, ErrUnsupported)
 	}
@@ -82,7 +82,7 @@ func transportSweepArc(current sweepTransportFrame, record pathSegmentRecord) (s
 		return sweepTransportFrame{}, fmt.Errorf(`%w: an arc span has no certified sine and cosine`, ErrUnsupported)
 	}
 	return sweeptransport.TransportArc(current, sweeptransport.Arc{
-		CenterExact: sweepRatIntervalVec(arc.center),
+		CenterExact: sweepRatIntervalVec(arc.Center),
 		AxisExact:   axisExact,
 		Sin:         sin, Cos: cos,
 		Phi: record.arcPhi,
