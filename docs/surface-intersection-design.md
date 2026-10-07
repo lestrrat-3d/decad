@@ -121,7 +121,7 @@ chain-revolve build, not a bound and not a gate.
 
 decad builds one private `sketch.Sketch`, the same
 `sketch.NewWorld().CreateSketch(...)` pattern `buildPrismScene`
-(`prism_boolean.go`) and `momentRecordScene` (`internal/momentvalidate/reconstruct.go`) already
+(`prism_boolean.go`) and `momentRecordScene` (`internal/momentinput/reconstruct.go`) already
 use. **`buildPrismScene` is reused**, over three extensions and no new scene
 code:
 

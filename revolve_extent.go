@@ -196,7 +196,7 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 // sectionCoordUpper widens the RECORDED meridian's own coordinate envelope
 // into one that covers the meridian the record DENOTES
 // (docs/surface-intersection-design.md §7.1). coordUpper is an L1 magnitude
-// (internal/walkconvert/walk.go's ratL1Upper), so a point whose two components each move by
+// (internal/boundarywalk/walk.go's ratL1Upper), so a point whose two components each move by
 // at most sectionDelta adds at most twice it. Every term the axis frame and the
 // sweep extreme charge at an envelope has to be charged at THIS one, or those
 // two terms would be proven against the recorded meridian while the extreme

@@ -284,7 +284,7 @@ silent fallback stops being available:
 ### 4.1 Scene construction
 
 For an admitted pair, decad builds one private `sketch.Sketch` (the same
-`sketch.NewWorld().CreateSketch(...)` pattern `internal/momentvalidate/reconstruct.go`'s
+`sketch.NewWorld().CreateSketch(...)` pattern `internal/momentinput/reconstruct.go`'s
 `momentRecordScene` already uses for authentication):
 
 - Operand A's frame is the reference (`target`'s, for `Cut`). Every entity —

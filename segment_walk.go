@@ -11,7 +11,7 @@ import (
 )
 
 // This file caches the profile-boundary walks extrude, revolve and loft read.
-// internal/walkconvert builds each survey2d.SegmentWalk from a recorded segment.
+// internal/boundarywalk builds each survey2d.SegmentWalk from a recorded segment.
 //
 // A walk is the recorded segment restated in the form a sweep needs — a
 // centre, a radius and a turn for a circular kind, two endpoints for a line,
@@ -38,7 +38,7 @@ import (
 // which need a placed cap frame a free-form wall genuinely cannot represent.
 //
 // The one call site that reaches walkOf without this gate is
-// internal/momentvalidate/validate.go's validateMomentWalk: it runs only after every
+// internal/momentinput/validate.go's validateMomentWalk: it runs only after every
 // free-form segment kind has already been diverted to the exact integrator
 // (spline_bezier.go/spline_moments.go), so a free-form segment never reaches
 // it. This is deliberate, not a missed gate — adding one here would be dead

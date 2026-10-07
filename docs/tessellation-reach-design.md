@@ -700,7 +700,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `chordStationBound(w segmentWalk, k, n int) walkEndBound` for a circular walk's interior sample —
    `circularWalkEndBound`'s mechanism at fraction `k/n` (`turnSinCosInterval` for `CircleSeg`,
    `radSinCosSpan` over `atan2Interval` for `ArcSeg`). **Pattern:**
-   `internal/walkconvert/walk.go`'s `circularWalkEndBound`, `moments_circular.go`'s `circularEndpointInterval`. **Tests:** internal:
+   `internal/boundarywalk/walk.go`'s `circularWalkEndBound`, `moments_circular.go`'s `circularEndpointInterval`. **Tests:** internal:
    a quarter-turn `CircleSeg` sample at `k/n = 1/2` publishes a bound within 4 ulps of `r`; an `ArcSeg` sample
    publishes a finite positive bound; a non-derivable enclosure answers `+Inf`.
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of

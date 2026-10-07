@@ -493,7 +493,7 @@ sketch's reconstruction rebuilds the SAME entity from the SAME `Fit` points
 and reports the SAME dedup-collapsed curve every time, so it can never falsify
 this particular mismatch. decad's own moments path therefore runs the one
 self-consistency check that CAN: `requireFitSplineTerminalJoins`
-(`internal/momentvalidate/validate.go`) compares the converted chain's own natural-end
+(`internal/momentinput/validate.go`) compares the converted chain's own natural-end
 coordinate against `Fit[len(Fit)-1]` by exact identity — not a tolerance,
 since the two floats are bit-identical whenever nothing was collapsed — and
 refuses `ErrDegenerate` on any difference (R17): the record's own boundary
@@ -512,7 +512,7 @@ same "full domain" cause every other Tier A kind reports.
 **R16.** `geom.NewFitInterpolant` returns `ErrNonFiniteFitInterpolant` when
 finite fit coordinates give a cumulative chord parameter or a span coefficient
 that leaves float64 range, or a parameter that stalls. The fit points
-themselves are finite — checked by `internal/curveconvert/fit.go`'s scan immediately
+themselves are finite — checked by `internal/splinebezier/fit.go`'s scan immediately
 before the call, since `record.go`'s validation runs only at JSON decode and a
 caller-built `ProfileRecord` reaches this reduction without ever passing
 through it — so this is `ErrUnsupported` — the curve exists, described by
