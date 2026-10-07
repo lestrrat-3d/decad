@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/big"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
@@ -197,42 +196,14 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 	return lp, nil
 }
 
-// coordinateAxis reads an axis exactly parallel to a coordinate axis: its
-// index and sense; ok is false for any other direction.
-func coordinateAxis(v r3.Vec) (int, int, bool) {
-	c := [3]float64{v.X, v.Y, v.Z}
-	idx := -1
-	for i, x := range c {
-		if x == 0 {
-			continue
-		}
-		if idx >= 0 {
-			return 0, 0, false
-		}
-		idx = i
-	}
-	if idx < 0 {
-		return 0, 0, false
-	}
-	if c[idx] < 0 {
-		return idx, -1, true
-	}
-	return idx, 1, true
-}
+// coordinateAxis reads an exactly coordinate-aligned axis and its sense.
+func coordinateAxis(v r3.Vec) (int, int, bool) { return linkagebound.CoordinateAxis(v) }
 
 // unitAxis is sense·e_axis.
-func unitAxis(axis, sense int) r3.Vec {
-	c := [3]float64{}
-	c[axis] = float64(sense)
-	return r3.NewVec(c[0], c[1], c[2])
-}
+func unitAxis(axis, sense int) r3.Vec { return linkagebound.UnitAxis(axis, sense) }
 
-// ratVecExact reads a finite vector exactly; every caller has checked it is
-// finite.
-func ratVecExact(v r3.Vec) motionbound.RatVec {
-	out, _ := motionbound.RatVecOf(v)
-	return out
-}
+// ratVecExact reads a finite held vector exactly.
+func ratVecExact(v r3.Vec) motionbound.RatVec { return linkagebound.ExactVec(v) }
 
 // commonAncestor is the lowest common ancestor of a and b in their tree.
 func commonAncestor(a, b *Link) *Link {
@@ -786,125 +757,35 @@ type loopPlane struct {
 	uLen, vLen proofbound.RatInterval // enclosures of |u| and |v|
 }
 
-// sceneFrame is the loop's plane on one side. u is the primary slide's own
-// direction on a loop with one, e_{i+1} on any other loop about ±e_i, and
-// otherwise n × e_m for the coordinate axis e_m along which n has its
-// smallest component; v = n × u, with n the closure axis, negated by mirror.
-// halfTurn negates both under the same normal. On a coordinate-axis loop
-// whose primary slide, if any, runs along a coordinate axis, the float frame's U and
-// V are unit coordinate axes, so a pin's float plane position is two of its
-// own coordinates.
+// sceneFrame reads the loop's held slide and constructs its exact plane.
 func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (loopPlane, error) {
-	n := lp.normal
-	if mirror {
-		n = ratNeg(n)
-	}
-	var slideDir r3.Vec
-	slideAxis := -1
+	var slideDir *r3.Vec
 	if lp.slide != nil {
 		j, _ := lp.slide.joint.(PrismaticJoint)
-		slideDir = j.Dir
-		if idx, _, ok := coordinateAxis(j.Dir); ok {
-			slideAxis = idx
-		}
+		slideDir = &j.Dir
 	}
-	var uf, vf r3.Vec
-	switch {
-	case lp.coord >= 0 && lp.slide == nil:
-		sense := ratVecSign(lp.normal, lp.coord)
-		if mirror {
-			sense = -sense
-		}
-		axes := [3]r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-		uf, vf = axes[(lp.coord+1)%3], axes[(lp.coord+2)%3]
-		if sense < 0 {
-			vf = vf.Scale(-1)
-		}
-	case lp.coord >= 0 && slideAxis >= 0:
-		sense := ratVecSign(lp.normal, lp.coord)
-		if mirror {
-			sense = -sense
-		}
-		_, dir, _ := coordinateAxis(slideDir)
-		uf = unitAxis(slideAxis, dir)
-		vf = unitAxis(lp.coord, sense).Cross(uf)
-	case lp.slide != nil:
-		uf = slideDir
-		vf = ratVecFloat(n).Cross(uf)
-	default:
-		m := 0
-		for i := 1; i < 3; i++ {
-			if new(big.Rat).Abs(lp.normal[i]).Cmp(new(big.Rat).Abs(lp.normal[m])) < 0 {
-				m = i
-			}
-		}
-		e := [3]float64{}
-		e[m] = 1
-		uf = ratVecFloat(lp.normal).Cross(r3.NewVec(e[0], e[1], e[2]))
-		vf = ratVecFloat(n).Cross(uf)
-	}
-	if halfTurn {
-		uf, vf = uf.Scale(-1), vf.Scale(-1)
-	}
-	frame, err := r3.NewFrame(r3.Vec{}, uf, vf)
+	pl, err := linkagebound.SceneFrame(lp.normal, lp.coord, slideDir, mirror, halfTurn)
 	if err != nil {
 		return loopPlane{}, err
 	}
-	// uf holds u exactly: a unit axis, the slide's direction, or n × e_m,
-	// whose components are 0 and ± n's own. v is formed exactly from it.
-	u := ratVecExact(uf)
-	v := ratCross(n, u)
-	return loopPlane{frame: frame, u: u, v: v, uLen: ratNorm(u), vLen: ratNorm(v)}, nil
+	return loopPlane{frame: pl.Frame, u: pl.U, v: pl.V, uLen: pl.ULen, vLen: pl.VLen}, nil
 }
 
-// coords encloses p's exact coordinates (p·u*, p·v*) in the plane as two
-// rational intervals; each is one exact value where the plane's axis has a
-// float length and the quotient is exact, as on a coordinate-axis loop.
+// coords encloses p's exact coordinates in the loop plane.
 func (pl loopPlane) coords(p r3.Vec) (proofbound.RatInterval, proofbound.RatInterval) {
 	return pl.coordsRat(ratVecExact(p))
 }
 
 // coordsRat is coords of an exact point.
 func (pl loopPlane) coordsRat(pr motionbound.RatVec) (proofbound.RatInterval, proofbound.RatInterval) {
-	return ratQuoInterval(ratDot(pr, pl.u), pl.uLen), ratQuoInterval(ratDot(pr, pl.v), pl.vLen)
-}
-
-// ratQuoInterval encloses num/d for d in the positive interval den.
-func ratQuoInterval(num *big.Rat, den proofbound.RatInterval) proofbound.RatInterval {
-	lo, hi := new(big.Rat).Quo(num, den.Hi), new(big.Rat).Quo(num, den.Lo)
-	if num.Sign() < 0 {
-		lo, hi = hi, lo
-	}
-	return proofbound.IntervalOwned(lo, hi)
-}
-
-// ratNorm encloses |w| between the two floats around its exact root.
-func ratNorm(w motionbound.RatVec) proofbound.RatInterval {
-	sq := ratDot(w, w)
-	return proofbound.IntervalOwned(proofarith.FloatRat(proofbound.RatSqrtDown(sq)), proofarith.FloatRat(proofbound.RatSqrtUp(sq)))
+	return linkagebound.PlaneCoordinates(pr, pl.u, pl.v, pl.uLen, pl.vLen)
 }
 
 // ratNeg is −w.
-func ratNeg(w motionbound.RatVec) motionbound.RatVec {
-	return motionbound.RatVec{new(big.Rat).Neg(w[0]), new(big.Rat).Neg(w[1]), new(big.Rat).Neg(w[2])}
-}
+func ratNeg(w motionbound.RatVec) motionbound.RatVec { return linkagebound.NegVec(w) }
 
-// ratVecSign is the sign of w's component i.
-func ratVecSign(w motionbound.RatVec, i int) int {
-	if w[i].Sign() < 0 {
-		return -1
-	}
-	return 1
-}
-
-// ratVecFloat is the float vector nearest w; every caller's w is a float
-// vector read exactly, or its negation, so it is w itself.
-func ratVecFloat(w motionbound.RatVec) r3.Vec {
-	x, _ := w[0].Float64()
-	y, _ := w[1].Float64()
-	z, _ := w[2].Float64()
-	return r3.NewVec(x, y, z)
-}
+// ratVecFloat is the float vector nearest w.
+func ratVecFloat(w motionbound.RatVec) r3.Vec { return linkagebound.VecFloat(w) }
 
 // floatBox is the outward-rounded float interval around iv.
 func floatBox(iv proofbound.RatInterval) sketch.Interval {
@@ -1489,24 +1370,9 @@ func (sc *loopScene) foldRefusal(fold *sketch.FoldError, cause error) error {
 	return &loopFoldError{link: sc.driverLink, lo: lo, hi: hi, unit: unit, cause: cause}
 }
 
-// foldDigits is how many decimals a fold's bounds are printed to, each
-// rounded outward.
-const foldDigits = 12
-
-// decimalDown and decimalUp print x to foldDigits decimals, rounded down and
-// up, so a printed interval holds the exact one.
-func decimalDown(x *big.Rat) string { return decimalRounded(x, false) }
-func decimalUp(x *big.Rat) string   { return decimalRounded(x, true) }
-
-func decimalRounded(x *big.Rat, up bool) string {
-	scale := new(big.Int).Exp(big.NewInt(10), big.NewInt(foldDigits), nil)
-	scaled := new(big.Rat).Mul(x, new(big.Rat).SetInt(scale))
-	q, m := new(big.Int).DivMod(scaled.Num(), scaled.Denom(), new(big.Int))
-	if up && m.Sign() != 0 {
-		q.Add(q, big.NewInt(1))
-	}
-	return new(big.Rat).SetFrac(q, scale).FloatString(foldDigits)
-}
+// decimalDown and decimalUp print a fold's bounds rounded outward.
+func decimalDown(x *big.Rat) string { return linkagebound.DecimalDown(x) }
+func decimalUp(x *big.Rat) string   { return linkagebound.DecimalUp(x) }
 
 // turnsOverlap reports whether f shifted by m whole turns can meet l: false
 // only when the two are proven disjoint for every π in its enclosure. A
@@ -1519,61 +1385,14 @@ func turnsOverlap(f sketch.Interval, m int64, l sketch.Interval) bool {
 	return shiftLo.Cmp(proofarith.FloatRat(l.Hi)) <= 0 && proofarith.FloatRat(l.Lo).Cmp(shiftHi) <= 0
 }
 
-// linkageGridDepth is the deepest dyadic level the canonical chain reaches
-// through binary cells; a deeper parameter is reached by one cell from the
-// nearest grid point of linkageReadingFloor's depth on its near side.
-const linkageGridDepth = 30
-
-// chainStart is where the cell ending at s starts in sub's canonical chain
-// (docs/linkage-check-design.md §15.3): the depth-d cell ending at s for a
-// parameter of depth d, or the nearest grid parameter of the reading floor's
-// depth on the near side for a parameter on no grid this file walks, never
-// past the sub-segment's near end.
+// chainStart finds the canonical cell ending at s without passing the sub-segment's near end.
 func chainStart(sub loopSub, s *big.Rat) *big.Rat {
-	start := gridStart(sub, s)
-	if sub.increasing() && start.Cmp(sub.near) < 0 || !sub.increasing() && start.Cmp(sub.near) > 0 {
-		return new(big.Rat).Set(sub.near)
-	}
-	return start
-}
-
-func gridStart(sub loopSub, s *big.Rat) *big.Rat {
-	den := s.Denom()
-	depth := den.BitLen() - 1
-	dyadic := new(big.Int).Lsh(big.NewInt(1), uint(depth)).Cmp(den) == 0
-	if dyadic && depth <= linkageGridDepth {
-		step := new(big.Rat).SetFrac(big.NewInt(1), den)
-		if sub.increasing() {
-			return step.Sub(s, step)
-		}
-		return step.Add(s, step)
-	}
-	scaled := new(big.Rat).Mul(s, big.NewRat(linkageReadingFloor, 1))
-	q := new(big.Int).Div(scaled.Num(), scaled.Denom())
-	if !sub.increasing() {
-		q.Add(q, big.NewInt(1))
-	}
-	anchor := new(big.Rat).SetFrac(q, big.NewInt(linkageReadingFloor))
-	if anchor.Cmp(s) == 0 {
-		// Unreachable: a parameter on the reading floor's grid is dyadic of
-		// depth 14 and takes the branch above. The near end keeps the chain
-		// finite whatever reaches here.
-		return new(big.Rat).Set(sub.near)
-	}
-	return anchor
+	return linkagebound.ChainStart(sub.lo, sub.near, s, linkageReadingFloor)
 }
 
 // askKey names an ask of sub's chain.
 func askKey(sub loopSub, kind string, ends ...*big.Rat) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%d:%s", sub.idx, kind)
-	for n, e := range ends {
-		if n > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteString(e.RatString())
-	}
-	return b.String()
+	return linkagebound.AskKey(sub.idx, kind, ends...)
 }
 
 // point is the point ask at the exact fraction s in sub's chain, continued
