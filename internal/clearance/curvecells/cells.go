@@ -1,10 +1,10 @@
-// Package curvepair evaluates face-edge and edge-edge clearance cells.
+// Package curvecells evaluates face-edge and edge-edge clearance cells.
 // Candidates come from unbounded Line3, Circle3 and Arc3 carriers and are
 // admitted by edge parameters and face trims. Line3 × Cone and Circle3 × Cone
 // use coarse enclosures. Constant-distance families require the degeneracy
 // oracle's DegYes; uncertain degeneracy contributes a bound or marks the cell
 // unsure.
-package curvepair
+package curvecells
 
 import (
 	"context"

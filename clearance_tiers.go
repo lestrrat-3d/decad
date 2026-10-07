@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/clearance/curvepair"
+	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/decad/internal/clearance/tier"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -15,26 +15,26 @@ import (
 
 // feCell dispatches one face × edge pair through §4's curve-tier table.
 func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
-	cells := curvepair.New(k.ctx, k.tol, k.slack)
+	cells := curvecells.New(k.ctx, k.tol, k.slack)
 	cells.FaceEdge(f, e, sink)
 	k.captureCurveCells(cells)
 }
 
 // eeCell dispatches one edge pair through §4's curve tiers.
 func (k *pairKernel) eeCell(ea, eb *clearance.CEdge, sink *cellSink) {
-	cells := curvepair.New(k.ctx, k.tol, k.slack)
+	cells := curvecells.New(k.ctx, k.tol, k.slack)
 	cells.EdgeEdge(ea, eb, sink)
 	k.captureCurveCells(cells)
 }
 
 func (k *pairKernel) principalCircleEdgeGap(ea, eb *clearance.CEdge, sink *cellSink) bool {
-	cells := curvepair.New(k.ctx, k.tol, k.slack)
+	cells := curvecells.New(k.ctx, k.tol, k.slack)
 	ok := cells.PrincipalCircleEdgeGap(ea, eb, sink)
 	k.captureCurveCells(cells)
 	return ok
 }
 
-func (k *pairKernel) captureCurveCells(cells *curvepair.Kernel) {
+func (k *pairKernel) captureCurveCells(cells *curvecells.Kernel) {
 	if err := cells.Err(); err != nil {
 		k.err = err
 	}
