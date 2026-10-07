@@ -56,7 +56,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 
 // view is the prismPayload a private scene reads for one of this operand's
 // regions: the region, the operand's frame and placement, and its section
-// displacement for prism-boolean §3.4's reroute.
+// displacement for prism-boolean §3.4's crossing charge.
 func (o stackedUnionOperand) view(region ProfileRecord) prismPayload {
 	v := o.proxy
 	v.profile = region
@@ -224,12 +224,14 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (stackedPrismPayload, bool
 	// §7's formula, with each term the largest over every scene this union
 	// arranged: A's walk charge beside A's displacement, B's walk charge and
 	// re-expression beside B's, the interface scenes' walk charge on regions
-	// already in the result's frame, and every merge's cut charge on top.
+	// already in the result's frame, every merge's crossing charge (A6), and
+	// every merge's cut charge on top.
 	sp.sectionDelta = proofbound.AbsSumUpper(
 		max(
 			proofbound.AbsSumUpper(va.proxy.sectionDelta, st.walkA),
 			proofbound.AbsSumUpper(vb.proxy.sectionDelta, st.walkB, reexpress.delta),
 			st.walkInterface,
+			st.crossing,
 		),
 		st.cutDelta,
 	)
@@ -250,6 +252,7 @@ type stackedUnionState struct {
 	walkA, walkB  float64
 	walkInterface float64
 	cutDelta      float64
+	crossing      float64
 }
 
 // slabRegion is one result slab's region from the operand slabs ia and ib
@@ -290,21 +293,20 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 		return st.bRegion(ctx, ib)
 	}
 	// Neither holds the other whole: prism-boolean §4.2's select-all merge,
-	// with §3.4's reroute of a split boundary over a displaced source.
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !st.reexpress.identity || m.sceneDelta.a != 0 || m.sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(st.budget, m.profiles)
-		if err != nil || split {
-			return ProfileRecord{}, false, err
-		}
-	}
+	// with §3.4's crossing charge on every cut a displaced source can move
+	// (docs/general-boolean-design.md §3 A6).
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
 	if err != nil || !resolved {
+		return ProfileRecord{}, false, err
+	}
+	if err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil {
 		return ProfileRecord{}, false, err
 	}
 	if err := auditPrismMergeSection(st.budget, pa, merged); err != nil {
 		return ProfileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)
+	st.crossing = max(st.crossing, m.sceneDelta.crossing)
 	return merged, true, nil
 }
 
@@ -452,6 +454,7 @@ type stackedNesting struct {
 	nest       stackedNest
 	split      bool
 	profiles   []*sketch.Profile
+	tags       map[sketch.Entity]prismcells.Origin
 	sceneDelta prismSceneDelta
 }
 
@@ -470,7 +473,7 @@ func stackedNestingOf(ctx context.Context, budget *proofbound.WorkBudget, pa, pb
 	if err != nil {
 		return stackedNesting{}, err
 	}
-	out := stackedNesting{profiles: profiles, sceneDelta: sceneDelta}
+	out := stackedNesting{profiles: profiles, tags: tags, sceneDelta: sceneDelta}
 	aOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return stackedNesting{}, err
