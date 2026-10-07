@@ -34,6 +34,58 @@ import (
 // edge count outside {1, 2}, or a chain that does not close into one simple
 // loop. opName names the op for RB1's message alone.
 func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) (sectionrecord.LoopRecord, float64, bool, error) {
+	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
+	if err != nil || !resolved {
+		return sectionrecord.LoopRecord{}, 0, false, err
+	}
+	chain, resolved, err := ChainClosedSurvivors(budget, survivors)
+	if err != nil {
+		return sectionrecord.LoopRecord{}, 0, false, err
+	}
+	if !resolved {
+		return sectionrecord.LoopRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+	}
+	loop, cutDelta, err := recordChain(budget, chain)
+	if err != nil {
+		return sectionrecord.LoopRecord{}, 0, false, err
+	}
+	return loop, cutDelta, true, nil
+}
+
+// MergeLoops is Merge for a selection whose survivors close into several
+// loops (docs/general-boolean-design.md §3 A5's disjoint Union): the same
+// edge counting, then ChainClosedLoops partitions the survivors into closed
+// cycles, and each cycle is recorded and closure-falsified as Merge records
+// its one loop. The loops are the candidate boundaries only: whether they
+// bound disjoint lumps is the caller's to prove. cutDelta is the largest
+// over every loop.
+func MergeLoops(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
+	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
+	if err != nil || !resolved {
+		return nil, 0, false, err
+	}
+	chains, resolved, err := ChainClosedLoops(budget, survivors)
+	if err != nil || !resolved {
+		return nil, 0, false, err
+	}
+	loops := make([]sectionrecord.LoopRecord, 0, len(chains))
+	cutDelta := 0.0
+	for _, chain := range chains {
+		loop, d, err := recordChain(budget, chain)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		loops = append(loops, loop)
+		cutDelta = math.Max(cutDelta, d)
+	}
+	return loops, cutDelta, true, nil
+}
+
+// mergeSurvivors is Merge's edge count: every boundary edge of every selected
+// cell keyed by (Entity, TStart, TEnd), an edge counted twice dropped as an
+// interior wall, an edge counted once kept, any other count unresolved. An
+// invalid selected cell is RB1.
+func mergeSurvivors(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) ([]sketch.BoundaryEdge, bool, error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
@@ -41,18 +93,18 @@ func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName str
 	counts := map[edgeKey]int{}
 	for _, p := range selected {
 		if err := budget.Step(); err != nil {
-			return sectionrecord.LoopRecord{}, 0, false, err
+			return nil, false, err
 		}
 		if !p.Valid {
 			// RB1: a candidate region the merge depends on is invalid. Every
 			// cell in `selected` is part of this op's result, so any invalid
 			// cell among them is a genuine refusal, not an unresolved topology.
-			return sectionrecord.LoopRecord{}, 0, false, InvalidRegionError(opName)
+			return nil, false, InvalidRegionError(opName)
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.Step(); err != nil {
-					return sectionrecord.LoopRecord{}, 0, false, err
+					return nil, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
 			}
@@ -65,7 +117,7 @@ func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName str
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.Step(); err != nil {
-					return sectionrecord.LoopRecord{}, 0, false, err
+					return nil, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
 				switch n {
@@ -74,46 +126,40 @@ func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName str
 				case 2:
 					// dropped: an interior wall
 				default:
-					return sectionrecord.LoopRecord{}, 0, false, nil // §4.4: not a shape this increment covers
+					return nil, false, nil // §4.4: not a shape this increment covers
 				}
 			}
 		}
 	}
 	if len(survivors) == 0 {
-		return sectionrecord.LoopRecord{}, 0, false, nil
+		return nil, false, nil
 	}
+	return survivors, true, nil
+}
 
-	chain, resolved, err := ChainClosedSurvivors(budget, survivors)
-	if err != nil {
-		return sectionrecord.LoopRecord{}, 0, false, err
-	}
-	if !resolved {
-		return sectionrecord.LoopRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
-	}
-
-	// Point of no return crossed within this function's own contract: every
-	// further problem (a rejected TExact fragment, §9's RB8; a non-closing
-	// merged loop, §9's RB9) is genuine.
+// recordChain records one chained loop. Past the chaining every problem is
+// genuine: a rejected TExact fragment (§9's RB8) or a non-closing loop (RB9).
+func recordChain(budget *proofbound.WorkBudget, chain []sketch.BoundaryEdge) (sectionrecord.LoopRecord, float64, error) {
 	segs := make([]sectionrecord.CurveSegment, len(chain))
 	joins := make([]sketchrecord.LoopJoin, len(chain))
 	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.Step(); err != nil {
-			return sectionrecord.LoopRecord{}, 0, false, err
+			return sectionrecord.LoopRecord{}, 0, err
 		}
 		seg, err := sketchrecord.RecordEdge(e)
 		if err != nil {
-			return sectionrecord.LoopRecord{}, 0, false, err
+			return sectionrecord.LoopRecord{}, 0, err
 		}
 		segs[i] = seg
 		join, err := sketchrecord.EdgeJoin(e, seg)
 		if err != nil {
-			return sectionrecord.LoopRecord{}, 0, false, err
+			return sectionrecord.LoopRecord{}, 0, err
 		}
 		joins[i] = join
 		d, err := CutDelta(e, seg)
 		if err != nil {
-			return sectionrecord.LoopRecord{}, 0, false, err
+			return sectionrecord.LoopRecord{}, 0, err
 		}
 		cutDelta = math.Max(cutDelta, d)
 	}
@@ -122,9 +168,9 @@ func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName str
 	// takes no budget.step() charge and would drop cutDelta's per-edge
 	// pairing — so this calls edgeJoin/falsifyLoopJoins directly, unchanged.
 	if err := sketchrecord.FalsifyLoopJoins("merged loop", joins); err != nil {
-		return sectionrecord.LoopRecord{}, 0, false, err
+		return sectionrecord.LoopRecord{}, 0, err
 	}
-	return sectionrecord.LoopRecord{Segments: segs}, cutDelta, true, nil
+	return sectionrecord.LoopRecord{Segments: segs}, cutDelta, nil
 }
 
 // CutDelta is §7's cut charge for one surviving boundary edge: how
@@ -273,6 +319,60 @@ func ChainClosedSurvivors(budget *proofbound.WorkBudget, survivors []sketch.Boun
 		return nil, false, nil // the walk did not return to its own start
 	}
 	return chain, true, nil
+}
+
+// ChainClosedLoops partitions the survivors into closed directed cycles,
+// connectivity read off sketch's own walked Polyline endpoints by exact
+// equality, as ChainClosedSurvivors reads it. resolved=false (err always nil
+// in that case) means some vertex has more than one survivor leaving it, or a
+// walk reaches a dead end: survivors that do not partition into simple closed
+// loops are a shape this evaluator does not cover.
+func ChainClosedLoops(budget *proofbound.WorkBudget, survivors []sketch.BoundaryEdge) ([][]sketch.BoundaryEdge, bool, error) {
+	byStart := make(map[sectionrecord.Point2]int, len(survivors))
+	ends := make([]sectionrecord.Point2, len(survivors))
+	for i, e := range survivors {
+		if err := budget.Step(); err != nil {
+			return nil, false, err
+		}
+		if len(e.Polyline) < 2 {
+			return nil, false, nil // defensive: no walked endpoints to key on
+		}
+		start := sectionrecord.Point2{U: e.Polyline[0][0], V: e.Polyline[0][1]}
+		if _, dup := byStart[start]; dup {
+			return nil, false, nil // ambiguous: more than one survivor leaves this vertex
+		}
+		byStart[start] = i
+		ends[i] = sectionrecord.Point2{U: e.Polyline[len(e.Polyline)-1][0], V: e.Polyline[len(e.Polyline)-1][1]}
+	}
+	used := make([]bool, len(survivors))
+	var loops [][]sketch.BoundaryEdge
+	for first := range survivors {
+		if used[first] {
+			continue
+		}
+		var chain []sketch.BoundaryEdge
+		cur := first
+		for {
+			if err := budget.Step(); err != nil {
+				return nil, false, err
+			}
+			if used[cur] {
+				if cur != first {
+					return nil, false, nil // the walk joined another loop part-way
+				}
+				break
+			}
+			used[cur] = true
+			chain = append(chain, survivors[cur])
+			next, ok := byStart[ends[cur]]
+			if !ok {
+				return nil, false, nil // a dead end: no survivor continues from here
+			}
+			cur = next
+		}
+		loops = append(loops, chain)
+	}
+	return loops, true, nil
 }
 
 // Select filters profiles to the cells keep admits, given each

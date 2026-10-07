@@ -912,6 +912,12 @@
 4	0.90	TestPointDeviationMatchesRationalForm
 4	2.94	TestPositiveBoundFacetedUnionRetainsExactLowerFace
 4	0.01	TestPrismBooleanWholeSourceSegmentsChargeNothing
+4	0.01	TestPrismGroupGateDiameterSpansEveryLump
+4	0.01	TestPrismGroupMirrorJoinRefuses
+4	0.01	TestPrismGroupPayloadAudit
+4	0.01	TestPrismGroupRegionsDisjointProof
+4	0.04	TestPrismGroupSixHoleCutIsUndisplaced
+4	0.01	TestPrismGroupUnionVoidGuard
 4	0.01	TestRevolveMeridianMomentChargesACurvedGenerator
 4	0.11	TestRevolveMeshAreaSlackCoversTheHeldAreaGap
 4	0.10	TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian

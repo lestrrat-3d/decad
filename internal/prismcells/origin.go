@@ -21,8 +21,13 @@ import (
 // is a reflection, it is read off the re-wound record buildPrismScene builds
 // B from (docs/general-boolean-design.md §3 A4), whose loops keep the
 // "outer CCW, holes CW" convention the comparison assumes.
+//
+// Region names which of the operand's regions the loop belongs to: 0 for a
+// prism, the lump index for a prism group (docs/general-boolean-design.md §3
+// A5), whose regions enter one scene together.
 type Origin struct {
 	IsB              bool
+	Region           int
 	Hole             int
 	AuthoredReversed bool
 }
@@ -37,6 +42,22 @@ func LoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 			return nil, err
 		}
 		if origin.IsB == isB && origin.Hole == hole {
+			out[e] = struct{}{}
+		}
+	}
+	return out, nil
+}
+
+// RegionLoopEntitySet is LoopEntitySet narrowed to one region of the
+// operand: the entities of that region's outer (hole = -1) or of one of its
+// holes. A5's clean-nesting match reads one set per region of a prism group.
+func RegionLoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, isB bool, region, hole int) (map[sketch.Entity]struct{}, error) {
+	out := map[sketch.Entity]struct{}{}
+	for e, origin := range tags {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		if origin.IsB == isB && origin.Region == region && origin.Hole == hole {
 			out[e] = struct{}{}
 		}
 	}

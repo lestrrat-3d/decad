@@ -87,8 +87,8 @@ evaluator does not build — never repaired.
 
 | # | Invariant | Sentinel |
 |---|---|---|
-| I1 | At least two slabs. A one-slab stack is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
-| I2 | Each slab holds exactly one region. Multi-region slabs are modify-reach §9.1's shell migration and are not built. (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`, as `evalCup` refuses one.) | `ErrUnsupported` |
+| I1 | At least two slabs, or one slab holding two or more regions (a prism group, below). A one-slab stack with one region is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
+| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built. (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`, as `evalCup` refuses one.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
@@ -123,6 +123,16 @@ The audit checks the records the union reading names. The nesting itself is
 proven once, by the match that built the union, as I6's monotone holes are
 proven by the cut that built them.
 
+A **prism group** (`docs/mirror-pattern-design.md` §6.3) is one slab holding
+two or more regions, each a separate lump over the slab's interval. It has
+no interface, so I3 is its only level rule and I4–I7 do not apply. The audit
+checks the slab, the empty interface list and that every region has an outer
+loop; that the regions are pairwise disjoint is proven when the group is
+built, by `provePrismRegionsDisjoint`: a private scene of every region's outer
+must return one valid cell per region, each reproducing that outer with
+every edge whole and no hole. A `Union` whose survivors close into several
+such loops builds one (`docs/general-boolean-design.md` §3 A5).
+
 ### 2.3 Loop columns
 
 A **column** is one loop record over a maximal run of consecutive slabs that
@@ -149,7 +159,7 @@ identity, after `falsifyStackedPayload`:
 
 | Face | Built from | Surface | Role |
 |---|---|---|---|
-| wall | one column, through `buildLoopSidesAs` over a `prismPayload` view of that column (the payload's frame, placement and `sectionDelta`; the column's interval and level displacements) | `Plane` or `Cylinder` per segment | `slab(k).region(0).side(i,j)` — `k` the slab the column starts in, `i` the loop's index in that slab's region, `j` the segment |
+| wall | one column, through `buildLoopSidesAs` over a `prismPayload` view of that column (the payload's frame, placement and `sectionDelta`; the column's interval and level displacements) | `Plane` or `Cylinder` per segment | `slab(k).region(r).side(i,j)` — `k` the slab the column starts in, `r` the region (0 outside a prism group), `i` the loop's index in that region, `j` the segment |
 | bottom cap | the first slab's region | `Plane` at `slabs[0].z0`, outward `-N` | `capStart` |
 | top cap | the last slab's region | `Plane` at the last `z1`, outward `+N` | `capEnd` |
 | floor | `interfaces[i].lowerExposed[e]` | `Plane` at the interface level, outward `+N` | `floor(i,e)` |
@@ -170,6 +180,12 @@ interface's ceiling. The cup build (`shell_cup.go`) already pairs a reversed
 cavity wall's floor coedges with its pocket floor this way. `sheetLumps` derives
 the lump set from face adjacency, as `evalPrism` does; a stage-1 body is one
 lump with one shell.
+
+A prism group carries one bottom cap and one top cap per region, every one
+under `capStart` or `capEnd`, so `CapStart(body)` selects one face per lump,
+and `Lumps()` reports one lump per region. Columns, measurements and
+tessellation run per region; loop clearance is proven over every ring of the
+one slab, all regions together.
 
 `capStart` and `capEnd` keep their prism names so `CapStart(body)` and
 `CapEnd(body)` select them. Roles are fresh under the boolean's step and no
@@ -249,7 +265,8 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 |---|---|
 | `Body.Placed` / `Duplicate` / `PlacedCopy` | re-evaluates the payload under the composed motion |
 | later `Cut` with a prism tool | prism-boolean §3.2's stacked-target row: a tool spanning the whole stack and clean-nesting in every slab's region builds a stacked result (stage 1); a tool ending inside the stack, one touching any slab's boundary, or any tool on a union-built stack takes the mesh path |
-| `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands |
+| `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
+| `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
 | `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; one shell, so STEP's one-shell rule is met |
 | `ThroughAll` / `ThroughAllSide` stops | `extentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
