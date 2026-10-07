@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -347,29 +348,7 @@ func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 // brepEmbed maps one face frame's local axes onto the reference frame's: local
 // axis i is reference axis axis[i] scaled by sign[i]. Every sign is ±1, so the
 // map moves a float coordinate exactly in both directions.
-type brepEmbed struct {
-	axis [3]int
-	sign [3]float64
-}
-
-// canon is a local (u, v, z) in reference coordinates. Adding zero turns a
-// negative zero positive, so equal points compare equal as map keys.
-func (e brepEmbed) canon(u, v, z float64) [3]float64 {
-	var out [3]float64
-	for i, x := range [3]float64{u, v, z} {
-		out[e.axis[i]] = e.sign[i]*x + 0
-	}
-	return out
-}
-
-// local is canon's inverse.
-func (e brepEmbed) local(c [3]float64) [3]float64 {
-	var out [3]float64
-	for i := range out {
-		out[i] = e.sign[i]*c[e.axis[i]] + 0
-	}
-	return out
-}
+type brepEmbed = brepgeom.Embed
 
 // brepEmbeds states every face frame in the first face's frame, the reference
 // every reading is taken in. A face frame must share the reference origin bit
@@ -379,57 +358,11 @@ func (e brepEmbed) local(c [3]float64) [3]float64 {
 // compare by identity (§4.2). Any other frame is ErrUnsupported: this build has
 // no exact map for it.
 func brepEmbeds(faces []brepFace) ([]brepEmbed, error) {
-	ref := faces[0].frame
-	refAxes := [3]r3.Vec{ref.U(), ref.V(), ref.N()}
-	out := make([]brepEmbed, len(faces))
+	frames := make([]r3.Frame, len(faces))
 	for fi, f := range faces {
-		if f.frame.Origin() != ref.Origin() {
-			return nil, fmt.Errorf(`%w: brep face %d's frame does not share the reference origin`, ErrUnsupported, fi)
-		}
-		var e brepEmbed
-		used := [3]bool{}
-		for i, a := range [3]r3.Vec{f.frame.U(), f.frame.V(), f.frame.N()} {
-			found := false
-			for j, b := range refAxes {
-				switch {
-				case a == b:
-					e.axis[i], e.sign[i], found = j, 1, true
-				case a == b.Scale(-1):
-					e.axis[i], e.sign[i], found = j, -1, true
-				}
-				if found {
-					break
-				}
-			}
-			if !found || used[e.axis[i]] {
-				return nil, fmt.Errorf(`%w: brep face %d's frame is not a signed permutation of the reference frame`, ErrUnsupported, fi)
-			}
-			used[e.axis[i]] = true
-		}
-		if brepEmbedDeterminant(e) < 0 {
-			return nil, fmt.Errorf(`%w: brep face %d's frame reverses the reference frame's handedness`, ErrUnsupported, fi)
-		}
-		out[fi] = e
+		frames[fi] = f.frame
 	}
-	return out, nil
-}
-
-// brepEmbedDeterminant is the signed permutation's determinant: the
-// permutation's parity times the product of the signs.
-func brepEmbedDeterminant(e brepEmbed) float64 {
-	det := e.sign[0] * e.sign[1] * e.sign[2]
-	inversions := 0
-	for i := range 3 {
-		for j := i + 1; j < 3; j++ {
-			if e.axis[i] > e.axis[j] {
-				inversions++
-			}
-		}
-	}
-	if inversions%2 == 1 {
-		det = -det
-	}
-	return det
+	return brepgeom.Embeds(frames, ErrUnsupported)
 }
 
 // falsifyBrepPayload refuses a record no brep body matches (ErrDegenerate) or
@@ -504,26 +437,21 @@ func falsifyBrepPayload(ctx context.Context, bp brepPayload) error {
 }
 
 // brepPart names which boundary piece of its face an edge use is.
-type brepPart int
+type brepPart = brepgeom.Part
 
 const (
-	brepLoopSeg brepPart = iota // a planar face's loop segment
-	brepRim0                    // a swept face's wall at z0
-	brepRim1                    // a swept face's wall at z1
-	brepSide0                   // a swept face's line at the wall's start
-	brepSide1                   // a swept face's line at the wall's end
+	brepLoopSeg = brepgeom.LoopSeg // a planar face's loop segment
+	brepRim0    = brepgeom.Rim0    // a swept face's wall at z0
+	brepRim1    = brepgeom.Rim1    // a swept face's wall at z1
+	brepSide0   = brepgeom.Side0   // a swept face's line at the wall's start
+	brepSide1   = brepgeom.Side1   // a swept face's line at the wall's end
 )
 
 // brepEdgeKey is an edge's identity in reference coordinates (§4.2): a line by
 // its two endpoints in sorted order; an arc by its centre, normal axis and its
 // counter-clockwise start and end about that axis; a whole circle by its
 // centre, normal axis and radius. Two uses with one key are one edge.
-type brepEdgeKey struct {
-	circular, closed bool
-	a, b, c          [3]float64
-	axis             int
-	radius           float64
-}
+type brepEdgeKey = brepgeom.EdgeKey
 
 // brepUse is one face's use of one edge. from/to run the way the face's own
 // loop walks the use; dirFrom/dirTo run the use's natural way — a wall's walk
@@ -549,9 +477,10 @@ type brepTopology struct {
 	embeds []brepEmbed
 	// walls holds a swept face's walk, planar holds each planar face's walks
 	// per region loop.
-	walls  map[int]survey2d.SegmentWalk
-	planar map[int][][]survey2d.SegmentWalk
-	uses   []brepUse
+	walls   map[int]survey2d.SegmentWalk
+	planar  map[int][][]survey2d.SegmentWalk
+	uses    []brepUse
+	keyUses []brepgeom.Use
 	// edges lists the two use indices of every edge, the owner first: a rim use
 	// where the edge has one, then a side line, then a loop segment. The
 	// owner's natural direction is the edge's direction.
@@ -623,7 +552,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 						level: f.z0, levelDelta: f.z0Delta}
 					u.key, u.sense = brepCurveKey(e, w, f.z0)
 					u.dirSense = u.sense
-					u.from, u.to = e.canon(w.StartU, w.StartV, f.z0), e.canon(w.EndU, w.EndV, f.z0)
+					u.from, u.to = e.Canon(w.StartU, w.StartV, f.z0), e.Canon(w.EndU, w.EndV, f.z0)
 					u.dirFrom, u.dirTo = u.from, u.to
 					add(u)
 				}
@@ -636,8 +565,8 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 			return nil, err
 		}
 		topo.walls[fi] = w
-		s0, s1 := e.canon(w.StartU, w.StartV, f.z0), e.canon(w.StartU, w.StartV, f.z1)
-		t0, t1 := e.canon(w.EndU, w.EndV, f.z0), e.canon(w.EndU, w.EndV, f.z1)
+		s0, s1 := e.Canon(w.StartU, w.StartV, f.z0), e.Canon(w.StartU, w.StartV, f.z1)
+		t0, t1 := e.Canon(w.EndU, w.EndV, f.z0), e.Canon(w.EndU, w.EndV, f.z1)
 		rim := func(part brepPart, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) brepUse {
 			u := brepUse{face: fi, loop: -1, seg: -1, part: part, walk: w, level: z, levelDelta: zDelta,
 				from: from, to: to, dirFrom: dirFrom, dirTo: dirTo}
@@ -659,32 +588,15 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		add(brepUse{face: fi, loop: -1, seg: -1, part: brepSide0, key: brepLineKey(s0, s1),
 			from: s1, to: s0, dirFrom: s0, dirTo: s1})
 	}
-	byKey := map[brepEdgeKey][]int{}
-	var order []brepEdgeKey
+	topo.keyUses = make([]brepgeom.Use, len(topo.uses))
 	for ui, u := range topo.uses {
-		if _, seen := byKey[u.key]; !seen {
-			order = append(order, u.key)
-		}
-		byKey[u.key] = append(byKey[u.key], ui)
+		topo.keyUses[ui] = brepgeom.Use{Face: u.face, Loop: u.loop, Part: u.part, Key: u.key,
+			From: u.from, To: u.to, DirFrom: u.dirFrom, DirTo: u.dirTo,
+			Sense: u.sense, DirSense: u.dirSense, Walk: u.walk}
 	}
-	topo.edgeOf = make([]int, len(topo.uses))
-	for _, key := range order {
-		pair := byKey[key]
-		if len(pair) != 2 || topo.uses[pair[0]].face == topo.uses[pair[1]].face {
-			return nil, fmt.Errorf(`%w: a brep edge must bound exactly two distinct faces; one bounds %d face uses`, ErrUnsupported, len(pair))
-		}
-		a, b := pair[0], pair[1]
-		if brepOwnerRank(topo.uses[b].part) < brepOwnerRank(topo.uses[a].part) {
-			a, b = b, a
-		}
-		if key.circular && topo.uses[a].part == brepLoopSeg {
-			return nil, fmt.Errorf(`%w: a circular brep edge must bound a swept face`, ErrUnsupported)
-		}
-		if brepIsRim(topo.uses[a].part) && topo.uses[b].part != brepLoopSeg {
-			return nil, fmt.Errorf(`%w: a swept face's rim must meet a planar face`, ErrUnsupported)
-		}
-		topo.edgeOf[a], topo.edgeOf[b] = len(topo.edges), len(topo.edges)
-		topo.edges = append(topo.edges, [2]int{a, b})
+	topo.edges, topo.edgeOf, err = brepgeom.Pair(topo.keyUses, ErrUnsupported)
+	if err != nil {
+		return nil, err
 	}
 	return topo, nil
 }
@@ -693,62 +605,23 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 // which is its owner use's natural one. A whole circle compares senses: it has
 // no endpoints to compare.
 func (topo *brepTopology) forward(ui int) bool {
-	u := topo.uses[ui]
-	owner := topo.uses[topo.edges[topo.edgeOf[ui]][0]]
-	if u.key.closed {
-		return u.sense == owner.dirSense
-	}
-	return u.from == owner.dirFrom && u.to == owner.dirTo
+	return brepgeom.Forward(topo.keyUses, topo.edges, topo.edgeOf, ui)
 }
 
-func brepIsRim(p brepPart) bool { return p == brepRim0 || p == brepRim1 }
-
-// brepOwnerRank orders the uses an edge takes its direction and geometry from.
-func brepOwnerRank(p brepPart) int {
-	switch p {
-	case brepRim0, brepRim1:
-		return 0
-	case brepSide0, brepSide1:
-		return 1
-	default:
-		return 2
-	}
-}
+func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
 
 // brepLineKey keys a line edge by its two endpoints in sorted order.
 func brepLineKey(a, b [3]float64) brepEdgeKey {
-	for i := range 3 {
-		if a[i] != b[i] {
-			if a[i] > b[i] {
-				a, b = b, a
-			}
-			break
-		}
-	}
-	return brepEdgeKey{a: a, b: b}
+	return brepgeom.LineKey(a, b)
 }
 
 // brepCurveKey keys one walk at one level and reports its counter-clockwise
 // sense about the reference axis the walk's own normal lands on. A walk
 // counter-clockwise in its frame turns about +frame.N(), and that axis lands
-// on the reference axis with sign e.sign[2]; the map keeps handedness, so the
+// on the reference axis with sign e.Sign[2]; the map keeps handedness, so the
 // sense flips exactly when the sign is negative.
 func brepCurveKey(e brepEmbed, w survey2d.SegmentWalk, z float64) (brepEdgeKey, bool) {
-	from, to := e.canon(w.StartU, w.StartV, z), e.canon(w.EndU, w.EndV, z)
-	if !w.IsCircular() {
-		return brepLineKey(from, to), false
-	}
-	ccw := (w.Th1 > w.Th0) == (e.sign[2] > 0)
-	key := brepEdgeKey{circular: true, c: e.canon(w.CU, w.CV, z), axis: e.axis[2]}
-	if w.Closed {
-		key.closed, key.radius = true, w.Radius
-		return key, ccw
-	}
-	if !ccw {
-		from, to = to, from
-	}
-	key.a, key.b = from, to
-	return key, ccw
+	return brepgeom.CurveKey(e, w, z)
 }
 
 // evalBrepContext builds the body a brepPayload records (§4.2, §4.3). Every
@@ -783,7 +656,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	for _, u := range topo.uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
 		// circle from another seam places no vertex of its own.
-		if (u.part != brepLoopSeg && !brepIsRim(u.part)) || (u.part == brepLoopSeg && u.key.closed) {
+		if (u.part != brepLoopSeg && !brepIsRim(u.part)) || (u.part == brepLoopSeg && u.key.Closed) {
 			continue
 		}
 		f := bp.faces[u.face]
@@ -909,39 +782,5 @@ func brepEdgeConvex(ctx context.Context, topo *brepTopology, pair [2]int) (bool,
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	owner, other := topo.uses[pair[0]], topo.uses[pair[1]]
-	switch owner.part {
-	case brepRim0, brepRim1:
-		if owner.walk.IsCircular() {
-			return owner.walk.Th1 >= owner.walk.Th0, nil
-		}
-		hole := other.loop != 0
-		same := other.dirFrom == owner.dirFrom && other.dirTo == owner.dirTo
-		return !hole == same, nil
-	case brepSide0, brepSide1:
-		if other.part != brepSide0 && other.part != brepSide1 {
-			return other.loop == 0, nil
-		}
-		prev, next := owner, other
-		if prev.part == brepSide0 {
-			prev, next = next, prev
-		}
-		if prev.part != brepSide1 || next.part != brepSide0 {
-			return false, fmt.Errorf(`%w: two swept faces meet at a junction both walk the same way`, ErrUnsupported)
-		}
-		pe, ne := topo.embeds[prev.face], topo.embeds[next.face]
-		if pe.axis[2] != ne.axis[2] {
-			return false, fmt.Errorf(`%w: two swept faces meeting at a junction sweep along different axes`, ErrUnsupported)
-		}
-		pw, nw := topo.walls[prev.face], topo.walls[next.face]
-		tOut := (brepVec(pe.canon(pw.TanOutU, pw.TanOutV, 0)))
-		tIn := (brepVec(ne.canon(nw.TanInU, nw.TanInV, 0)))
-		axis := (brepVec(pe.canon(0, 0, 1)))
-		return tOut.Cross(tIn).Dot(axis) > 0, nil
-	default:
-		return owner.loop == 0, nil
-	}
+	return brepgeom.Convex(pair, topo.keyUses, topo.embeds, topo.walls, ErrUnsupported)
 }
-
-// brepVec reads reference coordinates as a vector.
-func brepVec(c [3]float64) r3.Vec { return r3.NewVec(c[0], c[1], c[2]) }

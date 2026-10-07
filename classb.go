@@ -308,7 +308,7 @@ func classBFaceBox(f brepFace, e brepEmbed) (box3, error) {
 	if f.planar() {
 		segs = f.region.Outer.Segments
 	}
-	return classbgeom.FaceBox(segs, f.z0, f.z1, f.z0Delta, f.z1Delta, e.axis, e.sign)
+	return classbgeom.FaceBox(segs, f.z0, f.z1, f.z0Delta, f.z1Delta, e.Axis, e.Sign)
 }
 
 // classBCurvedApart is B7: every curved wall of X and every curved wall of Y
@@ -371,10 +371,10 @@ func classBNoCoplanarFaces(ctx context.Context, cp classBPair) (bool, error) {
 	for fi, f := range cp.x.faces {
 		e := cp.embeds[fi]
 		if f.planar() {
-			xs = append(xs, classBPlane{Axis: e.axis[2], Level: proofarith.FloatRat(e.sign[2]*f.z0 + 0)})
+			xs = append(xs, classBPlane{Axis: e.Axis[2], Level: proofarith.FloatRat(e.Sign[2]*f.z0 + 0)})
 			continue
 		}
-		xs = append(xs, classBRecordPlanes(classBFaceRecord(f), e.axis, e.sign)...)
+		xs = append(xs, classBRecordPlanes(classBFaceRecord(f), e.Axis, e.Sign)...)
 	}
 	ys := classBRecordPlanes(cp.y.profile, cp.axis, cp.sign)
 	for _, z := range []float64{cp.y.z0, cp.y.z1} {
@@ -474,7 +474,7 @@ func classBThroughReach(ctx context.Context, cp classBPair) (classBThrough, bool
 func classBAcross(f brepFace, e brepEmbed, d int) (classBSlab, bool) {
 	return classbgeom.Across(classbgeom.AcrossFace{
 		Planar: f.planar(), Wall: f.wall, Z0: f.z0, Z0Delta: f.z0Delta,
-		Outward: f.outward, Axis: e.axis, Sign: e.sign,
+		Outward: f.outward, Axis: e.Axis, Sign: e.Sign,
 	}, d)
 }
 
@@ -499,7 +499,7 @@ type classBSlabFace struct {
 func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (classBSlabFace, error) {
 	f := cp.x.faces[s.Face]
 	e := cp.embeds[s.Face]
-	toG := func(u, v, z float64) [3]float64 { return cp.yLocalOfX(e.canon(u, v, z)) }
+	toG := func(u, v, z float64) [3]float64 { return cp.yLocalOfX(e.Canon(u, v, z)) }
 	out := classBSlabFace{
 		level:      cp.sign[2]*s.Level + 0,
 		levelDelta: s.LevelDelta,

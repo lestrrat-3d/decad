@@ -214,8 +214,8 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 				s = big.NewRat(1, 1)
 			}
 			vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(region.area, proofbound.RatMul(s, z0)))
-			k := e.axis[2]
-			half := proofbound.RatMul(big.NewRat(1, 2), s, big.NewRat(int64(e.sign[2]), 1), z0, z0)
+			k := e.Axis[2]
+			half := proofbound.RatMul(big.NewRat(1, 2), s, big.NewRat(int64(e.Sign[2]), 1), z0, z0)
 			moments[k] = proofbound.IntervalAdd(moments[k], proofbound.IntervalScale(region.area, half))
 			area = proofbound.BoundedAdd(area, region.published)
 			displaced = proofbound.AbsSumUpper(displaced,
@@ -230,8 +230,8 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 		h := new(big.Rat).Sub(z1, z0)
 		vol3 = proofbound.IntervalAdd(vol3, proofbound.IntervalScale(terms[0], proofbound.RatMul(big.NewRat(2, 1), h)))
 		for i, mom := range [2]proofbound.RatInterval{terms[1], terms[2]} {
-			scale := proofbound.RatMul(big.NewRat(int64(e.sign[i]), 1), h)
-			moments[e.axis[i]] = proofbound.IntervalAdd(moments[e.axis[i]], proofbound.IntervalScale(mom, scale))
+			scale := proofbound.RatMul(big.NewRat(int64(e.Sign[i]), 1), h)
+			moments[e.Axis[i]] = proofbound.IntervalAdd(moments[e.Axis[i]], proofbound.IntervalScale(mom, scale))
 		}
 		area = proofbound.BoundedAdd(area, brepWallArea(f, w))
 		heightUpper := proofbound.AbsSumUpper(proofbound.UpRound(f.z1-f.z0), f.z0Delta, f.z1Delta)
