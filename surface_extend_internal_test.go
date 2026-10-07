@@ -113,7 +113,7 @@ func extendSceneCarrier(t *testing.T, seg CurveSegment) sketch.Entity {
 	var carrier sketch.Entity
 	found := 0
 	for entity, tag := range tags {
-		if tag.isB {
+		if tag.IsB {
 			continue
 		}
 		carrier, found = entity, found+1

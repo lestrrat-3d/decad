@@ -6,10 +6,9 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -251,149 +250,6 @@ func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pick
 	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
 }
 
-// prismEntityOrigin is buildPrismScene's own tag map value (§4.1's "tagged, in
-// a side map, with its origin"): which operand a created scene entity traces
-// to, and which of that operand's loops it came from — -1 for Outer, else the
-// index into ProfileRecord.Holes. Union's resolution never reads it — every
-// operand it admits is hole-free (G6), so only "which operand" would ever
-// vary. Cut/Intersect's clean-nesting match (§4.2) is what needs the loop half
-// too: proving §4.2's nesting relation is a pure data comparison against this
-// map, never a geometric test. authoredReversed is the crossing sub-case's own
-// addition (prism_boolean_crossing.go): whether this operand's own recorded
-// walk of the entity runs backwards relative to the entity's own natural
-// parameterization — the fixed fact buildPrismScene computes once at creation
-// time that classifyPrismCells later compares against a returned edge's own
-// Reversed flag, never a geometric test.
-type prismEntityOrigin struct {
-	isB              bool
-	hole             int
-	authoredReversed bool
-}
-
-// prismLoopEntitySet is the tag map's per-loop view: the set of entities
-// buildPrismScene created for one operand's one loop (Outer at hole = -1,
-// else Holes[hole]), read for the structural match (§4.2) alone.
-func prismLoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, isB bool, hole int) (map[sketch.Entity]struct{}, error) {
-	out := map[sketch.Entity]struct{}{}
-	for e, origin := range tags {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if origin.isB == isB && origin.hole == hole {
-			out[e] = struct{}{}
-		}
-	}
-	return out, nil
-}
-
-// prismLoopMatchesOrigin reports whether a candidate boundary loop
-// structurally reproduces the wanted entity set (§4.2's "clean" sub-case):
-// every edge is Whole (Partial == false — the arrangement cut nothing), the
-// edge count equals the wanted set's size, and the edges' Entity values equal
-// the wanted set. Comparing Entity by interface identity is the same
-// discipline buildPrismScene's own dedup key already uses. Deliberately NOT a
-// check on edge order or starting index: a simple loop's own walk is
-// determined only up to rotation, and requiring an index would make the match
-// fragile without proving anything more.
-func prismLoopMatchesOrigin(budget *proofbound.WorkBudget, edges []sketch.BoundaryEdge, want map[sketch.Entity]struct{}) (bool, error) {
-	if len(edges) != len(want) {
-		return false, nil
-	}
-	seen := make(map[sketch.Entity]struct{}, len(edges))
-	for _, e := range edges {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		if e.Partial {
-			return false, nil
-		}
-		if _, ok := want[e.Entity]; !ok {
-			return false, nil
-		}
-		if _, dup := seen[e.Entity]; dup {
-			return false, nil
-		}
-		seen[e.Entity] = struct{}{}
-	}
-	return true, nil
-}
-
-// prismHolesMatchOrigin reports whether a candidate profile's Holes
-// structurally reproduce EXACTLY the wanted hole entity sets, as an unordered
-// set of sets: each candidate hole matches at most one wanted hole (by
-// prismLoopMatchesOrigin), and every wanted hole is matched by exactly one
-// candidate hole. The bipartite match is small (a handful of holes at most,
-// bounded by the same arrangement cap as everything else here) and needs no
-// index correspondence — sketch's own Holes order is not decad's to assume.
-func prismHolesMatchOrigin(budget *proofbound.WorkBudget, holes [][]sketch.BoundaryEdge, want []map[sketch.Entity]struct{}) (bool, error) {
-	matched := make([]bool, len(want))
-	for _, h := range holes {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		found := -1
-		for i, w := range want {
-			if matched[i] {
-				continue
-			}
-			ok, err := prismLoopMatchesOrigin(budget, h, w)
-			if err != nil {
-				return false, err
-			}
-			if ok {
-				found = i
-				break
-			}
-		}
-		if found == -1 {
-			return false, nil
-		}
-		matched[found] = true
-	}
-	return true, nil
-}
-
-// prismFindLoopMatch is §4.2's clean-nesting structural search: the unique
-// s.Profiles() result whose Outer structurally reproduces wantOuter and whose
-// Holes structurally reproduce EXACTLY the entity sets in wantHoles — a pure
-// data comparison against decad's own tag map, never a geometric test.
-// resolved=false (err always nil in that case) means no such unique profile
-// exists: zero candidates or more than one (ambiguous) are both §4.4's
-// "unresolved," not a refusal.
-func prismFindLoopMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile, wantOuter map[sketch.Entity]struct{}, wantHoles []map[sketch.Entity]struct{}) (*sketch.Profile, bool, error) {
-	var found *sketch.Profile
-	for _, p := range profiles {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		outerOK, err := prismLoopMatchesOrigin(budget, p.Outer, wantOuter)
-		if err != nil {
-			return nil, false, err
-		}
-		if !outerOK {
-			continue
-		}
-		if len(p.Holes) != len(wantHoles) {
-			continue
-		}
-		holesOK, err := prismHolesMatchOrigin(budget, p.Holes, wantHoles)
-		if err != nil {
-			return nil, false, err
-		}
-		if !holesOK {
-			continue
-		}
-		if found != nil {
-			return nil, false, nil // ambiguous: more than one candidate matches
-		}
-		found = p
-	}
-	if found == nil {
-		return nil, false, nil
-	}
-	return found, true, nil
-}
-
 // resolvePrismCut is §4.2's clean-nesting match for Cut(target, tool): when
 // the tool's boundary does not touch the target's anywhere, the arrangement
 // leaves both operands' original loops completely unmodified, and decad
@@ -425,7 +281,7 @@ func resolvePrismCut(ctx context.Context, budget *proofbound.WorkBudget, target,
 // resolvePrismCutWithTags also returns the scene's entity-origin map. A
 // stacked result uses it to retain the target's already recorded whole loops
 // while taking only the new tool hole from RecordProfile's authenticated cell.
-func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, bool, error) {
+func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismcells.Origin, prismSceneDelta, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
@@ -453,25 +309,25 @@ func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget,
 		}
 	}
 
-	targetOuter, err := prismLoopEntitySet(budget, tags, false, -1)
+	targetOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles := make([]map[sketch.Entity]struct{}, 0, len(target.profile.Holes)+1)
 	for i := range target.profile.Holes {
-		hs, err := prismLoopEntitySet(budget, tags, false, i)
+		hs, err := prismcells.LoopEntitySet(budget, tags, false, i)
 		if err != nil {
 			return nil, nil, nil, prismSceneDelta{}, false, err
 		}
 		wantHoles = append(wantHoles, hs)
 	}
-	toolOuter, err := prismLoopEntitySet(budget, tags, true, -1)
+	toolOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles = append(wantHoles, toolOuter) // the tool's own solid, as one new hole
 
-	match, resolved, err := prismFindLoopMatch(budget, profiles, targetOuter, wantHoles)
+	match, resolved, err := prismcells.FindLoopMatch(budget, profiles, targetOuter, wantHoles)
 	if err != nil {
 		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
@@ -532,11 +388,11 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 		}
 	}
 
-	aOuter, err := prismLoopEntitySet(budget, tags, false, -1)
+	aOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
-	bOuter, err := prismLoopEntitySet(budget, tags, true, -1)
+	bOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
@@ -550,7 +406,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	// and reading a nesting off it would bless an arrangement sketch has
 	// already disowned. That is RB1's "a candidate region the result depends
 	// on", and this path depends on two.
-	proofBNested, bNested, err := prismFindLoopMatch(budget, profiles, aOuter, []map[sketch.Entity]struct{}{bOuter})
+	proofBNested, bNested, err := prismcells.FindLoopMatch(budget, profiles, aOuter, []map[sketch.Entity]struct{}{bOuter})
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
@@ -559,7 +415,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	}
 	aNested := false
 	if len(pb.profile.Holes) == 0 {
-		proofANested, matched, err := prismFindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
+		proofANested, matched, err := prismcells.FindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
 		if err != nil {
 			return nil, nil, prismSceneDelta{}, false, false, err
 		}
@@ -582,14 +438,14 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	if bNested {
 		wantOuter, nested = bOuter, true
 		for i := range pb.profile.Holes {
-			hole, err := prismLoopEntitySet(budget, tags, true, i)
+			hole, err := prismcells.LoopEntitySet(budget, tags, true, i)
 			if err != nil {
 				return nil, nil, prismSceneDelta{}, false, false, err
 			}
 			wantHoles = append(wantHoles, hole)
 		}
 	}
-	result, resultResolved, err := prismFindLoopMatch(budget, profiles, wantOuter, wantHoles)
+	result, resultResolved, err := prismcells.FindLoopMatch(budget, profiles, wantOuter, wantHoles)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}

@@ -447,11 +447,11 @@ material side at that edge (X's authored convention already puts material on
 the walk's left), a mismatch means X's void side. This is a **flag
 comparison**, not a geometric test — the classification `sketch` already
 encodes in which direction it walked a shared entity for this specific cell.
-`prismEntityOrigin.authoredReversed` (`prism_boolean.go`'s `buildPrismScene`)
+`prismcells.Origin.AuthoredReversed` (`prism_boolean.go`'s `buildPrismScene`)
 records, once per created entity at scene-build time, whether that operand's
 own recorded walk runs backwards relative to the entity's own natural
 parameterization, so the comparison above is bookkeeping on a fact already
-captured, never a fact `classifyPrismCells` derives from geometry. For a cell
+captured, never a fact `prismcells.Classify` derives from geometry. For a cell
 with a direct edge from both operands, both readings are available and the
 four combinations (`A-only`, `B-only`, `both`, impossible-for-two-simple-
 curves-`neither`) select `Union`'s "either", `Cut`'s "A and not B",
@@ -459,7 +459,7 @@ curves-`neither`) select `Union`'s "either", `Cut`'s "A and not B",
 operand's own classification from a neighboring cell reached by crossing an
 edge that does NOT belong to that operand — crossing a non-operand edge
 cannot move across that operand's own boundary, so membership carries over
-unchanged; `classifyPrismCells` floods this from every directly-classified
+unchanged; `prismcells.Classify` floods this from every directly-classified
 cell.
 For a cell touching only one operand directly but adjoining a **coincident
 carrier** (the tooth-only cell of the gear's shared-arc case, which the
@@ -535,18 +535,18 @@ decision.
 (`admitPrismPairBudget`), the trimmed-circular refusal
 (`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
 z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
-§3.4's split-boundary reroute, `classifyPrismCells`, and `selectPrismCells`
+§3.4's split-boundary reroute, `prismcells.Classify`, and `selectPrismCells`
 under `Intersect`'s own `keep`. The reading begins where `mergePrismCells`
 would have been called, and replaces only that tail.
 
 **Selection.** The measured set is the arrangement's own bounded cells that
-`classifyPrismCells` puts on BOTH operands' material sides. `sketch` returns
+`prismcells.Classify` puts on BOTH operands' material sides. `sketch` returns
 the arrangement's full planar decomposition (§4.2), whose cells have disjoint
 interiors, so the selected set's total area is the sum of its cells' areas and
 no cell is counted twice. That disjointness is `sketch`'s own answer about its
 own arrangement, consumed as CLAUDE.md's carve-out allows — decad computes no
 containment, no crossing and no membership of its own. The existing
-reject-only structural checks inside `classifyPrismCells` are what falsify it:
+reject-only structural checks inside `prismcells.Classify` are what falsify it:
 a cell reporting `Valid == false`, a cell carrying its own hole, an edge
 occurring on more than two cells, or an entity the scene did not create each
 leave the whole reading unresolved.

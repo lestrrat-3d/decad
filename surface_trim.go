@@ -6,18 +6,16 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/sketch"
 )
 
 // This file implements Body.Trim, Body.Extend and Document.Split. Their §2.1
 // gates share prism-boolean's exact generator comparison, identity
 // re-expression check and sweep-span relation. All three use buildPrismScene;
-// Trim reads classifyPrismCells unchanged, while Split reads only the target
+// Trim reads prismcells.Classify unchanged, while Split reads only the target
 // label. Every miss is a typed refusal at the call: a sheet's mesh proves no
 // occupied volume, and a mesh trim would decide topology from float signs on
 // chorded triangles (docs/surface-intersection-design.md §2.1).
@@ -380,7 +378,7 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 	// one of them, and the pick would vary run to run.
 	var source sketch.Entity
 	for entity, tag := range tags {
-		if !tag.isB {
+		if !tag.IsB {
 			source = entity
 			break
 		}
@@ -971,8 +969,8 @@ func trimBoundsWalks(profile ProfileRecord, work *freeform.FreeformWork) (*profi
 
 // resolveTrim is §3's design over an admitted pair: buildPrismScene's own
 // scene (§3.1, reused unchanged), the structural no-crossing check and
-// classifyPrismCells's side reading (§3.2), and §3.3's open-walk chaining.
-// keepInside selects classifyPrismCells's own tool-membership label a
+// prismcells.Classify's side reading (§3.2), and §3.3's open-walk chaining.
+// keepInside selects prismcells.Classify's own tool-membership label a
 // surviving fragment must carry.
 func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl prismPayload, keepInside bool) ([]ChainRecord, float64, error) {
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, rcv, tl)
@@ -1012,9 +1010,9 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 	}
 
 	// The structural no-crossing check (this file's own trimNoCrossingSide)
-	// runs BEFORE classifyPrismCells: a cell carrying a hole — the shape
+	// runs BEFORE prismcells.Classify: a cell carrying a hole — the shape
 	// every no-crossing configuration produces, tool nested in receiver or
-	// receiver nested in tool — is explicitly outside classifyPrismCells's
+	// receiver nested in tool — is explicitly outside prismcells.Classify's
 	// own hole-free scope (prism_boolean_crossing.go), and a wholly disjoint
 	// pair leaves the two operands' cells with no edge in common for its
 	// propagation to reach across either. All three are genuine trim
@@ -1031,7 +1029,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, ErrDegenerate)
 	}
 
-	matterRcv, matterTool, resolved, err := classifyPrismCells(budget, tags, profiles)
+	matterRcv, matterTool, resolved, err := prismcells.Classify(budget, tags, profiles)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1039,7 +1037,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		return nil, 0, fmt.Errorf(`%w: the receiver and tool's arrangement is not one this evaluator's crossing classifier resolves`, ErrUnsupported)
 	}
 
-	survivors, total, err := trimSurvivingFragments(budget, tags, matterRcv, matterTool, profiles, keepInside)
+	survivors, total, err := prismcells.SurvivingFragments(budget, tags, matterRcv, matterTool, profiles, keepInside)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1050,7 +1048,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; every fragment is kept`, ErrDegenerate)
 	}
 
-	walks, resolved, err := chainTrimSurvivorWalks(budget, survivors)
+	walks, resolved, err := prismcells.ChainSurvivorWalks(budget, survivors)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1094,32 +1092,32 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 	return chains, cutDelta, nil
 }
 
-// trimNoCrossingSide decides, without classifyPrismCells, whether the tool's
+// trimNoCrossingSide decides, without prismcells.Classify, whether the tool's
 // boundary crosses the receiver's at all. Three structural shapes answer it,
 // each a pure data comparison against buildPrismScene's own tag map
-// (prismFindLoopMatch, prism_boolean_nesting.go) rather than a geometric
+// (prismcells.FindLoopMatch, internal/prismcells/origin.go) rather than a geometric
 // test: the receiver's own cell, untouched, carrying no further hole (wholly
 // disjoint); the receiver's own cell, untouched, carrying the tool's own
 // solid as one further hole (the tool nested inside the receiver); or the
 // tool's own cell, untouched, carrying the receiver's own outer as its one
 // hole (the receiver nested inside the tool — S5 already keeps the tool
 // itself hole-free). resolved=false means none of the three applies, so the
-// tool's boundary genuinely crosses the receiver's and classifyPrismCells's
+// tool's boundary genuinely crosses the receiver's and prismcells.Classify's
 // own propagation is what answers it.
-func trimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile, rcv prismPayload) (insideTool, resolved bool, err error) {
-	rcvOuter, err := prismLoopEntitySet(budget, tags, false, -1)
+func trimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, rcv prismPayload) (insideTool, resolved bool, err error) {
+	rcvOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return false, false, err
 	}
 	rcvHoles := make([]map[sketch.Entity]struct{}, len(rcv.profile.Holes))
 	for i := range rcv.profile.Holes {
-		hs, err := prismLoopEntitySet(budget, tags, false, i)
+		hs, err := prismcells.LoopEntitySet(budget, tags, false, i)
 		if err != nil {
 			return false, false, err
 		}
 		rcvHoles[i] = hs
 	}
-	toolOuter, err := prismLoopEntitySet(budget, tags, true, -1)
+	toolOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
 	if err != nil {
 		return false, false, err
 	}
@@ -1131,165 +1129,26 @@ func trimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]pr
 		return fmt.Errorf(`%w: the trim scene's arrangement reports an invalid region`, ErrUnsupported)
 	}
 
-	if disjointMatch, ok, err := prismFindLoopMatch(budget, profiles, rcvOuter, rcvHoles); err != nil {
+	if disjointMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, rcvOuter, rcvHoles); err != nil {
 		return false, false, err
 	} else if ok {
 		return false, true, invalid(disjointMatch)
 	}
 
 	toolInsideHoles := append(append([]map[sketch.Entity]struct{}{}, rcvHoles...), toolOuter)
-	if toolInsideMatch, ok, err := prismFindLoopMatch(budget, profiles, rcvOuter, toolInsideHoles); err != nil {
+	if toolInsideMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, rcvOuter, toolInsideHoles); err != nil {
 		return false, false, err
 	} else if ok {
 		return false, true, invalid(toolInsideMatch)
 	}
 
-	if rcvInsideMatch, ok, err := prismFindLoopMatch(budget, profiles, toolOuter, []map[sketch.Entity]struct{}{rcvOuter}); err != nil {
+	if rcvInsideMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, toolOuter, []map[sketch.Entity]struct{}{rcvOuter}); err != nil {
 		return false, false, err
 	} else if ok {
 		return true, true, invalid(rcvInsideMatch)
 	}
 
 	return false, false, nil
-}
-
-// trimSurvivingFragments reads §3.2's Trim side: for every RECEIVER boundary
-// fragment, classifyPrismCells's own tool-side reading for the cell that is
-// the RECEIVER's own material (matterRcv true) decides its fate.
-//
-// A fragment's OTHER side is usually the unbounded face s.Profiles() does not
-// return, in which case matterRcv is true for the one cell it bounds and
-// "one cell settles it" (§3.2) needs nothing further. It is a SECOND bounded
-// cell only where the tool's own section extends past the receiver's on that
-// side — a tool taller or wider than the sheet it trims, which every fixture
-// here that spans the sheet axially produces on its unswept sides — and that
-// second cell is never the receiver's own material (matterRcv false there),
-// so filtering on matterRcv alone picks the one occurrence that matters
-// without a special case for which shape produced it. Two occurrences BOTH
-// reporting matterRcv true is RS5's own coincident carrier: the tool's
-// boundary runs exactly along the receiver's, so a receiver fragment bounds
-// the receiver's material on both sides at once.
-//
-// keepInside selects the survivors: false keeps a fragment whose settling
-// cell classifyPrismCells puts outside the tool's material, true keeps one
-// it puts inside. total is the count of distinct receiver fragments the
-// arrangement produced, for RS6's "keeps every fragment or none" check.
-func trimSurvivingFragments(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, matterRcv, matterTool []bool, profiles []*sketch.Profile, keepInside bool) (survivors []sketch.BoundaryEdge, total int, err error) {
-	type edgeKey struct {
-		entity sketch.Entity
-		t0, t1 float64
-	}
-	type settled struct {
-		edge   sketch.BoundaryEdge
-		inTool bool
-	}
-	byKey := map[edgeKey]settled{}
-	var order []edgeKey
-	for i, p := range profiles {
-		if err := budget.Step(); err != nil {
-			return nil, 0, err
-		}
-		if !p.Valid {
-			return nil, 0, fmt.Errorf(`%w: a cell the trim resolution depends on is not valid`, ErrUnsupported)
-		}
-		if !matterRcv[i] {
-			continue // not the receiver's own material: never the settling cell
-		}
-		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
-			for _, e := range loop {
-				if err := budget.Step(); err != nil {
-					return nil, 0, err
-				}
-				origin, ok := tags[e.Entity]
-				if !ok {
-					return nil, 0, fmt.Errorf(`decad: a trim arrangement entity traces to neither operand`)
-				}
-				if origin.isB {
-					continue // tool-sourced: never part of a trimmed result
-				}
-				key := edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}
-				if _, dup := byKey[key]; dup {
-					return nil, 0, fmt.Errorf(`%w: a receiver boundary fragment coincides with the tool's own boundary`, ErrUnsupported)
-				}
-				byKey[key] = settled{edge: e, inTool: matterTool[i]}
-				order = append(order, key)
-			}
-		}
-	}
-	total = len(order)
-	for _, key := range order {
-		s := byKey[key]
-		if s.inTool == keepInside {
-			survivors = append(survivors, s.edge)
-		}
-	}
-	return survivors, total, nil
-}
-
-// chainTrimSurvivorWalks is §3.3's open-walk chaining: chainPrismUnionSurvivors
-// (prism_boolean.go) generalized two ways, and nothing else — the walk is not
-// required to close, and a survivor set that falls into several runs yields
-// several walks rather than failing. Connectivity reads sketch's own walked
-// Polyline endpoints exactly as chainPrismUnionSurvivors does: bookkeeping on
-// an answer sketch already computed, never a re-derived geometric fact.
-// resolved=false (err always nil in that case) means the survivors do not
-// partition cleanly into dangling-ended runs — a shape this evaluator does
-// not cover.
-func chainTrimSurvivorWalks(budget *proofbound.WorkBudget, survivors []sketch.BoundaryEdge) ([][]sketch.BoundaryEdge, bool, error) {
-	type endpoints struct{ start, end Point2 }
-	pts := make([]endpoints, len(survivors))
-	byStart := make(map[Point2]int, len(survivors))
-	for i, e := range survivors {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		if len(e.Polyline) < 2 {
-			return nil, false, nil // defensive: no walked endpoints to key on
-		}
-		start := Point2{U: e.Polyline[0][0], V: e.Polyline[0][1]}
-		end := Point2{U: e.Polyline[len(e.Polyline)-1][0], V: e.Polyline[len(e.Polyline)-1][1]}
-		if _, dup := byStart[start]; dup {
-			return nil, false, nil // ambiguous: more than one survivor leaves this vertex
-		}
-		byStart[start] = i
-		pts[i] = endpoints{start: start, end: end}
-	}
-	hasIncoming := make(map[Point2]bool, len(survivors))
-	for _, p := range pts {
-		hasIncoming[p.end] = true
-	}
-
-	used := make([]bool, len(survivors))
-	var walks [][]sketch.BoundaryEdge
-	for i := range survivors {
-		if used[i] || hasIncoming[pts[i].start] {
-			continue // not a run's own start: reached by following its predecessor
-		}
-		var walk []sketch.BoundaryEdge
-		cur := i
-		for {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			used[cur] = true
-			walk = append(walk, survivors[cur])
-			next, ok := byStart[pts[cur].end]
-			if !ok {
-				break // a free end: this run is done
-			}
-			if used[next] {
-				return nil, false, nil // a cycle folding back without a dangling start
-			}
-			cur = next
-		}
-		walks = append(walks, walk)
-	}
-	for _, u := range used {
-		if !u {
-			return nil, false, nil // a pure cycle among the survivors: not a shape this covers
-		}
-	}
-	return walks, true, nil
 }
 
 // Split cuts target with tool and returns one solid per arranged target cell
@@ -1478,7 +1337,7 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 	if unchanged {
 		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, ErrDegenerate)
 	}
-	matterTarget, err := classifySplitTargetCells(budget, tags, profiles)
+	matterTarget, err := prismcells.ClassifySplit(budget, tags, profiles)
 	if err != nil {
 		return nil, err
 	}
@@ -1530,20 +1389,20 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 // one sketch cell. An inside stub or an outside tool leaves this exact cell;
 // neither creates a piece boundary. The match reads only entity identity and
 // whole-edge flags from sketch's publication.
-func splitUnchangedTargetCell(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin,
+func splitUnchangedTargetCell(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin,
 	profiles []*sketch.Profile, target ProfileRecord) (bool, error) {
-	outer, err := prismLoopEntitySet(budget, tags, false, -1)
+	outer, err := prismcells.LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
 		return false, err
 	}
 	holes := make([]map[sketch.Entity]struct{}, len(target.Holes))
 	for i := range holes {
-		holes[i], err = prismLoopEntitySet(budget, tags, false, i)
+		holes[i], err = prismcells.LoopEntitySet(budget, tags, false, i)
 		if err != nil {
 			return false, err
 		}
 	}
-	match, found, err := prismFindLoopMatch(budget, profiles, outer, holes)
+	match, found, err := prismcells.FindLoopMatch(budget, profiles, outer, holes)
 	if err != nil || !found {
 		return false, err
 	}
@@ -1553,87 +1412,10 @@ func splitUnchangedTargetCell(budget *proofbound.WorkBudget, tags map[sketch.Ent
 	return true, nil
 }
 
-// classifySplitTargetCells uses classifyPrismCells's orientation and
-// propagation rule for the target alone. A sheet tool has no material side;
-// its edges only divide cells. In particular a circular tool may leave a
-// holed target cell, so every published loop participates in the link map.
-func classifySplitTargetCells(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) ([]bool, error) {
-	type edgeKey struct {
-		entity sketch.Entity
-		t0, t1 float64
-	}
-	type occurrence struct {
-		cell int
-		isB  bool
-	}
-	member := make([]prismCellMembership, len(profiles))
-	occ := map[edgeKey][]occurrence{}
-	for i, p := range profiles {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if !p.Valid {
-			return nil, fmt.Errorf(`%w: a cell the split resolution depends on is invalid`, ErrUnsupported)
-		}
-		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
-			for _, edge := range loop {
-				if err := budget.Step(); err != nil {
-					return nil, err
-				}
-				origin, ok := tags[edge.Entity]
-				if !ok {
-					return nil, fmt.Errorf(`%w: a split cell edge traces to neither operand`, ErrUnsupported)
-				}
-				if !origin.isB {
-					match := edge.Reversed == origin.authoredReversed
-					if member[i].known && member[i].val != match {
-						return nil, fmt.Errorf(`%w: a split cell has conflicting target-side labels`, ErrUnsupported)
-					}
-					member[i] = prismCellMembership{known: true, val: match}
-				}
-				key := edgeKey{entity: edge.Entity, t0: edge.TStart, t1: edge.TEnd}
-				occ[key] = append(occ[key], occurrence{cell: i, isB: origin.isB})
-			}
-		}
-	}
-	var links []prismCellLink
-	for _, uses := range occ {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		switch len(uses) {
-		case 1:
-		case 2:
-			if uses[0].cell == uses[1].cell || uses[0].isB != uses[1].isB {
-				return nil, fmt.Errorf(`%w: a split edge has inconsistent cell ownership`, ErrUnsupported)
-			}
-			links = append(links, prismCellLink{a: uses[0].cell, b: uses[1].cell, isB: uses[0].isB})
-		default:
-			return nil, fmt.Errorf(`%w: a split edge belongs to more than two cells`, ErrUnsupported)
-		}
-	}
-	if err := propagatePrismMembership(budget, links, true, member); err != nil {
-		return nil, err
-	}
-	for _, link := range links {
-		if link.isB && member[link.a].known && member[link.b].known && member[link.a].val != member[link.b].val {
-			return nil, fmt.Errorf(`%w: adjacent split cells disagree on the target side of a tool edge`, ErrUnsupported)
-		}
-	}
-	matter := make([]bool, len(profiles))
-	for i, m := range member {
-		if !m.known {
-			return nil, fmt.Errorf(`%w: a split cell has no target-side label`, ErrUnsupported)
-		}
-		matter[i] = m.val
-	}
-	return matter, nil
-}
-
 // This section is the revolve family's arm of the gate and of Trim
 // (docs/surface-intersection-design.md §11's PR4). Only S1's routing, S4's
 // generator test and S6's span relation differ from the prism arm; §3's whole
-// resolution — buildPrismScene, classifyPrismCells, the survivor chaining and
+// resolution — buildPrismScene, prismcells.Classify, the survivor chaining and
 // the cut-displacement reading — is consumed VERBATIM over the two operands'
 // MERIDIAN views, which is what §3.1 claims and what revolvePayload.meridian
 // supplies.

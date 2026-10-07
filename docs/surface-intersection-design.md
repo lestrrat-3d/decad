@@ -184,11 +184,11 @@ both, and selects among them per operation. Selection reads only facts
 scene tag map, their `Reversed` flag, their `Partial` flag, `Profile.Valid`,
 and which of the two publications an edge arrived in.
 
-**`Trim`: the side comes from `classifyPrismCells`, unchanged.** The receiver's
+**`Trim`: the side comes from `prismcells.Classify`, unchanged.** The receiver's
 section is a closed loop, so every fragment of it bounds at least one bounded
 cell — a fragment's outer side may be the unbounded face `s.Profiles()` does
 not return, but its inner side is always a bounded cell of the receiver's own
-interior. `classifyPrismCells` (`prism_boolean_crossing.go`) already labels
+interior. `prismcells.Classify` (`internal/prismcells/membership.go`) already labels
 each returned cell against each operand by edge-orientation propagation: it
 compares a boundary edge's `Reversed` flag in that cell's own walk against
 the operand's authored orientation for the loop the entity came from, which
@@ -602,7 +602,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 
 1. **PR1 — the gate and `Trim` over the prism family.** S1–S7,
    `buildPrismScene`'s `ChainRecord` arm, §3.2's side reading over
-   `classifyPrismCells` unchanged, §3.3's open-walk chaining, `chainPayload`'s
+   `prismcells.Classify` unchanged, §3.3's open-walk chaining, `chainPayload`'s
    walk set and section displacement, §7's exactness, and `Body.Trim`. Tests:
    surface §15's T170–T174 and T181.
 2. **PR2 — `Document.Split` over the prism family.** §3.2's cell selection,

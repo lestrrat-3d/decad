@@ -63,7 +63,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 
 	// Selected cells: Task 1's first half of the crossing resolution, under
 	// Intersect's own keep — the arrangement's own cells that
-	// classifyPrismCells puts on BOTH operands' material sides.
+	// prismcells.Classify puts on BOTH operands' material sides.
 	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress,
 		func(a, b bool) bool { return a && b })
 	if err != nil {
