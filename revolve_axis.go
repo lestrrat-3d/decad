@@ -244,7 +244,7 @@ func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (
 // axisDirectionSqrtBracket proves how far the held unit-direction components
 // heldU, heldV — each dU = du/L, dV = dv/L with L = sqrt(du²+dv²) — can sit
 // from the axis's own exact direction, through the same sqrt bracket the
-// straight-prism campaign proved (segment_walk.go's lineWalkBounds /
+// straight-prism campaign proved (internal/walkconvert/walk.go's lineWalkBounds /
 // dySqrtIntervalError): L² = du²+dv² is exact rational arithmetic, and
 // proofbound.RatSqrtDown/proofbound.RatSqrtUp (internal/freeform/spline_length.go) bracket its root by exact
 // comparison, without assuming any libm accuracy from the division that
