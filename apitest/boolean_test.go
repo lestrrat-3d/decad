@@ -1216,10 +1216,13 @@ func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
 	// face: the boundary touches the plane and comes back. That is a true graze,
 	// no side classification is proven for it, and it stays refused. The model is
 	// valid, so the refusal is BooleanUnsupportedContact wrapping ErrUnsupported.
+	// The inner wedge is placed up 1 mm, so the analytic union's shared-axis
+	// gate declines the pair and the mesh path decides it; drawn unplaced on
+	// one plane, the pair is TestStackedUnionKnifeEdgeNestedWedge's.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
-	b := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3)
+	b := translated(t, wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3), 0, 0, 1)
 
 	_, err := decad.Union(t.Context(), a, b)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

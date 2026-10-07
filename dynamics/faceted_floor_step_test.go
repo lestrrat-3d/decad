@@ -156,7 +156,10 @@ func facetedFloorStepFixture(t *testing.T) (*decad.Document, *decad.Body, *decad
 	t.Helper()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	upperCap := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
+	// Placed up to z = 8 so the analytic union's shared-axis gate declines
+	// the pair and the union stays faceted.
+	upperCap, err := makeBox(t, doc, -2, -2, 2, 2, 0, 4).Placed(t.Context(), translation(t, r3.Vec{Z: 8}))
+	require.NoError(t, err)
 	faceted, err := decad.Union(t.Context(), base, upperCap)
 	require.NoError(t, err)
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
@@ -196,7 +199,9 @@ func TestBoundedFacetedMassAdmitsDynamicWorld(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	upper := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
+	// Placed up to z = 8 so the union stays faceted (see facetedFloorStepFixture).
+	upper, err := makeBox(t, doc, -2, -2, 2, 2, 0, 4).Placed(t.Context(), translation(t, r3.Vec{Z: 8}))
+	require.NoError(t, err)
 	union, err := decad.Union(t.Context(), base, upper)
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: .1})
@@ -229,7 +234,9 @@ func TestBoundedFacetedMassClearStepAndTrace(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	upper := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
+	// Placed up to z = 8 so the union stays faceted (see facetedFloorStepFixture).
+	upper, err := makeBox(t, doc, -2, -2, 2, 2, 0, 4).Placed(t.Context(), translation(t, r3.Vec{Z: 8}))
+	require.NoError(t, err)
 	union, err := decad.Union(t.Context(), base, upper)
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: .1})

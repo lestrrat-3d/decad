@@ -985,6 +985,13 @@
 5	0.06	TestSegFilterNeverRejectsAnExactHit
 5	0.03	TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses
 5	0.01	TestStackedPayloadAuditRejectsBrokenRecords
+5	0.01	TestStackedUnionExtentReadsEveryRun
+5	0.01	TestStackedUnionGateDiameterStaysOnTheBody
+5	0.01	TestStackedUnionInterfaceReportsSplitBoundary
+5	0.01	TestStackedUnionLevelChargesExactOffsetSum
+5	0.01	TestStackedUnionPayloadAuditRejectsBrokenInterfaces
+5	0.02	TestStackedUnionPlacedBossChargesSectionDisplacement
+5	0.01	TestStackedUnionRecordsSlabsAndFloor
 5	0.02	TestSweepPairRealFacetedUnionClearAndImpact
 5	0.01	TestTessellateChargesSectionDisplacementToEveryProof
 5	0.62	TestTessellatePrismReusesPublishedWalks

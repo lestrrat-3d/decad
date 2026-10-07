@@ -12,8 +12,7 @@ func facetedFloorSweepFixture(t *testing.T) (*Document, *Body, *Body) {
 	t.Helper()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := facetedUnionPartner(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	_, faceted := union.payload.(facetedPayload)

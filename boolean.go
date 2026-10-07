@@ -248,6 +248,27 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 		d.commit(body, a, b)
 		return body, nil
 	}
+	if op == meshbool.OpUnion {
+		// docs/general-boolean-design.md §3 A1: unequal sweep intervals that
+		// overlap or touch build a stacked prism. Same contract as above.
+		if sp, ok, err := tryStackedUnion(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			ref := d.nextProducerID()
+			body, err := evalStackedContext(ctx, d, ref, sp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commit(body, a, b)
+			return body, nil
+		}
+	}
 	if op == meshbool.OpCut {
 		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
 			if errors.Is(err, ErrUnsupported) {

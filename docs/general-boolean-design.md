@@ -108,8 +108,12 @@ in either arm, and G5 read for `Union` as "the intervals overlap or touch"
 `{z0_a, z1_a, z0_b', z1_b'}` sorted exactly cut the union into at most three
 slabs. In a slab both operands reach, the region is `Union`'s select-all
 merge (prism-boolean §4.2) over the two records, with its §6 audit and §7
-displacement; in a slab one operand reaches, the region is that operand's
-own record verbatim. Each interface is where the two adjacent slabs' regions
+displacement; where the clean-nesting match below proves one region carries
+the other's outer whole as a hole, that merge is the containing region, and
+the slab keeps the containing operand's record verbatim. In a slab one
+operand reaches, the region is that operand's own record verbatim; under a
+non-identity re-expression, B's region is arranged alone in a private scene
+of re-expressed entities and recorded from the one cell `sketch` returns. Each interface is where the two adjacent slabs' regions
 differ; its exposed records are decided by the clean-nesting structural match
 prism-boolean §4.2 already runs: the smaller region's outer must reproduce
 whole as a hole of the larger region's cell, in which case the exposed
@@ -117,7 +121,9 @@ record is the larger region with that hole, and the smaller region is the
 material on both sides. A boss whose footprint crosses the plate's outline
 at the interface (the match finds `Partial` edges) is refused with
 `ErrUnsupported`: the exposed floor would need the per-cell classification
-with a split boundary, which A6 admits later. Stacked §2.2's I5 reads, for
+with a split boundary, which A6 admits later. The same refusal covers a
+rooted boss crossing the outline, whose merged slab meets the plate's slab
+along partly coincident walls. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
 exposure records the match derives, and the implementation PR changes that
@@ -447,7 +453,7 @@ are relations, never literals.
 - **A1 boss on plate**: 40×40×10 plate on XY `Union` Ø10 boss on
   `CreateOffsetPlane(XY, 10)` extruded 15: no `Faceted` face, two slabs, one
   interface with one exposed floor record (plate outer, boss hole), volume
-  within its bound of `16000 + π·25·15`, bound below 1e-9 mm³, 9 faces,
+  within its bound of `16000 + π·25·15`, bound below 1e-9 mm³, 8 faces,
   `CapStart` one face, `CapEnd` one face. The rooted boss (offset 5,
   extruded 20) gives three slabs and the same volume. Two equal boxes stacked
   edge-to-edge give `Exact` volume and I5's equal-outer column of one wall

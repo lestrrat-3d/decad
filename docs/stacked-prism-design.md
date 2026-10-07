@@ -1,8 +1,10 @@
 # Stacked Prism Design
 
 The `stackedPrismPayload`: an axial stack of recorded sections over one sketch
-plane, and the one construction that builds it today — a blind `Cut` of a
-straight prism by a same-plane prism tool whose sweep ends inside the target.
+plane, and the two constructions that build it — a blind `Cut` of a straight
+prism by a same-plane prism tool whose sweep ends inside the target, and a
+`Union` of two co-directional prisms or stacked prisms whose sweep intervals
+overlap or touch without being equal (`docs/general-boolean-design.md` §3 A1).
 `docs/modify-reach-design.md` §9.1 names this payload as the record a general
 prism shell will migrate to; this document owns the payload itself (its record,
 its invariants, how its body is built and measured, how it tessellates, and
@@ -89,7 +91,7 @@ evaluator does not build — never repaired.
 | I2 | Each slab holds exactly one region. Multi-region slabs are modify-reach §9.1's shell migration and are not built. (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`, as `evalCup` refuses one.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
-| I5 | Every slab's outer loop is the same record (`loopRecordsEqual`). A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so the outer wall runs the whole height. | `ErrUnsupported` |
+| I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
 | I6 | Each interface is **monotone**: every hole of the lower region either equals (`loopRecordsEqual`) a hole of the upper region or is lower-only; every hole of the upper region either equals a hole of the lower region or is upper-only; and lower-only and upper-only holes do not both exist at one interface. | `ErrUnsupported` |
 | I7 | `interfaces[i].lowerExposed` holds exactly one record per upper-only hole — `{Outer: reverse(hole)}` — and `upperExposed` one per lower-only hole, the same way. The audit re-derives both lists from the two regions and compares them record for record. | `ErrDegenerate` |
 
@@ -107,16 +109,33 @@ outer stays one record (I5) and every interface stays monotone (I6). The
 join re-derives each interface's exposed records from the rewritten regions
 (I7), and this audit checks all three again before the body is built.
 
+A union-built stack reads I5–I7 per interface. Where the two outer loops are
+one record, the rows above apply unchanged. Where they differ:
+
+| # | Union reading | Sentinel |
+|---|---|---|
+| I5 | Both regions are hole-free, and the narrower outer is proven nested in the wider region by prism-boolean §4.2's clean-nesting match when the union is built: the wider region's cell carries the narrower outer, whole, as its one hole | `ErrUnsupported` |
+| I6 | Exactly one side records exposed material: `lowerExposed` when the lower region is the wider one, `upperExposed` when the upper is | `ErrDegenerate` |
+| I7 | That side holds exactly one record, `{Outer: wider.Outer, Holes: [reverse(narrower.Outer)]}`. The audit re-derives it from the two regions and compares it record for record | `ErrDegenerate` |
+
+The audit checks the records the union reading names. The nesting itself is
+proven once, by the match that built the union, as I6's monotone holes are
+proven by the cut that built them.
+
 ### 2.3 Loop columns
 
 A **column** is one loop record over a maximal run of consecutive slabs that
-all carry it (I5 and I6 make "carry it" a `loopRecordsEqual` question). The
-outer loop is one column over every slab. A through hole is one column over
-every slab. A pocket's wall is a column over the slabs the pocket reaches, and
-a hole that vanishes and reappears is two columns. `stackedColumns` derives the
-column list from the slabs alone, and the body build and the tessellator both
-read it, so a wall is one face however many slabs it crosses — evaluator §3's
-canonicalization rule — and both consumers name the same face by the same role.
+all carry it (I5 and I6 make "carry it" a `loopRecordsEqual` question). In a
+cut-built stack the outer loop is one column over every slab. A union-built
+stack has one outer column per run of slabs that share an outer record: a
+boss's wall is one column over the slabs the boss alone reaches, and a plate's
+wall is one column over the slabs the plate spans. A through hole is one
+column over every slab. A pocket's wall is a column over the slabs the pocket
+reaches, and a hole that vanishes and reappears is two columns.
+`stackedColumns` derives the column list from the slabs alone, and the body
+build and the tessellator both read it, so a wall is one face however many
+slabs it crosses — evaluator §3's canonicalization rule — and both consumers
+name the same face by the same role.
 
 A column records its loop, the slab it starts in, that loop's index in that
 slab's region, its sweep interval `[z0, z1]` (the first slab's `z0` to the last
@@ -134,6 +153,12 @@ identity, after `falsifyStackedPayload`:
 | top cap | the last slab's region | `Plane` at the last `z1`, outward `+N` | `capEnd` |
 | floor | `interfaces[i].lowerExposed[e]` | `Plane` at the interface level, outward `+N` | `floor(i,e)` |
 | ceiling | `interfaces[i].upperExposed[e]` | `Plane` at the interface level, outward `-N` | `ceiling(i,e)` |
+
+A union-built interface's one patch has two loops: its outer is the wider
+side's outer column, read at that column's end on the interface, and its hole
+is the narrower side's outer column, read at that column's start or end there.
+`stackedInterfacePatches` lists every patch with its column rings, and the
+body build and the tessellator both read that list.
 
 Every planar face's loops are the coedges the column walls already placed at
 that level, so every edge bounds exactly two faces: a column that starts in
@@ -160,9 +185,9 @@ needed.
 |---|---|
 | `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `evalPrism` does) times its bounded height |
 | `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`loopEnclosedAreaContext` of its outer loop) + `Σ_columns perimeter · height` |
-| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismPointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismCentroidGeometryBound` over the outer-only prism on the full interval, plus `sectionDelta`, caps the result as `evalPrism`'s does |
-| `Bounds` | `prismBoundsContext` over the outer-only prism (`{Outer: slabs[0].regions[0].Outer}`) on the full interval with the end slabs' own level displacements and the payload's `sectionDelta` — every slab's region lies inside its outer loop (I5) |
-| `extentAlong` | the outer-only prism's reading, as `cupPayload.extentAlong` reads its outer prism |
+| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismPointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismCentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
+| `Bounds` | the union of `prismBoundsContext` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
+| `extentAlong` | the extreme over every outer run's reading |
 | `axialDelta` | the largest level displacement over every slab |
 
 `Exactness` follows `exactnessOf` on each composed bound: a rectangular pocket in
@@ -189,7 +214,10 @@ per planar patch):
   `capEnd` from the last slab's rings at their `z1` (`+N`), each floor from its
   upper-only column's bottom ring with the hole's winding reversed (`+N`), and
   each ceiling from its lower-only column's top ring, reversed, emitted
-  reversed (`-N`). Every planar patch indexes the already allocated ring
+  reversed (`-N`). A union-built patch triangulates the wider outer column's
+  ring as its outer and the narrower outer column's ring, reversed, as its
+  hole. Its two rings come from two slabs, so `requireLoopClearance` runs over
+  the patch's own rings before it is triangulated. Every planar patch indexes the already allocated ring
   vertices, so the mesh closes by construction and `internal/tessellation.RequireClosedMesh` proves it.
 - Face bounds: a wall's largest sagitta plus the larger of its column's two
   level displacements; a planar patch's largest bounding-loop sagitta plus its
@@ -219,13 +247,14 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | Consumer | Behaviour |
 |---|---|
 | `Body.Placed` / `Duplicate` / `PlacedCopy` | re-evaluates the payload under the composed motion |
-| later `Cut` with a prism tool | prism-boolean §3.2's stacked-target row: a tool spanning the whole stack and clean-nesting in every slab's region builds a stacked result (stage 1); a tool ending inside the stack, or one touching any slab's boundary, takes the mesh path |
-| `Union` / `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
+| later `Cut` with a prism tool | prism-boolean §3.2's stacked-target row: a tool spanning the whole stack and clean-nesting in every slab's region builds a stacked result (stage 1); a tool ending inside the stack, one touching any slab's boundary, or any tool on a union-built stack takes the mesh path |
+| `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands |
+| `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
 | `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; one shell, so STEP's one-shell rule is met |
 | `ThroughAll` / `ThroughAllSide` stops | `extentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
 | `ToFace` stops | read the selected face's own `axialDelta` |
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
-| `Verify` tolerance gate | `gateWitnessPrism` reads the outer-only prism on the full interval, a shape containing the whole body, and shrinks its witness maximum by `sectionDelta + axialDelta` (`docs/verification-design.md` §3) |
+| `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose witnesses are all points of the body, and shrinks their witness maximum by `sectionDelta + axialDelta` (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |
 | `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 3 lifts both: DX7's exact per-face normals over the columns and planar patches, DX8's `prismMinRadius` over the outer loop plus every column's hole loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 3 adds the exposed-face model, DX6) |

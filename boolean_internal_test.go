@@ -675,7 +675,13 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	s2.Fix(rect.A)
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
-	bar, err := doc.Extrude(s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5 * scale)})
+	bar, err := doc.Extrude(s2, s2.Profiles()[0], Distance{D: units.Millimeters(10 * scale), Dir: Along})
+	require.NoError(t, err)
+	// Placed down to span [-5·scale, 5·scale]: the placement misses the
+	// analytic union's shared-axis gate, so the pair keeps the mesh path.
+	lower, err := r3.Translation(r3.NewVec(0, 0, -5*scale))
+	require.NoError(t, err)
+	bar, err = bar.Placed(t.Context(), lower)
 	require.NoError(t, err)
 	for _, operand := range []*Body{wedge, bar} {
 		mesh, meshErr := tessellateContext(t.Context(), operand, units.Millimeters(1), VerifyAll)

@@ -60,8 +60,84 @@ func (sp stackedPrismPayload) outerPrism() prismPayload {
 	}
 }
 
+// outerRuns is one outer-only prism per maximal run of consecutive slabs that
+// carry one outer loop record, over that run's own interval. A cut-built stack
+// is one run, the outer-only prism on the full interval. A union-built stack
+// has one run per distinct outer, and every run's prism is material of the
+// body, since a union-built slab region is hole-free (§2.2's union reading).
+// The union of the runs' prisms is the body's outer envelope, which is what
+// Bounds, extentAlong, the centroid's geometric cap and the tolerance gate's
+// witnesses read.
+func (sp stackedPrismPayload) outerRuns() ([]prismPayload, error) {
+	base := sp.outerPrism()
+	var runs []prismPayload
+	for k, slab := range sp.slabs {
+		if k > 0 {
+			same, err := loopRecordsEqual(nil, sp.slabs[k-1].regions[0].Outer, slab.regions[0].Outer)
+			if err != nil {
+				return nil, err
+			}
+			if same {
+				last := &runs[len(runs)-1]
+				last.z1, last.z1Delta = slab.z1, slab.z1Delta
+				continue
+			}
+		}
+		run := base
+		run.profile = ProfileRecord{Outer: slab.regions[0].Outer}
+		run.z0, run.z0Delta = slab.z0, slab.z0Delta
+		run.z1, run.z1Delta = slab.z1, slab.z1Delta
+		runs = append(runs, run)
+	}
+	return runs, nil
+}
+
 func (sp stackedPrismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return sp.outerPrism().extentAlong(g)
+	runs, err := sp.outerRuns()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	var lo, hi, bound float64
+	for i, run := range runs {
+		rlo, rhi, rbound, err := run.extentAlong(g)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		if i == 0 {
+			lo, hi, bound = rlo, rhi, rbound
+			continue
+		}
+		lo, hi, bound = min(lo, rlo), max(hi, rhi), max(bound, rbound)
+	}
+	return lo, hi, bound, nil
+}
+
+// stackedBoundsContext is the union of every outer run's box. Each run's box
+// bounds its own extremes, so the union's extreme along each axis is one
+// run's, and the largest run bound covers it.
+func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, work *freeform.FreeformWork) (Box, error) {
+	runs, err := sp.outerRuns()
+	if err != nil {
+		return Box{}, err
+	}
+	var out Box
+	bound := 0.0
+	for i, run := range runs {
+		box, err := prismBoundsContext(ctx, run, work, nil)
+		if err != nil {
+			return Box{}, err
+		}
+		bound = max(bound, box.Bound.Base())
+		if i == 0 {
+			out = box
+			continue
+		}
+		out.Min = r3.NewVec(min(out.Min.X, box.Min.X), min(out.Min.Y, box.Min.Y), min(out.Min.Z, box.Min.Z))
+		out.Max = r3.NewVec(max(out.Max.X, box.Max.X), max(out.Max.Y, box.Max.Y), max(out.Max.Z, box.Max.Z))
+	}
+	out.Exactness = exactnessOf(bound)
+	out.Bound = units.Millimeters(bound)
+	return out, nil
 }
 
 // stackedExclusiveHoles derives the holes present on only one side of an
@@ -143,7 +219,10 @@ func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {
 			return err
 		}
 		if !equal {
-			return fmt.Errorf(`%w: a stacked prism's outer wall must be one loop`, ErrUnsupported)
+			if err := falsifyStackedUnionInterface(ctx, prev.regions[0], slab.regions[0], sp.interfaces[i-1], i-1); err != nil {
+				return err
+			}
+			continue
 		}
 		lowerOnly, upperOnly, err := stackedExclusiveHoles(prev.regions[0], slab.regions[0])
 		if err != nil {
@@ -166,6 +245,136 @@ func falsifyStackedPayload(ctx context.Context, sp stackedPrismPayload) error {
 		}
 	}
 	return nil
+}
+
+// falsifyStackedUnionInterface is §2.2's union reading of I5-I7 for an
+// interface whose two outer loops differ. Both regions must be hole-free, and
+// exactly one side records exactly one exposed patch: the wider region with
+// the narrower outer reversed as its hole (stackedUnionExposed). The audit
+// re-derives that record from the two regions and the recorded side and
+// compares it record for record. That the narrower outer lies inside the
+// wider one is proven at construction by the clean-nesting match, as I6's
+// monotone holes are; this audit compares records and proves no geometry.
+func falsifyStackedUnionInterface(ctx context.Context, lower, upper ProfileRecord, boundary prismSlabInterface, index int) error {
+	if len(lower.Holes) != 0 || len(upper.Holes) != 0 {
+		return fmt.Errorf(`%w: interface %d changes the outer loop between holed regions`, ErrUnsupported, index)
+	}
+	var got []ProfileRecord
+	var want []ProfileRecord
+	var err error
+	switch {
+	case len(boundary.lowerExposed) == 1 && len(boundary.upperExposed) == 0:
+		got = boundary.lowerExposed
+		want, err = stackedUnionExposed(ctx, lower, upper)
+	case len(boundary.upperExposed) == 1 && len(boundary.lowerExposed) == 0:
+		got = boundary.upperExposed
+		want, err = stackedUnionExposed(ctx, upper, lower)
+	default:
+		return fmt.Errorf(`%w: interface %d changes the outer loop without exactly one exposed patch`, ErrDegenerate, index)
+	}
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(got, want) {
+		return fmt.Errorf(`%w: interface %d does not record its exposed material`, ErrDegenerate, index)
+	}
+	return nil
+}
+
+// stackedPatchLoop is one loop of a planar patch: the column whose ring it
+// reads, which ring (the column's top or its bottom), and whether the loop is
+// the patch's outer boundary.
+type stackedPatchLoop struct {
+	column int
+	top    bool
+	outer  bool
+}
+
+// stackedPatch is one exposed planar patch at an interface: a floor (material
+// below only, outward +N) or a ceiling (material above only, outward -N).
+type stackedPatch struct {
+	role   string
+	floor  bool
+	record ProfileRecord
+	loops  []stackedPatchLoop
+}
+
+// stackedInterfacePatches lists interface k's exposed patches with the column
+// rings that bound them. Where the two outers match (§2.2's I5), each patch is
+// one exclusive hole's column. Where they differ (the union reading), the one
+// patch is bounded by the wider side's outer column and, as its hole, the
+// narrower side's outer column. The body build and the tessellator both read
+// this list, so both name the same face by the same role and the same rings.
+func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, bySlab [][]int, k int) ([]stackedPatch, error) {
+	lower, upper := sp.slabs[k].regions[0], sp.slabs[k+1].regions[0]
+	boundary := sp.interfaces[k]
+	same, err := loopRecordsEqual(nil, lower.Outer, upper.Outer)
+	if err != nil {
+		return nil, err
+	}
+	var patches []stackedPatch
+	if !same {
+		lowerOuter, upperOuter := bySlab[k][0], bySlab[k+1][0]
+		if columns[lowerOuter].end != k || columns[upperOuter].start != k+1 {
+			return nil, fmt.Errorf(`%w: interface %d changes the outer loop but a wall column crosses it`, ErrDegenerate, k)
+		}
+		for e, exposed := range boundary.lowerExposed {
+			patches = append(patches, stackedPatch{role: fmt.Sprintf("floor(%d,%d)", k, e), floor: true, record: exposed,
+				loops: []stackedPatchLoop{{column: lowerOuter, top: true, outer: true}, {column: upperOuter}}})
+		}
+		for e, exposed := range boundary.upperExposed {
+			patches = append(patches, stackedPatch{role: fmt.Sprintf("ceiling(%d,%d)", k, e), record: exposed,
+				loops: []stackedPatchLoop{{column: upperOuter, outer: true}, {column: lowerOuter, top: true}}})
+		}
+		return patches, nil
+	}
+	lowerOnly, upperOnly, err := stackedExclusiveHoles(lower, upper)
+	if err != nil {
+		return nil, err
+	}
+	for e, hole := range upperOnly {
+		ci, err := stackedHoleColumn(columns, bySlab[k+1][1:], hole, k+1, true)
+		if err != nil {
+			return nil, err
+		}
+		patches = append(patches, stackedPatch{role: fmt.Sprintf("floor(%d,%d)", k, e), floor: true,
+			record: boundary.lowerExposed[e], loops: []stackedPatchLoop{{column: ci, outer: true}}})
+	}
+	for e, hole := range lowerOnly {
+		ci, err := stackedHoleColumn(columns, bySlab[k][1:], hole, k, false)
+		if err != nil {
+			return nil, err
+		}
+		patches = append(patches, stackedPatch{role: fmt.Sprintf("ceiling(%d,%d)", k, e),
+			record: boundary.upperExposed[e], loops: []stackedPatchLoop{{column: ci, top: true, outer: true}}})
+	}
+	return patches, nil
+}
+
+// stackedPatchArea is a patch record's area: its outer loop's enclosed area
+// less each hole's, with sectionDisplacementArea over every loop's walks and
+// proven perimeter folded into the bound (§4).
+func stackedPatchArea(ctx context.Context, sectionDelta float64, columns []stackedColumn, patch stackedPatch) (proofbound.BoundedScalar, error) {
+	area, err := loopEnclosedAreaContext(ctx, patch.record.Outer)
+	if err != nil {
+		return proofbound.BoundedScalar{}, err
+	}
+	for _, hole := range patch.record.Holes {
+		holeArea, err := loopEnclosedAreaContext(ctx, hole)
+		if err != nil {
+			return proofbound.BoundedScalar{}, err
+		}
+		area = proofbound.BoundedSub(area, holeArea)
+	}
+	walks := 0
+	perimeter := 0.0
+	for _, pl := range patch.loops {
+		col := columns[pl.column]
+		walks += len(col.loop.Segments)
+		perimeter = proofbound.AbsSumUpper(perimeter, proofbound.AbsSumUpper(col.perimeter.Value, col.perimeter.Bound))
+	}
+	area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sectionDelta, walks, perimeter))
+	return area, nil
 }
 
 type stackedColumn struct {
@@ -303,49 +512,28 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 		capEnd.loops = append(capEnd.loops, &Loop{coedges: col.top, outer: col.loopIndex == 0})
 	}
 	planar := []*Face{capStart, capEnd}
-	for k, boundary := range sp.interfaces {
+	for k := range sp.interfaces {
 		z, axial := sp.slabs[k].z1, sp.slabs[k].z1Delta
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(
-			sp.slabs[k].regions[0], sp.slabs[k+1].regions[0])
+		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
 		if err != nil {
 			return nil, err
 		}
-		for e, exposed := range boundary.lowerExposed {
-			area, err := loopEnclosedAreaContext(ctx, exposed.Outer)
+		for _, patch := range patches {
+			area, err := stackedPatchArea(ctx, sp.sectionDelta, columns, patch)
 			if err != nil {
 				return nil, err
 			}
-			ci, err := stackedHoleColumn(columns, bySlab[k+1][1:], upperOnly[e], k+1, true)
+			f, err := newPlane(z, axial, !patch.floor, patch.role, area)
 			if err != nil {
 				return nil, err
 			}
-			perimeter := columns[ci].perimeter
-			area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sp.sectionDelta,
-				len(columns[ci].loop.Segments), proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)))
-			f, err := newPlane(z, axial, false, fmt.Sprintf("floor(%d,%d)", k, e), area)
-			if err != nil {
-				return nil, err
+			for _, pl := range patch.loops {
+				coedges := columns[pl.column].bottom
+				if pl.top {
+					coedges = columns[pl.column].top
+				}
+				f.loops = append(f.loops, &Loop{coedges: coedges, outer: pl.outer})
 			}
-			f.loops = []*Loop{{coedges: columns[ci].bottom, outer: true}}
-			planar = append(planar, f)
-		}
-		for e, exposed := range boundary.upperExposed {
-			area, err := loopEnclosedAreaContext(ctx, exposed.Outer)
-			if err != nil {
-				return nil, err
-			}
-			ci, err := stackedHoleColumn(columns, bySlab[k][1:], lowerOnly[e], k, false)
-			if err != nil {
-				return nil, err
-			}
-			perimeter := columns[ci].perimeter
-			area.Bound = proofbound.AbsSumUpper(area.Bound, proofbound.SectionDisplacementArea(sp.sectionDelta,
-				len(columns[ci].loop.Segments), proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)))
-			f, err := newPlane(z, axial, true, fmt.Sprintf("ceiling(%d,%d)", k, e), area)
-			if err != nil {
-				return nil, err
-			}
-			f.loops = []*Loop{{coedges: columns[ci].top, outer: true}}
 			planar = append(planar, f)
 		}
 	}
@@ -386,17 +574,27 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	x, y, z := proofbound.BoundedDiv(moment[0], volume), proofbound.BoundedDiv(moment[1], volume), proofbound.BoundedDiv(moment[2], volume)
 	centroidBound := proofbound.Radius3D(max(x.Bound, y.Bound, z.Bound))
 	if sp.sectionDelta > 0 {
-		geometryBound, err := prismCentroidGeometryBound(base, base.profile,
-			r3.Vec{X: x.Value, Y: y.Value, Z: z.Value}, work, nil)
+		runs, err := sp.outerRuns()
 		if err != nil {
 			return nil, err
+		}
+		// Every material point lies in one run's prism, so the largest run
+		// envelope caps the centroid's distance from the held point.
+		geometryBound := 0.0
+		for _, run := range runs {
+			runBound, err := prismCentroidGeometryBound(run, run.profile,
+				r3.Vec{X: x.Value, Y: y.Value, Z: z.Value}, work, nil)
+			if err != nil {
+				return nil, err
+			}
+			geometryBound = max(geometryBound, runBound)
 		}
 		centroidBound = max(centroidBound, proofbound.AbsSumUpper(geometryBound,
 			sp.sectionDelta, sp.axialDelta()))
 	}
 	body.centroid = VecMeasurement{Value: r3.Vec{X: x.Value, Y: y.Value, Z: z.Value},
 		Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
-	bounds, err := prismBoundsContext(ctx, base, work, nil)
+	bounds, err := stackedBoundsContext(ctx, sp, work)
 	if err != nil {
 		return nil, err
 	}

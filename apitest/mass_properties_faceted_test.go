@@ -14,7 +14,9 @@ import (
 func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
-	upper := boxBodyAtZ(t, doc, -2, -2, 2, 2, 8, 4)
+	// Placed up to z = 8 so the analytic union's shared-axis gate declines
+	// the pair and the union is the faceted body this test measures.
+	upper := translated(t, boxBodyAtZ(t, doc, -2, -2, 2, 2, 0, 4), 0, 0, 8)
 	union, err := decad.Union(t.Context(), base, upper)
 	require.NoError(t, err)
 	mesh, err := union.Tessellate(t.Context(), units.Millimeters(1),

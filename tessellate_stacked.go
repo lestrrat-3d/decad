@@ -122,21 +122,24 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return nil, err
 		}
 	}
-	// All region loops already have their material winding. An exposed patch
-	// uses a hole loop as its outer boundary and reverses its index order.
-	emitRegion := func(role string, slabColumns []int, top, reverseFace, reverseLoop bool, axial float64) error {
+	// Every column ring carries its loop's own material winding: an outer
+	// column runs CCW, a hole column CW. A patch triangulates its outer CCW and
+	// its holes CW, so a ring whose column winding differs from the role it
+	// plays in the patch is read reversed; a -N patch flips its triangles.
+	emitPatch := func(role string, loops []stackedPatchLoop, reverseFace bool, axial float64) error {
 		face, err := faceOfRole(role)
 		if err != nil {
 			return err
 		}
 		var points []Point2
 		var vertices []int
-		var loops [][]int
-		for _, ci := range slabColumns {
-			r := rings[ci]
+		var indexLoops [][]int
+		var sags []float64
+		for _, pl := range loops {
+			r := rings[pl.column]
 			start := len(points)
 			points = append(points, r.samples...)
-			if top {
+			if pl.top {
 				vertices = append(vertices, r.top...)
 			} else {
 				vertices = append(vertices, r.bottom...)
@@ -145,15 +148,23 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			for i := range idx {
 				idx[i] = start + i
 			}
-			if reverseLoop {
+			if (columns[pl.column].loopIndex == 0) != pl.outer {
 				for a, z := 0, len(idx)-1; a < z; a, z = a+1, z-1 {
 					idx[a], idx[z] = idx[z], idx[a]
 				}
 			}
-			loops = append(loops, idx)
+			indexLoops = append(indexLoops, idx)
+			sags = append(sags, r.sag)
 			faceTrim[face] = math.Max(faceTrim[face], r.sag)
 		}
-		tris, err := triangulate2DContext(ctx, points, loops)
+		if len(loops) > 1 {
+			// A union patch joins rings from two slabs, which no per-slab
+			// clearance proof has compared.
+			if err := requireLoopClearance(ctx, points, indexLoops, sags); err != nil {
+				return err
+			}
+		}
+		tris, err := triangulate2DContext(ctx, points, indexLoops)
 		if err != nil {
 			return err
 		}
@@ -167,36 +178,27 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		faceAxial[face] = axial
 		return nil
 	}
+	capLoops := func(slabColumns []int, top bool) []stackedPatchLoop {
+		loops := make([]stackedPatchLoop, len(slabColumns))
+		for i, ci := range slabColumns {
+			loops[i] = stackedPatchLoop{column: ci, top: top, outer: columns[ci].loopIndex == 0}
+		}
+		return loops
+	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	if err := emitRegion(roleCapStart, bySlab[0], false, true, false, first.z0Delta); err != nil {
+	if err := emitPatch(roleCapStart, capLoops(bySlab[0], false), true, first.z0Delta); err != nil {
 		return nil, err
 	}
-	if err := emitRegion(roleCapEnd, bySlab[len(bySlab)-1], true, false, false, last.z1Delta); err != nil {
+	if err := emitPatch(roleCapEnd, capLoops(bySlab[len(bySlab)-1], true), false, last.z1Delta); err != nil {
 		return nil, err
 	}
 	for k := range sp.interfaces {
-		lower, upper := sp.slabs[k].regions[0], sp.slabs[k+1].regions[0]
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(lower, upper)
+		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
 		if err != nil {
 			return nil, err
 		}
-		for e, hole := range upperOnly {
-			ci, err := stackedHoleColumn(columns, bySlab[k+1][1:], hole, k+1, true)
-			if err != nil {
-				return nil, err
-			}
-			if err := emitRegion(fmt.Sprintf("floor(%d,%d)", k, e), []int{ci}, false, false, true,
-				sp.slabs[k].z1Delta); err != nil {
-				return nil, err
-			}
-		}
-		for e, hole := range lowerOnly {
-			ci, err := stackedHoleColumn(columns, bySlab[k][1:], hole, k, false)
-			if err != nil {
-				return nil, err
-			}
-			if err := emitRegion(fmt.Sprintf("ceiling(%d,%d)", k, e), []int{ci}, true, true, true,
-				sp.slabs[k].z1Delta); err != nil {
+		for _, patch := range patches {
+			if err := emitPatch(patch.role, patch.loops, !patch.floor, sp.slabs[k].z1Delta); err != nil {
 				return nil, err
 			}
 		}
