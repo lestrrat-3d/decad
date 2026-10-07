@@ -302,6 +302,37 @@ charged per scene.
 | free-form segments | seam §1's whole-scene gate |
 | a sheet operand | core §13, unchanged |
 
+#### B.3 The built reach
+
+`Cut` builds class B for a prism target X and a prism tool Y
+(`classb_cut.go`). Beside B1–B8, the record of §4.1 needs one shared
+placement (`X.xform == Y.xform`), Y's axes carried bit for bit as signed axes
+of X, and every segment of both over its natural range. Y's record is moved
+into `g`, Y's axes at X's origin, by the exact rational dot of the origin
+difference with each axis. The pair is admitted only when every moved
+coordinate and level is a float, so a datum plane and its `CreateOffsetPlane`
+at a float distance meet it and a shift that would round misses.
+
+Within that, the built reach is the through-nesting one, decided by exact
+comparisons of recorded coordinates. Let d be the axis of X's plane Y sweeps
+along, e the other, and w X's normal. Y's section box in `(e, w)` lies strictly
+inside X's sweep interval, with each level displacement as margin. Exactly
+two segments of X meet the closed strip of e that box spans: two lines along
+e, at `d = l0 < l1`, each running strictly past the strip at both ends. Y's
+sweep runs strictly past both. X over the strip is then the slab
+`l0 ≤ d ≤ l1`, and X ∩ Y is Y's section swept over it. The two slab walls
+become planar faces carrying Y's section as a hole; each one's region is its
+perpendicular-face scene's clean-nesting match (§5). Y's walls, reversed,
+become the hole's walls over `[l0, l1]`. No edge of either section is cut,
+so the section and parallel-face scenes are not built. S1's cross-drilled box
+and B1's cross slot are in the reach.
+
+Every pair whose scenes would cut an edge takes the mesh path: B2's keyway,
+a blind cross hole, a hole breaking out, a tool crossing a wall. A cut is a
+fragment endpoint `sketch` computes in one scene, and two scenes that meet
+one crossing record it at different floats (§10), so §4.2's pairing by
+record identity does not close such a result.
+
 ## 4. The `brepPayload`
 
 ### 4.1 Record
@@ -595,16 +626,19 @@ are relations, never literals.
   `Verify` `Sound` with no survey asked, undercut survey measured, STEP
   analytic path (every edge a line or full circle).
 - **B slot**: B1 builds with `Exact` 14000 mm³ and 10 planar faces.
-- **B keyway**: B2 builds with 7 faces (5 planar, 2 circular walls of the
-  rod split by the key), volume within its bound of
-  `π·100·40 − 40·(2·√96 + 100·asin(0.2))` (the rod's strip |x| ≤ 2 over its
-  40 mm length) computed over certified enclosures, the arc walls' rims
-  `Arc3`, STEP taking the faceted writer.
+- **B keyway**: B2 passes B1–B8, misses the through-nesting reach (§3 B.3)
+  and takes the mesh path, with volume within the mesh bound of
+  `π·100·40 − 40·(2·√96 + 100·asin(0.2))` (the rod's strip |x| ≤ 2 above its
+  axis, over its 40 mm length).
+- **B exact offset**: a drill on a frame whose origin is shifted in plane
+  builds when the shifted centre is a float (0.5 + 19.5) and takes the mesh
+  path when it rounds (0.1 + 19.9).
 - **B chain**: S11's three cross holes build analytically, then a fourth
   overlapping the first refuses by B8 or B7 with `ErrUnsupported`, pinned.
-- **B gate misses**: S10 (tilted plane), S7 (cylinder × cylinder), a 1-ulp
-  non-perpendicular pair, a non-permutation frame pair, each take the mesh
-  path with the §2 result unchanged; the non-perpendicular fixture asserts
+- **B gate misses**: S10 (tilted plane), S7 (cylinder × cylinder), a
+  non-perpendicular pair 1e-12 off, a non-permutation frame pair, a slanted
+  tool wall (B6), a tool face in the target's cap plane (B8) and a blind
+  cross hole each take the mesh path; the non-perpendicular fixture asserts
   `N_A · N_B != 0` itself.
 - **B with a hole breaking out**: a cross hole whose circle crosses the bar's
   top face: the perpendicular-face scenes report `Partial` edges, the
@@ -636,6 +670,18 @@ are relations, never literals.
 - **Class C's ellipse.** Recommendation: file the `sketch` ask only when a
   consumer needs an oblique hole; the whole-scene `TExact` gate makes it a
   larger upstream change than a carrier rule.
+- **Crossing vertices across scenes.** Two scenes that cut one carrier pair
+  record the crossing at different floats: a circle of radius 10 at the
+  origin against the line u = 2 records `(2, 9.7979589711327115)` on the line
+  and `(2.0000000000000013, 9.7979589711327115)` on the circle, and moving the
+  line's ends to v = ±20 records `(2, 9.797958971132708)` on the line. §4.2's
+  pairing by record identity therefore cannot join faces that different
+  scenes cut. Options: key each crossing by the two carriers that make it
+  and the side of the circle's centre it lies on, record one float per key
+  for every face that meets it, and charge each face the cut displacement;
+  or pre-split every carrier at the section scenes' crossings so the face
+  scenes cut nothing. Recommendation: the keyed crossing table, decided by
+  the designer before the crossing reach is built.
 - **S8's sphere facet cap.** Recommendation: separate task; raising the cap
   or deriving the boolean's tolerance per operand is a mesh-path change
   outside this design.
@@ -660,8 +706,10 @@ Each PR ships code and tests; this document ships with PR 1.
    stacked payloads, topology and roles, measurements, tessellation with the
    occupied-volume proof, placement, `Verify` validity and the tolerance
    gate; the prism round-trip tests.
-6. **Class B `Cut`.** B1–B8, the three scenes, result assembly, S1/B1/B2
-   fixtures and the gate-miss fixtures.
+6. **Class B `Cut`.** B1–B8, the through-nesting reach (§3 B.3), result
+   assembly, S1/B1 fixtures, B2's mesh-path fixture, the exact offset and
+   the gate-miss fixtures. The crossing reach waits on §10's crossing
+   vertices.
 7. **Class B `Union`/`Intersect` and chaining.** The rooted boss (B4), a
    brep operand in both positions, the breaking-out hole, S11's chain.
 8. **brep consumers.** Undercut and minimum-radius surveys, the clearance

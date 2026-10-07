@@ -340,6 +340,10 @@
 3	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
 3	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 3	0.00	TestClampedConversionCostIsQuadratic
+3	0.02	TestClassBCutCrossDrilledBox
+3	0.01	TestClassBCutCrossSlot
+3	0.02	TestClassBCutExactOffsetPlane
+3	0.10	TestClassBCutKeywayTakesMeshPath
 3	0.00	TestClearDenomsIsAPositiveRescaling
 3	0.00	TestClearanceEnumerationCountsVertexTierFaces
 3	0.01	TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal
@@ -965,6 +969,7 @@
 5	0.39	TestChainStationsIsOneSideOfThePairWalk
 5	0.55	TestChordLoopReadsResolvedWalks
 5	0.01	TestCircularStationChainStartsAtThePinnedEnd
+5	0.90	TestClassBCutGateMissesTakeMeshPath
 5	0.02	TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct
 5	0.03	TestContactPairBoundedFacetedFloorStrictClear
 5	0.00	TestDependentSpan
