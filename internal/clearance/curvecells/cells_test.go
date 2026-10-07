@@ -1,11 +1,11 @@
-package curvepair_test
+package curvecells_test
 
 import (
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/clearance/curvepair"
+	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +88,7 @@ func TestWindowedCircleEdge(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			tol := 1e-9 * 62
-			k := curvepair.New(t.Context(), tol, tol)
+			k := curvecells.New(t.Context(), tol, tol)
 			sink := &clearance.CellSink{}
 			k.FaceEdge(c.face, c.edge, sink)
 			require.NoError(t, k.Err())
@@ -130,7 +130,7 @@ func TestWindowedCircleKeepsTheCoarseEnclosure(t *testing.T) {
 	}
 	pin := windowedCylinder(r3.Vec{}, r3.NewVec(0, 0, 1), 5, 0, 8)
 	tol := 1e-9 * 50
-	k := curvepair.New(t.Context(), tol, tol)
+	k := curvecells.New(t.Context(), tol, tol)
 	sink := &clearance.CellSink{}
 	k.FaceEdge(pin, rim, sink)
 	require.NoError(t, k.Err())

@@ -486,7 +486,7 @@ trimmed inner face alone and asks the oracle nothing:
   rims against the bore's — in the curve tier's undecided band, where
   `Circle3` × `Cylinder` and `Circle3` × `Sphere` otherwise take the coarse
   enclosure and its zero lower bound (`windowedCircleFE`,
-  `internal/clearance/curvepair`). Every point of a circle of radius `ρ` about centre
+  `internal/clearance/curvecells`). Every point of a circle of radius `ρ` about centre
   `c` with unit axis `n` is `c + ρ·u` for a unit `u ⊥ n`, so its distance to
   a point spine `s` lies within `δ = dist(s, axis of the circle)` of the
   constant `√(ρ² + h²)`, `h` the axial offset of `s`'s foot from `c`, and

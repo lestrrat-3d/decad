@@ -290,7 +290,7 @@ the rules leave to the byte budget.
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance geometry, cell accumulation, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
-| `internal/clearance/curvepair/` | Face-edge and edge-edge cells. See clearance §4. |
+| `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
 | `internal/stitchflux/` | Bounded scalars and per-surface flux and moment integrals for Stitch. See `docs/surface-design.md` §6.4. |
