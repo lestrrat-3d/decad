@@ -332,7 +332,7 @@ no better claim than itself, since the record names a target face rather
 than an angle, so its displacement is unbounded and every reading it feeds
 keeps the magnitude envelope it always has. The pair is spelled
 `revolvePayload.phi0`/`phi1` beside `den`, their `angleDenotation` twin
-(`revolve_denotation.go`), and the per-end displacement is
+(`internal/revolveangle/denotation.go`), and the per-end displacement is
 `phi0Delta`/`phi1Delta` (`angularDelta` for whichever a reading cannot
 attribute to one end). Every reading that folds a held sweep angle into a
 published measurement takes it: `Bounds`, the partial-sweep cap vertices and
