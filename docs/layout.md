@@ -251,7 +251,8 @@ the rules leave to the byte budget.
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, the shared-denominator intervals of the island certificate, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact axis/oriented box and planar solid relations, gaps, patches and convexity. |
 | `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
-| `internal/record/` | Curve records, validation, fragment recording and join checks. See `docs/sketch-seam-design.md`. |
+| `internal/sectionrecord/` | Curve records and validation. |
+| `internal/sketchrecord/` | Sketch edge conversion and join checks. |
 | `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/walkconvert/` | Bounded walks and coalescing over recorded segments. |
 | `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |

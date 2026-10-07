@@ -1,15 +1,15 @@
 package decad
 
-import "github.com/lestrrat-3d/decad/internal/record"
+import "github.com/lestrrat-3d/decad/internal/sectionrecord"
 
-// Structural curve records are defined in internal/record. These aliases
+// Structural curve records are defined in internal/sectionrecord. These aliases
 // expose their definitions through decad.
 
 // PlaneRecord is a recorded sketch plane. See docs/sketch-seam-design.md §2.
-type PlaneRecord = record.PlaneRecord
+type PlaneRecord = sectionrecord.PlaneRecord
 
 // Point2 is a plane-local coordinate in millimetres.
-type Point2 = record.Point2
+type Point2 = sectionrecord.Point2
 
 // ProfileRecord is a structural plane-local region: one outer loop and its
 // holes. The evaluator defines its measurement methods in the root package.
@@ -19,47 +19,47 @@ type ProfileRecord struct {
 }
 
 // LoopRecord is one closed directed boundary walk.
-type LoopRecord = record.LoopRecord
+type LoopRecord = sectionrecord.LoopRecord
 
 // ChainRecord is one open directed boundary walk.
-type ChainRecord = record.ChainRecord
+type ChainRecord = sectionrecord.ChainRecord
 
 // CurveSegment is a recorded curve with a sealed variant set.
-type CurveSegment = record.CurveSegment
+type CurveSegment = sectionrecord.CurveSegment
 
 // LineSeg records a line and its parameter range.
-type LineSeg = record.LineSeg
+type LineSeg = sectionrecord.LineSeg
 
 // CircleSeg records a circle and its parameter range.
-type CircleSeg = record.CircleSeg
+type CircleSeg = sectionrecord.CircleSeg
 
 // ArcSeg records an arc and its parameter range.
-type ArcSeg = record.ArcSeg
+type ArcSeg = sectionrecord.ArcSeg
 
 // EllipseSeg records an ellipse and its parameter range.
-type EllipseSeg = record.EllipseSeg
+type EllipseSeg = sectionrecord.EllipseSeg
 
 // EllipticalArcSeg records an elliptical arc and its parameter range.
-type EllipticalArcSeg = record.EllipticalArcSeg
+type EllipticalArcSeg = sectionrecord.EllipticalArcSeg
 
 // SplineSeg records a spline and its parameter range.
-type SplineSeg = record.SplineSeg
+type SplineSeg = sectionrecord.SplineSeg
 
 // NURBSSeg records a NURBS curve and its parameter range.
-type NURBSSeg = record.NURBSSeg
+type NURBSSeg = sectionrecord.NURBSSeg
 
 // ClosedSplineSeg records a closed spline and its parameter range.
-type ClosedSplineSeg = record.ClosedSplineSeg
+type ClosedSplineSeg = sectionrecord.ClosedSplineSeg
 
 // FitSplineSeg records a fit spline and its parameter range.
-type FitSplineSeg = record.FitSplineSeg
+type FitSplineSeg = sectionrecord.FitSplineSeg
 
 // ConicSeg records a conic and its parameter range.
-type ConicSeg = record.ConicSeg
+type ConicSeg = sectionrecord.ConicSeg
 
-func cloneLoopRecord(loop LoopRecord) LoopRecord  { return record.CloneLoopRecord(loop) }
-func validateNURBSSegment(segment NURBSSeg) error { return record.ValidateNURBSSegment(segment) }
-func validateSegment(segment CurveSegment) error  { return record.ValidateSegment(segment) }
+func cloneLoopRecord(loop LoopRecord) LoopRecord  { return sectionrecord.CloneLoopRecord(loop) }
+func validateNURBSSegment(segment NURBSSeg) error { return sectionrecord.ValidateNURBSSegment(segment) }
+func validateSegment(segment CurveSegment) error  { return sectionrecord.ValidateSegment(segment) }
 func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
-	return record.NormalizeSegment(segment)
+	return sectionrecord.NormalizeSegment(segment)
 }

@@ -1,4 +1,4 @@
-package record
+package sketchrecord
 
 import (
 	"fmt"
@@ -6,9 +6,26 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
+)
+
+type (
+	Point2           = sectionrecord.Point2
+	LoopRecord       = sectionrecord.LoopRecord
+	CurveSegment     = sectionrecord.CurveSegment
+	LineSeg          = sectionrecord.LineSeg
+	CircleSeg        = sectionrecord.CircleSeg
+	ArcSeg           = sectionrecord.ArcSeg
+	EllipseSeg       = sectionrecord.EllipseSeg
+	EllipticalArcSeg = sectionrecord.EllipticalArcSeg
+	ConicSeg         = sectionrecord.ConicSeg
+	SplineSeg        = sectionrecord.SplineSeg
+	ClosedSplineSeg  = sectionrecord.ClosedSplineSeg
+	FitSplineSeg     = sectionrecord.FitSplineSeg
+	NURBSSeg         = sectionrecord.NURBSSeg
 )
 
 var ErrUnrecordableProfile = decaderr.ErrUnrecordableProfile
