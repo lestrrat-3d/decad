@@ -339,7 +339,7 @@ func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget,
 		// the result depends on reports an invalid arrangement. Cut's matched
 		// profile is both its nesting proof and its result, so this one check
 		// covers both claims.
-		return nil, nil, nil, prismSceneDelta{}, false, prismInvalidRegionErr("cut")
+		return nil, nil, nil, prismSceneDelta{}, false, prismcells.InvalidRegionError("cut")
 	}
 	return s, match, tags, sceneDelta, true, nil
 }
@@ -411,7 +411,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
 	if bNested && !proofBNested.Valid {
-		return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
+		return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
 	}
 	aNested := false
 	if len(pb.profile.Holes) == 0 {
@@ -420,7 +420,7 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 			return nil, nil, prismSceneDelta{}, false, false, err
 		}
 		if matched && !proofANested.Valid {
-			return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
+			return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
 		}
 		aNested = matched
 	}
@@ -454,16 +454,9 @@ func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, p
 	}
 	if !result.Valid {
 		// RB1, matching the Union/Cut paths' own behaviour.
-		return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
+		return nil, nil, prismSceneDelta{}, false, false, prismcells.InvalidRegionError("intersect")
 	}
 	return s, result, sceneDelta, nested, true, nil
-}
-
-// prismInvalidRegionErr is §9's RB1: a candidate region this op's result
-// depends on reports Profile.Valid == false. It is a genuine refusal past
-// §3.4's point of no return, never a reroute to the mesh path.
-func prismInvalidRegionErr(op string) error {
-	return fmt.Errorf(`%w: the %s scene's arrangement reports an invalid region`, ErrUnsupported, op)
 }
 
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement

@@ -227,24 +227,9 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 		return nil, prismSceneDelta{}, false, nil
 	}
 
-	selected, err = selectPrismCells(budget, profiles, matterA, matterB, keep)
+	selected, err = prismcells.Select(budget, profiles, matterA, matterB, keep)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
 	return selected, sceneDelta, true, nil
-}
-
-// selectPrismCells filters profiles to the cells keep admits, given each
-// cell's own classification — a pure data selection, no geometry read.
-func selectPrismCells(budget *proofbound.WorkBudget, profiles []*sketch.Profile, matterA, matterB []bool, keep func(a, b bool) bool) ([]*sketch.Profile, error) {
-	var selected []*sketch.Profile
-	for i, p := range profiles {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if keep(matterA[i], matterB[i]) {
-			selected = append(selected, p)
-		}
-	}
-	return selected, nil
 }

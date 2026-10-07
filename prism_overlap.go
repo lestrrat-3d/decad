@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -95,7 +96,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 
 		// Per-cell measurement: the cell's own closed directed walk,
 		// recorded through the existing recordEdge/edgeJoin/
-		// prismUnionCutDelta sequence mergePrismCells already uses — no
+		// prismcells.CutDelta sequence mergePrismCells already uses — no
 		// count, drop or chain, since a cell is already one loop in
 		// sketch's own order. RB8/RB9 propagate here, exactly as they do on
 		// the body path.
@@ -159,7 +160,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 }
 
 // recordPrismOverlapCell records one arrangement cell's own Outer boundary
-// edges into a ProfileRecord, the same recordEdge/edgeJoin/prismUnionCutDelta
+// edges into a ProfileRecord, the same recordEdge/edgeJoin/prismcells.CutDelta
 // sequence mergePrismCells (prism_boolean.go) already runs over its merged
 // chain — minus the count, drop and chain steps, which exist only to build
 // one loop out of many. A cell is already one closed directed walk in
@@ -185,7 +186,7 @@ func recordPrismOverlapCell(budget *proofbound.WorkBudget, edges []sketch.Bounda
 			return ProfileRecord{}, 0, err
 		}
 		joins[i] = join
-		delta, err := prismUnionCutDelta(e, seg)
+		delta, err := prismcells.CutDelta(e, seg)
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
