@@ -7,9 +7,10 @@
 // the repository's docs/images, at each shot's own chord tolerance and size,
 // exactly as committed.
 //
-// The features subcommand renders each feature at successive construction
-// stages and writes looping GIFs under docs/images/features. It requires
-// ffmpeg and accepts -only and -out flags.
+// The features subcommand renders each animated feature at successive
+// construction stages and writes looping GIFs under docs/images/features.
+// Verify uses a static thumbnail. The subcommand requires ffmpeg and accepts
+// -only and -out flags.
 //
 // Flags let one invocation try a shot at a different tolerance or size
 // without touching the committed images:
@@ -108,11 +109,7 @@ func (r imageRender) write(ctx context.Context, chord units.Value, settings soli
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
 	}
-	if r.name() == "verify" {
-		err = renderVerifiedFit(ctx, file, scene, settings)
-	} else {
-		err = solidlens.RenderPNG(ctx, file, scene, settings)
-	}
+	err = solidlens.RenderPNG(ctx, file, scene, settings)
 	closeErr := file.Close()
 	if err != nil {
 		return fmt.Errorf("render: %w", err)

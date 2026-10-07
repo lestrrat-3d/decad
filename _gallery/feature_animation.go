@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"github.com/lestrrat-3d/decad"
@@ -37,7 +38,10 @@ func runFeatureAnimations(ctx context.Context, args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("features: unexpected argument %q", fs.Arg(0))
 	}
-	selected, err := selectRenders(featureRenders(), *only)
+	renders := slices.DeleteFunc(featureRenders(), func(render imageRender) bool {
+		return render.name() == "verify"
+	})
+	selected, err := selectRenders(renders, *only)
 	if err != nil {
 		return err
 	}
@@ -89,8 +93,6 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 		}
 		if name == "boolean" && len(models) > 1 {
 			err = renderBooleanFrame(ctx, file, scene)
-		} else if name == "verify" && stage == steps-1 {
-			err = renderVerifiedFit(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
 		} else {
 			err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
 		}
@@ -254,8 +256,6 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 		return oneModel(ctx, body, blue, chord)
 	case "boolean":
 		return booleanAnimationModels(ctx, stage, chord)
-	case "verify":
-		return verifyAnimationModels(ctx, stage, chord)
 	case "surface":
 		body, err := dishBodyAtAngle(ctx, float64(stage+1)*150/featureAnimationSteps)
 		if err != nil {
@@ -314,53 +314,4 @@ func booleanAnimationModels(ctx context.Context, stage int, chord units.Value) (
 		models = append(models, toolModels...)
 	}
 	return models, nil
-}
-
-func verifyAnimationModels(ctx context.Context, stage int, chord units.Value) ([]solidlens.Model, error) {
-	w := sketch.NewWorld()
-	doc := decad.New()
-	plate, err := prism(ctx, doc, w, w.XY(), 16, rectangle(-44, -38, 44, 38))
-	if err != nil {
-		return nil, err
-	}
-	if stage > 0 {
-		depth := float64(min(stage, 7)) * 2.3
-		if stage >= 8 {
-			depth = flangeThickness + holeClearance
-		}
-		bore, err := holeTool(ctx, doc, w, drill{name: "fit", radius: 22}, 16, depth)
-		if err != nil {
-			return nil, err
-		}
-		plate, err = decad.Cut(ctx, plate, bore)
-		if err != nil {
-			return nil, err
-		}
-	}
-	models, err := oneModel(ctx, plate, gold, chord)
-	if err != nil || stage < 8 {
-		return models, err
-	}
-	pin, err := verifyPin(ctx, doc, w)
-	if err != nil {
-		return nil, err
-	}
-	travel := 80 * float64(featureAnimationSteps-1-stage) / (featureAnimationSteps - 9)
-	if travel > 0 {
-		translation, err := r3.Translation(r3.NewVec(0, 0, travel))
-		if err != nil {
-			return nil, err
-		}
-		pin, err = pin.PlacedCopy(ctx, translation)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if stage == featureAnimationSteps-1 {
-		if err := verifyFitGap(ctx, doc); err != nil {
-			return nil, err
-		}
-	}
-	part, err := oneModel(ctx, pin, cyan, chord)
-	return append(models, part...), err
 }

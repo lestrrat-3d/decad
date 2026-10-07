@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -516,7 +515,7 @@ func requireSheet(body *decad.Body) error {
 	return nil
 }
 
-// verifyShot checks a pin in a bore before drawing its clearance result.
+// verifyShot renders a pin inside a larger bore with radial clearance.
 func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
@@ -537,10 +536,6 @@ func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyFitGap(ctx, doc); err != nil {
-		return nil, err
-	}
-
 	housingModel, err := oneModel(ctx, housing, gold, chord)
 	if err != nil {
 		return nil, err
@@ -550,23 +545,6 @@ func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 		return nil, err
 	}
 	return append(housingModel, pinModel...), nil
-}
-
-// verifyFitGap checks the fitted pair before its measured clearance is drawn.
-func verifyFitGap(ctx context.Context, doc *decad.Document) error {
-	report, err := doc.Verify(ctx, decad.WithClearances())
-	if err != nil {
-		return fmt.Errorf("verify pin clearance: %w", err)
-	}
-	if !report.Passed() || len(report.Clearances) != 1 {
-		return fmt.Errorf("verify pin clearance: status %s, %d clearance readings",
-			report.Status, len(report.Clearances))
-	}
-	gap := report.Clearances[0].Gap
-	if math.Abs(gap.Value.Base()-7)+gap.Bound.Base() >= 0.5 {
-		return fmt.Errorf("verify pin clearance: gap %s ± %s cannot be shown as 7 mm", gap.Value, gap.Bound)
-	}
-	return nil
 }
 
 // lateralEdgePlate is the receiver the three modify shots share: one plate with
