@@ -141,9 +141,9 @@ func requireTiles(t *testing.T, cells []craneCell) {
 // A colliding centre blocks its cell only once the cell's τ_half falls under
 // about 0.9 mm, near 1/128 of the θ range, so at any floor down to 1/64 every
 // colliding cell splits to the floor and none blocks. This runs at
-// WithResolution(1/16): 239 centres evaluated, 120 leaves. At
-// WithResolution(1/64) the same check evaluates 2953 centres into 1477
-// leaves, about 15 s, 70 s under the race detector.
+// WithResolution(1/16): 213 centres evaluated, 107 leaves. At
+// WithResolution(1/64) the same check evaluates 2781 centres into 1391
+// leaves, about 17 s.
 //
 // Legs seen to fail when deleted: halving τ_half again, and dropping the
 // prismatic joint's term from it (a clear leaf's bound exceeds the true gap
@@ -674,17 +674,20 @@ func TestVerifyJointBoxPoseDeviationIsCharged(t *testing.T) {
 // layer exclusion's 20 mm between mast and boom is not the box's minimum.
 // The tip's highest point over the box is its (80°, 30 mm) corner, so the
 // minimum gap is 100 − 90·sin 80° − 5·cos 80° ≈ 10.499 mm, at the box's
-// corner. At the defaults the whole-box reading
-// refines past the verdict floor toward that corner, to the reading floor
-// 1/16384 per axis, until it passes the tolerance gate; a 10 mm margin is
-// proven and an 11 mm one disproven at a centre. A stated resolution is both
-// floors, so at 1/64 the reading stays coarse and the report reads Suspect.
+// corner. At the defaults the whole-box reading refines toward that corner
+// until it passes the tolerance gate, which the projection bound (§5.8)
+// meets at the verdict floor: 43 centres. At a relative tolerance of 1e-4 it
+// refines past the verdict floor, toward the reading floor 1/16384 per axis:
+// 55 centres. A 10 mm margin is proven and an 11 mm one disproven at a
+// centre. A stated resolution is both floors, so at 1/64 the reading stays
+// coarse and the report reads Suspect.
 //
 // Legs seen to fail when deleted: the reading's refinement (the defaults read
 // Suspect, the reading beyond tolerance); the reading floor past the verdict
-// floor (no leaf is narrower than 1/1024); a stated resolution setting the
-// reading floor (a leaf narrower than 1/64); the margin's refinement (under a
-// loose tolerance the 10 mm margin reads AssessmentUndecided).
+// floor (at 1e-4 no leaf is narrower than 1/1024); a stated resolution
+// setting the reading floor (a leaf narrower than 1/64); the margin's
+// refinement (under a loose tolerance the 10 mm margin reads
+// AssessmentUndecided).
 func TestVerifyJointBoxClearReading(t *testing.T) {
 	t.Parallel()
 	truth := 100 - boomTipY(80, 30)
@@ -715,8 +718,19 @@ func TestVerifyJointBoxClearReading(t *testing.T) {
 		require.LessOrEqual(t, gap.Value.Mag()-gap.Bound.Mag(), truth)
 		require.GreaterOrEqual(t, gap.Value.Mag()+gap.Bound.Mag(), truth)
 		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
-		require.Less(t, narrowest(t, report), 1.0/1024, `the reading refines past the verdict floor`)
+		require.GreaterOrEqual(t, narrowest(t, report), 1.0/1024, `the reading meets the gate at the verdict floor`)
 		require.Less(t, report.CellsEvaluated, 1024)
+	})
+	t.Run("a tighter tolerance refines past the verdict floor", func(t *testing.T) {
+		t.Parallel()
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box(), decad.WithMotionTolerance(units.Scalar(1e-4)))
+		require.Equal(t, decad.Sound, report.Status)
+		require.NotNil(t, report.Clearance)
+		gap := report.Clearance.Measurement
+		require.LessOrEqual(t, gap.Value.Mag()-gap.Bound.Mag(), truth)
+		require.GreaterOrEqual(t, gap.Value.Mag()+gap.Bound.Mag(), truth)
+		require.Less(t, narrowest(t, report), 1.0/1024, `the reading refines past the verdict floor`)
 	})
 	t.Run("a 10 mm margin is met", func(t *testing.T) {
 		t.Parallel()

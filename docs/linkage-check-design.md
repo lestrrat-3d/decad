@@ -720,10 +720,11 @@ readings are kept on the pose and serve both intervals it ends. Measured on §10
 `WithResolution(Scalar(1.0/64))` its `10` poses take about `50` ms against `30` under the travel bound
 alone, and at the defaults the reading closes at a step of `1/256` in `16` poses and about `80` ms, where
 the travel bound alone refines to the reading floor in `251` poses and about `0.8` s. Estimated, and
-measured by §14.9's P2: the arm's box reads `Sound` in about a thousand centres in place of exhausting the
-budget (§14.7). The disc is unchanged. A box whose minimum sits at a corner of the box with a nonzero gradient
-(§14.8's clear crane box) gains little: its reading's upper end is a centre's gap, and no centre reaches
-the corner, so that end closes only linearly in the cell whatever bounds the lower end.
+measured by §14.9's P2: the arm's box reads `Sound` in `437` centres, about `2.5` s, in place of exhausting
+the budget (§14.7). The disc is unchanged. A box whose minimum sits at a corner of the box with a nonzero
+gradient (§14.8's clear crane box) still gains: its reading's upper end is a centre's gap, which no centre
+brings to the corner faster than linearly, but the lower end, the leaves' bounds, closes to second order,
+and the gate is met in `43` centres where the travel bound alone takes `137`.
 
 **The split axis.** Where a pair's bound over a cell or an interval is the projection bound, the joint
 whose halving lowers it most is the one with the largest share of its defect, `|n·v_{i,c}(m)|·h_i +
@@ -770,9 +771,10 @@ each of its ends, which is at least the minimum over it.
   poses, against `16` that end at the reading floor under the travel bound alone. The same scene stated along each of the six directions — the wall on each
   side of the pivot, the block hanging opposite — reads `Sound` at that tolerance; red when that direction
   is dropped. **The pendulum under a slide:** the pivot carried by a prismatic joint along `X` under the
-  ground on a carriage `x ∈ [−5, 5], y ∈ [−8, −2], z ∈ [30, 40]`, the box `d ∈ [0, 30]` mm × `θ ∈ [0°,
-  90°]` (§14.8); the layer exclusion settles the carriage against the wall along `Y` at `22` and against
-  the block along `Z` at `20`, both above the pendulum's `15`.
+  ground on a carriage `x ∈ [−5, 5], y ∈ [−8, −2], z ∈ [120, 130]`, the box `d ∈ [0, 30]` mm × `θ ∈ [0°,
+  90°]` (§14.8); the carriage's swept box, grown by its `30` mm of travel, clears the wall along `Z` by
+  `70`, and the layer exclusion settles it against the block along `Z` at `110`, both above every gap of
+  the block's, so each cell's bound is the block's own.
 - **Scene 14 — the two arms (both bodies moving).** Arm `A`, `x ∈ [0, 50], y ∈ [−5, 5], z ∈ [0, 10]`, on
   a revolute about `Z` through the origin sweeping `−30° → 30°`; arm `B`, `x ∈ [60, 110]`, the same
   section, on a revolute about `Z` through `(110, 0, 0)` under the ground sweeping `30° → −30°`. The
@@ -1419,9 +1421,11 @@ label `motionDomain.label` gives a pose at that fraction, while every bound read
    larger of its travel bound and its projection bound positive (§14.3) — else `CellUndecided` for now.
 5. **Split for the verdict.** A cell is **splittable** when it is `CellUndecided` or `CellColliding` and
    some varying joint's span is wider than the verdict floor. Its split axis is the varying joint
-   maximising `w_i·span_i` over the pairs that held the cell back — the uncertified pairs of an undecided
-   cell, the colliding pairs of a colliding one — ties to the earliest link, among the axes wider than the
-   floor; halving that axis lowers `τ_half` the most for the pair that needs it. Among the splittable
+   maximising its share of a held pair's bound's defect over the pairs that held the cell back — the
+   uncertified pairs of an undecided cell, the colliding pairs of a colliding one — ties to the earliest
+   link, among the axes wider than the floor: `w_i·span_i` where the pair's larger bound is the travel
+   bound, so halving that axis lowers `τ_half` the most for the pair that needs it, and the projection
+   bound's own share (§5.8) where it is that bound, a joint with no share then never split. Among the splittable
    cells, the next to split is the **shallowest first, then earliest in cell order**: level by level, so
    that a budget that runs out leaves the whole box examined coarsely rather than one corner finely. The
    cell is replaced in place by its two halves, lower half first, each with its centre evaluated and
@@ -1488,14 +1492,14 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   along the boundary curve, and the colliding side split to the floor. The blocked certificate does not
   shorten that: the boom's overlap never exceeds about `2100` mm³ against an area of `2200` mm², so a
   colliding cell blocks only once its `τ_half` falls under about `0.9` mm, near `1/128` of the `θ` range,
-  below this floor. Measured: `2953` centres into `1477` leaves (`88` clear, `98` undecided, `1291`
-  colliding), about `15` s and `1` GB, and `70` s under the race detector, the overlap-volume proof at each
-  colliding centre taking nine tenths of it; at `Scalar(1.0/16)`, `239` centres in about `1` s. The test
-  runs at `Scalar(1.0/16)` for that cost.
-- **Three joints.** The three-joint arm of §10 with each joint over `[0°, 90°]`. Measured: the verdict
-  is cheap, every leaf `CellClear` within `127` centres, about `0.4` s, since the elbows are declared, the
-  shoulder-wrist pair is settled by its layer and only the wrist's pairs with the posts are evaluated. The
-  whole-box reading is not under the travel bound alone. The wrist's leading corner `(150, −10)` sits at
+  below this floor. Measured: `2781` centres into `1391` leaves (`56` clear, `44` undecided, `1291`
+  colliding), about `17` s and `1` GB, the overlap-volume proof at each colliding centre taking most of
+  it; at `Scalar(1.0/16)`, `213` centres in about `1` s. The projection bound (§5.8) clears cells near the
+  boundary that the travel bound left undecided, so it costs fewer centres on the clear side and none on
+  the colliding one. The test runs at `Scalar(1.0/16)` for that cost.
+- **Three joints.** The three-joint arm of §10 with each joint over `[0°, 90°]`. The verdict is cheap,
+  since the elbows are declared, the shoulder-wrist pair is settled by its layer and only the wrist's pairs
+  with the posts are evaluated. The whole-box reading is not under the travel bound alone. The wrist's leading corner `(150, −10)` sits at
   `X = 50·(cos θ₁ + cos(θ₁ + θ₂) + cos(θ₁ + θ₂ + θ₃)) + 10·sin(θ₁ + θ₂ + θ₃)`, whose largest value over
   the box, `100 + √2600`, is reached at `(0°, 0°, atan(1/5) ≈ 11.31°)` with the corner at the post's
   mid-height, so the box's minimum gap is `60 − 10·√26 ≈ 9.0098` mm, on the box's edge `θ₁ = θ₂ = 0`,
@@ -1505,9 +1509,10 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   `1` GB and reads `Suspect`, the reading beyond tolerance and the budget finding raised, and
   `WithCellBudget(65536)` takes about `6` minutes and `2.1` GB and still does not meet the gate. The
   projection certificate (§5.8) bounds the gap over a cell to second order: with `Σ B_ij ≈ 700` mm/rad²
-  for this pair, the reading closes at a half-span of about `4e-3` rad, depth `8` along each joint, in an
-  estimated thousand centres; §14.9's P2 measures and records the count here. A caller who wants the
-  verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
+  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `437`
+  centres, about `2.5` s, at the defaults and at `WithResolution(Scalar(1.0/1024))`; at
+  `WithResolution(Scalar(1.0/64))` the reading stops coarse at `259` centres and reads `Suspect`. A caller
+  who wants the verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
   what makes a planar stack cheap: a pair it settles costs no cell, and scene 1's arms without the wall
   read `Sound` from the root alone.
 - **The reading.** Around an isolated minimum, step 6 costs about `n·log₂(1/ReadingResolution)` splits;
@@ -1558,9 +1563,9 @@ box's minimum, a bound no pose measures, and the reading could never close. Now 
 and the minimum gap over the box is `100 − y(80°, 30) = 100 − 90·sin 80° − 5·cos 80° ≈ 10.499` mm, at the
 box's corner. Assert `Sound`, every leaf `CellClear` with its bound below the true gap at its worst corner,
 `Clearance` enclosing `10.499` with `ToleranceSatisfied` at the defaults, `ReadingResolution` `1/16384`,
-some leaf narrower than `1/1024` along `θ`, fewer than `1024` centres (measured: `137`; the minimum sits
-at the box's corner with a nonzero gradient, so the reading's upper end, a centre's gap, closes only
-linearly in the cell and the projection certificate changes this count little); `WithMinClearance`
+fewer than `1024` centres and no leaf narrower than `1/1024` (measured: `43`; the projection bound meets
+the gate at the verdict floor, §5.8); at `WithMotionTolerance(Scalar(1e-4))`, `Sound` with some leaf
+narrower than `1/1024` along `θ` (measured: `55`), red when the reading floor is dropped; `WithMinClearance`
 `10` mm `AssessmentMet`, at the default tolerance and at a relative tolerance of `0.5`, where only the
 margin's own refinement proves it; `11` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose
 `Cell` is set. At `WithResolution(Scalar(1.0/64))` the reading is beyond tolerance and the report `Suspect`
@@ -1570,31 +1575,35 @@ with no leaf narrower than `1/64`; red when a stated resolution leaves the readi
 three-joint arm with each joint over `[0°, 90°]`, at the defaults. Its minimum is §14.7's `60 − 10·√26
 ≈ 9.0098` mm at `(0°, 0°, atan(1/5))`, where the wrist's corner `(150, −10)` faces the post at
 mid-height. Assert `Sound`, no `DiagJointBoxBudgetExhausted`, `Clearance` enclosing the minimum with
-`ToleranceSatisfied`, `CellsEvaluated` below `4096` (the count recorded), and for every `CellClear` leaf
-whose centre puts that corner within the post's face (`|Y| ≤ 10` at the centre) a bound at or below the
-closed-form gap `160 − X` at its centre, which is at least the cell's minimum; for every other leaf a bound
-at or below the centre row's upper end. Red when the projection bound is dropped (the budget is exhausted
-and the report reads `Suspect`, as §14.7 records) and when the linear term is dropped (a leaf far from the
-minimum reads a bound above the gap at its own centre). The leg that the remainder is load-bearing lives on
+`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `437` centres into `219` leaves), every
+leaf's bound at or below the smallest upper end of its centre's rows, and, at each of the leaf's centre
+and eight corners where the wrist's corner faces the post (`|Y| ≤ 10`), a bound at or below the
+closed-form gap `160 − X` there, which is at least the cell's minimum. Red when the projection bound is
+dropped (the budget is exhausted and the report reads `Suspect`, as §14.7 records) and when the linear
+term is dropped (a leaf's bound exceeds `160 − X` at one of its corners). The leg that the remainder is load-bearing lives on
 the pendulum below, whose gap is concave: here the gap is convex around its minimum and a dropped
 remainder does not overshoot.
 
 **Scene 13's box — the pendulum under a slide (the prismatic-ancestor rule).** §5.8's pendulum hung from a
-carriage on a prismatic joint along `X`, the box `d ∈ [0, 30]` mm × `θ ∈ [0°, 90°]`. The wall is wide, so
+carriage on a prismatic joint along `X` (§5.8), the box `d ∈ [0, 30]` mm × `θ ∈ [0°, 90°]`. The wall is wide, so
 the gap `g(θ) = 20 − 5·sin θ + 40·cos θ` is constant along `d`, and the shallower joint is a prismatic,
 so `B_11 = B_12 = 0` and `Rem = ½·ρ_22·h_θ²` carries no slide term. Assert `Sound` at the defaults,
 `Clearance` enclosing `15`, every `CellClear` leaf's bound at or below `g` at its greater `θ` end — the
 cell's true minimum, since `g` decreases — and no leaf narrower than the box along `d`: the reading splits
 along `θ` alone. Red when a prismatic ancestor is charged `w_j` in `B` (the remainder then carries
-`h_θ·h_d` terms and the reading splits along `d`), and when `Rem` is dropped or halved (a leaf's bound
-exceeds `g` at its far end). At `WithCellBudget(1)` the root's bound is below `15`.
+`h_θ·h_d` terms and the reading splits along `d`), when the travel bound's shares rank the axes in place
+of the projection bound's (the slide's span is then the larger share and the reading splits along `d`),
+and when `Rem` is dropped or halved (a leaf's bound exceeds `g` at its far end: near `0°` the gap is
+concave and needs a remainder of about `½·|g''|·h² ≈ 20·h²`, which `½·ρ·h² ≈ 25·h²` covers and half of it
+does not). At `WithCellBudget(1)` the root's bound, if any, is below `15`. Measured: `23` centres into `12`
+leaves.
 
 **Scene 14's box — the two arms.** §5.8's two arms with each joint over `[−30°, 30°]`: the gap `110 −
 50·(cos θ_A + cos θ_B) − 5·(|sin θ_A| + |sin θ_B|)` has four flat minima of `110 − 10·√101 ≈ 9.501` mm, at
 `(±θ*, ±θ*)` with `tan θ* = 1/10`, each with some corner pair at a shared height. Assert `Sound`,
-`Clearance` enclosing `9.501`, every `CellClear` leaf's bound at or below the closed-form gap at its centre,
-and `CellsEvaluated` below the budget with the count recorded; red when the partner's expansion is dropped
-from a link-link pair.
+`Clearance` enclosing `9.501`, every `CellClear` leaf's bound at or below the exact distance between the
+two arms' outlines at its centre, and `CellsEvaluated` below the budget (measured: `283` centres into
+`142` leaves); red when the partner's expansion is dropped from a link-link pair.
 
 **The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
 so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
