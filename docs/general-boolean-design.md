@@ -140,8 +140,11 @@ is re-wound before any entity is created:
 - every loop's segment order is reversed;
 - each `LineSeg` swaps `Start`/`End`; each `ArcSeg` becomes
   `{m(Center), m(End), m(Start)}` (mirror §5.2's table: the reflection turns
-  the arc clockwise and the reversal turns it back);
-- each `CircleSeg` flips `CCW`;
+  the arc clockwise and the reversal turns it back); both keep their range,
+  whose order still names the walk's sense;
+- each `CircleSeg` keeps `CCW` and its range, with only its centre mapped:
+  the reflection reverses the circle's winding and the reversal reverses it
+  back, and `walkOf` refuses a `CCW` that contradicts the range order;
 - a `LineSeg` recorded over a narrowed range enters as its walked endpoints
   (prism-boolean §7 `δ_walk`), since `1 − t` is not an exact float operation
   for a general `t`; a trimmed circular carrier is refused as §4.1 already
@@ -155,8 +158,12 @@ reflected the same way with no re-expression at all (T1). The G3 reading of
 the world normal uses `ApplyDir`, which a reflection maps correctly, so the
 co-directional test is unchanged. `δ_reexpress` is the same single
 rounding per coordinate; a reflection adds no term. Interference's read-only
-twin (`evaluateAnalyticIntersect`) takes the same lift, which turns T2 from
-`unsupported_pair_contact` into a measured overlap.
+twin (`evaluateAnalyticIntersect`) and the overlap-area reading share the
+same gate and scene, so a reflected pair the analytic `Intersect` resolves is
+measured instead of reaching the mesh path's `unsupported_pair_contact`.
+Prism-boolean §3.4's split-boundary reroute still applies: a reflection is a
+nonidentity re-expression, so a one-sided reflected pair whose outlines
+cross (M3, T2) reroutes until A6 charges the crossing (§9).
 
 #### A5 — multi-region operands and results
 
@@ -448,12 +455,23 @@ are relations, never literals.
 - **A1 refusal**: a boss whose footprint crosses the plate's outline is
   `ErrUnsupported` (not a mesh fallback), with the test asserting the
   interface match reports a `Partial` edge.
-- **A4 reflected union**: the L of mirror §2 unioned with its image across
-  x = 15 (overlapping): volume `3500 − overlap` with the overlap computed
-  over `math/big.Rat` from the two records, `Approximate` (split boundary),
-  and the bound containing the residual; T1's both-reflected cut builds
-  through the shared-axis arm with `sectionDelta` exactly `0.0`;
-  T2's `Verify` reports one `Interference` row with that volume.
+- **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
+  cut by a same-plane Ø3 cylinder inside its leg (M5) builds analytically,
+  `Approximate`, volume within its bound of `1750 − π·1.5²·10`; the same
+  image cut by a quarter-disc tool builds with the arc re-wound, volume
+  within its bound of `4000 − 16π·10` for a mirrored 20×20 box; a box
+  holding the mirrored L unions to the box's own volume through the
+  select-all merge; T1's both-reflected cut builds through the shared-axis
+  arm with `sectionDelta` exactly `0.0`; `Verify` on the mirrored L beside
+  the cylinder reports one `Interference` row of `π·1.5²·10`. A scene test
+  reads `prismcells.Classify` on a reflected box crossing a box and finds
+  the exact areas 75, 25 and 75 for A-only, both and B-only. M3 (the L
+  unioned with its image across x = 15) and T2 stay on the mesh path's
+  coplanar refusal: the image crosses the L, a reflection is a nonidentity
+  re-expression, and §3.4 of prism-boolean reroutes a split boundary under
+  one until A6 charges it; the two outlines also share collinear walls at
+  y = 0 and y = 5, which A3 waits on (`sketch` reports the arrangement of
+  the same two outlines drawn directly as an invalid region).
 - **A5 N-hole cut**: mirror §8's N-hole test, and the disjoint `Union` of
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
 - **A6 rotated tooth**: P1's hub and six teeth build analytically; the

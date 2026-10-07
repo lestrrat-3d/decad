@@ -100,33 +100,6 @@ func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 	require.False(t, ok, "G1: a non-prismPayload operand must never admit")
 }
 
-func TestPrismBooleanGateG2RejectsAReflectedOperand(t *testing.T) {
-	t.Parallel()
-	frame := canonicalPrismFrame(t)
-	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthLineLoop()},
-		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
-	}
-	a := &Body{payload: pp}
-
-	mirror, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
-	require.NoError(t, err)
-	refl, err := r3.Reflection(mirror)
-	require.NoError(t, err)
-	require.True(t, refl.IsReflection())
-	reflectedPP := pp
-	reflectedPP.xform = refl
-	b := &Body{payload: reflectedPP}
-
-	_, _, ok := admitPrismPair(a, b)
-	require.False(t, ok, "G2: a reflected operand must never admit")
-
-	// The identical pair without the reflection clears G1-G4 (isolates G2).
-	c := &Body{payload: pp}
-	_, _, ok = admitPrismPair(a, c)
-	require.True(t, ok)
-}
-
 // TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes isolates G3's
 // two arms (§3.1). Shown to fail, one deletion at a time: with
 // admitPrismPairBudget's prismSharedAxisOf call deleted (the coplanar arm
@@ -1888,7 +1861,7 @@ func TestPrismOverlapVolumeCancellationLeavesDocumentUntouched(t *testing.T) {
 
 // TestPrismOverlapVolumeRegressionFallbacks is §15's regression row over
 // prismOverlapVolume specifically: a non-coplanar pair, a reflected
-// placement, and a pair carrying a free-form segment each take the exact
+// placement whose image crosses A, and a pair carrying a free-form segment each take the exact
 // silent-fallback path they take through tryPrismBoolean/
 // admitPrismIntersectPair today — this reading shares that gate unchanged
 // (Task 1) rather than restating it.
@@ -1914,20 +1887,18 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		require.False(t, ok, "G3: a non-coplanar pair must never admit")
 	})
 
-	t.Run("reflected operand", func(t *testing.T) {
-		mirror, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
-		require.NoError(t, err)
-		refl, err := r3.Reflection(mirror)
-		require.NoError(t, err)
-		require.True(t, refl.IsReflection())
+	t.Run("reflected crossing operand", func(t *testing.T) {
+		// B's image across x = 0 is [5, 15]², which crosses A. A reflection is
+		// a nonidentity re-expression, so the split boundary reroutes the
+		// pair (§3.4) until docs/general-boolean-design.md's A6 charges it.
 		pb := pa
-		pb.profile = ProfileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
-		pb.xform = refl
+		pb.profile = ProfileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
+		pb.xform = prismMirrorAcrossX(t, 0)
 		a := &Body{doc: doc, payload: pa}
 		b := &Body{doc: doc, payload: pb}
 		_, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
-		require.False(t, ok, "G2: a reflected operand must never admit")
+		require.False(t, ok, "§3.4: a reflected operand whose image crosses A must reroute")
 	})
 
 	t.Run("free-form segment", func(t *testing.T) {

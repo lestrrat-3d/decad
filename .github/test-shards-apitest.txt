@@ -1402,3 +1402,8 @@
 3	0.01	TestVerifyMotionProjectionAlongAWall
 3	0.50	TestVerifyMotionProjectionPendulum
 3	43.09	TestVerifyLinkageLoopManyTurns
+2	0.01	TestPrismCutReflectedTargetByCylinder
+2	0.01	TestPrismCutReflectedTargetByArcTool
+2	0.01	TestPrismCutBothReflectedSharedAxis
+2	0.01	TestPrismUnionReflectedOperandInsideBox
+2	0.01	TestVerifyReflectedOperandMeasuresInterference

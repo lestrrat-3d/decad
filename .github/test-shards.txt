@@ -590,7 +590,7 @@
 3	0.00	TestPrepRefusesACollapsedOperandFacet
 3	0.00	TestPrincipalCircleEdgeGapBoundsAndFallback
 3	0.00	TestPrismBooleanGateG1RequiresBothOperandsPrismPayload
-3	0.00	TestPrismBooleanGateG2RejectsAReflectedOperand
+3	0.00	TestPrismBooleanGateG2AdmitsAReflectedOperand
 3	0.00	TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes
 3	0.00	TestPrismBooleanGateG4RefusesNonAnalyticSegment
 3	0.00	TestPrismBooleanGateG5RequiresMatchingZInterval
@@ -998,3 +998,7 @@
 3	0.19	TestLoopAnchorPassed
 0	0.01	TestLinkageHullPointsInsideRestBox
 0	0.01	TestLoopFoldStatement
+3	0.00	TestPrismReexpressionRewound
+3	0.00	TestPrismReflectedSceneClassifiesTheRewoundWinding
+3	0.01	TestPrismReflectedOperandChargesItsWalk
+3	0.01	TestPrismBooleanReflectedSharedAxisIsIdentity

@@ -287,10 +287,17 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 	return result, true, nil
 }
 
-// admitPrismPair checks G1 (both operands a prismPayload), G2 (neither
-// placement a reflection), G3 (the composed world normals are bit-identical
-// and the two planes share one sweep axis, exactly) and G4 (every segment of
-// both records is line/circle/arc) — §3.1. G3 has two arms. The shared-axis
+// admitPrismPair checks G1 (both operands a prismPayload), G3 (the composed
+// world normals are bit-identical and the two planes share one sweep axis,
+// exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
+// A reflected placement is no gate (docs/general-boolean-design.md §3 A4):
+// G3 reads each world normal through ApplyDir, which maps a reflection's
+// sweep direction like any other, and buildPrismScene re-winds operand B's
+// record when the composed relative map is a reflection
+// (prismReexpression.rewound). Two operands reflected by one placement share
+// it in G3's shared-axis arm and need no re-expression.
+//
+// G3 has two arms. The shared-axis
 // arm (prismSharedAxisOf) needs one placement, bit-identical U/V and a
 // frame-origin difference whose cross product with N is exactly zero over the
 // stored floats; the coplanar arm needs the float dot product of the world
@@ -307,9 +314,6 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, a, b *Body) (pa, pb pri
 	pa, aok := a.payload.(prismPayload) // G1
 	pb, bok := b.payload.(prismPayload)
 	if !aok || !bok {
-		return prismPayload{}, prismPayload{}, false, nil
-	}
-	if pa.reflected() || pb.reflected() { // G2
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	aAnalytic, err := prismProfileIsAnalytic(budget, pa.profile)
@@ -642,8 +646,10 @@ type prismSceneDelta struct {
 // operand's own boundary both reach the arrangement (Union's own admitted
 // pairs are hole-free by G6, so this is a no-op widening for that path).
 // Operand A's segments are created verbatim (A's frame is the reference);
-// operand B's are re-expressed into A's frame first (reexpressPrismPoint) —
-// the one new rounding this design introduces. Entities are deduplicated
+// operand B's are re-expressed into A's frame first (prismReexpression.point) —
+// the one new rounding this design introduces. When that map is a
+// reflection, B's record is mapped and re-wound first
+// (prismReexpression.rewound) and its entities are built from that record. Entities are deduplicated
 // WITHIN each operand (the same dedup key discipline internal/momentinput/reconstruct.go's
 // momentRecordScene already uses for one record) but NEVER across operands: a
 // coincident carrier is handed to sketch as two separate, numerically
@@ -701,7 +707,9 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 	tags := map[sketch.Entity]prismcells.Origin{}
 	sceneDelta := prismSceneDelta{}
 
-	addOperand := func(profile ProfileRecord, isB bool) error {
+	// mapPt is the identity for operand A, and for an operand B whose record
+	// was already re-expressed and re-wound (prismReexpression.rewound).
+	addOperand := func(profile ProfileRecord, isB bool, mapPt func(Point2) Point2) error {
 		type entityKey struct {
 			kind    uint8 // 1 = line, 2 = whole circle, 3 = arc (incl. a partial circle)
 			a, b, c Point2
@@ -711,10 +719,10 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		// two operands, even where the same physical curve appears in both.
 		entities := map[entityKey]struct{}{}
 		reexpressPt := func(p Point2) Point2 {
-			if !isB {
+			if mapPt == nil {
 				return p
 			}
-			return reexpress.point(p)
+			return mapPt(p)
 		}
 		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 		for li, loop := range loops {
@@ -795,10 +803,26 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		return nil
 	}
 
-	if err := addOperand(pa.profile, false); err != nil {
+	if err := addOperand(pa.profile, false, nil); err != nil {
 		return nil, nil, prismSceneDelta{}, err
 	}
-	if err := addOperand(pb.profile, true); err != nil {
+	if !reexpress.reflection {
+		if err := addOperand(pb.profile, true, reexpress.point); err != nil {
+			return nil, nil, prismSceneDelta{}, err
+		}
+		return s, tags, sceneDelta, nil
+	}
+	// docs/general-boolean-design.md §3 A4: a reflection reverses every loop's
+	// winding, so B's record is mapped AND re-wound before any entity exists.
+	// Every entity, and every tag's AuthoredReversed, then reads the re-wound
+	// record, whose segments are all whole and already in A's frame. The
+	// narrowed LineSegs it replaced by their walked endpoints charge here.
+	rewound, walkCharge, err := reexpress.rewound(budget, pb.profile)
+	if err != nil {
+		return nil, nil, prismSceneDelta{}, err
+	}
+	sceneDelta.b = math.Max(sceneDelta.b, walkCharge)
+	if err := addOperand(rewound, true, nil); err != nil {
 		return nil, nil, prismSceneDelta{}, err
 	}
 	return s, tags, sceneDelta, nil
@@ -829,8 +853,14 @@ type prismReexpression struct {
 	// one placement are the arm's d = 0 case; a datum and its
 	// CreateOffsetPlane are the d = s·N case.
 	identity bool
-	transAbs float64
-	delta    float64
+	// reflection records that the composed relative map is improper
+	// (Transform.IsReflection, read once in newPrismReexpression): exactly one
+	// of the two accumulated placements is a reflection. The mapped record
+	// then winds the wrong way, and buildPrismScene builds B from rewound's
+	// record instead (docs/general-boolean-design.md §3 A4).
+	reflection bool
+	transAbs   float64
+	delta      float64
 }
 
 // newPrismReexpression composes the map once. A rigid map's inverse is exact —
@@ -872,7 +902,102 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 	if m, err = m.Then(invFrameA); err != nil {
 		return fail(err)
 	}
-	return &prismReexpression{relative: m, transAbs: proofbound.VecMaxAbs(m.Translation())}, nil
+	return &prismReexpression{
+		relative:   m,
+		reflection: m.IsReflection(),
+		transAbs:   proofbound.VecMaxAbs(m.Translation()),
+	}, nil
+}
+
+// rewound is docs/general-boolean-design.md §3 A4's re-wound record: operand
+// B's profile mapped into A's frame through point, with every loop walked the
+// other way. A reflection turns a counter-clockwise outer loop clockwise and
+// a clockwise hole counter-clockwise; reversing the walk restores record.go's
+// "outer loops CCW, holes CW" convention, so the material is on the walk's
+// left again, which is what prismcells.Classify's flag comparison reads.
+//
+// Each loop keeps its index (Outer stays Outer, Holes[i] stays Holes[i]) and
+// its segments are taken in reverse order. Per kind, with m the map:
+//
+//   - a whole LineSeg{S, E} becomes LineSeg{m(E), m(S)} over the same range.
+//     The range order still names the walk's sense, and the swapped fields
+//     reverse it;
+//   - a whole ArcSeg{C, S, E} becomes ArcSeg{m(C), m(E), m(S)} over the same
+//     range. The reflection turns the arc clockwise from m(S) to m(E), which
+//     is the counter-clockwise arc from m(E) to m(S), and the reversed walk
+//     along it keeps the original range order;
+//   - a whole CircleSeg keeps its Radius, CCW and range, with its centre
+//     mapped. The reflection reverses the circle's winding and the reversed
+//     walk reverses it back, so the walk's winding, and therefore its CCW
+//     flag, is unchanged;
+//   - a LineSeg recorded over a narrowed range enters as a whole LineSeg
+//     between its mapped walked endpoints (walkOf), reversed. Re-ranging it
+//     to 1 − t is not an exact float operation for a general t, so the walked
+//     endpoints stand in, and walkChargeOf's allowance for them (§7's δ_walk)
+//     is returned for the caller to fold into operand B's walk charge.
+//
+// A trimmed ArcSeg or CircleSeg, or any other kind, is ErrUnsupported: every
+// caller refuses those pairs before the scene is built
+// (prismProfileHasTrimmedCircularSource, G4), so this is a defensive check.
+// point charges each mapped coordinate's rounding into re.delta exactly as
+// the unreflected path does. A reflection adds no rounding term of its own.
+func (re *prismReexpression) rewound(budget *proofbound.WorkBudget, profile ProfileRecord) (ProfileRecord, float64, error) {
+	charge := 0.0
+	rewindLoop := func(loop LoopRecord) (LoopRecord, error) {
+		n := len(loop.Segments)
+		out := make([]CurveSegment, n)
+		for i, seg := range loop.Segments {
+			if err := budget.Step(); err != nil {
+				return LoopRecord{}, err
+			}
+			var mapped CurveSegment
+			switch s := seg.(type) {
+			case LineSeg:
+				start, end, tStart, tEnd := s.Start, s.End, s.TStart, s.TEnd
+				if !prismcells.WholeSegmentRange(tStart, tEnd) {
+					w, err := walkOf(s, nil)
+					if err != nil {
+						return LoopRecord{}, err
+					}
+					c, err := walkChargeOf(s, w)
+					if err != nil {
+						return LoopRecord{}, err
+					}
+					charge = math.Max(charge, c)
+					start, end = Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
+					tStart, tEnd = 0, 1
+				}
+				mapped = LineSeg{Start: re.point(end), End: re.point(start), TStart: tStart, TEnd: tEnd}
+			case ArcSeg:
+				if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
+					return LoopRecord{}, fmt.Errorf(`%w: a reflected operand's trimmed arc cannot be re-wound`, ErrUnsupported)
+				}
+				mapped = ArcSeg{Center: re.point(s.Center), Start: re.point(s.End), End: re.point(s.Start), TStart: s.TStart, TEnd: s.TEnd}
+			case CircleSeg:
+				if !prismcells.WholeSegmentRange(s.TStart, s.TEnd) {
+					return LoopRecord{}, fmt.Errorf(`%w: a reflected operand's trimmed circle cannot be re-wound`, ErrUnsupported)
+				}
+				mapped = CircleSeg{Center: re.point(s.Center), Radius: s.Radius, CCW: s.CCW, TStart: s.TStart, TEnd: s.TEnd}
+			default:
+				return LoopRecord{}, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
+			}
+			out[n-1-i] = mapped
+		}
+		return LoopRecord{Segments: out}, nil
+	}
+	outer, err := rewindLoop(profile.Outer)
+	if err != nil {
+		return ProfileRecord{}, 0, err
+	}
+	result := ProfileRecord{Outer: outer}
+	for _, hole := range profile.Holes {
+		rewoundHole, err := rewindLoop(hole)
+		if err != nil {
+			return ProfileRecord{}, 0, err
+		}
+		result.Holes = append(result.Holes, rewoundHole)
+	}
+	return result, charge, nil
 }
 
 // point re-expresses one of operand B's plane-local points into operand A's

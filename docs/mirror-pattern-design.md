@@ -100,8 +100,8 @@ placement a float composition the caller never asked for, orthonormalised by
 | STL/OBJ/3MF | read the mesh |
 | `Verify` validity, surveys, tolerance gate | per payload, unchanged; measured `Sound` on prism, revolve, fillet result |
 | Clearance kernel | `clearance_geom.go` reads `reflected()`; measured T3 |
-| Interference | a reflected prism beside a coplanar prism misses prism-boolean G2 and reaches the mesh path's coplanar refusal: `Suspect` (T2). Lifted by `docs/general-boolean-design.md` class A4 |
-| `Union`/`Cut`/`Intersect` | G2 excludes a reflected operand from the analytic path (M2–M5, T1). Lifted by general-boolean class A4 |
+| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection still reroutes there (prism-boolean §3.4) and reaches the mesh path's coplanar refusal: `Suspect` (T2) |
+| `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M2 and M3 still refuse: their outlines share collinear walls (A3), and M3's also cross under a nonidentity re-expression, which prism-boolean §3.4 reroutes until A6 |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
 | `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `contact_sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
 | Loft | `loftPayload.placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |
