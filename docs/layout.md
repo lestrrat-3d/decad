@@ -306,7 +306,7 @@ the rules leave to the byte budget.
 | `internal/motionbound/` | Exact motion parameters, poses and sweeps. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepmemo/` | Sweep path, radius and replay memo tables. See contact-sweep §6–§7. |
-| `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
+| `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
