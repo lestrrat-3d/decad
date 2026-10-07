@@ -157,8 +157,8 @@ func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenS
 		// The whole swept family is the concentric circles of radius at most
 		// outerRadius about one fixed center, so the least radius any of them
 		// reaches from the axis is the center's own less that outermost radius.
-		least := new(big.Rat).Sub(radial.rho(proofarith.FloatRat(circle.Center.U), proofarith.FloatRat(circle.Center.V)), proofarith.FloatRat(outerRadius))
-		if err := radial.require(least); err != nil {
+		least := new(big.Rat).Sub(radial.Rho(proofarith.FloatRat(circle.Center.U), proofarith.FloatRat(circle.Center.V)), proofarith.FloatRat(outerRadius))
+		if err := radial.Require(least); err != nil {
 			return thickenSection{}, err
 		}
 	}
