@@ -5,9 +5,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
 
 // BenchmarkRevolveArcCellSlack measures the certified slack calculation for
@@ -25,7 +24,7 @@ func BenchmarkRevolveArcCellSlack(b *testing.B) {
 	var result float64
 	for b.Loop() {
 		var err error
-		result, err = tessellation.RevolveArcCellSlack(cell, step, twoArea, 0)
+		result, err = revolvemesh.RevolveArcCellSlack(cell, step, twoArea, 0)
 		if err != nil {
 			b.Fatal(err)
 		}

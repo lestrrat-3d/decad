@@ -6,10 +6,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 type loftCircularBounder struct{ seg CurveSegment }
@@ -18,17 +18,17 @@ func (b loftCircularBounder) BoundAt(t *big.Rat, u, v float64) proofbound.WalkEn
 	return circularPointBound(b.seg, t, u, v)
 }
 
-func loftCircularSide(w survey2d.SegmentWalk, seg CurveSegment) tessellation.LoftCircularSide {
+func loftCircularSide(w survey2d.SegmentWalk, seg CurveSegment) loftmesh.LoftCircularSide {
 	radius, sweep, enclosed := circularWalkEnclosures(seg)
 	tStart, dt, rangeOK := circularSegmentRange(seg)
-	return tessellation.LoftCircularSide{
+	return loftmesh.LoftCircularSide{
 		Walk: w, Radius: radius, Sweep: sweep, Enclosed: enclosed,
 		TStart: tStart, DT: dt, RangeOK: rangeOK,
 		EndRadialUpper: arcNaturalEndRadialUpper(seg), Bounder: loftCircularBounder{seg: seg},
 	}
 }
 
-func loftStationPoints(stations []tessellation.LoftStation) []Point2 {
+func loftStationPoints(stations []loftmesh.LoftStation) []Point2 {
 	points := make([]Point2, len(stations))
 	for i, station := range stations {
 		points[i] = Point2{U: station.U, V: station.V}
@@ -59,7 +59,7 @@ func loftStationPoints(stations []tessellation.LoftStation) []Point2 {
 //
 //	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
 //
-// S8 (internal/tessellation/loft_audit.go) refuses unless F*(F−1)/2 is at or below
+// S8 (internal/loftmesh/loft_audit.go) refuses unless F*(F−1)/2 is at or below
 // proofbound.MaxFacetPairTestsPerCall (8_000_000, internal/proofbound/budget.go), which admits F ≤ 4000:
 // 4000·3999/2 = 7_998_000 passes and 4001·4000/2 = 8_002_000 does not.
 //
@@ -385,7 +385,7 @@ func loftCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, targ
 
 // loftLineCellStations delegates the station proof to internal/tessellation.
 func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
-	a, b, sagitta, matched, round, err := tessellation.LoftLineCellStations(w0, w1)
+	a, b, sagitta, matched, round, err := loftmesh.LoftLineCellStations(w0, w1)
 	if err != nil {
 		return nil, nil, 0, nil, 0, err
 	}
@@ -394,12 +394,12 @@ func loftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]Point2, []Point2, floa
 
 // loftSettleStationCount delegates the station proof to internal/tessellation.
 func loftSettleStationCount(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64) (int, float64, float64, error) {
-	return tessellation.LoftSettleStationCount(loftCircularSide(w0, seg0), loftCircularSide(w1, seg1), target)
+	return loftmesh.LoftSettleStationCount(loftCircularSide(w0, seg0), loftCircularSide(w1, seg1), target)
 }
 
 // loftCircularCellStations delegates the station proof to internal/tessellation.
 func loftCircularCellStations(w0, w1 survey2d.SegmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, []float64, float64, error) {
-	a, b, sagitta, matched, round, err := tessellation.LoftCircularCellStations(
+	a, b, sagitta, matched, round, err := loftmesh.LoftCircularCellStations(
 		loftCircularSide(w0, seg0), loftCircularSide(w1, seg1), target,
 	)
 	if err != nil {
@@ -447,7 +447,7 @@ func perCellArcUpper(seg CurveSegment, w survey2d.SegmentWalk, m int) float64 {
 
 // chordCellDeltaUpper keeps the root loft callers on the shared bound.
 func chordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
-	return tessellation.ChordCellDeltaUpper(sagittaUpper, deltaUpper)
+	return loftmesh.ChordCellDeltaUpper(sagittaUpper, deltaUpper)
 }
 
 // errLoftStationDisplacementUnderivable is the sentinel docs/loft-design.md
@@ -462,7 +462,7 @@ func chordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
 // bound is composed from cannot be stated, so the sentinel is ErrUnsupported
 // and no finite value — least of all the sagitta alone — is published in its
 // place.
-var errLoftStationDisplacementUnderivable = tessellation.ErrLoftStationDisplacementUnderivable
+var errLoftStationDisplacementUnderivable = loftmesh.ErrLoftStationDisplacementUnderivable
 
 // perCellTangentEnergy is internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow own
 // tangentEnergyUpper obligation for ONE cell of this walk: a proven upper bound
@@ -503,13 +503,13 @@ func perCellTangentEnergy(seg CurveSegment, w survey2d.SegmentWalk, m int) float
 
 // circularStationChain delegates the station proof to internal/tessellation.
 func circularStationChain(w survey2d.SegmentWalk, seg CurveSegment, m int) ([]Point2, float64) {
-	stations, delta := tessellation.LoftCircularStationChain(loftCircularSide(w, seg), m)
+	stations, delta := loftmesh.LoftCircularStationChain(loftCircularSide(w, seg), m)
 	return loftStationPoints(stations), delta
 }
 
 // walkEndPlaneDelta delegates the station proof to internal/tessellation.
 func walkEndPlaneDelta(bound proofbound.WalkEndBound) float64 {
-	return tessellation.WalkEndPlaneDelta(bound)
+	return loftmesh.WalkEndPlaneDelta(bound)
 }
 
 // arcNaturalEndRadialUpper charges docs/loft-design.md §5.2's ARC-END RADIAL
@@ -614,7 +614,7 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 		return math.Inf(1)
 	}
 	radius, sweep, enclosed := circularWalkEnclosures(seg)
-	return tessellation.LoftCertifiedSagittaUpper(radius, sweep, enclosed, m)
+	return loftmesh.LoftCertifiedSagittaUpper(radius, sweep, enclosed, m)
 }
 
 // loftCertifiedChordLower delegates the station proof to internal/tessellation.
@@ -623,7 +623,7 @@ func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
 		return 0
 	}
 	radius, sweep, enclosed := circularWalkEnclosures(seg)
-	return tessellation.LoftCertifiedChordLower(radius, sweep, enclosed, m)
+	return loftmesh.LoftCertifiedChordLower(radius, sweep, enclosed, m)
 }
 
 // errLoftSagittaUnderivable is docs/loft-design.md Table S row S14's refusal:
@@ -633,4 +633,4 @@ func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
 // derivation gap in this evaluator's certified circular enclosures rather than
 // a shape rule — so the sentinel is ErrUnsupported, and no finite value is
 // published in its place.
-var errLoftSagittaUnderivable = tessellation.ErrLoftSagittaUnderivable
+var errLoftSagittaUnderivable = loftmesh.ErrLoftSagittaUnderivable

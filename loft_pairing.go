@@ -158,8 +158,8 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // walk in opposite directions, and that correspondence walls each side
 // against the other's reversed walk — the very crossing §6's build-time
 // audit proves in its AUDIT arm. The two arms answer one existence question
-// and therefore carry one sentinel, S7's own ErrDegenerate (internal/tessellation/loft_audit.go's
-// tessellation.ErrLoftContact is the audit arm's spelling of it): a self-crossing shell
+// and therefore carry one sentinel, S7's own ErrDegenerate (internal/loftmesh/loft_audit.go's
+// loftmesh.ErrLoftContact is the audit arm's spelling of it): a self-crossing shell
 // bounds no solid under any evaluator, so this is never a staging refusal.
 // What this arm buys is POSITION, not a different answer — it is decided
 // from the two records alone, before a single station or triangle is built,
@@ -447,7 +447,7 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey
 //     its cell is by definition a terminal one.
 //
 // Missing any of them lets a one-sided collapse fall through to S6
-// (internal/tessellation/loft_audit.go), whose collapse refusal is ErrDegenerate — a claim that no
+// (internal/loftmesh/loft_audit.go), whose collapse refusal is ErrDegenerate — a claim that no
 // body exists under ANY evaluator — where this row owes ErrUnsupported, the
 // weaker claim that a point-degenerate correspondence is a body a smarter
 // kernel could still loft.

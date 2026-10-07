@@ -45,7 +45,7 @@ func stitchKeyOf(v r3.Vec) stitchVertexKey {
 // about the two true points they stand for, and welding them would be
 // exactly the tolerant admission §1.3 refuses. This is J5 applied AT THE
 // VERTEX, and it is what makes two triangles sharing a table index — the
-// fact internal/tessellation/loft_audit.go's crossing audit is built on — a proof rather than a
+// fact internal/loftmesh/loft_audit.go's crossing audit is built on — a proof rather than a
 // convention: the shared index exists only because both vertices are
 // EXACT and IDENTICAL, never because they merely landed close.
 //

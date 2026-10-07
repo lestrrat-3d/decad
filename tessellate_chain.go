@@ -13,7 +13,7 @@ import (
 // docs/tessellation-design.md §1.2's manifold-with-boundary audit, which this
 // sheet runs in the closed-mesh audit's place. A chain-fed feature mints no
 // cap at all — §13's own decision, "no face to close anything" — so there is
-// nothing this restatement drops the way internal/tessellation.RestateLoft's
+// nothing this restatement drops the way internal/loftmesh.RestateLoft's
 // restatement drops the cap triangles by provenance range: every wall this
 // file emits is a mesh face, and the ribbon's free boundary is both rims plus
 // one sweep edge per free end (Table G).

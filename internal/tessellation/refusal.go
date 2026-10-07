@@ -26,6 +26,12 @@ func degenerate(format string, args ...any) error {
 	return &AuditError{Sentinel: Degenerate, Detail: fmt.Sprintf(format, args...)}
 }
 
+// DegenerateError reports a contradiction in a mesh input.
+func DegenerateError(format string, args ...any) error { return degenerate(format, args...) }
+
 func unsupported(format string, args ...any) error {
 	return &AuditError{Sentinel: Unsupported, Detail: fmt.Sprintf(format, args...)}
 }
+
+// UnsupportedError reports a mesh proof the evaluator cannot state.
+func UnsupportedError(format string, args ...any) error { return unsupported(format, args...) }

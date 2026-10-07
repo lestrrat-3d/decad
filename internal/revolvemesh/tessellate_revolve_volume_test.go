@@ -1,4 +1,4 @@
-package tessellation_test
+package revolvemesh_test
 
 import (
 	"math"
@@ -8,7 +8,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,14 +46,14 @@ func TestRevolveAngularHomotopyFactorMemoMatchesUncached(t *testing.T) {
 
 	for name, step := range steps {
 		t.Run(name, func(t *testing.T) {
-			want, err := tessellation.RevolveAngularHomotopyFactorUncached(step)
+			want, err := revolvemesh.RevolveAngularHomotopyFactorUncached(step)
 			require.NoError(t, err)
 			for call := range 3 {
-				got, err := tessellation.RevolveAngularHomotopyFactor(step)
+				got, err := revolvemesh.RevolveAngularHomotopyFactor(step)
 				require.NoError(t, err)
 				require.Zero(t, got.Cmp(want), "call %d", call)
 				require.Equal(t, want.RatString(), got.RatString(), "call %d", call)
-				require.True(t, tessellation.RevolveHomotopyMemoHolds(step), "call %d", call)
+				require.True(t, revolvemesh.RevolveHomotopyMemoHolds(step), "call %d", call)
 				// The caller owns the value: mutating it must not reach the memo.
 				got.Add(got, big.NewRat(1, 1))
 			}
@@ -62,10 +62,10 @@ func TestRevolveAngularHomotopyFactorMemoMatchesUncached(t *testing.T) {
 
 	t.Run("refusal", func(t *testing.T) {
 		step := proofbound.Interval(big.NewRat(1, 1), new(big.Rat))
-		_, want := tessellation.RevolveAngularHomotopyFactorUncached(step)
-		require.ErrorIs(t, want, tessellation.ErrRevolveAngularHomotopy)
+		_, want := revolvemesh.RevolveAngularHomotopyFactorUncached(step)
+		require.ErrorIs(t, want, revolvemesh.ErrRevolveAngularHomotopy)
 		for call := range 2 {
-			got, err := tessellation.RevolveAngularHomotopyFactor(step)
+			got, err := revolvemesh.RevolveAngularHomotopyFactor(step)
 			require.Nil(t, got, "call %d", call)
 			require.Equal(t, want, err, "call %d", call)
 		}

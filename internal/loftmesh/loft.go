@@ -1,10 +1,11 @@
-package tessellation
+package loftmesh
 
 import (
 	"context"
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -113,7 +114,7 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 	faceOfRole := func(role string) (int, error) {
 		f, ok := in.FaceOfRole[role]
 		if !ok {
-			return 0, degenerate(`the body carries no face for role %q`, role)
+			return 0, tessellation.DegenerateError(`the body carries no face for role %q`, role)
 		}
 		return f, nil
 	}
@@ -130,7 +131,7 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 		}
 	}
 
-	budget := newBudget(ctx)
+	budget := tessellation.NewAuditBudget(ctx)
 	// The payload records walls first, then the start cap, then the end cap.
 	// Dropping exactly the latter two ranges uses that provenance rather than
 	// testing a triangle's coordinates against a section plane.
@@ -140,7 +141,7 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 	}
 	src := make([]int, len(triangles))
 	for k := range in.WallCount {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return LoftResult{}, err
 		}
 		f, err := faceOfRole(fmt.Sprintf("side(%d,%d,%d)", in.WallCell[k][0], in.WallCell[k][1], in.WallSide[k]))
@@ -157,13 +158,13 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 			src[k] = capEnd
 		}
 	}
-	if err := budget.err(); err != nil {
+	if err := budget.Err(); err != nil {
 		return LoftResult{}, err
 	}
 
 	if isNonFinite(in.FacetDepartureMM) || isNonFinite(in.AreaSlackMM2) ||
 		(!in.Sheet && isNonFinite(in.VolumeSymDiffMM3)) {
-		return LoftResult{}, unsupported(`the loft payload states no finite proof for a required mesh bound`)
+		return LoftResult{}, tessellation.UnsupportedError(`the loft payload states no finite proof for a required mesh bound`)
 	}
 
 	// Fresh slices: the held mesh must not alias the payload's own arrays, or
@@ -180,28 +181,28 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 		out.VolumeProof = true
 	}
 	if in.Sheet {
-		if err := RequireSheetBoundary(ctx, SheetBoundary{
+		if err := tessellation.RequireSheetBoundary(ctx, tessellation.SheetBoundary{
 			Triangles: out.Triangles, SourceFaces: out.SourceFaces, FreeChainCounts: in.FreeChainCounts,
 		}); err != nil {
 			return LoftResult{}, err
 		}
-		if err := RequireSheetVertexLinks(ctx, len(out.Vertices), out.Triangles); err != nil {
+		if err := tessellation.RequireSheetVertexLinks(ctx, len(out.Vertices), out.Triangles); err != nil {
 			return LoftResult{}, err
 		}
 		return out, nil
 	}
-	if RequireClosedMesh(out.Triangles) != nil {
-		return LoftResult{}, unsupported(`the loft payload's held triangle set is not a closed mesh, so it restates no boundary`)
+	if tessellation.RequireClosedMesh(out.Triangles) != nil {
+		return LoftResult{}, tessellation.UnsupportedError(`the loft payload's held triangle set is not a closed mesh, so it restates no boundary`)
 	}
 	// docs/tessellation-design.md §4's signed-volume audit, over the same
 	// identity docs/loft-design.md §5's whole-shell orientation rule reads and
 	// at the same anchor the loft build used. The shell is not a void, so its
 	// sum must come out positive.
 	if !finiteVec(in.Anchor) {
-		return LoftResult{}, unsupported(`the loft payload states no finite anchor to audit its own orientation against`)
+		return LoftResult{}, tessellation.UnsupportedError(`the loft payload states no finite anchor to audit its own orientation against`)
 	}
-	if OrientationSign(out.Vertices, out.Triangles, in.Anchor) <= 0 {
-		return LoftResult{}, unsupported(`the loft payload's held triangle set does not enclose a positive volume, so it restates no solid`)
+	if tessellation.OrientationSign(out.Vertices, out.Triangles, in.Anchor) <= 0 {
+		return LoftResult{}, tessellation.UnsupportedError(`the loft payload's held triangle set does not enclose a positive volume, so it restates no solid`)
 	}
 	return out, nil
 }
@@ -214,13 +215,13 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 // assembly — so it stands for a payload no evaluator wrote.
 func requireTriangleSplit(in LoftInput) error {
 	if len(in.Triangles) == 0 || len(in.Vertices) == 0 {
-		return degenerate(`the loft payload holds no triangle set to restate`)
+		return tessellation.DegenerateError(`the loft payload holds no triangle set to restate`)
 	}
 	if in.WallCount < 0 || in.StartCapCount < 0 || in.WallCount+in.StartCapCount > len(in.Triangles) {
-		return degenerate(`the loft payload's wall and cap triangle counts do not partition its own triangle set`)
+		return tessellation.DegenerateError(`the loft payload's wall and cap triangle counts do not partition its own triangle set`)
 	}
 	if len(in.WallCell) != in.WallCount || len(in.WallSide) != in.WallCount {
-		return degenerate(`the loft payload names a cell for %d of its %d wall triangles`, len(in.WallCell), in.WallCount)
+		return tessellation.DegenerateError(`the loft payload names a cell for %d of its %d wall triangles`, len(in.WallCell), in.WallCount)
 	}
 	return nil
 }

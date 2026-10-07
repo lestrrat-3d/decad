@@ -14,7 +14,7 @@ import (
 // row (docs/surface-design.md §10, §14 Table D row 5): an all-planar
 // stitched body's mesh, CLOSED or OPEN, is an exact restatement of the
 // triangle set Stitch's own build already assembled and audited (stitch.go's
-// evalStitchContext), modelled line for line on internal/tessellation.RestateLoft's exact
+// evalStitchContext), modelled line for line on internal/loftmesh.RestateLoft's exact
 // restatement. Nothing is chorded, welded, moved, or retriangulated here, so
 // this path takes no chord tolerance at all — there is no chording
 // component for one to bind (RestateLoft's own reasoning, restated
@@ -396,7 +396,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	//     triangles (docs/tessellation-design.md §2's loftPayload row), and it
 	//     introduces no coordinate the polygon's own vertices did not already
 	//     hold: no rounding, no interpolation. checkStitchClosure's
-	//     directed-edge parity leg and tessellation.LoftCrossingAudit's own crossing test
+	//     directed-edge parity leg and loftmesh.LoftCrossingAudit's own crossing test
 	//     — both already run before this mesh is built, in
 	//     stitch.go's evalStitchContext — are what prove the several faces'
 	//     own triangle sets close into one watertight solid with no

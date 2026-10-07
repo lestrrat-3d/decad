@@ -1,4 +1,4 @@
-package tessellation
+package revolvemesh
 
 import (
 	"fmt"

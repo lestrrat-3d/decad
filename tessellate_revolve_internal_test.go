@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -32,45 +33,45 @@ func TestAbsLinearIntegralMatchesTheClosedForm(t *testing.T) {
 	t.Run("sign-fixed integrand", func(t *testing.T) {
 		// f(t) = t + 1 is positive on [0,1]. ∫ f·1 = 3/2, ∫ f·t = 5/6,
 		// ∫ f·(1−t) = 2/3.
-		ratNear(t, 1.5, tessellation.AbsLinearIntegral(r(1), r(1), tessellation.RevolveWeightOne))
-		ratNear(t, 5.0/6, tessellation.AbsLinearIntegral(r(1), r(1), tessellation.RevolveWeightT))
-		ratNear(t, 2.0/3, tessellation.AbsLinearIntegral(r(1), r(1), tessellation.RevolveWeightOneMinusT))
+		ratNear(t, 1.5, revolvemesh.AbsLinearIntegral(r(1), r(1), revolvemesh.RevolveWeightOne))
+		ratNear(t, 5.0/6, revolvemesh.AbsLinearIntegral(r(1), r(1), revolvemesh.RevolveWeightT))
+		ratNear(t, 2.0/3, revolvemesh.AbsLinearIntegral(r(1), r(1), revolvemesh.RevolveWeightOneMinusT))
 	})
 
 	t.Run("sign change inside the interval is decomposed", func(t *testing.T) {
 		// f(t) = 2t − 1 crosses zero at t = 1/2. ∫|f| = 1/2, which the SIGNED
 		// integral (zero) does not see — the whole point of the decomposition.
-		ratNear(t, 0.5, tessellation.AbsLinearIntegral(r(2), r(-1), tessellation.RevolveWeightOne))
+		ratNear(t, 0.5, revolvemesh.AbsLinearIntegral(r(2), r(-1), revolvemesh.RevolveWeightOne))
 		// ∫|2t−1|·t dt = 1/24 + 5/24 = 1/4 over [0,1], and the (1−t) weight
 		// answers the same by the substitution t → 1 − t. The two weights sum
 		// to the unweighted integral, which is the domain split the cell's own
 		// fixed diagonal makes.
-		ratNear(t, 0.25, tessellation.AbsLinearIntegral(r(2), r(-1), tessellation.RevolveWeightT))
-		ratNear(t, 0.25, tessellation.AbsLinearIntegral(r(2), r(-1), tessellation.RevolveWeightOneMinusT))
+		ratNear(t, 0.25, revolvemesh.AbsLinearIntegral(r(2), r(-1), revolvemesh.RevolveWeightT))
+		ratNear(t, 0.25, revolvemesh.AbsLinearIntegral(r(2), r(-1), revolvemesh.RevolveWeightOneMinusT))
 	})
 
 	t.Run("root outside the interval keeps one piece", func(t *testing.T) {
 		// f(t) = t − 4 is negative throughout; |∫f| = 7/2.
-		ratNear(t, 3.5, tessellation.AbsLinearIntegral(r(1), r(-4), tessellation.RevolveWeightOne))
+		ratNear(t, 3.5, revolvemesh.AbsLinearIntegral(r(1), r(-4), revolvemesh.RevolveWeightOne))
 	})
 
 	t.Run("against a dense numeric reference", func(t *testing.T) {
 		for _, tc := range [][2]float64{{3, -1.25}, {-7, 2}, {0.5, -0.5}, {0, 2}} {
-			for _, weight := range []int{tessellation.RevolveWeightOne, tessellation.RevolveWeightT, tessellation.RevolveWeightOneMinusT} {
+			for _, weight := range []int{revolvemesh.RevolveWeightOne, revolvemesh.RevolveWeightT, revolvemesh.RevolveWeightOneMinusT} {
 				const n = 200000
 				want := 0.0
 				for i := range n {
 					x := (float64(i) + 0.5) / n
 					w := 1.0
 					switch weight {
-					case tessellation.RevolveWeightT:
+					case revolvemesh.RevolveWeightT:
 						w = x
-					case tessellation.RevolveWeightOneMinusT:
+					case revolvemesh.RevolveWeightOneMinusT:
 						w = 1 - x
 					}
 					want += math.Abs(tc[0]*x+tc[1]) * w / n
 				}
-				got, _ := tessellation.AbsLinearIntegral(r(tc[0]), r(tc[1]), weight).Float64()
+				got, _ := revolvemesh.AbsLinearIntegral(r(tc[0]), r(tc[1]), weight).Float64()
 				require.InDelta(t, want, got, 1e-4, `alpha=%v beta=%v weight=%d`, tc[0], tc[1], weight)
 			}
 		}
@@ -95,7 +96,7 @@ func TestRevolveCellAreaSlackBracketsTheTrueJacobianGap(t *testing.T) {
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, n))
 	length := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
 	twoArea := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(jHeld))
-	got := tessellation.RevolveCellAreaSlack(rho, rho, length, step, [2]proofbound.RatInterval{twoArea, twoArea})
+	got := revolvemesh.RevolveCellAreaSlack(rho, rho, length, step, [2]proofbound.RatInterval{twoArea, twoArea})
 	require.InDelta(t, want, got, 1e-9)
 	require.Greater(t, got, 0.0)
 }
@@ -112,7 +113,7 @@ func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
 	length := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(meridianLen))
 	area := proofbound.PointInterval(big.NewRat(0, 1).SetFloat64(twoArea))
 	for _, poleFirst := range []bool{true, false} {
-		got := tessellation.RevolveFanAreaSlack(rho, poleFirst, length, step, area)
+		got := revolvemesh.RevolveFanAreaSlack(rho, poleFirst, length, step, area)
 		require.InDelta(t, math.Abs(c)/2, got, 1e-9, `poleFirst=%v`, poleFirst)
 	}
 }
@@ -123,11 +124,11 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 		seq, err := revolveAngularSequence(revolvePayload{phi0: 0, phi1: 2 * math.Pi, full: true}, 12)
 		require.NoError(t, err)
 		require.Len(t, seq.Cos, 12, `a full turn stores no seam sample`)
-		require.LessOrEqual(t, seq.Gap, tessellation.RevolveTrigGapPrior)
+		require.LessOrEqual(t, seq.Gap, revolvemesh.RevolveTrigGapPrior)
 		for l := range seq.Cos {
 			// The stored pair lies inside the certified enclosure and on the
 			// unit circle to within that enclosure's own width.
-			require.LessOrEqual(t, proofbound.IntervalFloatError(seq.CosIv[l], seq.Cos[l]), tessellation.RevolveTrigGapPrior)
+			require.LessOrEqual(t, proofbound.IntervalFloatError(seq.CosIv[l], seq.Cos[l]), revolvemesh.RevolveTrigGapPrior)
 			require.InDelta(t, 1.0, seq.Cos[l]*seq.Cos[l]+seq.Sin[l]*seq.Sin[l], 1e-15)
 			require.InDelta(t, math.Cos(2*math.Pi*float64(l)/12), seq.Cos[l], 1e-12)
 			require.InDelta(t, math.Sin(2*math.Pi*float64(l)/12), seq.Sin[l], 1e-12)
@@ -151,14 +152,14 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 
 func TestRevolveBudgetReservesBothCoordinateStages(t *testing.T) {
 	t.Parallel()
-	available, err := tessellation.RevolveBudget(0.1, 1e-9, 2e-9)
+	available, err := revolvemesh.RevolveBudget(0.1, 1e-9, 2e-9)
 	require.NoError(t, err)
 	require.Less(t, available, 0.1)
 	require.Greater(t, available, 0.09)
 
-	_, err = tessellation.RevolveBudget(1e-9, 1e-9, 0)
+	_, err = revolvemesh.RevolveBudget(1e-9, 1e-9, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
-	_, err = tessellation.RevolveBudget(1e-9, 2e-9, 0)
+	_, err = revolvemesh.RevolveBudget(1e-9, 2e-9, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -166,24 +167,24 @@ func TestExactRigidPointRoundIsZeroOnlyForAnExactPlacement(t *testing.T) {
 	t.Parallel()
 	p := r3.Vec{X: 3.25, Y: -1.5, Z: 7}
 	identity := r3.Identity()
-	require.Equal(t, 0.0, tessellation.ExactRigidPointRound(identity, p, identity.Apply(p)))
+	require.Equal(t, 0.0, revolvemesh.ExactRigidPointRound(identity, p, identity.Apply(p)))
 
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Degrees(37))
 	require.NoError(t, err)
-	require.Positive(t, tessellation.ExactRigidPointRound(rot, p, rot.Apply(p)))
+	require.Positive(t, revolvemesh.ExactRigidPointRound(rot, p, rot.Apply(p)))
 
 	// A vertex the caller stored WRONG is measured against what the exact map
 	// says, so the reading grows with the error rather than hiding it.
 	wrong := rot.Apply(p)
 	wrong.X += 1e-6
-	require.Greater(t, tessellation.ExactRigidPointRound(rot, p, wrong), 1e-6)
+	require.Greater(t, revolvemesh.ExactRigidPointRound(rot, p, wrong), 1e-6)
 }
 
 func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
 	t.Parallel()
 	// An axis-aligned basis with a power-of-two radius rounds nowhere, so the
 	// stored point equals the ideal one exactly.
-	b := tessellation.RevolveBasis3Iv{
+	b := revolvemesh.RevolveBasis3Iv{
 		A3: mustIvVec(r3.Vec{}),
 		W:  mustIvVec(r3.Vec{X: 1}),
 		E0: mustIvVec(r3.Vec{Y: 1}),
@@ -191,16 +192,16 @@ func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
 	}
 	one := big.NewRat(1, 1)
 	zero := new(big.Rat)
-	ideal := tessellation.RevolveIdealPoint(b, proofbound.PointInterval(zero), proofbound.PointInterval(big.NewRat(8, 1)), proofbound.PointInterval(one), proofbound.PointInterval(zero))
+	ideal := revolvemesh.RevolveIdealPoint(b, proofbound.PointInterval(zero), proofbound.PointInterval(big.NewRat(8, 1)), proofbound.PointInterval(one), proofbound.PointInterval(zero))
 	require.Equal(t, 0.0, proofbound.IntervalFloatError(ideal[1], 8.0))
 
 	// A basis whose own construction rounds cannot claim that: the enclosure
 	// separates from the stored float and the gap is charged.
 	tilted := mustIvVec(r3.Vec{X: 0.1, Y: 0.7, Z: 0.3})
-	b2 := tessellation.RevolveBasis3Iv{A3: mustIvVec(r3.Vec{}), W: mustIvVec(r3.Vec{X: 1}), E0: tilted, E1: mustIvVec(r3.Vec{Z: 1})}
+	b2 := revolvemesh.RevolveBasis3Iv{A3: mustIvVec(r3.Vec{}), W: mustIvVec(r3.Vec{X: 1}), E0: tilted, E1: mustIvVec(r3.Vec{Z: 1})}
 	third, ok := new(big.Rat).SetString("1/3")
 	require.True(t, ok)
-	ideal2 := tessellation.RevolveIdealPoint(b2, proofbound.PointInterval(zero), proofbound.PointInterval(third), proofbound.PointInterval(one), proofbound.PointInterval(zero))
+	ideal2 := revolvemesh.RevolveIdealPoint(b2, proofbound.PointInterval(zero), proofbound.PointInterval(third), proofbound.PointInterval(one), proofbound.PointInterval(zero))
 	held, _ := intervalMid(ideal2[1]).Float64()
 	require.Positive(t, proofbound.IntervalFloatError(ideal2[1], math.Nextafter(held, math.Inf(1))))
 }
@@ -235,11 +236,11 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 func auditRevolveFacets(t *testing.T, verts []r3.Vec, tris [][3]int, delta float64) error {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	data, err := tessellation.RequireRevolveFacetAreas(budget, verts, tris, delta)
+	data, err := revolvemesh.RequireRevolveFacetAreas(budget, verts, tris, delta)
 	if err != nil {
 		return err
 	}
-	return tessellation.RevolveContactAudit(budget, data, tris, delta)
+	return revolvemesh.RevolveContactAudit(budget, data, tris, delta)
 }
 
 func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
@@ -270,23 +271,23 @@ func TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement(t *testing.T
 	t.Parallel()
 	verts := []r3.Vec{{X: 0}, {X: 1}, {X: 0.5, Y: 1e-12}}
 	tris := [][3]int{{0, 1, 2}}
-	data, err := tessellation.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 0)
+	data, err := revolvemesh.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 0)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	_, err = tessellation.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 1e-6)
+	_, err = revolvemesh.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), verts, tris, 1e-6)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "positive area")
 }
 
 func TestRevolveCoordMaxCoversEveryIdealCoordinate(t *testing.T) {
 	t.Parallel()
-	b := tessellation.RevolveBasis{
+	b := revolvemesh.RevolveBasis{
 		A3: r3.Vec{X: 100, Y: -50, Z: 0},
 		W:  r3.Vec{X: 1},
 		E0: r3.Vec{Y: 1},
 		E1: r3.Vec{Z: 1},
 	}
-	got := tessellation.RevolveCoordMax(b, 20, 8)
+	got := revolvemesh.RevolveCoordMax(b, 20, 8)
 	require.GreaterOrEqual(t, got, 120.0)
 	for _, z := range []float64{-20, 0, 20} {
 		for i := range 33 {
@@ -383,7 +384,7 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 			walks: make([]survey2d.SideWalk, 4),
 			kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
 		},
-		samples: []tessellation.RevMeridian{{Walk: 0}, {Walk: 1}, {Walk: 2}, {Walk: 3}},
+		samples: []revolvemesh.RevMeridian{{Walk: 0}, {Walk: 1}, {Walk: 2}, {Walk: 3}},
 	}
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
 	// proofbound.MaxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
@@ -395,7 +396,7 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	// A pole ring fans rather than quads, so its own cell costs half as many
 	// facets per angular step and the same walks admit a finer count.
 	poled := loop
-	poled.samples = []tessellation.RevMeridian{{Walk: 0, OnAxis: true}, {Walk: 1}, {Walk: 2}, {Walk: 3}}
+	poled.samples = []revolvemesh.RevMeridian{{Walk: 0, OnAxis: true}, {Walk: 1}, {Walk: 2}, {Walk: 3}}
 	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, false, true, &revolveWork{}))
 	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, false, true, &revolveWork{}), ErrUnsupported)
 
@@ -520,14 +521,14 @@ func TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall(t *testing.T
 	const delta = 7.150045910436396e-15
 	triA := [3]int{35, 42, 43} // the wall triangle of one meridian chord
 	triB := [3]int{7, 49, 42}  // the start cap's fan triangle
-	a, ok := tessellation.NewRevolveAuditTri(verts, triA)
+	a, ok := revolvemesh.NewRevolveAuditTri(verts, triA)
 	require.True(t, ok)
-	b, ok := tessellation.NewRevolveAuditTri(verts, triB)
+	b, ok := revolvemesh.NewRevolveAuditTri(verts, triB)
 	require.True(t, ok)
 
 	require.True(t,
-		tessellation.RevolveVertexIsolated(a, triA, b, triB, 42, delta) ||
-			tessellation.RevolveVertexIsolated(b, triB, a, triA, 42, delta),
+		revolvemesh.RevolveVertexIsolated(a, triA, b, triB, 42, delta) ||
+			revolvemesh.RevolveVertexIsolated(b, triB, a, triA, 42, delta),
 		`the cap fan and the next chord's wall must be proven to meet only at the vertex they share`)
 
 	// The same pair inside the whole audit, which is where the refusal used to

@@ -9,8 +9,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -138,8 +138,8 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 	origin, u, v := rp.frame.Origin(), rp.frame.U(), rp.frame.V()
 	var out [3]*big.Rat
 	for i := range out {
-		o := proofarith.FloatRat(tessellation.VecComponent(origin, i))
-		ui, vi := proofarith.FloatRat(tessellation.VecComponent(u, i)), proofarith.FloatRat(tessellation.VecComponent(v, i))
+		o := proofarith.FloatRat(revolvemesh.VecComponent(origin, i))
+		ui, vi := proofarith.FloatRat(revolvemesh.VecComponent(u, i)), proofarith.FloatRat(revolvemesh.VecComponent(v, i))
 		if o == nil || ui == nil || vi == nil {
 			return [3]*big.Rat{}, fmt.Errorf("%w: revolve frame is not finite", ErrNotFinite)
 		}

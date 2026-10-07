@@ -5,8 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -51,7 +50,7 @@ func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
 	for _, delta := range []float64{0, 1e-8} {
 		uncached := newLoftMassAccumulator(anchor, delta, 0, 0)
 		cached := newLoftMassAccumulator(anchor, delta, 0, 0)
-		cache := make([]tessellation.LoftVertexDistance, len(verts))
+		cache := make([]loftmesh.LoftVertexDistance, len(verts))
 		for _, tri := range tris {
 			uncached.add(verts[tri[0]], verts[tri[1]], verts[tri[2]], true)
 			cached.addTriangle(verts[tri[0]], verts[tri[1]], verts[tri[2]], true, tri, cache)
@@ -101,7 +100,7 @@ func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
 	uncached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	cached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	far := r3.NewVec(math.MaxFloat64, 1, 0)
-	entry := new(tessellation.LoftVertexDistance)
+	entry := new(loftmesh.LoftVertexDistance)
 	for range 2 {
 		uncached.foldCoordUpper(far)
 		cached.foldCoordUpperCached(far, entry)
@@ -878,9 +877,9 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 			r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1),
 		}
 		got, err := computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
-		require.ErrorIs(t, err, tessellation.ErrLoftCapOffsetUnderivable, "S14 refuses the underivable cap plane offset")
+		require.ErrorIs(t, err, loftmesh.ErrLoftCapOffsetUnderivable, "S14 refuses the underivable cap plane offset")
 		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported, a derivation gap and not a shape rule")
-		require.Equal(t, tessellation.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
+		require.Equal(t, loftmesh.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
 	})
 
 	t.Run("a NaN cap1 vertex refuses instead of panicking", func(t *testing.T) {
@@ -894,19 +893,19 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 		require.Nil(t, ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, verts[2].X, verts[2].Y, verts[2].Z),
 			"a NaN coordinate states no squared distance")
 
-		var got tessellation.LoftChordedAllow
+		var got loftmesh.LoftChordedAllow
 		var err error
 		require.NotPanics(t, func() {
 			got, err = computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
 		}, "an unreadable cap1 coordinate is a refusal, never a nil dereference")
-		require.ErrorIs(t, err, tessellation.ErrLoftCapOffsetUnderivable, "S14 refuses the unreadable cap plane offset")
+		require.ErrorIs(t, err, loftmesh.ErrLoftCapOffsetUnderivable, "S14 refuses the unreadable cap plane offset")
 		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported")
-		require.Equal(t, tessellation.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
+		require.Equal(t, loftmesh.LoftChordedAllow{}, got, "a refused build publishes no leg at all")
 	})
 }
 
 // TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell pins
-// tessellation.LoftChordedAllow.twistAreaAllow (docs/tessellation-reach-design.md §4): the
+// loftmesh.LoftChordedAllow.twistAreaAllow (docs/tessellation-reach-design.md §4): the
 // wall's HELD-TO-BILINEAR area leg, summed over exactly the chorded cells the
 // other legs walk, through the same proofbound.AbsSumUpper chain.
 //

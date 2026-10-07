@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -352,7 +353,7 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 
 // buildLoftWallFace builds one wall triangle's Face (§7's lower/upper wall
 // triangle row): its own Plane, its own proven area bracket
-// (loft_moments.go's tessellation.WallTriangleArea, the identical bracket the mass
+// (loft_moments.go's loftmesh.WallTriangleArea, the identical bracket the mass
 // accumulator sums), and its side(i,j,k) role. A placed triangle (delta > 0,
 // §12 PR 2a) widens that bracket by internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow,
 // the same per-triangle correction the mass accumulator sums into Area's own
@@ -365,7 +366,7 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 	u := proofbound.Xsub(proofbound.XptOf(b), proofbound.XptOf(a))
 	v := proofbound.Xsub(proofbound.XptOf(c), proofbound.XptOf(a))
-	lo, hi := tessellation.WallTriangleArea(u, v)
+	lo, hi := loftmesh.WallTriangleArea(u, v)
 	areaBound := proofbound.UpRound(hi - lo)
 	if delta > 0 {
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))

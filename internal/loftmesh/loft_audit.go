@@ -1,10 +1,11 @@
-package tessellation
+package loftmesh
 
 import (
 	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
@@ -133,26 +134,6 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 		}
 	}
 	return d
-}
-
-// SharedVertexIndices returns the vertex indices two triangles hold in common
-// and their count — free and exact, since a shared vertex is a shared table
-// index. The loft build never emits a triangle with a repeated index (S6
-// refuses any that would collapse first), so the result holds at most 3 entries
-// and no duplicates without allocating a slice per pair.
-func SharedVertexIndices(a, b [3]int) ([3]int, int) {
-	var shared [3]int
-	count := 0
-	for _, va := range a {
-		for _, vb := range b {
-			if va == vb {
-				shared[count] = va
-				count++
-				break
-			}
-		}
-	}
-	return shared, count
 }
 
 // ErrLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
@@ -413,10 +394,10 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	xtb := data.Xtris[j]
 	na := data.Norms[i]
 	nb := data.Norms[j]
-	shared, sharedCount := SharedVertexIndices(tris[i], tris[j])
+	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if sharedCount == 2 {
 		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
-		apex := data.Xverts[TriangleApexIndex(tris[j], shared[0], shared[1])]
+		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
 		if meshbool.XdotSign(na, proofbound.Xsub(apex, edgeA)) == 0 {
 			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
 				return LoftPairClassified, nil
@@ -577,15 +558,6 @@ func ProjectionPairIndex(u, v int) int {
 	}
 }
 
-func TriangleApexIndex(tri [3]int, edgeA, edgeB int) int {
-	for _, vertex := range tri {
-		if vertex != edgeA && vertex != edgeB {
-			return vertex
-		}
-	}
-	return -1
-}
-
 // LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
 // the assembled wall-and-cap triangle set: S6 (per-triangle existence) first,
 // then S8 (the fixed facet-pair ceiling, checked before any pair test or
@@ -685,7 +657,7 @@ func LoftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 			if err := budget.Step(); err != nil {
 				return work, err
 			}
-			_, sharedCount := SharedVertexIndices(tris[i], tris[j])
+			_, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 			if shortcuts.BroadPhase && sharedCount == 0 {
 				if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
 					work.Skips++

@@ -434,7 +434,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if lp, ok := b.payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording
-		// (internal/tessellation.RestateLoft's own doc comment owns why).
+		// (internal/loftmesh.RestateLoft's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
