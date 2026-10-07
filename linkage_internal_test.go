@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -414,4 +417,221 @@ func TestLinkageConstantPlacementIsReused(t *testing.T) {
 	require.Same(t, held, run.constPlaced[0])
 	_, cached := run.cache.entries[held.body]
 	require.True(t, cached, `the kept placement's carriers stay cached between poses`)
+}
+
+// linkageRunOf is VerifyLinkage's own run state for a tree linkage under a
+// drive, before any pose.
+func linkageRunOf(t *testing.T, doc *Document, l *Linkage, drive Drive, opts ...MotionOption) *motionRun {
+	t.Helper()
+	spec, err := l.resolveDrive(drive)
+	require.NoError(t, err)
+	frames, ok := linkageFrames(spec)
+	require.True(t, ok)
+	bounds, ok := readLinkBounds(spec, frames)
+	require.True(t, ok)
+	cfg, err := resolveMotionOptions(opts, motionSpec{motionDomain: fractionDomain()})
+	require.NoError(t, err)
+	return newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
+}
+
+// TestLinkageSecondDerivativeBound pins B_ij of docs/linkage-check-design.md
+// §5.8 on linkageChain — revolute, prismatic, revolute, prismatic — against
+// central second differences of every rest-box corner's world position, read
+// off Linkage.Configuration at a grid of configurations: every difference
+// quotient of every coordinate, for every link and every pair of joints on
+// its path, sits at or below its B_ij. A revolute ancestor turns the deeper
+// joint's velocity, so the mixed derivatives under joints 1 and 3 are
+// nonzero; a prismatic ancestor turns nothing.
+//
+// Leg seen to fail when deleted: the rule's two halves exchanged — zero under
+// a revolute ancestor, w_j under a prismatic one (the difference quotients
+// under joint 1 exceed a zero bound).
+func TestLinkageSecondDerivativeBound(t *testing.T) {
+	t.Parallel()
+	spec, _, bounds := linkageChain(t)
+	l := spec.linkage
+	const step = 1e-3
+	value := func(k int, q float64) units.Value {
+		if spec.joints[k].revolute {
+			return units.Radians(q)
+		}
+		return units.Millimeters(q)
+	}
+	corner := func(q [4]float64, k int, c r3.Vec) r3.Vec {
+		values := make([]units.Value, 4)
+		for n := range values {
+			values[n] = value(n, q[n])
+		}
+		conf, err := l.Configuration(values)
+		require.NoError(t, err)
+		return conf.Poses[k].Apply(c)
+	}
+	checked := 0
+	for _, q1 := range []float64{0.1, 0.7, 1.4} {
+		for _, q2 := range []float64{1, 9} {
+			for _, q3 := range []float64{0.1, 0.7} {
+				q := [4]float64{q1, q2, q3, -3}
+				for k := range spec.joints {
+					box := spec.joints[k].link.bodies[0].bounds
+					for _, c := range []r3.Vec{box.Max, box.Min, r3.NewVec(box.Max.X, box.Min.Y, box.Max.Z)} {
+						for m := 0; m <= k; m++ {
+							for n := m; n <= k; n++ {
+								at := func(dm, dn float64) r3.Vec {
+									p := q
+									p[m] += dm
+									p[n] += dn
+									return corner(p, k, c)
+								}
+								var fd r3.Vec
+								if m == n {
+									fd = at(step, 0).Add(at(-step, 0)).Sub(corner(q, k, c).Scale(2)).Scale(1 / (step * step))
+								} else {
+									fd = at(step, step).Sub(at(step, -step)).Sub(at(-step, step)).Add(at(-step, -step)).Scale(1 / (4 * step * step))
+								}
+								bound := 0.0
+								if w := secondDerivativeBound(bounds[k], m, n); w != nil {
+									bound = linkRatFloat(t, w)
+								}
+								for _, d := range []float64{fd.X, fd.Y, fd.Z} {
+									require.LessOrEqual(t, math.Abs(d), bound+1e-4, "link %d, joints %d and %d at %v", k+1, m+1, n+1, q)
+								}
+								checked++
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	require.NotZero(t, checked)
+	require.Nil(t, secondDerivativeBound(bounds[3], 1, 2), `a prismatic ancestor turns nothing`)
+	require.Zero(t, secondDerivativeBound(bounds[3], 0, 1).Cmp(big.NewRat(1, 1)), `a revolute ancestor turns a slide's unit velocity`)
+	require.Zero(t, secondDerivativeBound(bounds[3], 0, 2).Cmp(bounds[3].rho[2]), `a revolute ancestor turns a revolute's velocity, at most ρ_jk long`)
+}
+
+// TestLinkageCornerVelocity pins v_{i,c} of docs/linkage-check-design.md
+// §5.8 on scene 1's forearm at s = 1/3, the shoulder at 30° and the elbow at
+// −30°: the forearm keeps its zero-pose orientation, so its corner
+// (96, 14, 22) sits at x = (48·cos 30° + 48, 48·sin 30° + 14, 22). Under the
+// shoulder, about Z through the origin, it moves at Z × x; under the elbow,
+// whose axis the shoulder has carried to (48·cos 30°, 48·sin 30°, 0), at
+// Z × (48, 14, 22) = (−14, 48, 0). Each enclosure is narrower than 1e-12.
+//
+// Leg seen to fail when deleted: the parent's pose in the elbow's axis (the
+// pivot stays at (48, 0, 0) and the velocity reads Z × (x − (48, 0, 0))).
+func TestLinkageCornerVelocity(t *testing.T) {
+	t.Parallel()
+	run, _, fore := foldingArmRun(t)
+	dr := run.drive.(*linkageDriver)
+	s := big.NewRat(1, 3)
+	params := []motionbound.MotionParam{jointParam(dr.spec.joints[0], s), jointParam(dr.spec.joints[1], s)}
+	lo, hi, ok := boxCornersExact(fore.bounds, new(big.Rat))
+	require.True(t, ok)
+	reading := readCorners(dr.spec, dr.frames, params, dr.bounds[1], 0, lo, hi)
+	c30, s30 := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
+	x := r3.NewVec(48*c30+48, 48*s30+14, 22)
+	requireEncloses := func(t *testing.T, want r3.Vec, got motionbound.IvVec) {
+		t.Helper()
+		for i, w := range []float64{want.X, want.Y, want.Z} {
+			lo, hi := linkRatFloat(t, got[i].Lo), linkRatFloat(t, got[i].Hi)
+			require.LessOrEqual(t, lo, w+1e-12)
+			require.GreaterOrEqual(t, hi, w-1e-12)
+			require.Less(t, hi-lo, 1e-12)
+		}
+	}
+	found := false
+	for c, pos := range reading.pos {
+		if linkRatFloat(t, pos[0].Lo) < 85 || linkRatFloat(t, pos[1].Lo) < 35 || linkRatFloat(t, pos[2].Lo) < 21 {
+			continue
+		}
+		found = true
+		requireEncloses(t, x, pos)
+		require.Len(t, reading.vel[c], 2)
+		requireEncloses(t, r3.NewVec(-x.Y, x.X, 0), reading.vel[c][0])
+		requireEncloses(t, r3.NewVec(-14, 48, 0), reading.vel[c][1])
+	}
+	require.True(t, found, `the corner (96, 14, 22) is read`)
+}
+
+// TestLinkageProjectionBoundHandSum pins L_n of docs/linkage-check-design.md
+// §5.8 on scene 13's pendulum over its first interval at
+// WithResolution(1/16), θ ∈ [0, π/32] (π at its upper enclosure in the
+// span). The wall's face y = 20 is β along +Y. From θ = 0 the block's
+// highest corners sit at y = −40 and move at |v_y| = |x| = 5 per radian, so
+// L_{+Y} = 20 − (−40 + 5·h) − ½·ρ_11·h² with ρ_11 = √(50² + 5²); from θ = h
+// each corner (x, y) sits at x·sin h + y·cos h and moves at
+// |x·cos h − y·sin h|. The bound is the larger of the two ends' readings;
+// every other direction separates nothing, and here θ = 0's reading is the
+// larger.
+//
+// Legs seen to fail when deleted: the remainder, and the first-order term.
+func TestLinkageProjectionBoundHandSum(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	block := internalBoxBody(t, doc, -5, -50, 5, -40, 10)
+	internalBoxBodyAtZ(t, doc, -100, 20, 100, 40, -10, 30)
+	l := NewLinkage()
+	swing, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{block})
+	require.NoError(t, err)
+	run := linkageRunOf(t, doc, l, Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}}, WithResolution(units.Scalar(1.0/16)))
+	dr := run.drive.(*linkageDriver)
+	fa, fb := new(big.Rat), big.NewRat(1, 16)
+	a, err := run.evaluatePose(fa, run.dom.label(fa))
+	require.NoError(t, err)
+	b, err := run.evaluatePose(fb, run.dom.label(fb))
+	require.NoError(t, err)
+	got := dr.projection(0, 0, a, b)
+	require.NotNil(t, got)
+
+	h := linkRatFloat(t, jointSpan(dr.spec.joints[0], fa, fb))
+	require.InDelta(t, math.Pi/32, h, 1e-15)
+	rho := math.Sqrt(50*50 + 5*5)
+	require.InDelta(t, rho, linkRatFloat(t, dr.bounds[0].rho[0]), 1e-12)
+	rem := rho * h * h / 2
+	fromA := 20 - (-40 + 5*h) - rem
+	reach := math.Inf(-1)
+	for _, c := range [][2]float64{{-5, -50}, {5, -50}, {-5, -40}, {5, -40}} {
+		y := c[0]*math.Sin(h) + c[1]*math.Cos(h)
+		v := math.Abs(c[0]*math.Cos(h) - c[1]*math.Sin(h))
+		reach = math.Max(reach, y+v*h)
+	}
+	fromB := 20 - reach - rem
+	require.InDelta(t, math.Max(fromA, fromB), linkRatFloat(t, got), 1e-9)
+	require.Greater(t, fromA, fromB, `the near end's reading is the larger here`)
+}
+
+// TestLinkageProjectionLeavesTheDiscToTheTravelBound: a disc of radius 5
+// spinning a quarter turn about its own axis beside a wall 7 mm away keeps
+// its gap, but its box corner sweeps a circle of radius 5·√2, so the
+// projection bound sits up to (√2 − 1)·5 below the gap and the travel bound
+// is the larger on every interval. Every interval's published bound is the
+// travel bound, bit for bit, and the run evaluates the 513 poses the travel
+// bound alone evaluates.
+//
+// Leg seen to fail when deleted: the larger of the two bounds (taking the
+// projection bound alone, every interval reads it).
+func TestLinkageProjectionLeavesTheDiscToTheTravelBound(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	disc := internalDiscBody(t, doc, 5, 10)
+	internalBoxBodyAtZ(t, doc, 12, -20, 22, 20, -5, 20)
+	l := NewLinkage()
+	spin, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*Body{disc})
+	require.NoError(t, err)
+	run := linkageRunOf(t, doc, l, Drive{{Link: spin, From: units.Degrees(0), To: units.Degrees(90)}})
+	run.cfg.readingP = &motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, linkageReadingFloor)}
+	poses, spans, err := run.refine()
+	require.NoError(t, err)
+	require.Len(t, poses, 513)
+	dr := run.drive.(*linkageDriver)
+	for k, span := range spans {
+		a, b := poses[k], poses[k+1]
+		require.Equal(t, IntervalClear, span.outcome)
+		pa, pb := a.pairs[0][0], b.pairs[0][0]
+		travel := new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
+		travel.Sub(travel, dr.travel(0, 0, a.param, b.param))
+		travel.Quo(travel, big.NewRat(2, 1))
+		require.Equal(t, proofbound.RatFloatDown(travel), span.clearance.Value.Base(), "interval %d", k)
+		require.Negative(t, dr.projection(0, 0, a, b).Cmp(travel), "interval %d", k)
+	}
 }

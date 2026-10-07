@@ -374,42 +374,72 @@ func TestLinkageConstructorRefusals(t *testing.T) {
 // Revolute, on motion §9's fixtures 1 (a wall the arm hits), 2 (a wall it
 // clears by 10 mm) and 4 (a stop it rests on). The one-link τ is
 // ρ_{11}·|Δq_1|, which is MoverTravel's value, and the ideal pose is one
-// MotionFrame.At, so the two paths read the same bounds and evaluate the same
-// poses at s = θ/90°.
+// MotionFrame.At, so at the endpoints alone, where no bound certifies the one
+// interval, the two reports agree in every reading. Bisected, VerifyMotion
+// keeps the travel bound alone while VerifyLinkage takes the larger of it and
+// the projection bound (docs/linkage-check-design.md §5.8), so the linkage
+// certifies some intervals sooner and evaluates fewer poses: the same
+// collisions, the same Status but on fixture 2, where the linkage's reading
+// meets the gate at the floor VerifyMotion's misses, both readings enclosing
+// 10 mm, and every IntervalClear interval's Clearance at or below the arm's
+// closed-form gap at its ends — its corner (48, 14) at y = 48·sin θ + 14·cos θ
+// below the wall's face, or its corner (0, −14) 14·(1 − cos θ) above the
+// stop's.
 //
 // Leg seen to fail when deleted: the link's own revolute term ρ_{kk}·|Δq_k|
 // in τ (fixture 2's swing certifies at the endpoints, so the interval
-// outcomes and pose counts part from VerifyMotion's).
+// outcomes part from VerifyMotion's).
 func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 	t.Parallel()
-	// VerifyMotion's default floor is 90°/1024 for verdict and reading alike;
-	// the linkage states its 1/1024 so its reading stops there too (§3).
-	statedDefault := []decad.MotionOption{decad.WithResolution(units.Scalar(1.0 / 1024))}
-	cases := []struct {
-		name       string
-		static     func(t *testing.T, doc *decad.Document)
+	corner := func(face float64) func(th float64) float64 {
+		return func(th float64) float64 { return face - 48*math.Sin(th) - 14*math.Cos(th) }
+	}
+	fixtures := []struct {
+		name   string
+		static func(t *testing.T, doc *decad.Document)
+		gap    func(th float64) float64
+		// the floor each check is bisected to: VerifyMotion's default of
+		// 90°/1024 for fixtures 2 and 4, for one floor serves its verdict
+		// and reading alike, which the linkage states as 1/1024 so its
+		// reading stops there too (§3)
 		motionRes  []decad.MotionOption
-		linkageRes []decad.MotionOption
+		linkageRes decad.MotionOption
 	}{
 		{"a wall the arm hits", func(t *testing.T, doc *decad.Document) { boxBodyAtZ(t, doc, -100, 40, 100, 60, -10, 40) },
-			[]decad.MotionOption{decad.WithResolution(units.Degrees(0.25))}, []decad.MotionOption{decad.WithResolution(units.Scalar(0.25 / 90))}},
-		{"a wall the arm clears", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, -100, 60, 100, 80, 10) }, nil, statedDefault},
-		{"a stop the arm rests on", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, 0, -24, 48, -14, 10) }, nil, statedDefault},
+			corner(40), []decad.MotionOption{decad.WithResolution(units.Degrees(0.25))}, decad.WithResolution(units.Scalar(0.25 / 90))},
+		{"a wall the arm clears", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, -100, 60, 100, 80, 10) },
+			corner(60), nil, decad.WithResolution(units.Scalar(1.0 / 1024))},
+		{"a stop the arm rests on", func(t *testing.T, doc *decad.Document) { boxBody(t, doc, 0, -24, 48, -14, 10) },
+			func(th float64) float64 { return 14 * (1 - math.Cos(th)) },
+			nil, decad.WithResolution(units.Scalar(1.0 / 1024))},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	both := func(t *testing.T, static func(t *testing.T, doc *decad.Document), motionRes []decad.MotionOption, linkageRes decad.MotionOption) (*decad.MotionReport, *decad.LinkageReport) {
+		t.Helper()
+		doc := decad.New()
+		arm := motionArm(t, doc)
+		static(t, doc)
+		motion := verifyMotion(t, doc, []*decad.Body{arm}, armSwing(), motionRes...)
+		l := decad.NewLinkage()
+		link, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*decad.Body{arm})
+		require.NoError(t, err)
+		drive := decad.Drive{{Link: link, From: units.Degrees(0), To: units.Degrees(90)}}
+		return motion, verifyLinkage(t, doc, l, drive, linkageRes)
+	}
+	requireSameCollisions := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport) {
+		t.Helper()
+		require.Len(t, linkage.Collisions, len(motion.Collisions))
+		for k, c := range motion.Collisions {
+			got := linkage.Collisions[k]
+			require.InDelta(t, c.At.Mag(), 90*got.At.Mag(), 1e-9)
+			require.Same(t, c.Moving, got.A)
+			require.Same(t, c.Static, got.B)
+			require.InDelta(t, c.Volume.Value.Mag(), got.Volume.Value.Mag(), 1e-9)
+		}
+	}
+	for _, tc := range fixtures {
+		t.Run(tc.name+" at the endpoints alone", func(t *testing.T) {
 			t.Parallel()
-			doc := decad.New()
-			arm := motionArm(t, doc)
-			tc.static(t, doc)
-			motion := verifyMotion(t, doc, []*decad.Body{arm}, armSwing(), tc.motionRes...)
-
-			l := decad.NewLinkage()
-			link, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*decad.Body{arm})
-			require.NoError(t, err)
-			drive := decad.Drive{{Link: link, From: units.Degrees(0), To: units.Degrees(90)}}
-			linkage := verifyLinkage(t, doc, l, drive, tc.linkageRes...)
-
+			motion, linkage := both(t, tc.static, []decad.MotionOption{endpointsOnly(armSwing())}, decad.WithResolution(units.Scalar(1)))
 			require.Equal(t, motion.Status, linkage.Status)
 			require.Equal(t, motion.Against, linkage.Against)
 			require.Len(t, linkage.Poses, len(motion.Poses))
@@ -425,24 +455,42 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 				require.NotNil(t, got.Clearance)
 				require.InDelta(t, iv.Clearance.Value.Mag(), got.Clearance.Value.Mag(), 1e-9)
 			}
-			require.Len(t, linkage.Collisions, len(motion.Collisions))
-			for k, c := range motion.Collisions {
-				got := linkage.Collisions[k]
-				require.InDelta(t, c.At.Mag(), 90*got.At.Mag(), 1e-9)
-				require.Same(t, c.Moving, got.A)
-				require.Same(t, c.Static, got.B)
-				require.InDelta(t, c.Volume.Value.Mag(), got.Volume.Value.Mag(), 1e-9)
+			requireSameCollisions(t, motion, linkage)
+			for k, pose := range motion.Poses {
+				linkPose := linkage.Poses[k]
+				require.Len(t, linkPose.Clearances, len(pose.Clearances))
+				for n, row := range pose.Clearances {
+					require.Equal(t, row.Gap, linkPose.Clearances[n].Gap, `both paths place the arm by the same pose`)
+				}
+			}
+		})
+		t.Run(tc.name+" bisected", func(t *testing.T) {
+			t.Parallel()
+			motion, linkage := both(t, tc.static, tc.motionRes, tc.linkageRes)
+			requireSameCollisions(t, motion, linkage)
+			require.LessOrEqual(t, len(linkage.Poses), len(motion.Poses))
+			for _, iv := range linkage.Intervals {
+				if iv.Outcome != decad.IntervalClear {
+					continue
+				}
+				for _, s := range []float64{iv.From.Mag(), iv.To.Mag()} {
+					require.LessOrEqual(t, iv.Clearance.Value.Mag(), tc.gap(s*math.Pi/2)+1e-9, "[%v, %v]", iv.From.Mag(), iv.To.Mag())
+				}
 			}
 			if motion.Clearance == nil {
+				require.Equal(t, motion.Status, linkage.Status)
 				require.Nil(t, linkage.Clearance)
-			} else {
-				require.NotNil(t, linkage.Clearance)
-				require.InDelta(t, motion.Clearance.Value.Mag(), linkage.Clearance.Value.Mag(), 1e-9)
+				return
 			}
-			first, linkFirst := motion.Poses[0], linkage.Poses[0]
-			require.Len(t, linkFirst.Clearances, len(first.Clearances))
-			for k, row := range first.Clearances {
-				require.Equal(t, row.Gap, linkFirst.Clearances[k].Gap, `the zero pose carries no placement rounding on either path`)
+			// Fixture 2: the travel bound's reading misses the gate at the
+			// floor, the projection bound's meets it.
+			require.Equal(t, decad.Suspect, motion.Status)
+			require.Equal(t, decad.Sound, linkage.Status)
+			for _, reading := range []*decad.ScalarReading{motion.Clearance, linkage.Clearance} {
+				require.NotNil(t, reading)
+				require.InDelta(t, 10, reading.Value.Mag(), 0.1)
+				require.LessOrEqual(t, reading.Value.Mag()-reading.Bound.Mag(), 10.0)
+				require.GreaterOrEqual(t, reading.Value.Mag()+reading.Bound.Mag(), 10.0)
 			}
 		})
 	}

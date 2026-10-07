@@ -1188,7 +1188,7 @@
 4	0.16	TestVerifyIsNonMutating
 4	5.36	TestVerifyJointBoxLoopCancellation
 4	2.75	TestVerifyJointBoxNonMutationAndDeterminism
-4	1.25	TestVerifyLinkageAgreesWithVerifyMotion
+4	0.99	TestVerifyLinkageAgreesWithVerifyMotion
 4	0.68	TestVerifyLinkageCancellation
 4	16.61	TestVerifyLinkageLoopCrankRocker
 4	11.39	TestVerifyLinkageLoopTiltedSlider
@@ -1361,4 +1361,7 @@
 5	0.01	TestVertexPlacedRevolveBoundEnclosesDisplacement
 5	0.01	TestWallDraftAllowanceBoundary
 5	0.01	TestWallSectorTooTightForItsFlats
-1	5.55	TestVerifyLinkageReadingFloor
+1	4.40	TestVerifyLinkageReadingFloor
+1	0.68	TestVerifyLinkageThreeJointFlatMinimum
+1	0.33	TestVerifyLinkagePendulum
+2	0.22	TestVerifyLinkageTwoArms
