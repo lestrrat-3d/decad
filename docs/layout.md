@@ -43,7 +43,7 @@ the rules leave to the byte budget.
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
-| `docs/linkage-check-design.md` | `Document.VerifyLinkage`: links, joints, drives, joint contacts, the chain travel bound. |
+| `docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`: links, joints, drives, boxes, contacts, the chain travel bound. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
@@ -199,6 +199,7 @@ the rules leave to the byte budget.
 | `motion.go` / `motion_verify.go` | `Motion`, `MotionReport`, and the engine shared with `VerifyLinkage`. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
 | `linkage.go` / `linkage_verify.go` | `Document.VerifyLinkage`. See `docs/linkage-check-design.md`. |
+| `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
 | `linkage_bound.go` | The chain travel bound. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |

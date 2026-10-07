@@ -486,19 +486,7 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 	if l == nil {
 		return nil, fmt.Errorf(`%w: a nil linkage has no link to move`, ErrDegenerate)
 	}
-	spec := &linkageSpec{linkage: l, joints: make([]linkJoint, len(l.links))}
-	for k, link := range l.links {
-		jt := linkJoint{link: link, parent: link.parent.index}
-		switch j := link.joint.(type) {
-		case RevoluteJoint:
-			jt.revolute, jt.center, jt.axis, jt.limits = true, j.Center, j.Axis, j.Limits
-			jt.holdAtZero(units.Angle, units.Radian)
-		case PrismaticJoint:
-			jt.axis, jt.limits = j.Dir, j.Limits
-			jt.holdAtZero(units.Length, units.Millimeter)
-		}
-		spec.joints[k] = jt
-	}
+	spec := l.restSpec()
 	segments := 0
 	for _, sw := range d {
 		link := sw.Link
@@ -559,6 +547,25 @@ func (l *Linkage) resolveDrive(d Drive) (*linkageSpec, error) {
 		}
 	}
 	return spec, nil
+}
+
+// restSpec reads l into one joint per link, every joint holding 0 in its
+// Kind's base unit: the schedule of a joint no drive or box lists.
+func (l *Linkage) restSpec() *linkageSpec {
+	spec := &linkageSpec{linkage: l, joints: make([]linkJoint, len(l.links))}
+	for k, link := range l.links {
+		jt := linkJoint{link: link, parent: link.parent.index}
+		switch j := link.joint.(type) {
+		case RevoluteJoint:
+			jt.revolute, jt.center, jt.axis, jt.limits = true, j.Center, j.Axis, j.Limits
+			jt.holdAtZero(units.Angle, units.Radian)
+		case PrismaticJoint:
+			jt.axis, jt.limits = j.Dir, j.Limits
+			jt.holdAtZero(units.Length, units.Millimeter)
+		}
+		spec.joints[k] = jt
+	}
+	return spec
 }
 
 // holdAtZero sets the schedule of a joint the drive does not list.
@@ -632,24 +639,38 @@ func (jt linkJoint) pose(q units.Value) (r3.Transform, error) {
 	return prismaticPose(jt.axis, q)
 }
 
-// posesAt is every link's joint value and world pose at the exact fraction f:
-// Pose_k = J_k(q_k).Then(Pose_parent), a link under the ground taking its
-// joint's motion alone.
+// posesAt is every link's joint value and world pose at the exact fraction f
+// of the drive: each joint's label there, posed by posesOf.
 func (s *linkageSpec) posesAt(f *big.Rat) ([]units.Value, []r3.Transform, error) {
 	values := make([]units.Value, len(s.joints))
-	poses := make([]r3.Transform, len(s.joints))
 	for k, jt := range s.joints {
 		values[k] = jt.label(f)
+	}
+	poses, err := s.posesOf(values)
+	if err != nil {
+		return nil, nil, err
+	}
+	return values, poses, nil
+}
+
+// posesOf is every link's world pose at the joint values given, one per link
+// in Linkage.Links() order: Pose_k = J_k(q_k).Then(Pose_parent), a link under
+// the ground taking its joint's motion alone. It is the one place a linkage
+// pose is built: Linkage.PoseAt, Linkage.Configuration, VerifyLinkage and
+// VerifyJointBox all call it.
+func (s *linkageSpec) posesOf(values []units.Value) ([]r3.Transform, error) {
+	poses := make([]r3.Transform, len(s.joints))
+	for k, jt := range s.joints {
 		pose, err := jt.pose(values[k])
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if jt.parent >= 0 {
 			if pose, err = pose.Then(poses[jt.parent]); err != nil {
-				return nil, nil, fmt.Errorf(`%w: composing a link's pose onto its parent's failed: %w`, ErrNotFinite, err)
+				return nil, fmt.Errorf(`%w: composing a link's pose onto its parent's failed: %w`, ErrNotFinite, err)
 			}
 		}
 		poses[k] = pose
 	}
-	return values, poses, nil
+	return poses, nil
 }

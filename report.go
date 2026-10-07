@@ -292,6 +292,12 @@ const (
 	// falsifies it. At the interval's From, Reading ReadingGap, Observed the
 	// interval's lower bound, Required the minimum. Contributes Suspect.
 	DiagMotionUndecidedClearance
+	// DiagJointBoxBudgetExhausted — WithCellBudget stopped a joint-box split
+	// the resolution would have allowed (docs/linkage-check-design.md §14.2).
+	// Raised at most once per report; Pair, Body and Cell nil, Reading
+	// ReadingNone; Message names the budget and the cells it held.
+	// Contributes Suspect.
+	DiagJointBoxBudgetExhausted
 )
 
 // String renders the pinned lower-snake token — the identity a caller branches
@@ -349,6 +355,8 @@ func (c DiagnosticCode) String() string {
 		return "motion_undecided_interval"
 	case DiagMotionUndecidedClearance:
 		return "motion_undecided_clearance"
+	case DiagJointBoxBudgetExhausted:
+		return "joint_box_budget_exhausted"
 	default:
 		return fmt.Sprintf("diagnostic(%d)", int(c))
 	}
@@ -368,7 +376,9 @@ type DiagnosticPair struct{ A, B *Body }
 // undercut, or concave-radius refusal is distinguished without inspecting
 // Message text. At is the motion parameter a VerifyMotion finding concerns
 // (docs/motion-check-design.md §4.1); it is nil on every diagnostic Verify
-// emits and on every motion finding about the whole path.
+// emits and on every motion finding about the whole path. Cell is the joint
+// cell a VerifyJointBox finding concerns (docs/linkage-check-design.md §14.2);
+// it is nil on every diagnostic Verify, VerifyMotion and VerifyLinkage emit.
 type Diagnostic struct {
 	Code        DiagnosticCode  // the stable branch key
 	Status      Status          // the rung this reason contributes
@@ -381,6 +391,7 @@ type Diagnostic struct {
 	ObservedBox *Box            // a box reading (a Bounds); nil unless Reading == ReadingBounds
 	Required    *units.Value    // the threshold the reading was judged against; nil when the reason states none
 	At          *units.Value    // the motion parameter a VerifyMotion finding concerns; nil outside motion reports
+	Cell        *JointCell      // the joint cell a VerifyJointBox finding concerns; nil outside joint-box reports
 	Message     string          // human-readable; NEVER the branch key
 }
 

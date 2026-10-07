@@ -149,6 +149,8 @@
 0	0.01	TestVerifyClearancesMeasureBoxProvenPair
 0	0.04	TestVerifyComputedToFaceDiameterThreshold
 0	0.01	TestVerifyEffectiveRequestRecorded
+0	0.60	TestVerifyJointBoxBudget
+0	0.02	TestVerifyJointBoxErrors
 0	1.81	TestVerifyMotionBetweenRotationAgreesWithRevolute
 0	0.29	TestVerifyMotionBetweenTranslationAgreesWithPrismatic
 0	0.85	TestVerifyMotionCancellation
@@ -294,6 +296,8 @@
 1	0.01	TestVerifyCoincidentPairIsInterfering
 1	0.02	TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided
 1	1.86	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
+1	0.12	TestVerifyJointBoxCancellation
+1	0.03	TestVerifyJointBoxPoseDeviationIsCharged
 1	0.01	TestVerifyLinkageErrors
 1	0.19	TestVerifyLinkageNearMissBetweenSamples
 1	0.71	TestVerifyMitredSweepMeetingPrismArmIsNotSound
@@ -482,7 +486,9 @@
 2	0.00	TestImplicitExactlyOneStopSatisfiedAssertionRewritten
 2	0.00	TestImplicitExactlyOneStopSuccessfulManyRewritten
 2	0.00	TestImplicitExactlyOneStopUnassertedZeroRewritten
+2	0.00	TestJointBoxOptionSet
 2	0.00	TestLineRationalRoundingIsBounded
+2	0.01	TestLinkageConfiguration
 2	0.00	TestLinkageConstructorRefusals
 2	0.00	TestLinkageJointLimits
 2	0.01	TestLinkagePoseAt
@@ -1015,6 +1021,7 @@
 3	0.11	TestVerifyDiagnosticsProximityRefusalIsContact
 3	0.01	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	12.76	TestVerifyGearScaleOverArrangementCapStaysSuspect
+3	5.06	TestVerifyJointBoxCrane
 3	0.05	TestVerifyLinkageWaypointReach
 3	0.18	TestVerifyLinkageWaypoints
 3	0.60	TestVerifyMitredSweepUnderPrismArmIsDisjoint
@@ -1159,6 +1166,7 @@
 4	0.01	TestVerifyDiagnosticsBeyondTolerance
 4	0.03	TestVerifyFacetedMultiRegionPairStaysAsBefore
 4	0.16	TestVerifyIsNonMutating
+4	2.75	TestVerifyJointBoxNonMutationAndDeterminism
 4	1.25	TestVerifyLinkageAgreesWithVerifyMotion
 4	0.68	TestVerifyLinkageCancellation
 4	0.02	TestVerifyLinkagePoseDeviationIsCharged
@@ -1305,6 +1313,7 @@
 5	0.01	TestVerifyCapBlendChamferAreaVolumeCentroidAllPass
 5	0.02	TestVerifyClearanceCancellationInsideSturmChainBuild
 5	0.01	TestVerifyDiagnosticsUnsupportedPairStagedContact
+5	5.00	TestVerifyJointBoxOneJoint
 5	0.18	TestVerifyLinkageCrane
 5	0.21	TestVerifyLinkageFoldingArm
 5	0.06	TestVerifyLinkageHeldLinks

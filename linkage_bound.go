@@ -295,13 +295,21 @@ func ownJointBall(jt linkJoint, f motionbound.MotionFrame, lo, hi motionbound.Ra
 // revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan. below is the position on the path of the
 // first joint below L: 0 when L is the ground.
 func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *big.Rat {
+	return pathTravel(b, below, func(joint int) *big.Rat { return jointSpan(spec.joints[joint], sa, sb) })
+}
+
+// pathTravel is the telescoping sum of docs/linkage-check-design.md §5.2 over
+// the joints on b's path from position below on: ρ_{ik}·span(i) for a
+// revolute joint i and span(i) for a prismatic one, span(i) a proven upper
+// bound on joint i's travel. span MUST return a fresh rational.
+func pathTravel(b linkBound, below int, span func(joint int) *big.Rat) *big.Rat {
 	sum := new(big.Rat)
 	for n := below; n < len(b.path); n++ {
-		span := jointSpan(spec.joints[b.path[n]], sa, sb)
+		term := span(b.path[n])
 		if b.rho[n] != nil {
-			span.Mul(span, b.rho[n])
+			term.Mul(term, b.rho[n])
 		}
-		sum.Add(sum, span)
+		sum.Add(sum, term)
 	}
 	return sum
 }
@@ -322,9 +330,20 @@ func commonDepth(a, b []int) int {
 // joint value, then its parent's ideal pose, composed over rational
 // intervals; a link under the ground takes its joint's ideal motion alone.
 func idealPosesAt(spec *linkageSpec, frames []motionbound.MotionFrame, s *big.Rat) []motionbound.IdealPose {
+	params := make([]motionbound.MotionParam, len(spec.joints))
+	for k, jt := range spec.joints {
+		params[k] = jointParam(jt, s)
+	}
+	return idealPosesOf(spec, frames, params)
+}
+
+// idealPosesOf is every link's ideal pose at the exact joint values params,
+// one per link in Linkage.Links() order: its joint's ideal motion, then its
+// parent's ideal pose, composed over rational intervals.
+func idealPosesOf(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam) []motionbound.IdealPose {
 	ideals := make([]motionbound.IdealPose, len(spec.joints))
 	for k, jt := range spec.joints {
-		ideal := frames[k].At(jointParam(jt, s))
+		ideal := frames[k].At(params[k])
 		if jt.parent >= 0 {
 			ideal = ideal.Then(ideals[jt.parent])
 		}
