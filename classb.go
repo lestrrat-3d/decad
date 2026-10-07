@@ -89,10 +89,19 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 		if err != nil {
 			return nil, false, err
 		}
-		if !ok {
+		if ok {
+			return buildClassB(ctx, op, cp, reach)
+		}
+		// A Cut of a prism outside the through reach takes the crossing
+		// reach (classb_crossing.go).
+		x, isPrism := pair[0].payload.(prismPayload)
+		if op != meshbool.OpCut || !isPrism {
 			continue
 		}
-		return buildClassB(ctx, op, cp, reach)
+		bp, ok, err := tryClassBCrossingCut(ctx, x, cp)
+		if err != nil || ok {
+			return bp, ok, err
+		}
 	}
 	return nil, false, nil
 }

@@ -352,12 +352,18 @@ cross-drilled box, B1's cross slot, a blind cross hole, a pin rooted in a
 wall, S11's chain of cross holes and a cross hole under a blind pocket are in
 the reach.
 
-Every pair whose scenes would cut an edge takes the mesh path: B2's keyway, a
-hole breaking out of a face, a tool crossing a wall, two holes whose walls
-are not apart (B7). A cut is a fragment endpoint `sketch` computes in one
-scene, and two scenes that meet one crossing record it at different floats
-(§10), so §4.2's pairing by record identity does not close such a result
-until the keyed crossing table lands.
+A `Cut` of a prism target outside it takes the crossing reach
+(`classb_crossing.go`), whose scenes cut edges: B2's keyway, a hole breaking
+out of a face, a tool crossing a wall. It needs both operands hole-free, every level
+displacement zero, and a frame for faces normal to e that carries X's axes
+bit for bit. Every planar face of either operand is decided by its own
+scene (§5), every crossing a scene computes takes the one float §10's keyed
+crossing table records for it, every edge is split at every vertex on it,
+and each cylinder's pieces are read off the planar faces across its axis
+(§5). A trace with more than one chord, a crossing too close to tangency to
+key, a scene whose cells this reach does not cover, and a crossing result
+with a hole each send the pair to the mesh path; a face that fails modify
+§5's audit, or a result whose edges do not pair, refuses.
 
 ## 4. The `brepPayload`
 
@@ -389,6 +395,16 @@ face view of §B1 is this record, built on demand from either payload and
 never stored for them. A class-B result stores it. Every face's frame is
 stated in the payload's unplaced coordinates and `xform` places the whole
 body, as every payload does.
+
+A boolean's cut fragment records its carrier and a narrowed range, so two
+fragments meeting at a cut walk to it at two different floats. The face view
+joins each such junction first (`brepJoinLoop`): it takes the line's walked
+point, whose fixed coordinate the lerp keeps exact, else the lexicographically
+smaller one, so a loop and its reversal choose alike, and rewrites each
+segment between its two junctions, a circular fragment as an arc pinned
+there. Both walked points lie within the record's section displacement of
+the cut they denote plus their walk's rounding, so that rounding joins the
+payload's section displacement.
 
 Every face frame shares the first face's origin bit for bit and carries each
 of its axes, or that axis negated, bit for bit, keeping handedness. The map
@@ -516,14 +532,34 @@ N_Y`:
 | **Perpendicular-face scene** of a planar face F of X with `n_F ∥ N_Y` | F's plane | F's loops, plus Y's whole section re-expressed into F's frame (a 2D rigid map, the identity or a signed permutation under B4) | F's new loops: prism-boolean's clean-nesting match or crossing sub-case, verbatim |
 | **Parallel-face scene** of a planar face F of X with `n_F ⟂ N_Y` | F's plane | F's loops, plus one rectangle per chord of Y's section along F's trace line, `chord × [y0, y1]` along `N_Y` | F's new loops, by the same cell selection |
 
-The chords of the parallel-face scene come from Y's section scene: F's trace
-line is one of its lines, and the fragments `sketch` returns along it, with
-`TExact` certified cuts, are the chords. A circular wall of X survives as
-the arc fragments its section scene returns, each over the z-intervals that
-Y's perpendicular faces bound (below), and each such patch is inside the
-result when the cell of X's section it borders is selected and the level
-interval lies inside Y's own `[y0, y1]` — both facts the scene and the exact
-level comparison already decided.
+The chords of the parallel-face scene come from one private scene per trace:
+the other operand's section and F's trace line, run past its section box.
+The fragments of the line that bound a returned cell are the chords, with
+`TExact` certified cuts; a trace with more than one chord misses. A face of X
+keeps what lies outside Y (`Cut`'s selection), a face of Y what lies inside X
+(`Intersect`'s), through prism-boolean's clean-nesting match or crossing
+sub-case; a crossing result may close into several outer loops, each one
+face.
+
+Every junction a scene returns is replaced by one canonical vertex, keyed
+by the three carriers that meet there. Three planes meet at their exact
+levels. A cylinder and two planes meet at the keyed crossing of the cylinder
+with the plane along its axis (§10), at the other plane's exact level. Each
+segment is then rewritten between its two vertices — a line whole, a
+circular fragment as an arc pinned there about its recorded centre — and
+every face edge is split at every recorded vertex on it: a line at each
+vertex lying on both its face and its carrier, an arc at the angle of each
+vertex on its cylinder, read at the face's level. Two vertices of one
+cylinder closer than 1e-9 rad are not ordered and miss.
+
+A circular wall's pieces are read off the planar faces across its axis: X's
+caps and Y's walls along e for a cylinder of X, Y's caps and X's walls across
+d for a cylinder of Y. Each arc those faces carry on the cylinder is a
+fragment; the levels of the faces carrying one fragment, sorted along the
+axis, pair up into the ends of its pieces, since each piece of a closed
+surface ends on exactly one face at each end. An odd count misses. A piece of
+X keeps X's walk; a piece of Y runs reversed, since Y's material leaves the
+result.
 
 The 3D computations decad performs, each with its bound:
 
@@ -532,12 +568,13 @@ The 3D computations decad performs, each with its bound:
 | Perpendicularity, B3 | `==` on the dot product of stored world normals | a decision | misses take the mesh path |
 | Trace of a plane of Y in X's plane | two points of the plane through `Frame.ToLocal` into X's frame; under B4 every coordinate is a sum of signed stored floats, held exactly, and the trace is the line through them | zero under B4 (`rationalFloatError` of each coordinate is computed and must be `0`; a nonzero one refuses the pair in this increment) | — |
 | Level of a perpendicular face of Y along `N_X` | the exact rational `p · N_X` of a recorded point `p` of that face (`big.Rat` over stored floats); the held float is rounded once | `rationalFloatError` into that patch's `z0Delta`/`z1Delta`, prism-boolean G5's own mechanism | interval comparisons are exact over `big.Rat` |
-| Chord endpoints, surviving fragments | `sketch`'s certified cut parameters | `δ_cut` (prism-boolean §7's `cutDisplacementAllow`) | `TExact == false` refuses (`ErrUnrecordableProfile`); the seam's range falsifier rejects a disproven flag |
+| Chord endpoints, surviving fragments | `sketch`'s certified cut parameters | `δ_cut` (prism-boolean §7's `cutDisplacementAllow`) plus the walk's rounding | `TExact == false` refuses (`ErrUnrecordableProfile`); the seam's range falsifier rejects a disproven flag |
+| Canonical vertex | three planes: their exact levels; a cylinder: the keyed table's one float (§10) | zero for three planes; the key's `δ_cut`, charged to every face that uses it | a crossing whose free coordinate lies within twice its displacement of the cylinder's centre is too close to tangency to key and misses |
 | Re-expression of Y's section into F's frame | one rigid 2D map per coordinate | zero under B4; `δ_reexpress` otherwise (§8) | — |
 | Curved × curved separation, B7 | outward-rounded per-wall boxes compared exactly | a decision | refuses any overlap, including false overlaps |
 | Closure of each face loop | the seam's junction falsifier on every assembled loop | — | rejects a contradicted junction (RB9) |
 | Simplicity, orientation, nesting per face | modify §5's audit per planar face record | verification §4's floor | S7/S8/S9 refuse; none admits |
-| Edge pairing of the result | exact record identity (§4.2) | — | an unpaired edge refuses |
+| Edge pairing of the result | exact record identity of the canonical vertices (§4.2) | — | an unpaired edge refuses |
 
 No residual against a curve admits anything anywhere in this design; the
 only residual-shaped quantities — the contact floor and the chord bounds —
@@ -652,10 +689,16 @@ are relations, never literals.
   `Verify` `Sound` with no survey asked, undercut survey measured, STEP
   analytic path (every edge a line or full circle).
 - **B slot**: B1 builds with `Exact` 14000 mm³ and 10 planar faces.
-- **B keyway**: B2 passes B1–B8, misses the through-nesting reach (§3 B.3)
-  and takes the mesh path, with volume within the mesh bound of
-  `π·100·40 − 40·(2·√96 + 100·asin(0.2))` (the rod's strip |x| ≤ 2 above its
-  axis, over its 40 mm length).
+- **B keyway**: B2 builds through the crossing reach with 6 faces (two
+  notched caps, the key's floor and two walls, one cylinder piece), volume
+  within its bound of `π·100·40 − 40·(2·√96 + 100·asin(0.2))` (the rod's
+  strip |x| ≤ 2 above its axis, over its 40 mm length), the mesh's
+  occupied-volume proof covering the same closed form, and a volume bound
+  covering each keyed wall's band `2·δ·L·h`.
+- **B blind cross hole**: a drill ending at y = 11 inside the box builds with
+  8 faces and volume within its bound of `16000 − 9π·11`.
+- **B tool crossing a wall**: a 10×10 slot ending inside the box and crossing
+  its x = 40 wall removes `5·10·10.3` mm³ within its bound.
 - **B exact offset**: a drill on a frame whose origin is shifted in plane
   builds when the shifted centre is a float (0.5 + 19.5) and takes the mesh
   path when it rounds (0.1 + 19.9).
@@ -675,12 +718,14 @@ are relations, never literals.
   `8000 + 90π`, and `Intersect` `360π`, each with either operand first.
 - **B stacked target**: a cross hole under a blind pocket builds a brep of
   `4000 − 400 − 80π`.
-- **B with a hole breaking out**: a cross hole whose circle crosses the bar's
-  top face misses the through reach (the top face meets the tube) and takes
-  the mesh path today, its volume within the mesh bound of the closed form
-  (box minus the cylinder clipped by the top plane: circular-segment
-  integrals). With the crossing reach the top cap gains a chord notch and
-  the result builds analytically within the same closed form.
+- **B with a hole breaking out**: a through cross hole whose circle crosses
+  the box's top face: the perpendicular-face scenes report `Partial` edges,
+  the crossing sub-case builds, the top cap splits in two, volume within its
+  bound of `16000 − 20·(9π − 9·acos(2/3) + 2·√5)` (the disc below the top
+  face), with the same mesh and charge checks as the keyway.
+- **brep face view of a crossing-built prism**: a box less a corner bite,
+  built through prism-boolean's crossing sub-case, joins its fragments'
+  junctions and builds a brep within its bound of `8000 − 62.5π`.
 - **brep measurements**: a prism viewed as a brep reports volume, area,
   bounds and centroid value bit-identical to `prismPayload`'s for an
   all-line record whose readings are exact rationals rounded once, and
@@ -716,8 +761,8 @@ are relations, never literals.
 - **Class C's ellipse.** Recommendation: file the `sketch` ask only when a
   consumer needs an oblique hole; the whole-scene `TExact` gate makes it a
   larger upstream change than a carrier rule.
-- **Crossing vertices across scenes.** Two scenes that cut one carrier pair
-  record the crossing at different floats: a circle of radius 10 at the
+- **Crossing vertices across scenes (decided: a keyed table).** Two scenes
+  that cut one carrier pair record the crossing at different floats: a circle of radius 10 at the
   origin against the line u = 2 records `(2, 9.7979589711327115)` on the line
   and `(2.0000000000000013, 9.7979589711327115)` on the circle, and moving the
   line's ends to v = ±20 records `(2, 9.797958971132708)` on the line. §4.2's
@@ -726,8 +771,14 @@ are relations, never literals.
   and the side of the circle's centre it lies on, record one float per key
   for every face that meets it, and charge each face the cut displacement;
   or pre-split every carrier at the section scenes' crossings so the face
-  scenes cut nothing. Recommendation: the keyed crossing table, decided by
-  the designer before the crossing reach is built.
+  scenes cut nothing. Decision: the keyed table. A crossing of a cylinder
+  with a plane along its axis is keyed by the cylinder, the plane, and the
+  side of the cylinder's centre it lies on along the remaining axis; the
+  first scene to reach a key records its float and displacement, every later
+  one takes them, and every face that uses the key carries that
+  displacement. A recorded corner where a section's arc meets its line is
+  the key's float with displacement zero. A crossing too close to tangency to
+  decide its side misses to the mesh path; reject-only, it admits nothing.
 - **S8's sphere facet cap.** Recommendation: separate task; raising the cap
   or deriving the boolean's tolerance per operand is a mesh-path change
   outside this design.
@@ -753,9 +804,12 @@ Each PR ships code and tests; this document ships with PR 1.
    occupied-volume proof, placement, `Verify` validity and the tolerance
    gate; the prism round-trip tests.
 6. **Class B `Cut`.** B1–B8, the through-nesting reach (§3 B.3), result
-   assembly, S1/B1 fixtures, B2's mesh-path fixture, the exact offset and
-   the gate-miss fixtures. The crossing reach waits on §10's crossing
-   vertices.
+   assembly, S1/B1 fixtures, the exact offset and the gate-miss fixtures.
+6b. **Class B crossing reach.** §10's keyed crossing table, the per-face
+   scenes, vertex canonicalization and edge splitting, the cylinder pieces
+   (§5), the face view's junction join (§4.1); B2, the blind cross hole, the
+   hole breaking out and the tool crossing a wall, each with a closed-form
+   volume fixture.
 7. **Class B `Union`/`Intersect` and chaining.** The rooted boss (B4), a
    brep operand in both positions, the breaking-out hole, S11's chain.
 8. **brep consumers.** Undercut and minimum-radius surveys, the clearance
