@@ -124,7 +124,7 @@ the rules leave to the byte budget.
 | `segment_walk_adapters.go` | Adapts root walk callers to `internal/walkconvert/`. |
 | `prism_extent.go` | A finished prism's extent readings, reach along a direction and the containing box, each a bounded interval charging the frame, section and axial terms. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and `WithSurfaceResult` parsing, angular-extent resolution. Axis, build and extent readings: the other `revolve_*.go` files. |
-| `revolve_axis.go` | Resolves the axis into the sketch plane and decides what the profile may do around it: `axisLine2`, `axisFrame`, `wallKind`, and the contact gates. See `docs/evaluator-design.md` §6. |
+| `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
 | `revolve_extent.go` | A finished revolve's extent readings: each extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
 | `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact or certified-interval angles and their sweep/trig bounds. See `docs/evaluator-design.md` §6, `docs/sweep-design.md` §3. |
@@ -255,6 +255,7 @@ the rules leave to the byte budget.
 | `internal/record/` | Curve records, validation, fragment recording and join checks. See `docs/sketch-seam-design.md`. |
 | `internal/curveconvert/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/walkconvert/` | Bounded walks and coalescing over recorded segments. |
+| `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/momentvalidate/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
 | `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
