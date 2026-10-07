@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
+	"github.com/lestrrat-3d/decad/internal/linkagebound/loopchain"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -560,7 +561,7 @@ type loopScene struct {
 
 // zero is the driver range E0 asks: the floats outward from offset's ends.
 func (sc *loopScene) zero() (float64, float64) {
-	return proofbound.RatFloatDown(sc.offset.Lo), proofbound.RatFloatUp(sc.offset.Hi)
+	return loopchain.ZeroRange(sc.offset)
 }
 
 // scenePin is one loop pin's sketch point, its world position, and the
@@ -580,6 +581,16 @@ type loopAsk struct {
 	enc   *sketch.Enclosure
 	turns []int64
 	err   error
+}
+
+// boundScene passes the private sketch handles to the enclosure-chain proof.
+func (sc *loopScene) boundScene() loopchain.Scene {
+	return loopchain.Scene{
+		Sketch: sc.sk, Driver: sc.driver, Driven: sc.driven,
+		Angular: sc.angular, Anchored: sc.anchored, Signs: sc.signs,
+		Options: sc.opts, ZeroReadings: sc.e0Readings, Offset: sc.offset,
+		Side: sc.side, DriverLink: sc.driverLink, SlideDriver: sc.slideDriver,
+	}
 }
 
 // loopSpan is one dependent's readings over a verification interval's piece:
@@ -1159,67 +1170,17 @@ func (s *linkageSpec) prepare(ctx context.Context) error {
 
 // askZero asks E0 and runs the zero-pose falsifier on it.
 func (sc *loopScene) askZero(ctx context.Context) error {
-	lo, hi := sc.zero()
-	enc, err := sc.sk.Enclose(ctx, sc.driver, lo, hi, sc.opts...)
-	if err != nil {
-		if cerr := ctx.Err(); cerr != nil {
-			return cerr
-		}
-		if loopInvariant(err) {
-			return err
-		}
-		return fmt.Errorf(`%w: the loop cannot be enclosed at its zero pose: %w`, ErrUnsupported, err)
-	}
+	bound := sc.boundScene()
 	for _, pin := range sc.pins {
-		x, y, ok := enc.PointBox(pin.p)
-		if !ok || !intervalHolds(x, pin.u) || !intervalHolds(y, pin.v) {
-			return fmt.Errorf(`%w: the loop's zero-pose enclosure does not hold the document's pin at %v, in the loop's plane (%v, %v), so it does not describe the document's mechanism`,
-				ErrUnsupported, pin.at, pin.u.Lo.FloatString(6), pin.v.Lo.FloatString(6))
-		}
+		bound.Pins = append(bound.Pins, loopchain.Pin{Point: pin.p, At: pin.at, U: pin.u, V: pin.v})
 	}
-	sc.e0 = &loopAsk{scene: sc, enc: enc, turns: make([]int64, len(sc.driven))}
-	for _, d := range sc.driven {
-		r, ok := enc.Driven(d)
-		if !ok {
-			return fmt.Errorf(`%w: the loop's zero-pose enclosure reads no value for a dependent joint`, ErrUnsupported)
-		}
-		sc.e0Readings = append(sc.e0Readings, r)
+	ask, readings, err := loopchain.Zero(ctx, bound, ErrUnsupported)
+	if err != nil {
+		return err
 	}
-	if err := sc.anchorsAhead(enc); err != nil {
-		return fmt.Errorf(`%w: %w`, ErrUnsupported, err)
-	}
+	sc.e0 = &loopAsk{scene: sc, enc: ask.Enclosure, turns: ask.Turns}
+	sc.e0Readings = readings
 	return nil
-}
-
-// anchorsAhead refuses an enclosure that does not prove every anchored
-// slide's reading positive over its whole range
-// (docs/linkage-check-design.md §15.2): only then has the slide's rider kept
-// to its side of the anchor, so that the reading less its zero-pose reading is
-// the slide's displacement.
-func (sc *loopScene) anchorsAhead(enc *sketch.Enclosure) error {
-	for j, d := range sc.driven {
-		if !sc.anchored[j] {
-			continue
-		}
-		if r, ok := enc.Driven(d); !ok || !(r.Lo > 0) {
-			return fmt.Errorf(`%w: a slide's reading from its anchor is not proven positive`, sketch.ErrNotCertified)
-		}
-	}
-	return nil
-}
-
-// intervalHolds reports whether the outward-rounded iv holds every value of
-// the exact enclosure x. A pin whose enclosure is not proven inside its box
-// is refused, so the check can only refuse.
-func intervalHolds(iv sketch.Interval, x proofbound.RatInterval) bool {
-	lo, hi := proofarith.FloatRat(iv.Lo), proofarith.FloatRat(iv.Hi)
-	return lo != nil && hi != nil && lo.Cmp(x.Lo) <= 0 && x.Hi.Cmp(hi) <= 0
-}
-
-// loopInvariant reports a sketch refusal that is an invariant failure on a
-// scene decad built (docs/linkage-check-design.md §15.6).
-func loopInvariant(err error) bool {
-	return errors.Is(err, sketch.ErrUncertifiedConstraint) || errors.Is(err, sketch.ErrForeignHandle) || errors.Is(err, sketch.ErrNonFiniteGeometry)
 }
 
 // sceneValue is the driver's scene value at the exact fraction s, as the two
@@ -1255,135 +1216,35 @@ func (ld *loopDrive) enclose(ctx context.Context, key string, lo, hi float64, pr
 }
 
 func encloseFresh(ctx context.Context, lo, hi float64, pred *loopAsk) (*loopAsk, error) {
-	if pred.err != nil {
-		return &loopAsk{err: pred.err}, nil //nolint:nilerr // a predecessor's refusal is this ask's, recorded rather than returned
+	var bound loopchain.Scene
+	if pred.scene != nil {
+		bound = pred.scene.boundScene()
 	}
-	if lo > hi {
-		return &loopAsk{err: fmt.Errorf(`%w: the driver range [%v, %v] is empty`, sketch.ErrNotCertified, lo, hi)}, nil
-	}
-	sc := pred.scene
-	opts := append(slices.Clone(sc.opts), sketch.WithContinuation(pred.enc))
-	if budget, ok := sc.pieceBudget(lo, hi); ok {
-		opts = append(opts, sketch.WithMaxPieces(budget))
-	}
-	enc, err := sc.sk.Enclose(ctx, sc.driver, lo, hi, opts...)
+	ask, err := loopchain.Continue(ctx, bound, lo, hi, loopchain.Ask{
+		Enclosure: pred.enc, Turns: pred.turns, Err: pred.err,
+	})
 	if err != nil {
-		if cerr := ctx.Err(); cerr != nil {
-			return nil, cerr
-		}
-		if loopInvariant(err) {
-			return nil, err
-		}
-		var fold *sketch.FoldError
-		if errors.As(err, &fold) {
-			err = sc.foldRefusal(fold, err)
-		}
-		return &loopAsk{err: err}, nil
+		return nil, err
 	}
-	if err := sc.anchorsAhead(enc); err != nil {
-		return &loopAsk{err: err}, nil //nolint:nilerr // a refused ask is recorded, not returned
-	}
-	ask := &loopAsk{scene: sc, enc: enc, turns: make([]int64, len(sc.driven))}
-	prevPieces, pieces := pred.enc.Pieces(), enc.Pieces()
-	last, first := prevPieces[len(prevPieces)-1], pieces[0]
-	for j, d := range sc.driven {
-		l, okL := last.Driven(d)
-		f, okF := first.Driven(d)
-		if !okL || !okF {
-			return &loopAsk{err: fmt.Errorf(`%w: an enclosure reads no value for a dependent joint`, sketch.ErrNotCertified)}, nil
-		}
-		m := 0.0
-		if sc.angular[j] {
-			// A slide's reading is a length, never read modulo a turn; its
-			// continuation is still checked for overlap below.
-			m = math.Round(((l.Lo+l.Hi)/2 - (f.Lo+f.Hi)/2) / (2 * math.Pi))
-		}
-		if math.IsNaN(m) || math.Abs(m) > 1<<40 {
-			return &loopAsk{err: fmt.Errorf(`%w: a dependent reading cannot be continued`, sketch.ErrNotCertified)}, nil
-		}
-		shift := int64(m)
-		if !turnsOverlap(f, shift, l) {
-			return &loopAsk{err: fmt.Errorf(`%w: a dependent reading does not continue its predecessor's by any whole turn`, sketch.ErrNotCertified)}, nil
-		}
-		ask.turns[j] = pred.turns[j] + shift
-	}
-	return ask, nil
+	return &loopAsk{scene: pred.scene, enc: ask.Enclosure, turns: ask.Turns, err: ask.Err}, nil
 }
 
 // loopPiecesPerTurn is the piece budget an ask states per whole turn its
 // angular driver range spans (docs/linkage-check-design.md §15.9): sketch's
 // default budget, which one turn of the crank-rocker uses about 1400 of.
-const loopPiecesPerTurn = 4096
+const loopPiecesPerTurn = loopchain.PiecesPerTurn
 
 // pieceBudget is the piece budget for an ask over the scene values [lo, hi]:
 // loopPiecesPerTurn per whole turn the range spans, rounded up, for an
 // angular driver whose range spans more than one turn. ok is false where
 // sketch's default serves: a range within one turn, or a slide's.
 func (sc *loopScene) pieceBudget(lo, hi float64) (int, bool) {
-	turns := math.Ceil((hi - lo) / (2 * math.Pi))
-	if sc.slideDriver || !(turns > 1) {
-		return 0, false
-	}
-	return loopPiecesPerTurn * int(min(turns, 1<<20)), true
-}
-
-// loopFoldError is sketch's proof that the branch an ask followed turns back
-// (docs/linkage-check-design.md §15.6), restated in the driver's own terms:
-// the driver's value at the fold lies in [lo, hi], radians or millimetres,
-// and a drive from the zero pose that does not reverse never carries it past
-// that interval. It unwraps to sketch's *FoldError.
-type loopFoldError struct {
-	link   int
-	lo, hi *big.Rat
-	unit   string
-	cause  error
-}
-
-func (e *loopFoldError) Error() string {
-	limit := decimalUp(e.hi)
-	if e.hi.Sign() <= 0 {
-		limit = decimalDown(e.lo)
-	}
-	return fmt.Sprintf(`the mechanism folds: on the zero pose's branch link %d's joint turns back at a value in [%s, %s] %s, and driven from the zero pose without reversing it never passes %s %s`,
-		e.link, decimalDown(e.lo), decimalUp(e.hi), e.unit, limit, e.unit)
-}
-
-func (e *loopFoldError) Unwrap() error { return e.cause }
-
-// foldRefusal states sketch's fold in the driver's terms: the scene's driving
-// value is offset + |q|, so |q| at the fold lies in [Fold.Lo − offset.Hi,
-// Fold.Hi − offset.Lo], negated on the side where the driver's value is −|q|.
-func (sc *loopScene) foldRefusal(fold *sketch.FoldError, cause error) error {
-	lo, hi := proofarith.FloatRat(fold.Fold.Lo), proofarith.FloatRat(fold.Fold.Hi)
-	if lo == nil || hi == nil {
-		return cause
-	}
-	lo.Sub(lo, sc.offset.Hi)
-	hi.Sub(hi, sc.offset.Lo)
-	if sc.side == 1 {
-		lo, hi = hi.Neg(hi), lo.Neg(lo)
-	}
-	unit := "rad"
-	if sc.slideDriver {
-		unit = "mm"
-	}
-	return &loopFoldError{link: sc.driverLink, lo: lo, hi: hi, unit: unit, cause: cause}
+	return loopchain.PieceBudget(lo, hi, sc.slideDriver)
 }
 
 // decimalDown and decimalUp print a fold's bounds rounded outward.
 func decimalDown(x *big.Rat) string { return linkagebound.DecimalDown(x) }
 func decimalUp(x *big.Rat) string   { return linkagebound.DecimalUp(x) }
-
-// turnsOverlap reports whether f shifted by m whole turns can meet l: false
-// only when the two are proven disjoint for every π in its enclosure. A
-// continued enclosure's first reading and its predecessor's last enclose one
-// configuration, so a proven gap disproves the continuation.
-func turnsOverlap(f sketch.Interval, m int64, l sketch.Interval) bool {
-	turn := big.NewRat(m, 1)
-	shiftLo := motionbound.ParamLower(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Lo)})
-	shiftHi := motionbound.ParamUpper(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Hi)})
-	return shiftLo.Cmp(proofarith.FloatRat(l.Hi)) <= 0 && proofarith.FloatRat(l.Lo).Cmp(shiftHi) <= 0
-}
 
 // chainStart finds the canonical cell ending at s without passing the sub-segment's near end.
 func chainStart(sub loopSub, s *big.Rat) *big.Rat {
@@ -1497,17 +1358,9 @@ func (ld *loopDrive) chainCell(ctx context.Context, sub loopSub, a, b *big.Rat) 
 // reading, in the joint's own sense on that scene. The two ends share one
 // turn count.
 func (ld *loopDrive) value(ask *loopAsk, j int) (motionbound.MotionParam, motionbound.MotionParam) {
-	sc := ask.scene
-	iv, _ := ask.enc.Driven(sc.driven[j])
-	r0 := sc.e0Readings[j]
-	lo := new(big.Rat).Sub(proofarith.FloatRat(iv.Lo), proofarith.FloatRat(r0.Hi))
-	hi := new(big.Rat).Sub(proofarith.FloatRat(iv.Hi), proofarith.FloatRat(r0.Lo))
-	turn := big.NewRat(ask.turns[j], 1)
-	if sc.signs[j] < 0 {
-		lo, hi = hi.Neg(hi), lo.Neg(lo)
-		turn.Neg(turn)
-	}
-	return motionbound.MotionParam{Turn: turn, Base: lo}, motionbound.MotionParam{Turn: new(big.Rat).Set(turn), Base: hi}
+	return loopchain.Value(ask.scene.boundScene(), loopchain.Ask{
+		Enclosure: ask.enc, Turns: ask.turns,
+	}, j)
 }
 
 // valueInterval is a value range as one rational radian interval.
