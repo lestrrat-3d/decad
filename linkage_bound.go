@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
 )
 
 // This file proves the bounds docs/linkage-check-design.md §5 builds its
@@ -887,4 +888,77 @@ func projectionLower(a, b projectionSide) *big.Rat {
 		}
 	}
 	return best
+}
+
+// bodySymmetryAxis is the exact axis line of a body that every rotation
+// about that line carries onto itself (docs/linkage-check-design.md §5.2):
+// a point on it and its direction, as exact rationals. It admits only bodies
+// whose geometry is exact under a cardinal frame and a placement that
+// permutes and signs the coordinate axes — a solid prism whose profile is one
+// whole circle (sourceCylinderAtPose) and a solid full revolve whose axis the
+// record states exactly — and answers ok false for anything else.
+func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
+	toRat := func(v proofarith.DyV3) motionbound.RatVec {
+		return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
+	}
+	if rp, isRevolve := b.payload.(revolvePayload); isRevolve {
+		if !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full || rp.sectionDelta != 0 ||
+			!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) || !signedAxisTransform(rp.xform) ||
+			!proofbound.FiniteVec(rp.frame.Origin()) || !finiteMeasurementValues(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV) ||
+			rp.ax.aUBound != 0 || rp.ax.aVBound != 0 || rp.ax.dUBound != 0 || rp.ax.dVBound != 0 ||
+			(rp.ax.dU == 0 && rp.ax.dV == 0) {
+			return motionbound.RatVec{}, motionbound.RatVec{}, false
+		}
+		anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
+			dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
+			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
+		w := proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
+			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
+		far := exactContactTransform(rp.xform, proofarith.DvAdd(anchor, w))
+		anchor = exactContactTransform(rp.xform, anchor)
+		var d motionbound.RatVec
+		for i := range 3 {
+			d[i] = new(big.Rat).Sub(far[i].Rat(), anchor[i].Rat())
+		}
+		return toRat(anchor), d, true
+	}
+	cylinder, isCylinder := sourceCylinderAtPose(b, r3.Identity())
+	if !isCylinder {
+		return motionbound.RatVec{}, motionbound.RatVec{}, false
+	}
+	half := big.NewRat(1, 2)
+	for i := range 3 {
+		point[i] = new(big.Rat).Add(cylinder.box.lo[i].Rat(), cylinder.box.hi[i].Rat())
+		point[i].Mul(point[i], half)
+		dir[i] = new(big.Rat)
+	}
+	dir[cylinder.axis].SetInt64(1)
+	return point, dir, true
+}
+
+// symmetricAboutJoint reports whether body b, a body of link jt, does not
+// move under its own joint (docs/linkage-check-design.md §5.2): jt is a
+// revolute whose axis is exactly parallel to b's symmetry axis and whose
+// centre lies exactly on that axis line.
+func symmetricAboutJoint(b *Body, jt linkJoint, f motionbound.MotionFrame) bool {
+	if !jt.revolute {
+		return false
+	}
+	point, dir, ok := bodySymmetryAxis(b)
+	if !ok || !ratZero(ratCross(dir, f.Axis)) {
+		return false
+	}
+	var offset motionbound.RatVec
+	for i := range 3 {
+		offset[i] = new(big.Rat).Sub(f.Center[i], point[i])
+	}
+	return ratZero(ratCross(offset, dir))
+}
+
+// withoutOwnJoint is b's reading with its own joint, the last on its path,
+// dropped: the reading of a body that joint does not move. ρ_{ik} of every
+// joint above stays an upper bound, read over the link's whole rest box.
+func withoutOwnJoint(b linkBound) linkBound {
+	n := len(b.path) - 1
+	return linkBound{path: b.path[:n], rho: b.rho[:n], reach: b.reach}
 }
