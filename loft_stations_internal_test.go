@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is a10-plan.md Part 3 PR 5's own test file: loftCellStations (the
+// This file is a10-plan.md Part 3 PR 5's own test file: loftmesh.RecordCellStations (the
 // station generator), loftCircularCellStations (the ARC arm), the S15 station
 // cap and S16 one-sided collapsed-cell refusal, and loftPairings' own
 // station-chain and sectionDelta expansion. Every circular-arm test below
@@ -84,7 +85,7 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	t.Parallel()
 	w0 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 1, StartV: 2}
 	w1 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 3, StartV: 4}
-	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
+	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
@@ -241,7 +242,7 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 	require.Positive(t, endDelta,
 		"a station the record denotes off the float64 grid must carry a positive gap")
 
-	_, _, sagitta, matchedDelta, stationRound, err := loftCellStations(w, w, seg, seg, 123.0, nil, nil)
+	_, _, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w, w, seg, seg, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Zero(t, sagitta, "a straight chord IS its own recorded segment, trimmed or not")
 	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
@@ -736,7 +737,7 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	t.Parallel()
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, _, _, _, err := loftCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, _, err := loftmesh.RecordCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, freeform.ErrTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
@@ -1228,11 +1229,11 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	const target = 1e-3
 
 	segA, wA := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, sagA, _, _, err := loftCellStations(wA, wA, segA, segA, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
+	_, _, sagA, _, _, err := loftmesh.RecordCellStations(wA, wA, segA, segA, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
 	require.NoError(t, err)
 
 	segB, wB := arcFixture(t, 1, 0, math.Pi/6, 0, 1)
-	_, _, sagB, _, _, err := loftCellStations(wB, wB, segB, segB, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
+	_, _, sagB, _, _, err := loftmesh.RecordCellStations(wB, wB, segB, segB, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
 	require.NoError(t, err)
 
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
