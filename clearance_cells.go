@@ -29,145 +29,11 @@ import (
 // the trims — a lower tier holds its minimum; a candidate whose admission is
 // in doubt is kept for the lower bound and never counted toward exactness.
 
-// cellSink accumulates contributions and the undecidable findings.
-type cellSink struct {
-	contribs []clearance.GapContrib
-	// overlap is set only by a trim-admitted transversal boundary crossing.
-	// Such a crossing proves a shared open material neighborhood.
-	overlap bool
-	// unsure is set when a cell meets a question it cannot decide: an
-	// admitted-or-ambiguous carrier crossing, an uncertified contact, an
-	// equality where a branch demands strictness (§4: equality routes to §6,
-	// where only the coplanar plane pair is certified).
-	unsure bool
+// cellSink is the clearance kernel's contribution accumulator.
+type cellSink = clearance.CellSink
 
-	// prune enables §5's cell pruning (pruned, below). A zero-value sink
-	// never prunes, so a cell run on its own reports everything it finds.
-	prune bool
-	// margin is the length charged against a box distance before it may
-	// prune. The kernel passes its slack, 1e-9 × the pair's coordinate
-	// scale, which covers the few-ulp rounding of the float boxes, of the
-	// box distance and of the subtraction many times over.
-	margin float64
-	// best is the smallest finite contribution hi among contribs[:seen].
-	best float64
-	seen int
-	// skipped counts the cells pruned so far.
-	skipped int
-}
-
-// newPruningSink returns a sink that prunes against its own best upper
-// bound, charging margin against every box distance.
 func newPruningSink(margin float64) *cellSink {
-	return &cellSink{prune: true, margin: margin, best: math.Inf(1)}
-}
-
-// pruned reports whether a cell whose two features' boxes lie lb apart
-// cannot hold the pair's minimum, and counts it when so (§5). Every
-// contribution's hi bounds the true gap from above, and every point of the
-// cell's features lies at least lb − margin from the other's, so a cell with
-// lb − margin STRICTLY above the best hi in hand lies wholly beyond the
-// minimum. Equality never prunes: a feature pair at exactly the best upper
-// bound may hold the minimum itself. A non-finite lb never prunes.
-func (s *cellSink) pruned(lb float64) bool {
-	if !s.prune || proofbound.IsNonFinite(lb) {
-		return false
-	}
-	for _, c := range s.contribs[s.seen:] {
-		if c.Hi < s.best {
-			s.best = c.Hi
-		}
-	}
-	s.seen = len(s.contribs)
-	if lb-s.margin <= s.best {
-		return false
-	}
-	s.skipped++
-	return true
-}
-
-// interval folds the contributions into the held-candidate gap interval
-// [lo, hi] (§1): hi is the least upper bound, lo the least lower bound below
-// it, and exact holds only for a closed-form winner at hi with every rival's
-// lo at or above it. ok is false when no contribution carries a finite hi.
-func (s *cellSink) interval() (float64, float64, bool, bool) {
-	hi := math.Inf(1)
-	for _, c := range s.contribs {
-		if c.Hi < hi {
-			hi = c.Hi
-		}
-	}
-	if math.IsInf(hi, 1) {
-		return 0, 0, false, false
-	}
-	lo := hi
-	for _, c := range s.contribs {
-		if c.Lo < lo {
-			lo = c.Lo
-		}
-	}
-	exact := false
-	for _, c := range s.contribs {
-		if c.Exact && c.Lo == hi && c.Hi == hi {
-			exact = true
-		}
-	}
-	return lo, hi, exact && lo == hi, true
-}
-
-// crossing records a carrier crossing after trim admission: admitted proves
-// overlap, rejected proves absence, and a boundary-straddling admission stays
-// undecided.
-func (s *cellSink) crossing(admit int) {
-	switch admit {
-	case 1:
-		s.overlap = true
-	case 0:
-		s.unsure = true
-	}
-}
-
-// candidate folds an admission state into a contribution: rejected feet are
-// discarded (a lower tier holds the minimum), a straddle keeps only the
-// lower bound, and a near-zero value that is not cleanly rejected is a
-// possible contact — undecided.
-//
-//nolint:unparam // Keep witness arguments while preserving every caller's admission and evaluation path.
-func (s *cellSink) candidate(k *pairKernel, admit int, lo, hi float64, exact bool, pa, pb r3.Vec) {
-	if admit == -1 {
-		return
-	}
-	if lo <= k.tol {
-		s.unsure = true
-		return
-	}
-	if admit == 0 {
-		s.contribs = append(s.contribs, clearance.GapContrib{Lo: lo, Hi: math.Inf(1)})
-		return
-	}
-	s.contribs = append(s.contribs, clearance.GapContrib{Lo: lo, Hi: hi, Exact: exact})
-}
-
-// loOnly contributes a bare proven lower bound.
-func (s *cellSink) loOnly(lo float64) {
-	s.contribs = append(s.contribs, clearance.GapContrib{Lo: math.Max(0, lo), Hi: math.Inf(1)})
-}
-
-// coarse contributes a conservative enclosure for a pair no shipped cell can
-// solve: the boxes' distance below, the closest admitted witness pair above
-// (§5 — enclosure distance never exceeds true distance, a witness is always
-// an upper bound).
-func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
-	lo := clearance.ClrBoxDist(boxA, boxB)
-	hi := math.Inf(1)
-	for _, wa := range witA {
-		for _, wb := range witB {
-			if d := wa.Sub(wb).Len(); d < hi {
-				hi = d
-			}
-		}
-	}
-	s.contribs = append(s.contribs, clearance.GapContrib{Lo: math.Max(0, lo), Hi: hi})
+	return clearance.NewPruningSink(margin)
 }
 
 // The feature-pair cell kinds enumerate sorts by box distance.
@@ -218,7 +84,7 @@ func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 				return nil, err
 			}
 			d := va.Sub(vb).Len()
-			sink.candidate(k, 1, d, d, true, va, vb)
+			sink.Candidate(k.tol, 1, d, d, true, va, vb)
 		}
 	}
 	for _, va := range k.a.verts {
@@ -245,7 +111,7 @@ func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 		if err := check(); err != nil {
 			return nil, err
 		}
-		if sink.pruned(c.lb) {
+		if sink.Pruned(c.lb) {
 			continue
 		}
 		switch c.kind {
@@ -266,7 +132,7 @@ func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 		return nil, err
 	}
 	if k.clearanceRefused {
-		sink.unsure = true
+		sink.Unsure = true
 	}
 	return sink, nil
 }
@@ -341,12 +207,12 @@ func (k *pairKernel) ffCell(f, g *clearance.CFace, sink *cellSink) {
 			k.coneSphere(f, g, sink)
 			return
 		}
-		sink.coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
 	case (f.Kind == clearance.CkTorus && f.Spindle) || (g.Kind == clearance.CkTorus && g.Spindle):
 		// A Minor ≥ Major torus leaves the polynomial path (§4): the pair
 		// takes the coarse enclosure — the face-box distance below, the
 		// closest witness pair above.
-		sink.coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
 	default:
 		k.offsetPair(f, g, sink)
 	}
@@ -361,7 +227,7 @@ func (k *pairKernel) ffCell(f, g *clearance.CFace, sink *cellSink) {
 func (k *pairKernel) offsetPair(f, g *clearance.CFace, sink *cellSink) {
 	crits, ok := k.spineCriticals(f, g)
 	if !ok {
-		sink.coarse(f.Box, g.Box, f.Wit, g.Wit)
+		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
 		return
 	}
 	minLo := math.Inf(1)
@@ -379,7 +245,7 @@ func (k *pairKernel) offsetPair(f, g *clearance.CFace, sink *cellSink) {
 	if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
 		return // the trimmed faces provably cannot touch
 	}
-	sink.unsure = true
+	sink.Unsure = true
 }
 
 func (k *pairKernel) spineEngine() *spine.Engine {
@@ -438,7 +304,7 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *clearance.CFace, c c
 			k.emitRingCombos(sink, f, g, c)
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	dir := sep.Scale(1 / d)
@@ -453,7 +319,7 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *clearance.CFace, c c
 			admit := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(pg, margin))
 			if rawLo <= k.tol && rawHi >= -k.tol {
 				if admit != -1 {
-					sink.unsure = true
+					sink.Unsure = true
 				}
 				continue
 			}
@@ -461,7 +327,7 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *clearance.CFace, c c
 			if lo > hi {
 				lo, hi = hi, lo
 			}
-			sink.candidate(k, admit, lo, hi, c.Exact, pf, pg)
+			sink.Candidate(k.tol, admit, lo, hi, c.Exact, pf, pg)
 		}
 	}
 }
@@ -501,16 +367,16 @@ func (k *pairKernel) emitRingCombos(sink *cellSink, f, g *clearance.CFace, c cle
 		far := c.Fb.Sub(dir.Scale(rg))
 		if a := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(near, margin)); a != -1 {
 			nearAdmitted = true
-			sink.candidate(k, a, math.Abs(rf-rg), math.Abs(rf-rg), c.Exact, pf, near)
+			sink.Candidate(k.tol, a, math.Abs(rf-rg), math.Abs(rf-rg), c.Exact, pf, near)
 		}
 		if a := clearance.AdmitState(f.AdmitPoint(pf, margin), g.AdmitPoint(far, margin)); a != -1 {
-			sink.candidate(k, a, rf+rg, rf+rg, c.Exact, pf, far)
+			sink.Candidate(k.tol, a, rf+rg, rf+rg, c.Exact, pf, far)
 		}
 	}
 	if !nearAdmitted {
 		// The near pairing is the small one: a far pairing can never hold the
 		// minimum the near pairing does not. Unproven absence keeps its bound.
-		sink.loOnly(math.Abs(rf - rg))
+		sink.LoOnly(math.Abs(rf - rg))
 	}
 }
 
@@ -534,7 +400,7 @@ func (k *pairKernel) planePlane(f, g *clearance.CFace, sink *cellSink) {
 		}
 		if math.Abs(h) <= k.tol {
 			if rel != -1 {
-				sink.unsure = true
+				sink.Unsure = true
 			}
 			return
 		}
@@ -542,9 +408,9 @@ func (k *pairKernel) planePlane(f, g *clearance.CFace, sink *cellSink) {
 		case 1:
 			pa := f.O.Add(f.U.Scale(wit[0])).Add(f.V.Scale(wit[1]))
 			pb := pa.Add(f.N.Scale(h))
-			sink.candidate(k, 1, math.Abs(h), math.Abs(h), true, pa, pb)
+			sink.Candidate(k.tol, 1, math.Abs(h), math.Abs(h), true, pa, pb)
 		case 0:
-			sink.loOnly(math.Abs(h))
+			sink.LoOnly(math.Abs(h))
 		}
 		return
 	}
@@ -554,12 +420,12 @@ func (k *pairKernel) planePlane(f, g *clearance.CFace, sink *cellSink) {
 	// The intersection line, clipped by both trims on a shared parameter.
 	dir, ok := f.N.Cross(g.N).Normalize()
 	if !ok {
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	p0, ok := clearance.PlanesIntersect(f, g)
 	if !ok {
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	fx, fy := f.PlaneCoords(p0)
@@ -570,13 +436,13 @@ func (k *pairKernel) planePlane(f, g *clearance.CFace, sink *cellSink) {
 	ivF, okF := f.Region.LineIntervals(fx, fy, dir.Dot(f.U), dir.Dot(f.V))
 	ivG, okG := g.Region.LineIntervals(gx, gy, dir.Dot(g.U), dir.Dot(g.V))
 	if okF && okG {
-		sink.crossing(clearance.IntervalsMeet(ivF, ivG, k.tol))
+		sink.Crossing(clearance.IntervalsMeet(ivF, ivG, k.tol))
 		return
 	}
 	supF := f.Region.LineIntervalsSuperset(fx, fy, dir.Dot(f.U), dir.Dot(f.V))
 	supG := g.Region.LineIntervalsSuperset(gx, gy, dir.Dot(g.U), dir.Dot(g.V))
 	if clearance.IntervalsMeet(supF, supG, k.tol) != -1 {
-		sink.unsure = true
+		sink.Unsure = true
 	}
 }
 
@@ -620,19 +486,19 @@ func (k *pairKernel) planeCylinder(f, g *clearance.CFace, sink *cellSink) {
 			radial := g.RefU.Scale(math.Cos(th)).Add(g.RefV.Scale(math.Sin(th)))
 			rel := k.rulingRelation(f, g, radial)
 			if rel == 1 {
-				sink.overlap = true
+				sink.Overlap = true
 				return
 			}
 			ambiguous = ambiguous || rel == 0
 		}
 		if ambiguous {
-			sink.unsure = true
+			sink.Unsure = true
 		}
 	default:
 		// Tangency at distance zero: not certified here (§6); excluded
 		// through the trims or undecided.
 		if k.rulingRelation(f, g, toward) != -1 {
-			sink.unsure = true
+			sink.Unsure = true
 		}
 	}
 }
@@ -657,7 +523,7 @@ func (k *pairKernel) rulingCandidate(f, g *clearance.CFace, radial r3.Vec, v flo
 	pa := f.O.Add(f.U.Scale(w[0])).Add(f.V.Scale(w[1]))
 	h := f.N.Dot(p0.Sub(f.O))
 	pb := pa.Add(f.N.Scale(h))
-	sink.candidate(k, admit, v, v, true, pa, pb)
+	sink.Candidate(k.tol, admit, v, v, true, pa, pb)
 }
 
 // rulingRelation classifies one carrier-crossing ruling through both trims.
@@ -708,10 +574,10 @@ func (k *pairKernel) planeCrossesRevolved(f, g *clearance.CFace, sink *cellSink)
 		if rel == -1 {
 			return
 		}
-		sink.crossing(rel)
+		sink.Crossing(rel)
 		return
 	}
-	sink.unsure = true
+	sink.Unsure = true
 }
 
 // planeCone is the plane-row cone cell, and it owes only the crossing
@@ -756,7 +622,7 @@ func (k *pairKernel) planeCone(f, g *clearance.CFace, sink *cellSink) {
 	if rangeLo > k.tol || rangeHi < -k.tol || clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
 		return
 	}
-	sink.unsure = true
+	sink.Unsure = true
 }
 
 // planeSphere is the plane-row sphere cell: the center's plane distance
@@ -776,7 +642,7 @@ func (k *pairKernel) planeSphere(f, g *clearance.CFace, sink *cellSink) {
 			foot := pb.Sub(f.N.Scale(f.N.Dot(pb.Sub(f.O))))
 			x, y := f.PlaneCoords(foot)
 			admit := clearance.AdmitState(f.Region.Classify(x, y, k.tol), g.AdmitPoint(pb, k.tol))
-			sink.candidate(k, admit, d-dirSign*g.Radius, d-dirSign*g.Radius, true, foot, pb)
+			sink.Candidate(k.tol, admit, d-dirSign*g.Radius, d-dirSign*g.Radius, true, foot, pb)
 		}
 	case g.Radius-d > k.tol:
 		if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
@@ -788,7 +654,7 @@ func (k *pairKernel) planeSphere(f, g *clearance.CFace, sink *cellSink) {
 		if rel == -1 {
 			return
 		}
-		sink.crossing(rel)
+		sink.Crossing(rel)
 	default:
 		pb := g.Anchor.Sub(f.N.Scale(side * g.Radius))
 		foot := pb.Sub(f.N.Scale(f.N.Dot(pb.Sub(f.O))))
@@ -796,7 +662,7 @@ func (k *pairKernel) planeSphere(f, g *clearance.CFace, sink *cellSink) {
 		if clearance.AdmitState(f.Region.Classify(x, y, k.tol), g.AdmitPoint(pb, k.tol)) == -1 {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 	}
 }
 
@@ -826,7 +692,7 @@ func (k *pairKernel) planeTorus(f, g *clearance.CFace, sink *cellSink) {
 			star += math.Pi
 		}
 		if g.Sweep.Classify(star, clearance.ClrAngTol*10) != 1 && !g.Sweep.Full {
-			sink.loOnly(math.Min(math.Abs(hLo), math.Abs(hHi)) - g.Radius)
+			sink.LoOnly(math.Min(math.Abs(hLo), math.Abs(hHi)) - g.Radius)
 			return
 		}
 		sp := g.Anchor.Add(g.RefU.Scale(g.Major * math.Cos(star))).Add(g.RefV.Scale(g.Major * math.Sin(star)))
@@ -835,7 +701,7 @@ func (k *pairKernel) planeTorus(f, g *clearance.CFace, sink *cellSink) {
 		x, y := f.PlaneCoords(foot)
 		v := math.Min(math.Abs(hLo), math.Abs(hHi)) - g.Radius
 		admit := clearance.AdmitState(f.Region.Classify(x, y, k.tol), g.AdmitPoint(pb, k.tol))
-		sink.candidate(k, admit, v, v, true, foot, pb)
+		sink.Candidate(k.tol, admit, v, v, true, foot, pb)
 		return
 	}
 	if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
@@ -843,10 +709,10 @@ func (k *pairKernel) planeTorus(f, g *clearance.CFace, sink *cellSink) {
 	}
 	if hLo > g.Radius-k.tol || hHi < -(g.Radius-k.tol) {
 		// Tangency zone: not certified here.
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
-	sink.unsure = true
+	sink.Unsure = true
 }
 
 // coneSphere is the closed-form meridian point/cone cell of §4's sphere
@@ -880,7 +746,7 @@ func (k *pairKernel) coneSphere(f, g *clearance.CFace, sink *cellSink) {
 		// is not: an offset in the undecided band normalizes to a garbage
 		// direction. The carrier distance still bounds the trimmed pair from
 		// below, so it stands as the honest lower bound it is.
-		sink.loOnly(math.Abs(rho*cosA-z*sinA) - sph.Radius)
+		sink.LoOnly(math.Abs(rho*cosA-z*sinA) - sph.Radius)
 		return
 	}
 	t := z*cosA + rho*sinA // slant projection onto the ruling
@@ -888,7 +754,7 @@ func (k *pairKernel) coneSphere(f, g *clearance.CFace, sink *cellSink) {
 		// The nearest carrier point is the apex — a singular point owned by
 		// the synthesized vertex tier; the interior cell has no critical.
 		if clearance.ClrBoxDist(f.Box, g.Box) <= k.tol && z*z+rho*rho <= (sph.Radius+k.tol)*(sph.Radius+k.tol) {
-			sink.unsure = true
+			sink.Unsure = true
 		}
 		return
 	}
@@ -900,21 +766,21 @@ func (k *pairKernel) coneSphere(f, g *clearance.CFace, sink *cellSink) {
 	case v > k.tol:
 		dir, ok := sep.Normalize()
 		if !ok {
-			sink.unsure = true
+			sink.Unsure = true
 			return
 		}
 		pg := sph.Anchor.Add(dir.Scale(sph.Radius))
 		admit := clearance.AdmitState(cone.AdmitPoint(pf, k.tol), sph.AdmitPoint(pg, k.tol))
-		sink.candidate(k, admit, v, v, true, pf, pg)
+		sink.Candidate(k.tol, admit, v, v, true, pf, pg)
 	case v < -k.tol:
 		if clearance.ClrBoxDist(f.Box, g.Box) > k.tol {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 	default:
 		if clearance.AdmitState(cone.AdmitPoint(pf, k.tol), sph.AdmitPoint(sph.Anchor.Add(sep), k.tol)) == -1 {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 	}
 }

@@ -42,10 +42,10 @@ func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *cellSi
 		k.circlePlaneFE(f, e, sink)
 	case clearance.CkCone:
 		// Line3 × Cone and Circle3 × Cone take the coarse enclosure here.
-		sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+		sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 	default:
 		if f.Kind == clearance.CkTorus && f.Spindle {
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 		if e.Line {
@@ -80,17 +80,17 @@ func (k *pairKernel) linePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *c
 			return
 		}
 		if math.Abs(h) <= k.tol {
-			sink.unsure = true // the edge meets the face's own plane inside the trim (or ambiguously)
+			sink.Unsure = true // the edge meets the face's own plane inside the trim (or ambiguously)
 			return
 		}
 		pa := f.O.Add(f.U.Scale(w[0])).Add(f.V.Scale(w[1]))
-		sink.candidate(k, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.N.Scale(h)))
+		sink.Candidate(k.tol, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.N.Scale(h)))
 		return
 	case clearance.DegUnknown:
 		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	// The crossing point of the carrier with the plane.
@@ -103,7 +103,7 @@ func (k *pairKernel) linePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *c
 	if f.Region.Classify(x, y, k.tol) == -1 {
 		return
 	}
-	sink.unsure = true
+	sink.Unsure = true
 }
 
 // circlePlaneFE: the circle's signed plane height is a first harmonic —
@@ -125,7 +125,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	if parallel == clearance.DegYes {
@@ -135,7 +135,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 			// meets the trim (the full circle is a sound superset of an arc).
 			cx, cy := f.PlaneCoords(e.Center)
 			if clearance.CircleRegionHits(f.Region, cx, cy, e.Radius) != -1 {
-				sink.unsure = true
+				sink.Unsure = true
 			}
 			return
 		}
@@ -151,7 +151,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 			pe := e.At(th)
 			foot := pe.Sub(f.N.Scale(base))
 			x, y := f.PlaneCoords(foot)
-			sink.candidate(k, clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol)), math.Abs(base), math.Abs(base), true, foot, pe)
+			sink.Candidate(k.tol, clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol)), math.Abs(base), math.Abs(base), true, foot, pe)
 		}
 		return
 	}
@@ -166,7 +166,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 		foot := pe.Sub(f.N.Scale(hh))
 		x, y := f.PlaneCoords(foot)
 		admit = clearance.AdmitState(admit, f.Region.Classify(x, y, k.tol))
-		sink.candidate(k, admit, math.Abs(hh), math.Abs(hh), true, foot, pe)
+		sink.Candidate(k.tol, admit, math.Abs(hh), math.Abs(hh), true, foot, pe)
 	}
 	lo, hi := 0.0, 2*math.Pi
 	if !e.Ang.Full {
@@ -179,7 +179,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 	// Crossing roots h(θ) = 0: excluded only when every root leaves a trim.
 	amp := math.Hypot(hu, hv)
 	if amp < 1e-30 {
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	dth := math.Acos(math.Max(-1, math.Min(1, -base/amp)))
@@ -192,7 +192,7 @@ func (k *pairKernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink 
 		if f.Region.Classify(x, y, k.tol) == -1 {
 			continue
 		}
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 }
@@ -203,7 +203,7 @@ func (k *pairKernel) feOffsetEmit(sink *cellSink, f *clearance.CFace, pe, spineF
 	sep := pe.Sub(spineFoot)
 	d := sep.Len()
 	if d <= k.tol {
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	dir := sep.Scale(1 / d)
@@ -214,7 +214,7 @@ func (k *pairKernel) feOffsetEmit(sink *cellSink, f *clearance.CFace, pe, spineF
 		admit := clearance.AdmitState(eAdmit, f.AdmitPoint(pf, margin))
 		if rawLo <= k.tol && rawHi >= -k.tol {
 			if admit != -1 {
-				sink.unsure = true
+				sink.Unsure = true
 			}
 			continue
 		}
@@ -222,7 +222,7 @@ func (k *pairKernel) feOffsetEmit(sink *cellSink, f *clearance.CFace, pe, spineF
 		if lo > hi {
 			lo, hi = hi, lo
 		}
-		sink.candidate(k, admit, lo, hi, exact, pf, pe)
+		sink.Candidate(k.tol, admit, lo, hi, exact, pf, pe)
 	}
 }
 
@@ -281,12 +281,12 @@ func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		case clearance.DegNo:
 			cs, okp := k.lineLinePerp(e.A, u, f.Anchor, f.Axis)
 			if !okp {
-				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
 			crits = []clearance.SpineCrit{cs}
 		default:
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	default:
@@ -301,7 +301,7 @@ func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		// the (edge point, spine foot) order the emit helper reads.
 		crits, okc = k.lineCircleBracketCrits(cp, f.Anchor, f.RefU, f.RefV, e.A, u)
 		if !okc {
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	}
@@ -312,7 +312,7 @@ func (k *pairKernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *
 		k.feOffsetEmit(sink, f, c.Fa, c.Fb, c.Lo, c.Hi, c.Exact, clearance.LineParamAdmit(e, c.Fa, k.tol))
 	}
 	if !k.feCrossingExcluded(f, e, minLo, maxHi) {
-		sink.unsure = true
+		sink.Unsure = true
 	}
 }
 
@@ -330,7 +330,7 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 	case 0:
 		cs, ok := k.pointCircleCrits(f.Anchor, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)
 		if !ok {
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 		for i := range cs {
@@ -356,7 +356,7 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 				perp := rel.Sub(f.Axis.Scale(rel.Dot(f.Axis)))
 				dir, okd := perp.Normalize()
 				if !okd {
-					sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+					sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 					return
 				}
 				near := clearance.AngleOf(e, dir.Scale(-1))
@@ -366,7 +366,7 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 					crits = append(crits, clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe)))
 				}
 			default:
-				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
 		case clearance.DegNo:
@@ -378,7 +378,7 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 			}
 			cs, ok := k.lineCircleBracketCrits(cp, e.Center, e.RefU, e.RefV, f.Anchor, f.Axis)
 			if !ok {
-				sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 				return
 			}
 			for i := range cs {
@@ -386,14 +386,14 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 			}
 			crits = cs
 		default:
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 	default:
 		ef := &clearance.CFace{Kind: clearance.CkTorus, Anchor: e.Center, Axis: e.Axis, RefU: e.RefU, RefV: e.RefV, Major: e.Radius}
 		cs, ok := k.circleCircleCrits(ef, f)
 		if !ok {
-			sink.coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
 			return
 		}
 		crits = cs
@@ -406,7 +406,7 @@ func (k *pairKernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink
 		k.feOffsetEmit(sink, f, c.Fa, c.Fb, c.Lo, c.Hi, c.Exact, clearance.CircleAngleAdmit(e, th, k.tol+(c.Hi-c.Lo)))
 	}
 	if !k.feCrossingExcluded(f, e, minLo, maxHi) {
-		sink.unsure = true
+		sink.Unsure = true
 	}
 }
 
@@ -450,7 +450,7 @@ func (k *pairKernel) lineLineEE(ea, eb *clearance.CEdge, sink *cellSink) {
 		pa := ea.A.Add(ua.Scale(t))
 		pb := clearance.LinePoint(eb.A, ub, pa)
 		d := pa.Sub(pb).Len()
-		sink.candidate(k, 1, d, d, true, pa, pb)
+		sink.Candidate(k.tol, 1, d, d, true, pa, pb)
 		return
 	case clearance.DegUnknown:
 		// A tilt too small to prove or disprove: the constant family is not
@@ -458,17 +458,17 @@ func (k *pairKernel) lineLineEE(ea, eb *clearance.CEdge, sink *cellSink) {
 		if clearance.ClrBoxDist(ea.Box, eb.Box) > k.tol {
 			return
 		}
-		sink.unsure = true
+		sink.Unsure = true
 		return
 	}
 	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub)
 	if !ok {
-		sink.coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
+		sink.Coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
 		return
 	}
 	d := c.Fa.Sub(c.Fb).Len()
 	admit := clearance.AdmitState(clearance.LineParamAdmit(ea, c.Fa, k.tol), clearance.LineParamAdmit(eb, c.Fb, k.tol))
-	sink.candidate(k, admit, d, d, true, c.Fa, c.Fb)
+	sink.Candidate(k.tol, admit, d, d, true, c.Fa, c.Fb)
 }
 
 // lineCircleEE: the axis-parallel case is closed form; the general case is
@@ -496,12 +496,12 @@ func (k *pairKernel) lineCircleEE(el, ec *clearance.CEdge, sink *cellSink) {
 			perp := rel.Sub(ec.Axis.Scale(rel.Dot(ec.Axis)))
 			dirP, okd := perp.Normalize()
 			if !okd {
-				sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+				sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 				return
 			}
 			ths = []float64{clearance.AngleOf(ec, dirP), clearance.AngleOf(ec, dirP.Scale(-1))}
 		default:
-			sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+			sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 			return
 		}
 		for _, th := range ths {
@@ -509,11 +509,11 @@ func (k *pairKernel) lineCircleEE(el, ec *clearance.CEdge, sink *cellSink) {
 			pl := clearance.LinePoint(el.A, u, pc)
 			d := pc.Sub(pl).Len()
 			admit := clearance.AdmitState(clearance.CircleAngleAdmit(ec, th, k.tol), clearance.LineParamAdmit(el, pl, k.tol))
-			sink.candidate(k, admit, d, d, true, pl, pc)
+			sink.Candidate(k.tol, admit, d, d, true, pl, pc)
 		}
 		return
 	case clearance.DegUnknown:
-		sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+		sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 		return
 	}
 	cp := freeform.CircleParam{
@@ -524,13 +524,13 @@ func (k *pairKernel) lineCircleEE(el, ec *clearance.CEdge, sink *cellSink) {
 	}
 	crits, ok := k.lineCircleBracketCrits(cp, ec.Center, ec.RefU, ec.RefV, el.A, u)
 	if !ok {
-		sink.coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+		sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 		return
 	}
 	for _, c := range crits {
 		th := clearance.AngleOf(ec, c.Fb.Sub(ec.Center))
 		admit := clearance.AdmitState(clearance.LineParamAdmit(el, c.Fa, k.tol), clearance.CircleAngleAdmit(ec, th, k.tol+(c.Hi-c.Lo)))
-		sink.candidate(k, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
+		sink.Candidate(k.tol, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 	}
 }
 
@@ -576,7 +576,7 @@ func (k *pairKernel) principalCircleEdgeGap(ea, eb *clearance.CEdge, sink *cellS
 	if !proofbound.FiniteVec(pa) || !proofbound.FiniteVec(pb) {
 		return false
 	}
-	sink.candidate(k, 1, lo, hi, lo == hi, pa, pb)
+	sink.Candidate(k.tol, 1, lo, hi, lo == hi, pa, pb)
 	return true
 }
 
@@ -590,14 +590,14 @@ func (k *pairKernel) circleCircleEE(ea, eb *clearance.CEdge, sink *cellSink) {
 	fb := &clearance.CFace{Kind: clearance.CkTorus, Anchor: eb.Center, Axis: eb.Axis, RefU: eb.RefU, RefV: eb.RefV, Major: eb.Radius}
 	crits, ok := k.circleCircleCrits(fa, fb)
 	if !ok {
-		sink.coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
+		sink.Coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
 		return
 	}
 	for _, c := range crits {
 		tha := clearance.AngleOf(ea, c.Fa.Sub(ea.Center))
 		thb := clearance.AngleOf(eb, c.Fb.Sub(eb.Center))
 		admit := clearance.AdmitState(clearance.CircleAngleAdmit(ea, tha, k.tol+(c.Hi-c.Lo)), clearance.CircleAngleAdmit(eb, thb, k.tol+(c.Hi-c.Lo)))
-		sink.candidate(k, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
+		sink.Candidate(k.tol, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 	}
 }
 
@@ -606,14 +606,14 @@ func (k *pairKernel) circleCircleEE(ea, eb *clearance.CEdge, sink *cellSink) {
 // edges — every cell closed form (§3's vertex tiers). It continues the
 // enumerator's budget through every face, edge, and planar trim scan. A
 // face or edge whose box lies beyond the sink's best upper bound is pruned
-// (cellSink.pruned).
+// (cellSink.Pruned).
 func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
 	at := [2]r3.Vec{v, v}
 	for _, f := range other.faces {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if sink.pruned(clearance.ClrBoxDist(at, f.Box)) {
+		if sink.Pruned(clearance.ClrBoxDist(at, f.Box)) {
 			continue
 		}
 		if err := k.vertexFace(budget, v, f, sink); err != nil {
@@ -624,7 +624,7 @@ func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if sink.pruned(clearance.ClrBoxDist(at, e.Box)) {
+		if sink.Pruned(clearance.ClrBoxDist(at, e.Box)) {
 			continue
 		}
 		k.vertexEdge(v, e, sink)
@@ -642,7 +642,7 @@ func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clea
 		if err != nil {
 			return err
 		}
-		sink.candidate(k, admit, math.Abs(h), math.Abs(h), true, foot, v)
+		sink.Candidate(k.tol, admit, math.Abs(h), math.Abs(h), true, foot, v)
 	case clearance.CkCone:
 		rel := v.Sub(f.Anchor)
 		z := rel.Dot(f.Axis)
@@ -664,7 +664,7 @@ func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clea
 		default:
 			// The distance is azimuth-free, the admission foot is not. The
 			// carrier distance is a proven lower bound; it stands as one.
-			sink.loOnly(math.Abs(rho*cosA - z*sinA))
+			sink.LoOnly(math.Abs(rho*cosA - z*sinA))
 			return nil
 		}
 		t := z*cosA + rho*sinA
@@ -673,18 +673,18 @@ func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clea
 		}
 		pf := f.Anchor.Add(f.Axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
 		d := math.Abs(rho*cosA - z*sinA)
-		sink.candidate(k, f.AdmitPoint(pf, k.tol), d, d, true, pf, v)
+		sink.Candidate(k.tol, f.AdmitPoint(pf, k.tol), d, d, true, pf, v)
 	default:
 		d, foot := clearance.SpineDistOf(f, v)
 		if d <= k.tol {
-			sink.unsure = true
+			sink.Unsure = true
 			return nil
 		}
 		dir := v.Sub(foot).Scale(1 / d)
 		for _, sf := range []float64{1, -1} {
 			pf := foot.Add(dir.Scale(sf * f.Radius))
 			raw := d - sf*f.Radius
-			sink.candidate(k, f.AdmitPoint(pf, k.tol), math.Abs(raw), math.Abs(raw), true, pf, v)
+			sink.Candidate(k.tol, f.AdmitPoint(pf, k.tol), math.Abs(raw), math.Abs(raw), true, pf, v)
 		}
 	}
 	return nil
@@ -699,7 +699,7 @@ func (k *pairKernel) vertexEdge(v r3.Vec, e *clearance.CEdge, sink *cellSink) {
 		}
 		foot := clearance.LinePoint(e.A, u, v)
 		d := v.Sub(foot).Len()
-		sink.candidate(k, clearance.LineParamAdmit(e, foot, k.tol), d, d, true, foot, v)
+		sink.Candidate(k.tol, clearance.LineParamAdmit(e, foot, k.tol), d, d, true, foot, v)
 		return
 	}
 	crits, ok := k.pointCircleCrits(v, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)
@@ -710,13 +710,13 @@ func (k *pairKernel) vertexEdge(v r3.Vec, e *clearance.CEdge, sink *cellSink) {
 		rel := v.Sub(e.Center)
 		z := rel.Dot(e.Axis)
 		rho := rel.Sub(e.Axis.Scale(z)).Len()
-		sink.loOnly(math.Hypot(z, math.Abs(rho-e.Radius)))
+		sink.LoOnly(math.Hypot(z, math.Abs(rho-e.Radius)))
 		return
 	}
 	for _, c := range crits {
 		th := clearance.AngleOf(e, c.Fb.Sub(e.Center))
 		d := c.Fa.Sub(c.Fb).Len()
-		sink.candidate(k, clearance.CircleAngleAdmit(e, th, k.tol), d, d, true, c.Fb, v)
+		sink.Candidate(k.tol, clearance.CircleAngleAdmit(e, th, k.tol), d, d, true, c.Fb, v)
 	}
 }
 

@@ -40,7 +40,7 @@ func TestCellSinkPrunesOnlyStrictlyBeyondTheMargin(t *testing.T) {
 	t.Parallel()
 	withBest := func(margin float64) *cellSink {
 		s := newPruningSink(margin)
-		s.contribs = append(s.contribs,
+		s.Contribs = append(s.Contribs,
 			clearance.GapContrib{Lo: 4, Hi: math.Inf(1)},
 			clearance.GapContrib{Lo: 5, Hi: 5, Exact: true},
 			clearance.GapContrib{Lo: 6, Hi: 7},
@@ -49,29 +49,29 @@ func TestCellSinkPrunesOnlyStrictlyBeyondTheMargin(t *testing.T) {
 	}
 	t.Run("equality never prunes", func(t *testing.T) {
 		s := withBest(0)
-		require.False(t, s.pruned(5))
-		require.True(t, s.pruned(math.Nextafter(5, 6)))
-		require.Equal(t, 1, s.skipped)
+		require.False(t, s.Pruned(5))
+		require.True(t, s.Pruned(math.Nextafter(5, 6)))
+		require.Equal(t, 1, s.Skipped)
 	})
 	t.Run("the margin is charged before comparing", func(t *testing.T) {
 		s := withBest(0.5)
-		require.False(t, s.pruned(5.5))
-		require.True(t, s.pruned(5.75))
+		require.False(t, s.Pruned(5.5))
+		require.True(t, s.Pruned(5.75))
 	})
 	t.Run("a non-finite distance never prunes", func(t *testing.T) {
 		s := withBest(0)
-		require.False(t, s.pruned(math.Inf(1)))
-		require.False(t, s.pruned(math.NaN()))
-		require.Zero(t, s.skipped)
+		require.False(t, s.Pruned(math.Inf(1)))
+		require.False(t, s.Pruned(math.NaN()))
+		require.Zero(t, s.Skipped)
 	})
 	t.Run("no finite upper bound prunes nothing", func(t *testing.T) {
 		s := newPruningSink(0)
-		s.contribs = append(s.contribs, clearance.GapContrib{Lo: 4, Hi: math.Inf(1)})
-		require.False(t, s.pruned(1e300))
+		s.Contribs = append(s.Contribs, clearance.GapContrib{Lo: 4, Hi: math.Inf(1)})
+		require.False(t, s.Pruned(1e300))
 	})
 	t.Run("a zero-value sink never prunes", func(t *testing.T) {
-		s := &cellSink{contribs: []clearance.GapContrib{{Lo: 5, Hi: 5, Exact: true}}}
-		require.False(t, s.pruned(100))
+		s := &cellSink{Contribs: []clearance.GapContrib{{Lo: 5, Hi: 5, Exact: true}}}
+		require.False(t, s.Pruned(100))
 	})
 }
 
@@ -100,7 +100,7 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 	// less the margin exceeds the full walk's best hi. The vertex tiers run
 	// earlier, against the bound in hand then, so each of their cells beyond
 	// it may or may not be pruned.
-	_, fullHi, _, ok := full.interval()
+	_, fullHi, _, ok := full.Interval()
 	require.True(t, ok)
 	cells, err := k.featureCells(proofbound.NewWorkBudget(t.Context()))
 	require.NoError(t, err)
@@ -127,18 +127,18 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 		}
 	}
 	require.Positive(t, beyond, `far rim and cap cells must be prunable`)
-	require.GreaterOrEqual(t, pruned.skipped, beyond)
-	require.LessOrEqual(t, pruned.skipped, beyond+vertexBeyond)
-	require.Zero(t, full.skipped)
-	require.Less(t, len(pruned.contribs), len(full.contribs))
-	require.Equal(t, full.overlap, pruned.overlap)
-	require.Equal(t, full.unsure, pruned.unsure)
-	require.False(t, pruned.overlap)
-	require.False(t, pruned.unsure)
+	require.GreaterOrEqual(t, pruned.Skipped, beyond)
+	require.LessOrEqual(t, pruned.Skipped, beyond+vertexBeyond)
+	require.Zero(t, full.Skipped)
+	require.Less(t, len(pruned.Contribs), len(full.Contribs))
+	require.Equal(t, full.Overlap, pruned.Overlap)
+	require.Equal(t, full.Unsure, pruned.Unsure)
+	require.False(t, pruned.Overlap)
+	require.False(t, pruned.Unsure)
 
-	lo, hi, _, ok := pruned.interval()
+	lo, hi, _, ok := pruned.Interval()
 	require.True(t, ok)
-	fullLo, _, _, ok := full.interval()
+	fullLo, _, _, ok := full.Interval()
 	require.True(t, ok)
 	require.Equal(t, fullHi, hi)
 	require.GreaterOrEqual(t, lo, fullLo)
@@ -175,10 +175,10 @@ func TestEnumerateNeverPrunesAtTheBestUpperBound(t *testing.T) {
 	full, err := k.enumerateInto(&cellSink{})
 	require.NoError(t, err)
 
-	require.Zero(t, pruned.skipped)
-	require.Len(t, full.contribs, 4)
-	require.Equal(t, full.contribs, pruned.contribs)
-	lo, hi, exact, ok := pruned.interval()
+	require.Zero(t, pruned.Skipped)
+	require.Len(t, full.Contribs, 4)
+	require.Equal(t, full.Contribs, pruned.Contribs)
+	lo, hi, exact, ok := pruned.Interval()
 	require.True(t, ok)
 	require.Equal(t, 5.0, lo)
 	require.Equal(t, 5.0, hi)

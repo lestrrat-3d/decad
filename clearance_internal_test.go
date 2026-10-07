@@ -253,17 +253,17 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 		b := full(r3.NewVec(7, 0, 3), z.Scale(-1), 2)
 		sink := &cellSink{}
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
-		require.Len(t, sink.contribs, 1)
-		require.Equal(t, 5.0, sink.contribs[0].Lo)
-		require.Equal(t, 5.0, sink.contribs[0].Hi)
-		require.True(t, sink.contribs[0].Exact)
+		require.Len(t, sink.Contribs, 1)
+		require.Equal(t, 5.0, sink.Contribs[0].Lo)
+		require.Equal(t, 5.0, sink.Contribs[0].Hi)
+		require.True(t, sink.Contribs[0].Exact)
 	})
 	t.Run("irrational distance is enclosed", func(t *testing.T) {
 		b := full(r3.NewVec(6, 0, 1), z, 2)
 		sink := &cellSink{}
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
-		require.Len(t, sink.contribs, 1)
-		c := sink.contribs[0]
+		require.Len(t, sink.Contribs, 1)
+		c := sink.Contribs[0]
 		require.LessOrEqual(t, c.Lo, math.Sqrt(10))
 		require.GreaterOrEqual(t, c.Hi, math.Sqrt(10))
 		require.False(t, c.Exact)
@@ -272,7 +272,7 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 		b := full(r3.NewVec(0, -7, 3), z, 2)
 		sink := &cellSink{}
 		require.True(t, k.principalCircleEdgeGap(a, b, sink))
-		require.Equal(t, 5.0, sink.contribs[0].Lo)
+		require.Equal(t, 5.0, sink.Contribs[0].Lo)
 	})
 	t.Run("uncertified shapes fall back", func(t *testing.T) {
 		cases := map[string]*clearance.CEdge{
@@ -288,7 +288,7 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				sink := &cellSink{}
 				require.False(t, k.principalCircleEdgeGap(a, b, sink))
-				require.Empty(t, sink.contribs)
+				require.Empty(t, sink.Contribs)
 			})
 		}
 	})
@@ -857,11 +857,11 @@ func TestVertexTierBudgetKeepsNormalResult(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Len(t, sink.contribs, 1)
-	require.Equal(t, 5.0, sink.contribs[0].Lo)
-	require.Equal(t, 5.0, sink.contribs[0].Hi)
-	require.True(t, sink.contribs[0].Exact)
-	require.False(t, math.IsInf(sink.contribs[0].Lo, 0))
+	require.Len(t, sink.Contribs, 1)
+	require.Equal(t, 5.0, sink.Contribs[0].Lo)
+	require.Equal(t, 5.0, sink.Contribs[0].Hi)
+	require.True(t, sink.Contribs[0].Exact)
+	require.False(t, math.IsInf(sink.Contribs[0].Lo, 0))
 }
 
 // TestAddPrismFacesOmitsCapsForSurfaceResult is docs/surface-design.md §4.1's
