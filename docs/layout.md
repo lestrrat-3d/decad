@@ -137,7 +137,7 @@ the rules leave to the byte budget.
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
-| `loft_topology.go` | Assembles the paired stations into the payload's flat-triangle solid and builds its `Body` topology. See `docs/loft-design.md` §5.1, §7. |
+| `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Modify
@@ -280,7 +280,7 @@ the rules leave to the byte budget.
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/tessellation/` | Chord bounds and samples, section clearance, and mesh audits. |
-| `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
+| `internal/loftmesh/` | Loft pairing, stations, assembly, mass sums, mesh proofs and restatement. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping; indexed triangles, chording refusals. |
