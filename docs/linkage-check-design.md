@@ -6,7 +6,8 @@ the joints move?" without changing the document: where the capability sits (§1)
 the procedure (§6), coverage (§7), errors (§8), what is deferred and why (§9), cost (§10), required tests
 (§11), increments (§12), settled points (§13), the joint-box check `Document.VerifyJointBox`, which
 proves a whole box of joint values clear cell by cell (§14), and closed loops — a four-bar, a
-slider-crank — whose dependent joints are read from `sketch`'s certified enclosure (§15). Companion to
+slider-crank — whose dependent joints are read from `sketch`'s certified enclosure (§15), and the joint
+box over such a loop (§16). Companion to
 `docs/motion-check-design.md` ("motion §N"),
 which owns the one-mover check this design generalises and every proof piece it reuses; to
 `docs/api-design.md` ("core §N"); to `docs/verification-design.md` ("verification §N"), which owns `Status`,
@@ -922,10 +923,12 @@ type MotionOption interface { JointBoxOption /* sealed */ }
 // (§14.4); default 16384. cells < 1 is ErrDegenerate.
 func WithCellBudget(cells int) JointBoxOption
 
-// JointConfiguration is one point of joint space: every link's joint value
-// and world pose, in Linkage.Links() order.
+// JointConfiguration is one point of joint space: every link's joint value,
+// its proven half-width (zero for a stated joint; §16.3) and world pose, in
+// Linkage.Links() order.
 type JointConfiguration struct {
     Values []units.Value
+    Bounds []units.Value
     Poses  []r3.Transform
 }
 
@@ -950,9 +953,9 @@ making every `MotionOption` a `JointBoxOption`, so passing the budget to `Verify
 does not compile, and no runtime refusal is needed. `Configuration` refuses a value count other than
 `len(Links())` (`ErrDegenerate`), a wrong `Kind` (`ErrUnitKind`), a non-finite value (`ErrNotFinite`), a
 value outside its joint's limits (`ErrDegenerate`, naming the link) and a pose `r3` cannot represent
-(`ErrNotFinite`). It is the one place a configuration's poses are built, so a renderer drawing a cell's
-corner and the verifier evaluating its centre read the same transform; `PoseAt` is `Configuration` of the
-drive's values at `s`.
+(`ErrNotFinite`). It is the one place a tree linkage's configuration is built, so a renderer drawing a
+cell's corner and the verifier evaluating its centre read the same transform; `PoseAt` is `Configuration`
+of the drive's values at `s`. A looped linkage's configuration is a held drive (§16.1).
 
 One joint varying is legal and is not what the box is for: a drive over the same range costs about half
 the poses — an interval's endpoint serves two intervals, a cell's centre serves one cell (§14.3) — and
@@ -1670,7 +1673,7 @@ The errors added to §8, all before `ctx` is read:
 | a drive listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
 | `E0` refused as the table above says, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
 | a dependent joint whose whole-drive hull is not proven inside its limits (§15.5) | `ErrDegenerate`, after the decomposition reads the hull |
-| a looped linkage given to `VerifyJointBox` or `Linkage.Configuration` (§15.8) | `ErrUnsupported` |
+| a looped linkage given to `Linkage.Configuration` (§16.1) | `ErrUnsupported` |
 
 `E0` is asked under a context that is never canceled (`context.WithoutCancel`), so its refusal is a
 validation error even under a canceled context; the decomposition of §15.7 follows the cancellation check.
@@ -1744,12 +1747,10 @@ there for the travel sum of §15.5, each piece read in its own sub-segment's cha
 A loop whose joints the drive does not list, or whose listed joint holds `0`, stands at the zero pose
 (§15.1).
 
-`VerifyJointBox` (§14) and `Linkage.Configuration` refuse a looped linkage with `ErrUnsupported` in v1. A
-box varies several joints independently, and a loop's dependents follow its driver, so a cell's travel
-needs the dependents' hull over the cell's driver range and the centre needs a point ask; both come from
-the same chain, but the cell structure of §14.4 is per axis rather than dyadic in one parameter, and the
-mapping is a later increment. `Configuration` takes a value per link, and a dependent joint's value is not
-the caller's to state.
+`VerifyJointBox` (§14) varies a loop at its driver alone and reads each cell's dependents from this
+chain — the centre's point ask and the hull over the cell's driver range — on §16's terms.
+`Linkage.Configuration` takes a value per link and names no driver, so it refuses a looped linkage with
+`ErrUnsupported`; a looped configuration is a held drive posed by `PoseAt` (§16.1).
 
 ### 15.9 Cost
 
@@ -1953,7 +1954,8 @@ link twice, a link of another linkage, a non-finite center, a zero axis, a closu
 from the loop's revolutes about `Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure
 axis, a slide along `(1, 0, 1e-12)`, a slide under a link that is not `Common`, two slides on one loop, a
 second closure on the coupler, a closure coincident with a pin in the plane, a drive listing crank and
-follower, a drive listing the coupler, a schedule pose outside `[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
+follower, a drive listing the coupler, a schedule pose outside `[0, 1]`, `Configuration` on scene 7's
+linkage; and a drive listing no loop
 joint standing every link at the zero pose with zero `Bounds`. Non-mutation of the document and
 determinism of two reports as motion §9 test 7; cancellation at every depth of the check, inside an
 `Enclose` call among them, returns `ctx.Err()` and no report. Internal tests in
@@ -1995,7 +1997,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still refused or `Suspect` after it |
 |---|---|---|
-| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `VerifyJointBox` and `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
+| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
@@ -2021,7 +2023,8 @@ every later read (§15.5). A refusal is a finding, except at the zero pose, wher
 unbuildable pose is not evaluated and its interval is undecided (§15.6). A drive over a loop is cut into
 sub-segments at its waypoints and its zero crossings, each with its own chain and side, an irrational
 crossing at two rational cuts around a straddle read from both sides' branches, and a dependent with
-limits is held to its whole-drive hull (§15.5, §15.8). `VerifyJointBox` refuses loops (§15.8).
+limits is held to its whole-drive hull (§15.5, §15.8). The joint box over a loop reads the same chain per
+cell (§16).
 
 **What sketch #155 supplies.** `.tmp/decad-handoff-interval-targets.md` in the `sketch` repository asked
 for two additions to `Enclose`, and both landed in `821a4460`: `WithTargetRange`, a dimension's target as
@@ -2029,3 +2032,346 @@ an interval with every claim holding for every target in it, which §15.2 states
 makes the zero-pose falsifier valid; and `WithFixedBox`, a fixed point as a box, which §15.2 states every
 fixed point of a tilted loop with, since its plane position is then irrational. Nothing in this section
 waits on `sketch`.
+
+## 16. The joint box over a closed loop
+
+`Document.VerifyJointBox` takes a looped linkage (§15) on this section's terms: the box varies a loop at
+its **driver** alone, every other joint of the loop follows it, and each cell reads its dependents' values
+from `sketch`'s certified enclosures exactly as a drive's interval does (§15.3–§15.5) — the enclosure of
+each dependent at the cell's centre enters `η`, and its hull over the cell's driver range enters `τ_half`.
+Everything in §14 and §15 holds unless this section says otherwise. `linkage_box.go` runs the subdivision
+and `linkage_loop.go` answers its asks; no new file is added.
+
+### 16.1 Which joints a box varies
+
+A `JointBox` lists at most one joint of each loop, as a `Drive` does (§15.1): that joint is the loop's
+driver for the box, its parent MUST be `Common` (`ErrUnsupported` otherwise), and every other joint of the
+loop is dependent and is not listed. A box listing two joints of one loop is `ErrDegenerate`, since the
+second value cannot be stated. The driver's range stands for the loop:
+
+| The driver's range | The loop |
+|---|---|
+| unlisted, or `Min == Max == 0` | stands at the zero pose: its links are the tree's held links (§6 step 2) and no scene is built |
+| `Min == Max ≠ 0` | is **held**: one scene, `E0`, the approach and one point ask (§15.8); its links are constant placements, and its dependents contribute nothing to any `τ_half` |
+| `Min < Max` | is the box's **loop axis**, one varying axis |
+
+A dependent is never a box axis, so `n` counts a loop once. A cell publishes its dependents' values
+(§16.4); the caller never states them.
+
+`Linkage.Configuration` refuses a looped linkage with `ErrUnsupported`: it takes one value per link and
+names no driver, and a four-bar is driven at its crank or at its follower. A configuration of a looped
+linkage is stated as a drive whose every sweep holds — the driver and each moved tree joint listed with
+`From == To` — and posed by `Linkage.PoseAt` or `Schedule.PoseAt` (§15.7, §15.8), which read the dependents
+at that one driver value. A cell's `Center` is built by the same reading (§16.3), so `PoseAt` of the held
+drive at a centre's stated values and that `Center` agree to the enclosures' widths, each enclosing the one
+exact configuration; they are not bit-identical, because the held drive's point ask is continued from its
+approach and the centre's from its cell (§16.2).
+
+### 16.2 The loop axis is a drive
+
+The loop axis is the one-segment drive `Min → Max` in the fraction `f ∈ [0, 1]` of the driver's range, and
+§15.2, §15.3 and §15.8 apply to it verbatim, about any axis the loop closes about: `driverSubs` cuts it at
+a crossing of `0` into two sub-segments, each read on its own scene side with its own chain from the
+crossing, and at a crossing between ends stated in mixed terms into three, the straddle between two
+rational cuts read from both neighbours' branches; the scene is built per side; `E0` and the zero-pose
+falsifier run; and `prepareLoops` decomposes `[0, 1]` down to the verdict floor before any cell, so each
+dependent's reach `m_j` and its limits (§15.5) are read first.
+
+A cell's extent along the loop axis is a dyadic interval `[a, b]` of `f` and its centre `m = (a + b)/2` a
+dyadic fraction, because §14.4 halves one axis at a time from the root. The cell tree's loop-axis intervals
+are therefore §6's grid, and §15.3's canonical rule names every ask's predecessor — a cell `[a, b]` is
+continued from the point at its chain-start, a point at depth `d` from the depth-`d` cell ending at it —
+whatever order the subdivision asks them in. A cell asks for:
+
+- its **centre**: the point ask at `m`, on the sub-segment `subAt(m)` picks (§15.8), giving each
+  dependent's enclosure `M_j = [m_lo, m_hi]` — inside a straddle, the hull of its asks (§15.8);
+- its **hull**: `intervalSpans(a, b)` — the point asks at `a` and `b` and the cell ask between them, per
+  sub-segment piece the interval is cut into (§15.5) — and over the pieces the hull `H_j = [h_lo, h_hi]` of
+  each dependent's value.
+
+Cells that share a loop-axis interval share every ask: §15.7's cache is keyed by the sub-segment, the
+kind and the ends of the fraction, not by the cell, so two cells that differ along a tree axis alone cost
+one chain between them. The number of distinct asks is the number of distinct loop-axis intervals and
+points the subdivision reaches — about what a `VerifyLinkage` over `Min → Max` asks at the same floor. The
+subdivision is deterministic as §14.4 states and each ask as §15.7 states, so two calls on the same inputs
+return reports equal in every field.
+
+### 16.3 What a cell proves over a loop
+
+**The centre.** The centre's pose is §15.4's: each dependent at the float midpoint label of `M_j`, posed
+by `posesOf`; its ideal pose composed with `MotionFrame.AtRange(m_lo, m_hi)`, so `η` charges the whole
+enclosure; every stated joint at its exact centre value. `JointConfiguration` carries the half-widths:
+
+```go
+type JointConfiguration struct {
+    Values []units.Value
+    Bounds []units.Value  // each value's proven half-width, in its Kind; zero for a stated joint (§15.4)
+    Poses  []r3.Transform
+}
+```
+
+`Bounds` is zero for every joint of a tree linkage, so `Configuration` and a tree box's `Center` are
+unchanged but for the field.
+
+**The dependent's term in `τ_half`.** §14.3 moves one joint at a time from the centre `m` to a
+configuration `q` of the cell. A stated joint `i` changes by at most half its span, which is `τ_half`'s
+`½·w_i·span_i`. A dependent `j` changes from its exact centre value `c_j` to its exact value at `q`: both
+lie in `H_j`, and `c_j` lies in `M_j` too, because the centre's point ask and the cell's asks enclose the
+one solution continued from the zero pose (§15.3). So
+
+```text
+δ_j(C) = max( h_hi − m_lo,  m_hi − h_lo )      (exact rationals)
+```
+
+bounds `|θ_j(q) − c_j|` for every `q` in `C`, and the dependent's term is `w_j·δ_j(C)` — the full one-sided
+distance, not a half. The centre's value sits wherever the loop puts it in `H_j`: at an end of the hull
+where the dependent is monotone over the cell, inside it where the dependent turns back, and `δ_j` is a
+bound in both cases where half the hull's width is not. Hence
+
+```text
+τ_half(C) = ½·Σ_{stated i} w_i·span_i(C)  +  Σ_{dependent j} w_j·δ_j(C)
+```
+
+summed as §14.3 sums, over the joints below the pair's lowest common ancestor on each branch, with
+`w_j = ρ_{jk}` for a revolute dependent and `1` for a dependent slide. A held loop's dependents have
+`δ_j = 0` (§16.1). The same `τ_half` enters the blocked certificate's allowance (§14.3): along the straight
+joint-space segment from `m` to `q` each dependent changes by at most `δ_j`, so the volume's Lipschitz bound
+holds with the same per-body travel. `τ_half` is the one quantity that changes; the centre certificate,
+the blocked certificate and the cell's `Clearance` read as §14.3 writes them.
+
+**The loop gate.** A cell whose hull ask `sketch` refused — a fold inside its loop-axis range, the piece
+budget, a reading past a dependent's reach (§15.5) — has no `δ_j`, so no pair of it has a `τ_half`, and it
+is neither `CellClear` nor `CellBlocked` whatever its pairs prove, even when every pair was settled before
+any cell: the claim that the cell's configurations lie on the zero-pose branch is `sketch`'s, and it was
+refused. Such a cell is `CellColliding` when its centre collides and `CellUndecided` otherwise, with the
+loop's finding (§16.4). This is §15.5's interval gate over a cell.
+
+**An unbuildable centre.** A cell whose centre's point ask is refused has no pose: it is `CellUndecided`,
+its `Center` is the zero `JointConfiguration`, it carries no row, and its finding names the loop and
+`sketch`'s cause. It counts in `CellsEvaluated` and against the budget, as the split that produced it
+spent them.
+
+**Reach, exclusions, limits.** A dependent's reach `m_j` is the decomposition's hull (§15.5) and enters
+the balls, the swept-box reach and the layer exclusion as §14.3 states them for a held or varying joint;
+every loop joint keeps `a·x` for `a = n`, so a stacked planar loop's link-link pairs are layer-separated. A
+dependent with `WithJointLimits` is held to the decomposition's hull over the box's loop axis
+(`ErrDegenerate`, after the decomposition). A cell whose hull reaches past `m_j` is refused by the reach
+guard, and the gate makes it undecided.
+
+### 16.4 The procedure over a loop
+
+§14.4 runs with these additions:
+
+- **Step 2** builds each loop's scenes, asks `E0` and decomposes the loop axis to the verdict floor
+  (`prepareLoops`, §15.7) before the bounds are read, as `VerifyLinkage` does.
+- **Step 4** classifies through the gate: a refused hull or an unbuildable centre is never clear or
+  blocked.
+- **Step 5's axis.** Wherever §14.4 ranks the varying axes by a joint's term — the split axis of an
+  undecided or colliding cell, step 6's reading axis — a dependent's term is charged to its loop's driver
+  axis as `2·w_j·δ_j`, twice its share of `τ_half`, which is how a stated joint's `w_i·span_i` counts;
+  halving the driver's range is what shrinks the hull. A pair's share of an axis is the sum of its terms
+  charged there, so the driver of a crank on a pair's path carries its own term and its dependents'. A
+  gated cell — its hull refused or its centre unbuildable, colliding at its centre or not — has no term
+  to rank and splits along the refusing loop's axis, the one axis a split changes, while that axis is
+  wider than the verdict floor; it is **stuck**, published as it stands, when its loop-axis range overlaps
+  no stretch the decomposition certified by more than a point, because every centre a split could place
+  inside it was refused at the floor already. A cell whose range overlaps a certified stretch is split, and
+  a child whose range lies inside the certified set has a buildable centre.
+- **Step 8** publishes, per dependent `j` of a cell, `Cell.Min[j]` and `Cell.Max[j]` as the floats of
+  `H_j`'s ends rounded outward, in the joint's `Kind` — the proven enclosure of the dependent over the cell,
+  `M_j` for a held loop — or the zero `units.Value` when the hull was refused, and for every dependent of
+  every loop when the centre is unbuildable, since no hull is read then; `Center.Values[j]` and `Center.Bounds[j]` as §15.4
+  labels them; and an undecided cell's `DiagMotionUndecidedInterval` with `Cell` set and, where the gate
+  held the cell, a `Message` naming the loop by its two closed links and carrying `sketch`'s cause, as
+  §15.6's interval finding does. No new `DiagnosticCode` is added.
+
+### 16.5 What is never claimed
+
+§14.5 and §15.6 hold, and in addition: nothing about a cell whose hull or centre `sketch` refused, beyond
+a collision proven at its centre; nothing about a dependent's value outside the hull its cell publishes;
+nothing about a branch of the loop other than the zero pose's (§15.3).
+
+### 16.6 Errors
+
+§14.6 holds, with these rows added, each before `ctx` is read and each as §15.6 states it for a drive:
+
+| Condition | Error |
+|---|---|
+| a box listing two joints of one loop | `ErrDegenerate` |
+| a box listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
+| `E0` refused, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
+| a dependent's decomposition hull not proven inside its limits | `ErrDegenerate`, after the decomposition |
+| `Linkage.Configuration` on a looped linkage (§16.1) | `ErrUnsupported` |
+
+A refused cell or centre is a finding, never an error, as §15.6 says of every ask after validation.
+
+### 16.7 Cost
+
+Each centre costs §14.7's kernel pose plus one point ask (about a millisecond on the crank-rocker, §15.9),
+and each distinct loop-axis interval one cell ask whose pieces serve every cell over it. At a floor of
+`1/2^d` along the loop axis the asks number about `2^(d+1)` cells and points — the chain a `VerifyLinkage`
+over `Min → Max` builds — so the enclosure work is a few hundred milliseconds where the kernel work is
+seconds; the root's cell ask, over the whole range, costs the most pieces (a quarter turn of the
+crank-rocker: a few hundred). A stuck cell costs its one refused point ask, which the cache answers from
+its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `445` centres
+in about `2.3` s, `13` s under the race detector; the one-axis loop box `107` centres in about `2` s, `6` s
+under the race detector; the fold box `21` centres in about `2` s, most of it the decomposition walking the
+refused cells down to the fold. The test file records the counts.
+
+### 16.8 Required tests
+
+§11's standard holds: every assertion is on computed geometry through the production path, every bound is
+`InDelta` at a stated slack, and each guarding leg is deleted once and seen to fail. The four-bar is
+scene 7's (ground `100`, crank `30`, coupler `80`, follower `70`, pivots `O2 = (0, 0)` and `O4 = (100, 0)`,
+links in layers along `Z`), with `θ4(θ2)` the two-circle closed form and the follower's top corner at
+
+```text
+y_c(θ2) = 70·sin θ4 − 4·cos θ4,    θ4 = θ4(θ2)
+```
+
+which rises from `67.0399` at `θ2 = 0` to `69.3857` at the follower's extreme `θ2* = 38.5727°`
+(`θ4 = 101.5370°`) and falls to `65.8629` at `90°`. The follower's rest box is `x ∈ [71.9627, 103.7516]`,
+`y ∈ [−1.3878, 67.0399]`, and its ball reading about `O4`'s axis — the farthest corner, `(71.9627,
+67.0399)` — is `ρ = 72.6666`; its area is `2368` mm². Every non-dyadic value below is bracketed to `1e-12`
+by bisection of the closed form.
+
+**Scene 11 — the crank-rocker and the gate (the acceptance target).** Scene 7's four-bar with no static
+body, and link 4, the **gate**: a prism `x ∈ [−50, 150], y ∈ [72, 82], z ∈ [19, 29]` on a prismatic joint
+under the ground along `(0, −1, 0)`, so its value `d` lowers it. The box is the crank over `[0°, 90°]` and
+the gate over `[0, 10]` mm. The gate's underside is `y = 72 − d`, so the colliding region is
+`{d > d*(θ2)}` with `d*(θ2) = 72 − y_c(θ2)`: `4.9601` at `0°`, `2.6143` at `θ2*`, `6.1371` at `90°` — a
+boundary curve that is monotone in `d` and turns back in the crank. The `(crank, gate)` and `(coupler,
+gate)` pairs are settled by the layer exclusion along `Z` (`z`-gaps `11` and `1`), the loop's own pairs
+as in scene 7, so each centre evaluates `(follower, gate)` alone; the follower's reach `ρ·0.1529` — its
+dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting the gate's. At
+`WithResolution(Scalar(1.0/16))` assert:
+
+- `Status` is `Interfering`; the leaves tile the box; every leaf's `Center` is its cell's midpoint along
+  the crank and the gate; `Center.Values[2]` (the follower) is within `1e-9` rad of `θ4(θ2_c) − θ4(0)`
+  with `Bounds[2]` positive and below `1e-9`, and `Bounds[0]`, `Bounds[3]` zero; `Cell.Min[2]` and
+  `Cell.Max[2]` enclose the closed form's extremes over the cell's crank range (at its ends, or at `θ2*`
+  where the cell holds it), and their width is at most `1.05` times the true variation plus `1e-6` rad —
+  `sketch`'s piece slack is `5%` of the hull plus `1e-7` of the coordinate scale. Measured, the widest is
+  `1.0052` times the true variation, `1.2e-4` rad over it.
+- Every `CellClear` leaf has `y_c(θ̂) < 72 − d_hi`, with `θ̂` the crank value of the cell nearest `θ2*` —
+  `y_c`'s maximum over the cell — and `Clearance.Value` at or below `72 − d_hi − y_c(θ̂)`, the true minimum
+  gap over the cell. This is the leg that goes red when the dependent's term is dropped from `τ_half`.
+- Every `CellBlocked` leaf has `y_c(θ̌) > 72 − d_lo`, with `θ̌` the end of its crank range farther from
+  `θ2*`; none blocks at this floor, since the gate's own allowance `½·Δd·8200 ≈ 2560` mm³ exceeds every
+  overlap. Every `CellColliding` leaf has `y_c(θ_c) > 72 − d_c` at its centre; every undecided and colliding
+  leaf is at the floor along both axes; and an undecided leaf's centre gap `72 − d_c − y_c(θ_c)` is at
+  most `ρ·(1.1·v + 1e-6) + Δd/2`, with `v` the largest `|θ4(θ) − θ4(θ_c)|` over the cell's crank range:
+  `δ` is at most `v` plus the slack of a hull `5%` wider than the variation, which is at most `2·v`.
+- Every `JointBoxCollision` has `y_c > 72 − d` at its configuration; where the corner's depth
+  `δ = y_c − (72 − d)` is below `8·|cos θ4|`, so that only the corner has crossed, its `Volume` is the
+  triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³ within `1e-6`, `Bound` below `Value`; at least one
+  collision is that shallow.
+- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
+  file records the count: `445` centres into `223` leaves, `24` clear, `168` colliding, `31` undecided.
+- `examples/` gains `Example_decad_jointBoxLoop` on this scene at `WithResolution(Scalar(1.0/16))`,
+  printing `Status`, the first collision's bodies and its crank angle and gate value to two decimals; the
+  centres are dyadic, so the printed values hold on every platform.
+
+**The clear box and its reading.** Scene 11 with the gate over `[0, 2]` mm: `d*` is at least `2.6143`, so
+no configuration collides, and the minimum gap over the box is `72 − 2 − 69.3857 = 0.6143` mm at
+`(θ2*, 2)` — interior along the crank, at the gate's end. At `WithMotionTolerance(Scalar(0.05))` and the
+other defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
+`72 − d_hi − y_c(θ̂)`; `Clearance` enclosing `0.6143` with `ToleranceSatisfied`; `ReadingResolution`
+`1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (the test
+file records it). `WithMinClearance` `0.5` mm reads `AssessmentMet`; `0.7` mm `AssessmentViolated` with a
+`DiagMotionClearanceViolated` whose `Cell` is set.
+
+**The one-axis loop box.** Scene 7's linkage and wall (`y ∈ [68.5, 78.5]`), the crank alone over
+`[0°, 90°]`, at `WithResolution(Scalar(1.0/64))`. The corner is inside the wall for `θ2 ∈ (12.6250°,
+66.7924°)`, the fractions `s₁ = 0.140278` and `s₂ = 0.742137`. Assert `Interfering`; every `CellClear`
+leaf's range lies inside `[0, s₁]` or `[s₂, 1]`; every `CellColliding` leaf's centre lies inside
+`(s₁, s₂)`; every `CellBlocked` leaf's range lies inside `(s₁, s₂)` — none blocks at this floor, since the
+corner's overlap is at most about `16` mm³ against the follower's area, so blocking needs `τ_half` under
+about `7e-3` mm, cells near `1/5000` of the range; the leaves holding `s₁` and `s₂` are undecided or
+colliding; every undecided leaf is at the floor; every collision's `Volume` is the triangular prism above
+within `1e-6` where the corner's depth is below `8·|cos θ4|`; `Center.Values[2]` is within `1e-9` rad of
+the closed form with `Bounds[2]` positive and below `1e-9`. This is the leg that goes red when the
+dependent's term is dropped from the blocked allowance: `τ_half` of `(follower, wall)` is then `0`, every
+colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `107` centres into `54` leaves.
+
+**The turn-back cell.** Scene 7 without the wall, the crank over `[0°, 81.857366°]` — the follower returns
+to `θ4(0)` at the range's end (§15.10) — and a `0.8` mm pin in the follower's layer (`z ∈ [23.6, 24.4]`)
+centred on the follower's top corner at the zero pose, `(79.4658, 67.0399)`, so the pin is struck at both
+ends of the range. At `WithResolution(Scalar(1))`, the root alone: its centre `40.9287°` has the corner
+`10.67` mm from the pin's centre, a gap of about `10` mm; the follower's hull over the range is
+`[−8.7632°, 0]` from `θ4(0)` and its centre value `−8.7314°`, so `δ = 8.7314° = 0.15240` rad and the
+pair's `τ_half` is about `11.1` mm. Assert `CellUndecided`. Red when `δ` is half the hull's width — `5.6` mm, and the root
+reads `CellClear` across a struck pin — and when the dependent's term is dropped.
+
+**The held loop.** Scene 11 with the crank over `[30°, 30°]` and the gate over `[0, 10]`, at
+`WithResolution(Scalar(1.0/64))`: the follower stands at `θ4(30°) = 101.9717°`, `y_c = 69.3072`, and the
+boundary is `d_30 = 2.6928`. Assert every `CellClear` leaf has `d_hi ≤ d_30` and every colliding or blocked
+leaf's centre `d_c > d_30`; every leaf's `Center.Values[2]` is within `1e-9` rad of `θ4(30°) − θ4(0) =
+−8.3285°` with `Bounds[2]` positive and below `1e-9`, and `Cell.Min[2]`, `Cell.Max[2]` within `1e-9` of it.
+Red when a held driver's loop stands at the zero pose: the boundary is then `4.9601`.
+
+**The fold box.** Scene 9's four-bar (ground `100`, crank `50`, coupler `60`, follower `50`), the crank
+over `[0°, 90°]`, no static body, at the defaults. The loop folds at `s_fold = 0.974528`. Assert `Suspect`;
+no collision; every `CellClear` leaf's range ends at or below `s_fold`; the leaf holding `s_fold` is
+undecided and at the floor; every leaf past it is undecided with a zero `Center`, no row, and a finding
+whose `Cell` is set and whose `Message` names the loop and `sketch`'s refusal; some such leaf is wider
+than the verdict floor; `CellsEvaluated` is below `64` (measured: `21` centres into `11` leaves). Red when
+the hull gate is dropped — the root's hull spans the fold, every pair is settled, and the root reads
+`CellClear` and the report `Sound` — and when a stuck cell splits to the floor: every leaf past the fold is
+then floor-sized, `67` centres.
+
+**The blocked box.** Scene 11 with the gate shortened to `x ∈ [60, 120]` (area `2600` mm²), the crank over
+`[35°, 42°]` and the gate over `[8, 10]`, at `WithResolution(Scalar(1.0/64))`. Over that crank range `y_c`
+stays within `[69.3725, 69.3857]`, so the corner's depth below the underside `y = 72 − d ∈ [62, 64]` is at
+least `5.37` mm, past the bar's full width `8·|cos θ4| ≈ 1.61`, and the overlap is the trapezoidal prism
+`8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298` mm³; at the floor the allowance is about
+`½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57` mm³. Assert every leaf `CellBlocked`, no undecided or colliding leaf,
+`CellsEvaluated` below `512`. Red when the blocked certificate is dropped: the run then splits to the
+floor, exhausts the budget and reads `CellColliding` with `DiagJointBoxBudgetExhausted`.
+
+**Standing tests.** Errors, one subtest per row of §16.6: a box listing the crank and the follower, a
+box listing the coupler, the flat four-bar of scene 9 (`E0` refuses,
+`ErrUnsupported` wrapping `sketch.ErrUnderconstrained`), follower limits `[−5°, 5°]` under the crank over
+`[0°, 90°]` (`ErrDegenerate` naming link `2`) and `[−10°, 5°]` admitted, `Configuration` on scene 7's
+linkage. The crank over `[−30°, 60°]`, crossing `0` at the non-dyadic `1/3`, and over `[−30°, 1 rad]`,
+crossing it at an irrational fraction cut around a straddle (§15.8), each with the gate over `[0, 10]` at
+`WithResolution(Scalar(1.0/4))`: every centre reads the closed form within `1e-9`, the stretch below `0` on
+the mirrored scene; red when every cell reads on the scene's own side. `PoseAt` of the held drive at a leaf's stated centre values
+agrees with its `Center.Values` within `1e-9` and with the closed form. Non-mutation and determinism as
+motion §9 test 7; cancellation at every depth, inside an `Enclose` call among them. Internal tests in
+`linkage_box_internal_test.go` pin `δ_j` on hand-made `M` and `H` — `M` at an end of `H` gives the hull's
+whole width, `M` in its middle half of it — red when it is half the hull's width or §15.5's two-sided term;
+pin the split axis at the root of scene 11 built from boxes, the follower a box `x ∈ [70, 100]` with
+`ρ = √(30² + 4²)` and the gate over `[0, 5]` mm — the crank's share is exactly `2·ρ·δ ≈ 12` mm against the
+gate's `5`, so the crank splits first although it is not on the pair's path — red when a dependent's term
+is charged to no axis or dropped; and pin the stuck rule on a hand-built decomposition, a cell inside the
+refused set left unsplit, one straddling it split along the loop axis, one meeting it at a point only
+left unsplit.
+
+`.github/test-shards.txt` and `.github/test-shards-apitest.txt` are updated for every test and example,
+and `go test . ./apitest/ -run '^TestCI'` is run before the push.
+
+### 16.9 Increments
+
+| PR | lands | still `Suspect` after it |
+|---|---|---|
+| B1 (`linkage_box.go`, `linkage_loop.go`) | §16.1's admission and errors; the loop axis as a drive with `prepareLoops` before the bounds (§16.2); the centre over `AtRange`, `JointConfiguration.Bounds`, `δ_j` in `τ_half` and in the blocked allowance, the loop gate, unbuildable centres and the stuck rule, the driver-axis attribution, the dependents' `Cell` and `Center` entries (§16.3, §16.4); scene 11 and its example, the one-axis loop box, the fold box, the standing and internal tests; this section, and §14.1, §15.6, §15.8 and §15.10 read as this section states | nothing this section refuses: the remaining fixtures pin terms B1 already carries |
+| B2 (tests only) | the clear box and its reading, the turn-back cell, the held loop, the blocked box; the measured counts and times of §16.7 recorded | — |
+
+B1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, cells over a loop,
+one report, with scene 11's closed-form boundary as its acceptance. Its code is one change — `τ_half`
+and the blocked allowance share one term list, so a dependent's term reaches both or neither — which is
+why B1 is not split by certificate.
+
+### 16.10 Settled points
+
+A box varies a loop at its driver alone, listed as a drive lists it; a dependent is never an axis and
+is never stated; a held driver holds the loop (§16.1). `Configuration` refuses a loop, and a looped
+configuration is a held drive posed by `PoseAt` (§16.1). The loop axis is the drive `Min → Max` in the
+fraction, so the cell tree's dyadic intervals are §6's grid and §15.3's chain is unchanged; cells sharing
+a loop-axis interval share every ask (§16.2). A dependent's term in `τ_half` is the full one-sided
+distance `δ_j` from the centre's enclosure to the far end of the cell's hull, never half the hull, and the
+same term enters the blocked allowance (§16.3). A cell whose hull or centre `sketch` refused is never clear
+or blocked, splits along the loop axis alone, and is stuck once its range meets no certified cell of the
+decomposition (§16.3, §16.4). A dependent's term is charged to its driver's axis when an axis is ranked,
+and a cell publishes its dependents' hull and the centre's bounded value (§16.4).

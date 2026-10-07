@@ -22,8 +22,9 @@ import (
 
 // This file is the closed loop of docs/linkage-check-design.md §15: Close and
 // Loop, the private sketch scene a driven loop is read from, the canonical
-// chain of certified enclosures every dependent joint value comes from, and
-// the Schedule a renderer calls per frame. decad computes no 2D answer here:
+// chain of certified enclosures every dependent joint value comes from, the
+// Schedule a renderer calls per frame, and the asks a joint box over a
+// loop reads per cell (§16). decad computes no 2D answer here:
 // every dependent value is sketch.Enclose's certified enclosure, and the
 // checks this file runs on what sketch returns only ever refuse.
 
@@ -371,6 +372,10 @@ type loopDrive struct {
 	asks   map[string]*loopAsk
 	reach  []*big.Rat // per dependent: a proven bound on |value| over the certified drive
 	hulls  []proofbound.RatInterval
+	// certified lists the stretches [a, b] of the fraction the decomposition
+	// asked whole and sketch certified; a joint-box cell whose loop-axis range
+	// meets none of them is stuck (docs/linkage-check-design.md §16.4).
+	certified [][2]*big.Rat
 	// spans holds each verification interval's dependent readings, keyed by
 	// its two ends, per piece the interval is cut into and per dependent,
 	// from intervalGate until travel reads them.
@@ -438,8 +443,11 @@ type loopSpan struct {
 
 // unbuildableError marks a pose whose loop could not be enclosed
 // (docs/linkage-check-design.md §15.6): the pose is not evaluated and the
-// intervals that end at it are undecided.
-type unbuildableError struct{ cause error }
+// intervals that end at it are undecided. loop is the loop that refused.
+type unbuildableError struct {
+	cause error
+	loop  *loopDrive
+}
 
 func (e *unbuildableError) Error() string { return e.cause.Error() }
 func (e *unbuildableError) Unwrap() error { return e.cause }
@@ -449,8 +457,10 @@ func (e *unbuildableError) unbuildable()  {}
 // a resolved drive, marks every dependent joint, and cuts each driven loop's
 // drive into sub-segments. A loop the drive does not list, or whose listed
 // joint holds 0, stands at the zero pose and is left as the tree's held
-// joints. The scenes are built later, by prepare.
-func (l *Linkage) resolveLoops(spec *linkageSpec) error {
+// joints. The scenes are built later, by prepare. A joint box is read the
+// same way, its loop driver's range the one-segment drive Min → Max (§16.2);
+// noun names what states the values, "drive" or "box", in a refusal.
+func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 	for _, lp := range l.loops {
 		var listed []int
 		for _, k := range lp.links {
@@ -459,7 +469,7 @@ func (l *Linkage) resolveLoops(spec *linkageSpec) error {
 			}
 		}
 		if len(listed) > 1 {
-			return fmt.Errorf(`%w: a drive states links %d and %d of one loop, but a loop's second value follows from its first`, ErrDegenerate, listed[0], listed[1])
+			return fmt.Errorf(`%w: a %s states links %d and %d of one loop, but a loop's second value follows from its first`, ErrDegenerate, noun, listed[0], listed[1])
 		}
 		if len(listed) == 0 {
 			continue
@@ -467,7 +477,7 @@ func (l *Linkage) resolveLoops(spec *linkageSpec) error {
 		k := listed[0]
 		jt := spec.joints[k]
 		if jt.link.parent != lp.common {
-			return fmt.Errorf(`%w: a drive moves link %d of a loop, whose parent is not the loop's common link`, ErrUnsupported, k)
+			return fmt.Errorf(`%w: a %s moves link %d of a loop, whose parent is not the loop's common link`, ErrUnsupported, noun, k)
 		}
 		if heldAtZeroJoint(jt) {
 			continue
@@ -1439,6 +1449,7 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 			for _, ask := range asks {
 				add(ask)
 			}
+			ld.certified = append(ld.certified, [2]*big.Rat{a, b})
 			return nil
 		}
 		width := new(big.Rat).Sub(b, a)
@@ -1521,13 +1532,13 @@ func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbo
 		return nil, err
 	}
 	if ask.err != nil {
-		return nil, &unbuildableError{cause: ld.describe(ask.err)}
+		return nil, ld.unbuildable(ask.err)
 	}
 	out := make([][2]motionbound.MotionParam, len(ld.deps))
 	for j := range ld.deps {
 		lo, hi := ld.value(ask, j)
 		if !ld.withinReach(j, valueInterval(lo, hi)) {
-			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		out[j] = [2]motionbound.MotionParam{lo, hi}
 	}
@@ -1544,14 +1555,14 @@ func (ld *loopDrive) straddleValues(ctx context.Context, sub loopSub) ([][2]moti
 	}
 	for _, ask := range asks {
 		if ask.err != nil {
-			return nil, &unbuildableError{cause: ld.describe(ask.err)}
+			return nil, ld.unbuildable(ask.err)
 		}
 	}
 	out := make([][2]motionbound.MotionParam, len(ld.deps))
 	for j := range ld.deps {
 		h := ld.askHull(asks, j)
 		if !ld.withinReach(j, h) {
-			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		out[j] = [2]motionbound.MotionParam{{Turn: new(big.Rat), Base: h.Lo}, {Turn: new(big.Rat), Base: h.Hi}}
 	}
@@ -1561,6 +1572,12 @@ func (ld *loopDrive) straddleValues(ctx context.Context, sub loopSub) ([][2]moti
 // describe names the loop in a refusal.
 func (ld *loopDrive) describe(err error) error {
 	return fmt.Errorf(`the loop closing links %d and %d: %w`, ld.loop.a.index, ld.loop.b.index, err)
+}
+
+// unbuildable is sketch's refusal err, the loop named, as the error that
+// leaves a pose unbuildable or an interval or cell undecided.
+func (ld *loopDrive) unbuildable(err error) *unbuildableError {
+	return &unbuildableError{cause: ld.describe(err), loop: ld}
 }
 
 // intervalSpans reads every dependent's values over [a, b], cut at every
@@ -1594,7 +1611,7 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 		}
 		for _, ask := range []*loopAsk{pa, c, pb} {
 			if ask.err != nil {
-				return nil, &unbuildableError{cause: ld.describe(ask.err)}
+				return nil, ld.unbuildable(ask.err)
 			}
 		}
 		piece := make([]loopSpan, len(ld.deps))
@@ -1602,7 +1619,7 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 			A, B, C := valueInterval(ld.value(pa, j)), valueInterval(ld.value(pb, j)), valueInterval(ld.value(c, j))
 			H := hull(A, B, C)
 			if !ld.withinReach(j, H) {
-				return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+				return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 			}
 			piece[j] = loopSpan{a: A, b: B, h: H}
 		}
@@ -1623,14 +1640,14 @@ func (ld *loopDrive) straddleSpans(ctx context.Context, sub loopSub) ([]loopSpan
 	}
 	for _, ask := range asks {
 		if ask.err != nil {
-			return nil, &unbuildableError{cause: ld.describe(ask.err)}
+			return nil, ld.unbuildable(ask.err)
 		}
 	}
 	piece := make([]loopSpan, len(ld.deps))
 	for j := range ld.deps {
 		h := ld.askHull(asks, j)
 		if !ld.withinReach(j, h) {
-			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		piece[j] = loopSpan{a: valueInterval(ld.value(asks[1], j)), b: valueInterval(ld.value(asks[3], j)), h: h}
 	}
@@ -1679,25 +1696,88 @@ func (ld *loopDrive) span(joint int, sa, sb *big.Rat) *big.Rat {
 // loopSpanKey names a verification interval.
 func loopSpanKey(a, b *big.Rat) string { return a.RatString() + "," + b.RatString() }
 
+// cellHulls is every dependent's hull over the stretch [a, b] of the loop
+// axis (docs/linkage-check-design.md §16.2): the hull, over every piece
+// intervalSpans cuts the stretch into, of the values at the piece's ends and
+// over its cell; err is the refusal that leaves a joint-box cell gated.
+func (ld *loopDrive) cellHulls(ctx context.Context, a, b *big.Rat) ([]proofbound.RatInterval, error) {
+	pieces, err := ld.intervalSpans(ctx, a, b)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]proofbound.RatInterval, len(ld.deps))
+	for j := range ld.deps {
+		ivs := make([]proofbound.RatInterval, len(pieces))
+		for n, piece := range pieces {
+			ivs[n] = piece[j].h
+		}
+		out[j] = hull(ivs...)
+	}
+	return out, nil
+}
+
+// meetsCertified reports whether the stretch [a, b] of the loop axis
+// overlaps, over a positive length, some stretch the decomposition certified.
+// A cell whose range meets none holds no buildable centre a split could place,
+// since every such centre was refused at the floor already
+// (docs/linkage-check-design.md §16.4).
+func (ld *loopDrive) meetsCertified(a, b *big.Rat) bool {
+	for _, c := range ld.certified {
+		if a.Cmp(c[1]) < 0 && c[0].Cmp(b) < 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// loopPose is every link's pose at one configuration of a looped linkage
+// (docs/linkage-check-design.md §15.4): its joint value — stated, or the
+// float midpoint label of a dependent's enclosure — and that value's proven
+// half-width, its world pose, its ideal pose, and per joint the exact value
+// range the ideal pose was composed over.
+type loopPose struct {
+	values, bounds []units.Value
+	poses          []r3.Transform
+	ideals         []motionbound.IdealPose
+	lo, hi         []motionbound.MotionParam
+}
+
 // loopPosesAt builds every link's pose at the exact fraction f for a drive
-// that moves a loop (docs/linkage-check-design.md §15.4): each stated joint at
-// its label, each dependent at the float midpoint of its enclosure, both
-// posed by posesOf; every link's ideal pose composed over the dependent's
-// whole enclosure by MotionFrame.AtRange; and each value's proven half-width.
+// that moves a loop: loopPosesOf with every joint at f.
 func (s *linkageSpec) loopPosesAt(ctx context.Context, frames []motionbound.MotionFrame, f *big.Rat) ([]units.Value, []units.Value, []r3.Transform, []motionbound.IdealPose, error) {
+	fracs := make([]*big.Rat, len(s.joints))
+	for k := range fracs {
+		fracs[k] = f
+	}
+	lp, err := s.loopPosesOf(ctx, frames, fracs)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return lp.values, lp.bounds, lp.poses, lp.ideals, nil
+}
+
+// loopPosesOf builds every link's pose with each stated joint k at the exact
+// fraction fracs[k] of its own schedule — one fraction for every joint on a
+// drive, each joint's own on a joint box — and each driven loop's dependents
+// read at its driver's fraction (docs/linkage-check-design.md §15.4, §16.3):
+// each stated joint at its label, each dependent at the float midpoint of its
+// enclosure, both posed by posesOf; every link's ideal pose composed over the
+// dependent's whole enclosure by MotionFrame.AtRange; and each value's proven
+// half-width.
+func (s *linkageSpec) loopPosesOf(ctx context.Context, frames []motionbound.MotionFrame, fracs []*big.Rat) (loopPose, error) {
 	n := len(s.joints)
 	values, bounds := make([]units.Value, n), make([]units.Value, n)
 	lo, hi := make([]motionbound.MotionParam, n), make([]motionbound.MotionParam, n)
 	for k, jt := range s.joints {
-		values[k] = jt.label(f)
+		values[k] = jt.label(fracs[k])
 		bounds[k] = units.New(0, values[k].Unit())
-		p := jointParam(jt, f)
+		p := jointParam(jt, fracs[k])
 		lo[k], hi[k] = p, p
 	}
 	for _, ld := range s.loops {
-		ranges, err := ld.pointValues(ctx, f)
+		ranges, err := ld.pointValues(ctx, fracs[ld.driver])
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return loopPose{}, err
 		}
 		for j, d := range ld.deps {
 			lo[d], hi[d] = ranges[j][0], ranges[j][1]
@@ -1719,7 +1799,7 @@ func (s *linkageSpec) loopPosesAt(ctx context.Context, frames []motionbound.Moti
 	}
 	poses, err := s.posesOf(values)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return loopPose{}, err
 	}
 	var ideals []motionbound.IdealPose
 	if frames != nil {
@@ -1732,7 +1812,7 @@ func (s *linkageSpec) loopPosesAt(ctx context.Context, frames []motionbound.Moti
 			ideals[k] = ideal
 		}
 	}
-	return values, bounds, poses, ideals, nil
+	return loopPose{values: values, bounds: bounds, poses: poses, ideals: ideals, lo: lo, hi: hi}, nil
 }
 
 // prepareLoops builds every driven loop's scene and E0 under a context that is

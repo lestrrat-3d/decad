@@ -91,12 +91,17 @@ type fourBar struct {
 	b                        [2]float64
 }
 
-// buildFourBar builds the four-bar with ground pivots (0, 0) and (g, 0), the
-// crank along +X at the zero pose and the coupler pin B on the branch above
-// the ground line, crank z ∈ [0, 8], coupler z ∈ [10, 18], follower
-// z ∈ [20, 28].
-func buildFourBar(t *testing.T, doc *decad.Document, g, r, l, f float64) fourBar {
+// fourBarGround is the ground bar of every four-bar the loop tests build:
+// scene 7's crank-rocker and scene 9's fold alike.
+const fourBarGround = 100.0
+
+// buildFourBar builds the four-bar with ground pivots (0, 0) and
+// (fourBarGround, 0), the crank along +X at the zero pose and the coupler pin
+// B on the branch above the ground line, crank z ∈ [0, 8], coupler
+// z ∈ [10, 18], follower z ∈ [20, 28].
+func buildFourBar(t *testing.T, doc *decad.Document, r, l, f float64) fourBar {
 	t.Helper()
+	g := fourBarGround
 	fb := fourBar{doc: doc, g: g, r: r, l: l, f: f}
 	t4 := fourBarTheta4(0, g, r, l, f)
 	fb.b = [2]float64{g + f*math.Cos(t4), f * math.Sin(t4)}

@@ -68,7 +68,7 @@ func rockerWallHits() (float64, float64) {
 func buildRocker(t *testing.T, withWall bool) (fourBar, *decad.Body) {
 	t.Helper()
 	doc := decad.New()
-	fb := buildFourBar(t, doc, rockerGround, rockerCrank, rockerCoupler, rockerFollower)
+	fb := buildFourBar(t, doc, rockerCrank, rockerCoupler, rockerFollower)
 	var wall *decad.Body
 	if withWall {
 		wall = boxBodyAtZ(t, doc, -50, 68.5, 150, 78.5, 19, 10)
@@ -368,7 +368,7 @@ func TestVerifyLinkageLoopMirroredAxes(t *testing.T) {
 // The non-Grashof four-bar of scene 9: ground 100, crank 50, coupler 60,
 // follower 50. Its loop folds at cos θ2 = 0.04: past θ2 = 87.707557° no
 // configuration exists.
-const foldGround, foldCrank, foldCoupler, foldFollower = 100.0, 50.0, 60.0, 50.0
+const foldCrank, foldCoupler, foldFollower = 50.0, 60.0, 50.0
 
 // TestVerifyLinkageLoopFold is scene 9 of docs/linkage-check-design.md §15.10.
 // No static body stands in the document and the layer exclusion settles every
@@ -388,7 +388,7 @@ func TestVerifyLinkageLoopFold(t *testing.T) {
 	t.Run("the drive into the fold", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		fb := buildFourBar(t, doc, foldGround, foldCrank, foldCoupler, foldFollower)
+		fb := buildFourBar(t, doc, foldCrank, foldCoupler, foldFollower)
 		drive := fb.crankDrive(units.Degrees(90))
 		report := verifyLinkage(t, doc, fb.linkage, drive)
 		require.Equal(t, decad.Suspect, report.Status)
@@ -502,7 +502,7 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		t.Run(row.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			fb := buildFourBarOpen(t, doc, rockerGround, rockerCrank, rockerCoupler, rockerFollower, z)
+			fb := buildFourBarOpen(t, doc, z)
 			require.ErrorIs(t, row.mod(t, fb), row.want)
 			require.Empty(t, fb.linkage.Loops())
 		})
@@ -510,7 +510,7 @@ func TestLinkageLoopRefusals(t *testing.T) {
 	t.Run("a loop revolute not parallel to the closure", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		fb := buildFourBarOpen(t, doc, rockerGround, rockerCrank, rockerCoupler, rockerFollower, r3.NewVec(0, 1e-12, 1))
+		fb := buildFourBarOpen(t, doc, r3.NewVec(0, 1e-12, 1))
 		_, err := fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), z)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
@@ -604,12 +604,10 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		_, err = sched.PoseAt(t.Context(), units.Degrees(1))
 		require.ErrorIs(t, err, decad.ErrUnitKind)
 	})
-	t.Run("the joint box and a configuration", func(t *testing.T) {
+	t.Run("a configuration", func(t *testing.T) {
 		t.Parallel()
 		fb, _ := buildRocker(t, false)
-		_, err := fb.doc.VerifyJointBox(t.Context(), fb.linkage, decad.JointBox{{Link: fb.crank, Min: units.Degrees(0), Max: units.Degrees(90)}})
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		_, err = fb.linkage.Configuration([]units.Value{units.Degrees(0), units.Degrees(0), units.Degrees(0)})
+		_, err := fb.linkage.Configuration([]units.Value{units.Degrees(0), units.Degrees(0), units.Degrees(0)})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("a loop the drive does not move stands at the zero pose", func(t *testing.T) {
@@ -625,10 +623,11 @@ func TestLinkageLoopRefusals(t *testing.T) {
 	})
 }
 
-// buildFourBarOpen is buildFourBar with every joint about axis and no
-// closure yet; opts go to the follower's joint.
-func buildFourBarOpen(t *testing.T, doc *decad.Document, g, r, l, f float64, axis r3.Vec, opts ...decad.JointOption) fourBar {
+// buildFourBarOpen is buildFourBar of scene 7's crank-rocker with every
+// joint about axis and no closure yet; opts go to the follower's joint.
+func buildFourBarOpen(t *testing.T, doc *decad.Document, axis r3.Vec, opts ...decad.JointOption) fourBar {
 	t.Helper()
+	g, r, l, f := fourBarGround, rockerCrank, rockerCoupler, rockerFollower
 	fb := fourBar{doc: doc, g: g, r: r, l: l, f: f}
 	t4 := fourBarTheta4(0, g, r, l, f)
 	fb.b = [2]float64{g + f*math.Cos(t4), f * math.Sin(t4)}
