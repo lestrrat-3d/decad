@@ -108,7 +108,11 @@ func (r imageRender) write(ctx context.Context, chord units.Value, settings soli
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
 	}
-	err = solidlens.RenderPNG(ctx, file, scene, settings)
+	if r.name() == "verify" {
+		err = renderVerifiedFit(ctx, file, scene, settings)
+	} else {
+		err = solidlens.RenderPNG(ctx, file, scene, settings)
+	}
 	closeErr := file.Close()
 	if err != nil {
 		return fmt.Errorf("render: %w", err)

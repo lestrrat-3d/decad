@@ -89,6 +89,8 @@ func renderFeatureAnimation(ctx context.Context, name, root string) error {
 		}
 		if name == "boolean" && len(models) > 1 {
 			err = renderBooleanFrame(ctx, file, scene)
+		} else if name == "verify" && stage == steps-1 {
+			err = renderVerifiedFit(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
 		} else {
 			err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 480, Height: 360})
 		}
@@ -351,6 +353,11 @@ func verifyAnimationModels(ctx context.Context, stage int, chord units.Value) ([
 		}
 		pin, err = pin.PlacedCopy(ctx, translation)
 		if err != nil {
+			return nil, err
+		}
+	}
+	if stage == featureAnimationSteps-1 {
+		if err := verifyFitGap(ctx, doc); err != nil {
 			return nil, err
 		}
 	}

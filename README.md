@@ -105,8 +105,8 @@ meshes decad tessellates.
 </tr>
 <tr>
 <td>
-<img src="docs/images/features/verify.gif" alt="A housing is bored and a smaller pin lowers into its opening" width="320"><br>
-<strong>Verify</strong> proves the gap between two bodies, so a fit is checked before anything is cut.
+<img src="docs/images/features/verify.gif" alt="A pin enters a bored housing; Verify reports a 7 mm gap" width="320"><br>
+<strong>Verify</strong> measures the 7 mm clearance between the pin and housing after the pin seats in the bore.
 </td>
 <td>
 <img src="docs/images/features/surface.gif" alt="A curved open dish grows as its profile revolves" width="320"><br>
