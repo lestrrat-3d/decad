@@ -9,8 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -54,7 +52,7 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 	if err != nil {
 		return MassProperties{}, err
 	}
-	rotation, err := revolveRotation(rp)
+	rotation, err := massmoment.RevolveRotation(rp.frame, rp.ax.dU, rp.ax.dV, rp.xform)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -90,14 +88,6 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 	if err != nil {
 		return massmoment.Moments{}, err
 	}
-	axisMoment := massmoment.AxisMoments(plane, ax.aU, ax.aV, ax.dU, ax.dV)
-	r1 := axisMoment(0, 1)
-	zr := axisMoment(1, 1)
-	r2 := axisMoment(0, 2)
-	z2r := axisMoment(2, 1)
-	zr2 := axisMoment(1, 2)
-	r3m := axisMoment(0, 3)
-
 	angular, ok := revolveAngularFactors(rp)
 	if !ok {
 		return massmoment.Moments{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
@@ -105,46 +95,7 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 	if err := ctx.Err(); err != nil {
 		return massmoment.Moments{}, err
 	}
-
-	volume := proofbound.IntervalMul(angular.width, r1)
-	if volume.Lo.Sign() <= 0 {
-		return massmoment.Moments{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
-	}
-	first := [3]proofbound.RatInterval{
-		proofbound.IntervalMul(angular.width, zr),
-		proofbound.IntervalMul(angular.cos, r2),
-		proofbound.IntervalMul(angular.sin, r2),
-	}
-	var second [3][3]proofbound.RatInterval
-	second[0][0] = proofbound.IntervalMul(angular.width, z2r)
-	second[0][1] = proofbound.IntervalMul(angular.cos, zr2)
-	second[0][2] = proofbound.IntervalMul(angular.sin, zr2)
-	second[1][1] = proofbound.IntervalMul(angular.cos2, r3m)
-	second[1][2] = proofbound.IntervalMul(angular.sinCos, r3m)
-	second[2][2] = proofbound.IntervalMul(angular.sin2, r3m)
-	second[1][0], second[2][0], second[2][1] = second[0][1], second[0][2], second[1][2]
-	return massmoment.Moments{Volume: volume, First: first, Second: second}, nil
-}
-
-// revolveAnchor is the axis anchor a3 = o + aU·U + aV·V before placement, the
-// origin of revolveVolumeMoments' coordinates, as exact rationals read from
-// the held floats.
-func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
-	aU, aV := proofarith.FloatRat(rp.ax.aU), proofarith.FloatRat(rp.ax.aV)
-	if aU == nil || aV == nil {
-		return [3]*big.Rat{}, fmt.Errorf("%w: revolve axis anchor is not finite", ErrNotFinite)
-	}
-	origin, u, v := rp.frame.Origin(), rp.frame.U(), rp.frame.V()
-	var out [3]*big.Rat
-	for i := range out {
-		o := proofarith.FloatRat(revolvemesh.VecComponent(origin, i))
-		ui, vi := proofarith.FloatRat(revolvemesh.VecComponent(u, i)), proofarith.FloatRat(revolvemesh.VecComponent(v, i))
-		if o == nil || ui == nil || vi == nil {
-			return [3]*big.Rat{}, fmt.Errorf("%w: revolve frame is not finite", ErrNotFinite)
-		}
-		out[i] = proofbound.RatAdd(o, proofbound.RatMul(aU, ui), proofbound.RatMul(aV, vi))
-	}
-	return out, nil
+	return massmoment.RevolveMoments(plane, rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, angular)
 }
 
 // rigidMassProperties publishes the mass properties of a solid whose local
@@ -156,51 +107,16 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 // definite by its leading principal minors. center is the evaluator's own
 // bounded world centroid of the same solid.
 func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmoment.Moments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
-	volume, first, second := m.Volume, m.First, m.Second
-	if volume.Lo.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
-	}
-	var centroidal [3][3]proofbound.RatInterval
-	for i := range 3 {
-		for j := i; j < 3; j++ {
-			shift, ok := proofbound.IntervalQuo(proofbound.IntervalMul(first[i], first[j]), volume)
-			if !ok {
-				return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
-			}
-			centroidal[i][j] = proofbound.IntervalSub(second[i][j], shift)
-			centroidal[j][i] = centroidal[i][j]
-		}
-	}
-
-	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
-	trace := proofbound.IntervalAdd(proofbound.IntervalAdd(centroidal[0][0], centroidal[1][1]), centroidal[2][2])
-	var local [3][3]proofbound.RatInterval
-	for i := range 3 {
-		for j := range 3 {
-			if i == j {
-				local[i][j] = proofbound.IntervalScale(proofbound.IntervalSub(trace, centroidal[i][i]), rho)
-				continue
-			}
-			local[i][j] = proofbound.IntervalScale(centroidal[i][j], new(big.Rat).Neg(rho))
-		}
-	}
-	world := massmoment.RotateTensor(rotation, local)
-	defect := massmoment.OrthonormalityDefect(rotation)
-	widen := new(big.Rat).Mul(big.NewRat(3, 1), defect)
-	widen.Mul(widen, new(big.Rat).Add(big.NewRat(2, 1), defect))
-	widen.Mul(widen, massmoment.TensorMagnitude(local))
-	for i := range world {
-		for j := range world[i] {
-			world[i][j] = proofbound.IntervalWiden(world[i][j], widen)
-		}
+	world, rho, err := massmoment.RigidInertia(m, rotation, density)
+	if err != nil {
+		return MassProperties{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return MassProperties{}, err
 	}
 
 	result := MassProperties{Center: center}
-	var err error
-	result.Mass, err = massIntervalReading(proofbound.IntervalScale(volume, rho), units.Kilogram)
+	result.Mass, err = massIntervalReading(proofbound.IntervalScale(m.Volume, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -247,50 +163,6 @@ func publishedTensor(reading InertiaReading) [3][3]proofbound.RatInterval {
 	}
 }
 
-// revolveRotation is the exact rational matrix taking the local basis
-// (w, e0, e1) to world directions, column k the image of local axis k: the
-// placement basis times w = dU·U + dV·V, e0 = dU·V − dV·U and e1 = w × e0,
-// every factor read from the held floats (revolvePayload.basis states the same
-// basis in floats). Its departure from orthonormality is charged by the
-// caller.
-func revolveRotation(rp revolvePayload) ([3][3]*big.Rat, error) {
-	vec := func(v r3.Vec) ([3]*big.Rat, bool) {
-		out := [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-		return out, out[0] != nil && out[1] != nil && out[2] != nil
-	}
-	u, okU := vec(rp.frame.U())
-	v, okV := vec(rp.frame.V())
-	dU, dV := proofarith.FloatRat(rp.ax.dU), proofarith.FloatRat(rp.ax.dV)
-	basis := rp.xform.Basis()
-	ex, okX := vec(basis.EX)
-	ey, okY := vec(basis.EY)
-	ez, okZ := vec(basis.EZ)
-	if !okU || !okV || dU == nil || dV == nil || !okX || !okY || !okZ {
-		return [3][3]*big.Rat{}, fmt.Errorf("%w: revolve orientation is not finite", ErrNotFinite)
-	}
-	var w, e0, e1 [3]*big.Rat
-	for i := range 3 {
-		w[i] = proofbound.RatAdd(proofbound.RatMul(u[i], dU), proofbound.RatMul(v[i], dV))
-		e0[i] = new(big.Rat).Sub(proofbound.RatMul(v[i], dU), proofbound.RatMul(u[i], dV))
-	}
-	for i := range 3 {
-		j, k := (i+1)%3, (i+2)%3
-		e1[i] = new(big.Rat).Sub(proofbound.RatMul(w[j], e0[k]), proofbound.RatMul(w[k], e0[j]))
-	}
-	placement := [3][3]*big.Rat{ex, ey, ez}
-	var out [3][3]*big.Rat
-	for i := range 3 {
-		for k, local := range [3][3]*big.Rat{w, e0, e1} {
-			sum := new(big.Rat)
-			for l := range 3 {
-				sum.Add(sum, proofbound.RatMul(placement[l][i], local[l]))
-			}
-			out[i][k] = sum
-		}
-	}
-	return out, nil
-}
-
 // revolveSectionMoments returns the recorded section's plane-origin moments
 // m[p][q] = ∫u^p·v^q dA for p + q ≤ 3 as rational enclosures. Orders up to
 // two are the region's exact rationals where it has them and otherwise its
@@ -324,42 +196,16 @@ func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, er
 	return m, nil
 }
 
-// revolveMassAngular is the sweep's angular factors over [φ0, φ1]: its width
-// ∫dφ, cos ∫cos φ, sin ∫sin φ, and the three quadratic factors.
-type revolveMassAngular struct {
-	width, cos, sin    proofbound.RatInterval
-	cos2, sinCos, sin2 proofbound.RatInterval
-}
-
-// revolveAngularFactors encloses the factors from the payload's own sweep
-// denotation: the width is den.widthInterval (2π's enclosure for a full
-// turn), and each end's sine and cosine come from angleDenotation.sinCosFor,
-// the certified enclosure the partial-sweep centroid already reads. With
-// s, c the end values,
-//
-//	∫cos φ = s1 − s0        ∫sin φ = c0 − c1
-//	∫cos² φ = Δφ/2 + (s1c1 − s0c0)/2
-//	∫sin² φ = Δφ/2 − (s1c1 − s0c0)/2
-//	∫sin φ cos φ = (s1² − s0²)/2
-func revolveAngularFactors(rp revolvePayload) (revolveMassAngular, bool) {
+// revolveAngularFactors reads the sweep's certified width and endpoint values.
+func revolveAngularFactors(rp revolvePayload) (massmoment.RevolveAngular, bool) {
 	width, ok := rp.den.widthInterval()
 	if !ok {
-		return revolveMassAngular{}, false
+		return massmoment.RevolveAngular{}, false
 	}
 	s0, c0, ok0 := rp.den.phi0.sinCosFor(rp.phi0)
 	s1, c1, ok1 := rp.den.phi1.sinCosFor(rp.phi1)
 	if !ok0 || !ok1 {
-		return revolveMassAngular{}, false
+		return massmoment.RevolveAngular{}, false
 	}
-	half := big.NewRat(1, 2)
-	halfWidth := proofbound.IntervalScale(width, half)
-	doubleAngle := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, c1), proofbound.IntervalMul(s0, c0)), half)
-	return revolveMassAngular{
-		width:  width,
-		cos:    proofbound.IntervalSub(s1, s0),
-		sin:    proofbound.IntervalSub(c0, c1),
-		cos2:   proofbound.IntervalAdd(halfWidth, doubleAngle),
-		sin2:   proofbound.IntervalSub(halfWidth, doubleAngle),
-		sinCos: proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, s1), proofbound.IntervalMul(s0, s0)), half),
-	}, true
+	return massmoment.AngularFactors(width, s0, c0, s1, c1), true
 }

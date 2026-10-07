@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -77,7 +76,7 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 		}
 		total = massmoment.Add(total, unplaced)
 	}
-	rotation, err := placementRotation(placement)
+	rotation, err := massmoment.PlacementRotation(placement)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -95,11 +94,11 @@ func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Mo
 			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
 		rp.xform = r3.Identity()
-		frame, err := revolveRotation(rp)
+		frame, err := massmoment.RevolveRotation(rp.frame, rp.ax.dU, rp.ax.dV, rp.xform)
 		if err != nil {
 			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
-		origin, err := revolveAnchor(rp)
+		origin, err := massmoment.RevolveAnchor(rp.frame, rp.ax.aU, rp.ax.aV)
 		if err != nil {
 			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
@@ -122,31 +121,9 @@ func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Mo
 	if err != nil {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
-	origin, ok := exactVec(pp.frame.Origin())
+	origin, ok := massmoment.ExactVec(pp.frame.Origin())
 	if !ok {
 		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, fmt.Errorf("%w: sweep span frame is not finite", ErrNotFinite)
 	}
 	return local, frame, origin, nil
-}
-
-// placementRotation is the exact rational linear part of a placement, its
-// column k the image of world axis k, read from the held basis.
-func placementRotation(placement r3.Transform) ([3][3]*big.Rat, error) {
-	basis := placement.Basis()
-	var out [3][3]*big.Rat
-	for k, column := range []r3.Vec{basis.EX, basis.EY, basis.EZ} {
-		exact, ok := exactVec(column)
-		if !ok {
-			return out, fmt.Errorf("%w: placement basis is not finite", ErrNotFinite)
-		}
-		for i := range exact {
-			out[i][k] = exact[i]
-		}
-	}
-	return out, nil
-}
-
-func exactVec(v r3.Vec) ([3]*big.Rat, bool) {
-	out := [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-	return out, out[0] != nil && out[1] != nil && out[2] != nil
 }
