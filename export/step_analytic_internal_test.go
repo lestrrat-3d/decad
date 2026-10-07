@@ -55,6 +55,16 @@ func arcPrisms(t *testing.T) map[string]*decad.Body {
 	return map[string]*decad.Body{"half disc": extrude(half, 5), "notched plate": extrude(notch, 4)}
 }
 
+// loopHasArc reports whether any edge of the loop is an Arc3.
+func loopHasArc(loop *decad.Loop) bool {
+	for _, ce := range loop.CoEdges() {
+		if _, ok := ce.Edge().Curve().(decad.Arc3); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // vectorArea is ½∮ r × dr over the loop, each arc sampled finely along its own
 // sweep: the test's own oracle for which way a loop turns. For a planar loop
 // it is the area times the normal the loop runs counter-clockwise about; for
@@ -126,7 +136,7 @@ func reverseVecs(in []r3.Vec) []r3.Vec {
 // TestAnalyticArcLoopsRunCounterClockwiseAboutTheirFaceNormal checks the
 // analytic arm's orientation decisions against vectorArea on every arc face
 // of both prisms. A plane loop carrying an arc must run counter-clockwise
-// about the placement axis arcLoopPlacement states. A partial cylinder wall's
+// about the placement axis areaLoopPlacement states. A partial cylinder wall's
 // loop, once reversed or not as partialWallSense says, must run
 // counter-clockwise about the STEP face normal: the radial direction at the
 // wall's middle when the face keeps the surface's sense, its negation
@@ -151,7 +161,7 @@ func TestAnalyticArcLoopsRunCounterClockwiseAboutTheirFaceNormal(t *testing.T) {
 						continue
 					}
 					arcPlanes++
-					_, axis, _, err := arcLoopPlacement(face, loops[0])
+					_, axis, _, err := areaLoopPlacement(face, loops[0])
 					require.NoError(t, err)
 					require.Positive(t, vectorArea(t, loops[0]).Dot(axis))
 				case decad.Cylinder:

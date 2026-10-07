@@ -1052,3 +1052,4 @@
 3	0.01	TestBrepArcWallHasTheAnalyticSTEPShape
 3	0.01	TestBrepClearanceReadsItsCarriers
 3	0.01	TestBrepModifyOpsAreStaged
+3	0.01	TestBrepConsumersOnTheClassBCutResult

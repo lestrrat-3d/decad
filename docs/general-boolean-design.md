@@ -651,16 +651,16 @@ are relations, never literals.
   all-line record whose readings are exact rationals rounded once, and
   within the composed bounds for a circular one. The brep's centroid bound is
   the exact error of that one rounding, so it is at or below the prism's.
-- **brep consumers**, on hand-built records until class B produces one: S1's
-  pull survey hooks only the hole's wall under a pull along +z, nothing
-  along the hole, and the x = 0 face, the floor and the hole's wall under a
-  pull along (1, 0, 1); its concave-radius survey measures 3 mm, a half
-  disc's convex wall is no candidate, and a displaced record is undecided;
-  its clearance rows read 5 mm to a box off its x = 40 wall and 2 mm to a
-  pin threaded through its hole; `Fillet`, `Chamfer` and `Shell` refuse with
-  SX16; the half disc's face view carries the partial cylinder face and arc
-  loops export's analytic STEP arm admits, and that arm's own tests write
-  the half disc and a notched plate with every edge used once in each sense.
+- **brep consumers**: S1, both hand-built and as the public class B `Cut`
+  builds it: its pull survey hooks only the hole's wall under a pull along
+  +z, nothing along the hole, and the x = 0 face, the floor and the hole's
+  wall under a pull along (1, 0, 1); its concave-radius survey measures
+  3 mm, a half disc's convex wall is no candidate, and a displaced record is
+  undecided; its clearance rows read 5 mm to a box off its x = 40 wall and
+  2 mm to a pin threaded through its hole; `Fillet`, `Chamfer` and `Shell`
+  refuse with SX16. export writes the class B S1 and B1 results, a half
+  disc, a notched plate and an L whose cap loop starts at its reflex corner
+  analytically, every edge used once in each sense.
 - **Cancellation and the cap** as prism-boolean §15, per scene.
 
 ## 10. Open questions

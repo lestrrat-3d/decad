@@ -13,9 +13,9 @@ import (
 
 // This file is the brep consumers' share of docs/general-boolean-design.md
 // §4.5 that reads through Verify: the undercut and minimum-radius surveys.
-// No public boolean produces a brep yet, so every fixture is a hand-built
-// record (internalCrossDrilledBrep) or a prism's face view committed as a
-// brep body (internalBrepBody).
+// The fixtures are hand-built records (internalCrossDrilledBrep), a prism's
+// face view committed as a brep body (internalBrepBody), and S1 as the public
+// class B Cut builds it (internalCrossDrilled).
 
 // internalHalfDiscPrism extrudes a half disc of radius 10 about the origin
 // (an arc counter-clockwise from (10, 0) to (−10, 0) closed by its diameter)
@@ -130,9 +130,9 @@ func TestBrepConcaveRadiusReadsConcaveWalls(t *testing.T) {
 // supportsAnalyticPlanarLoop), read off a brep body: the half disc's face
 // view carries one cylinder face bounded by a single loop alternating two
 // arcs about its axis and two lines along it, and two planar faces whose
-// loops carry an arc. export reads only the public Body, which a public
-// boolean does not yet produce as a brep, so export's own tests run on the
-// prism that states the same faces.
+// loops carry an arc. No public boolean builds a brep with an arc wall yet
+// (class B's keyway takes the mesh path), so export's own arc tests run on
+// the prism that states the same faces; its class B tests write S1 and B1.
 func TestBrepArcWallHasTheAnalyticSTEPShape(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -188,18 +188,7 @@ func TestBrepClearanceReadsItsCarriers(t *testing.T) {
 	doc := New()
 	brep := internalCommitBrep(t, doc, internalCrossDrilledBrep(t))
 	box := internalBoxBody(t, doc, 45, 0, 50, 20, 20)
-	xz, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
-	require.NoError(t, err)
-	pinPayload := prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
-			CircleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
-		}}},
-		// The frame's normal is −y: z ∈ [−25, 5] spans y ∈ [−5, 25].
-		frame: xz, z0: -25, z1: 5, xform: r3.Identity(),
-	}
-	pin, err := evalPrismContext(t.Context(), doc, doc.nextProducerID(), pinPayload, freeform.NewFreeformWork())
-	require.NoError(t, err)
-	doc.commit(pin)
+	pin := internalPinThroughS1(t, doc)
 
 	_, ok := newBodyGeom(brep)
 	require.True(t, ok, "the brep body has a carrier model")
@@ -221,4 +210,87 @@ func TestBrepClearanceReadsItsCarriers(t *testing.T) {
 		require.True(t, found, "the brep body has a proven clearance row")
 		require.LessOrEqual(t, math.Abs(gap.Value.Base()-want), gap.Bound.Base()+1e-12)
 	}
+}
+
+// internalPinThroughS1 commits a Ø2 pin threaded along y through S1's hole
+// axis (20, ·, 10), spanning y from −5 to 25: 2 mm from the Ø6 hole's wall
+// all round.
+func internalPinThroughS1(t *testing.T, doc *Document) *Body {
+	t.Helper()
+	xz, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	pinPayload := prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			CircleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
+		}}},
+		// The frame's normal is −y: z ∈ [−25, 5] spans y ∈ [−5, 25].
+		frame: xz, z0: -25, z1: 5, xform: r3.Identity(),
+	}
+	pin, err := evalPrismContext(t.Context(), doc, doc.nextProducerID(), pinPayload, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	doc.commit(pin)
+	return pin
+}
+
+// TestBrepConsumersOnTheClassBCutResult runs the same consumers over S1 as a
+// public Cut builds it (class B, classb_cut.go), not the hand-built record:
+// a pull up hooks only the hole's cylinder; a pull along (1, 0, 1) hooks the
+// cylinder and the two planes facing −x and −z; the concave-radius survey
+// measures the hole's 3 mm; and the clearance rows read 5 mm to a box off
+// the x = 40 wall and 2 mm to a pin threaded through the hole. Shown to fail
+// with the survey's and newBodyGeomBudget's brepPayload arms deleted
+// (coverage unavailable, radius unavailable, no clearance rows).
+func TestBrepConsumersOnTheClassBCutResult(t *testing.T) {
+	t.Parallel()
+	doc, s1 := internalCrossDrilled(t)
+	_, isBrep := s1.payload.(brepPayload)
+	require.True(t, isBrep, "the public Cut builds S1 as a brep body")
+	box := internalBoxBody(t, doc, 45, 0, 50, 20, 20)
+	pin := internalPinThroughS1(t, doc)
+
+	rep, err := doc.Verify(t.Context(), WithPullDirection(r3.NewVec(0, 0, 1)), WithConcaveRadius(), WithClearances())
+	require.NoError(t, err)
+	br, err := rep.ForBody(s1)
+	require.NoError(t, err)
+	require.Equal(t, CoverageComplete, br.Undercut.Coverage)
+	require.Len(t, br.Undercut.Faces, 1)
+	_, isCylinder := br.Undercut.Faces[0].Surface().(Cylinder)
+	require.True(t, isCylinder, "a pull up hooks only the hole")
+	require.Equal(t, ScalarMeasured, br.ConcaveRadius.Outcome)
+	radius := br.ConcaveRadius.Minimum.Measurement
+	require.LessOrEqual(t, math.Abs(radius.Value.Base()-3), radius.Bound.Base())
+	gaps := map[*Body]Measurement{}
+	for _, row := range rep.Clearances {
+		switch s1 {
+		case row.A:
+			gaps[row.B] = row.Gap
+		case row.B:
+			gaps[row.A] = row.Gap
+		}
+	}
+	for other, want := range map[*Body]float64{box: 5, pin: 2} {
+		gap, found := gaps[other]
+		require.True(t, found, "S1 has a proven clearance row")
+		require.LessOrEqual(t, math.Abs(gap.Value.Base()-want), gap.Bound.Base()+1e-12)
+	}
+
+	rep, err = doc.Verify(t.Context(), WithPullDirection(r3.NewVec(1, 0, 1)))
+	require.NoError(t, err)
+	br, err = rep.ForBody(s1)
+	require.NoError(t, err)
+	require.Equal(t, CoverageComplete, br.Undercut.Coverage)
+	require.Len(t, br.Undercut.Faces, 3)
+	planes := 0
+	for _, f := range br.Undercut.Faces {
+		if _, ok := f.Surface().(Plane); !ok {
+			continue
+		}
+		at := f.Loops()[0].CoEdges()[0].Start().Position().Value
+		n, err := f.NormalAt(at)
+		require.NoError(t, err)
+		require.True(t, n.Value.Sub(r3.NewVec(-1, 0, 0)).Len() < 1e-12 || n.Value.Sub(r3.NewVec(0, 0, -1)).Len() < 1e-12,
+			"a hooked plane faces −x or −z, got %v", n.Value)
+		planes++
+	}
+	require.Equal(t, 2, planes)
 }

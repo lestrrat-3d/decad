@@ -46,9 +46,10 @@ according to the writer path.
   topology, not the body's geometry. Plane faces use their source outer and
   inner loops. A face's plane sense follows its outward normal; reverse its
   loop walks when the source walk opposes that normal. A plane whose outer
-  loop carries an arc takes its own plane normal as the placement axis,
-  turned so the loop's signed area about it (each arc adding its circular
-  segment) is positive. A partial wall's sense follows its outward normal
+  loop is a chain of lines and arcs takes its own plane normal as the
+  placement axis, turned so the loop's signed area about it (each arc adding
+  its circular segment) is positive; the sense is never read off the turn at
+  the loop's first vertex, which a reflex corner reverses. A partial wall's sense follows its outward normal
   against the radial direction, and its loop is reversed when its signed area
   in the cylinder's (θ, z) parameter plane disagrees with that sense.
 - Otherwise preserve mesh vertex indices as distinct `VERTEX_POINT`s and

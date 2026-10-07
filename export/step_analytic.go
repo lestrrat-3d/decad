@@ -236,11 +236,12 @@ func (b *analyticSTEPBuilder) addEdge(edge *decad.Edge) (step.Reference, error) 
 	return ref, nil
 }
 
+// planarSTEPPlacement is a planar face's STEP placement from its outer loop:
+// a full circle's own centre, axis and seam direction, or, for a chain of
+// lines and arcs, areaLoopPlacement's plane normal turned to the loop's
+// sense.
 func planarSTEPPlacement(face *decad.Face, loop *decad.Loop) (r3.Vec, r3.Vec, r3.Vec, error) {
 	coedges := loop.CoEdges()
-	if loopHasArc(loop) {
-		return arcLoopPlacement(face, loop)
-	}
 	if supportsAnalyticCircleLoop(loop) {
 		circle, ok := coedges[0].Edge().Curve().(decad.Circle3)
 		if !ok {
@@ -252,19 +253,7 @@ func planarSTEPPlacement(face *decad.Face, loop *decad.Loop) (r3.Vec, r3.Vec, r3
 		}
 		return circle.Center, circle.Axis, reference, nil
 	}
-	origin := coedges[0].Start().Position().Value
-	next := coedges[0].End().Position().Value
-	reference, ok := next.Sub(origin).Normalize()
-	if !ok {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: plane loop has a zero first edge", decad.ErrDegenerate)
-	}
-	for _, ce := range coedges[1:] {
-		axis, ok := reference.Cross(ce.End().Position().Value.Sub(next)).Normalize()
-		if ok {
-			return origin, axis, reference, nil
-		}
-	}
-	return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: plane loop has no normal", decad.ErrDegenerate)
+	return areaLoopPlacement(face, loop)
 }
 
 func (b *analyticSTEPBuilder) addPlanarFace(ctx context.Context, face *decad.Face) (step.Reference, error) {
@@ -371,16 +360,6 @@ func (b *analyticSTEPBuilder) addCylinderFace(ctx context.Context, face *decad.F
 	return b.add(ap214.AdvancedFace(0, "", surface, sameSense, bound)), nil
 }
 
-// loopHasArc reports whether any edge of the loop is an Arc3.
-func loopHasArc(loop *decad.Loop) bool {
-	for _, ce := range loop.CoEdges() {
-		if _, ok := ce.Edge().Curve().(decad.Arc3); ok {
-			return true
-		}
-	}
-	return false
-}
-
 // arcSweep is an arc edge's counter-clockwise sweep about its own Axis from
 // its start vertex to its end vertex, in (0, 2π].
 func arcSweep(edge *decad.Edge, arc decad.Arc3) (float64, bool) {
@@ -430,19 +409,21 @@ func loopAreaAbout(loop *decad.Loop, u, v, n r3.Vec) (float64, bool) {
 	return area, true
 }
 
-// arcLoopPlacement is the plane placement of a face whose outer loop carries
-// an arc: the face's own plane normal, turned so the loop runs
-// counter-clockwise about it (loopAreaAbout), with the loop's first vertex as
-// origin and the plane's own U as the reference direction.
-func arcLoopPlacement(face *decad.Face, loop *decad.Loop) (r3.Vec, r3.Vec, r3.Vec, error) {
+// areaLoopPlacement is the plane placement of a face whose outer loop is a
+// chain of lines and arcs: the face's own plane normal, turned so the loop
+// runs counter-clockwise about it (loopAreaAbout), with the loop's first
+// vertex as origin and the plane's own U as the reference direction. The
+// sense is read off the whole loop, never off the turn at its first vertex,
+// which a reflex corner reverses.
+func areaLoopPlacement(face *decad.Face, loop *decad.Loop) (r3.Vec, r3.Vec, r3.Vec, error) {
 	plane, ok := face.Surface().(decad.Plane)
 	if !ok {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: an arc loop's face is not a plane", decad.ErrUnsupported)
+		return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: a plane loop's face is not a plane", decad.ErrUnsupported)
 	}
 	u, v, n := plane.Frame.U(), plane.Frame.V(), plane.Frame.N()
 	area, ok := loopAreaAbout(loop, u, v, n)
 	if !ok || area == 0 {
-		return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: a plane loop with an arc has no orientation", decad.ErrDegenerate)
+		return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: a plane loop has no orientation", decad.ErrDegenerate)
 	}
 	if area < 0 {
 		n = n.Scale(-1)
