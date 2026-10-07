@@ -1,4 +1,4 @@
-package cappatch
+package capband
 
 import (
 	"math"

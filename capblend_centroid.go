@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/cappatch"
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -45,21 +45,21 @@ import (
 // composition, identical to capBandVolume's.
 
 func patchFirstMomentFlux(g capPatchGeom) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar) {
-	return cappatch.FirstMomentFlux(g.patch())
+	return capband.FirstMomentFlux(g.patch())
 }
 
-type phaseTerm = cappatch.PhaseTerm
+type phaseTerm = capband.PhaseTerm
 
 func coneMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []phaseTerm {
-	return cappatch.ConeMomentTermsX(R0, R1, H, cU, dS, dC)
+	return capband.ConeMomentTermsX(R0, R1, H, cU, dS, dC)
 }
 
 func coneMomentTermsY(R0, R1, H, cV, dS, dC *big.Rat) []phaseTerm {
-	return cappatch.ConeMomentTermsY(R0, R1, H, cV, dS, dC)
+	return capband.ConeMomentTermsY(R0, R1, H, cV, dS, dC)
 }
 
 func coneMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []phaseTerm {
-	return cappatch.ConeMomentTermsZ(R0, R1, H, z0, dS, dC)
+	return capband.ConeMomentTermsZ(R0, R1, H, z0, dS, dC)
 }
 
 // loopCoordinateUpper is one loop's own coordinate envelope

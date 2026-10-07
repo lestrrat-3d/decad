@@ -1,4 +1,4 @@
-package clearancespine
+package spine
 
 import (
 	"context"
