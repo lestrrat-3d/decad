@@ -3,9 +3,9 @@ package decad
 import (
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -43,80 +43,7 @@ type sweepReplayProof struct {
 	bracketGap                 *big.Rat // a rotating bracket's proven lower gap at its left edge
 	bracketTravel              *big.Rat // both bodies' travel bound per unit fraction, rotating brackets
 	grazingAt                  *big.Rat
-	poses                      replayPoseMemo // certifiedPosesAtFraction's answers; changes no outcome
-}
-
-// replayPoseMemoCap bounds how many fractions one sweep's replay memo keeps.
-// A scheduled step replays a pair's sweep at a handful of slice fractions,
-// several times each, so a few dozen keep every repeat; a caller sampling a
-// trace at many times only cycles the ring.
-const replayPoseMemoCap = 32
-
-// replayPoses is one replay answer: both certified poses, or the refusal.
-type replayPoses struct {
-	a, b r3.Transform
-	err  error
-}
-
-// replayPoseMemo holds a sweep's recent replay answers, keyed by the exact
-// fraction. The replay proof is complete before the report reaches any
-// caller and never changes afterwards, so an answer depends on nothing but
-// its fraction, and a repeat returns the same poses or the same refusal.
-// Poses are values and a refusal is never written, so no caller can change
-// what another reads. When full, the oldest entry leaves first. A report
-// may be replayed by concurrent Trace.Sample and Step calls, so a mutex
-// guards it.
-type replayPoseMemo struct {
-	mu      sync.Mutex
-	entries map[string]replayPoses
-	order   []string // insertion order; a ring once it holds replayPoseMemoCap keys
-	next    int
-	hits    uint64
-	misses  uint64
-}
-
-// replayFractionKey encodes a fraction's sign, numerator and denominator.
-// big.Rat keeps lowest terms, so equal fractions share one key.
-func replayFractionKey(f *big.Rat) string {
-	num, den := f.Num().Bytes(), f.Denom().Bytes()
-	key := make([]byte, 0, 5+len(num)+len(den))
-	key = append(key, byte(f.Sign()+1), byte(len(num)>>24), byte(len(num)>>16), byte(len(num)>>8), byte(len(num)))
-	key = append(key, num...)
-	return string(append(key, den...))
-}
-
-func (m *replayPoseMemo) load(key string) (replayPoses, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	value, ok := m.entries[key]
-	if ok {
-		m.hits++
-	} else {
-		m.misses++
-	}
-	return value, ok
-}
-
-// store keeps value under key, evicting the oldest entry when full. A key
-// already present keeps its value: two concurrent misses computed the same
-// one.
-func (m *replayPoseMemo) store(key string, value replayPoses) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.entries[key]; ok {
-		return
-	}
-	if m.entries == nil {
-		m.entries = make(map[string]replayPoses)
-	}
-	if len(m.order) < replayPoseMemoCap {
-		m.order = append(m.order, key)
-	} else {
-		delete(m.entries, m.order[m.next])
-		m.order[m.next] = key
-		m.next = (m.next + 1) % replayPoseMemoCap
-	}
-	m.entries[key] = value
+	poses                      sweepmemo.ReplayPoseMemo // certifiedPosesAtFraction's answers; changes no outcome
 }
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
@@ -210,12 +137,12 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 // certifiedPosesAtFraction answers from the replay's memo when it holds f,
 // and replays f otherwise.
 func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
-	key := replayFractionKey(f)
-	if value, ok := r.replay.poses.load(key); ok {
-		return value.a, value.b, value.err
+	key := sweepmemo.ReplayFractionKey(f)
+	if value, ok := r.replay.poses.Load(key); ok {
+		return value.A, value.B, value.Err
 	}
 	a, b, err := r.replayPosesAtFraction(f)
-	r.replay.poses.store(key, replayPoses{a: a, b: b, err: err})
+	r.replay.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err})
 	return a, b, err
 }
 

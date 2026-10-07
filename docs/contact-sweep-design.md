@@ -865,7 +865,7 @@ above applies with that deviation and displacement charge as `η`. A touch or
 band track checks every rounded held vertex height against the held band
 widened by that deviation.
 Each report keeps its last 32 replay answers, poses or refusal, keyed by
-the exact fraction (`contact_sweep_replay.go`). The replay proof is complete
+the exact fraction (`internal/sweepmemo/`). The replay proof is complete
 before the report reaches a caller and reads none of its public fields, so a
 repeat returns the same answer and changes no outcome. A mutex guards the
 memo, since `Trace.Sample` and `Step` may replay one report concurrently.

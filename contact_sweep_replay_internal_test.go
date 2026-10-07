@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -81,7 +82,7 @@ func replayMemoTestSweeps(t *testing.T) map[string]*SweepReport {
 
 // replayMemoTestFractions returns small fractions, equal fractions in other
 // terms (2/4 and 1/2 read one key), and random fractions with large terms,
-// fewer distinct ones than replayPoseMemoCap so no entry is evicted.
+// fewer distinct ones than sweepmemo.ReplayPoseCap so no entry is evicted.
 func replayMemoTestFractions(rng *rand.Rand) []*big.Rat {
 	var out []*big.Rat
 	for _, n := range []int64{1, 2, 3, 4, 7} {
@@ -141,9 +142,10 @@ func TestReplayPoseMemoMatchesUncachedReplay(t *testing.T) {
 			check(f)
 		}
 		memo := &report.replay.poses
-		require.Less(t, len(distinct), replayPoseMemoCap, "premise: %s evicts nothing", name)
-		require.Equal(t, uint64(len(distinct)), memo.misses, "%s misses once per distinct fraction", name)
-		require.Equal(t, uint64(3*len(fractions)-len(distinct)), memo.hits, "%s serves every repeat", name)
+		require.Less(t, len(distinct), sweepmemo.ReplayPoseCap, "premise: %s evicts nothing", name)
+		hits, misses := memo.Counts()
+		require.Equal(t, uint64(len(distinct)), misses, "%s misses once per distinct fraction", name)
+		require.Equal(t, uint64(3*len(fractions)-len(distinct)), hits, "%s serves every repeat", name)
 	}
 	require.Positive(t, outcomes[true], "premise: some fractions replay")
 	require.Positive(t, outcomes[false], "premise: some fractions are refused")
@@ -188,11 +190,11 @@ func TestReplayPoseMemoIsSafeConcurrently(t *testing.T) {
 // whose bytes concatenate alike, to differ.
 func TestReplayFractionKeyIsExact(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, replayFractionKey(big.NewRat(1, 2)), replayFractionKey(big.NewRat(4, 8)))
+	require.Equal(t, sweepmemo.ReplayFractionKey(big.NewRat(1, 2)), sweepmemo.ReplayFractionKey(big.NewRat(4, 8)))
 	keys := map[string]string{}
 	for _, f := range []*big.Rat{big.NewRat(0, 1), big.NewRat(1, 2), big.NewRat(-1, 2), big.NewRat(2, 1),
 		big.NewRat(1, 3), big.NewRat(3, 2), big.NewRat(1, 258), big.NewRat(257, 2), big.NewRat(1, 1)} {
-		key := replayFractionKey(f)
+		key := sweepmemo.ReplayFractionKey(f)
 		other, ok := keys[key]
 		require.False(t, ok, "%s and %s share a key", f.RatString(), other)
 		keys[key] = f.RatString()
@@ -200,36 +202,36 @@ func TestReplayFractionKeyIsExact(t *testing.T) {
 }
 
 // TestReplayPoseMemoEvictsOldest fills a memo past its bound: it keeps
-// exactly replayPoseMemoCap answers, the oldest leaves first, and storing a
+// exactly sweepmemo.ReplayPoseCap answers, the oldest leaves first, and storing a
 // key it holds keeps the first answer.
 func TestReplayPoseMemoEvictsOldest(t *testing.T) {
 	t.Parallel()
-	keyAt := func(i int) string { return replayFractionKey(big.NewRat(int64(i), 1000)) }
-	answerAt := func(i int) replayPoses {
+	keyAt := func(i int) string { return sweepmemo.ReplayFractionKey(big.NewRat(int64(i), 1000)) }
+	answerAt := func(i int) sweepmemo.ReplayPoses {
 		pose, err := r3.Translation(r3.Vec{X: float64(i)})
 		require.NoError(t, err)
-		return replayPoses{a: pose, b: pose}
+		return sweepmemo.ReplayPoses{A: pose, B: pose}
 	}
-	var memo replayPoseMemo
-	for i := range replayPoseMemoCap + 3 {
-		memo.store(keyAt(i), answerAt(i))
+	var memo sweepmemo.ReplayPoseMemo
+	for i := range sweepmemo.ReplayPoseCap + 3 {
+		memo.Store(keyAt(i), answerAt(i))
 	}
-	require.Len(t, memo.entries, replayPoseMemoCap)
+	require.Equal(t, sweepmemo.ReplayPoseCap, memo.Len())
 	for i := range 3 {
-		_, ok := memo.load(keyAt(i))
+		_, ok := memo.Load(keyAt(i))
 		require.False(t, ok, "entry %d is among the oldest", i)
 	}
-	for _, i := range []int{3, replayPoseMemoCap, replayPoseMemoCap + 2} {
-		value, ok := memo.load(keyAt(i))
+	for _, i := range []int{3, sweepmemo.ReplayPoseCap, sweepmemo.ReplayPoseCap + 2} {
+		value, ok := memo.Load(keyAt(i))
 		require.True(t, ok, "entry %d", i)
-		require.Equal(t, poseBits(answerAt(i).a), poseBits(value.a))
+		require.Equal(t, poseBits(answerAt(i).A), poseBits(value.A))
 	}
-	memo.store(keyAt(5), answerAt(99))
-	value, ok := memo.load(keyAt(5))
+	memo.Store(keyAt(5), answerAt(99))
+	value, ok := memo.Load(keyAt(5))
 	require.True(t, ok)
-	require.Equal(t, poseBits(answerAt(5).a), poseBits(value.a))
-	require.Len(t, memo.entries, replayPoseMemoCap)
-	memo.store(keyAt(0), answerAt(0))
-	_, ok = memo.load(keyAt(3))
+	require.Equal(t, poseBits(answerAt(5).A), poseBits(value.A))
+	require.Equal(t, sweepmemo.ReplayPoseCap, memo.Len())
+	memo.Store(keyAt(0), answerAt(0))
+	_, ok = memo.Load(keyAt(3))
 	require.False(t, ok, "the next oldest leaves for the next new key")
 }
