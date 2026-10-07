@@ -14,7 +14,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/polynomial"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -53,7 +52,7 @@ func (k *Kernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, wi
 	return out, ok
 }
 
-func (k *Kernel) lineCircleBracketCrits(cp polynomial.CircleParam, center, refU, refV, la, ld r3.Vec) ([]clearance.SpineCrit, bool) {
+func (k *Kernel) lineCircleBracketCrits(cp spine.CircleParam, center, refU, refV, la, ld r3.Vec) ([]clearance.SpineCrit, bool) {
 	e := k.spineEngine()
 	out, ok := e.LineCircleBracketCrits(cp, center, refU, refV, la, ld)
 	k.captureSpine(e)
@@ -326,7 +325,7 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 			return
 		}
 	default:
-		cp := polynomial.CircleParam{
+		cp := spine.CircleParam{
 			C: [3]float64{f.Anchor.X, f.Anchor.Y, f.Anchor.Z},
 			U: [3]float64{f.RefU.X, f.RefU.Y, f.RefU.Z},
 			V: [3]float64{f.RefV.X, f.RefV.Y, f.RefV.Z},
@@ -406,7 +405,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 				return
 			}
 		case clearance.DegNo:
-			cp := polynomial.CircleParam{
+			cp := spine.CircleParam{
 				C: [3]float64{e.Center.X, e.Center.Y, e.Center.Z},
 				U: [3]float64{e.RefU.X, e.RefU.Y, e.RefU.Z},
 				V: [3]float64{e.RefV.X, e.RefV.Y, e.RefV.Z},
@@ -656,7 +655,7 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 		sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
 		return
 	}
-	cp := polynomial.CircleParam{
+	cp := spine.CircleParam{
 		C: [3]float64{ec.Center.X, ec.Center.Y, ec.Center.Z},
 		U: [3]float64{ec.RefU.X, ec.RefU.Y, ec.RefU.Z},
 		V: [3]float64{ec.RefV.X, ec.RefV.Y, ec.RefV.Z},

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -315,33 +316,33 @@ func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
 
 func TestLineCircleBracketsRejectsNonFinitePolynomial(t *testing.T) {
 	t.Parallel()
-	cp := polynomial.CircleParam{
+	cp := spine.CircleParam{
 		C: [3]float64{math.MaxFloat64, 0, 0},
 		U: [3]float64{1, 0, 0},
 		V: [3]float64{0, 1, 0},
 		R: 1,
 	}
-	brackets, nonConstant, err := polynomial.LineCircleBracketsContext(
+	brackets, nonConstant, err := spine.LineCircleBracketsContext(
 		t.Context(),
 		cp,
 		[3]float64{},
 		[3]float64{0, 0, 1},
 		1e-9,
 	)
-	require.ErrorIs(t, err, polynomial.ErrNonFiniteClearancePolynomial)
+	require.ErrorIs(t, err, spine.ErrNonFiniteClearancePolynomial)
 	require.False(t, nonConstant)
 	require.Empty(t, brackets)
 }
 
 func TestLineCircleBracketsAcceptsFinitePolynomial(t *testing.T) {
 	t.Parallel()
-	cp := polynomial.CircleParam{
+	cp := spine.CircleParam{
 		C: [3]float64{3, 0, 0},
 		U: [3]float64{1, 0, 0},
 		V: [3]float64{0, 1, 0},
 		R: 1,
 	}
-	brackets, nonConstant, err := polynomial.LineCircleBracketsContext(
+	brackets, nonConstant, err := spine.LineCircleBracketsContext(
 		t.Context(),
 		cp,
 		[3]float64{},
@@ -373,8 +374,8 @@ func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
 }
 
 // p8SpineFixture and p8SpineFixture2 are the P8 cell's own circles, chosen
-// generic and non-axis-aligned so polynomial.CircleCircleBracketsContext's chart never
-// hits a degenerate branch. Each circle honours the precondition polynomial.CircleParam
+// generic and non-axis-aligned so spine.CircleCircleBracketsContext's chart never
+// hits a degenerate branch. Each circle honours the precondition spine.CircleParam
 // documents — u and v unit and orthogonal — because both bracket functions
 // collapse |u|=|v|=1, u·v=0 into the r² constant of their trig polynomial,
 // so a frame that misses it makes the algebraic polynomial and the float
@@ -382,13 +383,13 @@ func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
 // circle 2's plane, u2×v2. requireP8SpineFixtures proves all of it, and
 // every consumer below asserts it before use.
 var (
-	p8SpineFixture = polynomial.CircleParam{
+	p8SpineFixture = spine.CircleParam{
 		C: [3]float64{0.3, -0.7, 1.1},
 		U: [3]float64{0.8017837257372732, 0.5345224838248488, 0.2672612419124244},
 		V: [3]float64{-0.303678878182283, 0.7495851586730601, -0.588133682799271},
 		R: 5.25,
 	}
-	p8SpineFixture2 = polynomial.CircleParam{
+	p8SpineFixture2 = spine.CircleParam{
 		C: [3]float64{12.7, 3.3, -4.9},
 		U: [3]float64{0.8, 0.6, 0.0},
 		V: [3]float64{-0.42426406871192851, 0.56568542494923812, 0.70710678118654746},
@@ -399,18 +400,18 @@ var (
 
 func fixtureDot(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 
-// requireCircleParamFrame proves one fixture honours polynomial.CircleParam's
+// requireCircleParamFrame proves one fixture honours spine.CircleParam's
 // documented precondition: u and v unit and orthogonal. The tolerance admits
 // only float64 rounding of an exactly orthonormal frame, never a frame that
 // is merely close.
-func requireCircleParamFrame(tb testing.TB, name string, cp polynomial.CircleParam) {
+func requireCircleParamFrame(tb testing.TB, name string, cp spine.CircleParam) {
 	tb.Helper()
 	require.InDeltaf(tb, 1, math.Sqrt(fixtureDot(cp.U, cp.U)), 1e-15, "%s: u must be a unit vector", name)
 	require.InDeltaf(tb, 1, math.Sqrt(fixtureDot(cp.V, cp.V)), 1e-15, "%s: v must be a unit vector", name)
 	require.InDeltaf(tb, 0, fixtureDot(cp.U, cp.V), 1e-15, "%s: u and v must be orthogonal", name)
 }
 
-// requireP8SpineFixtures proves both spine circles satisfy polynomial.CircleParam's
+// requireP8SpineFixtures proves both spine circles satisfy spine.CircleParam's
 // precondition and that p8SpineNormal2 really is the unit normal of circle
 // 2's plane. Every test and benchmark that reads these vars calls it first,
 // so no measurement is ever taken against a fixture that is not the circle
@@ -426,10 +427,10 @@ func requireP8SpineFixtures(tb testing.TB) {
 
 // TestP8SpineFixturesAreCircles proves the shared spine fixtures are the
 // circles the bracket functions assume: their frames are orthonormal, and the
-// observable consequence — every point polynomial.CircleParam.at traces sits at exactly
+// observable consequence — every point spine.CircleParam.at traces sits at exactly
 // radius r from the center — holds. A frame that is not orthonormal traces an
 // ellipse instead, and the collapsed r² constant in
-// polynomial.LineCircleBracketsContext and polynomial.CircleCircleBracketsContext would then be
+// spine.LineCircleBracketsContext and spine.CircleCircleBracketsContext would then be
 // measuring a different curve than their float references do.
 func TestP8SpineFixturesAreCircles(t *testing.T) {
 	t.Parallel()
@@ -437,7 +438,7 @@ func TestP8SpineFixturesAreCircles(t *testing.T) {
 
 	for _, cp := range []struct {
 		name string
-		cp   polynomial.CircleParam
+		cp   spine.CircleParam
 	}{
 		{"p8SpineFixture", p8SpineFixture},
 		{"p8SpineFixture2", p8SpineFixture2},
@@ -471,7 +472,7 @@ func mustSturmChainInt(t *testing.T, p polynomial.RatPoly) polynomial.SturmChain
 	return chain
 }
 
-// p8SpinePoly rebuilds polynomial.CircleCircleBracketsContext's own degree-8 spine
+// p8SpinePoly rebuilds spine.CircleCircleBracketsContext's own degree-8 spine
 // polynomial, by the same polynomial.CsPoly steps that function runs internally, so the
 // proofs below run against the actual production P8 input rather than a
 // stand-in.
@@ -688,7 +689,7 @@ func TestRefineRootCachedVariationMatchesRecount(t *testing.T) {
 }
 
 // BenchmarkLineCircleBrackets measures the P4 cell end to end
-// (polynomial.LineCircleBracketsContext): chart construction, Sturm chain, isolation
+// (spine.LineCircleBracketsContext): chart construction, Sturm chain, isolation
 // and refinement of every root. It reads the shared p8SpineFixture circle —
 // generic and non-axis-aligned, so no degenerate branch is hit — against a
 // generic line, and asserts the fixture's frame before timing anything.
@@ -701,7 +702,7 @@ func BenchmarkLineCircleBrackets(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		brackets, ok, err := polynomial.LineCircleBracketsContext(ctx, cp, a, d, 1e-9)
+		brackets, ok, err := spine.LineCircleBracketsContext(ctx, cp, a, d, 1e-9)
 		if err != nil || !ok || len(brackets) == 0 {
 			b.Fatalf("lineCircleBracketsContext: brackets=%d ok=%v err=%v", len(brackets), ok, err)
 		}
@@ -709,7 +710,7 @@ func BenchmarkLineCircleBrackets(b *testing.B) {
 }
 
 // BenchmarkCircleCircleBrackets measures the P8 cell end to end
-// (polynomial.CircleCircleBracketsContext), the degree-8 spine problem and the
+// (spine.CircleCircleBracketsContext), the degree-8 spine problem and the
 // dominant cost this change targets. The fixture is the same generic pair
 // p8SpineChain rebuilds above, so the correctness proof and the benchmark
 // exercise the same polynomial. The fixture's frame is asserted before
@@ -721,7 +722,7 @@ func BenchmarkCircleCircleBrackets(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		brackets, ok, err := polynomial.CircleCircleBracketsContext(ctx, c1, c2, n2, 1e-9)
+		brackets, ok, err := spine.CircleCircleBracketsContext(ctx, c1, c2, n2, 1e-9)
 		if err != nil || !ok || len(brackets) == 0 {
 			b.Fatalf("circleCircleBracketsContext: brackets=%d ok=%v err=%v", len(brackets), ok, err)
 		}
