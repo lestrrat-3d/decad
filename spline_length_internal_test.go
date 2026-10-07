@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -364,8 +365,8 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 // below it and the upper at or above.
 func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	t.Parallel()
-	a := survey2d.RatPoint{U: freeform.MustRatOf(0), V: freeform.MustRatOf(0)}
-	b := survey2d.RatPoint{U: freeform.MustRatOf(1), V: freeform.MustRatOf(1)}
+	a := survey2d.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)}
+	b := survey2d.RatPoint{U: polynomial.MustRatOf(1), V: polynomial.MustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
 
 	lo := proofbound.RatSqrtDown(squared)
@@ -398,8 +399,8 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 	} {
 		t.Run(strconv.FormatFloat(leg, 'g', -1, 64), func(t *testing.T) {
 			q := ratSquaredDistance(
-				survey2d.RatPoint{U: freeform.MustRatOf(0), V: freeform.MustRatOf(0)},
-				survey2d.RatPoint{U: freeform.MustRatOf(leg), V: freeform.MustRatOf(0)},
+				survey2d.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)},
+				survey2d.RatPoint{U: polynomial.MustRatOf(leg), V: polynomial.MustRatOf(0)},
 			)
 
 			lo := proofbound.RatSqrtDown(q)

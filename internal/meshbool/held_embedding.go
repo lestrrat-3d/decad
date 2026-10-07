@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -606,7 +606,7 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 	if s := Orient2Float(pa, pb, pc); s != 0 {
 		return s
 	}
-	r := func(x float64) *big.Rat { return freeform.MustRatOf(x) }
+	r := func(x float64) *big.Rat { return polynomial.MustRatOf(x) }
 	bu := new(big.Rat).Sub(r(pb[0]), r(pa[0]))
 	bv := new(big.Rat).Sub(r(pb[1]), r(pa[1]))
 	cu := new(big.Rat).Sub(r(pc[0]), r(pa[0]))
@@ -780,7 +780,7 @@ func FloatBoxCorners(p proofbound.Xpt) []r3.Vec {
 
 func floatBracket(r *big.Rat) []float64 {
 	f, _ := r.Float64()
-	switch freeform.MustRatOf(f).Cmp(r) {
+	switch polynomial.MustRatOf(f).Cmp(r) {
 	case 0:
 		return []float64{f}
 	case -1:
@@ -917,10 +917,10 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 // float evaluation of the motion only approximates.
 func ExactRigidImage(b r3.Basis, t, p r3.Vec) proofbound.Xpt {
 	coord := func(ex, ey, ez, tc float64) *big.Rat {
-		s := new(big.Rat).Mul(freeform.MustRatOf(ex), freeform.MustRatOf(p.X))
-		s.Add(s, new(big.Rat).Mul(freeform.MustRatOf(ey), freeform.MustRatOf(p.Y)))
-		s.Add(s, new(big.Rat).Mul(freeform.MustRatOf(ez), freeform.MustRatOf(p.Z)))
-		return s.Add(s, freeform.MustRatOf(tc))
+		s := new(big.Rat).Mul(polynomial.MustRatOf(ex), polynomial.MustRatOf(p.X))
+		s.Add(s, new(big.Rat).Mul(polynomial.MustRatOf(ey), polynomial.MustRatOf(p.Y)))
+		s.Add(s, new(big.Rat).Mul(polynomial.MustRatOf(ez), polynomial.MustRatOf(p.Z)))
+		return s.Add(s, polynomial.MustRatOf(tc))
 	}
 	x := coord(b.EX.X, b.EY.X, b.EZ.X, t.X)
 	y := coord(b.EX.Y, b.EY.Y, b.EZ.Y, t.Y)

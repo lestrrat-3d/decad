@@ -6,8 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -1561,7 +1560,7 @@ func HeldVertexBounds(ctx context.Context, xverts []proofbound.Xpt, xbeta []floa
 func CoordDistance(p proofbound.Xpt, v r3.Vec) *big.Rat {
 	px, py, pz := XhpRat(proofbound.Xhp(p))
 	d := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{px, freeform.MustRatOf(v.X)}, {py, freeform.MustRatOf(v.Y)}, {pz, freeform.MustRatOf(v.Z)}} {
+	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(v.X)}, {py, polynomial.MustRatOf(v.Y)}, {pz, polynomial.MustRatOf(v.Z)}} {
 		dd := new(big.Rat).Sub(pair[0], pair[1])
 		dd.Abs(dd)
 		if dd.Cmp(d) > 0 {

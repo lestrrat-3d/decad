@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -28,7 +29,7 @@ import (
 func ratSpan(uv [][2]float64) survey2d.BezierSpan {
 	span := make(survey2d.BezierSpan, len(uv))
 	for i, p := range uv {
-		span[i] = survey2d.RatPoint{U: freeform.MustRatOf(p[0]), V: freeform.MustRatOf(p[1])}
+		span[i] = survey2d.RatPoint{U: polynomial.MustRatOf(p[0]), V: polynomial.MustRatOf(p[1])}
 	}
 	return span
 }
@@ -121,10 +122,10 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
 	gu, gv := 1.0, 0.0
 
-	half := freeform.MustRatOf(0.5)
-	restricted := freeform.BernsteinRestrict(freeform.SpanDirectionalValues(span, freeform.MustRatOf(gu), freeform.MustRatOf(gv)), half, half)
+	half := polynomial.MustRatOf(0.5)
+	restricted := freeform.BernsteinRestrict(freeform.SpanDirectionalValues(span, polynomial.MustRatOf(gu), polynomial.MustRatOf(gv)), half, half)
 	lo, hi := freeform.BernsteinHull(restricted)
-	one := freeform.MustRatOf(1)
+	one := polynomial.MustRatOf(1)
 	require.Zero(t, lo.Cmp(one), "restricting to the zero-width interval [1/2, 1/2] evaluates P there exactly")
 	require.Zero(t, hi.Cmp(one))
 
@@ -141,7 +142,7 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 }
 
 // 3b. Cancellation during the span's own Sturm chain build: the context
-// reports cancellation only while freeform.SturmChainContext is on the stack, so the
+// reports cancellation only while polynomial.SturmChainContext is on the stack, so the
 // refusal here cannot have come from the entry poll this function already
 // ran. A free-form span's stationarity chain is built before any root is
 // isolated, and the caller must not wait it out.
@@ -157,7 +158,7 @@ func TestSpanExtremeEnclosureCancelsInsideTheChainBuild(t *testing.T) {
 }
 
 // 4. A collapsed span (every control point coincident): the stationarity
-// polynomial is identically zero, freeform.RpIsolateRootsContext returns no interval
+// polynomial is identically zero, polynomial.RpIsolateRootsContext returns no interval
 // (§6.2: a zero root count is never on its own the proof of anything, but the
 // endpoint candidates carry the constant either way), and both endpoints
 // report the same constant with a zero-width enclosure.
@@ -170,7 +171,7 @@ func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, minIv.Lo.Cmp(minIv.Hi), "a collapsed span's minimum has zero width")
 	require.Zero(t, maxIv.Lo.Cmp(maxIv.Hi), "a collapsed span's maximum has zero width")
-	four := freeform.MustRatOf(4)
+	four := polynomial.MustRatOf(4)
 	require.Zero(t, minIv.Lo.Cmp(four), "the constant value is 5*1 + (-1)*1 = 4")
 	require.Zero(t, maxIv.Lo.Cmp(four))
 }
@@ -468,20 +469,20 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 // enclosure has no reading either.
 func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
 	t.Parallel()
-	lo, hi, err := freeform.FreeformExtremeFloats(freeform.RatIv{Lo: freeform.MustRatOf(-2.5), Hi: freeform.MustRatOf(4)})
+	lo, hi, err := freeform.FreeformExtremeFloats(polynomial.RatIv{Lo: polynomial.MustRatOf(-2.5), Hi: polynomial.MustRatOf(4)})
 	require.NoError(t, err)
 	require.Equal(t, -2.5, lo, "an exactly representable end comes back unchanged")
 	require.Equal(t, 4.0, hi)
 
-	past := new(big.Rat).Mul(freeform.MustRatOf(math.MaxFloat64), freeform.MustRatOf(4))
+	past := new(big.Rat).Mul(polynomial.MustRatOf(math.MaxFloat64), polynomial.MustRatOf(4))
 	for _, tc := range []struct {
 		name string
-		iv   freeform.RatIv
+		iv   polynomial.RatIv
 	}{
-		{"lower end past the range", freeform.RatIv{Lo: new(big.Rat).Neg(past), Hi: freeform.MustRatOf(0)}},
-		{"upper end past the range", freeform.RatIv{Lo: freeform.MustRatOf(0), Hi: past}},
-		{"finite ends, width past the range", freeform.RatIv{
-			Lo: freeform.MustRatOf(-math.MaxFloat64), Hi: freeform.MustRatOf(math.MaxFloat64),
+		{"lower end past the range", polynomial.RatIv{Lo: new(big.Rat).Neg(past), Hi: polynomial.MustRatOf(0)}},
+		{"upper end past the range", polynomial.RatIv{Lo: polynomial.MustRatOf(0), Hi: past}},
+		{"finite ends, width past the range", polynomial.RatIv{
+			Lo: polynomial.MustRatOf(-math.MaxFloat64), Hi: polynomial.MustRatOf(math.MaxFloat64),
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

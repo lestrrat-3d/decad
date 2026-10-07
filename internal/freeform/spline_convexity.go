@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -24,7 +25,7 @@ import (
 // reads its control polygon's own turns — a sign is proven, never measured
 // or estimated.
 //
-// It reduces to clearance_poly.go's certified Sturm-chain root engine for
+// It reduces to internal/polynomial's certified Sturm-chain root engine for
 // the speed precondition, exactly as §6.2's directional extreme does, and to
 // spline_extreme.go's own BernsteinSplit for the fixed-depth subdivision —
 // reused rather than forked, per §6.5's own instruction.
@@ -207,7 +208,7 @@ func SpanConvexitySignContext(ctx context.Context, span survey2d.BezierSpan, wor
 	if err := RequireSpanSpeedRegularContext(ctx, span); err != nil {
 		return 0, err
 	}
-	k := RpTrim(CurvatureNumerator(span))
+	k := polynomial.RpTrim(CurvatureNumerator(span))
 	if len(k) == 0 {
 		// K identically zero: C' and C" are parallel across the whole span —
 		// the precondition just proved the speed nonzero there — so the span
@@ -223,18 +224,18 @@ func SpanConvexitySignContext(ctx context.Context, span survey2d.BezierSpan, wor
 // shipped exact Bernstein-to-monomial restatement spline_moments.go already
 // integrates through (SpanCoordinatePolys, RpFromBernstein), so nothing here
 // rounds and nothing forks a second basis conversion.
-func CurvatureNumerator(span survey2d.BezierSpan) RatPoly {
+func CurvatureNumerator(span survey2d.BezierSpan) polynomial.RatPoly {
 	u, v := SpanCoordinatePolys(span)
-	du, dv := RpDeriv(u), RpDeriv(v)
-	ddu, ddv := RpDeriv(du), RpDeriv(dv)
-	return RpSub(RpMul(du, ddv), RpMul(dv, ddu))
+	du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
+	ddu, ddv := polynomial.RpDeriv(du), polynomial.RpDeriv(dv)
+	return polynomial.RpSub(polynomial.RpMul(du, ddv), polynomial.RpMul(dv, ddu))
 }
 
 // StatedCurvatureDegree is §6.5's STATED Bernstein degree for a span of
 // degree p (len(span)-1 control-point legs): 2p−3 for p ≥ 2, and the
 // degree-0 all-zero form for p = 1, whose formula 2p−3 = −1 names no array
 // at all. A degree-1 span's K is always the zero polynomial (its CurvatureNumerator
-// returns the empty RatPoly directly, since a 2-point net's second difference
+// returns the empty polynomial.RatPoly directly, since a 2-point net's second difference
 // does not exist), so SpanConvexitySignContext never actually calls
 // RpToBernstein with this degree-0 result — it is stated here only so the
 // function is total over every degree Table K names, exactly as the section
@@ -282,7 +283,7 @@ func FreeformConvexityCost(controls int) uint64 {
 	return CostAdd(speed, subdivide)
 }
 
-// RpToBernstein restates a monomial RatPoly of degree at most `degree` as the
+// RpToBernstein restates a monomial polynomial.RatPoly of degree at most `degree` as the
 // Bernstein form of exactly that degree — spline_moments.go's RpFromBernstein
 // run in reverse. It is the standard degree-preserving (or degree-elevating,
 // when p's true degree sits below `degree`) change of basis:
@@ -292,7 +293,7 @@ func FreeformConvexityCost(controls int) uint64 {
 // closed under exact rational arithmetic, so nothing rounds. BinomialRat is
 // spline_moments.go's own binomial coefficient, reused rather than
 // reimplemented.
-func RpToBernstein(p RatPoly, degree int) []*big.Rat {
+func RpToBernstein(p polynomial.RatPoly, degree int) []*big.Rat {
 	out := make([]*big.Rat, degree+1)
 	for i := range out {
 		sum := new(big.Rat)
@@ -368,24 +369,24 @@ var Half = big.NewRat(1, 2)
 // behaved at a cusp, so this has to close before a coefficient is read at
 // all.
 //
-// It reduces to clearance_poly.go's certified root engine exactly as §6.2's
+// It reduces to internal/polynomial's certified root engine exactly as §6.2's
 // directional extreme does, rather than forking a second one: a half-open
-// (0, 1] Sturm root count (SturmCount) paired with the endpoint value S(0)
+// (0, 1] Sturm root count (polynomial.SturmCount) paired with the endpoint value S(0)
 // covers the closed span, because a half-open count alone misses a root
 // sitting exactly at the span's own start (a net whose first two control
 // points coincide).
 func RequireSpanSpeedRegularContext(ctx context.Context, span survey2d.BezierSpan) error {
 	u, v := SpanCoordinatePolys(span)
-	du, dv := RpDeriv(u), RpDeriv(v)
-	s := RpAdd(RpMul(du, du), RpMul(dv, dv))
-	if RpEval(s, new(big.Rat)).Sign() == 0 {
+	du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
+	s := polynomial.RpAdd(polynomial.RpMul(du, du), polynomial.RpMul(dv, dv))
+	if polynomial.RpEval(s, new(big.Rat)).Sign() == 0 {
 		return ErrFreeformConvexitySpeedAtStart
 	}
-	chain, err := SturmChainIntContext(ctx, RpSquareFree(RpTrim(s)))
+	chain, err := polynomial.SturmChainIntContext(ctx, polynomial.RpSquareFree(polynomial.RpTrim(s)))
 	if err != nil {
 		return err
 	}
-	if SturmCount(chain, new(big.Rat), big.NewRat(1, 1)) != 0 {
+	if polynomial.SturmCount(chain, new(big.Rat), big.NewRat(1, 1)) != 0 {
 		return ErrFreeformConvexitySpeedInterior
 	}
 	return nil

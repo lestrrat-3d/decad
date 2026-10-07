@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -387,7 +386,7 @@ var xhpGrid = [8]float64{-2.5, -1, -0.125, 0, 0.1, 0.3, 1, 2.75}
 type refPoint struct{ x, y, z *big.Rat }
 
 func refPointOf(v r3.Vec) refPoint {
-	return refPoint{freeform.MustRatOf(v.X), freeform.MustRatOf(v.Y), freeform.MustRatOf(v.Z)}
+	return refPoint{polynomial.MustRatOf(v.X), polynomial.MustRatOf(v.Y), polynomial.MustRatOf(v.Z)}
 }
 
 func refSub(a, b refPoint) refPoint {
@@ -871,12 +870,12 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 
 		got := meshbool.FivPoint(a).Mul(meshbool.FivPoint(b)).Sub(meshbool.FivPoint(c).Mul(meshbool.FivPoint(d)))
 		exact := new(big.Rat).Sub(
-			new(big.Rat).Mul(freeform.MustRatOf(a), freeform.MustRatOf(b)),
-			new(big.Rat).Mul(freeform.MustRatOf(c), freeform.MustRatOf(d)),
+			new(big.Rat).Mul(polynomial.MustRatOf(a), polynomial.MustRatOf(b)),
+			new(big.Rat).Mul(polynomial.MustRatOf(c), polynomial.MustRatOf(d)),
 		)
 		require.False(t, got.Abstains(), `a finite product/difference must never abstain`)
-		require.LessOrEqual(t, freeform.MustRatOf(got.Lo).Cmp(exact), 0)
-		require.GreaterOrEqual(t, freeform.MustRatOf(got.Hi).Cmp(exact), 0)
+		require.LessOrEqual(t, polynomial.MustRatOf(got.Lo).Cmp(exact), 0)
+		require.GreaterOrEqual(t, polynomial.MustRatOf(got.Hi).Cmp(exact), 0)
 
 		if a == b {
 			continue // a/(a-b) is undefined; the filter's own div guard covers it
@@ -885,9 +884,9 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 		if gotDiv.Abstains() {
 			continue // an abstained bound trivially encloses every value
 		}
-		exactDiv := new(big.Rat).Quo(freeform.MustRatOf(a), new(big.Rat).Sub(freeform.MustRatOf(a), freeform.MustRatOf(b)))
-		require.LessOrEqual(t, freeform.MustRatOf(gotDiv.Lo).Cmp(exactDiv), 0)
-		require.GreaterOrEqual(t, freeform.MustRatOf(gotDiv.Hi).Cmp(exactDiv), 0)
+		exactDiv := new(big.Rat).Quo(polynomial.MustRatOf(a), new(big.Rat).Sub(polynomial.MustRatOf(a), polynomial.MustRatOf(b)))
+		require.LessOrEqual(t, polynomial.MustRatOf(gotDiv.Lo).Cmp(exactDiv), 0)
+		require.GreaterOrEqual(t, polynomial.MustRatOf(gotDiv.Hi).Cmp(exactDiv), 0)
 	}
 }
 
@@ -943,9 +942,9 @@ func referenceMeshParityContext(ctx context.Context, p proofbound.Xpt, verts []r
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 			pa := meshbool.NewXP2(meshbool.RatCoordOf(p, ray.U), meshbool.RatCoordOf(p, ray.V))
-			qa := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(a, ray.U)), freeform.MustRatOf(meshbool.CoordOf(a, ray.V)))
-			qb := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(b, ray.U)), freeform.MustRatOf(meshbool.CoordOf(b, ray.V)))
-			qc := meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(c, ray.U)), freeform.MustRatOf(meshbool.CoordOf(c, ray.V)))
+			qa := meshbool.NewXP2(polynomial.MustRatOf(meshbool.CoordOf(a, ray.U)), polynomial.MustRatOf(meshbool.CoordOf(a, ray.V)))
+			qb := meshbool.NewXP2(polynomial.MustRatOf(meshbool.CoordOf(b, ray.U)), polynomial.MustRatOf(meshbool.CoordOf(b, ray.V)))
+			qc := meshbool.NewXP2(polynomial.MustRatOf(meshbool.CoordOf(c, ray.U)), polynomial.MustRatOf(meshbool.CoordOf(c, ray.V)))
 			s1 := meshbool.Cross2xSign(qa, qb, pa)
 			s2 := meshbool.Cross2xSign(qb, qc, pa)
 			s3 := meshbool.Cross2xSign(qc, qa, pa)
@@ -1833,7 +1832,7 @@ func parityScatterMesh(side int) ([]r3.Vec, [][3]int) {
 func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]meshbool.Xp2 {
 	var out [3]meshbool.Xp2
 	for k, vi := range tri {
-		out[k] = meshbool.NewXP2(freeform.MustRatOf(meshbool.CoordOf(verts[vi], u)), freeform.MustRatOf(meshbool.CoordOf(verts[vi], v)))
+		out[k] = meshbool.NewXP2(polynomial.MustRatOf(meshbool.CoordOf(verts[vi], u)), polynomial.MustRatOf(meshbool.CoordOf(verts[vi], v)))
 	}
 	return out
 }
@@ -2004,11 +2003,11 @@ func parityBoxQueries(fx parityFixture) []parityCase {
 // the caller marks, where it is the bound minus a third of the gap to the next
 // float below it — a value no float64 names, sitting inside the last ulp.
 func parityBoxOffsetRat(c float64, offset bool, at float64) *big.Rat {
-	r := freeform.MustRatOf(c)
+	r := polynomial.MustRatOf(c)
 	if !offset {
 		return r
 	}
-	gap := new(big.Rat).Sub(freeform.MustRatOf(at), freeform.MustRatOf(math.Nextafter(at, math.Inf(-1))))
+	gap := new(big.Rat).Sub(polynomial.MustRatOf(at), polynomial.MustRatOf(math.Nextafter(at, math.Inf(-1))))
 	return new(big.Rat).Sub(r, new(big.Rat).Quo(gap, big.NewRat(3, 1)))
 }
 

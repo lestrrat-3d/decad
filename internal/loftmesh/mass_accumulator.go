@@ -147,7 +147,7 @@ func NewMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta 
 // Add folds one outward-oriented triangle (A, B, C) of T into the volume,
 // centroid and bounds accumulators, and — when wall is true — into the area
 // accumulator's float sum and that sum's two proof terms. Every vertex
-// coordinate is a float64, hence an exact rational (internal/freeform/clearance_poly.go's
+// coordinate is a float64, hence an exact rational (internal/polynomial/polynomial.go's
 // take-the-floats-exactly discipline); the volume and centroid sums round
 // nothing until publication, and the area sum's own terms are the endpoints
 // of a proven per-triangle enclosure rather than a float evaluation.

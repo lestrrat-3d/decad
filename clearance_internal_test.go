@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -308,7 +307,7 @@ func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
 func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
 	t.Parallel()
 	for _, coeff := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		p, ok := freeform.RatPolyOf(1, coeff, 2)
+		p, ok := polynomial.RatPolyOf(1, coeff, 2)
 		require.False(t, ok)
 		require.Nil(t, p)
 	}
@@ -316,33 +315,33 @@ func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
 
 func TestLineCircleBracketsRejectsNonFinitePolynomial(t *testing.T) {
 	t.Parallel()
-	cp := freeform.CircleParam{
+	cp := polynomial.CircleParam{
 		C: [3]float64{math.MaxFloat64, 0, 0},
 		U: [3]float64{1, 0, 0},
 		V: [3]float64{0, 1, 0},
 		R: 1,
 	}
-	brackets, nonConstant, err := freeform.LineCircleBracketsContext(
+	brackets, nonConstant, err := polynomial.LineCircleBracketsContext(
 		t.Context(),
 		cp,
 		[3]float64{},
 		[3]float64{0, 0, 1},
 		1e-9,
 	)
-	require.ErrorIs(t, err, freeform.ErrNonFiniteClearancePolynomial)
+	require.ErrorIs(t, err, polynomial.ErrNonFiniteClearancePolynomial)
 	require.False(t, nonConstant)
 	require.Empty(t, brackets)
 }
 
 func TestLineCircleBracketsAcceptsFinitePolynomial(t *testing.T) {
 	t.Parallel()
-	cp := freeform.CircleParam{
+	cp := polynomial.CircleParam{
 		C: [3]float64{3, 0, 0},
 		U: [3]float64{1, 0, 0},
 		V: [3]float64{0, 1, 0},
 		R: 1,
 	}
-	brackets, nonConstant, err := freeform.LineCircleBracketsContext(
+	brackets, nonConstant, err := polynomial.LineCircleBracketsContext(
 		t.Context(),
 		cp,
 		[3]float64{},
@@ -374,8 +373,8 @@ func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
 }
 
 // p8SpineFixture and p8SpineFixture2 are the P8 cell's own circles, chosen
-// generic and non-axis-aligned so freeform.CircleCircleBracketsContext's chart never
-// hits a degenerate branch. Each circle honours the precondition freeform.CircleParam
+// generic and non-axis-aligned so polynomial.CircleCircleBracketsContext's chart never
+// hits a degenerate branch. Each circle honours the precondition polynomial.CircleParam
 // documents — u and v unit and orthogonal — because both bracket functions
 // collapse |u|=|v|=1, u·v=0 into the r² constant of their trig polynomial,
 // so a frame that misses it makes the algebraic polynomial and the float
@@ -383,13 +382,13 @@ func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
 // circle 2's plane, u2×v2. requireP8SpineFixtures proves all of it, and
 // every consumer below asserts it before use.
 var (
-	p8SpineFixture = freeform.CircleParam{
+	p8SpineFixture = polynomial.CircleParam{
 		C: [3]float64{0.3, -0.7, 1.1},
 		U: [3]float64{0.8017837257372732, 0.5345224838248488, 0.2672612419124244},
 		V: [3]float64{-0.303678878182283, 0.7495851586730601, -0.588133682799271},
 		R: 5.25,
 	}
-	p8SpineFixture2 = freeform.CircleParam{
+	p8SpineFixture2 = polynomial.CircleParam{
 		C: [3]float64{12.7, 3.3, -4.9},
 		U: [3]float64{0.8, 0.6, 0.0},
 		V: [3]float64{-0.42426406871192851, 0.56568542494923812, 0.70710678118654746},
@@ -400,18 +399,18 @@ var (
 
 func fixtureDot(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 
-// requireCircleParamFrame proves one fixture honours freeform.CircleParam's
+// requireCircleParamFrame proves one fixture honours polynomial.CircleParam's
 // documented precondition: u and v unit and orthogonal. The tolerance admits
 // only float64 rounding of an exactly orthonormal frame, never a frame that
 // is merely close.
-func requireCircleParamFrame(tb testing.TB, name string, cp freeform.CircleParam) {
+func requireCircleParamFrame(tb testing.TB, name string, cp polynomial.CircleParam) {
 	tb.Helper()
 	require.InDeltaf(tb, 1, math.Sqrt(fixtureDot(cp.U, cp.U)), 1e-15, "%s: u must be a unit vector", name)
 	require.InDeltaf(tb, 1, math.Sqrt(fixtureDot(cp.V, cp.V)), 1e-15, "%s: v must be a unit vector", name)
 	require.InDeltaf(tb, 0, fixtureDot(cp.U, cp.V), 1e-15, "%s: u and v must be orthogonal", name)
 }
 
-// requireP8SpineFixtures proves both spine circles satisfy freeform.CircleParam's
+// requireP8SpineFixtures proves both spine circles satisfy polynomial.CircleParam's
 // precondition and that p8SpineNormal2 really is the unit normal of circle
 // 2's plane. Every test and benchmark that reads these vars calls it first,
 // so no measurement is ever taken against a fixture that is not the circle
@@ -427,10 +426,10 @@ func requireP8SpineFixtures(tb testing.TB) {
 
 // TestP8SpineFixturesAreCircles proves the shared spine fixtures are the
 // circles the bracket functions assume: their frames are orthonormal, and the
-// observable consequence — every point freeform.CircleParam.at traces sits at exactly
+// observable consequence — every point polynomial.CircleParam.at traces sits at exactly
 // radius r from the center — holds. A frame that is not orthonormal traces an
 // ellipse instead, and the collapsed r² constant in
-// freeform.LineCircleBracketsContext and freeform.CircleCircleBracketsContext would then be
+// polynomial.LineCircleBracketsContext and polynomial.CircleCircleBracketsContext would then be
 // measuring a different curve than their float references do.
 func TestP8SpineFixturesAreCircles(t *testing.T) {
 	t.Parallel()
@@ -438,7 +437,7 @@ func TestP8SpineFixturesAreCircles(t *testing.T) {
 
 	for _, cp := range []struct {
 		name string
-		cp   freeform.CircleParam
+		cp   polynomial.CircleParam
 	}{
 		{"p8SpineFixture", p8SpineFixture},
 		{"p8SpineFixture2", p8SpineFixture2},
@@ -456,54 +455,54 @@ func TestP8SpineFixturesAreCircles(t *testing.T) {
 // mustSturmChain and mustSturmChainInt build a Sturm chain under the test's
 // own context, which is never cancelled. The production builders take a
 // context because the build is where a cancelled clearance run would
-// otherwise keep working (freeform.SturmChainContext); a test that only wants the
+// otherwise keep working (polynomial.SturmChainContext); a test that only wants the
 // chain treats that error as a failure.
-func mustSturmChain(t *testing.T, p freeform.RatPoly) []freeform.RatPoly {
+func mustSturmChain(t *testing.T, p polynomial.RatPoly) []polynomial.RatPoly {
 	t.Helper()
-	chain, err := freeform.SturmChainContext(t.Context(), p)
+	chain, err := polynomial.SturmChainContext(t.Context(), p)
 	require.NoError(t, err)
 	return chain
 }
 
-func mustSturmChainInt(t *testing.T, p freeform.RatPoly) freeform.SturmChainInt {
+func mustSturmChainInt(t *testing.T, p polynomial.RatPoly) polynomial.SturmChainInt {
 	t.Helper()
-	chain, err := freeform.SturmChainIntContext(t.Context(), p)
+	chain, err := polynomial.SturmChainIntContext(t.Context(), p)
 	require.NoError(t, err)
 	return chain
 }
 
-// p8SpinePoly rebuilds freeform.CircleCircleBracketsContext's own degree-8 spine
-// polynomial, by the same freeform.CsPoly steps that function runs internally, so the
+// p8SpinePoly rebuilds polynomial.CircleCircleBracketsContext's own degree-8 spine
+// polynomial, by the same polynomial.CsPoly steps that function runs internally, so the
 // proofs below run against the actual production P8 input rather than a
 // stand-in.
-func p8SpinePoly(t *testing.T) freeform.RatPoly {
+func p8SpinePoly(t *testing.T) polynomial.RatPoly {
 	t.Helper()
 	requireP8SpineFixtures(t)
 	c1, c2, n2 := p8SpineFixture, p8SpineFixture2, p8SpineNormal2
 	dot := func(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 	m := [3]float64{c1.C[0] - c2.C[0], c1.C[1] - c2.C[1], c1.C[2] - c2.C[2]}
-	wConst, ok := freeform.CsConst(dot(m, m) + c1.R*c1.R)
+	wConst, ok := polynomial.CsConst(dot(m, m) + c1.R*c1.R)
 	require.True(t, ok)
-	wLin, ok := freeform.CsLin(0, 2*c1.R*dot(m, c1.U), 2*c1.R*dot(m, c1.V))
+	wLin, ok := polynomial.CsLin(0, 2*c1.R*dot(m, c1.U), 2*c1.R*dot(m, c1.V))
 	require.True(t, ok)
-	h, ok := freeform.CsLin(dot(m, n2), c1.R*dot(c1.U, n2), c1.R*dot(c1.V, n2))
+	h, ok := polynomial.CsLin(dot(m, n2), c1.R*dot(c1.U, n2), c1.R*dot(c1.V, n2))
 	require.True(t, ok)
-	w := freeform.CsAdd(wConst, wLin)
-	sp := freeform.CsSub(w, freeform.CsMul(h, h))
-	wd := freeform.CsDerivTheta(w)
-	sd := freeform.CsDerivTheta(sp)
-	r2, ok := freeform.CsConst(c2.R * c2.R)
+	w := polynomial.CsAdd(wConst, wLin)
+	sp := polynomial.CsSub(w, polynomial.CsMul(h, h))
+	wd := polynomial.CsDerivTheta(w)
+	sd := polynomial.CsDerivTheta(sp)
+	r2, ok := polynomial.CsConst(c2.R * c2.R)
 	require.True(t, ok)
-	f := freeform.CsSub(freeform.CsMul(sp, freeform.CsMul(wd, wd)), freeform.CsMul(r2, freeform.CsMul(sd, sd)))
+	f := polynomial.CsSub(polynomial.CsMul(sp, polynomial.CsMul(wd, wd)), polynomial.CsMul(r2, polynomial.CsMul(sd, sd)))
 
-	p := freeform.RpSquareFree(freeform.RpTrim(freeform.CsToT(f)))
-	require.Equal(t, 8, freeform.RpDeg(p), "the P8 fixture must isolate the degree-8 spine polynomial")
+	p := polynomial.RpSquareFree(polynomial.RpTrim(polynomial.CsToT(f)))
+	require.Equal(t, 8, polynomial.RpDeg(p), "the P8 fixture must isolate the degree-8 spine polynomial")
 	return p
 }
 
 // p8SpineChain is that polynomial's Sturm chain, so the exactness proof below
 // runs against the actual production P8 chain.
-func p8SpineChain(t *testing.T) []freeform.RatPoly {
+func p8SpineChain(t *testing.T) []polynomial.RatPoly {
 	t.Helper()
 	return mustSturmChain(t, p8SpinePoly(t))
 }
@@ -522,20 +521,20 @@ func TestSturmChainBuildPollsPerMember(t *testing.T) {
 	require.Greater(t, len(mustSturmChain(t, p)), 3, "the fixture chain must outlast the poll budget below")
 
 	ctx := &internalCancelContext{Context: t.Context(), limit: 3}
-	chain, err := freeform.SturmChainContext(ctx, p)
+	chain, err := polynomial.SturmChainContext(ctx, p)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, chain)
 	require.Equal(t, 3, ctx.calls, "one poll per member, refusing at the third")
 
 	intCtx := &internalCancelContext{Context: t.Context(), limit: 2}
-	intChain, err := freeform.SturmChainIntContext(intCtx, p)
+	intChain, err := polynomial.SturmChainIntContext(intCtx, p)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, intChain)
 }
 
 // TestTorusCrossingsCancellationReachesTheChainBuild proves the ray-cast
 // Sturm site (clearance_geom.go) refuses inside the chain build itself: the
-// context reports cancellation only while freeform.SturmChainContext is on the stack,
+// context reports cancellation only while polynomial.SturmChainContext is on the stack,
 // so an error here cannot have come from an earlier phase boundary.
 func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
 	t.Parallel()
@@ -553,27 +552,27 @@ func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
 // TestSturmVarAtMatchesRationalHornerSigns is the exactness proof behind the
 // integer sign path: for the real production P8 chain plus a handful of
 // small hand-written chains (a zero coefficient, a constant last member, and
-// the empty freeform.RatPoly{}), every chain member's sign under freeform.IpSign must match
-// freeform.RpEval(...).Sign() at points that are deliberately not all dyadic — the
+// the empty polynomial.RatPoly{}), every chain member's sign under polynomial.IpSign must match
+// polynomial.RpEval(...).Sign() at points that are deliberately not all dyadic — the
 // entry's claim that evaluation points are dyadic did not survive
 // investigation, so this test does not assume it — and the sign-change count
-// freeform.SturmVarAt reports over the integer chain must match the count the old
-// freeform.RpEval-based algorithm would have computed from the very same signs.
+// polynomial.SturmVarAt reports over the integer chain must match the count the old
+// polynomial.RpEval-based algorithm would have computed from the very same signs.
 func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
 	t.Parallel()
-	rationalRoots := freeform.RatPoly{big.NewRat(-6, 1), big.NewRat(11, 1), big.NewRat(-6, 1), big.NewRat(1, 1)} // (x-1)(x-2)(x-3)
-	zeroCoeff := freeform.RatPoly{big.NewRat(6, 1), big.NewRat(-5, 1), new(big.Rat), big.NewRat(1, 1)}           // x^3 - 5x + 6, x^2 coefficient is zero
-	constLastMember := freeform.RatPoly{big.NewRat(2, 1), big.NewRat(3, 1)}                                      // 2 + 3x; its chain's last member is the constant 3
+	rationalRoots := polynomial.RatPoly{big.NewRat(-6, 1), big.NewRat(11, 1), big.NewRat(-6, 1), big.NewRat(1, 1)} // (x-1)(x-2)(x-3)
+	zeroCoeff := polynomial.RatPoly{big.NewRat(6, 1), big.NewRat(-5, 1), new(big.Rat), big.NewRat(1, 1)}           // x^3 - 5x + 6, x^2 coefficient is zero
+	constLastMember := polynomial.RatPoly{big.NewRat(2, 1), big.NewRat(3, 1)}                                      // 2 + 3x; its chain's last member is the constant 3
 
 	cases := []struct {
 		name  string
-		chain []freeform.RatPoly
+		chain []polynomial.RatPoly
 	}{
 		{"p8", p8SpineChain(t)},
 		{"rationalRoots", mustSturmChain(t, rationalRoots)},
 		{"zeroCoeff", mustSturmChain(t, zeroCoeff)},
 		{"constLastMember", mustSturmChain(t, constLastMember)},
-		{"empty", mustSturmChain(t, freeform.RatPoly{})},
+		{"empty", mustSturmChain(t, polynomial.RatPoly{})},
 	}
 
 	points := []*big.Rat{
@@ -593,14 +592,14 @@ func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
 	require.GreaterOrEqual(t, len(points), 12, "the design calls for at least twelve evaluation points")
 
 	for _, c := range cases {
-		chainInt := freeform.NewSturmChainInt(c.chain)
+		chainInt := polynomial.NewSturmChainInt(c.chain)
 		require.Len(t, chainInt, len(c.chain))
 		for _, x := range points {
 			num, den := x.Num(), x.Denom()
 			wantVars, prevWant := 0, 0
 			for i, p := range c.chain {
-				wantSign := freeform.RpEval(p, x).Sign()
-				gotSign := freeform.IpSign(chainInt[i], num, den, new(big.Int), new(big.Int), new(big.Int))
+				wantSign := polynomial.RpEval(p, x).Sign()
+				gotSign := polynomial.IpSign(chainInt[i], num, den, new(big.Int), new(big.Int), new(big.Int))
 				require.Equalf(t, wantSign, gotSign, "chain %s member %d at x=%s", c.name, i, x.RatString())
 				if wantSign == 0 {
 					continue
@@ -610,19 +609,19 @@ func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
 				}
 				prevWant = wantSign
 			}
-			require.Equalf(t, wantVars, freeform.SturmVarAt(chainInt, x), "chain %s sign-change count at x=%s", c.name, x.RatString())
+			require.Equalf(t, wantVars, polynomial.SturmVarAt(chainInt, x), "chain %s sign-change count at x=%s", c.name, x.RatString())
 		}
 	}
 }
 
-// TestClearDenomsIsAPositiveRescaling proves freeform.ClearDenoms only ever rescales
+// TestClearDenomsIsAPositiveRescaling proves polynomial.ClearDenoms only ever rescales
 // by one positive rational shared across every coefficient — the single
 // admissible transformation the design permits (docs/clearance-design.md
 // §4's "cannot lie" guarantee).
 func TestClearDenomsIsAPositiveRescaling(t *testing.T) {
 	t.Parallel()
-	p := freeform.RatPoly{big.NewRat(1, 3), big.NewRat(-2, 7), big.NewRat(5, 1), big.NewRat(-11, 13)}
-	out := freeform.ClearDenoms(p)
+	p := polynomial.RatPoly{big.NewRat(1, 3), big.NewRat(-2, 7), big.NewRat(5, 1), big.NewRat(-11, 13)}
+	out := polynomial.ClearDenoms(p)
 	require.Len(t, out, len(p))
 
 	for i := range p {
@@ -653,19 +652,19 @@ func TestClearDenomsIsAPositiveRescaling(t *testing.T) {
 }
 
 // TestRefineRootCachedVariationMatchesRecount proves the cached varLo in
-// freeform.RpRefineRootContext takes the identical branch the original recomputation
+// polynomial.RpRefineRootContext takes the identical branch the original recomputation
 // did: it isolates and refines x^2 - 2's positive root and checks the
-// straddle (freeform.RpEval's sign flips low-to-high across the narrowed interval)
+// straddle (polynomial.RpEval's sign flips low-to-high across the narrowed interval)
 // and the numeric answer (√2) the branch history must have produced.
 func TestRefineRootCachedVariationMatchesRecount(t *testing.T) {
 	t.Parallel()
-	p := freeform.RatPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
+	p := polynomial.RatPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
 	chain := mustSturmChainInt(t, p)
-	ivs, err := freeform.RpIsolateRootsContext(t.Context(), p, chain)
+	ivs, err := polynomial.RpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)
 
-	var iv freeform.RatIv
+	var iv polynomial.RatIv
 	found := false
 	for _, cand := range ivs {
 		lo, _ := cand.Lo.Float64()
@@ -677,19 +676,19 @@ func TestRefineRootCachedVariationMatchesRecount(t *testing.T) {
 	require.True(t, found, "must isolate the positive root of x^2 - 2")
 
 	narrow := func(lo, hi float64) bool { return hi-lo <= 1e-12 }
-	iv, err = freeform.RpRefineRootContext(t.Context(), chain, iv, narrow)
+	iv, err = polynomial.RpRefineRootContext(t.Context(), chain, iv, narrow)
 	require.NoError(t, err)
 
 	loF, _ := iv.Lo.Float64()
 	hiF, _ := iv.Hi.Float64()
 	require.LessOrEqual(t, hiF-loF, 1e-12)
-	require.Negative(t, freeform.RpEval(p, iv.Lo).Sign(), "the interval must still straddle sqrt(2) from below")
-	require.Positive(t, freeform.RpEval(p, iv.Hi).Sign(), "the interval must still straddle sqrt(2) from above")
+	require.Negative(t, polynomial.RpEval(p, iv.Lo).Sign(), "the interval must still straddle sqrt(2) from below")
+	require.Positive(t, polynomial.RpEval(p, iv.Hi).Sign(), "the interval must still straddle sqrt(2) from above")
 	require.InDelta(t, math.Sqrt2, (loF+hiF)/2, 1e-12)
 }
 
 // BenchmarkLineCircleBrackets measures the P4 cell end to end
-// (freeform.LineCircleBracketsContext): chart construction, Sturm chain, isolation
+// (polynomial.LineCircleBracketsContext): chart construction, Sturm chain, isolation
 // and refinement of every root. It reads the shared p8SpineFixture circle —
 // generic and non-axis-aligned, so no degenerate branch is hit — against a
 // generic line, and asserts the fixture's frame before timing anything.
@@ -702,7 +701,7 @@ func BenchmarkLineCircleBrackets(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		brackets, ok, err := freeform.LineCircleBracketsContext(ctx, cp, a, d, 1e-9)
+		brackets, ok, err := polynomial.LineCircleBracketsContext(ctx, cp, a, d, 1e-9)
 		if err != nil || !ok || len(brackets) == 0 {
 			b.Fatalf("lineCircleBracketsContext: brackets=%d ok=%v err=%v", len(brackets), ok, err)
 		}
@@ -710,7 +709,7 @@ func BenchmarkLineCircleBrackets(b *testing.B) {
 }
 
 // BenchmarkCircleCircleBrackets measures the P8 cell end to end
-// (freeform.CircleCircleBracketsContext), the degree-8 spine problem and the
+// (polynomial.CircleCircleBracketsContext), the degree-8 spine problem and the
 // dominant cost this change targets. The fixture is the same generic pair
 // p8SpineChain rebuilds above, so the correctness proof and the benchmark
 // exercise the same polynomial. The fixture's frame is asserted before
@@ -722,7 +721,7 @@ func BenchmarkCircleCircleBrackets(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		brackets, ok, err := freeform.CircleCircleBracketsContext(ctx, c1, c2, n2, 1e-9)
+		brackets, ok, err := polynomial.CircleCircleBracketsContext(ctx, c1, c2, n2, 1e-9)
 		if err != nil || !ok || len(brackets) == 0 {
 			b.Fatalf("circleCircleBracketsContext: brackets=%d ok=%v err=%v", len(brackets), ok, err)
 		}

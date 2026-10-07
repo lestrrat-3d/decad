@@ -8,8 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -581,8 +580,8 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 // special case").
 //
 // Every coordinate is taken exactly as a math/big.Rat off its own float64
-// (internal/freeform/clearance_poly.go's freeform.MustRatOf, the package's take-the-floats-exactly
-// discipline) — no float arithmetic anywhere in this sum. freeform.MustRatOf's
+// (polynomial.MustRatOf from internal/polynomial, with its take-the-floats-exactly
+// discipline) — no float arithmetic anywhere in this sum. polynomial.MustRatOf's
 // finiteness precondition is already proven here: every pts entry is one
 // of the SAME (U, V) pairs assembleLoft already lifted through its plane
 // frame and checked with proofbound.FiniteVec before this function is ever reached
@@ -599,8 +598,8 @@ func capPolygonAreaRat(pts []Point2, loopIdx [][]int) *big.Rat {
 		n := len(idx)
 		for j := range n {
 			p, q := pts[idx[j]], pts[idx[(j+1)%n]]
-			term := new(big.Rat).Mul(freeform.MustRatOf(p.U), freeform.MustRatOf(q.V))
-			term.Sub(term, new(big.Rat).Mul(freeform.MustRatOf(q.U), freeform.MustRatOf(p.V)))
+			term := new(big.Rat).Mul(polynomial.MustRatOf(p.U), polynomial.MustRatOf(q.V))
+			term.Sub(term, new(big.Rat).Mul(polynomial.MustRatOf(q.U), polynomial.MustRatOf(p.V)))
 			sum.Add(sum, term)
 		}
 	}

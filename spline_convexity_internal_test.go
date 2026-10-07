@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -37,7 +38,7 @@ import (
 // (§10 P4b); apitest/extrude_freeform_test.go's TestExtrudeFreeformR19RefusesTheBuild
 // pins two of these same nets as BUILD refusals through the public Extrude.
 // What these tests pin is the exact-rational geometry underneath it, computed
-// through the shipped conversion and the shipped freeform.RatPoly engine.
+// through the shipped conversion and the shipped polynomial.RatPoly engine.
 
 // freeform.CurvatureNumerator is now internal/freeform/spline_convexity.go's own production function;
 // this file no longer defines a duplicate. Every test below calls it exactly
@@ -62,27 +63,27 @@ func polygonTurns(span survey2d.BezierSpan) []*big.Rat {
 // squaredSpeed is §6.3's S = u'^2 + v'^2 for one polynomial span: the exact
 // rational polynomial §6.5's regularity precondition proves has no root on the
 // closed span before any curvature coefficient is read.
-func squaredSpeed(span survey2d.BezierSpan) freeform.RatPoly {
+func squaredSpeed(span survey2d.BezierSpan) polynomial.RatPoly {
 	u, v := freeform.SpanCoordinatePolys(span)
-	du, dv := freeform.RpDeriv(u), freeform.RpDeriv(v)
-	return freeform.RpAdd(freeform.RpMul(du, du), freeform.RpMul(dv, dv))
+	du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
+	return polynomial.RpAdd(polynomial.RpMul(du, du), polynomial.RpMul(dv, dv))
 }
 
 // closedSpanRootCount is the precondition's own mechanical test, exactly as
-// §6.5 states it: freeform.RatPoly's Sturm chain counts roots on the HALF-OPEN (0, 1],
+// §6.5 states it: polynomial.RatPoly's Sturm chain counts roots on the HALF-OPEN (0, 1],
 // so the value at 0 is reported beside it and the closed span is covered only
 // by reading both.
-func closedSpanRootCount(t *testing.T, s freeform.RatPoly) (halfOpen int, atZero *big.Rat) {
+func closedSpanRootCount(t *testing.T, s polynomial.RatPoly) (halfOpen int, atZero *big.Rat) {
 	t.Helper()
-	chain := mustSturmChainInt(t, freeform.RpSquareFree(freeform.RpTrim(s)))
-	return freeform.SturmCount(chain, big.NewRat(0, 1), big.NewRat(1, 1)), freeform.RpEval(s, big.NewRat(0, 1))
+	chain := mustSturmChainInt(t, polynomial.RpSquareFree(polynomial.RpTrim(s)))
+	return polynomial.SturmCount(chain, big.NewRat(0, 1), big.NewRat(1, 1)), polynomial.RpEval(s, big.NewRat(0, 1))
 }
 
-// bernsteinCoefficients restates a monomial freeform.RatPoly in the Bernstein basis of
+// bernsteinCoefficients restates a monomial polynomial.RatPoly in the Bernstein basis of
 // the given degree, exactly: b_i = sum_k C(i,k)/C(n,k) * a_k. §6.5 reads these
 // coefficients' signs, and the sign of a Bernstein coefficient is basis
 // business, never a rounding one.
-func bernsteinCoefficients(p freeform.RatPoly, degree int) []*big.Rat {
+func bernsteinCoefficients(p polynomial.RatPoly, degree int) []*big.Rat {
 	binom := func(n, k int) *big.Rat {
 		return new(big.Rat).SetInt(new(big.Int).Binomial(int64(n), int64(k)))
 	}
@@ -247,14 +248,14 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 	require.InDelta(t, 0.1, second, 1e-12, "the second turn is the doc's approximate 1/10")
 
 	k := freeform.CurvatureNumerator(spans[0])
-	at0 := freeform.RpEval(k, big.NewRat(0, 1))
+	at0 := polynomial.RpEval(k, big.NewRat(0, 1))
 	require.Equal(t, 1, at0.Sign(), "K(0) must be positive")
 	require.Equal(t, "18", at0.RatString())
 
-	at57 := freeform.RpEval(k, big.NewRat(5, 7))
+	at57 := polynomial.RpEval(k, big.NewRat(5, 7))
 	require.Equal(t, -1, at57.Sign(), "K(5/7) must be negative — the curvature sign the polygon turns did not bound")
 
-	at1 := freeform.RpEval(k, big.NewRat(1, 1))
+	at1 := polynomial.RpEval(k, big.NewRat(1, 1))
 	require.Equal(t, 1, at1.Sign(), "K(1) must be positive: two curvature sign changes, zero polygon-turn sign changes")
 
 	// The production certificate must refuse this net rather than publish the
@@ -325,7 +326,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	// leading factor misses -6 by about 8.3e-17. The quoted figure is asserted
 	// at the precision it states; the exact lifted rationals are pinned beside
 	// it, so a conversion that rounded anywhere would fail here.
-	k := freeform.RpTrim(freeform.CurvatureNumerator(spans[0]))
+	k := polynomial.RpTrim(freeform.CurvatureNumerator(spans[0]))
 	require.Len(t, k, 3)
 	for i, want := range []float64{-1.5, 6, -6} {
 		got, _ := k[i].Float64()
@@ -351,7 +352,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	// The precondition is what stops it: S vanishes at the cusp, interior to
 	// the span, so the root count alone already refuses R19.
 	s := squaredSpeed(spans[0])
-	require.Equal(t, 0, freeform.RpEval(s, big.NewRat(1, 2)).Sign(), "the speed vanishes at t = 1/2 — an ordinary cusp")
+	require.Equal(t, 0, polynomial.RpEval(s, big.NewRat(1, 2)).Sign(), "the speed vanishes at t = 1/2 — an ordinary cusp")
 	halfOpen, atZero := closedSpanRootCount(t, s)
 	require.Equal(t, 1, halfOpen, "the Sturm chain must see that root on (0, 1]")
 	require.Equal(t, 1, atZero.Sign(), "and the span's own start is regular, so only the count refuses it")
@@ -378,7 +379,7 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 	require.False(t, reversed)
 	require.Len(t, spans, 1)
 
-	k := freeform.RpTrim(freeform.CurvatureNumerator(spans[0]))
+	k := polynomial.RpTrim(freeform.CurvatureNumerator(spans[0]))
 	top := bernsteinCoefficients(k, 3)
 	require.Equal(t, []int{0, 0, 1, 1}, signsOf(top),
 		"every coefficient >= 0 with strict entries: the coefficient test alone publishes a strict '+'")
@@ -424,7 +425,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 	require.Equal(t, 0, turns[0].Sign(), "the lone polygon turn is zero — neither a sign nor a disagreement")
 
 	k := freeform.CurvatureNumerator(spans[0])
-	require.Empty(t, freeform.RpTrim(k), "K must be the zero polynomial: the span lies on one straight line")
+	require.Empty(t, polynomial.RpTrim(k), "K must be the zero polynomial: the span lies on one straight line")
 
 	verdict, err := freeform.FreeformWallConvexityContext(t.Context(), spans, false, reversed, false, freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -540,7 +541,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 		require.False(t, spanIsCollapsed(span), "span %d is a real segment, not a collapsed one", i)
 
 		// K is the ZERO polynomial: C" is identically zero on a degree-1 span.
-		k := freeform.RpTrim(freeform.CurvatureNumerator(span))
+		k := polynomial.RpTrim(freeform.CurvatureNumerator(span))
 		require.Empty(t, k, "span %d must have K identically zero", i)
 
 		// §6.5 carries it as a degree-0 Bernstein form holding one zero
@@ -554,7 +555,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 		// The regularity precondition closes: S is the nonzero constant 1 here,
 		// so the half-open count sees no root and the endpoint value is nonzero.
 		s := squaredSpeed(span)
-		require.Equal(t, []string{"1"}, ratStrings(freeform.RpTrim(s)), "span %d's S is the constant 1", i)
+		require.Equal(t, []string{"1"}, ratStrings(polynomial.RpTrim(s)), "span %d's S is the constant 1", i)
 		halfOpen, atZero := closedSpanRootCount(t, s)
 		require.Equal(t, 0, halfOpen, "span %d's speed has no root on (0, 1]", i)
 		require.Equal(t, 1, atZero.Sign(), "span %d's speed is nonzero at its start too", i)
@@ -593,7 +594,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 
-	k := freeform.RpTrim(freeform.CurvatureNumerator(spans[0]))
+	k := polynomial.RpTrim(freeform.CurvatureNumerator(spans[0]))
 	require.Equal(t, []string{"4"}, ratStrings(k), "K is the constant 4 — one degree BELOW the stated 2p-3 = 1")
 
 	turns := polygonTurns(spans[0])
@@ -692,10 +693,10 @@ func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 
 	// Route A: split the parent's Bernstein coefficients. Route B: split the
 	// span and recompute K on each child. They differ by 1/8 per level exactly.
-	parent := bernsteinCoefficients(freeform.RpTrim(freeform.CurvatureNumerator(spans[0])), 3)
+	parent := bernsteinCoefficients(polynomial.RpTrim(freeform.CurvatureNumerator(spans[0])), 3)
 	splitLeft, splitRight := splitBernsteinAtMidpoint(parent)
-	childLeft := bernsteinCoefficients(freeform.RpTrim(freeform.CurvatureNumerator(left)), 3)
-	childRight := bernsteinCoefficients(freeform.RpTrim(freeform.CurvatureNumerator(right)), 3)
+	childLeft := bernsteinCoefficients(polynomial.RpTrim(freeform.CurvatureNumerator(left)), 3)
+	childRight := bernsteinCoefficients(polynomial.RpTrim(freeform.CurvatureNumerator(right)), 3)
 
 	eighth := big.NewRat(1, 8)
 	for i := range parent {
@@ -744,7 +745,7 @@ func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
 	// sign differs. Negating the straight walk's own 0 leaves 0.
 	require.Equal(t, jointCross(forwardSpans[0], forwardSpans[1]).RatString(),
 		jointCross(backwardSpans[0], backwardSpans[1]).RatString())
-	require.Equal(t, 0, new(big.Rat).Neg(freeform.RpEval(freeform.RpTrim(freeform.CurvatureNumerator(backwardSpans[0])), big.NewRat(1, 2))).Sign(),
+	require.Equal(t, 0, new(big.Rat).Neg(polynomial.RpEval(polynomial.RpTrim(freeform.CurvatureNumerator(backwardSpans[0])), big.NewRat(1, 2))).Sign(),
 		"a degree-1 span's K is zero, and negating zero is zero")
 
 	// The production certificate's own reversal negation: the forward chain's
@@ -1074,7 +1075,7 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 		freeform.FreeformConvexityPositive, freeform.FreeformConvexityPositive,
 	}
 	for i, span := range spans {
-		coeffs := bernsteinCoefficients(freeform.RpTrim(freeform.CurvatureNumerator(span)), freeform.StatedCurvatureDegree(span))
+		coeffs := bernsteinCoefficients(polynomial.RpTrim(freeform.CurvatureNumerator(span)), freeform.StatedCurvatureDegree(span))
 		require.Equal(t, wantK[i], ratStrings(coeffs), "span %d's curvature numerator", i)
 
 		undivided, err := freeform.BernsteinCurvatureSignContext(t.Context(), coeffs, 0)

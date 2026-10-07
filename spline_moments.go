@@ -16,7 +16,7 @@ import (
 // integral is an exact rational — which is what earns a Tier A kind its zero
 // bound, and why §5.2 forbids a quadrature fallback here.
 //
-// The polynomial machinery is internal/freeform/clearance_poly.go's freeform.RatPoly, reused rather than
+// The polynomial machinery is polynomial.RatPoly from internal/polynomial,
 // forked (spline design §6.2): that file already owns dense rational
 // polynomials with the products and derivatives these forms need.
 

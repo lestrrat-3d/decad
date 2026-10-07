@@ -158,7 +158,7 @@ func twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h float64) float64 {
 
 // ratOfFloat lifts a float64 into an exact big.Rat leaf: every coordinate
 // this test measures is itself a float64, hence an exact rational
-// (internal/freeform/clearance_poly.go's take-the-floats-exactly discipline), so no rounding
+// (internal/polynomial/polynomial.go's take-the-floats-exactly discipline), so no rounding
 // is introduced by the lift.
 func ratOfFloat(x float64) *big.Rat {
 	r := new(big.Rat)

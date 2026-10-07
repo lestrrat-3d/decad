@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -232,7 +233,7 @@ func ClampedUniformKnots(n int) []*big.Rat {
 	floats := geom.ClampedKnots(n)
 	knots := make([]*big.Rat, len(floats))
 	for i, knot := range floats {
-		knots[i] = MustRatOf(knot)
+		knots[i] = polynomial.MustRatOf(knot)
 	}
 	return knots
 }

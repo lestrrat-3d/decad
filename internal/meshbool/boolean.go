@@ -7,8 +7,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -343,7 +342,7 @@ func CertifiedInteriorDepth(p proofbound.Xpt, other *BoolMesh) float64 {
 func PointRoundBound(p proofbound.Xpt, pf r3.Vec) float64 {
 	px, py, pz := XhpRat(proofbound.Xhp(p))
 	worst := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{px, freeform.MustRatOf(pf.X)}, {py, freeform.MustRatOf(pf.Y)}, {pz, freeform.MustRatOf(pf.Z)}} {
+	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(pf.X)}, {py, polynomial.MustRatOf(pf.Y)}, {pz, polynomial.MustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])
 		d.Abs(d)
 		if d.Cmp(worst) > 0 {

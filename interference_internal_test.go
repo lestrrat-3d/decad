@@ -11,10 +11,9 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -126,14 +125,14 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {
 	t.Parallel()
-	p := freeform.RatPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
+	p := polynomial.RatPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
 	chain := mustSturmChainInt(t, p)
-	ivs, err := freeform.RpIsolateRootsContext(t.Context(), p, chain)
+	ivs, err := polynomial.RpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)
 	ctx := &internalCancelContext{Context: t.Context(), limit: 1}
 
-	_, err = freeform.RpRefineRootContext(ctx, chain, ivs[0], func(float64, float64) bool { return false })
+	_, err = polynomial.RpRefineRootContext(ctx, chain, ivs[0], func(float64, float64) bool { return false })
 	require.ErrorIs(t, err, context.Canceled)
 }
 

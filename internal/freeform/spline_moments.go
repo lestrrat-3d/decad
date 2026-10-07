@@ -3,6 +3,7 @@ package freeform
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -56,7 +57,7 @@ func ChargeFreeformSpans(spans []survey2d.BezierSpan, work *FreeformWork) error 
 }
 
 // RpIntegral01 is the exact ∫₀¹ of a rational polynomial: Σ cᵢ/(i+1).
-func RpIntegral01(p RatPoly) *big.Rat {
+func RpIntegral01(p polynomial.RatPoly) *big.Rat {
 	out := new(big.Rat)
 	for i, coefficient := range p {
 		out.Add(out, new(big.Rat).Quo(coefficient, big.NewRat(int64(i)+1, 1)))
@@ -70,13 +71,13 @@ func RpIntegral01(p RatPoly) *big.Rat {
 // This is the binomial expansion of Σ bᵢ·C(n,i)·tⁱ·(1−t)ⁿ⁻ⁱ; the difference
 // table computes all coefficients with quadratic rather than cubic rational
 // work. The record's existing conservative integration charge is unchanged.
-func RpFromBernstein(values []*big.Rat) RatPoly {
+func RpFromBernstein(values []*big.Rat) polynomial.RatPoly {
 	degree := len(values) - 1
 	if degree < 0 {
 		return nil
 	}
 	differences := append([]*big.Rat(nil), values...)
-	out := make(RatPoly, len(values))
+	out := make(polynomial.RatPoly, len(values))
 	choose := big.NewRat(1, 1)
 	for k := range out {
 		out[k] = new(big.Rat).Mul(choose, differences[0])
@@ -88,7 +89,7 @@ func RpFromBernstein(values []*big.Rat) RatPoly {
 			choose.Mul(choose, big.NewRat(int64(degree-k), int64(k+1)))
 		}
 	}
-	return RpTrim(out)
+	return polynomial.RpTrim(out)
 }
 
 // BinomialRat is C(n, k) as an exact rational. n is a Bézier degree, so it is
@@ -102,7 +103,7 @@ func BinomialRat(n, k int) *big.Rat {
 }
 
 // SpanCoordinatePolys returns one span's u(t) and v(t) in monomial form.
-func SpanCoordinatePolys(span survey2d.BezierSpan) (RatPoly, RatPoly) {
+func SpanCoordinatePolys(span survey2d.BezierSpan) (polynomial.RatPoly, polynomial.RatPoly) {
 	us := make([]*big.Rat, len(span))
 	vs := make([]*big.Rat, len(span))
 	for i, point := range span {
@@ -140,17 +141,17 @@ func ExactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order Mome
 	}
 	for _, span := range spans {
 		u, v := SpanCoordinatePolys(span)
-		du, dv := RpDeriv(u), RpDeriv(v)
-		uu := RpMul(u, u)
-		vv := RpMul(v, v)
+		du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
+		uu := polynomial.RpMul(u, u)
+		vv := polynomial.RpMul(v, v)
 
-		out.Area.Add(out.Area, new(big.Rat).Mul(half, RpIntegral01(RpSub(RpMul(u, dv), RpMul(v, du)))))
-		out.Mu.Add(out.Mu, new(big.Rat).Mul(half, RpIntegral01(RpMul(uu, dv))))
-		out.Mv.Sub(out.Mv, new(big.Rat).Mul(half, RpIntegral01(RpMul(vv, du))))
+		out.Area.Add(out.Area, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpSub(polynomial.RpMul(u, dv), polynomial.RpMul(v, du)))))
+		out.Mu.Add(out.Mu, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpMul(uu, dv))))
+		out.Mv.Sub(out.Mv, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpMul(vv, du))))
 		if order >= MomentSecondOrder {
-			out.Muu.Add(out.Muu, new(big.Rat).Mul(third, RpIntegral01(RpMul(RpMul(uu, u), dv))))
-			out.Mvv.Sub(out.Mvv, new(big.Rat).Mul(third, RpIntegral01(RpMul(RpMul(vv, v), du))))
-			out.Muv.Add(out.Muv, new(big.Rat).Mul(half, RpIntegral01(RpMul(RpMul(uu, v), dv))))
+			out.Muu.Add(out.Muu, new(big.Rat).Mul(third, RpIntegral01(polynomial.RpMul(polynomial.RpMul(uu, u), dv))))
+			out.Mvv.Sub(out.Mvv, new(big.Rat).Mul(third, RpIntegral01(polynomial.RpMul(polynomial.RpMul(vv, v), du))))
+			out.Muv.Add(out.Muv, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpMul(polynomial.RpMul(uu, v), dv))))
 		}
 	}
 	if reversed {
@@ -172,15 +173,15 @@ func ExactFreeformMoments(spans []survey2d.BezierSpan, reversed bool, order Mome
 //
 // A line is the degree-1 path, so moments.go's line arm and this file's span
 // arm share it.
-func PolyThirdMoments(u, v RatPoly) [4]*big.Rat {
-	dv := RpDeriv(v)
-	uu, vv := RpMul(u, u), RpMul(v, v)
-	uuu := RpMul(uu, u)
+func PolyThirdMoments(u, v polynomial.RatPoly) [4]*big.Rat {
+	dv := polynomial.RpDeriv(v)
+	uu, vv := polynomial.RpMul(u, u), polynomial.RpMul(v, v)
+	uuu := polynomial.RpMul(uu, u)
 	return [4]*big.Rat{
-		new(big.Rat).Mul(big.NewRat(1, 4), RpIntegral01(RpMul(RpMul(uu, uu), dv))),
-		new(big.Rat).Mul(big.NewRat(1, 3), RpIntegral01(RpMul(RpMul(uuu, v), dv))),
-		new(big.Rat).Mul(big.NewRat(1, 2), RpIntegral01(RpMul(RpMul(uu, vv), dv))),
-		RpIntegral01(RpMul(RpMul(u, RpMul(vv, v)), dv)),
+		new(big.Rat).Mul(big.NewRat(1, 4), RpIntegral01(polynomial.RpMul(polynomial.RpMul(uu, uu), dv))),
+		new(big.Rat).Mul(big.NewRat(1, 3), RpIntegral01(polynomial.RpMul(polynomial.RpMul(uuu, v), dv))),
+		new(big.Rat).Mul(big.NewRat(1, 2), RpIntegral01(polynomial.RpMul(polynomial.RpMul(uu, vv), dv))),
+		RpIntegral01(polynomial.RpMul(polynomial.RpMul(u, polynomial.RpMul(vv, v)), dv)),
 	}
 }
 

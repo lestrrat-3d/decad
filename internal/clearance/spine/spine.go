@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -47,7 +47,7 @@ func (e *Engine) SpineCriticals(f, g *clearance.CFace) ([]clearance.SpineCrit, b
 	case sf == 1 && sg == 1:
 		return e.LineLineCrits(f, g)
 	case sf == 1 && sg == 2:
-		cp := freeform.CircleParam{
+		cp := polynomial.CircleParam{
 			C: [3]float64{g.Anchor.X, g.Anchor.Y, g.Anchor.Z},
 			U: [3]float64{g.RefU.X, g.RefU.Y, g.RefU.Z},
 			V: [3]float64{g.RefV.X, g.RefV.Y, g.RefV.Z},
@@ -132,10 +132,10 @@ func (e *Engine) LineLineCrits(f, g *clearance.CFace) ([]clearance.SpineCrit, bo
 }
 
 // LineCircleBracketCrits runs the P4 machinery for an explicit circle.
-func (e *Engine) LineCircleBracketCrits(cp freeform.CircleParam, center, refU, refV, la, ld r3.Vec) ([]clearance.SpineCrit, bool) {
-	brs, ok, err := freeform.LineCircleBracketsContext(e.Context, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, e.Slack)
+func (e *Engine) LineCircleBracketCrits(cp polynomial.CircleParam, center, refU, refV, la, ld r3.Vec) ([]clearance.SpineCrit, bool) {
+	brs, ok, err := polynomial.LineCircleBracketsContext(e.Context, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, e.Slack)
 	if err != nil {
-		if errors.Is(err, freeform.ErrNonFiniteClearancePolynomial) {
+		if errors.Is(err, polynomial.ErrNonFiniteClearancePolynomial) {
 			e.Refused = true
 			return nil, false
 		}
@@ -190,21 +190,21 @@ func (e *Engine) CircleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit
 	if axisDist-f.Major <= e.Tolerance {
 		return nil, false
 	}
-	c1 := freeform.CircleParam{
+	c1 := polynomial.CircleParam{
 		C: [3]float64{f.Anchor.X, f.Anchor.Y, f.Anchor.Z},
 		U: [3]float64{f.RefU.X, f.RefU.Y, f.RefU.Z},
 		V: [3]float64{f.RefV.X, f.RefV.Y, f.RefV.Z},
 		R: f.Major,
 	}
-	c2 := freeform.CircleParam{
+	c2 := polynomial.CircleParam{
 		C: [3]float64{g.Anchor.X, g.Anchor.Y, g.Anchor.Z},
 		U: [3]float64{g.RefU.X, g.RefU.Y, g.RefU.Z},
 		V: [3]float64{g.RefV.X, g.RefV.Y, g.RefV.Z},
 		R: g.Major,
 	}
-	brs, ok, err := freeform.CircleCircleBracketsContext(e.Context, c1, c2, [3]float64{g.Axis.X, g.Axis.Y, g.Axis.Z}, e.Slack)
+	brs, ok, err := polynomial.CircleCircleBracketsContext(e.Context, c1, c2, [3]float64{g.Axis.X, g.Axis.Y, g.Axis.Z}, e.Slack)
 	if err != nil {
-		if errors.Is(err, freeform.ErrNonFiniteClearancePolynomial) {
+		if errors.Is(err, polynomial.ErrNonFiniteClearancePolynomial) {
 			e.Refused = true
 			return nil, false
 		}

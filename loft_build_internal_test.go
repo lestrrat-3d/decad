@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -1014,9 +1015,9 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 // triangle areas.
 func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
 	a, b, c := pts[tri[0]], pts[tri[1]], pts[tri[2]]
-	ua, va := freeform.MustRatOf(a.U), freeform.MustRatOf(a.V)
-	ub, vb := freeform.MustRatOf(b.U), freeform.MustRatOf(b.V)
-	uc, vc := freeform.MustRatOf(c.U), freeform.MustRatOf(c.V)
+	ua, va := polynomial.MustRatOf(a.U), polynomial.MustRatOf(a.V)
+	ub, vb := polynomial.MustRatOf(b.U), polynomial.MustRatOf(b.V)
+	uc, vc := polynomial.MustRatOf(c.U), polynomial.MustRatOf(c.V)
 	sum := new(big.Rat).Mul(ua, new(big.Rat).Sub(vb, vc))
 	sum.Add(sum, new(big.Rat).Mul(ub, new(big.Rat).Sub(vc, va)))
 	sum.Add(sum, new(big.Rat).Mul(uc, new(big.Rat).Sub(va, vb)))

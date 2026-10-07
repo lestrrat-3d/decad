@@ -7,8 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -1337,7 +1336,7 @@ func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 	}
 	if slot[vi].U == nil {
 		vert := pm.Verts[vi]
-		slot[vi] = NewXP2(freeform.MustRatOf(CoordOf(vert, u)), freeform.MustRatOf(CoordOf(vert, v)))
+		slot[vi] = NewXP2(polynomial.MustRatOf(CoordOf(vert, u)), polynomial.MustRatOf(CoordOf(vert, v)))
 	}
 	return slot[vi]
 }
