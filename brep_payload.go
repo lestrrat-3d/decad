@@ -447,28 +447,8 @@ const (
 	brepSide1   = brepgeom.Side1   // a swept face's line at the wall's end
 )
 
-// brepEdgeKey is an edge's identity in reference coordinates (§4.2): a line by
-// its two endpoints in sorted order; an arc by its centre, normal axis and its
-// counter-clockwise start and end about that axis; a whole circle by its
-// centre, normal axis and radius. Two uses with one key are one edge.
-type brepEdgeKey = brepgeom.EdgeKey
-
-// brepUse is one face's use of one edge. from/to run the way the face's own
-// loop walks the use; dirFrom/dirTo run the use's natural way — a wall's walk
-// for a rim or a loop segment, bottom to top for a side line. sense and
-// dirSense are the same two readings of a circular use as counter-clockwise
-// senses about its reference axis, which is all a whole circle has.
-type brepUse struct {
-	face, loop, seg int
-	part            brepPart
-	key             brepEdgeKey
-	from, to        [3]float64
-	dirFrom, dirTo  [3]float64
-	sense, dirSense bool
-	walk            survey2d.SegmentWalk
-	level           float64
-	levelDelta      float64
-}
+// brepUse is one face's use of one edge in the shared topology builder.
+type brepUse = brepgeom.Use
 
 // brepTopology is the shared reading of a record that the body build and the
 // tessellator both take: each face's walks, every edge use, and how the uses
@@ -477,10 +457,9 @@ type brepTopology struct {
 	embeds []brepEmbed
 	// walls holds a swept face's walk, planar holds each planar face's walks
 	// per region loop.
-	walls   map[int]survey2d.SegmentWalk
-	planar  map[int][][]survey2d.SegmentWalk
-	uses    []brepUse
-	keyUses []brepgeom.Use
+	walls  map[int]survey2d.SegmentWalk
+	planar map[int][][]survey2d.SegmentWalk
+	uses   []brepUse
 	// edges lists the two use indices of every edge, the owner first: a rim use
 	// where the edge has one, then a side line, then a loop segment. The
 	// owner's natural direction is the edge's direction.
@@ -510,12 +489,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 	if err != nil {
 		return nil, err
 	}
-	topo := &brepTopology{
-		embeds: embeds,
-		walls:  map[int]survey2d.SegmentWalk{},
-		planar: map[int][][]survey2d.SegmentWalk{},
-	}
-	topo.faceUses = make([][]int, len(bp.faces))
+	faces := make([]brepgeom.FaceWalks, len(bp.faces))
 	work := freeform.NewFreeformWork()
 	walk := func(seg CurveSegment) (survey2d.SegmentWalk, error) {
 		w, err := walkOf(seg, work)
@@ -525,104 +499,53 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		if err := requireAnalyticWalk(w, "a brep face"); err != nil {
 			return survey2d.SegmentWalk{}, err
 		}
-		topo.coordUpper = math.Max(topo.coordUpper, w.CoordUpper)
 		return w, nil
-	}
-	add := func(u brepUse) {
-		topo.faceUses[u.face] = append(topo.faceUses[u.face], len(topo.uses))
-		topo.uses = append(topo.uses, u)
 	}
 	for fi, f := range bp.faces {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		e := embeds[fi]
-		topo.coordUpper = math.Max(topo.coordUpper, math.Max(math.Abs(f.z0), math.Abs(f.z1)))
+		face := brepgeom.FaceWalks{Embed: embeds[fi], IsPlanar: f.planar(),
+			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta}
 		if f.planar() {
 			loops := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
-			walks := make([][]survey2d.SegmentWalk, len(loops))
+			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
 			for li, loop := range loops {
-				for si, seg := range loop.Segments {
+				for _, seg := range loop.Segments {
 					w, err := walk(seg)
 					if err != nil {
 						return nil, err
 					}
-					walks[li] = append(walks[li], w)
-					u := brepUse{face: fi, loop: li, seg: si, part: brepLoopSeg, walk: w,
-						level: f.z0, levelDelta: f.z0Delta}
-					u.key, u.sense = brepCurveKey(e, w, f.z0)
-					u.dirSense = u.sense
-					u.from, u.to = e.Canon(w.StartU, w.StartV, f.z0), e.Canon(w.EndU, w.EndV, f.z0)
-					u.dirFrom, u.dirTo = u.from, u.to
-					add(u)
+					face.Planar[li] = append(face.Planar[li], w)
 				}
 			}
-			topo.planar[fi] = walks
+			faces[fi] = face
 			continue
 		}
 		w, err := walk(f.wall)
 		if err != nil {
 			return nil, err
 		}
-		topo.walls[fi] = w
-		s0, s1 := e.Canon(w.StartU, w.StartV, f.z0), e.Canon(w.StartU, w.StartV, f.z1)
-		t0, t1 := e.Canon(w.EndU, w.EndV, f.z0), e.Canon(w.EndU, w.EndV, f.z1)
-		rim := func(part brepPart, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) brepUse {
-			u := brepUse{face: fi, loop: -1, seg: -1, part: part, walk: w, level: z, levelDelta: zDelta,
-				from: from, to: to, dirFrom: dirFrom, dirTo: dirTo}
-			u.key, u.sense = brepCurveKey(e, w, z)
-			u.dirSense = u.sense
-			if reversed {
-				u.sense = !u.sense
-			}
-			return u
-		}
-		add(rim(brepRim0, f.z0, f.z0Delta, s0, t0, s0, t0, false))
-		if w.Closed {
-			add(rim(brepRim1, f.z1, f.z1Delta, s1, s1, s1, s1, true))
-			continue
-		}
-		add(brepUse{face: fi, loop: -1, seg: -1, part: brepSide1, key: brepLineKey(t0, t1),
-			from: t0, to: t1, dirFrom: t0, dirTo: t1})
-		add(rim(brepRim1, f.z1, f.z1Delta, t1, s1, s1, t1, true))
-		add(brepUse{face: fi, loop: -1, seg: -1, part: brepSide0, key: brepLineKey(s0, s1),
-			from: s1, to: s0, dirFrom: s0, dirTo: s1})
+		face.Wall = w
+		faces[fi] = face
 	}
-	topo.keyUses = make([]brepgeom.Use, len(topo.uses))
-	for ui, u := range topo.uses {
-		topo.keyUses[ui] = brepgeom.Use{Face: u.face, Loop: u.loop, Part: u.part, Key: u.key,
-			From: u.from, To: u.to, DirFrom: u.dirFrom, DirTo: u.dirTo,
-			Sense: u.sense, DirSense: u.dirSense, Walk: u.walk}
-	}
-	topo.edges, topo.edgeOf, err = brepgeom.Pair(topo.keyUses, ErrUnsupported)
+	built, err := brepgeom.Build(faces, ErrUnsupported)
 	if err != nil {
 		return nil, err
 	}
-	return topo, nil
+	return &brepTopology{embeds: embeds, walls: built.Walls, planar: built.Planar,
+		uses: built.Uses, edges: built.Edges, edgeOf: built.EdgeOf,
+		faceUses: built.FaceUses, coordUpper: built.CoordUpper}, nil
 }
 
 // forward reports whether use ui walks its edge in the edge's own direction,
 // which is its owner use's natural one. A whole circle compares senses: it has
 // no endpoints to compare.
 func (topo *brepTopology) forward(ui int) bool {
-	return brepgeom.Forward(topo.keyUses, topo.edges, topo.edgeOf, ui)
+	return brepgeom.Forward(topo.uses, topo.edges, topo.edgeOf, ui)
 }
 
 func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
-
-// brepLineKey keys a line edge by its two endpoints in sorted order.
-func brepLineKey(a, b [3]float64) brepEdgeKey {
-	return brepgeom.LineKey(a, b)
-}
-
-// brepCurveKey keys one walk at one level and reports its counter-clockwise
-// sense about the reference axis the walk's own normal lands on. A walk
-// counter-clockwise in its frame turns about +frame.N(), and that axis lands
-// on the reference axis with sign e.Sign[2]; the map keeps handedness, so the
-// sense flips exactly when the sign is negative.
-func brepCurveKey(e brepEmbed, w survey2d.SegmentWalk, z float64) (brepEdgeKey, bool) {
-	return brepgeom.CurveKey(e, w, z)
-}
 
 // evalBrepContext builds the body a brepPayload records (§4.2, §4.3). Every
 // edge is shared by exactly two faces, identified by record identity in the
@@ -656,13 +579,13 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	for _, u := range topo.uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
 		// circle from another seam places no vertex of its own.
-		if (u.part != brepLoopSeg && !brepIsRim(u.part)) || (u.part == brepLoopSeg && u.key.Closed) {
+		if (u.Part != brepLoopSeg && !brepIsRim(u.Part)) || (u.Part == brepLoopSeg && u.Key.Closed) {
 			continue
 		}
-		f := bp.faces[u.face]
-		base := proofbound.AbsSumUpper(f.delta, u.levelDelta, frameLift)
-		vertexAt(u.dirFrom, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.walk.StartBound)))
-		vertexAt(u.dirTo, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.walk.EndBound)))
+		f := bp.faces[u.Face]
+		base := proofbound.AbsSumUpper(f.delta, u.LevelDelta, frameLift)
+		vertexAt(u.DirFrom, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.Walk.StartBound)))
+		vertexAt(u.DirTo, proofbound.AbsSumUpper(base, proofbound.WalkEndBoundAllow(u.Walk.EndBound)))
 	}
 
 	edges := make([]*Edge, len(topo.edges))
@@ -694,7 +617,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 				loops[li] = &Loop{outer: li == 0}
 			}
 			for _, ui := range uses {
-				l := loops[topo.uses[ui].loop]
+				l := loops[topo.uses[ui].Loop]
 				l.coedges = append(l.coedges, coedgeOf(ui))
 			}
 			face.loops = loops
@@ -736,20 +659,20 @@ func (bp brepPayload) refView() prismPayload {
 // length. Convexity reads evaluator §3's walked boundary (brepEdgeConvex).
 func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]int, vertexAt func([3]float64, float64) *Vertex) (*Edge, error) {
 	owner := topo.uses[pair[0]]
-	f := bp.faces[owner.face]
-	start := vertexAt(owner.dirFrom, 0)
-	end := vertexAt(owner.dirTo, 0)
+	f := bp.faces[owner.Face]
+	start := vertexAt(owner.DirFrom, 0)
+	end := vertexAt(owner.DirTo, 0)
 	convex, err := brepEdgeConvex(ctx, topo, pair)
 	if err != nil {
 		return nil, err
 	}
-	switch owner.part {
+	switch owner.Part {
 	case brepSide0, brepSide1:
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(f.z1, f.z1Delta), proofbound.MeasuredScalar(f.z0, f.z0Delta))
 		return &Edge{curve: Line3{}, start: start, end: end, convex: convex,
 			length: f.z1 - f.z0, lengthBound: height.Bound}, nil
 	case brepRim0, brepRim1:
-		w := topo.walls[owner.face]
+		w := topo.walls[owner.Face]
 		pp := f.view(bp.xform)
 		bottom, top, _, _, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
 			convex, w.Closed, start, end, start, end)
@@ -757,13 +680,13 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 			return nil, err
 		}
 		edge := bottom
-		if owner.part == brepRim1 {
+		if owner.Part == brepRim1 {
 			edge = top
 		}
 		edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
 		return edge, nil
 	default:
-		w := owner.walk
+		w := owner.Walk
 		return &Edge{curve: Line3{}, start: start, end: end, convex: convex, length: w.Length,
 			lengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))}, nil
 	}
@@ -782,5 +705,5 @@ func brepEdgeConvex(ctx context.Context, topo *brepTopology, pair [2]int) (bool,
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	return brepgeom.Convex(pair, topo.keyUses, topo.embeds, topo.walls, ErrUnsupported)
+	return brepgeom.Convex(pair, topo.uses, topo.embeds, topo.walls, ErrUnsupported)
 }

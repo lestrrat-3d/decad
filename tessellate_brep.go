@@ -104,7 +104,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		walls[fi] = wm
 		for _, ui := range topo.faceUses[fi] {
-			switch u := topo.uses[ui]; u.part {
+			switch u := topo.uses[ui]; u.Part {
 			case brepRim0:
 				edgePoly[topo.edgeOf[ui]] = wm.bottom
 			case brepRim1:
@@ -154,23 +154,23 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			owner := topo.uses[topo.edges[ei][0]]
 			poly := edgePoly[ei]
 			if poly == nil {
-				poly = []int{addVertex(owner.dirFrom, owner.walk.StartBound), addVertex(owner.dirTo, owner.walk.EndBound)}
+				poly = []int{addVertex(owner.DirFrom, owner.Walk.StartBound), addVertex(owner.DirTo, owner.Walk.EndBound)}
 				edgePoly[ei] = poly
 			}
 			if !topo.forward(ui) {
 				poly = slices.Clone(poly)
 				slices.Reverse(poly)
 			}
-			if wm, ok := walls[owner.face]; ok && brepIsRim(owner.part) {
+			if wm, ok := walls[owner.Face]; ok && brepIsRim(owner.Part) {
 				trim = math.Max(trim, wm.sag)
-				loopSag[u.loop] = math.Max(loopSag[u.loop], wm.sag)
+				loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.sag)
 				capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)
 			}
 			for _, vi := range poly[:len(poly)-1] {
 				local := e.Local(canon[vi])
 				pts = append(pts, Point2{U: local[0], V: local[1]})
 				meshIdx = append(meshIdx, vi)
-				loops[u.loop] = append(loops[u.loop], len(pts)-1)
+				loops[u.Loop] = append(loops[u.Loop], len(pts)-1)
 			}
 		}
 		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
