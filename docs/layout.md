@@ -172,7 +172,7 @@ the rules leave to the byte budget.
 | `verify.go` | `Document.Verify` orchestration and ordered report assembly. See `docs/verification-design.md` §1–§3 and the file's doc comment. |
 | `verify_pairs.go` | `Verify`'s bounded pair workers and ordered outcomes. See `docs/interference-design.md` §2, §5.3 and §7.2. |
 | `report.go` | `Verify`'s report types: `Status`, `Diagnostic`, `Interference`, `Clearance` and their enums. See `docs/verification-design.md` §1-§3. |
-| `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
+| `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_result.go` | Verify report types and accessors; `verify_publish.go` builds their values. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
@@ -286,6 +286,7 @@ the rules leave to the byte budget.
 | `internal/triangulation/` | Cap hole bridging and ear clipping; indexed triangles, chording refusals. |
 | `internal/proofbound/` | Bounded scalars and interval vectors, rational interval arithmetic, work budget, and certified trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
+| `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |
 | `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |

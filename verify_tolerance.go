@@ -3,7 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
+
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -18,8 +19,6 @@ import (
 // reference per reading kind; verify_gate.go owns how the diameter that
 // anchors it is proven. See docs/verification-design.md §2-§3.
 
-const toleranceEpsilon = 1e-9
-
 // measurementReference forms one scalar result's reference magnitude from
 // its non-negative base-unit value. The callback keeps the shared scalar gate
 // usable for body readings, clearances, and the future interference volume.
@@ -33,39 +32,14 @@ type measurementReference func(value float64) (float64, bool)
 // (which passes without one) and for an unusable magnitude — so a caller may
 // report rel*ref as a Required threshold only when it exists.
 func scalarToleranceRef(m Measurement, rel float64, reference measurementReference) (bool, float64, bool) {
-	bound := m.Bound.Base()
-	if !usableMagnitude(bound) {
-		return false, 0, false
-	}
-	if bound == 0 {
-		return true, 0, false
-	}
-	value := math.Abs(m.Value.Base())
-	if !usableMagnitude(value) {
-		return false, 0, false
-	}
-	ref, ok := reference(value)
-	if !ok {
-		return false, 0, false
-	}
-	return withinTolerance(bound, ref, rel), ref, true
+	return tolerance.Scalar(m.Value, m.Bound, rel, reference)
 }
 
 // boundedToleranceRef applies the same gate to a bounded non-scalar shape such
 // as a Box or position VecMeasurement, handing back the reference it formed on
 // the same terms as scalarToleranceRef.
 func boundedToleranceRef(bound, rel float64, reference func() (float64, bool)) (bool, float64, bool) {
-	if !usableMagnitude(bound) {
-		return false, 0, false
-	}
-	if bound == 0 {
-		return true, 0, false
-	}
-	ref, ok := reference()
-	if !ok {
-		return false, 0, false
-	}
-	return withinTolerance(bound, ref, rel), ref, true
+	return tolerance.Bounded(bound, rel, reference)
 }
 
 // requiredThreshold builds the Required value a DiagMeasurementBeyondTolerance
@@ -186,20 +160,8 @@ func centroidToleranceVerdict(body *Body, cen VecMeasurement, rel float64, refer
 	}
 }
 
-func withinTolerance(bound, ref, rel float64) bool {
-	if !usableMagnitude(ref) {
-		return false
-	}
-	if ref == 0 || rel == 0 {
-		return bound <= rel*ref
-	}
-	// Compare the represented ratio directly: multiplying that ratio back by
-	// ref can round one ulp below the bound at the inclusive boundary.
-	return bound/ref <= rel
-}
-
 func usableMagnitude(v float64) bool {
-	return v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0)
+	return tolerance.UsableMagnitude(v)
 }
 
 // bodyToleranceInputs lazily reads one body's intrinsic reference data. The
@@ -252,35 +214,15 @@ func (in *bodyToleranceInputs) edgeLength() (float64, bool) {
 }
 
 func (in *bodyToleranceInputs) areaReference(value float64) (float64, bool) {
-	diameter, ok := in.diameter()
-	if !ok {
-		return 0, false
-	}
-	edgeLength, ok := in.edgeLength()
-	if !ok {
-		return 0, false
-	}
-	return math.Max(value, toleranceEpsilon*diameter*edgeLength), true
+	return tolerance.AreaReference(value, in.diameter, in.edgeLength)
 }
 
 func (in *bodyToleranceInputs) volumeReference(value float64) (float64, bool) {
-	diameter, ok := in.diameter()
-	if !ok {
-		return 0, false
-	}
-	area := math.Abs(in.area.Value.Base())
-	if !usableMagnitude(area) {
-		return 0, false
-	}
-	return math.Max(value, toleranceEpsilon*diameter*area), true
+	return tolerance.VolumeReference(value, in.area.Value, in.diameter)
 }
 
 func (in *bodyToleranceInputs) lengthReference(value float64) (float64, bool) {
-	diameter, ok := in.diameter()
-	if !ok {
-		return 0, false
-	}
-	return math.Max(value, toleranceEpsilon*diameter), true
+	return tolerance.LengthReference(value, in.diameter)
 }
 
 func (in *bodyToleranceInputs) diameterReference() (float64, bool) {
@@ -396,8 +338,5 @@ type pairToleranceInputs struct {
 }
 
 func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
-	if !usableMagnitude(in.diameter) {
-		return 0, false
-	}
-	return math.Max(value, toleranceEpsilon*in.diameter), true
+	return tolerance.PairLengthReference(value, in.diameter)
 }
