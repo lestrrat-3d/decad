@@ -748,7 +748,10 @@ remainder bounds a vector, so along `n` it is charged `Rem·|n|`, rounded up.
 
 **Two bounds, the larger.** For each pair the projection bound is the larger of the box-corner bound over
 the six coordinate directions and the hull-point bound over every candidate direction: two proven lower
-bounds, so their maximum is one, and no interval reads worse than under the box corners alone.
+bounds, so their maximum is one, and no interval reads worse than under the box corners alone. The cell
+form (§14.3) takes both the same way, each body's points read at the cell's centre and expanded by its
+half-spans, so no cell reads worse either; a share of the hull bound's defect is read along the
+direction that attained it, `|n·v_{i,c}|·h_i/|n| + Σ_j B_ij·h_i·h_j`.
 
 **Over a loop's dependent joint.** A dependent joint's value at a pose is an enclosure `E_e` (§15.4) and
 over an interval it lies in the hull `H` that §15.5 reads, never an exact value; the expansion takes it
@@ -801,7 +804,7 @@ readings are kept on the pose and serve both intervals it ends. Measured on §10
 `WithResolution(Scalar(1.0/64))` its `9` poses take about `50` ms against `30` under the travel bound
 alone, and at the defaults the reading closes at a step of `1/256` in `15` poses and about `80` ms, where
 the travel bound alone refines to the reading floor in `239` poses and about `0.8` s. Estimated, and
-measured by §14.9's P2: the arm's box reads `Sound` in `419` centres, about `2.5` s, in place of exhausting
+measured by §14.9's P2: the arm's box reads `Sound` in `417` centres, about `2.5` s, in place of exhausting
 the budget (§14.7). The disc is unchanged. A box whose minimum sits at a corner of the box with a nonzero
 gradient (§14.8's clear crane box) still gains: its reading's upper end is a centre's gap, which no centre
 brings to the corner faster than linearly, but the lower end, the leaves' bounds, closes to second order,
@@ -1613,7 +1616,7 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   `1` GB and reads `Suspect`, the reading beyond tolerance and the budget finding raised, and
   `WithCellBudget(65536)` takes about `6` minutes and `2.1` GB and still does not meet the gate. The
   projection certificate (§5.8) bounds the gap over a cell to second order: with `Σ B_ij ≈ 700` mm/rad²
-  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `419`
+  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `417`
   centres, about `2.5` s, at the defaults and at `WithResolution(Scalar(1.0/1024))`; at
   `WithResolution(Scalar(1.0/64))` the reading stops coarse at `259` centres and reads `Suspect`. A caller
   who wants the verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
@@ -1679,7 +1682,7 @@ with no leaf narrower than `1/64`; red when a stated resolution leaves the readi
 three-joint arm with each joint over `[0°, 90°]`, at the defaults. Its minimum is §14.7's `60 − 10·√26
 ≈ 9.0098` mm at `(0°, 0°, atan(1/5))`, where the wrist's corner `(150, −10)` faces the post at
 mid-height. Assert `Sound`, no `DiagJointBoxBudgetExhausted`, `Clearance` enclosing the minimum with
-`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `419` centres into `210` leaves), every
+`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `417` centres into `209` leaves), every
 leaf's bound at or below the smallest upper end of its centre's rows, and, at each of the leaf's centre
 and eight corners where the wrist's corner faces the post (`|Y| ≤ 10`), a bound at or below the
 closed-form gap `160 − X` there, which is at least the cell's minimum. Red when the projection bound is
@@ -1706,8 +1709,18 @@ leaves.
 50·(cos θ_A + cos θ_B) − 5·(|sin θ_A| + |sin θ_B|)` has four flat minima of `110 − 10·√101 ≈ 9.501` mm, at
 `(±θ*, ±θ*)` with `tan θ* = 1/10`, each with some corner pair at a shared height. Assert `Sound`,
 `Clearance` enclosing `9.501`, every `CellClear` leaf's bound at or below the exact distance between the
-two arms' outlines at its centre, and `CellsEvaluated` below the budget (measured: `283` centres into
-`142` leaves); red when the partner's expansion is dropped from a link-link pair.
+two arms' outlines at its centre, and `CellsEvaluated` below the budget (measured: `263` centres into
+`132` leaves); red when the partner's expansion is dropped from a link-link pair.
+
+**The tilted box and the slot (hull points in the cell form).** Scene 13's box carried by the tilt of
+§15.10, the slide along the tilt of `X` and the swing about the tilt of `Z`: every distance is the untilted
+box's, but the wall is met along no coordinate direction and the boxes stand far outside the bodies.
+Assert `Sound`, the reading enclosing `15`, every leaf's bound at or below `g` at its far `θ` end, and
+fewer than `256` centres (measured: `23`, as untilted); red when the hull bound is dropped (`4607`
+centres under box corners alone) and when the face normals are dropped (`Suspect`). §5.8's slot rocking
+over `[−20°, 20°]` under a wall, a box of one joint, keeps its box corners, since its outer loop holds
+arcs: `Sound`, the reading enclosing `5`, every leaf's bound at or below the gap's least value over it
+(measured: `563` centres); red when an arc is read at its start point.
 
 **The symmetric body in a box.** §11's disc of radius `5` beside a wall `7` mm away, spinning over
 `[0°, 90°]` on a revolute about `Z` under a carriage that slides `[0, 20]` mm along `Y`, the wall long
@@ -1768,6 +1781,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | D2 (`linkage_box.go`: `dependentReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
 | H1 (`linkage_bound.go`: `bodyHullPoints`, the point readings, `extentsAlong` and the hull bound over every candidate direction; `linkage_verify.go`: the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
 | C1 (`linkage_bound.go`: the cylinder beside the ball in `readLinkBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
+| H2 (`linkage_box.go`: `cellProjection` over hull points and face normals, `hullAttained`, `addHullShares`) | §5.8's hull points and directions in the cell form; the tilted box and the slot (§14.8) | — |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
@@ -1796,10 +1810,10 @@ the one whose halving lowers `τ_half` most for the pair that held the cell back
 (§14.1, §14.4). Leaves tile the box; a split cell's collisions stay in the report (§14.2). One diagnostic
 code and one `Diagnostic` field are added (§14.2). A pair's bound over a cell, and over a drive's
 interval, is the larger of the travel bound and the projection bound: the gap bounded below by the
-bodies' separation along a direction, each body's rest-box corners — or, on a drive, its hull points —
+bodies' separation along a direction, each body's rest-box corners or its hull points —
 expanded to second order in the joint values from the centre or an end, with the remainder proven from
-`ρ` (§5.8, §14.3). The candidate directions are the six coordinate directions and, on a drive, the face
-normals of either body's hull points; `VerifyMotion` keeps the travel bound alone (§5.8).
+`ρ` (§5.8, §14.3). The candidate directions are the six coordinate directions and the face normals of
+either body's hull points; `VerifyMotion` keeps the travel bound alone (§5.8).
 
 ## 15. Closed loops
 
@@ -2721,8 +2735,8 @@ and each distinct loop-axis interval one cell ask whose pieces serve every cell 
 over `Min → Max` builds — so the enclosure work is a few hundred milliseconds where the kernel work is
 seconds; the root's cell ask, over the whole range, costs the most pieces (a quarter turn of the
 crank-rocker: a few hundred). A stuck cell costs its one refused point ask, which the cache answers from
-its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `429` centres
-in about `2.3` s, `13` s under the race detector; the one-axis loop box `101` centres in about `2` s, `6` s
+its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `393` centres
+in about `2.3` s, `13` s under the race detector; the one-axis loop box `89` centres in about `2` s, `6` s
 under the race detector; the fold box `21` centres in about `2` s, most of it the decomposition walking the
 refused cells down to the fold. Under the race detector the clear box's reading and its two margins take
 about `15` s together, the blocked box `3` s, the held loop `2` s and the turn-back cell `1` s. The test file
@@ -2777,7 +2791,7 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
   triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³ within `1e-6`, `Bound` below `Value`; at least one
   collision is that shallow.
 - `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
-  file records the count: `429` centres into `215` leaves, `22` clear, `168` colliding, `25` undecided.
+  file records the count: `393` centres into `197` leaves, `20` clear, `168` colliding, `9` undecided.
 - `examples/` gains `Example_decad_jointBoxLoop` on this scene at `WithResolution(Scalar(1.0/16))`,
   printing `Status`, the first collision's bodies and its crank angle and gate value to two decimals; the
   centres are dyadic, so the printed values hold on every platform.
@@ -2789,12 +2803,12 @@ falls linearly along the gate, so the reading meets the default tolerance by ref
 defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
 `72 − d_hi − y_c(θ̂)`; `Clearance` enclosing `0.6143` with `ToleranceSatisfied`; `ReadingResolution`
 `1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (measured:
-`299` centres into `150` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
-where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`79`
-centres) and `0.7` mm `AssessmentViolated` (`97` centres) with a `DiagMotionClearanceViolated` whose
+`63` centres into `32` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
+where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`19`
+centres) and `0.7` mm `AssessmentViolated` (`27` centres) with a `DiagMotionClearanceViolated` whose
 `Cell` is set. Red when the dependent's term is dropped from `τ_half` (a leaf's bound exceeds the true gap
 at its worst configuration), when the reading stops at the verdict floor (no leaf is narrower than
-`1/1024`; the gate is met there at `351` centres), and when the margin's refinement is dropped (both
+`1/1024`; the gate is met there at `69` centres), and when the margin's refinement is dropped (both
 margins read `AssessmentUndecided`).
 
 **The one-axis loop box.** Scene 7's linkage and wall (`y ∈ [68.5, 78.5]`), the crank alone over
@@ -2808,7 +2822,7 @@ colliding; every undecided leaf is at the floor; every collision's `Volume` is t
 within `1e-6` where the corner's depth is below `8·|cos θ4|`; `Center.Values[2]` is within `1e-9` rad of
 the closed form with `Bounds[2]` positive and below `1e-9`. This is the leg that goes red when the
 dependent's term is dropped from the blocked allowance: `τ_half` of `(follower, wall)` is then `0`, every
-colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `101` centres into `51` leaves.
+colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `89` centres into `45` leaves.
 
 **The turn-back cell.** Scene 7 without the wall, the crank over `[0°, 81.857366°]` — the follower returns
 to `θ4(0)` at the range's end (§15.10) — and a `0.8` mm pin in the follower's layer (`z ∈ [23.6, 24.4]`)
