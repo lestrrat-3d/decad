@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -74,18 +75,33 @@ func (k *Kernel) FaceCell(f, g *clearance.CFace, sink *clearance.CellSink) {
 // pairs: enumerate the spine-pair criticals, emit every offset combination
 // per critical, then decide whether a carrier crossing is excluded — by the
 // strict exterior branch, by a certified containment (§4's d_sup list: an
-// inner point spine, parallel cylinder axes, coaxial spines), or by face-box
-// separation; otherwise the pair is undecided.
+// inner point spine, parallel cylinder axes, coaxial spines), by the windowed
+// nested cell, or by face-box separation; otherwise the pair is undecided.
 func (k *Kernel) offsetPair(f, g *clearance.CFace, sink *clearance.CellSink) {
 	crits, ok := k.spineCriticals(f, g)
 	if !ok {
+		// A line pair the parallel oracle cannot decide has no critical, but
+		// the windowed cell needs none. Its bound tightens the coarse
+		// enclosure rather than replacing it: a window axially outside the
+		// partner's trim admits no witness, and the coarse box distance can
+		// prove more than the windowed one.
+		if f.Kind == clearance.CkCylinder && g.Kind == clearance.CkCylinder {
+			if lo, hi, ok := k.windowedNested(f, g); ok {
+				sink.CoarseWith(lo, hi, f.Box, g.Box, f.Wit, g.Wit)
+				return
+			}
+		}
 		sink.Coarse(f.Box, g.Box, f.Wit, g.Wit)
 		return
 	}
 	minLo := math.Inf(1)
+	nested := false
 	for _, c := range crits {
 		minLo = math.Min(minLo, c.Lo)
-		k.emitOffsetCombos(sink, f, g, c)
+		nested = k.emitOffsetCombos(sink, f, g, c) || nested
+	}
+	if nested {
+		return // the windowed cell proved f's face strictly inside g's carrier
 	}
 	rf, rg := clearance.SpineOffset(f), clearance.SpineOffset(g)
 	if minLo > rf+rg+k.tol {
@@ -121,22 +137,31 @@ func (k *Kernel) spineCriticals(f, g *clearance.CFace) ([]clearance.SpineCrit, b
 // emitOffsetCombos emits the four offset combinations of one spine-pair
 // critical: the joining line meets each offset surface twice, and every
 // carrier-pair stationary point lies among the combinations, so admission
-// (§3) decides each in isolation.
-func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFace, c clearance.SpineCrit) {
+// (§3) decides each in isolation. It reports true when the windowed nested
+// cell answered a coincident critical, which also excludes a crossing of the
+// two faces.
+func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFace, c clearance.SpineCrit) bool {
 	sep := c.Fb.Sub(c.Fa)
 	d := sep.Len()
 	if d <= k.tol {
 		// Coincident spine feet: the joining direction degenerates into a
 		// whole ring. Only a PROVEN ring family carries it (concentric
-		// shells, coaxial cylinders — the peg-in-hole reading); a
-		// near-coincidence the oracle cannot decide is a contact question
-		// this cell has no right to answer.
+		// shells, coaxial cylinders — the peg-in-hole reading). A
+		// near-coincidence the oracle cannot prove — a pin a rounding error
+		// off its bore's axis — is answered by the windowed nested cell when
+		// one face's trimmed spine lies strictly inside the other's carrier,
+		// and is otherwise a contact question this cell has no right to
+		// answer.
 		if k.oracle().RingFamily(f, g) == clearance.DegYes {
 			k.emitRingCombos(sink, f, g, c)
-			return
+			return false
+		}
+		if lo, hi, ok := k.windowedNested(f, g); ok {
+			sink.Contribs = append(sink.Contribs, clearance.GapContrib{Lo: lo, Hi: hi})
+			return true
 		}
 		sink.Unsure = true
-		return
+		return false
 	}
 	dir := sep.Scale(1 / d)
 	rf, rg := clearance.SpineOffset(f), clearance.SpineOffset(g)
@@ -161,6 +186,101 @@ func (k *Kernel) emitOffsetCombos(sink *clearance.CellSink, f, g *clearance.CFac
 			sink.Candidate(k.tol, admit, lo, hi, c.Exact, pf, pg)
 		}
 	}
+	return false
+}
+
+// windowedNested is §4's windowed nested cell: a sphere or cylinder face whose
+// trimmed spine lies strictly inside a sphere or cylinder carrier, bounded
+// from the inner face's spine window alone, with no oracle answer. f and g
+// are reordered so f has the smaller radius. d_sup is the greatest distance
+// from f's spine window (its centre, or its axial window's two ends) to g's
+// spine, plus the charge below; when r_g − r_f − d_sup clears the tolerance,
+// every point of f's face lies strictly inside g's carrier, so the two faces
+// cannot meet and every point pair is at least that far apart. It returns
+// that lower bound and the nearest admitted witness pair's distance as the
+// upper one, +Inf when no witness is admitted, and ok false when the radii,
+// the spines or the margin do not admit the certificate.
+//
+// The charge is AnalyticRoundBound over an envelope of every coordinate and
+// radius the cell reads: each distance and each witness takes fewer than 128
+// additions, multiplications, divisions and correctly rounded square roots
+// at that magnitude. A witness is never Exact: its feet are float points a
+// few roundings off the carriers, and a window end is read 2·tol inside the
+// window so the trim admits it with the kernel's own margin.
+func (k *Kernel) windowedNested(f, g *clearance.CFace) (float64, float64, bool) {
+	if clearance.SpineOffset(g) < clearance.SpineOffset(f) {
+		f, g = g, f
+	}
+	if clearance.SpineOf(f) > 1 || clearance.SpineOf(g) > 1 {
+		return 0, 0, false // a circle spine has no endpoint maximum
+	}
+	rf, rg := clearance.SpineOffset(f), clearance.SpineOffset(g)
+	window := []float64{0}
+	reach := 0.0
+	if f.Kind == clearance.CkCylinder {
+		window = []float64{f.ZWin.Lo, f.ZWin.Hi}
+		reach = math.Max(math.Abs(f.ZWin.Lo), math.Abs(f.ZWin.Hi))
+	}
+	charge := proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(
+		proofbound.VecMaxAbs(f.Anchor), proofbound.VecMaxAbs(g.Anchor), reach, rf, rg))
+	dSup := 0.0
+	for _, z := range window {
+		dSup = math.Max(dSup, clearance.PointSpineDist(f.Anchor.Add(f.Axis.Scale(z)), g))
+	}
+	dSup = proofbound.AbsSumUpper(dSup, charge)
+	lo := freeform.DownRound(freeform.DownRound(rg-rf) - dSup)
+	if proofbound.IsNonFinite(lo) || !(lo > k.tol) {
+		return 0, 0, false
+	}
+
+	axis := f.Axis
+	if g.Kind == clearance.CkCylinder {
+		axis = g.Axis
+	}
+	u := clearance.PerpTo(axis)
+	v := axis.Cross(u)
+	dirs := make([]r3.Vec, 0, 24)
+	for _, th := range clearance.RingAngles(f, g, u, v) {
+		dirs = append(dirs, u.Scale(math.Cos(th)).Add(v.Scale(math.Sin(th))))
+	}
+	stations := []float64{0}
+	if f.Kind == clearance.CkCylinder {
+		stations = []float64{f.ZWin.Lo + 2*k.tol, (f.ZWin.Lo + f.ZWin.Hi) / 2, f.ZWin.Hi - 2*k.tol}
+	} else {
+		dirs = append(dirs, axis, axis.Scale(-1))
+	}
+	best := math.Inf(1)
+	for _, z := range stations {
+		a := f.Anchor.Add(f.Axis.Scale(z))
+		for _, dir := range dirs {
+			if f.Kind == clearance.CkCylinder {
+				dir = dir.Sub(f.Axis.Scale(dir.Dot(f.Axis)))
+			}
+			dir, ok := dir.Normalize()
+			if !ok {
+				continue
+			}
+			p := a.Add(dir.Scale(rf))
+			c := g.Anchor
+			if g.Kind == clearance.CkCylinder {
+				c = clearance.LinePoint(g.Anchor, g.Axis, p)
+			}
+			out, ok := p.Sub(c).Normalize()
+			if !ok {
+				continue
+			}
+			q := c.Add(out.Scale(rg))
+			if clearance.AdmitState(f.AdmitPoint(p, k.tol), g.AdmitPoint(q, k.tol)) == 1 {
+				best = math.Min(best, p.Sub(q).Len())
+			}
+		}
+	}
+	if math.IsInf(best, 1) {
+		// A sample proves a witness present, never absent: the lower bound
+		// stands alone and the pair reads undecided for want of an upper one.
+		return lo, best, true
+	}
+	return lo, proofbound.AbsSumUpper(best, charge), true
 }
 
 // emitRingCombos handles the concentric family of a coincident-spine critical

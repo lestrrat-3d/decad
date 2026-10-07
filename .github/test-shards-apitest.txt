@@ -878,6 +878,8 @@
 2	0.61	TestVerifyLinkageExclusionsTakeTheLarger
 2	3.29	TestVerifyLinkageLoopCrossingZero
 2	8.08	TestVerifyLinkageLoopSliderPin
+2	0.49	TestVerifyLinkagePinOnStaticPost
+2	9.93	TestVerifyLinkagePinnedElbow
 2	0.06	TestVerifyLinkageSweptBoxCoversAncestorTravel
 2	0.37	TestVerifyLinkageSweptBoxExclusion
 2	0.00	TestVerifyMotionBetweenErrors

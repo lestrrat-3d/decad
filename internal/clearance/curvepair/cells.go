@@ -365,7 +365,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 	case 0:
 		cs, ok := k.pointCircleCrits(f.Anchor, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)
 		if !ok {
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			k.windowedCircleOrCoarse(f, e, sink)
 			return
 		}
 		for i := range cs {
@@ -401,7 +401,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 					crits = append(crits, clearance.ExactCrit(pe, clearance.LinePoint(f.Anchor, f.Axis, pe)))
 				}
 			default:
-				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				k.windowedCircleOrCoarse(f, e, sink)
 				return
 			}
 		case clearance.DegNo:
@@ -421,7 +421,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 			}
 			crits = cs
 		default:
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			k.windowedCircleOrCoarse(f, e, sink)
 			return
 		}
 	default:
@@ -443,6 +443,110 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 	if !k.feCrossingExcluded(f, e, minLo, maxHi) {
 		sink.Unsure = true
 	}
+}
+
+// windowedCircleOrCoarse answers a circular edge against a sphere or cylinder
+// face whose coaxiality the oracle cannot decide: the coarse enclosure,
+// tightened by the windowed reading below when it certifies. The reading
+// never replaces the enclosure: an edge axially outside the face's trim
+// admits no witness, and the coarse box distance can prove more.
+func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, sink *clearance.CellSink) {
+	if lo, hi, ok := k.windowedCircleFE(f, e); ok {
+		sink.CoarseWith(lo, hi, f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+		return
+	}
+	sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+}
+
+// windowedCircleFE is the edge tier's twin of the windowed nested cell
+// (docs/clearance-design.md §4): a circular edge of radius ρ about centre c
+// with unit axis n, against a sphere or cylinder face of radius r whose spine
+// the oracle can place neither on the circle's axis nor provably off it — the
+// bore's rim against a pin a rounding error off concentric. Every point of the
+// circle is c + ρ·u for a unit u ⊥ n, so its distance to the face's spine lies
+// in a band read from c alone:
+//
+//   - a point spine s: |p − s| differs by at most δ = dist(s, axis of the
+//     circle) from |p − s'|, s' the foot of s on that axis, and |p − s'| is
+//     the constant D = √(ρ² + h²), h the axial offset of s' from c;
+//   - a line spine of unit direction a: dist(p, line) = |P(c − a₀) + ρ·P(u)|,
+//     P the projection off a, so it lies in [ρ·cos α − δ, ρ + δ] with
+//     δ = dist(c, line) and sin α ≤ |n × a|, since |u·a| ≤ sin α.
+//
+// When the band clears r by more than tol on one side the whole edge lies
+// strictly outside (or inside) the face's carrier: the two never meet, and
+// every point pair is at least the band's distance from r apart. Each end of
+// the band carries the charge windowedNested makes, AnalyticRoundBound over
+// an envelope of every coordinate and radius read. The upper bound is the
+// nearest admitted witness pair: an edge point at each azimuth of a uniform
+// set and the edge's own window, and its radial image on the face's carrier,
+// +Inf when none is admitted. ok is false when the band does not clear r.
+func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge) (float64, float64, bool) {
+	spine := clearance.SpineOf(f)
+	if spine > 1 {
+		return 0, 0, false
+	}
+	rho, r := e.Radius, f.Radius
+	charge := proofbound.AnalyticRoundBound(proofbound.AbsSumUpper(
+		proofbound.VecMaxAbs(e.Center), proofbound.VecMaxAbs(f.Anchor), rho, r))
+	var dLo, dHi float64
+	if spine == 0 {
+		rel := f.Anchor.Sub(e.Center)
+		h := rel.Dot(e.Axis)
+		delta := rel.Sub(e.Axis.Scale(h)).Len()
+		d := math.Sqrt(rho*rho + h*h)
+		dLo, dHi = d-delta, d+delta
+	} else {
+		delta := clearance.PointSpineDist(e.Center, f)
+		sin := math.Min(1, proofbound.AbsSumUpper(e.Axis.Cross(f.Axis).Len(), proofbound.AnalyticRoundBound(1)))
+		dLo, dHi = rho*math.Sqrt(1-sin*sin)-delta, rho+delta
+	}
+	dLo, dHi = freeform.DownRound(dLo-charge), proofbound.AbsSumUpper(dHi, charge)
+	var lo float64
+	switch {
+	case freeform.DownRound(dLo-r) > k.tol:
+		lo = freeform.DownRound(dLo - r)
+	case freeform.DownRound(r-dHi) > k.tol:
+		lo = freeform.DownRound(r - dHi)
+	default:
+		return 0, 0, false
+	}
+	if proofbound.IsNonFinite(lo) {
+		return 0, 0, false
+	}
+	const uniform = 16
+	angles := make([]float64, 0, uniform+3)
+	for i := range uniform {
+		angles = append(angles, 2*math.Pi*float64(i)/uniform)
+	}
+	if !e.Ang.Full {
+		angles = append(angles, e.Ang.Lo, (e.Ang.Lo+e.Ang.Hi)/2, e.Ang.Hi)
+	}
+	best := math.Inf(1)
+	for _, th := range angles {
+		if clearance.CircleAngleAdmit(e, th, k.tol) != 1 {
+			continue
+		}
+		s, c := math.Sincos(th)
+		radial, ok := e.RefU.Scale(c).Add(e.RefV.Scale(s)).Normalize()
+		if !ok {
+			continue
+		}
+		pe := e.Center.Add(radial.Scale(rho))
+		_, foot := clearance.SpineDistOf(f, pe)
+		out, ok := pe.Sub(foot).Normalize()
+		if !ok {
+			continue
+		}
+		q := foot.Add(out.Scale(r))
+		if f.AdmitPoint(q, k.tol) == 1 {
+			best = math.Min(best, pe.Sub(q).Len())
+		}
+	}
+	if math.IsInf(best, 1) {
+		return lo, best, true
+	}
+	return lo, proofbound.AbsSumUpper(best, charge), true
 }
 
 // EdgeEdge dispatches one edge pair through §4's curve tiers.

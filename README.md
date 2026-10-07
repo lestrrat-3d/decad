@@ -155,15 +155,16 @@ link and the stop it would hit flash coral while the clip pauses there.
 <img src="docs/images/motion/arm.gif" alt="A two-link arm pinned to a post on a base plate folds up to a stop block, the forearm and the block flash coral, and the arm folds back" width="320"><br>
 <strong>VerifyLinkage</strong> proves the folding arm clear up to s = 91/256, with the forearm all but
 on the stop: the exact contact is at s = asin(17/32)/90° ≈ 0.3566 and the first proven collision at
-92/256. The clip drives to 91/256 and back. At every pose the check evaluates, each pin measures
-0.25 to 0.75 mm clear of its bore.
+92/256. The clip drives to 91/256 and back. At every pose the check evaluates, each pin sits on
+its bore's centre and measures 0.5 mm clear of it.
 </td>
 <td>
 <img src="docs/images/motion/rocker.gif" alt="A crank drives a pinned four-bar linkage until the follower reaches a stop block, the follower and the block flash coral, and the crank turns back" width="320"><br>
 <strong>Closed loops</strong> are checked too: VerifyLinkage proves the crank-rocker clear up to
 s = 118/256 (crank angle 165.94°), just before the follower's flank reaches the stop at a crank
 angle of 167.62°; its first proven collision is at 120/256. The clip drives to 118/256 and back.
-All four pins measure 0.25 to 0.75 mm clear of their bores at every pose the check evaluates.
+All four pins sit on their bores' centres and measure 0.5 mm clear of them at every pose the
+check evaluates.
 </td>
 </tr>
 <tr>
