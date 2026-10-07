@@ -46,12 +46,12 @@ type motionClip struct {
 //   - parts-bin: TestPartsBinTimeline (dynamics_clip_test.go).
 //
 // The linkage clips run at 64 fps, so frame i shows the drive fraction
-// i/256. The arm's GIF keeps every second frame and the rocker's every
-// fourth, so each keeps the frame of its first collision, 86 for the arm and
-// 36 for the rocker; TestMotionClipsKeepTheMarkedFrame checks this.
+// i/256. Each GIF keeps every fourth frame, so each keeps the frame of its
+// first collision, 92 for the arm and 120 for the rocker;
+// TestMotionClipsKeepTheMarkedFrame checks this.
 var motionClips = []motionClip{
-	{name: "arm", build: linkageMotion(foldingArmScene, 0), stride: 2},
-	{name: "rocker", build: linkageMotion(crankRockerScene, 28), stride: 4},
+	{name: "arm", build: linkageMotion(foldingArmScene, 0), stride: 4},
+	{name: "rocker", build: linkageMotion(crankRockerScene, 0), stride: 4},
 	{name: "tumble", build: dynamicsMotion("tumble", 30), stride: 1, hold: time.Second},
 	{name: "parts-bin", build: dynamicsMotion("parts-bin", 27), stride: 1, hold: time.Second},
 }

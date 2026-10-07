@@ -21,9 +21,11 @@ import (
 // Each leg was seen red by breaking what it guards: a drive fraction channel
 // ending one frame late (4 s plus 1/64 s) fails the bit-identical pose leg;
 // firstFrameAt testing > instead of >= fails the
-// marked-frame leg (frame 87); hitFades switching one frame late fails the
-// fade leg at frame 86; and a hit colour of gold fails the pixel leg at
-// frame 86.
+// marked-frame leg (frame 93); hitFades switching one frame late fails the
+// fade leg at frame 92; a hit colour of gold fails the pixel leg at
+// frame 92; the stop's end moved 2 mm along X in the scene alone fails the
+// volume leg; and the elbow pin set on its bore's centre fails the
+// joint-contact leg.
 
 // transformBits are a transform's twelve components as raw float64 bits, so
 // two transforms compare equal only when they are bit-identical.
@@ -50,7 +52,13 @@ func TestLinkageClipMatchesPoseAt(t *testing.T) {
 	clip, _, err := scene.clip(nil, linkageClipLength, smokeWidth, smokeHeight)
 	require.NoError(t, err)
 
-	byName := map[string]*decad.Link{"upper-arm": scene.shoulder, "forearm": scene.elbow}
+	byName := make(map[string]*decad.Link)
+	for _, part := range scene.parts {
+		if part.link != nil {
+			byName[part.name] = part.link
+		}
+	}
+	require.Len(t, byName, 5, "the upper arm, the forearm and the elbow pin's three bodies")
 	index := func(link *decad.Link) int { return slices.Index(scene.linkage.Links(), link) }
 	for _, c := range []struct {
 		frame int
@@ -58,8 +66,8 @@ func TestLinkageClipMatchesPoseAt(t *testing.T) {
 	}{
 		{0, 0},
 		{1, 1.0 / 256},
-		{85, 85.0 / 256},
-		{86, 86.0 / 256},
+		{91, 91.0 / 256},
+		{92, 92.0 / 256},
 		{171, 171.0 / 256},
 		{256, 1},
 		{300, 1}, // the hold after the drive
@@ -82,32 +90,41 @@ func TestLinkageClipMatchesPoseAt(t *testing.T) {
 	}
 
 	// The forearm keeps its orientation and rides the elbow's circle: at
-	// s = 86/256 its corner (96, 14, 22) sits at (48·cos θ + 48,
-	// 48·sin θ + 14, 22) with θ = 90°·86/256.
-	frame, err := clip.Frame(t.Context(), 86)
+	// s = 92/256 the top of its tip end, (96, 12, 20), sits at
+	// (48·cos θ + 48, 48·sin θ + 12, 20) with θ = 90°·92/256.
+	frame, err := clip.Frame(t.Context(), 92)
 	require.NoError(t, err)
-	theta := math.Pi / 2 * 86 / 256
+	theta := math.Pi / 2 * 92 / 256
 	checked := false
 	for _, pose := range frame.Poses {
 		if pose.Name != "forearm" {
 			continue
 		}
 		checked = true
-		corner := pose.Transform.Apply(r3.NewVec(2*linkageElbow, linkageHalfWidth, 22))
+		top := linkageForearmZ + linkageBarThick
+		corner := pose.Transform.Apply(r3.NewVec(2*linkageElbow, linkageEnd, top))
 		require.InDelta(t, linkageElbow*math.Cos(theta)+linkageElbow, corner.X, 1e-9)
-		require.InDelta(t, linkageElbow*math.Sin(theta)+linkageHalfWidth, corner.Y, 1e-9)
-		require.InDelta(t, 22, corner.Z, 1e-9)
+		require.InDelta(t, linkageElbow*math.Sin(theta)+linkageEnd, corner.Y, 1e-9)
+		require.InDelta(t, top, corner.Z, 1e-9)
 	}
 	require.True(t, checked)
 }
 
 // TestLinkageClipMarksFirstCollision asserts the scene's verdict against its
-// closed form and the frame the clip marks against the verdict. The forearm's
-// top face y = 48·sin θ + 14 reaches the wall face y = 38 at sin θ = 1/2,
-// θ* = 30°, s* = 1/3. The check bisects a dyadic grid down to 1/256, so its
-// first collision is the first grid point past s*, 86/256, where the overlap
-// is the slab 48 × (48·sin θ − 24) × 10 mm³. The clip draws the forearm in its
-// own colour through frame 85 and in the hit colour from frame 86 on.
+// closed form and the frame the clip marks against the verdict. The
+// forearm's upper flank y = 48·sin θ + 12 reaches the stop's face y = 37.5
+// at sin θ = 25.5/48, θ* = asin(17/32) ≈ 32.09°, s* = θ*/90° ≈ 0.3566. The
+// check bisects a dyadic grid down to 1/256, so its first collision is the
+// first grid point past s*, 92/256.
+// There the forearm reaches h = 48·sin θ − 25.5 past the face, and its overlap
+// with the stop, 8 mm deep along Z, is the strip of the flat flank from the
+// stop's end x = 64 to the tip's centre x = 48·cos θ + 48, plus the half of
+// the tip's circular segment of height h beyond that centre:
+//
+//	V = 8·((48·cos θ − 16)·h + seg(h)/2),  seg(h) = R²·acos((R − h)/R) − (R − h)·√(2Rh − h²),  R = 12
+//
+// The clip draws the forearm in its own colour through frame 91 and in the
+// hit colour from frame 92 on.
 func TestLinkageClipMarksFirstCollision(t *testing.T) {
 	t.Parallel()
 	scene, err := foldingArmScene(t.Context())
@@ -115,30 +132,38 @@ func TestLinkageClipMarksFirstCollision(t *testing.T) {
 	report, err := scene.verify(t.Context())
 	require.NoError(t, err)
 
-	sStar := math.Asin((linkageWallFace-linkageHalfWidth)/linkageElbow) / (math.Pi / 2)
-	require.InDelta(t, 1.0/3, sStar, 1e-15)
+	sStar := math.Asin((linkageStopFace-linkageEnd)/linkageElbow) / (math.Pi / 2)
+	require.InDelta(t, math.Asin(17.0/32)/(math.Pi/2), sStar, 1e-15)
 	grid := math.Ceil(sStar/linkageResolution) * linkageResolution
-	require.Equal(t, 86.0/256, grid)
+	require.Equal(t, 92.0/256, grid)
 
 	require.Equal(t, decad.Interfering, report.Status)
 	require.NotEmpty(t, report.Collisions)
 	first := report.Collisions[0]
-	forearm, wall := scene.parts[1].body, scene.parts[2].body
+	forearm, stop := scene.parts[1].body, scene.parts[3].body
 	require.Same(t, forearm, first.A)
-	require.Same(t, wall, first.B)
+	require.Same(t, stop, first.B)
 	require.Equal(t, grid, first.At.Mag())
 	require.Greater(t, first.At.Mag(), sStar)
 	theta := math.Pi / 2 * first.At.Mag()
-	slab := 48 * (linkageElbow*math.Sin(theta) + linkageHalfWidth - linkageWallFace) * 10
-	require.InDelta(t, slab, first.Volume.Value.Base(), 1e-3)
+	h := linkageElbow*math.Sin(theta) + linkageEnd - linkageStopFace
+	r := linkageEnd
+	seg := r*r*math.Acos((r-h)/r) - (r-h)*math.Sqrt(2*r*h-h*h)
+	volume := linkageBarThick * ((linkageElbow*math.Cos(theta)+linkageElbow-linkageStopX)*h + seg/2)
+	require.InDelta(t, volume, first.Volume.Value.Base(), first.Volume.Bound.Base())
 	require.Less(t, first.Volume.Bound.Base(), first.Volume.Value.Base())
+
+	// Both pins are measured in their bores at every pose the check
+	// evaluates: the shoulder post on its bore's centre at 0.5 mm, the elbow
+	// pin pinOffset off centre at between 0.25 and 0.75 mm.
+	requireJointGaps(t, scene, report, 2)
 
 	clip, style, err := scene.clip(report, linkageClipLength, smokeWidth, smokeHeight)
 	require.NoError(t, err)
 	require.Equal(t, 320, clip.FrameCount())
 	marked, err := firstFrameAt(clip, first.At.Mag())
 	require.NoError(t, err)
-	require.Equal(t, 86, marked)
+	require.Equal(t, 92, marked)
 	fraction, err := linkageFraction()
 	require.NoError(t, err)
 	at, err := fraction.At(clip.FrameTime(marked))
@@ -147,12 +172,12 @@ func TestLinkageClipMarksFirstCollision(t *testing.T) {
 
 	// Every frame draws exactly one copy of the forearm: its own colour
 	// before the marked frame, the hit colour from it on. The upper arm and
-	// the wall carry no fade.
+	// the stop carry no fade.
 	own, hit := style.Parts["forearm"], style.Parts["forearm-hit"]
 	require.NotNil(t, own.Fade)
 	require.NotNil(t, hit.Fade)
 	require.Nil(t, style.Parts["upper-arm"].Fade)
-	require.Nil(t, style.Parts["wall"].Fade)
+	require.Nil(t, style.Parts["stop"].Fade)
 	for i := range clip.FrameCount() {
 		ownAt, err := own.Fade.At(clip.FrameTime(i))
 		require.NoError(t, err)
@@ -213,4 +238,31 @@ func hitTinted(img *image.RGBA) int {
 		}
 	}
 	return n
+}
+
+// requireJointGaps asserts that report declares want joint contacts and that
+// every pose it evaluates measures each of them: a gap of 0.5 mm for a pin
+// on its bore's centre, and one between 0.5 − pinOffset and 0.5 + pinOffset
+// for a pin set pinOffset off it.
+func requireJointGaps(t *testing.T, scene *linkageScene, report *decad.LinkageReport, want int) {
+	t.Helper()
+	require.Len(t, report.JointContacts, want)
+	require.NotEmpty(t, report.Poses)
+	for _, pose := range report.Poses {
+		measured := 0
+		for _, c := range pose.Clearances {
+			for _, jc := range report.JointContacts {
+				if (jc.A != c.A || jc.B != c.B) && (jc.A != c.B || jc.B != c.A) {
+					continue
+				}
+				measured++
+				gap := c.Gap.Value.Base()
+				require.GreaterOrEqual(t, gap, 0.5-pinOffset-1e-9, "%s/%s at s = %v",
+					scene.partName(c.A), scene.partName(c.B), pose.Pose.At.Mag())
+				require.LessOrEqual(t, gap, 0.5+pinOffset+1e-9, "%s/%s at s = %v",
+					scene.partName(c.A), scene.partName(c.B), pose.Pose.At.Mag())
+			}
+		}
+		require.Equal(t, want, measured, "joint contacts measured at s = %v", pose.Pose.At.Mag())
+	}
 }

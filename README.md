@@ -151,14 +151,17 @@ collision, from the first frame at which the check proves it.
 <table>
 <tr>
 <td>
-<img src="docs/images/motion/arm.gif" alt="A two-link arm folds toward a wall, and its forearm turns coral as it enters the wall" width="320"><br>
-<strong>VerifyLinkage</strong> finds the folding arm's first collision at s = 86/256, the first point
-of its 1/256 grid past the exact contact at s = 1/3.
+<img src="docs/images/motion/arm.gif" alt="A two-link arm pinned to a post on a base plate folds toward a stop block, and its forearm turns coral as it enters the block" width="320"><br>
+<strong>VerifyLinkage</strong> finds the folding arm's first collision at s = 92/256, the first point
+of its 1/256 grid past the exact contact at s = asin(17/32)/90° ≈ 0.3566. At every pose it
+evaluates, it also measures each pin's clearance in its bore: between 0.25 and 0.75 mm.
 </td>
 <td>
-<img src="docs/images/motion/rocker.gif" alt="A crank turns a four-bar linkage, and the follower turns coral as its tip reaches a wall" width="320"><br>
+<img src="docs/images/motion/rocker.gif" alt="A crank turns a pinned four-bar linkage a full turn, and the follower turns coral as it swings into a stop block" width="320"><br>
 <strong>Closed loops</strong> are checked too: the crank-rocker's follower first collides with the
-wall at s = 36/256 (crank angle 12.66°), the first grid point after its corner crosses the wall face.
+stop at s = 120/256 (crank angle 168.75°), the first grid point after its flank reaches the stop's
+face at a crank angle of 167.62°. All four pins measure 0.25 to 0.75 mm clear of their bores at
+every pose the check evaluates.
 </td>
 </tr>
 <tr>
