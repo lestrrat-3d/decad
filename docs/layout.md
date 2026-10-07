@@ -300,11 +300,12 @@ the rules leave to the byte budget.
 | `internal/planarsweep/` | Planar sweep motion, vertex rates, curvature and depth bounds. |
 | `internal/sweepmemo/` | Sweep path and radius memo tables, keys, and cloned values. See contact-sweep §7. |
 | `internal/linkagebound/` | Link reach, projections, loop frames and chains. See linkage §15. |
+| `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
-| `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
+| `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding, audits. See evaluator §9. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries and selects loops. See evaluator §9. |
-| `internal/clearance/` | Clearance geometry, cell accumulation, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
+| `internal/clearance/` | Clearance geometry, cell sums, coplanar trim classification and degeneracy checks. See clearance design. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
@@ -313,5 +314,5 @@ the rules leave to the byte budget.
 | `internal/stitchweld/` | Exact Stitch vertex classes and weld pairs. See surface §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
-| `_shardgen/` | Own nested module: packs root and `apitest` tests into cost-balanced race shards; the `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
-| `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; `codeql.yml` runs CodeQL; `test-shards*.txt` assign race shards. |
+| `_shardgen/` | Nested module: packs root and `apitest` tests into cost-balanced race shards; `_` hides it from root tools. See `main.go` doc comment. |
+| `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |
