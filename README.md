@@ -128,22 +128,59 @@ writes each shot's PNG frames under `_gallery/out/` and prints the two ffmpeg
 commands, which the script runs to write `out/decad-landing.mp4` and
 `out/decad-landing.gif`.
 
-The `stack-and-drop` dynamics scene drops spheres and a cylinder beside a
-resting box pyramid, every frame a certified pose of a `dynamics.Timeline`.
-Render it with `cd _gallery && go run . dynamics -scene stack-and-drop`; the
-frames go under `_gallery/out/`. The `tumble` scene drops spinning boxes, a
-hexagonal prism, a wedge and a stitched tetrahedron into a tray, where each
-lands on a corner and comes to rest face down; `-scene tumble` renders it.
-The `parts-bin` scene drops a shelled cup, a chamfered block, a loft, a swept
-hexagon and a revolved bottle into the same tray, where each comes to rest,
-while a cylinder rolls across its floor; `-scene parts-bin` renders it.
+## Motion and collisions
 
-The `linkage` scene films a mechanism that `VerifyLinkage` has checked. A
-two-link arm folds into a wall, and the check finds the first collision at
-s = 86/256, the first point of its 1/256 grid past the exact contact at
-s = 1/3. The clip shows frame i at s = i/256 using the poses `Linkage.PoseAt`
-returns, and the forearm turns coral from frame 86. Render it with
-`cd _gallery && go run . linkage`; the frames go under `_gallery/out/`.
+decad also checks parts that move. `Document.VerifyMotion` moves bodies along one
+revolute, prismatic or `Between` path. `Document.VerifyLinkage` drives a chain of
+joints, including a closed loop such as a four-bar or a slider-crank.
+`Document.VerifyJointBox` checks every combination of joint values in a box.
+Each check splits the motion into intervals, or the box into cells, and reports
+each one as clear, colliding, or undecided. For a clear interval, decad proves
+that no two bodies overlap at any point in it, not only at sampled poses, and
+reports a lower bound on the gap. A colliding interval has a proven, measured
+overlap at one of its ends. An undecided interval makes the report `Suspect`, and
+decad does not count it as clear.
+
+The `dynamics` package simulates rigid bodies under gravity, impact and
+friction. A `dynamics.Timeline` advances a scene one fixed step at a time. A step
+that its proofs cannot settle returns `Undecided` with a typed reason, and the
+timeline stops there. Every frame below is a pose the check or the timeline
+computed. The coral body in the first two clips is the one in a proven
+collision, from the first frame at which the check proves it.
+
+<table>
+<tr>
+<td>
+<img src="docs/images/motion/arm.gif" alt="A two-link arm folds toward a wall, and its forearm turns coral as it enters the wall" width="320"><br>
+<strong>VerifyLinkage</strong> finds the folding arm's first collision at s = 86/256, the first point
+of its 1/256 grid past the exact contact at s = 1/3.
+</td>
+<td>
+<img src="docs/images/motion/rocker.gif" alt="A crank turns a four-bar linkage, and the follower turns coral as its tip reaches a wall" width="320"><br>
+<strong>Closed loops</strong> are checked too: the crank-rocker's follower first collides with the
+wall at s = 36/256 (crank angle 12.66°), the first grid point after its corner crosses the wall face.
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/images/motion/tumble.gif" alt="Spinning boxes, a hexagonal prism, a wedge and a tetrahedron drop into a tray and settle" width="320"><br>
+<strong>Tumble</strong> runs all 768 steps of its 3 s timeline, and every body ends at rest on a face,
+with at least three vertices within 10 µm of the tray floor.
+</td>
+<td>
+<img src="docs/images/motion/parts-bin.gif" alt="Five modeled parts drop into a tray and settle while a cylinder rolls across the floor" width="320"><br>
+<strong>Parts bin</strong> drops a shelled cup, a chamfered block, a loft, a swept hexagon and a
+revolved bottle to rest, while a cylinder rolls 60 mm without slipping.
+</td>
+</tr>
+</table>
+
+Regenerate these GIFs with `cd _gallery && go run . motion` (requires `ffmpeg`).
+The same scenes render as full-size PNG frames under `_gallery/out/` with
+`go run . linkage`, `go run . linkage -scene rocker`, and
+`go run . dynamics -scene tumble` or `-scene parts-bin`. A third dynamics scene,
+`-scene stack-and-drop`, drops spheres and a cylinder beside a resting box
+pyramid.
 
 ## Layering
 
