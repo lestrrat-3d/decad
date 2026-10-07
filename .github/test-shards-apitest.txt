@@ -870,6 +870,7 @@
 2	10.21	TestVerifyJointBoxBlocked
 2	2.07	TestVerifyJointBoxLoopHeld
 2	5.96	TestVerifyJointBoxLoopOneAxis
+2	6.21	TestVerifyJointBoxLoopProjection
 2	2.33	TestVerifyJointBoxTwoArms
 2	2.27	TestVerifyLinkageDeclaredJointContact
 2	3.29	TestVerifyLinkageLoopCrossingZero

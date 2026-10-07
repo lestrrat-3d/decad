@@ -711,7 +711,9 @@ are read at `m`, the stated joints at their exact values and each dependent at i
 inside `E_e` and the hull inside the dependent's reach (§15.5), so every configuration on the segment
 lies inside the range `ρ` and `B_ij` were read over. A dependent's schedule is not affine in `s`, so a pair
 whose relative path holds one takes the box form, the segment term never. A pose or an interval the loop
-could not be enclosed at takes neither bound, as §15.6 says.
+could not be enclosed at takes neither bound, as §15.6 says. The cell form over a loop box (§16.3) reads a
+dependent the same way, its centre the midpoint of its enclosure `M_j` at the cell's centre and `h_j` the
+farther end of the hull of the cell's hull `H_j` and `M_j`.
 
 **The interval form.** On `[s_a, s_b]` the bound is read from each end `e ∈ {a, b}`, the larger of the two
 ends' `L_n` serving. The remainder takes `h_i = D_i`, `jointSpan`'s total variation of joint `i` over the
@@ -1705,6 +1707,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | S1 (`linkage_bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage_verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
 | S2 (`linkage_box.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
 | D1 (`linkage_loop.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
+| D2 (`linkage_box.go`: `dependentReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
 | P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
@@ -2553,8 +2556,14 @@ summed as §14.3 sums, over the joints below the pair's lowest common ancestor o
 `w_j = ρ_{jk}` for a revolute dependent and `1` for a dependent slide. A held loop's dependents have
 `δ_j = 0` (§16.1). The same `τ_half` enters the blocked certificate's allowance (§14.3): along the straight
 joint-space segment from `m` to `q` each dependent changes by at most `δ_j`, so the volume's Lipschitz bound
-holds with the same per-body travel. `τ_half` is the one quantity that changes; the centre certificate,
-the blocked certificate and the cell's `Clearance` read as §14.3 writes them.
+holds with the same per-body travel. The centre certificate, the blocked certificate and the cell's
+`Clearance` read as §14.3 writes them with this `τ_half`.
+
+**The projection bound over a loop.** A pair whose relative path holds a dependent takes §5.8's cell form
+too, the dependent read at the exact midpoint of `M_j` with `h_j` the larger distance from it to an end of
+the hull of `H_j` and `M_j`, every value the dependent takes over the cell (§5.8, over a loop's dependent
+joint); its share of the bound's defect is charged to its driver's axis, as its travel term is. A held
+loop's dependent has `H_j = M_j`. A gated cell takes neither bound.
 
 **The loop gate.** A cell whose hull ask `sketch` refused — a fold inside its loop-axis range, the piece
 budget, a reading past a dependent's reach (§15.5) — has no `δ_j`, so no pair of it has a `τ_half`, and it
@@ -2630,8 +2639,8 @@ and each distinct loop-axis interval one cell ask whose pieces serve every cell 
 over `Min → Max` builds — so the enclosure work is a few hundred milliseconds where the kernel work is
 seconds; the root's cell ask, over the whole range, costs the most pieces (a quarter turn of the
 crank-rocker: a few hundred). A stuck cell costs its one refused point ask, which the cache answers from
-its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `445` centres
-in about `2.3` s, `13` s under the race detector; the one-axis loop box `107` centres in about `2` s, `6` s
+its predecessor's refusal. Measured: scene 11 at `WithResolution(Scalar(1.0/16))` evaluates `429` centres
+in about `2.3` s, `13` s under the race detector; the one-axis loop box `101` centres in about `2` s, `6` s
 under the race detector; the fold box `21` centres in about `2` s, most of it the decomposition walking the
 refused cells down to the fold. Under the race detector the clear box's reading and its two margins take
 about `15` s together, the blocked box `3` s, the held loop `2` s and the turn-back cell `1` s. The test file
@@ -2686,7 +2695,7 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
   triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³ within `1e-6`, `Bound` below `Value`; at least one
   collision is that shallow.
 - `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
-  file records the count: `445` centres into `223` leaves, `24` clear, `168` colliding, `31` undecided.
+  file records the count: `429` centres into `215` leaves, `22` clear, `168` colliding, `25` undecided.
 - `examples/` gains `Example_decad_jointBoxLoop` on this scene at `WithResolution(Scalar(1.0/16))`,
   printing `Status`, the first collision's bodies and its crank angle and gate value to two decimals; the
   centres are dyadic, so the printed values hold on every platform.
@@ -2698,12 +2707,12 @@ falls linearly along the gate, so the reading meets the default tolerance by ref
 defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
 `72 − d_hi − y_c(θ̂)`; `Clearance` enclosing `0.6143` with `ToleranceSatisfied`; `ReadingResolution`
 `1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (measured:
-`305` centres into `153` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
-where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`83`
-centres) and `0.7` mm `AssessmentViolated` (`103` centres) with a `DiagMotionClearanceViolated` whose
+`299` centres into `150` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
+where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`79`
+centres) and `0.7` mm `AssessmentViolated` (`97` centres) with a `DiagMotionClearanceViolated` whose
 `Cell` is set. Red when the dependent's term is dropped from `τ_half` (a leaf's bound exceeds the true gap
 at its worst configuration), when the reading stops at the verdict floor (no leaf is narrower than
-`1/1024`; the gate is met there at `357` centres), and when the margin's refinement is dropped (both
+`1/1024`; the gate is met there at `351` centres), and when the margin's refinement is dropped (both
 margins read `AssessmentUndecided`).
 
 **The one-axis loop box.** Scene 7's linkage and wall (`y ∈ [68.5, 78.5]`), the crank alone over
@@ -2717,7 +2726,7 @@ colliding; every undecided leaf is at the floor; every collision's `Volume` is t
 within `1e-6` where the corner's depth is below `8·|cos θ4|`; `Center.Values[2]` is within `1e-9` rad of
 the closed form with `Bounds[2]` positive and below `1e-9`. This is the leg that goes red when the
 dependent's term is dropped from the blocked allowance: `τ_half` of `(follower, wall)` is then `0`, every
-colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `107` centres into `54` leaves.
+colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `101` centres into `51` leaves.
 
 **The turn-back cell.** Scene 7 without the wall, the crank over `[0°, 81.857366°]` — the follower returns
 to `θ4(0)` at the range's end (§15.10) — and a `0.8` mm pin in the follower's layer (`z ∈ [23.6, 24.4]`)
@@ -2748,6 +2757,15 @@ than the verdict floor; `CellsEvaluated` is below `64` (measured: `21` centres i
 the hull gate is dropped — the root's hull spans the fold, every pair is settled, and the root reads
 `CellClear` and the report `Sound` — and when a stuck cell splits to the floor: every leaf past the fold is
 then floor-sized, `67` centres.
+
+**The projection over a dependent in a box.** §15.10's block riding the follower under a ceiling, the
+ceiling on a prismatic joint under the ground along `(0, −1, 0)`, the box the crank over `[0°, 90°]` and
+the ceiling over `[0, 1]` mm: the gap `67.5 − d − 66·cos Δ − 4·|sin Δ|` is smallest, `66.5 − √4372 ≈
+0.379` mm, at `d = 1` where `Δ = −atan(4/66)`, flat along the crank twice. At the defaults assert `Sound`,
+the reading enclosing it, and every leaf's bound at or below the closed-form gap at its centre and
+corners. Measured: `137` centres into `69` leaves, against `6457` and `Suspect` under the travel bound
+alone. Red when the dependent's expansion is dropped (the travel bound alone), when `h_j` is read from
+`M_j` alone, and when it is a quarter of the hull's width (a leaf's bound exceeds the gap at a corner).
 
 **The blocked box.** Scene 11 with the gate shortened to `x ∈ [60, 120]` (area `2600` mm²), the crank over
 `[35°, 42°]` and the gate over `[8, 10]`, at `WithResolution(Scalar(1.0/64))`. Over that crank range `y_c`

@@ -125,7 +125,7 @@ func rockerFollowerRho() float64 {
 // variation, 1.2e-4 rad over it. An undecided centre's δ is then at most
 // 1.1·v, v the follower's farthest closed-form value from the centre's.
 //
-// Measured: 445 centres into 223 leaves (24 clear, 168 colliding, 31
+// Measured: 429 centres into 215 leaves (22 clear, 168 colliding, 25
 // undecided); none blocks, since the gate's own allowance ½·Δd·8200 ≈ 2560
 // mm³ exceeds every overlap at this floor.
 //
@@ -245,7 +245,7 @@ func TestVerifyJointBoxLoopGate(t *testing.T) {
 // so a colliding cell blocks only once its τ_half falls under about
 // 7e-3 mm, near 1/5000 of the range: none blocks at this floor.
 //
-// Measured: 107 centres into 54 leaves.
+// Measured: 101 centres into 51 leaves.
 //
 // Legs seen to fail when deleted: the dependent's term in the blocked
 // allowance (τ_half of (follower, wall) is then 0, every colliding centre
@@ -530,7 +530,7 @@ func TestVerifyJointBoxLoopCancellation(t *testing.T) {
 // minimum is flat along the crank, but the gap falls linearly along the gate,
 // so the reading meets the default tolerance by refining the gate axis.
 //
-// Measured: 305 centres into 153 leaves, the narrowest 1/2048 of a range.
+// Measured: 299 centres into 150 leaves, the narrowest 1/2048 of a range.
 //
 // Legs seen to fail when deleted: the dependent's term in τ_half (a leaf's
 // bound exceeds the true gap at its worst configuration); the reading floor
@@ -569,7 +569,7 @@ func TestVerifyJointBoxLoopClearReading(t *testing.T) {
 // cells and only a margin's own refinement decides it: 0.5 mm, below the true
 // 0.6143 mm minimum, is met; 0.7 mm is disproven at some centre.
 //
-// Measured: 83 centres for 0.5 mm, 103 for 0.7 mm.
+// Measured: 79 centres for 0.5 mm, 97 for 0.7 mm.
 //
 // Legs seen to fail when deleted: the margin's refinement (both margins read
 // AssessmentUndecided).
