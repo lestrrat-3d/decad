@@ -226,7 +226,7 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, loop assembly over `internal/tessellation/`'s chord bounds, payload dispatch, and sheet audit mapping. See `docs/tessellation-design.md`. |
+| `tessellate.go` | `Mesh`, `Body.Tessellate`, loop assembly, payload dispatch and sheet audit mapping. See tessellation design. |
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | Builds revolve rings, cells, poles and caps. See tessellation §8–§10. |
@@ -263,7 +263,7 @@ the rules leave to the byte budget.
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
-| `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
+| `internal/tessellation/` | Chord bounds and samples, section clearance, and mesh audits. |
 | `internal/loftmesh/` | Loft pairing, stations, mass sums, mesh proofs, and restatement. |
 | `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
