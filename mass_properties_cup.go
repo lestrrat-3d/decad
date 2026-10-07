@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -47,10 +48,10 @@ func cupMassProperties(ctx context.Context, b *Body, cp cupPayload, density unit
 	}
 	// Both are frame-local about their own (0, 0, zm). A cavity coordinate
 	// about the outer mid level is its own plus (0, 0, zm_cavity − zm_outer).
-	void = shiftVolumeMoments(void, [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat).Sub(cavityMid, outerMid)})
+	void = massmoment.Shift(void, [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat).Sub(cavityMid, outerMid)})
 	rotation, err := prismRotation(outer)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return rigidMassProperties(ctx, b.centroid, subVolumeMoments(solid, void), rotation, density)
+	return rigidMassProperties(ctx, b.centroid, massmoment.Sub(solid, void), rotation, density)
 }

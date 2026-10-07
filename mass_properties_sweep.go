@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -23,7 +24,7 @@ import (
 // unplaced coordinates through its own rigid motion: the exact rational image
 // of its local origin and the rotation nearest its exact rational frame
 // matrix, widened by that matrix's orthonormality defect
-// (rotateVolumeMoments). The exact change of anchor (shiftVolumeMoments)
+// (massmoment.Rotate). The exact change of anchor (massmoment.Shift)
 // carries the span's P and Q to the shared anchor, so no span is reduced to
 // a centroidal tensor and moved by the parallel-axis rule. The summed
 // moments then reach world axes through the one placement every span shares,
@@ -49,7 +50,7 @@ func sweepMassProperties(ctx context.Context, b *Body, sp sweepPayload, density 
 // every span.
 func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload, density units.Value) (MassProperties, error) {
 	placement := sp.spans[0].transform()
-	var total volumeMoments
+	var total massmoment.Moments
 	var anchor [3]*big.Rat
 	for i, span := range sp.spans {
 		if err := ctx.Err(); err != nil {
@@ -69,12 +70,12 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 		for k := range offset {
 			offset[k] = new(big.Rat).Sub(origin[k], anchor[k])
 		}
-		unplaced := shiftVolumeMoments(rotateVolumeMoments(local, frame), offset)
+		unplaced := massmoment.Shift(massmoment.Rotate(local, frame), offset)
 		if i == 0 {
 			total = unplaced
 			continue
 		}
-		total = addVolumeMoments(total, unplaced)
+		total = massmoment.Add(total, unplaced)
 	}
 	rotation, err := placementRotation(placement)
 	if err != nil {
@@ -86,44 +87,44 @@ func compositeSweepMassProperties(ctx context.Context, b *Body, sp sweepPayload,
 // sweepSpanMoments returns one span's local moments, the exact rational
 // matrix taking its local axes to the composite's unplaced axes, and the
 // exact unplaced position of its local origin.
-func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (volumeMoments, [3][3]*big.Rat, [3]*big.Rat, error) {
+func sweepSpanMoments(ctx context.Context, span sweepSpanPayload) (massmoment.Moments, [3][3]*big.Rat, [3]*big.Rat, error) {
 	if span.arc {
 		rp := span.revolve
 		local, err := revolveVolumeMoments(ctx, rp)
 		if err != nil {
-			return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
 		rp.xform = r3.Identity()
 		frame, err := revolveRotation(rp)
 		if err != nil {
-			return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
 		origin, err := revolveAnchor(rp)
 		if err != nil {
-			return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+			return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 		}
 		return local, frame, origin, nil
 	}
 	pp := span.prism
 	mid, err := prismMidLevel(pp)
 	if err != nil {
-		return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
 	local, err := prismVolumeMoments(ctx, pp)
 	if err != nil {
-		return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
 	// prismVolumeMoments is about (0, 0, zm); the span's rigid motion is
 	// anchored at the frame origin.
-	local = shiftVolumeMoments(local, [3]*big.Rat{new(big.Rat), new(big.Rat), mid})
+	local = massmoment.Shift(local, [3]*big.Rat{new(big.Rat), new(big.Rat), mid})
 	pp.xform = r3.Identity()
 	frame, err := prismRotation(pp)
 	if err != nil {
-		return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
+		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, err
 	}
 	origin, ok := exactVec(pp.frame.Origin())
 	if !ok {
-		return volumeMoments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, fmt.Errorf("%w: sweep span frame is not finite", ErrNotFinite)
+		return massmoment.Moments{}, [3][3]*big.Rat{}, [3]*big.Rat{}, fmt.Errorf("%w: sweep span frame is not finite", ErrNotFinite)
 	}
 	return local, frame, origin, nil
 }

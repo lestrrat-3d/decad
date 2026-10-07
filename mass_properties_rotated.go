@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -38,8 +35,8 @@ import (
 //     |(Q I Qᵀ − M I Mᵀ)_ij| ≤ ‖M − Q‖(‖I‖ + ‖M‖‖I‖) ≤ d(2+d)‖I‖_2 and
 //     ‖I‖_2 ≤ ‖I‖_F ≤ 3m.
 //
-// The volume-moment helpers here (prismVolumeMoments, shiftVolumeMoments,
-// rotateVolumeMoments) are shared with the sweep and cup paths, which
+// prismVolumeMoments and the internal/massmoment transforms are shared
+// with the sweep and cup paths, which
 // combine several solids' V, P and Q about one anchor before forming a
 // tensor.
 
@@ -53,7 +50,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	volume, first, second := moments.volume, moments.first, moments.second
+	volume, first, second := moments.Volume, moments.First, moments.Second
 
 	// Centroidal second moment S = Q - P Pᵀ/V and the local inertia
 	// ρ(trace(S)δ - S), all from the one V, P, Q enclosure (dynamic-mass §3).
@@ -78,7 +75,7 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	}
 	// Every tensor in the local box has its smallest eigenvalue at or above
 	// the Gershgorin lower bound; a rotation keeps the eigenvalues.
-	eigenLower := gershgorinLower(local)
+	eigenLower := massmoment.GershgorinLower(local)
 	if eigenLower.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
 	}
@@ -87,10 +84,10 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	if err != nil {
 		return MassProperties{}, err
 	}
-	world := rotateTensorInterval(basis, local)
-	widen := new(big.Rat).Mul(big.NewRat(3, 1), orthonormalityDefect(basis))
-	widen.Mul(widen, new(big.Rat).Add(big.NewRat(2, 1), orthonormalityDefect(basis)))
-	widen.Mul(widen, tensorMagnitude(local))
+	world := massmoment.RotateTensor(basis, local)
+	widen := new(big.Rat).Mul(big.NewRat(3, 1), massmoment.OrthonormalityDefect(basis))
+	widen.Mul(widen, new(big.Rat).Add(big.NewRat(2, 1), massmoment.OrthonormalityDefect(basis)))
+	widen.Mul(widen, massmoment.TensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
 			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
@@ -138,37 +135,28 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 	return result, nil
 }
 
-// volumeMoments is one solid's V = ∫dV, P_i = ∫q_i dV and Q_ij = ∫q_i·q_j dV
-// as rational intervals, q the coordinates about the anchor the producer
-// names (docs/dynamic-mass-design.md §2). second is filled symmetrically.
-type volumeMoments struct {
-	volume proofbound.RatInterval
-	first  [3]proofbound.RatInterval
-	second [3][3]proofbound.RatInterval
-}
-
 // prismVolumeMoments integrates pp's admitted section moments over its axial
 // interval in the frame-local coordinates q = (u, v, z - zm), zm the recorded
 // mid level, and charges any recorded displacement as E, R·E and R²·E.
-func prismVolumeMoments(ctx context.Context, pp prismPayload) (volumeMoments, error) {
+func prismVolumeMoments(ctx context.Context, pp prismPayload) (massmoment.Moments, error) {
 	if !nonNegativeFinite(pp.sectionDelta) || !nonNegativeFinite(pp.z0Delta) || !nonNegativeFinite(pp.z1Delta) {
-		return volumeMoments{}, fmt.Errorf("%w: prism displacement has no finite bound", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: prism displacement has no finite bound", ErrUnsupported)
 	}
 	section, err := prismSectionMoments(ctx, pp)
 	if err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
 	a, mu, mv := section[0], section[1], section[2]
 	if a.Lo.Sign() <= 0 {
-		return volumeMoments{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
 	}
 	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
 	if z0 == nil || z1 == nil {
-		return volumeMoments{}, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
+		return massmoment.Moments{}, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
 	}
 	h := new(big.Rat).Sub(z1, z0)
 	if h.Sign() <= 0 {
-		return volumeMoments{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
 	}
 
 	// The axial interval is symmetric about zm, so every first or mixed
@@ -185,7 +173,7 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (volumeMoments, er
 	if pp.sectionDelta > 0 || pp.z0Delta > 0 || pp.z1Delta > 0 {
 		e, r, err := prismOccupiedVolumeError(ctx, pp, a, h)
 		if err != nil {
-			return volumeMoments{}, err
+			return massmoment.Moments{}, err
 		}
 		re := new(big.Rat).Mul(r, e)
 		r2e := new(big.Rat).Mul(r, re)
@@ -198,12 +186,12 @@ func prismVolumeMoments(ctx context.Context, pp prismPayload) (volumeMoments, er
 		}
 	}
 	if volume.Lo.Sign() <= 0 {
-		return volumeMoments{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
-	return volumeMoments{volume: volume, first: first, second: second}, nil
+	return massmoment.Moments{Volume: volume, First: first, Second: second}, nil
 }
 
 // prismMidLevel is zm = (z0 + z1)/2, the anchor level of prismVolumeMoments,
@@ -214,84 +202,6 @@ func prismMidLevel(pp prismPayload) (*big.Rat, error) {
 		return nil, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
 	}
 	return new(big.Rat).Quo(new(big.Rat).Add(z0, z1), big.NewRat(2, 1)), nil
-}
-
-// shiftVolumeMoments re-anchors m from anchor a to anchor a − s: with
-// q' = q + s, P' = P + V·s and Q'_ij = Q_ij + s_i·P_j + P_i·s_j + V·s_i·s_j.
-// s is exact and the map is a polynomial in V, P and Q, so its interval
-// evaluation encloses the re-anchored moments of every solid the input
-// encloses. It is an exact change of anchor, not a parallel-axis estimate.
-func shiftVolumeMoments(m volumeMoments, s [3]*big.Rat) volumeMoments {
-	out := volumeMoments{volume: m.volume}
-	for i := range out.first {
-		out.first[i] = proofbound.IntervalAdd(m.first[i], proofbound.IntervalScale(m.volume, s[i]))
-	}
-	for i := range out.second {
-		for j := range out.second[i] {
-			term := proofbound.IntervalAdd(m.second[i][j], proofbound.IntervalScale(m.first[j], s[i]))
-			term = proofbound.IntervalAdd(term, proofbound.IntervalScale(m.first[i], s[j]))
-			out.second[i][j] = proofbound.IntervalAdd(term, proofbound.IntervalScale(m.volume, new(big.Rat).Mul(s[i], s[j])))
-		}
-	}
-	return out
-}
-
-// rotateVolumeMoments carries m through the rigid rotation Q nearest the
-// exact rational matrix f (its polar factor), f's column k the image of
-// local axis k. With d = orthonormalityDefect(f) ≥ ‖f − Q‖_F:
-//
-//   - each (Q·P)_i lies within d·‖P‖₁ of (f·P)_i, since
-//     |((Q − f)P)_i| ≤ ‖Q − f‖₂‖P‖₂ ≤ d·‖P‖₁;
-//   - each (Q·Q_m·Qᵀ)_ij lies within 3·d·(2+d)·m of (f·Q_m·fᵀ)_ij, m the
-//     largest entry magnitude of Q_m, by the bound this file's header states
-//     for the inertia tensor, which holds for any 3×3 matrix.
-func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
-	defect := orthonormalityDefect(f)
-	firstNorm := new(big.Rat)
-	for _, component := range m.first {
-		firstNorm.Add(firstNorm, proofbound.IntervalAbsUpper(component))
-	}
-	firstWiden := new(big.Rat).Mul(defect, firstNorm)
-	out := volumeMoments{volume: m.volume}
-	for i := range out.first {
-		sum := proofbound.PointInterval(new(big.Rat))
-		for k := range m.first {
-			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m.first[k], f[i][k]))
-		}
-		out.first[i] = survey2d.IntervalWiden(sum, firstWiden)
-	}
-	secondWiden := new(big.Rat).Mul(big.NewRat(3, 1), defect)
-	secondWiden.Mul(secondWiden, new(big.Rat).Add(big.NewRat(2, 1), defect))
-	secondWiden.Mul(secondWiden, tensorMagnitude(m.second))
-	out.second = rotateTensorInterval(f, m.second)
-	for i := range out.second {
-		for j := range out.second[i] {
-			out.second[i][j] = survey2d.IntervalWiden(out.second[i][j], secondWiden)
-		}
-	}
-	return out
-}
-
-// addVolumeMoments and subVolumeMoments combine two solids' moments about one
-// anchor. Each operand keeps its own outward interval, so an uncertainty
-// never cancels against a neighbor's (docs/dynamic-mass-design.md §2).
-func addVolumeMoments(a, b volumeMoments) volumeMoments {
-	return combineVolumeMoments(a, b, proofbound.IntervalAdd)
-}
-
-func subVolumeMoments(a, b volumeMoments) volumeMoments {
-	return combineVolumeMoments(a, b, proofbound.IntervalSub)
-}
-
-func combineVolumeMoments(a, b volumeMoments, op func(proofbound.RatInterval, proofbound.RatInterval) proofbound.RatInterval) volumeMoments {
-	out := volumeMoments{volume: op(a.volume, b.volume)}
-	for i := range out.first {
-		out.first[i] = op(a.first[i], b.first[i])
-		for j := range out.second[i] {
-			out.second[i][j] = op(a.second[i][j], b.second[i][j])
-		}
-	}
-	return out
 }
 
 // prismSectionMoments reads the section's area, first and second moments as
@@ -395,74 +305,6 @@ func prismRotation(pp prismPayload) ([3][3]*big.Rat, error) {
 		}
 	}
 	return out, nil
-}
-
-// rotateTensorInterval forms M T Mᵀ entry by entry over exact rational
-// coefficients, so every tensor inside the local box maps inside the result.
-func rotateTensorInterval(m [3][3]*big.Rat, local [3][3]proofbound.RatInterval) [3][3]proofbound.RatInterval {
-	var out [3][3]proofbound.RatInterval
-	for i := range out {
-		for j := range out[i] {
-			sum := proofbound.PointInterval(new(big.Rat))
-			for k := range local {
-				for l := range local[k] {
-					coefficient := new(big.Rat).Mul(m[i][k], m[j][l])
-					sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(local[k][l], coefficient))
-				}
-			}
-			out[i][j] = sum
-		}
-	}
-	return out
-}
-
-// orthonormalityDefect is the entrywise absolute sum of MᵀM - I, an upper
-// bound on its Frobenius norm that needs no square root.
-func orthonormalityDefect(m [3][3]*big.Rat) *big.Rat {
-	defect := new(big.Rat)
-	for i := range m {
-		for j := range m {
-			dot := new(big.Rat)
-			for k := range m {
-				dot.Add(dot, new(big.Rat).Mul(m[k][i], m[k][j]))
-			}
-			if i == j {
-				dot.Sub(dot, big.NewRat(1, 1))
-			}
-			defect.Add(defect, dot.Abs(dot))
-		}
-	}
-	return defect
-}
-
-// tensorMagnitude is the largest magnitude any entry of the box allows.
-func tensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
-	largest := new(big.Rat)
-	for i := range t {
-		for j := range t[i] {
-			largest = survey2d.RatMax(largest, proofbound.IntervalAbsUpper(t[i][j]))
-		}
-	}
-	return largest
-}
-
-// gershgorinLower is a lower bound on the smallest eigenvalue of every
-// symmetric tensor inside the box: each diagonal lower end minus the largest
-// magnitudes its row's off-diagonal entries allow, minimized over rows.
-func gershgorinLower(t [3][3]proofbound.RatInterval) *big.Rat {
-	var lower *big.Rat
-	for i := range t {
-		row := new(big.Rat).Set(t[i][i].Lo)
-		for j := range t[i] {
-			if i != j {
-				row.Sub(row, proofbound.IntervalAbsUpper(t[i][j]))
-			}
-		}
-		if lower == nil || row.Cmp(lower) < 0 {
-			lower = row
-		}
-	}
-	return lower
 }
 
 func nonNegativeFinite(value float64) bool {

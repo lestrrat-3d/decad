@@ -24,12 +24,12 @@ import (
 //   - The placement's orthonormality-defect widening in rigidMassProperties:
 //     with it zeroed, TestMassPropertiesCompositeSweepPlaced misses a
 //     reference component.
-//   - The span frame's defect widening in rotateVolumeMoments, on P and on Q:
+//   - The span frame's defect widening in massmoment.Rotate, on P and on Q:
 //     recorded in mass_properties_sweep_internal_test.go. A held sweep frame
 //     is orthonormal to within an ulp, so TestMassPropertiesCompositeSweep-
 //     TurnedFrame stays green without it; that test checks the turned frame's
 //     rotation, and the internal test makes each widening visible.
-//   - The exact re-anchoring in shiftVolumeMoments: dropping its V·sᵢ·sⱼ or
+//   - The exact re-anchoring in massmoment.Shift: dropping its V·sᵢ·sⱼ or
 //     sᵢ·Pⱼ terms turns TestMassPropertiesCompositeSweepSumsSpans red.
 
 // massMoments is a solid's V, P and Q about the world origin, exact.

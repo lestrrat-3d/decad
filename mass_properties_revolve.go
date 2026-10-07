@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -68,33 +65,33 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 // revolveVolumeMoments integrates the revolve's V, P and Q about the axis
 // anchor a3 in the local basis (w, e0, e1), refusing every term it does not
 // charge.
-func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments, error) {
+func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Moments, error) {
 	if rp.sectionDelta != 0 {
-		return volumeMoments{}, fmt.Errorf("%w: revolve section carries a displacement the mass path does not charge", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve section carries a displacement the mass path does not charge", ErrUnsupported)
 	}
 	ax := rp.ax
 	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
-		return volumeMoments{}, fmt.Errorf("%w: revolve axis is not exact", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve axis is not exact", ErrUnsupported)
 	}
 	if ax.radialAdmitAllow != 0 || ax.snap != (regionSnapAllow{}) {
-		return volumeMoments{}, fmt.Errorf("%w: revolve axis snap is not charged by the mass path", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve axis snap is not charged by the mass path", ErrUnsupported)
 	}
 	if !rp.den.phi0.valid() || !rp.den.phi1.valid() {
-		return volumeMoments{}, fmt.Errorf("%w: revolve sweep has no exact denotation", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve sweep has no exact denotation", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
 
 	ig, err := rp.profile.evaluatorIntegralsContext(ctx, freeform.MomentThirdOrder, nil)
 	if err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
 	plane, err := revolveSectionMoments(ig)
 	if err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
-	axisMoment := revolveAxisMoments(plane, ax)
+	axisMoment := massmoment.AxisMoments(plane, ax.aU, ax.aV, ax.dU, ax.dV)
 	r1 := axisMoment(0, 1)
 	zr := axisMoment(1, 1)
 	r2 := axisMoment(0, 2)
@@ -104,15 +101,15 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments
 
 	angular, ok := revolveAngularFactors(rp)
 	if !ok {
-		return volumeMoments{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
-		return volumeMoments{}, err
+		return massmoment.Moments{}, err
 	}
 
 	volume := proofbound.IntervalMul(angular.width, r1)
 	if volume.Lo.Sign() <= 0 {
-		return volumeMoments{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
+		return massmoment.Moments{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
 	}
 	first := [3]proofbound.RatInterval{
 		proofbound.IntervalMul(angular.width, zr),
@@ -127,7 +124,7 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments
 	second[1][2] = proofbound.IntervalMul(angular.sinCos, r3m)
 	second[2][2] = proofbound.IntervalMul(angular.sin2, r3m)
 	second[1][0], second[2][0], second[2][1] = second[0][1], second[0][2], second[1][2]
-	return volumeMoments{volume: volume, first: first, second: second}, nil
+	return massmoment.Moments{Volume: volume, First: first, Second: second}, nil
 }
 
 // revolveAnchor is the axis anchor a3 = o + aU·U + aV·V before placement, the
@@ -159,8 +156,8 @@ func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
 // orthonormality-defect widening, and proves the PUBLISHED tensor positive
 // definite by its leading principal minors. center is the evaluator's own
 // bounded world centroid of the same solid.
-func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMoments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
-	volume, first, second := m.volume, m.first, m.second
+func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmoment.Moments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
+	volume, first, second := m.Volume, m.First, m.Second
 	if volume.Lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 	}
@@ -188,11 +185,11 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 			local[i][j] = proofbound.IntervalScale(centroidal[i][j], new(big.Rat).Neg(rho))
 		}
 	}
-	world := rotateTensorInterval(rotation, local)
-	defect := orthonormalityDefect(rotation)
+	world := massmoment.RotateTensor(rotation, local)
+	defect := massmoment.OrthonormalityDefect(rotation)
 	widen := new(big.Rat).Mul(big.NewRat(3, 1), defect)
 	widen.Mul(widen, new(big.Rat).Add(big.NewRat(2, 1), defect))
-	widen.Mul(widen, tensorMagnitude(local))
+	widen.Mul(widen, massmoment.TensorMagnitude(local))
 	for i := range world {
 		for j := range world[i] {
 			world[i][j] = survey2d.IntervalWiden(world[i][j], widen)
@@ -228,7 +225,7 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMom
 	// The proof runs on the PUBLISHED readings, so every tensor a caller can
 	// read inside the six bounds is positive definite, not only the rational
 	// box they were rounded from.
-	if !intervalPositiveDefinite(publishedTensor(result.Inertia)) {
+	if !massmoment.PositiveDefinite(publishedTensor(result.Inertia)) {
 		return MassProperties{}, fmt.Errorf("%w: inertia interval does not prove positive definiteness", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
@@ -328,56 +325,6 @@ func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, er
 	return m, nil
 }
 
-// revolveAxisMoments returns a reader of ∫z^a·ρ^b dA, a + b ≤ 3, over the
-// section, for the exact axis ax (axisFrame.toAxis):
-// z = dU·(u − aU) + dV·(v − aV) and ρ = dU·(v − aV) − dV·(u − aU). Each is an
-// affine form in (u, v) with exact rational coefficients, so z^a·ρ^b expands
-// into a polynomial whose coefficients weight the plane-origin moments.
-func revolveAxisMoments(m [4][4]proofbound.RatInterval, ax axisFrame) func(a, b int) proofbound.RatInterval {
-	aU, aV := proofarith.FloatRat(ax.aU), proofarith.FloatRat(ax.aV)
-	dU, dV := proofarith.FloatRat(ax.dU), proofarith.FloatRat(ax.dV)
-	zForm := [3]*big.Rat{dU, dV, new(big.Rat).Neg(proofbound.RatAdd(proofbound.RatMul(dU, aU), proofbound.RatMul(dV, aV)))}
-	rhoForm := [3]*big.Rat{new(big.Rat).Neg(dV), dU, new(big.Rat).Sub(proofbound.RatMul(dV, aU), proofbound.RatMul(dU, aV))}
-	return func(a, b int) proofbound.RatInterval {
-		var poly [4][4]*big.Rat
-		poly[0][0] = big.NewRat(1, 1)
-		for k := range a + b {
-			form := zForm
-			if k >= a {
-				form = rhoForm
-			}
-			var next [4][4]*big.Rat
-			add := func(i, j int, value *big.Rat) {
-				if next[i][j] == nil {
-					next[i][j] = new(big.Rat)
-				}
-				next[i][j].Add(next[i][j], value)
-			}
-			for i := range 4 {
-				for j := range 4 - i {
-					c := poly[i][j]
-					if c == nil {
-						continue
-					}
-					add(i+1, j, proofbound.RatMul(form[0], c))
-					add(i, j+1, proofbound.RatMul(form[1], c))
-					add(i, j, proofbound.RatMul(form[2], c))
-				}
-			}
-			poly = next
-		}
-		sum := proofbound.PointInterval(new(big.Rat))
-		for i := range 4 {
-			for j := range 4 - i {
-				if poly[i][j] != nil && poly[i][j].Sign() != 0 {
-					sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(m[i][j], poly[i][j]))
-				}
-			}
-		}
-		return sum
-	}
-}
-
 // revolveMassAngular is the sweep's angular factors over [φ0, φ1]: its width
 // ∫dφ, cos ∫cos φ, sin ∫sin φ, and the three quadratic factors.
 type revolveMassAngular struct {
@@ -416,31 +363,4 @@ func revolveAngularFactors(rp revolvePayload) (revolveMassAngular, bool) {
 		sin2:   proofbound.IntervalSub(halfWidth, doubleAngle),
 		sinCos: proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalMul(s1, s1), proofbound.IntervalMul(s0, s0)), half),
 	}, true
-}
-
-// intervalPositiveDefinite proves every symmetric matrix in the interval
-// tensor positive definite by Sylvester's criterion: each leading principal
-// minor, evaluated in interval arithmetic, has a strictly positive lower end.
-// The minors are polynomials in the entries, so their interval evaluation
-// encloses the minor of every member; a positive lower end then holds for
-// every member at once.
-func intervalPositiveDefinite(m [3][3]proofbound.RatInterval) bool {
-	if m[0][0].Lo.Sign() <= 0 {
-		return false
-	}
-	minor2 := proofbound.IntervalSub(proofbound.IntervalMul(m[0][0], m[1][1]), proofbound.IntervalMul(m[0][1], m[1][0]))
-	if minor2.Lo.Sign() <= 0 {
-		return false
-	}
-	cofactor := func(a, b, c, d proofbound.RatInterval) proofbound.RatInterval {
-		return proofbound.IntervalSub(proofbound.IntervalMul(a, b), proofbound.IntervalMul(c, d))
-	}
-	det := proofbound.IntervalAdd(
-		proofbound.IntervalSub(
-			proofbound.IntervalMul(m[0][0], cofactor(m[1][1], m[2][2], m[1][2], m[2][1])),
-			proofbound.IntervalMul(m[0][1], cofactor(m[1][0], m[2][2], m[1][2], m[2][0])),
-		),
-		proofbound.IntervalMul(m[0][2], cofactor(m[1][0], m[2][1], m[1][1], m[2][0])),
-	)
-	return det.Lo.Sign() > 0
 }
