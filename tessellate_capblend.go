@@ -631,146 +631,32 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	return lm, nil
 }
 
-// emitCapBlendSamples fills one loop's side and cap sample arrays at the counts
-// chordCapBlendLoop chose. A junction is emitted exactly once — every piece
-// contributes its own START and leaves its end to the piece that follows — so
-// the two rings close by construction rather than by comparison.
+// emitCapBlendSamples adapts the resolved offset joins to the shared sampler.
 func emitCapBlendSamples(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
-	n := len(lm.walks)
-	lm.sideStart = make([]int, n)
-	for i, w := range lm.walks {
-		lm.sideStart[i] = len(lm.sidePts)
-		if !w.IsCircular() {
-			lm.sidePts = append(lm.sidePts, Point2{U: w.StartU, V: w.StartV})
-			lm.sideBound = append(lm.sideBound, w.StartBound)
-			continue
-		}
-		seg := lm.loop.Segments[w.Segs[0]]
-		count := lm.count[i]
-		dth := (w.Th1 - w.Th0) / float64(count)
-		for k := range count {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			p := Point2{U: w.StartU, V: w.StartV}
-			bound := w.StartBound
-			if k > 0 {
-				th := w.Th0 + float64(k)*dth
-				p = Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
-				bound = chordStationBound(seg, k, count, p.U, p.V)
-			}
-			lm.sidePts = append(lm.sidePts, p)
-			lm.sideBound = append(lm.sideBound, bound)
+	joins := make([]tessellation.CapBlendJoin, len(lm.joins))
+	for i, j := range lm.joins {
+		joins[i] = tessellation.CapBlendJoin{
+			Arc: j.arc, VU: j.vU, VV: j.vV, M: j.m, PA: j.pA, PB: j.pB,
 		}
 	}
-	if !lm.chamfered {
-		return nil
+	samples, err := tessellation.SampleCapBlend(tessellation.CapBlendSampleInput{
+		Walks: lm.walks, Segments: lm.loop.Segments, Joins: joins,
+		Count: lm.count, CapRadius: lm.capRadius, CapTh0: lm.capTh0, CapTh1: lm.capTh1,
+		ArcCount: lm.arcCount, ArcTh0: lm.arcTh0, ArcTh1: lm.arcTh1,
+		Whole: lm.whole, Chamfered: lm.chamfered, D: cbp.d,
+	}, budget, chordStationBound)
+	if err != nil {
+		return err
 	}
-
-	lm.capWallStart = make([]int, n)
-	lm.capArcStart = make([]int, n)
-	for i := range n {
-		lm.capArcStart[i] = -1
-	}
-	addCap := func(p Point2, bound proofbound.WalkEndBound) {
-		lm.capPts = append(lm.capPts, p)
-		lm.capBound = append(lm.capBound, bound)
-	}
-	if lm.whole {
-		w := lm.walks[0]
-		lm.capWallStart[0] = 0
-		count := lm.count[0]
-		dth := (lm.capTh1[0] - lm.capTh0[0]) / float64(count)
-		for k := range count {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			th := lm.capTh0[0] + float64(k)*dth
-			p := Point2{U: w.CU + lm.capRadius[0]*math.Cos(th), V: w.CV + lm.capRadius[0]*math.Sin(th)}
-			addCap(p, capStationBound(w.CU, w.CV, lm.capRadius[0], th, p.U, p.V))
-		}
-		return nil
-	}
-
-	for i, w := range lm.walks {
-		lm.capWallStart[i] = len(lm.capPts)
-		start, _ := capWallFoot(lm.joins, i, n)
-		if !w.IsCircular() {
-			// A straight wall's cap directrix is the offset SEGMENT between two
-			// corner feet, so it holds one station and chords nothing. The foot
-			// itself is the point the offset denotes, within the band's own
-			// contour displacement, which is charged as its own term.
-			addCap(start, proofbound.WalkEndBound{})
-		} else {
-			count := lm.count[i]
-			dth := (lm.capTh1[i] - lm.capTh0[i]) / float64(count)
-			for k := range count {
-				if err := budget.Step(); err != nil {
-					return err
-				}
-				th := lm.capTh0[i] + float64(k)*dth
-				p := Point2{U: w.CU + lm.capRadius[i]*math.Cos(th), V: w.CV + lm.capRadius[i]*math.Sin(th)}
-				if k == 0 {
-					// Station 0 is the corner foot VERBATIM, so the wall patch and
-					// the piece before it close on one vertex. Its own gap from the
-					// station it stands for is measured, never assumed zero.
-					p = start
-				}
-				addCap(p, capStationBound(w.CU, w.CV, lm.capRadius[i], th, p.U, p.V))
-			}
-		}
-		ni := (i + 1) % n
-		j := lm.joins[ni]
-		if !j.arc {
-			continue
-		}
-		lm.capArcStart[ni] = len(lm.capPts)
-		count := lm.arcCount[ni]
-		dth := (lm.arcTh1[ni] - lm.arcTh0[ni]) / float64(count)
-		for k := range count {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			th := lm.arcTh0[ni] + float64(k)*dth
-			p := Point2{U: j.vU + cbp.d*math.Cos(th), V: j.vV + cbp.d*math.Sin(th)}
-			if k == 0 {
-				p = j.pA
-			}
-			addCap(p, capStationBound(j.vU, j.vV, cbp.d, th, p.U, p.V))
-		}
-	}
+	lm.sidePts, lm.sideBound, lm.sideStart = samples.SidePts, samples.SideBound, samples.SideStart
+	lm.capPts, lm.capBound = samples.CapPts, samples.CapBound
+	lm.capWallStart, lm.capArcStart = samples.CapWallStart, samples.CapArcStart
 	return nil
 }
 
-// capStationBound is the certified plane-local gap between a cap-contour sample
-// the build HOLDS and the point that sample's own station denotes on the held
-// offset circle: centre plus radius times the sine and cosine of one exact
-// float angle, each enclosed through proofbound.RadSinCosInterval.
-//
-// It is chordStationBound's cap-level twin, and it answers a different question
-// only because the curve is different: a cap contour is a curve this evaluator
-// COMPUTED, not one the record states, so the station's denoted point is the
-// point on the held offset circle and the gap from THAT circle to the one the
-// offset denotes is the band's own contour displacement, charged as its own
-// term beside this one and never folded into it.
-//
-// An angle, radius or centre this arithmetic cannot enclose answers +Inf on
-// both components — the underivable bound the tessellation refuses on
-// (docs/tessellation-design.md §12) — never a zero.
+// capStationBound keeps the root tests on the same cap-station enclosure.
 func capStationBound(cU, cV, radius, theta, heldU, heldV float64) proofbound.WalkEndBound {
-	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
-	rt, rr := proofarith.FloatRat(theta), proofarith.FloatRat(radius)
-	ru, rv := proofarith.FloatRat(cU), proofarith.FloatRat(cV)
-	if rt == nil || rr == nil || ru == nil || rv == nil {
-		return underivable
-	}
-	sin, cos, ok := proofbound.RadSinCosInterval(rt)
-	if !ok {
-		return underivable
-	}
-	uIv := proofbound.IntervalAdd(proofbound.PointInterval(ru), proofbound.IntervalMul(proofbound.PointInterval(rr), cos))
-	vIv := proofbound.IntervalAdd(proofbound.PointInterval(rv), proofbound.IntervalMul(proofbound.PointInterval(rr), sin))
-	return proofbound.WalkEndBound{U: proofbound.IntervalFloatError(uIv, heldU), V: proofbound.IntervalFloatError(vIv, heldV)}
+	return tessellation.CapStationBound(cU, cV, radius, theta, heldU, heldV)
 }
 
 // capBlendCornerLocusGap is how far a MITER corner's built ruling — an Edge
