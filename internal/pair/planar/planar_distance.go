@@ -6,6 +6,20 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
+func dyMax(a, b proof.Dyadic) proof.Dyadic {
+	if proof.DyCmp(a, b) >= 0 {
+		return a
+	}
+	return b
+}
+
+func dyMin(a, b proof.Dyadic) proof.Dyadic {
+	if proof.DyCmp(a, b) <= 0 {
+		return a
+	}
+	return b
+}
+
 func (k *planarKernel) addSite(site contactSite) {
 	if k.seen == nil {
 		k.seen = make(map[PlanarContact]struct{})
