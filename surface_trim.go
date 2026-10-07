@@ -279,32 +279,13 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
-	// The receiver side of this scene holds exactly ONE entity: §3.1's
-	// Extend scene carries the extended segment's own carrier and the tool's
-	// section and nothing else, and view.profile above was replaced by a
-	// single-segment loop for precisely that reason. So breaking out of the
-	// map range is deterministic — there is one non-isB tag to find, and map
-	// iteration order cannot change which. Give the Extend scene a second
-	// receiver segment and this stops holding: it would then pick an arbitrary
-	// one of them, and the pick would vary run to run.
-	var source sketch.Entity
-	for entity, tag := range tags {
-		if !tag.IsB {
-			source = entity
-			break
-		}
-	}
+	source := prismcells.ExtendSource(tags)
 	if source == nil {
 		return nil, 0, fmt.Errorf(`%w: the extended carrier has no scene entity`, ErrUnsupported)
 	}
-	var fragments []sketch.BoundaryEdge
-	for _, profile := range profiles {
-		if !profile.Valid {
-			return nil, 0, fmt.Errorf(`%w: the extend arrangement has an invalid cell`, ErrUnsupported)
-		}
-		for _, loop := range append([][]sketch.BoundaryEdge{profile.Outer}, profile.Holes...) {
-			fragments = append(fragments, loop...)
-		}
+	fragments, err := prismcells.ExtendProfileFragments(profiles)
+	if err != nil {
+		return nil, 0, err
 	}
 	chains, err := extendChainsContext(ctx, s.Chains)
 	if err != nil {
@@ -313,55 +294,23 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 	if err := budget.Err(); err != nil {
 		return nil, 0, err
 	}
-	for _, chain := range chains {
-		if !chain.Valid {
-			return nil, 0, fmt.Errorf(`%w: the extend arrangement has an invalid chain`, ErrUnsupported)
-		}
-		fragments = append(fragments, chain.Edges...)
+	fragments, err = prismcells.AppendExtendChainFragments(fragments, chains)
+	if err != nil {
+		return nil, 0, err
 	}
-	// Which way the named bound widens, read off the record's own range order
-	// alone. TStart is the covered interval's LOWER bound when the record runs
-	// ascending and its UPPER bound when it runs reversed, so widening TStart
-	// decreases it in the first case and increases it in the second; TEnd is
-	// the mirror. forward means "increasing t".
-	forward := t1 > t0
-	if atStart {
-		forward = !forward
-	}
-	nearest := 0.0
-	found := false
-	for _, edge := range fragments {
-		if err := budget.Step(); err != nil {
-			return nil, 0, err
-		}
-		if edge.Entity != source || !edge.Partial {
-			continue
-		}
-		for _, candidate := range []float64{edge.TStart, edge.TEnd} {
-			if candidate == 0 || candidate == 1 {
-				continue
-			}
-			if forward && candidate <= old || !forward && candidate >= old {
-				continue
-			}
-			if !found || forward && candidate < nearest || !forward && candidate > nearest {
-				nearest, found = candidate, true
-			}
-		}
+	nearest, edge, found, err := prismcells.NearestExtendCut(budget, fragments, source, t0, t1, atStart)
+	if err != nil {
+		return nil, 0, err
 	}
 	if !found {
 		return nil, 0, fmt.Errorf(
 			`%w: the tool has no cut past the named end at t = %v inside the carrier's own natural domain, which is %s`,
 			ErrUnsupported, old, extendCarrierDomain(seg))
 	}
-	for _, edge := range fragments {
-		if edge.Entity != source || edge.TStart != nearest && edge.TEnd != nearest {
-			continue
-		}
+	if edge.Entity != nil {
 		if _, err := recordEdge(edge); err != nil {
 			return nil, 0, err
 		}
-		break
 	}
 	widened := extendSetBound(seg, atStart, nearest)
 	delta, err := prismcells.CutDelta(sketch.BoundaryEdge{Partial: true}, widened)
@@ -812,7 +761,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		return nil, 0, fmt.Errorf(`%w: the receiver and tool's arrangement holds no bounded cell`, ErrUnsupported)
 	}
 
-	// The structural no-crossing check (this file's own trimNoCrossingSide)
+	// The structural no-crossing check (prismcells.TrimNoCrossingSide)
 	// runs BEFORE prismcells.Classify: a cell carrying a hole — the shape
 	// every no-crossing configuration produces, tool nested in receiver or
 	// receiver nested in tool — is explicitly outside prismcells.Classify's
@@ -821,7 +770,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 	// propagation to reach across either. All three are genuine trim
 	// answers, not unresolved topology, so they are read structurally rather
 	// than reported as a classifier miss.
-	insideTool, noCrossing, err := trimNoCrossingSide(budget, tags, profiles, rcv)
+	insideTool, noCrossing, err := prismcells.TrimNoCrossingSide(budget, tags, profiles, len(rcv.profile.Holes))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -893,65 +842,6 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		chains[wi] = ChainRecord{Segments: segs}
 	}
 	return chains, cutDelta, nil
-}
-
-// trimNoCrossingSide decides, without prismcells.Classify, whether the tool's
-// boundary crosses the receiver's at all. Three structural shapes answer it,
-// each a pure data comparison against buildPrismScene's own tag map
-// (prismcells.FindLoopMatch, internal/prismcells/origin.go) rather than a geometric
-// test: the receiver's own cell, untouched, carrying no further hole (wholly
-// disjoint); the receiver's own cell, untouched, carrying the tool's own
-// solid as one further hole (the tool nested inside the receiver); or the
-// tool's own cell, untouched, carrying the receiver's own outer as its one
-// hole (the receiver nested inside the tool — S5 already keeps the tool
-// itself hole-free). resolved=false means none of the three applies, so the
-// tool's boundary genuinely crosses the receiver's and prismcells.Classify's
-// own propagation is what answers it.
-func trimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile, rcv prismPayload) (insideTool, resolved bool, err error) {
-	rcvOuter, err := prismcells.LoopEntitySet(budget, tags, false, -1)
-	if err != nil {
-		return false, false, err
-	}
-	rcvHoles := make([]map[sketch.Entity]struct{}, len(rcv.profile.Holes))
-	for i := range rcv.profile.Holes {
-		hs, err := prismcells.LoopEntitySet(budget, tags, false, i)
-		if err != nil {
-			return false, false, err
-		}
-		rcvHoles[i] = hs
-	}
-	toolOuter, err := prismcells.LoopEntitySet(budget, tags, true, -1)
-	if err != nil {
-		return false, false, err
-	}
-
-	invalid := func(match *sketch.Profile) error {
-		if match.Valid {
-			return nil
-		}
-		return fmt.Errorf(`%w: the trim scene's arrangement reports an invalid region`, ErrUnsupported)
-	}
-
-	if disjointMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, rcvOuter, rcvHoles); err != nil {
-		return false, false, err
-	} else if ok {
-		return false, true, invalid(disjointMatch)
-	}
-
-	toolInsideHoles := append(append([]map[sketch.Entity]struct{}{}, rcvHoles...), toolOuter)
-	if toolInsideMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, rcvOuter, toolInsideHoles); err != nil {
-		return false, false, err
-	} else if ok {
-		return false, true, invalid(toolInsideMatch)
-	}
-
-	if rcvInsideMatch, ok, err := prismcells.FindLoopMatch(budget, profiles, toolOuter, []map[sketch.Entity]struct{}{rcvOuter}); err != nil {
-		return false, false, err
-	} else if ok {
-		return true, true, invalid(rcvInsideMatch)
-	}
-
-	return false, false, nil
 }
 
 // Split cuts target with tool and returns one solid per arranged target cell
@@ -1133,7 +1023,7 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 	if len(profiles) == 0 {
 		return nil, fmt.Errorf(`%w: the split arrangement holds no bounded cell`, ErrUnsupported)
 	}
-	unchanged, err := splitUnchangedTargetCell(budget, tags, profiles, target.profile)
+	unchanged, err := prismcells.SplitUnchangedTargetCell(budget, tags, profiles, len(target.profile.Holes))
 	if err != nil {
 		return nil, err
 	}
@@ -1186,33 +1076,6 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 		}
 	}
 	return result, nil
-}
-
-// splitUnchangedTargetCell finds the target's original loops reproduced in
-// one sketch cell. An inside stub or an outside tool leaves this exact cell;
-// neither creates a piece boundary. The match reads only entity identity and
-// whole-edge flags from sketch's publication.
-func splitUnchangedTargetCell(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin,
-	profiles []*sketch.Profile, target ProfileRecord) (bool, error) {
-	outer, err := prismcells.LoopEntitySet(budget, tags, false, -1)
-	if err != nil {
-		return false, err
-	}
-	holes := make([]map[sketch.Entity]struct{}, len(target.Holes))
-	for i := range holes {
-		holes[i], err = prismcells.LoopEntitySet(budget, tags, false, i)
-		if err != nil {
-			return false, err
-		}
-	}
-	match, found, err := prismcells.FindLoopMatch(budget, profiles, outer, holes)
-	if err != nil || !found {
-		return false, err
-	}
-	if !match.Valid {
-		return false, fmt.Errorf(`%w: the unchanged target cell is invalid`, ErrUnsupported)
-	}
-	return true, nil
 }
 
 // This section is the revolve family's arm of the gate and of Trim
