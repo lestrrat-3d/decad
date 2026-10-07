@@ -2954,6 +2954,13 @@ corners. Measured: `137` centres into `69` leaves, against `6457` and `Suspect` 
 alone. Red when the dependent's expansion is dropped (the travel bound alone), when `h_j` is read from
 `M_j` alone, and when it is a quarter of the hull's width (a leaf's bound exceeds the gap at a corner).
 
+**A dependent slide in a box.** §15.10's Scotch yoke, the block over `[−4, 4]` mm on the yoke, the yoke a
+dependent slide, beside a wall `x ∈ [25.5, 60]` in the yoke's layer alone: the gap
+`25.5 − 2 − √(900 − (24 + q)²)` is smallest, `23.5 − √500 ≈ 1.14` mm, at `q = −4`. Assert `Sound`, the
+reading enclosing it, every leaf's yoke range holding the closed form, and every leaf's bound at or below
+the gap at its lower end (measured: `23` centres). Red when the dependent slide's term is dropped from
+`τ_half`, from the projection's half-spans, or from both: the root claims more than the gap.
+
 **The blocked box.** Scene 11 with the gate shortened to `x ∈ [60, 120]` (area `2600` mm²), the crank over
 `[35°, 42°]` and the gate over `[8, 10]`, at `WithResolution(Scalar(1.0/64))`. Over that crank range `y_c`
 stays within `[69.3725, 69.3857]`, so the corner's depth below the underside `y = 72 − d ∈ [62, 64]` is at
