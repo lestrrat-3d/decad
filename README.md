@@ -200,18 +200,28 @@ r3       vectors, frames, rigid transforms   github.com/lestrrat-3d/r3
 units    typed quantities (Value, Kind)      github.com/lestrrat-3d/units
 ```
 
-The arrows point **down and never back up**. decad imports `sketch`, `r3` and
-[`units`](https://github.com/lestrrat-3d/units); none of them knows decad
-exists.
+decad owns the 3D side. It builds solids and sheet bodies, records their
+topology, applies features and booleans, and runs the verification checks
+(watertightness, volume, interference, wall thickness). Every measurement it
+returns is a `units.Value`.
 
-This is the layer both of them deliberately left room for. `r3` excludes shapes
-by charter — *"if it lives in ℝ³ it belongs here; if it **is** a shape, it does
-not"* — and `sketch` excludes anything that must be computed **from** a solid,
-consuming 3D-derived geometry only as first-class reference geometry it is
-*given*. decad is what sits on the other side of that seam.
+`sketch` answers every 2D question: whether a profile closes, whether a sketch
+is fully constrained or over-constrained, where two curves intersect, and how a
+set of curves divides a plane into regions. decad also builds private `sketch`
+scenes from its own recorded geometry and reads the regions back. decad
+consumes these answers. When `sketch` reports a curve fragment as
+approximate, decad rejects the input instead of repairing it.
 
-A 2D question — does this profile close, is this sketch fully constrained — is
-`sketch`'s to answer, and decad consumes the answer rather than re-deriving it.
+`r3` owns vectors, frames and rigid transforms. decad does all coordinate
+math, including local-to-world conversion, through `r3`. `r3` excludes shapes
+by charter: *"if it lives in ℝ³ it belongs here; if it **is** a shape, it does
+not"*.
+
+[`units`](https://github.com/lestrrat-3d/units) owns typed quantities (`Value`
+and `Kind`). decad and `sketch` share it, so lengths, angles and error bounds
+use one unit system.
+
+decad imports `sketch`, `r3` and `units`. None of them imports decad.
 
 ## License
 
