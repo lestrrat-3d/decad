@@ -115,3 +115,34 @@ type LoftChordedAllow struct {
 var ErrLoftCapOffsetUnderivable = fmt.Errorf(
 	`%w: a chorded loft cap's plane offset from the mass anchor has no derivation from this assembly`, decaderr.ErrUnsupported,
 )
+
+// ChordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
+// composes a chord's own departure from the curve it chords (the certified
+// sagitta, that table's sectionDelta row, read per cell or build-wide) with the
+// displacement of the two held stations that chord actually joins (that table's
+// delta row) into the single PARAMETER-MATCHED bound every chorded leg charges.
+// Both terms are listed there with the quantity each bounds and the certified
+// source each is read from.
+//
+// The two are accumulated apart — the generator publishes them apart and the
+// payload carries them apart (loftPayload.sectionDelta and loftPayload.delta),
+// which is the rule §5.2's table states for them — and this helper is only ever
+// a consumer's own composition. Composing them is not optional for such a
+// consumer: the sagitta bounds the IDEAL chord between the two points the record
+// denotes, and the chord the build DREW joins two stations each displaced by
+// delta from those points, so a leg charging the sagitta alone leaves the
+// computed station's own displacement uncharged.
+//
+// That table owns the composition's derivation and its rounding direction, and
+// this helper adds no mechanism of its own to either. What the code here does
+// state is that both terms are read at the same s, which is what keeps the
+// published bound PARAMETER-MATCHED (loftCellStations' own doc comment).
+//
+// Either term underivable answers +Inf, the answer §5.2's table assigns those
+// rows, and the caller refuses on it.
+func ChordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
+	if proofbound.IsNonFinite(sagittaUpper) || proofbound.IsNonFinite(deltaUpper) {
+		return math.Inf(1)
+	}
+	return proofbound.AbsSumUpper(sagittaUpper, deltaUpper)
+}
