@@ -18,7 +18,7 @@ func TrimNoCrossingSide(budget *proofbound.WorkBudget, tags map[sketch.Entity]Or
 		return false, false, err
 	}
 	rcvHoles := make([]map[sketch.Entity]struct{}, receiverHoles)
-	for i := 0; i < receiverHoles; i++ {
+	for i := range receiverHoles {
 		hs, err := LoopEntitySet(budget, tags, false, i)
 		if err != nil {
 			return false, false, err
