@@ -207,7 +207,7 @@ the rules leave to the byte budget.
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
-| `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
+| `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift over source boxes or exact planar bodies. See contact-sweep design. |
 | `contact_sweep_memo.go` | Adapts `internal/sweepmemo/` to sweep paths and body radius readings. See contact-sweep §7. |
 | `contact_sweep_band.go` / `contact_sweep_rolling.go` | Departure and band tracks, planar and rolling. See `docs/multibody-dynamics-design.md` §10.2–§10.6, §10.8. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
@@ -228,7 +228,7 @@ the rules leave to the byte budget.
 | `brep_payload.go` / `brep_measure.go` | `brepPayload`, its face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission adapters. See general-boolean §3 B. |
 | `classb_crossing.go` / `classb_canonical.go` | Class-B crossing and keyed vertices. See general-boolean §5, §10. |
-| `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
+| `surface_trim.go` | `Trim`/`Extend`/`Split` gates; `internal/prismcells/` record adapters. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
 | `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
 
@@ -271,6 +271,7 @@ the rules leave to the byte budget.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, record gates, and through reach. See general-boolean §3 B. |
+| `internal/brepgeom/` | BRep frame maps, edge keys and pairing. See general-boolean §4. |
 | `internal/revolveaxis/` | Axis input resolution, walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
@@ -309,10 +310,10 @@ the rules leave to the byte budget.
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
-| `internal/clearance/spine/` | Stationary point, line, and circle spine pairs for clearance cells, including P4/P8 brackets. See `docs/clearance-design.md` §4. |
+| `internal/clearance/spine/` | Stationary point, line and circle spine pairs for cells, with P4/P8 brackets. See clearance §4. |
 | `internal/stitchflux/` | Stitch bounded scalars and flux. See surface §6.4. |
 | `internal/stitchweld/` | Exact Stitch vertex classes and weld pairs. See surface §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
-| `_gallery/` | Own nested module for README images, landing clip, dynamics scenes and linkage clip; keeps SolidLens out of the library. See `main.go`. |
+| `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module: packs root and `apitest` tests into cost-balanced race shards; `_` hides it from root tools. See `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |

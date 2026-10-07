@@ -167,7 +167,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)
 			}
 			for _, vi := range poly[:len(poly)-1] {
-				local := e.local(canon[vi])
+				local := e.Local(canon[vi])
 				pts = append(pts, Point2{U: local[0], V: local[1]})
 				meshIdx = append(meshIdx, vi)
 				loops[u.loop] = append(loops[u.loop], len(pts)-1)
@@ -285,8 +285,8 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
 		segmentArea: sampled.SegmentArea}
 	for j, p := range samples {
-		wm.bottom = append(wm.bottom, addVertex(e.canon(p.U, p.V, f.z0), bounds[j]))
-		wm.top = append(wm.top, addVertex(e.canon(p.U, p.V, f.z1), bounds[j]))
+		wm.bottom = append(wm.bottom, addVertex(e.Canon(p.U, p.V, f.z0), bounds[j]))
+		wm.top = append(wm.top, addVertex(e.Canon(p.U, p.V, f.z1), bounds[j]))
 	}
 	if w.Closed {
 		wm.bottom = append(wm.bottom, wm.bottom[0])
@@ -316,8 +316,8 @@ func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, 
 			continue
 		}
 		e := topo.embeds[fi]
-		k := e.axis[2]
-		lo, hi := e.sign[2]*f.z0, e.sign[2]*f.z1
+		k := e.Axis[2]
+		lo, hi := e.Sign[2]*f.z0, e.Sign[2]*f.z1
 		if lo > hi {
 			lo, hi = hi, lo
 		}
