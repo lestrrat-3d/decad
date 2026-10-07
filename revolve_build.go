@@ -110,7 +110,7 @@ func requireExactRevolveSection(rp revolvePayload, what string) error {
 // meridian is a *view* of rp as a prismPayload carrying the recorded MERIDIAN
 // and the frame and placement it is expressed in — never a body this evaluator
 // builds from. It is what docs/surface-intersection-design.md §3.1 hands
-// buildPrismScene, newPrismReexpression, classifyPrismCells and the rest of
+// buildPrismScene, newPrismReexpression, prismcells.Classify and the rest of
 // §3's resolution, every one of which reads a profile, a frame and a placement
 // and nothing else. The sweep fields are deliberately absent: the revolve's own
 // angular interval is S6's business, never the private 2D scene's, and the

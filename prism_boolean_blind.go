@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -14,17 +14,17 @@ import (
 // Keep those records verbatim so a wall shared across slabs stays one column;
 // take only the new tool hole from the authenticated arranged profile.
 func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target ProfileRecord, match *sketch.Profile,
-	tags map[sketch.Entity]prismEntityOrigin, candidate ProfileRecord) (ProfileRecord, error) {
+	tags map[sketch.Entity]prismcells.Origin, candidate ProfileRecord) (ProfileRecord, error) {
 	if len(match.Holes) != len(candidate.Holes) || len(candidate.Holes) != len(target.Holes)+1 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the cut profile has an unexpected hole count`, ErrUnsupported)
 	}
-	toolEntities, err := prismLoopEntitySet(budget, tags, true, -1)
+	toolEntities, err := prismcells.LoopEntitySet(budget, tags, true, -1)
 	if err != nil {
 		return ProfileRecord{}, err
 	}
 	toolIndex := -1
 	for j, hole := range match.Holes {
-		isTool, err := prismLoopMatchesOrigin(budget, hole, toolEntities)
+		isTool, err := prismcells.LoopMatchesOrigin(budget, hole, toolEntities)
 		if err != nil {
 			return ProfileRecord{}, err
 		}

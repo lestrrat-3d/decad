@@ -7,12 +7,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -1069,7 +1067,7 @@ type prismSceneDelta struct {
 // one the record states verbatim — and walkChargeOf's allowance for it is
 // accumulated into the returned prismSceneDelta, the largest such charge over
 // each operand's own consumed segments (§7's δ_walk).
-func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, error) {
+func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
@@ -1086,7 +1084,7 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		return created
 	}
 
-	tags := map[sketch.Entity]prismEntityOrigin{}
+	tags := map[sketch.Entity]prismcells.Origin{}
 	sceneDelta := prismSceneDelta{}
 
 	addOperand := func(profile ProfileRecord, isB bool) error {
@@ -1108,7 +1106,7 @@ func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpre
 		for li, loop := range loops {
 			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
 			tag := func(ent sketch.Entity, authoredReversed bool) {
-				tags[ent] = prismEntityOrigin{isB: isB, hole: hole, authoredReversed: authoredReversed}
+				tags[ent] = prismcells.Origin{IsB: isB, Hole: hole, AuthoredReversed: authoredReversed}
 			}
 			for _, seg := range loop.Segments {
 				if err := budget.Step(); err != nil {

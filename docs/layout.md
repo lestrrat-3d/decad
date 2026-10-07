@@ -213,10 +213,10 @@ the rules leave to the byte budget.
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See `docs/evaluator-design.md` §9. |
 | `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar or offset-plane prisms, ahead of the mesh path. See `docs/prism-boolean-design.md`. |
-| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match: the whole-loop tag-map search resolving a clean bore/nested pair. See `docs/prism-boolean-design.md` §4.2. |
+| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting resolution. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_boolean_blind.go` | Admits blind and spanning Cuts through sketch's whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Builds and audits stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
-| `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case: per-operand cell classification and `mergePrismCells`. See `docs/prism-boolean-design.md` §4.2. |
+| `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
@@ -264,6 +264,7 @@ the rules leave to the byte budget.
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |
+| `internal/prismcells/` | Sketch cell classification, whole-loop matching and trim fragment walks. See `docs/prism-boolean-design.md` §4.2 and `docs/surface-intersection-design.md` §3. |
 | `internal/massmoment/` | Rational volume moments, anchor and rotation transforms, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
 | `internal/capcontour/` | Interval enclosures for cap contour points, offset carrier intersections and miter locus speed. See `docs/modify-reach-design.md` §8.3-§8.4. |
 | `internal/capband/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
