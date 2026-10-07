@@ -1393,7 +1393,8 @@ a slide, since one of `Common`'s loop pins is then the rail.
 **driver** for the drive, and every other joint of the loop is dependent; a drive that lists two joints of
 one loop is `ErrDegenerate`, since the second value cannot be stated. A drive that lists none, or whose
 listed joint holds `0`, holds the loop at the zero pose, where every joint value is `0`: its links are the
-tree's held links (§6 step 2) and no scene is built. v1 takes a driver only when its parent is `Common`,
+tree's held links (§6 step 2) and no scene is built. The driver's sweep may carry `Via` values, hold a
+nonzero value, or cross `0` (§15.8). v1 takes a driver only when its parent is `Common`,
 so that its reference line (§15.2) is fixed in the scene: a four-bar is driven at the crank or at the
 follower, a slider-crank at the crank or at the slide, and a drive listing the coupler's joint is
 `ErrUnsupported`.
@@ -1472,9 +1473,9 @@ The scene is therefore built on the side of the plane that makes the driver's sc
 drive that takes a revolute driver's value negative in the scene, `v` is negated (the mirror image, normal
 `−n`, every revolute `s_k` flipped), and for a slide driven backward `u` and `v` are both negated (a half
 turn in the plane, the same normal, the slide's `s_k` flipped); readings map back through that side's
-signs. Every side describes one mechanism and seeds at the same zero pose. One drive in v1 keeps its driver
-on one side of `0` (§15.6), so it builds
-one scene.
+signs. Every side describes one mechanism and seeds at the same zero pose. A drive builds the scene for
+every side its sub-segments read (§15.8): one for a driver that keeps one side of `0`, both for one that
+crosses it.
 
 **The zero pose, `E0`, and the one falsifier.** The first call on the scene is `Enclose(ctx, driver, 0, 0)`
 with the bars' target ranges: one piece, a box around the seed in which the exact solution at driver value
@@ -1498,8 +1499,9 @@ piece about `1e-13` wide; an interval `[s_a, s_b]` is a **cell ask** `Enclose(dr
 its range ordered by the scene's `q`. A cell whose range would be empty is refused as `sketch` refuses one.
 
 **Every ask is continued from a canonical predecessor**, so that each enclosure certifies the zero-pose
-branch and two calls at the same parameter return the same floats. The chain runs from the drive's **near
-end**, the end whose driver value is nearer `0`, toward the far end:
+branch and two calls at the same parameter return the same floats. Each sub-segment of the drive
+(§15.8) has its own chain, on its own side's scene, running from its **near end**, the end whose driver
+value is nearer `0`, toward its far end:
 
 | Ask | Continued from |
 |---|---|
@@ -1509,10 +1511,14 @@ end**, the end whose driver value is nearer `0`, toward the far end:
 | the cell of a dyadic interval `[s_a, s_b]` of §6's grid, read in chain direction | the point at its chain-start |
 | the point at a grid parameter `s` of depth `d ≤ 30` (the least `d` with `s` a multiple of `2^−d`), other than the near end | the depth-`d` cell that ends at `s` in chain direction |
 | the point at a deeper parameter (a renderer's frame at `i/300`, as a float) | the cell from the nearest depth-`14` grid parameter on its near side (`linkageReadingFloor`) to it, itself continued from that grid parameter's point |
+| any point or cell of a sub-segment that holds its driver | the point at its near end: the sub-segment has one driver value, so one point |
 
-A point at `s` of depth `d` thus reaches back to the near end through the cells of the binary expansion
-of `s`, each shared with every other parameter that passes through it. The schedule (§15.7) caches every
-enclosure by its kind and its ends. A refused ask makes every ask continued from it refused with the same
+A cell's chain-start never passes the sub-segment's near end: where the grid rule would start a cell
+beyond it — a sub-segment that starts at a waypoint `1/3` or a zero crossing — the cell starts at the near
+end. A point at `s` of depth `d` thus reaches back to the near end through the cells of the binary
+expansion of `s`, each shared with every other parameter that passes through it. The schedule (§15.7)
+caches every enclosure by its sub-segment, its kind and its ends. A refused ask makes every ask continued
+from it refused with the same
 cause.
 
 **Why two chains agree.** The cell `[s_a, s_b]` is continued from the point at `s_a`; the point at `s_b`
@@ -1592,7 +1598,11 @@ each as rational radians with `π` at the enclosure end that widens it: the two 
 ```
 
 It equals the hull's width where the joint is monotone across the interval and twice it where the joint
-returns to its starting value, which is the joint's total variation in each case. The term enters
+returns to its starting value, which is the joint's total variation in each case. An interval holding a
+sub-segment boundary — a waypoint or a zero crossing of the driver — is cut there, each piece read from
+its own sub-segment's point asks and cell, and the pieces' terms summed: total variation is additive over
+the cut, and the two one-sided travels from any `x` in one piece are bounded by that piece's term plus
+every other piece's, each of which bounds the joint's change across it. The term enters
 `chainTravel` as every other joint's does, multiplied by `ρ_{ik}` for a revolute. The engine reads the
 interval's three asks before any pair (`linkageDriver.intervalGate`); an interval whose point or cell ask
 `sketch` refused is `IntervalUndecided` whatever its pairs prove (§15.6).
@@ -1604,6 +1614,13 @@ points at its ends. The ball reading, the swept-box reach `Σ ρ_{ik}·m_i` and 
 is refused — unbuildable or undecided — so every value a claim is made about lies within the reach every
 swept box was grown by. Every loop joint keeps `a·x` for `a = n`, so a stacked planar loop's link-link
 pairs are layer-separated as a stacked arm's are.
+
+**Limits.** A dependent joint with `WithJointLimits` is held to that same whole-drive hull once the
+decomposition has read it: a hull not proven inside `[Min, Max]` — its lower end at or above `Min`'s upper
+enclosure and its upper end at or below `Max`'s lower — is `ErrDegenerate` with a message naming the link
+and the hull. The hull is wider than the exact value set by the pieces' slack, so a drive that reaches a
+limit exactly is refused; the refusal is conservative and admits nothing. A dependent is never held to the
+`0` an unlisted joint holds, so limits that exclude the zero pose admit a drive that stays inside them.
 
 ### 15.6 Refusals
 
@@ -1643,7 +1660,8 @@ The errors added to §8, all before `ctx` is read, and the refusals v1 holds bac
 | a drive listing two joints of one loop | `ErrDegenerate` |
 | a drive listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
 | `E0` refused as the table above says, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
-| a loop's driver with `Via` values, held at a nonzero value, or crossing `0` inside the drive; a dependent joint with `WithJointLimits` (L3) | `ErrUnsupported` |
+| a loop's driver crossing `0` between two waypoints stated in mixed terms (one in whole turns, the other in radians), where the crossing is not an exact fraction | `ErrUnsupported` |
+| a dependent joint whose whole-drive hull is not proven inside its limits (§15.5) | `ErrDegenerate`, after the decomposition reads the hull |
 | a looped linkage given to `VerifyJointBox` or `Linkage.Configuration` (§15.8) | `ErrUnsupported` |
 
 `E0` is asked under a context that is never canceled (`context.WithoutCancel`), so its refusal is a
@@ -1685,12 +1703,23 @@ which is §2.4's one-place rule for loops; a tree linkage's poses are built as b
 
 ### 15.8 Waypoints, held loops and the joint box
 
-A loop's driver may carry `Via` values from L3 on (§15.11): each segment is then cut at the driver's zero
-crossings into **sub-segments**, each with its own chain from its own near end and its own scene side; an
-interval holding a waypoint or a zero crossing is cut there for the travel sum of §15.5, each piece read
-from its own sub-segment's enclosures, and the dependents' labels at a waypoint come from the point ask
-there. A loop whose joints the drive does not list stands at the zero pose (§15.1). A loop whose driver
-holds at a nonzero value is one point ask after the approach, every link `linkConstant`.
+**Sub-segments.** A loop's driver may carry `Via` values like any joint (§2.3). Each segment of its
+schedule is one **sub-segment**, or two where the driver's value crosses `0` inside it, at the fraction
+`s₀ = j/n + t₀/n` with `t₀ = q_j / (q_j − q_{j+1})`, exact when both waypoints are whole turns or both
+radians or lengths. On each sub-segment the driver's value keeps one sign, so it reads on one side of the
+plane (§15.2) with its own chain from its own near end (§15.3): the end with the smaller `|q|`, the crossing
+itself where there is one. A sub-segment whose two waypoints are equal **holds** the driver; a drive whose
+every sub-segment holds is a held loop, its links `linkConstant` (§6 step 2), each dependent one point ask
+after its approach. A sub-segment holding the driver at `0` reads on a side some moving sub-segment uses.
+
+**A parameter on two sub-segments.** A waypoint or a crossing lies on two sub-segments. A pose there is
+read on the one whose near end it is, and otherwise on the first; either reads one exact configuration,
+since on one side of `0` the dependents along the branch certified from the zero pose are one continuous
+function of the driver's value, and at `0` they are the zero pose. An interval holding the boundary is cut
+there for the travel sum of §15.5, each piece read in its own sub-segment's chain.
+
+A loop whose joints the drive does not list, or whose listed joint holds `0`, stands at the zero pose
+(§15.1).
 
 `VerifyJointBox` (§14) and `Linkage.Configuration` refuse a looped linkage with `ErrUnsupported` in v1. A
 box varies several joints independently, and a loop's dependents follow its driver, so a cell's travel
@@ -1832,16 +1861,48 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
   Jacobian is singular there: `E0` refuses, and `VerifyLinkage`, `Schedule` and `PoseAt` return
   `ErrUnsupported` wrapping `sketch.ErrUnderconstrained` (one degree of freedom remains at the singular
   configuration).
-- Driven `0° → 100° → 0°` (L3): poses at `0` and `1` both read every dependent `Value` within `1e-9` of
-  `0`; one `IntervalUndecided` holds `[0.438538, 0.561462]`; the intervals outside it are `IntervalClear`.
+- Driven `0° → 100° → 0°` at the defaults: the crank enters the fold at `s = 87.707557/200 = 0.438538` and
+  leaves it at `0.561462`. Assert `Suspect`; poses at `0` and `1` both read every dependent `Value` within
+  `1e-9` of `0`; no pose lies in `[0.438538, 0.561462]`; exactly one interval is not `IntervalClear`, an
+  `IntervalUndecided` from at or below `0.438538` to at or above `0.561462`, merged across the unbuildable
+  poses between.
+
+**Drives over a loop.** Scene 7's crank-rocker without a wall; every assertion on a dependent value is the
+closed form at the crank angle the drive states, within `1e-9`, at every pose the check evaluates and at
+every `k/16` of a schedule, with each non-dyadic boundary added.
+
+- **Waypoints.** The crank `0° → 60° → 20°`: the second segment's value falls toward `0`, so its chain
+  starts at `s = 1`; the waypoint `1/2` and `1/3`, `2/3` read the closed form; the report is `Sound`. Red
+  when a sub-segment's chain starts at its first waypoint instead of its near end: the falling segment's
+  cells are asked downward, refused, and its poses are unbuildable.
+- **Out and back.** The crank `0° → 30° → 0°` and a `0.8` mm pin in the follower's layer centred on the
+  follower's top corner at `θ2 = 30°`. Endpoints alone: both read the zero pose, and the one interval,
+  holding the waypoint, is `IntervalUndecided` — the follower's travel is summed over its two pieces, about
+  twice the corner's `10.2` mm arc, against endpoint gaps summing to about `19.2` mm. At
+  `WithResolution(Scalar(1.0/2))` the pin is struck at `s = 1/2`. Red when one piece's term stands for the
+  sum: the interval certifies and the report reads `Sound` past a collision.
+- **Crossing zero.** The crank `−30° → 60°`, across `0` at the non-dyadic `s = 1/3`: the stretch below
+  reads on the mirrored scene, the one above on the scene's own side, each chain starting at the crossing;
+  `s = 0` reads the follower at `14.583238°` and `s = 1/3` exactly `0`. The slide-driven slider-crank of
+  scene 8's last leg driven `−5 → 5` mm crosses at `s = 1/2`, the backward stretch on the half-turned side.
+  Red, for each, when every stretch reads on the scene's own side.
+- **A held driver.** The crank held at `30°` while a separate arm off the loop turns: every pose reads the
+  closed form at `30°` and the loop's links stand at one placement. The crank `0° → 30° → 30° → 0°` reads
+  `30°` over its middle segment. Red when a held stretch's cells are asked: their range is empty, `sketch`
+  refuses them, and the stretch's poses are unbuildable.
+- **Limits on a dependent.** Under the crank `0° → 90°` the follower turns over `[−8.763°, 3.025°]`:
+  limits `[−5°, 5°]` refuse the drive with `ErrDegenerate` naming link `2`, `[−10°, 5°]` admit it. Limits
+  `[−10°, −1°]`, which exclude the zero pose, admit the crank `20° → 50°`. Red when the hull check is
+  deleted (the first drive is admitted), and when a dependent is held to the `0` of an unlisted joint (the
+  last is refused).
 
 **Standing tests.** Errors, one subtest per row of §15.1's and §15.6's tables: a nil link, the ground, one
 link twice, a link of another linkage, a non-finite center, a zero axis, an axis tilted by `1e-9` from
 `Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure axis, a slide along `(1, 1e-12, 0)`,
 a slide under a link that is not `Common`, two slides on one loop, a second closure on the
 coupler, a closure coincident with a pin in the plane, a drive listing crank and follower, a drive listing
-the coupler, a driver with `Via`, held off `0`, or crossing `0`, a dependent with limits, a schedule pose
-outside `[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
+the coupler, a driver crossing `0` between waypoints stated in mixed terms, a schedule pose outside
+`[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
 joint standing every link at the zero pose with zero `Bounds`. Non-mutation of the document and
 determinism of two reports as motion §9 test 7; cancellation at every depth of the check, inside an
 `Enclose` call among them, returns `ctx.Err()` and no report. Internal tests in
@@ -1876,7 +1937,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 |---|---|---|
 | L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `VerifyJointBox` and `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
-| L3 | `Via` on a loop's driver: sub-segments at zero crossings with a scene side each, the waypoint and crossing cuts of §15.5, held drivers; limits on a dependent, checked against its whole-drive hull at the schedule's construction (`ErrDegenerate` naming the link and the hull; the hull is wider than the exact value set by the pieces' slack, so a drive that reaches a limit exactly is refused); scene 9's out-and-back drive and scene 5 over a loop | a tilted loop |
+| L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
 | L4 | a loop about any axis: the frame any `r3.Frame` about the closure axis, each pin stated to `Enclose` as the outward-rounded box of its exact plane position (`WithFixedBox`, sketch #155) and each free pin's seed at its float, §15.1's coordinate-axis row gone, the falsifier taking each pin's box | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
@@ -1896,7 +1957,9 @@ at the zero pose, carries a whole-turn count per dependent, and poses and interv
 (§15.3, §15.7). A dependent's travel is the two-sided hull bound, which doubles where the joint turns back,
 and its reach is the decomposition's hull, held against every later read (§15.5). A refusal is a finding,
 except at the zero pose, where it is an error; an unbuildable pose is not evaluated and its interval is
-undecided (§15.6). `VerifyJointBox` refuses loops (§15.8).
+undecided (§15.6). A drive over a loop is cut into sub-segments at its waypoints and its zero crossings,
+each with its own chain and side, and a dependent with limits is held to its whole-drive hull (§15.5,
+§15.8). `VerifyJointBox` refuses loops (§15.8).
 
 **What sketch #155 unblocked.** `.tmp/decad-handoff-interval-targets.md` in the `sketch` repository asked
 for two additions to `Enclose`, and both landed in `821a4460`: `WithTargetRange`, a dimension's target as

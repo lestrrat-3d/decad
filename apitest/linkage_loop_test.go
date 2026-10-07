@@ -578,14 +578,8 @@ func TestLinkageLoopRefusals(t *testing.T) {
 		{"the coupler stated", func(fb fourBar) decad.Drive {
 			return decad.Drive{{Link: fb.couplerLk, From: units.Degrees(0), To: units.Degrees(10)}}
 		}, decad.ErrUnsupported},
-		{"a driver with Via", func(fb fourBar) decad.Drive {
-			return decad.Drive{{Link: fb.crank, From: units.Degrees(0), Via: []units.Value{units.Degrees(45)}, To: units.Degrees(90)}}
-		}, decad.ErrUnsupported},
-		{"a driver held off zero", func(fb fourBar) decad.Drive {
-			return decad.Drive{{Link: fb.crank, From: units.Degrees(10), To: units.Degrees(10)}}
-		}, decad.ErrUnsupported},
-		{"a driver crossing zero", func(fb fourBar) decad.Drive {
-			return decad.Drive{{Link: fb.crank, From: units.Degrees(-10), To: units.Degrees(10)}}
+		{"a driver crossing 0 between waypoints in mixed terms", func(fb fourBar) decad.Drive {
+			return decad.Drive{{Link: fb.crank, From: units.Degrees(-10), To: units.Radians(0.2)}}
 		}, decad.ErrUnsupported},
 	}
 	for _, row := range driveRows {
@@ -602,15 +596,6 @@ func TestLinkageLoopRefusals(t *testing.T) {
 			require.Equal(t, before, fb.doc.Bodies())
 		})
 	}
-	t.Run("a dependent with limits", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		fb := buildFourBarOpen(t, doc, rockerGround, rockerCrank, rockerCoupler, rockerFollower, z, decad.WithJointLimits(units.Degrees(-5), units.Degrees(5)))
-		_, err := fb.linkage.Close(fb.couplerLk, fb.follow, r3.NewVec(fb.b[0], fb.b[1], 0), z)
-		require.NoError(t, err)
-		_, err = doc.VerifyLinkage(t.Context(), fb.linkage, fb.crankDrive(units.Degrees(90)))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
 	t.Run("a schedule outside the drive", func(t *testing.T) {
 		t.Parallel()
 		fb, _ := buildRocker(t, false)
