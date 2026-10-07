@@ -596,14 +596,12 @@ a sheet, a resolution floor reached — none is an error; each is a finding that
 
 ## 9. Deferred, and the condition for each
 
-### 9.1 Closed loops about a tilted axis, and loops with two sliders
+### 9.1 Loops with two sliders, and loops driven below the common link
 
-A planar loop is §15. What §15 refuses with `ErrUnsupported` waits on named conditions: a loop whose
-common axis is not a coordinate axis is a later increment of §15 itself (§15.11), which `sketch`'s
-`WithFixedBox` unblocked (§15.12); a loop with
-two prismatic joints, or a prismatic joint below the common link, waits on a scene dimension that measures
-a displacement along a second direction; a loop driven at a joint whose parent is not the common link
-waits on a reference for the driving angle that moves with the parent. Until then a caller who knows a
+A planar loop is §15, about any axis. What §15 refuses with `ErrUnsupported` waits on named conditions: a
+loop with two prismatic joints, or a prismatic joint below the common link, waits on a scene dimension that
+measures a displacement along a second direction; a loop driven at a joint whose parent is not the common
+link waits on a reference for the driving angle that moves with the parent. Until then a caller who knows a
 dependent value in closed form states it as its own sweep of a tree, and the report speaks for that stated
 motion, not for closure (§5.6).
 
@@ -1407,13 +1405,13 @@ tolerance (`linkage_bound.go`'s `ratCross`, `ratDot`):
 | nil `l`, nil or parentless `a` or `b`, `a == b`, a link of another linkage | `ErrDegenerate` |
 | a non-finite `center` or `axis` component | `ErrNotFinite` |
 | a zero `axis` | `ErrDegenerate` |
-| `axis` not exactly parallel to a coordinate axis (`X`, `Y` or `Z`, either sense); a loop revolute's `Axis` not exactly parallel to `axis`; a loop prismatic's `Dir` not exactly along a coordinate axis, or not exactly perpendicular to `axis` | `ErrUnsupported`, naming the joint |
+| a loop revolute's `Axis` not exactly parallel to `axis`; a loop prismatic's `Dir` not exactly perpendicular to `axis` | `ErrUnsupported`, naming the joint |
 | a second prismatic joint on the loop; a loop prismatic whose parent is not `Common` | `ErrUnsupported` |
 | a tree joint already on another loop (two loops may share `Common` and nothing else) | `ErrUnsupported` |
 | two loop pins of one link coincident in the loop's plane, `Common`'s two included | `ErrDegenerate` |
 
-A coordinate axis is required because the scene's frame is then exact (§15.2); a loop about a tilted axis
-is the later increment of §15.11. Every other joint of the linkage, off the loop, is unrestricted. The
+`axis` may point anywhere: a loop about a tilted axis states each pin's plane position to `sketch` as an
+exact enclosure (§15.2). Every other joint of the linkage, off the loop, is unrestricted. The
 closure takes no `JointOption`: its relative angle is not a value the drive states or the report
 publishes, so limits on it have nothing to compare against. The closing pin's bodies go through
 `DeclareJointContact` like every other joint's (§2.2): nothing is inferred from the closure.
@@ -1424,27 +1422,36 @@ decad builds one private `sketch.Sketch` per loop and per drive, from the loop's
 else, as `prism_boolean.go` builds a scene from recorded sections. The scene is never published and no
 `sketch` type crosses decad's API.
 
-**Frame.** The plane is `r3.NewFrame(origin, u, v)` with `origin` the world origin and `u`, `v` two unit
-coordinate axes with `u × v` the closure axis's direction `n`. An all-revolute loop about `±e_i` takes
-`u = e_{i+1}` and `v = ±e_{i+2}` (indices mod 3) — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`, `(Y, Z)` for `+X`,
-`(Z, X)` for `+Y`. A loop with a slide takes `u` along the slide's own sense of its coordinate axis and
-`v = n × u`, so the slide's displacement is its pin's `u`-coordinate change. `Frame.ToLocal` of a world
-point is then two of its coordinates copied exactly, every
-pin's plane position the caller's own floats; the third coordinate, the pin's height along `n`, is
-dropped, because a rotation about an axis parallel to `n` moves a point within its own height. r3 does the
-frame arithmetic; decad picks the axes.
+**Frame.** The plane's axes are `u* = u/|u|` and `v* = v/|v|`, with `u` and `v` exact rational directions,
+`v = n × u` for the closure axis `n` as stated, so `u* × v* = n/|n|` exactly. A loop with a slide takes `u`
+the slide's own `Dir`, so the slide's displacement is its pin's `u*`-coordinate change. An all-revolute
+loop about `±e_i` takes `u = e_{i+1}`, so `v*` is `±e_{i+2}` — `(X, Y)` for `+Z`, `(X, −Y)` for `−Z`,
+`(Y, Z)` for `+X`, `(Z, X)` for `+Y` — and any other all-revolute loop takes `u = n × e_m`, `e_m` the
+coordinate axis along which `n` has its smallest component. Each of these `u` is a float vector read
+exactly, and `v` is formed from it in exact rational arithmetic. A pin `p`'s plane position is
+`(p·u/|u|, p·v/|v|)`: `p·u` and `p·v` are exact rationals, and `|u|` and `|v|` lie between the two floats
+around their exact roots (`proofbound.RatSqrtDown`, `RatSqrtUp`), so each coordinate is enclosed in a
+rational interval about `1e-16` of its size wide. The third coordinate, the pin's height along `n`, is
+dropped, because a rotation about an axis parallel to `n` moves a point within its own height. On a
+coordinate-axis loop whose slide, if any, runs along a coordinate axis, `|u|` and `|v|` are exact and
+each enclosure is one float, two of the pin's own coordinates. The float positions the scene's points are
+created at come from `r3.NewFrame(origin, u, v)`'s `ToLocal`; they seed the solves and claim nothing.
 
 **Points and lines.** Each loop pin is one `*sketch.Point` at its zero-pose plane position, shared by the
-two links it joins. `Common`'s two pins are fixed (`Sketch.Fix`), and `Common`'s line joins them. Each
-revolute link of `Links()` is a `Line` from its own pin to its next pin and a `NewDistance` between them.
+two links it joins. Every fixed point is stated to `Enclose` at its exact plane position: where either
+coordinate's enclosure is not one float, as on a tilted loop, with `WithFixedBox(p, x, y)` (sketch #155)
+over the outward-rounded float box `x × y` of the enclosure, so every claim holds for every position in
+the box and so for the exact one. `Common`'s two pins are fixed (`Sketch.Fix`), and `Common`'s line joins
+them. Each revolute link of `Links()` is a `Line` from its own pin to its next pin and a `NewDistance`
+between them.
 A slide's rail is the fixed line from a fixed point `P₀` at its next pin's zero-pose position to a fixed
 point one millimetre along `u`, and its next pin `P` is free with `NewPointOnLine(P, rail)`; the rail is
 the slide's line and `Common`'s, and `Common`'s other pin is fixed.
 
 **The bars are the document's.** A bar's exact length is the root of the exact rational squared distance
-`L²` between its two pins in the plane, which is in general irrational. Each `NewDistance` carries the
-target `RatSqrtUp(L²)` and is stated to `Enclose` with `WithTargetRange(d, RatSqrtDown(L²), RatSqrtUp(L²))`
-(sketch #155): every claim of every enclosure holds for every length in that interval, so for the exact
+`L² = |d|² − (d·n)²/|n|²` between its two pins in the plane, `d` their difference, which is in general
+irrational. Each `NewDistance` carries the target `RatSqrtUp(L²)` and is stated to `Enclose` with
+`WithTargetRange(d, RatSqrtDown(L²), RatSqrtUp(L²))` (sketch #155): every claim of every enclosure holds for every length in that interval, so for the exact
 one, and the scene describes the document's own loop. `LoopBar.Length` publishes the interval — `Value` the
 up-rounded root, `Bound` the one-float gap down to the lower root, `Exact` with a zero `Bound` when `L²` is a
 float's square. Nothing about the bars is left uncharged.
@@ -1478,15 +1485,18 @@ every side its sub-segments read (§15.8): one for a driver that keeps one side 
 crosses it.
 
 **The zero pose, `E0`, and the one falsifier.** The first call on the scene is `Enclose(ctx, driver, 0, 0)`
-with the bars' target ranges: one piece, a box around the seed in which the exact solution at driver value
-`0` is the only one for every bar length in its interval, and for each driven dimension the interval
-`reading₀` of its zero-pose value. `reading₀` is the offset every dependent value is measured from. The
-document's pins satisfy every equation of the scene exactly at driver value `0` — the bars are their exact
-distances, held in the stated intervals, and the driver's reference point is its own pin — so they are one
-of the solutions `E0` claims to hold uniquely. A pin outside its `E0` point box therefore disproves the
-enclosure — it holds some other solution, of another branch — and decad refuses the loop with
-`ErrUnsupported`. A pin inside the box admits nothing; admission is `E0`'s own certificate. `E0` refusing
-is an error from the call (§15.6).
+with the bars' target ranges and the fixed boxes: one piece, a box around the seed in which the exact
+solution at driver value `0` is the only one for every bar length in its interval and every fixed position
+in its box, and for each driven dimension the interval `reading₀` of its zero-pose value. `reading₀` is the
+offset every dependent value is measured from. The document's pins satisfy every equation of the scene
+exactly at driver value `0` — the bars are their exact distances, held in the stated intervals, the fixed
+pins sit at their exact positions, held in their boxes, and the driver's reference point is its own pin —
+so they are one of the solutions `E0` claims to hold uniquely. Each pin's exact plane position is known as
+its enclosure (§15.2's frame), and a pin whose enclosure is not proven inside its `E0` point box is refused:
+outside it, the pin holds some other solution, of another branch, which disproves the enclosure, and where
+the two only overlap nothing places the pin inside. decad refuses the loop with `ErrUnsupported`. A fixed
+pin's point box is its own fixed box, which holds its enclosure. A pin inside its box admits nothing;
+admission is `E0`'s own certificate. `E0` refusing is an error from the call (§15.6).
 
 ### 15.3 The enclosure chain
 
@@ -1652,15 +1662,13 @@ interval raises `DiagMotionUndecidedInterval` with `At` its `From`, and the `Mes
 refused names the loop by its two closed links and carries `sketch`'s cause; no new `DiagnosticCode` is
 added. A refusal is never an error from `VerifyLinkage` after validation.
 
-The errors added to §8, all before `ctx` is read, and the refusals v1 holds back for a later increment
-(§15.11):
+The errors added to §8, all before `ctx` is read:
 
 | Condition | Error |
 |---|---|
 | a drive listing two joints of one loop | `ErrDegenerate` |
 | a drive listing a loop joint whose parent is not `Common` | `ErrUnsupported` |
 | `E0` refused as the table above says, or a document pin outside `E0`'s box (§15.2) | `ErrUnsupported` |
-| a loop's driver crossing `0` between two waypoints stated in mixed terms (one in whole turns, the other in radians), where the crossing is not an exact fraction | `ErrUnsupported` |
 | a dependent joint whose whole-drive hull is not proven inside its limits (§15.5) | `ErrDegenerate`, after the decomposition reads the hull |
 | a looped linkage given to `VerifyJointBox` or `Linkage.Configuration` (§15.8) | `ErrUnsupported` |
 
@@ -1712,6 +1720,21 @@ itself where there is one. A sub-segment whose two waypoints are equal **holds**
 every sub-segment holds is a held loop, its links `linkConstant` (§6 step 2), each dependent one point ask
 after its approach. A sub-segment holding the driver at `0` reads on a side some moving sub-segment uses.
 
+**A crossing between waypoints stated in mixed terms.** Where one waypoint is in whole turns and the other
+in radians, `t₀ = 2π·T/(2π·T − B)` depends on `π` and `s₀` is irrational, so the segment is cut at two
+rationals around it instead (`crossingCuts`): `t₀` is read at both ends of `π`'s enclosure, the two
+readings are widened outward by the gap between them, and the driver's value at each cut is then proven,
+for every `π` in the enclosure, to carry the sign of the waypoint on its side. On §15.10's `−30° → 1 rad`
+drive the cuts lie `2e-76` apart. The segment becomes three sub-segments: up to the lower cut, on its waypoint's side, and
+on from the upper cut, on the other's, each with its near end at its cut — a nonzero driver value, reached
+by an approach from `E0` as for a sub-segment that starts off `0` — and between them the **straddle**,
+which has no chain. Anywhere on the straddle the driver's value lies between its values at the two cuts,
+on one side of `0` or the other, so each dependent's value lies in the hull of the two neighbours'
+approaches and of their points at the cuts: the branch from the zero pose to each cut, certified on that
+cut's side. A pose inside the straddle takes that hull as its enclosure, and an interval holding the
+straddle is cut at both its ends, the straddle's piece read as that hull, with the neighbours' points at
+the cuts as its ends. A pair of cuts whose signs cannot be proven is `ErrUnsupported`.
+
 **A parameter on two sub-segments.** A waypoint or a crossing lies on two sub-segments. A pose there is
 read on the one whose near end it is, and otherwise on the first; either reads one exact configuration,
 since on one side of `0` the dependents along the branch certified from the zero pose are one continuous
@@ -1738,7 +1761,10 @@ reaches depth `d` everywhere asks about `d` times the full-range work. Measured:
 `WithResolution(Scalar(1.0/256))` evaluates `37` poses in about `0.4` s; scene 9 at the defaults evaluates
 `8` poses in about `0.7` s, most of it the decomposition walking the refused cells down to the fold; scene
 8 at `WithResolution(Scalar(1.0/256))` evaluates `10` poses in about `0.1` s. The
-kernel cost per pose is §10's. `sketch` refuses an angle target beyond `±64` rad, so a crank driven more
+kernel cost per pose is §10's. A tilted loop costs the scene nothing measurable, but on a tilted
+mechanism the links' axis-aligned `Bounds()` boxes overlap along `n`, so the layer exclusion (§5.7)
+settles no pair and the pair kernel evaluates every one: scene 10's tilted scene 7 evaluates `113` poses
+in about `1.5` s, and its tilted scene 8 `254` poses in about `2` s. `sketch` refuses an angle target beyond `±64` rad, so a crank driven more
 than ten turns reads undecided past that; §15.10 does not test it.
 
 ### 15.10 Required tests
@@ -1867,6 +1893,27 @@ body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
   `IntervalUndecided` from at or below `0.438538` to at or above `0.561462`, merged across the unbuildable
   poses between.
 
+**Scene 10 — the tilted loop.** Scenes 7 and 8 carried by the rotation that takes `X` to `(1, −1, 0)/√2`
+and `Z` to `(1, 1, 1)/√3` (`r3.FromFrame` of the frame `u = (1, −1, 0)`, `v = (1, 1, −2)`): each body built
+as its scene builds it and placed by the rotation (`Body.Placed`), each pin the rotation of the scene's,
+every revolute and the closure about `(1, 1, 1)`, scene 8's slide along `(1, −1, 0)`, exactly
+perpendicular to it. No pin's plane position is a float, so every fixed point is a box.
+
+- Scene 7 tilted, its wall carried with it, at `WithResolution(Scalar(1.0/256))`: the bars within `1e-9`
+  of `100`, `30`, `80` and `70` with `Bound` below `1e-12`; `Interfering`; the first `LinkCollision` is
+  `(follower, wall)` at the untilted report's own first `At`, `36/256`; every collision lies in
+  `(s₁, s₂)` with `Bound` below `Value`, every `IntervalClear` interval outside it; every pose's dependent
+  values within `1e-9` of scene 7's closed forms, each `Bounds` positive and below `1e-9`. Red when the
+  fixed boxes are dropped: each of `Common`'s pins is then fixed at its float plane position, which `E0`
+  reports as its box and which does not hold the pin's enclosure, so the falsifier refuses the loop.
+- Scene 8 tilted, its stop carried with it, at `WithResolution(Scalar(1.0/256))`: `Interfering`, the first
+  `LinkCollision` `(slider, stop)` at the untilted report's own first `At`, `252/256`, its volume within
+  `1e-6` of `80·(75 − x) = 7.849912` mm³ with `Bound` below `Value`; every collision past `s*`; every
+  pose's slide value within `1e-9` of `x(θ) − 110` mm and the rod's turn of its closed form. Dropping the
+  fixed boxes here is not a leg the fixture fails: the crank's ground pin is the origin, a float, and the
+  rail's two points are not pins, so the falsifier has no pin to refuse. The boxes are what makes the
+  scene the document's; the falsifier only refuses.
+
 **Drives over a loop.** Scene 7's crank-rocker without a wall; every assertion on a dependent value is the
 closed form at the crank angle the drive states, within `1e-9`, at every pose the check evaluates and at
 every `k/16` of a schedule, with each non-dyadic boundary added.
@@ -1886,6 +1933,11 @@ every `k/16` of a schedule, with each non-dyadic boundary added.
   `s = 0` reads the follower at `14.583238°` and `s = 1/3` exactly `0`. The slide-driven slider-crank of
   scene 8's last leg driven `−5 → 5` mm crosses at `s = 1/2`, the backward stretch on the half-turned side.
   Red, for each, when every stretch reads on the scene's own side.
+- **Crossing zero in mixed terms.** The crank `−30° → 1 rad`, across `0` at the irrational
+  `s₀ = (π/6)/(1 + π/6)`, at `WithResolution(Scalar(1.0/16))`: `Sound`, every pose and every `k/16` of a
+  schedule and the float nearest `s₀` read the closed form, `s = 0` the follower at `14.583238°`, the float
+  nearest `s₀` within `1e-12` of the zero pose. Red when the stretch below `s₀` reads on the scene's own
+  side: `s = 0` then reads the follower's turn at `+30°`, `−8.33°`.
 - **A held driver.** The crank held at `30°` while a separate arm off the loop turns: every pose reads the
   closed form at `30°` and the loop's links stand at one placement. The crank `0° → 30° → 30° → 0°` reads
   `30°` over its middle segment. Red when a held stretch's cells are asked: their range is empty, `sketch`
@@ -1897,12 +1949,11 @@ every `k/16` of a schedule, with each non-dyadic boundary added.
   last is refused).
 
 **Standing tests.** Errors, one subtest per row of §15.1's and §15.6's tables: a nil link, the ground, one
-link twice, a link of another linkage, a non-finite center, a zero axis, an axis tilted by `1e-9` from
-`Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure axis, a slide along `(1, 1e-12, 0)`,
-a slide under a link that is not `Common`, two slides on one loop, a second closure on the
-coupler, a closure coincident with a pin in the plane, a drive listing crank and follower, a drive listing
-the coupler, a driver crossing `0` between waypoints stated in mixed terms, a schedule pose outside
-`[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
+link twice, a link of another linkage, a non-finite center, a zero axis, a closure axis tilted by `1e-9`
+from the loop's revolutes about `Z`, a loop revolute about `(0, 1e-12, 1)`, a slide along the closure
+axis, a slide along `(1, 0, 1e-12)`, a slide under a link that is not `Common`, two slides on one loop, a
+second closure on the coupler, a closure coincident with a pin in the plane, a drive listing crank and
+follower, a drive listing the coupler, a schedule pose outside `[0, 1]`, `VerifyJointBox` and `Configuration` on scene 7's linkage; and a drive listing no loop
 joint standing every link at the zero pose with zero `Bounds`. Non-mutation of the document and
 determinism of two reports as motion §9 test 7; cancellation at every depth of the check, inside an
 `Enclose` call among them, returns `ctx.Err()` and no report. Internal tests in
@@ -1913,15 +1964,24 @@ end alone; pin the dependent `|Δq_k|` of §15.5 on hand-made `A`, `B`, `H` for 
 turn-back case — red when it is the span of the ends; pin the canonical chain on a four-level grid: for a
 drive from `10°`, the point at `5/8` is continued from the cell `[1/2, 5/8]`, that from the point at `1/2`,
 that from the cell `[0, 1/2]`, that from the point at `0`, that from the approach, by asserting the cache
-holds exactly those keys after one point ask; pin the zero-pose falsifier: each of the four pins' recorded
-positions moved by `1e-6` mm after the scene is built is refused, the record as built admitted — red when
-the pin-in-box check is deleted; pin the interval gate: a refused cell put in place of a certified one
+holds exactly those keys after one point ask; pin the zero-pose falsifier, on scene 7's loop and on its
+tilt about `(1, 1, 1)`: each of the four pins' recorded positions moved by `1e-6` mm after the scene is
+built is refused, the record as built admitted — red, on both, when the pin-in-box check is deleted; pin
+the straddle on the crank `−30° → 1 rad`: three sub-segments that tile the segment, the mirrored side
+below and the scene's own above, each neighbour's chain starting at its cut, the cuts under `1e-60`
+apart; a pose inside the straddle holds both neighbours' values at their cuts and lies within `1e-12` of
+`0`; the pieces of `[1/4, 1/2]` tile it with the straddle in the middle — red when the straddle is not a
+sub-segment, which leaves a gap no fixture's pose or travel term is wide enough to show; pin the interval gate: a refused cell put in place of a certified one
 leaves the interval refused with `sketch`'s cause — red when the gate's refusal is deleted, which no
 public fixture shows, since a real chain refuses the point at a refused cell's end too; and pin the scene's
 frame: for each of the six axis senses and both scene sides, `U` and `V` are unit coordinate axes bit for
 bit, `U × V` is the closure axis times the side, and a pin's plane position is the caller's coordinates bit
-for bit; for a loop with a slide, for each of the four slide directions perpendicular to the axis and on
-the half-turned side too, `U` is the slide's sense, negated on the half-turned side. A slide's reading
+for bit, its exact enclosure that one value; for a loop with a slide, for each of the four slide
+directions perpendicular to the axis and on the half-turned side too, `U` is the slide's sense, negated on
+the half-turned side; and for the tilted axes `(1, 1, 1)` and `(−0.3, 2, 0.7)`, with and without a slide,
+on every side, `u ⟂ v`, `u × v` along the side's normal, `u` along the slide's own sense, and a pin's two
+enclosures each below `1e-12` wide with `x² + y²` holding the pin's exact squared distance from the axis
+— red when the coordinates are not divided by `|u|` and `|v|`. A slide's reading
 sense `s_k` against `u` is not a leg any fixture can fail: `u` is the slide's own sense on every side a
 dependent slide is read on, since a loop holds one slide and only a slide driver half-turns the scene; nor
 is the zero whole-turn count of a horizontal distance, whose continued readings agree to the boxes' width.
@@ -1938,33 +1998,34 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to sketch `821a4460` (`add interval targets and fixed boxes to Enclose (#155)`); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `VerifyJointBox` and `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout.md` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
 | L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
-| L4 | a loop about any axis: the frame any `r3.Frame` about the closure axis, each pin stated to `Enclose` as the outward-rounded box of its exact plane position (`WithFixedBox`, sketch #155) and each free pin's seed at its float, §15.1's coordinate-axis row gone, the falsifier taking each pin's box | — |
+| L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
 scene 7's closed-form onset as its acceptance. The `_gallery` linkage clip of a looped scene is a separate
 `_gallery` change after L1.
 
-### 15.12 Settled points, and what sketch #155 unblocked
+### 15.12 Settled points, and what sketch #155 supplies
 
-A loop is a tree plus a revolute closure, holding at most one prismatic joint, a child of the common
-link that rides its next pin along a fixed rail; the drive names the driver, whose parent is the loop's
-common link; every other loop joint is dependent and its value is read from `sketch`'s certified enclosure, never
-from a float solve (§15.1, §15.4). The public type is `LinkageLoop`, since `Loop` is the topology's. The
-scene is built in an exact frame over coordinate axes from the document's own pins, with every bar stated
-as the interval around its exact length, so every claim is about the document's loop; the document's pins
-falsify `E0` and never admit it (§15.2). Every enclosure is continued from a canonical predecessor rooted
-at the zero pose, carries a whole-turn count per dependent, and poses and intervals share one cached chain
-(§15.3, §15.7). A dependent's travel is the two-sided hull bound, which doubles where the joint turns back,
-and its reach is the decomposition's hull, held against every later read (§15.5). A refusal is a finding,
-except at the zero pose, where it is an error; an unbuildable pose is not evaluated and its interval is
-undecided (§15.6). A drive over a loop is cut into sub-segments at its waypoints and its zero crossings,
-each with its own chain and side, and a dependent with limits is held to its whole-drive hull (§15.5,
-§15.8). `VerifyJointBox` refuses loops (§15.8).
+A loop is a tree plus a revolute closure about any axis, holding at most one prismatic joint, a child of
+the common link that rides its next pin along a fixed rail perpendicular to the axis; the drive names the
+driver, whose parent is the loop's common link; every other loop joint is dependent and its value is read
+from `sketch`'s certified enclosure, never from a float solve (§15.1, §15.4). The public type is
+`LinkageLoop`, since `Loop` is the topology's. The scene is built in an exact orthonormal frame from the
+document's own pins, every pin's plane position enclosed exactly, every fixed point stated as the box
+around its enclosure and every bar as the interval around its exact length, so every claim is about the
+document's loop; the document's pins falsify `E0` and never admit it (§15.2). Every enclosure is
+continued from a canonical predecessor rooted at the zero pose, carries a whole-turn count per dependent,
+and poses and intervals share one cached chain (§15.3, §15.7). A dependent's travel is the two-sided hull
+bound, which doubles where the joint turns back, and its reach is the decomposition's hull, held against
+every later read (§15.5). A refusal is a finding, except at the zero pose, where it is an error; an
+unbuildable pose is not evaluated and its interval is undecided (§15.6). A drive over a loop is cut into
+sub-segments at its waypoints and its zero crossings, each with its own chain and side, an irrational
+crossing at two rational cuts around a straddle read from both sides' branches, and a dependent with
+limits is held to its whole-drive hull (§15.5, §15.8). `VerifyJointBox` refuses loops (§15.8).
 
-**What sketch #155 unblocked.** `.tmp/decad-handoff-interval-targets.md` in the `sketch` repository asked
+**What sketch #155 supplies.** `.tmp/decad-handoff-interval-targets.md` in the `sketch` repository asked
 for two additions to `Enclose`, and both landed in `821a4460`: `WithTargetRange`, a dimension's target as
 an interval with every claim holding for every target in it, which §15.2 states every bar with and which
-made the zero-pose falsifier valid; and `WithFixedBox`, a fixed point as a box, which a loop about a
-tilted axis needs, since `Frame.ToLocal` then rounds each pin's plane position. A tilted loop states each
-pin as the outward-rounded box of its exact plane position and is §15.11's L4; nothing else in this
-section waits on `sketch`.
+makes the zero-pose falsifier valid; and `WithFixedBox`, a fixed point as a box, which §15.2 states every
+fixed point of a tilted loop with, since its plane position is then irrational. Nothing in this section
+waits on `sketch`.

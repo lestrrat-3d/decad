@@ -41,8 +41,10 @@ type LinkageLoop struct {
 	// either is empty when a or b is Common itself.
 	sideA, sideB []*Link
 	links        []*Link // every loop link but Common, in Linkage.Links() order
-	// axis and sense name the closure's axis n = sense·e_axis.
-	axis, sense int
+	// normal is the closure's axis n exactly as stated; coord is the
+	// coordinate axis it lies along, or -1 for a tilted loop.
+	normal motionbound.RatVec
+	coord  int
 	// slide is the loop's one prismatic link, nil for an all-revolute loop.
 	// Its parent is Common; its loop pins are its rail and its next pin.
 	slide *Link
@@ -108,11 +110,10 @@ func (l *Linkage) Loops() []*LinkageLoop {
 //
 // It refuses, in this order: a nil linkage, a nil or parentless a or b,
 // a == b, or a link of another linkage (ErrDegenerate); a non-finite center or
-// axis component (ErrNotFinite); the zero axis (ErrDegenerate); an axis not
-// exactly parallel to a coordinate axis, a loop revolute whose axis is not
-// exactly parallel to it, or a loop prismatic whose direction is not exactly
-// along a coordinate axis perpendicular to it (ErrUnsupported, naming the
-// joint); a second prismatic joint on the loop, or one whose parent is not
+// axis component (ErrNotFinite); the zero axis (ErrDegenerate); a loop
+// revolute whose axis is not exactly parallel to axis, or a loop prismatic
+// whose direction is not exactly perpendicular to it (ErrUnsupported, naming
+// the joint); a second prismatic joint on the loop, or one whose parent is not
 // the loop's common link (ErrUnsupported); a loop joint already on another
 // loop (ErrUnsupported); and two loop pins of one link coincident in the
 // loop's plane (ErrDegenerate).
@@ -135,10 +136,9 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 	if zeroVec(axis) {
 		return nil, fmt.Errorf(`%w: a zero closure axis names no direction`, ErrDegenerate)
 	}
-	lp := &LinkageLoop{linkage: l, a: a, b: b, closure: RevoluteJoint{Center: center, Axis: axis}}
-	var ok bool
-	if lp.axis, lp.sense, ok = coordinateAxis(axis); !ok {
-		return nil, fmt.Errorf(`%w: a closure axis must be exactly parallel to a coordinate axis, got %v`, ErrUnsupported, axis)
+	lp := &LinkageLoop{linkage: l, a: a, b: b, closure: RevoluteJoint{Center: center, Axis: axis}, normal: ratVecExact(axis), coord: -1}
+	if idx, _, ok := coordinateAxis(axis); ok {
+		lp.coord = idx
 	}
 	lp.common = commonAncestor(a, b)
 	lp.sideA, lp.sideB = linksBelow(lp.common, a), linksBelow(lp.common, b)
@@ -151,17 +151,15 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 			lp.links = append(lp.links, k)
 		}
 	}
-	n := unitAxis(lp.axis, lp.sense)
 	for _, k := range lp.links {
 		switch j := k.joint.(type) {
 		case RevoluteJoint:
-			if c := ratCross(ratVecExact(j.Axis), ratVecExact(n)); !ratZero(c) {
+			if c := ratCross(ratVecExact(j.Axis), lp.normal); !ratZero(c) {
 				return nil, fmt.Errorf(`%w: link %d's revolute axis %v is not exactly parallel to the closure axis %v`, ErrUnsupported, k.index, j.Axis, axis)
 			}
 		case PrismaticJoint:
-			_, _, along := coordinateAxis(j.Dir)
-			if !along || ratDot(ratVecExact(j.Dir), ratVecExact(n)).Sign() != 0 {
-				return nil, fmt.Errorf(`%w: link %d's prismatic direction %v is not exactly along a coordinate axis perpendicular to the closure axis %v`, ErrUnsupported, k.index, j.Dir, axis)
+			if ratDot(ratVecExact(j.Dir), lp.normal).Sign() != 0 {
+				return nil, fmt.Errorf(`%w: link %d's prismatic direction %v is not exactly perpendicular to the closure axis %v`, ErrUnsupported, k.index, j.Dir, axis)
 			}
 		}
 	}
@@ -284,18 +282,18 @@ func (lp *LinkageLoop) commonPins() (r3.Vec, r3.Vec) {
 }
 
 // planeSq is the exact squared distance between two points in the loop's
-// plane: their difference with the component along the closure axis dropped.
+// plane: their difference with the component along the closure axis n
+// dropped, |d|² − (d·n)²/|n|².
 func (lp *LinkageLoop) planeSq(p, q r3.Vec) *big.Rat {
 	pd, qd := ratVecExact(p), ratVecExact(q)
-	sum := new(big.Rat)
+	var d motionbound.RatVec
 	for i := range 3 {
-		if i == lp.axis {
-			continue
-		}
-		d := new(big.Rat).Sub(pd[i], qd[i])
-		sum.Add(sum, d.Mul(d, d))
+		d[i] = new(big.Rat).Sub(pd[i], qd[i])
 	}
-	return sum
+	along := ratDot(d, lp.normal)
+	along.Mul(along, along)
+	along.Quo(along, ratDot(lp.normal, lp.normal))
+	return along.Sub(ratDot(d, d), along)
 }
 
 // linkNext is loop link k's next pin along its side of the loop.
@@ -390,12 +388,17 @@ type loopSub struct {
 	nearZero bool // the driver is exactly 0 at the near end
 	held     bool // the driver holds one value over the sub-segment
 	side     int  // 0 when q ≥ 0 over it, 1 when q ≤ 0
+	// straddle marks the stretch between two rational cuts that holds an
+	// irrational zero crossing. It has no chain: its two neighbours, the
+	// sub-segments just before and after it, end at those cuts, and its
+	// values are their branches' from the zero pose to each cut.
+	straddle bool
 }
 
 // loopScene is the private sketch scene of one loop under one drive, on one
 // side of the plane (docs/linkage-check-design.md §15.2).
 type loopScene struct {
-	frame      r3.Frame
+	plane      loopPlane
 	sk         *sketch.Sketch
 	driver     sketch.Dimension
 	driven     []sketch.Dimension // per dependent: an angle, or a slide's horizontal distance
@@ -407,11 +410,13 @@ type loopScene struct {
 	e0Readings []sketch.Interval // per dependent: its reading at the zero pose
 }
 
-// scenePin is one loop pin's sketch point and its exact plane position in the
-// document.
+// scenePin is one loop pin's sketch point, its world position, and the
+// enclosure of its exact plane position in the document: one exact value per
+// coordinate on a coordinate-axis loop.
 type scenePin struct {
 	p    *sketch.Point
-	u, v *big.Rat
+	at   r3.Vec
+	u, v proofbound.RatInterval
 }
 
 // loopAsk is one certified enclosure of a chain, on its scene, or the refusal
@@ -469,7 +474,7 @@ func (l *Linkage) resolveLoops(spec *linkageSpec) error {
 		}
 		ld := &loopDrive{loop: lp, driver: k, driverJt: jt, asks: make(map[string]*loopAsk), spans: make(map[string][][]loopSpan)}
 		if jt.revolute {
-			ld.axisSense = ratDot(ratVecExact(jt.axis), ratVecExact(unitAxis(lp.axis, lp.sense))).Sign()
+			ld.axisSense = ratDot(ratVecExact(jt.axis), lp.normal).Sign()
 		}
 		subs, err := driverSubs(jt)
 		if err != nil {
@@ -492,9 +497,11 @@ func (l *Linkage) resolveLoops(spec *linkageSpec) error {
 
 // driverSubs cuts a loop driver's schedule into sub-segments
 // (docs/linkage-check-design.md §15.8): each segment once, or twice at the
-// fraction where its driver value crosses 0. That fraction is exact only when
-// both of the segment's waypoints are whole turns, or both radians or
-// lengths, so a crossing between waypoints stated in mixed terms is refused.
+// fraction where its driver value crosses 0. That fraction is exact when both
+// of the segment's waypoints are whole turns, or both radians or lengths.
+// Between waypoints stated in mixed terms it depends on π, and the segment is
+// cut three times instead: up to a rational cut below the crossing, the
+// straddle holding it, and on from a rational cut above it (crossingCuts).
 // A sub-segment holding the driver at 0 is read on any side a moving one
 // uses.
 func driverSubs(jt linkJoint) ([]loopSub, error) {
@@ -533,8 +540,15 @@ func driverSubs(jt linkJoint) ([]loopSub, error) {
 			case pa.Base.Sign() == 0 && pb.Base.Sign() == 0:
 				num, den = pa.Turn, new(big.Rat).Sub(pa.Turn, pb.Turn)
 			default:
-				return nil, fmt.Errorf(`%w: link %d's driver crosses 0 between waypoints %s and %s stated in mixed terms, where the crossing is not an exact fraction`,
-					ErrUnsupported, jt.link.index, jt.values[j], jt.values[j+1])
+				lo, hi, ok := crossingCuts(pa, pb, a, b, sa)
+				if !ok {
+					return nil, fmt.Errorf(`%w: link %d's driver crosses 0 between waypoints %s and %s stated in mixed terms, where the crossing cannot be bracketed`,
+						ErrUnsupported, jt.link.index, jt.values[j], jt.values[j+1])
+				}
+				add(loopSub{lo: a, hi: lo, near: lo, side: side(sa)})
+				add(loopSub{lo: new(big.Rat).Set(lo), hi: hi, near: new(big.Rat).Set(lo), side: side(sa), straddle: true})
+				add(loopSub{lo: new(big.Rat).Set(hi), hi: b, near: new(big.Rat).Set(hi), side: side(sb)})
+				continue
 			}
 			t := new(big.Rat).Quo(num, den)
 			s0 := new(big.Rat).Sub(b, a)
@@ -572,6 +586,55 @@ func driverSubs(jt linkJoint) ([]loopSub, error) {
 		}
 	}
 	return subs, nil
+}
+
+// crossingCuts brackets the irrational fraction where a driver crosses 0
+// between waypoints pa at a and pb at b stated in mixed terms: two rationals
+// lo < hi inside (a, b), the driver's value at lo proven to have pa's sign sa
+// and at hi pb's, for every π in its enclosure. The crossing's local
+// fraction q_a/(q_a − q_b) is read at both ends of π's enclosure, the two
+// readings widened outward by their gap, and the signs then checked exactly;
+// ok is false when a check fails.
+func crossingCuts(pa, pb motionbound.MotionParam, a, b *big.Rat, sa int) (*big.Rat, *big.Rat, bool) {
+	twoPi := proofbound.TwoPiInterval()
+	var ts []*big.Rat
+	for _, tp := range []*big.Rat{twoPi.Lo, twoPi.Hi} {
+		qa := new(big.Rat).Mul(pa.Turn, tp)
+		qa.Add(qa, pa.Base)
+		qb := new(big.Rat).Mul(pb.Turn, tp)
+		qb.Add(qb, pb.Base)
+		den := new(big.Rat).Sub(qa, qb)
+		if den.Sign() == 0 {
+			return nil, nil, false
+		}
+		ts = append(ts, new(big.Rat).Quo(qa, den))
+	}
+	tlo, thi := ts[0], ts[1]
+	if tlo.Cmp(thi) > 0 {
+		tlo, thi = thi, tlo
+	}
+	gap := new(big.Rat).Sub(thi, tlo)
+	tlo = new(big.Rat).Sub(tlo, gap)
+	thi = new(big.Rat).Add(thi, gap)
+	at := func(t *big.Rat) *big.Rat {
+		out := new(big.Rat).Sub(b, a)
+		return out.Add(out.Mul(out, t), a)
+	}
+	lo, hi := at(tlo), at(thi)
+	if lo.Cmp(a) <= 0 || hi.Cmp(b) >= 0 || lo.Cmp(hi) >= 0 {
+		return nil, nil, false
+	}
+	signed := func(t *big.Rat, want int) bool {
+		q := pa.Lerp(pb, t)
+		if want < 0 {
+			return paramUpper(q).Sign() < 0
+		}
+		return paramLower(q).Sign() > 0
+	}
+	if !signed(tlo, sa) || !signed(thi, -sa) {
+		return nil, nil, false
+	}
+	return lo, hi, true
 }
 
 // increasing reports that a sub-segment's chain runs toward larger fractions.
@@ -653,33 +716,135 @@ func (ld *loopDrive) sceneSide(side int, slide bool) (mirror, halfTurn bool) {
 	return sign*ld.axisSense < 0, false
 }
 
-// sceneFrame is the loop's plane frame on one side (docs/linkage-check-design.md
-// §15.2): two unit coordinate axes u, v with u × v the closure axis's
-// direction, flipped by mirror. An all-revolute loop takes u = e_{i+1} for the
-// closure axis ±e_i; a loop with a slide takes u along the slide's own sense
-// and v = n × u. halfTurn negates both under the same normal.
-func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (r3.Frame, error) {
-	sense := lp.sense
+// loopPlane is the loop's plane on one side (docs/linkage-check-design.md
+// §15.2): the exact orthonormal axes u* = u/|u| and v* = v/|v|, with u and v
+// exact rational directions and u* × v* the side's normal, and the float
+// frame r3 builds along them, which seeds the scene's points.
+type loopPlane struct {
+	frame      r3.Frame
+	u, v       motionbound.RatVec
+	uLen, vLen proofbound.RatInterval // enclosures of |u| and |v|
+}
+
+// sceneFrame is the loop's plane on one side. u is the slide's own direction
+// on a loop with a slide, e_{i+1} on an all-revolute loop about ±e_i, and
+// otherwise n × e_m for the coordinate axis e_m along which n has its
+// smallest component; v = n × u, with n the closure axis, negated by mirror.
+// halfTurn negates both under the same normal. On a coordinate-axis loop
+// whose slide, if any, runs along a coordinate axis, the float frame's U and
+// V are unit coordinate axes, so a pin's float plane position is two of its
+// own coordinates.
+func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (loopPlane, error) {
+	n := lp.normal
 	if mirror {
-		sense = -sense
+		n = ratNeg(n)
 	}
-	var u, v r3.Vec
-	if lp.slide == nil {
-		axes := [3]r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-		u, v = axes[(lp.axis+1)%3], axes[(lp.axis+2)%3]
-		if sense < 0 {
-			v = v.Scale(-1)
-		}
-	} else {
+	var slideDir r3.Vec
+	slideAxis := -1
+	if lp.slide != nil {
 		j, _ := lp.slide.joint.(PrismaticJoint)
-		idx, dir, _ := coordinateAxis(j.Dir)
-		u = unitAxis(idx, dir)
-		v = unitAxis(lp.axis, sense).Cross(u)
+		slideDir = j.Dir
+		if idx, _, ok := coordinateAxis(j.Dir); ok {
+			slideAxis = idx
+		}
+	}
+	var uf, vf r3.Vec
+	switch {
+	case lp.coord >= 0 && lp.slide == nil:
+		sense := ratVecSign(lp.normal, lp.coord)
+		if mirror {
+			sense = -sense
+		}
+		axes := [3]r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
+		uf, vf = axes[(lp.coord+1)%3], axes[(lp.coord+2)%3]
+		if sense < 0 {
+			vf = vf.Scale(-1)
+		}
+	case lp.coord >= 0 && slideAxis >= 0:
+		sense := ratVecSign(lp.normal, lp.coord)
+		if mirror {
+			sense = -sense
+		}
+		_, dir, _ := coordinateAxis(slideDir)
+		uf = unitAxis(slideAxis, dir)
+		vf = unitAxis(lp.coord, sense).Cross(uf)
+	case lp.slide != nil:
+		uf = slideDir
+		vf = ratVecFloat(n).Cross(uf)
+	default:
+		m := 0
+		for i := 1; i < 3; i++ {
+			if new(big.Rat).Abs(lp.normal[i]).Cmp(new(big.Rat).Abs(lp.normal[m])) < 0 {
+				m = i
+			}
+		}
+		e := [3]float64{}
+		e[m] = 1
+		uf = ratVecFloat(lp.normal).Cross(r3.NewVec(e[0], e[1], e[2]))
+		vf = ratVecFloat(n).Cross(uf)
 	}
 	if halfTurn {
-		u, v = u.Scale(-1), v.Scale(-1)
+		uf, vf = uf.Scale(-1), vf.Scale(-1)
 	}
-	return r3.NewFrame(r3.Vec{}, u, v)
+	frame, err := r3.NewFrame(r3.Vec{}, uf, vf)
+	if err != nil {
+		return loopPlane{}, err
+	}
+	// uf holds u exactly: a unit axis, the slide's direction, or n × e_m,
+	// whose components are 0 and ± n's own. v is formed exactly from it.
+	u := ratVecExact(uf)
+	v := ratCross(n, u)
+	return loopPlane{frame: frame, u: u, v: v, uLen: ratNorm(u), vLen: ratNorm(v)}, nil
+}
+
+// coords encloses p's exact coordinates (p·u*, p·v*) in the plane as two
+// rational intervals; each is one exact value where the plane's axis has a
+// float length and the quotient is exact, as on a coordinate-axis loop.
+func (pl loopPlane) coords(p r3.Vec) (proofbound.RatInterval, proofbound.RatInterval) {
+	pr := ratVecExact(p)
+	return ratQuoInterval(ratDot(pr, pl.u), pl.uLen), ratQuoInterval(ratDot(pr, pl.v), pl.vLen)
+}
+
+// ratQuoInterval encloses num/d for d in the positive interval den.
+func ratQuoInterval(num *big.Rat, den proofbound.RatInterval) proofbound.RatInterval {
+	lo, hi := new(big.Rat).Quo(num, den.Hi), new(big.Rat).Quo(num, den.Lo)
+	if num.Sign() < 0 {
+		lo, hi = hi, lo
+	}
+	return proofbound.IntervalOwned(lo, hi)
+}
+
+// ratNorm encloses |w| between the two floats around its exact root.
+func ratNorm(w motionbound.RatVec) proofbound.RatInterval {
+	sq := ratDot(w, w)
+	return proofbound.IntervalOwned(proofarith.FloatRat(proofbound.RatSqrtDown(sq)), proofarith.FloatRat(proofbound.RatSqrtUp(sq)))
+}
+
+// ratNeg is −w.
+func ratNeg(w motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{new(big.Rat).Neg(w[0]), new(big.Rat).Neg(w[1]), new(big.Rat).Neg(w[2])}
+}
+
+// ratVecSign is the sign of w's component i.
+func ratVecSign(w motionbound.RatVec, i int) int {
+	if w[i].Sign() < 0 {
+		return -1
+	}
+	return 1
+}
+
+// ratVecFloat is the float vector nearest w; every caller's w is a float
+// vector read exactly, or its negation, so it is w itself.
+func ratVecFloat(w motionbound.RatVec) r3.Vec {
+	x, _ := w[0].Float64()
+	y, _ := w[1].Float64()
+	z, _ := w[2].Float64()
+	return r3.NewVec(x, y, z)
+}
+
+// floatBox is the outward-rounded float interval around iv.
+func floatBox(iv proofbound.RatInterval) sketch.Interval {
+	return sketch.Interval{Lo: proofbound.RatFloatDown(iv.Lo), Hi: proofbound.RatFloatUp(iv.Hi)}
 }
 
 // buildScene builds the loop's private scene for the drive on one side
@@ -694,7 +859,7 @@ func (lp *LinkageLoop) sceneFrame(mirror, halfTurn bool) (r3.Frame, error) {
 func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int) (*loopScene, error) {
 	lp := ld.loop
 	mirror, halfTurn := ld.sceneSide(side, spec.joints[ld.driver].link == lp.slide)
-	frame, err := lp.sceneFrame(mirror, halfTurn)
+	plane, err := lp.sceneFrame(mirror, halfTurn)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: a loop's plane frame: %w`, ErrNotFinite, err)
 	}
@@ -703,25 +868,43 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 	if err != nil {
 		return nil, fmt.Errorf(`%w: a loop's scene: %w`, ErrUnsupported, err)
 	}
-	sc := &loopScene{frame: frame, sk: sk}
-	points := make(map[r3.Vec]*sketch.Point)
-	point := func(at r3.Vec) *sketch.Point {
-		if p, ok := points[at]; ok {
-			return p
+	sc := &loopScene{plane: plane, sk: sk}
+	// fix grounds p at the exact plane position x × y: a fixed box around it
+	// where either coordinate is not one float, as on a tilted loop.
+	fix := func(p *sketch.Point, x, y proofbound.RatInterval) {
+		sk.Fix(p)
+		bx, by := floatBox(x), floatBox(y)
+		if bx.Lo != bx.Hi || by.Lo != by.Hi {
+			sc.opts = append(sc.opts, sketch.WithFixedBox(p, bx, by))
 		}
-		local := frame.ToLocal(at)
-		p := sk.CreatePoint(local.X, local.Y)
-		points[at] = p
-		sc.pins = append(sc.pins, scenePin{p: p, u: proofarith.FloatRat(local.X), v: proofarith.FloatRat(local.Y)})
-		return p
+	}
+	points := make(map[r3.Vec]int) // each pin's index in sc.pins
+	pinAt := func(at r3.Vec) scenePin {
+		if n, ok := points[at]; ok {
+			return sc.pins[n]
+		}
+		local := plane.frame.ToLocal(at)
+		x, y := plane.coords(at)
+		pin := scenePin{p: sk.CreatePoint(local.X, local.Y), at: at, u: x, v: y}
+		points[at] = len(sc.pins)
+		sc.pins = append(sc.pins, pin)
+		return pin
+	}
+	point := func(at r3.Vec) *sketch.Point { return pinAt(at).p }
+	fixPin := func(at r3.Vec) {
+		pin := pinAt(at)
+		fix(pin.p, pin.u, pin.v)
 	}
 	fixed := func(at r3.Vec, du float64) *sketch.Point {
-		local := frame.ToLocal(at)
+		local := plane.frame.ToLocal(at)
+		x, y := plane.coords(at)
 		if du != 0 {
 			local.X += du
+			shift := proofarith.FloatRat(du)
+			x = proofbound.IntervalOwned(new(big.Rat).Add(x.Lo, shift), new(big.Rat).Add(x.Hi, shift))
 		}
 		p := sk.CreatePoint(local.X, local.Y)
-		sk.Fix(p)
+		fix(p, x, y)
 		return p
 	}
 	lines := make(map[*Link]*sketch.Line)
@@ -731,8 +914,8 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 	if lp.slide == nil {
 		pa, pb := lp.commonPins()
 		commonLine = sk.CreateLine(point(pa), point(pb))
-		sk.Fix(point(pa))
-		sk.Fix(point(pb))
+		fixPin(pa)
+		fixPin(pb)
 	} else {
 		// The slide's rail is the fixed line through its next pin's zero-pose
 		// position along u; that pin rides it. The rail is the line Common's
@@ -748,7 +931,7 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 		if len(lp.sideA) > 0 && lp.sideA[0] == lp.slide {
 			other = pb
 		}
-		sk.Fix(point(other))
+		fixPin(other)
 	}
 	for _, bar := range lp.bars {
 		if bar.link == lp.common {
@@ -766,17 +949,15 @@ func (ld *loopDrive) buildScene(ctx context.Context, spec *linkageSpec, side int
 		}
 		return lines[k.parent]
 	}
-	sense := lp.sense
+	n := lp.normal
 	if mirror {
-		sense = -sense
+		n = ratNeg(n)
 	}
-	n := ratVecExact(unitAxis(lp.axis, sense))
-	u := ratVecExact(frame.U())
 	senseOf := func(k int) int {
 		if spec.joints[k].revolute {
 			return ratDot(ratVecExact(spec.joints[k].axis), n).Sign()
 		}
-		return ratDot(ratVecExact(spec.joints[k].axis), u).Sign()
+		return ratDot(ratVecExact(spec.joints[k].axis), plane.u).Sign()
 	}
 	driverLink := spec.joints[ld.driver].link
 	if driverLink == lp.slide {
@@ -851,8 +1032,8 @@ func (sc *loopScene) askZero(ctx context.Context) error {
 	for _, pin := range sc.pins {
 		x, y, ok := enc.PointBox(pin.p)
 		if !ok || !intervalHolds(x, pin.u) || !intervalHolds(y, pin.v) {
-			return fmt.Errorf(`%w: the loop's zero-pose enclosure excludes the document's pin at (%v, %v) in the loop's plane, so it does not describe the document's mechanism`,
-				ErrUnsupported, pin.u.FloatString(6), pin.v.FloatString(6))
+			return fmt.Errorf(`%w: the loop's zero-pose enclosure does not hold the document's pin at %v, in the loop's plane (%v, %v), so it does not describe the document's mechanism`,
+				ErrUnsupported, pin.at, pin.u.Lo.FloatString(6), pin.v.Lo.FloatString(6))
 		}
 	}
 	sc.e0 = &loopAsk{scene: sc, enc: enc, turns: make([]int64, len(sc.driven))}
@@ -866,10 +1047,12 @@ func (sc *loopScene) askZero(ctx context.Context) error {
 	return nil
 }
 
-// intervalHolds reports whether the exact x lies in the outward-rounded iv.
-func intervalHolds(iv sketch.Interval, x *big.Rat) bool {
+// intervalHolds reports whether the outward-rounded iv holds every value of
+// the exact enclosure x. A pin whose enclosure is not proven inside its box
+// is refused, so the check can only refuse.
+func intervalHolds(iv sketch.Interval, x proofbound.RatInterval) bool {
 	lo, hi := proofarith.FloatRat(iv.Lo), proofarith.FloatRat(iv.Hi)
-	return lo != nil && hi != nil && lo.Cmp(x) <= 0 && x.Cmp(hi) <= 0
+	return lo != nil && hi != nil && lo.Cmp(x.Lo) <= 0 && x.Hi.Cmp(hi) <= 0
 }
 
 // loopInvariant reports a sketch refusal that is an invariant failure on a
@@ -1075,6 +1258,37 @@ func (ld *loopDrive) point(ctx context.Context, sub loopSub, s *big.Rat) (*loopA
 	return ld.enclose(ctx, key, lo, hi, cell)
 }
 
+// straddleAsks are the asks a straddle's values are read from
+// (docs/linkage-check-design.md §15.8): for each neighbour, its approach from
+// the zero pose and its point at its cut. The driver's value anywhere on the
+// straddle lies between its values at the two cuts, on one side of 0 or the
+// other, so every dependent value there lies in the hull of these four.
+// Callers hold mu.
+func (ld *loopDrive) straddleAsks(ctx context.Context, sub loopSub) ([]*loopAsk, error) {
+	var out []*loopAsk
+	for _, nb := range []loopSub{ld.subs[sub.idx-1], ld.subs[sub.idx+1]} {
+		approach, err := ld.approach(ctx, nb)
+		if err != nil {
+			return nil, err
+		}
+		at, err := ld.point(ctx, nb, nb.near)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, approach, at)
+	}
+	return out, nil
+}
+
+// askHull is dependent j's hull over every ask given.
+func (ld *loopDrive) askHull(asks []*loopAsk, j int) proofbound.RatInterval {
+	ivs := make([]proofbound.RatInterval, len(asks))
+	for n, ask := range asks {
+		ivs[n] = valueInterval(ld.value(ask, j))
+	}
+	return hull(ivs...)
+}
+
 // approach is the enclosure from the zero pose to sub's near-end driver value.
 func (ld *loopDrive) approach(ctx context.Context, sub loopSub) (*loopAsk, error) {
 	lo, _ := ld.sceneValue(sub.near)
@@ -1181,6 +1395,10 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 		}
 	}
 	for _, sub := range ld.subs {
+		if sub.straddle {
+			// Its neighbours' near ends are its values' sources.
+			continue
+		}
 		near, err := ld.point(ctx, sub, sub.near)
 		if err != nil {
 			return err
@@ -1192,6 +1410,17 @@ func (ld *loopDrive) decompose(ctx context.Context, spec *linkageSpec, floor *bi
 		var asks []*loopAsk
 		refused := false
 		for _, pc := range ld.pieces(a, b) {
+			if pc.sub.straddle {
+				st, err := ld.straddleAsks(ctx, pc.sub)
+				if err != nil {
+					return err
+				}
+				for _, ask := range st {
+					refused = refused || ask.err != nil
+				}
+				asks = append(asks, st...)
+				continue
+			}
 			c, err := ld.chainCell(ctx, pc.sub, pc.lo, pc.hi)
 			if err != nil {
 				return err
@@ -1283,7 +1512,11 @@ func (ld *loopDrive) withinReach(j int, iv proofbound.RatInterval) bool {
 func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbound.MotionParam, error) {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	ask, err := ld.point(ctx, ld.subAt(s), s)
+	sub := ld.subAt(s)
+	if sub.straddle {
+		return ld.straddleValues(ctx, sub)
+	}
+	ask, err := ld.point(ctx, sub, s)
 	if err != nil {
 		return nil, err
 	}
@@ -1297,6 +1530,30 @@ func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbo
 			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
 		}
 		out[j] = [2]motionbound.MotionParam{lo, hi}
+	}
+	return out, nil
+}
+
+// straddleValues is every dependent's value range at a fraction inside a
+// straddle: its hull over the straddle's asks, as radians or millimetres.
+// Callers hold mu.
+func (ld *loopDrive) straddleValues(ctx context.Context, sub loopSub) ([][2]motionbound.MotionParam, error) {
+	asks, err := ld.straddleAsks(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	for _, ask := range asks {
+		if ask.err != nil {
+			return nil, &unbuildableError{cause: ld.describe(ask.err)}
+		}
+	}
+	out := make([][2]motionbound.MotionParam, len(ld.deps))
+	for j := range ld.deps {
+		h := ld.askHull(asks, j)
+		if !ld.withinReach(j, h) {
+			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+		}
+		out[j] = [2]motionbound.MotionParam{{Turn: new(big.Rat), Base: h.Lo}, {Turn: new(big.Rat), Base: h.Hi}}
 	}
 	return out, nil
 }
@@ -1315,6 +1572,14 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 	defer ld.mu.Unlock()
 	var out [][]loopSpan
 	for _, pc := range ld.pieces(a, b) {
+		if pc.sub.straddle {
+			piece, err := ld.straddleSpans(ctx, pc.sub)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, piece)
+			continue
+		}
 		pa, err := ld.point(ctx, pc.sub, pc.lo)
 		if err != nil {
 			return nil, err
@@ -1345,6 +1610,31 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 	}
 	ld.spans[loopSpanKey(a, b)] = out
 	return out, nil
+}
+
+// straddleSpans reads every dependent over a whole straddle: its values at
+// the two cuts, the neighbours' points there, and the hull over its asks. An
+// interval is cut at both of a straddle's ends, so its piece is the whole
+// straddle. Callers hold mu.
+func (ld *loopDrive) straddleSpans(ctx context.Context, sub loopSub) ([]loopSpan, error) {
+	asks, err := ld.straddleAsks(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	for _, ask := range asks {
+		if ask.err != nil {
+			return nil, &unbuildableError{cause: ld.describe(ask.err)}
+		}
+	}
+	piece := make([]loopSpan, len(ld.deps))
+	for j := range ld.deps {
+		h := ld.askHull(asks, j)
+		if !ld.withinReach(j, h) {
+			return nil, &unbuildableError{cause: ld.describe(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))}
+		}
+		piece[j] = loopSpan{a: valueInterval(ld.value(asks[1], j)), b: valueInterval(ld.value(asks[3], j)), h: h}
+	}
+	return piece, nil
 }
 
 // dependentSpan is |Δq_k| of docs/linkage-check-design.md §15.5 for one

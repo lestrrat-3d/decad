@@ -47,6 +47,7 @@
 0	0.09	TestLoftPlacedArcWedgeCarriesBothDisplacements
 0	0.52	TestLoftPlacedCopyTenTimesSectionDeltaUnchanged
 0	0.07	TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference
+0	0.01	TestLoopSceneFrameTilted
 0	0.23	TestMitredSweepPublishesPerVertexBounds
 0	0.01	TestMotionDefaultResolutionUnderflowIsReusable
 0	0.02	TestOperandSymDiffRefusesARealUnverifiedMesh
@@ -883,6 +884,7 @@
 4	0.01	TestLoftCollapsedGateDiameterIsRefusedFirst
 4	0.22	TestLoftConeFrustumWallAreaEnclosed
 4	0.48	TestLoftWalkResolutionChargesOncePerSegment
+4	0.22	TestLoopMixedCrossing
 4	0.01	TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted
 4	0.55	TestMitredSweepDeltaAndMeshProofs
 4	4.02	TestMitredSweepMomentsMatchRationalSum
