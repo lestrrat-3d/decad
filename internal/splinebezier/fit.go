@@ -7,14 +7,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
-func FitSplineBezierSpans(segment FitSplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func FitSplineBezierSpans(segment FitSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return fitSplineBezierSpans(segment, work)
 }
 func IsFitSplineSeg(segment CurveSegment) bool { return isFitSplineSeg(segment) }
@@ -51,7 +49,7 @@ func FitCoords(points []Point2) [][2]float64   { return fitCoords(points) }
 // second-to-last recorded point. decad integrates exactly the curve
 // FitSpline.Eval walks — Points, not Fit — which is the right answer; nothing
 // here papers over the difference or adds a second threshold.
-func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	if err := freeform.RequireFullFreeformRange(seg.TStart, seg.TEnd, "fit spline segment"); err != nil {
 		return nil, err
 	}
@@ -111,8 +109,8 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]surv
 
 	k := len(interp.Points)
 	params := make([]*big.Rat, k)
-	points := make([]survey2d.RatPoint, k)
-	seconds := make([]survey2d.RatPoint, k)
+	points := make([]freeform.RatPoint, k)
+	seconds := make([]freeform.RatPoint, k)
 	for i := range k {
 		p, ok := proofbound.RatOf(interp.Params[i])
 		if !ok {
@@ -124,20 +122,20 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]surv
 		if !okU || !okV {
 			return nil, fmt.Errorf(`%w: a fit spline's active point is not finite`, ErrNotFinite)
 		}
-		points[i] = survey2d.RatPoint{U: u, V: v}
+		points[i] = freeform.RatPoint{U: u, V: v}
 		mu, okMU := proofbound.RatOf(interp.SecondDerivs[i][0])
 		mv, okMV := proofbound.RatOf(interp.SecondDerivs[i][1])
 		if !okMU || !okMV {
 			return nil, fmt.Errorf(`%w: a fit spline's second derivative is not finite`, ErrNotFinite)
 		}
-		seconds[i] = survey2d.RatPoint{U: mu, V: mv}
+		seconds[i] = freeform.RatPoint{U: mu, V: mv}
 	}
 
 	// k-1 spans over k active points; k == 1 (every fit point collapsed
 	// together) yields zero spans, which freeformEndpoints and freeformDegenerate
 	// refuse on their own terms as R14 — the same answer the identical record's
 	// length bracket gives.
-	spans := make([]survey2d.BezierSpan, k-1)
+	spans := make([]freeform.BezierSpan, k-1)
 	for i := range spans {
 		// h is formed here as the exact big.Rat difference of two consecutive
 		// Params, never sketch's own float h (which evalCubicSpan and FitSpan's
@@ -175,10 +173,10 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]surv
 		hSq := new(big.Rat).Mul(h, h)
 		b1u, b2u := freeform.FitSpanControls(points[i].U, points[i+1].U, seconds[i].U, seconds[i+1].U, hSq)
 		b1v, b2v := freeform.FitSpanControls(points[i].V, points[i+1].V, seconds[i].V, seconds[i+1].V, hSq)
-		spans[i] = survey2d.BezierSpan{
+		spans[i] = freeform.BezierSpan{
 			points[i],
-			survey2d.RatPoint{U: b1u, V: b1v},
-			survey2d.RatPoint{U: b2u, V: b2v},
+			freeform.RatPoint{U: b1u, V: b1v},
+			freeform.RatPoint{U: b2u, V: b2v},
 			points[i+1],
 		}
 	}

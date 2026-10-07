@@ -139,7 +139,7 @@ func freeformWalkStations(w survey2d.SideWalk, chain freeform.FreeformChain) ([]
 	if len(chain.Stations) == 0 {
 		return nil, nil, fmt.Errorf(`%w: a free-form walk chorded to no station has no boundary sample`, decaderr.ErrDegenerate)
 	}
-	ordered := make([]survey2d.RatPoint, 0, len(chain.Stations))
+	ordered := make([]freeform.RatPoint, 0, len(chain.Stations))
 	if !w.Reversed {
 		ordered = append(ordered, chain.Stations...)
 	} else {

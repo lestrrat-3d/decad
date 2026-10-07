@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -35,7 +34,7 @@ type Profile struct {
 
 // Plan carries one converted free-form segment into the moments pass.
 type Plan struct {
-	Spans    []survey2d.BezierSpan
+	Spans    []freeform.BezierSpan
 	Reversed bool
 }
 
@@ -355,7 +354,7 @@ func requireFitSplineTerminalJoins(segment CurveSegment, start, end Point2, reve
 // It is this path's half of Table R row R14. The length bracket refuses the
 // same record on its own terms — a collapsed net is the one shape whose bracket
 // has zero width (internal/freeform/spline_length.go) — so the two paths agree.
-func freeformDegenerate(spans []survey2d.BezierSpan) bool {
+func freeformDegenerate(spans []freeform.BezierSpan) bool {
 	if len(spans) == 0 || len(spans[0]) == 0 {
 		return true
 	}

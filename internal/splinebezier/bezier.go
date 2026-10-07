@@ -9,8 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -46,29 +44,29 @@ func validateNURBSSegmentContent(segment NURBSSeg) error {
 func finiteSegmentValue(value float64) bool { return sectionrecord.FiniteSegmentValue(value) }
 
 func IsFreeformSegment(segment CurveSegment) bool { return isFreeformSegment(segment) }
-func FreeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {
+func FreeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]freeform.BezierSpan, bool, error) {
 	return freeformBezierSpans(segment, work)
 }
-func RatPointsOf(points []Point2) ([]survey2d.RatPoint, error) { return ratPointsOf(points) }
-func SplineBezierSpans(segment SplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func RatPointsOf(points []Point2) ([]freeform.RatPoint, error) { return ratPointsOf(points) }
+func SplineBezierSpans(segment SplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return splineBezierSpans(segment, work)
 }
-func NURBSBezierSpans(segment NURBSSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func NURBSBezierSpans(segment NURBSSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return nurbsBezierSpans(segment, work)
 }
-func ClosedSplineBezierSpans(segment ClosedSplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func ClosedSplineBezierSpans(segment ClosedSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return closedSplineBezierSpans(segment, work)
 }
-func ShiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
+func ShiftFreeformSpans(spans []freeform.BezierSpan, anchor Point2) error {
 	return shiftFreeformSpans(spans, anchor)
 }
-func FreeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Point2, error) {
+func FreeformEndpoints(spans []freeform.BezierSpan, reversed bool) (Point2, Point2, error) {
 	return freeformEndpoints(spans, reversed)
 }
-func FreeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
+func FreeformEndpointBounds(spans []freeform.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
 	return freeformEndpointBounds(spans, reversed, start, end)
 }
-func Point2Of(point survey2d.RatPoint) (Point2, bool) { return point2Of(point) }
+func Point2Of(point freeform.RatPoint) (Point2, bool) { return point2Of(point) }
 
 // This file is docs/spline-design.md §5.1's exact reduction: a recorded
 // free-form curve becomes piecewise polynomial Bézier control points over
@@ -128,7 +126,7 @@ func isFreeformSegment(seg CurveSegment) bool {
 //     transcendental terms, so they are integrated by their own bracketed
 //     formulas, not through a polynomial Bézier.
 //   - A rational NURBSSeg is Tier C, refused above.
-func freeformBezierSpans(seg CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {
+func freeformBezierSpans(seg CurveSegment, work *freeform.FreeformWork) ([]freeform.BezierSpan, bool, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
 		return nil, false, err
@@ -198,15 +196,15 @@ func freeformSegmentRange(seg CurveSegment) (float64, float64, string, bool) {
 
 // ratPointsOf lifts recorded control points into exact rationals. A
 // non-finite coordinate has no rational form and is rejected.
-func ratPointsOf(points []Point2) ([]survey2d.RatPoint, error) {
-	out := make([]survey2d.RatPoint, len(points))
+func ratPointsOf(points []Point2) ([]freeform.RatPoint, error) {
+	out := make([]freeform.RatPoint, len(points))
 	for i, point := range points {
 		u, okU := proofbound.RatOf(point.U)
 		v, okV := proofbound.RatOf(point.V)
 		if !okU || !okV {
 			return nil, fmt.Errorf(`%w: control point %d is not finite`, ErrNotFinite, i)
 		}
-		out[i] = survey2d.RatPoint{U: u, V: v}
+		out[i] = freeform.RatPoint{U: u, V: v}
 	}
 	return out, nil
 }
@@ -217,7 +215,7 @@ func ratPointsOf(points []Point2) ([]survey2d.RatPoint, error) {
 // restated here and the knot vector is READ FROM geom: its interior knots are
 // float64(j)/float64(n−3), and those floats — not the exact rationals they round
 // — are the curve sketch defines.
-func splineBezierSpans(seg SplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func splineBezierSpans(seg SplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	const degree = 3
 	if err := freeform.RequireFullFreeformRange(seg.TStart, seg.TEnd, "spline segment"); err != nil {
 		return nil, err
@@ -257,7 +255,7 @@ func splineBezierSpans(seg SplineSeg, work *freeform.FreeformWork) ([]survey2d.B
 // exactly. A genuinely rational NURBS is Tier C and refuses here, because
 // converting it to a polynomial Bézier would integrate a DIFFERENT curve and
 // report the result as exact.
-func nurbsBezierSpans(seg NURBSSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func nurbsBezierSpans(seg NURBSSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	// Order is the preflight's own: the O(1) refusals — the recorded range, then
 	// every slice size — decide first, because they read no element, so a record
 	// whose knot count cannot match its control count is refused in constant time
@@ -335,7 +333,7 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeform.FreeformWork) ([]survey2d.Bez
 // the standard uniform cubic basis, so it converts by the closed-form uniform
 // B-spline to Bézier identity and needs no knot insertion. n control points
 // give n spans, which is what closes the loop.
-func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) ([]survey2d.BezierSpan, error) {
+func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	if err := freeform.RequireFullFreeformRange(seg.TStart, seg.TEnd, "closed spline segment"); err != nil {
 		return nil, err
 	}
@@ -362,7 +360,7 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) (
 		return nil, err
 	}
 	n := len(ctrl)
-	spans := make([]survey2d.BezierSpan, n)
+	spans := make([]freeform.BezierSpan, n)
 	for i := range n {
 		// The four cyclic controls of span i, matching geom's own indexing.
 		q0, q1 := ctrl[i], ctrl[(i+1)%n]
@@ -370,11 +368,11 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) (
 		// The uniform cubic B-spline to Bézier identity, per coordinate:
 		// B₀ = (Q₀+4Q₁+Q₂)/6, B₁ = (2Q₁+Q₂)/3, B₂ = (Q₁+2Q₂)/3,
 		// B₃ = (Q₁+4Q₂+Q₃)/6.
-		spans[i] = survey2d.BezierSpan{
-			freeform.RatWeighted([]survey2d.RatPoint{q0, q1, q2}, []int64{1, 4, 1}, 6),
-			freeform.RatWeighted([]survey2d.RatPoint{q1, q2}, []int64{2, 1}, 3),
-			freeform.RatWeighted([]survey2d.RatPoint{q1, q2}, []int64{1, 2}, 3),
-			freeform.RatWeighted([]survey2d.RatPoint{q1, q2, q3}, []int64{1, 4, 1}, 6),
+		spans[i] = freeform.BezierSpan{
+			freeform.RatWeighted([]freeform.RatPoint{q0, q1, q2}, []int64{1, 4, 1}, 6),
+			freeform.RatWeighted([]freeform.RatPoint{q1, q2}, []int64{2, 1}, 3),
+			freeform.RatWeighted([]freeform.RatPoint{q1, q2}, []int64{1, 2}, 3),
+			freeform.RatWeighted([]freeform.RatPoint{q1, q2, q3}, []int64{1, 4, 1}, 6),
 		}
 	}
 	return spans, nil
@@ -401,7 +399,7 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeform.FreeformWork) (
 // the record, and this write would reach all of them at once, past a cache
 // guard that only ever compares the record (internal/boundarywalk/walk.go's spans field).
 // Hand it a copy, or a fresh conversion.
-func shiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
+func shiftFreeformSpans(spans []freeform.BezierSpan, anchor Point2) error {
 	u, okU := proofbound.RatOf(anchor.U)
 	v, okV := proofbound.RatOf(anchor.V)
 	if !okU || !okV {
@@ -409,7 +407,7 @@ func shiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
 	}
 	for _, span := range spans {
 		for i, point := range span {
-			span[i] = survey2d.RatPoint{
+			span[i] = freeform.RatPoint{
 				U: new(big.Rat).Sub(point.U, u),
 				V: new(big.Rat).Sub(point.V, v),
 			}
@@ -421,7 +419,7 @@ func shiftFreeformSpans(spans []survey2d.BezierSpan, anchor Point2) error {
 // freeformEndpoints returns the converted chain's own endpoints in the recorded
 // walk order — the first and last Bézier control point, which a Bézier
 // interpolates exactly, so these are the curve's endpoints and not samples.
-func freeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Point2, error) {
+func freeformEndpoints(spans []freeform.BezierSpan, reversed bool) (Point2, Point2, error) {
 	first, last, ok := freeform.FreeformEndControls(spans, reversed)
 	if !ok {
 		return Point2{}, Point2{}, fmt.Errorf(`%w: a converted free-form curve holds no span`, ErrDegenerate)
@@ -441,13 +439,13 @@ func freeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Poin
 // rational control point into float64, and that is measured here against the
 // rational itself. A chain with no span answers +Inf, the underivable bound
 // every consumer refuses on.
-func freeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
+func freeformEndpointBounds(spans []freeform.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
 	first, last, ok := freeform.FreeformEndControls(spans, reversed)
 	if !ok {
 		unbounded := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 		return unbounded, unbounded
 	}
-	bound := func(p survey2d.RatPoint, held Point2) proofbound.WalkEndBound {
+	bound := func(p freeform.RatPoint, held Point2) proofbound.WalkEndBound {
 		return proofbound.WalkEndBound{
 			U: proofarith.RationalFloatError(p.U, held.U),
 			V: proofarith.RationalFloatError(p.V, held.V),
@@ -456,7 +454,7 @@ func freeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, e
 	return bound(first, start), bound(last, end)
 }
 
-func point2Of(p survey2d.RatPoint) (Point2, bool) {
+func point2Of(p freeform.RatPoint) (Point2, bool) {
 	u, _ := p.U.Float64()
 	v, _ := p.V.Float64()
 	if proofbound.IsNonFinite(u) || proofbound.IsNonFinite(v) {

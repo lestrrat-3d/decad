@@ -78,8 +78,8 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 
 	// Compare the complete fixed-depth bracket, including its outward sums,
 	// with the former rational leaf calculation.
-	var rationalBracket func(survey2d.BezierSpan, int) (float64, float64)
-	rationalBracket = func(span survey2d.BezierSpan, depth int) (float64, float64) {
+	var rationalBracket func(freeform.BezierSpan, int) (float64, float64)
+	rationalBracket = func(span freeform.BezierSpan, depth int) (float64, float64) {
 		if depth == 0 {
 			lo := proofbound.RatSqrtDown(ratSquaredDistance(span[0], span[len(span)-1]))
 			hi := 0.0
@@ -101,14 +101,14 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 
 func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 	t.Parallel()
-	makeSpan := func(coords [][4]int64) survey2d.BezierSpan {
-		span := make(survey2d.BezierSpan, len(coords))
+	makeSpan := func(coords [][4]int64) freeform.BezierSpan {
+		span := make(freeform.BezierSpan, len(coords))
 		for i, c := range coords {
-			span[i] = survey2d.RatPoint{U: big.NewRat(c[0], c[1]), V: big.NewRat(c[2], c[3])}
+			span[i] = freeform.RatPoint{U: big.NewRat(c[0], c[1]), V: big.NewRat(c[2], c[3])}
 		}
 		return span
 	}
-	cases := map[string]survey2d.BezierSpan{
+	cases := map[string]freeform.BezierSpan{
 		"degree one":       makeSpan([][4]int64{{0, 1, 0, 1}, {7, 11, -4, 7}}),
 		"degree two":       makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}}),
 		"odd denominators": makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}, {3, 1, 0, 1}}),
@@ -202,7 +202,7 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 			}
 			cost := freeform.FreeformBracketCost(len(span))
 			work := &freeform.FreeformWork{Spent: freeform.FreeformWorkLimit - cost + 1}
-			_, _, err = freeform.FreeformArcLength([]survey2d.BezierSpan{span}, work)
+			_, _, err = freeform.FreeformArcLength([]freeform.BezierSpan{span}, work)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, freeform.FreeformWorkLimit, work.Spent)
 		})
@@ -365,8 +365,8 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 // below it and the upper at or above.
 func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	t.Parallel()
-	a := survey2d.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)}
-	b := survey2d.RatPoint{U: polynomial.MustRatOf(1), V: polynomial.MustRatOf(1)}
+	a := freeform.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)}
+	b := freeform.RatPoint{U: polynomial.MustRatOf(1), V: polynomial.MustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
 
 	lo := proofbound.RatSqrtDown(squared)
@@ -399,8 +399,8 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 	} {
 		t.Run(strconv.FormatFloat(leg, 'g', -1, 64), func(t *testing.T) {
 			q := ratSquaredDistance(
-				survey2d.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)},
-				survey2d.RatPoint{U: polynomial.MustRatOf(leg), V: polynomial.MustRatOf(0)},
+				freeform.RatPoint{U: polynomial.MustRatOf(0), V: polynomial.MustRatOf(0)},
+				freeform.RatPoint{U: polynomial.MustRatOf(leg), V: polynomial.MustRatOf(0)},
 			)
 
 			lo := proofbound.RatSqrtDown(q)
@@ -750,7 +750,7 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			exp := rng.IntN(2098) - 1074
 			return math.Ldexp((rng.Float64()*2)-1, exp)
 		}
-		span := survey2d.BezierSpan{
+		span := freeform.BezierSpan{
 			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
 			{U: proofarith.FloatRat(coord()), V: proofarith.FloatRat(coord())},
 		}
@@ -807,7 +807,7 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 // requireSubdivisionStaysDyadic walks the whole subdivision tree to the given
 // depth, checking every level of both computations against each other and every
 // reference denominator against the span's odd part.
-func requireSubdivisionStaysDyadic(t *testing.T, dyadic freeform.DyadicSpan, reference survey2d.BezierSpan, odd *big.Int, depth int) {
+func requireSubdivisionStaysDyadic(t *testing.T, dyadic freeform.DyadicSpan, reference freeform.BezierSpan, odd *big.Int, depth int) {
 	t.Helper()
 	for _, point := range reference {
 		for _, coord := range []*big.Rat{point.U, point.V} {
@@ -827,7 +827,7 @@ func requireSubdivisionStaysDyadic(t *testing.T, dyadic freeform.DyadicSpan, ref
 	requireSubdivisionStaysDyadic(t, dyadicRight, referenceRight, odd, depth-1)
 }
 
-func requireSameSpan(t *testing.T, dyadic freeform.DyadicSpan, reference survey2d.BezierSpan, msgAndArgs ...any) {
+func requireSameSpan(t *testing.T, dyadic freeform.DyadicSpan, reference freeform.BezierSpan, msgAndArgs ...any) {
 	t.Helper()
 	require.Len(t, dyadic.Points, len(reference), msgAndArgs...)
 	for i, point := range dyadic.Points {
@@ -862,7 +862,7 @@ func oddPart(n *big.Int) *big.Int {
 // ratSquaredDistance is |b−a|² taken straight over normalising rationals — the
 // plain reading freeform.DyadicSpan.squaredDistance must reproduce exactly, and the exact
 // value the directed square-root bounds are proven against.
-func ratSquaredDistance(a, b survey2d.RatPoint) *big.Rat {
+func ratSquaredDistance(a, b freeform.RatPoint) *big.Rat {
 	du := new(big.Rat).Sub(b.U, a.U)
 	dv := new(big.Rat).Sub(b.V, a.V)
 	du.Mul(du, du)
@@ -873,22 +873,22 @@ func ratSquaredDistance(a, b survey2d.RatPoint) *big.Rat {
 // referenceSplit is the defining de Casteljau bisection over normalising
 // rationals: each blend an Add and a halving, each result reduced to lowest
 // terms. It is the yardstick the split form is measured against.
-func referenceSplit(span survey2d.BezierSpan) (survey2d.BezierSpan, survey2d.BezierSpan) {
+func referenceSplit(span freeform.BezierSpan) (freeform.BezierSpan, freeform.BezierSpan) {
 	half := big.NewRat(1, 2)
 	midpoint := func(a, b *big.Rat) *big.Rat {
 		out := new(big.Rat).Add(a, b)
 		return out.Mul(out, half)
 	}
 	n := len(span)
-	work := make(survey2d.BezierSpan, n)
+	work := make(freeform.BezierSpan, n)
 	copy(work, span)
-	left := make(survey2d.BezierSpan, 0, n)
-	right := make(survey2d.BezierSpan, n)
+	left := make(freeform.BezierSpan, 0, n)
+	right := make(freeform.BezierSpan, n)
 	left = append(left, work[0])
 	right[n-1] = work[n-1]
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			work[i] = survey2d.RatPoint{
+			work[i] = freeform.RatPoint{
 				U: midpoint(work[i].U, work[i+1].U),
 				V: midpoint(work[i].V, work[i+1].V),
 			}

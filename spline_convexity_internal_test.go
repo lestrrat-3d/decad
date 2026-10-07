@@ -8,8 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +45,7 @@ import (
 
 // polygonTurns is the retired rule's own quantity: the cross product at each
 // interior vertex of the control polygon, exactly.
-func polygonTurns(span survey2d.BezierSpan) []*big.Rat {
+func polygonTurns(span freeform.BezierSpan) []*big.Rat {
 	out := make([]*big.Rat, 0, len(span)-2)
 	for i := 1; i+1 < len(span); i++ {
 		ax := new(big.Rat).Sub(span[i].U, span[i-1].U)
@@ -63,7 +61,7 @@ func polygonTurns(span survey2d.BezierSpan) []*big.Rat {
 // squaredSpeed is §6.3's S = u'^2 + v'^2 for one polynomial span: the exact
 // rational polynomial §6.5's regularity precondition proves has no root on the
 // closed span before any curvature coefficient is read.
-func squaredSpeed(span survey2d.BezierSpan) polynomial.RatPoly {
+func squaredSpeed(span freeform.BezierSpan) polynomial.RatPoly {
 	u, v := freeform.SpanCoordinatePolys(span)
 	du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
 	return polynomial.RpAdd(polynomial.RpMul(du, du), polynomial.RpMul(dv, dv))
@@ -124,20 +122,20 @@ func splitBernsteinAtMidpoint(b []*big.Rat) (left, right []*big.Rat) {
 // the SPAN itself rather than to K's coefficients. §6.5 states the subdivision
 // over the span, so the two routes to a child's coefficients are pinned against
 // each other below.
-func splitSpanAtMidpoint(span survey2d.BezierSpan) (left, right survey2d.BezierSpan) {
+func splitSpanAtMidpoint(span freeform.BezierSpan) (left, right freeform.BezierSpan) {
 	n := len(span)
 	half := big.NewRat(1, 2)
-	work := make([]survey2d.RatPoint, n)
+	work := make([]freeform.RatPoint, n)
 	for i, p := range span {
-		work[i] = survey2d.RatPoint{U: new(big.Rat).Set(p.U), V: new(big.Rat).Set(p.V)}
+		work[i] = freeform.RatPoint{U: new(big.Rat).Set(p.U), V: new(big.Rat).Set(p.V)}
 	}
-	left = make(survey2d.BezierSpan, 0, n)
-	right = make(survey2d.BezierSpan, n)
+	left = make(freeform.BezierSpan, 0, n)
+	right = make(freeform.BezierSpan, n)
 	for level := range n {
-		left = append(left, survey2d.RatPoint{U: new(big.Rat).Set(work[0].U), V: new(big.Rat).Set(work[0].V)})
-		right[n-1-level] = survey2d.RatPoint{U: new(big.Rat).Set(work[n-1-level].U), V: new(big.Rat).Set(work[n-1-level].V)}
+		left = append(left, freeform.RatPoint{U: new(big.Rat).Set(work[0].U), V: new(big.Rat).Set(work[0].V)})
+		right[n-1-level] = freeform.RatPoint{U: new(big.Rat).Set(work[n-1-level].U), V: new(big.Rat).Set(work[n-1-level].V)}
 		for i := 0; i+1 < n-level; i++ {
-			work[i] = survey2d.RatPoint{
+			work[i] = freeform.RatPoint{
 				U: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].U, work[i+1].U)),
 				V: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].V, work[i+1].V)),
 			}
@@ -149,7 +147,7 @@ func splitSpanAtMidpoint(span survey2d.BezierSpan) (left, right survey2d.BezierS
 // controlEdge is one control edge of a span as an exact rational vector: the
 // quantity §6.5's joint rule crosses, and the quantity a collapsed span has
 // none of.
-func controlEdge(from, to survey2d.RatPoint) (u, v *big.Rat) {
+func controlEdge(from, to freeform.RatPoint) (u, v *big.Rat) {
 	return new(big.Rat).Sub(to.U, from.U), new(big.Rat).Sub(to.V, from.V)
 }
 
@@ -166,7 +164,7 @@ func dotOf(au, av, bu, bv *big.Rat) *big.Rat {
 
 // jointCross is §6.5's joint verdict between two spans of a chain: the incoming
 // span's LAST control edge crossed with the outgoing span's FIRST.
-func jointCross(incoming, outgoing survey2d.BezierSpan) *big.Rat {
+func jointCross(incoming, outgoing freeform.BezierSpan) *big.Rat {
 	inU, inV := controlEdge(incoming[len(incoming)-2], incoming[len(incoming)-1])
 	outU, outV := controlEdge(outgoing[0], outgoing[1])
 	return crossOf(inU, inV, outU, outV)
@@ -174,7 +172,7 @@ func jointCross(incoming, outgoing survey2d.BezierSpan) *big.Rat {
 
 // spanIsCollapsed is §5.1's collapsed span: every control point of the span the
 // same point, so the span has no nonzero control edge and no direction.
-func spanIsCollapsed(span survey2d.BezierSpan) bool {
+func spanIsCollapsed(span freeform.BezierSpan) bool {
 	for i := 1; i < len(span); i++ {
 		if span[i].U.Cmp(span[0].U) != 0 || span[i].V.Cmp(span[0].V) != 0 {
 			return false
@@ -779,7 +777,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 	t.Parallel()
 	spanA := ratSpan([][2]float64{{0, 0}, {1, 0}})
 	spanB := ratSpan([][2]float64{{1, 0}, {1, 1}})
-	spans := []survey2d.BezierSpan{spanA, spanB}
+	spans := []freeform.BezierSpan{spanA, spanB}
 
 	require.Equal(t, "1", jointCross(spanA, spanB).RatString(),
 		"the internal joint turns by exactly +1, the identical shape and figure degreeOneNURBS's own conversion carries")
@@ -799,7 +797,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 // own net: one degree-2 span whose K is the positive constant 4, reused here
 // because it is cheap enough to certify well inside the record work ceiling —
 // the point of the two tests below is the counter, not the geometry.
-func degreeTwoConvexityFixture(t *testing.T) ([]survey2d.BezierSpan, bool) {
+func degreeTwoConvexityFixture(t *testing.T) ([]freeform.BezierSpan, bool) {
 	seg := NURBSSeg{
 		Degree:  2,
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
@@ -857,7 +855,7 @@ func TestConvexityCertificateSpendIncreases(t *testing.T) {
 
 // spanStrings renders a span's control points exactly, so a conversion that
 // rounded anywhere fails the comparison rather than passing within a delta.
-func spanStrings(span survey2d.BezierSpan) [][]string {
+func spanStrings(span freeform.BezierSpan) [][]string {
 	out := make([][]string, len(span))
 	for i, p := range span {
 		out[i] = []string{p.U.RatString(), p.V.RatString()}
@@ -1007,7 +1005,7 @@ func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
 	t.Parallel()
 	spanPos := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 1}})
 	spanNeg := ratSpan([][2]float64{{2, 1}, {3, 2}, {4, 2}})
-	spans := []survey2d.BezierSpan{spanPos, spanNeg}
+	spans := []freeform.BezierSpan{spanPos, spanNeg}
 
 	posSign, err := freeform.SpanConvexitySignContext(t.Context(), spanPos, freeform.NewFreeformWork())
 	require.NoError(t, err)

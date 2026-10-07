@@ -34,13 +34,13 @@ func normalizeSegment(segment CurveSegment) (CurveSegment, error) {
 	return sectionrecord.NormalizeSegment(segment)
 }
 func isFreeformSegment(segment CurveSegment) bool { return splinebezier.IsFreeformSegment(segment) }
-func freeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]survey2d.BezierSpan, bool, error) {
+func freeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]freeform.BezierSpan, bool, error) {
 	return splinebezier.FreeformBezierSpans(segment, work)
 }
-func freeformEndpoints(spans []survey2d.BezierSpan, reversed bool) (Point2, Point2, error) {
+func freeformEndpoints(spans []freeform.BezierSpan, reversed bool) (Point2, Point2, error) {
 	return splinebezier.FreeformEndpoints(spans, reversed)
 }
-func freeformEndpointBounds(spans []survey2d.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
+func freeformEndpointBounds(spans []freeform.BezierSpan, reversed bool, start, end Point2) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
 	return splinebezier.FreeformEndpointBounds(spans, reversed, start, end)
 }
 func isFitSplineSeg(segment CurveSegment) bool { return splinebezier.IsFitSplineSeg(segment) }

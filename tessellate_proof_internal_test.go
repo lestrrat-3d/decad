@@ -6,8 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -428,7 +426,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	pp, ok := body.payload.(prismPayload)
 	require.True(t, ok)
 
-	var spans []survey2d.BezierSpan
+	var spans []freeform.BezierSpan
 	for _, seg := range pp.profile.Outer.Segments {
 		if _, isFree := seg.(FitSplineSeg); !isFree {
 			continue

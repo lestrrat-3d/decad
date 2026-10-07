@@ -65,7 +65,7 @@ type momentPreflight struct {
 // the segment is not a converted free-form one — a line, an arc or a circle,
 // each integrated from its own closed form.
 type freeformPlan struct {
-	spans    []survey2d.BezierSpan
+	spans    []freeform.BezierSpan
 	reversed bool
 }
 

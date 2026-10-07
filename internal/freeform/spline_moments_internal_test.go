@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/stretchr/testify/require"
 )
@@ -104,14 +103,14 @@ func BenchmarkExactFreeformMomentsDegreeAndSpans(b *testing.B) {
 	}
 }
 
-func benchmarkMomentSpans(degree, count int) []survey2d.BezierSpan {
-	spans := make([]survey2d.BezierSpan, count)
+func benchmarkMomentSpans(degree, count int) []BezierSpan {
+	spans := make([]BezierSpan, count)
 	for spanIndex := range spans {
-		span := make(survey2d.BezierSpan, degree+1)
+		span := make(BezierSpan, degree+1)
 		for i := range span {
 			u := big.NewRat(int64(i*i+3*i+spanIndex+1), int64(2*i+3))
 			v := big.NewRat(int64(i*i*i-2*i+spanIndex+2), int64(3*i+5))
-			span[i] = survey2d.RatPoint{U: u, V: v}
+			span[i] = RatPoint{U: u, V: v}
 		}
 		spans[spanIndex] = span
 	}
@@ -127,8 +126,8 @@ func benchmarkMomentSpans(degree, count int) []survey2d.BezierSpan {
 // Shown-to-fail: dropping the ¼ of ∫u³ dA, or integrating ∫v³ dA against du
 // instead of dv, separates that term from its value.
 func TestFreeformThirdMomentsParabolicRegion(t *testing.T) {
-	point := func(u, v int64) survey2d.RatPoint { return survey2d.RatPoint{U: big.NewRat(u, 1), V: big.NewRat(v, 1)} }
-	parabola := []survey2d.BezierSpan{{point(0, 0), point(1, 0), point(2, 4)}}
+	point := func(u, v int64) RatPoint { return RatPoint{U: big.NewRat(u, 1), V: big.NewRat(v, 1)} }
+	parabola := []BezierSpan{{point(0, 0), point(1, 0), point(2, 4)}}
 	curve := FreeformThirdMoments(parabola, false)
 	chord := PolyThirdMoments(
 		polynomial.RatPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},

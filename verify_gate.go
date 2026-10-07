@@ -492,7 +492,7 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 				if len(span) == 0 {
 					return 0, false, nil
 				}
-				for _, cp := range [2]survey2d.RatPoint{span[0], span[len(span)-1]} {
+				for _, cp := range [2]freeform.RatPoint{span[0], span[len(span)-1]} {
 					held, ok := point2Of(cp)
 					if !ok {
 						return 0, false, nil

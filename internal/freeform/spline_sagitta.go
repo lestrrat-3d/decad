@@ -7,8 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -203,7 +201,7 @@ func DyadicSplitOps(n uint64) uint64 {
 // operands the conversion actually builds: the running least common multiple's
 // bit length is at most the SUM of the denominators folded into it, and
 // ScaledNumerator then multiplies a numerator by a quotient of that multiple.
-func DyadicSpanOfCharge(span survey2d.BezierSpan) uint64 {
+func DyadicSpanOfCharge(span BezierSpan) uint64 {
 	denBits, numBits := 0, 0
 	for _, p := range span {
 		denBits += p.U.Denom().BitLen() + p.V.Denom().BitLen()
@@ -242,7 +240,7 @@ func DyadicSpanOfCharge(span survey2d.BezierSpan) uint64 {
 // operand width, first, and returns having done nothing when the counter cannot
 // cover it. The charge is fixed per call so the work bound does not depend on
 // which exact branch the input takes.
-func ChordSegmentSquaredDistance(w *FreeformWork, p, a survey2d.RatPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
+func ChordSegmentSquaredDistance(w *FreeformWork, p, a RatPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
 	if err := w.Step(CostMul(ChordProjectionCost, WidthUnits(RatBitWidth(p.U, p.V, a.U, a.V, bax, bay, d)))); err != nil {
 		return nil, err
 	}
@@ -268,7 +266,7 @@ func ChordSegmentSquaredDistance(w *FreeformWork, p, a survey2d.RatPoint, bax, b
 // operand width as ChordSegmentSquaredDistance. A chord endpoint has exact
 // squared distance zero, so its projection arithmetic can be skipped after
 // the charge succeeds without changing a budget refusal.
-func ChordEndpointSquaredDistance(w *FreeformWork, p, a survey2d.RatPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
+func ChordEndpointSquaredDistance(w *FreeformWork, p, a RatPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
 	if err := w.Step(CostMul(ChordProjectionCost, WidthUnits(RatBitWidth(p.U, p.V, a.U, a.V, bax, bay, d)))); err != nil {
 		return nil, err
 	}
@@ -281,7 +279,7 @@ func ChordEndpointSquaredDistance(w *FreeformWork, p, a survey2d.RatPoint, bax, 
 // point.
 //
 // It charges ChordFrameCost at its own operand width, first.
-func RatChordFrame(w *FreeformWork, a, b survey2d.RatPoint) (*big.Rat, *big.Rat, *big.Rat, error) {
+func RatChordFrame(w *FreeformWork, a, b RatPoint) (*big.Rat, *big.Rat, *big.Rat, error) {
 	if err := w.Step(CostMul(ChordFrameCost, WidthUnits(RatBitWidth(a.U, a.V, b.U, b.V)))); err != nil {
 		return nil, nil, nil, err
 	}
@@ -313,11 +311,11 @@ func RatRunningMax(w *FreeformWork, best, candidate *big.Rat) (*big.Rat, error) 
 // because a big.Rat.Set of a wide value copies every word of it.
 //
 // It charges RatPointCopyCost at its own operand width, first.
-func RatPointCopy(w *FreeformWork, p survey2d.RatPoint) (survey2d.RatPoint, error) {
+func RatPointCopy(w *FreeformWork, p RatPoint) (RatPoint, error) {
 	if err := w.Step(CostMul(RatPointCopyCost, WidthUnits(RatBitWidth(p.U, p.V)))); err != nil {
-		return survey2d.RatPoint{}, err
+		return RatPoint{}, err
 	}
-	return survey2d.RatPoint{U: new(big.Rat).Set(p.U), V: new(big.Rat).Set(p.V)}, nil
+	return RatPoint{U: new(big.Rat).Set(p.U), V: new(big.Rat).Set(p.V)}, nil
 }
 
 // ChargedRatSqrtUp is this file's metered entry point for proofbound.RatSqrtUp
@@ -359,7 +357,7 @@ func ChargedRatSqrtDown(w *FreeformWork, q *big.Rat) (float64, error) {
 // numerator / (den · 2^exp), the inverse of the factored form DyadicSpanOf
 // and split (spline_length.go) build it in. Every value that form holds is
 // exact — a den·2^exp scaling and an integer numerator, never a normalised
-// rational — so this reconstruction loses nothing: the survey2d.RatPoint it returns is
+// rational — so this reconstruction loses nothing: the RatPoint it returns is
 // the value the split produced, to the last bit, and big.Rat.SetFrac copies
 // rather than aliases its arguments, so the result shares no storage with the
 // DyadicSpan it was read from.
@@ -368,19 +366,19 @@ func ChargedRatSqrtDown(w *FreeformWork, q *big.Rat) (float64, error) {
 // denominator den·2^exp it normalises against, or either numerator, whichever
 // is widest — so a reconstruction at depth pays for the wider integers depth
 // gave it.
-func (s DyadicSpan) RatPointAt(w *FreeformWork, i int) (survey2d.RatPoint, error) {
+func (s DyadicSpan) RatPointAt(w *FreeformWork, i int) (RatPoint, error) {
 	p := s.Points[i]
 	if err := w.Step(CostMul(RatPointReconstructCost, WidthUnits(s.ValueWidth(p)))); err != nil {
-		return survey2d.RatPoint{}, err
+		return RatPoint{}, err
 	}
 	scale := new(big.Int).Lsh(s.Den, p.Exp)
-	return survey2d.RatPoint{
+	return RatPoint{
 		U: new(big.Rat).SetFrac(p.U, scale),
 		V: new(big.Rat).SetFrac(p.V, scale),
 	}, nil
 }
 
-// survey2d.BezierSpan reconstructs a DyadicSpan's own control points as a survey2d.BezierSpan —
+// BezierSpan reconstructs a DyadicSpan's own control points as a BezierSpan —
 // the form SpanMatchedDeltaUpper/SpanHodographGapUpper read — by calling
 // ratPointAt over every index. It is ratPointAt's own doc comment's
 // "reconstruction" extended to a whole span rather than one point: every
@@ -388,8 +386,8 @@ func (s DyadicSpan) RatPointAt(w *FreeformWork, i int) (survey2d.RatPoint, error
 //
 // It holds no charge of its own; every unit it spends is ratPointAt's, spent
 // once per index it actually reconstructs.
-func (s DyadicSpan) BezierSpan(w *FreeformWork) (survey2d.BezierSpan, error) {
-	span := make(survey2d.BezierSpan, len(s.Points))
+func (s DyadicSpan) BezierSpan(w *FreeformWork) (BezierSpan, error) {
+	span := make(BezierSpan, len(s.Points))
 	for i := range s.Points {
 		p, err := s.RatPointAt(w, i)
 		if err != nil {
@@ -482,14 +480,14 @@ func DyadicSpanSagittaUpper(w *FreeformWork, s DyadicSpan) (float64, error) {
 
 // DyadicSpanSagittaUpperWithSpan is the PairStations walk's fused reading. It
 // reconstructs the exact control points once, uses them for the sagitta, and
-// returns the same survey2d.BezierSpan to the accepted cell's matched-delta reading.
+// returns the same BezierSpan to the accepted cell's matched-delta reading.
 // Rejected cells discard the reconstructed span after this call, but accepted
 // cells avoid a second full ratPointAt pass before SpanMatchedDeltaUpper.
 //
 // This helper holds no charge of its own. The reconstruction, projection,
 // comparison and rounding each charge the primitive that performs them, just
 // as they do in DyadicSpanSagittaUpper.
-func DyadicSpanSagittaUpperWithSpan(w *FreeformWork, s DyadicSpan) (float64, survey2d.BezierSpan, error) {
+func DyadicSpanSagittaUpperWithSpan(w *FreeformWork, s DyadicSpan) (float64, BezierSpan, error) {
 	span, err := s.BezierSpan(w)
 	if err != nil {
 		return 0, nil, err
@@ -527,14 +525,14 @@ func DyadicSpanSagittaUpperWithSpan(w *FreeformWork, s DyadicSpan) (float64, sur
 }
 
 // SpanSagittaUpper is DyadicSpanSagittaUpper's entry point for a caller
-// holding a converted survey2d.BezierSpan rather than an already-split DyadicSpan —
+// holding a converted BezierSpan rather than an already-split DyadicSpan —
 // freeformBezierSpans' own output, before any bisection has run. It converts
 // once through DyadicSpanOf (spline_length.go) and reuses the identical
 // arithmetic DyadicSpanSagittaUpper runs on every dyadic cell PairStations
 // bisects, so the sagitta bound exists in exactly one place regardless of
 // which form a caller starts from. Both phases charge the counter it is
 // handed, each on its own call.
-func SpanSagittaUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error) {
+func SpanSagittaUpper(w *FreeformWork, span BezierSpan) (float64, error) {
 	s, err := DyadicSpanOf(w, span)
 	if err != nil {
 		return 0, err
@@ -598,7 +596,7 @@ func SpanSagittaUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error
 // start-to-end in the shared parameter domain, one entry per cell boundary
 // (a chain bisected into k cells returns k+1 stations per side, with no
 // duplicate at a span join: consecutive spans already share their boundary
-// control point exactly, per survey2d.BezierSpan's own doc comment).
+// control point exactly, per BezierSpan's own doc comment).
 //
 // The HARD CAP bounds the number of CHORD CELLS the finished chain carries —
 // the accepted leaves this call returns stations for — and never the number of
@@ -648,7 +646,7 @@ func SpanSagittaUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error
 // two input chains to the two output lists, so the same two span chains and
 // target produce a bit-identical station list — same rationals, same length —
 // on every call.
-func PairStations(spans0, spans1 []survey2d.BezierSpan, target float64, work0, work1 *FreeformWork) ([]survey2d.RatPoint, []survey2d.RatPoint, []float64, float64, error) {
+func PairStations(spans0, spans1 []BezierSpan, target float64, work0, work1 *FreeformWork) ([]RatPoint, []RatPoint, []float64, float64, error) {
 	if len(spans0) != len(spans1) {
 		return nil, nil, nil, 0, fmt.Errorf(
 			`%w: two paired free-form span chains of different length (%d vs %d) share no common dyadic parameter domain`,
@@ -715,7 +713,7 @@ func PairStations(spans0, spans1 []survey2d.BezierSpan, target float64, work0, w
 	// COPIED, not aliased: every other station in the two returned lists comes
 	// from ratPointAt, whose own doc comment guarantees the *big.Rat it returns
 	// shares no storage with the DyadicSpan it was read from. Appending the
-	// caller's own last0[len(last0)-1]/last1[len(last1)-1] survey2d.RatPoint directly
+	// caller's own last0[len(last0)-1]/last1[len(last1)-1] RatPoint directly
 	// would break that guarantee for this ONE station — it would alias the
 	// input span's own *big.Rat fields, so a caller mutating a returned station
 	// in place would silently corrupt the span it originally passed in. The copy
@@ -746,11 +744,11 @@ type FreeformChain struct {
 	// carried separately because a consumer emitting one boundary sample per
 	// chord needs exactly this list forward, and needs the end only as the
 	// FIRST sample of a walk that runs the chain backwards.
-	Stations []survey2d.RatPoint
+	Stations []RatPoint
 	// end is the chain's own last cell boundary — the last span's last control
 	// point, which a Bézier interpolates exactly — copied so it aliases no
 	// input span (PairStations' own rule for the station it reads the same way).
-	End survey2d.RatPoint
+	End RatPoint
 	// sagitta is the MEASURED post-subdivision maximum over the accepted cells,
 	// never a sum: a curve point lies in exactly one cell, so the widest cell's
 	// own departure bounds the whole chain.
@@ -780,7 +778,7 @@ type FreeformChain struct {
 // with no control points at all has no chord to bisect. work is the RECORD's
 // own free-form counter; this function mints none and states no cost of its
 // own, so every unit spent is spent inside the primitive that does the work.
-func ChainStations(spans []survey2d.BezierSpan, target float64, work *FreeformWork) (FreeformChain, error) {
+func ChainStations(spans []BezierSpan, target float64, work *FreeformWork) (FreeformChain, error) {
 	if len(spans) == 0 {
 		return FreeformChain{}, fmt.Errorf(`%w: a free-form station chain needs at least one span`, decaderr.ErrDegenerate)
 	}
@@ -841,7 +839,7 @@ type SagittaStationWalk struct {
 	// accepted and bisected TOGETHER, which is what keeps a pair's two station
 	// lists on one shared set of dyadic cell boundaries.
 	Works    []*FreeformWork
-	Stations [][]survey2d.RatPoint
+	Stations [][]RatPoint
 	// reader records whatever ELSE each accepted cell owes its own consumer —
 	// the pair's matched-delta obligation, the chain's arc/chord bracket —
 	// which is the only place the two consumers' arithmetic differs.
@@ -859,7 +857,7 @@ func NewSagittaStationWalk(target float64, reader StationCellReader, spans int, 
 	return &SagittaStationWalk{
 		Target:   target,
 		Works:    works,
-		Stations: make([][]survey2d.RatPoint, len(works)),
+		Stations: make([][]RatPoint, len(works)),
 		Reader:   reader,
 		Frontier: spans,
 	}
@@ -874,7 +872,7 @@ func NewSagittaStationWalk(target float64, reader StationCellReader, spans int, 
 // It states no cost of its own either: every implementation below spends its
 // units inside the metered primitive that does the work.
 type StationCellReader interface {
-	AcceptCell(spans []survey2d.BezierSpan, works []*FreeformWork) error
+	AcceptCell(spans []BezierSpan, works []*FreeformWork) error
 }
 
 // PairMatchedDeltaReader is PairStations' reading: internal/proofbound/bounds.go's
@@ -886,7 +884,7 @@ type PairMatchedDeltaReader struct {
 	MatchedDelta []float64
 }
 
-func (r *PairMatchedDeltaReader) AcceptCell(spans []survey2d.BezierSpan, works []*FreeformWork) error {
+func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
 	md0, err := SpanMatchedDeltaUpper(works[0], spans[0])
 	if err != nil {
 		return err
@@ -912,7 +910,7 @@ type ChainArcChordReader struct {
 	ChordLower []float64
 }
 
-func (r *ChainArcChordReader) AcceptCell(spans []survey2d.BezierSpan, works []*FreeformWork) error {
+func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
 	span, work := spans[0], works[0]
 	arc, err := SpanSpeedUpper(work, span)
 	if err != nil {
@@ -967,7 +965,7 @@ func (r *ChainArcChordReader) AcceptCell(spans []survey2d.BezierSpan, works []*F
 // charges its own counter from inside the primitive that performs it, so this
 // function never restates what any of them costs or how often it runs.
 func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
-	spans := make([]survey2d.BezierSpan, len(cells))
+	spans := make([]BezierSpan, len(cells))
 	worst := 0.0
 	for i, cell := range cells {
 		sag, span, err := DyadicSpanSagittaUpperWithSpan(g.Works[i], cell)
@@ -981,7 +979,7 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 		if err := g.Reader.AcceptCell(spans, g.Works); err != nil {
 			return err
 		}
-		starts := make([]survey2d.RatPoint, len(cells))
+		starts := make([]RatPoint, len(cells))
 		for i, cell := range cells {
 			start, err := cell.RatPointAt(g.Works[i], 0)
 			if err != nil {
@@ -1030,7 +1028,7 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 // shared quantity SpanHodographGapUpper and SpanSpeedUpper each build on.
 //
 // It charges ChordVectorCost at its own operand width, first.
-func SpanChordVector(w *FreeformWork, span survey2d.BezierSpan) (*big.Rat, *big.Rat, error) {
+func SpanChordVector(w *FreeformWork, span BezierSpan) (*big.Rat, *big.Rat, error) {
 	a, b := span[0], span[len(span)-1]
 	if err := w.Step(CostMul(ChordVectorCost, WidthUnits(RatBitWidth(a.U, a.V, b.U, b.V)))); err != nil {
 		return nil, nil, err
@@ -1042,7 +1040,7 @@ func SpanChordVector(w *FreeformWork, span survey2d.BezierSpan) (*big.Rat, *big.
 //
 // It charges ChordSquaredCost for its own two multiplications and one addition,
 // first; the vector it squares is SpanChordVector's own charge, spent there.
-func SpanChordSquared(w *FreeformWork, span survey2d.BezierSpan) (*big.Rat, error) {
+func SpanChordSquared(w *FreeformWork, span BezierSpan) (*big.Rat, error) {
 	dxU, dxV, err := SpanChordVector(w, span)
 	if err != nil {
 		return nil, err
@@ -1083,7 +1081,7 @@ func SpanChordSquared(w *FreeformWork, span survey2d.BezierSpan) (*big.Rat, erro
 // operand width, before the hull scan runs — its control count is the operand's
 // shape, never a caller's loop bound — and the chord vector charges itself on
 // its own call.
-func SpanHodographGapSquared(w *FreeformWork, span survey2d.BezierSpan) (*big.Rat, error) {
+func SpanHodographGapSquared(w *FreeformWork, span BezierSpan) (*big.Rat, error) {
 	n := len(span)
 	if n < 2 {
 		return new(big.Rat), nil
@@ -1139,7 +1137,7 @@ func RatQuarterOf(w *FreeformWork, q *big.Rat) (*big.Rat, error) {
 //
 // Beyond that guard it holds no charge of its own; every unit it spends is
 // spent by the exact scan and the outward rounding it calls.
-func SpanHodographGapUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error) {
+func SpanHodographGapUpper(w *FreeformWork, span BezierSpan) (float64, error) {
 	if len(span) < 2 {
 		return 0, nil
 	}
@@ -1151,9 +1149,9 @@ func SpanHodographGapUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, 
 }
 
 // SpanBitWidth is the widest bit length a converted span's own control
-// coordinates carry, the operand width every per-span charge over a survey2d.BezierSpan
+// coordinates carry, the operand width every per-span charge over a BezierSpan
 // scales by.
-func SpanBitWidth(span survey2d.BezierSpan) int {
+func SpanBitWidth(span BezierSpan) int {
 	widest := 0
 	for _, p := range span {
 		widest = max(widest, RatBitWidth(p.U, p.V))
@@ -1200,7 +1198,7 @@ func SpanBitWidth(span survey2d.BezierSpan) int {
 // bound, so it reports 0 without charging. Beyond that guard it holds no charge
 // of its own; every unit it spends is spent by the exact scan, the exact
 // quartering and the outward rounding it calls.
-func SpanMatchedDeltaUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error) {
+func SpanMatchedDeltaUpper(w *FreeformWork, span BezierSpan) (float64, error) {
 	if len(span) < 2 {
 		return 0, nil
 	}
@@ -1227,7 +1225,7 @@ func SpanMatchedDeltaUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, 
 // A span with fewer than 2 control points has no chord and no hodograph, so
 // it reports 0, matching SpanHodographGapUpper's own guard. It holds no charge
 // of its own; every unit it spends is spent by the three primitives it calls.
-func SpanSpeedUpper(w *FreeformWork, span survey2d.BezierSpan) (float64, error) {
+func SpanSpeedUpper(w *FreeformWork, span BezierSpan) (float64, error) {
 	if len(span) < 2 {
 		return 0, nil
 	}
