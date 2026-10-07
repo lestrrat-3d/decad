@@ -229,7 +229,7 @@ the rules leave to the byte budget.
 | `classb_cut.go` | Perpendicular prism `Cut` into a brep body. See general-boolean §3 B. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates and adapters for `internal/prismcells/`'s record helpers. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | `prepBoolMeshContext` prepares an operand's mesh for `internal/meshbool/`'s pipeline. See `docs/evaluator-design.md` §9. |
-| `boolean_body.go` | Builds faceted topology and measurements from an audited mesh. See `docs/evaluator-design.md` §9. |
+| `boolean_body.go` | Builds faceted bodies and measurements from an audited mesh; adapts `internal/facetedtopology/`. See evaluator §9. |
 
 ### Output
 
@@ -297,6 +297,7 @@ the rules leave to the byte budget.
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Mesh boolean contact, subdivision, stitching, embedding and audits. See `docs/evaluator-design.md` §9. |
+| `internal/facetedtopology/` | Chains audited mesh face boundaries and selects loops. See evaluator §9. |
 | `internal/clearance/` | Clearance geometry, cell accumulation, coplanar trim classification, and degeneracy checks. See `docs/clearance-design.md`. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
