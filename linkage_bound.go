@@ -663,15 +663,6 @@ func ivCross(a, b motionbound.IvVec) motionbound.IvVec {
 	return motionbound.IvVec{term(1, 2), term(2, 0), term(0, 1)}
 }
 
-// ivAbsUpper is the largest magnitude an enclosure allows.
-func ivAbsUpper(iv proofbound.RatInterval) *big.Rat {
-	out := new(big.Rat).Abs(iv.Lo)
-	if hi := new(big.Rat).Abs(iv.Hi); hi.Cmp(out) > 0 {
-		out = hi
-	}
-	return out
-}
-
 // readCorners is docs/linkage-check-design.md §5.8's reading of one body of
 // link b at the exact joint values params, under the joints on b's path from
 // position below on — the joints strictly below a pair's lowest common
@@ -728,47 +719,12 @@ func readPoints(spec *linkageSpec, frames []motionbound.MotionFrame, params []mo
 	return out
 }
 
-// secondDerivativeBound is B_ij of docs/linkage-check-design.md §5.8 for
-// the joints at positions m ≤ n of b's path, m the shallower: a proven upper
-// bound on |∂²x_c/∂q_i∂q_j| for every corner c of the link at every
-// configuration the drive reaches. The shallower joint turns the deeper
-// one's velocity, whose length is at most w_j — ρ_jk for a revolute joint j,
-// 1 for a prismatic one — so B_ij = w_j when the shallower joint is a
-// revolute; a prismatic shallower joint turns nothing, and B_ij is 0, nil
-// here.
 func secondDerivativeBound(b linkBound, m, n int) *big.Rat {
-	if b.rho[m] == nil {
-		return nil
-	}
-	if w := b.rho[n]; w != nil {
-		return w
-	}
-	return big.NewRat(1, 1)
+	return linkagebound.DerivativeBound(b.rho, m, n)
 }
 
-// projectionRemainder is Rem(h) = ½·Σ_{i,j} B_ij·h_i·h_j of
-// docs/linkage-check-design.md §5.8 over the joints on b's path from
-// position below on, h holding each one's travel bound in path order: by
-// Taylor's theorem along the straight segment in joint space, it bounds how
-// far a corner's position departs from its first-order expansion.
 func projectionRemainder(b linkBound, below int, h []*big.Rat) *big.Rat {
-	sum := new(big.Rat)
-	half := big.NewRat(1, 2)
-	for m := range h {
-		for n := m; n < len(h); n++ {
-			w := secondDerivativeBound(b, below+m, below+n)
-			if w == nil {
-				continue
-			}
-			term := new(big.Rat).Mul(h[m], h[n])
-			term.Mul(term, w)
-			if n == m {
-				term.Mul(term, half)
-			}
-			sum.Add(sum, term)
-		}
-	}
-	return sum
+	return linkagebound.Remainder(b.rho[below:], h)
 }
 
 // cornerBounds is a corner reading rounded outward to floats and read back
@@ -842,10 +798,6 @@ type projectionSide struct {
 	h       []*big.Rat
 	seg     []proofbound.RatInterval
 	rem     *big.Rat
-}
-
-func (s projectionSide) firstOrder(c, d int) (up, down *big.Rat) {
-	return s.boundSide().FirstOrder(c, d)
 }
 
 func (s projectionSide) extents() (up, down [3]*big.Rat) {
@@ -1027,14 +979,6 @@ func (s projectionSide) boundSide() linkagebound.Side {
 		},
 		H: s.h, Seg: s.seg, Rem: s.rem,
 	}
-}
-
-func faceNormals(c cornerBounds) []motionbound.RatVec {
-	return linkagebound.FaceNormals(linkagebound.Bounds{Lo: c.lo, Hi: c.hi, Vel: c.vel, Pad: c.pad, PrismK: c.prismK})
-}
-
-func (s projectionSide) extentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.Rat) {
-	return s.boundSide().ExtentsAlong(n, norm)
 }
 
 func projectionLowerHull(a, b projectionSide) *big.Rat {
