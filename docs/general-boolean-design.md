@@ -121,12 +121,11 @@ whole as a hole of the larger region's cell, in which case the exposed
 record is the larger region with that hole, and the smaller region is the
 material on both sides. A boss whose footprint crosses the plate's outline,
 or sits flush with it (a wall of each on one carrier), meets it at the
-interface with `Partial` edges, and that interface is an unresolved topology
-in prism-boolean §4.4's sense: the pair takes the mesh path with no error.
-The 2D answer is not what is missing. `Classify` resolves the interface
-scene's cells, through A3's shared-span reading where the walls are flush,
-and the cells on one side only are the exposed floor or ceiling. What the
-stacked payload cannot state is the result's topology:
+interface with `Partial` edges, which the match leaves unresolved. The 2D
+answer is not what is missing: `Classify` resolves the interface scene's
+cells, through A3's shared-span reading where the walls are flush, and the
+cells on one side only are the exposed floor or ceiling. What the stacked
+payload cannot state is the result's topology:
 
 - an interface patch is bounded by whole column rings (stacked §3), while
   this floor's boundary takes part of the plate's ring and part of the
@@ -137,12 +136,10 @@ stacked payload cannot state is the result's topology:
   that one face, while a stacked wall is one column's segment swept over
   that column's own slabs.
 
-Building either needs a topology this class does not have: split column rings
-with cross-column planar walls in the stacked payload, or the A1 result as a
-`brepPayload` (§4) whose merged wall is a planar face in its own frame, as
-class B's per-face scenes record a notched wall. The mesh path builds a
-rooted crossing boss as a `Faceted` body and refuses one standing on the
-plate's top as a coplanar contact, as it did before this class. Stacked §2.2's I5 reads, for
+Such a union is therefore stated as a `brepPayload` (§4) from the same
+slabs, under "A1 as a brep" below, and a pair that build does not cover
+takes the mesh path with no error, prism-boolean §4.4's unresolved
+topology. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
 exposure records the match derives, and the implementation PR changes that
@@ -153,6 +150,93 @@ stacked operand in a stacked union splits at every level of both.
 
 A stacked union whose only interface is a boss on a plate has `Volume` the
 exact rational sum `A_plate·h_plate + A_boss·h_boss`, `Exact` where both are.
+
+#### A1 as a brep — the flush or crossing interface
+
+`stacked_union_brep.go` takes over when an interface's clean-nesting match
+is unresolved, with the slabs tryStackedUnion built. It admits the pair
+only where every carrier it records is exact: the identity re-expression
+(B's records enter every scene verbatim; a re-expressed B would be recorded
+once per scene, at floats no two scenes share), both operands'
+`sectionDelta` zero (class B's B5: a straight wall becomes a planar face at
+its recorded level, and a planar face states no band for a wall that
+moved), and every scene's walk and crossing charge zero. Every miss is
+silent.
+
+**Scenes.** Each interface arranges the two distinct operand records that
+reach the slab below and the slab above it — a prism operand's one region,
+or a stacked operand's region on either side — in one private scene,
+cached by the pair, so the merge of a slab both operands reach and the
+interfaces that read the same two records share one arrangement and its
+cut points. `Classify` names each cell's membership in both records; a cell
+inside the records reaching one side and outside those reaching the other
+is that side's exposed face, recorded from the cell as `sketch` returned it
+(a floor faces up, a ceiling down). Three distinct records at one level
+(a stacked operand changing region where the other operand reaches) is a
+scene this build does not arrange: a miss.
+
+**Vertices.** decad restates the records it holds and computes no 2D
+answer. Consecutive fragments of one carrier — a circle cut at its seam, a
+line run restated at other cells' vertices — are one unit. Each junction
+between two units is one canonical vertex, as class B's §10 table makes
+it: two axis-aligned lines meet at their exact levels, displacement zero;
+a line crossing a circle takes the keyed table's one float for the crossing
+(the line's walked point, its fixed coordinate exact, with that point's cut
+and walk allowance), keyed by the two carriers and the side of the circle's
+centre the crossing lies on, the first loop to reach the key recording it,
+operand records before cells so a recorded corner wins; a crossing within
+twice its allowance of the centre's coordinate cannot name its side and
+misses; two circles crossing have no exact record and miss. Every unit is
+then rewritten between its two vertices, a line whole and a circular
+fragment as an arc pinned there about its recorded centre.
+
+**Faces.** Each level's horizontal faces — the bottom cap, the top cap,
+and each interface's floors and ceilings — are planar faces in the
+reference frame (operand A's), their line units split at every vertex of
+the body at that level on the unit's carrier, their circle units at every
+vertex on the circle. A vertex of the body at a level is a horizontal
+face's loop vertex there, or a level where a slab region's junction starts,
+ends or changes its two carriers. Every straight wall on an axis-aligned
+carrier plane becomes one planar face per material side, in a frame whose
+normal is the plane's outward axis and whose in-plane axes are two
+reference axes (a right-handed signed permutation, so §4.1's frame rule
+holds and every coordinate carries over exactly): each slab's segment on
+the plane sweeps a rectangle whose horizontal edges are split at the body's
+vertices at the two levels, the edges two rectangles share cancel, the
+rest chain into the face's loops, and consecutive collinear pieces join
+where their shared point is no vertex of the body. A loop that chains into
+a clockwise ring, a point with two outgoing pieces, or a rectangle edge
+with no partner is a miss. A flush wall is then one L- or T-shaped face
+across both operands' slabs, as class B's crossing reach records a notched
+wall. Every circular or oblique straight wall is a swept piece between its
+vertices over its slab's interval, the identical piece in consecutive slabs
+joined into one face; a vertex of the body at the level between, on either
+of the piece's two ends, would sit inside a side line, which a swept face
+cannot carry, so that pair misses — the rooted round boss crossing the
+plate's outline, whose floor corner lies on the overhanging piece. An
+oblique line with a vertex strictly inside it misses too.
+
+**Displacements.** Every level carries its own `z0Delta`/`z1Delta`. Every
+face carries one section displacement: §7's stacked formula over the
+slab merges (their cut charge, since every incoming and walk term is zero
+by admission) plus the largest allowance of any canonical vertex. Every
+vertex lies on exact carriers — an axis-aligned plane at its recorded
+level, a circle about its recorded centre — within that distance of the
+crossing it denotes, so each planar region and each pinned arc is within
+it of the face it denotes; a swept piece's band and a planar face's area
+term read it as §4.3 states, and a planar face's level moves by its level
+displacement alone. An all-planar result with float levels is `Exact`.
+
+**Audit and consumers.** Each planar face runs modify §5's audit, and the
+record must pair every edge by §4.2's count; a record this build leaves
+unpaired is an uncovered topology and a miss, not a refusal. The result is
+an ordinary brep: §4.5's consumers read it, STEP writes it analytically
+(two partial cylinders with arc rims for the crossing boss), and a further
+`Union` on it takes the mesh path, since a brep operand is outside class A
+and a co-directional pair outside class B. Edge convexity is evaluator
+§3's walked boundary: a line two planar faces share reads the owner's loop
+role, so the floor's edges along the boss's walls read convex, as the
+stacked body's rims along a square boss do.
 
 #### A4 — the reflected re-expression
 
@@ -714,13 +798,25 @@ are relations, never literals.
   extruded 20) gives three slabs and the same volume. Two equal boxes stacked
   edge-to-edge give `Exact` volume and I5's equal-outer column of one wall
   per side.
-- **A1 fallback**: a rooted boss whose footprint crosses the plate's outline
-  takes the mesh path, a `Faceted` result whose volume bound contains the
-  closed form, with the test asserting the interface match reports a
-  `Partial` edge. A square boss standing flush in the plate's corner is a
-  silent miss too, with the test asserting that the interface scene's cells
-  resolve through the shared-span reading and that its plate-only cells are
-  the exposed floor's 1500 mm².
+- **A1 as a brep**: a 10 mm square boss standing flush in the plate's
+  corner: the interface match reports a `Partial` edge, the scene's cells
+  resolve through the shared-span reading, the plate-only cell is the
+  floor's 1500 mm², and the union is a brep of 9 faces, 21 edges, `Exact`
+  17500 mm³ and 5400 mm², whose walls x = 20 and y = −20 are each one
+  L-shaped planar face of 550 mm², with a proven 5 mm clearance to a box
+  off the shared wall and STEP's analytic arm (9 planes). The same boss
+  flush along one edge: 10 faces, the wall x = 20 one T-shaped face,
+  the same exact volume and area. The Ø10 boss standing on the plate's
+  top with its centre 2 mm inside x = 20: 10 faces (two cylinder pieces, a
+  floor, a ceiling, the top cap in two arcs), 20 edges, volume within its
+  bound of `16000 + 375π`, area within its bound of
+  `4800 + 150π + 2·(25·acos(0.4) − 2·√21)`, bound below 1e-9, mesh
+  volume verified, `Sound`, STEP analytic with two partial cylinders; a
+  further `Union` on the result takes the mesh path. The flush corner boss
+  rooted at z = 5: 9 faces, the shared corner's vertical edge one 25 mm
+  edge. Misses: the rooted round crossing boss (`Faceted`, its volume bound
+  containing the closed form), an operand carrying a section displacement,
+  and a boss drawn on a plane offset in the plate's plane.
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
   cut by a same-plane Ø3 cylinder inside its leg (M5) builds analytically,
   `Approximate`, volume within its bound of `1750 − π·1.5²·10`; the same
@@ -879,6 +975,10 @@ Each PR ships code and tests; this document ships with PR 1.
 1. **A1 stacked union.** Overlapping/touching `Union` intervals, slab
    splitting, per-slab select-all merge, interface exposure by the
    clean-nesting match, stacked §2.2's union reading of I5–I7, §9's A1 tests.
+1b. **A1 as a brep.** The flush and crossing interfaces as a `brepPayload`
+   over the same slabs: cached interface scenes, cell classification,
+   canonical vertices, merged planar walls, swept pieces, §9's A1 brep
+   tests. Depends on PRs 5 and 8.
 2. **A4 reflected re-expression.** G2 replaced by the re-wound record,
    `AuthoredReversed` on the re-wound record, the shared-axis both-reflected
    case, the interference twin, §9's A4 tests. Depends on nothing.

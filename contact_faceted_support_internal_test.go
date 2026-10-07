@@ -12,8 +12,7 @@ import (
 func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	mesh, err := union.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
@@ -149,8 +148,7 @@ func TestFacetedAxisSupportRefusesTwoLowestFaces(t *testing.T) {
 func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	tool := internalOffsetBox(t, doc, 2, 2, 4, 4, -2,
@@ -173,8 +171,7 @@ func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 func TestContactPairRealFacetedUnionOnFloor(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
@@ -234,8 +231,7 @@ func TestContactPairRealFacetedUnionOnFloor(t *testing.T) {
 func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,

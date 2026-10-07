@@ -28,9 +28,11 @@ import (
 // region, prism-boolean's trimmed-circular refusal, and the interval relation
 // `z0_b' <= z1_a && z0_a <= z1_b'` over big.Rat. Past that point an
 // unresolved topology still falls back to the mesh path, as prism-boolean
-// §4.4 states: a disjoint overlap, a cell the match cannot find, and an
-// interface whose footprints cross (a split boundary), whose exposed face
-// would need a per-cell classification this evaluator does not run.
+// §4.4 states: a disjoint overlap, and a cell the match cannot find. An
+// interface the clean-nesting match leaves unresolved — footprints that
+// cross or share a wall — hands the same slabs to stacked_union_brep.go,
+// which classifies that interface's cells and states the result as a
+// brepPayload; a pair that build does not cover takes the mesh path.
 
 // stackedUnionOperand is one operand of the stacked union read as slabs: a
 // prism is one slab over its own interval; a stacked prism is its own slabs.
@@ -148,34 +150,36 @@ func stackedUnionSlabOf(o stackedUnionOperand, shift *big.Rat, lo, hi *big.Rat) 
 
 // tryStackedUnion is general-boolean §3 A1. ok=false with a nil error is a
 // silent miss: the caller takes the mesh path. A non-nil error is a genuine
-// refusal the caller propagates (prism-boolean §3.4).
-func tryStackedUnion(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
+// refusal the caller propagates (prism-boolean §3.4). The payload is a
+// stackedPrismPayload when every interface resolves through the clean-nesting
+// match, and a brepPayload (stacked_union_brep.go) when one does not.
+func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, error) {
 	va, aok := stackedUnionOperandOf(a)
 	vb, bok := stackedUnionOperandOf(b)
 	if !aok || !bok {
-		return stackedPrismPayload{}, false, nil
+		return nil, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
-		return stackedPrismPayload{}, false, err
+		return nil, false, err
 	}
 	// G1-G4 on the outer prisms; G4, G6 and the trimmed-circular refusal on
 	// every region, since a stacked operand's proxy names its first slab only.
 	if _, _, ok, err := admitPrismPairBudget(budget, &Body{payload: va.proxy}, &Body{payload: vb.proxy}); err != nil || !ok {
-		return stackedPrismPayload{}, false, err
+		return nil, false, err
 	}
 	for _, op := range []stackedUnionOperand{va, vb} {
 		for _, slab := range op.slabs {
 			if len(slab.regions) != 1 || len(slab.regions[0].Holes) != 0 { // G6
-				return stackedPrismPayload{}, false, nil
+				return nil, false, nil
 			}
 			analytic, err := prismProfileIsAnalytic(budget, slab.regions[0]) // G4
 			if err != nil || !analytic {
-				return stackedPrismPayload{}, false, err
+				return nil, false, err
 			}
 			trimmed, err := prismProfileHasTrimmedCircularSource(budget, slab.regions[0])
 			if err != nil || trimmed {
-				return stackedPrismPayload{}, false, err
+				return nil, false, err
 			}
 		}
 	}
@@ -183,7 +187,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (stackedPrismPayload, bool
 	levels, ok := stackedUnionLevels(va, vb, shift)
 	if !ok || len(levels) < 3 {
 		// Equal intervals are prism-boolean §3.2's Union row, not a stack.
-		return stackedPrismPayload{}, false, nil
+		return nil, false, nil
 	}
 	a0 := proofarith.FloatRat(va.slabs[0].z0)
 	a1 := proofarith.FloatRat(va.slabs[len(va.slabs)-1].z1)
@@ -192,67 +196,143 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (stackedPrismPayload, bool
 	b0.Add(b0, shift)
 	b1.Add(b1, shift)
 	if b0.Cmp(a1) > 0 || a0.Cmp(b1) > 0 { // G5 for a stacked union: the intervals overlap or touch
-		return stackedPrismPayload{}, false, nil
+		return nil, false, nil
 	}
 	reexpress, err := newPrismReexpression(va.proxy, vb.proxy)
 	if err != nil {
-		return stackedPrismPayload{}, false, err
+		return nil, false, err
 	}
 
 	st := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress,
-		bRecorded: map[int]ProfileRecord{}}
+		bRecorded: map[int]ProfileRecord{}, scenes: map[[2]stackedUnionRegionRef]*stackedNesting{}}
 	sp := stackedPrismPayload{frame: va.proxy.frame, xform: va.proxy.xform}
 	zero := new(big.Rat)
+	var reach [][2]int
 	for k := 0; k+1 < len(levels); k++ {
 		lo, hi := levels[k], levels[k+1]
 		ia := stackedUnionSlabOf(va, zero, lo.exact, hi.exact)
 		ib := stackedUnionSlabOf(vb, shift, lo.exact, hi.exact)
 		region, ok, err := st.slabRegion(ctx, ia, ib)
 		if err != nil || !ok {
-			return stackedPrismPayload{}, false, err
+			return nil, false, err
 		}
+		reach = append(reach, [2]int{ia, ib})
 		sp.slabs = append(sp.slabs, prismSlab{regions: []ProfileRecord{region},
 			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
 	}
 	for k := 0; k+1 < len(sp.slabs); k++ {
 		boundary, ok, err := st.interfaceOf(ctx, sp.slabs[k].regions[0], sp.slabs[k+1].regions[0])
-		if err != nil || !ok {
-			return stackedPrismPayload{}, false, err
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			// A1's flush or crossing interface: the slabs are right and the
+			// stacked record cannot state the result, so the brep build
+			// classifies every interface's cells instead.
+			return st.brep(ctx, sp.slabs, levels, reach)
 		}
 		sp.interfaces = append(sp.interfaces, boundary)
 	}
-	// §7's formula, with each term the largest over every scene this union
-	// arranged: A's walk charge beside A's displacement, B's walk charge and
-	// re-expression beside B's, the interface scenes' walk charge on regions
-	// already in the result's frame, every merge's crossing charge (A6), and
-	// every merge's cut charge on top.
-	sp.sectionDelta = proofbound.AbsSumUpper(
+	sp.sectionDelta = st.sectionDelta()
+	if err := falsifyStackedPayload(ctx, sp); err != nil {
+		return nil, false, err
+	}
+	return sp, true, nil
+}
+
+// sectionDelta is §7's formula, with each term the largest over every scene
+// this union arranged: A's walk charge beside A's displacement, B's walk
+// charge and re-expression beside B's, the interface scenes' walk charge on
+// regions already in the result's frame, every merge's crossing charge (A6),
+// and every merge's cut charge on top.
+func (st *stackedUnionState) sectionDelta() float64 {
+	return proofbound.AbsSumUpper(
 		max(
-			proofbound.AbsSumUpper(va.proxy.sectionDelta, st.walkA),
-			proofbound.AbsSumUpper(vb.proxy.sectionDelta, st.walkB, reexpress.delta),
+			proofbound.AbsSumUpper(st.va.proxy.sectionDelta, st.walkA),
+			proofbound.AbsSumUpper(st.vb.proxy.sectionDelta, st.walkB, st.reexpress.delta),
 			st.walkInterface,
 			st.crossing,
 		),
 		st.cutDelta,
 	)
-	if err := falsifyStackedPayload(ctx, sp); err != nil {
-		return stackedPrismPayload{}, false, err
-	}
-	return sp, true, nil
+}
+
+// stackedUnionRegionRef names one operand slab region: operand B's slab ib,
+// or operand A's slab ia.
+type stackedUnionRegionRef struct {
+	isB  bool
+	slab int
 }
 
 // stackedUnionState is the per-call state one tryStackedUnion threads through
-// its scenes: the charges each scene adds and B's regions already recorded in
-// A's frame.
+// its scenes: the charges each scene adds, B's regions already recorded in
+// A's frame, and every scene of two operand regions arranged so far, keyed by
+// the two regions, so a slab merge and the interfaces that read the same two
+// regions share one arrangement and its vertices.
 type stackedUnionState struct {
 	budget        *proofbound.WorkBudget
 	va, vb        stackedUnionOperand
 	reexpress     *prismReexpression
 	bRecorded     map[int]ProfileRecord
+	scenes        map[[2]stackedUnionRegionRef]*stackedNesting
 	walkA, walkB  float64
 	walkInterface float64
 	cutDelta      float64
 	crossing      float64
+}
+
+// region is the record a reference names.
+func (st *stackedUnionState) region(ref stackedUnionRegionRef) ProfileRecord {
+	if ref.isB {
+		return st.vb.slabs[ref.slab].regions[0]
+	}
+	return st.va.slabs[ref.slab].regions[0]
+}
+
+// view is the prism a private scene reads for a reference: the region under
+// its operand's frame, placement and section displacement.
+func (st *stackedUnionState) view(ref stackedUnionRegionRef) prismPayload {
+	if ref.isB {
+		return st.vb.view(st.vb.slabs[ref.slab].regions[0])
+	}
+	return st.va.view(st.va.slabs[ref.slab].regions[0])
+}
+
+// scene arranges two operand regions once and keeps the arrangement: the
+// clean-nesting answer, the cells and their tags, and the scene's walk
+// charge. The region named first enters as operand A of the scene.
+func (st *stackedUnionState) scene(ctx context.Context, x, y stackedUnionRegionRef) (*stackedNesting, error) {
+	key := [2]stackedUnionRegionRef{x, y}
+	if m, ok := st.scenes[key]; ok {
+		return m, nil
+	}
+	px, py := st.view(x), st.view(y)
+	if err := st.withinCap(px, py); err != nil {
+		return nil, err
+	}
+	reexpress := st.reexpress
+	if x.isB == y.isB {
+		// Two regions of one operand share a frame: the brep build, the only
+		// caller that arranges such a pair, admits the identity
+		// re-expression alone, so B's regions are already in A's frame.
+		reexpress = &prismReexpression{identity: true}
+	}
+	m, err := stackedNestingOf(ctx, st.budget, px, py, reexpress)
+	if err != nil {
+		return nil, err
+	}
+	if x.isB {
+		st.walkB = max(st.walkB, m.sceneDelta.a)
+	} else {
+		st.walkA = max(st.walkA, m.sceneDelta.a)
+	}
+	if y.isB {
+		st.walkB = max(st.walkB, m.sceneDelta.b)
+	} else {
+		st.walkA = max(st.walkA, m.sceneDelta.b)
+	}
+	st.scenes[key] = &m
+	return &m, nil
 }
 
 // slabRegion is one result slab's region from the operand slabs ia and ib
@@ -277,15 +357,10 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 		}
 	}
 	pa, pb := st.va.view(ra), st.vb.view(rb)
-	if err := st.withinCap(pa, pb); err != nil {
-		return ProfileRecord{}, false, err
-	}
-	m, err := stackedNestingOf(ctx, st.budget, pa, pb, st.reexpress)
+	m, err := st.scene(ctx, stackedUnionRegionRef{slab: ia}, stackedUnionRegionRef{isB: true, slab: ib})
 	if err != nil {
 		return ProfileRecord{}, false, err
 	}
-	st.walkA = max(st.walkA, m.sceneDelta.a)
-	st.walkB = max(st.walkB, m.sceneDelta.b)
 	switch m.nest {
 	case stackedNestBInA:
 		return ra, true, nil
@@ -299,7 +374,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	if len(m.profiles) == 0 {
 		return ProfileRecord{}, false, nil
 	}
-	if ok, err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil || !ok {
+	if ok, err := m.charge(st.budget, pa, pb, st.reexpress); err != nil || !ok {
 		return ProfileRecord{}, false, err
 	}
 	// Select-all is the union only without an enclosed void (§4.2): a void
@@ -463,12 +538,30 @@ const (
 // stackedNesting is one private scene's clean-nesting answer: which operand's
 // cell carries the other's outer whole as a hole, the scene's cells for a
 // merge, whether any arranged edge is Partial, and the scene's walk charge.
+// charged records that chargeCrossings has run over the scene, so a second
+// reader of one cached scene takes the charge already in sceneDelta.
 type stackedNesting struct {
 	nest       stackedNest
 	split      bool
 	profiles   []*sketch.Profile
 	tags       map[sketch.Entity]prismcells.Origin
 	sceneDelta prismSceneDelta
+	charged    bool
+	chargeOK   bool
+}
+
+// charge runs A6's crossing charge once over the scene's cells. ok=false is
+// a crossing or a span with no proven charge: the mesh path.
+func (m *stackedNesting) charge(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (bool, error) {
+	if m.charged {
+		return m.chargeOK, nil
+	}
+	ok, err := m.sceneDelta.chargeCrossings(budget, m.tags, m.profiles, pa, pb, reexpress)
+	if err != nil {
+		return false, err
+	}
+	m.charged, m.chargeOK = true, ok
+	return ok, nil
 }
 
 // stackedNestingOf runs prism-boolean §4.2's structural whole-loop match in

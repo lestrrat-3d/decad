@@ -4,16 +4,42 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+// internalCrossingFramedBox extrudes the 10 mm box spanning x, y = 5..15 and
+// z = 4..12, drawn on a plane whose origin is the box's own corner (5, 5, 4).
+// The corner offset is in the plane, so the box re-expresses into an
+// XY-sketched partner's frame as a translation that is not the identity, and
+// A1's brep build declines the pair (stacked_union_brep.go): its union with
+// the 10 mm box at the origin crosses that box's outline and takes the mesh
+// path, which is the faceted result these fixtures are about. Every
+// coordinate is exact.
+func internalCrossingFramedBox(t *testing.T, doc *Document) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(5, 5, 4), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
 
 func facetedFloorSweepFixture(t *testing.T) (*Document, *Body, *Body) {
 	t.Helper()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
-		Distance{D: units.Millimeters(8), Dir: Along})
+	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	_, faceted := union.payload.(facetedPayload)

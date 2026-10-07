@@ -9,6 +9,8 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -77,14 +79,38 @@ func TestTessellateDefaultsToVerifyAll(t *testing.T) {
 // mesh from stating a proof the call never ran
 // (docs/tessellation-design.md §2). A faceted body — a boolean's own result —
 // is the restatement whose payload always carries a volume proof.
+// framedBoxBody extrudes a box spanning x0..x1, y0..y1 and z0..z0+h, drawn on
+// a plane whose origin is the box's own corner, so every coordinate is exact
+// and the box re-expresses into an XY-sketched partner's frame as a
+// translation that is not the identity.
+func framedBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(x0, y0, z0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, x1-x0, y1-y0)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
 func TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	// The second box crosses the first's outline at a different height, so the
-	// analytic paths decline the pair and the result is a FACETED body — the
-	// restatement this test is about.
+	// The second box crosses the first's outline at a different height and is
+	// drawn on a plane whose origin is its own corner, so the analytic paths
+	// decline the pair (A1's brep build admits the identity re-expression
+	// alone) and the result is a FACETED body — the restatement this test is
+	// about.
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := boxBodyAtZ(t, doc, 5, 5, 15, 15, 4, 8)
+	b := framedBoxBody(t, doc, 5, 5, 15, 15, 4, 8)
 	fused, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	_, faceted := fused.Edges()[0].Curve().(decad.FacetedCurve)

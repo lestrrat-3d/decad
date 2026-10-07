@@ -315,7 +315,12 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 // earBlocked reports whether the candidate ear at position i is cut off from
 // the region by another boundary vertex. Only a reflex vertex can block an
 // ear of a simple polygon, and that rule also handles the duplicate vertices
-// a hole bridge introduces.
+// a hole bridge introduces. A collinear vertex — a zero turn between two
+// boundary edges on one line, which a T-shaped face has at its stem's root
+// — blocks an ear too when it lies on the ear's edge: clipping that ear would
+// span the boundary edge beside it, and the fan would then miss that edge. A
+// collinear vertex coincident with one of the ear's own corners is a hole
+// bridge's duplicate and blocks nothing.
 func earBlocked(ctx context.Context, pts []Point2, idx []int, i int) (bool, error) {
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
@@ -331,7 +336,8 @@ func earBlocked(ctx context.Context, pts []Point2, idx []int, i int) (bool, erro
 		}
 		p := pts[idx[j]]
 		prev, next := pts[idx[(j-1+n)%n]], pts[idx[(j+1)%n]]
-		if cross2(prev, p, next) >= 0 {
+		turn := cross2(prev, p, next)
+		if turn > 0 || (turn == 0 && (p == a || p == b || p == c)) {
 			continue
 		}
 		if pointInTri(p, a, b, c) {
