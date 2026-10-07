@@ -1,4 +1,4 @@
-package pair
+package planar
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -71,7 +72,7 @@ func supportSetRebuilt(a, b *PlanarSolid, plane SupportPlane, band proof.Dyadic,
 		if locate(frame.Project(foot), region) <= 0 {
 			continue
 		}
-		var separation ScalarReading
+		var separation pair.ScalarReading
 		if h.Sign() != 0 {
 			reading, ok := canonicalSqrt(frac{num: proof.DyMul(h, h), den: norm})
 			if !ok {

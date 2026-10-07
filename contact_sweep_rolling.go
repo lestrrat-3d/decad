@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
@@ -13,7 +14,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -466,8 +466,8 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 		lo[axis] = new(big.Rat).Sub(low, survey2d.RatMax(shift, zero))
 		hi[axis] = new(big.Rat).Sub(high, survey2d.RatMin(shift, zero))
 	}
-	solid := pair.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	_, apart, err := pair.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
+	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
+	_, apart, err := planar.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
 	return apart, err
 }
 

@@ -1,11 +1,11 @@
-package pair_test
+package planar_test
 
 import (
 	"errors"
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +29,7 @@ func columnBox() ([3]*big.Rat, [3]*big.Rat) {
 
 func columnClear(t *testing.T, tris ...[3][3]float64) (*big.Rat, bool) {
 	t.Helper()
-	var s pair.PlanarSolid
+	var s planar.PlanarSolid
 	for _, tri := range tris {
 		base := len(s.Verts)
 		for _, v := range tri {
@@ -38,7 +38,7 @@ func columnClear(t *testing.T, tris ...[3][3]float64) (*big.Rat, bool) {
 		s.Tris = append(s.Tris, [3]int{base, base + 1, base + 2})
 	}
 	lo, hi := columnBox()
-	clearance, open, err := pair.PlanarColumnClear(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, noPoll)
+	clearance, open, err := planar.PlanarColumnClear(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, noPoll)
 	require.NoError(t, err)
 	return clearance, open
 }
@@ -93,7 +93,7 @@ func TestPlanarColumnPollsAndStops(t *testing.T) {
 	lo, hi := columnBox()
 	stop := errors.New("stop")
 	calls := 0
-	_, _, err := pair.PlanarColumnClear(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, func() error {
+	_, _, err := planar.PlanarColumnClear(&s, vec(0, 0, 1), vec(0, 0, 0), lo, hi, func() error {
 		calls++
 		if calls > 3 {
 			return stop

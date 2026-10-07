@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -21,7 +22,7 @@ import (
 // shallow-penetration patch of an Overlapping pair, and publishes it on
 // report. An Overlapping pair takes planarOverlapPatch. A Touching pair with
 // no convex body publishes the contact set of a host face that holds every
-// contact (pair.PlanarGuestTouch, §10.5). A withheld manifold leaves
+// contact (planar.PlanarGuestTouch, §10.5). A withheld manifold leaves
 // report.Manifold nil with its reason: AmbiguousFeature for a contact set
 // outside §9.3's table or an overlap through two faces, NonConvex for a touch
 // of two non-convex bodies that no host face covers, PointTooCoarse or
@@ -29,16 +30,16 @@ import (
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (docs/multibody-dynamics-design.md §10.5).
-func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport, a, b *pair.PlanarSolid,
-	result pair.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
-	var points []pair.PatchPoint
-	var planes []pair.SupportPlane
+func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport, a, b *planar.PlanarSolid,
+	result planar.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
+	var points []planar.PatchPoint
+	var planes []planar.SupportPlane
 	overlap := false
 	switch result.Relation {
 	case pair.Touching:
 		if !convexA && !convexB {
 			// §10.5: a non-convex guest whose contacts all lie on one host face.
-			manifold, err := pair.PlanarGuestTouch(a, b, result.Contacts, budget.Step)
+			manifold, err := planar.PlanarGuestTouch(a, b, result.Contacts, budget.Step)
 			if err != nil {
 				return err
 			}
@@ -49,7 +50,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 			points, planes = manifold.Points, manifold.Supports
 			break
 		}
-		manifold, err := pair.PlanarTouchManifold(a, b, result.Contacts, convexA, convexB, budget.Step)
+		manifold, err := planar.PlanarTouchManifold(a, b, result.Contacts, convexA, convexB, budget.Step)
 		if err != nil {
 			return err
 		}
@@ -110,20 +111,20 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 // growB; zero for an exact body). It returns the points and the support plane
 // whose lifted set a positive band appends, or nil points with the kernel's
 // reason, NoReason when it names none.
-func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
-	convexA, convexB bool, growA, growB proofarith.Dyadic) ([]pair.PatchPoint, []pair.SupportPlane, pair.Reason, error) {
-	var points []pair.PatchPoint
-	var plane *pair.SupportPlane
+func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *planar.PlanarSolid, result planar.PlanarResult,
+	convexA, convexB bool, growA, growB proofarith.Dyadic) ([]planar.PatchPoint, []planar.SupportPlane, pair.Reason, error) {
+	var points []planar.PatchPoint
+	var plane *planar.SupportPlane
 	if convexA && convexB {
 		var err error
-		points, plane, err = pair.PlanarPenetrationSupport(a, b, budget.Step)
+		points, plane, err = planar.PlanarPenetrationSupport(a, b, budget.Step)
 		if err != nil {
 			return nil, nil, pair.NoReason, err
 		}
 	}
 	if points == nil {
 		// §9.6: a convex body poking through one face of any planar body.
-		local, err := pair.PlanarFacePenetrationGrown(a, b, result.Crossings, convexA, convexB,
+		local, err := planar.PlanarFacePenetrationGrown(a, b, result.Crossings, convexA, convexB,
 			growA, growB, budget.Step)
 		if err != nil || local.Points == nil {
 			return nil, nil, local.Reason, err
@@ -133,7 +134,7 @@ func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, r
 	if plane == nil {
 		return points, nil, pair.NoReason, nil
 	}
-	return points, []pair.SupportPlane{*plane}, pair.NoReason, nil
+	return points, []planar.SupportPlane{*plane}, pair.NoReason, nil
 }
 
 // planarLiftedSet gathers the lifted points of each support plane in order.
@@ -144,18 +145,18 @@ func planarOverlapPatch(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, r
 // face, its exact height) hold for any guest.
 // result is ClassifyPlanar's result for a and b, whose derived data the
 // kernel reuses.
-func planarLiftedSet(budget *proofbound.WorkBudget, a, b *pair.PlanarSolid, result pair.PlanarResult,
-	planes []pair.SupportPlane, band proofarith.Dyadic, overlap bool) ([]pair.PatchPoint, error) {
-	return pair.PlanarSupportSets(a, b, result, planes, band, overlap, budget.Step)
+func planarLiftedSet(budget *proofbound.WorkBudget, a, b *planar.PlanarSolid, result planar.PlanarResult,
+	planes []planar.SupportPlane, band proofarith.Dyadic, overlap bool) ([]planar.PatchPoint, error) {
+	return planar.PlanarSupportSets(a, b, result, planes, band, overlap, budget.Step)
 }
 
 // planarSupportPlanes lists every face of the admitted hosts as a support
 // plane, the B body's faces first, then A's, each in face order.
-func planarSupportPlanes(a, b *pair.PlanarSolid, hostA, hostB bool) []pair.SupportPlane {
-	var planes []pair.SupportPlane
+func planarSupportPlanes(a, b *planar.PlanarSolid, hostA, hostB bool) []planar.SupportPlane {
+	var planes []planar.SupportPlane
 	for _, host := range []struct {
 		isA, admitted bool
-		solid         *pair.PlanarSolid
+		solid         *planar.PlanarSolid
 	}{{false, hostB, b}, {true, hostA, a}} {
 		if !host.admitted {
 			continue
@@ -163,7 +164,7 @@ func planarSupportPlanes(a, b *pair.PlanarSolid, hostA, hostB bool) []pair.Suppo
 		faces := slices.Clone(host.solid.Faces)
 		slices.Sort(faces)
 		for _, face := range slices.Compact(faces) {
-			planes = append(planes, pair.SupportPlane{HostIsA: host.isA, Face: face})
+			planes = append(planes, planar.SupportPlane{HostIsA: host.isA, Face: face})
 		}
 	}
 	return planes
@@ -175,8 +176,8 @@ func planarSupportPlanes(a, b *pair.PlanarSolid, hostA, hostB bool) []pair.Suppo
 // The planes are read with the B body's faces first, then A's, each in face
 // order. The gap becomes [0 ± g], g its upper end, and the manifold is every
 // such plane's lifted set. A pair that meets neither stays Separated.
-func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, b *pair.PlanarSolid,
-	result pair.PlanarResult, band proofarith.Dyadic) error {
+func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, b *planar.PlanarSolid,
+	result planar.PlanarResult, band proofarith.Dyadic) error {
 	if band.Sign() <= 0 || result.Gap == nil {
 		return nil
 	}
@@ -226,11 +227,11 @@ type planarTopology struct {
 	vertexAt map[*Vertex]int
 }
 
-func newPlanarFeatureMap(a, b *Body, sa, sb *pair.PlanarSolid) (*planarFeatureMap, error) {
+func newPlanarFeatureMap(a, b *Body, sa, sb *planar.PlanarSolid) (*planarFeatureMap, error) {
 	m := &planarFeatureMap{}
 	for i, side := range []struct {
 		body  *Body
-		solid *pair.PlanarSolid
+		solid *planar.PlanarSolid
 	}{{a, sa}, {b, sb}} {
 		topology := planarTopology{faces: side.body.Faces(), faceAt: make(map[*Face]int),
 			edgeAt: make(map[*Edge]int), vertexAt: make(map[*Vertex]int)}
@@ -257,7 +258,7 @@ func newPlanarFeatureMap(a, b *Body, sa, sb *pair.PlanarSolid) (*planarFeatureMa
 // feature resolves one side's kernel feature. A facet is its face; an edge is
 // the one live Edge both of its faces share; a vertex is the one live Vertex
 // every one of its faces holds. Anything else has no single source identity.
-func (m *planarFeatureMap) feature(side int, f pair.PatchFeature) (ContactFeature, bool) {
+func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (ContactFeature, bool) {
 	topology := &m.sides[side]
 	if len(f.Faces) == 0 {
 		return ContactFeature{}, false
@@ -267,12 +268,12 @@ func (m *planarFeatureMap) feature(side int, f pair.PatchFeature) (ContactFeatur
 		faces[i] = topology.faces[id]
 	}
 	switch f.Kind {
-	case pair.FeatureFacet:
+	case planar.FeatureFacet:
 		if len(faces) != 1 {
 			return ContactFeature{}, false
 		}
 		return ContactFeature{Face: faces[0]}, true
-	case pair.FeatureEdge:
+	case planar.FeatureEdge:
 		if len(faces) != 2 {
 			return ContactFeature{}, false
 		}
@@ -287,7 +288,7 @@ func (m *planarFeatureMap) feature(side int, f pair.PatchFeature) (ContactFeatur
 			found = edge
 		}
 		return ContactFeature{Edge: found}, found != nil
-	case pair.FeatureVertex:
+	case planar.FeatureVertex:
 		var found *Vertex
 		for _, edge := range faces[0].Edges() {
 			for _, vertex := range []*Vertex{edge.Start(), edge.End()} {

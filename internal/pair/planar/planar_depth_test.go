@@ -1,10 +1,10 @@
-package pair_test
+package planar_test
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,9 +16,9 @@ import (
 //     other solid reads as deep, whether outside it (the block's corners
 //     against the plug at margin 2) or in a cavity (the floating box).
 
-func deepVertex(t *testing.T, a, b pair.PlanarSolid, margin float64) bool {
+func deepVertex(t *testing.T, a, b planar.PlanarSolid, margin float64) bool {
 	t.Helper()
-	deep, err := pair.PlanarDeepVertex(&a, &b, dy(margin), noPoll)
+	deep, err := planar.PlanarDeepVertex(&a, &b, dy(margin), noPoll)
 	require.NoError(t, err)
 	return deep
 }
@@ -28,7 +28,7 @@ func TestPlanarDeepVertexMargin(t *testing.T) {
 	// The plug's lower corners are 2 below the block's top face and at least
 	// 4 from every other face, so their depth is exactly 2.
 	plug := boxSolid([3]float64{4, 4, 8}, [3]float64{6, 6, 12})
-	for _, order := range [][2]pair.PlanarSolid{{plug, block}, {block, plug}} {
+	for _, order := range [][2]planar.PlanarSolid{{plug, block}, {block, plug}} {
 		require.True(t, deepVertex(t, order[0], order[1], 0))
 		require.True(t, deepVertex(t, order[0], order[1], 1.75))
 		require.False(t, deepVertex(t, order[0], order[1], 2))
@@ -57,7 +57,7 @@ func TestPlanarDeepVertexPollsAndStops(t *testing.T) {
 	far := boxSolid([3]float64{20, 20, 20}, [3]float64{21, 21, 21})
 	stop := errors.New("stop")
 	calls := 0
-	_, err := pair.PlanarDeepVertex(&far, &block, dy(0), func() error {
+	_, err := planar.PlanarDeepVertex(&far, &block, dy(0), func() error {
 		calls++
 		if calls > 5 {
 			return stop

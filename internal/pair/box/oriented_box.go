@@ -1,8 +1,9 @@
-package pair
+package box
 
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -16,7 +17,7 @@ type OrientedBox struct {
 
 // OrientedBoxRelation applies the complete separating-axis test. Every axis
 // and projection is a polynomial of held float entries, hence exact dyadic.
-func OrientedBoxRelation(a, b OrientedBox) (Relation, proofarith.Dyadic, proofarith.Dyadic) {
+func OrientedBoxRelation(a, b OrientedBox) (pair.Relation, proofarith.Dyadic, proofarith.Dyadic) {
 	faceAxes := func(box OrientedBox) [3]proofarith.DyV3 {
 		return [3]proofarith.DyV3{proofarith.DvCross(box.Edge[1], box.Edge[2]),
 			proofarith.DvCross(box.Edge[2], box.Edge[0]), proofarith.DvCross(box.Edge[0], box.Edge[1])}
@@ -57,12 +58,12 @@ func OrientedBoxRelation(a, b OrientedBox) (Relation, proofarith.Dyadic, proofar
 		}
 	}
 	if bestGap.Sign() > 0 {
-		return Separated, bestGap, bestNormSquared
+		return pair.Separated, bestGap, bestNormSquared
 	}
 	if touch {
-		return Touching, proofarith.DyZero(), proofarith.DyZero()
+		return pair.Touching, proofarith.DyZero(), proofarith.DyZero()
 	}
-	return Overlapping, proofarith.DyZero(), proofarith.DyZero()
+	return pair.Overlapping, proofarith.DyZero(), proofarith.DyZero()
 }
 
 func OrientedProjection(box OrientedBox, axis proofarith.DyV3) (proofarith.Dyadic, proofarith.Dyadic) {
@@ -76,14 +77,14 @@ func OrientedProjection(box OrientedBox, axis proofarith.DyV3) (proofarith.Dyadi
 
 // OrientedBoxGap encloses the true minimum distance. SAT supplies a lower
 // bound; actual vertex/face point pairs supply upper bounds.
-func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (ScalarReading, bool) {
+func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (pair.ScalarReading, bool) {
 	normUp := proofbound.RatSqrtUp(normSquared.Rat())
 	if !finite(normUp) || normUp <= 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	lower := new(big.Rat).Quo(gap.Rat(), proofarith.FloatRat(normUp))
 	if lower.Sign() <= 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	var upperSquared *big.Rat
 	consider := func(candidate *big.Rat) {
@@ -110,20 +111,20 @@ func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (Scala
 		}
 	}
 	if upperSquared == nil {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	upperFloat := proofbound.RatSqrtUp(upperSquared)
 	if !finite(upperFloat) {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	upper := proofarith.FloatRat(upperFloat)
 	if upper.Cmp(lower) < 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	mid := new(big.Rat).Quo(new(big.Rat).Add(lower, upper), big.NewRat(2, 1))
 	value, _ := mid.Float64()
 	if !finite(value) {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	held := proofarith.FloatRat(value)
 	deviation := new(big.Rat).Sub(held, lower)
@@ -135,9 +136,9 @@ func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (Scala
 	}
 	bound := proofbound.RatFloatUp(deviation)
 	if !finite(bound) || new(big.Rat).Sub(held, proofarith.FloatRat(bound)).Sign() <= 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
-	return ScalarReading{ValueMM: value, BoundMM: bound}, true
+	return pair.ScalarReading{ValueMM: value, BoundMM: bound}, true
 }
 
 func OrientedVertexFaceDistanceSquared(vertex proofarith.DyV3, box OrientedBox, axis, side int) *big.Rat {

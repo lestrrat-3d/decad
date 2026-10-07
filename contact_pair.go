@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -469,10 +470,10 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 }
 
 func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
-	result := pair.ClassifyAxisBoxes(
-		pair.AxisBox{Lo: a.lo, Hi: a.hi},
-		pair.AxisBox{Lo: b.lo, Hi: b.hi},
-		pair.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
+	result := box.ClassifyAxisBoxes(
+		box.AxisBox{Lo: a.lo, Hi: a.hi},
+		box.AxisBox{Lo: b.lo, Hi: b.hi},
+		box.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
 	)
 	switch result.Relation {
 	case pair.Separated:
@@ -510,7 +511,7 @@ func sourceBoxReason(reason pair.Reason) ContactReason {
 	}
 }
 
-func publishAxisBoxPatch(report *ContactReport, a, b sourceBoxContactProof, patch *pair.AxisBoxPatch) {
+func publishAxisBoxPatch(report *ContactReport, a, b sourceBoxContactProof, patch *box.AxisBoxPatch) {
 	faceA := a.faces[patch.FaceA.Axis][patch.FaceA.Side]
 	faceB := b.faces[patch.FaceB.Axis][patch.FaceB.Side]
 	var normal r3.Vec

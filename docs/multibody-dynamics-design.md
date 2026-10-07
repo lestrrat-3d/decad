@@ -1140,7 +1140,7 @@ the identity, every vertex bound zero, every face planar (`contact_faceted_pair.
 The relation of two such bodies at exact poses is decided by exact rational tests over their triangle
 sets, prefiltered by per-triangle boxes as `meshBoolean` does and charged to the shared `workBudget`
 with `ctx` polled every `workPollInterval` operations. The split follows the one `contact_box.go` and
-`internal/pair/axis_box.go` already make: `internal/pair/planar.go` takes the two exact vertex and
+`internal/pair/box/axis_box.go` already make: `internal/pair/planar/planar.go` takes the two exact vertex and
 triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
 `contact_faceted_pair.go` admits the bodies, builds the snapshots at the query poses, maps feature
 indices back to live `*Face` values and publishes the typed report. A prism's caps reuse the
@@ -1163,7 +1163,7 @@ The distance scan visits its candidates in a fixed index order and records the f
 the minimum. Each body caches, per partner body, the candidate pair that set the last minimum of their
 relation. The next relation of the pair reads that pair's exact distance first and uses it only to
 prune box pairs farther than it, never as the minimum, so the recorded candidate and every outcome are
-the same with or without the cache (`internal/pair/planar_prune.go`).
+the same with or without the cache (`internal/pair/planar/planar_prune.go`).
 
 Two coplanar facets with matching outward normals and a positive-area overlap also prove `Overlapping`.
 A shell whose every vertex lies on the other body's boundary needs no cast: it meets the contact set.
@@ -1215,7 +1215,7 @@ leave the manifold absent with `ContactAmbiguousFeature`. Every published point 
 a normal ball from normalizing the exact direction (zero when the unit normal is a float, so
 `NormalAngle` is zero there), and a `Separation` interval containing zero.
 
-The kernel (`internal/pair/planar_manifold.go`) builds the manifold from the zero-distance feature pairs
+The kernel (`internal/pair/planar/planar_manifold.go`) builds the manifold from the zero-distance feature pairs
 §9.1 records, which cover the whole contact set. With `X` a convex body and `Y` the other, each pair must
 be covered by one accepted piece holding one of its faces, tried in this order; any uncovered pair
 withholds the manifold with `ContactAmbiguousFeature`:
@@ -1254,7 +1254,7 @@ not, and only a pair neither path covers withholds the manifold.
 ### 9.4 The planar patch by exact rational clipping
 
 The patch of a coplanar face pair is computed inside decad, in exact rational arithmetic: the clip
-itself in `internal/pair/planar_patch.go` over the two exact loops, the face map and witness publication
+itself in `internal/pair/planar/planar_patch.go` over the two exact loops, the face map and witness publication
 in the root `contact_faceted_manifold.go` and `contact_faceted_patch.go`, the same split §9.1 makes.
 This is a decad-side 2D answer under CLAUDE.md's "Ask `sketch` for 2D answers by default" rule,
 which admits one where it clearly wins on performance or correctness and asks the owning design to
@@ -1347,7 +1347,7 @@ the floor of a `Cut` tray, which every rotating impact's right sample shows (§1
 the separating-axis argument needs both bodies convex, and `S`'s walls rise past any floor-normal axis.
 The FACE-LOCAL patch publishes that overlap from the one face it passes through. With `h` a flat face of
 `S` (every triangle coplanar, one outward normal `n`, exact), the kernel
-(`internal/pair/planar_face_penetration.go`, `PlanarFacePenetration`) publishes a manifold when all of
+(`internal/pair/planar/planar_face_penetration.go`, `PlanarFacePenetration`) publishes a manifold when all of
 the following hold, each an exact rational test:
 
 1. **One crossed face.** Every crossing §9.1 recorded between `M` and `S` lies in a triangle of `h`, or
@@ -1754,7 +1754,7 @@ support plane of `S`, every `M` vertex on or in front of it and each contact's f
 that plane's contact set (its `M` vertices at zero height, each strictly inside the face) followed by its
 lifted set, with the plane's face normal, each contact vertex an exact touching vertex with an exact foot,
 which needs no convexity either. A contact lies on the face when its `S` feature is a facet of the face, or
-an edge or vertex one of whose faces it is; `PlanarGuestTouch` (`internal/pair/planar_manifold.go`) tries
+an edge or vertex one of whose faces it is; `PlanarGuestTouch` (`internal/pair/planar/planar_manifold.go`) tries
 every such face of each body in turn as the host and publishes every one whose contact set is nonempty.
 §9.4's clipped patch, which would add the crossing points of a face overhanging `S`, needs §9.3's
 certificate and is not attempted; a contact feature off that plane keeps `ContactNonConvex` with no manifold.
@@ -1777,7 +1777,7 @@ exception. Lifted points follow the exact points, in support-plane order and the
 query orders publish the same set reversed (§9.5). Several planes (a box against a tray floor and a wall)
 publish per plane with their own normals, as §9.3's last row does. Two oriented source boxes take this path
 for a touch, a shallow overlap or a gap within the band, as §9.4's last paragraph routes their edge and vertex
-touches today: the box patches certify exact touches and know no band. `internal/pair/planar_manifold.go`
+touches today: the box patches certify exact touches and know no band. `internal/pair/planar/planar_manifold.go`
 gains `PlanarSupportSets`, which takes the two snapshots, their support planes and the band and returns the lifted
 points with their exact heights; `contact_faceted_manifold.go` maps and publishes them.
 
@@ -2464,9 +2464,9 @@ lines below do not repeat it.
 ### PR 10 (Phase 2) — exact planar pair relation and convexity
 
 - Delivers §9.1 and §9.2.
-- Files: new `internal/pair/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
+- Files: new `internal/pair/planar/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
 - Test (`apitest`): `apitest/contact_faceted_pair_test.go`, with the snapshot-level cases in
-  `internal/pair/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
+  `internal/pair/planar/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
   `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow Boolean's
   wall is `Overlapping` and one in its cavity is `Separated`; the non-convex Booleans report
   `ContactNonConvex`.
@@ -2475,7 +2475,7 @@ lines below do not repeat it.
 ### PR 11 (Phase 2) — faceted manifolds and the exact-clipped patch
 
 - Delivers §9.3, §9.4 and the shallow-penetration patch.
-- Files: new `internal/pair/planar_patch.go`, `internal/pair/planar_manifold.go`,
+- Files: new `internal/pair/planar/planar_patch.go`, `internal/pair/planar/planar_manifold.go`,
   `contact_faceted_manifold.go`, `contact_faceted_patch.go`; `contact_faceted_pair.go`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
   vertex touch, two at an edge touch, and the clipped hexagon's seven extremal vertices at a face
@@ -2490,7 +2490,7 @@ lines below do not repeat it.
 - Test (`apitest`): `apitest/contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
   vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
 - Depends on: PRs 10, 11.
-- Shipped, with the deep-vertex overlap witness in new `internal/pair/planar_depth.go`.
+- Shipped, with the deep-vertex overlap witness in new `internal/pair/planar/planar_depth.go`.
 
 ### PR 13 (Phase 2) — generalized departure and band tracks
 
@@ -2498,13 +2498,13 @@ lines below do not repeat it.
   tracks and advances through a rotating pair's impact (§5 steps 4, 6 and 7).
 - Files: `contact_sweep_faceted.go`, `contact_sweep.go`, new `contact_sweep_band.go`,
   `contact_sweep_replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
-  `internal/pair/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
+  `internal/pair/planar/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
   publishes a band track whose `Depth` equals `K·h²` for the computed `K`, and `BandAt` the same closed
   form over a prefix; `contact_sweep_band_internal_test.go` shows the rotating bracket replay's travel
   and deviation charges; `apitest/contact_sweep_rotation_test.go` publishes a turned box's edge poking through a
-  face, and `internal/pair/planar_patch_test.go` a wedge's, clipped to the face. `dynamics/tip_test.go`: a
+  face, and `internal/pair/planar/planar_patch_test.go` a wedge's, clipped to the face. `dynamics/tip_test.go`: a
   cube on its edge, turned `30°` with its center of mass beyond the edge, tips over in a few steps; each
   step lands the edge as a rotating impact, rides a band track to the band end, and lifts clear; every
   impulse meets the discrete linear and angular laws, every band end is the last grid fraction within
@@ -2536,7 +2536,7 @@ lines below do not repeat it.
 - Delivers §10.5: `ContactRequest.SupportBand`, the support-set manifold of `ContactPair`, the band track over
   the support set, the exact pair's band start and departure, and the flat rest of a tipped box.
 - Files: `contact_pair.go`, `contact_faceted_pair.go`, `contact_faceted_manifold.go`,
-  `internal/pair/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_band.go`, `contact_sweep_faceted.go`,
+  `internal/pair/planar/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_band.go`, `contact_sweep_faceted.go`,
   `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
 - Test (`apitest`): new `apitest/contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
   `sin θ = 2⁻²⁴`, so its far edge stands exactly `2⁻²¹ mm` up and every height below is a float: at
@@ -2606,7 +2606,7 @@ lines below do not repeat it.
   column test and lateral clearance; `planarDepartureProof.lowerGap` and the replay read the clearance;
   `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
 - Files: `contact_sweep_band.go`, `contact_sweep_faceted.go`, `contact_sweep_replay.go`, new
-  `internal/pair/planar_column.go`.
+  `internal/pair/planar/planar_column.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
   of `apitest/contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
   cube rising from the tray's floor at `100 mm/s` with `ω = (0, 1, 0) rad/s`, `DepartedClear`, its
@@ -2620,7 +2620,7 @@ lines below do not repeat it.
   horizon runs past the wall and the sweep is `SweepUndecided` with `SweepDepartureUnproved`; the
   lateral clearance deleted from `lowerGap`, `contact_sweep_band_internal_test.go`'s
   `TestPlanarDepartureLowerGapIsBoundedByLateralClearance`, the cube rising `1 µm` from a wall, publishes a
-  lower gap above `1 µm`. `internal/pair/planar_column_test.go` checks the projected gap of a triangle
+  lower gap above `1 µm`. `internal/pair/planar/planar_column_test.go` checks the projected gap of a triangle
   diagonal to a box against its closed form and that a triangle behind the plane is not read.
   `.github/test-shards.txt` lists the root test and `.github/test-shards-apitest.txt` the `apitest` tests.
 - Depends on: PR 14a.
@@ -2634,7 +2634,7 @@ lines below do not repeat it.
 - Delivers §9.6 and §9.1's crossing set: `ClassifyPlanar` records `PlanarResult.Crossings`,
   `PlanarFacePenetration` publishes the patch through one face, and `publishPlanarManifold` runs it
   when §9.3's convex-convex path publishes nothing.
-- Files: `internal/pair/planar.go`, new `internal/pair/planar_face_penetration.go`,
+- Files: `internal/pair/planar/planar.go`, new `internal/pair/planar/planar_face_penetration.go`,
   `contact_faceted_manifold.go`; `docs/collision-v1-support.md`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
   `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `(1, −1, 0)` and sunk so
@@ -2647,13 +2647,13 @@ lines below do not repeat it.
   `TestPlanarManifoldWithholdsCornerThroughTwoFaces`, the corner sunk into the floor and a wall at once,
   `Overlapping` with `ContactAmbiguousFeature` and no manifold. Legs shown to fail: condition 1 deleted,
   the two-face fixture reads `ContactNoNormalProof` (conditions 3 and 4 still refuse it), and
-  `internal/pair/planar_face_penetration_test.go`'s corner sunk through a floor's thin skin into a cavity
+  `internal/pair/planar/planar_face_penetration_test.go`'s corner sunk through a floor's thin skin into a cavity
   below publishes the corner at its full depth; condition 4 deleted, that file's snapshot of a tray with a
   second shell, a `1 mm` cube standing on the floor wholly inside the sunk box (no crossing, so §9.1's
   nesting cast never runs and only the column test sees it), publishes one corner; each part of
   condition 3 deleted, its region helper accepts a point set over a hole, across an L's notch or around a
   hole (`planar_face_penetration_internal_test.go`); the lifted set deleted, the barely turned cube
-  publishes its sunk corner alone. `internal/pair/planar_test.go` gains
+  publishes its sunk corner alone. `internal/pair/planar/planar_test.go` gains
   `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles, its
   three edges with its faces' diagonals, and the floor's diagonal, and a box crossing floor and wall
   names both faces; stopping the scan at the first crossing is shown to fail. `.github/test-shards-apitest.txt`
@@ -2888,7 +2888,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   host's planes alone, charges `g + δ` on the gap, `δ` on each lifted point's `Separation` and each body's
   `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
   §9.6's face-local one, read over `M`'s held vertices grown by `M`'s `δ`, charged the same way.
-- Files: `contact_faceted_pair.go`, `contact_faceted_manifold.go`, `internal/pair/planar_face_penetration.go`.
+- Files: `contact_faceted_pair.go`, `contact_faceted_manifold.go`, `internal/pair/planar/planar_face_penetration.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` gains, each in both body orders over the §2 tray: the `2.1 mm`
   chamfered block turned about `Y` by `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`,
   `ContactBand` with `Gap.Bound` the lowest corner's height plus `δ`, four points whose `M` balls and
@@ -2937,7 +2937,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.5's hull rule: `planarLiftedSet` reads every guest, and a `Touching` non-convex guest whose
   §9.1 contacts all lie on one support plane publishes that plane's contact set then its lifted set.
-- Files: `contact_faceted_manifold.go`, `internal/pair/planar_manifold.go`.
+- Files: `contact_faceted_manifold.go`, `internal/pair/planar/planar_manifold.go`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
   floor at a translation pose, `Touching` with its four bottom corners at their exact coordinates,
   `Normal` `(0, 0, 1)` and the cup's live vertices as features; the cup turned about `Y` by

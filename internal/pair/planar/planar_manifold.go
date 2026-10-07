@@ -1,9 +1,10 @@
-package pair
+package planar
 
 import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -52,7 +53,7 @@ type PatchPoint struct {
 	OnA, OnB   Point3
 	A, B       PatchFeature
 	Normal     proof.DyV3
-	Separation ScalarReading
+	Separation pair.ScalarReading
 }
 
 // PlanarManifold is a published manifold, or a Reason when it is withheld.
@@ -61,7 +62,7 @@ type PatchPoint struct {
 // support set (PlanarSupportSets) a positive band adds to the manifold.
 type PlanarManifold struct {
 	Points   []PatchPoint
-	Reason   Reason
+	Reason   pair.Reason
 	Supports []SupportPlane
 }
 
@@ -291,7 +292,7 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 	poll func() error) (PlanarManifold, error) {
 	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || (!convexA && !convexB) ||
 		len(contacts) == 0 {
-		return PlanarManifold{Reason: AmbiguousFeature}, nil
+		return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 	}
 	sa, sb := newPatchSide(a, convexA, true), newPatchSide(b, convexB, false)
 	x, y := sa, sb
@@ -309,7 +310,7 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 			return PlanarManifold{}, err
 		}
 		if !covered {
-			return PlanarManifold{Reason: AmbiguousFeature}, nil
+			return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 		}
 	}
 	return PlanarManifold{Points: k.points, Supports: k.supports}, nil
@@ -334,7 +335,7 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 // vertex per candidate face.
 func PlanarGuestTouch(a, b *PlanarSolid, contacts []PlanarContact, poll func() error) (PlanarManifold, error) {
 	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || len(contacts) == 0 {
-		return PlanarManifold{Reason: AmbiguousFeature}, nil
+		return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 	}
 	sa, sb := newPatchSide(a, false, true), newPatchSide(b, false, false)
 	var out PlanarManifold
@@ -367,7 +368,7 @@ func PlanarGuestTouch(a, b *PlanarSolid, contacts []PlanarContact, poll func() e
 		}
 	}
 	if out.Points == nil {
-		return PlanarManifold{Reason: AmbiguousFeature}, nil
+		return PlanarManifold{Reason: pair.AmbiguousFeature}, nil
 	}
 	return out, nil
 }
@@ -800,7 +801,7 @@ func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoin
 		if !ok {
 			return nil, nil, nil
 		}
-		separation := ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
+		separation := pair.ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
 		if okA {
 			points, err := shallowSupport(sa, faceA, sb, bestDir, minB, maxA, separation, poll)
 			return points, &SupportPlane{HostIsA: true, Face: faceA}, err
@@ -839,7 +840,7 @@ func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoin
 	if !ok {
 		return nil, nil, nil
 	}
-	separation := ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
+	separation := pair.ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
 	featureA := PatchFeature{Kind: FeatureFacet, Faces: []int{faceA}}
 	featureB := PatchFeature{Kind: FeatureFacet, Faces: []int{faceB}}
 	var points []PatchPoint
@@ -862,7 +863,7 @@ func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoin
 // requires of a touch. Each point pairs the guest vertex with its foot, and
 // carries the separation.
 func shallowSupport(host *patchSide, h int, guest *patchSide, n proof.DyV3, level, plane proof.Dyadic,
-	separation ScalarReading, poll func() error) ([]PatchPoint, error) {
+	separation pair.ScalarReading, poll func() error) ([]PatchPoint, error) {
 	if !host.isFlat(h) {
 		return nil, nil
 	}
@@ -1003,12 +1004,12 @@ func supportFace(side *patchSide, dir proof.DyV3) (int, bool) {
 
 // canonicalSqrt encloses the square root of a nonnegative rational after
 // reducing it to lowest terms, so equal values give identical readings.
-func canonicalSqrt(x frac) (ScalarReading, bool) {
+func canonicalSqrt(x frac) (pair.ScalarReading, bool) {
 	value := new(big.Rat).Quo(x.num.Rat(), x.den.Rat())
 	num, okNum := proof.DyOfRat(new(big.Rat).SetInt(value.Num()))
 	den, okDen := proof.DyOfRat(new(big.Rat).SetInt(value.Denom()))
 	if !okNum || !okDen {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	return fracSqrtReading(frac{num: num, den: den})
 }
@@ -1105,7 +1106,7 @@ func supportSet(host, guest *patchSide, plane SupportPlane, band proof.Dyadic, o
 		if locate(frame.Project(foot), region) <= 0 {
 			continue
 		}
-		var separation ScalarReading
+		var separation pair.ScalarReading
 		if h.Sign() != 0 {
 			reading, ok := canonicalSqrt(frac{num: proof.DyMul(h, h), den: norm})
 			if !ok {

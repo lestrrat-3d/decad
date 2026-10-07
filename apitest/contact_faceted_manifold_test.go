@@ -45,7 +45,7 @@ import (
 //     publish patches.
 //
 // The penetration depth reading reuses the planar gap's square-root
-// enclosure, whose half-width leg internal/pair/planar_test.go shows to fail;
+// enclosure, whose half-width leg internal/pair/planar/planar_test.go shows to fail;
 // the fixtures here read exact dyadic depths.
 
 // prismBody extrudes a closed polygon h mm along +z.
@@ -581,7 +581,7 @@ func TestContactPairPlanarManifoldCancels(t *testing.T) {
 //     its sunk corner alone.
 //
 // Conditions 2 to 4 are shown to fail at the snapshot level
-// (internal/pair/planar_face_penetration_test.go and its internal test).
+// (internal/pair/planar/planar_face_penetration_test.go and its internal test).
 
 // trayCubeTwoWays runs ContactPair over the §2 tray at the identity and the
 // cube at pose in both body orders and returns the report with the tray as A.

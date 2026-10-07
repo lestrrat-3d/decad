@@ -1,4 +1,4 @@
-package pair_test
+package planar_test
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ import (
 
 // faceWound appends the quad q0..q3 as two triangles wound so their normals
 // point along out, all owned by face.
-func faceWound(s *pair.PlanarSolid, face int, q [4]int, out proof.DyV3) {
+func faceWound(s *planar.PlanarSolid, face int, q [4]int, out proof.DyV3) {
 	for _, tri := range [][3]int{{q[0], q[1], q[2]}, {q[0], q[2], q[3]}} {
 		a := s.Verts[tri[0]]
 		n := proof.DvCross(proof.DvSub(s.Verts[tri[1]], a), proof.DvSub(s.Verts[tri[2]], a))
@@ -55,8 +56,8 @@ var sideOut = []proof.DyV3{vec(0, -1, 0), vec(1, 0, 0), vec(0, 1, 0), vec(-1, 0,
 // [-12,12]²×[0,8]. Faces: 0 the bottom, 1-4 the outer walls, 5 the rim,
 // 6-9 the inner walls, 10 the floor at z = 0, whose diagonal runs from
 // (-12,-12) to (12,12).
-func faceTray() pair.PlanarSolid {
-	var s pair.PlanarSolid
+func faceTray() planar.PlanarSolid {
+	var s planar.PlanarSolid
 	for _, ring := range [][][3]float64{square(16, -2), square(16, 8), square(12, 8), square(12, 0)} {
 		for _, p := range ring {
 			s.Verts = append(s.Verts, vec(p[0], p[1], p[2]))
@@ -86,7 +87,7 @@ var boxFaces = []int{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5}
 
 // parallelepiped is the convex solid c + a·u + b·v + g·w for a, b, g in
 // [0, 1], vertex i at bits (a, b, g) = (i&1, i>>1&1, i>>2&1), with boxFaces.
-func parallelepiped(c, u, v, w [3]float64) pair.PlanarSolid {
+func parallelepiped(c, u, v, w [3]float64) planar.PlanarSolid {
 	points := make([][3]float64, 8)
 	for i := range points {
 		for axis := range 3 {
@@ -103,14 +104,14 @@ const tiny = 1.0 / (1 << 20)
 
 // cornerDown is a parallelepiped whose corner c is its lowest vertex: every
 // edge from it rises.
-func cornerDown(c [3]float64) pair.PlanarSolid {
+func cornerDown(c [3]float64) planar.PlanarSolid {
 	return parallelepiped(c, [3]float64{4, 0, 1}, [3]float64{0, 4, 1}, [3]float64{-1, -1, 4})
 }
 
-func audited(t *testing.T, solids ...*pair.PlanarSolid) {
+func audited(t *testing.T, solids ...*planar.PlanarSolid) {
 	t.Helper()
 	for _, s := range solids {
-		ok, err := pair.CheckPlanarSolid(s, noPoll)
+		ok, err := planar.CheckPlanarSolid(s, noPoll)
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
@@ -118,22 +119,22 @@ func audited(t *testing.T, solids ...*pair.PlanarSolid) {
 
 // facePenetration classifies the pair, requires Overlapping, and returns the
 // face-local patch with the given convexity flags.
-func facePenetration(t *testing.T, a, b pair.PlanarSolid, convexA, convexB bool) pair.PlanarManifold {
+func facePenetration(t *testing.T, a, b planar.PlanarSolid, convexA, convexB bool) planar.PlanarManifold {
 	t.Helper()
 	audited(t, &a, &b)
-	result, err := pair.ClassifyPlanar(&a, &b, noPoll)
+	result, err := planar.ClassifyPlanar(&a, &b, noPoll)
 	require.NoError(t, err)
 	require.Equal(t, pair.Overlapping, result.Relation)
-	got, err := pair.PlanarFacePenetration(&a, &b, result.Crossings, convexA, convexB, noPoll)
+	got, err := planar.PlanarFacePenetration(&a, &b, result.Crossings, convexA, convexB, noPoll)
 	require.NoError(t, err)
 	return got
 }
 
-func ratPt(x, y, z float64) pair.Point3 {
-	return pair.Point3{new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y), new(big.Rat).SetFloat64(z)}
+func ratPt(x, y, z float64) planar.Point3 {
+	return planar.Point3{new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y), new(big.Rat).SetFloat64(z)}
 }
 
-func requirePoint3(t *testing.T, want, got pair.Point3) {
+func requirePoint3(t *testing.T, want, got planar.Point3) {
 	t.Helper()
 	for axis := range 3 {
 		require.Zero(t, want[axis].Cmp(got[axis]), "axis %d: want %s, got %s", axis,
@@ -167,7 +168,7 @@ func TestPlanarFacePenetrationCorner(t *testing.T) {
 		} else {
 			require.Positive(t, point.Normal[2].Sign())
 		}
-		require.Equal(t, []pair.SupportPlane{{HostIsA: !boxIsA, Face: trayFloor}}, got.Supports)
+		require.Equal(t, []planar.SupportPlane{{HostIsA: !boxIsA, Face: trayFloor}}, got.Supports)
 	}
 
 	// An edge down: the box's edge from c along y stays at c's depth, and
@@ -192,7 +193,7 @@ func TestPlanarFacePenetrationTwoFaces(t *testing.T) {
 
 // cavitySlab is the slab [-16,16]²×[-4,0] with the closed cavity
 // [-8,8]²×[-3,-skin] under its top face (face 5).
-func cavitySlab(skin float64) pair.PlanarSolid {
+func cavitySlab(skin float64) planar.PlanarSolid {
 	s := hollowSolid([3]float64{-16, -16, -4}, [3]float64{16, 16, 0}, [3]float64{-8, -8, -3}, [3]float64{8, 8, -skin})
 	s.Faces = append(append([]int(nil), boxFaces...), boxFaces...)
 	for i := len(boxFaces); i < len(s.Faces); i++ {
@@ -217,12 +218,12 @@ func TestPlanarFacePenetrationCavity(t *testing.T) {
 
 // withShell appends a second closed shell to s, its faces numbered after
 // s's.
-func withShell(s, shell pair.PlanarSolid) pair.PlanarSolid {
+func withShell(s, shell planar.PlanarSolid) planar.PlanarSolid {
 	base, faceBase := len(s.Verts), 0
 	for _, f := range s.Faces {
 		faceBase = max(faceBase, f+1)
 	}
-	out := pair.PlanarSolid{Verts: append(append([]proof.DyV3(nil), s.Verts...), shell.Verts...),
+	out := planar.PlanarSolid{Verts: append(append([]proof.DyV3(nil), s.Verts...), shell.Verts...),
 		Tris: append([][3]int(nil), s.Tris...), Faces: append([]int(nil), s.Faces...)}
 	for i, tri := range shell.Tris {
 		out.Tris = append(out.Tris, [3]int{tri[0] + base, tri[1] + base, tri[2] + base})
@@ -261,17 +262,17 @@ func TestPlanarFacePenetrationNeedsCrossings(t *testing.T) {
 	result := classify(t, box, hollow)
 	require.Equal(t, pair.Overlapping, result.Relation)
 	require.Empty(t, result.Crossings)
-	got, err := pair.PlanarFacePenetration(&box, &hollow, result.Crossings, true, false, noPoll)
+	got, err := planar.PlanarFacePenetration(&box, &hollow, result.Crossings, true, false, noPoll)
 	require.NoError(t, err)
 	require.Nil(t, got.Points)
 }
 
 func TestPlanarFacePenetrationPolls(t *testing.T) {
 	box, tray := cornerDown([3]float64{2, 3, -tiny}), faceTray()
-	result, err := pair.ClassifyPlanar(&box, &tray, noPoll)
+	result, err := planar.ClassifyPlanar(&box, &tray, noPoll)
 	require.NoError(t, err)
 	calls := 0
-	_, err = pair.PlanarFacePenetration(&box, &tray, result.Crossings, true, false, func() error {
+	_, err = planar.PlanarFacePenetration(&box, &tray, result.Crossings, true, false, func() error {
 		calls++
 		return nil
 	})
@@ -280,7 +281,7 @@ func TestPlanarFacePenetrationPolls(t *testing.T) {
 	stop := errors.New("stop")
 	for limit := 1; limit <= calls; limit++ {
 		n := 0
-		_, err := pair.PlanarFacePenetration(&box, &tray, result.Crossings, true, false, func() error {
+		_, err := planar.PlanarFacePenetration(&box, &tray, result.Crossings, true, false, func() error {
 			if n++; n >= limit {
 				return stop
 			}

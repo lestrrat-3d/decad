@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -151,10 +152,10 @@ func signedAxisTransform(t r3.Transform) bool {
 // The root package maps neutral pair readings to public units and topology.
 func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, axis, sign int,
 	separation proofarith.Dyadic) {
-	patch, reason := pair.FacePatch(
-		pair.AxisBox{Lo: a.lo, Hi: a.hi}, pair.AxisBox{Lo: b.lo, Hi: b.hi},
+	patch, reason := box.FacePatch(
+		box.AxisBox{Lo: a.lo, Hi: a.hi}, box.AxisBox{Lo: b.lo, Hi: b.hi},
 		axis, sign, separation,
-		pair.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
+		box.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
 	)
 	report.Reason = sourceBoxReason(reason)
 	if patch != nil {
@@ -167,13 +168,13 @@ func sourceBoxScalar(reading pair.ScalarReading) Measurement {
 		Bound: units.Millimeters(reading.BoundMM), Exactness: exactnessOf(reading.BoundMM)}
 }
 
-func sourceBoxPointMeasurement(reading pair.PointReading) VecMeasurement {
+func sourceBoxPointMeasurement(reading box.PointReading) VecMeasurement {
 	return VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
 		Exactness: exactnessOf(reading.BoundMM)}
 }
 
 func sourceBoxGap(gaps [3]proofarith.Dyadic) (Measurement, bool) {
-	reading, ok := pair.AxisGap(gaps)
+	reading, ok := box.AxisGap(gaps)
 	if !ok {
 		return Measurement{}, false
 	}
@@ -185,7 +186,7 @@ func sourceBoxPoint(point proofarith.DyV3) (VecMeasurement, bool) {
 }
 
 func sourceBoxPointAt(point *proofarith.DyV3) (VecMeasurement, bool) {
-	reading, ok := pair.ReadPointAt(point)
+	reading, ok := box.ReadPointAt(point)
 	if !ok {
 		return VecMeasurement{}, false
 	}
@@ -193,7 +194,7 @@ func sourceBoxPointAt(point *proofarith.DyV3) (VecMeasurement, bool) {
 }
 
 func sourceBoxSignedReading(value proofarith.Dyadic) (Measurement, bool) {
-	reading, ok := pair.SignedReading(value)
+	reading, ok := box.SignedReading(value)
 	if !ok {
 		return Measurement{}, false
 	}

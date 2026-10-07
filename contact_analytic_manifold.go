@@ -5,12 +5,12 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -457,7 +457,7 @@ func rulingSupport(c *placedCylinder, S *rotationalSweepPath, poll func() error)
 // S triangle with a vertex strictly in front of the plane through origin
 // must project apart from the coordinate box of the staged corners, whose
 // hull holds the cylinder. clearance is that box's lateral clearance, nil for
-// an unbounded one (pair.PlanarColumnClear).
+// an unbounded one (planar.PlanarColumnClear).
 func rulingColumn(c *placedCylinder, S *rotationalSweepPath, unit, origin proofarith.DyV3,
 	poll func() error) (*big.Rat, bool, error) {
 	var lo, hi [3]*big.Rat
@@ -472,8 +472,8 @@ func rulingColumn(c *placedCylinder, S *rotationalSweepPath, unit, origin proofa
 			}
 		}
 	}
-	solid := pair.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	return pair.PlanarColumnClear(&solid, unit, origin, lo, hi, poll)
+	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
+	return planar.PlanarColumnClear(&solid, unit, origin, lo, hi, poll)
 }
 
 // holdsBox reports whether a closed box in the face's projected coordinates

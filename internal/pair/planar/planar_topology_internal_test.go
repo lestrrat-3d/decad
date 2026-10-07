@@ -1,10 +1,11 @@
-package pair
+package planar
 
 import (
 	"fmt"
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -193,7 +194,7 @@ func TestPlanarTopologyMatchesFullAudit(t *testing.T) {
 		}
 	}
 	accepted, refused, stale := 0, 0, 0
-	relations := map[Relation]int{}
+	relations := map[pair.Relation]int{}
 	for trial := range 1000 {
 		kind := rng.IntN(20)
 		if kind >= 10 {
@@ -259,6 +260,6 @@ func TestPlanarTopologyMatchesFullAudit(t *testing.T) {
 	require.Positive(t, accepted, "premise: some placements are accepted")
 	require.Positive(t, refused, "premise: some placements are refused")
 	require.Positive(t, stale, "premise: some solids are swapped after the audit")
-	require.Positive(t, relations[Separated], "premise: some pairs are separated")
-	require.Positive(t, relations[Overlapping], "premise: some pairs overlap")
+	require.Positive(t, relations[pair.Separated], "premise: some pairs are separated")
+	require.Positive(t, relations[pair.Overlapping], "premise: some pairs overlap")
 }

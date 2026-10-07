@@ -1,9 +1,10 @@
-// Package pair contains contact calculations over admitted geometry snapshots.
-package pair
+// Package box contains contact proofs for admitted axis and oriented boxes.
+package box
 
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -16,32 +17,6 @@ type AxisBox struct {
 // AxisBoxRequest bounds the error permitted for each published witness.
 type AxisBoxRequest struct {
 	PointResolutionMM float64
-}
-
-// Relation is the proven relation of two admitted occupied sets.
-type Relation uint8
-
-const (
-	Undecided Relation = iota
-	Separated
-	Touching
-	Overlapping
-)
-
-// Reason identifies a missing gap or manifold certificate.
-type Reason uint8
-
-const (
-	NoReason Reason = iota
-	NoGapProof
-	AmbiguousFeature
-	PointTooCoarse
-	PayloadUnsupported
-)
-
-// ScalarReading encloses a length in millimetres.
-type ScalarReading struct {
-	ValueMM, BoundMM float64
 }
 
 // PointReading encloses a world-space point in a millimetre-radius ball.
@@ -65,15 +40,15 @@ type AxisBoxPoint struct {
 type AxisBoxPatch struct {
 	FaceA, FaceB           FaceSlot
 	NormalAxis, NormalSign int
-	Separation             ScalarReading
+	Separation             pair.ScalarReading
 	Points                 []AxisBoxPoint
 }
 
 // AxisBoxResult is the complete relation and optional bounded face patch.
 type AxisBoxResult struct {
-	Relation Relation
-	Reason   Reason
-	Gap      *ScalarReading
+	Relation pair.Relation
+	Reason   pair.Reason
+	Gap      *pair.ScalarReading
 	Patch    *AxisBoxPatch
 }
 
@@ -103,15 +78,15 @@ func ClassifyAxisBoxes(a, b AxisBox, req AxisBoxRequest) AxisBoxResult {
 		}
 		reading, ok := AxisGap(gaps)
 		if !ok {
-			return AxisBoxResult{Reason: NoGapProof}
+			return AxisBoxResult{Reason: pair.NoGapProof}
 		}
-		return AxisBoxResult{Relation: Separated, Gap: &reading}
+		return AxisBoxResult{Relation: pair.Separated, Gap: &reading}
 	}
 	if touchAxes > 0 {
-		zero := ScalarReading{}
-		result := AxisBoxResult{Relation: Touching, Gap: &zero}
+		zero := pair.ScalarReading{}
+		result := AxisBoxResult{Relation: pair.Touching, Gap: &zero}
 		if touchAxes != 1 {
-			result.Reason = AmbiguousFeature
+			result.Reason = pair.AmbiguousFeature
 			return result
 		}
 		for axis := range 3 {
@@ -126,21 +101,21 @@ func ClassifyAxisBoxes(a, b AxisBox, req AxisBoxRequest) AxisBoxResult {
 		}
 	}
 	if !overlaps {
-		return AxisBoxResult{Reason: PayloadUnsupported}
+		return AxisBoxResult{Reason: pair.PayloadUnsupported}
 	}
-	result := AxisBoxResult{Relation: Overlapping}
+	result := AxisBoxResult{Relation: pair.Overlapping}
 	axis, sign, depth, unique := axisBoxTranslation(a, b)
 	if !unique {
-		result.Reason = AmbiguousFeature
+		result.Reason = pair.AmbiguousFeature
 		return result
 	}
 	if sign > 0 {
 		if proof.DyCmp(b.Lo[axis], a.Lo[axis]) <= 0 || proof.DyCmp(b.Hi[axis], a.Hi[axis]) <= 0 {
-			result.Reason = AmbiguousFeature
+			result.Reason = pair.AmbiguousFeature
 			return result
 		}
 	} else if proof.DyCmp(b.Lo[axis], a.Lo[axis]) >= 0 || proof.DyCmp(b.Hi[axis], a.Hi[axis]) >= 0 {
-		result.Reason = AmbiguousFeature
+		result.Reason = pair.AmbiguousFeature
 		return result
 	}
 	result.Patch, result.Reason = FacePatch(a, b, axis, sign, proof.DyNeg(depth), req)
@@ -175,7 +150,7 @@ func axisBoxTranslation(a, b AxisBox) (int, int, proof.Dyadic, bool) {
 // FacePatch computes the bounded rectangle shared by two certified support
 // faces. Other admitted pair paths may use it after proving their face slots.
 func FacePatch(a, b AxisBox, axis, sign int, separation proof.Dyadic,
-	req AxisBoxRequest) (*AxisBoxPatch, Reason) {
+	req AxisBoxRequest) (*AxisBoxPatch, pair.Reason) {
 	var sideA, sideB int
 	if sign > 0 {
 		sideA, sideB = 1, 0
@@ -194,12 +169,12 @@ func FacePatch(a, b AxisBox, axis, sign int, separation proof.Dyadic,
 	for i, ax := range projected {
 		low[i], high[i] = dyMax(a.Lo[ax], b.Lo[ax]), dyMin(a.Hi[ax], b.Hi[ax])
 		if proof.DyCmp(low[i], high[i]) >= 0 {
-			return nil, AmbiguousFeature
+			return nil, pair.AmbiguousFeature
 		}
 	}
 	sep, ok := SignedReading(separation)
 	if !ok {
-		return nil, PointTooCoarse
+		return nil, pair.PointTooCoarse
 	}
 	patch := &AxisBoxPatch{
 		FaceA:      FaceSlot{Axis: axis, Side: sideA},
@@ -224,15 +199,15 @@ func FacePatch(a, b AxisBox, axis, sign int, separation proof.Dyadic,
 		onA, okA := ReadPointAt(&pA)
 		onB, okB := ReadPointAt(&pB)
 		if !okA || !okB || onA.BoundMM > req.PointResolutionMM || onB.BoundMM > req.PointResolutionMM {
-			return nil, PointTooCoarse
+			return nil, pair.PointTooCoarse
 		}
 		patch.Points = append(patch.Points, AxisBoxPoint{OnA: onA, OnB: onB})
 	}
-	return patch, NoReason
+	return patch, pair.NoReason
 }
 
 // AxisGap reads the length of a vector of nonnegative exact axis gaps.
-func AxisGap(gaps [3]proof.Dyadic) (ScalarReading, bool) {
+func AxisGap(gaps [3]proof.Dyadic) (pair.ScalarReading, bool) {
 	positive := 0
 	var only proof.Dyadic
 	var squared proof.Dyadic
@@ -246,18 +221,18 @@ func AxisGap(gaps [3]proof.Dyadic) (ScalarReading, bool) {
 	if positive == 1 {
 		value, exact := only.Float64()
 		if !finite(value) {
-			return ScalarReading{}, false
+			return pair.ScalarReading{}, false
 		}
 		bound := proof.DyadicFloatError(only, value)
-		return ScalarReading{ValueMM: value, BoundMM: bound}, exact || bound < value
+		return pair.ScalarReading{ValueMM: value, BoundMM: bound}, exact || bound < value
 	}
 	lo, hi := proof.DySqrtDown(squared), proof.DySqrtUp(squared)
 	if !finite(lo) || !finite(hi) || lo <= 0 {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	value := lo + (hi-lo)/2
 	bound := proof.ProvenUpRound(math.Max(value-lo, hi-value))
-	return ScalarReading{ValueMM: value, BoundMM: bound}, finite(value) && finite(bound)
+	return pair.ScalarReading{ValueMM: value, BoundMM: bound}, finite(value) && finite(bound)
 }
 
 // ReadPointAt converts an exact point into a float point and proven radius.
@@ -280,13 +255,13 @@ func ReadPointAt(point *proof.DyV3) (PointReading, bool) {
 }
 
 // SignedReading converts an exact signed length into a bounded float length.
-func SignedReading(value proof.Dyadic) (ScalarReading, bool) {
+func SignedReading(value proof.Dyadic) (pair.ScalarReading, bool) {
 	held, _ := value.Float64()
 	if !finite(held) {
-		return ScalarReading{}, false
+		return pair.ScalarReading{}, false
 	}
 	bound := proof.DyadicFloatError(value, held)
-	return ScalarReading{ValueMM: held, BoundMM: bound}, finite(bound)
+	return pair.ScalarReading{ValueMM: held, BoundMM: bound}, finite(bound)
 }
 
 func dyMax(a, b proof.Dyadic) proof.Dyadic {

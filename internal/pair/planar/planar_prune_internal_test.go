@@ -1,4 +1,4 @@
-package pair
+package planar
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -931,7 +932,7 @@ func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
 	quarter := func(lo, hi int) proof.Dyadic {
 		return proof.DyShift(proof.DyInt(int64(lo+rng.IntN(hi-lo+1))), -2)
 	}
-	relations := map[Relation]int{}
+	relations := map[pair.Relation]int{}
 	for trial := range 40 {
 		floor := fineBox([3]proof.Dyadic{proof.DyZero(), proof.DyZero(), proof.DyInt(-2)},
 			[3]proof.Dyadic{proof.DyInt(4), proof.DyInt(4), proof.DyInt(2)}, 4, proof.DyZero())
@@ -975,7 +976,7 @@ func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
 			require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
 		}
 	}
-	for _, relation := range []Relation{Separated, Touching, Overlapping} {
+	for _, relation := range []pair.Relation{pair.Separated, pair.Touching, pair.Overlapping} {
 		require.Positive(t, relations[relation], "premise: relation %v occurs", relation)
 	}
 }

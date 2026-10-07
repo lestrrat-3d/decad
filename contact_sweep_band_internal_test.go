@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -223,7 +223,7 @@ func supportFixture(rng *rand.Rand, shared []proofarith.DyV3, scale proofarith.D
 		}
 		return out
 	}
-	solid := &pair.PlanarSolid{Verts: points}
+	solid := &planar.PlanarSolid{Verts: points}
 	for range 6 + rng.IntN(30) {
 		i := rng.IntN(len(points))
 		pool := level(i)

@@ -8,12 +8,12 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -29,10 +29,10 @@ type rotationalSweepPath struct {
 	fullTravel   *big.Rat
 	startBox     orientedSourceBox
 	sourceBox    orientedSourceBox
-	startPoints  []proofarith.DyV3 // exact source points under the path's From
-	sourcePoints []proofarith.DyV3 // exact source points at the identity query pose
-	solid        *pair.PlanarSolid // the identity-pose planar snapshot, planar paths only
-	delta        proofarith.Dyadic // the snapshot's held displacement δ (§10.4), planar paths only
+	startPoints  []proofarith.DyV3   // exact source points under the path's From
+	sourcePoints []proofarith.DyV3   // exact source points at the identity query pose
+	solid        *planar.PlanarSolid // the identity-pose planar snapshot, planar paths only
+	delta        proofarith.Dyadic   // the snapshot's held displacement δ (§10.4), planar paths only
 	frame        motionbound.MotionFrame
 	fromRot      motionbound.IvMat
 	fromT        motionbound.RatVec

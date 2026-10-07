@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/pair"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -22,8 +23,8 @@ type orientedSourceBox struct {
 	faces  [3][2]*Face
 }
 
-func (box orientedSourceBox) pairBox() pair.OrientedBox {
-	return pair.OrientedBox{Corner: box.corner, Edge: box.edge}
+func (box orientedSourceBox) pairBox() pairbox.OrientedBox {
+	return pairbox.OrientedBox{Corner: box.corner, Edge: box.edge}
 }
 
 func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, bool) {
@@ -122,7 +123,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 
 // orientedBoxRelation keeps the contact report's relation type at the root.
 func orientedBoxRelation(a, b orientedSourceBox) (ContactRelation, proofarith.Dyadic, proofarith.Dyadic) {
-	relation, gap, normSquared := pair.OrientedBoxRelation(a.pairBox(), b.pairBox())
+	relation, gap, normSquared := pairbox.OrientedBoxRelation(a.pairBox(), b.pairBox())
 	switch relation {
 	case pair.Separated:
 		return ContactSeparated, gap, normSquared
@@ -136,7 +137,7 @@ func orientedBoxRelation(a, b orientedSourceBox) (ContactRelation, proofarith.Dy
 }
 
 func orientedProjection(box orientedSourceBox, axis proofarith.DyV3) (proofarith.Dyadic, proofarith.Dyadic) {
-	return pair.OrientedProjection(box.pairBox(), axis)
+	return pairbox.OrientedProjection(box.pairBox(), axis)
 }
 
 func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) {
@@ -395,14 +396,14 @@ type orientedFace struct {
 	origin, u, v proofarith.DyV3
 }
 
-func (face orientedFace) pairFace() pair.OrientedFace {
-	return pair.OrientedFace{Origin: face.origin, U: face.u, V: face.v}
+func (face orientedFace) pairFace() pairbox.OrientedFace {
+	return pairbox.OrientedFace{Origin: face.origin, U: face.u, V: face.v}
 }
 
 func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace) bool {
 	geom := box.pairBox()
-	var found pair.OrientedFace
-	if !pair.OrientedAxisFace(&geom, axis, side, &found) {
+	var found pairbox.OrientedFace
+	if !pairbox.OrientedAxisFace(&geom, axis, side, &found) {
 		return false
 	}
 	*face = orientedFace{origin: found.Origin, u: found.U, v: found.V}
@@ -411,12 +412,12 @@ func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace
 
 func orientedFaceCenter(face *orientedFace, point *proofarith.DyV3) {
 	geom := face.pairFace()
-	pair.OrientedFaceCenter(&geom, point)
+	pairbox.OrientedFaceCenter(&geom, point)
 }
 
 func orientedFaceContainsProjection(face *orientedFace, point *proofarith.DyV3, axis int) bool {
 	geom := face.pairFace()
-	return pair.OrientedFaceContainsProjection(&geom, point, axis)
+	return pairbox.OrientedFaceContainsProjection(&geom, point, axis)
 }
 
 func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
@@ -440,7 +441,7 @@ func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 
 // orientedBoxGap publishes the neutral gap enclosure as a public reading.
 func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) (Measurement, bool) {
-	reading, ok := pair.OrientedBoxGap(a.pairBox(), b.pairBox(), gap, normSquared)
+	reading, ok := pairbox.OrientedBoxGap(a.pairBox(), b.pairBox(), gap, normSquared)
 	if !ok {
 		return Measurement{}, false
 	}
@@ -449,18 +450,18 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) 
 }
 
 func orientedVertexFaceDistanceSquared(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) *big.Rat {
-	return pair.OrientedVertexFaceDistanceSquared(vertex, box.pairBox(), axis, side)
+	return pairbox.OrientedVertexFaceDistanceSquared(vertex, box.pairBox(), axis, side)
 }
 
 func orientedVertexFaceFoot(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) ([3]*big.Rat, *big.Rat) {
-	return pair.OrientedVertexFaceFoot(vertex, box.pairBox(), axis, side)
+	return pairbox.OrientedVertexFaceFoot(vertex, box.pairBox(), axis, side)
 }
 
 // An actual point strictly inside both eroded read boxes is inside both ideal boxes.
 func orientedInteriorWitness(a, b orientedSourceBox, etaA, etaB *big.Rat) bool {
-	return pair.OrientedInteriorWitness(a.pairBox(), b.pairBox(), etaA, etaB)
+	return pairbox.OrientedInteriorWitness(a.pairBox(), b.pairBox(), etaA, etaB)
 }
 
 func orientedWitnessSamples(box orientedSourceBox) []proofarith.DyV3 {
-	return pair.OrientedWitnessSamples(box.pairBox())
+	return pairbox.OrientedWitnessSamples(box.pairBox())
 }

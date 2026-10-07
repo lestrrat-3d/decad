@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -17,16 +17,16 @@ import (
 
 // placePlanarSnapshotRebuilt is placePlanarSnapshot before the snapshot
 // carried its topology: every pose maps each vertex through
-// exactContactTransform and runs the whole pair.CheckPlanarSolid audit.
-func placePlanarSnapshotRebuilt(snapshot *planarSnapshotEntry, pose r3.Transform) (pair.PlanarSolid, bool) {
-	solid := pair.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.solid.Verts)),
+// exactContactTransform and runs the whole planar.CheckPlanarSolid audit.
+func placePlanarSnapshotRebuilt(snapshot *planarSnapshotEntry, pose r3.Transform) (planar.PlanarSolid, bool) {
+	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.solid.Verts)),
 		Tris: slices.Clip(snapshot.solid.Tris), Faces: slices.Clip(snapshot.solid.Faces)}
 	for i, v := range snapshot.solid.Verts {
 		solid.Verts[i] = exactContactTransform(pose, v)
 	}
-	audited, err := pair.CheckPlanarSolid(&solid, noSweepPoll)
+	audited, err := planar.CheckPlanarSolid(&solid, noSweepPoll)
 	if err != nil || !audited {
-		return pair.PlanarSolid{}, false
+		return planar.PlanarSolid{}, false
 	}
 	return solid, true
 }
@@ -108,7 +108,7 @@ func TestPlacePlanarSnapshotMatchesFullAudit(t *testing.T) {
 		require.NoError(t, err, name)
 		require.True(t, snapshot.ok, "%s: premise: an admitted snapshot", name)
 		require.NotNil(t, snapshot.topology, name)
-		var other pair.PlanarSolid
+		var other planar.PlanarSolid
 		for trial := range 60 {
 			pose := r3.Identity()
 			if trial > 0 {
@@ -126,9 +126,9 @@ func TestPlacePlanarSnapshotMatchesFullAudit(t *testing.T) {
 			require.Equal(t, want.Tris, got.Tris)
 			require.Equal(t, want.Faces, got.Faces)
 			if trial > 0 {
-				wantResult, err := pair.ClassifyPlanar(&want, &other, noSweepPoll)
+				wantResult, err := planar.ClassifyPlanar(&want, &other, noSweepPoll)
 				require.NoError(t, err)
-				gotResult, err := pair.ClassifyPlanar(&got, &other, noSweepPoll)
+				gotResult, err := planar.ClassifyPlanar(&got, &other, noSweepPoll)
 				require.NoError(t, err)
 				require.Equal(t, wantResult.Relation, gotResult.Relation, "%s trial %d", name, trial)
 				require.Equal(t, wantResult.Reason, gotResult.Reason, "%s trial %d", name, trial)
