@@ -5,9 +5,8 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
 
 // This file is docs/tessellation-design.md §13's increment T4
@@ -60,7 +59,7 @@ import (
 // sign as an outline that loses it and nothing cancels across loops.
 //
 // Each walk's slivers are bounded by their own total area times an upper bound
-// on ρ over them: tessellation.ChordSegmentArea already proves the first (with no trig call
+// on ρ over them: revolvemesh.ChordSegmentArea already proves the first (with no trig call
 // and no library ulp assumption), and the second is the largest ρ the walk's own
 // endpoints and enclosed cardinal points reach — a sliver lies between its arc
 // and the chord joining two points of that arc, so it reaches no farther from
@@ -72,7 +71,7 @@ func revolveMeridianMoment(p *revolvePlan) float64 {
 			if !w.IsCircular() {
 				continue
 			}
-			area := tessellation.ChordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k])
+			area := revolvemesh.ChordSegmentArea(w.Radius, math.Abs(w.Th1-w.Th0), p.counts[li][k])
 			rho := 0.0
 			for _, pt := range revolveWalkExtremes(w.SegmentWalk) {
 				rho = math.Max(rho, pt[1])
@@ -118,7 +117,7 @@ func revolveSweepUpper(p *revolvePlan) float64 {
 // sum.
 func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
 	if angular == nil || angular.Sign() < 0 {
-		return 0, tessellation.ErrRevolveAngularHomotopy
+		return 0, revolvemesh.ErrRevolveAngularHomotopy
 	}
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 	area := proofbound.PerturbedAreaUpper(m.vertices, m.triangles, coord)

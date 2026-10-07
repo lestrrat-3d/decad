@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -297,7 +296,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		}
 
 		budget := proofbound.NewWorkBudget(ctx)
-		auditErr := tessellation.LoftCrossingAudit(budget, verts, tris)
+		auditErr := loftmesh.LoftCrossingAudit(budget, verts, tris)
 		switch {
 		case auditErr != nil && !open:
 			// Closed plus a refusing audit surfaces R9/R10 unchanged — the
@@ -761,7 +760,7 @@ func deriveStitchOrientation(faces []*Face) error {
 }
 
 // checkStitchClosure is docs/surface-design.md §6.4's closure and manifold
-// leg, the explicit directed-edge parity leg the reused tessellation.LoftCrossingAudit
+// leg, the explicit directed-edge parity leg the reused loftmesh.LoftCrossingAudit
 // alone does not run (correction 1): every edge must be adjacent to one or
 // two faces, and a two-face edge must be traversed by exactly one forward
 // and one backward coedge, with a coedge-use count that disagrees with the

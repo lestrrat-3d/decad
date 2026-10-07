@@ -131,9 +131,9 @@ the rules leave to the byte budget.
 | `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused, never matched to the nearest. See §5, §5.1. |
-| `loft_stations.go` | Sets the shared loft chord target and station cap, and feeds record enclosures to `internal/tessellation/`. See `docs/loft-design.md` §5.2. |
+| `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
-| `loft_moments.go` | `loftMassAccumulator` publishes Volume/Centroid/Bounds/Area from exact-rational tetrahedron sums and maps loft cell data to `internal/tessellation/`'s chord proof. See `docs/loft-design.md` §8, §12. |
+| `loft_moments.go` | Computes loft mass properties and chord proofs. See `docs/loft-design.md` §8, §12. |
 
 ### Modify
 
@@ -230,8 +230,8 @@ the rules leave to the byte budget.
 | `tessellate_stacked.go` | Meshes stacked slabs with shared chords and volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's doc comment. |
-| `tessellate_revolve_proof.go` | Revolve mesh audit wiring over `internal/tessellation/`'s revolve proofs. |
-| `tessellate_revolve_arc.go` | `revolveArcStation`: a CIRCULAR generator's meridian stations; its `Ecell` and cap area live in `internal/tessellation/`. |
+| `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
+| `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Revolve mesh occupied-volume proof. See the file's doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
@@ -258,7 +258,9 @@ the rules leave to the byte budget.
 | `internal/revolveaxis/` | Axis walks, charges, snap bounds and radial envelopes. See evaluator §6. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Checks moment fields, whole circles and sketch reconstruction. See `docs/spline-design.md` §5.2. |
-| `internal/tessellation/` | Shared chord bounds, section clearance, loft stations and cell corrections, mesh audits, revolve proofs, and loft restatement over neutral triangles. |
+| `internal/tessellation/` | Shared chord bounds, section clearance, and mesh audits. |
+| `internal/loftmesh/` | Loft stations, mesh proofs, and payload restatement. |
+| `internal/revolvemesh/` | Revolve mesh construction and proofs. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over plane-local points; returns indexed triangles and marks chording refusals. |
 | `internal/proofbound/` | Bounded scalars, work budget, certified trig and rational helpers. See file comments. |
 | `internal/circularmoments/` | Exact rational area, length, endpoint and moment enclosures over neutral circle and arc records. |

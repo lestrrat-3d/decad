@@ -1,4 +1,4 @@
-package tessellation
+package loftmesh
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // LoftStation is a plane-local station held by a loft chord chain.
@@ -211,11 +212,11 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 // cap: it bounds one curve's own chording and knows nothing of how many curves
 // the build holds, while loftStationCap bounds the build's station total.
 func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64, float64, error) {
-	m0, _, err := ChordCount(a.Walk, target, ChordWalkMin(a.Walk))
+	m0, _, err := tessellation.ChordCount(a.Walk, target, tessellation.ChordWalkMin(a.Walk))
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	m1, _, err := ChordCount(b.Walk, target, ChordWalkMin(b.Walk))
+	m1, _, err := tessellation.ChordCount(b.Walk, target, tessellation.ChordWalkMin(b.Walk))
 	if err != nil {
 		return 0, 0, 0, err
 	}

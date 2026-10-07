@@ -6,9 +6,8 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -269,7 +268,7 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
 func (rp revolvePayload) frameRoundAllow(
-	g r3.Vec, b tessellation.RevolveBasis, base, wg, c0, c1 float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
+	g r3.Vec, b revolvemesh.RevolveBasis, base, wg, c0, c1 float64, work *freeform.FreeformWork, profile *revolveExtentProfile,
 ) (float64, error) {
 	coordUpper := 0.0
 	if profile != nil {

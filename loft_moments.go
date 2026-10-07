@@ -5,8 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -99,7 +98,7 @@ type loftMassAccumulator struct {
 	// field stays
 	// its zero value unless evalLoft calls computeLoftChordedAllow, which it
 	// does only when sectionDelta > 0 or sectionMatchedDelta > 0.
-	chorded tessellation.LoftChordedAllow
+	chorded loftmesh.LoftChordedAllow
 
 	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
 	// six times the signed volume (docs/loft-design.md §8).
@@ -133,7 +132,7 @@ type loftMassAccumulator struct {
 	perturbAreaSum float64
 
 	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
-	// bounds tessellation.WallTriangleArea returns; wallAreaAbs is an upper bound on
+	// bounds loftmesh.WallTriangleArea returns; wallAreaAbs is an upper bound on
 	// Σ|term|, the scale proofbound.SumSlop's summation proof reads; wallAreaSlack is an
 	// upper bound on Σ (upper − lower), the enclosure width each triangle's
 	// own area contributes. The three are what make the published bound a
@@ -184,7 +183,7 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 // addTriangle keeps add's triangle fold unchanged. Only evalLoft supplies
 // indices and a cache, so repeated references to one assembled vertex reuse
 // its exact Euclidean upper distance.
-func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []tessellation.LoftVertexDistance) {
+func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []loftmesh.LoftVertexDistance) {
 	sa := proofbound.Xsub(proofbound.XptOf(a), m.anchor)
 	sb := proofbound.Xsub(proofbound.XptOf(b), m.anchor)
 	sc := proofbound.Xsub(proofbound.XptOf(c), m.anchor)
@@ -224,7 +223,7 @@ func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]
 	}
 	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
 	// rationals, so the already-lifted vertices serve the area bracket too.
-	lo, hi := tessellation.WallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
+	lo, hi := loftmesh.WallTriangleArea(proofbound.Xsub(sb, sa), proofbound.Xsub(sc, sa))
 	m.wallAreaSum += lo
 	m.wallAreaAbs = proofbound.UpRound(m.wallAreaAbs + lo)
 	m.wallAreaSlack = proofbound.UpRound(m.wallAreaSlack + proofbound.UpRound(hi-lo))
@@ -283,7 +282,7 @@ func (m *loftMassAccumulator) foldCoordUpper(p r3.Vec) {
 // foldCoordUpperCached performs the same per-reference maxima as
 // foldCoordUpper. The distance is computed when this assembled vertex index
 // is first referenced, so unused vertices never affect the measurements.
-func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *tessellation.LoftVertexDistance) {
+func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *loftmesh.LoftVertexDistance) {
 	d := p.Sub(m.anchorF)
 	m.coordUpper = max(m.coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
 	if !entry.Ready {
@@ -350,7 +349,7 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 // sagitta is spent on Bounds instead. The two legs are mechanically distinct (a vertex displaced versus
 // a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
 // but each publishes a volume and a first-moment allowance over the SAME
-// anchored accumulator, so ONE clearance test and ONE tessellation.PlacedCentroidAllow
+// anchored accumulator, so ONE clearance test and ONE loftmesh.PlacedCentroidAllow
 // quotient composition — moments.go's proofbound.BoundedQuotient formula, specialized to
 // whichever allowances are active — cover both. A non-positive clearance (the
 // combined volume allowance is not smaller than the held volume) leaves the
@@ -414,9 +413,9 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		if clearance <= 0 {
 			return VecMeasurement{}, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
 		}
-		bx = proofbound.AbsSumUpper(bx, tessellation.PlacedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
-		by = proofbound.AbsSumUpper(by, tessellation.PlacedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
-		bz = proofbound.AbsSumUpper(bz, tessellation.PlacedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
+		bx = proofbound.AbsSumUpper(bx, loftmesh.PlacedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
+		by = proofbound.AbsSumUpper(by, loftmesh.PlacedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
+		bz = proofbound.AbsSumUpper(bz, loftmesh.PlacedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
 	}
 
 	bound := proofbound.Radius3D(math.Max(bx, math.Max(by, bz)))
@@ -574,7 +573,7 @@ func (m *loftMassAccumulator) wallBound() float64 {
 }
 
 // computeLoftChordedAllow maps built loft cells to the neutral chord proof.
-func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64, reversed bool) (tessellation.LoftChordedAllow, error) {
+func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64, reversed bool) (loftmesh.LoftChordedAllow, error) {
 	// Derive cap1's offset before lifting any wall cell into exact rationals.
 	// Production has already refused non-finite vertices at S13, while direct
 	// internal callers still receive S14's existing derivation refusal instead
@@ -608,24 +607,24 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			v := verts[idx]
 			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
 			if d2 == nil {
-				return tessellation.LoftChordedAllow{}, tessellation.ErrLoftCapOffsetUnderivable
+				return loftmesh.LoftChordedAllow{}, loftmesh.ErrLoftCapOffsetUnderivable
 			}
 			h1Upper = math.Min(h1Upper, proofbound.RatSqrtUp(d2))
 		}
 	}
 	if proofbound.IsNonFinite(h1Upper) {
-		return tessellation.LoftChordedAllow{}, tessellation.ErrLoftCapOffsetUnderivable
+		return loftmesh.LoftChordedAllow{}, loftmesh.ErrLoftCapOffsetUnderivable
 	}
 
-	neutral := make([]tessellation.LoftChordPair, len(pairs))
+	neutral := make([]loftmesh.LoftChordPair, len(pairs))
 	for i, p := range pairs {
-		neutral[i] = tessellation.LoftChordPair{
+		neutral[i] = loftmesh.LoftChordPair{
 			Cells: len(p.v), ArcUpperV: p.arcUpperV, ArcUpperW: p.arcUpperW,
 			MatchedDelta: p.matchedDelta, TangentEnergyV: p.tangentEnergyV,
 			TangentEnergyW: p.tangentEnergyW,
 		}
 	}
-	return tessellation.ComputeLoftChordedAllow(
+	return loftmesh.ComputeLoftChordedAllow(
 		neutral, vIdx, wIdx, verts, anchor, h1Upper, matchedDelta, delta, distUpper, reversed,
 	), nil
 }

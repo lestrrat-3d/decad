@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -17,9 +17,9 @@ import (
 // loftPayload, Table S gates S1-S5, S7's STRUCTURAL arm and S13's
 // coordinate-range gate (S9-S11 are the public entry point's job,
 // docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
-// (internal/tessellation/loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
+// (internal/loftmesh/loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
 // measurements. Document.Loft is PR 1b; nothing here is called
-// from outside this file's own tests, the same shape #114 (internal/tessellation/loft_audit.go/
+// from outside this file's own tests, the same shape #114 (internal/loftmesh/loft_audit.go/
 // loft_moments.go) already shipped.
 //
 // Three sibling files carry the construction evalLoft drives, each with its
@@ -290,7 +290,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	if err := tessellation.LoftCrossingAudit(budget, a.verts, a.tris); err != nil {
+	if err := loftmesh.LoftCrossingAudit(budget, a.verts, a.tris); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -362,7 +362,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	vertexDistances := make([]tessellation.LoftVertexDistance, len(a.verts))
+	vertexDistances := make([]loftmesh.LoftVertexDistance, len(a.verts))
 	for k, t := range a.tris {
 		mass.addTriangle(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls, t, vertexDistances)
 	}
@@ -374,13 +374,13 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// carry a positive matchedDelta at an exactly-zero sagitta
 	// (internal/freeform/spline_sagitta.go's own counterexample), and skipping the computation
 	// there would silently drop a genuine chord-to-curve area/volume
-	// obligation. Left at its zero value (every field of tessellation.LoftChordedAllow)
+	// obligation. Left at its zero value (every field of loftmesh.LoftChordedAllow)
 	// for a LineSeg-only build, where both are zero.
 	//
 	// It is also where S14's CONSTRUCTION arm decides the cap
 	// planeOffsetUpper term §5.2's table lists: an assembly stating no proven
 	// distance from the anchor to a held cap1 vertex refuses here
-	// (tessellation.ErrLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
+	// (loftmesh.ErrLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
 	// so no measurement below is ever composed from a substituted value.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
 		chorded, err := computeLoftChordedAllow(
@@ -516,7 +516,7 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 // tessellateLoft restates a lofted body's held triangle set as a Mesh
 // (docs/tessellation-design.md §2's "loftPayload exact restatement", §4's
 // source-face table; docs/tessellation-reach-design.md §4).
-// internal/tessellation.RestateLoft copies the set, names each triangle's
+// internal/loftmesh.RestateLoft copies the set, names each triangle's
 // face by its provenance role, publishes the payload's own proof record and
 // audits the result; this adapter numbers the live faces for it and maps the
 // numbers back to *Face.
@@ -543,7 +543,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 		}
 	}
 	sheet := b.Kind() == BodySheet
-	in := tessellation.LoftInput{
+	in := loftmesh.LoftInput{
 		Vertices: lp.verts, Triangles: lp.tris,
 		WallCount: lp.walls, StartCapCount: lp.capStartCount,
 		WallCell: lp.cell, WallSide: lp.side,
@@ -564,7 +564,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 		// orientation rule).
 		in.Anchor = lp.xform.Apply(lp.plane0.Origin)
 	}
-	out, err := tessellation.RestateLoft(ctx, in)
+	out, err := loftmesh.RestateLoft(ctx, in)
 	if err != nil {
 		return nil, liftTessellationError(err)
 	}

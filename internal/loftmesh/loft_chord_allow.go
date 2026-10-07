@@ -1,4 +1,4 @@
-package tessellation
+package loftmesh
 
 import (
 	"math"

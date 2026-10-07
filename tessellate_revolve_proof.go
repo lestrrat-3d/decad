@@ -6,8 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -31,10 +30,10 @@ import (
 //   - §8's tolerance split, which reserves both of them before a single chord
 //     is chosen and refuses when nothing is left.
 //   - §9's endpoint and homotopy audits, discharged in ONE pass over the final
-//     stored triangles (tessellation.RevolveContactAudit's own doc comment carries the
+//     stored triangles (revolvemesh.RevolveContactAudit's own doc comment carries the
 //     derivation).
 //   - §10.2's Ecell, the cut-stable area allowance of one wall cell, in closed
-//     form by complete sign decomposition (tessellation.RevolveCellAreaSlack).
+//     form by complete sign decomposition (revolvemesh.RevolveCellAreaSlack).
 //
 // Nothing here samples anything to decide anything. Every enclosure is a
 // proofbound.RatInterval built from the payload's held float64s, which are exact
@@ -55,14 +54,14 @@ import (
 // (proofbound.TurnSinCosInterval, no π entering at all), and a full turn starting
 // elsewhere as the same radian enclosure over φ0 + 2π·l/n, widened by the 2π
 // enclosure's own (sub-2⁻²⁴⁰) width.
-func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngular, error) {
+func revolveAngularSequence(rp revolvePayload, n int) (revolvemesh.RevolveAngular, error) {
 	if n <= 0 {
-		return tessellation.RevolveAngular{}, fmt.Errorf(`%w: a revolve mesh needs at least one angular chord`, ErrDegenerate)
+		return revolvemesh.RevolveAngular{}, fmt.Errorf(`%w: a revolve mesh needs at least one angular chord`, ErrDegenerate)
 	}
 	phi0, phi1, full := rp.phi0, rp.phi1, rp.full
 	r0, r1 := proofarith.FloatRat(phi0), proofarith.FloatRat(phi1)
 	if r0 == nil || r1 == nil {
-		return tessellation.RevolveAngular{}, fmt.Errorf(`%w: the sweep interval is not finite, so no angular sample can be enclosed`, ErrUnsupported)
+		return revolvemesh.RevolveAngular{}, fmt.Errorf(`%w: the sweep interval is not finite, so no angular sample can be enclosed`, ErrUnsupported)
 	}
 	enc0, ok0 := rp.den.phi0.enclosure()
 	enc1, ok1 := rp.den.phi1.enclosure()
@@ -71,7 +70,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 	if haveDen {
 		diff = proofbound.IntervalSub(enc1, enc0)
 	}
-	out := tessellation.RevolveAngular{N: n, Samples: n + 1}
+	out := revolvemesh.RevolveAngular{N: n, Samples: n + 1}
 	if full {
 		out.Samples = n
 	}
@@ -90,7 +89,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 			var ok bool
 			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
 			if !ok {
-				return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
+				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
 		case full && r0.Sign() == 0:
 			sinIv, cosIv = proofbound.TurnSinCosInterval(frac)
@@ -99,7 +98,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 			var ok bool
 			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
 			if !ok {
-				return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
+				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
 			// A full turn's last interval closes onto its first sample, so the
 			// sequence never states φ1 and no seam ring is emitted.
@@ -108,17 +107,17 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 			var ok bool
 			sinIv, cosIv, ok = survey2d.RadSinCosInterval(angle)
 			if !ok {
-				return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
+				return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 			}
 		}
 		cosHeld, _ := intervalMid(cosIv).Float64()
 		sinHeld, _ := intervalMid(sinIv).Float64()
 		if proofbound.IsNonFinite(cosHeld) || proofbound.IsNonFinite(sinHeld) {
-			return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
+			return revolvemesh.RevolveAngular{}, revolvemesh.ErrRevolveAngleEnclosure
 		}
 		gap := math.Max(proofbound.IntervalFloatError(cosIv, cosHeld), proofbound.IntervalFloatError(sinIv, sinHeld))
-		if proofbound.IsNonFinite(gap) || gap > tessellation.RevolveTrigGapPrior {
-			return tessellation.RevolveAngular{}, fmt.Errorf(`%w: an angular sample's stored cosine and sine sit farther from the angle they denote than this mesh reserved for them`, ErrUnsupported)
+		if proofbound.IsNonFinite(gap) || gap > revolvemesh.RevolveTrigGapPrior {
+			return revolvemesh.RevolveAngular{}, fmt.Errorf(`%w: an angular sample's stored cosine and sine sit farther from the angle they denote than this mesh reserved for them`, ErrUnsupported)
 		}
 		out.Cos = append(out.Cos, cosHeld)
 		out.Sin = append(out.Sin, sinHeld)
@@ -134,14 +133,14 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 // the build stores for it: a3 = O + aU·U + aV·V, w = dU·U + dV·V,
 // e0 = −dV·U + dU·V and e1 = w × e0. The gap between this and the stored basis
 // is one of the terms deltaC measures.
-func revolveIdealBasis(rp revolvePayload) (tessellation.RevolveBasis3Iv, bool) {
+func revolveIdealBasis(rp revolvePayload) (revolvemesh.RevolveBasis3Iv, bool) {
 	origin, ok0 := survey2d.IvVec3Of(rp.frame.Origin())
 	fu, ok1 := survey2d.IvVec3Of(rp.frame.U())
 	fv, ok2 := survey2d.IvVec3Of(rp.frame.V())
 	aU, aV := proofarith.FloatRat(rp.ax.aU), proofarith.FloatRat(rp.ax.aV)
 	dU, dV := proofarith.FloatRat(rp.ax.dU), proofarith.FloatRat(rp.ax.dV)
 	if !ok0 || !ok1 || !ok2 || aU == nil || aV == nil || dU == nil || dV == nil {
-		return tessellation.RevolveBasis3Iv{}, false
+		return revolvemesh.RevolveBasis3Iv{}, false
 	}
 	scale := func(v survey2d.IvVec3, s *big.Rat) survey2d.IvVec3 {
 		return survey2d.IvVec3Mul(v, proofbound.PointInterval(s))
@@ -149,7 +148,7 @@ func revolveIdealBasis(rp revolvePayload) (tessellation.RevolveBasis3Iv, bool) {
 	a3 := survey2d.IvVec3Add(origin, survey2d.IvVec3Add(scale(fu, aU), scale(fv, aV)))
 	w := survey2d.IvVec3Add(scale(fu, dU), scale(fv, dV))
 	e0 := survey2d.IvVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
-	return tessellation.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: survey2d.IvVec3Cross(w, e0)}, true
+	return revolvemesh.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: survey2d.IvVec3Cross(w, e0)}, true
 }
 
 // requireVertexLinks is docs/tessellation-design.md §9's construction safety

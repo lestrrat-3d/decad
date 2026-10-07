@@ -9,8 +9,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -294,8 +294,8 @@ func prismRotation(pp prismPayload) ([3][3]*big.Rat, error) {
 		for k := range out[i] {
 			sum := new(big.Rat)
 			for l := range placement {
-				entry := proofarith.FloatRat(tessellation.VecComponent(placement[l], i))
-				axis := proofarith.FloatRat(tessellation.VecComponent(frame[k], l))
+				entry := proofarith.FloatRat(revolvemesh.VecComponent(placement[l], i))
+				axis := proofarith.FloatRat(revolvemesh.VecComponent(frame[k], l))
 				if entry == nil || axis == nil {
 					return out, fmt.Errorf("%w: prism orientation is not finite", ErrNotFinite)
 				}

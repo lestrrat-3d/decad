@@ -24,17 +24,17 @@ import (
 // pollInterval is how many counted steps may pass between context polls.
 const pollInterval = 256
 
-// budget shares one bounded cancellation counter across a counted loop. It
+// AuditBudget shares one bounded cancellation counter across a counted loop. It
 // holds closures rather than a stored context, so no geometry state holds a
 // context.
-type budget struct {
+type AuditBudget struct {
 	stepFn func() error
 	errFn  func() error
 }
 
-func newBudget(ctx context.Context) *budget {
+func NewAuditBudget(ctx context.Context) *AuditBudget {
 	work := 0
-	return &budget{
+	return &AuditBudget{
 		stepFn: func() error {
 			work++
 			if work%pollInterval == 0 {
@@ -46,12 +46,40 @@ func newBudget(ctx context.Context) *budget {
 	}
 }
 
-// step counts one candidate operation and returns ctx.Err() on the polling
+// Step counts one candidate operation and returns ctx.Err() on the polling
 // interval.
-func (b *budget) step() error { return b.stepFn() }
+func (b *AuditBudget) Step() error { return b.stepFn() }
 
-// err polls the context unconditionally, the phase-boundary check.
-func (b *budget) err() error { return b.errFn() }
+// Err polls the context unconditionally, the phase-boundary check.
+func (b *AuditBudget) Err() error { return b.errFn() }
+
+// SharedVertexIndices returns the vertex indices two triangles hold in common
+// and their count. A shared vertex is a shared table index, so this needs no
+// coordinate comparison or allocation.
+func SharedVertexIndices(a, b [3]int) ([3]int, int) {
+	var shared [3]int
+	count := 0
+	for _, va := range a {
+		for _, vb := range b {
+			if va == vb {
+				shared[count] = va
+				count++
+				break
+			}
+		}
+	}
+	return shared, count
+}
+
+// TriangleApexIndex returns the vertex outside the named edge.
+func TriangleApexIndex(tri [3]int, edgeA, edgeB int) int {
+	for _, vertex := range tri {
+		if vertex != edgeA && vertex != edgeB {
+			return vertex
+		}
+	}
+	return -1
+}
 
 // RequireClosedMesh proves the mesh is a closed 2-manifold — every directed
 // edge is matched by its reverse — refusing a mesh the cap triangulator could
@@ -225,7 +253,7 @@ func chainRoot(parent map[int]int, v int) int {
 //
 // vertexCount is the length of the mesh's vertex table; only indices are read.
 func RequireSheetVertexLinks(ctx context.Context, vertexCount int, triangles [][3]int) error {
-	budget := newBudget(ctx)
+	budget := NewAuditBudget(ctx)
 	links := make(map[int]map[int][]int, vertexCount)
 	add := func(center, from, to int) {
 		l, ok := links[center]
@@ -237,7 +265,7 @@ func RequireSheetVertexLinks(ctx context.Context, vertexCount int, triangles [][
 		l[to] = append(l[to], from)
 	}
 	for _, tri := range triangles {
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		add(tri[0], tri[1], tri[2])
@@ -251,14 +279,14 @@ func RequireSheetVertexLinks(ctx context.Context, vertexCount int, triangles [][
 		if !ok {
 			continue
 		}
-		if err := budget.step(); err != nil {
+		if err := budget.Step(); err != nil {
 			return err
 		}
 		if err := requireCycleOrPathLink(center, link); err != nil {
 			return err
 		}
 	}
-	return budget.err()
+	return budget.Err()
 }
 
 // requireCycleOrPathLink checks one vertex's own link graph — center's own

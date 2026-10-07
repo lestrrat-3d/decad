@@ -1,4 +1,4 @@
-package tessellation
+package revolvemesh
 
 import "github.com/lestrrat-3d/decad/internal/proofbound"
 

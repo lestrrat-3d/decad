@@ -5,9 +5,8 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
 
 // This file is docs/tessellation-design.md §13's increment T3
@@ -49,7 +48,7 @@ import (
 // an EXACT rational — rounding it to a float first would enclose the recorded
 // curve at a neighbouring parameter and prove a bound about a point this
 // chording never named (chordStationBound's own rule). The plane-local
-// enclosure is circularEndpointInterval's, and tessellation.AxisCoordInterval carries it
+// enclosure is circularEndpointInterval's, and revolvemesh.AxisCoordInterval carries it
 // into (z, ρ) through the payload's own axis frame with no rounding.
 //
 // The stored pair is the float NEAREST the enclosure's midpoint. That is what
@@ -62,33 +61,33 @@ import (
 // ON or BEYOND the axis is ErrDegenerate rather than a pole: a generator that
 // meets the axis at an interior point sweeps no manifold solid, and §12 forbids
 // rounding a near-axis ring onto the axis to make one.
-func revolveArcStation(ax axisFrame, seg CurveSegment, k, n int) (tessellation.RevMeridian, float64, error) {
+func revolveArcStation(ax axisFrame, seg CurveSegment, k, n int) (revolvemesh.RevMeridian, float64, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
-		return tessellation.RevMeridian{}, 0, err
+		return revolvemesh.RevMeridian{}, 0, err
 	}
 	start, span, ok := circularSegmentRange(seg)
 	if !ok || n <= 0 || k <= 0 || k >= n {
-		return tessellation.RevMeridian{}, 0, tessellation.ErrRevolveStationEnclosure
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
 	}
 	frac := new(big.Rat).SetFrac64(int64(k), int64(n))
 	rt := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
 	uIv, vIv, ok := circularEndpointInterval(seg, rt)
 	if !ok {
-		return tessellation.RevMeridian{}, 0, tessellation.ErrRevolveStationEnclosure
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
 	}
-	zIv, rhoIv, ok := tessellation.AxisCoordInterval(ax.aU, ax.aV, ax.dU, ax.dV, uIv, vIv)
+	zIv, rhoIv, ok := revolvemesh.AxisCoordInterval(ax.aU, ax.aV, ax.dU, ax.dV, uIv, vIv)
 	if !ok {
-		return tessellation.RevMeridian{}, 0, tessellation.ErrRevolveStationEnclosure
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
 	}
 	z, _ := intervalMid(zIv).Float64()
 	rho, _ := intervalMid(rhoIv).Float64()
 	gap := math.Max(proofbound.IntervalFloatError(zIv, z), proofbound.IntervalFloatError(rhoIv, rho))
 	if proofbound.IsNonFinite(z) || proofbound.IsNonFinite(rho) || proofbound.IsNonFinite(gap) {
-		return tessellation.RevMeridian{}, 0, tessellation.ErrRevolveStationEnclosure
+		return revolvemesh.RevMeridian{}, 0, revolvemesh.ErrRevolveStationEnclosure
 	}
 	if rho <= 0 {
-		return tessellation.RevMeridian{}, 0, fmt.Errorf(`%w: a revolve meridian chord station lands on the axis or across it, so the recorded generator sweeps no manifold solid there`, ErrDegenerate)
+		return revolvemesh.RevMeridian{}, 0, fmt.Errorf(`%w: a revolve meridian chord station lands on the axis or across it, so the recorded generator sweeps no manifold solid there`, ErrDegenerate)
 	}
-	return tessellation.RevMeridian{Z: z, Rho: rho, ZIv: zIv, RhoIv: rhoIv}, gap, nil
+	return revolvemesh.RevMeridian{Z: z, Rho: rho, ZIv: zIv, RhoIv: rhoIv}, gap, nil
 }

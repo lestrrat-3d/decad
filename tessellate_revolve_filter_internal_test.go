@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/r3"
@@ -21,13 +22,13 @@ type filterOracle struct {
 }
 
 // sides compares sideOf against sideOfExact for every axis and offset pair.
-func (o *filterOracle) sides(t *testing.T, axes []tessellation.RevolveSepAxis, offs []tessellation.RevolveOffset, drift float64) {
+func (o *filterOracle) sides(t *testing.T, axes []revolvemesh.RevolveSepAxis, offs []revolvemesh.RevolveOffset, drift float64) {
 	t.Helper()
 	for ai, ax := range axes {
 		for oi, off := range offs {
 			o.readings++
-			allow := tessellation.PerturbBilinearAllow(ax.Length, off.Length, ax.Drift, drift)
-			if _, ok := tessellation.RevIvSide(tessellation.RevIvDot(ax.F, off.F), allow); ok {
+			allow := revolvemesh.PerturbBilinearAllow(ax.Length, off.Length, ax.Drift, drift)
+			if _, ok := revolvemesh.RevIvSide(revolvemesh.RevIvDot(ax.F, off.F), allow); ok {
 				o.settled++
 			}
 			gotSide, gotOK := ax.SideOf(off, drift)
@@ -41,40 +42,40 @@ func (o *filterOracle) sides(t *testing.T, axes []tessellation.RevolveSepAxis, o
 // pair runs every candidate axis the vertex and edge isolation proofs build
 // for triangles i and j, plus the separating-axis walk, through both the
 // pre-tested and the exact predicates.
-func (o *filterOracle) pair(t *testing.T, data []tessellation.RevolveAuditTri, tris [][3]int, i, j int, delta float64) {
+func (o *filterOracle) pair(t *testing.T, data []revolvemesh.RevolveAuditTri, tris [][3]int, i, j int, delta float64) {
 	t.Helper()
 	a, b := data[i], data[j]
 	shared, count := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if count == 0 {
 		o.readings++
-		if tessellation.RevolveSeparatedFloat(a, b, delta) {
+		if revolvemesh.RevolveSeparatedFloat(a, b, delta) {
 			o.settled++
 		}
-		require.Equal(t, tessellation.RevolveSeparatedExact(a, b, delta), tessellation.RevolveSeparated(a, b, delta), `facets %d and %d`, i, j)
+		require.Equal(t, revolvemesh.RevolveSeparatedExact(a, b, delta), revolvemesh.RevolveSeparated(a, b, delta), `facets %d and %d`, i, j)
 		return
 	}
 	e := proofbound.ProductUpper(2, delta)
-	ai := tessellation.TriangleVertexSlot(tris[i], shared[0])
-	bi := tessellation.TriangleVertexSlot(tris[j], shared[0])
-	aOff, bOff := tessellation.RevolveCornerOffsets(a, ai), tessellation.RevolveCornerOffsets(b, bi)
-	chord := tessellation.RevolveOffsetOf(proofarith.DvSub(aOff[0].V, aOff[1].V), tessellation.RevIvSubVec(aOff[0].F, aOff[1].F))
-	axes := []tessellation.RevolveSepAxis{
-		tessellation.RevolveNormalAxis(a, delta), tessellation.RevolveNormalAxis(b, delta),
-		tessellation.RevolveEdgeFanAxis(a, aOff[0], delta), tessellation.RevolveEdgeFanAxis(a, aOff[1], delta),
-		tessellation.RevolveEdgeFanAxis(a, chord, delta),
-		tessellation.RevolveRejectionAxis(aOff[0], aOff[1], delta),
+	ai := revolvemesh.TriangleVertexSlot(tris[i], shared[0])
+	bi := revolvemesh.TriangleVertexSlot(tris[j], shared[0])
+	aOff, bOff := revolvemesh.RevolveCornerOffsets(a, ai), revolvemesh.RevolveCornerOffsets(b, bi)
+	chord := revolvemesh.RevolveOffsetOf(proofarith.DvSub(aOff[0].V, aOff[1].V), revolvemesh.RevIvSubVec(aOff[0].F, aOff[1].F))
+	axes := []revolvemesh.RevolveSepAxis{
+		revolvemesh.RevolveNormalAxis(a, delta), revolvemesh.RevolveNormalAxis(b, delta),
+		revolvemesh.RevolveEdgeFanAxis(a, aOff[0], delta), revolvemesh.RevolveEdgeFanAxis(a, aOff[1], delta),
+		revolvemesh.RevolveEdgeFanAxis(a, chord, delta),
+		revolvemesh.RevolveRejectionAxis(aOff[0], aOff[1], delta),
 	}
 	for k := range 2 {
 		for m := range 2 {
-			axes = append(axes, tessellation.RevolveSepAxis{
+			axes = append(axes, revolvemesh.RevolveSepAxis{
 				G:      proofarith.DvCross(aOff[k].V, bOff[m].V),
-				F:      tessellation.RevIvCross(aOff[k].F, bOff[m].F),
+				F:      revolvemesh.RevIvCross(aOff[k].F, bOff[m].F),
 				Length: proofbound.ProductUpper(aOff[k].Length, bOff[m].Length),
-				Drift:  tessellation.PerturbBilinearAllow(aOff[k].Length, bOff[m].Length, e, e),
+				Drift:  revolvemesh.PerturbBilinearAllow(aOff[k].Length, bOff[m].Length, e, e),
 			})
 		}
 	}
-	o.sides(t, axes, append(append([]tessellation.RevolveOffset{chord}, aOff[:]...), bOff[:]...), e)
+	o.sides(t, axes, append(append([]revolvemesh.RevolveOffset{chord}, aOff[:]...), bOff[:]...), e)
 }
 
 // TestRevolveAuditPreTestMatchesExact runs every facet pair of a real revolve
@@ -91,7 +92,7 @@ func TestRevolveAuditPreTestMatchesExact(t *testing.T) {
 	require.NoError(t, err)
 	var o filterOracle
 	for _, delta := range []float64{0, 1e-15, 1e-9, 1e-4, 0.05, 0.5} {
-		data, err := tessellation.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), m.vertices, m.triangles, 0)
+		data, err := revolvemesh.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), m.vertices, m.triangles, 0)
 		require.NoError(t, err)
 		for i := range data {
 			for j := i + 1; j < len(data); j++ {
@@ -117,12 +118,12 @@ func TestRevolveAuditPreTestMatchesExact(t *testing.T) {
 		if verts[3] == verts[0] {
 			tris[1] = [3]int{0, 4, 5}
 		}
-		a, okA := tessellation.NewRevolveAuditTri(verts, tris[0])
-		b, okB := tessellation.NewRevolveAuditTri(verts, tris[1])
+		a, okA := revolvemesh.NewRevolveAuditTri(verts, tris[0])
+		b, okB := revolvemesh.NewRevolveAuditTri(verts, tris[1])
 		if !okA || !okB {
 			continue
 		}
 		delta := 1e-6 * float64(rng.IntN(20000))
-		o.pair(t, []tessellation.RevolveAuditTri{a, b}, tris, 0, 1, delta)
+		o.pair(t, []revolvemesh.RevolveAuditTri{a, b}, tris, 0, 1, delta)
 	}
 }

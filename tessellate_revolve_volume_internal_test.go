@@ -5,9 +5,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -119,7 +118,7 @@ func TestRevolveAngularHomotopyFactorEnclosesTheAngularIntegral(t *testing.T) {
 	// The angular factor alone is the triple integral of a cell whose meridian
 	// chord has |z'| = 1 and ρ ≡ 1, since ∫ρ² dt is then 1.
 	for _, dphi := range []float64{2 * math.Pi / 3, 2 * math.Pi / 8, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		g, err := tessellation.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
+		g, err := revolvemesh.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
 		require.NoError(t, err)
 		got := proofbound.RatFloatUp(g)
 		want := tripleIntegralReference(0, 1, 1, 1, dphi, 60)
@@ -134,9 +133,9 @@ func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
 	// A small angular step's factor is dφ³/12 to leading order — which is what
 	// makes Σ Icell reproduce a chorded cylinder's own volume deficit — so
 	// halving the step must divide the factor by very nearly eight.
-	coarse, err := tessellation.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 40)))
+	coarse, err := revolvemesh.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 40)))
 	require.NoError(t, err)
-	fine, err := tessellation.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 80)))
+	fine, err := revolvemesh.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(2 * math.Pi / 80)))
 	require.NoError(t, err)
 	ratio := proofbound.RatFloatUp(coarse) / proofbound.RatFloatUp(fine)
 	require.InDelta(t, 8.0, ratio, 0.05)
@@ -150,7 +149,7 @@ func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
 
 func mustAngularFactor(t *testing.T, dphi float64) *big.Rat {
 	t.Helper()
-	g, err := tessellation.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
+	g, err := revolvemesh.RevolveAngularHomotopyFactor(proofbound.PointInterval(proofarith.FloatRat(dphi)))
 	require.NoError(t, err)
 	return g
 }
@@ -160,7 +159,7 @@ func TestRevolveAngularHomotopyFactorRefusesAnUnenclosableStep(t *testing.T) {
 	// A reversed enclosure states no angle at all, and §11's integral may not
 	// be answered from one: the mesh refuses rather than publishing a figure it
 	// cannot stand behind.
-	_, err := tessellation.RevolveAngularHomotopyFactor(proofbound.Interval(big.NewRat(1, 1), new(big.Rat)))
+	_, err := revolvemesh.RevolveAngularHomotopyFactor(proofbound.Interval(big.NewRat(1, 1), new(big.Rat)))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -181,9 +180,9 @@ func TestRevolveCellSweptVolumeBoundsTheCellIntegral(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := mustAngularFactor(t, tc.dphi)
-			lo := tessellation.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(tc.z0)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho0))}
-			hi := tessellation.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(tc.z1)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho1))}
-			got := proofbound.RatFloatUp(tessellation.RevolveCellSweptVolume(lo, hi, g))
+			lo := revolvemesh.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(tc.z0)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho0))}
+			hi := revolvemesh.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(tc.z1)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(tc.rho1))}
+			got := proofbound.RatFloatUp(revolvemesh.RevolveCellSweptVolume(lo, hi, g))
 			want := tripleIntegralReference(tc.z0, tc.rho0, tc.z1, tc.rho1, tc.dphi, 60)
 			require.Positive(t, want)
 			require.GreaterOrEqual(t, got, want, `Icell sits below the swept volume it must bound`)
@@ -198,9 +197,9 @@ func TestRevolveCellSweptVolumeIsZeroForAnAxisLevelCell(t *testing.T) {
 	// homotopy moves nothing along the axis and sweeps no volume at all: |z'|
 	// is the factor that vanishes.
 	g := mustAngularFactor(t, 2*math.Pi/32)
-	lo := tessellation.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(3)), RhoIv: proofbound.PointInterval(new(big.Rat))}
-	hi := tessellation.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(3)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(8))}
-	require.Zero(t, tessellation.RevolveCellSweptVolume(lo, hi, g).Sign())
+	lo := revolvemesh.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(3)), RhoIv: proofbound.PointInterval(new(big.Rat))}
+	hi := revolvemesh.RevMeridian{ZIv: proofbound.PointInterval(proofarith.FloatRat(3)), RhoIv: proofbound.PointInterval(proofarith.FloatRat(8))}
+	require.Zero(t, revolvemesh.RevolveCellSweptVolume(lo, hi, g).Sign())
 }
 
 func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
@@ -319,7 +318,7 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 	t.Parallel()
 	// The per-piece allowance rests on max|f''| for each of P and Q. Both bounds
 	// are elementary rather than derived, so the falsifier is a dense numeric
-	// second difference of the very functions tessellation.RevolveAngularHomotopyFactor
+	// second difference of the very functions revolvemesh.RevolveAngularHomotopyFactor
 	// encloses: a claimed bound below the observed curvature disproves it.
 	p := func(u, d float64) float64 {
 		return d * ((1-u)*(1-math.Cos(u*d)) + u*(1-math.Cos((1-u)*d)))
@@ -327,10 +326,10 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 	q := func(u, d float64) float64 {
 		return math.Sin(u*d)*(1-math.Cos(d)) - math.Sin(d)*(1-math.Cos(u*d))
 	}
-	n := int64(tessellation.RevolveAngularIntegralSteps)
+	n := int64(revolvemesh.RevolveAngularIntegralSteps)
 	scale := float64(8 * n * n)
 	for _, d := range []float64{2 * math.Pi / 3, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		bp, bq := tessellation.AngularHomotopyBulges(proofbound.PointInterval(proofarith.FloatRat(d)), n)
+		bp, bq := revolvemesh.AngularHomotopyBulges(proofbound.PointInterval(proofarith.FloatRat(d)), n)
 		require.Positive(t, proofbound.RatFloatUp(bp))
 		require.Positive(t, proofbound.RatFloatUp(bq))
 		const h = 1e-4
