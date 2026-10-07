@@ -187,6 +187,10 @@ func revolveShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // ringBody revolves a circle of radius 14mm, 38mm off the axis, into a flat
 // torus.
 func ringBody(ctx context.Context) (*decad.Body, error) {
+	return ringBodyAtAngle(ctx, 360)
+}
+
+func ringBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the ring lies flat.
 	s, err := w.CreateSketch(w.XZ())
@@ -205,7 +209,11 @@ func ringBody(ctx context.Context) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	ring, err := decad.New().Revolve(s, profile, axis, decad.FullRevolution{}) //nolint:contextcheck
+	var extent decad.AngularExtent = decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along}
+	if angle == 360 {
+		extent = decad.FullRevolution{}
+	}
+	ring, err := decad.New().Revolve(s, profile, axis, extent) //nolint:contextcheck
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
@@ -225,12 +233,16 @@ func loftShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error)
 // loftDuct lofts an 84×60mm rectangle into a 36×28mm one, offset along X,
 // 46mm above it.
 func loftDuct(ctx context.Context) (*decad.Body, error) {
+	return loftDuctAtHeight(ctx, 46)
+}
+
+func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	bottom, bottomProfile, err := sketchLoops(ctx, w, w.XY(), rectangle(-42, -30, 42, 30))
 	if err != nil {
 		return nil, err
 	}
-	topPlane, err := w.CreateOffsetPlane(w.XY(), 46)
+	topPlane, err := w.CreateOffsetPlane(w.XY(), height)
 	if err != nil {
 		return nil, err
 	}
@@ -299,13 +311,17 @@ func shellShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error
 // trayBody shells a 92×64×34mm block through its top face, leaving a 7mm
 // wall.
 func trayBody(ctx context.Context) (*decad.Body, error) {
+	return trayBodyAtThickness(ctx, 7)
+}
+
+func trayBodyAtThickness(ctx context.Context, thickness float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	block, err := prism(ctx, doc, w, w.XY(), 34, rectangle(-46, -32, 46, 32))
 	if err != nil {
 		return nil, err
 	}
-	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(7))
+	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness))
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}
@@ -336,6 +352,10 @@ func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, er
 // bladeBody extrudes 30mm a section bounded by a fit spline through five
 // points and the straight chord between its ends.
 func bladeBody(ctx context.Context) (*decad.Body, error) {
+	return bladeBodyAtHeight(ctx, 30)
+}
+
+func bladeBodyAtHeight(ctx context.Context, height float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -359,7 +379,7 @@ func bladeBody(ctx context.Context) (*decad.Body, error) {
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
 	blade, err := decad.New().Extrude(s, profile, //nolint:contextcheck
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
 	}
@@ -384,6 +404,10 @@ func surfaceShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // axis 26mm behind the origin and keeps only the swept wall. It refuses a
 // result that is not an open sheet (requireSheet).
 func dishBody(ctx context.Context) (*decad.Body, error) {
+	return dishBodyAtAngle(ctx, 150)
+}
+
+func dishBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the dish stands
 	// upright and its axis is vertical. Offsetting that plane carries the axis
@@ -416,7 +440,7 @@ func dishBody(ctx context.Context) (*decad.Body, error) {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
 	dish, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
-		decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along},
+		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	if err != nil {
 		return nil, fmt.Errorf("revolve the dish: %w", err)

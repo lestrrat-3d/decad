@@ -7,6 +7,10 @@
 // the repository's docs/images, at each shot's own chord tolerance and size,
 // exactly as committed.
 //
+// The features subcommand renders each feature at successive construction
+// stages and writes looping GIFs under docs/images/features. It requires
+// ffmpeg and accepts -only and -out flags.
+//
 // Flags let one invocation try a shot at a different tolerance or size
 // without touching the committed images:
 //
@@ -123,7 +127,7 @@ func main() {
 }
 
 // run renders the hero still and each feature thumbnail. A first argument of
-// "hero", "clip", "dynamics" or "linkage" renders the corresponding animation
+// "hero", "clip", "features", "dynamics" or "linkage" renders the corresponding animation
 // instead.
 func run(ctx context.Context) error {
 	if len(os.Args) > 1 && os.Args[1] == "linkage" {
@@ -138,11 +142,15 @@ func run(ctx context.Context) error {
 	if len(os.Args) > 1 && os.Args[1] == "hero" {
 		return runHero(ctx, os.Args[2:], os.Stdout)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "features" {
+		return runFeatureAnimations(ctx, os.Args[2:])
+	}
 	flag.Usage = func() {
 		out := flag.CommandLine.Output()
 		fmt.Fprintln(out, "Usage: go run . [flags]")
 		fmt.Fprintln(out, "       go run . clip [clip flags]   (go run . clip -h lists the clip flags)")
 		fmt.Fprintln(out, "       go run . hero [hero flags]   (go run . hero -h lists the hero flags)")
+		fmt.Fprintln(out, "       go run . features [feature flags]   (go run . features -h lists the feature flags)")
 		fmt.Fprintln(out, "       go run . dynamics -scene <name> [dynamics flags]   (go run . dynamics -h lists them)")
 		fmt.Fprintln(out, "       go run . linkage [linkage flags]   (go run . linkage -h lists them)")
 		fmt.Fprintln(out, "Flags:")
