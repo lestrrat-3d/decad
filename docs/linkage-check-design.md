@@ -1217,11 +1217,15 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   colliding), about `15` s and `1` GB, and `70` s under the race detector, the overlap-volume proof at each
   colliding centre taking nine tenths of it; at `Scalar(1.0/16)`, `239` centres in about `1` s. The test
   runs at `Scalar(1.0/16)` for that cost.
-- **Three joints.** The three-joint arm of §10 over three quarter turns has `τ_half ≈ 236` mm at the root;
-  a `10` mm gap everywhere needs cells of about `1/24` per axis, `24³ ≈ 14000` leaves and twice that many
-  centres, at the edge of the default budget: the default run reaches depth `14`, about `1/20` per axis,
-  and raises the budget finding. A caller who wants that box proven states `WithCellBudget(65536)` and
-  waits about three minutes, or holds one joint. The layer exclusion is what makes a planar stack cheap: a
+- **Three joints.** The three-joint arm of §10 with each joint over `[0°, 90°]`. Measured: the verdict
+  is cheap, every leaf `CellClear` within `127` centres, about `0.4` s, since the elbows are declared, the
+  shoulder-wrist pair is settled by its layer and only the wrist's pairs with the posts are evaluated. The
+  whole-box reading is not: its minimum, the wrist `10` mm from the near post at the zero configuration,
+  is flat — the gap grows with the square of each joint's turn while `τ_half` shrinks only linearly with
+  the cell — so step 6 crowds cells around that corner. At the default budget it evaluates `16383` centres
+  in about `43` s and `1` GB and reads `Suspect`, the reading beyond tolerance and the budget finding raised;
+  at `WithCellBudget(65536)` it takes about `6` minutes and `2.1` GB and still does not meet the gate. A
+  caller who wants the verdict states `WithResolution`, which stops the reading at the same floor. The layer exclusion is what makes a planar stack cheap: a
   pair it settles costs no cell, and scene 1's arms without the wall read `Sound` from the root alone.
 - **The reading.** Around an isolated minimum, step 6 costs about `n·log₂(1/ReadingResolution)` splits;
   a gap constant along one axis makes every cell along it tie, and the cost is linear in that axis's cell
@@ -1265,13 +1269,17 @@ and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, w
   `Status`, the first collision's bodies and its `θ` and `d` to two decimals; the centres are dyadic, so
   the printed values hold on every platform.
 
-**The clear box and its reading.** The same box with the wall moved to `y ∈ [100, 120]`: the minimum gap
-over the box is `100 − y(80°, 30) = 100 − 90·sin 80° − 5·cos 80° ≈ 10.499` mm, at the box's corner.
-Assert `Sound`, every leaf `CellClear`, `Clearance` enclosing `10.499` with `ToleranceSatisfied` at the
-defaults, `ReadingResolution` `1/16384`, some leaf narrower than `1/1024` along `θ`; `WithMinClearance`
-`10` mm `AssessmentMet`, `11` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose `Cell` is
-set. At `WithResolution(Scalar(1.0/64))` the reading is beyond tolerance and the report `Suspect` with no
-leaf narrower than `1/64`; red when a stated resolution leaves the reading floor at its default.
+**The clear box and its reading.** The same box with the wall moved to `y ∈ [100, 120]` and the mast cut
+to `z ∈ [0, 20]`: at scene 6's `38` mm mast the layer exclusion's `2` mm between mast and boom would be the
+box's minimum, a bound no pose measures, and the reading could never close. Now the layer bound is `20` mm
+and the minimum gap over the box is `100 − y(80°, 30) = 100 − 90·sin 80° − 5·cos 80° ≈ 10.499` mm, at the
+box's corner. Assert `Sound`, every leaf `CellClear` with its bound below the true gap at its worst corner,
+`Clearance` enclosing `10.499` with `ToleranceSatisfied` at the defaults, `ReadingResolution` `1/16384`,
+some leaf narrower than `1/1024` along `θ`, fewer than `1024` centres (measured: `137`); `WithMinClearance`
+`10` mm `AssessmentMet`, at the default tolerance and at a relative tolerance of `0.5`, where only the
+margin's own refinement proves it; `11` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose
+`Cell` is set. At `WithResolution(Scalar(1.0/64))` the reading is beyond tolerance and the report `Suspect`
+with no leaf narrower than `1/64`; red when a stated resolution leaves the reading floor at its default.
 
 **The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
 so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
@@ -1312,7 +1320,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 |---|---|---|
 | 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
 | 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions, still at `Scalar(1.0/16)` (§14.7), the blocked box, and the blocked allowance pinned per moving body | a clear box's whole-box reading at the default floor |
-| 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis whose gate needs the budget |
+| 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis, or a flat minimum, whose gate needs more than the budget |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
 one report, with scene 6's closed-form region as its acceptance. This section ships in PR 1.

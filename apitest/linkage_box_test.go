@@ -31,8 +31,15 @@ type craneBox struct {
 
 func buildCraneBox(t *testing.T, wallY float64) craneBox {
 	t.Helper()
+	return buildCraneBoxWithMast(t, wallY, 38)
+}
+
+// buildCraneBoxWithMast is scene 6 with the mast standing mastTop mm tall,
+// 40 − mastTop mm under the boom.
+func buildCraneBoxWithMast(t *testing.T, wallY, mastTop float64) craneBox {
+	t.Helper()
 	c := craneBox{doc: decad.New()}
-	c.mast = boxBody(t, c.doc, -5, -5, 5, 5, 38)
+	c.mast = boxBody(t, c.doc, -5, -5, 5, 5, mastTop)
 	c.boom = boxBodyAtZ(t, c.doc, 10, -5, 60, 5, 40, 10)
 	c.wall = boxBodyAtZ(t, c.doc, -100, wallY, 150, wallY+20, 30, 70)
 	c.linkage = decad.NewLinkage()
@@ -658,4 +665,99 @@ func TestVerifyJointBoxPoseDeviationIsCharged(t *testing.T) {
 	far := centreBound(t, 1e6)
 	require.Greater(t, near, 0.0)
 	require.Greater(t, far, near)
+}
+
+// TestVerifyJointBoxClearReading is §14.8's clear box: scene 6's crane with
+// the wall moved to y ∈ [100, 120] and the mast cut to z ∈ [0, 20], so the
+// layer exclusion's 20 mm between mast and boom is not the box's minimum.
+// The tip's highest point over the box is its (80°, 30 mm) corner, so the
+// minimum gap is 100 − 90·sin 80° − 5·cos 80° ≈ 10.499 mm, at the box's
+// corner. At the defaults the whole-box reading
+// refines past the verdict floor toward that corner, to the reading floor
+// 1/16384 per axis, until it passes the tolerance gate; a 10 mm margin is
+// proven and an 11 mm one disproven at a centre. A stated resolution is both
+// floors, so at 1/64 the reading stays coarse and the report reads Suspect.
+//
+// Legs seen to fail when deleted: the reading's refinement (the defaults read
+// Suspect, the reading beyond tolerance); the reading floor past the verdict
+// floor (no leaf is narrower than 1/1024); a stated resolution setting the
+// reading floor (a leaf narrower than 1/64); the margin's refinement (under a
+// loose tolerance the 10 mm margin reads AssessmentUndecided).
+func TestVerifyJointBoxClearReading(t *testing.T) {
+	t.Parallel()
+	truth := 100 - boomTipY(80, 30)
+	narrowest := func(t *testing.T, report *decad.JointBoxReport) float64 {
+		t.Helper()
+		least := 1.0
+		for _, cell := range report.Cells {
+			cc := readCraneCell(t, cell.Cell)
+			least = math.Min(least, (cc.thHi-cc.thLo)/80)
+		}
+		return least
+	}
+	t.Run("the defaults refine the reading to the gate", func(t *testing.T) {
+		t.Parallel()
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box())
+		require.Equal(t, decad.Sound, report.Status)
+		require.Empty(t, report.Diagnostics)
+		require.Equal(t, units.Scalar(1.0/1024), report.Request.Resolution)
+		require.Equal(t, units.Scalar(1.0/16384), report.ReadingResolution)
+		for _, cell := range report.Cells {
+			require.Equal(t, decad.CellClear, cell.Outcome)
+			cc := readCraneCell(t, cell.Cell)
+			require.LessOrEqual(t, cell.Clearance.Value.Mag(), 100-boomTipY(cc.thHi, cc.dHi), `each bound is below the cell's true minimum`)
+		}
+		require.NotNil(t, report.Clearance)
+		gap := report.Clearance.Measurement
+		require.LessOrEqual(t, gap.Value.Mag()-gap.Bound.Mag(), truth)
+		require.GreaterOrEqual(t, gap.Value.Mag()+gap.Bound.Mag(), truth)
+		require.Equal(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+		require.Less(t, narrowest(t, report), 1.0/1024, `the reading refines past the verdict floor`)
+		require.Less(t, report.CellsEvaluated, 1024)
+	})
+	t.Run("a 10 mm margin is met", func(t *testing.T) {
+		t.Parallel()
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box(), decad.WithMinClearance(units.Millimeters(10)))
+		require.Equal(t, decad.AssessmentMet, report.Assessment)
+		require.Equal(t, decad.Sound, report.Status)
+	})
+	t.Run("a 10 mm margin refines past a loose reading", func(t *testing.T) {
+		t.Parallel()
+		// At a relative tolerance of 0.5 the reading passes its gate on coarse
+		// cells, so only the margin's own refinement proves 10 mm.
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box(),
+			decad.WithMinClearance(units.Millimeters(10)), decad.WithMotionTolerance(units.Scalar(0.5)))
+		require.Equal(t, decad.AssessmentMet, report.Assessment)
+		require.Equal(t, decad.Sound, report.Status)
+	})
+	t.Run("an 11 mm margin is violated", func(t *testing.T) {
+		t.Parallel()
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box(), decad.WithMinClearance(units.Millimeters(11)))
+		require.Equal(t, decad.AssessmentViolated, report.Assessment)
+		require.Equal(t, decad.Violating, report.Status)
+		violations := 0
+		for _, d := range report.Diagnostics {
+			if d.Code != decad.DiagMotionClearanceViolated {
+				continue
+			}
+			violations++
+			require.NotNil(t, d.Cell, `the violation names the cell whose centre proved it`)
+			require.Less(t, d.Observed.Value.Mag()+d.Observed.Bound.Mag(), 11.0)
+		}
+		require.Positive(t, violations)
+	})
+	t.Run("a stated resolution is both floors", func(t *testing.T) {
+		t.Parallel()
+		c := buildCraneBoxWithMast(t, 100, 20)
+		report := verifyJointBox(t, c.doc, c.linkage, c.box(), decad.WithResolution(units.Scalar(1.0/64)))
+		require.Equal(t, units.Scalar(1.0/64), report.ReadingResolution)
+		require.Equal(t, decad.Suspect, report.Status)
+		require.NotNil(t, report.Clearance)
+		require.NotEqual(t, decad.ToleranceSatisfied, report.Clearance.Tolerance.State)
+		require.GreaterOrEqual(t, narrowest(t, report), 1.0/64)
+	})
 }
