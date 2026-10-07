@@ -249,7 +249,7 @@ func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
 	defect := orthonormalityDefect(f)
 	firstNorm := new(big.Rat)
 	for _, component := range m.first {
-		firstNorm.Add(firstNorm, tessellation.IntervalAbsUpper(component))
+		firstNorm.Add(firstNorm, proofbound.IntervalAbsUpper(component))
 	}
 	firstWiden := new(big.Rat).Mul(defect, firstNorm)
 	out := volumeMoments{volume: m.volume}
@@ -364,7 +364,7 @@ func prismOccupiedVolumeError(ctx context.Context, pp prismPayload, area proofbo
 	d0, d1, delta := proofarith.FloatRat(pp.z0Delta), proofarith.FloatRat(pp.z1Delta), proofarith.FloatRat(pp.sectionDelta)
 	axial := new(big.Rat).Add(d0, d1)
 	e := new(big.Rat).Mul(proofarith.FloatRat(displaced), new(big.Rat).Add(h, axial))
-	e.Add(e, new(big.Rat).Mul(tessellation.IntervalAbsUpper(area), axial))
+	e.Add(e, new(big.Rat).Mul(proofbound.IntervalAbsUpper(area), axial))
 
 	inPlane := new(big.Rat).Add(proofarith.FloatRat(coordUpper), delta)
 	alongAxis := new(big.Rat).Quo(h, big.NewRat(2, 1))
@@ -440,7 +440,7 @@ func tensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
 	largest := new(big.Rat)
 	for i := range t {
 		for j := range t[i] {
-			largest = survey2d.RatMax(largest, tessellation.IntervalAbsUpper(t[i][j]))
+			largest = survey2d.RatMax(largest, proofbound.IntervalAbsUpper(t[i][j]))
 		}
 	}
 	return largest
@@ -455,7 +455,7 @@ func gershgorinLower(t [3][3]proofbound.RatInterval) *big.Rat {
 		row := new(big.Rat).Set(t[i][i].Lo)
 		for j := range t[i] {
 			if i != j {
-				row.Sub(row, tessellation.IntervalAbsUpper(t[i][j]))
+				row.Sub(row, proofbound.IntervalAbsUpper(t[i][j]))
 			}
 		}
 		if lower == nil || row.Cmp(lower) < 0 {

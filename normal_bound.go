@@ -3,8 +3,6 @@ package decad
 import (
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -143,12 +141,12 @@ func axialRadialExact(p, origin, axis r3.Vec) (survey2d.IvVec3, bool) {
 	if !okP || !okO || !okA {
 		return survey2d.IvVec3{}, false
 	}
-	rel := tessellation.IvVec3Sub(pi, oi)
+	rel := survey2d.IvVec3Sub(pi, oi)
 	share, ok := survey2d.IntervalQuo(survey2d.IvVec3Dot(rel, ai), survey2d.IvVec3NormSq(ai))
 	if !ok {
 		return survey2d.IvVec3{}, false
 	}
-	return tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
+	return survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(ai, share)), true
 }
 
 // planeNormalAllow bounds the Plane arm's own reading. An r3.Frame stores no
@@ -166,7 +164,7 @@ func planeNormalAllow(fr r3.Frame, held r3.Vec) (float64, normalStatus) {
 	if !okU || !okV {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(tessellation.IvVec3Cross(u, v), held)
+	return unitDirAllow(survey2d.IvVec3Cross(u, v), held)
 }
 
 // axialNormalAllow bounds the Cylinder arm's reading: its exact normal is the
@@ -187,7 +185,7 @@ func radialNormalAllow(p, center r3.Vec, held r3.Vec) (float64, normalStatus) {
 	if !okP || !okC {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(tessellation.IvVec3Sub(pi, ci), held)
+	return unitDirAllow(survey2d.IvVec3Sub(pi, ci), held)
 }
 
 // coneNormalAllow bounds the Cone arm's reading. The exact normal is
@@ -220,7 +218,7 @@ func coneNormalAllow(p r3.Vec, s Cone, half float64, held r3.Vec) (float64, norm
 	if !okT {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(tessellation.IvVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
+	return unitDirAllow(survey2d.IvVec3Sub(survey2d.IvVec3Mul(rdir, cos), survey2d.IvVec3Mul(adir, sin)), held)
 }
 
 // torusNormalAllow bounds the Torus arm's reading: the exact direction runs
@@ -241,6 +239,6 @@ func torusNormalAllow(p r3.Vec, s Torus, major float64, held r3.Vec) (float64, n
 	if rMajor == nil || !okP || !okC {
 		return 0, normalUnproven
 	}
-	rel := tessellation.IvVec3Sub(pi, ci)
-	return unitDirAllow(tessellation.IvVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
+	rel := survey2d.IvVec3Sub(pi, ci)
+	return unitDirAllow(survey2d.IvVec3Sub(rel, survey2d.IvVec3Mul(rdir, proofbound.PointInterval(rMajor))), held)
 }

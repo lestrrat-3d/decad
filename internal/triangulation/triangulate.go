@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // Point2 is a plane-local coordinate in millimetres.
@@ -24,6 +23,12 @@ func (e *ExpectedError) Unwrap() error { return e.err }
 // given as a chorded outer boundary plus hole boundaries becomes triangles by
 // hole bridging (Eberly's max-u visibility construction) followed by ear
 // clipping — correct for non-convex outlines with holes, and deterministic.
+
+// isBridgeStub identifies a zero-area corner created by hole bridging.
+// Distinct collinear vertices remain part of the boundary.
+func isBridgeStub(ia, ib, ic int) bool {
+	return ia == ic || ia == ib || ib == ic
+}
 
 // cross2 returns the z-component of (b − a) × (c − a): positive when a, b, c
 // turn counter-clockwise.
@@ -275,7 +280,7 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 				// A zero-area corner is removed only when it is a bridge stub, and
 				// never emits a triangle — so the reflex-blocking scan, whose
 				// result is discarded for such a corner, is skipped entirely.
-				if !tessellation.IsBridgeStub(ia, ib, ic) {
+				if !isBridgeStub(ia, ib, ic) {
 					continue
 				}
 			} else {

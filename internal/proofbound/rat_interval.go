@@ -62,6 +62,15 @@ func IntervalMul(a, b RatInterval) RatInterval {
 	return FromProofInterval(proofarith.MulInterval(ToProofInterval(a), ToProofInterval(b)))
 }
 
+// IntervalAbsUpper is the largest magnitude an interval permits.
+func IntervalAbsUpper(a RatInterval) *big.Rat {
+	lo, hi := new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi)
+	if lo.Cmp(hi) >= 0 {
+		return lo
+	}
+	return hi
+}
+
 func IntervalFloatError(a RatInterval, held float64) float64 {
 	return proofarith.IntervalFloatError(ToProofInterval(a), held)
 }

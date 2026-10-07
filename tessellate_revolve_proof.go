@@ -88,7 +88,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 		case haveDen:
 			angle := proofbound.IntervalAdd(enc0, proofbound.IntervalScale(diff, frac))
 			var ok bool
-			sinIv, cosIv, ok = tessellation.RadSinCosSpan(angle)
+			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
 			if !ok {
 				return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
 			}
@@ -97,7 +97,7 @@ func revolveAngularSequence(rp revolvePayload, n int) (tessellation.RevolveAngul
 		case full:
 			angle := proofbound.IntervalAdd(proofbound.PointInterval(r0), proofbound.IntervalScale(proofbound.TwoPiInterval(), frac))
 			var ok bool
-			sinIv, cosIv, ok = tessellation.RadSinCosSpan(angle)
+			sinIv, cosIv, ok = survey2d.RadSinCosSpan(angle)
 			if !ok {
 				return tessellation.RevolveAngular{}, tessellation.ErrRevolveAngleEnclosure
 			}
@@ -149,7 +149,7 @@ func revolveIdealBasis(rp revolvePayload) (tessellation.RevolveBasis3Iv, bool) {
 	a3 := survey2d.IvVec3Add(origin, survey2d.IvVec3Add(scale(fu, aU), scale(fv, aV)))
 	w := survey2d.IvVec3Add(scale(fu, dU), scale(fv, dV))
 	e0 := survey2d.IvVec3Add(scale(fu, new(big.Rat).Neg(dV)), scale(fv, dU))
-	return tessellation.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: tessellation.IvVec3Cross(w, e0)}, true
+	return tessellation.RevolveBasis3Iv{A3: a3, W: w, E0: e0, E1: survey2d.IvVec3Cross(w, e0)}, true
 }
 
 // requireVertexLinks is docs/tessellation-design.md §9's construction safety

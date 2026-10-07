@@ -3,8 +3,6 @@ package decad
 import (
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
-
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -125,9 +123,9 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		return capPatchModel{}, false
 	}
 	perp := func(v survey2d.IvVec3) survey2d.IvVec3 {
-		return tessellation.IvVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
+		return survey2d.IvVec3Sub(v, survey2d.IvVec3Mul(ahat, survey2d.IvVec3Dot(v, ahat)))
 	}
-	offset := perp(tessellation.IvVec3Sub(world.Point(cU, cV, capZ), originIv))
+	offset := perp(survey2d.IvVec3Sub(world.Point(cU, cV, capZ), originIv))
 	qu := survey2d.IvVec3Mul(perp(world.Du), proofbound.PointInterval(radius))
 	qv := survey2d.IvVec3Mul(perp(world.Dv), proofbound.PointInterval(radius))
 
@@ -168,8 +166,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		b: proofbound.IntervalMul(scale, anchoredV),
 		c: proofbound.IntervalSub(proofbound.IntervalMul(scale, offComp), axial),
 		slop: proofbound.RatMul(
-			tessellation.IntervalAbsUpper(cosH),
-			proofbound.RatAdd(tessellation.IntervalAbsUpper(uComp), tessellation.IntervalAbsUpper(vComp), tessellation.IntervalAbsUpper(offComp)),
+			proofbound.IntervalAbsUpper(cosH),
+			proofbound.RatAdd(proofbound.IntervalAbsUpper(uComp), proofbound.IntervalAbsUpper(vComp), proofbound.IntervalAbsUpper(offComp)),
 			gap,
 		),
 	}, true
