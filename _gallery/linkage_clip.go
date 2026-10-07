@@ -63,16 +63,6 @@ const (
 	linkageBaseTop  = -4.0
 )
 
-// pinOffset is how far, in millimetres, a pin that rides in a moving bore
-// sits off the bore's centre, toward −Y at the zero pose. As the joint turns
-// the shaft circles the bore's centre at that radius, so the clearance runs
-// between 0.25 and 0.75 mm and never closes. A pin set exactly on its bore's
-// centre left VerifyLinkage unable to measure the pair at most poses, where
-// the two bodies' float poses put the circles a rounding error off
-// concentric: the declared pair then published nothing and the check spent
-// its time on the mesh path.
-const pinOffset = 0.25
-
 // linkageScene is a mechanism as verified and as filmed: the folding arm, or
 // the crank-rocker, whose drive moves a loop and whose frames are posed
 // through schedule.
@@ -109,7 +99,7 @@ var linkageHitColor = coral
 // about Z through the elbow from 0° to −90°. It carries the elbow pin, so it
 // needs no bore: a shaft from 1 mm under the upper arm up through its elbow
 // bore, a spacer between the two bars and a cap on the forearm. Every shaft
-// clears its bore by at least 0.25 mm (pinOffset), every head, cap and collar
+// stands on its bore's centre and clears it by 0.5 mm, every head, cap and collar
 // stands at least 1 mm off the bar it does not belong to, and both
 // shaft-in-bore pairs are declared joint contacts.
 //
@@ -141,14 +131,14 @@ func foldingArmScene(ctx context.Context) (*linkageScene, error) {
 	if err != nil {
 		return nil, fmt.Errorf("forearm: %w", err)
 	}
-	elbowPin, err := pinStack(ctx, scene.doc, linkageElbow, -pinOffset, linkageUpperZ-1, []pinStep{
+	elbowPin, err := pinStack(ctx, scene.doc, linkageElbow, 0, linkageUpperZ-1, []pinStep{
 		{radius: linkagePin, top: linkageUpperZ + linkageBarThick + 1},
 		{radius: linkageHead, top: linkageForearmZ},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("elbow pin: %w", err)
 	}
-	elbowCap, err := pinStack(ctx, scene.doc, linkageElbow, -pinOffset, linkageForearmZ+linkageBarThick, []pinStep{
+	elbowCap, err := pinStack(ctx, scene.doc, linkageElbow, 0, linkageForearmZ+linkageBarThick, []pinStep{
 		{radius: linkageHead, top: linkageForearmZ + linkageBarThick + 2},
 	})
 	if err != nil {

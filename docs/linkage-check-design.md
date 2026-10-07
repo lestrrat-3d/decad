@@ -505,6 +505,8 @@ endpoint ends the argument.
 | a rest-box corner's position `f_c` and velocities `v_{i,c}` at a pose, projected onto `n` (§5.8) | enclosed by the ideal poses at that pose, rounded outward to floats; the bound takes the end that weakens it |
 | the float pose the kernel measured | charged by `η_k` (§5.1); never trusted |
 | a link body with no record radius (a stitched payload) under a path with any revolute joint | `η` unbounded: the pair reads `DiagUndecidedClearance` at every pose and no collision transfers, exactly as motion §7's stitched mover under a `Revolute`; a path of prismatic joints alone leaves the linear part the identity and `η` is the translation term |
+| a pin on one link in a bore on another, the two axes exactly coincident in the ideal poses | the float poses put the two carriers' anchors a few ulps apart; the kernel's windowed nested cell (clearance §4) reads the gap as `R − r ∓ d_sup`, `Approximate`, widened by `δ` and `η` like any placed pair's |
+| a pin whose radius equals its bore's | undecided at every pose: a contact clearance §6 does not certify; declared, it publishes nothing (§5.4) |
 | a `Bounds()` box or an axis the exact reader cannot form (non-finite) | `ErrNotFinite` at the call |
 
 ### 5.4 Declared joint contacts
@@ -988,11 +990,15 @@ check declines by design is listed in §1, §13 and §14.10.
 ## 10. Cost
 
 Each pose runs the pair procedure once per evaluated pair; a declared pair costs the same as an evaluated
-one. The per-call `bodyGeomCache` holds every static body's clearance carriers for the whole run, and each
-transient link placement is built, used for its pairs, and dropped per pose, as `VerifyMotion` does. The
-one-mesh-per-body cache of interference §5.3 is `Verify`'s and does not apply: a pose measures transient
-bodies, and each pair keeps its own tolerance, as that section records for the motion check. A static
-body's mesh, when a pair reaches the mesh path, comes from the body's own one-entry tessellation cache.
+one. A pin in a bore costs the kernel's windowed nested cell (clearance §4), about `0.1` ms per pose on
+the folding arm's elbow. A pair the kernel leaves undecided falls to the read-only mesh intersection at
+every pose, the slow path, which re-tessellates each transient placement; the windowed cell keeps a pin
+pair off it. The per-call `bodyGeomCache` holds every static body's clearance carriers for the whole run,
+and each transient link placement is built, used for its pairs, and dropped per pose, as `VerifyMotion`
+does. The one-mesh-per-body cache of interference §5.3 is `Verify`'s and does not apply: a pose measures
+transient bodies, and each pair keeps its own tolerance, as that section records for the motion check. A
+static body's mesh, when a pair reaches the mesh path, comes from the body's own one-entry tessellation
+cache.
 
 The pose count is governed by the travel rate. A link under `k` sweeping revolute joints has
 `τ ≈ Δs·Σ_i ρ_{ik}·|To_i − From_i|`; a wrist link with `ρ` of `50`, `100` and `150` mm under three quarter-
@@ -1182,6 +1188,45 @@ y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
 - `examples/` gains `Example_decad_linkageWaypoints` on the lift-swing-lower scene, printing `Status`, the
   first collision at `s = 0.918`, and its segment and local fraction: the lowering, `75%` through it.
 
+**Scene 8 — the pinned elbow (the concentric pin's acceptance target).** The upper arm `A`: a prism over
+`x ∈ [−14, 62], y ∈ [−14, 14]`, `z ∈ [0, 8]`, holed by the circle of radius `R = 5.5` about `(48, 0)`, on
+the shoulder revolute about `Z` through the origin, `0° → 90°`. The elbow pin `P`: a prism over the circle
+of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute about `Z` through `(48, 0, 0)`,
+`0° → −90°`, with `DeclareJointContact(A, P)`. Scene 1's wall, `y ∈ [38, 58]`, which `A`'s far corner
+`(62, 14)`, at radius `≈ 63.6` and polar angle `atan(14/62)`, reaches when `63.6·sin(θ + atan(14/62)) =
+38`: `θ ≈ 24.0°`, `s ≈ 0.267`; `P`, whose centre rides the elbow's circle of radius `48`, reaches it when
+`48·sin θ + 5 = 38`, `s ≈ 0.482`. The verdict therefore bisects, and the endpoints, `1/2` (colliding) and
+`1/4` (clear, `A`'s corner at `y ≈ 36.7`) are among the evaluated poses. At
+`WithResolution(Scalar(1.0/256))`:
+
+- `A` and `P` are coaxial in the ideal poses at every `s`: the pin turns about its own axis, which the
+  shoulder carries along with the bore. Their float poses do not agree: `A`'s bore anchor is the shoulder
+  rotation's image of `(48, 0, 0)`, `P`'s is the `Then`-composed elbow-then-shoulder pose's image of
+  `(48, 0, −1)`, and the two differ by `3e-15` to `7e-15` at `s = 1/4`, `3/4` and `1` on amd64, zero at
+  `s = 0`, `1/8`, `1/3` and `1/2`.
+- Assert: `Status` is `Interfering` with every `LinkCollision` on `(A, wall)` or `(P, wall)` and none on
+  `(A, P)`; EVERY evaluated pose carries
+  a `Clearance` row for `(A, P)` with `Gap.Value` within `1e-9` of `0.5` and `Bound` at most `1e-9`; no
+  diagnostic names `(A, P)`. Red when the windowed face cell is deleted, and again when its edge-tier
+  twin is (clearance §4): the kernel's `RingFamily` is undecided where the anchors differ, and the bore's
+  rims against the pin's wall take the coarse enclosure's zero lower bound, so the pair is undecided there
+  and the declared pair's row is missing at `s = 1` and at `4` of the other `9` evaluated poses on amd64
+  (`10` poses, the first `(A, wall)` collision at `70/256`, the first `(P, wall)` one at `1/2`).
+- **The jammed pin.** `r = 5.6`: a `LinkCollision` on `(A, P)` at every evaluated pose, `Volume.Value ±
+  Bound` enclosing `8·π·(5.6² − 5.5²) ≈ 27.897` mm³ (measured `27.896 ± 0.68` through the mesh path);
+  `Status` `Interfering` with the pin unmeasured at no pose. This leg pins the order the kernel reads its
+  findings in: the bore body's caps cross the pin's wall inside their trims, and that `sink.Overlap` is
+  read before the windowed cell's interval, which here bounds the two cylinder FACES a proven `0.1` apart.
+- **The filled bore.** `r = 5.5`: no `(A, P)` row and no finding naming `(A, P)` at any pose; the report's
+  `Status` is the wall's. A windowed cell that admitted a lower bound at or below the kernel's `tol` would
+  still leave the pair undecided here, since the pair's own lower bound must clear `tol`; the kernel's band
+  test is the leg that goes red for it.
+- **The pin on a static post.** Scene 8 without the elbow: `P` static, `A` on a shoulder revolute about `Z`
+  through `(48, 0, 0)`, the bore on the joint. Every pose carries the `(A, P)` row at `0.5` today — a
+  single `RotationAround` fixes its centre bit for bit on this scene — and keeps it.
+- `_gallery`'s folding arm and crank-rocker put their pins back on their bores' centres, and
+  `linkage_clip_test.go` asserts every evaluated pose of each declared pair carries its row.
+
 **Agreement with `VerifyMotion`.** A one-link linkage on a revolute joint and the same body under the
 equivalent `Revolute`, on motion §9's fixtures 1, 2 and 4 at the endpoints alone: equal `Status`, equal
 interval outcomes in order, each `Collision.At` equal under `s ↦ From + s·(To − From)` within `1e-9°`,
@@ -1249,6 +1294,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | 3 | §6 step 2's held links — a link holding `0` stands where it is and forms no pair with a static body, a link held elsewhere is one constant placement; link-link swept-box exclusion; the layer exclusion (§5.7); their tests | a clear drive's whole-drive reading at the default floor where its minimum is reached at one parameter (§10) |
 | 4 | the reading floor (§3): `ReadingResolution`, the reading's refinement past the verdict floor at the defaults, the margin held to the verdict floor; its tests | a stated `WithResolution` too coarse for the reading, and a constant gap the layer exclusion cannot settle whose gate needs a step under `1/16384` |
 | 5 | waypoints (§2.3): `JointSweep.Via`, equal-share segments, `PoseAt` per segment, limits at every waypoint, `m_i`, holds and standings over every waypoint, `|Δq_i|` cut at every waypoint inside an interval (§5.2); scene 5 and its example | as after PR 4 |
+| 6 (`internal/clearance/facepair`, `internal/clearance/curvepair`: clearance §4's windowed nested cell and its edge-tier twin, clearance §8 PR 4) | a placed pin in a bore measured at every pose: scene 8, its jammed, filled and static-post variants, the kernel's band, tilt and rim tests; `_gallery`'s pins back on their centres | a pin that fills its bore |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
 one report, with the closed-form answer of scene 1 as its acceptance. This design document ships in PR 1.
@@ -1274,7 +1320,10 @@ holding a waypoint takes each joint's travel on both sides of it (§2.3, §5.2).
 vocabulary are `VerifyMotion`'s (§3, §4). The joint set is revolute and prismatic, every other lower pair
 a chain of them, and a joint moved by a caller's transform is refused, since no travel bound covers it
 (§1). Nothing continuous is claimed about a declared joint contact, and two bodies of one link form no
-pair (§4, §5.4, §5.6): both are the caller's stated scope. A link body with no record radius — a stitched
+pair (§4, §5.4, §5.6): both are the caller's stated scope. A pin coaxial with its bore in the ideal poses
+but a few ulps off in the float ones is measured by the kernel's windowed nested cell (clearance §4), never
+repaired into coaxiality. A link
+body with no record radius — a stitched
 payload — under a path with a revolute joint leaves `η` unbounded and its pairs undecided, exactly as
 `VerifyMotion`'s stitched mover (§5.3).
 

@@ -21,8 +21,10 @@ import (
 // by a linear channel while the clip reports the eased one fails the
 // bit-identical pose leg; a hit colour of
 // gold fails the pixel leg at frame 192; the stop's angle moved to 144.6°
-// fails the volume leg; and the coupler pins set on their bores' centres fail
-// the joint-contact leg.
+// fails the volume leg; and the clearance kernel's windowed nested cell
+// deleted fails the joint-contact leg, since the coupler pins and their bores
+// then part by a few ulps at most poses and the declared pairs publish
+// nothing there.
 
 // TestLinkageLoopClipMatchesSchedule asserts that the crank-rocker's clip
 // shows only poses the check proves clear, each exactly as the scene's

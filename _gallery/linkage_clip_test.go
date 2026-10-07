@@ -25,8 +25,10 @@ import (
 // by a linear channel while the clip reports the eased one fails the
 // bit-identical pose leg; flashFades switching one frame late fails the flash leg at frame
 // 192; a hit colour of gold fails the pixel leg at frame 192; the stop's end
-// moved 2 mm along X in the scene alone fails the volume leg; and the elbow
-// pin set on its bore's centre fails the joint-contact leg.
+// moved 2 mm along X in the scene alone fails the volume leg; and the
+// clearance kernel's windowed nested cell deleted fails the joint-contact
+// leg, since the elbow pin and its bore then part by a few ulps at most poses
+// and the declared pair publishes nothing there.
 
 // transformBits are a transform's twelve components as raw float64 bits, so
 // two transforms compare equal only when they are bit-identical.
@@ -240,9 +242,8 @@ func TestLinkageClipTurnsAtTheStop(t *testing.T) {
 	require.InDelta(t, volume, first.Volume.Value.Base(), first.Volume.Bound.Base())
 	require.Less(t, first.Volume.Bound.Base(), first.Volume.Value.Base())
 
-	// Both pins are measured in their bores at every pose the check
-	// evaluates: the shoulder post on its bore's centre at 0.5 mm, the elbow
-	// pin pinOffset off centre at between 0.25 and 0.75 mm.
+	// Both pins are measured in their bores at 0.5 mm at every pose the check
+	// evaluates.
 	requireJointGaps(t, scene, report, 2)
 
 	// The turnaround is the last grid point the check proves clear before
@@ -280,9 +281,8 @@ func hitTinted(img *image.RGBA) int {
 }
 
 // requireJointGaps asserts that report declares want joint contacts and that
-// every pose it evaluates measures each of them: a gap of 0.5 mm for a pin
-// on its bore's centre, and one between 0.5 − pinOffset and 0.5 + pinOffset
-// for a pin set pinOffset off it.
+// every pose it evaluates measures each of them at the 0.5 mm every pin
+// clears its bore by, on the bore's centre.
 func requireJointGaps(t *testing.T, scene *linkageScene, report *decad.LinkageReport, want int) {
 	t.Helper()
 	require.Len(t, report.JointContacts, want)
@@ -295,10 +295,9 @@ func requireJointGaps(t *testing.T, scene *linkageScene, report *decad.LinkageRe
 					continue
 				}
 				measured++
-				gap := c.Gap.Value.Base()
-				require.GreaterOrEqual(t, gap, 0.5-pinOffset-1e-9, "%s/%s at s = %v",
+				require.InDelta(t, 0.5, c.Gap.Value.Base(), 1e-9, "%s/%s at s = %v",
 					scene.partName(c.A), scene.partName(c.B), pose.Pose.At.Mag())
-				require.LessOrEqual(t, gap, 0.5+pinOffset+1e-9, "%s/%s at s = %v",
+				require.LessOrEqual(t, c.Gap.Bound.Base(), 1e-9, "%s/%s at s = %v",
 					scene.partName(c.A), scene.partName(c.B), pose.Pose.At.Mag())
 			}
 		}

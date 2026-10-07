@@ -87,10 +87,9 @@ func rockerPoint(th4, u, n float64) [2]float64 {
 // bearing tube on the base plate, with a cap on top. The coupler, a slot bar
 // from A to B, z ∈ [20, 26], hangs from the crank at A and is closed onto
 // the follower at B. The crank and the follower each carry the pin the
-// coupler turns on, set pinOffset off its bore's centre: a shaft from the
-// carrying bar up through the coupler's bore and a cap 1 mm over it. Every
-// shaft clears its bore by at least 0.25 mm, and every shaft-in-bore pair is
-// a declared joint contact.
+// coupler turns on, on its bore's centre: a shaft from the carrying bar up
+// through the coupler's bore and a cap 1 mm over it. Every shaft clears its
+// bore by 0.5 mm, and every shaft-in-bore pair is a declared joint contact.
 //
 // The follower rocks between about 101.8° and 152.3° from the ground line. A
 // stop block on the base plate, z ∈ [−4, 16.5], has its face along the
@@ -133,11 +132,11 @@ func crankRockerScene(ctx context.Context) (*linkageScene, error) {
 		{radius: rockerPin, top: rockerCouplerZ + rockerThick + 1},
 		{radius: rockerHead, top: rockerCouplerZ + rockerThick + 3},
 	}
-	crankPin, err := pinStack(ctx, scene.doc, a[0], a[1]-pinOffset, rockerCrankZ, couplerPinSteps)
+	crankPin, err := pinStack(ctx, scene.doc, a[0], a[1], rockerCrankZ, couplerPinSteps)
 	if err != nil {
 		return nil, fmt.Errorf("crank pin: %w", err)
 	}
-	couplerPin, err := pinStack(ctx, scene.doc, b[0], b[1]-pinOffset, rockerFollowerZ, couplerPinSteps)
+	couplerPin, err := pinStack(ctx, scene.doc, b[0], b[1], rockerFollowerZ, couplerPinSteps)
 	if err != nil {
 		return nil, fmt.Errorf("coupler pin: %w", err)
 	}

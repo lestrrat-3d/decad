@@ -412,6 +412,109 @@ Two upgrades and one downgrade close the table:
   swept above the axis). Those faces take the `BB` path (the torus as its
   meridian-circle family) — a wider bound, never a wrong `Exact`.
 
+**A trimmed spine inside a carrier: the windowed nested cell.** The nested
+branch above reads `d_sup` off exact spine geometry, so it needs an oracle
+answer — exactly parallel axes, an exactly coaxial pair — and a pair whose
+axes are exactly parallel but whose anchors sit an ulp apart falls into the
+oracle's undecided band: `RingFamily` cannot say the ring's value is attained
+all the way round, `SpineSup` cannot bound an infinite line, and the pair
+reads undecided. That is the shape every placed pin takes. A pin on one
+moving link and the bore on another are coaxial in the ideal poses, and
+their float poses — computed through different sequences of rounded
+operations, the parent's pose and the child's `Then`-composed pose — put the
+two carriers' anchors one to ten ulps apart at most parameters
+(`docs/linkage-check-design.md` §11 scene 8). The windowed cell
+(`windowedNested`, `internal/clearance/facepair`) bounds the pair from the
+trimmed inner face alone and asks the oracle nothing:
+
+- **The reading.** For two offset faces `f` (inner, radius `r_f`) and `g`
+  (outer, radius `r_g`) whose spines are points or lines — a sphere or a
+  cylinder in a sphere or a cylinder — `d_sup` is the greatest distance
+  from `f`'s spine WINDOW to `g`'s spine: `f`'s centre for a sphere; for a
+  cylinder the larger of its two axial-window endpoints' distances to `g`'s
+  spine, since point-to-point and point-to-line distances are convex along
+  a segment and their maximum over it sits at an end. The distances are
+  floats, and `d_sup` carries one charge on top:
+  `proofbound.AnalyticRoundBound` of an envelope summing both anchors'
+  largest coordinates, the window's reach and both radii. Each distance and
+  each witness below takes fewer than `128` additions, multiplications,
+  divisions and correctly rounded square roots at that magnitude, so the
+  charge, about `2e-12` on a `50` mm part, covers their rounding. A circle
+  spine has no endpoint maximum of this kind and never takes the cell.
+- **The certificate.** When `r_g > r_f + d_sup + tol` STRICTLY, every point
+  of `f`'s trimmed face lies strictly inside `g`'s carrier, so the two faces
+  do not meet, and every point pair is at least `r_g − r_f − d_sup` apart.
+  The argument: a point `p` of `f`'s face is `a + r_f·u` for a window point
+  `a` of its spine and a unit `u`, so `dist(p, spine_g) ≤ dist(a, spine_g)
+  + r_f ≤ d_sup + r_f < r_g`; a point `q` of `g`'s carrier has
+  `dist(q, spine_g) = r_g`; distance to a point or a line is 1-Lipschitz, so
+  `|p − q| ≥ r_g − dist(p, spine_g) ≥ r_g − r_f − d_sup`. The cell
+  contributes that value as a lower bound for the whole face pair and, since
+  `f`'s face cannot reach `g`'s, excludes a crossing of the two faces exactly
+  as the oracle-certified nested branch does.
+- **The witnesses.** An upper bound needs an admitted point pair (§5). At
+  each of `f`'s window endpoints, read `2·tol` inside the window so the trim
+  admits them at the kernel's own margin, and its midpoint — at `f`'s
+  centre for a sphere — and at each azimuth of `RingAngles` — the uniform
+  set plus both trims' window ends and midpoints, in `g`'s axis frame for a
+  cylinder `g` and `f`'s for a sphere `g`, the azimuth's direction taken off
+  `f`'s axis for a cylinder `f` and joined by `±` the axis for a sphere
+  `f` — the cell takes `p` on `f`'s carrier, the foot `c` of `p` on `g`'s
+  spine, and `q = c + r_g·(p − c)/|p − c|` on `g`'s carrier,
+  well-conditioned since `|p − c| ≥ r_f − d_sup > 0`. The nearest pair both
+  trims admit contributes `[r_g − r_f − d_sup, |p − q|]`, its upper end
+  carrying the same charge, never `Exact`. A sample proves a witness
+  present, never absent: a pair with no admitted witness keeps its lower
+  bound and reads undecided for want of an upper bound.
+- **Where it runs.** Cylinder × cylinder, sphere × cylinder and sphere ×
+  sphere, in both orders (`f` the smaller radius), in exactly the two places
+  the offset reduction otherwise gives up: a coincident-spine critical
+  (`d ≤ tol`) whose `RingFamily` is not proven — undecided, or disproven
+  while the feet still meet, as two cylinder axes crossing at a tilt do —
+  and a line pair the parallel oracle cannot decide (`LineLineCrits`
+  answers `ok` false). It never replaces a decided answer: an exactly
+  coaxial pair still reads the ring family's `Exact` value, and a provenly
+  offset pair still reads the exact offset combinations.
+- **The edge tier's twin.** The same rounding error leaves a circular edge
+  about the pin's axis — the bore's rims against the pin's wall, the pin's
+  rims against the bore's — in the curve tier's undecided band, where
+  `Circle3` × `Cylinder` and `Circle3` × `Sphere` otherwise take the coarse
+  enclosure and its zero lower bound (`windowedCircleFE`,
+  `internal/clearance/curvepair`). Every point of a circle of radius `ρ` about centre
+  `c` with unit axis `n` is `c + ρ·u` for a unit `u ⊥ n`, so its distance to
+  a point spine `s` lies within `δ = dist(s, axis of the circle)` of the
+  constant `√(ρ² + h²)`, `h` the axial offset of `s`'s foot from `c`, and
+  its distance to a line spine of direction `a` lies in
+  `[ρ·cos α − δ, ρ + δ]`, `δ = dist(c, line)` and `sin α ≤ |n × a|`. A band
+  that clears the face's radius by more than `tol` puts the whole edge
+  strictly outside or inside the carrier: the two never meet, and every point
+  pair is at least the band's distance from the radius apart. Both band ends
+  carry the charge above, and the nearest admitted pair of an edge point at
+  each of `16` uniform azimuths and the edge's own window and its radial
+  image on the carrier is the upper bound. It runs where the curve tier
+  gives up for want of an oracle answer — a point spine the oracle cannot
+  place on the circle's axis, a line spine it cannot prove parallel, or one
+  exactly parallel whose offset it cannot decide — and a band that does not
+  clear leaves the coarse enclosure in place.
+- **What it costs and what it reads.** Two point-to-line distances and at
+  most `3 × 22` witness pairs, closed form: about `0.1` ms for a pin pair.
+  A pin of radius `r` in a bore of radius `R`, a rounding error off
+  concentric, reads `Gap ∈ [R − r − d_sup, R − r + d_sup]` before the body
+  deltas and `η` widen it, with `d_sup` of order `1e-12` once charged,
+  against deltas of the same order: the row the exact ring family would have
+  read, `Approximate` at a bound of about `1e-11`. A pin tilted by `α` in a
+  bore, its window reaching `h` from the tilt's pivot, reads a lower bound
+  `R − r − h·sin α` up to `r·(1/cos α − 1)` below the true minimum, second
+  order in `α`.
+- **What still refuses.** Equal radii — a pin that fills its bore — read
+  `r_g − r_f − d_sup ≤ tol` and stay undecided, since the contact is one §6
+  does not certify. A jammed pin, `r_f > r_g`, reaches the cell only with
+  the roles swapped, where the two cylinder faces are a proven `r_f − r_g`
+  apart, and its overlap is proven by the crossing cells — the bore body's
+  caps cross the pin's wall inside their trims — which `sink.Overlap` reads
+  ahead of any interval. A face with a nonzero `sectionDelta` has no model
+  at all (§2).
+
 ## 5. Intervals: witnesses, conservative bounds, refinement
 
 - **An upper bound is any admitted witness.** Evaluate any on-face point pair
@@ -625,6 +728,7 @@ reads `Suspect`, never an error, never a silent pass:
 | 1 | the tier enumeration + exact admission, every CF cell, the P4/P8 certified brackets, the nesting exclusion, coplanar `Plane` × `Plane` contact, report wiring — rows, the empty list, the `Gap` gate, pair `D` | cone-involved pairs near contact (coarse enclosure interval only: proven disjoint with a wide honest row when even the coarse `lo` clears zero, undecided when it does not); every non-coplanar contact type |
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
+| 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis; its band test (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; and a pin that fills its bore undecided, red when a lower bound at or below `tol` is admitted), its tilt test (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends), its rim test (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero), and `docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
 
 The cup adapter lands in payload verification §13. Until its stage lands, an
 invoked pair containing a cup remains `Suspect`; the analytic kernel does not
