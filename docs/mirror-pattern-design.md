@@ -30,11 +30,10 @@ What is missing is everything a caller does WITH a mirror image:
   plane, mirror, join — refuses at the join. The two halves are co-directional
   prisms sharing a wall, and the analytic boolean excludes a reflected operand
   (prism-boolean §3.1 G2), so the pair takes the mesh path and refuses on the
-  coplanar contact. With G2 lifted the same pair still refuses, because the
-  private scene then holds two collinear line carriers and `sketch` reports
-  the arrangement invalid (§2 rows W1–W4; `sketch`'s
-  `docs/coincident-carrier-resolution-design.md` leaves coincident LINE
-  carriers out of scope);
+  coplanar contact. With G2 lifted and the shared wall resolved
+  (general-boolean §3 A3) the same pair still takes the mesh path: the image
+  carries the placement's rounding, and a displaced pair's wall inside the
+  union is a sliver no recorded edge bounds;
 - a pattern built from `PlacedCopy` and `Union` ends in one of three places:
   disjoint instances become a `Faceted` multi-lump body whose surveys read
   `Suspect` and which no later coplanar boolean accepts as a tool; instances
@@ -100,8 +99,8 @@ placement a float composition the caller never asked for, orthonormalised by
 | STL/OBJ/3MF | read the mesh |
 | `Verify` validity, surveys, tolerance gate | per payload, unchanged; measured `Sound` on prism, revolve, fillet result |
 | Clearance kernel | `clearance_geom.go` reads `reflected()`; measured T3 |
-| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls have no charge, so it reaches the mesh path's coplanar refusal: `Suspect` |
-| `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M2 and M3 still refuse, on the mesh path: their outlines share collinear walls (A3), which A6's crossing charge cannot bound |
+| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls are read as one carrier (general-boolean A3), and its overlap is measured: `Interfering`, 500 mm³ |
+| `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M3's shared walls bound its union and build analytically (A3); M2's shared wall lies inside its union and the image is displaced, so `Union` takes the mesh path's coplanar refusal, and the mirror join builds it (§5) |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
 | `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `contact_sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
 | Loft | `loftPayload.placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |
@@ -243,10 +242,11 @@ sketch plane by J2, so the sweep is unchanged.
 **This is a decad-side 2D answer, and CLAUDE.md requires the reason.** The
 join computes no crossing, no containment, no cut parameter and no region
 membership: it reflects decad's own recorded coordinates in exact rational
-arithmetic and removes recorded segments by exact identity. `sketch` does not
-answer it: its coincident-carrier resolution leaves collinear line carriers
-out of scope (`docs/coincident-carrier-resolution-design.md`), and the probe
-confirms an arrangement holding them reports an invalid region (§2 W1–W4).
+arithmetic and removes recorded segments by exact identity. `sketch` can
+arrange the two halves (general-boolean §3 A3), but only after the image is
+placed, and the placement's rounding displaces it: the shared wall then lies
+inside the union as a displaced span, which A3 sends to the mesh path. The
+join wins on exactness, since its result carries no displacement at all.
 The assembly is then audited exactly as every modify op's rewritten section
 is (modify §5), which is the same carve-out `docs/prism-boolean-design.md`
 §5 claim 2 already uses.
@@ -354,9 +354,8 @@ that applies:
    general-boolean class A5's disjoint `Union`.
 
 Rule 3 is where touching instances land (a pattern of pegs sharing walls),
-and it inherits general-boolean class A3's dependency on `sketch` for
-collinear carriers. The rule is stated here so a caller knows the result is
-`Union`'s, never a silently merged one.
+which `Union` joins through general-boolean class A3. The rule is stated here
+so a caller knows the result is `Union`'s, never a silently merged one.
 
 ### 6.2 Instance records
 
@@ -428,9 +427,9 @@ outer with every edge `Whole`, and none carrying a hole. Any `Partial` edge
 (two outers cross), any cell with a hole (one outer inside another), any
 extra or missing cell, or any invalid cell means "not proven disjoint", and
 `Patterned` takes §6.1 rule 3. Two instances sharing a wall arrive as
-collinear coincident carriers and report an invalid region today (§2 W1), so
-they take rule 3 as well, where `Union` refuses them until general-boolean
-class A3 lands. The scene is capped by `prismMaxArrangementSegments`
+coincident carriers whose shared span bounds two cells, never one instance's
+whole outer, so they take rule 3 as well, where `Union` joins them
+(general-boolean class A3). The scene is capped by `prismMaxArrangementSegments`
 (prism-boolean §10); exhaustion is `ErrUnsupported`.
 
 Topology, roles and measurements are stacked §3–§4 with the region index
@@ -541,12 +540,11 @@ Every test asserts computed geometry; bounds are asserted as relations
 - **Overlapping instances**: a 15 mm peg at 10 mm steps: the disjointness
   scene does not prove the pair disjoint, the test asserts that premise, and
   `Patterned` returns exactly what `Union` returns for the receiver and the
-  instance `PatternCopies` builds — today RB1, since the two pegs' long
-  walls are collinear carriers (class A3). Two Ø6 discs crossing about the
-  origin join into one lump the same way.
+  instance `PatternCopies` builds: one analytic prism of 625 mm³, the two
+  pegs' long walls joined as coincident carriers (general-boolean class A3).
+  Two Ø6 discs crossing about the origin join into one lump the same way.
 - **Touching instances**: a 10 mm peg at 10 mm steps: `Patterned` returns
-  `Union`'s RB1 refusal today, pinned to `Union`'s own outcome so the
-  behaviour changes only when class A3 lands.
+  `Union`'s one analytic prism of 500 mm³, pinned to `Union`'s own outcome.
 - **Non-co-directional**: a 5 mm peg patterned along +z at 5 mm: a
   `PlacedCopy` instance and, for `Patterned`, `Union`'s own result: the
   mesh path's coplanar refusal, since the instance's own placement keeps the

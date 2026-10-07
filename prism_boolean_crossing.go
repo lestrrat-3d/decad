@@ -184,7 +184,7 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 	if err := budget.Err(); err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
 		return nil, prismSceneDelta{}, false, err
 	}
@@ -210,6 +210,9 @@ func resolvePrismCrossingCells(ctx context.Context, budget *proofbound.WorkBudge
 	// operands' incoming displacement can move is charged, and a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, pa, pb, reexpress); err != nil || !ok {
+		return nil, prismSceneDelta{}, false, err
+	}
+	if ok, err := sceneDelta.sharedSpansBounded(budget, selected); err != nil || !ok {
 		return nil, prismSceneDelta{}, false, err
 	}
 	return selected, sceneDelta, true, nil

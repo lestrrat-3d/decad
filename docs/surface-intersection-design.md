@@ -196,7 +196,8 @@ is a flag comparison on a classification `sketch` already encoded, never a
 geometric test. decad reads the TOOL's label for a cell the fragment bounds.
 A fragment not lying on the tool's own boundary has the same tool-membership
 on both sides, so one cell settles it; a fragment that does lie on the tool's
-boundary is a coincident carrier and is refused (§4).
+boundary is a coincident carrier, which `sketch` emits once under one of the
+two entities (`docs/general-boolean-design.md` §3 A3), and is refused (§4).
 
 `Trim` then keeps the fragments whose label matches the caller's stated side
 and drops the rest.
@@ -309,7 +310,7 @@ set, so it needs the same two fields and no third.
 | A receiver or tool carrying a nonzero section displacement, or a nonidentity re-expression | S7, `ErrUnsupported`. §5 states the cost |
 | A co-directional pair whose two sections sit on PARALLEL planes | S7, `ErrUnsupported`. The two footprints map onto one plane by copying their `Point2` fields verbatim wherever the frames share a basis and differ only in origin along the shared normal, so the map costs no rounding at all — but `newPrismReexpression` reports the identity only for `frameA == frameB`, and widening that comparison needs an exact test that the origin difference is a multiple of the normal. That is a bounded, separable addition, listed in §10 |
 | A `Trim` receiver, or either operand, carrying a segment recorded over a range narrower than its entity's own natural domain | S7, `ErrUnsupported`. Such a segment enters the scene at an endpoint `lerp2` computes rather than one the record states, which is prism §7's `δ_walk`, and this design charges no displacement it cannot also bound through a cut. `Extend`'s extended segment is the one exception, and §3.1 states why it costs nothing |
-| A fragment of the receiver lying ON the tool's own boundary (a coincident carrier) | `ErrUnsupported` (RS5). Prism §4.2's own coincident-carrier extension is what would resolve it, and it is not built there either |
+| A fragment of the receiver lying ON the tool's own boundary (a coincident carrier) | `ErrUnsupported` (RS5), read by `prismcells.CoincidentEdges`. The span is the receiver's fragment and the tool's boundary at once, and no side reading settles which piece keeps it. `Split`, whose tool has no side, reads such a span as the target's boundary (`prismcells.ClassifySplit`) |
 | A free-form segment on either operand | S3, `ErrUnsupported`. The whole-scene `TExact` gate blinds the arrangement, not only the free-form segment's own edges |
 | A `Trim` that keeps every fragment or none | `ErrDegenerate` (RS6). The tool separates nothing, so no trimmed body exists |
 | A `Split` whose tool separates no part of the target | `ErrDegenerate` (RS7), on the same reading |

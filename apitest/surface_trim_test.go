@@ -240,6 +240,28 @@ func TestSurfaceTrimDegenerateWhenNothingSeparates(t *testing.T) {
 	})
 }
 
+// TestSurfaceTrimRefusesASharedWall is RS5: a tool whose wall y = 0 runs
+// along the sheet's own bottom wall from x = 40 to 60. sketch emits that
+// span once, under one of the two entities, so no side reading settles the
+// sheet's fragment there, and Trim refuses rather than keep or drop it.
+//
+// Shown to fail with Trim's coincident-span refusal deleted (KeepOutside
+// returned two ribbons of 2800 mm², the shared fragment silently dropped).
+func TestSurfaceTrimRefusesASharedWall(t *testing.T) {
+	t.Parallel()
+	for _, side := range []decad.TrimSide{decad.KeepOutside, decad.KeepInside} {
+		doc := decad.New()
+		sheet := trimRectSheet(t, doc)
+		tool := trimSpanningTool(t, doc, 40, 0, 60, 70)
+		before := doc.Bodies()
+		trimmed, err := sheet.Trim(t.Context(), tool, side)
+		require.Nil(t, trimmed)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "coincides with the tool's own boundary")
+		require.Equal(t, before, doc.Bodies())
+	}
+}
+
 // TestSurfaceTrimRefusesASecondTrim is T173: T170's own trimmed result
 // refuses a second Trim on S7's own section-displacement clause, while the
 // SAME second tool succeeds against the untrimmed sheet.

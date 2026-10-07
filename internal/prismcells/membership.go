@@ -19,6 +19,10 @@ type membership struct {
 type link struct {
 	a, b int
 	isB  bool
+	// both marks an edge on a span sketch resolved between two operands'
+	// coincident lines (CoincidentEdges): a boundary of both operands, so no
+	// propagation crosses it.
+	both bool
 }
 
 // Classify is §4.2's edge-orientation propagation: for every cell
@@ -41,8 +45,27 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 	type occurrence struct {
 		cell int
 		isB  bool
+		both bool
 	}
 	occ := map[edgeKey][]occurrence{}
+
+	// A span two operands' coincident lines share is emitted once, under one
+	// operand's entity; it is the other operand's boundary too.
+	coincident, ok, err := CoincidentEdges(budget, tags, profiles)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	setMember := func(i int, isB, match bool) bool {
+		member := &memberA[i]
+		if isB {
+			member = &memberB[i]
+		}
+		if member.known && member.val != match {
+			return false
+		}
+		*member = membership{known: true, val: match}
+		return true
+	}
 
 	for i, p := range profiles {
 		if err := budget.Step(); err != nil {
@@ -68,17 +91,26 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 			// direction on it. A match puts this cell on that operand's
 			// material side, a mismatch on its void side.
 			match := e.Reversed == origin.AuthoredReversed
-			member := &memberA[i]
-			if origin.IsB {
-				member = &memberB[i]
-			}
-			if member.known && member.val != match {
+			if !setMember(i, origin.IsB, match) {
 				return nil, nil, false, nil // conflicting direct edges: not covered
 			}
-			*member = membership{known: true, val: match}
 
 			k := edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}
-			occ[k] = append(occ[k], occurrence{cell: i, isB: origin.IsB})
+			c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
+			if shared {
+				// The losing line walks this span too: the cell walks it
+				// against the losing line's natural direction when it walks
+				// it against the named line's, unless the two lines oppose.
+				partner, ok := tags[c.Partner]
+				if !ok || partner.IsB == origin.IsB {
+					return nil, nil, false, nil
+				}
+				partnerMatch := (e.Reversed != c.Opposite) == partner.AuthoredReversed
+				if !setMember(i, partner.IsB, partnerMatch) {
+					return nil, nil, false, nil
+				}
+			}
+			occ[k] = append(occ[k], occurrence{cell: i, isB: origin.IsB, both: shared})
 		}
 	}
 
@@ -95,7 +127,7 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		switch len(os) {
 		case 1:
 		case 2:
-			links = append(links, link{a: os[0].cell, b: os[1].cell, isB: os[0].isB})
+			links = append(links, link{a: os[0].cell, b: os[1].cell, isB: os[0].isB, both: os[0].both})
 		default:
 			return nil, nil, false, nil // §4.4: not a shape this increment covers
 		}
@@ -131,7 +163,7 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 func propagate(budget *proofbound.WorkBudget, links []link, connectorIsB bool, member []membership) error {
 	adj := make([][]int, len(member))
 	for _, l := range links {
-		if l.isB != connectorIsB {
+		if l.both || l.isB != connectorIsB {
 			continue
 		}
 		adj[l.a] = append(adj[l.a], l.b)

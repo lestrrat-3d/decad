@@ -137,7 +137,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -181,6 +181,9 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	}
 	selected, err := prismcells.Select(budget, profiles, matterA, matterB, func(a, b bool) bool { return a && !b })
 	if err != nil {
+		return prismPayload{}, false, err
+	}
+	if ok, err := sceneDelta.sharedSpansBounded(budget, selected); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(budget, selected, "cut")
@@ -264,7 +267,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
 		return nil, false, err
 	}
@@ -293,6 +296,9 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 	// encloses such a cell.
 	voidFree, err := prismCellsHaveNoVoid(budget, tags, profiles)
 	if err != nil || !voidFree {
+		return nil, false, err
+	}
+	if ok, err := sceneDelta.sharedSpansBounded(budget, profiles); err != nil || !ok {
 		return nil, false, err
 	}
 	loops, cutDelta, resolved, err := prismcells.MergeLoops(budget, profiles, "union")

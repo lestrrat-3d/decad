@@ -781,7 +781,7 @@
 2	0.00	TestSurfaceRevolveSheetVerifiesUndecided
 2	0.00	TestSurfaceRevolveShellOpenAgreesWithFreeEdgeDerivation
 2	0.01	TestSurfaceRevolveStaysASheetThroughPlacement
-2	0.00	TestSurfaceSplitCoincidentBoundaryRefusesInvalidCell
+2	0.00	TestSurfaceSplitCoincidentBoundarySeparatesNothing
 2	0.00	TestSurfaceSplitInsideStubDoesNotSeparate
 2	0.00	TestSurfaceSplitOutsideRibbonDoesNotSeparate
 2	0.00	TestSurfaceSweepLineIsASheet
@@ -1444,3 +1444,7 @@
 2	0.01	TestPrismIntersectRotatedBoxBuildsAnalyticOctagon
 2	0.01	TestPrismUnionRotatedToothBuildsAnalytic
 2	0.01	TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot
+5	0.00	TestPrismBooleanSharedWallBoxes
+5	0.00	TestPrismBooleanTouchingCornerStaysOnMesh
+5	0.00	TestPrismBooleanToothTouchingHubDoesNotOverlap
+5	0.00	TestSurfaceTrimRefusesASharedWall

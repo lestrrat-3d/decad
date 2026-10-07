@@ -294,7 +294,11 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	}
 	// Neither holds the other whole: prism-boolean §4.2's select-all merge,
 	// with §3.4's crossing charge on every cut a displaced source can move
-	// (docs/general-boolean-design.md §3 A6).
+	// (docs/general-boolean-design.md §3 A6). No cell at all is a scene
+	// prismCellProfiles could not restate: the mesh path.
+	if len(m.profiles) == 0 {
+		return ProfileRecord{}, false, nil
+	}
 	if ok, err := m.sceneDelta.chargeCrossings(st.budget, m.tags, m.profiles, pa, pb, st.reexpress); err != nil || !ok {
 		return ProfileRecord{}, false, err
 	}
@@ -302,6 +306,9 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	// is unresolved, never an error, so the pair takes the mesh path.
 	voidFree, err := prismCellsHaveNoVoid(st.budget, m.tags, m.profiles)
 	if err != nil || !voidFree {
+		return ProfileRecord{}, false, err
+	}
+	if ok, err := m.sceneDelta.sharedSpansBounded(st.budget, m.profiles); err != nil || !ok {
 		return ProfileRecord{}, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(st.budget, m.profiles, "union")
@@ -475,7 +482,7 @@ func stackedNestingOf(ctx context.Context, budget *proofbound.WorkBudget, pa, pb
 	if err := budget.Err(); err != nil {
 		return stackedNesting{}, err
 	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	profiles, err := prismCellProfiles(ctx, budget, s)
 	if err != nil {
 		return stackedNesting{}, err
 	}

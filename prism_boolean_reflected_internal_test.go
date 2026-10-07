@@ -361,12 +361,13 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 // carry an amplified input displacement: it never refuses on the analytic
 // path.
 //
-//   - A tooth whose root arc lies on the hub circle, rotated 60°, meets the
-//     hub circle tangentially: the crossing has no charge, and Union and a
-//     Cut whose tool is taller than the hub both return ok=false with no
-//     error, so the caller takes the mesh path. So does the L of
-//     docs/mirror-pattern-design.md §2 unioned with its image across x = 15,
-//     whose shared collinear walls meet at a sine of zero.
+//   - A tooth whose root arc lies on the hub circle, rotated 60°: the root
+//     arc and the hub circle are one carrier (general-boolean §3 A3), the
+//     rotation displaces the tooth, and Union keeps the shared arc inside
+//     its result, where no displacement charge covers the two true walls
+//     parting (prismSceneDelta.sharedSpansBounded). Union and a Cut whose
+//     tool is taller than the hub both return ok=false with no error, so
+//     the caller takes the mesh path.
 //   - fu141's overshooting quadrilateral, whose fragments carry a walk
 //     charge, restates one corner as two whole segments that do not
 //     bit-match. Unioned with a box strictly inside it, nothing is cut, and
@@ -375,8 +376,8 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 //     the same RB9 sends the pair to the mesh path instead.
 //
 // Shown to fail with prismAmplifiedFallback returning every error (the
-// crossing quadrilateral returned RB9), and with CrossingCharge's decline
-// turned into an error (the tooth returned ErrUnsupported).
+// crossing quadrilateral returned RB9), and with sharedSpansBounded always
+// reporting true (the tooth's Union built analytically).
 func TestPrismAmplifiedCutsFallBack(t *testing.T) {
 	t.Parallel()
 	turn, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
@@ -399,16 +400,6 @@ func TestPrismAmplifiedCutsFallBack(t *testing.T) {
 			require.False(t, ok)
 		})
 	}
-
-	t.Run("collinear walls under a reflection", func(t *testing.T) {
-		doc := New()
-		l := internalPolyPrismBody(t, doc, [][2]float64{{0, 0}, {20, 0}, {20, 5}, {5, 5}, {5, 20}, {0, 20}}, prismFixtureHeight)
-		image, err := l.PlacedCopy(t.Context(), prismMirrorAcrossX(t, 15))
-		require.NoError(t, err)
-		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, l, image)
-		require.NoError(t, err)
-		require.False(t, ok)
-	})
 
 	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
 	t.Run("a merge that cuts nothing refuses RB9", func(t *testing.T) {

@@ -72,6 +72,14 @@ func CrossingCharge(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin
 	if deltaA == 0 && deltaB == 0 {
 		return 0, true, nil
 	}
+	// Two operands' coincident lines sharing a span (CoincidentEdges) do not
+	// cross: sketch resolved them as one line at round-off. Where the span
+	// ends, a third line meets them — the corner of the operand whose line
+	// ends there — and its pair with the other operand's line is charged.
+	coincident, ok, err := CoincidentEdges(budget, tags, profiles)
+	if err != nil || !ok {
+		return 0, false, err
+	}
 	type endKey struct {
 		entity sketch.Entity
 		t      float64
@@ -123,7 +131,7 @@ func CrossingCharge(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin
 				if err := budget.Step(); err != nil {
 					return 0, false, err
 				}
-				if ends[i].edge.Entity == ends[j].edge.Entity {
+				if ends[i].edge.Entity == ends[j].edge.Entity || coincident.Partners(ends[i].edge.Entity, ends[j].edge.Entity) {
 					continue
 				}
 				c, ok := junctionCharge(tags, ends[i], ends[j], deltaA, deltaB)

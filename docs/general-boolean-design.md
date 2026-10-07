@@ -95,7 +95,7 @@ admits takes it unchanged.
 |---|---|---|---|
 | A1 | `Union` with unequal sweep intervals: a boss standing on a plate, rooted inside it, a flange on a circle-prism shaft, a stack of blocks | B3, B4, S3b with the shaft drawn as a prism | `stackedPrismPayload`: a slab per distinct level, interface exposure by the clean-nesting match |
 | A2 | a blind tool over an existing hole, or a through tool inside a blind one (counterbore, counterbored through hole) | S4b, S4d | stacked §7 stage 2 owns it; this design adds no mechanism and lists it for priority |
-| A3 | two operands sharing a wall: collinear coincident line carriers (box beside box, a mirrored half beside its source) | W1–W4, W6, S12c, M2 | waits on `sketch` (§7); the mirror join (mirror §5) covers the symmetric case without it |
+| A3 | two operands sharing a wall: coincident line carriers (box beside box, a mirrored half beside its source), and the coincident arcs and circles `sketch` already resolved | W1–W4, W6, M3, T2 | `prismPayload` through prism-boolean's own paths, every shared span read from `sketch`'s report (A3 below); a reflected half beside its source (M2) joins through the mirror join (mirror §5) |
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
@@ -170,8 +170,62 @@ twin (`evaluateAnalyticIntersect`) and the overlap-area reading share the
 same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
 A one-sided reflection is a nonidentity re-expression, so a reflected pair
-whose outlines cross takes A6's crossing charge. M3 and T2 still refuse:
-their outlines share collinear walls, which A3 waits on (§9).
+whose outlines cross takes A6's crossing charge, and one whose outlines share
+a wall takes A3's reading (M3, T2).
+
+#### A3 — shared walls
+
+`sketch` resolves two operands' entities on one carrier — two lines since
+`sketch`'s "Coincident line carriers", an arc and a circle or two arcs
+before that — by emitting their shared span once, under the entity it names,
+and withdrawing it from the other, the losing entity, as a window its
+fragments do not cover. `prismcells.CoincidentEdges` reads every such span
+from that report alone: the windows are the gaps in the losing entity's own
+fragments, a window's ends are vertices `sketch` split both entities at, and
+the partner is the one entity of the other operand, on the same kind of
+carrier, with fragment ends at both. Two candidates make the scene
+unresolved; none means the window is an open part no bounded cell uses. A
+circle withdrawn whole takes the other operand's circle with the same
+recorded centre and radius bit for bit, or the scene is unresolved. Nothing
+is decided from geometry.
+
+Each consumer reads the span as a boundary of both operands:
+
+- **Classification.** The edge carries both operands' direct readings: its
+  own entity's flag comparison, and the partner's, through the two entities'
+  relative direction (two lines may oppose; arcs and circles both run
+  counter-clockwise). Membership never propagates across it. Propagating
+  across it, as an edge of the named operand alone, put the cell beyond the
+  span inside the operand it only touches: a tooth whose root arc lies on a
+  hub's circle `Intersect`ed into the whole tooth and `Verify` reported the
+  touching pair `Interfering`. `ClassifySplit` reads it the same way, and
+  `Trim` refuses a span it shares with the receiver (surface-intersection
+  RS5).
+- **Runs.** `sketch` reports a cell's boundary in runs: a cell walking a line
+  straight through vertices that only bound cells on its other side reports
+  one edge over the run. `prismcells.SplitRuns` restates every line run at
+  the parameters other cells' edges of that line end at, with those edges'
+  own `Polyline` vertices, so a shared span is one edge key in both cells it
+  separates; a piece is `TExact` only where both of its bounds were. A
+  circular run, which would need its own densified `Polyline`, leaves the
+  scene unresolved.
+- **Crossing charge.** The two entities of a span do not cross, so A6 skips
+  that pair at its end vertices and charges every other pair there.
+- **Displacement.** The result records the span on the named entity. The
+  span's width bound is the gap between the two recorded entities — at the
+  span's two ends, each end vertex's distance from both lines; for circular
+  carriers, the centres' distance plus the radii's difference, an arc's
+  radius read at both recorded endpoints — plus both incoming displacements,
+  every square root rounded outward. It enters `crossing` in §7's formula
+  and covers a span the result keeps as boundary. `sketch`'s identity gate
+  decides the two recorded entities are one carrier (prism-boolean §4.1), so
+  a span inside or outside the result leaves nothing between two walls. An
+  incoming displacement does: the true walls can part by up to the width,
+  leaving a sliver no recorded edge bounds. A displaced pair with any span
+  that is not exactly one selected cell's boundary takes the mesh path.
+
+A union of two boxes sharing a wall whole, drawn on one carrier, cuts nothing
+and is `Exact`; a partial shared wall is `Approximate` with the cut charge.
 
 #### A5 — multi-region operands and results
 
@@ -261,9 +315,10 @@ With A6 a rotated tooth whose root sits inside the hub builds analytically
 with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
 result refuses (prism-boolean §13's displaced-receiver rule), as it does for
 every cut-bearing merge. P1's own tooth does not build. Its root arc lies on
-the hub's circle, so where the arc ends it meets the hub circle tangentially
-(a coincident carrier, which `sketch` merges), and that junction's bound is
-zero: the pair falls back to the mesh path. A chain of teeth also stops at the
+the hub's circle (a coincident carrier, which `sketch` merges), the rotation
+displaces the tooth, and the shared arc lies inside the union, where A3 has
+no charge for the two true walls parting: the pair falls back to the mesh
+path. A chain of teeth also stops at the
 second tooth on prism-boolean §4.1's trimmed-circular refusal, since the
 first union trims the hub circle.
 
@@ -595,15 +650,12 @@ refuse or are charged.
 
 ## 7. Upstream dependency
 
-Class A3 needs `sketch` to resolve coincident collinear LINE carriers the way
-it resolves coincident circular ones. The ask is filed at
-`../sketch/.tmp/decad-handoff-coincident-line-carriers.md` with the §2 W rows
-as evidence. This design does not block on it: A1, A2, A4–A6 and class B
-stand without it, and the mirror join covers the symmetric half of the
-shared-wall workload exactly. If `sketch` declines, the alternative is a
-decad-side pre-resolution of collinear overlaps in exact rational
-arithmetic before the scene is built (the mirror join's splice generalised
-to two records); §10 records it as an open question.
+Class A3 reads `sketch`'s resolution of coincident line carriers
+(`docs/coincident-carrier-resolution-design.md`, "Coincident line carriers"),
+which resolves a line pair only where both lines close loops (its
+shared-wall gate) and they are the same line at round-off (its identity
+gate). A pair outside either gate stays an invalid region, and the boolean
+refuses it as RB1 or takes the mesh path, as before.
 
 ## 8. Do not do this
 
@@ -659,11 +711,25 @@ are relations, never literals.
   arm with `sectionDelta` exactly `0.0`; `Verify` on the mirrored L beside
   the cylinder reports one `Interference` row of `π·1.5²·10`. A scene test
   reads `prismcells.Classify` on a reflected box crossing a box and finds
-  the exact areas 75, 25 and 75 for A-only, both and B-only. M3 (the L
-  unioned with its image across x = 15) and T2 fall back to the mesh path's
-  coplanar refusal: the two outlines share collinear walls at y = 0 and
-  y = 5, which meet at a sine of zero, and `sketch` reports that arrangement
-  as an invalid region, which A3 waits on.
+  the exact areas 75, 25 and 75 for A-only, both and B-only.
+- **A3 shared walls**: W1–W4 union into one analytic prism of 2000, 1600,
+  3000 and 1900 mm³, and `Cut` by the second box leaves 1000, 1000, 1000
+  and 900 mm³ (W6). M3 (the L unioned with its image across x = 15, sharing
+  the walls y = 0 and y = 5) builds 3000 mm³ with a positive section
+  displacement, and T2 measures one `Interference` row of 500 mm³. A box
+  beside its own mirror image across x = 10 takes the mesh path for
+  `Union` (a displaced interior span) and builds the box for `Cut`. A wall
+  leaning 1.07e-14 mm inside the identity band charges at least that exact
+  distance into `Cut`'s section displacement. A tooth whose root arc lies on
+  a hub's circle: `Cut` of the tooth by the hub leaves the tooth,
+  `Intersect` builds no analytic body, `Verify` reports no interference, and
+  `Union` stays analytic. A scene test reads `Classify` and `ClassifySplit`
+  on a region outside a disk bounded by an arc on the disk's circle, and
+  finds it outside the disk. A `Trim` tool sharing the sheet's wall refuses
+  with RS5. `Patterned` pegs that overlap or share a wall join into 625 and
+  500 mm³. S12c (two boxes meeting at one vertical edge) shares no span: its
+  `Union` is two lumps along an edge, which no prism payload holds, and it
+  keeps the mesh path's coplanar refusal.
 - **A5 N-hole cut**: mirror §8's N-hole test, and the disjoint `Union` of
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
 - **A6 crossing charge**: a Ø40 hub unioned with a 7×3 tooth rooted inside
@@ -745,10 +811,13 @@ are relations, never literals.
 
 ## 10. Open questions
 
-- **A3 fallback if `sketch` declines collinear carriers.** Recommendation:
-  wait for `sketch`; the mirror join covers the symmetric workload, and a
-  decad-side overlap resolution would duplicate an arrangement rule the
-  coincident-circle case already gets upstream.
+- **A3's interior span under a displacement (decided: the mesh path).** A
+  displaced pair whose shared span lies inside or outside the result could
+  instead charge the sliver as an area, `width · length` over the result's
+  perimeter, but the section displacement is a boundary distance that also
+  feeds the centroid and the walls' areas, and a sliver away from every
+  recorded edge moves neither by a distance. A mirrored half beside its
+  source joins through the mirror join, which carries no displacement.
 - **Should B4 (signed-permutation frames) be relaxed before A6 lands?**
   Recommendation: no. A rounded trace has no charge without A6, and the
   datum planes cover the measured workload.
@@ -815,6 +884,8 @@ Each PR ships code and tests; this document ships with PR 1.
 8. **brep consumers.** Undercut and minimum-radius surveys, the clearance
    `bodyGeom` arm, STEP's analytic arm with `Arc3` edges, modify-reach's RX
    row.
-9. **A3 shared walls.** Waiting on §7's `sketch` hand-off; lands the W1–W4
-   and S12c fixtures as analytic results once the arrangement resolves
-   collinear carriers.
+9. **A3 shared walls.** The `sketch` pin with coincident line carriers, the
+   shared-span reading (`prismcells.CoincidentEdges`) in `Classify`,
+   `ClassifySplit` and `CrossingCharge`, line-run splitting, the span's width
+   charge and the displaced-interior-span fallback, `Trim`'s RS5 refusal,
+   and §9's A3 tests. S12c stays on the mesh path (§9).

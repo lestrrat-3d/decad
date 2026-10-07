@@ -781,6 +781,18 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 		return nil, 0, fmt.Errorf(`%w: the tool separates no fragment of the receiver; none is kept`, ErrDegenerate)
 	}
 
+	// RS5: a span the tool shares with the receiver (a coincident carrier,
+	// prismcells.CoincidentEdges) is the receiver's boundary and the tool's
+	// at once, and sketch emits it under only one of them, so no side
+	// reading settles that fragment.
+	coincident, readable, err := prismcells.CoincidentEdges(budget, tags, profiles)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !readable || len(coincident.Spans) > 0 {
+		return nil, 0, fmt.Errorf(`%w: a receiver boundary fragment coincides with the tool's own boundary`, ErrUnsupported)
+	}
+
 	matterRcv, matterTool, resolved, err := prismcells.Classify(budget, tags, profiles)
 	if err != nil {
 		return nil, 0, err
