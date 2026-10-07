@@ -258,7 +258,7 @@ the rules leave to the byte budget.
 | `internal/cappatch/` | Cap-band patch flux, area and first-moment proofs over neutral patch geometry. See `docs/modify-reach-design.md` §8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | The 2D inscribed-disk kernel, prism wall reader, undercut reader, walk type and interval vectors behind the surveys. See `docs/verification-design.md` §6. |
-| `internal/motionbound/` | Exact motion parameters, poses and travel bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
+| `internal/motionbound/` | Exact motion parameters, poses, sweep bounds, and the `RadianSinCos` memo. See `docs/motion-check-design.md`. |
 | `internal/freeform/` | Exact free-form arithmetic: Bézier reduction and work budget, arc length, extremes, sagitta stations, convexity, moments and the Sturm/Lipschitz bracket engine. See `docs/spline-design.md`. |
 | `internal/meshbool/` | The exact-predicate mesh-boolean pipeline: contact classification and batches, facet subdivision, stitching, the closed-mesh audit, the rounding that keeps a held mesh embedded, and near-contact witnesses. See `docs/evaluator-design.md` §9. |
 | `internal/clearance/` | Clearance carriers, angle and line windows, 2D trim regions, ray crossings, boxes, spine and ruling helpers, and the degeneracy oracle. See `docs/clearance-design.md`. |
