@@ -85,6 +85,12 @@ func WithShellSense(s ShellSense) ShellOption {
 // SIDE wall is S2, a receiver whose payload is not a prism is S3, both
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
+//
+// An analytic boolean result (a brep or stacked body) that reads as a prism
+// along a reference axis is shelled as that prism
+// (docs/brep-modify-design.md route P) when the removed faces are its caps;
+// otherwise it is ErrUnsupported: SB3, the prism's own S2, where it reads as
+// a prism, and SB10 where it reads as none.
 func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
@@ -163,20 +169,29 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	if err := modifyBrepReceiver(ctx, b.payload, "shells"); err != nil {
+	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "shells", shell: true,
+		admits: func(_ prismPayload, caps prismCaps) error {
+			_, _, err := classifyRemovedCaps(caps, removed)
+			return err
+		}})
+	if err != nil {
 		return nil, err
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every removed face
 	// is a cap (S2).
 	pp, ok := b.payload.(prismPayload)
+	caps := prismCapsOf(b)
+	if route.prism != nil {
+		pp, ok, caps = *route.prism, true, route.caps
+	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
 	}
 	if err := requireExactSection(pp, "shells"); err != nil {
 		return nil, err
 	}
-	removedStart, removedEnd, err := classifyRemovedCaps(b, removed)
+	removedStart, removedEnd, err := classifyRemovedCaps(caps, removed)
 	if err != nil {
 		return nil, err
 	}
@@ -318,29 +333,23 @@ const shellTol = 1e-9
 const shellInradiusWorkLimit uint64 = 1 << 20
 
 // classifyRemovedCaps decides which caps a removed-face set names: every face
-// must be a cap of the receiver (else S2, a side wall — ErrUnsupported), and it
-// reports whether the start cap, the end cap, or both were removed.
-func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) {
-	caps := map[*Face]string{}
-	for _, f := range b.Faces() {
-		for _, o := range f.origins {
-			if o.producer == b.origin.producer && (o.Role == roleCapStart || o.Role == roleCapEnd) {
-				caps[f] = o.Role
-			}
-		}
-	}
+// must be one of the prism's two cap faces (else S2, a side wall —
+// ErrUnsupported), and it reports whether the start cap, the end cap, or both
+// were removed. caps names the receiver's own capStart/capEnd faces, or a
+// brep receiver's route P caps (docs/brep-modify-design.md §4.2).
+func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
+	var start, end bool
 	for _, f := range removed {
-		role, ok := caps[f]
-		if !ok {
+		switch {
+		case caps.start != nil && f == caps.start:
+			start = true
+		case caps.end != nil && f == caps.end:
+			end = true
+		default:
 			// S2: the cavity of a side-wall removal is the offset of an open
 			// chain closed against the removed wall's own surface — a different
 			// 2D machine.
 			return false, false, fmt.Errorf(`%w: a shell that removes a side wall is not supported by this evaluator`, ErrUnsupported)
-		}
-		if role == roleCapStart {
-			start = true
-		} else {
-			end = true
 		}
 	}
 	return start, end, nil

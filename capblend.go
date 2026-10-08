@@ -346,8 +346,11 @@ func (cbp capBlendPayload) loops() []LoopRecord {
 // only part of a cap loop. It returns the loop indices selected per cap when
 // the selection is a clean cap-loop selection; lateral is true when every
 // selected edge is instead an ordinary lateral edge (the caller then runs the
-// base path).
-func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel EdgeSelector, edges []*Edge) (startLoops, endLoops map[int]bool, lateral bool, err error) {
+// base path). caps names the two cap faces whose loops are the cap loops: the
+// receiver's own capStart/capEnd faces, or a brep receiver's route P caps
+// (docs/brep-modify-design.md §4.2), each face loop mapped to its section
+// loop.
+func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCaps, sel EdgeSelector, edges []*Edge) (startLoops, endLoops map[int]bool, lateral bool, err error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	cornerLoops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
@@ -361,22 +364,15 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel
 	}
 	capEdgeOf := map[*Edge]capKey{}
 	capLoopSize := map[capKey]int{}
-	for _, f := range b.Faces() {
-		var start bool
-		var isCap bool
-		for _, o := range f.Origins() {
-			if o.Role == roleCapStart {
-				start, isCap = true, true
-			}
-			if o.Role == roleCapEnd {
-				start, isCap = false, true
-			}
-		}
-		if !isCap {
+	for _, c := range []struct {
+		face  *Face
+		start bool
+	}{{caps.start, true}, {caps.end, false}} {
+		if c.face == nil {
 			continue
 		}
-		for li, l := range f.Loops() {
-			key := capKey{start: start, loop: li}
+		for li, l := range c.face.Loops() {
+			key := capKey{start: c.start, loop: caps.sectionLoop(c.start, li)}
 			for _, e := range l.Edges() {
 				capEdgeOf[e] = key
 				capLoopSize[key]++

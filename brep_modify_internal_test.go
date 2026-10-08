@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin docs/brep-modify-design.md's receiver dispatch (§2) and
-// its stage-2a gates (§6): SB2, SB1, and modify-reach SX16 for every brep or
-// stacked receiver that passes both, since neither route is built.
+// These fixtures pin docs/brep-modify-design.md's receiver dispatch (§2), its
+// stage-2a gates (§6), SB2 and SB1, and the refusals a receiver that passes
+// both meets outside route P: SB3, SB10, and modify-reach SX16 while route E
+// is not built.
 
 // requireBrepModifyRefuses runs Fillet, Chamfer and Shell on body and
 // requires each to refuse with ErrUnsupported naming want, leaving body live
@@ -52,20 +53,33 @@ func requireSB1Names(t *testing.T, body *Body) {
 	require.ErrorContains(t, err, fmt.Sprintf("displacement of %g mm", delta))
 }
 
-// TestBrepModifyOpsAreStaged pins the receivers that pass SB1 and SB2: an
-// exact brep (general-boolean §9's S1, built by hand) and an exact stacked
-// pocket each refuse every modify op with modify-reach SX16's
-// ErrUnsupported, and stay live. Shown to fail with modifyBrepReceiver's
-// final refusal replaced by a nil return (each op fell through to the
-// generic "not a prism" refusal, which names no SX16).
-func TestBrepModifyOpsAreStaged(t *testing.T) {
+// TestBrepModifyOutsideRoutePRefuses pins the refusals that follow route P
+// (§2, §6): a selection no prism reading admits falls to route E, which is
+// not built, so a Fillet or Chamfer refuses with modify-reach SX16; a Shell
+// refuses with SB3 where the body reads as a prism whose caps are not the
+// removed faces, and with SB10 where it reads as none. S1's convex edges
+// include cap edges, which no prism reading takes; the stacked pocket reads
+// as no prism. Every refusal leaves the receiver live. Shown to fail with
+// modifyBrepReceiver's shell arms deleted (each Shell read SX16) and with
+// its route E refusal replaced by a nil return (each Fillet and Chamfer fell
+// through to the generic "straight prism" refusal).
+func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
+	refuses := func(t *testing.T, body *Body, shell string) {
+		t.Helper()
+		before := body.doc.Bodies()
+		edges := Edges(Convex()).AtLeast(1)
+		_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
+		requireRefusesUnchanged(t, body, before, err, "brep-modify route E", "fillets", "SX16")
+		_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
+		requireRefusesUnchanged(t, body, before, err, "brep-modify route E", "chamfers", "SX16")
+		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
+		requireRefusesUnchanged(t, body, before, err, shell)
+	}
 	t.Run("brep", func(t *testing.T) {
 		t.Parallel()
-		doc := New()
-		bp := internalCrossDrilledBrep(t)
-		require.Zero(t, bp.sectionDelta())
-		requireBrepModifyRefuses(t, internalCommitBrep(t, doc, bp), "SX16")
+		_, s1 := internalCrossDrilled(t)
+		refuses(t, s1, "brep-modify SB3")
 	})
 	t.Run("stacked pocket", func(t *testing.T) {
 		t.Parallel()
@@ -73,7 +87,7 @@ func TestBrepModifyOpsAreStaged(t *testing.T) {
 		sp, ok := pocket.payload.(stackedPrismPayload)
 		require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.payload)
 		require.Zero(t, sp.sectionDelta)
-		requireBrepModifyRefuses(t, pocket, "SX16")
+		refuses(t, pocket, "brep-modify SB10")
 	})
 }
 
