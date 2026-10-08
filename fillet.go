@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -119,7 +121,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	if err != nil {
 		return nil, err
 	}
-	rmm, err := magnitudeIn(r, units.Length, units.Millimeter, "the fillet radius")
+	rmm, err := sectionrecord.MagnitudeIn(r, units.Length, units.Millimeter, "the fillet radius")
 	if err != nil {
 		return nil, err
 	}

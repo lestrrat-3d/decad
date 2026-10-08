@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/r3"
@@ -317,7 +319,7 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 	full := false
 	switch a := a.(type) {
 	case AngleExtent:
-		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the extent angle")
+		m, err := sectionrecord.MagnitudeIn(a.A, units.Angle, units.Radian, "the extent angle")
 		if err != nil {
 			return 0, 0, false, sweepDenotation{}, nil, err
 		}
@@ -340,7 +342,7 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 		fullDen := sweepDenotation{phi0: zeroAngleDenotation(), phi1: angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 1)}}
 		return 0, 2 * math.Pi, true, fullDen, nil, nil
 	case SymmetricAngle:
-		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
+		m, err := sectionrecord.MagnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
 		if err != nil {
 			return 0, 0, false, sweepDenotation{}, nil, err
 		}
@@ -415,7 +417,7 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 	}
 	switch s := s.(type) {
 	case AngleSide:
-		m, err := magnitudeIn(s.A, units.Angle, units.Radian, what)
+		m, err := sectionrecord.MagnitudeIn(s.A, units.Angle, units.Radian, what)
 		if err != nil {
 			return 0, angleDenotation{}, nil, err
 		}

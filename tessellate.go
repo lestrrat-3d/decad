@@ -7,6 +7,8 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -380,7 +382,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	chord, err := magnitudeIn(tol, units.Length, units.Millimeter, "the chord tolerance")
+	chord, err := sectionrecord.MagnitudeIn(tol, units.Length, units.Millimeter, "the chord tolerance")
 	if err != nil {
 		return nil, err
 	}

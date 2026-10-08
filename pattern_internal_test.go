@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -90,7 +92,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		require.NoError(t, err)
 		held, err := step.In(units.Millimeter)
 		require.NoError(t, err)
-		conversion := conversionRound(step, units.Millimeter, held)
+		conversion := extent.ConversionRound(step, units.Millimeter, held)
 		require.Positive(t, conversion, "the premise: 0.3 in does not convert to a float")
 		require.GreaterOrEqual(t, patternInstance(t, copies[0]).sectionDelta, conversion)
 	})

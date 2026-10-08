@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -148,7 +150,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if o.NoOpenings && !nilSel {
 		return nil, errOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)
 	}
-	tmm, tDelta, err := magnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
+	tmm, tDelta, err := extent.MagnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
 		return nil, err
 	}
@@ -701,7 +703,7 @@ func wallSurveyInradius(budget *proofbound.WorkBudget, elems []survey2d.SurveyEl
 func shellRectCircleWitness(budget *proofbound.WorkBudget, profile ProfileRecord, loops [][]survey2d.SideWalk, thickness, thicknessDelta float64) (bool, error) {
 	return survey2d.RectangleCircleWitness(budget, profile.Holes, loops, thickness, thicknessDelta, shellTol,
 		func(radius units.Value) (float64, float64, error) {
-			return magnitudeInBounded(radius, units.Length, units.Millimeter, "the hole radius")
+			return extent.MagnitudeInBounded(radius, units.Length, units.Millimeter, "the hole radius")
 		})
 }
 

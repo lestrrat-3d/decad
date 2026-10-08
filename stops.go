@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -74,84 +73,6 @@ func selectedFaceAxialDelta(b *Body, face *Face) float64 {
 		return face.axialDelta
 	}
 	return payloadAxialDelta(b)
-}
-
-// stopLevelRound proves a to-face level's own float rounding: the level the
-// resolution HELD, against the value its expression — (faceOrigin − planeOrigin)
-// · n + travel·offset — takes exactly over the same inputs, every one of them a
-// float64 and so an exact rational. It measures the arithmetic this resolution
-// performs and nothing else: n is the normal the payload itself lifts along, so
-// reading the level in that direction re-derives no coordinate.
-func stopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held float64) float64 {
-	face := [3]float64{faceOrigin.X, faceOrigin.Y, faceOrigin.Z}
-	plane := [3]float64{planeOrigin.X, planeOrigin.Y, planeOrigin.Z}
-	normal := [3]float64{n.X, n.Y, n.Z}
-	terms := make([]*big.Rat, 0, 4)
-	for i := range face {
-		f, p, nn := proofarith.FloatRat(face[i]), proofarith.FloatRat(plane[i]), proofarith.FloatRat(normal[i])
-		if f == nil || p == nil || nn == nil {
-			return math.Inf(1)
-		}
-		terms = append(terms, proofbound.RatMul(new(big.Rat).Sub(f, p), nn))
-	}
-	t, o := proofarith.FloatRat(travel), proofarith.FloatRat(offset)
-	if t == nil || o == nil {
-		return math.Inf(1)
-	}
-	terms = append(terms, proofbound.RatMul(t, o))
-	return proofarith.RationalFloatError(proofbound.RatAdd(terms...), held)
-}
-
-// throughStopRound is stopLevelRound's through-all analogue: travel·(hi −
-// origin·dir) taken exactly over the far side the winning stop body reported
-// and the frame this sweep lifts through, against the float the resolution
-// held. hi arrives from the body's own extentAlong, whose own displacement the
-// resolution charges beside this term, so what this term adds is the
-// subtraction and the sign.
-func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
-	o := [3]float64{origin.X, origin.Y, origin.Z}
-	g := [3]float64{dir.X, dir.Y, dir.Z}
-	base := new(big.Rat)
-	for i := range o {
-		oi, gi := proofarith.FloatRat(o[i]), proofarith.FloatRat(g[i])
-		if oi == nil || gi == nil {
-			return math.Inf(1)
-		}
-		base.Add(base, proofbound.RatMul(oi, gi))
-	}
-	h, t := proofarith.FloatRat(hi), proofarith.FloatRat(travel)
-	if h == nil || t == nil {
-		return math.Inf(1)
-	}
-	return proofarith.RationalFloatError(new(big.Rat).Mul(t, new(big.Rat).Sub(h, base)), held)
-}
-
-// relStopTol is stopTol scaled to the magnitudes in play.
-func relStopTol(scale float64) float64 {
-	return stopTol * math.Max(1, math.Abs(scale))
-}
-
-// displacementIn validates a signed-displacement parameter — magnitudeIn
-// minus the sign gate: ToFace.Offset is the one signed number in the extent
-// vocabulary, and its sign is legal intent (which side of the target face
-// the sweep stops on), so ErrNegativeMagnitude does not apply (core
-// §8.1/§12). The zero Value means no displacement.
-// It returns the displacement beside the rounding its own conversion into unit
-// committed, the same term magnitudeInBounded reports for a magnitude: an offset
-// stated in a non-base unit reaches the level as a rescaled float, and the level
-// carries that rounding.
-func displacementIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, float64, error) {
-	if v == (units.Value{}) {
-		return 0, 0, nil
-	}
-	if v.Kind() != kind {
-		return 0, 0, fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
-	}
-	m, err := v.In(unit)
-	if err != nil {
-		return 0, 0, fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
-	}
-	return m, conversionRound(v, unit, m), nil
 }
 
 // resolveStopBody runs the body gates every body-relative stop shares with
@@ -255,7 +176,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	offset, offsetDelta, err := displacementIn(tf.Offset, units.Length, units.Millimeter, "the to-face offset")
+	offset, offsetDelta, err := extent.DisplacementIn(tf.Offset, units.Length, units.Millimeter, "the to-face offset")
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -276,7 +197,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal parallel to the sweep direction (the face perpendicular to the sweep); this face is tilted — choose a perpendicular face or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
-	tol := relStopTol(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
+	tol := extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
 	if math.Abs(zFace) <= tol {
 		return 0, 0, 0, fmt.Errorf(`%w: the stop face is coplanar with the sketch plane`, ErrDegenerate)
 	}
@@ -297,7 +218,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	// product and the offset step alike), the offset's conversion into
 	// millimetres, and the displacement the stop body proved for its own levels.
 	delta := proofbound.AbsSumUpper(
-		stopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
+		extent.StopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
 		offsetDelta,
 		selectedFaceAxialDelta(body, face),
 	)
@@ -361,7 +282,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 			}
 		}
 		far := hi - base
-		tol := relStopTol(math.Max(math.Abs(hi), math.Abs(base)))
+		tol := extent.RelativeStopTolerance(math.Max(math.Abs(hi), math.Abs(base)))
 		switch {
 		case freeform.DownRound(far-delta) > tol:
 			// Material beyond the plane whatever the displacement hides.
@@ -409,7 +330,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		}
 	}
 	stop := travel * last.far
-	delta := proofbound.AbsSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
+	delta := proofbound.AbsSumUpper(extent.ThroughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
 	return stop, delta, refs, nil
 }
 
@@ -497,7 +418,7 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane is not parallel to the axis — choose a radial face or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported)
 	}
 	off := pl.Frame.Origin().Sub(st.a3).Dot(nf)
-	if math.Abs(off) > relStopTol(math.Max(pl.Frame.Origin().Len(), st.a3.Len())) {
+	if math.Abs(off) > extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), st.a3.Len())) {
 		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane runs parallel to the axis but offset from it — choose a face through the axis or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported)
 	}
 	phi, err := st.faceHalfPlane(face)
@@ -539,7 +460,7 @@ func (st angularStops) faceHalfPlane(face *Face) (float64, error) {
 		for _, p := range boundaryProbes(e) {
 			x := p.Sub(st.a3)
 			u, w := x.Dot(st.r0), x.Dot(st.e1)
-			if math.Hypot(u, w) <= relStopTol(x.Len()) {
+			if math.Hypot(u, w) <= extent.RelativeStopTolerance(x.Len()) {
 				continue
 			}
 			a := math.Atan2(w, u)
@@ -651,7 +572,7 @@ func (st angularStops) rejectAxisCrossing(e *Edge, m r3.Vec) error {
 		return fmt.Errorf(`%w: a stop face edge's radius is not representable: %s`, ErrNotFinite, err)
 	}
 	depth := center.Sub(st.a3).Dot(m) - r
-	if depth >= -relStopTol(r) {
+	if depth >= -extent.RelativeStopTolerance(r) {
 		// Even the circle's deepest point stays in the face's half-plane
 		// (or on the axis).
 		return nil

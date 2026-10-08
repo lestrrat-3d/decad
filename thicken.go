@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
@@ -67,7 +69,7 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		}
 		side = o.side
 	}
-	tmm, tDelta, err := magnitudeInBounded(thickness, units.Length, units.Millimeter, "the thicken thickness")
+	tmm, tDelta, err := extent.MagnitudeInBounded(thickness, units.Length, units.Millimeter, "the thicken thickness")
 	if err != nil {
 		return nil, err
 	}

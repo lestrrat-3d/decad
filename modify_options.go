@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -181,7 +183,7 @@ func decodeChamferOptions(opts []ChamferOption) (chamferOpts, error) {
 			if !ok {
 				return chamferOpts{}, errOptionConflict(`WithAsymmetricChamfer carries no reference and distance`)
 			}
-			mm, mmDelta, err := magnitudeInBounded(a.Other, units.Length, units.Millimeter, "the asymmetric chamfer's other distance")
+			mm, mmDelta, err := extent.MagnitudeInBounded(a.Other, units.Length, units.Millimeter, "the asymmetric chamfer's other distance")
 			if err != nil {
 				return chamferOpts{}, err
 			}

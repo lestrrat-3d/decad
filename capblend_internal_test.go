@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -254,7 +256,7 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 // and a later ThroughAll stop reads the payload's axialDelta.
 func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 	t.Parallel()
-	d, dDelta, err := magnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
+	d, dDelta, err := extent.MagnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
 	require.NoError(t, err)
 	require.Positive(t, dDelta, "the fixture's inch-to-millimetre conversion rounds")
 
