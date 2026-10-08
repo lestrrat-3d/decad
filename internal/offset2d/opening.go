@@ -81,6 +81,19 @@ func readOpening(k, r survey2d.SideWalk, atEnd bool, s, tol float64) (opening, e
 	return o, nil
 }
 
+// OpeningForward reports whether the rim cut at one end of a side opening's
+// kept chain runs forward, into the removed walk r's own span, or backward
+// along r's carrier beyond the corner v (Table RO's reflex row inward, its
+// convex rows outward). The arguments are OpeningJoin's, and so are the
+// refusals.
+func OpeningForward(k, r survey2d.SideWalk, atEnd bool, s, tol float64) (bool, error) {
+	o, err := readOpening(k, r, atEnd, s, tol)
+	if err != nil {
+		return false, err
+	}
+	return o.forward, nil
+}
+
 // OpeningJoin is the rim cut at one end of a side opening's kept chain
 // (docs/shell-opening-design.md §2.4): k is the kept walk and r the removed
 // walk beside it; atEnd says the corner v is k's end, where r starts, and

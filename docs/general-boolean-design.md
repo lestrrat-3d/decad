@@ -693,9 +693,12 @@ cancelling pair of faces widens the bound rather than narrowing it.
 A planar face chords its loops and triangulates them through the cap path
 (`triangulate.go`, tessellation §5), sharing every arc's chord samples with
 the swept wall that owns the arc (tessellation §3). A swept wall is the
-prism wall path over its own segment and interval, with a row of samples at
-every split level between its rims, so each side piece's two vertices are
-the wall's own. The mesh closes by
+prism wall path over its own segment and interval: each interior sample
+holds a vertex at every split level of either side line, and each side
+line's own column a vertex at its own splits alone, so each side piece's two
+vertices are the wall's own and the face across a side line meets no vertex
+the other side's splits put there. The strip between two columns climbs
+whichever column's next vertex is lower. The mesh closes by
 construction because every edge is shared by exactly two faces (§4.2) and
 both chord it from one sample set; `internal/tessellation.RequireClosedMesh`
 proves it. The largest `delta` is reserved from the chord budget, as a

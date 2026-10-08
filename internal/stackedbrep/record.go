@@ -3,6 +3,7 @@ package stackedbrep
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -135,9 +136,12 @@ func (b *Engine) LoopOf(region brepgeom.Profile, budget *proofbound.WorkBudget) 
 // their exact levels. A line crossing a circle takes the keyed table's one
 // float for that crossing — the first scene to reach the key records the
 // line's walked point, whose fixed coordinate is exact, with its allowance —
-// keyed by the side of the circle's centre the crossing lies on; a crossing
-// too close to the centre's coordinate to decide its side misses. Two
-// circles crossing have no exact record and miss.
+// keyed by the side of the circle's centre the crossing lies on. A crossing
+// too close to the centre's coordinate to decide its side is a tangency when
+// an axis-aligned line lies exactly the radius from the centre (tangentFoot),
+// and takes the exact tangent point, keyed with no side: a tangent line meets
+// its circle once (docs/shell-opening-design.md §4.3). Any other crossing
+// that close misses. Two circles crossing have no exact record and miss.
 func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, float64, error) {
 	if ci == cj {
 		return Point2{}, 0, brepgeom.ErrStackedWallMiss
@@ -184,12 +188,22 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 			diff = du*(p.V-curve.A.V) - dv*(p.U-curve.A.U)
 			scale = math.Abs(du) + math.Abs(dv)
 		}
-		if !(math.Abs(diff) > 2*hint.allow*scale) {
-			return Point2{}, 0, brepgeom.ErrStackedWallMiss
-		}
-		side = 1
-		if diff < 0 {
-			side = -1
+		switch {
+		case math.Abs(diff) > 2*hint.allow*scale:
+			side = 1
+			if diff < 0 {
+				side = -1
+			}
+		default:
+			foot, ok := tangentFoot(line, curve)
+			if !ok {
+				return Point2{}, 0, brepgeom.ErrStackedWallMiss
+			}
+			// The line touches the circle at one point, the centre's foot on
+			// it; the walked end lies within the side test's band of it, so
+			// the foot is charged that band on top of the walked allowance.
+			p = foot
+			hint.allow = proofbound.AbsSumUpper(hint.allow, math.Abs(diff))
 		}
 	}
 	pair := ubPair(ci, cj)
@@ -201,6 +215,30 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 	}
 	b.allow = math.Max(b.allow, entry.delta)
 	return entry.p, entry.delta, nil
+}
+
+// tangentFoot is the one point where an axis-aligned line touches a circle:
+// it reports false unless the line's level lies exactly the circle's radius
+// from the centre's coordinate across it, read in exact rational arithmetic
+// over the held floats. The point is the centre's coordinate along the line
+// with the line's level across it, so it is exact. An oblique line is never
+// decided tangent.
+func tangentFoot(line, circle Carrier) (Point2, bool) {
+	if line.Kind != ubPlane || circle.Kind != ubCircle {
+		return Point2{}, false
+	}
+	across := circle.A.U
+	if line.Axis == 1 {
+		across = circle.A.V
+	}
+	gap := new(big.Rat).Sub(new(big.Rat).SetFloat64(line.Level), new(big.Rat).SetFloat64(across))
+	if new(big.Rat).Abs(gap).Cmp(new(big.Rat).SetFloat64(circle.R)) != 0 {
+		return Point2{}, false
+	}
+	if line.Axis == 0 {
+		return Point2{U: line.Level, V: circle.A.V}, true
+	}
+	return Point2{U: circle.A.U, V: line.Level}, true
 }
 
 // record registers a canonical vertex with the carriers it was found on.

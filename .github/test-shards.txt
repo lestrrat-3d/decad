@@ -725,6 +725,7 @@
 3	0.00	TestShellRectCircleWitnessKeepsToleranceAndFallsBack
 3	0.01	TestSideOpeningBrepChargesInexactThickness
 3	0.01	TestSideOpeningCutReachCoversExactCut
+3	0.01	TestSideOpeningRegionsDSection
 3	0.01	TestSideOpeningRegionsLPrism
 3	0.01	TestSideOpeningRegionsOblique
 3	0.01	TestSideOpeningRegionsUChannel

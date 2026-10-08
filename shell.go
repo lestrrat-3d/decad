@@ -94,15 +94,17 @@ func WithShellSense(s ShellSense) ShellOption {
 // A prism also takes a side opening (docs/shell-opening-design.md): one
 // connected run of its outer side faces removed, with or without its caps, on
 // a hole-free section whose every walk is a line, along a section axis or
-// oblique. Each end of the kept walks closes on the removed face's own plane,
-// cut by the kept wall's offset. With both caps removed the result is a prism
-// over the wall section; otherwise it is an analytic face record with
-// face(k)/wall(k) roles, an axis-aligned removed face's plane holding the
-// opening as its hole and an oblique one stated as coplanar pieces. A removed
-// hole wall, two runs, every side face, or a holed section is ErrUnsupported
-// (SO6); so are a circular walk, an oblique removed end face recorded as
-// several segments, and an offset arc join under a kept cap (SO5). Inward, the kept caps must leave a cavity height (SO3,
-// ErrDegenerate).
+// oblique, or a circular arc. Each end of the kept walks closes on the removed
+// face's own plane or cylinder, cut by the kept wall's offset. With both caps
+// removed the result is a prism over the wall section; otherwise it is an
+// analytic face record with face(k)/wall(k) roles, an axis-aligned removed
+// face's plane holding the opening as its hole and an oblique one stated as
+// coplanar pieces. A removed hole wall, two runs, every side face, or a holed
+// section is ErrUnsupported (SO6); so are a kept arc meeting a removed arc at
+// an end corner, an oblique removed end face recorded as several segments,
+// and, under a kept cap, a rim cut on a removed arc at a point that is not
+// exactly on the arc's circle (SO5). Inward, the kept caps must leave a
+// cavity height (SO3, ErrDegenerate).
 //
 // A partial revolve is shelled when sel removes both of its angular caps: the
 // wall is its meridian's offset swept over the same angle, and a meridian walk

@@ -9,6 +9,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -306,4 +307,111 @@ func TestSideOpeningCutReachCoversExactCut(t *testing.T) {
 		}
 	}
 	require.Positive(t, charged, "some cut is a float solve whose displacement is charged")
+}
+
+// internalDSectionPrism is §9's D section — the semicircle of radius 5 about
+// the origin from (0,−5) through (5,0) to (0,5), closed by the chord x = 0 —
+// swept 10 along +z. It returns the prism and the indices of the arc's and
+// the chord's recorded segments.
+func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	a := s.CreatePoint(0, -5)
+	b := s.CreatePoint(0, 5)
+	s.CreateArc(o, a, b)
+	s.CreateLine(b, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+	pp := body.payload.(prismPayload)
+	arc, chord := -1, -1
+	for i, seg := range pp.profile.Outer.Segments {
+		switch seg.(type) {
+		case ArcSeg:
+			arc = i
+		case LineSeg:
+			chord = i
+		}
+	}
+	require.Len(t, pp.profile.Outer.Segments, 2)
+	return pp, arc, chord
+}
+
+// internalWalkedPoints lists a loop's walked start points in walk order.
+func internalWalkedPoints(t *testing.T, loop LoopRecord) []Point2 {
+	t.Helper()
+	out := make([]Point2, len(loop.Segments))
+	for i, seg := range loop.Segments {
+		from, _, ok := walkedEnds(seg)
+		require.True(t, ok, "segment %d is %T", i, seg)
+		out[i] = from
+	}
+	return out
+}
+
+// TestSideOpeningRegionsDSection pins §9's D section, inward. With the chord
+// removed at t = 1 the cuts are the exact feet (0, ±4) and C is the radius-4
+// arc then the chord's piece between them, with no displacement. With the arc
+// removed at t = 3 the offset chord x = 3 meets the arc's circle at the exact
+// points (3, ±4), and C is x = 3 then the arc's piece between them. At t = 2
+// the cuts (2, ±√21) are float solves: the section displacement is nonzero
+// and covers the held cut's distance from √21, and with a kept cap the rims,
+// which read their radius from the cut, cannot key the arc's own circle
+// (SO5). Shown to fail with chainSectionDelta's reach zeroed (the t = 2
+// displacement then 0).
+func TestSideOpeningRegionsDSection(t *testing.T) {
+	t.Parallel()
+	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pp, arc, chord := internalDSectionPrism(t)
+	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (sideOpeningSection, error) {
+		t.Helper()
+		budget := proofbound.NewWorkBudget(t.Context())
+		return sideOpeningRegions(budget, pp, map[int]struct{}{removed: {}}, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
+	}
+	t.Run("chord removed", func(t *testing.T) {
+		t.Parallel()
+		sec, err := regions(t, chord, 2, 1)
+		require.NoError(t, err)
+		require.Equal(t, []Point2{pt(0, -4), pt(0, 4)}, internalWalkedPoints(t, sec.cavity.Outer))
+		require.Equal(t, []Point2{pt(0, -5), pt(0, 5), pt(0, 4), pt(0, -4)}, internalWalkedPoints(t, sec.wall.Outer))
+		require.Empty(t, sec.corners)
+		require.Zero(t, sec.delta)
+	})
+	t.Run("arc removed", func(t *testing.T) {
+		t.Parallel()
+		sec, err := regions(t, arc, 2, 3)
+		require.NoError(t, err)
+		require.Equal(t, []Point2{pt(3, 4), pt(3, -4)}, internalWalkedPoints(t, sec.cavity.Outer))
+		require.Equal(t, []Point2{pt(0, 5), pt(0, -5), pt(3, -4), pt(3, 4)}, internalWalkedPoints(t, sec.wall.Outer))
+		for _, i := range []int{1, 3} {
+			rim, ok := sec.wall.Outer.Segments[i].(ArcSeg)
+			require.True(t, ok, "the rim is an arc about the removed arc's centre")
+			require.Equal(t, pt(0, 0), rim.Center)
+		}
+		require.ElementsMatch(t, []Point2{pt(0, -5), pt(0, 5)}, sec.corners, "both end vertices on the removed arc are marked")
+		require.Zero(t, sec.delta, "the exact cuts enclose to their held floats")
+	})
+	t.Run("arc removed at a float cut", func(t *testing.T) {
+		t.Parallel()
+		sec, err := regions(t, arc, 0, 2)
+		require.NoError(t, err)
+		q := internalWalkedPoints(t, sec.cavity.Outer)[0]
+		require.Equal(t, 2.0, q.U)
+		require.Positive(t, sec.delta)
+		lo := new(big.Rat).Sub(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+		hi := new(big.Rat).Add(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+		require.Positive(t, lo.Sign())
+		require.LessOrEqual(t, new(big.Rat).Mul(lo, lo).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches down to √21")
+		require.GreaterOrEqual(t, new(big.Rat).Mul(hi, hi).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches up to √21")
+
+		_, err = regions(t, arc, 2, 2)
+		require.True(t, errors.Is(err, ErrUnsupported))
+		require.ErrorContains(t, err, "not an exact point of the arc's circle")
+		require.ErrorContains(t, err, "SO5")
+	})
 }
