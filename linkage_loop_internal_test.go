@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
+	"github.com/lestrrat-3d/decad/internal/linkagebound/loopchain"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -132,12 +133,12 @@ func TestLoopCanonicalChain(t *testing.T) {
 	require.NoError(t, spec.prepare(t.Context()))
 	ld := spec.loops[0]
 	ld.mu.Lock()
-	ask, err := ld.point(t.Context(), ld.subs[0], big.NewRat(5, 8))
+	ask, err := ld.chain.Point(t.Context(), ld.subs[0], big.NewRat(5, 8))
 	ld.mu.Unlock()
 	require.NoError(t, err)
-	require.NoError(t, ask.err)
-	keys := make([]string, 0, len(ld.asks))
-	for k := range ld.asks {
+	require.NoError(t, ask.Err)
+	keys := make([]string, 0, len(ld.chain.Asks))
+	for k := range ld.chain.Asks {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
@@ -453,7 +454,9 @@ func TestLoopIntervalGate(t *testing.T) {
 	require.Empty(t, dr.intervalGate(&motionPose{f: half}, &motionPose{f: end}), `a certified cell passes`)
 	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)], 1, `one piece`)
 	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)][0], 2, `two dependents`)
-	ld.asks["0:c0,1/2"] = &loopAsk{err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)}
+	ld.chain.Asks["0:c0,1/2"] = &loopchain.LocatedAsk{
+		Ask: loopchain.Ask{Err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)},
+	}
 	require.Contains(t, dr.intervalGate(&motionPose{f: new(big.Rat)}, &motionPose{f: half}), `injected`)
 }
 
@@ -538,24 +541,23 @@ func TestLoopFoldStatement(t *testing.T) {
 	t.Run("the printed ends are rounded outward", func(t *testing.T) {
 		t.Parallel()
 		third := big.NewRat(1, 3)
-		require.Equal(t, "0.333333333333", decimalDown(third))
-		require.Equal(t, "0.333333333334", decimalUp(third))
+		require.Equal(t, "0.333333333333", linkagebound.DecimalDown(third))
+		require.Equal(t, "0.333333333334", linkagebound.DecimalUp(third))
 		minus := new(big.Rat).Neg(third)
-		require.Equal(t, "-0.333333333334", decimalDown(minus))
-		require.Equal(t, "-0.333333333333", decimalUp(minus))
+		require.Equal(t, "-0.333333333334", linkagebound.DecimalDown(minus))
+		require.Equal(t, "-0.333333333333", linkagebound.DecimalUp(minus))
 		exact := big.NewRat(3, 4)
-		require.Equal(t, "0.750000000000", decimalDown(exact), `an end of fewer decimals prints as itself`)
-		require.Equal(t, "0.750000000000", decimalUp(exact))
+		require.Equal(t, "0.750000000000", linkagebound.DecimalDown(exact), `an end of fewer decimals prints as itself`)
+		require.Equal(t, "0.750000000000", linkagebound.DecimalUp(exact))
 	})
 	t.Run("the piece budget grows with the turns spanned", func(t *testing.T) {
 		t.Parallel()
-		angle, slide := &loopScene{}, &loopScene{slideDriver: true}
-		_, ok := angle.pieceBudget(1, 1+2*math.Pi)
+		_, ok := loopchain.PieceBudget(1, 1+2*math.Pi, false)
 		require.False(t, ok, `one turn keeps sketch's default`)
-		budget, ok := angle.pieceBudget(0, 2.5*2*math.Pi)
+		budget, ok := loopchain.PieceBudget(0, 2.5*2*math.Pi, false)
 		require.True(t, ok)
-		require.Equal(t, 3*loopPiecesPerTurn, budget, `two and a half turns round up to three`)
-		_, ok = slide.pieceBudget(0, 100)
+		require.Equal(t, 3*loopchain.PiecesPerTurn, budget, `two and a half turns round up to three`)
+		_, ok = loopchain.PieceBudget(0, 100, true)
 		require.False(t, ok, `a slide's range is a length, not turns`)
 	})
 }
