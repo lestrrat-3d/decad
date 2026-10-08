@@ -617,22 +617,34 @@ count grows.
 **The chord target and its constant.**
 
 ```text
-chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))
+chordTarget = loftChordFraction * min(|area(p0)| / perimeterUpper(p0), |area(p1)| / perimeterUpper(p1))
+loftChordFraction = 2.5e-4
 ```
 
-`loftChordFraction` is one unexported package constant (§14 records its
-calibration), and `profileCoordinateEnvelope` is the existing non-refusing
-section-coordinate magnitude-envelope reader (`prism_payload.go`). It reads each
-walk's own `coordUpper`: analytic walks produce the same value
-`profileCoordinateUpper` would return, while a free-form walk supplies
-`freeformControlExtent` without passing through that reader's analytic-only
-placed-frame gate. The target therefore scales with the section's own size
-rather than with one arc's own radius, so a Tier-A free-form pair that has no
-radius can share the identical rule (§12 reach). **The target is not a caller
-option.** The export writer's chord tolerance is a tessellation render knob; a loft's
-chording is TOPOLOGY — it decides the vertex set the payload holds — so a
-caller-supplied tolerance would change body identity and demand a wire field.
-The constant stays in source, and `LoftOpts` gains no new field for it (§10).
+`docs/loft-gear-bounds-design.md` §5 owns this rule and its derivation.
+`area(p)` is the record's own region integral, the value
+`falsifyRecordedArea` already computes in `Document.Loft`; the payload
+carries the two integrals (`loftPayload.recordArea`), so no evaluation
+integrates a record a second time and a placement re-reads the same two
+values. `perimeterUpper(p)` sums `perCellArcUpper(seg, walk, 1)` over every
+segment of every loop: the exact `circularLengthInterval` bracket for a
+circular segment and the walk's own `lengthUpper` otherwise.
+`loftStationCapGate` computes the target once per evaluation from those
+values and the walks `validateLoftRecords` resolved, decides S15 against
+it, and returns it to the station generators, so every pair is chorded at the
+target S15 was decided against. A build with no chorded pair (`C = 0`) never
+reads it. A target that is not a positive finite number — a perimeter bound
+that overflowed — refuses `ErrUnsupported` at S14's derivation arm.
+
+The target is a fraction of the section's own feature size `A / P`, so it
+does not grow with the section's distance from the sketch origin or with
+the radius of a gear one tooth belongs to, and a Tier-A free-form pair that
+has no radius shares the identical rule (§12 reach). **The target is not a
+caller option.** The export writer's chord tolerance is a tessellation render
+knob; a loft's chording is TOPOLOGY — it decides the vertex set the payload
+holds — so a caller-supplied tolerance would change body identity and demand
+a wire field. The constant stays in source, and `LoftOpts` gains no new field
+for it (§10).
 
 **The station cap and the ceiling it answers to.** A build's total station
 count is capped by one unexported package constant, `loftStationCap` (§14
@@ -819,10 +831,18 @@ only the RULE that places its stations differs from the circular walk-up.
   side's own walk-ordered span (above) — and read that seed's own station
   points off the open/closed accounting stated
   above for the circular arm, which governs a free-form side unchanged and
-  is restated nowhere here. Measure that cell's own sagitta (below) on BOTH
-  sides; bisect any CELL whose measured sagitta on either side exceeds the
-  chord target (below), replacing it with its two dyadic children; repeat,
-  measuring the new cells, under the station cap (below). **Because the
+  is restated nowhere here. Measure that cell's own sagitta (below) and its
+  parameter-matched departure (`spanMatchedDeltaUpper`, §5.2's `matchedDelta`
+  row) on BOTH sides; bisect any CELL whose measured sagitta or matched
+  departure on either side exceeds the chord target (below), replacing it
+  with its two dyadic children; repeat, measuring the new cells, under the
+  station cap (below). The accepted cell's matched departure is the value
+  §5.2's row records for it, so every free-form cell's matched departure is
+  at or below the target. A sagitta under the target bounds the matched
+  departure by no fixed factor — a span whose control points all lie on its
+  chord has sagitta 0 and a matched departure as large as the chord allows —
+  so bisecting on the sagitta alone would leave that departure unbounded
+  (`docs/loft-gear-bounds-design.md` §5). **Because the
   bisection is dyadic and is applied to the CELL rather than to one side,
   the two sides carry an identical station set by construction** — a
   bisected cell replaces ONE cell on BOTH sides at once, at the identical
@@ -864,13 +884,12 @@ evaluation of the same curve, and never re-derived from a fit or a numerical
 root.
 
 **The chord target is the same one the circular arm already uses.** §5.1's
-chord target above — `chordTarget = loftChordFraction *
-max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))` — reads a
-free-form walk's `freeformControlExtent` and scales with the section's own
-coordinate envelope rather than with any one curve's own radius. That is what
-lets a free-form pair, which has no radius at all, share the identical rule and
-the identical `loftChordFraction` constant (§14): the target is a property of
-the two SECTIONS, not of either curve's own parameterisation.
+chord target above reads the two sections' areas and perimeter bounds, and a
+free-form segment contributes to both like any other segment: its exact area
+integral and its walk's `lengthUpper`. That is what lets a free-form pair,
+which has no radius at all, share the identical rule and the identical
+`loftChordFraction` constant: the target is a property of the two SECTIONS,
+not of either curve's own parameterisation.
 
 **The station cap applies unchanged, and a free-form pair's share of it is
 counted by the same allocation stated above.** A free-form pair that cannot
@@ -2179,49 +2198,27 @@ against this budget.
 
 ## 14. Open questions
 
-**The chord-target constant.** `loftChordFraction = 3.76491e-05` (§5.1),
-used as `chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0),
-profileCoordinateEnvelope(p1))`. The number comes from two calibration
-fixtures measured at a FORCED `m = 64`, each with its own implied fraction at
-that count: the arc wedge, this document's reference fixture — a 90° radius-5
-quarter-arc lofted between `z=0` and `z=10` — reaches a `sectionDelta` of
-3.76491e-4 there, an implied fraction of 3.76491e-05, and the matching
-fit-spline wedge reaches a `sectionDelta` of
-4.73591e-4, an implied fraction of 6.69759e-05. **The shipped constant is the
-finer of those two implied fractions**, the arc wedge's 3.76491e-05, so one
-constant serves both fixtures rather than each kind carrying its own.
+**The chord-target constant.** `loftChordFraction = 2.5e-4` (§5.1), used as
+`chordTarget = loftChordFraction * min(|area(p_i)| / perimeterUpper(p_i))`.
+`docs/loft-gear-bounds-design.md` §5 owns its derivation and its
+calibration: it is the finest fraction whose full forty-tooth helical gear
+build that design measured keeps its audit near 5 seconds. No two-pass
+rebuild reads its own published measurement and rebuilds to chase a tighter
+margin, since that would make the topology a function of a published float
+and a new determinism obligation for replay (§10).
 
-**The binding reading is `Volume`, not `Centroid`, and the two measured
-margins belong to that forced `m = 64` run.** There, `Verify` at the default
-`1e-3` tolerance clears with a 2.39x margin on the arc wedge (a gate ratio of
-4.18e-4) and with a 1.90x margin on the fit-spline wedge. The arc wedge's
-`m = 64` is a FORCED count, not the count the shipped constant yields on the
-production path: `chordCount` (§5.1) proves its own bound through
-`chordSagitta`'s `r·sweep²/(8n²)`, which is conservative against the exact
-`2r·sin²(Δθ/4)` the calibration measured, so at `m = 64` it reads 3.764955e-4
-against a 3.764910e-4 target — over by 4.53e-9 — and steps to `m = 65`, where
-it reads 3.650002e-4 and clears. The production `sectionDelta` at 65 is
-therefore TIGHTER than the calibration's own at 64, so the 2.39x is a
-conservative LOWER bound on the margin the shipped constant reaches on this
-fixture, never an overstatement of it. The fit-spline wedge's 1.90x
-is NOT: 6.69759e-05 is a coarser target than the shipped constant, so a
-fit-spline wedge chorded to meet 3.76491e-05 takes more than 64 chord cells.
-Through §5.1's free-form arm it takes 112, where `Verify` reads `Sound` with
-`Centroid` binding at about 1.99x (§13's A10b fixture).
-
-**The constant does not clear a 4x margin inside the wall-clock budget, and
-this design accepts that rather than widen either.** A 4x margin needs 128
-stations, whose build measures about 4.3 seconds and so falls outside the
-fixture wall-clock budget §13 states; the 64-station build measures about
-1.4 seconds and meets it. What ships is the chord-target fraction that
-64-station run implies — `loftChordFraction`, a dimensionless number and not
-a station count, whose own count is whatever each build's walk-up settles on
-(65 on this fixture, above). An arc loft at an aspect ratio more extreme than
-the reference fixture, judged at a tolerance tighter than the default, can
-read `Suspect` rather than `Sound` — a correct, non-silent outcome. **No
-two-pass rebuild reads its own published measurement and rebuilds to chase a
-tighter margin**, since that would make the topology a function of a
-published float and a new determinism obligation for replay (§10).
+**The reference wedges under that constant.** The arc wedge — a 90° radius-5
+quarter-arc lofted between `z=0` and `z=10` — has a feature size of
+`(25π/4) / (10 + 5π/2)`, about 1.10 mm, so its target is about 2.75e-4 mm.
+The joint walk-up settles at `m = 75`: the certified sagitta first meets the
+target there, and at `m = 74` both the certified and the exact sagitta are
+still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
+`Centroid` binding at about 2.9x
+(`loft_chord_calibration_internal_test.go`'s `loftChordFractionPinM`,
+`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
+§5.1's free-form arm with its matched-departure bisection, takes 120 cells
+and reads `Sound` with `Centroid` binding at about 3.3x
+(`TestLoftFitSplineWedgeVerifiesSound`).
 
 **`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the
@@ -2234,7 +2231,7 @@ below `maxFacetPairTestsPerCall` (§6), and the cap leaves room for every
 fixture §13 requires. The same existing cap at that defining site bounds the
 free-form station generator; the extension creates no second
 cap. Nothing else in this document reads the number: every station count named
-here, the reference fixture's FORCED 64 included, is stated against the chord
+here, the reference wedge's 75 included, is stated against the chord
 target above rather than against the cap.
 
 Every other design variable this document depends on is resolved above, and

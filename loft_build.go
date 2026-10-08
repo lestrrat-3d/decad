@@ -60,6 +60,14 @@ type loftPayload struct {
 	// loft leaves it false.
 	surfaceResult bool
 
+	// recordArea holds each record's own exact region integral, the value
+	// falsifyRecordedArea computed and compared against sketch's area in
+	// Loft. The chord target reads it (loftChordTarget,
+	// docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
+	// record a second time to size its chords. A rigid placement moves
+	// neither record, so placed carries it over unchanged.
+	recordArea [2]float64
+
 	// delta is the proven displacement of every held vertex from the exact
 	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
 	// a10-plan.md Part 3 PR 6): stationRound, liftAllow and placeAllow summed
@@ -280,12 +288,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
-	if err != nil {
-		return nil, err
-	}
-
-	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,8 @@ func boxLoftPayloadOn(t *testing.T, z0, z1 float64) loftPayload {
 	pl1 := planeAt(r3.NewVec(0, 0, z1))
 	return loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -333,7 +334,8 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -533,7 +535,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
-	offsets, walks0, walks1, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, _, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, loftRecordAreas(t, p0, p1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{1}, offsets)
 	require.Len(t, walks0, 1)
@@ -613,7 +615,8 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -785,7 +788,8 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, tc.height))
 			pl := loftPayload{
 				profile0: p, profile1: p,
-				plane0: pl0, plane1: pl1,
+				recordArea: loftRecordAreasOrZero(p, p),
+				plane0:     pl0, plane1: pl1,
 				frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 				xform: r3.Identity(),
 			}
@@ -827,9 +831,50 @@ func TestEvalLoftCancellation(t *testing.T) {
 // validateLoftRecordsErr is validateLoftRecords with only the error kept, for
 // the gate tests below that assert a refusal and don't need the resolved
 // offsets or walks.
+//
+// It hands the gate the records' own areas the way Loft does
+// (loftRecordAreasOrZero), so a gate that reads the chord target reads the
+// same one a real build would.
 func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) error {
-	_, _, _, err := validateLoftRecords(p0, p1, pl0, pl1, alignment, work0, work1) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := validateLoftRecords(p0, p1, pl0, pl1, alignment, loftRecordAreasOrZero(p0, p1), work0, work1) //nolint:dogsled // only the error matters here.
 	return err
+}
+
+// loftRecordAreas is the pair of exact region integrals Loft reads off
+// falsifyRecordedArea and stores on the payload (loftPayload.recordArea), for
+// a test that builds a payload or calls validateLoftRecords directly.
+func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
+	t.Helper()
+	ig0, err := p0.evaluatorIntegrals(freeform.MomentAreaOrder, nil)
+	require.NoError(t, err)
+	ig1, err := p1.evaluatorIntegrals(freeform.MomentAreaOrder, nil)
+	require.NoError(t, err)
+	return [2]float64{ig0.area, ig1.area}
+}
+
+// loftRecordAreasOrZero is loftRecordAreas for the gate tests, whose records
+// are often ones the integrator itself refuses: a record it cannot integrate
+// gets a zero area, which only a chorded build ever reads.
+func loftRecordAreasOrZero(p0, p1 ProfileRecord) [2]float64 {
+	var out [2]float64
+	if ig, err := p0.evaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
+		out[0] = ig.area
+	}
+	if ig, err := p1.evaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
+		out[1] = ig.area
+	}
+	return out
+}
+
+// loftTestChordTarget is the chord target a real build of p0 and p1 chords
+// at: loftChordTarget over the records' own areas and loftPerimeterUpper of
+// the resolved walks.
+func loftTestChordTarget(t testing.TB, p0, p1 ProfileRecord, walks0, walks1 [][]survey2d.SegmentWalk) float64 {
+	t.Helper()
+	areas := loftRecordAreas(t, p0, p1)
+	target, err := loftChordTarget(areas[0], loftPerimeterUpper(p0, walks0), areas[1], loftPerimeterUpper(p1, walks1))
+	require.NoError(t, err)
+	return target
 }
 
 func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
@@ -914,7 +959,7 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 	t.Parallel()
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, _, err := validateLoftRecords(p, p, pl0, pl1, nil, loftRecordAreas(t, p, p), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, []int{0}, offsets)
 	require.Len(t, walks0, 1)
@@ -935,7 +980,8 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 	pl1 := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(0, 0, 1)}
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -956,7 +1002,8 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 	pl1 := PlaneRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -991,7 +1038,8 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -1126,9 +1174,7 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 // directly rather than only the published body.
 func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	t.Helper()
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, freeform.NewFreeformWork(), freeform.NewFreeformWork())
-	require.NoError(t, err)
-	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -1224,7 +1270,8 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -1317,7 +1364,8 @@ func loftPayloadFor(t *testing.T, p0, p1 ProfileRecord, o0, o1 r3.Vec) loftPaylo
 	pl0, pl1 := planeAt(o0), planeAt(o1)
 	return loftPayload{
 		profile0: p0, profile1: p1,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p0, p1),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}

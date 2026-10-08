@@ -174,9 +174,8 @@ func buildChordedWedgeLoft(t *testing.T, pts [][2]float64) (*Body, time.Duration
 	return body, elapsed
 }
 
-// --- the TRUE (uncorded) wedge outlines, used only to read the chordTarget
-// envelope through the real profileCoordinateUpper/profileCoordinateEnvelope helper
-// (Q2), never to build a measured loft ---
+// --- the TRUE (uncorded) wedge outlines, used to read the chord target's
+// feature size and to build the production lofts the Verify tests measure ---
 
 // wedgeArcSketch builds the true A10a outline: two lines plus one radius-5, 90-degree
 // arc.
@@ -227,49 +226,37 @@ func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*ske
 	return s, profiles[0]
 }
 
-// wedgeArcEnvelope reads §5.1's chordTarget envelope off the TRUE (arc) wedge
-// record on both planes. The current analytic staging helper uses
-// profileCoordinateUpper, whose answer agrees with profileCoordinateEnvelope
-// for this analytic walk.
-func wedgeArcEnvelope(t *testing.T) float64 {
+// wedgeFeatureSize reads the chord target's feature size off a TRUE wedge
+// record on both planes (docs/loft-gear-bounds-design.md §5): the smaller of
+// the two records' |area| over perimeter bound, each read the way a real build
+// reads it — falsifyRecordedArea's own area integral and loftPerimeterUpper
+// over the record's resolved walks. loftChordFraction times it is the target a
+// real build of that wedge chords at.
+func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sketch.Plane) (*sketch.Sketch, *sketch.Profile)) float64 {
 	t.Helper()
 	w, base, top := wedgePlanes(t)
-	s0, p0 := wedgeArcSketch(t, w, base)
-	s1, p1 := wedgeArcSketch(t, w, top)
-	rec0, _, err := RecordProfile(s0, p0)
-	require.NoError(t, err)
-	rec1, _, err := RecordProfile(s1, p1)
-	require.NoError(t, err)
-	work := freeform.NewFreeformWork()
-	u0, err := profileCoordinateUpper(rec0, work, nil)
-	require.NoError(t, err)
-	u1, err := profileCoordinateUpper(rec1, work, nil)
-	require.NoError(t, err)
-	return math.Max(u0, u1)
+	size := math.Inf(1)
+	for _, plane := range []*sketch.Plane{base, top} {
+		s, p := sketchOn(t, w, plane)
+		rec, _, sketchArea, err := recordProfile(s, p)
+		require.NoError(t, err)
+		area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
+		require.NoError(t, err)
+		size = math.Min(size, loftFeatureSize(area, loftPerimeterUpper(rec, resolveLoftLoopWalks(t, rec))))
+	}
+	return size
 }
 
-// wedgeSplineEnvelope is wedgeArcEnvelope's A10b twin. profileCoordinateUpper
-// REFUSES a free-form walk outright (requireAnalyticWalk, extrude.go) — it exists for
-// callers that need a placed cap frame, which a free-form wall genuinely cannot
-// represent. This fixture's curved side is a FitSplineSeg, so it has no placed cap
-// frame to ask for; profileCoordinateEnvelope is the twin extrude.go's own doc
-// comment names for exactly this case — a caller that needs only a coordinate
-// MAGNITUDE envelope reads it directly rather than refusing.
-func wedgeSplineEnvelope(t *testing.T) float64 {
+// wedgeArcFeatureSize is wedgeFeatureSize over the A10a (arc) wedge.
+func wedgeArcFeatureSize(t *testing.T) float64 {
 	t.Helper()
-	w, base, top := wedgePlanes(t)
-	s0, p0 := wedgeSplineSketch(t, w, base)
-	s1, p1 := wedgeSplineSketch(t, w, top)
-	rec0, _, err := RecordProfile(s0, p0)
-	require.NoError(t, err)
-	rec1, _, err := RecordProfile(s1, p1)
-	require.NoError(t, err)
-	work := freeform.NewFreeformWork()
-	u0, err := profileCoordinateEnvelope(rec0, work, nil)
-	require.NoError(t, err)
-	u1, err := profileCoordinateEnvelope(rec1, work, nil)
-	require.NoError(t, err)
-	return math.Max(u0, u1)
+	return wedgeFeatureSize(t, wedgeArcSketch)
+}
+
+// wedgeSplineFeatureSize is wedgeFeatureSize over the A10b (fit-spline) wedge.
+func wedgeSplineFeatureSize(t *testing.T) float64 {
+	t.Helper()
+	return wedgeFeatureSize(t, wedgeSplineSketch)
 }
 
 // requireFeetMatchChordEnds asserts that the two radial feet of a true outline are
@@ -295,14 +282,14 @@ func requireFeetMatchChordEnds(t *testing.T, feet [][2]float64, chorded [][2]flo
 }
 
 // TestLoftChordCalibrationTrueOutlineIsTheChordedTwin pins the fidelity both
-// envelope readings rest on: each TRUE outline encloses the same wedge region its
+// feature-size readings rest on: each TRUE outline encloses the same wedge region its
 // chorded stand-in does. chordedWedgeProfile walks origin -> pts[0] -> ... ->
 // pts[last] -> origin, so the uncorded twin is origin -> the curve's first defining
 // point -> the curve -> its last defining point -> origin, with the chord chain and
 // nothing else replaced by the curve. An outline closed straight from the curve's
 // last point back to its first would enclose a lens rather than a wedge, and its
-// envelope would then be read off a different region than every other reading here
-// is measured on. It records profiles only and builds no loft, so it always runs.
+// feature size would then be read off a different region than every other reading
+// here is measured on. It records profiles only and builds no loft, so it always runs.
 func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	t.Parallel()
 	// radialFeet returns, for each straight segment of the recorded loop, the
@@ -930,16 +917,16 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 	const splineSamplesPerCell = 200
 	const splineDenseN = 20000
 
-	arcEnvelope := wedgeArcEnvelope(t)
-	splineEnvelope := wedgeSplineEnvelope(t)
-	t.Logf("A10a envelope (profileCoordinateUpper) = %.10g mm; A10b envelope (profileCoordinateEnvelope) = %.10g mm", arcEnvelope, splineEnvelope)
+	arcSize := wedgeArcFeatureSize(t)
+	splineSize := wedgeSplineFeatureSize(t)
+	t.Logf("A10a feature size |A|/P = %.10g mm; A10b feature size = %.10g mm", arcSize, splineSize)
 
 	for _, m := range ms {
 		pts, sd := wedgeArcChords(t, m)
 		ex := arcChordExcess(t, m)
 		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10a(arc)", meas)
-		t.Logf("  A10a m=%d implied loftChordFraction = sagitta/envelope = %.6g", m, sd/arcEnvelope)
+		t.Logf("  A10a m=%d implied loftChordFraction = sagitta/featureSize = %.6g", m, sd/arcSize)
 	}
 
 	for _, m := range ms {
@@ -948,7 +935,7 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 		ex := splineChordExcess(fs, m, wedgeHeight, splineDenseN)
 		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10b(spline)", meas)
-		t.Logf("  A10b m=%d implied loftChordFraction = sagitta/envelope = %.6g", m, sd/splineEnvelope)
+		t.Logf("  A10b m=%d implied loftChordFraction = sagitta/featureSize = %.6g", m, sd/splineSize)
 	}
 }
 
@@ -970,55 +957,25 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 const loftChordBuildCeiling = 60 * time.Second
 
 // loftChordFractionPinM is the station count the SHIPPED generator settles the
-// reference arc wedge on at the shipped loftChordFraction:
+// reference arc wedge on at the shipped chord target:
 // loftCircularCellStations (loft_build.go), asked for loftChordFraction *
-// wedgeArcEnvelope, settles its joint walk-up at 65 chords. wedgePinStations
+// wedgeArcFeatureSize, settles its joint walk-up at 75 chords. wedgePinStations
 // re-derives it from that generator at every run and requires the two to
 // agree, so every fixture below is chorded at a count production actually
 // produces and this literal is a pin on the generator's own answer, never a
 // hand-forced count.
 //
-// The constant that count is measured at was itself read off
-// TestLoftChordCalibrationSweep's table over the mandated grid m = 4, 8, 16,
-// 32, 64, 128 (a10-plan.md Part 2 Q2's "chordTarget = loftChordFraction *
-// envelope" rule). On that grid the 4x-margin requirement and the wall-clock
-// budget §13 owns do NOT hold simultaneously (a10-plan.md's risk R2,
-// confirmed by measurement rather than assumed):
-//
-//   - Volume is the binding reading throughout (not Centroid — the areaUpper
-//     ceiling covers the body's whole boundary, walls and both caps, rather than
-//     the curved wall alone, which makes the volume term dominate).
-//   - The coarsest grid m at which BOTH fixtures clear 4x margin is m=128
-//     (arc ratio=1.04e-4, margin=9.58x; spline ratio=1.32e-4, margin=7.55x) —
-//     but its assembled F (§7) and its measured build both land outside the
-//     budget docs/loft-design.md §13's build cost model paragraph owns.
-//   - The finest grid m that still fits that budget is m=64 — Sound (ratio <
-//     1e-3 for both) but only ~2.4x (arc) / ~1.9x (spline) margin, short of
-//     4x. The shipped constant is that grid point's own implied fraction.
-//
-// Per the plan's named fallback (Q2, "Fallback if calibration does not close"),
-// the coarser, in-budget value ships: Q3's wall-clock ceiling is stated as a
-// hard "any fixture that ships in go test ./... builds in 2 seconds or less",
-// while the 4x margin is a target on top of Sound, not a second hard gate. A
-// loft at this radius/aspect-ratio combination can therefore still read Suspect
-// at a tighter-than-default tolerance; that is the plan's accepted, non-silent
-// outcome, not a bug.
-//
-// The pin sits one station ABOVE that grid point because the walk-up's SEED
-// proves its bound differently from the way the sweep measures one:
-// chordCount asks chordSagitta, whose outward-rounded r*sweep^2/(8n^2) is
-// conservative against the exact 2r*sin^2(dtheta/4) arcSagitta evaluates, and
-// at m=64 on this fixture the two straddle the target. The joint walk-up only
-// ever increments from that seed, so the count stands at 65 even though the
-// certified sagitta at 64 already clears. wedgePinStations asserts the
-// straddle directly. The production chording is therefore strictly FINER than
-// the grid point the constant was read off, and the margins measured here are
-// correspondingly wider than that grid row's.
-const loftChordFractionPinM = 65
+// The wedge's feature size is its quarter-disc area 25*pi/4 over a perimeter
+// bound of 10 + 5*pi/2, about 1.10 mm, so the target is about 2.75e-4 mm. The
+// certified sagitta 5*(pi/2)^2/(8*m^2) first meets that at m = 75; at m = 74
+// both the certified and the exact sagitta are still over it, so the count is
+// the target's own and not a rounding artefact of either bound
+// (wedgePinStations asserts both).
+const loftChordFractionPinM = 75
 
 // wedgePinStations asks the PRODUCTION generator — loftCircularCellStations
 // (loft_build.go), the same call a real build makes — how many stations the
-// reference arc wedge takes at the shipped loftChordFraction, and requires the
+// reference arc wedge takes at the shipped chord target, and requires the
 // answer to be loftChordFractionPinM. Every fixture in this file is chorded at
 // THIS returned count, so no reading here can belong to a chording production
 // never produces.
@@ -1031,7 +988,7 @@ const loftChordFractionPinM = 65
 // however far the shipped stations drifted.
 func wedgePinStations(t *testing.T) int {
 	t.Helper()
-	target := loftChordFraction * wedgeArcEnvelope(t)
+	target := loftChordFraction * wedgeArcFeatureSize(t)
 	seg, w := wedgeArcRecord(t)
 	stations, _, sagitta, _, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
@@ -1053,18 +1010,16 @@ func wedgePinStations(t *testing.T) int {
 		require.Equal(t, [2]float64{p.U, p.V}, chordPts[k], "every A10a vertex must BE the station the shipped generator produced")
 	}
 
-	// The seed that decides this count, asserted rather than described: the
-	// held chooser's conservative bound at one station BELOW the pin still
-	// reads over target, so chordCount seeds the joint walk-up one station
-	// higher, while the exact sagitta formula the sweep measures with is
-	// already under target there.
-	require.Greater(t, chordSagitta(wedgeRadius, wedgeSweep, m-1), target,
-		"the held chooser's own conservative bound at m=%d must exceed the target, or it would not have seeded m=%d", m-1, m)
-	require.Less(t, arcSagitta(m-1), target,
-		"the exact sagitta at m=%d is already under target, which is why the sweep's own grid row sits one station coarser", m-1)
+	// One station fewer misses the target on BOTH sagitta readings — the
+	// certified one the generator walks up against and the exact one the sweep
+	// measures — so the settled count is the smallest one the target admits.
+	require.Greater(t, loftCertifiedSagittaUpper(seg, m-1), target,
+		"the certified sagitta at m=%d must exceed the target, or the walk-up would have stopped there", m-1)
+	require.Greater(t, arcSagitta(m-1), target,
+		"the exact sagitta at m=%d must exceed the target too, so the count is not a straddle between the two readings", m-1)
 
-	t.Logf("the shipped generator on the reference arc wedge: m=%d target=%.10g published=%.17g (certified=%.17g + stations=%.4g); chordSagitta at m=%d is %.10g against an exact sagitta of %.10g",
-		m, target, sagitta, certified, sagitta-certified, m-1, chordSagitta(wedgeRadius, wedgeSweep, m-1), arcSagitta(m-1))
+	t.Logf("the shipped generator on the reference arc wedge: m=%d target=%.10g published=%.17g (certified=%.17g + stations=%.4g); exact sagitta at m=%d is %.10g",
+		m, target, sagitta, certified, sagitta-certified, m-1, arcSagitta(m-1))
 	require.Equal(t, loftChordFractionPinM, m, "the pinned station count must be the one the shipped generator produces at the shipped constant")
 	return m
 }
@@ -1126,20 +1081,17 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 		"|Volume.Value - (pi*25/4)*10| must be <= Volume.Bound + sectionDelta*areaUpper; got |%.10g-%.10g|=%.3e, allowed %.3e (raw Bound=%.3e + term=%.3e)",
 		gotVolume, wantVolume, math.Abs(gotVolume-wantVolume), arcMeas.volume.widened, vol.Bound.Base(), sectionDeltaVolumeTerm)
 
-	arcEnvelope := wedgeArcEnvelope(t)
-	arcFraction := arcSD / arcEnvelope
+	arcFraction := arcSD / wedgeArcFeatureSize(t)
 	arcBinding := arcMeas.binding()
 	arcMargin := toleranceRel / arcBinding.ratio
 	t.Logf("A10a pin: m=%d F=%d elapsed=%s binding=%s ratio=%.6g margin=%.3gx impliedFraction=%.6g", m, arcMeas.f, arcElapsed, arcBinding.reading, arcBinding.ratio, arcMargin, arcFraction)
-	// The achieved margin, asserted numerically rather than the verdict alone
-	// (PR 1's task 4): this fixture does NOT reach 4x at the production count
-	// (Volume is binding here — see loftChordFractionPinM's comment) — assert the
-	// weaker margin actually measured (~2.5x), loudly, rather than silently
-	// asserting 4x. require.InEpsilon pins the measured value against drift while
-	// tolerating ordinary float rounding.
+	// The achieved margin, asserted numerically rather than the verdict alone:
+	// Volume binds at about 3.3x on this widened reading at the production count.
+	// require.InEpsilon pins the measured value against drift while tolerating
+	// ordinary float rounding.
 	require.Greater(t, arcBinding.ratio, 0.0, "the binding reading must have formed a usable reference")
 	require.Less(t, arcBinding.ratio, toleranceRel, "the binding reading must still be Sound (ratio < 1e-3) at m=%d", m)
-	require.InEpsilon(t, 2.4696, arcMargin, 0.05, "the achieved arc-wedge margin at m=%d, pinned so a future change to the widening formula is caught", m)
+	require.InEpsilon(t, 3.29, arcMargin, 0.05, "the achieved arc-wedge margin at m=%d, pinned so a future change to the widening formula is caught", m)
 
 	// --- A10b: the fit-spline wedge, checked against a dense-sample reference
 	// since the spline has no closed form to compare against ---
@@ -1167,24 +1119,19 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 		"the analogous enclosure for the spline wedge: |Volume.Value - denseSampleVolume| must be <= Volume.Bound + sectionDelta*areaUpper; got |%.10g-%.10g|=%.3e, allowed %.3e",
 		gotSplineVolume, denseVolume, math.Abs(gotSplineVolume-denseVolume), splineMeas.volume.widened)
 
-	splineEnvelope := wedgeSplineEnvelope(t)
-	splineFraction := splineSD / splineEnvelope
+	splineFraction := splineSD / wedgeSplineFeatureSize(t)
 	splineBinding := splineMeas.binding()
 	splineMargin := toleranceRel / splineBinding.ratio
 	t.Logf("A10b pin: m=%d F=%d elapsed=%s binding=%s ratio=%.6g margin=%.3gx impliedFraction=%.6g", m, splineMeas.f, splineElapsed, splineBinding.reading, splineBinding.ratio, splineMargin, splineFraction)
 	require.Greater(t, splineBinding.ratio, 0.0, "the binding reading must have formed a usable reference")
 	require.Less(t, splineBinding.ratio, toleranceRel, "the binding reading must still be Sound (ratio < 1e-3) at m=%d", m)
-	require.InEpsilon(t, 1.9483, splineMargin, 0.05, "the achieved spline-wedge margin at m=%d, pinned so a future change to the widening formula is caught", m)
+	require.InEpsilon(t, 2.61, splineMargin, 0.05, "the achieved spline-wedge margin at m=%d, pinned so a future change to the widening formula is caught", m)
 
-	// The tie-break Q2 states for the shared constant ("the constant takes the
-	// finer of the two") is the SMALLER of the two implied fractions — a smaller
-	// fraction only tightens chordTarget for both arms, so using the finer one
-	// keeps the chooser at this fixture's own station count or above on whichever
-	// arm a caller's own section resembles. Report it rather than assert it: it is
-	// a derived float from two independently-measured envelopes, not a value this
-	// harness can pin bit-for-bit without coupling to profileCoordinateUpper's own
-	// internals. The shipped loftChordFraction (loft_build.go) is that tie-break's
-	// own answer, read off the sweep grid rather than off this pin.
+	// Each wedge's sagitta at this count over its own feature size is the
+	// fraction that count implies. Reported rather than asserted: the arc's sits
+	// just under loftChordFraction because the walk-up stops at the first count
+	// that meets the target, and the spline's is a dense-sample stand-in, not a
+	// generator reading.
 	finerFraction := min(arcFraction, splineFraction)
 	t.Logf("finer of the two implied fractions = %.6g, from arc=%.6g spline=%.6g", finerFraction, arcFraction, splineFraction)
 	require.Positive(t, finerFraction)

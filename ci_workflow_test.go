@@ -268,16 +268,16 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			"%s names these tests, which no longer exist: regenerate it (see _shardgen/main.go)", ciShardFilePath)
 	})
 
-	t.Run("the chord sweep fixture is built by one shard", func(t *testing.T) {
-		assigned := shardAssignment(t, ciShardFilePath)
-		const enclosure = "TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap"
-		shard, ok := assigned[enclosure]
-		require.Truef(t, ok, "%s must have a shard assignment", enclosure)
+	t.Run("the chord sweep fixture runs together in internal/proofbound", func(t *testing.T) {
+		const path = "internal/proofbound/chord_bounds_test.go"
+		source, err := os.ReadFile(path)
+		require.NoError(t, err)
 		for _, name := range []string{
+			"TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap",
 			"TestChordedBoundaryVolumeAllowWallLegDeletionSearch",
 			"TestChordedBoundaryVolumeAllowSeamLegDeletionSearch",
 		} {
-			require.Equalf(t, shard, assigned[name], "%s and %s read chordSweepTable and must run in one shard", enclosure, name)
+			require.Containsf(t, string(source), "func "+name+"(", "%s must stay in %s", name, path)
 		}
 	})
 

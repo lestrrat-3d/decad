@@ -11,20 +11,24 @@ import (
 // This file adapts loftmesh's record gates and station pairs for root consumers.
 
 // validateLoftRecords keeps the station cap after the record-only pairing
-// gates, preserving the refusal order in docs/loft-design.md §4.
-func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, error) {
+// gates, preserving the refusal order in docs/loft-design.md §4. It also
+// returns the build's one chord target, which the station cap gate reads once
+// from recordArea and the walks resolved here (loftStationCapGate), so the
+// station generators chord at the target the gate decided S15 against.
+func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, recordArea [2]float64, work0, work1 *freeform.FreeformWork) ([]int, [][]survey2d.SegmentWalk, [][]survey2d.SegmentWalk, float64, error) {
 	offsets, walks0, walks1, err := loftmesh.ValidateRecordWalks(
 		loftmesh.RecordProfile{Outer: p0.Outer, Holes: p0.Holes},
 		loftmesh.RecordProfile{Outer: p1.Outer, Holes: p1.Holes},
 		pl0, pl1, alignment, work0, work1,
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, 0, err
 	}
-	if err := loftStationCapGate(p0, p1, offsets, walks0, walks1); err != nil {
-		return nil, nil, nil, err
+	target, err := loftStationCapGate(p0, p1, recordArea, offsets, walks0, walks1)
+	if err != nil {
+		return nil, nil, nil, 0, err
 	}
-	return offsets, walks0, walks1, nil
+	return offsets, walks0, walks1, target, nil
 }
 
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
