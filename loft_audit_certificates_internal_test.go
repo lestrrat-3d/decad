@@ -258,12 +258,13 @@ func transformVerts(verts []r3.Vec, scale float64, shift r3.Vec) []r3.Vec {
 // requireLoftAuditWork runs the audit under the given shortcuts and asserts
 // the whole per-outcome breakdown of its pair loop, so a test states which
 // path decided every pair rather than only how many pairs there were. It
-// compares the four per-pair outcomes; the Candidates and CapProofs counts
-// belong to the enumeration, which loft_audit_sweep_internal_test.go asserts.
+// compares the four per-pair outcomes; the Candidates, Scanned and CapProofs
+// counts belong to the enumeration, which loft_audit_sweep_internal_test.go
+// asserts.
 func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts loftmesh.LoftAuditShortcuts, want loftmesh.LoftAuditWork) error {
 	t.Helper()
 	work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, shortcuts)
-	work.Candidates, work.CapProofs = 0, 0
+	work.Candidates, work.Scanned, work.CapProofs = 0, 0, 0
 	require.Equal(t, want, work)
 	return err
 }

@@ -35,15 +35,16 @@ var (
 )
 
 // LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
-// an assembled triangle set with no structure of its own: S6 (per-triangle
-// existence) first, then S8 (the fixed ceiling, compared against the number
-// of box-overlapping candidate pairs before any pair test or pair-sized
-// allocation), then S7 (the pair-by-pair contact audit over those
+// an assembled triangle set with no structure of its own: S8's triangle
+// ceiling (MaxLoftAuditTriangles) first, then S6 (per-triangle existence),
+// then S8's pair ceiling (compared against the sweep's scanned pairs and the
+// number of box-overlapping candidate pairs, before any pair test or
+// pair-sized allocation), then S7 (the pair-by-pair contact audit over those
 // candidates). budget is shared with the rest of the pre-commit cancellation
 // path exactly as docs/modify-design.md §5's audits already share one
-// (fillet_audit.go); Step is called once per triangle in S6, once per
-// triangle in each of the two sweep passes, and once per tested pair, and Err
-// at every phase boundary, the end of S7 among them.
+// (fillet_audit.go); Step is called once per triangle in S6, once per scanned
+// pair in each of the two sweep passes, and once per tested pair, and Err at
+// every phase boundary, the end of S7 among them.
 //
 // sweep_mitre_build.go, stitch.go, mass_properties_mesh.go and LoftChain call
 // it. A loft calls LoftCrossingAuditStructured instead. Tests that need a
@@ -97,10 +98,11 @@ func LoftSweepCandidates(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][
 		members[i] = i
 	}
 	order := newSweepOrder(boxes, members)
-	starts, count, err := sweepCandidateCounts(budget, order, len(tris), keepEveryPair)
+	sc, err := sweepCandidateCounts(budget, order, len(tris), keepEveryPair, math.MaxUint64)
 	if err != nil {
 		return nil, err
 	}
+	starts, count := sc.starts, sc.count
 	cands, err := sweepCandidates(budget, order, starts, count, keepEveryPair)
 	if err != nil {
 		return nil, err
@@ -113,8 +115,20 @@ func LoftSweepCandidates(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][
 	return out, nil
 }
 
+// MaxLoftAuditTriangles is S8's ceiling on the triangle count one crossing
+// audit accepts, checked before S6 lifts a single triangle: 8·8192 − 8, the
+// most triangles a loft at docs/loft-gear-bounds-design.md §7's hard station
+// ceiling of 8192 assembles (F = 4·Σstations + 4H − 4 with H ≤ Σstations − 1).
+// It bounds the exact lifts NewLoftAuditData holds for the whole audit, which
+// no candidate count bounds: far-apart triangles give no candidates at all.
+const MaxLoftAuditTriangles = 8*8192 - 8
+
 func errLoftAuditCeiling() error {
 	return fmt.Errorf(`%w: the loft crossing audit's candidate pair count exceeds the fixed work ceiling`, decaderr.ErrUnsupported)
+}
+
+func errLoftAuditTriangles(f int) error {
+	return fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`, decaderr.ErrUnsupported, f, MaxLoftAuditTriangles)
 }
 
 // loftCrossingAudit is every entry point's body. structure is nil for the
@@ -148,6 +162,10 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 	if err := budget.Err(); err != nil {
 		return work, err
 	}
+	f := len(tris)
+	if f > MaxLoftAuditTriangles {
+		return work, errLoftAuditTriangles(f)
+	}
 
 	// S6: per-triangle existence, before the pair audit runs at all.
 	for i, tri := range tris {
@@ -162,14 +180,11 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 		return work, err
 	}
 
-	f := len(tris)
-	if f > math.MaxInt32 {
-		return work, errLoftAuditCeiling()
-	}
-
 	// The cap proofs read the exact lifts, so a structured audit builds them
-	// before S8. F is bounded there by the loft's own station cap (S15); the
-	// generic entry keeps building them only after S8 admits the call.
+	// before S8's candidate count. The triangle ceiling checked above is what
+	// bounds them there: the loft's own station cap (S15) does not, since
+	// loftStationCapGate never consults it for a build with no chorded pair.
+	// The generic entry builds them only after S8 admits the call.
 	var data *LoftAuditData
 	var proven [2]bool
 	if shortcuts.CapProof && structure != nil {
@@ -217,16 +232,24 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 
 	// S8: the ceiling, over the candidates the pair loop will test, refused
 	// before a single pair test runs and before any candidate list is built.
+	// The sweep's counting pass is itself held to the ceiling: it counts every
+	// comparison of two boxes that overlap on the sweep axis, a number at
+	// least the candidate count, and refuses the moment that passes the
+	// ceiling, so the work before an S8 refusal is O(F log F + ceiling).
 	var order sweepOrder
 	var count uint64
 	var starts []int
 	if shortcuts.Sweep {
 		order = newSweepOrder(boxes, members)
-		var err error
-		starts, count, err = sweepCandidateCounts(budget, order, f, keepEveryPair)
+		sc, err := sweepCandidateCounts(budget, order, f, keepEveryPair, ceiling)
+		work.Scanned = int(sc.scanned)
 		if err != nil {
 			return work, err
 		}
+		if sc.exceeded {
+			return work, errLoftAuditCeiling()
+		}
+		starts, count = sc.starts, sc.count
 	} else {
 		var ok bool
 		count, ok = proofbound.WallChoose2(uint64(len(members)))
@@ -339,6 +362,9 @@ func loftAuditLookback(budget *proofbound.WorkBudget, boxes [][2]r3.Vec, f int, 
 		all[i] = i
 	}
 	if !sweep {
+		if pairs, ok := proofbound.WallChoose2(uint64(f)); !ok || uint64(work.Candidates)+pairs > ceiling {
+			return failed
+		}
 		count := uint64(0)
 		if err := eachMemberPair(all, func(i, j int) error {
 			if keep(i, j) {
@@ -364,11 +390,12 @@ func loftAuditLookback(budget *proofbound.WorkBudget, boxes [][2]r3.Vec, f int, 
 		return failed
 	}
 	order := newSweepOrder(boxes, all)
-	starts, count, err := sweepCandidateCounts(budget, order, f, keep)
+	sc, err := sweepCandidateCounts(budget, order, f, keep, ceiling-uint64(work.Candidates))
 	if err != nil {
 		return err
 	}
-	if uint64(work.Candidates)+count > ceiling {
+	starts, count := sc.starts, sc.count
+	if sc.exceeded || uint64(work.Candidates)+count > ceiling {
 		return failed
 	}
 	work.Candidates += int(count)
@@ -458,17 +485,29 @@ func newSweepOrder(boxes [][2]r3.Vec, members []int) sweepOrder {
 // and a pair whose boxes are disjoint on one axis is disjoint. Every
 // overlapping pair is therefore reached from whichever of its two triangles
 // comes first in the order. Both passes are float comparisons only.
-func (s sweepOrder) visit(budget *proofbound.WorkBudget, fn func(i, j int)) error {
+//
+// Every scanned pair — one whose boxes overlap on the sweep axis — steps the
+// budget once and counts toward limit; visit stops and reports true as soon
+// as the count passes limit. That count is at least the number of pairs fn
+// receives, and it is what bounds the pass's work: a tall shape whose boxes
+// all overlap on the sweep axis scans F·(F−1)/2 pairs however few overlap on
+// all three.
+func (s sweepOrder) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, j int)) (uint64, bool, error) {
+	scanned := uint64(0)
 	for a, ia := range s.order {
-		if err := budget.Step(); err != nil {
-			return err
-		}
 		boxA := s.boxes[ia]
 		_, hiA := boxAxis(boxA, s.axis)
 		for _, ib := range s.order[a+1:] {
 			boxB := s.boxes[ib]
 			if loB, _ := boxAxis(boxB, s.axis); loB > hiA {
 				break
+			}
+			if err := budget.Step(); err != nil {
+				return scanned, false, err
+			}
+			scanned++
+			if scanned > limit {
+				return scanned, true, nil
 			}
 			if !meshbool.BoxesOverlap(boxA, boxB) {
 				continue
@@ -480,27 +519,37 @@ func (s sweepOrder) visit(budget *proofbound.WorkBudget, fn func(i, j int)) erro
 			fn(i, j)
 		}
 	}
-	return nil
+	return scanned, false, nil
 }
 
 // sweepCandidateCounts is the first sweep pass: it counts the overlapping
 // pairs keep accepts, per lower index, and returns the offsets the second
 // pass fills (starts[i] is where triangle i's partners begin; len f+1) and
-// the total, which is the count S8 compares.
-func sweepCandidateCounts(budget *proofbound.WorkBudget, s sweepOrder, f int, keep func(i, j int) bool) ([]int, uint64, error) {
+// the total, which is the count S8 compares, beside the number of pairs the
+// pass scanned. It reports true instead when the pass scans more than limit
+// pairs (visit).
+func sweepCandidateCounts(budget *proofbound.WorkBudget, s sweepOrder, f int, keep func(i, j int) bool, limit uint64) (sweepCount, error) {
 	starts := make([]int, f+1)
-	err := s.visit(budget, func(i, j int) {
+	scanned, exceeded, err := s.visit(budget, limit, func(i, j int) {
 		if keep(i, j) {
 			starts[i+1]++
 		}
 	})
-	if err != nil {
-		return nil, 0, err
+	if err != nil || exceeded {
+		return sweepCount{scanned: scanned, exceeded: exceeded}, err
 	}
 	for i := 1; i <= f; i++ {
 		starts[i] += starts[i-1]
 	}
-	return starts, uint64(starts[f]), nil
+	return sweepCount{starts: starts, count: uint64(starts[f]), scanned: scanned}, nil
+}
+
+// sweepCount is sweepCandidateCounts' result.
+type sweepCount struct {
+	starts   []int
+	count    uint64
+	scanned  uint64
+	exceeded bool
 }
 
 // loftCandidates is a candidate list in lexicographic order: triangle i's
@@ -513,11 +562,13 @@ type loftCandidates struct {
 // sweepCandidates is the second sweep pass (docs/loft-design.md §6): it
 // fills the list sweepCandidateCounts sized, then sorts each triangle's
 // partners, so the list runs in the same lexicographic order the all-pairs
-// loop tests in and the first refused pair is the one that loop reports.
+// loop tests in and the first refused pair is the one that loop reports. It
+// scans exactly the pairs the first pass scanned, which that pass already
+// held to its limit.
 func sweepCandidates(budget *proofbound.WorkBudget, s sweepOrder, starts []int, count uint64, keep func(i, j int) bool) (loftCandidates, error) {
 	c := loftCandidates{starts: starts, js: make([]int32, count)}
 	next := slices.Clone(starts[:len(starts)-1])
-	err := s.visit(budget, func(i, j int) {
+	_, _, err := s.visit(budget, math.MaxUint64, func(i, j int) {
 		if !keep(i, j) {
 			return
 		}

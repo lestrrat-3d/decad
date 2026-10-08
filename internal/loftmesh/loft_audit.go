@@ -245,8 +245,11 @@ type LoftAuditShortcuts struct {
 //
 // Candidates is the number of pairs the pair loop was handed: every pair of
 // the triangles no cap proof decided, or only the box-overlapping ones under
-// Sweep. It is the count S8 compares against the ceiling. CapProofs is how
-// many cap families (0, 1 or 2) CapFamilyProof decided.
+// Sweep. It is the count S8 compares against the ceiling. Scanned is how
+// many pairs the sweep's counting pass compared on its sweep axis, at least
+// Candidates; S8 refuses as soon as it passes the ceiling, and it stops at
+// ceiling + 1 on that refusal. CapProofs is how many cap families (0, 1 or 2)
+// CapFamilyProof decided.
 //
 // The four pair outcomes always sum to Candidates on a call that ran to
 // completion. classifications counts the pairs the certificates are there to
@@ -269,6 +272,7 @@ type LoftAuditWork struct {
 	VertexCerts     int
 	Classifications int
 	Candidates      int
+	Scanned         int
 	CapProofs       int
 }
 

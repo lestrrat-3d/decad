@@ -209,7 +209,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms: the RECORDED arm, where EVERY vertex the collapse consumes is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides), or the COMPUTED arm, which takes every other collapse — one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence, since the record states no coordinate for a COMPUTED vertex to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
 | **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records alone (§4's gate-order paragraph places both arms) — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
-| **S8** | the crossing audit's candidate count — the box-overlapping pairs it will test pairwise, after the cap proofs (§6) — exceeds its fixed ceiling (§6, §10); the count grows with the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
+| **S8** | the crossing audit's work passes a fixed ceiling (§6, §10): more triangles than its triangle ceiling, more pairs scanned on the sweep axis than its pair ceiling, or more candidates — the box-overlapping pairs it will test pairwise, after the cap proofs — than that pair ceiling; each grows with the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
@@ -1344,14 +1344,23 @@ sweep and tests every candidate pairwise. The zero shortcut set still tests
 every pair of every triangle through the exact classification, and every
 shortcut's verdict is tested against it.
 
-**S8 counts candidates.** The ceiling reuses tessellation design §3's own
-`maxFacetPairTestsPerCall = 8_000_000`, since the predicate under test is the
-one tessellation's boolean pre-pass runs. A first sweep pass counts the
-candidates the pairwise pass will test — the wall-wall pairs whose boxes
-overlap, plus those of any cap whose proof failed — with no pair-sized
-allocation, and the audit refuses under S8 when the count exceeds the
-ceiling, before any pair test. The second pass builds the list and the
-pairwise pass tests it, stepping the budget once per pair.
+**S8 bounds the triangles, the sweep's scan and the candidates.** Before S6
+lifts a single triangle, the audit refuses a set of more than
+`maxLoftAuditTriangles = 8·8192 − 8` triangles — the most a loft assembles at
+`docs/loft-gear-bounds-design.md` §7's hard station ceiling — since the exact
+lifts it holds grow with `F` and no pair count bounds them: far-apart
+triangles give no candidates at all. The pair ceiling reuses tessellation
+design §3's own `maxFacetPairTestsPerCall = 8_000_000`, since the predicate
+under test is the one tessellation's boolean pre-pass runs. A first sweep pass
+counts the candidates the pairwise pass will test — the wall-wall pairs whose
+boxes overlap, plus those of any cap whose proof failed — with no pair-sized
+allocation. That pass steps the budget once per pair it compares on the sweep
+axis and refuses under S8 the moment that scan count passes the ceiling, since
+a shape whose boxes all overlap on the sweep axis (a tall tube) scans
+`F·(F−1)/2` pairs to find few candidates; the scan count is at least the
+candidate count, which is refused against the same ceiling. The work before
+an S8 refusal is therefore `O(F log F + ceiling)`. The second pass builds the
+list and the pairwise pass tests it, stepping the budget once per pair.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
@@ -1961,7 +1970,9 @@ against this budget.
   overlap in area; the audit rejects them as S7. A synthetic triangle set
   whose candidate count exceeds the fixed pair-test budget → S8, refused
   before any pair test; a 1200-gon prism whose `F*(F-1)/2` exceeds it builds,
-  because S8 counts candidates. The sweep's candidate list equals the
+  because S8 counts candidates; a tall open tube, and a 3000-gon loft 100
+  tall, refuse once the sweep's scan passes the ceiling, after at most that
+  many comparisons; a set past the triangle ceiling refuses before S6. The sweep's candidate list equals the
   box-overlap set on the gear tooth, the chorded wedge and the crossing
   fixtures, and the structured audit's verdict, refused pair included, equals
   the zero-shortcut reference's on real lofts and on caps mutated to fail each

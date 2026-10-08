@@ -304,8 +304,8 @@ func stackedLoftTriangles(n int, dx float64) ([]r3.Vec, [][3]int) {
 // 4001*4000/2 = 8_002_000 candidates, past
 // proofbound.MaxFacetPairTestsPerCall (8_000_000), and the audit refuses
 // before a single pair test runs. The counting budget proves it: S6 steps
-// once per triangle and the sweep's counting pass once more per triangle, and
-// nothing else steps.
+// once per triangle, the sweep's counting pass once per scanned pair until
+// its scan passes the ceiling, and nothing else steps.
 func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 	t.Parallel()
 	const n = 4001
@@ -319,7 +319,7 @@ func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 
 	work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
 	require.ErrorIs(t, err, ErrUnsupported)
-	require.Equal(t, 2*n, calls,
+	require.Equal(t, n+proofbound.MaxFacetPairTestsPerCall+1, calls,
 		"the budget must be spent only on S6's scan and the sweep's counting pass; S8 must refuse before any pair test")
 	require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "no pair may be tested")
 }
@@ -351,8 +351,8 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 // poll. The budget here mirrors proofbound.NewWorkBudget's real semantics — step observes
 // the context only on every proofbound.WorkPollInterval-th call, err observes it
 // unconditionally — so three stacked triangles finish the whole audit without
-// a single step poll landing: three S6 steps, three steps in each of the two
-// sweep passes, then the three candidate pairs. The trailing budget.err()
+// a single step poll landing: three S6 steps, one step per scanned pair (three)
+// in each of the two sweep passes, then the three candidate pairs. The trailing budget.err()
 // after S7 is the only thing that can return ctx.Err() here.
 func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 	t.Parallel()

@@ -340,8 +340,11 @@ the refused pair is the reference path's.
 **S8 counts candidates.** The ceiling `maxFacetPairTestsPerCall` stays `8_000_000`
 and is compared against the number of enumerated candidates the pairwise pass will
 test (wall-wall, plus any cap family that fell back), counted in a first sweep pass
-before the second pass tests them; the `F·(F − 1)/2` preflight goes. `F` itself is
-bounded through §7's station cap. The budget still steps once per tested pair.
+before the second pass tests them; the `F·(F − 1)/2` preflight goes. The counting
+pass steps the budget once per pair it compares on the sweep axis and refuses once
+that scan count passes the same ceiling, so a tall shape whose boxes all overlap on
+the sweep axis refuses after `O(F log F + ceiling)` work. `F` itself is refused past
+`8·8192 − 8` before any exact lift (§7). The budget still steps once per tested pair.
 
 **Entry points.** `LoftCrossingAuditStructured(budget, verts, tris, walls,
 capStartCount, loops0, loops1)` is the loft's; the generic
@@ -375,7 +378,7 @@ Every ceiling keeps a hard constant and gains a shape that scales with the recor
 | Ceiling | Today | Becomes | Hard ceiling | Why this shape |
 |---|---|---|---|---|
 | S15 station cap `loftStationCap` | 500 | `stationCap(P) = min(max(512, 32·P), 8192)` | 8192 stations, `F ≤ 8·8192 − 8` | the probe needs 125–132 stations per tooth (`P = 6`) and 952–1960 for the gears (`P = 48–240`); 32 per paired segment covers every case with ≥ 3.9× room; the hard ceiling keeps `NewLoftAuditData`'s exact lifts under ~70 MB |
-| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | enumerated candidates ≤ `8_000_000` (§6) | unchanged | the exact tests are what the ceiling bounds; the enumeration is `O(F log F + candidates)` and `F` is bounded by the station cap |
+| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | pairs the sweep scans on its axis ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | unchanged | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` comparisons and the work before a refusal is `O(F log F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`loftStationCapGate` returns early there) |
 | R7 `FreeformWorkLimit` for the loft's station walk | `1 << 20` per record per operation | `FreeformWork.Limit`, raised in `evalLoft` once `loftStationCapGate` has passed (where `P` is known) to `max(1 << 20, Spent + 8192 · stationCap(P))` | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | measured 5000–8300 work units per station per record on the probe (`.tmp/loft-gear-bounds-logs/`); the same counter stays the record's one counter for the operation |
 | reconstruction `ReconstructionWorkLimit` | `1 << 26` (chord ceiling 5792) | `1 << 28` (chord ceiling 11585) | `1 << 28` | the z40 record charges `2 · 6640²` = 88 M; sketch's arranger took 0.7 s for both records' admission at that size; `1 << 28` is ~3 s of the same work |
 

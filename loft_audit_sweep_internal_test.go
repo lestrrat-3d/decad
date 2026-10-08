@@ -4,7 +4,9 @@ import (
 	"math"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -347,9 +349,11 @@ func TestLoftCapProofRefusesOverlappingTriangulation(t *testing.T) {
 }
 
 // TestLoftAuditCandidateCeilingRefuses is S8 over the structured audit's own
-// candidates, on the gear tooth: a ceiling one below the count refuses with
-// ErrUnsupported before any pair test, and a ceiling equal to it admits. The
-// count is far below F*(F-1)/2, which is what S8 compared before the sweep.
+// work, on the gear tooth. The counting pass scans at least as many pairs as
+// it finds candidates, and S8 holds that scan to the ceiling: a ceiling one
+// below the scan count refuses with ErrUnsupported before any pair test, and
+// a ceiling equal to it admits. Both counts are far below F*(F-1)/2, which is
+// what S8 compared before the sweep.
 func TestLoftAuditCandidateCeilingRefuses(t *testing.T) {
 	t.Parallel()
 	fx := loftAuditFixtureOf(loftGearAssembly(t, loftGearZ(8), 1))
@@ -360,16 +364,98 @@ func TestLoftAuditCandidateCeilingRefuses(t *testing.T) {
 	full, err := run(math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, 2, full.CapProofs)
-	count := uint64(full.Candidates)
-	require.Positive(t, count)
+	require.Positive(t, full.Candidates)
+	require.LessOrEqual(t, full.Candidates, full.Scanned, "every candidate is a scanned pair")
+	scanned := uint64(full.Scanned)
 	allPairs := uint64(len(fx.tris) * (len(fx.tris) - 1) / 2)
-	require.Less(t, count*4, allPairs, "the structured audit tests a small share of the pairs")
-	t.Logf("gear tooth z=8: F=%d all pairs=%d candidates=%d", len(fx.tris), allPairs, count)
+	require.Less(t, scanned*2, allPairs, "the structured audit scans a small share of the pairs")
+	t.Logf("gear tooth z=8: F=%d all pairs=%d scanned=%d candidates=%d", len(fx.tris), allPairs, scanned, full.Candidates)
 
-	work, err := run(count - 1)
+	work, err := run(scanned - 1)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "S8 must refuse before any pair test")
 
-	_, err = run(count)
+	_, err = run(scanned)
 	require.NoError(t, err)
+}
+
+// tallTubeTriangles builds an open tube of radius 1 and height 100 from n
+// quads around its circumference, two triangles each. Every triangle spans
+// the full height, so every pair overlaps on the sweep axis (z) while only
+// neighbours overlap on all three: the sweep scans F·(F−1)/2 pairs to find
+// about 3F candidates.
+func tallTubeTriangles(n int) ([]r3.Vec, [][3]int) {
+	verts := make([]r3.Vec, 0, 2*n)
+	for k := range n {
+		theta := 2 * math.Pi * float64(k) / float64(n)
+		verts = append(verts, r3.NewVec(math.Cos(theta), math.Sin(theta), 0), r3.NewVec(math.Cos(theta), math.Sin(theta), 100))
+	}
+	tris := make([][3]int, 0, 2*n)
+	for k := range n {
+		b, top := 2*k, 2*k+1
+		bn, tn := 2*((k+1)%n), 2*((k+1)%n)+1
+		tris = append(tris, [3]int{b, bn, tn}, [3]int{b, tn, top})
+	}
+	return verts, tris
+}
+
+// TestLoftAuditScanCeilingRefusesTallTube is S8 over the sweep's own scan. A
+// tall tube of 20000 triangles has few candidates but scans about 2·10^8
+// pairs on the sweep axis; the counting pass refuses once its scan passes the
+// ceiling, so the budget steps exactly F + ceiling + 1 times and no pair is
+// tested. The same shape built as a 3000-gon loft 100 tall refuses through
+// evalLoft, while the gear tooth and the 1200-gon prism
+// (TestLoftAuditCandidateCeilingRefuses, TestEvalLoftAuditCountsCandidatesNotPairs)
+// still build.
+//
+// Shown to fail: with the scan limit removed from sweepOrder.visit the tube
+// audit passed after scanning every pair (2.1 s at F = 20000 against 0.15 s
+// with the limit, on the development host) and the 3000-gon loft built.
+func TestLoftAuditScanCeilingRefusesTallTube(t *testing.T) {
+	t.Parallel()
+	t.Run("generic entry", func(t *testing.T) {
+		const n = 10000
+		verts, tris := tallTubeTriangles(n)
+		calls := 0
+		budget := &proofbound.WorkBudget{
+			StepFn: func() error { calls++; return nil },
+			ErrFn:  func() error { return nil },
+		}
+		start := time.Now()
+		work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
+		t.Logf("tall tube F=%d refused in %s", len(tris), time.Since(start))
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Equal(t, len(tris)+proofbound.MaxFacetPairTestsPerCall+1, calls,
+			"S6 steps once per triangle and the counting pass once per scanned pair, up to the ceiling")
+		require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "no pair may be tested")
+	})
+	t.Run("3000-gon loft 100 tall", func(t *testing.T) {
+		p := ProfileRecord{Outer: manyGonLoop(0, 0, 1, 3000)}
+		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 100))
+		pl := loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
+			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}
+		start := time.Now()
+		_, err := evalLoft(t.Context(), New(), producerID(0), pl, proofbound.NewWorkBudget(t.Context()),
+			freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		t.Logf("3000-gon tube refused in %s", time.Since(start))
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Contains(t, err.Error(), "candidate pair count exceeds")
+	})
+}
+
+// TestLoftAuditTriangleCeilingRefuses is S8's triangle ceiling: one triangle
+// past loftmesh.MaxLoftAuditTriangles refuses before S6 steps the budget once,
+// so no triangle is lifted to exact coordinates.
+func TestLoftAuditTriangleCeilingRefuses(t *testing.T) {
+	t.Parallel()
+	verts, tris := syntheticLoftTriangles(loftmesh.MaxLoftAuditTriangles + 1)
+	calls := 0
+	budget := &proofbound.WorkBudget{
+		StepFn: func() error { calls++; return nil },
+		ErrFn:  func() error { return nil },
+	}
+	err := loftmesh.LoftCrossingAuditStructured(budget, verts, tris, len(tris), 0, nil, nil)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "triangles exceed the fixed ceiling")
+	require.Zero(t, calls, "the triangle ceiling refuses before S6")
 }
