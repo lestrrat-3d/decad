@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -447,14 +448,12 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 // (walkOf neither memoizes nor is free to call again — it charges the
 // free-form work budget on every call).
 //
-// The charge is pinned AT THE GATE because a full free-form BUILD is not
-// reachable: S3 refuses every non-LineSeg pair, so no input runs evalLoft to
-// completion with a nonzero free-form charge, and a LineSeg-only build
-// charges zero whether its segments are walked once or twice (walkOf's
-// LineSeg arm charges nothing), which would separate nothing.
-// validateLoftRecords with a FitSplineSeg as p0's first segment does charge,
-// and refuses at S3 immediately after, so its counter reads exactly what one
-// segment's walk costs.
+// The charge is pinned AT THE GATE, where a FitSplineSeg paired against a
+// LineSeg is walked and then refused at S3, so its counter reads exactly what
+// one segment's walk costs; a LineSeg-only build would charge zero whether its
+// segments are walked once or twice (walkOf's LineSeg arm charges nothing).
+// The pairing step is pinned beside it on an admitted free-form pair, whose
+// station generator charges the same counters.
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	t.Parallel()
 	fit := FitSplineSeg{
@@ -492,20 +491,31 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 		"the gate walks that segment ONCE: its counter reads a single reference charge, not two")
 	require.Zero(t, work1.Spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
 
-	// loftPairings, handed those already-resolved walks, spends nothing
-	// further.
-	before := loopWork.Spent
+	// loftPairings, handed those already-resolved walks, resolves no walk
+	// again: everything it spends is the free-form station generator's own
+	// work, which the same generator run on a fresh counter reproduces.
 	loop := LoopRecord{Segments: make([]CurveSegment, k)}
 	for i := range loop.Segments {
 		loop.Segments[i] = fit
 	}
 	profile := ProfileRecord{Outer: loop}
-	// A free-form pairing has no station rule yet (loftCellStations' own
-	// default case, unreached from any real build since S3 refuses it
-	// first) — this is asserted below for the charge, not the correspondence.
-	_, _, _, _, err = loftPairings(profile, profile, []int{0}, [][]survey2d.SegmentWalk{walks}, [][]survey2d.SegmentWalk{walks}, 0, loopWork, loopWork) //nolint:dogsled // only the error matters here.
-	require.Error(t, err)
-	require.Equal(t, before, loopWork.Spent, "loftPairings must spend no further free-form work")
+	walks0 := [][]survey2d.SegmentWalk{walks}
+	// A coarse target keeps four pairs' station work inside the one shared
+	// counter's R7 ceiling; the charge comparison does not depend on it.
+	const target = 1e-1
+	before := loopWork.Spent
+	_, _, _, _, err = loftPairings(profile, profile, []int{0}, walks0, walks0, target, loopWork, loopWork) //nolint:dogsled // only the charge matters here.
+	require.NoError(t, err)
+
+	stationWork := &freeform.FreeformWork{}
+	share := loftStationShare(k, k)
+	for _, w := range walks {
+		_, err := loftmesh.FreeformCellPoints(w, w, target, share, stationWork, stationWork)
+		require.NoError(t, err)
+	}
+	require.Positive(t, stationWork.Spent, "chording a free-form pair charges the records' counters")
+	require.Equal(t, stationWork.Spent, loopWork.Spent-before,
+		"loftPairings spends the station generator's work and resolves no walk a second time")
 }
 
 // TestLoftPairingsConsumesTheGateResolvedWalks pins Task 1's other half on

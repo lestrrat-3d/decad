@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // PairStations generates docs/spline-design.md §6.2.1's shared dyadic chord
@@ -114,20 +115,81 @@ import (
 // target produce a bit-identical station list — same rationals, same length —
 // on every call.
 func PairStations(spans0, spans1 []BezierSpan, target float64, work0, work1 *FreeformWork) ([]RatPoint, []RatPoint, []float64, float64, error) {
+	reader := &PairMatchedDeltaReader{}
+	gen := NewSagittaStationWalk(target, reader, len(spans0), work0, work1)
+	stations0, stations1, err := pairWalk(spans0, spans1, gen)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	return stations0, stations1, reader.MatchedDelta, gen.SagittaUpper, nil
+}
+
+// PairChainLimits narrows PairChainStations' walk for a caller that owns a
+// smaller ceiling than MaxChordsPerWalk or a refusal of its own for a sagitta
+// with no derivation.
+type PairChainLimits struct {
+	// MaxChords caps the finished chain's chord count. Zero means
+	// MaxChordsPerWalk; a value above it is clamped to it. Passing the cap
+	// refuses with ErrTooManyChords exactly as PairStations does.
+	MaxChords int
+	// Underivable, when non-nil, is returned the moment a cell's measured
+	// sagitta is non-finite. A nil value keeps PairStations' behaviour, which
+	// bisects such a cell until the cap refuses.
+	Underivable error
+}
+
+// PairChain is PairChainStations' answer. Stations, MatchedDelta and Sagitta
+// carry PairStations' own meanings. ArcUpper[side][k] is SpanSpeedUpper of
+// accepted cell k's own dyadic sub-span on that side: a proven upper bound on
+// the cell's tangent speed under its native [0, 1] parameter, and so on its arc
+// length, never below its chord length.
+type PairChain struct {
+	Stations     [2][]RatPoint
+	MatchedDelta []float64
+	ArcUpper     [2][]float64
+	Sagitta      float64
+}
+
+// PairChainStations is PairStations under a caller's own limits, returning the
+// per-cell speed bounds a same-kind free-form loft cell needs beside the
+// matched-departure bounds (docs/loft-design.md §5.2's arcLenUpper_k row). The
+// walk, its sharing of one dyadic cell set between the two sides, its
+// determinism and its charging are PairStations' own.
+func PairChainStations(spans0, spans1 []BezierSpan, target float64, limits PairChainLimits, work0, work1 *FreeformWork) (PairChain, error) {
+	reader := &PairCellReader{}
+	gen := NewSagittaStationWalk(target, reader, len(spans0), work0, work1)
+	gen.Limit = limits.MaxChords
+	gen.Underivable = limits.Underivable
+	stations0, stations1, err := pairWalk(spans0, spans1, gen)
+	if err != nil {
+		return PairChain{}, err
+	}
+	return PairChain{
+		Stations:     [2][]RatPoint{stations0, stations1},
+		MatchedDelta: reader.MatchedDelta,
+		ArcUpper:     reader.ArcUpper,
+		Sagitta:      gen.SagittaUpper,
+	}, nil
+}
+
+// pairWalk runs PairStations' guards and its cell walk over gen, returning the
+// two station lists with the chain's own final station appended to each.
+func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint, []RatPoint, error) {
+	work0, work1 := gen.Works[0], gen.Works[1]
 	if len(spans0) != len(spans1) {
-		return nil, nil, nil, 0, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			`%w: two paired free-form span chains of different length (%d vs %d) share no common dyadic parameter domain`,
 			decaderr.ErrUnsupported, len(spans0), len(spans1),
 		)
 	}
 	if len(spans0) == 0 {
-		return nil, nil, nil, 0, fmt.Errorf(`%w: a paired free-form station chain needs at least one span on each side`, decaderr.ErrDegenerate)
+		return nil, nil, fmt.Errorf(`%w: a paired free-form station chain needs at least one span on each side`, decaderr.ErrDegenerate)
 	}
 	// Every span carries at least one chord even when it needs no bisection at
 	// all, so a chain of more spans than the ceiling admits already exceeds the
 	// chord count ErrTooManyChords names.
-	if len(spans0) > MaxChordsPerWalk {
-		return nil, nil, nil, 0, ErrTooManyChords
+	if len(spans0) > gen.limit() {
+		return nil, nil, ErrTooManyChords
 	}
 	// A span with no control points at all is not a Bézier of any degree — it
 	// has no chord and no curve, unlike a COLLAPSED span (every control point
@@ -142,15 +204,13 @@ func PairStations(spans0, spans1 []BezierSpan, target float64, work0, work1 *Fre
 	// wrong Measurement.
 	for i := range spans0 {
 		if len(spans0[i]) == 0 || len(spans1[i]) == 0 {
-			return nil, nil, nil, 0, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				`%w: a free-form span with no control points at index %d has no chord to bisect`,
 				decaderr.ErrDegenerate, i,
 			)
 		}
 	}
 
-	reader := &PairMatchedDeltaReader{}
-	gen := NewSagittaStationWalk(target, reader, len(spans0), work0, work1)
 	for i := range spans0 {
 		// The DyadicSpanOf conversion that opens the walk charges itself, like
 		// every step inside it: it runs its own exact big.Int arithmetic per
@@ -158,14 +218,14 @@ func PairStations(spans0, spans1 []BezierSpan, target float64, work0, work1 *Fre
 		// spans do unbounded work before the first cell is ever measured.
 		cell0, err := DyadicSpanOf(work0, spans0[i])
 		if err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, err
 		}
 		cell1, err := DyadicSpanOf(work1, spans1[i])
 		if err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, err
 		}
 		if err := gen.WalkCell([]DyadicSpan{cell0, cell1}); err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, err
 		}
 	}
 	// The whole chain's own final station is the last span's own last control
@@ -190,15 +250,15 @@ func PairStations(spans0, spans1 []BezierSpan, target float64, work0, work1 *Fre
 	last1 := spans1[len(spans1)-1][len(spans1[len(spans1)-1])-1]
 	end0, err := RatPointCopy(work0, last0)
 	if err != nil {
-		return nil, nil, nil, 0, err
+		return nil, nil, err
 	}
 	end1, err := RatPointCopy(work1, last1)
 	if err != nil {
-		return nil, nil, nil, 0, err
+		return nil, nil, err
 	}
 	gen.Stations[0] = append(gen.Stations[0], end0)
 	gen.Stations[1] = append(gen.Stations[1], end1)
-	return gen.Stations[0], gen.Stations[1], reader.MatchedDelta, gen.SagittaUpper, nil
+	return gen.Stations[0], gen.Stations[1], nil
 }
 
 // FreeformChain is ChainStations' answer: docs/spline-design.md §6.2.1's dyadic
@@ -314,6 +374,21 @@ type SagittaStationWalk struct {
 	SagittaUpper float64
 	Chords       int
 	Frontier     int
+	// Limit is the chord-count ceiling the walk refuses past. Zero means
+	// MaxChordsPerWalk, and a larger value is clamped to it.
+	Limit int
+	// Underivable, when non-nil, is returned as soon as a measured sagitta is
+	// non-finite, rather than bisecting that cell until the ceiling refuses.
+	Underivable error
+}
+
+// limit is the chord-count ceiling WalkCell reads: Limit when it is positive
+// and below MaxChordsPerWalk, and MaxChordsPerWalk otherwise.
+func (g *SagittaStationWalk) limit() int {
+	if g.Limit > 0 && g.Limit < MaxChordsPerWalk {
+		return g.Limit
+	}
+	return MaxChordsPerWalk
 }
 
 // NewSagittaStationWalk opens a walk over sides sides, one per counter, with
@@ -361,6 +436,28 @@ func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, works []*Freefor
 		return err
 	}
 	r.MatchedDelta = append(r.MatchedDelta, math.Max(md0, md1))
+	return nil
+}
+
+// PairCellReader is PairChainStations' reading: PairMatchedDeltaReader's
+// per-cell matched-departure bound, plus each side's SpanSpeedUpper over the
+// same accepted dyadic sub-span, in the same left-to-right cell order.
+type PairCellReader struct {
+	PairMatchedDeltaReader
+	ArcUpper [2][]float64
+}
+
+func (r *PairCellReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
+	if err := r.PairMatchedDeltaReader.AcceptCell(spans, works); err != nil {
+		return err
+	}
+	for side := range r.ArcUpper {
+		arc, err := SpanSpeedUpper(works[side], spans[side])
+		if err != nil {
+			return err
+		}
+		r.ArcUpper[side] = append(r.ArcUpper[side], arc)
+	}
 	return nil
 }
 
@@ -442,6 +539,9 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 		spans[i] = span
 		worst = math.Max(worst, sag)
 	}
+	if g.Underivable != nil && proofbound.IsNonFinite(worst) {
+		return g.Underivable
+	}
 	if worst <= g.Target {
 		if err := g.Reader.AcceptCell(spans, g.Works); err != nil {
 			return err
@@ -463,7 +563,7 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 		return nil
 	}
 
-	if g.Chords+g.Frontier+1 > MaxChordsPerWalk {
+	if g.Chords+g.Frontier+1 > g.limit() {
 		return ErrTooManyChords
 	}
 	lefts := make([]DyadicSpan, len(cells))

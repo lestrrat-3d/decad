@@ -1,0 +1,521 @@
+package decad
+
+import (
+	"math"
+	"slices"
+	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// This file holds docs/loft-design.md §12 PR 4's acceptance tests: a
+// same-kind Tier A free-form pair builds through §5.1's free-form arm, its
+// readings enclose closed-form or densely sampled references, and the
+// refusals beside it (S3, S17) keep their sentinels. wedgePlanes,
+// wedgeSplineSketch and wedgeHeight are loft_chord_calibration_internal_test.go's
+// own A10b fixtures.
+
+// TestLoftFitSplineWedgeMatchesExtrude lofts the A10b fit-spline wedge to its
+// own pure translate. That body is the extrude of the section, so Extrude on
+// the same profile is an independent oracle: Volume, Centroid and Area must
+// each overlap Extrude's interval. Every station on the top section sits
+// exactly above a station on the bottom one, which pins the shared dyadic
+// correspondence on built coordinates.
+//
+// Shown to fail first: with FreeformCellPoints' MatchedDelta replaced by
+// zeros, the chord-to-curve volume legs vanish and the Volume overlap fails
+// (gap 5.4e-3 against a 1.5e-13 bound).
+func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
+	t.Parallel()
+	w, base, top := wedgePlanes(t)
+	s0, p0 := wedgeSplineSketch(t, w, base)
+	s1, p1 := wedgeSplineSketch(t, w, top)
+	doc := New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	extDoc := New()
+	ext, err := extDoc.Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	extVol, err := ext.Volume()
+	require.NoError(t, err)
+	gap := math.Abs(vol.Value.Base() - extVol.Value.Base())
+	t.Logf("Volume: loft=%.12g+/-%.3e extrude=%.12g+/-%.3e gap=%.3e",
+		vol.Value.Base(), vol.Bound.Base(), extVol.Value.Base(), extVol.Bound.Base(), gap)
+	require.LessOrEqual(t, gap, vol.Bound.Base()+extVol.Bound.Base(), "the loft and extrude volume intervals must overlap")
+
+	cen, err := body.Centroid()
+	require.NoError(t, err)
+	extCen, err := ext.Centroid()
+	require.NoError(t, err)
+	dist := cen.Value.Sub(extCen.Value).Len()
+	require.LessOrEqual(t, dist, cen.Bound.Base()+extCen.Bound.Base(), "the loft and extrude centroid intervals must overlap")
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	extArea, err := ext.Area()
+	require.NoError(t, err)
+	areaGap := math.Abs(area.Value.Base() - extArea.Value.Base())
+	t.Logf("Area: loft=%.10g+/-%.3e extrude=%.10g+/-%.3e gap=%.3e",
+		area.Value.Base(), area.Bound.Base(), extArea.Value.Base(), extArea.Bound.Base(), areaGap)
+	require.LessOrEqual(t, areaGap, area.Bound.Base()+extArea.Bound.Base(), "the loft and extrude area intervals must overlap")
+
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	for _, m := range []Measurement{vol, area} {
+		require.Equal(t, Approximate, m.Exactness)
+		require.Positive(t, m.Bound.Base())
+	}
+	require.Equal(t, Approximate, cen.Exactness)
+	require.Positive(t, cen.Bound.Base())
+	require.Equal(t, Approximate, bounds.Exactness)
+	require.Positive(t, bounds.Bound.Base())
+
+	lp, ok := body.payload.(loftPayload)
+	require.True(t, ok)
+	require.Positive(t, lp.sectionDelta, "a chorded free-form pair publishes its measured sagitta")
+	require.Greater(t, lp.walls, 2*3, "the free-form pair must chord into more than one cell")
+
+	lower := map[[2]float64]struct{}{}
+	upper := map[[2]float64]struct{}{}
+	for _, v := range lp.verts {
+		switch v.Z {
+		case 0:
+			lower[[2]float64{v.X, v.Y}] = struct{}{}
+		case wedgeHeight:
+			upper[[2]float64{v.X, v.Y}] = struct{}{}
+		default:
+			t.Fatalf("a held vertex %v sits on neither section plane", v)
+		}
+	}
+	require.Equal(t, lower, upper, "each top station must sit exactly above its paired bottom station")
+}
+
+// TestLoftFreeformReversedRangeBuildsTheSameStations records the same curve
+// shape twice: once forward, and once with its control points reversed and its
+// range recorded as [1, 0], which is how the seam records a walk that runs
+// against the entity. Both name the same walk, so both build bit-identical
+// vertices: slot 0 of the shared dyadic coordinate is each side's own walk
+// START (docs/loft-design.md §5.1). A natural-order mapping lands the reversed
+// side's slot 0 at its far end and fails here.
+//
+// The spline has five control points, so its clamped knots are 0 and 1/2 and
+// reversing the control points reverses the curve exactly.
+//
+// Shown to fail first: with walkOrderSpans returning the natural chain for a
+// reversed walk, the opposite-sense build no longer succeeds.
+func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
+	t.Parallel()
+	control := []Point2{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)}
+	forward := SplineSeg{Control: control, TStart: 0, TEnd: 1}
+	reversed := SplineSeg{Control: slices.Clone(control), TStart: 1, TEnd: 0}
+	slices.Reverse(reversed.Control)
+	loopOf := func(spline CurveSegment) ProfileRecord {
+		return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
+			spline,
+		}}}
+	}
+
+	sameSense := evalLoftFixture(t, loftPayloadFor(t, loopOf(forward), loopOf(forward), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 3)))
+	opposite := evalLoftFixture(t, loftPayloadFor(t, loopOf(forward), loopOf(reversed), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 3)))
+
+	a := sameSense.payload.(loftPayload)
+	b := opposite.payload.(loftPayload)
+	require.Greater(t, a.walls, 4, "the spline must chord into several cells")
+	require.Equal(t, a.verts, b.verts, "the reversed record must build the identical station coordinates")
+	require.Equal(t, a.tris, b.tris)
+}
+
+// TestLoftFreeformTwistedClosedSplineBracketsDenseReference lofts a closed
+// spline to the same local curve on a plane turned 20 degrees about the z
+// axis. The true body is ruled by straight lines between points at the same
+// span-native parameter, so its cross-section at height fraction λ is the loop
+// (1-λ)·C0(s) + λ·C1(s): that loop's area is quadratic and its first moments
+// cubic in λ, so Simpson's rule over three heights integrates the volume and
+// centroid exactly from densely sampled loops. The wall area integrates the
+// densely sampled ruled surface directly. Each published reading must enclose
+// its reference, and the box widened by its own bound must contain both curves.
+//
+// Shown to fail first: zeroing FreeformCellPoints' MatchedDelta fails the
+// Volume enclosure, and zeroing its Sagitta leaves the box short of the curve.
+func TestLoftFreeformTwistedClosedSplineBracketsDenseReference(t *testing.T) {
+	t.Parallel()
+	const height = 10.0
+	const twist = 20 * math.Pi / 180
+	w := sketch.NewWorld()
+	frame0, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	frame1, err := r3.NewFrame(r3.NewVec(0, 0, height), r3.NewVec(math.Cos(twist), math.Sin(twist), 0), r3.NewVec(-math.Sin(twist), math.Cos(twist), 0))
+	require.NoError(t, err)
+	plane0, err := w.CreatePlaneFromFrame(frame0)
+	require.NoError(t, err)
+	plane1, err := w.CreatePlaneFromFrame(frame1)
+	require.NoError(t, err)
+	s0, p0 := closedSplineSketch(t, w, plane0)
+	s1, p1 := closedSplineSketch(t, w, plane1)
+
+	doc := New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	lp := body.payload.(loftPayload)
+	require.Positive(t, lp.sectionDelta)
+
+	c0 := denseWalkSamples(t, lp.profile0.Outer.Segments[0], 2048)
+	c1 := denseWalkSamples(t, lp.profile1.Outer.Segments[0], 2048)
+	require.Len(t, c1, len(c0))
+	x0 := liftSamples(c0, lp.frame0)
+	x1 := liftSamples(c1, lp.frame1)
+	ref := ruledReference(x0, x1, height)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	t.Logf("Volume: value=%.12g bound=%.3e reference=%.12g residual=%.3e",
+		vol.Value.Base(), vol.Bound.Base(), ref.volume, math.Abs(vol.Value.Base()-ref.volume))
+	require.LessOrEqual(t, math.Abs(vol.Value.Base()-ref.volume), vol.Bound.Base())
+
+	cen, err := body.Centroid()
+	require.NoError(t, err)
+	t.Logf("Centroid: value=%v bound=%.3e reference=%v", cen.Value, cen.Bound.Base(), ref.centroid)
+	require.LessOrEqual(t, cen.Value.Sub(ref.centroid).Len(), cen.Bound.Base())
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	t.Logf("Area: value=%.10g bound=%.3e reference=%.10g", area.Value.Base(), area.Bound.Base(), ref.area)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-ref.area), area.Bound.Base())
+
+	box, err := body.Bounds()
+	require.NoError(t, err)
+	b := box.Bound.Base()
+	require.Positive(t, b)
+	for _, p := range append(slices.Clone(x0), x1...) {
+		require.GreaterOrEqual(t, p.X, box.Min.X-b)
+		require.LessOrEqual(t, p.X, box.Max.X+b)
+		require.GreaterOrEqual(t, p.Y, box.Min.Y-b)
+		require.LessOrEqual(t, p.Y, box.Max.Y+b)
+		require.GreaterOrEqual(t, p.Z, box.Min.Z-b)
+		require.LessOrEqual(t, p.Z, box.Max.Z+b)
+	}
+}
+
+// TestLoftFreeformWedgePlacedAndTessellated places the A10b wedge loft and
+// tessellates both bodies. The placed body re-lifts the records under the
+// motion, so its volume still encloses Extrude's and its centroid moves with
+// the motion inside both bounds. Each mesh restates the held triangle set,
+// publishes the payload's facet departure as its Bound, and its own signed
+// volume sits within its occupied-volume proof of Extrude's interval.
+//
+// Shown to fail first: zeroing FreeformCellPoints' MatchedDelta fails the
+// mesh volume check.
+func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
+	t.Parallel()
+	w, base, top := wedgePlanes(t)
+	s0, p0 := wedgeSplineSketch(t, w, base)
+	s1, p1 := wedgeSplineSketch(t, w, top)
+	doc := New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	ext, err := New().Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+	require.NoError(t, err)
+	extVol, err := ext.Volume()
+	require.NoError(t, err)
+
+	spin, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(5, -3, 2))
+	require.NoError(t, err)
+	motion, err := spin.Then(shift)
+	require.NoError(t, err)
+	placed, err := body.PlacedCopy(t.Context(), motion)
+	require.NoError(t, err)
+
+	src := body.payload.(loftPayload)
+	moved := placed.payload.(loftPayload)
+	require.Greater(t, moved.delta, src.delta, "a placement adds its rigid rounding to every vertex")
+
+	placedVol, err := placed.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(placedVol.Value.Base()-extVol.Value.Base()), placedVol.Bound.Base()+extVol.Bound.Base())
+
+	srcCen, err := body.Centroid()
+	require.NoError(t, err)
+	placedCen, err := placed.Centroid()
+	require.NoError(t, err)
+	want := motion.Apply(srcCen.Value)
+	require.LessOrEqual(t, placedCen.Value.Sub(want).Len(), placedCen.Bound.Base()+srcCen.Bound.Base())
+
+	for _, b := range []*Body{body, placed} {
+		lp := b.payload.(loftPayload)
+		mesh, err := b.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
+		require.NoError(t, err)
+		require.Len(t, mesh.Triangles(), len(lp.tris))
+		require.Equal(t, lp.proof.facetDeparture, mesh.Bound().Base())
+		require.Positive(t, mesh.Bound().Base())
+		require.True(t, mesh.VolumeVerified())
+		meshVol := signedMeshVolume(mesh.Vertices(), mesh.Triangles())
+		require.LessOrEqual(t, math.Abs(meshVol-extVol.Value.Base()), mesh.volSymDiff+extVol.Bound.Base(),
+			"the mesh's own volume must sit within its occupied-volume proof of the extruded body")
+	}
+}
+
+// TestLoftFreeformSpanCountMismatchRefusesS17 pairs two fit-spline wedges
+// whose curves pass through five and six points, so their converted chains
+// hold four and five Bézier spans. That pair has no shared station coordinate
+// and refuses as S17, with ErrUnsupported, before any body is committed. The
+// record-only gates alone reach the refusal, which pins it among the shape
+// gates rather than in station generation (docs/loft-design.md §4).
+//
+// Shown to fail first: with SpanCountGate's refusal ignored, the record-only
+// gates pass and the refusal comes from station generation instead.
+func TestLoftFreeformSpanCountMismatchRefusesS17(t *testing.T) {
+	t.Parallel()
+	const s17 = "reduce to 4 and 5 Bézier spans; this evaluator chords a free-form pair only over an equal span count"
+	w, base, top := wedgePlanes(t)
+	s0, p0 := fitSplineWedgeSketch(t, w, base, 5)
+	s1, p1 := fitSplineWedgeSketch(t, w, top, 6)
+	doc := New()
+	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, s17)
+	require.Empty(t, doc.Bodies(), "a refused loft leaves the document unchanged")
+
+	rec0, pl0, err := RecordProfile(s0, p0)
+	require.NoError(t, err)
+	rec1, pl1, err := RecordProfile(s1, p1)
+	require.NoError(t, err)
+	err = validateLoftRecordsErr(rec0, rec1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, s17)
+}
+
+// TestLoftFreeformMixedPairsRefuseS3 keeps S3 for every pairing that is not
+// the same recorded type: a free-form side against an arc or a line, and two
+// different free-form types. None of them reaches S17's span comparison.
+func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
+	t.Parallel()
+	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
+	spline := SplineSeg{Control: []Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}, TStart: 0, TEnd: 1}
+	arc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	line := LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	for _, row := range []struct {
+		name   string
+		s0, s1 CurveSegment
+	}{
+		{"arc against fit spline", arc, fit},
+		{"line against fit spline", line, fit},
+		{"spline against fit spline", spline, fit},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			t.Parallel()
+			p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(row.s0)}
+			p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(row.s1)}
+			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+			err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.ErrorContains(t, err, "not the same admitted segment type")
+		})
+	}
+}
+
+// TestLoftFreeformPairPastItsShareRefusesS15 gives a free-form pair a share of
+// one station: its loop holds 500 paired segments, so P already reaches the
+// cap and §5.1's allocation clamps every chorded pair to mMax = 1. The pair's
+// four Bézier spans need at least one cell each, so its dyadic walk refuses
+// before measuring a cell, and the refusal names the segment whose share it
+// passed (Table S row S15).
+//
+// Shown to fail first: with the walk's ceiling left at MaxChordsPerWalk
+// instead of the share, the pair chords and no refusal comes back.
+func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
+	t.Parallel()
+	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	segs := []CurveSegment{LineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
+	for len(segs) < loftStationCap {
+		segs = append(segs, LineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})
+	}
+	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	walks := resolveLoftLoopWalks(t, p)
+	_, _, _, _, err := loftPairings(p, p, []int{0}, walks, walks, 1, freeform.NewFreeformWork(), freeform.NewFreeformWork()) //nolint:dogsled // only the refusal is under test.
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorIs(t, err, freeform.ErrTooManyChords)
+	var capErr *loftStationCapError
+	require.ErrorAs(t, err, &capErr)
+	require.Equal(t, loftStationCapError{Loop: 0, Seg: 1, M: 2, MMax: 1, AtLeast: true}, *capErr)
+}
+
+// --- fixtures and references ---
+
+// closedSplineSketch draws one closed cubic spline over six fixed control
+// points around the origin.
+func closedSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	coords := [][2]float64{{6, 0}, {3, 4}, {-2, 5}, {-6, 0}, {-3, -4}, {3, -5}}
+	pts := make([]*sketch.Point, len(coords))
+	for i, c := range coords {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	_, err = s.CreateClosedSpline(pts...)
+	require.NoError(t, err)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// fitSplineWedgeSketch is wedgeSplineSketch with n fit points on the quarter
+// circle rather than five.
+func fitSplineWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, n int) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
+	pts := make([]*sketch.Point, n)
+	for k := range pts {
+		theta := float64(k) * math.Pi / 2 / float64(n-1)
+		pts[k] = s.CreatePoint(wedgeRadius*math.Cos(theta), wedgeRadius*math.Sin(theta))
+		s.Fix(pts[k])
+	}
+	_, err = s.CreateFitSpline(pts...)
+	require.NoError(t, err)
+	s.CreateLine(origin, pts[0])
+	s.CreateLine(pts[n-1], origin)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// denseWalkSamples samples one recorded free-form segment in walk order at
+// perSpan evenly spaced local parameters per converted Bézier span, the span's
+// own end excluded. Sample i of one side and sample i of another side with the
+// same span count sit at the same span-native parameter.
+func denseWalkSamples(t *testing.T, seg CurveSegment, perSpan int) []Point2 {
+	t.Helper()
+	w, err := walkOf(seg, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, survey2d.WalkFreeform, w.Kind)
+	spans := w.Spans
+	if w.Reversed {
+		spans = make([]freeform.BezierSpan, len(w.Spans))
+		for i, span := range w.Spans {
+			rev := slices.Clone(span)
+			slices.Reverse(rev)
+			spans[len(w.Spans)-1-i] = rev
+		}
+	}
+	var out []Point2
+	for _, span := range spans {
+		ctrl := make([]Point2, len(span))
+		for i, p := range span {
+			u, _ := p.U.Float64()
+			v, _ := p.V.Float64()
+			ctrl[i] = pt(u, v)
+		}
+		for k := range perSpan {
+			out = append(out, deCasteljau(ctrl, float64(k)/float64(perSpan)))
+		}
+	}
+	return out
+}
+
+func deCasteljau(ctrl []Point2, s float64) Point2 {
+	work := slices.Clone(ctrl)
+	for n := len(work) - 1; n > 0; n-- {
+		for i := range n {
+			work[i] = pt((1-s)*work[i].U+s*work[i+1].U, (1-s)*work[i].V+s*work[i+1].V)
+		}
+	}
+	return work[0]
+}
+
+func liftSamples(pts []Point2, f r3.Frame) []r3.Vec {
+	out := make([]r3.Vec, len(pts))
+	for i, p := range pts {
+		out[i] = f.ToWorldUV(p.U, p.V)
+	}
+	return out
+}
+
+type ruledReferenceReadings struct {
+	volume   float64
+	centroid r3.Vec
+	area     float64
+}
+
+// ruledReference integrates the solid ruled between two closed sample loops on
+// the parallel planes z = 0 and z = height. A cross-section's signed area is
+// quadratic and its first moments cubic in the height fraction, so Simpson's
+// rule over three fractions is exact for the sampled loops. The lateral wall
+// integrates each sample interval's bilinear patch by 4-point Gauss-Legendre in
+// both directions; the two caps add the end sections' own areas.
+func ruledReference(x0, x1 []r3.Vec, height float64) ruledReferenceReadings {
+	n := len(x0)
+	section := func(lambda float64) (float64, float64, float64) {
+		var a, mx, my float64
+		for i := range n {
+			p := x0[i].Scale(1 - lambda).Add(x1[i].Scale(lambda))
+			q := x0[(i+1)%n].Scale(1 - lambda).Add(x1[(i+1)%n].Scale(lambda))
+			cross := p.X*q.Y - q.X*p.Y
+			a += cross / 2
+			mx += (p.X + q.X) * cross / 6
+			my += (p.Y + q.Y) * cross / 6
+		}
+		return a, mx, my
+	}
+	simpson := func(f0, fm, f1 float64) float64 { return (f0 + 4*fm + f1) / 6 }
+	a0, mx0, my0 := section(0)
+	am, mxm, mym := section(0.5)
+	a1, mx1, my1 := section(1)
+	volume := height * simpson(a0, am, a1)
+	mx := height * simpson(mx0, mxm, mx1)
+	my := height * simpson(my0, mym, my1)
+	mz := height * height * simpson(0, 0.5*am, a1)
+
+	gauss := [4][2]float64{
+		{0.5 - 0.3399810435848563/2, 0.6521451548625461 / 2},
+		{0.5 + 0.3399810435848563/2, 0.6521451548625461 / 2},
+		{0.5 - 0.8611363115940526/2, 0.3478548451374538 / 2},
+		{0.5 + 0.8611363115940526/2, 0.3478548451374538 / 2},
+	}
+	wall := 0.0
+	for i := range n {
+		a, b := x0[i], x0[(i+1)%n]
+		c, d := x1[i], x1[(i+1)%n]
+		for _, gu := range gauss {
+			for _, gl := range gauss {
+				u, l := gu[0], gl[0]
+				xu := b.Sub(a).Scale(1 - l).Add(d.Sub(c).Scale(l))
+				xl := c.Sub(a).Scale(1 - u).Add(d.Sub(b).Scale(u))
+				wall += gu[1] * gl[1] * xu.Cross(xl).Len()
+			}
+		}
+	}
+	return ruledReferenceReadings{
+		volume:   math.Abs(volume),
+		centroid: r3.NewVec(mx/volume, my/volume, mz/volume),
+		area:     wall + math.Abs(a0) + math.Abs(a1),
+	}
+}
+
+func signedMeshVolume(verts []r3.Vec, tris [][3]int) float64 {
+	sum := 0.0
+	for _, tri := range tris {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		sum += a.Dot(b.Cross(c))
+	}
+	return sum / 6
+}
