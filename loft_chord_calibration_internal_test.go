@@ -622,7 +622,7 @@ func (m wedgeMeasurement) marginText() string {
 // measureWedgeReadings builds the chorded loft over pts, then widens each of the
 // four readings' Bound by the term Part 2 Q2 states for it and re-runs verify.go's
 // own tolerance gate on the widened value:
-//   - Volume:   + sectionDelta * areaUpper                  (proofbound.ChordedBoundaryVolumeAllow)
+//   - Volume:   + sectionDelta * areaUpper                  (a calibration ESTIMATE of the wall leg)
 //   - Area:     + excess.wall                               (ruled-vs-chord wall excess)
 //   - Bounds:   + sectionDelta
 //   - Centroid: + sectionDelta*(diameter/2+|centroid|)*areaUpper/volume (a calibration

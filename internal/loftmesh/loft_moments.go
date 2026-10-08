@@ -1,22 +1,13 @@
 package loftmesh
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
-
-// LoftVertexDistance is local to one assembled Loft. A ready entry can hold
-// +Inf: that is the exact upper-distance result when float64 saturates.
-type LoftVertexDistance struct {
-	Upper float64
-	Ready bool
-}
 
 // WallTriangleArea brackets one wall triangle's own area between two floats,
 // both PROVEN. u and v are the triangle's exact rational edge vectors, so
@@ -42,21 +33,32 @@ func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 
 // LoftChordedAllow bundles the exact volume and first-moment corrections,
 // the unsigned twist measure retained for tessellation's occupied-volume
-// proof, the three residual volume terms, and the wall's two-leg area residual
-// (docs/loft-design.md §5/§8, a10-plan.md
-// Part 3 PR 6's integration task). Every field of the zero value is 0, the
-// correct standing for a LineSeg-only loft that never calls
-// computeLoftChordedAllow at all. It is also what a REFUSING call returns
-// beside its error, where the zero stands for nothing at all and no consumer
-// ever sees it: evalLoft propagates that error and publishes no measurement.
+// proof, the per-cell wall and skirt volume legs, and the wall's two-leg area
+// residual (docs/loft-design.md §5.2/§8, docs/loft-gear-bounds-design.md §2).
+// Every field of the zero value is 0, the correct standing for a LineSeg-only
+// loft that never calls ComputeLoftChordedAllow at all.
 type LoftChordedAllow struct {
-	WallAreaUpper         float64
+	// WallAreaUpper is Σ proofbound.CellChordCurveAreaUpper over the charged
+	// cells. No measurement reads it: WallLeg charges each cell's own area at
+	// its own departure, and the tests compare it with the build-wide
+	// matchedDelta × WallAreaUpper form.
+	WallAreaUpper float64
+	// WallLeg is docs/loft-gear-bounds-design.md §2's per-cell wall leg:
+	// Σ proofbound.ProductUpper(cellMatched_k, cellWallUpper_k) over the charged
+	// cells, each charged at its own matched departure rather than the
+	// build-wide maximum. It bounds the measure the charged cells sweep as
+	// they move from the bilinear patch at the held corners to the true wall.
+	WallLeg float64
+	// SkirtLeg is §2's skirt between the held seam and its projection onto the
+	// cap plane, productUpper(productUpper(matchedDelta, delta),
+	// seamPerimeterUpper) with the perimeter summed over EVERY seam cell, each
+	// side the larger of its arc-length upper bound and its held chord's exact
+	// length, and exactly 0 at delta == 0.
+	SkirtLeg              float64
 	TwistVolumeUpper      float64
 	TwistVolumeCorrection *big.Rat
 	TwistMomentCorrection proofbound.RatV3
 	MaxTwistOffsetUpper   float64
-	CapVolumeUpper        float64
-	SeamAllow             float64
 	// areaCorrection moves Area.Value from the held chord facets to the
 	// bilinear wall patches. Its bound covers the correction's one rounding;
 	// bilinearAreaBound covers those patches' certified integration intervals.
@@ -78,42 +80,12 @@ type LoftChordedAllow struct {
 	// (docs/tessellation-design.md §2's loftPayload row). It stays exactly 0
 	// on a build with no chorded cell, the zero value's own standing.
 	TwistAreaAllow float64
-	// capAreaExcess is capAreaAllow0 and capAreaAllow1 (each
-	// proofbound.SectionDisplacementArea over its own cap's boundary) composed by
-	// proofbound.AbsSumUpper: the SAME two per-cap area allowances capVolumeUpper folds
-	// into a volume via proofbound.CapAreaVolumeAllow's own |h|/3 identity, spent here
-	// UNFOLDED as an area instead — area()'s own AREA reading, unlike
-	// volume(), has no plane offset h to divide by, since a cap's own
-	// published area IS the built polygon's area and the true denoted area
-	// differs from it by exactly this much (docs/loft-design.md §5/§8).
+	// CapAreaExcess is the per-cell cap tube over both caps
+	// (docs/loft-gear-bounds-design.md §4): how far each cap's held chord
+	// polygon can differ in AREA from the region its recorded boundary
+	// denotes, Area()'s own cap term.
 	CapAreaExcess float64
-	// WallLeg is docs/loft-gear-bounds-design.md §2's per-cell wall leg:
-	// Σ proofbound.ProductUpper(cellMatched_k, cellWallUpper_k) over the same
-	// chorded cells WallAreaUpper sums, each cell charged at its own matched
-	// departure rather than the build-wide maximum. SkirtLeg is that section's
-	// skirt between each held seam and its projection onto the cap plane,
-	// productUpper(productUpper(matchedDelta, delta), perimeter), the
-	// perimeter summed over EVERY held seam cell, each side the larger of
-	// its arc-length upper bound and its held chord's exact length, and
-	// exactly 0 at delta == 0. Together with the vertex sweep they bound the
-	// MEASURE of the region the chord-to-curve homotopy sweeps, which is what
-	// MassAccumulator.Centroid's shift form spends.
-	WallLeg  float64
-	SkirtLeg float64
 }
-
-// ErrLoftCapOffsetUnderivable is the sentinel docs/loft-design.md Table S row
-// S14 carries for the cap planeOffsetUpper term (§5.2), raised in the
-// CONSTRUCTION arm §4's gate-order paragraph assigns that term — it reads the
-// held vertex table, which the record-only arm does not have. Like its
-// certified-sagitta and station-displacement twins the shape itself is fine and
-// the chord set is buildable; only one of the proven displacement terms the
-// published cap volume allowance is composed from cannot be stated, so the
-// sentinel is ErrUnsupported and no finite value — least of all a zero — is
-// published in its place.
-var ErrLoftCapOffsetUnderivable = fmt.Errorf(
-	`%w: a chorded loft cap's plane offset from the mass anchor has no derivation from this assembly`, decaderr.ErrUnsupported,
-)
 
 // ChordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
 // composes a chord's own departure from the curve it chords (the certified

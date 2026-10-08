@@ -455,7 +455,6 @@
 3	0.00	TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta
 3	0.00	TestLoftArcSegAgainstCircleSegRefusesS3
 3	0.00	TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit
-3	0.00	TestLoftCapOffsetUnderivableRefuses
 3	0.00	TestLoftCellStationsStationCapFiresBeforeAuditCeiling
 3	0.00	TestLoftCertifiedChordLowerIsALowerBound
 3	0.00	TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats
@@ -521,7 +520,6 @@
 3	0.00	TestLoftStationCapClearsTheAuditPairCeiling
 3	0.01	TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling
 3	0.00	TestLoftStationShareAllocatesTheCap
-3	0.00	TestLoftVertexDistanceCacheMatchesUncachedAccumulator
 3	0.00	TestLoopSignedAreaMatchesFullIntegrator
 3	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
 3	1.98	TestMeshMassLadderRefinesUntilPositive
@@ -1072,6 +1070,10 @@
 0	0.02	TestBrepModifyEdgeChamferCornerBoss
 1	0.02	TestBrepModifyEdgeFilletConcavePlanarEdge
 2	0.05	TestBrepModifyEdgeRefusals
+2	0.00	TestLoftAreaCapTubeIsPerCell
+2	0.00	TestLoftPlacedVolumeNeedsTheVertexSweep
+2	0.00	TestLoftVolumeBoundEnclosesRefinedRing
+2	0.00	TestLoftVolumeResidualIsPerCellWallLegPlusSkirt
 4	0.05	TestBrepModifyEdgeConsumersOnS1Fillet
 0	0.03	TestBrepModifyEdgeFilletPocketFloorEdges
 1	0.02	TestBrepModifyEdgeChamferS1AlongX

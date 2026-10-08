@@ -24,83 +24,64 @@ type LoftChordPair struct {
 // every wall cell of every loop pairs holds, over the SAME cell corner
 // convention assembleLoft's own Table B split uses (vLo, vHi = section-0's
 // two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are evalLoft's own
-// assembled loftAssembly fields, read after the whole mass-accumulator add
-// loop so coordUpper is complete. anchor is the accumulator's own anchor
-// (p0's placed plane origin).
+// assembled loftAssembly fields. anchor is the accumulator's own anchor (p0's
+// placed plane origin), read by the exact first-moment correction.
 //
 // matchedDelta is docs/loft-design.md §5.2's own matchedDelta term, already
 // COMPOSED by evalLoft as proofbound.AbsSumUpper(sectionDelta, delta) over that table's
-// sectionDelta and delta rows — the build-wide PARAMETER-MATCHED displacement,
-// spent on every leg that table keys on it: the cap-area tube
-// (proofbound.SectionDisplacementArea, below, whose capAreaAllow row names this term and
-// not the sagitta, because a held cap polygon's own vertices are displaced as
-// well as chorded) and proofbound.ChordedBoundarySeamAllow's own matchedDelta/posUpper
-// obligations. delta is that same table's delta row on its own — the held
-// vertex displacement — passed alongside so each cell can compose its OWN
-// tighter matched reading through chordCellDeltaUpper (loft_build.go) from the
-// cell's own chord-to-curve half rather than the build-wide maximum. Neither is
-// ever the sagitta alone: reading matchedDelta as sectionDelta leaves the
-// computed station's own displacement uncharged on every chorded leg (§5.2's
+// sectionDelta and delta rows — the build-wide PARAMETER-MATCHED displacement.
+// The skirt leg reads it. delta is that same table's delta row on its own —
+// the held vertex displacement — passed alongside so each cell can compose its
+// OWN tighter matched reading through ChordCellDeltaUpper from the cell's own
+// chord-to-curve half rather than the build-wide maximum. Neither is ever the
+// sagitta alone: reading matchedDelta as sectionDelta leaves the computed
+// station's own displacement uncharged on every chorded leg (§5.2's
 // matchedDelta paragraph).
 //
-// A cell contributes to wallAreaUpper (proofbound.CellChordCurveAreaUpper), the exact
-// volume/first-moment corrections, the unsigned twistVolumeUpper retained for
-// tessellation's occupied-volume proof, maxTwistOffsetUpper (the MAX,
-// never a sum, of proofbound.CellTwistOffsetUpper), twistAreaAllow (the SUM of
-// proofbound.CellTwistAreaAllow, retained for the tessellation's own area slack) and
-// seamPerimeterUpper's own running total UNLESS it is a FACETED cell —
-// a LineSeg pair's cell (pairs[i].Faceted[j]) whose own CHORD-TO-CURVE
-// departure is zero (pairs[i].MatchedDelta[j] <= 0, the cell's own half of
-// §5.2's matchedDelta composition). Only such a cell's held triangle pair IS
-// the boundary §5 gives it, so it has nothing to contribute to any of those
-// legs, and its own vertex displacement is charged by the accumulator's
-// delta-keyed legs instead, never twice.
+// A cell is CHARGED unless it is a FACETED cell — a LineSeg pair's cell
+// (pairs[i].Faceted[j]) whose own CHORD-TO-CURVE departure is zero
+// (pairs[i].MatchedDelta[j] <= 0, the cell's own half of §5.2's matchedDelta
+// composition). Only such a cell's held triangle pair IS the boundary §5 gives
+// it, so it has nothing to contribute to the chorded legs, and its own vertex
+// displacement is the accumulator's sweptVolumeAllow and perturbAreaSum,
+// charged once (docs/loft-gear-bounds-design.md §2, step 2).
 //
 // Every other cell is charged, whatever its departure: a circular or
 // free-form cell stands for a bilinear ruled patch through its four held
 // corners, and a zero departure says only that its two sides are straight. A
-// degree-1 NURBSSeg pair twisted between its sections is exactly that case,
-// and skipping its twist correction published the triangulated polyhedron's
-// volume for a body that denotes the ruled one. The exemption names the ONE
-// arm proven faceted rather than the arms that are charged, so an arm added
-// later is charged by default, and a positive departure is charged even on a
-// cell flagged faceted.
+// degree-1 NURBSSeg pair twisted between its sections is exactly that case.
+// The twist correction moves Volume onto that patch and only wallLeg pays for
+// its motion, so such a cell may never be skipped. The exemption names the
+// ONE arm proven faceted rather than the arms that are charged, so an arm
+// added later is charged by default, and a positive departure is charged even
+// on a cell flagged faceted. A charged cell contributes to wallAreaUpper
+// (proofbound.CellChordCurveAreaUpper), wallLeg (that area times the cell's
+// own matched departure), the exact volume, first-moment and area
+// corrections, the unsigned twistVolumeUpper retained for tessellation's
+// occupied-volume proof, maxTwistOffsetUpper (the MAX, never a sum, of
+// proofbound.CellTwistOffsetUpper), twistAreaAllow, areaExcess and the cap
+// tube.
 //
-// perimeterUpperV/perimeterUpperW and walksV/walksW sum only the charged
-// cells of their own cap: under the fixed-station chord-to-curve homotopy
-// this whole function reasons about, a faceted boundary never moves at all
-// (its chord IS the curve it denotes), so the symmetric difference between
-// the held cap polygon and the true denoted region lies inside the tube
-// proofbound.SectionDisplacementArea takes over the charged cells' own
-// perimeter — including the faceted cells would only widen an already-sound
-// bound, never repair an unsound one, so they are left out.
+// seamPerimeterUpper is the one sum that reads EVERY cell, charged or not: the
+// skirt between the held seam and its projection onto the cap plane runs along
+// the whole seam, and a faceted cell's seam moves by delta too (§2). Each
+// side adds the larger of its arcLenUpper and its held chord's exact length,
+// since the moving seam's speed is a convex combination of the two. The
+// skirt leg is productUpper(productUpper(matchedDelta, delta),
+// seamPerimeterUpper), and exactly 0 at delta == 0, where the held seam already
+// lies in its plane; the delta > 0 gate keeps a +Inf arc-length claim on an
+// unplaced build from turning that honest zero into a refusal.
 //
-// h0 (cap0's own offset from anchor) is always exactly zero because anchor
-// IS a point on cap0's own plane (evalLoft's own anchor := xform.Apply(
-// plane0.Origin)) — proofbound.CapAreaVolumeAllow(0, ...) answers 0 without reading its
-// second argument, so capAreaAllow0 is computed but never spent BY THE VOLUME
-// LEG. h1 (cap1's own offset) is bounded by the proven exact-rational
-// distance from anchor to ANY one held cap1 vertex — valid because a plane's
-// own perpendicular offset from a point is never more than the distance to
-// any single point ON that plane, and every cap1 vertex lies on cap1's own
-// plane exactly. The root adapter refuses an underivable cap1 offset before
-// this function runs; a zero would not bound an unknown offset.
-//
-// capAreaAllow0 and capAreaAllow1 are ALSO area()'s own AREA reading of the
-// identical cap gap capVolumeUpper folds into a volume: h0 being zero sinks
-// capAreaAllow0 out of capVolumeUpper (an area gap in a plane THROUGH the
-// anchor sweeps no volume), but it never sinks the AREA those two allowances
-// bound in the first place — a cap's published Area is capPolygonAreaRat, the
-// built polygon's own exact rational, and the region the loft's construction
-// actually denotes is the curved region proofbound.SectionDisplacementArea(matchedDelta,
-// walks, perimeterUpper) bounds the gap to, for EITHER cap, offset or not —
-// the MATCHED term, never the sagitta, because that cap polygon's own held
-// vertices are displaced as well as chorded (§5.2's capAreaAllow row).
-// capAreaExcess is proofbound.AbsSumUpper(capAreaAllow0, capAreaAllow1), unfolded by no
-// plane-offset division at all, and area() charges it beside the wall term
-// below — omitting it (an earlier version of this function did) understates
-// Area on every curved pairing, caught on the shipped A10a wedge fixture
-// itself (TestLoftArcWedgeAreaMatchesExtrudeOracle).
+// capAreaExcess is §4's per-cell cap tube, summed over the charged cells of
+// both caps: 2·cellMatched_k·arcLenUpper_k plus a joint disk π⁺·cellMatched_k²
+// per cell, proofbound.SectionDisplacementArea's own rectangle-plus-half-disks
+// argument read per chord at that chord's own departure rather than at the
+// build-wide maximum. A faceted cell's chord IS the curve it denotes, so the
+// symmetric difference between the held cap polygon and the denoted region is
+// the union of the charged cells' lenses, which lie inside that tube; the
+// held vertices' own displacement is the accumulator's perturbAreaSum. Area()
+// charges it beside the wall term; omitting it understates Area on every curved
+// pairing (TestLoftArcWedgeAreaMatchesExtrudeOracle).
 //
 // areaExcess is the two residual legs of the wall's own per-cell gap after
 // proofbound.CellBilinearArea has moved the nominal reading from held facets to the
@@ -113,41 +94,25 @@ type LoftChordPair struct {
 //     and its two per-side tangent-deviation ENERGIES
 //     (p.tangentEnergyV/tangentEnergyW: PerCellTangentEnergy's reading for a
 //     line or circular arm, freeform.SpanTangentEnergyUpper's for a free-form
-//     one), and that helper's own doc comment carries the derivation. It
-//     replaces an arc-minus-chord LENGTH excess times a rung length, a shape
-//     third order in the cell's own sweep where the gap it stood for is
-//     SECOND order wherever the ruling runs anything but square across the
-//     section tangent — an understatement without bound on a twisted
-//     pairing.
+//     one), and that helper's own doc comment carries the derivation.
 //   - the STATION-SHIFT leg, proofbound.CellStationShiftAreaAllow (internal/proofbound/bounds.go):
 //     |ruled at the held corners − ruled at the denoted stations|, the step the
 //     ruled leg stops short of, since it pins its patch at the corners
 //     the build HOLDS. It reads the cell's own held corners for the same eB
 //     convexity rung the ruled leg forms, its two per-side arc-length bounds,
 //     the SAME composed cellMatched those legs take, and the payload's own
-//     station displacement delta; that helper's own doc comment carries the
-//     derivation, one dimension up from the |e x v| + |u x f| + |e x f|
-//     expansion proofbound.PerturbedTriangleAreaAllow states for a single triangle. It is
-//     exactly zero on a build that holds the stations it denotes.
+//     station displacement delta. It is exactly zero on a build that holds the
+//     stations it denotes.
 //
 // proofbound.CellChordCurveAreaAllow's own composition section owns the split and why the
 // ruled reading is not widened by delta to stand in for the station shift.
-//
-// This is the wall term; capAreaExcess above is Area's own cap term, and the
-// two together are what area() charges beside the mixed wall reading.
-//
-// wallLeg sums each charged cell's own cellMatched times its cellWallUpper,
-// and skirtLeg charges the skirt along every seam cell, a zero-departure one
-// included (docs/loft-gear-bounds-design.md §3);
-// LoftChordedAllow's field comment states what the two bound.
 func ComputeLoftChordedAllow(
 	pairs []LoftChordPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
-	h1Upper, matchedDelta, delta, distUpper float64, reversed bool,
+	matchedDelta, delta float64, reversed bool,
 ) LoftChordedAllow {
-	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
-	var perimeterUpperV, perimeterUpperW, areaExcess, bilinearAreaBound, twistAreaAllow float64
-	var walksV, walksW int
-	var wallLeg, skirtPerimeterUpper float64
+	var wallAreaUpper, wallLeg, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
+	var capTube, areaExcess, bilinearAreaBound, twistAreaAllow float64
+	piUp := math.Nextafter(math.Pi, math.Inf(1))
 	twistVolumeCorrection := new(big.Rat)
 	var twistMomentCorrection proofbound.RatV3
 	for axis := range twistMomentCorrection {
@@ -161,30 +126,21 @@ func ComputeLoftChordedAllow(
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
-			// The skirt runs along every HELD seam cell, a zero-departure one
-			// included: its held seam is as far off the cap plane as any.
+			// The skirt runs along every HELD seam cell (this function's
+			// doc comment), so this sum precedes the charged-cell gate.
 			// ArcUpper bounds the true segment, and a held chord joining two
 			// displaced stations can be up to 2·delta longer, so each side
 			// takes the larger of that and the held chord's own exact length.
-			skirtPerimeterUpper = proofbound.AbsSumUpper(skirtPerimeterUpper,
+			seamPerimeterUpper = proofbound.AbsSumUpper(seamPerimeterUpper,
 				math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
 				math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
 			)
 			if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
-				// A faceted cell's held triangle pair IS the boundary it
-				// denotes, so its true departure is exactly zero: excluding
-				// it from the cap's own perimeter/walks tally
-				// (proofbound.SectionDisplacementArea's own tube-plus-joints argument)
-				// is sound, not merely convenient — a zero-width segment of
-				// the tube contributes nothing to widen, and a joint whose
-				// own incident boundary never moves contributes no disk
-				// either (this function's own doc comment).
+				// A faceted cell's held triangle pair IS its boundary; its
+				// vertex displacement is the accumulator's delta-keyed legs
+				// (this function's doc comment).
 				continue
 			}
-			walksV++
-			walksW++
-			perimeterUpperV = proofbound.AbsSumUpper(perimeterUpperV, p.ArcUpperV[j])
-			perimeterUpperW = proofbound.AbsSumUpper(perimeterUpperW, p.ArcUpperW[j])
 
 			// docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
 			// the cell's own chord-to-curve half composed with the held
@@ -192,13 +148,20 @@ func ComputeLoftChordedAllow(
 			// claim about the chord the build actually DREW rather than the
 			// ideal chord between the two points the record denotes. The
 			// per-cell composition is at most the build-wide matchedDelta
-			// above (that term takes the same sum at the MAX cell), so it is
+			// (that term takes the same sum at the MAX cell), so it is
 			// the tighter of the two readings of the same row.
 			cellMatched := ChordCellDeltaUpper(p.MatchedDelta[j], delta)
 
 			cellWallUpper := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
 			wallAreaUpper = proofbound.AbsSumUpper(wallAreaUpper, cellWallUpper)
 			wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWallUpper))
+			joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cellMatched, cellMatched))
+			twice := proofbound.ProductUpper(2, cellMatched)
+			capTube = proofbound.AbsSumUpper(
+				capTube,
+				proofbound.ProductUpper(twice, p.ArcUpperV[j]), joint,
+				proofbound.ProductUpper(twice, p.ArcUpperW[j]), joint,
+			)
 			twistVolumeUpper = proofbound.AbsSumUpper(twistVolumeUpper, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 			cellTwist := proofbound.CellTwistVolume(vLo, vHi, wLo, wHi)
 			cellMoment := proofbound.CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor, cellTwist)
@@ -213,7 +176,6 @@ func ComputeLoftChordedAllow(
 				twistMomentCorrection[axis].Add(twistMomentCorrection[axis], cellMoment[axis])
 			}
 			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi))
-			seamPerimeterUpper = proofbound.AbsSumUpper(seamPerimeterUpper, p.ArcUpperV[j], p.ArcUpperW[j])
 
 			ruledLeg := proofbound.CellChordCurveAreaAllow(
 				vLo, vHi, wLo, wHi,
@@ -237,48 +199,25 @@ func ComputeLoftChordedAllow(
 		}
 	}
 
-	capAreaAllow0 := proofbound.SectionDisplacementArea(matchedDelta, walksV, perimeterUpperV)
-	capAreaAllow1 := proofbound.SectionDisplacementArea(matchedDelta, walksW, perimeterUpperW)
-	// h1Upper is the root adapter's proven cap1 plane-offset bound.
-	capVolumeUpper := proofbound.AbsSumUpper(
-		proofbound.CapAreaVolumeAllow(0, capAreaAllow0),
-		proofbound.CapAreaVolumeAllow(h1Upper, capAreaAllow1),
-	)
-
-	// posUpper (proofbound.ChordedBoundarySeamAllow's own obligation): the held
-	// material's own max EUCLIDEAN distance from anchor (distUpper, tighter
-	// than proofbound.Radius3D(coordUpper) — loft_moments.go's foldCoordUpper doc
-	// comment), widened by matchedDelta — proofbound.ChordedBoundarySeamAllow's
-	// own doc comment requires "the SAME parameter-matched displacement leg
-	// (a)'s own obligation", never the sagitta alone, so this widening and
-	// the matchedDelta argument beside it both read §5.2's own COMPOSED
-	// matched term, never either half of it alone.
-	posUpper := proofbound.AbsSumUpper(distUpper, matchedDelta)
-	seamAllow := proofbound.ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
+	skirtLeg := 0.0
+	if delta > 0 {
+		skirtLeg = proofbound.ProductUpper(proofbound.ProductUpper(matchedDelta, delta), seamPerimeterUpper)
+	}
 	areaCorrectionValue, _ := areaCorrection.Float64()
-	// The skirt joins each held seam, within delta of its cap plane, to that
-	// seam's projection onto the plane; every point of it moves at most
-	// matchedDelta (at least delta, so it covers a zero-departure cell's own
-	// motion too), so its swept measure is at most this
-	// (docs/loft-gear-bounds-design.md §3). ProductUpper answers an honest 0
-	// at delta == 0, where the held seam already lies in the plane.
-	skirtLeg := proofbound.ProductUpper(proofbound.ProductUpper(matchedDelta, delta), skirtPerimeterUpper)
 
 	return LoftChordedAllow{
 		WallAreaUpper:         wallAreaUpper,
+		WallLeg:               wallLeg,
+		SkirtLeg:              skirtLeg,
 		TwistVolumeUpper:      twistVolumeUpper,
 		TwistVolumeCorrection: twistVolumeCorrection,
 		TwistMomentCorrection: twistMomentCorrection,
 		MaxTwistOffsetUpper:   maxTwistOffsetUpper,
-		CapVolumeUpper:        capVolumeUpper,
-		SeamAllow:             seamAllow,
 		AreaCorrection:        areaCorrectionValue,
 		AreaCorrectionBound:   proofarith.RationalFloatError(areaCorrection, areaCorrectionValue),
 		BilinearAreaBound:     bilinearAreaBound,
 		AreaExcess:            areaExcess,
 		TwistAreaAllow:        twistAreaAllow,
-		CapAreaExcess:         proofbound.AbsSumUpper(capAreaAllow0, capAreaAllow1),
-		WallLeg:               wallLeg,
-		SkirtLeg:              skirtLeg,
+		CapAreaExcess:         capTube,
 	}
 }

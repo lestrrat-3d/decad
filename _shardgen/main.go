@@ -55,9 +55,8 @@ const shardCount = 6
 // These tests read the same costly sync.OnceValue table. Putting them in one
 // shard lets the test binary build that table once.
 var chordSweepReaders = []string{
-	"TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap",
-	"TestChordedBoundaryVolumeAllowSeamLegDeletionSearch",
-	"TestChordedBoundaryVolumeAllowWallLegDeletionSearch",
+	"TestChordedWallAndTwistLegsEncloseTheMeasuredGap",
+	"TestChordedWallLegIsLoadBearing",
 }
 
 func main() {

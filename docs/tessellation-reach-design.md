@@ -46,8 +46,8 @@ Every restatement below publishes into that record, and no consumer infers a ter
 `Plane` face with `Line3` edges publishes zero only where its own polygon and its own stored coordinates are
 both proved exact, so a placed loft's planar facets cannot enter the hidden-tangency pre-pass at 0 while
 sitting `delta` off their true position. `bound * heldArea` is nowhere a substitute for the occupied-volume
-proof: for a chorded loft that proof composes `sweptVolumeAllow(delta, perturbedAreaUpper)` with the four-leg
-`chordedBoundaryVolumeAllow` (tess §2's row), and for a revolve tess §11 forbids the product outright. A
+proof: for a chorded loft that proof composes `sweptVolumeAllow(delta, perturbedAreaUpper)` with `wallLeg`,
+`skirtLeg` and `twistVolumeUpper` (tess §2's row), and for a revolve tess §11 forbids the product outright. A
 payload whose occupied-volume proof has not landed returns a mesh with `symDiffOK` false, which serves export
 while the boolean refuses the operand.
 
@@ -183,7 +183,7 @@ re-evaluates, so nothing stored can disagree with the records.
 |---|---|---|
 | `facetDeparture` | `absSumUpper(chordCellDeltaUpper(sectionMatchedDelta, a.delta), chorded.maxTwistOffsetUpper)` — computed UNCONDITIONALLY, so a `LineSeg`-only placed loft publishes `a.delta` (loft §5.2's facet-departure row: "`matchedDelta` reduces to `delta`") | loft §5.2 `matchedDelta`, `maxTwistOffsetUpper` rows |
 | `areaSlack` | `upRound(mass.perturbAreaSum + chorded.twistAreaAllow + chorded.areaExcess + chorded.capAreaExcess)` | tess §2's loft row: the per-triangle perturbation sum, the wall's three legs (`cellTwistAreaAllow` held-to-bilinear, `cellChordCurveAreaAllow` + `cellStationShiftAreaAllow` already summed in `areaExcess`), and the two caps' `capAreaAllow` |
-| `volSymDiff` | `absSumUpper(sweptVolumeAllow(a.delta, perturbedAreaUpper(verts, tris, a.delta)), chordedBoundaryVolumeAllow(matchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow))` | tess §2's loft row; the FOUR-leg helper (`internal/proofbound/bounds.go:chordedBoundaryVolumeAllow`), not the three-leg residual `Volume` uses, because the mesh holds the uncorrected triangles |
+| `volSymDiff` | `absSumUpper(sweptVolumeAllow(a.delta, perturbedAreaUpper(verts, tris, a.delta)), chorded.wallLeg, chorded.twistVolumeUpper, chorded.skirtLeg)` | tess §2's loft row; the twist measure joins `Volume`'s legs because the mesh holds the uncorrected triangles (`docs/loft-gear-bounds-design.md` §2) |
 
 `loftChordedAllow` gains `twistAreaAllow`, the sum of `cellTwistAreaAllow(vLo, vHi, wLo, wHi)` over the same
 chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[j] > 0`, never on kind).

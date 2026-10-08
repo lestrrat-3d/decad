@@ -123,13 +123,13 @@ type loftPayload struct {
 	// Every matched-delta obligation is discharged by a SEPARATE quantity,
 	// the matchedDelta evalLoft composes: loftPairings accumulates each
 	// cell's own chord-to-curve departure into a MAX beside sectionDelta,
-	// and evalLoft sums that MAX with the delta above through
+	// and buildLoftMass sums that MAX with the delta above through
 	// chordCellDeltaUpper before passing it — never this field — to
 	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
-	// which is where every proofbound.ChordedBoundaryVolumeAllow,
-	// proofbound.ChordedBoundarySeamAllow, centroid radius and cap-area
-	// matched argument comes from; proofbound.CellChordCurveAreaUpper reads the same
-	// composition per cell, over the cell's own chord-to-curve half.
+	// which is where the skirt leg's, the centroid radius' and every other
+	// build-wide matched argument comes from;
+	// proofbound.CellChordCurveAreaUpper, the wall leg and the cap tube read the
+	// same composition per cell, over the cell's own chord-to-curve half.
 	// The raw matched quantity itself is a PER-BUILD LOCAL of evalLoft and is
 	// never a field here. What the payload stores instead is the proof
 	// COMPOSED from it — the three terms of the proof field below, which the
@@ -356,61 +356,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 	}
 
-	anchor := pl.xform.Apply(pl.plane0.Origin)
-	// docs/loft-design.md §5.2's matchedDelta row, composed here and nowhere
-	// else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
-	// departure (loftPairings' sectionMatchedDelta) and the held vertex
-	// displacement a.delta. The two halves are accumulated apart — a chord's
-	// departure from the curve it chords, and a station's departure from the
-	// point the record and the motion denote for it — and every chorded leg
-	// charges their SUM, since the chord the build DREW joins two displaced
-	// stations. The sagitta alone would leave the computed station's own
-	// displacement uncharged (§5.2's matchedDelta paragraph). Left at exactly
-	// 0 on a build with no chorded cell, which is what keeps a LineSeg-only
-	// pairing's published measurements free of every chorded term: its held
-	// triangle pair IS the boundary §5 gives it, and a.delta already reaches
-	// its measurements through the accumulator's own delta-keyed legs.
-	//
-	// A build is chorded when any cell is NOT faceted (loftLoopPair.faceted),
-	// not only when a departure is positive: a degree-1 free-form pair has a
-	// zero departure on every cell and still stands for twisted bilinear
-	// patches, whose correction and twist legs must run.
-	chorded := sectionDelta > 0 || sectionMatchedDelta > 0 || loftHasUnfacetedCell(pairs)
-	matchedDelta := 0.0
-	if chorded {
-		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
-	}
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
-	vertexDistances := make([]loftmesh.LoftVertexDistance, len(a.verts))
-	for k, t := range a.tris {
-		mass.addTriangle(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls, t, vertexDistances)
-	}
-	// The chorded correction terms (docs/loft-design.md §5/§8, a10-plan.md
-	// Part 3 PR 6) read the mass accumulator's own coordUpper, which is only
-	// complete once every triangle has folded into it above — so this runs
-	// after the add loop, gated on the build being chorded rather than on
-	// sectionDelta alone: a free-form cell can carry a positive matchedDelta at
-	// an exactly-zero sagitta (internal/freeform/spline_sagitta.go's own
-	// counterexample), and a degree-1 free-form cell carries neither while its
-	// twisted bilinear patch still needs the exact correction. Skipping the
-	// computation there would silently drop a genuine area/volume obligation.
-	// Left at its zero value (every field of loftmesh.LoftChordedAllow) for a
-	// LineSeg-only build, whose every cell is faceted.
-	//
-	// It is also where S14's CONSTRUCTION arm decides the cap
-	// planeOffsetUpper term §5.2's table lists: an assembly stating no proven
-	// distance from the anchor to a held cap1 vertex refuses here
-	// (loftmesh.ErrLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
-	// so no measurement below is ever composed from a substituted value.
-	if chorded {
-		allow, err := computeLoftChordedAllow(
-			pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed,
-		)
-		if err != nil {
-			return nil, err
-		}
-		mass.Chorded = allow
-	}
+	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)
 	if err != nil {
@@ -461,16 +407,64 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 
 	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
 	pl.capStartCount, pl.cell, pl.side = a.capStartCount, a.cell, a.side
-	pl.proof = loftMeshProofOf(a, mass, sectionMatchedDelta, matchedDelta)
+	pl.proof = loftMeshProofOf(a, mass, sectionMatchedDelta)
 	pl.delta = a.delta
 	// sectionDelta is loftPairings' own accumulated MAX over cells
 	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
 	// positive for a same-kind circular one, to the sagitta its station
 	// chording commits.
 	pl.sectionDelta = sectionDelta
-	pl.chorded = chorded
+	pl.chorded = loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	body.payload = pl
 	return body, nil
+}
+
+// loftIsChorded reports whether a build holds a cell whose held triangle pair
+// is not the boundary it denotes: a positive section term, or any cell that is
+// not faceted (loftLoopPair.faceted). A degree-1 free-form pair has a zero
+// departure on every cell and still stands for twisted bilinear patches.
+func loftIsChorded(pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float64) bool {
+	return sectionDelta > 0 || sectionMatchedDelta > 0 || loftHasUnfacetedCell(pairs)
+}
+
+// buildLoftMass folds the assembled triangle set into the mass accumulator
+// and, on a chorded build, attaches the chorded proof terms. evalLoft calls it
+// once per build; it is its own function so the volume and area tests can read
+// the same accumulator at a chord target of their choosing.
+//
+// docs/loft-design.md §5.2's matchedDelta row is composed here and nowhere
+// else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
+// departure (loftPairings' sectionMatchedDelta) and the held vertex
+// displacement a.delta. The two halves are accumulated apart — a chord's
+// departure from the curve it chords, and a station's departure from the
+// point the record and the motion denote for it — and every chorded leg
+// charges their SUM, since the chord the build DREW joins two displaced
+// stations. The sagitta alone would leave the computed station's own
+// displacement uncharged (§5.2's matchedDelta paragraph). Left at exactly 0 on
+// a build with no chorded cell, which is what keeps a LineSeg-only pairing's
+// published measurements free of every chorded term: its held triangle pair IS
+// the boundary §5 gives it, and a.delta already reaches its measurements
+// through the accumulator's own delta-keyed legs.
+//
+// A build is chorded if any cell is not faceted, including a degree-1
+// free-form cell with zero departure. Its bilinear patch still needs the
+// exact correction and twist legs. The chorded terms remain zero for a
+// LineSeg-only build, whose cells are all faceted.
+func buildLoftMass(pl loftPayload, a loftAssembly, pairs []loftLoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
+	anchor := pl.xform.Apply(pl.plane0.Origin)
+	chorded := loftIsChorded(pairs, sectionDelta, sectionMatchedDelta)
+	matchedDelta := 0.0
+	if chorded {
+		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
+	}
+	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
+	for k, t := range a.tris {
+		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
+	}
+	if chorded {
+		mass.Chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, a.reversed)
+	}
+	return mass
 }
 
 // loftMeshProofOf composes docs/tessellation-design.md §2's loftPayload row
@@ -480,9 +474,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 // publishes the payload's own proofs and states nothing new of its own.
 //
 // sectionMatchedDelta is loftPairings' own MAX-over-cells chord-to-curve
-// departure and matchedDelta is evalLoft's composed §5.2 matchedDelta — 0 on a
-// build that reached no chorded cell, where the accumulator's delta-keyed legs
-// carry the whole displacement instead.
+// departure.
 //
 // The three terms and why each reads what it does:
 //
@@ -500,16 +492,18 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 //     held-to-bilinear leg appears here and not in Area's own bound because
 //     Area.Value has been MOVED onto the bilinear patches by areaCorrection
 //     while the mesh keeps the uncorrected triangles.
-//   - volSymDiff composes the vertex-displacement swept allowance with the
-//     FOUR-leg chorded boundary allowance — the twist leg included, for the
-//     same reason: Volume.Value applies the exact twist correction and the mesh
-//     does not, so the residual three-leg form Volume spends would understate
-//     the occupied volume this triangle set differs by.
+//   - volSymDiff composes docs/loft-gear-bounds-design.md §2's chain — the
+//     vertex sweep, the per-cell wall leg and the skirt — with the twist
+//     measure, for the same reason: Volume.Value applies the exact twist
+//     correction and the mesh does not, so the mesh's own first step is the
+//     held-to-bilinear twist sweep, and the three legs Volume spends would
+//     understate the occupied volume this triangle set differs by. The vertex
+//     sweep is required whenever delta > 0 (§2).
 //
 // Each sum rounds up at every step (docs/tessellation-design.md §2), so a term
 // this build could not state saturates rather than vanishing, and the caller
 // refuses on it instead of publishing it.
-func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta, matchedDelta float64) loftMeshProof {
+func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta float64) loftMeshProof {
 	return loftMeshProof{
 		facetDeparture: proofbound.AbsSumUpper(
 			chordCellDeltaUpper(sectionMatchedDelta, a.delta),
@@ -522,14 +516,10 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 			m.Chorded.CapAreaExcess,
 		),
 		volSymDiff: proofbound.AbsSumUpper(
-			proofbound.SweptVolumeAllow(a.delta, proofbound.PerturbedAreaUpper(a.verts, a.tris, a.delta)),
-			proofbound.ChordedBoundaryVolumeAllow(
-				matchedDelta,
-				m.Chorded.WallAreaUpper,
-				m.Chorded.TwistVolumeUpper,
-				m.Chorded.CapVolumeUpper,
-				m.Chorded.SeamAllow,
-			),
+			m.SweptVolumeAllow(a.verts, a.tris),
+			m.Chorded.WallLeg,
+			m.Chorded.TwistVolumeUpper,
+			m.Chorded.SkirtLeg,
 		),
 	}
 }

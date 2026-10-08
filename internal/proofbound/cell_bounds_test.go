@@ -468,8 +468,8 @@ func edgeProductRows() []edgeProductRow {
 // At matchedDeltaUpper=0 the eB term is eBBase alone, so the published
 // answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|) and an
 // understated eBBase puts the answer BELOW it — the unsound direction, since
-// proofbound.ChordedBoundaryVolumeAllow sums this reading over every wall cell for its
-// wallAreaUpper. The comparison is over exact rationals in SQUARED form (the
+// the loft's per-cell wall leg multiplies this reading by the cell's own
+// matched departure (docs/loft-gear-bounds-design.md §2). The comparison is over exact rationals in SQUARED form (the
 // norms are irrational, their squares exactly rational), never against a
 // float reference that shares the defect.
 func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
@@ -1020,138 +1020,6 @@ func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
 				"cellTwistVolumeAllow = %.20g sits below the exact determinant measure", volume)
 		})
 	}
-}
-
-// TestCapAreaVolumeAllowIsExactForAPlanarFace pins the closed form's own
-// derivation directly: for a cap whose true area exceeds its held polygon's
-// area by a KNOWN exact amount, planeOffsetUpper * capAreaAllow / 3 is what
-// the divergence-theorem identity Σvol6 = 2*h*Area gives, since
-// |ΔVolume| = |h|*|ΔArea|/3.
-func TestCapAreaVolumeAllowIsExactForAPlanarFace(t *testing.T) {
-	t.Parallel()
-	const h, area = 4.0, 6.0
-	want := h * area / 3
-	got := proofbound.CapAreaVolumeAllow(h, area)
-	require.InDelta(t, want, got, 1e-12)
-	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
-}
-
-// TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap pins the two
-// legitimate zeros: a cap plane passing exactly through the accumulator's
-// own anchor (offset 0, the ordinary case for the FIRST profile's own cap,
-// docs/loft-design.md §8) contributes nothing whatever its own area gap,
-// and a cap with a proven-zero area gap contributes nothing whatever its
-// own plane offset.
-func TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap(t *testing.T) {
-	t.Parallel()
-	require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(0, 6.0))
-	require.Equal(t, 0.0, proofbound.CapAreaVolumeAllow(4.0, 0))
-}
-
-// TestCapAreaVolumeAllowRefusesOnBrokenClaims pins the reject-only gate: a
-// non-finite or negative planeOffsetUpper or capAreaAllow must answer +Inf,
-// never a finite number computed past a broken claim.
-func TestCapAreaVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
-	t.Parallel()
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.NaN(), 6.0), 1))
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, math.NaN()), 1))
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(math.Inf(1), 6.0), 1))
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, math.Inf(1)), 1))
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(-1, 6.0), 1))
-	require.True(t, math.IsInf(proofbound.CapAreaVolumeAllow(4.0, -1), 1))
-}
-
-// TestChordedBoundaryVolumeAllowComposesAllFourLegs pins that
-// proofbound.ChordedBoundaryVolumeAllow composes its wall chord-to-curve leg, its
-// caller-supplied twist leg, its caller-supplied cap leg and its caller-
-// supplied seam leg by proofbound.AbsSumUpper, never by picking the largest of the four
-// or dropping any: with only one leg positive at a time, the whole answer is
-// exactly that leg; with all four positive, the answer is at least as large
-// as any one leg alone.
-func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
-	t.Parallel()
-	// proofbound.AbsSumUpper rounds its outward-nudged sum away from an exact value by
-	// construction (proofbound.UpRound's own contract), so single-leg cases are checked
-	// as an enclosure — never pinned to a literal float this platform's own
-	// rounding could move a ulp either way — rather than an exact match.
-	twistOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 3.5, 0, 0)
-	require.GreaterOrEqual(t, twistOnly, 3.5)
-	require.InDelta(t, 3.5, twistOnly, 1e-12)
-
-	capOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 2.0, 0)
-	require.GreaterOrEqual(t, capOnly, 2.0)
-	require.InDelta(t, 2.0, capOnly, 1e-12)
-
-	seamOnly := proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 0, 1.5)
-	require.GreaterOrEqual(t, seamOnly, 1.5)
-	require.InDelta(t, 1.5, seamOnly, 1e-12)
-
-	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, 5.0, 0, 0, 0))
-	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0.01, 0, 0, 0, 0))
-
-	all := proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, 1.5)
-	wallOnly := proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 0, 0, 0)
-	require.GreaterOrEqual(t, all, wallOnly)
-	require.GreaterOrEqual(t, all, twistOnly)
-	require.GreaterOrEqual(t, all, capOnly)
-	require.GreaterOrEqual(t, all, seamOnly)
-}
-
-// TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims pins F6's own fix: an
-// earlier version of this bound let a NaN wallAreaUpper compare false
-// against `> 0` and silently vanish from the sum (rather than refusing),
-// and let proofbound.AbsSumUpper's internal math.Abs flip a negative broken
-// twistVolumeUpper, capVolumeUpper or seamAllow positive instead of
-// refusing. Every case here must answer +Inf, never a finite number computed
-// past a broken claim.
-func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
-	t.Parallel()
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0, 1.5), 1), "NaN matchedDelta")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0, 1.5), 1), "negative matchedDelta")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0, 1.5), 1), "matchedDelta>0 with NaN wallAreaUpper — F6's own scenario")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(1, -1, 3.5, 2.0, 1.5), 1), "matchedDelta>0 with negative wallAreaUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, math.NaN(), 2.0, 1.5), 1), "NaN twistVolumeUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, -1, 2.0, 1.5), 1), "negative twistVolumeUpper — must refuse, never flip positive via absSumUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, math.NaN(), 1.5), 1), "NaN capVolumeUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, -1, 1.5), 1), "negative capVolumeUpper — must refuse, never flip positive via absSumUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, math.NaN()), 1), "NaN seamAllow")
-	require.True(t, math.IsInf(proofbound.ChordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, -1), 1), "negative seamAllow — must refuse, never flip positive via absSumUpper")
-
-	// matchedDelta==0 is a legitimate SKIP of the wall leg regardless of what
-	// wallAreaUpper claims (the boundary provably does not move, so the area
-	// it would move across is irrelevant) — never a refusal on its own.
-	require.Equal(t, 0.0, proofbound.ChordedBoundaryVolumeAllow(0, math.Inf(1), 0, 0, 0))
-}
-
-// TestChordedBoundarySeamAllowRefusesOnBrokenClaims pins F2's own seam
-// helper against the same reject-only convention: a non-finite or negative
-// matchedDelta, posUpper or seamPerimeterUpper must answer +Inf, never a
-// finite number computed past a broken claim, and the three legitimate
-// zeros (any operand exactly 0) must publish exactly 0.
-func TestChordedBoundarySeamAllowRefusesOnBrokenClaims(t *testing.T) {
-	t.Parallel()
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(math.NaN(), 5.0, 10.0), 1), "NaN matchedDelta")
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(-1, 5.0, 10.0), 1), "negative matchedDelta")
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, math.NaN(), 10.0), 1), "NaN posUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, -1, 10.0), 1), "negative posUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, 5.0, math.NaN()), 1), "NaN seamPerimeterUpper")
-	require.True(t, math.IsInf(proofbound.ChordedBoundarySeamAllow(0.01, 5.0, -1), 1), "negative seamPerimeterUpper")
-
-	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0, 5.0, 10.0))
-	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0.01, 0, 10.0))
-	require.Equal(t, 0.0, proofbound.ChordedBoundarySeamAllow(0.01, 5.0, 0))
-}
-
-// TestChordedBoundarySeamAllowScalesWithItsThreeOperands pins the closed
-// form directly: matchedDelta*posUpper*seamPerimeterUpper/3, rounded
-// outward.
-func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
-	t.Parallel()
-	const matchedDelta, posUpper, seamPerimeterUpper = 0.02, 12.0, 40.0
-	want := matchedDelta * posUpper * seamPerimeterUpper / 3
-	got := proofbound.ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
-	require.InDelta(t, want, got, 1e-9)
-	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
 
 // TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures pins the two

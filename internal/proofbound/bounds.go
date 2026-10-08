@@ -36,53 +36,24 @@ import (
 //   - the VOLUME a vertex displacement sweeps out → SweptVolumeAllow, charged
 //     against PerturbedAreaUpper — the area of the surface the displacement
 //     acted ON, which is NOT the area of the mesh that survived it;
-//   - the VOLUME between a loft's HELD FLAT-TRIANGLE polyhedron — the two
-//     triangles assembleLoft actually builds per wall cell, never a ruled
-//     patch — and the curved solid its paired curved sections denote →
-//     ChordedBoundaryVolumeAllow, composed of FOUR legs, each its own
-//     mechanism, by AbsSumUpper: a wall chord-to-curve leg carrying the SAME
-//     closed form SweptVolumeAllow states for a DIFFERENT mechanism — a
-//     boundary REPLACED by a nearby non-mesh surface, rather than a mesh
-//     whose vertices moved — a ruled-to-triangle (TWIST) leg the caller
-//     supplies pre-summed from CellTwistVolumeAllow, a cap chord-to-curve
-//     leg the caller supplies pre-summed from CapAreaVolumeAllow, and a SEAM
-//     leg the caller supplies pre-summed from ChordedBoundarySeamAllow — the
-//     line-integral residue the wall leg's own flux identity drops by
-//     treating an OPEN patch (closed off only by the caps) as if it had no
-//     moving boundary of its own;
 //   - an ABSOLUTE upper bound on the AREA of every surface ONE chorded wall
 //     cell's chord-to-curve homotopy visits, from the bilinear RULED patch
 //     between its four chord corners through to the ruled surface between
-//     the two TRUE curves it denotes → CellChordCurveAreaUpper, the term
-//     ChordedBoundaryVolumeAllow's own wallAreaUpper obligation sums over
-//     every wall cell — never a held-facet-area-plus-excess reading, which
-//     does not bound a family whose area is not sign-definite relative to
-//     any one held facet, and never fed the loft evaluator's own sagitta
-//     sectionDelta in place of its own PARAMETER-MATCHED matchedDeltaUpper
-//     obligation, a strictly stronger claim the two coincide for only a
-//     LINE or an ARC (F1);
-//   - the LINE-INTEGRAL residue ChordedBoundaryVolumeAllow's own wall leg
-//     drops by treating the wall as a closed surface when it is in fact an
-//     OPEN patch whose r=0/r=1 seam moves under the SAME homotopy →
-//     ChordedBoundarySeamAllow, a Cauchy-Schwarz bound on the by-parts
-//     boundary term the flux identity's own open-surface application
-//     otherwise leaves uncharged (F2);
-//   - the VOLUME ONE cap contributes when its held polygon triangulation is
-//     replaced by the region its recorded profile curve denotes →
-//     CapAreaVolumeAllow, an EXACT divergence-theorem mechanism (a planar
-//     face's own signed-tetrahedron contribution is exactly its plane
-//     offset times its area, no homotopy needed) charged against the SAME
-//     SectionDisplacementArea a prism's own section reads one dimension
-//     down — never PerturbedAreaUpper's per-facet vertex-displacement
-//     argument, since a cap's vertices never move, only its 2-D region's
-//     shape;
+//     the two TRUE curves it denotes → CellChordCurveAreaUpper, the area the
+//     loft's per-cell wall volume leg multiplies by that cell's own matched
+//     departure (docs/loft-gear-bounds-design.md §2) — never a
+//     held-facet-area-plus-excess reading, which does not bound a family
+//     whose area is not sign-definite relative to any one held facet, and
+//     never fed the loft evaluator's own sagitta sectionDelta in place of its
+//     own PARAMETER-MATCHED matchedDeltaUpper obligation, a strictly stronger
+//     claim the two coincide for only a LINE or an ARC (F1);
 //   - the VOLUME between ONE loft wall cell's HELD two flat triangles and the
 //     BILINEAR RULED patch a chord-to-curve homotopy's own "chord point"
 //     implicitly denotes at that cell → CellTwistVolumeAllow, the exact swept
 //     measure |det(a,T,b)|/12 over the cell's side vectors and twist — a mechanism
-//     ChordedBoundaryVolumeAllow's chord-to-curve leg does not speak for,
-//     since that leg's own homotopy starts FROM the ruled patch, never from
-//     the triangle pair the evaluator actually holds; CellTwistOffsetUpper is
+//     the loft's chord-to-curve wall leg does not speak for, since that
+//     leg's own homotopy starts FROM the ruled patch, never from the
+//     triangle pair the evaluator actually holds; CellTwistOffsetUpper is
 //     the POINTWISE deviation bound |T|/4 used by the facet-departure proof,
 //     and CellTwistAreaAllow is the gap between that triangle pair's own area
 //     and the ruled patch's, as the minimum of a premise-free linear arm and a
@@ -248,8 +219,8 @@ func UpRound(x float64) float64 {
 //
 // +Inf is deliberately NOT the answer here. A refusal would propagate to
 // consumers that read a positive bound as their own gate
-// (CellChordPatchNormalLower's 0 sentinel, ChordedBoundaryVolumeAllow's
-// wallAreaUpper > 0 branch) and turn a
+// (CellChordPatchNormalLower's 0 sentinel, ChordedBoundaryMomentAllow's
+// matchedDelta > 0 branch) and turn a
 // tiny-but-real bound into a refused reading.
 //
 // A caller whose operands are NOT proven positive keeps UpRound: a zero that
@@ -309,12 +280,10 @@ func HeldDelta(a, b r3.Vec) proofarith.DyV3 {
 }
 
 // DvLenUpper is a PROVEN upper bound on |u| for an exactly-represented vector:
-// the squared length is exact rational arithmetic and RatSqrtUp brackets its
+// the squared length is exact dyadic arithmetic and DySqrtUp brackets its
 // root by exact comparison (f·f ≥ u·u), so the published value encloses the
-// true norm whatever the platform's own sqrt does — the same mechanism
-// loft_moments.go's distUpper and computeLoftChordedAllow's h1Upper already
-// use. A zero vector answers exactly 0, so a bound that vanishes with its
-// vector still vanishes. A norm past the float64 range answers +Inf, a
+// true norm whatever the platform's own sqrt does. A zero vector answers
+// exactly 0, so a bound that vanishes with its vector still vanishes. A norm past the float64 range answers +Inf, a
 // refusal rather than a bound.
 func DvLenUpper(u proofarith.DyV3) float64 { return proofarith.DySqrtUp(proofarith.DvDot(u, u)) }
 
@@ -527,6 +496,15 @@ func DirRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) floa
 // at most the held area plus delta·(|u'| + |v'|) + 2·delta². A facet the weld
 // COLLAPSED holds zero area and the correction is the whole of its bound —
 // which is the point: it is the only term that speaks for it.
+//
+// Every per-facet term is a PROVEN upper bound before it is summed:
+// PerturbedTriangleAreaUpper forms the cross product and both edge vectors in
+// exact dyadic arithmetic and roots them through DySqrtUp, so a thin facet's
+// float cross-product error, which scales with the products rather than the
+// result, never enters. The loft's volume residual depends on it
+// (docs/loft-gear-bounds-design.md §2), so it may not be a float estimate.
+// The summation slop of those held terms is SumSlop's. A non-finite vertex
+// answers +Inf: no term can be stated for it.
 func PerturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 	area, _ := PerturbedAreaUpperWithBudget(nil, verts, tris, delta)
 	return area
@@ -551,6 +529,25 @@ func PerturbedTriangleAreaAllow(a, b, c r3.Vec, delta float64) float64 {
 	return delta*(u.Len()+v.Len()) + 2*delta*delta
 }
 
+// PerturbedTriangleAreaUpper is a PROVEN upper bound on one facet's held area
+// plus PerturbedTriangleAreaAllow's correction, |u' × v'|/2 + delta·(|u'| +
+// |v'|) + 2·delta², with every norm read from exact dyadic coordinates through
+// DySqrtUp and every sum and product rounded outward. A non-finite vertex
+// answers +Inf.
+func PerturbedTriangleAreaUpper(a, b, c r3.Vec, delta float64) float64 {
+	if !FiniteVec(a) || !FiniteVec(b) || !FiniteVec(c) {
+		return math.Inf(1)
+	}
+	u, v := HeldDelta(b, a), HeldDelta(c, a)
+	n := proofarith.DvCross(u, v)
+	area := proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	allow := AbsSumUpper(
+		ProductUpper(delta, AbsSumUpper(DvLenUpper(u), DvLenUpper(v))),
+		ProductUpper(2, ProductUpper(delta, delta)),
+	)
+	return AbsSumUpper(area, allow)
+}
+
 func PerturbedAreaUpperContext(
 	ctx context.Context,
 	verts []r3.Vec,
@@ -573,9 +570,7 @@ func PerturbedAreaUpperWithBudget(
 				return 0, err
 			}
 		}
-		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-		u, v := b.Sub(a), c.Sub(a)
-		total += u.Cross(v).Len()/2 + PerturbedTriangleAreaAllow(a, b, c, delta)
+		total += PerturbedTriangleAreaUpper(verts[t[0]], verts[t[1]], verts[t[2]], delta)
 	}
 	if budget != nil {
 		if err := budget.Err(); err != nil {
@@ -669,9 +664,9 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 //     endpoints of the t sweep).
 //   - |∂X_t/∂s × ∂X_t/∂r| <= |∂X_t/∂s|·|∂X_t/∂r| <= eA·eB pointwise, so
 //     Area(X_t) <= eA·eB for every t in [0,1] (the (s,r) domain is the unit
-//     square, area 1) — the published bound, ready for
-//     ChordedBoundaryVolumeAllow's own matchedDelta · sup_t A(t) flux
-//     argument, summed over every wall cell for its wallAreaUpper.
+//     square, area 1) — the published bound, ready for the loft's
+//     per-cell wall volume leg, matchedDelta · sup_t A(t) at that cell
+//     (docs/loft-gear-bounds-design.md §2).
 //
 // matchedDeltaUpper is a DIFFERENT, STRONGER quantity than the loft
 // evaluator's own sectionDelta field (loftPayload.sectionDelta,
@@ -772,53 +767,6 @@ func CellChordCurveAreaFromSpans(spans CellSpans, arcLenUpperA, arcLenUpperB, ma
 	eBBase := math.Max(spans.RungLo, spans.RungHi)
 	eB := AbsSumUpper(eBBase, ProductUpper(2, matchedDeltaUpper))
 	return ProductUpper(eA, eB)
-}
-
-// CapAreaVolumeAllow bounds the VOLUME ONE loft cap contributes when its
-// held polygon triangulation is replaced by the region its recorded profile
-// curve denotes (docs/loft-design.md §5 — the chord-chain subsection lands
-// with the arc design change, §8). It closes the gap
-// ChordedBoundaryVolumeAllow's own doc comment used to claim
-// PerturbedAreaUpper already covered: a cap's vertices never move under this
-// homotopy (they are boundary points of the SAME recorded profile the wall
-// cells chord, already exact), so PerturbedAreaUpper's per-facet argument —
-// about VERTICES displaced by delta — says nothing about a cap, whose only
-// change is its 2-D REGION's own shape.
-//
-// The mechanism is EXACT, not a homotopy/flux argument: a cap lies entirely
-// in one fixed plane, so for any triangle (A,B,C) of its triangulation,
-// anchored at the mass accumulator's own anchor, (A−anchor)·((B−anchor)×
-// (C−anchor)) = 2·Area(A,B,C)·h exactly, h the plane's own SIGNED offset
-// from anchor along its outward normal (a standard tetrahedron-volume
-// identity: the tetrahedron anchor-A-B-C has volume (1/3)·Area(ABC)·h, and
-// vol6 is six times that). Summing over the cap's whole triangulation,
-// Σvol6_cap = 2·h·Area(cap) — exactly, whatever the triangulation, because
-// h is the SAME constant on every triangle of one planar face. Replacing the
-// held polygon's area with the true curve's own denoted area therefore
-// changes Σvol6_cap by EXACTLY 2·h·ΔArea, so |ΔVolume_cap| =
-// |Σvol6_cap,true − Σvol6_cap,held| / 6 <= |h| · |ΔArea| / 3.
-//
-// planeOffsetUpper must be a PROVEN upper bound on |h|. capAreaAllow must be
-// a PROVEN upper bound on |ΔArea| — SectionDisplacementArea(sectionDelta,
-// walks, perimeterUpper) for that cap's own recorded boundary, the same
-// identity a prism's own section reads one dimension down
-// (docs/prism-boolean-design.md §7). A non-finite or negative operand is a
-// BROKEN claim and answers +Inf, never 0 (CutDisplacementAllow's own rule).
-func CapAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
-	if IsNonFinite(planeOffsetUpper) || IsNonFinite(capAreaAllow) {
-		return math.Inf(1)
-	}
-	if planeOffsetUpper < 0 || capAreaAllow < 0 {
-		return math.Inf(1)
-	}
-	if planeOffsetUpper <= 0 || capAreaAllow <= 0 {
-		return 0
-	}
-	// Both operands are proven positive by the arm above, so the product and
-	// its third are positive too: ProductUpper and DivUpper carry that
-	// through a magnitude at which the float multiply or the divide flushes,
-	// where a bare UpRound would publish the moved cap as an unmoved one.
-	return DivUpper(ProductUpper(planeOffsetUpper, capAreaAllow), 3)
 }
 
 // CellTwistVolumeAllow bounds the swept volume between one loft wall cell's
@@ -1915,281 +1863,6 @@ func CellStationShiftAreaAllow(
 		ProductUpper(ProductUpper(2, delta), AbsSumUpper(rung, span)),
 		ProductUpper(4, ProductUpper(delta, delta)),
 	)
-}
-
-// ChordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD
-// FLAT-TRIANGLE polyhedron — the two triangles per wall cell assembleLoft
-// actually builds and loftMassAccumulator actually sums tetrahedra over,
-// never a ruled patch — and the TRUE solid its paired curved sections
-// denote (docs/loft-design.md §5 — the chord-chain subsection lands with
-// the arc design change, §8; the A10 plan's Part 1/Part 2 Q4). The gap
-// decomposes into FOUR legs, each its own mechanism with its own charge,
-// composed by AbsSumUpper into one total displacement:
-//
-// (a) wall chord-to-curve: matchedDelta · wallAreaUpper, the SAME closed
-// form SweptVolumeAllow states for a DIFFERENT mechanism. Each RULED-PATCH
-// chord point — the bilinear interpolation of a wall cell's own four
-// corners, NOT the built triangle pair — moves along the STRAIGHT path to
-// the curve point AT ITS OWN PARAMETER, a motion of at most matchedDelta
-// (CellChordCurveAreaUpper's own PARAMETER-MATCHED obligation, never the
-// evaluator's sagitta-only sectionDelta field — F1's own rule). The signed
-// volume of a parametrized surface patch, V = (1/3)∬ X·(X_s × X_r), is a
-// polynomial in the boundary, so along that path |dV/dt| <= matchedDelta ·
-// A(t) and |V_true − V_ruled| <= matchedDelta · sup_t A(t) — but this
-// identity, applied literally to the WALL patch alone, is only half the
-// story: see leg (d) below.
-//
-// wallAreaUpper must be the SUM, over every WALL cell, of
-// CellChordCurveAreaUpper for that cell — an ABSOLUTE bound on the area of
-// every surface the wall leg's homotopy visits at that cell, never a held-
-// facet-area-plus-excess reading (CellChordCurveAreaUpper's own doc comment
-// gives the counterexample that framing misses: a cell can hold almost no
-// triangle area while its own ruled patch already carries substantial area,
-// so no fixed held quantity an excess could subtract from bounds it, and
-// mere containment in a matchedDelta-thick neighbourhood of the held mesh
-// does not bound a surface's area either, since a surface can carry
-// unbounded area inside an arbitrarily thin slab).
-//
-// (b) ruled-to-triangle (the TWIST leg): twistVolumeUpper, which the caller
-// supplies PRE-SUMMED over every wall cell from CellTwistVolumeAllow — the
-// gap between that same ruled patch (a) starts its own homotopy FROM and the
-// flat triangle pair the evaluator actually holds.
-//
-// (c) cap chord-to-curve: capVolumeUpper, which the caller supplies
-// PRE-SUMMED over the loft's (at most two) caps from CapAreaVolumeAllow — a
-// cap has no second section to rule toward, so it is not part of either leg
-// above; its own vertices never move under this homotopy (they are boundary
-// points of the recorded profile the wall cells chord, already exact), only
-// its 2-D region's shape, an EXACT divergence-theorem mechanism
-// CapAreaVolumeAllow's own doc comment derives.
-//
-// (d) the SEAM correction: seamAllow, which the caller supplies
-// PRE-SUMMED from ChordedBoundarySeamAllow. Leg (a)'s own identity is the
-// flux formula for a CLOSED surface, but the wall is an OPEN patch — closed
-// off only by the two caps, at r=0 and r=1 — whose r=0/r=1 SEAM itself
-// moves under the SAME homotopy leg (a) integrates over. Integrating
-// V_wall = (1/3)∬ X·(X_s×X_r) by parts over that open patch gives
-// δV_wall = ∬ δX·(X_s×X_r) + (1/3)·[∮_s δX·(X×X_s) ds]{at r=1, minus at
-// r=0} — leg (a) charges only the first term. The second is the SAME
-// mechanism the anchored tetrahedron sum's own cap/wall split always pays:
-// for a straight (untwisted) prism the true identity ΔVolume = h·ΔArea
-// splits EXACTLY as h·ΔArea/3 to the cap (CapAreaVolumeAllow's own exact
-// share) and 2h·ΔArea/3 to the WALL's own TOTAL share — but that total is
-// itself the sum of the wall's own FLUX term (leg (a) alone, which equals
-// the full h·ΔArea) and the wall's own BOUNDARY term, which is −h·ΔArea/3:
-// 1/3 in magnitude, the OPPOSITE sign from the cap's own share (measured
-// directly on an untwisted ring, R=10, h=25, n=64, anchor on the bottom
-// cap: total gap 12.6104, wall flux +12.6104 ≈ +gap, wall boundary
-// −4.2035 ≈ −gap/3, cap +4.2035 ≈ +gap/3, flux+boundary = 8.4069 ≈
-// 2·gap/3). So leg (a)'s own flux term alone overcounts the wall's true
-// contribution by exactly the boundary term, and a wall leg that omits it
-// is relying on nothing but an unrelated leg's own incidental slack to
-// cover a mechanism that leg was never charged for — "zero proven margin",
-// not a proof. seamAllow charges it explicitly instead of assuming it
-// away; see ChordedBoundarySeamAllow's own doc comment for the bound.
-//
-// The wall leg (a) is NOT SHOWN TO FAIL given the other three — cap, twist
-// and seam — are present: the SAME open-question status the seam leg (d)
-// carries (bounds_chord_internal_test.go's per-leg status comment), not a
-// proof of redundancy. Only the T=0 (no-twist) case is actually proven:
-//
-//   - NO twist forces the two sections to be translates of each other,
-//     hence parallel planes at signed offsets h0 and h1 from the anchor.
-//     Writing H for |h0|+|h1|, delta for matchedDelta and P for the true
-//     perimeter, dArea <= delta·P: the SIGNED area difference between two
-//     boundaries whose own normal offset is bounded pointwise by delta is
-//     exactly a boundary integral of that offset, so it is bounded by
-//     delta times the perimeter it integrates over — a distinct, tighter
-//     identity than SectionDisplacementArea's own UNSIGNED
-//     symmetric-difference tube bound (2·delta·P), not sourced from it.
-//     So cap >= (|h0|+|h1|)·2·delta·P/3 >= (2/3)·H·dArea and seam >=
-//     delta·max(|h0|,|h1|)·2·P/3 >= (1/3)·H·dArea (posUpper >=
-//     max(|h0|,|h1|) >= H/2). Their sum already reaches H·dArea, the gap
-//     itself — tight only in a limit no arc attains, since an arc gives
-//     dArea/(delta·chord) <= pi/4. This T=0 case is a proven partial
-//     result, scoped to the untwisted pairing alone.
-//   - A NONZERO twist has no proof here. An earlier version of this
-//     comment claimed the twist leg is Theta(1/n) while the gap itself is
-//     Theta(1/n^2), so twist alone would dominate at any refinement — that
-//     claim is FALSE. Measured on a ring (r=10, h=25, twist=20deg), the
-//     gap itself is ALSO Theta(1/n) (gap·n converges as n runs 8..1024,
-//     while gap·n^2 grows without bound), the same order as the twist leg,
-//     and the twist leg alone does not dominate at every refinement either
-//     (twist-leg-alone-over-measured-gap ratio 0.7475 at n=6, twist=20deg,
-//     still under 1; 4.8e-5 at n=6 with twist shrunk to 0.001deg).
-//
-// There is no proof for the twisted case, so the leg's status over BOTH
-// cases together is NOT SHOWN TO FAIL, corroborated but not proven
-// empirically: an independent audit found deleting the wall leg alone —
-// keeping cap, twist and seam — over 1260 rows (the 900-row pie-slice
-// sweep table plus a ring-family grid) gives a minimum ratio of 2.00242
-// with 0 failing rows, strong empirical support and NOT a proof
-// (TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing,
-// TestChordedBoundaryVolumeAllowWallLegDeletionSearch). The leg stays in
-// the composition regardless — removing a mechanism on a case analysis
-// nobody had written down is how earlier rounds of this bound broke.
-//
-// "No proof for the twisted case" above scopes REDUNDANCY, never
-// DOMINATION, and the two questions have opposite consequences. Redundancy
-// asks whether this leg could be DELETED given the other three; leaving it
-// unproven keeps a leg that may be unnecessary, which can only make the
-// published total LARGER. Domination asks whether the total bounds the true
-// gap, and that IS proven, by the telescoping identity immediately below
-// plus each leg's own derivation: leg (a) the flux identity over
-// CellChordCurveAreaUpper's ABSOLUTE sup_t A(t), leg (b)
-// CellTwistVolumeAllow's exact swept-measure integral, leg (c) the exact planar
-// identity |h|·|ΔArea|/3, leg (d) Cauchy-Schwarz on the by-parts residue.
-// So no unproven step can shrink the number this function returns; the
-// open question can only cost precision.
-//
-// The empirical status above belongs to this VOLUME allowance alone. The
-// chorded AREA path publishes the bilinear patch directly and composes
-// CellChordCurveAreaAllow with CellStationShiftAreaAllow as residuals.
-//
-// The four-leg composition is also why this helper does NOT carry the
-// two-argument (sectionDelta, areaUpper) shape the A10 plan's Q4 names.
-// That shape charges the wall leg alone, and the wall leg alone does not
-// bound a twisted pairing: TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing
-// measures full ratio 4.24308 against without-twist ratio 1.84662e-05 on the
-// same twisted section pair, so the two-argument form understates the true
-// gap there by about five orders of magnitude. The plan's own Part 4 R1
-// anticipated that its Q4 derivation might not close and named charging the
-// per-cell ruled excess separately as the first fallback; these four legs are
-// that fallback carried through, with each leg proven rather than assumed.
-//
-// Composing all four by AbsSumUpper is sound because V_true − V_held
-// factors exactly into three differences that telescope to it: writing
-// W_true for the wall's true volume contribution, W_ruled for the SAME
-// ruled-patch flux leg (a)'s own homotopy starts from, W_tri for the held
-// flat-triangle wall's own contribution, C_true for the true cap
-// contribution and C_held for the held cap polygon's own contribution,
-//
-//	(W_true − W_ruled) + (W_ruled − W_tri) + (C_true − C_held)
-//	  = (W_true + C_true) − (W_tri + C_held) = V_true − V_held,
-//
-// so the triangle inequality gives |V_true − V_held| <= |W_true − W_ruled|
-// + |W_ruled − W_tri| + |C_true − C_held|. The first term is itself leg
-// (a)'s own flux bound plus leg (d)'s own seam correction (the by-parts
-// split above — the two together bound W_true − W_ruled, never either
-// alone), the second is leg (b) (twist), the third is leg (c) (cap) — the
-// four legs this function sums.
-//
-// This total is a bound on a SIGNED anchored-flux DIFFERENCE, while two of the
-// four legs are not measures of anything: the CAP leg is an EXACT signed identity,
-// |h|·|ΔArea|/3 (CapAreaVolumeAllow's own doc comment) — a cap's region
-// change sweeps exactly ZERO 3D measure, since it moves entirely inside its
-// own plane, so that /3 has no geometric reading as a measure; the SEAM leg
-// is a contour residue of a by-parts step (leg (d) above) and is attached
-// to no region at all.
-//
-// The bridge is the wall and twist legs ALONE. For the swept MEASURE
-// mu(Ω0 Δ Ω1) (Δ the symmetric difference) between the held triangle
-// polyhedron Ω0 and the true solid Ω1, mu(Ω0 Δ Ω1) <= ∫[0,1] sup|velocity|
-// · A(t) dt along ANY homotopy path from one to the other — and leg (a)
-// (matchedDelta·wallAreaUpper) plus leg (b) (twistVolumeUpper) are AT OR
-// ABOVE that integral — each is itself an UPPER BOUND on its own share
-// (matchedDelta >= sup|v|, wallAreaUpper >= sup_t A(t)), and over-estimating
-// only helps here, since the argument needs a LOWER bound on wall+twist —
-// taken over the two-leg path held triangle -> ruled patch -> true curve.
-// So wall + twist >= mu: the two legs that ARE measures already dominate the
-// true swept measure on their own. ChordedBoundaryMomentAllow therefore
-// multiplies those two by their own coordinate radii and does not read the cap
-// or seam corrections as material.
-//
-// A non-finite or negative matchedDelta, twistVolumeUpper, capVolumeUpper or
-// seamAllow is a BROKEN caller claim and this helper answers +Inf for it,
-// never a finite number silently computed past it (F6: math.Abs inside
-// AbsSumUpper would otherwise flip a negative broken total positive, and a
-// NaN wallAreaUpper compared with `> 0` would otherwise read false and
-// vanish from the sum instead of refusing) — an absent bound must never read
-// as a small one (CutDisplacementAllow's own rule).
-func ChordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow float64) float64 {
-	if IsNonFinite(matchedDelta) || matchedDelta < 0 {
-		return math.Inf(1)
-	}
-	if IsNonFinite(twistVolumeUpper) || twistVolumeUpper < 0 {
-		return math.Inf(1)
-	}
-	if IsNonFinite(capVolumeUpper) || capVolumeUpper < 0 {
-		return math.Inf(1)
-	}
-	if IsNonFinite(seamAllow) || seamAllow < 0 {
-		return math.Inf(1)
-	}
-	chordToCurve := 0.0
-	if matchedDelta > 0 {
-		if IsNonFinite(wallAreaUpper) || wallAreaUpper < 0 {
-			return math.Inf(1)
-		}
-		if wallAreaUpper > 0 {
-			// Both factors are proven positive by the two arms above, so the
-			// wall leg is positive: ProductUpper keeps it positive at a
-			// magnitude where the float multiply flushes, which a bare
-			// UpRound of the product cannot.
-			chordToCurve = ProductUpper(matchedDelta, wallAreaUpper)
-		}
-	}
-	return AbsSumUpper(chordToCurve, twistVolumeUpper, capVolumeUpper, seamAllow)
-}
-
-// ChordedBoundaryVolumeResidualAllow bounds the volume difference remaining
-// after Volume.Value has applied the exact signed twist correction. The wall,
-// cap and seam legs are unchanged from ChordedBoundaryVolumeAllow; the twist
-// leg is absent because CellTwistVolume has already moved the nominal value
-// from the held triangle pair to its bilinear ruled patch.
-func ChordedBoundaryVolumeResidualAllow(matchedDelta, wallAreaUpper, capVolumeUpper, seamAllow float64) float64 {
-	return ChordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, 0, capVolumeUpper, seamAllow)
-}
-
-// ChordedBoundarySeamAllow bounds ChordedBoundaryVolumeAllow's own leg (d):
-// the LINE-INTEGRAL residue leg (a)'s flux identity drops by treating the
-// wall as if it were closed, when it is in fact an OPEN patch whose r=0/r=1
-// seam moves under the same chord-to-curve homotopy
-// (docs/loft-design.md §5).
-//
-// |δX·(X×X_s)| <= |δX|·|X|·|X_s| pointwise (Cauchy-Schwarz on the cross
-// product, then again on the dot product), so the residue at ONE loop (r=0
-// or r=1) integrates, over s in [0,1] per cell — the same unit interval
-// CellChordCurveAreaUpper's own eA/eB bound already integrates over, so a
-// pointwise supremum over an interval of width 1 carries through unchanged —
-// and summed over every cell of that loop, to at most matchedDelta ·
-// posUpper · (that loop's own arc-length upper bound). seamPerimeterUpper
-// must be the SUM, over BOTH loops (r=0 and r=1), of every wall cell's own
-// side arc-length upper bound — the same arcLenUpperA/arcLenUpperB every
-// CellChordCurveAreaUpper call already states, so a caller that has already
-// summed wallAreaUpper's own per-cell arc lengths is reading the identical
-// quantities a second time, not deriving a new one.
-//
-// matchedDelta must be the SAME parameter-matched displacement leg (a)'s own
-// obligation requires (CellChordCurveAreaUpper's own doc comment — never the
-// sagitta alone). posUpper must be a PROVEN upper bound on the distance from
-// the mass accumulator's own anchor to any point of EITHER loop's TRUE
-// curve: the held loop's own max distance from anchor
-// (loftMassAccumulator's own coordUpper, or the wider box Radius3D of it)
-// widened by matchedDelta itself, since every true curve point sits within
-// matchedDelta of its own held chord vertex and so within matchedDelta
-// further from the anchor than that vertex's own distance.
-//
-// A non-finite or negative operand is a BROKEN caller claim and this helper
-// answers +Inf, never a finite number computed past it (CutDisplacementAllow's
-// own rule).
-func ChordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper float64) float64 {
-	if IsNonFinite(matchedDelta) || matchedDelta < 0 {
-		return math.Inf(1)
-	}
-	if IsNonFinite(posUpper) || posUpper < 0 {
-		return math.Inf(1)
-	}
-	if IsNonFinite(seamPerimeterUpper) || seamPerimeterUpper < 0 {
-		return math.Inf(1)
-	}
-	if matchedDelta <= 0 || posUpper <= 0 || seamPerimeterUpper <= 0 {
-		return 0
-	}
-	// All three operands are proven positive by the arm above, so every
-	// factor and the closing third are positive: DivUpper carries that
-	// through the divide the way ProductUpper already does the multiplies.
-	return DivUpper(ProductUpper(matchedDelta, ProductUpper(posUpper, seamPerimeterUpper)), 3)
 }
 
 // SectionDisplacementArea bounds the AREA a recorded 2D section can differ from
