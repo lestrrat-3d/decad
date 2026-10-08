@@ -166,9 +166,20 @@ func FaceNormals(c Bounds) []motionbound.RatVec {
 // so it is charged Rem·norm, norm an upper bound on |n|.
 func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.Rat) {
 	dot := func(p [3]proofbound.RatInterval) proofbound.RatInterval {
-		sum := proofbound.PointInterval(new(big.Rat))
+		var sum proofbound.RatInterval
 		for d := range 3 {
-			sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(p[d], n[d]))
+			if n[d].Sign() == 0 {
+				continue
+			}
+			term := proofbound.IntervalScale(p[d], n[d])
+			if sum.Lo == nil {
+				sum = term
+			} else {
+				sum = proofbound.IntervalAdd(sum, term)
+			}
+		}
+		if sum.Lo == nil {
+			return proofbound.PointInterval(new(big.Rat))
 		}
 		return sum
 	}
