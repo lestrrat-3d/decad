@@ -54,7 +54,8 @@ func TranslationOnly(t r3.Transform) bool {
 // lower source-box face may supply that support.
 func ProveAxisSupport(ctx context.Context, in AxisSupportInput) (AxisSupportProof, bool, error) {
 	if in.Axis < 0 || in.Axis > 2 || (in.Side != 0 && in.Side != 1) ||
-		!finite(in.MeshBound, in.VolSymDiff) || in.MeshBound < 0 || in.VolSymDiff < 0 ||
+		proofbound.IsNonFinite(in.MeshBound) || proofbound.IsNonFinite(in.VolSymDiff) ||
+		in.MeshBound < 0 || in.VolSymDiff < 0 ||
 		len(in.Verts) == 0 || len(in.Tris) == 0 || len(in.FaceOf) != len(in.Tris) {
 		return AxisSupportProof{}, false, nil
 	}
@@ -252,15 +253,6 @@ func ProveAxisSupport(ctx context.Context, in AxisSupportInput) (AxisSupportProo
 		out.Normal.Z = float64(sign)
 	}
 	return out, true, budget.Err()
-}
-
-func finite(values ...float64) bool {
-	for _, value := range values {
-		if proofbound.IsNonFinite(value) {
-			return false
-		}
-	}
-	return true
 }
 
 func transformDy(t r3.Transform, p proof.DyV3) proof.DyV3 {
