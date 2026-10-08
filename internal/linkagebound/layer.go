@@ -17,7 +17,7 @@ type LayerJoint struct {
 // layerKeeps reports whether a joint preserves a·x for every point x.
 func layerKeeps(j LayerJoint, a motionbound.RatVec) bool {
 	if j.Revolute {
-		return ratZero(Cross(a, j.Axis))
+		return ZeroVec(Cross(a, j.Axis))
 	}
 	return Dot(a, j.Axis).Sign() == 0
 }
@@ -44,7 +44,7 @@ func LayerAxes(joints []LayerJoint, path []int) []motionbound.RatVec {
 		candidates = []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
 		for n, i := range moving {
 			for _, j := range moving[n+1:] {
-				if c := Cross(joints[i].Axis, joints[j].Axis); !ratZero(c) {
+				if c := Cross(joints[i].Axis, joints[j].Axis); !ZeroVec(c) {
 					candidates = append(candidates, c)
 					break
 				}
