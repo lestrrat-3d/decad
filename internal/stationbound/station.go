@@ -71,7 +71,7 @@ func ChordStationBound(seg sectionrecord.CurveSegment, k, n int, heldU, heldV fl
 //
 // radiusOffset is the exact rational the offset adds to the segment's own
 // radius — −insideSign·d, capcontour.ExactOffsetRadius's own sign — and the enclosure
-// is circularOffsetEndpointInterval's, so neither the offset nor the station's
+// is circularbounds.OffsetEndpointInterval's, so neither the offset nor the station's
 // parameter is ever rounded to a float before it is enclosed.
 //
 // An index outside [0, n], an enclosure the record cannot state and a held
