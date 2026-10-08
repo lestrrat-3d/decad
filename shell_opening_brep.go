@@ -23,8 +23,17 @@ import (
 // is built; a topology the engine does not cover is SO5, never a fallback.
 
 // evalSideOpeningPrism is BO1: W over the receiver's interval, frame and
-// placement, carrying the offset's section displacement.
+// placement, carrying the offset's section displacement and, where a rim on
+// a removed arc names its cut at a float parameter, three times that cut's
+// gap on top (§4.4).
 func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp prismPayload, sec sideOpeningSection) (*Body, error) {
+	delta := sec.delta
+	if sec.cutGap > 0 {
+		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.cutGap))
+		if proofbound.IsNonFinite(delta) {
+			return nil, errOffsetUnbounded
+		}
+	}
 	return evalPrismContext(ctx, d, ref, prismPayload{
 		profile:      sec.wall,
 		frame:        pp.frame,
@@ -33,7 +42,7 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 		z0Delta:      pp.z0Delta,
 		z1Delta:      pp.z1Delta,
 		xform:        pp.xform,
-		sectionDelta: sec.delta,
+		sectionDelta: delta,
 	}, freeform.NewFreeformWork())
 }
 

@@ -189,8 +189,9 @@ func chainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk,
 // segment atEnd at K's end, K' backward and the closing segment atStart at
 // K's start; outward it walks K', atEnd back to K's end, K backward and
 // atStart out to K's start. kept is K's record and offset K' in K's own walk
-// order; each closing segment already runs the way the loop walks it.
-func openChainWallLoop(budget *proofbound.WorkBudget, kept, offset []CurveSegment, atEnd, atStart CurveSegment, inward bool) (LoopRecord, error) {
+// order; each closing run of segments already runs the way the loop walks
+// it.
+func openChainWallLoop(budget *proofbound.WorkBudget, kept, offset, atEnd, atStart []CurveSegment, inward bool) (LoopRecord, error) {
 	first, back := kept, offset
 	if !inward {
 		first, back = offset, kept
@@ -199,10 +200,10 @@ func openChainWallLoop(budget *proofbound.WorkBudget, kept, offset []CurveSegmen
 	if err != nil {
 		return LoopRecord{}, err
 	}
-	loop := make([]CurveSegment, 0, len(kept)+len(offset)+2)
+	loop := make([]CurveSegment, 0, len(kept)+len(offset)+len(atEnd)+len(atStart))
 	loop = append(loop, first...)
-	loop = append(loop, atEnd)
+	loop = append(loop, atEnd...)
 	loop = append(loop, rev.Segments...)
-	loop = append(loop, atStart)
+	loop = append(loop, atStart...)
 	return LoopRecord{Segments: loop}, nil
 }

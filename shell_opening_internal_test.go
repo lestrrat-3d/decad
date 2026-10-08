@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -354,24 +355,78 @@ func internalWalkedPoints(t *testing.T, loop LoopRecord) []Point2 {
 	return out
 }
 
+// internalArcPieces requires every circular segment of the three regions to
+// be a parameter range of the receiver's own arc record — its Center, Start
+// and End verbatim, or Start and End swapped (the arc's complement) — so the
+// record build keys each on the arc's circle (§4.2).
+func internalArcPieces(t *testing.T, own ArcSeg, sec sideOpeningSection) {
+	t.Helper()
+	for _, region := range []ProfileRecord{sec.wall, sec.cavity, sec.caps} {
+		for _, seg := range region.Outer.Segments {
+			a, ok := seg.(ArcSeg)
+			if !ok {
+				continue
+			}
+			require.Equal(t, own.Center, a.Center)
+			swapped := a.Start == own.End && a.End == own.Start
+			require.True(t, swapped || a.Start == own.Start && a.End == own.End, "%+v is a range of %+v or of its complement", a, own)
+		}
+	}
+}
+
+// internalCutWithin requires the point the arc segment seg denotes at the
+// parameter t — enclosed over rational intervals — to lie within e of the
+// exact cut, component by component: u exactly, and v = sign·√v2.
+func internalCutWithin(t *testing.T, seg CurveSegment, tCut float64, u *big.Rat, sign int, v2 int64, e float64) {
+	t.Helper()
+	uIv, vIv, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(seg), proofarith.FloatRat(tCut))
+	require.True(t, ok)
+	re := proofarith.FloatRat(e)
+	require.GreaterOrEqual(t, uIv.Lo.Cmp(new(big.Rat).Sub(u, re)), 0, "the cut's u reaches down to its denoted end")
+	require.LessOrEqual(t, uIv.Hi.Cmp(new(big.Rat).Add(u, re)), 0, "the cut's u reaches up to its denoted end")
+	lo, hi := vIv.Lo, vIv.Hi
+	if sign < 0 {
+		lo, hi = new(big.Rat).Neg(vIv.Hi), new(big.Rat).Neg(vIv.Lo)
+	}
+	n := big.NewRat(v2, 1)
+	// lo ≥ √n − e and hi ≤ √n + e, decided over squares.
+	up := new(big.Rat).Add(lo, re)
+	require.True(t, up.Sign() > 0 && new(big.Rat).Mul(up, up).Cmp(n) >= 0, "the cut's v reaches down to its denoted end")
+	down := new(big.Rat).Sub(hi, re)
+	require.True(t, down.Sign() <= 0 || new(big.Rat).Mul(down, down).Cmp(n) <= 0, "the cut's v reaches up to its denoted end")
+}
+
 // TestSideOpeningRegionsDSection pins §9's D section, inward. With the chord
 // removed at t = 1 the cuts are the exact feet (0, ±4) and C is the radius-4
 // arc then the chord's piece between them, with no displacement. With the arc
 // removed at t = 3 the offset chord x = 3 meets the arc's circle at the exact
-// points (3, ±4), and C is x = 3 then the arc's piece between them. At t = 2
-// the cuts (2, ±√21) are float solves: the section displacement is nonzero
-// and covers the held cut's distance from √21, and with a kept cap the rims,
-// which read their radius from the cut, cannot key the arc's own circle
-// (SO5). Shown to fail with chainSectionDelta's reach zeroed (the t = 2
-// displacement then 0).
+// points (3, ±4), and C is x = 3 then the arc's piece between them; at t = 2
+// the cuts (2, ±√21) are float solves, and the section displacement is
+// nonzero and covers the held cut's distance from √21. Every piece on the
+// arc's circle is a parameter range of the arc's own record, ending at the
+// cut's parameter, a float: the point it denotes there lies within the cut
+// gap (plus the displacement) of the exact cut, kept caps or not. Shown to
+// fail with chainSectionDelta's reach zeroed (the t = 2 displacement then 0)
+// and with arcCutGap answering zero (the t = 3 rims' denoted ends then lie
+// outside a zero bound).
 func TestSideOpeningRegionsDSection(t *testing.T) {
 	t.Parallel()
 	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
 	pp, arc, chord := internalDSectionPrism(t)
+	own := pp.profile.Outer.Segments[arc].(ArcSeg)
 	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (sideOpeningSection, error) {
 		t.Helper()
 		budget := proofbound.NewWorkBudget(t.Context())
 		return sideOpeningRegions(budget, pp, map[int]struct{}{removed: {}}, keptCaps, 1, units.Millimeters(tmm), tmm, 0)
+	}
+	// rims are W's two rims: vB → qB at index 1, qA → vA at index 3.
+	rims := func(t *testing.T, sec sideOpeningSection) (ArcSeg, ArcSeg) {
+		t.Helper()
+		require.Len(t, sec.wall.Outer.Segments, 4)
+		b, okB := sec.wall.Outer.Segments[1].(ArcSeg)
+		a, okA := sec.wall.Outer.Segments[3].(ArcSeg)
+		require.True(t, okB && okA, "the rims are pieces of the removed arc")
+		return b, a
 	}
 	t.Run("chord removed", func(t *testing.T) {
 		t.Parallel()
@@ -381,37 +436,42 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		require.Equal(t, []Point2{pt(0, -5), pt(0, 5), pt(0, 4), pt(0, -4)}, internalWalkedPoints(t, sec.wall.Outer))
 		require.Empty(t, sec.corners)
 		require.Zero(t, sec.delta)
+		require.Zero(t, sec.cutGap, "the rims are lines")
 	})
 	t.Run("arc removed", func(t *testing.T) {
 		t.Parallel()
 		sec, err := regions(t, arc, 2, 3)
 		require.NoError(t, err)
-		require.Equal(t, []Point2{pt(3, 4), pt(3, -4)}, internalWalkedPoints(t, sec.cavity.Outer))
-		require.Equal(t, []Point2{pt(0, 5), pt(0, -5), pt(3, -4), pt(3, 4)}, internalWalkedPoints(t, sec.wall.Outer))
-		for _, i := range []int{1, 3} {
-			rim, ok := sec.wall.Outer.Segments[i].(ArcSeg)
-			require.True(t, ok, "the rim is an arc about the removed arc's centre")
-			require.Equal(t, pt(0, 0), rim.Center)
-		}
+		require.Equal(t, LineSeg{Start: pt(3, 4), End: pt(3, -4), TStart: 0, TEnd: 1}, sec.cavity.Outer.Segments[0], "C opens with x = 3")
+		require.Equal(t, []Point2{pt(0, 5), pt(0, -5)}, internalWalkedPoints(t, sec.wall.Outer)[:2])
+		internalArcPieces(t, own, sec)
+		b, a := rims(t, sec)
+		require.Equal(t, 0.0, b.TStart, "the rim at (0, −5) starts at the arc's own start")
+		require.Equal(t, 1.0, a.TEnd, "the rim at (0, 5) ends at the arc's own end")
 		require.ElementsMatch(t, []Point2{pt(0, -5), pt(0, 5)}, sec.corners, "both end vertices on the removed arc are marked")
 		require.Zero(t, sec.delta, "the exact cuts enclose to their held floats")
+		require.Positive(t, sec.cutGap, "the cut parameter is a float")
+		internalCutWithin(t, b, b.TEnd, big.NewRat(3, 1), -1, 16, sec.cutGap)
+		internalCutWithin(t, a, a.TStart, big.NewRat(3, 1), 1, 16, sec.cutGap)
 	})
 	t.Run("arc removed at a float cut", func(t *testing.T) {
 		t.Parallel()
-		sec, err := regions(t, arc, 0, 2)
-		require.NoError(t, err)
-		q := internalWalkedPoints(t, sec.cavity.Outer)[0]
-		require.Equal(t, 2.0, q.U)
-		require.Positive(t, sec.delta)
-		lo := new(big.Rat).Sub(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
-		hi := new(big.Rat).Add(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
-		require.Positive(t, lo.Sign())
-		require.LessOrEqual(t, new(big.Rat).Mul(lo, lo).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches down to √21")
-		require.GreaterOrEqual(t, new(big.Rat).Mul(hi, hi).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches up to √21")
-
-		_, err = regions(t, arc, 2, 2)
-		require.True(t, errors.Is(err, ErrUnsupported))
-		require.ErrorContains(t, err, "not an exact point of the arc's circle")
-		require.ErrorContains(t, err, "SO5")
+		for _, keptCaps := range []int{0, 2} {
+			sec, err := regions(t, arc, keptCaps, 2)
+			require.NoError(t, err)
+			q := internalWalkedPoints(t, sec.cavity.Outer)[0]
+			require.Equal(t, 2.0, q.U)
+			require.Positive(t, sec.delta)
+			lo := new(big.Rat).Sub(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+			hi := new(big.Rat).Add(proofarith.FloatRat(q.V), proofarith.FloatRat(sec.delta))
+			require.Positive(t, lo.Sign())
+			require.LessOrEqual(t, new(big.Rat).Mul(lo, lo).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches down to √21")
+			require.GreaterOrEqual(t, new(big.Rat).Mul(hi, hi).Cmp(big.NewRat(21, 1)), 0, "the displacement reaches up to √21")
+			internalArcPieces(t, own, sec)
+			b, a := rims(t, sec)
+			e := proofbound.AbsSumUpper(sec.delta, sec.cutGap)
+			internalCutWithin(t, b, b.TEnd, big.NewRat(2, 1), -1, 21, e)
+			internalCutWithin(t, a, a.TStart, big.NewRat(2, 1), 1, 21, e)
+		}
 	})
 }

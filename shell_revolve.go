@@ -578,7 +578,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	loop, err := openChainWallLoop(budget, kept, off.segs, atK, atStart, inward)
+	loop, err := openChainWallLoop(budget, kept, off.segs, []CurveSegment{atK}, []CurveSegment{atStart}, inward)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}

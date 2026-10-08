@@ -785,6 +785,21 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		require.True(t, mesh.VolumeVerified())
+
+		// With both caps removed W is BO1's prism, 10·(25π/2 − (25·acos(3/5)
+		// − 12)) = 120 + 125π − 250·acos(3/5). Its rims end at the cut's
+		// parameter on the arc's own record, a float whose point is not
+		// (3, ±4) itself, and the prism charges that gap
+		// (TestSideOpeningRegionsDSection pins the gap's enclosure).
+		_, d = arcPrism(t, dSection)
+		removed = cylinderFaces(d, 0, 0, 5)
+		require.Len(t, removed, 1)
+		sel = decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
+		prism, err := d.Shell(t.Context(), sel, units.Millimeters(3))
+		require.NoError(t, err)
+		vol, err = prism.Volume()
+		require.NoError(t, err)
+		requireRatEnclosed(t, vol, dClosedForm(120, 125, -250, 0, false), dClosedForm(120, 125, -250, 0, true))
 	})
 	t.Run("arc removed, outward", func(t *testing.T) {
 		t.Parallel()
@@ -822,9 +837,16 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		// (2, ±√21), a float solve. With both caps removed the wall is a
 		// prism over 125π/10 − (25·acos(2/5) − 2√21), volume 125π −
 		// 250·acos(2/5) + 20√21 within its bound (the cut's own charge is
-		// TestSideOpeningRegionsDSection's). With a cap kept the rims read
-		// their radius from the cut and cannot key the arc's own circle
-		// (SO5).
+		// TestSideOpeningRegionsDSection's). Each kept cap adds a slab of the
+		// cavity C = 25·acos(2/5) − 2√21, two units tall: one cap kept,
+		// 125π − 200·acos(2/5) + 16√21; both, 125π − 150·acos(2/5) + 12√21.
+		// The rims and the pieces of R and R' are parameter ranges of the
+		// arc's own record, so they key its circle although the cut is a
+		// float. Outward the offset x = −2 meets the circle at (−2, ±√21)
+		// behind each corner, so the rims and R' run on the arc's complement:
+		// O = 25π − (25·acos(2/5) − 2√21) over 14, less the D's 125π. Shown
+		// to fail: every kept-cap body here refused SO5 before the pieces
+		// were stated as ranges (the rims read their radius from the cut).
 		arcFace := func(t *testing.T, d *decad.Body) *decad.FaceQuery {
 			t.Helper()
 			removed := cylinderFaces(d, 0, 0, 5)
@@ -838,13 +860,48 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		require.NoError(t, err)
 		requireRatEnclosed(t, vol, dClosedForm(0, 125, -250, 20, false), dClosedForm(0, 125, -250, 20, true))
 
-		doc, d := arcPrism(t, dSection)
-		before := snapshotDocument(t, doc)
-		_, err = d.Shell(t.Context(), arcFace(t, d), units.Millimeters(2))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "not an exact point of the arc's circle")
-		require.ErrorContains(t, err, "SO5")
-		require.Equal(t, before.bodies, doc.Bodies())
+		for _, tc := range []struct {
+			name         string
+			sel          func(*decad.FaceQuery) *decad.FaceQuery
+			pi, acos, rt int64
+			faces        int
+			outward      bool
+		}{
+			// Two caps, the cavity's floor and ceiling, the chord plane, its
+			// offset x = 2 and the four pieces on the arc's circle.
+			{"both caps kept", func(q *decad.FaceQuery) *decad.FaceQuery { return q }, 125, -150, 12, 10, false},
+			// The end cap removed: the kept cap, W's top at z = 10, the
+			// floor, the chord plane, its offset and three pieces on the
+			// circle — two rim columns and the floor strip.
+			{"end cap removed", func(q *decad.FaceQuery) *decad.FaceQuery {
+				return q.Or(decad.Facing(r3.NewVec(0, 0, 1)))
+			}, 125, -200, 16, 8, false},
+			// Outward, both caps kept: the faces of the t = 3 outward body.
+			{"outward, both caps kept", func(q *decad.FaceQuery) *decad.FaceQuery { return q }, 225, -350, 28, 10, true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				doc, d := arcPrism(t, dSection)
+				var opts []decad.ShellOption
+				if tc.outward {
+					opts = append(opts, decad.WithShellSense(decad.Outward))
+				}
+				body, err := d.Shell(t.Context(), tc.sel(arcFace(t, d)), units.Millimeters(2), opts...)
+				require.NoError(t, err)
+				vol, err := body.Volume()
+				require.NoError(t, err)
+				require.Positive(t, vol.Bound.Base(), "the float cut is charged")
+				requireRatEnclosed(t, vol, dClosedForm(0, tc.pi, tc.acos, tc.rt, false), dClosedForm(0, tc.pi, tc.acos, tc.rt, true))
+				require.Len(t, body.Faces(), tc.faces)
+				requireBrepRoles(t, body)
+				report, err := doc.Verify(t.Context())
+				require.NoError(t, err)
+				require.Equal(t, decad.Sound, report.Status)
+				mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+				require.NoError(t, err)
+				requireWatertight(t, mesh)
+				require.True(t, mesh.VolumeVerified())
+			})
+		}
 	})
 	t.Run("two arcs at an end corner (SO5)", func(t *testing.T) {
 		t.Parallel()
