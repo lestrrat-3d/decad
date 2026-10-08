@@ -37,10 +37,10 @@ func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
 	loops []sectionrecord.LoopRecord,
 	startLoops, endLoops map[int]bool,
-	resolve func(sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error),
+	resolve func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error),
 ) (error, error) {
 	for li, loop := range loops {
-		walks, joinArcs, err := resolve(loop)
+		walks, joinArcs, err := resolve(li, loop)
 		if err != nil {
 			return nil, err
 		}

@@ -351,6 +351,17 @@
 2	0.72	TestBooleanVerifyUsesProvenToleranceBound
 2	0.00	TestBox
 2	0.00	TestBrokenNURBSKnotVectorRefuses
+2	0.05	TestCapBlendAsymmetricBox
+2	0.05	TestCapBlendAsymmetricCapsPickApart
+2	0.05	TestCapBlendAsymmetricCircularRim
+2	0.05	TestCapBlendAsymmetricEqualDistancesAreTheEqualChamfer
+2	0.05	TestCapBlendAsymmetricHoleRim
+2	0.05	TestCapBlendAsymmetricMiterRulingEnclosesItsLocus
+2	0.05	TestCapBlendAsymmetricMiteredConeAreaEncloses
+2	0.05	TestCapBlendAsymmetricOverrunRefused
+2	0.05	TestCapBlendAsymmetricPlacedKeepsSetbacksAndRoles
+2	0.05	TestCapBlendAsymmetricSideLevelCarriesOtherDistanceRounding
+2	0.05	TestCapBlendAsymmetricUnrepresentableSetbackRefused
 2	0.01	TestCapBlendCapLevelEdgesReportFiniteLengths
 2	0.03	TestCapBlendCarrierCollapseRefused
 2	0.02	TestCapBlendConeAreaEnclosesRoundedRadiusDifference
@@ -850,6 +861,7 @@
 2	0.01	TestTangentChainUndecidedRefused
 2	0.13	TestTangentJoinedSlotChamferAtOffsetOrigin
 2	0.00	TestTessellateBoundIncludesComputedLevelDisplacement
+2	0.05	TestTessellateCapBlendAsymmetric
 2	0.02	TestTessellateCapBlendPlacedStaysWatertight
 2	0.01	TestTessellateCapBlendPlateIsExact
 2	0.07	TestTessellateCapBlendRectangularHoleApexFans

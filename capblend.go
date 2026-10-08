@@ -22,15 +22,15 @@ import (
 // prism cap loops, never mixed with lateral edges — S4), gates
 // SX4/SX6/SX7/SX10/SX12/SX13, the BX3 roles, and the build. The cap-loop FILLET
 // (§8.2, Cylinder/Torus/Sphere patches) is in row E's staged column and is
-// not implemented here, and the band builds at an equal setback only,
-// dc = ds = d (§8.3): Chamfer refuses WithAsymmetricChamfer on a cap loop
-// (errAsymmetricCapLoop) before it reaches this file.
+// not implemented here. Each chamfered cap carries its own two setbacks
+// (capSetback): dc = ds = d for an equal chamfer, and the pair §8.3.1 assigns
+// from WithAsymmetricChamfer's reference face for a two-distance one.
 //
 // The reduction mirrors modify-design §2's lateral-edge one: the selected
-// cap loop's boundary is offset dc = d into the material (the "cap contour",
+// cap loop's boundary is offset dc into the material (the "cap contour",
 // still in the cap plane — shell_offset.go's exact per-feature offset, reused
 // unchanged) while the ORIGINAL loop is held at its own (u, v) and moved
-// axially ds = d into the material (the "side contour"). The band between the
+// axially ds into the material (the "side contour"). The band between the
 // two contours is a ruled surface: a Plane for a line wall, a Cone for a
 // circular wall (concentric with the wall — the offset preserves the center),
 // and a Cone whose apex is the ORIGINAL corner point for a reflex corner's
@@ -46,9 +46,10 @@ import (
 // chamfer result (docs/modify-reach-design.md §8.3, BX3): the receiver's
 // unrewritten section (unselected loops build exactly as an ordinary prism;
 // selected loops are chamfered per below), the plane frame, sweep interval,
-// accumulated placement, the single equal setback d, and which loop indices
-// (into append(profile.Outer, profile.Holes...)) are chamfered on which cap.
-// It is evaluator-private: the public call supplies only the selector and d, never
+// accumulated placement, each chamfered cap's two setbacks, and which loop
+// indices (into append(profile.Outer, profile.Holes...)) are chamfered on which
+// cap. It is evaluator-private: the public call supplies only the selector and
+// its distances, never
 // the rewritten geometry (modify §11's role rule — a role indexes the record
 // it labels, so a result's roles are minted from the result's own record,
 // never inherited).
@@ -59,8 +60,7 @@ type capBlendPayload struct {
 	z0Delta    float64
 	z1Delta    float64
 	xform      r3.Transform
-	d          float64
-	dDelta     float64
+	start, end capSetback   // the z0 and z1 caps' own setbacks
 	startLoops map[int]bool // loop index -> chamfered on the z0 cap
 	endLoops   map[int]bool // loop index -> chamfered on the z1 cap
 	// patches carries every chamferCap(...) role beside its plane-local
@@ -84,6 +84,41 @@ type capBlendPayload struct {
 	// placement-invariant, exactly as patches is.
 	bandDelta map[capBandKey]float64
 }
+
+// capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
+// §8.3.1): dc across the cap face — the in-plane offset of the cap contour —
+// and ds down the side wall — the axial distance from the cap level to the
+// side level — beside dsDelta, the rounding ds's own unit conversion
+// committed, which every level built from ds charges. An equal chamfer holds
+// dc == ds == d.
+//
+// dc carries no conversion term: the offset reads it as an exact input, the
+// same way the equal-setback band reads d (§8.3.1).
+type capSetback struct {
+	dc, ds, dsDelta float64
+}
+
+// setbackAt returns the setbacks of the cap a band with material sense
+// matSign sits on: positive is the start cap, negative the end cap.
+func (cbp capBlendPayload) setbackAt(matSign float64) capSetback {
+	if matSign > 0 {
+		return cbp.start
+	}
+	return cbp.end
+}
+
+// loopSetback is the setbacks of whichever cap loop li is chamfered on. A loop
+// chamfered on both caps takes one pair on both: resolveCapSetbacks refuses a
+// loop whose two caps pick its setbacks differently.
+func (cbp capBlendPayload) loopSetback(li int) capSetback {
+	if cbp.startLoops[li] {
+		return cbp.start
+	}
+	return cbp.end
+}
+
+// loopOffset is loop li's own in-plane offset, its loopSetback's dc.
+func (cbp capBlendPayload) loopOffset(li int) float64 { return cbp.loopSetback(li).dc }
 
 // capBandKey names one chamfer band: the loop it belongs to (an index into
 // loops(), the same index space Table BX's roles use) and which cap it sits on.
@@ -138,10 +173,12 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) proofbound.Bounde
 func (cbp capBlendPayload) axialDelta() float64 {
 	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
 	if len(cbp.startLoops) != 0 {
-		z0Delta = proofbound.AbsSumUpper(z0Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
+		s := cbp.start
+		z0Delta = proofbound.AbsSumUpper(z0Delta, s.dsDelta, proofarith.AddRoundError(cbp.z0, s.ds, cbp.z0+s.ds))
 	}
 	if len(cbp.endLoops) != 0 {
-		z1Delta = proofbound.AbsSumUpper(z1Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
+		s := cbp.end
+		z1Delta = proofbound.AbsSumUpper(z1Delta, s.dsDelta, proofarith.AddRoundError(cbp.z1, -s.ds, cbp.z1-s.ds))
 	}
 	return math.Max(z0Delta, z1Delta)
 }
@@ -243,12 +280,14 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		loAllow := proofbound.ProductUpper(axial, cbp.z0Delta)
 		hiAllow := proofbound.ProductUpper(axial, cbp.z1Delta)
 		if onStart {
-			zLo = cbp.z0 + cbp.d
-			loAllow = proofbound.AbsSumUpper(loAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, zLo))))
+			s := cbp.start
+			zLo = cbp.z0 + s.ds
+			loAllow = proofbound.AbsSumUpper(loAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.dsDelta, proofarith.AddRoundError(cbp.z0, s.ds, zLo))))
 		}
 		if onEnd {
-			zHi = cbp.z1 - cbp.d
-			hiAllow = proofbound.AbsSumUpper(hiAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, zHi))))
+			s := cbp.end
+			zHi = cbp.z1 - s.ds
+			hiAllow = proofbound.AbsSumUpper(hiAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.dsDelta, proofarith.AddRoundError(cbp.z1, -s.ds, zHi))))
 		}
 		// The boundary scan states its own displacement per candidate — nonzero
 		// wherever a circular candidate's apex is not exactly representable
@@ -270,11 +309,11 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The cap contour is the band's cap-level directrix and the chamfered
 		// cap face's own boundary — the same offset loop the build emits, and
 		// the same displacement the band's own vertices and edges carry.
-		contour, err := capLoopBoundary(ctx, loop, cbp.d)
+		contour, err := capLoopBoundary(ctx, loop, cbp.loopOffset(li))
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		delta, err := loopContourDelta(ctx, loop, cbp.d)
+		delta, err := loopContourDelta(ctx, loop, cbp.loopOffset(li))
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -435,15 +474,30 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCa
 // SX12, and SX13's axial half) and, once every gate passes, builds the body. It
 // is the shared entry Chamfer calls once a clean cap-loop selection is
 // classified. SX13's radial half is decided per circular wall as the band is
-// constructed, in capblend_geom.go's capBandRadius.
-func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, d, dDelta float64, startLoops, endLoops map[int]bool) (*Body, error) {
+// constructed, in capblend_geom.go's capBandRadius. start and end are the two
+// caps' own setbacks (§8.3.1); a cap with no selected loop reads neither.
+func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, start, end capSetback, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	cbp := capBlendPayload{
+		profile:    pp.profile,
+		frame:      pp.frame,
+		z0:         pp.z0,
+		z1:         pp.z1,
+		z0Delta:    pp.z0Delta,
+		z1Delta:    pp.z1Delta,
+		xform:      pp.xform,
+		start:      start,
+		end:        end,
+		startLoops: startLoops,
+		endLoops:   endLoops,
+	}
 
 	// SX6 + SX7/SX12: build the "mixed" profile — every selected loop offset
-	// d into the material (the cap contour at whichever cap it is selected
-	// on; when a loop is selected on BOTH caps the two contours are equal —
-	// the offset does not depend on which cap — so one offset serves both),
+	// its own dc into the material (the cap contour at whichever cap it is
+	// selected on; when a loop is selected on BOTH caps the two contours are
+	// equal — resolveCapSetbacks gives both caps of such a loop one dc — so
+	// one offset serves both),
 	// every unselected loop left unchanged — and run the existing exact
 	// offset + §5 audit machinery on it. SX6 is the offset's own drop
 	// refusal, re-sentinelled here (wrapCapBlendDropError); the audit's own
@@ -451,22 +505,23 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	// (wrapCapBlendAuditError) — SX7/SX12 for a crossing or contact, the base
 	// S8/S9 ErrDegenerate for broken nesting. SX12 audits the exact offset
 	// FAMILY, not the ruled patch the body builds: at axial fraction s, the
-	// denoted miter locus is the parallel section offset by s*d
+	// denoted miter locus is the parallel section offset by s*dc
 	// (docs/modify-reach-design.md §8.3) — a fact about that family alone,
 	// independent of which surface later reports the body's volume — and the
 	// offset distance to any fixed feature is monotone non-increasing as the
 	// offset grows from 0, so a crossing anywhere in the family occurs no
-	// later than it occurs at the full offset d — proving the family
+	// later than it occurs at the full offset dc — proving the family
 	// disjoint at s=1 certifies every s in [0, 1].
 	budget := proofbound.NewWorkBudget(ctx)
-	mixed, err := mixedOffsetProfile(budget, pp.profile, d, startLoops, endLoops)
+	mixed, err := mixedOffsetProfile(budget, cbp)
 	if err != nil {
 		return nil, wrapCapBlendDropError(err)
 	}
 
 	// SX7 (band-meeting): a loop chamfered on both caps needs both bands to
 	// fit without meeting; a loop chamfered on one cap needs its own band to
-	// fit within the sweep.
+	// fit within the sweep. A band reaches its own cap's ds along the sweep
+	// (§8.3.1), whatever its dc.
 	//
 	// It runs AFTER SX6, which docs/modify-reach-design.md puts in stage 5 while
 	// this row is stage 6 ("SX6 precedes SX7"). The two rows answer the same §4
@@ -479,10 +534,10 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	for li := range loops {
 		reach := 0.0
 		if startLoops[li] {
-			reach += d
+			reach += start.ds
 		}
 		if endLoops[li] {
-			reach += d
+			reach += end.ds
 		}
 		if reach >= height {
 			return nil, fmt.Errorf(`%w: the chamfer band(s) on loop %d reach or pass the opposite end of the sweep; a merging kernel is not available`, ErrUnsupported, li)
@@ -492,22 +547,8 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
 		return nil, wrapCapBlendAuditError(err)
 	}
-	if err := requireCapBlendLevelsSeparate(pp.z0, pp.z1, d, startLoops, endLoops); err != nil {
+	if err := requireCapBlendLevelsSeparate(cbp); err != nil {
 		return nil, err
-	}
-
-	cbp := capBlendPayload{
-		profile:    pp.profile,
-		frame:      pp.frame,
-		z0:         pp.z0,
-		z1:         pp.z1,
-		z0Delta:    pp.z0Delta,
-		z1Delta:    pp.z1Delta,
-		xform:      pp.xform,
-		d:          d,
-		dDelta:     dDelta,
-		startLoops: startLoops,
-		endLoops:   endLoops,
 	}
 	return evalCapBlendContext(ctx, doc, ref, cbp)
 }
@@ -532,21 +573,22 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 // chamfer — and only float64 cannot name its side level at that sweep
 // coordinate, which is §4's ErrUnsupported side of the existence test.
 //
-// The axial half is a fact about the sweep interval and the setback alone, so it
-// is decided once per chamfered cap rather than per wall. SX7's band-reach gate
-// above is the opposite failure on the same two numbers and never overlaps this
-// one: SX7 refuses a setback so LARGE beside the sweep that the band passes the
-// far end, this one a setback so SMALL beside the sweep's own coordinates that
-// the level it displaces does not move.
-func requireCapBlendLevelsSeparate(z0, z1, d float64, startLoops, endLoops map[int]bool) error {
-	refuse := func(which string, level float64) error {
-		return fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of the %s cap's own sweep level %v mm, so the band's side level rounds back onto the cap level and every patch is emitted flat in the cap plane; a wider setback or a shorter sweep states a chamfer this evaluator can build`, ErrUnsupported, d, which, level)
+// The axial half is a fact about the sweep interval and the cap's own side
+// setback ds alone (§8.3.1), so it is decided once per chamfered cap rather
+// than per wall. SX7's band-reach gate above is the opposite failure on the
+// same two numbers and never overlaps this one: SX7 refuses a setback so LARGE
+// beside the sweep that the band passes the far end, this one a setback so
+// SMALL beside the sweep's own coordinates that the level it displaces does not
+// move.
+func requireCapBlendLevelsSeparate(cbp capBlendPayload) error {
+	refuse := func(which string, ds, level float64) error {
+		return fmt.Errorf(`%w: the chamfer's side setback %v mm is below the float64 spacing of the %s cap's own sweep level %v mm, so the band's side level rounds back onto the cap level and every patch is emitted flat in the cap plane; a wider setback or a shorter sweep states a chamfer this evaluator can build`, ErrUnsupported, ds, which, level)
 	}
-	if anyLoopSelected(startLoops) && z0+d == z0 {
-		return refuse(`start`, z0)
+	if ds := cbp.start.ds; anyLoopSelected(cbp.startLoops) && cbp.z0+ds == cbp.z0 {
+		return refuse(`start`, ds, cbp.z0)
 	}
-	if anyLoopSelected(endLoops) && z1-d == z1 {
-		return refuse(`end`, z1)
+	if ds := cbp.end.ds; anyLoopSelected(cbp.endLoops) && cbp.z1-ds == cbp.z1 {
+		return refuse(`end`, ds, cbp.z1)
 	}
 	return nil
 }
@@ -561,11 +603,12 @@ func anyLoopSelected(loops map[int]bool) bool {
 	return false
 }
 
-// mixedOffsetProfile offsets exactly the loops named in startLoops/endLoops
-// (their union — a loop chamfered on either or both caps takes the same
-// in-plane offset) by d into the material, leaving every other loop
-// unchanged. It reuses offsetLoopBudget's per-feature offset unmodified.
-func mixedOffsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, d float64, startLoops, endLoops map[int]bool) (ProfileRecord, error) {
+// mixedOffsetProfile offsets exactly the loops cbp chamfers (the union of its
+// startLoops/endLoops — a loop chamfered on either or both caps takes one
+// in-plane offset, loopOffset's dc) into the material, leaving every other
+// loop unchanged. It reuses offsetLoopBudget's per-feature offset unmodified.
+func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (ProfileRecord, error) {
+	profile := cbp.profile
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
 		return ProfileRecord{}, err
@@ -576,11 +619,11 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, profile ProfileRecord, d 
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return ProfileRecord{}, err
 		}
-		if !startLoops[li] && !endLoops[li] {
+		if !cbp.startLoops[li] && !cbp.endLoops[li] {
 			out[li] = cloneLoopRecord(orig[li])
 			continue
 		}
-		segs, err := offsetLoopBudget(budget, loops[li], 1, d)
+		segs, err := offsetLoopBudget(budget, loops[li], 1, cbp.loopOffset(li))
 		if err != nil {
 			return ProfileRecord{}, err
 		}
@@ -629,7 +672,7 @@ func wrapCapBlendAuditError(err error) error {
 		return context.DeadlineExceeded
 	}
 	if errors.Is(err, ErrDegenerate) {
-		return fmt.Errorf(`%w; the section that broke is the cap-loop chamfer's own offset of the selected loop(s) by d`, err)
+		return fmt.Errorf(`%w; the section that broke is the cap-loop chamfer's own offset of the selected loop(s) by the cap setback`, err)
 	}
 	return fmt.Errorf(`%w: the cap-loop chamfer's ruled patches cannot be certified disjoint from a non-adjacent boundary (%v); a trimming kernel is not available`, ErrUnsupported, err)
 }

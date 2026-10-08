@@ -28,10 +28,11 @@ type CapBlendLoopProof struct {
 }
 
 // CapBlendChordVolume bounds the slice-wise circular-segment volume between
-// the denoted body and the ideal chord polyhedron.
-func CapBlendChordVolume(d, dDelta float64, loops []CapBlendLoopProof) float64 {
+// the denoted body and the ideal chord polyhedron. bandHeight holds a proven
+// upper bound on the start and the end cap's own side setback ds, the axial
+// extent of every band on that cap.
+func CapBlendChordVolume(bandHeight [2]float64, loops []CapBlendLoopProof) float64 {
 	total := 0.0
-	dUpper := proofbound.AbsSumUpper(d, dDelta)
 	for li := range loops {
 		lm := &loops[li]
 		trim := proofbound.BoundedSub(lm.ZHi, lm.ZLo)
@@ -51,9 +52,9 @@ func CapBlendChordVolume(d, dDelta float64, loops []CapBlendLoopProof) float64 {
 			}, lm.Count[i]))
 		}
 		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(hTrimUpper, sideSegs))
-		for _, chamfered := range []bool{lm.OnStart, lm.OnEnd} {
+		for c, chamfered := range []bool{lm.OnStart, lm.OnEnd} {
 			if chamfered {
-				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(dUpper, bandSegs))
+				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(bandHeight[c], bandSegs))
 			}
 		}
 	}

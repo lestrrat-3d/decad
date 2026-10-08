@@ -100,12 +100,14 @@ type chamferOpts struct {
 // asymmetricChamferOpts is WithAsymmetricChamfer's payload: the copied
 // reference query, or the type name of a selector decad does not own, and
 // the other distance as the caller stated it. otherMM is that distance in
-// millimetres, filled by the decoder once the magnitude gates pass.
+// millimetres and otherDelta the rounding its unit conversion committed,
+// both filled by the decoder once the magnitude gates pass.
 type asymmetricChamferOpts struct {
-	Reference *FaceQuery
-	foreign   string
-	Other     units.Value
-	otherMM   float64
+	Reference  *FaceQuery
+	foreign    string
+	Other      units.Value
+	otherMM    float64
+	otherDelta float64
 }
 
 // shellOpts is the record a Shell call decodes its options into
@@ -179,14 +181,14 @@ func decodeChamferOptions(opts []ChamferOption) (chamferOpts, error) {
 			if !ok {
 				return chamferOpts{}, errOptionConflict(`WithAsymmetricChamfer carries no reference and distance`)
 			}
-			mm, err := magnitudeIn(a.Other, units.Length, units.Millimeter, "the asymmetric chamfer's other distance")
+			mm, mmDelta, err := magnitudeInBounded(a.Other, units.Length, units.Millimeter, "the asymmetric chamfer's other distance")
 			if err != nil {
 				return chamferOpts{}, err
 			}
 			if mm == 0 {
 				return chamferOpts{}, fmt.Errorf(`%w: an asymmetric chamfer's other distance must be positive; a zero setback leaves that face where it is`, ErrDegenerate)
 			}
-			a.otherMM = mm
+			a.otherMM, a.otherDelta = mm, mmDelta
 			out.Asymmetric = &a
 		default:
 			return chamferOpts{}, errOptionConflict(`unknown chamfer option identifier %T`, ident)
@@ -286,11 +288,13 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 // face roles map a reference face to a walk of the recorded section, each
 // chamfered edge's reference face, and the two distances in millimetres —
 // d, the positional distance, across the reference face, and other across
-// the face beside it.
+// the face beside it — each beside the rounding its own unit conversion
+// committed.
 type asymmetricChamfer struct {
-	body     *Body
-	refs     map[*Edge]*Face
-	d, other float64
+	body               *Body
+	refs               map[*Edge]*Face
+	d, other           float64
+	dDelta, otherDelta float64
 }
 
 // setbacks returns the arc lengths a chamfer of corner ci of loop li sets
@@ -319,14 +323,56 @@ func (a *asymmetricChamfer) setbacks(loop cornerLoop, li, ci int, e *Edge) (floa
 	}
 }
 
-// errAsymmetricCapLoop refuses the asymmetric chamfer of complete prism cap
-// loops (docs/modify-reach-design.md §6, §8.3). The body exists, and this
-// evaluator builds the cap-loop band at an equal setback only (§14 row E).
-// §6's mixed assignment, SX4, cannot reach this point: a cap face borders
-// every edge of its loops, so a reference naming it for one edge names it for
-// all of them, and a side face named beside it gives that edge two reference
-// faces, which SX3 has already refused.
-var errAsymmetricCapLoop = fmt.Errorf(`%w: this evaluator builds a cap-loop chamfer at an equal setback only; an asymmetric chamfer of a complete cap loop is not built (modify-reach §14 row E)`, ErrUnsupported)
+// capSetbacks returns the start and the end cap's own two setbacks for a
+// two-distance chamfer of complete cap loops (docs/modify-reach-design.md
+// §8.3.1). Every edge of a cap loop borders its cap face and one side wall, and
+// its reference face picks between them: the cap face gives the cap dc = d and
+// ds = other, a side wall gives dc = other and ds = d. The pick is made per
+// cap. A cap whose edges pick differently, and a loop chamfered on both caps
+// whose caps pick differently, give one loop's patches two in-plane offsets,
+// and both are SX4 (ErrUnsupported). SX3 has already refused both shapes — a
+// cap face borders every edge of its loops, and a side wall borders that
+// loop's edges on both caps, so a mixed pick names some edge's two faces or
+// neither — and these arms are a second check over the resolved pairs. An
+// edge on neither cap face is ErrUnsupported; classifyChamferSelection has
+// already put every selected edge on one. A cap with no selected edge reads
+// the side-wall pick, which no band reads.
+func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoops, endLoops map[int]bool) (capSetback, capSetback, error) {
+	var seen, capRef [2]bool
+	for ei, e := range edges {
+		c, capFace := -1, (*Face)(nil)
+		for _, f := range e.faces {
+			switch {
+			case f == caps.start && f != nil:
+				c, capFace = 0, f
+			case f == caps.end && f != nil:
+				c, capFace = 1, f
+			}
+		}
+		if c < 0 {
+			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's %s borders neither cap face`, ErrUnsupported, selectedEdgeContext(ei, e))
+		}
+		ref := a.refs[e] == capFace
+		if seen[c] && capRef[c] != ref {
+			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's reference names the cap face for some edges of one cap and a side wall for others; one cap takes one assignment (modify-reach SX4)`, ErrUnsupported)
+		}
+		seen[c], capRef[c] = true, ref
+	}
+	if seen[0] && seen[1] && capRef[0] != capRef[1] {
+		for li, on := range startLoops {
+			if on && endLoops[li] {
+				return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's reference names the cap face on one cap of loop %d and its side walls on the other; one loop takes one assignment (modify-reach SX4)`, ErrUnsupported, li)
+			}
+		}
+	}
+	pick := func(capReferenced bool) capSetback {
+		if capReferenced {
+			return capSetback{dc: a.d, ds: a.other, dsDelta: a.otherDelta}
+		}
+		return capSetback{dc: a.other, ds: a.d, dsDelta: a.dDelta}
+	}
+	return pick(capRef[0]), pick(capRef[1]), nil
+}
 
 // faceSideSegments returns the recorded segments of loop li that face f is
 // built from, read from its side(i,j) roles under b's own producer.

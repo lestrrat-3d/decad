@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -68,9 +69,9 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], work)
 	require.NoError(t, err)
-	joins, err := capOffsetJoins(budget, cl, cbp.d)
+	joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
 	require.NoError(t, err)
-	want, err := capContourDelta(cl.walks, joins, cbp.d)
+	want, err := capContourDelta(cl.walks, joins, cbp.loopOffset(0))
 	require.NoError(t, err)
 	require.Equal(t, want, stored)
 	require.NotNil(t, chamfered)
@@ -275,7 +276,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		}, 3)
 		walks, joins := capBlendCornerSetup(t, cbp)
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp, walks, i, j)
+			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, gap, `corner %d joins two straight walls`, i)
 		}
@@ -286,7 +287,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		walks, joins := capBlendCornerSetup(t, cbp)
 		positive := 0
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp, walks, i, j)
+			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j)
 			require.NoError(t, err)
 			require.False(t, proofbound.IsNonFinite(gap))
 			if gap > 0 {
@@ -304,7 +305,7 @@ func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capOffsetJoins(budget, cl, cbp.d)
+	joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
 	require.NoError(t, err)
 	return cl.walks, joins
 }
@@ -417,7 +418,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	seg := bore.loop.Segments[bore.walks[0].Segs[0]]
 	held := bore.capPts[0]
 	gap := proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, 0, bore.count[0],
-		capcontour.CapWallRadiusOffset(bore.walks[0], cbp.d), held.U, held.V))
+		capcontour.CapWallRadiusOffset(bore.walks[0], cbp.loopOffset(bore.li)), held.U, held.V))
 	require.Positive(t, gap, `the float full turn leaves the seam station off (19, 0)`)
 	seam := motion[bore.capHiV[0]]
 	require.Positive(t, seam)
@@ -598,4 +599,102 @@ func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
 		require.False(t, capOffsetStationBound(fillet, 0, 8, big.NewRat(-13, 1), 36, -33).Derivable(),
 			`an offset that swallows the radius denotes no circle`)
 	})
+}
+
+// asymChamferedSectionBody is chamferedSectionBody's two-distance sibling: the
+// end cap face is the reference, so the cap contour sits dc in and the side
+// level ds below the cap (docs/modify-reach-design.md §8.3.1).
+func asymChamferedSectionBody(t *testing.T, section func(*sketch.Sketch), dc, ds float64) (*Body, capBlendPayload) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	section(s)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	doc := New()
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(dc),
+		WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(ds)))
+	require.NoError(t, err)
+	cbp, ok := chamfered.payload.(capBlendPayload)
+	require.True(t, ok)
+	require.Equal(t, capSetback{dc: dc, ds: ds}, cbp.end)
+	return chamfered, cbp
+}
+
+// TestCapBlendChordVolumeChargesEachCapsBandHeight checks the occupied-volume
+// proof's chord term covers a two-distance band ds tall. The disk's mesh is
+// inscribed — every station sits on the true frustum at its own azimuth — so the
+// body's volume less the mesh's is the slice-wise circular-segment volume the
+// term bounds, and the band's share of it is ds tall, not dc.
+//
+// Shown to fail: charging the band at dc's height (capBlendChordVolume's
+// bandHeight) leaves the term below the measured deficit.
+func TestCapBlendChordVolumeChargesEachCapsBandHeight(t *testing.T) {
+	t.Parallel()
+	const tol = 0.25
+	chamfered, cbp := asymChamferedSectionBody(t, diskSection(0, 0, 10), 1, 8)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK)
+
+	meshVol := 0.0
+	for _, tri := range mesh.triangles {
+		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+		meshVol += a.Dot(b.Cross(c)) / 6
+	}
+	bodyVol := chamfered.volume.Value.Mag()
+	deficit := bodyVol - meshVol
+	require.Positive(t, deficit, `an inscribed mesh holds less than the body`)
+
+	lms, _ := capBlendMotionUnderTest(t, cbp, tol)
+	chordVolume := capBlendChordVolume(cbp, lms)
+	require.GreaterOrEqual(t, chordVolume, deficit, `the chord term covers the measured segment volume`)
+	require.GreaterOrEqual(t, mesh.volSymDiff, deficit)
+}
+
+// TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus checks the mesh's
+// locus gap at a line-circle miter covers the denoted corner locus of a
+// two-distance band. The quarter disk's corner at (r, 0) moves to
+// (sqrt(r² − 2·r·dc·s), s·dc) in the plane and s·ds along the sweep; every
+// sample's distance from the built ruling must stay within the gap.
+//
+// Shown to fail: passing dc as the locus's axial span in
+// capBlendCornerLocusGap answers a zero gap for the ds > dc rows.
+func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
+	t.Parallel()
+	const r = 10.0
+	for _, tc := range []struct{ dc, ds float64 }{{1, 4}, {2, 6}, {3, 1}} {
+		t.Run(fmt.Sprintf("dc=%g,ds=%g", tc.dc, tc.ds), func(t *testing.T) {
+			t.Parallel()
+			_, cbp := asymChamferedSectionBody(t, quarterDiskSection(r), tc.dc, tc.ds)
+			walks, joins := capBlendCornerSetup(t, cbp)
+			checked := 0
+			for i, j := range joins {
+				gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), walks, i, j)
+				require.NoError(t, err)
+				if j.vU != r || j.vV != 0 {
+					continue
+				}
+				locus := func(s float64) r3.Vec {
+					return r3.NewVec(math.Sqrt(r*r-2*r*tc.dc*s), s*tc.dc, s*tc.ds)
+				}
+				a, b := locus(0), r3.NewVec(j.m.U, j.m.V, tc.ds)
+				axis := b.Sub(a)
+				worst := 0.0
+				for k := range 4097 {
+					p := locus(float64(k) / 4096).Sub(a)
+					along := p.Dot(axis) / axis.Dot(axis)
+					worst = math.Max(worst, p.Sub(axis.Scale(along)).Len())
+				}
+				require.Positive(t, worst, `the locus bows off its chord`)
+				require.GreaterOrEqual(t, gap, worst, `the gap covers the locus`)
+				checked++
+			}
+			require.Equal(t, 1, checked, `the corner at (r, 0)`)
+		})
+	}
 }

@@ -322,8 +322,7 @@ referenced for every edge. A mixed assignment gives adjacent patches different
 axial setbacks and is SX4. SX3 runs first and always catches it: a cap face
 borders every edge of its loops, so a reference naming it for one edge names
 it for all, and a side face named beside it gives that edge two reference
-faces. The cap-loop band builds at an equal setback only (§14 row E), so an
-asymmetric chamfer of a complete cap loop is `ErrUnsupported`.
+faces. §8.3.1 builds the two-distance cap-loop band.
 
 ## 7. Revolve junction rewrite
 
@@ -655,6 +654,98 @@ ruled `Cone` patch is a separate, proven-bounded stand-in, for the surface
 readings above as much as for area/volume/moment measurement. A sample or
 residual never admits disjointness.
 
+#### 8.3.1 Two distances
+
+`WithAsymmetricChamfer` on a complete cap loop sets `dc` and `ds` apart. The
+construction above is unchanged; only the two numbers it reads differ.
+
+**What the reference picks.** §6's resolution pairs every selected edge with
+one reference face, and a cap-loop edge borders exactly two faces: its cap and
+one side wall. The pick is made per chamfered cap:
+
+| Reference face of the cap's edges | `dc` (across the cap) | `ds` (down the side) |
+|---|---|---|
+| the cap face itself | positional `d` | `otherDistance` |
+| the side wall beside each edge | `otherDistance` | positional `d` |
+
+Swapping the reference face swaps the two setbacks and nothing else. The two
+caps of one call may pick differently: a hole's mouth on the start cap
+referenced through its own side walls and the outer rim on the end cap
+referenced through the end cap face build two bands with swapped setbacks.
+
+**Refusals.** The payload holds one setback pair per chamfered cap. A cap
+whose edges reference the cap face for some edges and a side wall for others
+is SX4, and so is a loop chamfered on both caps whose two caps pick
+differently, since that loop's two bands would offset its cap contour by two
+different `dc`. SX3 already refuses both before stage 4 (§6), so SX4 here is a
+second check over the resolved pairs and never the first answer. The other
+existence and audit gates read the component they are about:
+
+- SX6, SX12, SX14 and SX13's radial half read `dc`, the offset of the cap
+  contour;
+- SX7 reads `ds`: a loop's bands reach `ds(start) + ds(end)` along the sweep,
+  and reaching the height is refused;
+- SX13's axial half reads `ds`: `z0 + ds == z0` or `z1 - ds == z1` refuses.
+
+A `dc` that empties the cap contour therefore answers SX6 (`ErrDegenerate`)
+whatever `ds` is, since SX6 runs first; a `dc` whose contour exists but
+crosses itself answers the audit's SX7/SX12 (`ErrUnsupported`) once the
+band-reach test has passed. A `ds` that reaches the far end answers SX7
+whatever `dc` is. A `dc` or `ds` too small to move its own coordinate answers
+SX13 on that axis alone.
+
+**Patches.** Each patch keeps its kind:
+
+- a straight wall's patch is the `Plane` through the side-level segment and
+  the cap-level segment offset `dc`, tilted `atan(dc/ds)` from the wall;
+- a circular wall's patch is the ruled `Cone` between radius `R` at the side
+  level and `R ∓ dc` at the cap level, half angle `atan(dc/ds)` about the
+  wall's axis;
+- a reflex corner's apex patch is the `Cone` from the original corner at the
+  side level to the connector arc of radius `dc` at the cap level, half angle
+  `atan(dc/ds)`.
+
+**Bounds.** Every bound above is already stated in terms of the patch's own
+held numbers — its two radii, its two levels, its two windows and its built
+rulings — or of the cap contour's offset, so each keeps its derivation and
+reads the right component:
+
+- the cap contour displacement (§8.4), the cap-level vertex and edge bounds,
+  the reflex connector arc's length bound, the cap face area's displacement
+  term, and every offset-radius rounding read `dc`: the contour is the
+  section offset by `dc`, and `ds` does not enter it;
+- the side level `capZ ± ds`, its rounding plus `ds`'s own unit-conversion
+  rounding (`levelDelta`), the straight-slab levels, the axial extent terms
+  and the tessellator's band height read `ds`: the side contour is the
+  original loop moved by `ds`, and `dc` does not enter it;
+- the miter locus enclosure parametrises the corner foot by the in-plane
+  offset `t ∈ [0, dc]` and moves it `t·ds/dc` along the sweep, so its length
+  bound sums the in-plane speed against the axial rate `ds/dc`;
+- the ruled patch's chord-versus-locus volume term, its departure from the
+  `Cone` tag, the normal model DX7 reads, and the area brackets read the
+  patch's radii, levels and windows. Erosion stays monotone in the offset
+  amount whatever rate the side contour moves at, so the sandwich between the
+  wide and narrow windows still encloses the true flux.
+
+Each derived bound encloses for the same reason it encloses at `dc = ds`:
+none of the derivations equates the two setbacks. One term is measured rather
+than derived: the `Cone` area's window-skew allowance
+(`internal/capband/area.go`), which scales with the patch's own slant
+`√(ΔR² + H²)` and so with both setbacks. It encloses a quadrature of the
+ruled patch at `dc/ds` from 1/8 to 8 with at least 2.8 times margin. The
+orientation sample references keep
+a positive dot product with the true outward normal for any positive pair:
+a wall patch's normal is `(ds·n̂_wall, ∓dc·ẑ)` against the reference
+`(n̂_wall, ∓ẑ)`, and an apex patch's is `(−ds·r̂, ∓dc·ẑ)` against
+`(−r̂, ∓ẑ)`, so each dot product is `dc + ds > 0`.
+
+The in-plane offset reads `dc` as an exact input, so `dc`'s own
+unit-conversion rounding is not charged to the cap contour; the equal-setback
+band reads `d` the same way.
+
+With no option, or with `otherDistance` equal to `d` in the same unit, the
+band reads `dc = ds = d` and builds the same body bit for bit.
+
 ### 8.4 Measurements + tessellation
 
 `capBlendPayload` owns analytic patches. Report each exactly representable
@@ -772,7 +863,7 @@ its exact-rational centroid unchanged in that case.
 
 A band's SIDE level is displaced too, and by a different mechanism, so it is a
 separate term with its own helper. `sideZ` is the single float sum
-`capZ + matSign*d`, so the whole side directrix translates rigidly by that
+`capZ + matSign*ds`, so the whole side directrix translates rigidly by that
 sum's own rounding (`levelDelta`) rather than moving point by point the way a
 solved contour does. Every reading built on that level charges it: a slant
 edge's own length, the band volume, and each BAND PATCH's own area, which
@@ -1181,6 +1272,17 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - reflex line/arc loop produces torus/cone vertex patch;
 - partial loop and mixed cap/lateral selection → SX4;
 - mixed cap/side asymmetric assignment on one loop → SX4;
+- a two-distance chamfer of a box's cap loop and of a circular rim matches the
+  closed-form volume (`ds·(LW − (L+W)·dc + 4/3·dc²)` and the frustum
+  `π·ds/3·(R² + R·(R−dc) + (R−dc)²)`), and swapping the reference face swaps
+  `dc` and `ds`;
+- a two-distance chamfer with `otherDistance == d` is bit-identical to the
+  equal one;
+- a two-distance overrun across the cap → SX6, down the side → SX7, and a
+  setback too small for its own axis → SX13 on that axis;
+- a two-distance band's side level carries `otherDistance`'s conversion
+  rounding where the side wall is referenced, and a miter ruling next to a
+  circular wall encloses its locus with `ds ≠ dc`;
 - opposite cap bands meeting → SX7;
 - carrier collapse → SX6, including where the same call ALSO satisfies SX7's
   `reach >= height`, so the sweep height alone can never pick the sentinel;
@@ -1298,11 +1400,11 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric cap-loop chamfer; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
+| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn, is S2 until C's §9.2 wall section lands; cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback; analytic integrals | the asymmetric cap-loop chamfer; complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where

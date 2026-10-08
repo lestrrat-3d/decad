@@ -103,8 +103,9 @@ func loopCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64,
 // and proofbound.SweptMomentAllow's own contract (internal/proofbound/bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
+	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
 	sideZ := sideZB.Value
 
 	signedArea, err := loopSignedAreaBudget(proofbound.NewWorkBudget(ctx), loop)
@@ -120,7 +121,7 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := capLoopBoundary(ctx, loop, cbp.d)
+	capBoundary, err := capLoopBoundary(ctx, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}

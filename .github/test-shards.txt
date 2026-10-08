@@ -210,6 +210,7 @@
 3	0.00	TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity
 3	0.00	TestAnalyticCircularEdgesCarryLengthBounds
 3	0.00	TestAngularHomotopyBulgesBoundTheSecondDerivatives
+3	0.04	TestAsymmetricCapSetbacksRefuseMixedPicks
 3	0.00	TestAtanSmallIntervalDegenerateArguments
 3	0.00	TestAuditRewriteSingleCornerOverrunIsUnsupported
 3	0.00	TestAuditSheetBoundaryStructuralViolations
@@ -265,8 +266,10 @@
 3	0.00	TestCapBandMomentCoordUpperCoversOffsetBoundary
 3	0.00	TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand
 3	0.03	TestCapBlendAdmissionRefusesAMiteredArc
+3	0.04	TestCapBlendChordVolumeChargesEachCapsBandHeight
 3	0.00	TestCapBlendConeFluxIntervalEnclosesFloatClosedForm
 3	0.00	TestCapBlendConeMomentCoefficientsMatchReference
+3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
 3	0.00	TestCapJoinIsG1IsExact
 3	0.00	TestCapOffsetStationBoundReadsTheExactOffsetCircle

@@ -109,19 +109,19 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			sign = -1
 		}
 
-		// A chamfered end pulls its own straight level in by the setback. Its
-		// unit conversion and float sum both round. The rounding is an ulp of
+		// A chamfered end pulls its own straight level in by that cap's side
+		// setback ds (docs/modify-reach-design.md §8.3.1). Its unit conversion
+		// and float sum both round. The rounding is an ulp of
 		// the SWEEP, but it multiplies the whole section area below, so it
 		// reaches the volume at the scale of the band itself and is charged here
 		// — the same term capBandVolume charges for the identical level it reads
 		// as sideZ.
 		zLo, zHi := proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta), proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
-		setback := proofbound.MeasuredScalar(cbp.d, cbp.dDelta)
 		if onStart {
-			zLo = proofbound.BoundedAdd(zLo, setback)
+			zLo = proofbound.BoundedAdd(zLo, proofbound.MeasuredScalar(cbp.start.ds, cbp.start.dsDelta))
 		}
 		if onEnd {
-			zHi = proofbound.BoundedSub(zHi, setback)
+			zHi = proofbound.BoundedSub(zHi, proofbound.MeasuredScalar(cbp.end.ds, cbp.end.dsDelta))
 		}
 		// The side walls are built over those same two bounded levels, so each
 		// end's displacement goes in with it: the wall vertices, the vertical
@@ -234,7 +234,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		startBoundary := loop
 		if onStart {
-			startBoundary, err = capLoopBoundary(ctx, loop, cbp.d)
+			startBoundary, err = capLoopBoundary(ctx, loop, cbp.start.dc)
 			if err != nil {
 				return nil, err
 			}
@@ -258,7 +258,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		endBoundary := loop
 		if onEnd {
-			endBoundary, err = capLoopBoundary(ctx, loop, cbp.d)
+			endBoundary, err = capLoopBoundary(ctx, loop, cbp.end.dc)
 			if err != nil {
 				return nil, err
 			}
@@ -369,7 +369,8 @@ func capContourPerimeterUpper(capCo []coedge) float64 {
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }
 
-// capLoopBoundary returns loop_li's OWN offset-by-d boundary as a standalone
+// capLoopBoundary returns loop_li's OWN offset-by-d boundary (d the cap's dc)
+// as a standalone
 // LoopRecord, used to compute a chamfered cap's per-loop enclosed area and
 // the band's closing disk at the cap level.
 func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecord, error) {
@@ -423,8 +424,9 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // capArea's own bound, or inside each patchRawFlux term, would count the SAME
 // displaced coordinates twice, since patchRawFlux already reads them.
 func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (proofbound.BoundedScalar, error) {
+	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
 	sideZ := sideZB.Value
 	// sideZ multiplies a whole disk area below, so its own rounding is a term
 	// of the band and is charged here — an error the size of an ulp of the
@@ -450,7 +452,7 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
-	capBoundary, err := capLoopBoundary(ctx, loop, cbp.d)
+	capBoundary, err := capLoopBoundary(ctx, loop, setback.dc)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
