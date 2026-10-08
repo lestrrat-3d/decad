@@ -86,9 +86,19 @@ func SectionExtentAllow(ax Frame, sectionDelta float64) float64 {
 //     extreme at the rate of |z| ≤ envUpper; c0's and c1's at the rate of
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
+//   - basisAllow: placeAllow reads the HELD a3/w/e0/e1 as its leaves, while
+//     the record denotes the basis built from the exact frame and axis
+//     leaves, e1 the exact cross product (RevolveLift.BasisRound's four L1
+//     gaps, basisRound). Each gap moves its coefficient's g-projection by at
+//     most twice its L1 norm, since every entry of the placement's held
+//     basis is within 1e-9 of a unit vector's, and at the same rates as
+//     placeAllow's. No other term in the box reads the frame's departure
+//     from orthonormal: the extreme of the linear functional g over the
+//     image of the plane-coordinate body is exact for any linear map, so an
+//     orthonormality defect enters only through these coefficients.
 func FrameRoundAllow(
 	ax Frame, sectionDelta float64, xform r3.Transform, g r3.Vec, b revolvemesh.RevolveBasis,
-	base, wg, c0, c1, coordUpper float64,
+	basisRound [4]float64, base, wg, c0, c1, coordUpper float64,
 ) float64 {
 	envUpper := ax.RadialUpper(SectionCoordUpper(coordUpper, sectionDelta))
 	dirAllow := proofbound.AbsSumUpper(ax.DUBound, ax.DVBound)
@@ -110,7 +120,18 @@ func FrameRoundAllow(
 		proofbound.ProductUpper(envUpper, proofbound.AbsSumUpper(c0Round, c1Round)),
 	)
 
-	return proofbound.AbsSumUpper(axisAllow, placeAllow)
+	total := proofbound.AbsSumUpper(axisAllow, placeAllow)
+	basisAllow := proofbound.ProductUpper(2, proofbound.AbsSumUpper(
+		basisRound[0],
+		proofbound.ProductUpper(basisRound[1], envUpper),
+		proofbound.ProductUpper(envUpper, proofbound.AbsSumUpper(basisRound[2], basisRound[3])),
+	))
+	// An absent basis gap folds nothing: proofbound.AbsSumUpper up-rounds a
+	// positive total even when the added term is zero.
+	if basisAllow > 0 {
+		total = proofbound.AbsSumUpper(total, basisAllow)
+	}
+	return total
 }
 
 // ExtentBoundarySweepBound is the per-end composition: the outward sum of the two terms,

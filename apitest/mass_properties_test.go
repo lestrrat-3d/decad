@@ -243,17 +243,38 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	oblique, err := body.PlacedCopy(t.Context(), obliquePose)
 	require.NoError(t, err)
 	// An oblique placement leaves the source-cylinder path for the general
-	// revolve path, whose rotation keeps the mass and, about Z, the
-	// transverse ZZ.
+	// revolve path, which reads the image of the cylinder under the held
+	// basis M read exactly (docs/multibody-dynamics-design.md §8.6): the
+	// mass ρ·|det M|·V and the image's inertia.
 	reading, err = oblique.MassProperties(t.Context(), density)
 	require.NoError(t, err)
-	requireReadingCovers(t, reading.Mass, mass)
-	requireReadingCovers(t, reading.Inertia.ZZ, transverse)
+	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	m := heldRotation(obliquePose, xy)
+	det := wideDet(m)
+	det.Abs(det)
+	requireWideCovers(t, reading.Mass, newWide().Mul(newWide().SetRat(mass), det))
+	local := [3][3]*big.Float{
+		{newWide().SetRat(axial), newWide(), newWide()},
+		{newWide(), newWide().SetRat(transverse), newWide()},
+		{newWide(), newWide(), newWide().SetRat(transverse)},
+	}
+	image := affineInertia(m, local, newWide().SetRat(new(big.Rat).SetFloat64(density.Mag())))
+	requireWideCovers(t, reading.Inertia.ZZ, image[2][2])
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	reading, err = body.MassProperties(canceled, density)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, decad.MassProperties{}, reading)
+}
+
+// requireWideCovers asserts a reading's own interval holds a 512-bit value.
+func requireWideCovers(t *testing.T, reading decad.Measurement, exact *big.Float) {
+	t.Helper()
+	deviation := newWide().Sub(exact, newWide().SetFloat64(reading.Value.Base()))
+	deviation.Abs(deviation)
+	require.LessOrEqual(t, deviation.Cmp(newWide().SetFloat64(reading.Bound.Base())), 0,
+		"%s ± %s misses %s", reading.Value, reading.Bound, exact.Text('g', 20))
 }
 
 func requireReadingCovers(t *testing.T, reading decad.Measurement, exact *big.Rat) {

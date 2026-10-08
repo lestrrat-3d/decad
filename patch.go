@@ -208,6 +208,9 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
+		return nil, err
+	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}

@@ -76,10 +76,25 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 	placed, err := pocket.Placed(t.Context(), rotation)
 	require.NoError(t, err)
 	require.Len(t, placed.Faces(), len(pocket.Faces()))
+	// The placed pocket keeps the value 936; the rotation's held basis is
+	// orthonormal only to rounding, so the bound charges its determinant's
+	// departure from 1 (docs/evaluator-design.md §5.1).
 	volume, err := placed.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, volume.Exactness)
 	require.Equal(t, 936.0, volumeMM(t, volume))
+	basis := rotation.Basis()
+	col := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
+	}
+	ex, ey, ez := col(basis.EX), col(basis.EY), col(basis.EZ)
+	det := new(big.Rat)
+	for i := range 3 {
+		j, k := (i+1)%3, (i+2)%3
+		minor := new(big.Rat).Sub(new(big.Rat).Mul(ey[j], ez[k]), new(big.Rat).Mul(ey[k], ez[j]))
+		det.Add(det, new(big.Rat).Mul(ex[i], minor))
+	}
+	miss := new(big.Rat).Abs(new(big.Rat).Sub(new(big.Rat).Mul(det, big.NewRat(936, 1)), big.NewRat(936, 1)))
+	require.LessOrEqual(t, miss.Cmp(new(big.Rat).SetFloat64(volume.Bound.Base())), 0, "the bound covers |det B|·936")
 	requireBodyWatertight(t, placed)
 }
 

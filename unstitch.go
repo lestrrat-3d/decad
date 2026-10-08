@@ -158,16 +158,18 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	shell := &Shell{faces: []*Face{nf}, open: shellIsOpen([]*Face{nf})}
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
-	// Area is the face's own reading, unaffected by delta: a rigid motion
-	// preserves area exactly, and this evaluator never recomputes area from
-	// placed coordinates — it copies the analytic value the source face
-	// already carried (copyFaceUnderContext), so that value's own proven
-	// bound already covers the placed face exactly as it covered the
-	// unplaced one.
+	// Area is the face's own reading, unaffected by delta: this evaluator
+	// never recomputes area from placed coordinates — it copies the analytic
+	// value the source face already carried (copyFaceUnderContext). The
+	// placement's held basis is orthonormal only to rounding, so
+	// chargePlacement widens the copied area and lengths for it.
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(nf.area),
 		Exactness: exactnessOf(nf.areaBound),
 		Bound:     units.SquareMillimeters(nf.areaBound),
+	}
+	if err := chargePlacement(body, xform); err != nil {
+		return nil, err
 	}
 
 	bounds, err := faceBounds(srcFace, nf, srcBounds, xform, delta)

@@ -119,3 +119,48 @@ func ExactVec(v r3.Vec) ([3]*big.Rat, bool) {
 	out := [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
 	return out, out[0] != nil && out[1] != nil && out[2] != nil
 }
+
+// MapCharge is what a reading taken in plane coordinates owes the linear map
+// L the record denotes through (PlaneMap, PrismRotation): the held frame and
+// placement read as exact rationals, which r3 keeps orthonormal only to
+// rounding. Volume is ||det L| − 1|, rounded up: L scales every volume by
+// exactly |det L|. Stretch is the orthonormality defect e of L, the
+// entrywise absolute sum of LᵀL − I, rounded up: every eigenvalue of LᵀL lies
+// in [1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor
+// in [1 − e, 1 + e]. Both are zero for an exactly orthonormal L, and every
+// widening below is then a no-op.
+type MapCharge struct {
+	Volume, Stretch float64
+}
+
+// MapChargeOf reads l's MapCharge, refusing a map whose defect reaches 1/2,
+// where the length factor's range no longer holds with margin. r3's own 1e-9
+// orthonormality admission keeps every real frame far below it.
+func MapChargeOf(l [3][3]*big.Rat) (MapCharge, error) {
+	defect := OrthonormalityDefect(l)
+	if defect.Cmp(big.NewRat(1, 2)) >= 0 {
+		return MapCharge{}, fmt.Errorf(`%w: the placed frame departs from orthonormal by %s`, decaderr.ErrUnsupported, defect.FloatString(3))
+	}
+	det := Determinant(l)
+	det.Abs(det).Sub(det, big.NewRat(1, 1))
+	return MapCharge{
+		Volume:  proofbound.RatFloatUp(det.Abs(det)),
+		Stretch: proofbound.RatFloatUp(defect),
+	}, nil
+}
+
+// VolumeOf widens a plane-coordinate volume reading to cover its image.
+func (c MapCharge) VolumeOf(x proofbound.BoundedScalar) proofbound.BoundedScalar {
+	return proofbound.BoundedStretch(x, c.Volume)
+}
+
+// AreaOf widens a plane-coordinate area reading to cover its image.
+func (c MapCharge) AreaOf(x proofbound.BoundedScalar) proofbound.BoundedScalar {
+	return proofbound.BoundedStretch(x, c.Stretch)
+}
+
+// LengthBound is the bound a plane-coordinate length and its bound carry
+// once widened to cover the curve's image.
+func (c MapCharge) LengthBound(value, bound float64) float64 {
+	return proofbound.BoundedStretch(proofbound.MeasuredScalar(value, bound), c.Stretch).Bound
+}

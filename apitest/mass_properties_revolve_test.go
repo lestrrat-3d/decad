@@ -336,13 +336,15 @@ func TestMassPropertiesRevolveArcWedge(t *testing.T) {
 
 // TestMassPropertiesRevolveRotated places the quarter-turn triangle under a
 // rotation composed from eight steps about (1, 1, 1), so the held basis
-// carries accumulated rounding. Every world component must enclose Q·I·Qᵀ,
-// I the independent local tensor and Q the polar factor of the held basis
-// (mass_properties_rotated_test.go's reference rotation); the sketch frame is
-// XY, so the local basis (axis, radial, sweep) is the frame's (U, V, N).
+// carries accumulated rounding. The revolve denotes the image of the local
+// solid under that held basis M read exactly (docs/multibody-dynamics-design.md
+// §8.6), so the mass must enclose ρ·|det M|·V and every world component the
+// image's inertia (affineInertia), I the independent local tensor; the sketch
+// frame is XY, so the local basis (axis, radial, sweep) is the frame's
+// (U, V, N).
 //
-// Shown-to-fail: zeroing the orthonormality-defect widening makes at least
-// one component miss Q·I·Qᵀ.
+// Shown-to-fail: publishing the rigid path's ρ·V and Q·I·Qᵀ, Q the polar
+// factor of M, made the mass miss.
 func TestMassPropertiesRevolveRotated(t *testing.T) {
 	doc := decad.New()
 	sk, profile := polygonSketch(t, [][2]float64{{0, 4}, {8, 4}, {8, 8}})
@@ -364,15 +366,26 @@ func TestMassPropertiesRevolveRotated(t *testing.T) {
 	mass, inertia := revolveExpectation(rho, quarterSweep(revolvePi(t)),
 		section.moment(1, 0), section.moment(1, 1), section.moment(2, 0),
 		section.moment(1, 2), section.moment(2, 1), section.moment(3, 0))
-	requireReadingCovers(t, got.Mass, mass)
-	local := [3][3]*big.Rat{
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	m := heldRotation(pose, frame)
+	det := wideDet(m)
+	det.Abs(det)
+	wantMass := newWide().Mul(newWide().SetRat(mass), det)
+	massDeviation := newWide().Sub(wantMass, newWide().SetFloat64(got.Mass.Value.Base()))
+	massDeviation.Abs(massDeviation)
+	require.LessOrEqual(t, massDeviation.Cmp(newWide().SetFloat64(got.Mass.Bound.Base())), 0)
+	var local [3][3]*big.Float
+	for i, row := range [3][3]*big.Rat{
 		{inertia[0], inertia[3], inertia[4]},
 		{inertia[3], inertia[1], inertia[5]},
 		{inertia[4], inertia[5], inertia[2]},
+	} {
+		for j, x := range row {
+			local[i][j] = newWide().SetRat(x)
+		}
 	}
-	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
-	require.NoError(t, err)
-	q := polarFactor(heldRotation(pose, frame))
+	image := affineInertia(m, local, newWide().SetRat(rho))
 	for _, entry := range []struct {
 		reading decad.Measurement
 		i, j    int
@@ -380,13 +393,7 @@ func TestMassPropertiesRevolveRotated(t *testing.T) {
 		{got.Inertia.XX, 0, 0}, {got.Inertia.YY, 1, 1}, {got.Inertia.ZZ, 2, 2},
 		{got.Inertia.XY, 0, 1}, {got.Inertia.XZ, 0, 2}, {got.Inertia.YZ, 1, 2},
 	} {
-		want := newWide()
-		for k := range 3 {
-			for l := range 3 {
-				term := newWide().Mul(q[entry.i][k], q[entry.j][l])
-				want.Add(want, term.Mul(term, newWide().SetRat(local[k][l])))
-			}
-		}
+		want := image[entry.i][entry.j]
 		deviation := newWide().Sub(want, newWide().SetFloat64(entry.reading.Value.Base()))
 		deviation.Abs(deviation)
 		require.LessOrEqual(t, deviation.Cmp(newWide().SetFloat64(entry.reading.Bound.Base())), 0,
