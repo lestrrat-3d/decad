@@ -35,6 +35,7 @@ the rules leave to the byte budget.
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers: prism recognition (route P), axis-parallel edge blends (route E), Tables RB/EB/SB/BB/DB. |
+| `docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: the rim rule, the brep record, Tables RO/SO/BO/DO, PR split. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
@@ -69,7 +70,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `doc.go` | Package scope, support map and layering. |
-| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError` with its `Code`. See api §12, §8. |
+| `errors.go` | Sentinel errors (from `internal/decaderr/`) and `BooleanError`. See api §12, §8. |
 | `measurement.go` | Public reading aliases and analytic result gate. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
@@ -177,14 +178,14 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `verify.go` | `Document.Verify` orchestration and ordered report assembly. See `docs/verification-design.md` §1–§3 and the file's doc comment. |
+| `verify.go` | `Document.Verify` orchestration. See verification §1–§3. |
 | `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
 | `report.go` | Public report aliases. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_result.go` | Public verification result aliases. |
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
-| `clearance.go` | The pair kernel: `clearancePair` proves a pair's relation and gap; `sheetSolidPair` decides a sheet pair. See clearance §1-§3/§6. |
+| `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred sweeps and faceted results: interference design §3.2. |
 | `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. Box classification lives in `internal/pair/box/`. See `docs/contact-geometry-design.md`. |
@@ -204,10 +205,10 @@ the rules leave to the byte budget.
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters and vertex budget. See clearance §3/§6. |
-| `clearance_geom.go` | `bodyGeom`: each body's clearance faces, edges and nesting test over `internal/clearance/`'s carriers. See `docs/clearance-design.md` §2–§3. |
+| `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
 | `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | Folds three-valued undercut readings. |
-| `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
+| `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
 | `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
 | `motion_bound.go` | Reads payload record radii for `internal/motionbound/`. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
@@ -252,7 +253,7 @@ the rules leave to the byte budget.
 | `tessellate_revolve_proof.go` | Wires `internal/revolvemesh/` audits. |
 | `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
-| `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
+| `tessellate_station.go` | `chordStationBound`: one chord station's enclosure gap. See its doc comment. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See tessellation reach §7. |
@@ -265,7 +266,7 @@ the rules leave to the byte budget.
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks). Never `package main`. |
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
-| `decadtest/` | The public test kit: comparison helpers over bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. See `decadtest/doc.go`. |
+| `decadtest/` | The public test kit. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/measurement/` | Bounded reading types. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
