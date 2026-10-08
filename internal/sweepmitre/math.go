@@ -117,7 +117,6 @@ func PlacedVolumeMoments(vol6 *big.Rat, moments [3]*big.Rat, xform r3.Transform)
 
 // TriangleAreas encloses each exact triangle area with rational endpoints.
 func TriangleAreas(ctx context.Context, exact []sweeparc.RatVec, tris [][3]int) ([][2]*big.Rat, error) {
-	quarter := big.NewRat(1, 4)
 	out := make([][2]*big.Rat, len(tris))
 	for k, t := range tris {
 		if k%256 == 0 {
@@ -125,9 +124,40 @@ func TriangleAreas(ctx context.Context, exact []sweeparc.RatVec, tris [][3]int) 
 				return nil, err
 			}
 		}
-		n := sweeparc.Cross(sweeparc.Sub(exact[t[1]], exact[t[0]]), sweeparc.Sub(exact[t[2]], exact[t[0]]))
-		q := sweeparc.Dot(n, n)
-		q.Mul(q, quarter)
+		// Scale only this triangle. A sweep-wide denominator makes the
+		// integers grow with unrelated vertices and slows their products.
+		den := big.NewInt(1)
+		var rem, gcd big.Int
+		for _, vertex := range t {
+			for axis := range 3 {
+				d := exact[vertex][axis].Denom()
+				if rem.Rem(den, d).Sign() == 0 {
+					continue
+				}
+				gcd.GCD(nil, nil, den, d)
+				den.Mul(den, rem.Quo(d, &gcd))
+			}
+		}
+		var edge [2][3]big.Int
+		for axis := range 3 {
+			origin := new(big.Int).Mul(new(big.Int).Quo(den, exact[t[0]][axis].Denom()), exact[t[0]][axis].Num())
+			for e := range 2 {
+				r := exact[t[e+1]][axis]
+				edge[e][axis].Mul(new(big.Int).Quo(den, r.Denom()), r.Num())
+				edge[e][axis].Sub(&edge[e][axis], origin)
+			}
+		}
+		var square, component, scratch big.Int
+		for axis := range 3 {
+			j, l := (axis+1)%3, (axis+2)%3
+			component.Mul(&edge[0][j], &edge[1][l])
+			component.Sub(&component, scratch.Mul(&edge[0][l], &edge[1][j]))
+			square.Add(&square, scratch.Mul(&component, &component))
+		}
+		den4 := new(big.Int).Mul(den, den)
+		den4.Mul(den4, den4)
+		den4.Lsh(den4, 2)
+		q := new(big.Rat).SetFrac(&square, den4)
 		lo, hi := proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 		if math.IsInf(hi, 0) {
 			return nil, fmt.Errorf(`%w: a mitred sweep triangle's area runs past the representable float64 range`, decaderr.ErrUnsupported)
