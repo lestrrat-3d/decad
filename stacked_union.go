@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -519,7 +520,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper Profi
 // stackedUnionExposed is the union reading of stacked §2.2's I7: the wider
 // region with the narrower region's outer, reversed, as its one hole.
 func stackedUnionExposed(ctx context.Context, wider, narrower ProfileRecord) ([]ProfileRecord, error) {
-	hole, err := reverseLoopRecordContext(ctx, narrower.Outer)
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, narrower.Outer)
 	if err != nil {
 		return nil, err
 	}

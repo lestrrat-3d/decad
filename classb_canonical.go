@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -396,7 +397,7 @@ func (b *cbBuild) cylinderPieces() ([]brepFace, error) {
 		}
 		same := (ww.Th1 > ww.Th0) == (rw.Th1 > rw.Th0)
 		if (k.c.op == cbX) != same {
-			rev, err := reverseLoopRecord(LoopRecord{Segments: []CurveSegment{wseg}})
+			rev, err := offset2d.ReverseLoopRecord(LoopRecord{Segments: []CurveSegment{wseg}})
 			if err != nil {
 				return nil, err
 			}

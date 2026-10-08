@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -694,7 +695,7 @@ func anyLoopSelected(loops map[int]bool) bool {
 // mixedOffsetProfile offsets exactly the loops cbp chamfers (the union of its
 // startLoops/endLoops — a loop chamfered on either or both caps takes one
 // in-plane offset, loopOffset's dc) into the material, leaving every other
-// loop unchanged. It reuses offsetLoopBudget's per-feature offset unmodified.
+// loop unchanged. It reuses offset2d.BuildLoop's per-feature offset unmodified.
 func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (ProfileRecord, error) {
 	profile := cbp.profile
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
@@ -711,7 +712,7 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (Pro
 			out[li] = cloneLoopRecord(orig[li])
 			continue
 		}
-		segs, err := offsetLoopBudget(budget, loops[li], 1, cbp.loopOffset(li))
+		segs, err := offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
 		if err != nil {
 			return ProfileRecord{}, err
 		}
@@ -730,13 +731,13 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (Pro
 // offset radius reaches zero collapses to a sharp corner) — so the body the
 // caller named does not exist as a cap-loop chamfer. §4's existence test puts
 // that in stage 5 with ErrDegenerate. The translation lives here, at the one
-// call site that asks the existence question, never on errOffsetDrop itself —
+// call site that asks the existence question, never on offset2d.ErrDrop itself —
 // Shell's own sentinel is correct for Shell. The result does not wrap
-// errOffsetDrop: carrying its ErrUnsupported along would leave the refusal
+// offset2d.ErrDrop: carrying its ErrUnsupported along would leave the refusal
 // answering to both sentinels, and a caller branching on either would be
 // right, which is the ambiguity §4's one-sentinel rule exists to prevent.
 func wrapCapBlendDropError(err error) error {
-	if !errors.Is(err, errOffsetDrop) {
+	if !errors.Is(err, offset2d.ErrDrop) {
 		return err
 	}
 	return fmt.Errorf(`%w: the cap-loop offset drops a section feature (a circular wall's offset radius reaches zero, or a walk is consumed), so the selected loop has no regular cap contour at this setback`, ErrDegenerate)
@@ -745,7 +746,7 @@ func wrapCapBlendDropError(err error) error {
 // wrapCapBlendAuditError relabels the shared offset audit's refusal with the
 // wording of the stage-6 row it came from, and preserves the sentinel that row
 // already decided. SX6 (drop) is settled by mixedOffsetProfile's own call to
-// offsetLoopBudget before the audit runs, so a refusal reaching here is one of
+// offset2d.BuildLoop before the audit runs, so a refusal reaching here is one of
 // the audit's own: the base S8/S9 nesting rows, which say the offset section is
 // decidably broken and therefore that no such body exists (ErrDegenerate), or
 // SX7/SX12, which say the body exists and this evaluator cannot trim or merge

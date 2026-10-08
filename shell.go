@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -392,13 +393,13 @@ func shellWallBands(ctx context.Context, outer, cavity ProfileRecord) ([]Profile
 	if len(outer.Holes) != len(cavity.Holes) {
 		return nil, fmt.Errorf(`%w: the shell's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
-	cavityOuter, err := reverseLoopRecordContext(ctx, cavity.Outer)
+	cavityOuter, err := offset2d.ReverseLoopRecordContext(ctx, cavity.Outer)
 	if err != nil {
 		return nil, err
 	}
 	bands := []ProfileRecord{{Outer: outer.Outer, Holes: []LoopRecord{cavityOuter}}}
 	for i, hole := range cavity.Holes {
-		post, err := reverseLoopRecordContext(ctx, hole)
+		post, err := offset2d.ReverseLoopRecordContext(ctx, hole)
 		if err != nil {
 			return nil, err
 		}
@@ -628,7 +629,7 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 		outer = offset.Outer
 		inner = pp.profile.Outer
 	}
-	holeLoop, err := reverseLoopRecordContext(ctx, inner)
+	holeLoop, err := offset2d.ReverseLoopRecordContext(ctx, inner)
 	if err != nil {
 		return nil, err
 	}

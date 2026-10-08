@@ -33,7 +33,7 @@ import (
 // assembles an annulus from an outer and an inner loop, so it must first prove
 // the source and offset loops disjoint and strictly nested; this build
 // publishes no such relation and denotes nothing whatever about the source, so
-// that audit has no subject here and reverseLoopRecordContext and
+// that audit has no subject here and offset2d.ReverseLoopRecordContext and
 // evalTubeContext are not on this path (§17.2). Everything else §16.2 states —
 // offsetProfile, auditOffsetSectionBudget, the exact-generation gate and the
 // whole-interval certification of thicken_axis.go — runs unchanged.

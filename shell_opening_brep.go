@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
@@ -31,7 +32,7 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 	if sec.cutGap > 0 {
 		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.cutGap))
 		if proofbound.IsNonFinite(delta) {
-			return nil, errOffsetUnbounded
+			return nil, offset2d.ErrUnbounded
 		}
 	}
 	return evalPrismContext(ctx, d, ref, prismPayload{

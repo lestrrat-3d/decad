@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -665,7 +666,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	}
 	switch op {
 	case meshbool.OpCut:
-		hole, err := reverseLoopRecordContext(ctx, section.Outer)
+		hole, err := offset2d.ReverseLoopRecordContext(ctx, section.Outer)
 		if err != nil {
 			return nil, false, err
 		}

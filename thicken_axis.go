@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -58,7 +59,7 @@ func thickenAxisSection(ctx context.Context, profile ProfileRecord, side Thicken
 			return thickenSection{}, err
 		}
 	}
-	hole, err := reverseLoopRecordContext(ctx, sec.inner.Outer)
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, sec.inner.Outer)
 	if err != nil {
 		return thickenSection{}, err
 	}

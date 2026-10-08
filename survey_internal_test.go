@@ -591,7 +591,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		line(100, 60, 0, 60),
 		line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfileBudget(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
+	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupView{
 		outer:     outer,
@@ -725,7 +725,7 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, out.ok)
 
-	for _, target := range []string{"coalesceWalksBudget", "crossingAuditBudget", "reverseLoopRecordBudget", "loopRecordsEqual"} {
+	for _, target := range []string{"coalesceWalksBudget", "crossingAuditBudget", "reverseLoopRecordWithPoll", "loopRecordsEqual"} {
 		t.Run(target, func(t *testing.T) {
 			budget, entered := newFrameWorkBudget(target)
 			_, err := cupWall(budget, cp)

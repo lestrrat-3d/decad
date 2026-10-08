@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -51,7 +52,7 @@ func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	base := pocket.payload.(stackedPrismPayload)
 	require.NoError(t, falsifyStackedPayload(t.Context(), base))
 	other := internalBoxBody(t, doc, 1, 1, 2, 2, 10)
-	otherHole, err := reverseLoopRecordContext(t.Context(), other.payload.(prismPayload).profile.Outer)
+	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).profile.Outer)
 	require.NoError(t, err)
 	cases := []struct {
 		name   string
@@ -172,7 +173,7 @@ func holedCupRecord(t *testing.T) cupPayload {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	hole := func(u0, v0, u1, v1 float64) LoopRecord {
-		l, err := reverseLoopRecordContext(t.Context(), rectangleRecord(u0, v0, u1, v1).Outer)
+		l, err := offset2d.ReverseLoopRecordContext(t.Context(), rectangleRecord(u0, v0, u1, v1).Outer)
 		require.NoError(t, err)
 		return l
 	}
@@ -223,7 +224,7 @@ func TestCupStackedRecord(t *testing.T) {
 
 func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
 	base := holedCupRecord(t).stack
-	other, err := reverseLoopRecordContext(t.Context(), rectangleRecord(1, 1, 2, 2).Outer)
+	other, err := offset2d.ReverseLoopRecordContext(t.Context(), rectangleRecord(1, 1, 2, 2).Outer)
 	require.NoError(t, err)
 	cases := []struct {
 		name   string

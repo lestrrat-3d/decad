@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 
@@ -488,7 +489,7 @@ var cupWallOperations = cupwall.Operations{
 	Offset:  offsetProfile,
 	Equal:   profileRecordsEqual,
 	Audit:   auditOffsetSectionBudget,
-	Reverse: reverseLoopRecordBudget,
+	Reverse: offset2d.ReverseLoopRecordBudget,
 }
 
 func cupWallInput(cp cupView) cupwall.Input {
@@ -547,7 +548,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		}
 	}
 	for i, loop := range cLoops {
-		crev, err := reverseLoopRecord(loop)
+		crev, err := offset2d.ReverseLoopRecord(loop)
 		if err != nil {
 			return undercutOutcome{}
 		}
@@ -613,7 +614,7 @@ func cupMinRadius(cp cupView) (radiusOutcome, bool) {
 	profile.Holes = append(profile.Holes, cp.outer.Holes...)
 	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
 	for _, loop := range cLoops {
-		crev, err := reverseLoopRecord(loop)
+		crev, err := offset2d.ReverseLoopRecord(loop)
 		if err != nil {
 			return radiusOutcome{}, false
 		}

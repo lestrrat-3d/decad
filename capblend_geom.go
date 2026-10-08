@@ -48,7 +48,7 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
-// exactly as offsetLoopBudget's per-wall trim does.
+// exactly as offset2d.BuildLoop's per-wall trim does.
 func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 	j0 := joins[i]
 	start := j0.m
@@ -455,7 +455,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	// Pass 3: the wall patches (Plane or Cone) AND the cap-level boundary
 	// coedges, in walk order — a wall's own capEdge, then the reflex arc
-	// (if any) at the corner it leads into, exactly the order offsetLoopBudget
+	// (if any) at the corner it leads into, exactly the order offset2d.BuildLoop
 	// emits the same offset loop's segments in.
 	for i := range n {
 		w := walks[i]

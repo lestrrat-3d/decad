@@ -313,7 +313,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Offset carriers, joins, side-opening rim and removed-run records, and displacement proofs. See modify §6–§9 and shell-opening §3–§5. |
+| `internal/offset2d/` | Offset carriers, joins, loop reversal, side-opening records and displacement proofs. See modify §6–§9 and shell-opening §3–§5. |
 | `internal/capband/` | Cap-band radius, window, miter locus, patch and mass proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |

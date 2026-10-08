@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -1142,7 +1143,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rev, err := reverseLoopRecordContext(ctx, loop)
+		rev, err := offset2d.ReverseLoopRecordContext(ctx, loop)
 		if err != nil {
 			return nil, err
 		}
