@@ -37,7 +37,7 @@ func SectionInradius(budget *proofbound.WorkBudget, profile boundarywalk.Profile
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, false, err
 	}
-	loops, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile(profile))
+	loops, err := boundarywalk.SurveyLoopsBudget(budget, profile)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return 0, false, err
