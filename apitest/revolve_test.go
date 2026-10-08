@@ -1164,24 +1164,41 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	require.Equal(t, 1, report.Bodies[0].Topology.Voids)
 }
 
-func TestVoidRevolveModifyOpsRefuseReceiver(t *testing.T) {
+func TestVoidRevolveModifyOps(t *testing.T) {
 	t.Parallel()
-	s, p := holedSketch(t)
-	doc := decad.New()
-	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	voidRevolve := func(t *testing.T) (*decad.Document, *decad.Body) {
+		t.Helper()
+		s, p := holedSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+		require.Len(t, body.Shells(), 2)
+		require.True(t, body.Shells()[1].IsVoid())
+		return doc, body
+	}
+
+	// The outer loop's four latitude circles are swept meridian junctions
+	// (docs/modify-reach-design.md Table RX row RX2), so a fillet rounds them
+	// and leaves the toroidal void alone. Each radius-1 corner removes a
+	// (1 − π/4) spandrel whose centroid sits k = (10 − 3π)/(12 − 3π) in from
+	// its corner: two corners at ρ = 5 and two at ρ = 15, so the four removed
+	// centroids' radii sum to 40 and the volume drops by 2π·40·(1 − π/4).
+	_, body := voidRevolve(t)
+	filleted, err := body.Fillet(t.Context(), decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(1))
 	require.NoError(t, err)
-	require.Len(t, body.Shells(), 2)
-	require.True(t, body.Shells()[1].IsVoid())
+	requireManifold(t, filleted)
+	require.Len(t, filleted.Shells(), 2)
+	require.True(t, filleted.Shells()[1].IsVoid(), `the hole's void shell survives the rewrite`)
+	decadtest.MeasuresVolume(t, filleted,
+		units.CubicMillimeters(2*math.Pi*(1000-40*math.Pi)-2*math.Pi*40*(1-math.Pi/4)))
+
+	// Shell of a revolve is not built (reach PR D): the receiver stays live and
+	// unchanged.
+	doc, body := voidRevolve(t)
 	before, err := body.Volume()
 	require.NoError(t, err)
-
-	_, err = body.Fillet(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = body.Chamfer(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	_, err = body.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-
 	after, err := body.Volume()
 	require.NoError(t, err)
 	require.Equal(t, before, after)

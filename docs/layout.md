@@ -128,7 +128,8 @@ the rules leave to the byte budget.
 | `segment_walk.go` | Caches profile walks for extrude, revolve and loft. |
 | `segment_walk_adapters.go` | Adapts root walk callers to `internal/boundarywalk/`. |
 | `prism_extent.go` | Prism extent readings, directional reach and box, each a bounded interval. See `docs/evaluator-design.md` §5. |
-| `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and option parsing, angular-extent resolution. Readings: the other `revolve_*.go` files. |
+| `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
+| `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
 | `revolve_extent.go` | Adapts revolve extents over `internal/revolveaxis/` and `internal/revolveangle/`. See evaluator §6. |
@@ -298,17 +299,18 @@ the rules leave to the byte budget.
 | `internal/prismcells/` | Prism scenes, cell matching, shared spans, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
-| `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
+| `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
-| `internal/capband/` | Cap-band admission, normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
-| `internal/sweepmemo/` | Sweep path, radius and replay memo tables. See contact-sweep §6–§7. |
+| `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
+| `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |
 | `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |

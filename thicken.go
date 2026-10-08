@@ -205,6 +205,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	rp.ax = ax
 	rp.radialProof = false
 	rp.surfaceResult = false
+	rp.blendSegs, rp.blendKind = nil, ""
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }
 

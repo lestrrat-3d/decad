@@ -83,6 +83,15 @@ type revolvePayload struct {
 	// radialProof belongs to this exact profile and resolved axis. A path
 	// replacing either must clear it; placement alone preserves both.
 	radialProof bool
+	// blendSegs and blendKind are prismPayload's own blend-role descriptors,
+	// read over the MERIDIAN: a revolve junction fillet or chamfer
+	// (revolve_blend.go) records, per loop, the segment indices of its
+	// rewritten record that are blend connectors, and blendKind is "fillet" or
+	// "chamfer". The build gives each such wall a second kind(i,j) role beside
+	// its side(i,j) one. They ride on the payload so Placed and Duplicate
+	// re-mint the same roles; a path replacing the profile must clear them.
+	blendSegs []map[int]struct{}
+	blendKind string
 }
 
 // requireExactRevolveSection is RS13's reject-only guard: the solid build
@@ -457,6 +466,9 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		}
 	}
 	body.lumps = lumps
+	if err := addBlendRoles(ctx, body, ref, rp.blendSegs, rp.blendKind); err != nil {
+		return nil, err
+	}
 
 	// Measurements — Pappus with the profile and float-evaluation bounds
 	// carried through (docs/evaluator-design.md §6).
@@ -617,6 +629,20 @@ type revJunction struct {
 	lat    *Edge   // full: the latitude circle; nil on the axis
 }
 
+// junctionCircle is the placed circle a junction at axis coordinates (z, ρ)
+// sweeps: its centre on the axis at z, its axis the placed sweep axis (negated
+// under a reflected placement, so the circle's sense stays the sweep's), and
+// its radius ρ. buildRevolveLoop stamps every junction edge from it, and
+// revolve_blend.go matches a selected edge against it, so the two read the
+// same numbers from the same arithmetic.
+func (rp revolvePayload) junctionCircle(b revolvemesh.RevolveBasis, z, rho float64) (r3.Vec, r3.Vec, units.Value) {
+	sweepSign := 1.0
+	if rp.reflected() {
+		sweepSign = -1
+	}
+	return rp.point(b, z, 0, 0), rp.xform.ApplyDir(b.W).Scale(sweepSign), units.Millimeters(rho)
+}
+
 // revolveWalks is one recorded loop resolved the way a revolve reads it: the
 // coalesced walks in AXIS coordinates, what each of them sweeps, the same
 // walks still in PLANE-local coordinates indexed by recorded segment, and
@@ -695,11 +721,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	n := len(walks)
 	sweep := rp.sweep()
 	dphi := sweep.Value
-	sweepSign := 1.0
-	if rp.reflected() {
-		sweepSign = -1
-	}
-	wDir := rp.xform.ApplyDir(b.W)
 
 	// Junction vertices and swept edges: junction i sits at walk i's start
 	// (== walk i−1's end). A single whole closed curve has none; a junction
@@ -718,7 +739,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			j := revJunction{z: w.StartU, rho: w.StartV, onAxis: w.StartV == 0}
 			prev := walks[(i+n-1)%n]
 			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
-			center := rp.point(b, j.z, 0, 0)
+			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
 			case rp.full && !j.onAxis:
 				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.ProductUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.AxisRadiusUpper))), denot: body.doc.mintCurve()}
@@ -729,7 +750,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
 				j.lat = &Edge{
-					curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					curve:       Circle3{Center: center, Axis: jAxis, Radius: jRadius},
 					start:       seam,
 					end:         seam,
 					convex:      turn > 0,
@@ -757,7 +778,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						}
 					}
 					j.arc = &Edge{
-						curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+						curve:       Arc3{Center: center, Axis: jAxis, Radius: jRadius},
 						start:       j.v0,
 						end:         j.v1,
 						convex:      turn > 0,

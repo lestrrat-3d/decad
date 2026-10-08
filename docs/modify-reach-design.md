@@ -313,6 +313,49 @@ interval, and placement. Result remains `revolvePayload`:
 Blend face carries `side(i,j)` plus `fillet(i,j)` / `chamfer(i,j)` in the
 result record's index space.
 
+### 7.1 Implementation
+
+`revolve_blend.go` runs this section; `Body.Fillet` and `Body.Chamfer` route a
+`revolvePayload` receiver to it after stage 1 and SX10/SX16.
+
+**Matching.** The build stamps every junction edge from
+`revolvePayload.junctionCircle`: centre on the axis at the junction's `z`,
+the placed sweep axis, radius `ρ`. A selected edge is a junction exactly when
+its curve kind is the sweep's (`Circle3` full, `Arc3` partial) and its centre,
+axis and radius equal one junction circle's bit for bit, recomputed from the
+same payload. A cap edge's circle lies in a cap plane, and an on-axis or cap
+line is a `Line3`, so neither matches: SX5. Equality is exact because the two
+numbers come from one function over one payload; no tolerance chooses a
+junction.
+
+**Corner coordinates.** The payload records the meridian plane-locally, and
+the rewrite is rigid-invariant, so the corner rewrite runs on the plane-local
+coalesced walk (`profileCornerLoopsBudget`), the one a prism's section uses.
+The axis-local junction maps to it through the recorded segment its leaving
+walk starts at. Where the two coalescings disagree about that segment, the
+call refuses with `ErrUnsupported` rather than picking a neighbouring corner.
+
+**Axis gates.** `revolveBlendAxis` reruns `resolveAxisSide` — side gate,
+axis-contact audit, snap allowances — on the rewritten meridian about the
+receiver's oriented axis, and the build takes the axis frame it returns,
+`radialProof` included. A region the gate puts on the far side is
+`ErrDegenerate`. A line-line blend cannot create new axis contact: its new
+piece lies in the triangle of its corner and two tangent feet, all strictly
+off the axis (S6 refuses a foot that reaches a wall's on-axis end). The gate
+still runs for every call, and a concave fillet whose arc centre falls across
+the axis reaches it as the spindle refusal (`ErrUnsupported`).
+
+**Payload.** The result is a `revolvePayload` with the receiver's frame,
+oriented axis, angular interval, denotation and placement, and the rewritten
+profile. Its `blendSegs`/`blendKind` fields carry the blend roles, so
+`Placed` and `Duplicate` re-mint them; a path that replaces the profile
+clears them. Measurements, topology, tessellation and the surveys are the
+revolve's own (Table DX).
+
+**Asymmetric chamfer.** PR A's `WithAsymmetricChamfer` has not landed, so a
+revolve chamfer is equal-distance only; the cutback assignment above waits on
+that option.
+
 ## 8. Complete prism cap-loop blends
 
 Cap-loop support requires a complete loop. This removes the free-end setback
@@ -930,8 +973,8 @@ reaches only the analytic bodies at the start of a chain.
 |---|---|---|---|---|
 | **DX1** | mass properties / bounds | existing bounded path | bounded analytic patch integrals | bounded slab-region sums |
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
-| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | patch tessellator: one count per wall walk shared by the side wall, the band patch and the cap contour (`docs/tessellation-reach-design.md` §7) | required slab-region tessellator |
-| **DX4** | mesh boolean | available once DX3 exists | admitted for a band whose every corner is a line-line miter or an exactly G1 join, or a whole turn (`docs/tessellation-reach-design.md` §7); a circular wall at a genuine miter or a reflex corner stays `ErrUnsupported` | available once DX3 exists |
+| **DX3** | `Tessellate` / STL / OBJ | existing revolve tessellator | patch tessellator: one count per wall walk shared by the side wall, the band patch and the cap contour (`docs/tessellation-reach-design.md` §7) | required slab-region tessellator |
+| **DX4** | mesh boolean | existing revolve operand path, with its own facet ceilings; no blend-specific gate | admitted for a band whose every corner is a line-line miter or an exactly G1 join, or a whole turn (`docs/tessellation-reach-design.md` §7); a circular wall at a genuine miter or a reflex corner stays `ErrUnsupported` | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema, published beside the displacement a computed cap contour and the inherited axial levels give them (§8.4), and beside the frame, placement and endpoint-summation rounding every extent reading of this payload carries (evaluator §5); the stop charges that displacement to the level it resolves and refuses only where it straddles the sketch plane (evaluator §5) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
@@ -1138,7 +1181,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | PR | Lands | Still staged |
 |---|---|---|
 | **A** | option records/codecs; tangent expansion; asymmetric prism chamfer | revolve/cap/shell reach; all SX9/SX10 |
-| **B** | revolve junction rewrite + roles + surveys | cap loops; shell reach; DX3 until revolve tessellation lands |
+| **B** (landed) | revolve junction rewrite + roles + surveys, equal-distance chamfer only | cap loops; shell reach; the asymmetric revolve chamfer, which waits on PR A's option |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
 | **D** | full/partial allowed revolve shell | cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
