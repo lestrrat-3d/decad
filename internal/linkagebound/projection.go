@@ -234,13 +234,20 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 // numerator divided by |n| rounded up when positive and down otherwise, less
 // both pads; nil when no direction can be normed.
 func LowerHull(a, b Side) *big.Rat {
-	bound, _, _, _ := LowerHullWithWitness(a, b)
-	return bound
+	return LowerHullWithWitness(a, b).Bound
+}
+
+// HullWitness records the first direction attaining a lower hull bound.
+type HullWitness struct {
+	Bound *big.Rat
+	Axis  motionbound.RatVec
+	Norm  *big.Rat
+	Sense int
 }
 
 // LowerHullWithWitness also returns the first direction attaining the bound.
 // The upper norm is used to charge that direction's derivative shares.
-func LowerHullWithWitness(a, b Side) (*big.Rat, motionbound.RatVec, *big.Rat, int) {
+func LowerHullWithWitness(a, b Side) HullWitness {
 	one, zero := big.NewRat(1, 1), new(big.Rat)
 	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
 	dirs = append(dirs, FaceNormals(a.Corners)...)
@@ -284,5 +291,5 @@ func LowerHullWithWitness(a, b Side) (*big.Rat, motionbound.RatVec, *big.Rat, in
 			}
 		}
 	}
-	return best, winner, winnerNorm, winnerSense
+	return HullWitness{Bound: best, Axis: winner, Norm: winnerNorm, Sense: winnerSense}
 }

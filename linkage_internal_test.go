@@ -797,13 +797,13 @@ func TestLinkageHullPoints(t *testing.T) {
 	}
 	a, b := side(block, nil), side(far, nil)
 	require.Zero(t, projectionLowerHull(a, b).Cmp(big.NewRat(10, 1)))
-	bound, axis, norm, sense := linkagebound.LowerHullWithWitness(a.boundSide(), b.boundSide())
-	require.Zero(t, bound.Cmp(big.NewRat(10, 1)))
-	require.Zero(t, axis[0].Cmp(big.NewRat(1, 1)))
-	require.Zero(t, axis[1].Sign())
-	require.Zero(t, axis[2].Sign())
-	require.Zero(t, norm.Cmp(big.NewRat(1, 1)))
-	require.Equal(t, 1, sense)
+	witness := linkagebound.LowerHullWithWitness(a.boundSide(), b.boundSide())
+	require.Zero(t, witness.Bound.Cmp(big.NewRat(10, 1)))
+	require.Zero(t, witness.Axis[0].Cmp(big.NewRat(1, 1)))
+	require.Zero(t, witness.Axis[1].Sign())
+	require.Zero(t, witness.Axis[2].Sign())
+	require.Zero(t, witness.Norm.Cmp(big.NewRat(1, 1)))
+	require.Equal(t, 1, witness.Sense)
 	require.Zero(t, projectionLowerHull(side(block, big.NewRat(1, 2)), side(far, big.NewRat(1, 4))).Cmp(big.NewRat(37, 4)))
 }
 

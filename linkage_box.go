@@ -990,14 +990,17 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if !okA || !okP {
 		return bound, shares
 	}
-	hull, n, norm, hullSense := linkagebound.LowerHullWithWitness(ah.boundSide(), ph.boundSide())
+	witness := linkagebound.LowerHullWithWitness(ah.boundSide(), ph.boundSide())
+	hull := witness.Bound
 	if hull == nil || hull.Cmp(bound) <= 0 {
 		return bound, shares
 	}
 	shares = make(map[int]*big.Rat)
-	linkagebound.AddHullShares(shares, ah.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf), n, norm, hullSense)
+	linkagebound.AddHullShares(shares, ah.boundSide(), mine.rho[below:], projectionAxes(mine, below, axisOf),
+		witness.Axis, witness.Norm, witness.Sense)
 	if other >= 0 {
-		linkagebound.AddHullShares(shares, ph.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf), n, norm, -hullSense)
+		linkagebound.AddHullShares(shares, ph.boundSide(), theirs.rho[below:], projectionAxes(theirs, below, axisOf),
+			witness.Axis, witness.Norm, -witness.Sense)
 	}
 	return hull, shares
 }
