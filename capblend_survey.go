@@ -241,8 +241,8 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		}
 		return pullComponent(n, p, pLen)
 	}
-	if !g.circular {
-		v, allow, ok := sampleAt(pl.point(g.sideA.U, g.sideA.V, g.sideZ))
+	if !g.Circular {
+		v, allow, ok := sampleAt(pl.point(g.SideA.U, g.SideA.V, g.SideZ))
 		if !ok {
 			return 0, 0, 0, false
 		}
@@ -251,15 +251,15 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	// A regular Cone patch's normal is independent of position along its own
 	// ruling (azimuth alone determines it), so sampling at the cap radius —
 	// which an apex patch's own zero side radius forces anyway — serves both.
-	r := g.capRadius
+	r := g.CapRadius
 	atAzimuth := func(theta float64) (float64, bool) {
 		sin, cos := math.Sincos(theta)
-		v, _, ok := sampleAt(pl.point(g.cU+r*cos, g.cV+r*sin, g.capZ))
+		v, _, ok := sampleAt(pl.point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
 		return v, ok
 	}
-	f0, ok0 := atAzimuth(g.th0)
-	f90, ok90 := atAzimuth(g.th0 + math.Pi/2)
-	f180, ok180 := atAzimuth(g.th0 + math.Pi)
+	f0, ok0 := atAzimuth(g.Th0)
+	f90, ok90 := atAzimuth(g.Th0 + math.Pi/2)
+	f180, ok180 := atAzimuth(g.Th0 + math.Pi)
 	if !ok0 || !ok90 || !ok180 {
 		return 0, 0, 0, false
 	}
@@ -267,11 +267,11 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	a := f0 - c
 	b := f90 - c
 	ra, rb, rc := proofarith.FloatRat(a), proofarith.FloatRat(b), proofarith.FloatRat(c)
-	rth0, rth1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
+	rth0, rth1 := proofarith.FloatRat(g.Th0), proofarith.FloatRat(g.Th1)
 	if ra == nil || rb == nil || rc == nil || rth0 == nil || rth1 == nil {
 		return 0, 0, 0, false
 	}
-	ext, okExt := harmonicWindowRange(ra, rb, rc, new(big.Rat).Sub(rth1, rth0), g.wholeTurn)
+	ext, okExt := harmonicWindowRange(ra, rb, rc, new(big.Rat).Sub(rth1, rth0), g.WholeTurn)
 	model, okModel := capPatchNormalModel(f, pl, g, p)
 	if !okExt || !okModel {
 		return 0, 0, 0, false

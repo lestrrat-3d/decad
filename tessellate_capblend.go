@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
@@ -565,8 +566,8 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 			return nil, tessellation.CapBlendBandPatch{}, fmt.Errorf(`%w: the payload states no geometry for patch role %q`, ErrDegenerate, role)
 		}
 		return f, tessellation.CapBlendBandPatch{
-			Circular: g.circular, SideRadius: g.sideRadius, CapRadius: g.capRadius,
-			Skew: capPatchWindowSkew(g), AreaAllow: patchDisplacementAreaAllow(g),
+			Circular: g.Circular, SideRadius: g.SideRadius, CapRadius: g.CapRadius,
+			Skew: capPatchWindowSkew(g), AreaAllow: capband.DisplacementAreaAllow(g),
 		}, nil
 	}
 	return tessellation.EmitCapBlendBand[*Face](budget, capBlendBandWriter{m: m, bump: bump},

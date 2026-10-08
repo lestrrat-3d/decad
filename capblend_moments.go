@@ -190,7 +190,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			}
 			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
 			for _, g := range band.geom {
-				pa, pb := patchAreaOf(g)
+				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
 			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, work)
@@ -217,7 +217,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			}
 			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
 			for _, g := range band.geom {
-				pa, pb := patchAreaOf(g)
+				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
 			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, work)
@@ -485,9 +485,9 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// already put each patch in its own walk's sense.
 	patchAreaTotal := proofbound.BoundedScalar{}
 	for _, g := range geom {
-		f := patchRawFlux(g)
+		f := capband.RawFlux(g)
 		fluxTotal = proofbound.BoundedAdd(fluxTotal, proofbound.MeasuredScalar(-matSign*orient*f.Value, f.Bound))
-		pa, pb := patchAreaOf(g)
+		pa, pb := capband.AreaOf(g)
 		patchAreaTotal = proofbound.BoundedAdd(patchAreaTotal, proofbound.MeasuredScalar(pa, pb))
 	}
 	result := proofbound.BoundedQuotient(fluxTotal.Value, fluxTotal.Bound, 3, 0)
@@ -498,30 +498,6 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
 	result.Bound = proofbound.AbsSumUpper(result.Bound, proofbound.SweptVolumeAllow(delta, areaUpper))
 	return result, nil
-}
-
-func patchRawFlux(g capPatchGeom) proofbound.BoundedScalar { return capband.RawFlux(g.patch()) }
-
-func patchAreaOf(g capPatchGeom) (float64, float64) { return capband.AreaOf(g.patch()) }
-
-func patchDisplacementAreaAllow(g capPatchGeom) float64 {
-	return capband.DisplacementAreaAllow(g.patch())
-}
-
-func capWindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {
-	return capband.WindowOnBranch(capTh0, capTh1, th0)
-}
-
-func ruledAngleCos(thS0, thS1, thC0, thC1 float64) float64 {
-	return capband.RuledAngleCos(thS0, thS1, thC0, thC1)
-}
-
-func conePatchFluxInterval(g capPatchGeom) (proofbound.RatInterval, bool) {
-	return capband.ConeFluxInterval(g.patch())
-}
-
-func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
-	return capband.FrustumAreaBracket(R0, R1, H, dth, dthAllow, held)
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read

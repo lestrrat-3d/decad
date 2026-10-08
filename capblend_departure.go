@@ -38,7 +38,7 @@ type capPatchBuilt = capband.PatchBuilt
 // reading of those four corners states.
 func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 	departure := capPlaneDeparture
-	if g.circular {
+	if g.Circular {
 		departure = capPatchDeparture
 	}
 	allow, ok := departure(f, b)

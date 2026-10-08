@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -69,7 +70,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			var skew float64
 			found := 0
 			for _, p := range cbp.patches {
-				if p.geom.circular && p.geom.sideRadius != 0 {
+				if p.geom.Circular && p.geom.SideRadius != 0 {
 					skew = capPatchWindowSkew(p.geom)
 					found++
 				}
@@ -84,7 +85,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 				}
 				start, end := capWallFoot(joins, i, n)
 				capTh0, capTh1, _ := capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
-				c0, c1 := capWindowOnBranch(capTh0, capTh1, w.Th0)
+				c0, c1 := capband.WindowOnBranch(capTh0, capTh1, w.Th0)
 				for _, corner := range []struct {
 					held      float64
 					side, cap Point2
