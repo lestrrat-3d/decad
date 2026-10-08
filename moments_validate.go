@@ -7,8 +7,6 @@ import (
 
 type freeformPlan = momentinput.Plan
 
-func momentProfile(record ProfileRecord) momentinput.Profile { return record }
-
 func validateFreeformMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	return momentinput.ValidateFreeformSegment(segment, work)
 }
