@@ -18,16 +18,19 @@ import (
 // and has the outgoing walk's sagitta and its own recorded-point enclosure.
 // WallSlack and CapSlack keep the two area charges separate so a sheet can
 // omit the cap charge. SegmentArea is also read by the volume proof.
+// PerimeterUpper bounds the analytic loop length used in a section
+// displacement's area charge.
 type ChordSamples[F any] struct {
-	Samples     []sectionrecord.Point2
-	FaceOf      []F
-	SagOf       []float64
-	BoundOf     []proofbound.WalkEndBound
-	MaxSag      float64
-	WallSlack   float64
-	CapSlack    float64
-	SegmentArea float64
-	Walks       int
+	Samples        []sectionrecord.Point2
+	FaceOf         []F
+	SagOf          []float64
+	BoundOf        []proofbound.WalkEndBound
+	MaxSag         float64
+	WallSlack      float64
+	CapSlack       float64
+	SegmentArea    float64
+	Walks          int
+	PerimeterUpper float64
 }
 
 // SampleLoop emits the starts and interior stations of already coalesced

@@ -387,12 +387,12 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	wall := func(survey2d.SideWalk) (*Face, error) { return face, nil }
 
 	direct := freeform.NewFreeformWork()
-	want, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall)
+	want, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall, chordStationBound)
 	require.NoError(t, err)
-	require.NotEmpty(t, want.samples)
+	require.NotEmpty(t, want.Samples)
 
 	replay := freeform.NewFreeformWork()
-	got, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall)
+	got, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall, chordStationBound)
 	require.NoError(t, err)
 
 	require.Equal(t, want, got, "reading the published walks must give the resolve-every-segment chording")
@@ -417,8 +417,8 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
 	}}}
 	face := &Face{}
-	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
-		func(survey2d.SideWalk) (*Face, error) { return face, nil })
+	_, err = tessellation.ChordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
+		func(survey2d.SideWalk) (*Face, error) { return face, nil }, chordStationBound)
 	require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
