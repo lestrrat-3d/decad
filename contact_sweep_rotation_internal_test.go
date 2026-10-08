@@ -262,7 +262,7 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 	for name, path := range rotationFormPaths(t) {
 		for _, span := range rotationFormFractions() {
 			f := span[1]
-			pose, err := path.poseAt(f)
+			pose, err := path.path.RoundedPoseAt(f)
 			require.NoError(t, err, name)
 			// The pose read at f, and the start pose read at f, which deviates
 			// from the ideal path by the whole step's motion.
@@ -417,7 +417,7 @@ func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 	for name, path := range paths {
 		for _, span := range rotationFormFractions() {
 			f := span[1]
-			pose, err := path.poseAt(f)
+			pose, err := path.path.RoundedPoseAt(f)
 			require.NoError(t, err, name)
 			ideal, ok := path.idealAt(f)
 			require.True(t, ok, name)

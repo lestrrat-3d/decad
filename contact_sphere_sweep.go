@@ -89,7 +89,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 
 func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, error) {
 	if path.Drift != nil {
-		pose, err := (rotationalSweepPath{path: path}).poseAt(f)
+		pose, err := path.RoundedPoseAt(f)
 		if err != nil {
 			return r3.Transform{}, err
 		}

@@ -659,7 +659,7 @@ func (p *planarTrackProof) roundedVertices(f *big.Rat) ([2][]proofarith.DyV3, [2
 	var verts [2][]proofarith.DyV3
 	var eta [2]*big.Rat
 	for i := range p.paths {
-		pose, err := p.paths[i].poseAt(f)
+		pose, err := p.paths[i].path.RoundedPoseAt(f)
 		if err != nil {
 			return verts, eta, false
 		}

@@ -234,7 +234,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 	var poses [2]r3.Transform
 	exact := true
 	for i := range r.paths {
-		pose, err := r.paths[i].poseAt(zero)
+		pose, err := r.paths[i].path.RoundedPoseAt(zero)
 		if err != nil {
 			return nil, err
 		}
@@ -464,7 +464,7 @@ func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, [
 	var eta [2]*big.Rat
 	var vertsS []proofarith.DyV3
 	for i := range p.paths {
-		pose, err := p.paths[i].poseAt(f)
+		pose, err := p.paths[i].path.RoundedPoseAt(f)
 		if err != nil {
 			return poses, eta, nil, false
 		}

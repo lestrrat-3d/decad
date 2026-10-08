@@ -99,7 +99,7 @@ func TestSweepPathMemoMatchesAfresh(t *testing.T) {
 		}
 		var poses []r3.Transform
 		for _, span := range rotationFormFractions() {
-			pose, err := path.poseAt(span[1])
+			pose, err := path.path.RoundedPoseAt(span[1])
 			require.NoError(t, err, name)
 			poses = append(poses, pose)
 		}

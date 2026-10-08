@@ -496,7 +496,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	for i := range paths {
 		path := paths[i]
 		var err error
-		pose[i], err = path.poseAt(f)
+		pose[i], err = path.path.RoundedPoseAt(f)
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
@@ -704,7 +704,7 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 	var poses [2]r3.Transform
 	deviation, displacement := new(big.Rat), new(big.Rat)
 	for i, path := range p.rotation {
-		pose, err := path.poseAt(f)
+		pose, err := path.path.RoundedPoseAt(f)
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
