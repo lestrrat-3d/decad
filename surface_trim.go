@@ -758,14 +758,13 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
 	// RS13: a revolve pair clears S1 and is refused BY NAME, ahead of the
 	// mixed-pair message, so the refusal states the staging rather than
-	// claiming the two generators differ. What it waits on is stated in
-	// docs/surface-intersection-design.md §3.4: a split piece is a SOLID
-	// revolve, and §7.1 derives the section displacement's reach into the area
-	// and the box alone, never into the Pappus volume and centroid a solid
-	// publishes.
+	// claiming the two generators differ. The solid build already charges a
+	// piece's section displacement (docs/surface-intersection-design.md §7.2);
+	// what §11's PR5 still owes is the revolve arm of the cell selection and
+	// the per-cell recording into revolvePayload pieces.
 	if rf == trimFamilyRevolve && tf == trimFamilyRevolve {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Split over the revolve family waits on a solid revolve's own section-displacement terms; this evaluator charges them for a sheet's area and box alone`,
+			`%w: Split over the revolve family waits on the revolve arm of its cell selection and per-cell recording; this evaluator splits the prism family alone`,
 			ErrUnsupported)
 	}
 	if rf != tf || rf != trimFamilyPrism {

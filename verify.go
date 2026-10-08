@@ -901,7 +901,11 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // provably covers every operation between the extremes call and the
 // comparison — never a number the accompanying bound does not cover.
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
-	if !rp.full {
+	if !rp.full || rp.sectionDelta != 0 {
+		// A displaced meridian (docs/surface-intersection-design.md §7.2) is
+		// read the way a displaced prism section is: the radial extreme below
+		// is of the recorded meridian, not the denoted one, so the leg is
+		// undecided.
 		return false
 	}
 	if ctx.Err() != nil {

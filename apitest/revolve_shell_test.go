@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -184,9 +185,45 @@ func TestRevolveShellConeApex(t *testing.T) {
 	// the slant (50√5 + 10) and the base (50), the rim's sector between their
 	// outward normals (5(π − atan 2) + (1 + 1/√5)/3) and the apex's half
 	// sector ((1 − 1/√5)/3).
-	l := 19 - math.Sqrt(5)
-	inward := (8000 - l*l*l) / 24
-	outward := 50*math.Sqrt(5) + 60 + 5*(math.Pi-math.Atan(2)) + 2.0/3
+	//
+	// The miter and the arc's foot sit at irrational points the float build
+	// rounds, so the wall's record carries a nonzero section displacement
+	// (docs/modify-reach-design.md §9.3.1). Every reading below is held to the
+	// closed form in 400-bit reference arithmetic with no slack: the volume's
+	// bound encloses π times the wall's ∫ρ dA, and inward the cavity's apex
+	// vertex, held at the float nearest 20 − √5 (√5 trailing), encloses the
+	// irrational point. Leg shown to fail before this fixture was accepted:
+	// publishing a zero displacement leaves the apex vertex Exact at a float
+	// that is not 20 − √5.
+	ref := func(x float64) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).SetFloat64(x) }
+	pi, ok := new(big.Float).SetPrec(volumeRefPrec).SetString(piRef)
+	require.True(t, ok)
+	sqrt5 := new(big.Float).SetPrec(volumeRefPrec).Sqrt(ref(5))
+	// atan 2 = π/2 − atan(1/2), and atan(1/2)'s alternating series gains two
+	// bits per term.
+	atanHalf := new(big.Float).SetPrec(volumeRefPrec)
+	term := new(big.Float).SetPrec(volumeRefPrec).Quo(ref(1), ref(2))
+	for k := range 220 {
+		x := new(big.Float).SetPrec(volumeRefPrec).Quo(term, ref(float64(2*k+1)))
+		if k%2 == 1 {
+			x.Neg(x)
+		}
+		atanHalf.Add(atanHalf, x)
+		term.Quo(term, ref(4))
+	}
+	atan2 := new(big.Float).SetPrec(volumeRefPrec).Sub(new(big.Float).SetPrec(volumeRefPrec).Quo(pi, ref(2)), atanHalf)
+	// inward = π·(8000 − L³)/24 with L = 19 − √5.
+	l := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(19), sqrt5)
+	l3 := new(big.Float).SetPrec(volumeRefPrec).Mul(l, new(big.Float).SetPrec(volumeRefPrec).Mul(l, l))
+	inward := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(8000), l3)
+	inward.Quo(inward, ref(24)).Mul(inward, pi)
+	// outward = π·(50√5 + 60 + 5(π − atan 2) + 2/3).
+	outward := new(big.Float).SetPrec(volumeRefPrec).Mul(ref(50), sqrt5)
+	outward.Add(outward, ref(60))
+	outward.Add(outward, new(big.Float).SetPrec(volumeRefPrec).Mul(ref(5), new(big.Float).SetPrec(volumeRefPrec).Sub(pi, atan2)))
+	outward.Add(outward, new(big.Float).SetPrec(volumeRefPrec).Quo(ref(2), ref(3)))
+	outward.Mul(outward, pi)
+	apexLead := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(20), sqrt5)
 	// The leading cone has its apex where the kept chain leaves the axis, the
 	// trailing one (its mirror image in z = 10) where the chain arrives, so
 	// each of the two end joins is read in both senses.
@@ -196,12 +233,15 @@ func TestRevolveShellConeApex(t *testing.T) {
 		name     string
 		meridian [][2]float64
 		opts     []decad.ShellOption
-		want     float64
+		want     *big.Float
+		// apex is the cavity apex's axial coordinate, nil where the join is
+		// an arc and lands no irrational vertex on the axis.
+		apex *big.Float
 	}{
-		{"leading inward", leading, nil, inward},
-		{"trailing inward", trailing, nil, inward},
-		{"leading outward", leading, []decad.ShellOption{decad.WithShellSense(decad.Outward)}, outward},
-		{"trailing outward", trailing, []decad.ShellOption{decad.WithShellSense(decad.Outward)}, outward},
+		{"leading inward", leading, nil, inward, apexLead},
+		{"trailing inward", trailing, nil, inward, sqrt5},
+		{"leading outward", leading, []decad.ShellOption{decad.WithShellSense(decad.Outward)}, outward, nil},
+		{"trailing outward", trailing, []decad.ShellOption{decad.WithShellSense(decad.Outward)}, outward, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -210,9 +250,84 @@ func TestRevolveShellConeApex(t *testing.T) {
 			shelled, err := cone.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1), tc.opts...)
 			require.NoError(t, err)
 			requireManifold(t, shelled)
-			decadtest.MeasuresVolume(t, shelled, halfTurnVolume(tc.want))
+			vol, err := shelled.Volume()
+			require.NoError(t, err)
+			gap := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(vol.Value.Base()), tc.want)
+			gap.Abs(gap)
+			require.LessOrEqual(t, gap.Cmp(ref(vol.Bound.Base())), 0,
+				`the volume's bound encloses the closed form: %v ± %v`, vol.Value, vol.Bound)
+			if tc.apex == nil {
+				return
+			}
+			var apex *decad.Vertex
+			for _, v := range shelled.Vertices() {
+				p := v.Position().Value
+				if p.Y == 0 && p.Z == 0 && math.Abs(p.X-mustFloat(tc.apex)) < 0.5 {
+					apex = v
+				}
+			}
+			require.NotNil(t, apex, `the cavity's apex is a vertex on the axis`)
+			pos := apex.Position()
+			require.Positive(t, pos.Bound.Base(), `the apex sits at a rounded miter, so its position is not Exact`)
+			off := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.X), tc.apex)
+			off.Abs(off)
+			require.LessOrEqual(t, off.Cmp(ref(pos.Bound.Base())), 0,
+				`the apex vertex encloses the irrational miter: %v ± %v`, pos.Value.X, pos.Bound)
 		})
 	}
+}
+
+func TestRevolveShellClosedCone(t *testing.T) {
+	t.Parallel()
+	// The cone of TestRevolveShellConeApex swept a whole turn under
+	// WithNoOpenings: the same wall region, 1 mm inward. A full turn sweeps
+	// the on-axis apex to a point with no vertex, but the cavity's base rim is
+	// the slant's offset met with the base's, at (1, (19 − √5)/2), which the
+	// float build rounds too. The full-turn closed path publishes the same
+	// displacement, so the rim's seam vertex encloses that point and the volume
+	// encloses 2π times the wall's ∫ρ dA. Leg shown to fail before this
+	// fixture was accepted: publishing a zero displacement leaves the rim
+	// vertex Exact at a float that is not the rim.
+	ref := func(x float64) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).SetFloat64(x) }
+	pi, ok := new(big.Float).SetPrec(volumeRefPrec).SetString(piRef)
+	require.True(t, ok)
+	sqrt5 := new(big.Float).SetPrec(volumeRefPrec).Sqrt(ref(5))
+	l := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(19), sqrt5)
+	l3 := new(big.Float).SetPrec(volumeRefPrec).Mul(l, new(big.Float).SetPrec(volumeRefPrec).Mul(l, l))
+	want := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(8000), l3)
+	want.Quo(want, ref(12)).Mul(want, pi)
+	rimRho := new(big.Float).SetPrec(volumeRefPrec).Quo(l, ref(2))
+
+	doc := decad.New()
+	cone := revolveMeridian(t, doc, coneMeridian, decad.FullRevolution{})
+	shelled, err := cone.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+	require.NoError(t, err)
+	requireManifold(t, shelled)
+	requireOuterAndVoid(t, shelled)
+	vol, err := shelled.Volume()
+	require.NoError(t, err)
+	gap := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(vol.Value.Base()), want)
+	gap.Abs(gap)
+	require.LessOrEqual(t, gap.Cmp(ref(vol.Bound.Base())), 0, `the volume's bound encloses the closed form: %v ± %v`, vol.Value, vol.Bound)
+	var rim *decad.Vertex
+	for _, v := range shelled.Vertices() {
+		p := v.Position().Value
+		if p.X == 1 && p.Z == 0 && math.Abs(p.Y-mustFloat(rimRho)) < 0.5 {
+			rim = v
+		}
+	}
+	require.NotNil(t, rim, `the cavity's base rim sweeps a seam vertex`)
+	pos := rim.Position()
+	require.Positive(t, pos.Bound.Base())
+	off := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.Y), rimRho)
+	off.Abs(off)
+	require.LessOrEqual(t, off.Cmp(ref(pos.Bound.Base())), 0, `the rim vertex encloses the irrational miter: %v ± %v`, pos.Value, pos.Bound)
+}
+
+// mustFloat is x's nearest float64.
+func mustFloat(x *big.Float) float64 {
+	f, _ := x.Float64()
+	return f
 }
 
 func TestRevolveShellPlaced(t *testing.T) {

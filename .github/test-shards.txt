@@ -1112,3 +1112,7 @@
 3	0.03	TestCapMiterLocusUpperReadsTheStatedAxialRise
 3	0.03	TestCapBlendAuditReadsTheSetbackSpan
 3	0.17	TestCapPatchIntegralsCoverTheirHeldNumbers
+3	0.05	TestRevolveSectionDisplacementEnclosesDenoted
+3	0.01	TestRevolveSectionDisplacementNormal
+3	0.20	TestRevolveSectionDisplacementTessellates
+3	0.03	TestRevolveShellSectionDelta

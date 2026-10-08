@@ -259,15 +259,9 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s,
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return 0, err
 	}
-	rt, rd := proofarith.FloatRat(t), proofarith.FloatRat(tDelta)
-	if rt == nil || rd == nil || rd.Sign() < 0 {
-		return 0, errOffsetUnbounded
-	}
-	// amount is s·t* over every denoted thickness, the signed offset the
-	// float build spells s*t.
-	amount := proofbound.Interval(new(big.Rat).Sub(rt, rd), new(big.Rat).Add(rt, rd))
-	if s < 0 {
-		amount = proofbound.IntervalNeg(amount)
+	amount, err := offsetAmount(s, t, tDelta)
+	if err != nil {
+		return 0, err
 	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
@@ -289,6 +283,20 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile ProfileRecord, s,
 		return 0, errOffsetUnbounded
 	}
 	return delta, nil
+}
+
+// offsetAmount is s·t* over every denoted thickness t* within tDelta of the
+// held t: the signed offset the float build spells s*t.
+func offsetAmount(s, t, tDelta float64) (proofbound.RatInterval, error) {
+	rt, rd := proofarith.FloatRat(t), proofarith.FloatRat(tDelta)
+	if rt == nil || rd == nil || rd.Sign() < 0 {
+		return proofbound.RatInterval{}, errOffsetUnbounded
+	}
+	amount := proofbound.Interval(new(big.Rat).Sub(rt, rd), new(big.Rat).Add(rt, rd))
+	if s < 0 {
+		amount = proofbound.IntervalNeg(amount)
+	}
+	return amount, nil
 }
 
 // offsetLoopReach reads the section offset displacement proof.

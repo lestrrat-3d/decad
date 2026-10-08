@@ -1302,9 +1302,29 @@ its own mirror image. That is SX8 (`ErrUnsupported`), not the base call's
 to the axis than `t` is the usual case.
 
 The result is a `revolvePayload` over the wall region with the receiver's frame,
-axis, angular interval, denotation and placement, built by `evalRevolve`. Its
-`sectionDelta` is zero: the wall region is the body's own record, as a tube's
-annular section is (modify §10).
+axis, angular interval, denotation and placement, built by `evalRevolve`. The
+wall's offset coordinates are float cuts: a slanted walk's foot, a miter of a
+slanted carrier with the axis (the cone apex's `20 − √5`), a connector arc's
+foot. The wall therefore carries the proven distance from its record to the
+wall it denotes as its `sectionDelta`, with `sectionWhole` set, and every
+reading charges it (`docs/surface-intersection-design.md` §7.2). The figure is
+modify §9's `offsetSectionDelta` argument: three times the largest reach of a
+recorded join point from its rational enclosure, over every denoted thickness
+within the thickness's own conversion bound. A wall off the axis reads the
+prism cup's `offsetSectionDelta` over the meridian's closed offset unchanged.
+A wall with an axis end or an opening end reads `offset2d.ChainReach` over the
+open chain `K`: an interior corner by `LoopReach`'s own enclosures, an opening
+end by the walk's offset foot, and an axis end by the join it builds against
+the receiver's axis line widened by its four proven bounds — the offset
+carrier met with that line for a miter, the line point `t` from the corner
+for a G1 end (charged the hull with the walk's own foot), and both for an arc.
+`K` and the axis points it leaves from are the receiver's own record and move
+by nothing. The figure is published only where it is nonzero, so a
+right-angle or exact-level shell — every enclosure a single point equal to the
+float the build holds — keeps a zero `sectionDelta`, `sectionWhole` false, and
+reads bit for bit as an undisplaced revolve. A shell whose wall carries a
+displacement refuses a second shell and a junction blend, since each rewrites
+the recorded meridian.
 
 A full turn sweeps that same wall region a whole turn, and evaluator §6's shell
 rule splits the result into an outer shell and one void shell. Off the axis the
@@ -1316,11 +1336,11 @@ and the run whose axis ends bracket the other's is the outer one: `K` inward,
 and the void shell outward. Only S10's section limit bounds the thickness, as
 for a partial turn, since a full turn keeps no angular floor.
 
-Stage 4's revolve gates run in this order: RS13's section-displacement guard,
-a holed meridian (SX8), a kept angular cap (SX8), more than one on-axis walk
-(SX8), then a removed side run that is not one proper connected run of whole
-walks or that leaves two kept chains (SX8, §9.3.2). `WithNoOpenings` on a
-partial turn or on a holed meridian is SX8 before the shell is routed here.
+Stage 4's revolve gates run in this order: the receiver's section-displacement
+guard (`requireExactRevolveSection`), a holed meridian (SX8), a kept angular
+cap (SX8), more than one on-axis walk (SX8), then a removed side run that is
+not one proper connected run of whole walks or that leaves two kept chains
+(SX8, §9.3.2). `WithNoOpenings` on a partial turn or on a holed meridian is SX8 before the shell is routed here.
 
 #### 9.3.2 Side opening
 
