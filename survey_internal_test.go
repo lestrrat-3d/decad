@@ -1443,7 +1443,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 // is >= 0, <= -1, or strictly between. The direction is the exact difference
 // of the walk's two recorded endpoints, and the frame directions are the
 // placed frame's held ones, which survey2d.WallNormalDecision reads too. It is
-// built independently of survey2d.CircularNormalRange and
+// built independently of survey2d.WallNormalDecision's circular range and
 // survey2d.DecideIntervalComponent so it does not share their bugs. ok is
 // false for a circular walk, where this test instead samples float64
 // endpoints only (see the caller).
@@ -1538,7 +1538,7 @@ func requireSoundVerdict(t *testing.T, fixture string, verdict survey2d.PullVerd
 // its window, so there is no single exact rational to compare against;
 // instead this densely samples sigma*(du*cosθ + dv*sinθ)/|pull| in float64
 // across [th0, th1] — an independent evaluation of the same closed form
-// survey2d.WallNormalDecision encloses, never calling survey2d.CircularNormalRange or any of
+// survey2d.WallNormalDecision encloses, never calling its circular range or any of
 // its helpers — and checks the verdict against what that dense sample
 // (with a healthy float64 margin around the 0 and -1 boundaries, so an
 // ordinary rounding difference between the two evaluations never trips it)

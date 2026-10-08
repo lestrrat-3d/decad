@@ -109,8 +109,14 @@ func DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2 *big.Rat) PullVer
 // an exact zero into a sign or a small sign into zero. Where an endpoint is
 // itself computed, t is an interval, and the verdict is PullUndecided when
 // the interval leaves the sign unresolved (DecideIntervalComponent). A
-// circular walk's component sweeps sigma·(du·cosθ + dv·sinθ)/|pull| over its
-// own [th0, th1], bracketed rather than evaluated. du = m.du·pull and
+// circular walk's component sweeps sigma·(du·cosθ + dv·sinθ)/|pull| over the
+// window its record denotes, bracketed rather than evaluated. The window's
+// ends are the directions from the recorded centre to the walk's two ends,
+// each widened by its own end bound (circularWindowOf). It never reads the
+// held Th0 and Th1 as the window: they are a float multiple of 2π for a
+// CircleSeg and math.Atan2 for an ArcSeg, so a window end can sit an ulp past
+// a direction where the component changes sign. Where an end's enclosure
+// leaves that sign open, the verdict is PullUndecided. du = m.du·pull and
 // dv = m.dv·pull are exact, since m's directions and the caller's pull are
 // both held floats. ok is false on any non-finite input, a failed enclosure,
 // or a free-form walk.
@@ -139,8 +145,14 @@ func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict,
 		}
 		a := new(big.Rat).Mul(sigma, du)
 		b := new(big.Rat).Mul(sigma, dv)
-		lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
-		minLo, minHi, maxLo, maxHi, ok := CircularNormalRange(a, b, lo, hi, w.Closed)
+		var win circularWindow
+		if !w.Closed {
+			var ok bool
+			if win, ok = circularWindowOf(w); !ok {
+				return PullUndecided, false
+			}
+		}
+		minLo, minHi, maxLo, maxHi, ok := circularNormalRange(a, b, win, w.Closed)
 		if !ok {
 			return PullUndecided, false
 		}
@@ -220,38 +232,158 @@ func CapNormalDecision(m PlacedFrameMap, pull r3.Vec, sign float64) (PullVerdict
 	return DecideRationalComponent(num, scale2, pull2), true
 }
 
-// CircularNormalRange encloses a*cosθ + b*sinθ over θ ∈ [lo, hi] (lo <= hi,
-// both held floats so exact): a bracket [minLo, minHi] on the function's
-// minimum and a bracket [maxLo, maxHi] on its maximum, each attained
-// wherever the search below can prove it. a and b are exact — no sampling is
-// involved building them, unlike a cap-blend patch's recovered coefficients
-// (capblend_normal.go) — so nothing here is charged an allowance; the only
-// imprecision is the necessarily-irrational sine and cosine the window's own
-// angles carry.
-//
-// The window is cut into four arcs and searched for each of the two critical
-// directions (a, b) and (-a, -b) with capblend_normal.go's
-// proofbound.WindowReachesDirection, called unmodified: the same robust cross-product
-// containment test that function already proves sound against a 200k-sample
-// brute force, rather than a second implementation of the same idea.
-// wholeTurn (the walk's own structural flag, SideWalk.closed) skips the
-// search entirely: a full turn always attains both extremes.
-//
-// This does not reuse harmonicWindowRange itself: that function's window is
-// measured from φ = θ - th0 in a frame its own three sampled coefficients are
-// already anchored to, and rotating OUR exact (a, b) into that frame would
-// need cos(lo) and sin(lo) — themselves irrational for a generic lo — turning
-// an exact input into an interval one for no reason, since a and b already
-// hold everywhere over [lo, hi] with no anchor at all.
-func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, minHi, maxLo, maxHi *big.Rat, ok bool) {
-	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
-	if rlo == nil || rhi == nil {
-		return nil, nil, nil, nil, false
+// circularWindow encloses a circular walk's denoted window counterclockwise,
+// from its low angle to its high angle, by the directions that cut it into
+// arcs each shorter than a half turn. Direction j is (xs[j], ys[j]) scaled by
+// 1/ls[j]: the first and last are the vectors from the recorded centre to the
+// window's two denoted ends, kept unnormalized so that an exact end keeps its
+// exact sign against any exact direction, and the ones between are proven to
+// lie strictly inside the window.
+type circularWindow struct {
+	xs, ys, ls []proofbound.RatInterval
+}
+
+func (cw *circularWindow) add(x, y, l proofbound.RatInterval) {
+	cw.xs = append(cw.xs, x)
+	cw.ys = append(cw.ys, y)
+	cw.ls = append(cw.ls, l)
+}
+
+// circularWindowOf encloses the window a circular walk's record denotes. Its
+// ends are the points the walk's end bounds enclose, read as directions from
+// the recorded centre. Three angles split the part of the window both ends'
+// angle enclosures prove covered into four equal arcs. A window too narrow
+// for that keeps its two ends alone, one arc shorter than a half turn. ok is
+// false where an end's box reaches the centre or a coordinate does not lift.
+func circularWindowOf(w SideWalk) (circularWindow, bool) {
+	type end struct {
+		u, v, held float64
+		bound      proofbound.WalkEndBound
 	}
-	width := new(big.Rat).Sub(rhi, rlo)
-	if width.Sign() < 0 {
-		return nil, nil, nil, nil, false
+	low := end{w.StartU, w.StartV, w.Th0, w.StartBound}
+	high := end{w.EndU, w.EndV, w.Th1, w.EndBound}
+	if w.Th1 < w.Th0 {
+		low, high = high, low
 	}
+	type enclosed struct{ x, y, l, angle proofbound.RatInterval }
+	var ends [2]enclosed
+	for i, e := range []end{low, high} {
+		reach := proofbound.WalkEndBoundAllow(e.bound)
+		x, y, l, ok := endDirection(w.CU, w.CV, e.u, e.v, reach)
+		if !ok {
+			return circularWindow{}, false
+		}
+		angle, ok := EndAngleEnclosure(w.CU, w.CV, e.u, e.v, reach, e.held)
+		if !ok {
+			return circularWindow{}, false
+		}
+		ends[i] = enclosed{x: x, y: y, l: l, angle: angle}
+	}
+	var cw circularWindow
+	cw.add(ends[0].x, ends[0].y, ends[0].l)
+	inner := new(big.Rat).Sub(ends[1].angle.Lo, ends[0].angle.Hi)
+	switch {
+	case inner.Sign() > 0:
+		one := proofbound.PointInterval(big.NewRat(1, 1))
+		for j := int64(1); j <= 3; j++ {
+			theta := new(big.Rat).Add(ends[0].angle.Hi, proofbound.RatMul(inner, big.NewRat(j, 4)))
+			sin, cos, ok := proofbound.RadSinCosInterval(theta)
+			if !ok {
+				return circularWindow{}, false
+			}
+			cw.add(cos, sin, one)
+		}
+	case math.Abs(w.Th1-w.Th0) >= math.Pi:
+		return circularWindow{}, false
+	}
+	cw.add(ends[1].x, ends[1].y, ends[1].l)
+	return cw, true
+}
+
+// endDirection encloses the vector from the centre (cU, cV) to every point
+// within reach of (u, v) on each axis, and that vector's length. ok is false
+// where the box reaches the centre, reach is not finite, or a coordinate does
+// not lift.
+func endDirection(cU, cV, u, v, reach float64) (x, y, l proofbound.RatInterval, ok bool) {
+	ru, rv := proofarith.FloatRat(u), proofarith.FloatRat(v)
+	rcu, rcv := proofarith.FloatRat(cU), proofarith.FloatRat(cV)
+	allow := proofarith.FloatRat(reach)
+	if ru == nil || rv == nil || rcu == nil || rcv == nil || allow == nil || allow.Sign() < 0 {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	widen := func(c, centre *big.Rat) proofbound.RatInterval {
+		d := new(big.Rat).Sub(c, centre)
+		return proofbound.Interval(new(big.Rat).Sub(d, allow), new(big.Rat).Add(d, allow))
+	}
+	x, y = widen(ru, rcu), widen(rv, rcv)
+	l, ok = proofbound.IntervalSqrt(proofbound.IntervalAdd(proofbound.IntervalSquare(x), proofbound.IntervalSquare(y)))
+	if !ok || l.Lo.Sign() <= 0 {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	return x, y, l, true
+}
+
+// EndAngleEnclosure encloses the exact angle about (cU, cV) of every point
+// within reach of (u, v), on the branch nearest held.
+//
+// The point and the centre are float64s, so the direction between them is an
+// exact rational and proofbound.Atan2Interval encloses its angle with no libm
+// accuracy assumed. A point within reach turns that angle by at most
+// arcsin(reach/ρ) ≤ (π/2)·reach/ρ, ρ the point's distance from the centre,
+// which widens the enclosure. A reach at or past ρ says nothing about the
+// angle and answers false, as does a point on the centre.
+//
+// The branch is the one nearest held. Every caller's held angle is a float
+// Atan2 of the same direction, a float multiple of 2π, or such an angle
+// unwrapped by whole turns, so it lies within a few ulps of its own branch and
+// more than π from any other.
+func EndAngleEnclosure(cU, cV, u, v, reach, held float64) (proofbound.RatInterval, bool) {
+	ru, rv := proofarith.FloatRat(u), proofarith.FloatRat(v)
+	rcu, rcv := proofarith.FloatRat(cU), proofarith.FloatRat(cV)
+	if ru == nil || rv == nil || rcu == nil || rcv == nil || !(reach >= 0) || proofbound.IsNonFinite(reach) || proofbound.IsNonFinite(held) {
+		return proofbound.RatInterval{}, false
+	}
+	dU, dV := new(big.Rat).Sub(ru, rcu), new(big.Rat).Sub(rv, rcv)
+	if dU.Sign() == 0 && dV.Sign() == 0 {
+		return proofbound.RatInterval{}, false
+	}
+	iv := proofbound.Atan2Interval(dV, dU, false)
+	mid, _ := new(big.Rat).Quo(new(big.Rat).Add(iv.Lo, iv.Hi), big.NewRat(2, 1)).Float64()
+	if turns := math.Round((held - mid) / (2 * math.Pi)); turns != 0 {
+		iv = proofbound.IntervalAdd(iv, proofbound.IntervalScale(proofbound.TwoPiInterval(), new(big.Rat).SetFloat64(turns)))
+	}
+	if reach > 0 {
+		rhoLower := proofbound.RatSqrtDown(new(big.Rat).Add(new(big.Rat).Mul(dU, dU), new(big.Rat).Mul(dV, dV)))
+		if !(reach < rhoLower) {
+			return proofbound.RatInterval{}, false
+		}
+		turn := new(big.Rat).Quo(
+			proofbound.RatMul(proofbound.PiUpper, proofarith.FloatRat(reach)),
+			proofbound.RatMul(big.NewRat(2, 1), proofarith.FloatRat(rhoLower)),
+		)
+		iv = proofbound.IntervalWiden(iv, turn)
+	}
+	return iv, true
+}
+
+// circularNormalRange encloses a*cosθ + b*sinθ over the window win encloses: a
+// bracket [minLo, minHi] on the function's minimum and a bracket
+// [maxLo, maxHi] on its maximum, each attained wherever the search below can
+// prove it. a and b are exact, with no sampling involved building them,
+// unlike a cap-blend patch's recovered coefficients (capblend_normal.go), so
+// nothing here is charged an allowance. At each of the window's directions the
+// function is (a·x + b·y)/l, so an exact end on an exact perpendicular reads
+// exactly zero.
+//
+// The window's arcs are searched for each of the two critical directions
+// (a, b) and (-a, -b) with capblend_normal.go's
+// proofbound.WindowReachesDirection, called unmodified: the same robust
+// cross-product containment test that function already proves sound against
+// a 200k-sample brute force. Its signs do not change under a positive scale,
+// so it reads the unnormalized directions as they are. wholeTurn (the walk's
+// own structural flag, SideWalk.closed) skips the search entirely: a full turn
+// always attains both extremes, and win is not read.
+func circularNormalRange(a, b *big.Rat, win circularWindow, wholeTurn bool) (minLo, minHi, maxLo, maxHi *big.Rat, ok bool) {
 	amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
 		return nil, nil, nil, nil, false
@@ -261,17 +393,14 @@ func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 	if wholeTurn {
 		return troughLo, troughHi, peakLo, peakHi, true
 	}
-
-	const arcs = 4
-	sins, coss := make([]proofbound.RatInterval, arcs+1), make([]proofbound.RatInterval, arcs+1)
-	for j := range arcs + 1 {
-		theta := new(big.Rat).Add(rlo, proofbound.RatMul(width, big.NewRat(int64(j), arcs)))
-		sin, cos, okT := proofbound.RadSinCosInterval(theta)
-		if !okT {
+	if len(win.xs) < 2 {
+		return nil, nil, nil, nil, false
+	}
+	for j := range win.xs {
+		at, okAt := proofbound.IntervalQuo(proofbound.IntervalAdd(proofbound.IntervalScale(win.xs[j], a), proofbound.IntervalScale(win.ys[j], b)), win.ls[j])
+		if !okAt {
 			return nil, nil, nil, nil, false
 		}
-		sins[j], coss[j] = sin, cos
-		at := proofbound.IntervalAdd(proofbound.IntervalScale(cos, a), proofbound.IntervalScale(sin, b))
 		if j == 0 {
 			minLo, minHi, maxLo, maxHi = at.Lo, at.Hi, at.Lo, at.Hi
 			continue
@@ -280,14 +409,14 @@ func CircularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, 
 		maxLo, maxHi = proofbound.RatMax(maxLo, at.Lo), proofbound.RatMax(maxHi, at.Hi)
 	}
 
-	sure, maybe := proofbound.WindowReachesDirection(coss, sins, a, b)
+	sure, maybe := proofbound.WindowReachesDirection(win.xs, win.ys, a, b)
 	if maybe {
 		maxHi = proofbound.RatMax(maxHi, peakHi)
 	}
 	if sure {
 		maxLo = proofbound.RatMax(maxLo, peakLo)
 	}
-	sure, maybe = proofbound.WindowReachesDirection(coss, sins, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
+	sure, maybe = proofbound.WindowReachesDirection(win.xs, win.ys, new(big.Rat).Neg(a), new(big.Rat).Neg(b))
 	if maybe {
 		minLo = proofbound.RatMin(minLo, troughLo)
 	}

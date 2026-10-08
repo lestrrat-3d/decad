@@ -1480,7 +1480,12 @@ answers this way:
   from a face's own tangent leaves the outcome `CoverageUndecided` even where
   the geometry is its tag. A straight wall's normal is read from the exact
   difference of its walk's two endpoints, each widened by its own end bound,
-  never from the walk's held tangent, which rounds that difference. A tagged analytic variant that is a bounded
+  never from the walk's held tangent, which rounds that difference. A circular
+  wall's normal sweeps the window from the recorded centre to its walk's two
+  ends, each end widened by its own end bound, never the held angles `Th0`
+  and `Th1`, which are a float multiple of 2π or a `math.Atan2`. An end whose
+  widened direction straddles a sign change of the component leaves the wall
+  undecided. A tagged analytic variant that is a bounded
   stand-in carries its own normal departure (`docs/modify-reach-design.md`
   §8.3) on top of that. A faceted survey proves the same all-clear only when
   every true patch's source-normal range clears. A missing or straddling

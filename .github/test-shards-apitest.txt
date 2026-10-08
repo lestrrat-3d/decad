@@ -146,7 +146,8 @@
 0	0.02	TestTessellateReservesSectionDisplacementFromTolerance
 0	0.01	TestTessellationCacheConcurrentColdAndHit
 0	0.02	TestThickenRevolveWasherInward
-0	0.01	TestUndercutUnseparablePullIsUndecided
+0	0.01	TestUndercutArcWindowFollowsTheRecord
+0	0.02	TestUndercutNearTangentPullDecidedAtRecordedStart
 0	0.01	TestUndercutWallTiltedOffItsHeldTangent
 0	0.03	TestUnderflowingSplineCentroidDividesExactly
 0	0.01	TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces
