@@ -150,13 +150,17 @@ type Vertex struct {
 // cap-loop chamfer's, brep's or patch's own rim/junction/cap vertex carries
 // the rounding its own lift through the payload's frame and accumulated
 // placement committed, measured exactly for that vertex
-// (proofbound.ExactFrameLiftRound, revolvemesh.RevolveLift.ExactPointRound;
-// docs/evaluator-design.md §8). The frame origin is part of that lift: a
-// sketch plane whose axes are the world's own still rounds origin.X + u
-// whenever the sum is not representable, and a body built far away and placed
-// back keeps the far lift's rounding. A lift that is exact for the coordinates
-// at hand — an integer origin and integer coordinates under the identity
-// placement, for one — charges nothing.
+// (proofbound.ExactFrameLiftRound, revolvemesh.RevolveLift.SweptPointGap;
+// docs/evaluator-design.md §8). A revolve's vertex is measured against its
+// recorded plane point rotated about the recorded axis by the angle the
+// record states, so the same bound also covers the float axis coordinates it
+// was placed from, a radius snapped onto the axis, and the axis's own anchor
+// and direction error (docs/evaluator-design.md §6). The frame origin is
+// part of that lift: a sketch plane whose axes are the world's own still
+// rounds origin.X + u whenever the sum is not representable, and a body built
+// far away and placed back keeps the far lift's rounding. A lift that is exact
+// for the coordinates at hand — an integer origin and integer coordinates
+// under the identity placement, for one — charges nothing.
 // A swept vertex is read from two independent coordinates and carries what each
 // was read from: its plane-local pair from the section, and its sweep level from
 // the extent. A level a ToFace or ThroughAll stop resolved in float, a magnitude

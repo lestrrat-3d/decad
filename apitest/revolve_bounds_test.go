@@ -90,8 +90,13 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 		radVertex := radEdges[0].Start()
 		require.Positive(t, degVertex.Position().Bound.Base(),
 			`a degree-stated sweep's cap vertex carries the angular displacement`)
-		require.Zero(t, radVertex.Position().Bound.Base(),
-			`a radian-stated sweep denotes its own held angle exactly, so its cap vertex is exact`)
+		// A radian-stated sweep denotes its own held angle exactly, so its
+		// cap vertex carries no angular displacement. It still carries the
+		// gap between math.Sincos's held values and the certified sine and
+		// cosine of that angle — sin(fl(π/2)) is not 1 — which is many orders
+		// below the degree-stated displacement.
+		decadtest.HasBoundAtMost(t, "radian-stated cap vertex", radVertex.Position().Bound, units.Millimeters(1e-20))
+		require.Less(t, radVertex.Position().Bound.Base(), degVertex.Position().Bound.Base())
 
 		degPlane, ok := degCap.Surface().(decad.Plane)
 		require.True(t, ok)

@@ -149,10 +149,11 @@ func chamferTop(o r3.Vec) []liftCand {
 // rational lift of the point it denotes.
 //
 // Shown to fail: with the lift term dropped from prismPayload.liftedVertex and
-// revolvePayload.liftedVertex (answering 0, the old axis-aligned exemption
-// that ignored the frame origin), every subtest below goes red — extrude,
-// revolve, chamfer, pocket at both origins (vertices claim Exact while off by
-// up to 4e-16 near and 2.33e-11 far), union and stepped at the far origin.
+// the comparison dropped from revolvePayload.sweptVertex (answering 0, the old
+// axis-aligned exemption that ignored the frame origin), every subtest below
+// goes red — extrude, revolve, chamfer, pocket at both origins (vertices claim
+// Exact while off by up to 4e-16 near and 2.33e-11 far), union and stepped at
+// the far origin.
 func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 	t.Parallel()
 	for _, o := range frameOrigins {
@@ -296,7 +297,7 @@ func TestClearanceFrameOriginGapEnclosesExactGap(t *testing.T) {
 // same for the clearance kernel's carriers). Shown to fail: replacing the
 // exact measurement with a magnitude charge (proofbound.RigidRoundAllow at the
 // coordinate and origin envelope) in prismPayload.liftedVertex turns the prism
-// and chamfer subtests red, and in revolvePayload.liftedVertex the revolve
+// and chamfer subtests red, and in revolvePayload.sweptVertex the revolve
 // subtest.
 func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Parallel()

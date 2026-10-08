@@ -94,3 +94,79 @@ func (l RevolveLift) ExactPointRound(xform r3.Transform, z, rho, cos, sin float6
 	}
 	return proofbound.ExactRigidRound(basis, tr, local, held)
 }
+
+// AxisBound is the resolved axis's own proven displacement: how far each of
+// RevolveLift's AU, AV, DU and DV sits from the anchor and the unit direction
+// the record names (revolveaxis.Line2's four bounds).
+type AxisBound struct {
+	AU, AV, DU, DV float64
+}
+
+// SweptPointGap proves, exactly, how far held sits from the point a swept
+// vertex denotes: the recorded plane-local point (u, v), known to within uv,
+// rotated about the axis the record names by the angle whose sine and cosine
+// sin and cos enclose, lifted through the frame and placed by xform.
+//
+// The construction is ExactPointRound's, evaluated over rational intervals:
+// the frame's origin, U and V and the placement's basis and translation are
+// exact leaves, the axis anchor and direction are widened by ab, and the axial
+// and radial coordinates are re-expressed from (u, v) inside the comparison
+// rather than read from the float (z, ρ) the build placed the vertex from.
+// The answer therefore covers the rounding of that re-expression, a radius
+// the build snapped onto the axis, and the axis's own anchor and direction
+// error at any angle, beside the frame lift and placement rounding
+// ExactPointRound measures. Every interval collapses to a point for an exact
+// axis and an exactly stated point and angle, so the answer is zero exactly
+// where the held evaluation is exact for them. It is the Radius3D bound of
+// the worst per-coordinate gap, rounded upward, and +Inf for a non-finite
+// leaf.
+func (l RevolveLift) SweptPointGap(ab AxisBound, xform r3.Transform, u, v float64, uv proofbound.WalkEndBound, sin, cos proofbound.RatInterval, held r3.Vec) float64 {
+	basis := xform.Basis()
+	vecs := [...]r3.Vec{l.Frame.Origin(), l.Frame.U(), l.Frame.V(), basis.EX, basis.EY, basis.EZ, xform.Translation()}
+	var iv [len(vecs)]proofbound.IvVec3
+	for i, w := range vecs {
+		enc, ok := proofbound.IvVec3Of(w)
+		if !ok {
+			return math.Inf(1)
+		}
+		iv[i] = enc
+	}
+	o, fu, fv, ex, ey, ez, tr := iv[0], iv[1], iv[2], iv[3], iv[4], iv[5], iv[6]
+	widen := func(x, w float64) (proofbound.RatInterval, bool) {
+		r, b := proofarith.FloatRat(x), proofarith.FloatRat(math.Abs(w))
+		if r == nil || b == nil {
+			return proofbound.RatInterval{}, false
+		}
+		return proofbound.IntervalWiden(proofbound.PointInterval(r), b), true
+	}
+	var leaves [6]proofbound.RatInterval
+	for i, pair := range [...][2]float64{{l.AU, ab.AU}, {l.AV, ab.AV}, {l.DU, ab.DU}, {l.DV, ab.DV}, {u, uv.U}, {v, uv.V}} {
+		enc, ok := widen(pair[0], pair[1])
+		if !ok {
+			return math.Inf(1)
+		}
+		leaves[i] = enc
+	}
+	aU, aV, dU, dV, pu, pv := leaves[0], leaves[1], leaves[2], leaves[3], leaves[4], leaves[5]
+
+	du, dv := proofbound.IntervalSub(pu, aU), proofbound.IntervalSub(pv, aV)
+	z := proofbound.IntervalAdd(proofbound.IntervalMul(du, dU), proofbound.IntervalMul(dv, dV))
+	rho := proofbound.IntervalSub(proofbound.IntervalMul(dv, dU), proofbound.IntervalMul(du, dV))
+
+	a3 := proofbound.IvVec3Add(o, proofbound.IvVec3Add(proofbound.IvVec3Mul(fu, aU), proofbound.IvVec3Mul(fv, aV)))
+	w := proofbound.IvVec3Add(proofbound.IvVec3Mul(fu, dU), proofbound.IvVec3Mul(fv, dV))
+	e0 := proofbound.IvVec3Add(proofbound.IvVec3Mul(fu, proofbound.IntervalNeg(dV)), proofbound.IvVec3Mul(fv, dU))
+	e1 := proofbound.IvVec3Cross(w, e0)
+	radial := proofbound.IvVec3Add(proofbound.IvVec3Mul(e0, cos), proofbound.IvVec3Mul(e1, sin))
+	local := proofbound.IvVec3Add(a3, proofbound.IvVec3Add(proofbound.IvVec3Mul(w, z), proofbound.IvVec3Mul(radial, rho)))
+
+	perCoord := 0.0
+	for i := range 3 {
+		placed := proofbound.IntervalAdd(
+			proofbound.IntervalAdd(proofbound.IntervalMul(ex[i], local[0]), proofbound.IntervalMul(ey[i], local[1])),
+			proofbound.IntervalAdd(proofbound.IntervalMul(ez[i], local[2]), tr[i]),
+		)
+		perCoord = math.Max(perCoord, proofbound.IntervalFloatError(placed, VecComponent(held, i)))
+	}
+	return proofbound.Radius3D(perCoord)
+}
