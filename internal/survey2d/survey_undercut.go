@@ -102,14 +102,18 @@ func DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2 *big.Rat) PullVer
 }
 
 // WallNormalDecision answers §6's membership rule for one side walk's
-// outward normal against the caller's pull, decided exactly over the
-// rationals: a straight walk's plane-local tangent (tu, tv) gives a single
-// exact component num / (|t|*|pull|), num = tv*du - tu*dv; a circular
-// walk's sweeps sigma*(du*cosθ + dv*sinθ)/|pull| over its own [th0, th1],
-// bracketed rather than evaluated. du = m.du·pull and dv = m.dv·pull are
-// exact — no sampling is involved building them, since m's directions and
-// the caller's pull are both held floats. ok is false on any non-finite
-// input or a failed enclosure.
+// outward normal against the caller's pull. A straight walk's component is
+// num / (|t|·|pull|), num = tv·du − tu·dv, for the direction t its recorded
+// endpoints denote (lineDirectionEnclosure). It never reads the held tangent
+// TanInU, TanInV, which is that difference rounded to float64 and so can turn
+// an exact zero into a sign or a small sign into zero. Where an endpoint is
+// itself computed, t is an interval, and the verdict is PullUndecided when
+// the interval leaves the sign unresolved (DecideIntervalComponent). A
+// circular walk's component sweeps sigma·(du·cosθ + dv·sinθ)/|pull| over its
+// own [th0, th1], bracketed rather than evaluated. du = m.du·pull and
+// dv = m.dv·pull are exact, since m's directions and the caller's pull are
+// both held floats. ok is false on any non-finite input, a failed enclosure,
+// or a free-form walk.
 func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict, bool) {
 	pv, okP := proofbound.IvVec3Of(pull)
 	if !okP {
@@ -119,28 +123,81 @@ func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict,
 	du := proofbound.IvVec3Dot(m.Du, pv).Lo
 	dv := proofbound.IvVec3Dot(m.Dv, pv).Lo
 
-	if !w.IsCircular() {
-		tu, tv := proofarith.FloatRat(w.TanInU), proofarith.FloatRat(w.TanInV)
-		if tu == nil || tv == nil {
+	switch w.Kind {
+	case WalkLine:
+		tu, tv, ok := lineDirectionEnclosure(w.SegmentWalk)
+		if !ok {
 			return PullUndecided, false
 		}
-		t2 := proofbound.RatAdd(proofbound.RatMul(tu, tu), proofbound.RatMul(tv, tv))
-		num := new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
-		return DecideRationalComponent(num, t2, pull2), true
-	}
-
-	sigma := big.NewRat(1, 1)
-	if w.Th1 < w.Th0 {
-		sigma = big.NewRat(-1, 1)
-	}
-	a := new(big.Rat).Mul(sigma, du)
-	b := new(big.Rat).Mul(sigma, dv)
-	lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
-	minLo, minHi, maxLo, maxHi, ok := CircularNormalRange(a, b, lo, hi, w.Closed)
-	if !ok {
+		t2 := proofbound.IntervalAdd(proofbound.IntervalSquare(tu), proofbound.IntervalSquare(tv))
+		num := proofbound.IntervalSub(proofbound.IntervalScale(tv, du), proofbound.IntervalScale(tu, dv))
+		return DecideIntervalComponent(num, t2, pull2), true
+	case WalkCircular:
+		sigma := big.NewRat(1, 1)
+		if w.Th1 < w.Th0 {
+			sigma = big.NewRat(-1, 1)
+		}
+		a := new(big.Rat).Mul(sigma, du)
+		b := new(big.Rat).Mul(sigma, dv)
+		lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
+		minLo, minHi, maxLo, maxHi, ok := CircularNormalRange(a, b, lo, hi, w.Closed)
+		if !ok {
+			return PullUndecided, false
+		}
+		return DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2), true
+	default:
 		return PullUndecided, false
 	}
-	return DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2), true
+}
+
+// lineDirectionEnclosure encloses the direction a straight walk's recorded
+// endpoints denote: the difference of the two boxes each endpoint's own end
+// bound allows. A recorded endpoint states a zero bound, so a walk between two
+// recorded points gets its exact difference as a single point.
+func lineDirectionEnclosure(w SegmentWalk) (tu, tv proofbound.RatInterval, ok bool) {
+	box := func(u, v float64, bound proofbound.WalkEndBound) (proofbound.RatInterval, proofbound.RatInterval, bool) {
+		ru, rv := proofarith.FloatRat(u), proofarith.FloatRat(v)
+		allow := proofarith.FloatRat(proofbound.WalkEndBoundAllow(bound))
+		if ru == nil || rv == nil || allow == nil {
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+		}
+		widen := func(c *big.Rat) proofbound.RatInterval {
+			return proofbound.Interval(new(big.Rat).Sub(c, allow), new(big.Rat).Add(c, allow))
+		}
+		return widen(ru), widen(rv), true
+	}
+	su, sv, okS := box(w.StartU, w.StartV, w.StartBound)
+	eu, ev, okE := box(w.EndU, w.EndV, w.EndBound)
+	if !okS || !okE {
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, false
+	}
+	return proofbound.IntervalSub(eu, su), proofbound.IntervalSub(ev, sv), true
+}
+
+// DecideIntervalComponent is DecideRationalComponent over enclosures: the
+// component is num / sqrt(scale2 · pull2) for some num in its interval and
+// scale2 in its, both taken together, and pull2 is exact. A verdict holds only
+// when it holds for every value the intervals allow, and every other case is
+// PullUndecided. Point intervals decide exactly as DecideRationalComponent
+// does, which never answers PullUndecided.
+func DecideIntervalComponent(num, scale2 proofbound.RatInterval, pull2 *big.Rat) PullVerdict {
+	if num.Lo.Sign() >= 0 {
+		return PullClear
+	}
+	if num.Hi.Sign() <= 0 {
+		// num² is smallest at num.Hi and largest at num.Lo.
+		least := new(big.Rat).Mul(num.Hi, num.Hi)
+		if least.Cmp(new(big.Rat).Mul(scale2.Hi, pull2)) >= 0 {
+			return PullClear
+		}
+	}
+	if num.Hi.Sign() < 0 {
+		most := new(big.Rat).Mul(num.Lo, num.Lo)
+		if most.Cmp(new(big.Rat).Mul(scale2.Lo, pull2)) < 0 {
+			return PullOpposes
+		}
+	}
+	return PullUndecided
 }
 
 // CapNormalDecision answers §6's rule for a planar face whose outward normal
