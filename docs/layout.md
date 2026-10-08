@@ -36,6 +36,7 @@ the rules leave to the byte budget.
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers: prism recognition (route P), axis-parallel edge blends (route E), Tables RB/EB/SB/BB/DB. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
+| `docs/loft-gear-bounds-design.md` | Loft per-cell volume/centroid/area bounds, `A/P` chord target, sweep-and-cap-proof audit, record-scaled ceilings. |
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms: entry gate, private `sketch` scene, displacement bounds. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
@@ -68,7 +69,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `doc.go` | Package doc: scope, the evaluator support-and-refusal map, and the layering contract (`decad -> sketch -> r3 -> units`). |
-| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError` with its failure `Code`. See `docs/api-design.md` §12, §8. |
+| `errors.go` | The core §12 sentinel errors (values from `internal/decaderr/`) and the typed `BooleanError` with its `Code`. See api §12, §8. |
 | `measurement.go` | Bounded reading types. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | `ProfileRecord` and public record aliases. See `docs/sketch-seam-design.md` §2. |
@@ -109,7 +110,7 @@ the rules leave to the byte budget.
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
-| `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
+| `denotation.go` | The shared-denotation certificate: minted plane (LEVEL) and curve/point (CURVE) identities. See surface §5.2, §6.2. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch curved-face mass adapter. See surface §6.4. |
@@ -184,7 +185,7 @@ the rules leave to the byte budget.
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_result.go` | Report records and accessors; `verify_publish.go` builds them. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
-| `clearance.go` | The pair kernel: `clearancePair` proves one pair's relation and gap; `sheetSolidPair` decides a sheet pair. See `docs/clearance-design.md` §1-§3/§6. |
+| `clearance.go` | The pair kernel: `clearancePair` proves a pair's relation and gap; `sheetSolidPair` decides a sheet pair. See clearance §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred sweeps and faceted results: interference design §3.2. |
 | `contact_pair.go` / `contact_pair_memo.go` | Pair gates, reports, and memo. Box classification lives in `internal/pair/box/`. See `docs/contact-geometry-design.md`. |
@@ -255,7 +256,7 @@ the rules leave to the byte budget.
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's doc comment. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
-| `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See `docs/tessellation-reach-design.md` §7. |
+| `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See tessellation reach §7. |
 | `triangulate.go` | Maps cap points and expected chording errors between `Point2` and `internal/triangulation/`; `cross2` serves root mesh clearance. |
 | `export/` | STL, OBJ, and 3MF mesh writers and the analytic/faceted AP214 writer. See `docs/step-export-design.md` and `docs/3mf-export-design.md`. |
 
