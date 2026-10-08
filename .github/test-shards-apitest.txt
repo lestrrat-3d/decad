@@ -1578,3 +1578,4 @@
 2	0.02	TestChainVertexReachesDenotedCutEnd
 5	0.01	TestProfileRecordClosesLongCutSquareExactly
 5	0.01	TestProfileRecordClosesLongLineTriangleAtCrossings
+5	0.04	TestStackedUnionCrossingBossFarFromOrigin

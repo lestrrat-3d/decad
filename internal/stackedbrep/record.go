@@ -177,7 +177,16 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 			p.V = line.Level
 		}
 	}
+	// The point's own proven distance from the crossing joins its allowance
+	// (docs/general-boolean-design.md §3 A1, §5).
+	off := crossingOffset(ei, sj, p)
 	side := 0
+	if curve.Kind != ubCircle {
+		if proofbound.IsNonFinite(off) {
+			return Point2{}, 0, brepgeom.ErrStackedWallMiss
+		}
+		hint.allow = max(hint.allow, off)
+	}
 	if curve.Kind == ubCircle {
 		var diff, scale float64
 		switch line.Kind {
@@ -196,7 +205,8 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 			scale = math.Abs(du) + math.Abs(dv)
 		}
 		switch {
-		case math.Abs(diff) > 2*hint.allow*scale:
+		case math.Abs(diff) > 2*max(hint.allow, off)*scale:
+			hint.allow = max(hint.allow, off)
 			side = 1
 			if diff < 0 {
 				side = -1

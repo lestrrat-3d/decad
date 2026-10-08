@@ -201,8 +201,9 @@ line run restated at other cells' vertices — are one unit. Each junction
 between two units is one canonical vertex, as class B's §10 table makes
 it: two axis-aligned lines meet at their exact levels, displacement zero;
 a line crossing a circle takes the keyed table's one float for the crossing
-(the line's walked point, its fixed coordinate exact, with that point's cut
-and walk allowance), keyed by the two carriers and the side of the circle's
+(the line's walked point, its fixed coordinate exact, with the larger of that
+point's cut and walk allowance and, at a cut, its proven distance from the
+exact crossing, §5), keyed by the two carriers and the side of the circle's
 centre the crossing lies on, the first loop to reach the key recording it,
 operand records before cells so a recorded corner wins; a crossing within
 twice its allowance of the centre's coordinate cannot name its side and
@@ -592,9 +593,15 @@ joins each such junction first (`brepgeom.JoinLoop`): it takes the line's walked
 point, whose fixed coordinate the lerp keeps exact, else the lexicographically
 smaller one, so a loop and its reversal choose alike, and rewrites each
 segment between its two junctions, a circular fragment as an arc pinned
-there. Both walked points lie within the record's section displacement of
-the cut they denote plus their walk's rounding, so that rounding joins the
-payload's section displacement.
+there. The chosen point's distance from the junction joins the payload's
+section displacement: its distance from the point its own segment denotes
+there (`boundarywalk.DenotedEndBound`/`DenotedStartBound`, the walk's
+rounding plus an arc's radial residual at its natural `t = 1` end), and,
+where the two segments lie on different carriers, its proven distance from
+their exact crossing (§5). Two fragments of one carrier name no crossing. A
+nonzero displacement makes class B's B5 and brep-modify's SB1 refuse the
+face view, so the join changes a published measurement only where both
+terms are zero.
 
 Every face frame shares the first face's origin bit for bit and carries each
 of its axes, or that axis negated, bit for bit, keeping handedness. The map
@@ -805,6 +812,30 @@ by a drill breaking out of its top places the vertex `5e-12` mm from the
 crossing against a `δ_cut` of `4e-14`, and every face pinned there inherits
 that distance. The bound is a charge, never an admission: it widens the faces
 that use the key and decides nothing.
+
+The two other places that pin a walked point at a crossing charge the same
+distance through `brepgeom.CrossingOffsetUpper`, which reads both segments'
+carriers exactly: a line through its recorded `Start` and `End`, a circle's
+recorded radius, an arc's squared `Start` radius. A1's keyed table (§3 "A1
+as a brep") charges it to the key's displacement wherever either side of the
+junction is a cut parameter; a recorded corner, both sides at their natural
+ends, is the record's own point and keeps displacement zero. The face view's
+join (`brepgeom.JoinLoop`, §4.1) charges it to the payload's section
+displacement at every junction it moves. Two lines
+cross at one exact rational point. A line `n·x = c` crosses a circle at
+`a = ±√b` along it from the centre's foot, and the point is
+`|n·p − c|/|n| + |a² − b|/(a + √b)` from the crossing on its side, with every
+square root rounded the way that enlarges the bound. Two circles cross on
+their radical line, `2(C₂ − C₁)·x = R₁² − R₂² + |C₂|² − |C₁|²`, which is
+exact, so they take the line arm. A point whose foot lies within twice that
+bound of the centre's foot names no side and is charged the far crossing too.
+A pair with no crossing — parallel lines, concentric circles, a line missing
+its circle — answers +Inf: the keyed table misses, and the join's
+displacement is infinite, which the face view's consumers refuse. A vertex
+exactly at its crossing is charged zero, so an exact record stays `Exact`.
+Without this charge a Ø10 boss crossing a 40 mm plate's wall 1e6 mm from the
+origin reads its A1 brep's area `5.5e-9` mm² off the exact value under a
+`2.0e-10` bound.
 
 A circular wall's pieces are read off the planar faces across its axis: X's
 caps and Y's walls along e for a cylinder of X, Y's caps and X's walls across

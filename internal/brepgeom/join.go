@@ -22,7 +22,15 @@ type Profile struct {
 // wins so a loop and its reversal choose alike. Each segment is rewritten
 // between its two junctions: a line whole, a circular fragment as an arc
 // pinned about its recorded centre. The returned allowance is the largest
-// walk rounding of a chosen point. A whole closed segment is left alone.
+// distance of a chosen point from the junction it stands for: its distance
+// from the point its own segment denotes there (boundarywalk.DenotedEndBound
+// and DenotedStartBound: the walk's rounding, plus the radial residual at an
+// arc's natural t = 1 end), and, where the two segments lie on different
+// carriers, its proven distance from their exact crossing
+// (CrossingOffsetUpper), +Inf where that crossing cannot be stated. Two
+// fragments of one carrier — a line run, a circle cut at its seam — name no
+// crossing and charge the first term alone. A whole closed segment is left
+// alone.
 func JoinLoop(loop sectionrecord.LoopRecord) (sectionrecord.LoopRecord, float64, error) {
 	n := len(loop.Segments)
 	if n < 2 {
@@ -56,16 +64,19 @@ func JoinLoop(loop sectionrecord.LoopRecord) (sectionrecord.LoopRecord, float64,
 			continue
 		}
 		met = false
-		pick, bound := end, walks[i].EndBound
+		pick, bound := end, boundarywalk.DenotedEndBound(loop.Segments[i], walks[i])
 		switch {
 		case walks[j].IsLine() && !walks[i].IsLine():
-			pick, bound = start, walks[j].StartBound
+			pick, bound = start, boundarywalk.DenotedStartBound(loop.Segments[j], walks[j])
 		case walks[i].IsLine() && !walks[j].IsLine():
 		case start.U < end.U || (start.U == end.U && start.V < end.V):
-			pick, bound = start, walks[j].StartBound
+			pick, bound = start, boundarywalk.DenotedStartBound(loop.Segments[j], walks[j])
 		}
 		joins[i] = pick
 		allow = math.Max(allow, proofbound.WalkEndBoundAllow(bound))
+		if !SameCarrier(loop.Segments[i], loop.Segments[j]) {
+			allow = math.Max(allow, CrossingOffsetUpper(loop.Segments[i], loop.Segments[j], pick))
+		}
 	}
 	if met {
 		return loop, 0, nil
