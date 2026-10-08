@@ -154,7 +154,7 @@ the rules leave to the byte budget.
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
-| `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
+| `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`/`evalCup`, the one-cap shell body. See modify §9, §12 D6. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
@@ -311,7 +311,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
+| `internal/offset2d/` | Offset carriers, joins, section records and displacement proofs. See modify §6–§9. |
 | `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
