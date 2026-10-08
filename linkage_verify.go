@@ -146,7 +146,7 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 		// the farthest any point of its link moves from the zero pose over the
 		// drive (§6 step 4): a joint whose From is 80° has moved before the
 		// drive begins.
-		lo, hi, ok := boxCornersExact(mv.body.bounds, bounds[mv.group].reach)
+		lo, hi, ok := motionbound.BoxCornersExact(mv.body.bounds, bounds[mv.group].reach)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	run.formPairs(swept)
@@ -435,7 +435,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 		side := projectionSide{corners: cm, h: hMine, seg: stepsFrom(segMine, backward), rem: remMine}
 		var partner projectionSide
 		if other < 0 {
-			lo, hi, ok := boxCornersExact(r.statics[k].body.bounds, new(big.Rat))
+			lo, hi, ok := motionbound.BoxCornersExact(r.statics[k].body.bounds, new(big.Rat))
 			if !ok {
 				return nil
 			}
@@ -622,7 +622,7 @@ func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 			return reading, true
 		}
 	}
-	lo, hi, ok := boxCornersExact(b.bounds, new(big.Rat))
+	lo, hi, ok := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
 	if !ok {
 		return cornerReading{}, false
 	}

@@ -426,7 +426,7 @@ d(M(s), S) ≥ max( lo_k − τ_k(s − s_k),  lo_{k+1} − τ_k(s_{k+1} − s) 
 
 where `τ_k(Δ)` bounds how far any point of the mover travels over a parameter change `Δ`.
 
-**The bound.** Every term of it is an exact rational (`motion_bound.go`), so no float rounding sits between
+**The bound.** Every term of it is an exact rational (`internal/motionbound/`), so no float rounding sits between
 a bound and the comparison it feeds. A motion parameter denotes `θ = 2π·turn + base`: a degree-stated angle
 is the exact rational turn `deg/360` (the degree count is what the caller stated; `units.Degree`'s factor is
 a rounded `π/180` and is never used), any other angle unit is `magnitude × factor` radians read exactly, and

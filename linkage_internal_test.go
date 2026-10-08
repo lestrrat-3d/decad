@@ -568,7 +568,7 @@ func TestLinkageCornerVelocity(t *testing.T) {
 	dr := run.drive.(*linkageDriver)
 	s := big.NewRat(1, 3)
 	params := []motionbound.MotionParam{jointParam(dr.spec.joints[0], s), jointParam(dr.spec.joints[1], s)}
-	lo, hi, ok := boxCornersExact(fore.bounds, new(big.Rat))
+	lo, hi, ok := motionbound.BoxCornersExact(fore.bounds, new(big.Rat))
 	require.True(t, ok)
 	reading := readCorners(dr.spec, dr.frames, params, dr.bounds[1], 0, lo, hi)
 	c30, s30 := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
@@ -853,7 +853,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	} {
 		points, pad, _, ok := bodyHullPoints(body)
 		require.True(t, ok, name)
-		lo, hi, ok := boxCornersExact(body.bounds, new(big.Rat))
+		lo, hi, ok := motionbound.BoxCornersExact(body.bounds, new(big.Rat))
 		require.True(t, ok, name)
 		for n, p := range points {
 			for i := range 3 {

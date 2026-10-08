@@ -103,7 +103,7 @@ func jointSpan(jt linkJoint, sa, sb *big.Rat) *big.Rat {
 // inflated outward by its own Bound, as exact rational extremes.
 func linkRestBox(link *Link) (lo, hi motionbound.RatVec, ok bool) {
 	for n, b := range link.bodies {
-		bLo, bHi, okB := boxCornersExact(b.bounds, new(big.Rat))
+		bLo, bHi, okB := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
 		if !okB {
 			return motionbound.RatVec{}, motionbound.RatVec{}, false
 		}
@@ -273,7 +273,7 @@ func ratZero(v motionbound.RatVec) bool {
 
 // layerExtent reads a body's inflated rest box and delegates its exact a-extents.
 func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
-	boxLo, boxHi, ok := boxCornersExact(b.bounds, new(big.Rat))
+	boxLo, boxHi, ok := motionbound.BoxCornersExact(b.bounds, new(big.Rat))
 	if !ok {
 		return nil, nil, false
 	}
