@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -40,44 +39,12 @@ func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]
 			return nil, err
 		}
 		if w.IsCircular() {
-			if _, err := capBandRadius(w, d); err != nil {
+			if _, err := capband.BandRadius(w, d, shellTol); err != nil {
 				return nil, err
 			}
 		}
 	}
 	return offsetJoinsBudget(budget, walks, 1, d)
-}
-
-// capBandRadius is the ONE place a circular cap-band wall's cap-level offset
-// radius is resolved, and it proves that the offset the caller asked for
-// SURVIVED float64 at this wall's own scale before any patch is built from it.
-// It is SX13's RADIAL half; the axial half — the same collapse in the sweep
-// direction, where the band's side level rounds back onto its own cap level —
-// is a fact about the sweep interval alone and is decided once per chamfered
-// cap in capblend.go's requireCapBlendLevelsSeparate.
-//
-// offsetRadius's own refusal is the empty one: an inward offset that reaches or
-// passes the centre leaves no circle at all (errOffsetDrop). The second refusal
-// is this one, and it is the opposite failure — an offset so small RELATIVE to
-// the radius that `R -/+ d` rounds back onto `R` itself. The band's patch is a
-// cone by construction (its two directrices are circles of different radii), and
-// a cone whose two stored radii are bit-identical is a CYLINDER: the taper the
-// chamfer exists to create is gone, so every reader of that surface — the DX7
-// undercut survey above all, which asks exactly about the taper — is answered by
-// a shape the caller never asked for. Substituting it is a wrong answer, not a
-// coarse one, so the call refuses. The body exists (the cone has a real, if
-// tiny, taper) and this evaluator cannot state its carrier in float64 at that
-// scale, which is §4's ErrUnsupported side of the existence test (Table SX row
-// SX13).
-func capBandRadius(w survey2d.SideWalk, d float64) (float64, error) {
-	r, ok := offsetRadius(w, 1, d)
-	if !ok {
-		return 0, errOffsetDrop
-	}
-	if r == w.Radius {
-		return 0, fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of a circular wall's own radius %v mm, so the cap contour's radial change rounds away and the band's cone patch cannot be told from a cylinder; a wider setback or a smaller radius states a chamfer this evaluator can build`, ErrUnsupported, d, w.Radius)
-	}
-	return r, nil
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
@@ -94,30 +61,6 @@ func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 		end = j1.pA
 	}
 	return start, end
-}
-
-// capWallSweep returns a circular wall's own CAP-LEVEL angular window — the
-// offset corner feet's angles about the wall's exact centre — unwrapped to
-// the branch nearest the wall's own recorded sweep refSweep (w.th1 - w.th0).
-// A chamfer setback is small relative to a sane wall radius, so the offset
-// foot never turns the corner's point by anywhere near a half turn from the
-// wall's own endpoint; picking the nearest branch is what keeps delta small
-// in patchRawFlux's own ruled-angle term rather than off by a spurious full
-// turn. wraps is how many extra full turns that unwrap added, so
-// capWallArcBound's own exact bracket can reproduce the same branch.
-func capWallSweep(cU, cV float64, start, end Point2, refSweep float64) (capTh0, capTh1 float64, wraps int) {
-	capTh0 = math.Atan2(start.V-cV, start.U-cU)
-	raw1 := math.Atan2(end.V-cV, end.U-cU)
-	diff := raw1 - capTh0
-	for diff-refSweep > math.Pi {
-		diff -= 2 * math.Pi
-		wraps--
-	}
-	for diff-refSweep < -math.Pi {
-		diff += 2 * math.Pi
-		wraps++
-	}
-	return capTh0, capTh0 + diff, wraps
 }
 
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
@@ -226,7 +169,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].Closed {
 		w := walks[0]
-		capRadius, err := capBandRadius(w, dc)
+		capRadius, err := capband.BandRadius(w, dc, shellTol)
 		if err != nil {
 			return capBandResult{}, err
 		}
@@ -524,7 +467,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 		// A circular wall's cap-level radius is resolved ONCE per wall and
 		// shared by the wall's edge, its surface and its recorded geometry, so
-		// no two of them can disagree about the offset and capBandRadius's own
+		// no two of them can disagree about the offset and capband.BandRadius's
 		// refusals are decided before any of the three is built. Its cap-level
 		// SWEEP (capTh0, capTh1) is resolved alongside it: the offset corner
 		// feet's own angles about the wall's exact centre, generally different
@@ -536,7 +479,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capThAllow := 0.0
 		radialShift := 0.0
 		if w.IsCircular() {
-			r, err := capBandRadius(w, dc)
+			r, err := capband.BandRadius(w, dc, shellTol)
 			if err != nil {
 				return capBandResult{}, err
 			}
@@ -551,10 +494,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// rounding widens it further. capWallArcBound charges it once per
 			// radian the arc sweeps.
 			radialShift = proofbound.IntervalFloatError(radius, capRadius)
-			capTh0, capTh1, wraps = capWallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
+			capTh0, capTh1, wraps = capband.WallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 			// capThAllow is capSweepAllow's own enclosure of THIS sweep
 			// (capTh1-capTh0), computed here where start/end/wraps are still
-			// the ones capWallSweep just resolved: patchAreaOf's later swap of
+			// the ones capband.WallSweep just resolved: patchAreaOf's later swap of
 			// g.CapTh0/g.CapTh1 (below) negates the raw difference but not its
 			// absolute value, and this bound is symmetric in sign (it bounds
 			// |held-true|), so computing it once, pre-swap, stays valid after.
@@ -781,8 +724,8 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // offset family's corner foot is otherwise a conic, and the chord this Edge
 // holds understates its length (docs/modify-reach-design.md §8.3's boundary
 // bullet). Where either wall is circular, dc's own offset range [0, dc]
-// (capMiterLocusUpper widens it by dc's unit-conversion rounding dcDelta) is
-// split into capMiterLocusSubdivisions sub-ranges, each enclosed through
+// (capband.MiterLocusUpper widens it by dc's unit-conversion rounding dcDelta) is
+// split into capband.MiterLocusSubdivisions sub-ranges, each enclosed through
 // miterLocusSpeedUpper and turned into that sub-range's own locus-length
 // upper bound via proofbound.ChordLocusLengthAllow (called with a zero chordUpper, which
 // reduces it to the raw product); the sub-range bounds sum to the whole
@@ -827,7 +770,7 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 		return e, heldBound, nil
 	}
 	chordUpper := proofbound.AbsSumUpper(held, heldBound)
-	total, ok, err := capMiterLocusUpper(budget, prev, cur, apexU, apexV, setback.axialUpper(), dc, dcDelta)
+	total, ok, err := capband.MiterLocusUpper(budget, prev, cur, apexU, apexV, setback.axialUpper(), dc, dcDelta)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -841,90 +784,6 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 	}
 	return e, heldBound, nil
 }
-
-// capMiterLocusUpper is the proven upper bound on the LENGTH of the conic miter
-// locus a mitered ruling stands for — the sum capSlantEdge charges its chord
-// against, factored out so the tessellator can read the same number for its own
-// locus-gap term (docs/tessellation-reach-design.md §7) instead of deriving a
-// second bound from the same two carriers.
-//
-// The offset range [0, dc] — out to dc + dcDelta where the setback's unit
-// conversion rounded by dcDelta — is split into capMiterLocusSubdivisions
-// sub-ranges, each enclosed through miterLocusSpeedUpper and turned into that
-// sub-range's own length upper bound by proofbound.ChordLocusLengthAllow (called
-// with a zero chordUpper, which reduces it to the raw product); the sub-range
-// bounds sum to the whole locus's own. axialUpper must be a proven upper bound
-// on the denoted locus's axial rise, which is the side setback the caller
-// stated (capSetback.axialUpper), not the held difference of the two float
-// levels. ok is false where any sub-range's enclosure cannot be
-// built, which every caller answers by withholding its reading rather than
-// publishing an understated one. Each sub-range charges one budget step, so a
-// band with many mitered circular corners cannot spend unbounded work here.
-func capMiterLocusUpper(budget *proofbound.WorkBudget, prev, cur survey2d.SideWalk, apexU, apexV, axialUpper, dc, dcDelta float64) (float64, bool, error) {
-	if dc <= 0 || !(axialUpper >= 0) || proofbound.IsNonFinite(axialUpper) {
-		return 0, false, nil
-	}
-	// span is the largest offset amount the denoted locus reaches and rate the
-	// smallest it can be divided by: dc itself for a setback stated in
-	// millimetres, and dc widened by its unit conversion's rounding dcDelta
-	// otherwise, so the sub-ranges cover the denoted locus's whole offset range
-	// and its axial speed is read no slower than the denoted one.
-	span, rate := dc, dc
-	if dcDelta > 0 {
-		span = proofbound.UpRound(dc + dcDelta)
-		rate = freeform.DownRound(dc - dcDelta)
-		if rate <= 0 {
-			return 0, false, nil
-		}
-	}
-	total := 0.0
-	for _, r := range capMiterLocusRanges(span) {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return 0, false, err
-		}
-		t0, t1 := r[0], r[1]
-		speed, ok := capcontour.MiterLocusSpeedUpper(prev, cur, t0, t1, apexU, apexV)
-		if !ok {
-			return 0, false, nil
-		}
-		// width bounds the sub-range's exact width from above, and axial
-		// bounds the locus's axial rise over it, axialUpper·width/rate, from
-		// above, so ChordLocusLengthAllow's axial speed axial/width is no
-		// slower than the denoted locus's axialUpper/rate.
-		width := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(t1), proofarith.FloatRat(t0)))
-		axial := proofbound.DivUpper(proofbound.ProductUpper(axialUpper, width), rate)
-		total = proofbound.AbsSumUpper(total, proofbound.ChordLocusLengthAllow(speed, width, axial, 0))
-	}
-	return total, true, nil
-}
-
-// capMiterLocusRanges splits the offset range [0, span] into
-// capMiterLocusSubdivisions sub-ranges at the floats k·span/N. Each sub-range
-// starts at the very float the previous one ends at, and the last ends at
-// span, so the ranges cover [0, span] with no gap however k·step rounds. Two
-// separately rounded ends, k·step + step for one range and (k+1)·step for the
-// next, can leave a one-ulp offset range that no speed enclosure covers.
-func capMiterLocusRanges(span float64) [capMiterLocusSubdivisions][2]float64 {
-	var ranges [capMiterLocusSubdivisions][2]float64
-	step := span / capMiterLocusSubdivisions
-	t0 := 0.0
-	for k := range capMiterLocusSubdivisions {
-		t1 := float64(k+1) * step
-		if k == capMiterLocusSubdivisions-1 {
-			t1 = span
-		}
-		ranges[k] = [2]float64{t0, t1}
-		t0 = t1
-	}
-	return ranges
-}
-
-// capMiterLocusSubdivisions is the fixed number of offset sub-ranges
-// capSlantEdge splits a miter corner's own [0, dc] into (its doc comment
-// above states why one range is too loose). A quarter disk of radius 10
-// chamfered up to 4mm — approaching its own line/circle tangency at
-// offset 5mm — stays comfortably under its own held chord at this count.
-const capMiterLocusSubdivisions = 32
 
 // wholeCircleEdge builds a full-circle Edge (Circle3) in the cap plane at z,
 // the same seam-vertex convention extrude.go's singleClosed branch uses. delta
@@ -957,7 +816,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 // arcEdge builds an Arc3 Edge in the cap plane at z between the given
 // vertices, walking the sense (th0, th1) the caller's own directrix does —
 // the wall's own (th0, th1) for a whole-circle band, the cap-level
-// (capTh0, capTh1) capWallSweep resolved for a regular wall's own trimmed
+// (capTh0, capTh1) capband.WallSweep resolved for a regular wall's own trimmed
 // arc. length is the held sweep r*|th1-th0| and lengthBound is
 // capWallArcBound's (or capCircleLengthBound's) proven bound on it — the
 // caller forms the two together so the bound is never computed against a
@@ -1000,7 +859,7 @@ func planeFromThree(p0, p1, p2 r3.Vec) (Plane, error) {
 //
 // Cylinder is therefore reserved for radii that are EXACTLY equal — the one
 // configuration in which the surface really is a cylinder. The cap-band callers
-// never reach it: capBandRadius refuses an offset whose radial change rounded
+// never reach it: capband.BandRadius refuses an offset whose radial change rounded
 // away before a patch is built from it, and an apex patch runs from radius 0 to
 // the cap setback dc, which S13 already proved non-zero.
 //

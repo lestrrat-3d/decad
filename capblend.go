@@ -497,7 +497,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCa
 // SX12, and SX13's axial half) and, once every gate passes, builds the body. It
 // is the shared entry Chamfer calls once a clean cap-loop selection is
 // classified. SX13's radial half is decided per circular wall as the band is
-// constructed, in capblend_geom.go's capBandRadius. start and end are the two
+// constructed, in capband.BandRadius. start and end are the two
 // caps' own setbacks (§8.3.1); a cap with no selected loop reads neither.
 func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, start, end capSetback, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
@@ -581,8 +581,8 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 
 // requireCapBlendLevelsSeparate is SX13's AXIAL half (Table SX,
 // docs/modify-reach-design.md §4 stage 6 and §8.3), the sibling of
-// capblend_geom.go's capBandRadius. The band has two directrices and the
-// setback displaces both: `d` in the plane, which capBandRadius proves survived
+// capband.BandRadius. The band has two directrices and the
+// setback displaces both: `d` in the plane, which capband.BandRadius proves survived
 // float64 at each circular wall's own radius, and `d` along the sweep, which
 // carries the original loop from the cap level to the side level. A tall enough
 // sweep puts `d` under the float64 spacing of that coordinate, and `z1 - d`

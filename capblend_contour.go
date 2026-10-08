@@ -92,7 +92,7 @@ func capContourDelta(walks []survey2d.SideWalk, joins []cornerJoin, d, dDelta fl
 	}
 	for _, w := range walks {
 		if w.IsCircular() {
-			if _, err := capBandRadius(w, d); err != nil {
+			if _, err := capband.BandRadius(w, d, shellTol); err != nil {
 				return 0, err
 			}
 		}
@@ -120,7 +120,7 @@ func capContourJoins(joins []cornerJoin) []capcontour.Join {
 // is the concentric circle at the offset radius. dDelta is the setback's own
 // unit-conversion rounding, read as capContourDelta reads it.
 func capWholeCircleDelta(w survey2d.SideWalk, d, dDelta float64) (float64, error) {
-	held, err := capBandRadius(w, d)
+	held, err := capband.BandRadius(w, d, shellTol)
 	if err != nil {
 		return 0, err
 	}
@@ -171,7 +171,7 @@ var errCapPatchHeldUnbounded = fmt.Errorf(`%w: a cap-loop chamfer's circular ban
 
 // capWallHeldAllow is a circular wall patch's capband.HeldAllow, before the
 // patch normalizes its window (th0, th1 are the walk's own, start and end its
-// cap feet in walk order, capTh0 and capTh1 capWallSweep's angles of them).
+// cap feet in walk order, capTh0 and capTh1 capband.WallSweep's angles of them).
 //
 // The side window ends are float angles of the walk's two ends, and each end
 // names the point the record denotes there to within its own proven end bound,

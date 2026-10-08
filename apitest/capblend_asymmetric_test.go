@@ -469,7 +469,7 @@ func asymQuarterDiskLocusLength(r, dc, ds float64) float64 {
 // the plane and ds along the sweep.
 //
 // Shown to fail: passing dc as the locus's axial span (capSlantEdge's call to
-// capMiterLocusUpper) leaves the ds > dc rows' bound below the locus.
+// capband.MiterLocusUpper) leaves the ds > dc rows' bound below the locus.
 func TestCapBlendAsymmetricMiterRulingEnclosesItsLocus(t *testing.T) {
 	t.Parallel()
 	const r, h = 10.0, 20.0
