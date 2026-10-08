@@ -223,12 +223,20 @@ func Centroid(anchor sweeparc.RatVec, vol6 *big.Rat, moments [3]*big.Rat) ([3]fl
 	if vol6.Sign() == 0 {
 		return [3]float64{}, 0, fmt.Errorf(`%w: a mitred sweep with zero volume has no centroid`, decaderr.ErrDegenerate)
 	}
-	denom := new(big.Rat).Mul(big.NewRat(4, 1), vol6)
+	fourVol := new(big.Int).Lsh(vol6.Num(), 2)
 	var value [3]float64
 	worst := 0.0
 	for axis := range 3 {
-		c := new(big.Rat).Quo(moments[axis], denom)
-		c.Add(c, anchor[axis])
+		moment, origin := moments[axis], anchor[axis]
+		var num, den, tmp big.Int
+		num.Mul(origin.Num(), fourVol)
+		num.Mul(&num, moment.Denom())
+		tmp.Mul(moment.Num(), vol6.Denom())
+		tmp.Mul(&tmp, origin.Denom())
+		num.Add(&num, &tmp)
+		den.Mul(fourVol, moment.Denom())
+		den.Mul(&den, origin.Denom())
+		c := new(big.Rat).SetFrac(&num, &den)
 		value[axis], _ = c.Float64()
 		worst = math.Max(worst, proofarith.RationalFloatError(c, value[axis]))
 	}
