@@ -225,8 +225,8 @@ func TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement(t *testing.T) {
 // sin/cos evaluate exactly (1, 0) with no libm rounding of their own, which
 // isolates the frame-lift/placement charge this row tests from the
 // angular-denotation charge revolve_bounds_test.go already covers.
-// Shown-to-fail: deleting the lift term revolve_build.go's sweptVertex
-// charges turns the enclosure assertions red.
+// Shown-to-fail: replacing revolve_build.go's sweptVertex comparison with a
+// zero bound turns the enclosure assertions red.
 func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
@@ -283,7 +283,7 @@ func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 // lift measurement with a magnitude charge (proofbound.RigidRoundAllow at the
 // coordinate envelope, nonzero whenever a coordinate is) in
 // prismPayload.liftedVertex turns the prism and capBlend subtests red, and in
-// revolvePayload.liftedVertex the revolve subtest.
+// revolvePayload.sweptVertex the revolve subtest.
 func TestVertexAxisAlignedUnplacedBoundStaysZero(t *testing.T) {
 	t.Parallel()
 

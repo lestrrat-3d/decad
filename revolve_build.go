@@ -146,27 +146,78 @@ func (rp revolvePayload) lift() revolvemesh.RevolveLift {
 // basis derives the sweep basis from the plane frame and the axis frame.
 func (rp revolvePayload) basis() revolvemesh.RevolveBasis { return rp.lift().Basis() }
 
-// liftedVertex places one swept vertex at axial z, radius rho and angle phi
-// over b (rp.basis()) and returns the held point beside the exact rounding
-// the frame lift and accumulated placement committed on it
-// (revolvemesh.RevolveLift.ExactPointRound; topology.go's Vertex.Position
-// contract). It is zero wherever that evaluation is exact for the
-// coordinates at hand, which is what keeps an ordinary revolve's junction and
-// seam vertices Exact; a far sketch-plane origin, a tilted frame or a
-// placement charges exactly what it rounded.
-func (rp revolvePayload) liftedVertex(b revolvemesh.RevolveBasis, z, rho, phi float64) (r3.Vec, float64) {
-	held := rp.point(b, z, rho, phi)
-	sin, cos := math.Sincos(phi)
-	return held, rp.lift().ExactPointRound(rp.xform, z, rho, cos, sin, held)
+// axisBound is the resolved axis's own proven anchor and direction
+// displacement, in the form the swept-vertex comparison reads it.
+func (rp revolvePayload) axisBound() revolvemesh.AxisBound {
+	return revolvemesh.AxisBound{AU: rp.ax.aUBound, AV: rp.ax.aVBound, DU: rp.ax.dUBound, DV: rp.ax.dVBound}
 }
 
-// sweptVertex places one swept vertex at axial z, radius rho and angle phi
-// (liftedVertex), bounded by angularAllow — the radius times the held angle's
-// own displacement — beside the vertex's own exact lift rounding, and stamps
-// it with denot, the zero token where the vertex mints no curve certificate.
-func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho, phi, angularAllow float64, denot curveToken) *Vertex {
-	held, lift := rp.liftedVertex(b, z, rho, phi)
-	return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(angularAllow, lift)), denot: denot}
+// sweptPoint is the recorded plane-local point a swept vertex denotes, with
+// the walk's own proven bound on it (survey2d.SegmentWalk's StartBound/
+// EndBound: zero where the record states the coordinate, the evaluation's
+// own bound where the walk computed it).
+type sweptPoint struct {
+	u, v  float64
+	bound proofbound.WalkEndBound
+}
+
+// walkStart and walkEnd read a PLANE-local walk's (revolveWalks.plane) two
+// ends as the points they denote.
+func walkStart(w survey2d.SegmentWalk) sweptPoint {
+	return sweptPoint{u: w.StartU, v: w.StartV, bound: w.StartBound}
+}
+
+func walkEnd(w survey2d.SegmentWalk) sweptPoint {
+	return sweptPoint{u: w.EndU, v: w.EndV, bound: w.EndBound}
+}
+
+// sweptEnd is one end of the sweep a vertex sits at: the held angle and the
+// angle the record denotes there (rp.phi0 with rp.den.phi0, or rp.phi1 with
+// rp.den.phi1).
+type sweptEnd struct {
+	phi float64
+	den angleDenotation
+}
+
+func (rp revolvePayload) end0() sweptEnd { return sweptEnd{phi: rp.phi0, den: rp.den.phi0} }
+func (rp revolvePayload) end1() sweptEnd { return sweptEnd{phi: rp.phi1, den: rp.den.phi1} }
+
+// sweptGap proves how far held sits from the point at denotes, swept to the
+// angle end's record states (revolvemesh.RevolveLift.SweptPointGap;
+// topology.go's Vertex.Position contract). An end with no denotation — a
+// ToFaceAngular stop, or a payload literal built without one — states no
+// angle to rotate to, so the gap is unbounded there, which is the +Inf the
+// end's own displacement (phi0Delta/phi1Delta) answers for every reading.
+func (rp revolvePayload) sweptGap(held r3.Vec, at sweptPoint, end sweptEnd) float64 {
+	if !end.den.valid() {
+		return math.Inf(1)
+	}
+	sin, cos, ok := end.den.sinCosFor(end.phi)
+	if !ok {
+		return math.Inf(1)
+	}
+	return rp.lift().SweptPointGap(rp.axisBound(), rp.xform, at.u, at.v, at.bound, sin, cos, held)
+}
+
+// sweptVertex places one swept vertex at axial z and radius rho — the
+// re-expressed, possibly snapped axis coordinates the walk carries — swept to
+// the first of ends, and stamps it with denot, the zero token where the vertex
+// mints no curve certificate. Its bound is ONE exact comparison per end
+// against the recorded point at, rotated to the angle that end denotes
+// (sweptGap): the re-expression's rounding, the snap, the axis's own anchor
+// and direction error, the angular displacement and trigonometric evaluation,
+// and the frame lift and placement rounding all sit inside it. A vertex one
+// end alone places passes that end; the shared on-axis vertex a partial sweep
+// gives both caps passes both, since it stands for the recorded point at each.
+// The bound is zero wherever every comparison is exact, which keeps an
+// ordinary revolve's φ = 0 cap and seam vertices Exact.
+func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho float64, at sweptPoint, denot curveToken, ends ...sweptEnd) *Vertex {
+	held := rp.point(b, z, rho, ends[0].phi)
+	gap := 0.0
+	for _, end := range ends {
+		gap = math.Max(gap, rp.sweptGap(held, at, end))
+	}
+	return &Vertex{position: held, bound: units.Millimeters(gap), denot: denot}
 }
 
 // revolveCentroidGeometryBound bounds the centroid independently of the
@@ -194,6 +245,55 @@ func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeform
 	rotatedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, profileUpper), proofbound.ProductUpper(4, axisUpper))
 	placedUpper := proofbound.AbsSumUpper(proofbound.ProductUpper(3, rotatedUpper), vecL1(rp.xform.Translation()))
 	return proofbound.AbsSumUpper(vecL1(held), placedUpper), nil
+}
+
+// revolveCentroidLift carries the magnitudes the centroid's own lift
+// A3 + W·axial + (E0·rx + E1·ry)·scale multiplies the axis basis by: the
+// axial coordinate's, and for a partial sweep the in-plane term's three
+// factors, each its value plus its own proven bound. A full turn leaves the
+// partial-sweep three at zero.
+type revolveCentroidLift struct {
+	axialUpper, rxUpper, ryUpper, scaleUpper float64
+}
+
+// charge is what that lift owes the axis basis itself, beside the float
+// rounding AnalyticRoundBound charges at the centroid's own magnitude.
+//
+// The anchor A3 is the frame lift O + U·aU + V·aV, whose products and sums
+// round at the frame origin's and the anchor's magnitudes rather than at
+// A3's: a far sketch plane whose anchor lifts back near the world origin
+// rounds at ulp(10⁶) while A3 itself is small. Its exact rounding is
+// RevolveLift.ExactPointRound's, read at z = ρ = 0 under the identity.
+//
+// The axis's own proven displacement (axisInPlane's aUBound, aVBound,
+// dUBound, dVBound) moves the basis the TRUE centroid is lifted through, and
+// axisMoments charges it only into the axial coordinate. Read as L1 norms of
+// the basis's own change: A3 moves by |U|·aUBound + |V|·aVBound, W = U·dU +
+// V·dV by dW = |U|·dUBound + |V|·dVBound, E0 = −U·dV + V·dU by dE0 =
+// |U|·dVBound + |V|·dUBound, and E1 = W × E0 by at most dW·|E0*| + |W|·dE0,
+// since W×E0 − W*×E0* = (W − W*)×E0* + W×(E0 − E0*) and an L1 cross product
+// is at most the product of its operands' L1 norms. Each moves the centroid
+// by its own factor's magnitude. Every term is zero for a frame whose anchor
+// lifts exactly and an axis whose anchor and direction carry no bound.
+func (l revolveCentroidLift) charge(rp revolvePayload, b revolvemesh.RevolveBasis) float64 {
+	a3Round := rp.lift().ExactPointRound(r3.Identity(), 0, 0, 1, 0, b.A3)
+	ax := rp.ax
+	lu, lv := vecL1(rp.frame.U()), vecL1(rp.frame.V())
+	anchor := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.aUBound), proofbound.ProductUpper(lv, ax.aVBound))
+	dW := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.dUBound), proofbound.ProductUpper(lv, ax.dVBound))
+	terms := []float64{a3Round, anchor, proofbound.ProductUpper(l.axialUpper, dW)}
+	if l.scaleUpper > 0 {
+		dE0 := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, ax.dVBound), proofbound.ProductUpper(lv, ax.dUBound))
+		wHeld := proofbound.AbsSumUpper(proofbound.ProductUpper(lu, math.Abs(ax.dU)), proofbound.ProductUpper(lv, math.Abs(ax.dV)))
+		e0True := proofbound.AbsSumUpper(
+			proofbound.ProductUpper(lu, proofbound.AbsSumUpper(ax.dV, ax.dVBound)),
+			proofbound.ProductUpper(lv, proofbound.AbsSumUpper(ax.dU, ax.dUBound)),
+		)
+		dE1 := proofbound.AbsSumUpper(proofbound.ProductUpper(dW, e0True), proofbound.ProductUpper(wHeld, dE0))
+		radial := proofbound.AbsSumUpper(proofbound.ProductUpper(l.rxUpper, dE0), proofbound.ProductUpper(l.ryUpper, dE1))
+		terms = append(terms, proofbound.ProductUpper(l.scaleUpper, radial))
+	}
+	return proofbound.AbsSumUpper(terms...)
 }
 
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
@@ -515,6 +615,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	cen := b.A3.Add(b.W.Scale(axial.Value))
 	centroidScale := proofbound.AbsSumUpper(proofbound.VecMaxAbs(b.A3), axial.Value)
 	centroidBound := proofbound.AbsSumUpper(axial.Bound, proofbound.Radius3D(proofbound.AnalyticRoundBound(centroidScale)))
+	lift := revolveCentroidLift{axialUpper: proofbound.AbsSumUpper(axial.Value, axial.Bound)}
 	if !rp.full {
 		// The in-plane term is the swept radial direction integrated over
 		// the interval — closed form in the sweep angle; a full turn's is
@@ -534,6 +635,15 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			proofbound.ProductUpper(radialUpper, radialScale.Bound),
 			proofbound.Radius3D(proofbound.AnalyticRoundBound(proofbound.ProductUpper(radialScale.Value, radialUpper))),
 		)
+		lift.rxUpper = proofbound.AbsSumUpper(rx.Value, rx.Bound)
+		lift.ryUpper = proofbound.AbsSumUpper(ry.Value, ry.Bound)
+		lift.scaleUpper = proofbound.AbsSumUpper(radialScale.Value, radialScale.Bound)
+	}
+	// An absent axis-lift charge folds nothing: proofbound.AbsSumUpper up-rounds
+	// every term it folds, zero included, and an exact axis must read as it
+	// did before the charge existed.
+	if axisLift := lift.charge(rp, b); axisLift > 0 {
+		centroidBound = proofbound.AbsSumUpper(centroidBound, axisLift)
 	}
 	centroidBound = proofbound.AbsSumUpper(
 		centroidBound,
@@ -745,12 +855,16 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				return revLoopParts{}, err
 			}
 			j := revJunction{z: w.StartU, rho: w.StartV, onAxis: w.StartV == 0}
+			// The recorded point the junction denotes: walk i's start is its
+			// first recorded segment's own start (revolveJunctions,
+			// tessellate_revolve.go, reads the same one).
+			at := walkStart(resolved.plane[w.Segs[0]])
 			prev := walks[(i+n-1)%n]
 			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
+				seam := rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.AxisRadiusUpper, proofbound.TwoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
@@ -772,10 +886,12 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
-				j.v1 = j.v0
-				if !j.onAxis {
-					j.v1 = rp.sweptVertex(b, j.z, j.rho, rp.phi1, proofbound.ProductUpper(j.rho, rp.phi1Delta()), body.doc.mintCurve())
+				if j.onAxis {
+					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
+					j.v1 = j.v0
+				} else {
+					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
+					j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end1())
 					arcLength := j.rho * dphi
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
@@ -842,8 +958,12 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				vs0, ve0 = js[i].v0, js[(i+1)%n].v0
 				vs1, ve1 = js[i].v1, js[(i+1)%n].v1
 			}
-			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, rp.phi0, rp.phi0Delta(), holeLoop)
-			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, rp.phi1, rp.phi1Delta(), holeLoop)
+			// A whole closed walk's seam vertex denotes its one recorded
+			// segment's own start; every other walk's cap edge takes the
+			// junction vertices above.
+			seam := walkStart(resolved.plane[w.Segs[0]])
+			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop)
+			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop)
 		}
 	}
 
@@ -1024,11 +1144,12 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // material outside the sphere/torus it sweeps, exactly as wallSurface reads
 // it, so its cap edge is concave — a hole's arc and a concave bite in the
 // outer boundary alike), while a STRAIGHT walk has no sense of its own and
-// takes the loop's: outer convex, hole concave. delta is the proven angular
-// displacement of THIS end (rp.phi0Delta() or rp.phi1Delta(), matching
-// whichever of phi0/phi1 phi is), charged into a closed walk's own seam
-// vertex the same way every other cap vertex is (docs/evaluator-design.md §6).
-func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
+// takes the loop's: outer convex, hole concave. end is THIS cap's end of the
+// sweep (rp.end0() or rp.end1()), and seam the recorded point a closed walk's
+// own seam vertex denotes; that vertex is bounded the same way every other cap
+// vertex is (sweptVertex; docs/evaluator-design.md §6). An open walk reads
+// neither.
+func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool) *Edge {
 	convex := !holeLoop
 	if w.IsCircular() {
 		convex = w.Th0 < w.Th1
@@ -1043,7 +1164,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	// its normal is the rotated sweep-velocity direction; the walk's own
 	// range order is the arc's CCW sense about it, inverted once by a
 	// reflected placement.
-	sin, cos := math.Sincos(phi)
+	sin, cos := math.Sincos(end.phi)
 	normal := b.E0.Scale(-sin).Add(b.E1.Scale(cos))
 	sign := 1.0
 	if w.Th1 < w.Th0 {
@@ -1053,12 +1174,12 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 		sign = -sign
 	}
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
-	center := rp.point(b, w.CU, w.CV, phi)
+	center := rp.point(b, w.CU, w.CV, end.phi)
 	radius := units.Millimeters(w.Radius)
 	if closed {
-		seam := rp.sweptVertex(b, w.StartU, w.StartV, phi, proofbound.ProductUpper(w.StartV, delta), curveToken{})
+		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
-		e.start, e.end = seam, seam
+		e.start, e.end = v, v
 		return e
 	}
 	e.curve = Arc3{Center: center, Axis: axis, Radius: radius}
@@ -1392,16 +1513,18 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	}
 	wDir := rp.xform.ApplyDir(b.W)
 
-	// junctionSource reads junction i's own (z, rho) and the walk whose end
-	// it belongs to: junction i sits at walk i's start for i < n, and at the
-	// LAST walk's own end for i == n — the chain's own two free ends.
-	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64) {
+	// junctionSource reads junction i's own (z, rho), the walk whose end it
+	// belongs to, and the recorded point it denotes: junction i sits at walk
+	// i's start for i < n, and at the LAST walk's own end for i == n — the
+	// chain's own two free ends. A coalesced walk starts at its first recorded
+	// segment's start and ends at its last one's end.
+	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64, at sweptPoint) {
 		if i < n {
 			w := walks[i]
-			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper
+			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, walkStart(resolved.plane[w.Segs[0]])
 		}
 		w := walks[n-1]
-		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper
+		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, walkEnd(resolved.plane[w.Segs[len(w.Segs)-1]])
 	}
 
 	js := make([]revJunction, n+1)
@@ -1409,7 +1532,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		if err := ctx.Err(); err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		z, rho, rhoBound, axisRadiusUpper := junctionSource(i)
+		z, rho, rhoBound, axisRadiusUpper, at := junctionSource(i)
 		j := revJunction{z: z, rho: rho, onAxis: rho == 0}
 		var turn float64
 		if i > 0 && i < n {
@@ -1419,7 +1542,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		center := rp.point(b, j.z, 0, 0)
 		switch {
 		case rp.full && !j.onAxis:
-			seam := rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
+			seam := rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
 			latitudeLength := 2 * math.Pi * j.rho
 			latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(axisRadiusUpper, proofbound.TwoPiUpper()))
 			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
@@ -1436,10 +1559,12 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				denot:       body.doc.mintCurve(),
 			}
 		case !rp.full:
-			j.v0 = rp.sweptVertex(b, j.z, j.rho, rp.phi0, proofbound.ProductUpper(j.rho, rp.phi0Delta()), body.doc.mintCurve())
-			j.v1 = j.v0
-			if !j.onAxis {
-				j.v1 = rp.sweptVertex(b, j.z, j.rho, rp.phi1, proofbound.ProductUpper(j.rho, rp.phi1Delta()), body.doc.mintCurve())
+			if j.onAxis {
+				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
+				j.v1 = j.v0
+			} else {
+				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
+				j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end1())
 				arcLength := j.rho * dphi
 				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))
@@ -1503,8 +1628,8 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
 			// (docs/surface-design.md §13.4).
-			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, rp.phi0, rp.phi0Delta(), false)
-			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, rp.phi1, rp.phi1Delta(), false)
+			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false)
+			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false)
 			co := []coedge{{edge: cap0, forward: true}}
 			if a := js[i+1].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: true})

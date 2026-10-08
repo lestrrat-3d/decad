@@ -363,20 +363,51 @@ cap-copy seam vertices, the cap faces' own `Plane` normal, the mesh's angular
 sampling, the wall survey's cap wedge, and the tolerance gate's reference
 diameter. Clearance and interference stay on the prism's own precedent:
 neither reads the axial displacement there, and neither reads the angular
-one here. Beside the angular displacement, every junction, seam and cap
-vertex `buildRevolveLoop` places charges its own frame/placement lift
-rounding, measured exactly for that vertex (`revolvePayload.sweptVertex`,
-`revolvemesh.RevolveLift.ExactPointRound`): the held point against the
-basis construction — the axis anchor's own frame lift, the axis and radial
-directions and the axial and radial terms — and the placement over dyadic
-rationals, with the held sine and cosine as leaves, so the frame origin, a
-tilted sketch plane and a placement each charge exactly what they rounded,
-and the trigonometric evaluation stays the angular term's own.
+one here.
+Every junction, seam and cap vertex `buildRevolveLoop` and the `RevolveChain`
+build place is bounded by ONE exact comparison per sweep end
+(`revolvePayload.sweptVertex`, `revolvemesh.RevolveLift.SweptPointGap`). The
+vertex is PLACED from its walk's float axis coordinates (z, ρ), which
+`axisFrame.walk` re-expresses from the plane-local point in float and snaps
+onto the axis inside the contact tolerance. The comparison instead starts
+from the recorded plane-local point (u, v) the vertex denotes, widened by the
+walk's own endpoint bound where the walk computed that point, re-expresses
+it about the axis anchor and direction widened by `axisInPlane`'s four
+bounds, rotates it by that end's certified sine and cosine
+(`angleDenotation.sinCosFor`), and lifts it through the frame and the
+placement, all over rational intervals with the frame and the placement as
+exact leaves. The held point's distance from that enclosure therefore covers
+the re-expression's rounding, a snapped radius, the axis's own anchor and
+direction error at any angle, the angular displacement and the
+trigonometric evaluation, and the frame lift and placement rounding. The
+on-axis vertex a partial sweep shares between its two caps denotes the
+recorded point at both ends and takes the larger of the two comparisons. An
+end with no denotation (a `ToFaceAngular` stop) bounds its vertices at +Inf.
+Every interval is a single point for an exactly resolved axis, recorded
+coordinates and an exactly stated end, so an integer profile about a
+coordinate axis keeps its φ = 0 cap and seam vertices `Exact`. A trimmed
+`RevolveChain`'s section displacement (`sectionDelta`) is not in the vertex
+bound: `Area`, `Bounds` and the tolerance gate charge it, as they do for the
+prism's chain.
+The swept edges' curves are held floats with no bound of their own: a
+junction `Circle3`/`Arc3` takes its centre and radius from the walk's (z, ρ)
+(`junctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
+`revolve_blend.go` matches a selected edge against `junctionCircle` by
+float identity over the same payload, so it reads the same numbers and needs
+no bound.
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial
-sweep's is closed form in the sweep angle. `Area` by Pappus's first theorem
+sweep's is closed form in the sweep angle. The centroid is lifted as
+A3 + W·axial (+ the partial sweep's in-plane term), and beside the axial
+coordinate's own bound and the lift's rounding at the centroid's magnitude it
+charges what that lift owes the axis basis (`revolveCentroidLift.charge`):
+the anchor A3's exact frame-lift rounding, which rounds at the frame origin's
+and the anchor's magnitudes rather than A3's own, and the axis's proven anchor
+and direction displacement carried through A3, W, E0 and E1 at the axial and
+in-plane magnitudes. Each is zero for an exactly lifted anchor and an axis
+with no bound. `Area` by Pappus's first theorem
 per side face — swept arc length × the sweep angle × the segment CURVE's
 centroidal radius about the axis, a boundary first moment with closed forms
 for `LineSeg`/`ArcSeg`/`CircleSeg` — plus the §4 region area for each partial-
@@ -493,7 +524,7 @@ coordinate, which a pure translation commits even where the isometry's float
 evaluation rounded nothing. `Vertex.Position` takes the identical charge for
 every rim, junction and cap-level vertex `prismPayload`, `revolvePayload` and
 `capBlendPayload` place, measured exactly per vertex (`ExactFrameLiftRound`,
-`RevolveLift.ExactPointRound`; §5, §6): a vertex sits at a plane-local
+`RevolveLift.SweptPointGap`; §5, §6): a vertex sits at a plane-local
 coordinate lifted through the payload's own frame and then its placement, the
 same two-step map `Bounds` reads, so a tilted frame or an origin the
 coordinate does not add to exactly rounds it under the identity placement

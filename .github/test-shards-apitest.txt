@@ -677,6 +677,7 @@
 2	0.02	TestRevolveBoundsEnclosesDenotedExtreme
 2	0.00	TestRevolveBoundsEnclosesTiltedAxisFullTurn
 2	0.00	TestRevolveBoundsExactFullTurn
+2	0.01	TestRevolveCentroidBoundCoversTiltedAxis
 2	0.00	TestRevolveChainFullTurnStaysOpen
 2	0.00	TestRevolveChainFullTurnWithOnePole
 2	0.00	TestRevolveChainPoleAtLastEnd
@@ -687,6 +688,7 @@
 2	0.00	TestRevolveChainRunsTheSeamGates
 2	0.00	TestRevolveChainSnappedPoleChargesArea
 2	0.00	TestRevolveChainSnappedPoleEnclosesRadialWallArea
+2	0.01	TestRevolveChainVertexBoundCoversAxisReexpression
 2	0.00	TestRevolveCone
 2	0.00	TestRevolveEdgeAxisDirectionSense
 2	0.01	TestRevolveEdgeAxisGates
@@ -714,6 +716,10 @@
 2	0.42	TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume
 2	0.00	TestRevolveVerifySound
 2	0.00	TestRevolveVerifySoundAnnular
+2	0.01	TestRevolveVertexBoundCoversAxisReexpression
+2	0.01	TestRevolveVertexBoundCoversAxisSnap
+2	0.01	TestRevolveVertexBoundCoversTiltedAxis
+2	0.01	TestRevolveVertexIntegerStaysExact
 2	0.00	TestRevolveWedgeSharesAxisEdgeBetweenCaps
 2	0.00	TestSTLPlate
 2	0.00	TestSecondMomentsOffsetCircle
