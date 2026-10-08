@@ -406,7 +406,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 	}
 	// Select-all is the union only without an enclosed void (§4.2): a void
 	// is unresolved, never an error, so the pair takes the mesh path.
-	voidFree, err := prismCellsHaveNoVoid(st.budget, m.tags, m.profiles)
+	voidFree, err := prismcells.CellsHaveNoVoid(st.budget, m.tags, m.profiles)
 	if err != nil || !voidFree {
 		return ProfileRecord{}, false, err
 	}

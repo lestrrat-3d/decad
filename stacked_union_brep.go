@@ -347,7 +347,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, erro
 	if err := b.charge(sc); err != nil {
 		return nil, err
 	}
-	voidFree, err := prismCellsHaveNoVoid(b.st.budget, sc.tags, sc.profiles)
+	voidFree, err := prismcells.CellsHaveNoVoid(b.st.budget, sc.tags, sc.profiles)
 	if err != nil {
 		return nil, err
 	}

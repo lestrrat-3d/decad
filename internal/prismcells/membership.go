@@ -27,6 +27,38 @@ type link struct {
 	both bool
 }
 
+// CellsHaveNoVoid reports whether every cell has at least one boundary edge
+// on its operand's material side, making Union's select-all merge the union
+// (docs/prism-boolean-design.md §4.2). Membership is constant over a cell,
+// so one material-side edge puts the cell inside that operand. A cell whose
+// every edge lies on its operand's void side is outside each operand with an
+// edge on it. Since both operands are hole-free, such a cell is an enclosed
+// void. The check reads sketch's Reversed flag against the authored sense,
+// as Classify does. False can only send the pair to the mesh path.
+func CellsHaveNoVoid(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (bool, error) {
+	for _, p := range profiles {
+		material := false
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return false, err
+				}
+				origin, ok := tags[e.Entity]
+				if !ok {
+					return false, nil
+				}
+				if e.Reversed == origin.AuthoredReversed {
+					material = true
+				}
+			}
+		}
+		if !material {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // Classify is §4.2's edge-orientation propagation: for every cell
 // profiles holds, whether it sits on operand A's material side and on
 // operand B's material side. resolved=false (err always nil in that case)
