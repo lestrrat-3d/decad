@@ -16,8 +16,6 @@ CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 **The public API lands incrementally against approved designs; unshipped
 APIs are design-only.**
 `docs/api-design.md` is the core contract for the whole surface.
-`docs/layout.md` lists every companion design and every root file with what
-each owns.
 
 ## Read before you write
 
@@ -38,6 +36,7 @@ each owns.
 | Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
 | `Trim`, `Extend` or `Split` code | `docs/surface-intersection-design.md` |
 | Anything the surrounding `.go` file documents | its doc comments |
+| Answering what is missing, or closing/adding a refusal | `docs/missing-features.md` |
 
 ## Hard rules
 
