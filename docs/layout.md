@@ -178,7 +178,7 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `verify.go` | `Document.Verify` orchestration and ordered report assembly. See `docs/verification-design.md` §1–§3 and the file's doc comment. |
-| `verify_pairs.go` | `Verify`'s bounded pair workers and ordered outcomes. See `docs/interference-design.md` §2, §5.3 and §7.2. |
+| `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
 | `report.go` | Public report aliases. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
@@ -303,6 +303,7 @@ the rules leave to the byte budget.
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
+| `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
