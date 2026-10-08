@@ -507,13 +507,7 @@ type loopDrive struct {
 	// asked whole and sketch certified; a joint-box cell whose loop-axis range
 	// meets none of them is stuck (docs/linkage-check-design.md §16.4).
 	certified [][2]*big.Rat
-	// spans holds each verification interval's dependent readings, keyed by
-	// its two ends, per piece the interval is cut into and per dependent,
-	// from intervalGate until travel reads them.
-	spans map[string][][]loopSpan
 }
-
-type loopSub = linkagebound.DriverSubsegment
 
 // loopScene is the private sketch scene of one loop under one drive, on one
 // side of the plane (docs/linkage-check-design.md §15.2).
@@ -603,7 +597,7 @@ func (l *Linkage) resolveLoops(spec *linkageSpec, noun string) error {
 		if heldAtZeroJoint(jt) {
 			continue
 		}
-		ld := &loopDrive{loop: lp, driver: k, driverJt: jt, spans: make(map[string][][]loopSpan)}
+		ld := &loopDrive{loop: lp, driver: k, driverJt: jt}
 		if jt.revolute {
 			ld.axisSense = linkagebound.Dot(ratVecExact(jt.axis), lp.normal).Sign()
 		}
@@ -1130,63 +1124,14 @@ func (ld *loopDrive) checkLimits(spec *linkageSpec) error {
 	return nil
 }
 
-// withinReach reports whether a value interval lies inside dependent j's
-// reach; one outside it is refused, so the reach every swept box was grown by
-// covers every value a claim is made about.
-func (ld *loopDrive) withinReach(j int, iv proofbound.RatInterval) bool {
-	return linkagebound.Magnitude(iv).Cmp(ld.reach[j]) <= 0
-}
-
 // pointValues is every dependent's value range at the exact fraction s, read
 // on the sub-segment subAt picks, or the refusal that makes the pose
 // unbuildable.
 func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbound.MotionParam, error) {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	sub := ld.subs.At(s)
-	if sub.Straddle {
-		return ld.straddleValues(ctx, sub)
-	}
-	ask, err := ld.chain.Point(ctx, sub, s)
-	if err != nil {
-		return nil, err
-	}
-	if ask.Err != nil {
-		return nil, ld.unbuildable(ask.Err)
-	}
-	out := make([][2]motionbound.MotionParam, len(ld.deps))
-	for j := range ld.deps {
-		lo, hi := ld.chain.Value(ask, j)
-		if !ld.withinReach(j, linkagebound.ValueInterval(lo, hi)) {
-			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
-		}
-		out[j] = [2]motionbound.MotionParam{lo, hi}
-	}
-	return out, nil
-}
-
-// straddleValues is every dependent's value range at a fraction inside a
-// straddle: its hull over the straddle's asks, as radians or millimetres.
-// Callers hold mu.
-func (ld *loopDrive) straddleValues(ctx context.Context, sub loopSub) ([][2]motionbound.MotionParam, error) {
-	asks, err := ld.chain.StraddleAsks(ctx, sub)
-	if err != nil {
-		return nil, err
-	}
-	for _, ask := range asks {
-		if ask.Err != nil {
-			return nil, ld.unbuildable(ask.Err)
-		}
-	}
-	out := make([][2]motionbound.MotionParam, len(ld.deps))
-	for j := range ld.deps {
-		h := ld.chain.Hull(asks, j)
-		if !ld.withinReach(j, h) {
-			return nil, ld.unbuildable(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
-		}
-		out[j] = [2]motionbound.MotionParam{{Turn: new(big.Rat), Base: h.Lo}, {Turn: new(big.Rat), Base: h.Hi}}
-	}
-	return out, nil
+	return ld.chain.PointValues(ctx, s, len(ld.deps), ld.reach,
+		func(err error) error { return ld.unbuildable(err) })
 }
 
 // describe names the loop in a refusal.
@@ -1204,13 +1149,8 @@ func (ld *loopDrive) unbuildable(err error) *unbuildableError {
 func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loopSpan, error) {
 	ld.mu.Lock()
 	defer ld.mu.Unlock()
-	out, err := ld.chain.IntervalSpans(ctx, a, b, len(ld.deps), ld.reach,
+	return ld.chain.IntervalSpans(ctx, a, b, len(ld.deps), ld.reach,
 		func(err error) error { return ld.unbuildable(err) })
-	if err != nil {
-		return nil, err
-	}
-	ld.spans[linkagebound.IntervalKey(a, b)] = out
-	return out, nil
 }
 
 // span is a dependent joint's |Δq| over [sa, sb]: the sum of dependentSpan
@@ -1218,36 +1158,26 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 // total variation since that is additive over the cuts; nil when there are no
 // readings.
 func (ld *loopDrive) span(joint int, sa, sb *big.Rat) *big.Rat {
-	lo, hi := sa, sb
-	if lo.Cmp(hi) > 0 {
-		lo, hi = hi, lo
-	}
-	ld.mu.Lock()
-	pieces, ok := ld.spans[linkagebound.IntervalKey(lo, hi)]
-	ld.mu.Unlock()
 	j := slices.Index(ld.deps, joint)
-	if !ok || j < 0 {
+	if j < 0 {
 		return nil
 	}
-	return linkagebound.SumSpanUpper(pieces, j)
+	ld.mu.Lock()
+	defer ld.mu.Unlock()
+	return ld.chain.Span(j, sa, sb)
 }
 
 // dependentHull is a dependent joint's hull over [sa, sb], from the readings
 // intervalSpans took for the interval: the hull of every piece's hull, as
 // rational radians or millimetres. ok is false when there are no readings.
 func (ld *loopDrive) dependentHull(joint int, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
-	lo, hi := sa, sb
-	if lo.Cmp(hi) > 0 {
-		lo, hi = hi, lo
-	}
-	ld.mu.Lock()
-	pieces, ok := ld.spans[linkagebound.IntervalKey(lo, hi)]
-	ld.mu.Unlock()
 	j := slices.Index(ld.deps, joint)
-	if !ok || j < 0 || len(pieces) == 0 {
+	if j < 0 {
 		return proofbound.RatInterval{}, false
 	}
-	return linkagebound.HullOfPieces(pieces, j), true
+	ld.mu.Lock()
+	defer ld.mu.Unlock()
+	return ld.chain.DependentHull(j, sa, sb)
 }
 
 // dependentAt is a dependent joint's enclosure at the exact fraction s, the
