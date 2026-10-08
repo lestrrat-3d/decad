@@ -3,9 +3,9 @@ package decad
 import (
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -53,15 +53,13 @@ type FaceSelector interface {
 }
 
 // cardKind discriminates the cardinality assertion a query carries.
-type cardKind int
+type cardKind = selectorquery.CardKind
 
 const (
-	// cardNone asserts nothing: zero matches at resolve is ErrNoMatch.
-	cardNone cardKind = iota
 	// cardExactly asserts exactly n matches; anything else is ErrCardinality.
-	cardExactly
+	cardExactly cardKind = selectorquery.CardExactly
 	// cardAtLeast asserts at least n matches; fewer is ErrCardinality.
-	cardAtLeast
+	cardAtLeast = selectorquery.CardAtLeast
 )
 
 // cardinality is the recorded cardinality assertion of a query. The zero
@@ -164,7 +162,7 @@ func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
 	edges := body.Edges()
 	matched := make([]*Edge, 0, len(edges))
 	for _, e := range edges {
-		if !edgeMatchesAny(e, q.branches) {
+		if !selectorquery.MatchAny(e, q.branches, EdgePredicate.matches) {
 			continue
 		}
 		matched = append(matched, e)
@@ -213,7 +211,7 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 	faces := body.Faces()
 	matched := make([]*Face, 0, len(faces))
 	for _, f := range faces {
-		if !faceMatchesAny(f, q.branches) {
+		if !selectorquery.MatchAny(f, q.branches, FacePredicate.matches) {
 			continue
 		}
 		matched = append(matched, f)
@@ -240,29 +238,7 @@ func (q *FaceQuery) enrich(body *Body, matched int, err error) error {
 // failed assertion is ErrCardinality even at zero matches, and ErrNoMatch is
 // reserved for a query that asserts nothing and matched nothing (core §12).
 func (c cardinality) enforce(n int, what string) error {
-	if c.kind != cardNone && c.n <= 0 {
-		// Exactly(0)/AtLeast(0) would let "matches nothing" read as
-		// success — the outcome core §9 makes an error — and a negative
-		// count asserts nothing at all. Both are malformed questions.
-		return fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, c.n)
-	}
-	switch c.kind {
-	case cardNone:
-		if n == 0 {
-			return fmt.Errorf(`%w: the query matched no %s`, ErrNoMatch, what)
-		}
-	case cardExactly:
-		if n != c.n {
-			return fmt.Errorf(`%w: the query matched %d %s, asserted exactly %d`, ErrCardinality, n, what, c.n)
-		}
-	case cardAtLeast:
-		if n < c.n {
-			return fmt.Errorf(`%w: the query matched %d %s, asserted at least %d`, ErrCardinality, n, what, c.n)
-		}
-	default:
-		return fmt.Errorf(`%w: unknown cardinality kind %d`, ErrDegenerate, int(c.kind))
-	}
-	return nil
+	return (selectorquery.Cardinality{Kind: c.kind, N: c.n}).Enforce(n, what)
 }
 
 // Exactly asserts the query resolves to exactly n matches; anything else —
@@ -327,19 +303,19 @@ type FacePredicate struct {
 
 // Stable predicate names are shared by query rendering and resolution.
 const (
-	predKindConvex        = "convex"
-	predKindConcave       = "concave"
-	predKindParallelTo    = "parallel_to"
-	predKindEndpointAt    = "endpoint_at"
-	predKindLongerThan    = "longer_than"
-	predKindCreatedBy     = "created_by"
-	predKindCircular      = "circular"
-	predKindPlanar        = "planar"
-	predKindCylindrical   = "cylindrical"
-	predKindNormalTo      = "normal_to"
-	predKindFacing        = "facing"
-	predKindFaceCreatedBy = "face_created_by"
-	predKindFree          = "free"
+	predKindConvex        = selectorquery.ConvexKind
+	predKindConcave       = selectorquery.ConcaveKind
+	predKindParallelTo    = selectorquery.ParallelToKind
+	predKindEndpointAt    = selectorquery.EndpointAtKind
+	predKindLongerThan    = selectorquery.LongerThanKind
+	predKindCreatedBy     = selectorquery.CreatedByKind
+	predKindCircular      = selectorquery.CircularKind
+	predKindPlanar        = selectorquery.PlanarKind
+	predKindCylindrical   = selectorquery.CylindricalKind
+	predKindNormalTo      = selectorquery.NormalToKind
+	predKindFacing        = selectorquery.FacingKind
+	predKindFaceCreatedBy = selectorquery.FaceCreatedByKind
+	predKindFree          = selectorquery.FreeKind
 )
 
 // Convex matches edges Edge.IsConvex reports convex — the walked-boundary
@@ -448,65 +424,8 @@ func CapEnd(b *Body) FeatureRef {
 	return FeatureRef{producer: b.Origin().producer, Role: roleCapEnd}
 }
 
-// parallelEps decides "parallel": two directions are parallel when the
-// magnitude of their cross product is within this relative tolerance of zero
-// — sign-insensitive, so either sense matches.
-const parallelEps = 1e-9
-
-// parallelDirs reports whether the two nonzero directions are parallel,
-// either sense.
-//
-// The ordinary path is the exact float comparison cross <= eps*la*lb, so a
-// direction of any ordinary magnitude resolves bit-for-bit as it always has.
-// That comparison breaks only for a finite but EXTREME caller-supplied
-// direction (near math.MaxFloat64, or the smallest normals), where Len squares
-// the components: a MaxFloat64 direction overflows a length or the tolerance
-// product to +Inf (so the test reads finite <= +Inf and EVERY partner reads
-// parallel), and a subnormal one underflows a length or the product to 0. Only
-// in those cases does the code rescale to infinity-norm 1 — scale-invariant, so
-// it changes no ordinary answer — where nothing overflows or underflows.
-func parallelDirs(a, b r3.Vec) bool {
-	if zeroVec(a) || zeroVec(b) {
-		return false
-	}
-	la, lb := a.Len(), b.Len()
-	cl := a.Cross(b).Len()
-	prod := parallelEps * la * lb
-	if !math.IsInf(la, 0) && !math.IsInf(lb, 0) && !math.IsInf(cl, 0) &&
-		!math.IsInf(prod, 0) && prod > 0 {
-		return cl <= prod
-	}
-	// A length overflowed to +Inf or the product underflowed to 0 — a genuine
-	// extreme direction. Rescale both to infinity-norm 1 and retry.
-	a, b = scaleToUnitInfNorm(a), scaleToUnitInfNorm(b)
-	return a.Cross(b).Len() <= parallelEps*a.Len()*b.Len()
-}
-
-// scaleToUnitInfNorm returns v scaled by the reciprocal of its
-// largest-magnitude component, so the result has infinity-norm 1 and names the
-// same ray. It keeps a finite-but-extreme direction (near math.MaxFloat64, or
-// near the smallest normals) from overflowing or underflowing when a later
-// step takes its Euclidean length. The caller guarantees v is finite and
-// nonzero (validateDirection), so the divisor is finite and nonzero.
-func scaleToUnitInfNorm(v r3.Vec) r3.Vec {
-	m := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
-	return r3.NewVec(v.X/m, v.Y/m, v.Z/m)
-}
-
-// validateDirection gates a caller-supplied predicate direction at resolve:
-// a non-finite component is ErrNotFinite and the zero vector is ErrDegenerate
-// — it names no direction to compare against.
-func validateDirection(v r3.Vec, what string) error {
-	for _, c := range []float64{v.X, v.Y, v.Z} {
-		if math.IsNaN(c) || math.IsInf(c, 0) {
-			return fmt.Errorf(`%w: a %s direction component is not finite`, ErrNotFinite, what)
-		}
-	}
-	if zeroVec(v) {
-		return fmt.Errorf(`%w: a zero %s direction names no direction`, ErrDegenerate, what)
-	}
-	return nil
-}
+// parallelDirs is shared with the body-relative stop adapter.
+func parallelDirs(a, b r3.Vec) bool { return selectorquery.ParallelDirs(a, b) }
 
 // validatePredicateRef rejects provenance that cannot name a feature role.
 func validatePredicateRef(ref FeatureRef, what string) error {
@@ -519,220 +438,77 @@ func validatePredicateRef(ref FeatureRef, what string) error {
 	return nil
 }
 
-// validate gates one edge clause's recorded parameters at resolve
-// (core §9/§12): a degenerate or non-finite direction, and a non-length,
-// non-finite or negative LongerThan quantity, are rejected before any edge
-// is examined. A kind the constructors never produce is malformed input.
-func (p EdgePredicate) validate() error {
-	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular, predKindFree:
-		return nil
-	case predKindCreatedBy:
-		return validatePredicateRef(p.ref, "created-by")
-	case predKindParallelTo:
-		return validateDirection(p.dir, "parallel-to")
-	case predKindEndpointAt:
-		for _, c := range []float64{p.point.X, p.point.Y, p.point.Z} {
-			if math.IsNaN(c) || math.IsInf(c, 0) {
-				return fmt.Errorf(`%w: an endpoint-at position component is not finite`, ErrNotFinite)
-			}
-		}
-		return nil
-	case predKindLongerThan:
-		_, err := magnitudeIn(p.length, units.Length, units.Millimeter, "the longer-than length")
-		return err
-	case "":
-		return fmt.Errorf(`%w: edge predicate names no kind; use the package constructors`, ErrDegenerate)
-	default:
-		return fmt.Errorf(`%w: unknown edge predicate kind %q`, ErrDegenerate, p.kind)
+func (p EdgePredicate) clause() selectorquery.EdgeClause[FeatureRef] {
+	return selectorquery.EdgeClause[FeatureRef]{
+		Kind: p.kind, Direction: p.dir, Point: p.point, Length: p.length, Ref: p.ref,
 	}
 }
 
-// validate gates one face clause's recorded parameters at resolve, the face
-// analog of EdgePredicate.validate.
-func (p FacePredicate) validate() error {
-	switch p.kind {
-	case predKindPlanar, predKindCylindrical:
-		return nil
-	case predKindFaceCreatedBy:
-		return validatePredicateRef(p.ref, "face-created-by")
-	case predKindNormalTo:
-		return validateDirection(p.dir, "normal-to")
-	case predKindFacing:
-		return validateDirection(p.dir, "facing")
-	case "":
-		return fmt.Errorf(`%w: face predicate names no kind; use the package constructors`, ErrDegenerate)
-	default:
-		return fmt.Errorf(`%w: unknown face predicate kind %q`, ErrDegenerate, p.kind)
-	}
+func (p FacePredicate) clause() selectorquery.FaceClause[FeatureRef] {
+	return selectorquery.FaceClause[FeatureRef]{Kind: p.kind, Direction: p.dir, Ref: p.ref}
 }
 
-// edgeMatchesAll reports whether the edge satisfies every clause — predicates
-// compose by conjunction (core §9). Predicates were validated up front.
-func edgeMatchesAll(e *Edge, preds []EdgePredicate) bool {
-	for _, p := range preds {
-		if !p.matches(e) {
-			return false
-		}
-	}
-	return true
-}
+func (p EdgePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
+func (p FacePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
 
-// faceMatchesAll reports whether the face satisfies every clause.
-func faceMatchesAll(f *Face, preds []FacePredicate) bool {
-	for _, p := range preds {
-		if !p.matches(f) {
-			return false
-		}
-	}
-	return true
-}
+func (p EdgePredicate) matches(e *Edge) bool { return p.clause().Matches(selectorEdge{e}) }
+func (p FacePredicate) matches(f *Face) bool { return p.clause().Matches(selectorFace{f}) }
 
-// edgeMatchesAny reports whether the edge satisfies every clause of at least
-// one branch — branches compose by union (core §9). No branch at all is a
-// zero-value query, which matches every edge as Edges() does.
-func edgeMatchesAny(e *Edge, branches [][]EdgePredicate) bool {
-	if len(branches) == 0 {
-		return true
+// selectorEdge exposes only the analytic facts a predicate reads.
+type selectorEdge struct{ *Edge }
+
+func (e selectorEdge) SelectorConvex() bool { return e.convex }
+func (e selectorEdge) SelectorFree() bool   { return e.IsFree() }
+func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
+	if _, ok := e.curve.(Line3); !ok {
+		return r3.Vec{}, false
 	}
-	for _, branch := range branches {
-		if edgeMatchesAll(e, branch) {
+	return e.end.position.Sub(e.start.position), true
+}
+func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
+	return e.start.position, e.end.position
+}
+func (e selectorEdge) SelectorLengthMM() float64 { return e.length }
+func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {
+	for _, face := range e.faces {
+		if slices.Contains(face.origins, ref) {
 			return true
 		}
 	}
 	return false
 }
-
-// faceMatchesAny is the face analog of edgeMatchesAny.
-func faceMatchesAny(f *Face, branches [][]FacePredicate) bool {
-	if len(branches) == 0 {
+func (e selectorEdge) SelectorCircular() bool {
+	switch e.curve.(type) {
+	case Circle3, Arc3:
 		return true
-	}
-	for _, branch := range branches {
-		if faceMatchesAll(f, branch) {
-			return true
-		}
-	}
-	return false
-}
-
-// matches decides one edge clause on the analytic data the edge holds
-// (docs/evaluator-design.md §7):
-//
-//   - convex/concave read the decided IsConvex answer — the walked-boundary
-//     convention, so a hole's rim edges are concave;
-//   - parallel_to compares a LINEAR edge's direction (start vertex toward
-//     end vertex) against the recorded vector, either sense — a curved edge
-//     has no single direction, so it does not match;
-//   - endpoint_at compares either stored endpoint with the stated position
-//     component-wise, without a tolerance;
-//   - longer_than compares Edge.Length() strictly against the recorded
-//     quantity;
-//   - created_by matches provenance through the edge's adjacent faces: an
-//     edge is created by the role that created a face it bounds, so it
-//     matches when ANY adjacent face's Origins() carries the ref;
-//   - circular matches an edge whose curve is a full circle or a circular
-//     arc;
-//   - free matches an edge Edge.IsFree reports free — exactly one adjacent
-//     face.
-func (p EdgePredicate) matches(e *Edge) bool {
-	switch p.kind {
-	case predKindConvex:
-		return e.convex
-	case predKindConcave:
-		return !e.convex
-	case predKindFree:
-		return e.IsFree()
-	case predKindParallelTo:
-		if _, ok := e.curve.(Line3); !ok {
-			return false
-		}
-		return parallelDirs(e.end.position.Sub(e.start.position), p.dir)
-	case predKindEndpointAt:
-		return e.start.position == p.point || e.end.position == p.point
-	case predKindLongerThan:
-		// validate ran magnitudeIn already, so the conversion cannot fail.
-		mm, err := p.length.In(units.Millimeter)
-		if err != nil {
-			return false
-		}
-		return e.length > mm
-	case predKindCreatedBy:
-		for _, f := range e.faces {
-			if slices.Contains(f.origins, p.ref) {
-				return true
-			}
-		}
-		return false
-	case predKindCircular:
-		switch e.curve.(type) {
-		case Circle3, Arc3:
-			return true
-		default:
-			return false
-		}
 	default:
 		return false
 	}
 }
 
-// matches decides one face clause on the analytic data the face holds
-// (docs/evaluator-design.md §7):
-//
-//   - planar/cylindrical match the Surface variant — matching is decided on
-//     what the face IS, so a face whose analytic identity is gone (Faceted)
-//     matches neither;
-//   - normal_to matches a PLANAR face whose plane normal is parallel to the
-//     recorded vector, either sense;
-//   - facing matches a PLANAR face whose OUTWARD (material-leaving) normal
-//     points along the recorded vector — parallel AND the same sense, so one
-//     of a slab's two parallel caps, never both;
-//   - face_created_by matches when the face's Origins() carries the ref —
-//     a canonicalization merge unions roles, and any of them matches.
-func (p FacePredicate) matches(f *Face) bool {
-	switch p.kind {
-	case predKindPlanar:
-		_, ok := f.surface.(Plane)
-		return ok
-	case predKindCylindrical:
-		_, ok := f.surface.(Cylinder)
-		return ok
-	case predKindNormalTo:
-		pl, ok := f.surface.(Plane)
-		if !ok {
-			return false
-		}
-		return parallelDirs(pl.Frame.N(), p.dir)
-	case predKindFacing:
-		pl, ok := f.surface.(Plane)
-		if !ok {
-			return false
-		}
-		// The face's outward normal is the plane normal flipped when the
-		// material lies on the +N side (Face.reversed, the same sign
-		// Face.NormalAt applies). Facing wants it pointing ALONG v: parallel
-		// AND a positive projection — same-sense, so exactly one of a slab's
-		// two caps.
-		n := pl.Frame.N()
-		if f.reversed {
-			n = n.Scale(-1)
-		}
-		// Scale the recorded direction down by its largest-magnitude
-		// component before the length-based parallel test. A finite but huge
-		// direction (a component near math.MaxFloat64) overflows to +Inf when
-		// its length squares the components, which would make every finite
-		// cross length compare parallel; a finite but tiny one underflows the
-		// same way. validate already rejected the zero and non-finite vectors,
-		// so the largest component is finite and nonzero and the scaled
-		// direction names the same ray, robustly. The sign of the dot is
-		// unchanged by a positive scale.
-		d := scaleToUnitInfNorm(p.dir)
-		return parallelDirs(n, d) && n.Dot(d) > 0
-	case predKindFaceCreatedBy:
-		return slices.Contains(f.origins, p.ref)
-	default:
-		return false
+// selectorFace exposes surface identity and the outward planar normal.
+type selectorFace struct{ *Face }
+
+func (f selectorFace) SelectorPlanarNormal() (r3.Vec, bool) {
+	plane, ok := f.surface.(Plane)
+	if !ok {
+		return r3.Vec{}, false
 	}
+	return plane.Frame.N(), true
+}
+func (f selectorFace) SelectorOutwardPlanarNormal() (r3.Vec, bool) {
+	normal, ok := f.SelectorPlanarNormal()
+	if ok && f.reversed {
+		normal = normal.Scale(-1)
+	}
+	return normal, ok
+}
+func (f selectorFace) SelectorCylindrical() bool {
+	_, ok := f.surface.(Cylinder)
+	return ok
+}
+func (f selectorFace) SelectorHasOrigin(ref FeatureRef) bool {
+	return slices.Contains(f.origins, ref)
 }
 
 // errNilSelector rejects a nil query.

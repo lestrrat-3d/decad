@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -49,15 +50,11 @@ func (k SelectorKind) String() string {
 // clause of the same branch. The clause whose Remaining reaches zero is the
 // one that emptied its branch.
 type PredicateResidual struct {
-	// Branch is the zero-based branch the clause belongs to: 0 for the
-	// clauses Edges or Faces took, i for the clauses of the i-th Or.
+	// Branch is the zero-based union branch containing the clause.
 	Branch int
-	// Predicate is the clause's stable rendering — "convex",
-	// "parallel_to(0,0,1)".
+	// Predicate is the clause's stable rendering.
 	Predicate string
-	// Remaining is the candidate count still matching after this clause and
-	// every earlier clause of its branch. Each branch starts at the body's
-	// whole edge or face count, and within a branch the count can only fall.
+	// Remaining is the candidate count after this and all preceding clauses.
 	Remaining int
 }
 
@@ -146,31 +143,9 @@ func (e *SelectionError) emptiedClauses() []PredicateResidual {
 // ToFaceAngular, EdgeAxis) renders.
 const expectedExactlyOne = "exactly 1"
 
-// expected renders a cardinality assertion in prose for SelectionError.Expected:
-// "exactly <n>", "at least <n>", or "any" for no assertion.
+// expected renders the recorded cardinality for a selection error.
 func (c cardinality) expected() string {
-	switch c.kind {
-	case cardExactly:
-		return fmt.Sprintf("exactly %d", c.n)
-	case cardAtLeast:
-		return fmt.Sprintf("at least %d", c.n)
-	default:
-		return "any"
-	}
-}
-
-// suffix renders a cardinality assertion as a query's trailing token: empty
-// for no assertion, ".exactly(<n>)" or ".at_least(<n>)" — the codec's own
-// keys.
-func (c cardinality) suffix() string {
-	switch c.kind {
-	case cardExactly:
-		return fmt.Sprintf(".exactly(%d)", c.n)
-	case cardAtLeast:
-		return fmt.Sprintf(".at_least(%d)", c.n)
-	default:
-		return ""
-	}
+	return (selectorquery.Cardinality{Kind: c.kind, N: c.n}).Expected()
 }
 
 // String renders the query canonically:
@@ -210,84 +185,16 @@ func (q *FaceQuery) String() string {
 	return renderQuery(selKindFaces, branches, q.card)
 }
 
-// renderQuery assembles the shared query shape: the plural kind token with
-// the first branch's clauses comma-separated, one ".or(…)" per further branch,
-// and the cardinality suffix. No clause renders empty parentheses. A
-// zero-value query holds no branch and renders as Edges() / Faces() do.
+// renderQuery assembles the ordered selector branches.
 func renderQuery(kind string, branches [][]string, card cardinality) string {
-	var b strings.Builder
-	b.WriteString(kind)
-	for i, preds := range branches {
-		if i > 0 {
-			b.WriteString(".or")
-		}
-		b.WriteByte('(')
-		b.WriteString(strings.Join(preds, ", "))
-		b.WriteByte(')')
-	}
-	if len(branches) == 0 {
-		b.WriteString("()")
-	}
-	b.WriteString(card.suffix())
-	return b.String()
+	return selectorquery.Render(kind, branches, selectorquery.Cardinality{Kind: card.kind, N: card.n})
 }
 
-// render renders one edge clause by its codec kind token and payload. It is
-// total: a zero-value, kind-less predicate — which the constructors never
-// produce, but a half-decoded query might carry — renders "<invalid>" rather
-// than panicking.
-func (p EdgePredicate) render() string {
-	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular, predKindFree:
-		return p.kind
-	case predKindParallelTo:
-		return p.kind + "(" + renderVec(p.dir) + ")"
-	case predKindEndpointAt:
-		return p.kind + "(" + renderVec(p.point) + ")"
-	case predKindLongerThan:
-		return p.kind + "(" + p.length.String() + ")"
-	case predKindCreatedBy:
-		return p.kind + "(" + renderRef(p.ref) + ")"
-	default:
-		return "<invalid>"
-	}
-}
+func (p EdgePredicate) render() string { return p.clause().Render(renderRef) }
+func (p FacePredicate) render() string { return p.clause().Render(renderRef) }
 
-// render renders one face clause by its codec kind token and payload, the face
-// analog of EdgePredicate.render.
-func (p FacePredicate) render() string {
-	switch p.kind {
-	case predKindPlanar, predKindCylindrical:
-		return p.kind
-	case predKindNormalTo, predKindFacing:
-		return p.kind + "(" + renderVec(p.dir) + ")"
-	case predKindFaceCreatedBy:
-		return p.kind + "(" + renderRef(p.ref) + ")"
-	default:
-		return "<invalid>"
-	}
-}
-
-// renderVec renders a direction as <x>,<y>,<z> — comma-separated, no spaces,
-// each coordinate as the shortest round-tripping float. A negative zero
-// renders "0" (the normalization is load-bearing for the equal-queries-render-
-// identically contract: -0.0 == 0.0, so two value-equal directions must render
-// the same). Rendering is total: a non-finite component reads NaN / +Inf /
-// -Inf as the formatter writes it.
-func renderVec(v r3.Vec) string {
-	return renderCoord(v.X) + "," + renderCoord(v.Y) + "," + renderCoord(v.Z)
-}
-
-// renderCoord renders one coordinate as its shortest round-tripping float,
-// normalizing a negative zero to "0" before formatting.
-func renderCoord(c float64) string {
-	if c == 0 {
-		// -0.0 == 0.0, so this catches math.Copysign(0, -1) too; FormatFloat
-		// would otherwise write it "-0".
-		return "0"
-	}
-	return strconv.FormatFloat(c, 'g', -1, 64)
-}
+func renderVec(v r3.Vec) string    { return selectorquery.RenderVec(v) }
+func renderCoord(c float64) string { return selectorquery.RenderCoord(c) }
 
 // renderRef renders a FeatureRef as <producer>:<role> — the private ID in decimal and
 // the role quoted, so a role that itself holds parentheses or commas stays
@@ -327,43 +234,23 @@ func (q *FaceQuery) selectionError(body *Body, actual int, expected string, sent
 	}
 }
 
-// residuals evaluates each branch's predicate conjunction cumulatively over
-// the body's edges, recording the running match count after each clause in
-// query order; every branch restarts from the whole edge list. Predicates were
-// validated before this runs, so p.matches is safe.
+// residuals evaluates edge predicates cumulatively on the failing path.
 func (q *EdgeQuery) residuals(body *Body) []PredicateResidual {
-	var out []PredicateResidual
-	for bi, branch := range q.branches {
-		cands := body.Edges()
-		for _, p := range branch {
-			kept := make([]*Edge, 0, len(cands))
-			for _, e := range cands {
-				if p.matches(e) {
-					kept = append(kept, e)
-				}
-			}
-			cands = kept
-			out = append(out, PredicateResidual{Branch: bi, Predicate: p.render(), Remaining: len(cands)})
-		}
-	}
-	return out
+	return selectorResiduals(selectorquery.Residuals(body.Edges(), q.branches, EdgePredicate.matches, EdgePredicate.render))
 }
 
-// residuals is the face analog of EdgeQuery.residuals.
+// residuals evaluates face predicates cumulatively on the failing path.
 func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
-	var out []PredicateResidual
-	for bi, branch := range q.branches {
-		cands := body.Faces()
-		for _, p := range branch {
-			kept := make([]*Face, 0, len(cands))
-			for _, f := range cands {
-				if p.matches(f) {
-					kept = append(kept, f)
-				}
-			}
-			cands = kept
-			out = append(out, PredicateResidual{Branch: bi, Predicate: p.render(), Remaining: len(cands)})
-		}
+	return selectorResiduals(selectorquery.Residuals(body.Faces(), q.branches, FacePredicate.matches, FacePredicate.render))
+}
+
+func selectorResiduals(records []selectorquery.Residual) []PredicateResidual {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]PredicateResidual, len(records))
+	for i, record := range records {
+		out[i] = PredicateResidual{Branch: record.Branch, Predicate: record.Predicate, Remaining: record.Remaining}
 	}
 	return out
 }
