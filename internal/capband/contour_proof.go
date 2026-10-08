@@ -55,13 +55,14 @@ func WholeCircleDisplacement(w survey2d.SideWalk, d, dDelta, tol float64) (float
 }
 
 // OffsetRadiusSpan encloses the cap radius over every offset amount in the
-// caller's stated setback span.
+// caller's stated setback span and every radius the wall's record denotes:
+// the held radius within its RadiusBound (capcontour.OffsetCircleRadius).
 func OffsetRadiusSpan(w survey2d.SideWalk, d, dDelta float64) (proofbound.RatInterval, bool) {
 	span, ok := capcontour.OffsetSpan(d, dDelta)
 	if !ok {
 		return proofbound.RatInterval{}, false
 	}
-	return capcontour.ExactOffsetRadiusOver(w, span)
+	return capcontour.OffsetCircleRadius(w, span)
 }
 
 // WallHeldAllow bounds a circular wall patch's side and cap angles and radii

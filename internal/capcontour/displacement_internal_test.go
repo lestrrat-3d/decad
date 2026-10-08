@@ -51,9 +51,9 @@ func requireEncloses(t *testing.T, iv proofbound.RatInterval, x *big.Float, what
 // for a line wall: the foot steps along the normal the recorded endpoints
 // denote, at the corner the walk's end bound encloses.
 //
-// Shown to fail: with joinFoot reading OffsetFootOver(j.VU, j.VV, held
-// tangent) for line walls, the enclosure is a single point that misses the
-// denoted foot at both ends.
+// Shown to fail: with joinFoot stepping from the join's held corner along the
+// exact unit normal of the held tangent for line walls, the enclosure is a
+// single point that misses the denoted foot at both ends.
 func TestJoinFootEnclosesDenotedLineNormal(t *testing.T) {
 	t.Parallel()
 	const d = 0.25
@@ -86,9 +86,10 @@ func TestJoinFootEnclosesDenotedLineNormal(t *testing.T) {
 // (3, 4) with an exact unit, so a foot read from them misses. Both senses run:
 // counterclockwise steps toward the centre and clockwise away from it.
 //
-// Shown to fail: with joinFoot reading OffsetFootOver(j.VU, j.VV, held
-// tangent) for circular walls again, the enclosure misses the denoted foot,
-// first at the counterclockwise wall's start.
+// Shown to fail: with joinFoot stepping from the join's held corner along the
+// exact unit normal of the held tangent for circular walls again, the
+// enclosure misses the denoted foot, first at the counterclockwise wall's
+// start.
 func TestJoinFootEnclosesDenotedArcNormal(t *testing.T) {
 	t.Parallel()
 	const d = 0.25

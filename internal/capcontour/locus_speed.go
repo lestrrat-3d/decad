@@ -276,16 +276,21 @@ type lineCircleCorner struct {
 }
 
 // lineCircleCornerOf encloses the corner's discriminant from the line's
-// recorded endpoints and the circle's held centre and radius. ok is false
-// where a number does not lift or the line's frame cannot be enclosed.
+// recorded endpoints, the circle's recorded centre and every radius its record
+// denotes: the held radius widened by its RadiusBound (OffsetCircleRadius at
+// a zero offset), since an ArcSeg walk holds the math.Hypot of
+// Start − Center. Where that bound is nonzero, Δ1 is no longer a single point
+// at a tangent corner, so the persistent-tangency closed form does not apply
+// and the general bound decides. ok is false where a number does not lift or
+// the line's frame cannot be enclosed.
 func lineCircleCornerOf(line, circle survey2d.SideWalk) (lineCircleCorner, bool) {
 	frame, ok := lineWallFrameOf(line)
 	if !ok {
 		return lineCircleCorner{}, false
 	}
 	cx, cy := proofarith.FloatRat(circle.CU), proofarith.FloatRat(circle.CV)
-	radius := proofarith.FloatRat(circle.Radius)
-	if cx == nil || cy == nil || radius == nil {
+	radius, okR := OffsetCircleRadius(circle, proofbound.PointInterval(new(big.Rat)))
+	if cx == nil || cy == nil || !okR {
 		return lineCircleCorner{}, false
 	}
 	w0u := proofbound.IntervalSub(frame.anchor.U, proofbound.PointInterval(cx))
@@ -294,8 +299,8 @@ func lineCircleCornerOf(line, circle survey2d.SideWalk) (lineCircleCorner, bool)
 	inside := InsideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
-	delta0 := proofbound.IntervalSub(proofbound.IntervalSquare(proofbound.PointInterval(radius)), proofbound.IntervalSquare(alpha))
-	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(proofbound.PointInterval(radius), inside)), big.NewRat(-2, 1))
+	delta0 := proofbound.IntervalSub(proofbound.IntervalSquare(radius), proofbound.IntervalSquare(alpha))
+	delta1 := proofbound.IntervalScale(proofbound.IntervalAdd(alpha, proofbound.IntervalScale(radius, inside)), big.NewRat(-2, 1))
 	return lineCircleCorner{frame: frame, alpha: alpha, delta0: delta0, delta1: delta1}, true
 }
 

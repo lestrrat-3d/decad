@@ -106,7 +106,7 @@ func CapApexArcBound(j ApexJoin, d, dDelta, held float64, wraps int, delta float
 }
 
 // CapCircleLengthBound bounds a whole cap-level circle's held 2πr against
-// every radius the offset denotes, radius (ExactOffsetRadiusOver): π is
+// every radius the offset denotes, radius (OffsetCircleRadius): π is
 // bracketed by proofbound's rational constants, so the enclosure needs no
 // float value of π and no libm accuracy.
 func CapCircleLengthBound(radius proofbound.RatInterval, held float64) float64 {
