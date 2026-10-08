@@ -13,9 +13,12 @@ import (
 // CapBlendChordInput names the resolved contour and its common chord budget.
 type CapBlendChordInput struct {
 	Walks            []survey2d.SideWalk
+	Segments         []sectionrecord.CurveSegment
 	Joins            []CapBlendJoin
 	Whole, Chamfered bool
 	D, Chord         float64
+	Setback          CapBlendSetback
+	FootDelta        float64
 }
 
 // CapBlendChords records one count per wall shared by every side and cap ring.
@@ -34,7 +37,6 @@ type CapBlendChords struct {
 func ChordCapBlendLoop(in CapBlendChordInput, budget *proofbound.WorkBudget,
 	radius func(survey2d.SideWalk, float64) (float64, error),
 	wallSweep func(float64, float64, sectionrecord.Point2, sectionrecord.Point2, float64) (float64, float64, int),
-	locusGap func(int) (float64, error),
 ) (CapBlendChords, error) {
 	n := len(in.Walks)
 	out := CapBlendChords{
@@ -94,7 +96,10 @@ func ChordCapBlendLoop(in CapBlendChordInput, budget *proofbound.WorkBudget,
 		}
 		j := in.Joins[i]
 		if !j.Arc {
-			gap, err := locusGap(i)
+			gap, err := CapBlendCornerLocusGap(budget, CapBlendLocusInput{
+				Setback: in.Setback, Segments: in.Segments, Walks: in.Walks,
+				Corner: i, Join: j, FootDelta: in.FootDelta,
+			})
 			if err != nil {
 				return CapBlendChords{}, err
 			}

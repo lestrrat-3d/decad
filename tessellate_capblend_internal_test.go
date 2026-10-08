@@ -281,7 +281,8 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		}, 3)
 		walks, joins := capBlendCornerSetup(t, cbp)
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
+			gap, err := tessellation.CapBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()),
+				capBlendLocusInput(cbp, walks, i, j))
 			require.NoError(t, err)
 			require.Equal(t, 0.0, gap, `corner %d joins two straight walls`, i)
 		}
@@ -292,7 +293,8 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 		walks, joins := capBlendCornerSetup(t, cbp)
 		positive := 0
 		for i, j := range joins {
-			gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
+			gap, err := tessellation.CapBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()),
+				capBlendLocusInput(cbp, walks, i, j))
 			require.NoError(t, err)
 			require.False(t, proofbound.IsNonFinite(gap))
 			if gap > 0 {
@@ -313,6 +315,16 @@ func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk
 	joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
 	require.NoError(t, err)
 	return cl.walks, joins
+}
+
+func capBlendLocusInput(cbp capBlendPayload, walks []survey2d.SideWalk, i int,
+	j cornerJoin,
+) tessellation.CapBlendLocusInput {
+	return tessellation.CapBlendLocusInput{
+		Setback: capBlendProofSetback(cbp.loopSetback(0)), Segments: cbp.loops()[0].Segments,
+		Walks: walks, Corner: i, Join: capBlendSampleJoins([]cornerJoin{j})[0],
+		FootDelta: cbp.loopBandDelta(0),
+	}
 }
 
 // TestCapStationBoundEnclosesTheStationItDenotes pins the cap contour's own
@@ -668,7 +680,7 @@ func TestCapBlendChordVolumeChargesEachCapsBandHeight(t *testing.T) {
 // sample's distance from the built ruling must stay within the gap.
 //
 // Shown to fail: passing dc as the locus's axial span in
-// capBlendCornerLocusGap answers a zero gap for the ds > dc rows.
+// CapBlendCornerLocusGap answers a zero gap for the ds > dc rows.
 func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
 	t.Parallel()
 	const r = 10.0
@@ -679,7 +691,8 @@ func TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus(t *testing.T) {
 			walks, joins := capBlendCornerSetup(t, cbp)
 			checked := 0
 			for i, j := range joins {
-				gap, err := capBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()), cbp.loopSetback(0), cbp.loops()[0].Segments, walks, i, j, cbp.loopBandDelta(0))
+				gap, err := tessellation.CapBlendCornerLocusGap(proofbound.NewWorkBudget(t.Context()),
+					capBlendLocusInput(cbp, walks, i, j))
 				require.NoError(t, err)
 				if j.vU != r || j.vV != 0 {
 					continue
