@@ -18,7 +18,7 @@ func newStitchVertexTable() *stitchVertexTable {
 }
 
 func (t *stitchVertexTable) classOf(v *Vertex) int {
-	return t.ClassOf(v, v.position, v.bound.Base(), v.denot, v.denot.id != 0)
+	return t.ClassOf(v, v.position, v.bound.Base(), v.denot, v.denot.ID != 0)
 }
 
 // stitchWeldPlan records the admitted free-edge pairs over one Stitch call.
@@ -59,7 +59,7 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 					continue
 				}
 				_, isLine := e.curve.(Line3)
-				if !isLine && e.denot.id == 0 { // J2, then J5, or the certificate
+				if !isLine && e.denot.ID == 0 { // J2, then J5, or the certificate
 					continue
 				}
 				candidates = append(candidates, stitchweld.Candidate[*Edge]{

@@ -578,7 +578,7 @@ Four gates, in this order, and each is reject-only:
    tried only when this first, exact arm refuses on a nonzero bound**, and its
    ADMISSION decision never reads a coordinate, a residual or a bound
    magnitude. It requires every chain vertex, and every chain edge, to carry
-   a `levelToken` (`denotation.go`) with the SAME non-zero id: a minted
+   a `levelToken` (`internal/denotation/token.go`) with the SAME non-zero id: a minted
    identity a straight prism build (`prism_build.go`) stamps once per swept
    end, only when its own record is drawn straight from the profile
    (`sectionDelta == 0`) and its frame axes are RECORDED rather than
@@ -782,7 +782,7 @@ provably coincident on a chain that is not planar. The LEVEL token proves the
 first; the CURVE token below proves the second, and neither discharges the
 other.
 
-A `curveToken` (`denotation.go`) is minted once per denoted curve or point by
+A `curveToken` (`internal/denotation/token.go`) is minted once per denoted curve or point by
 the evaluator that first builds it — today a straight prism's own rim edge
 and rim vertex (`prism_build.go`, minted fresh per edge and per vertex, with
 no `sectionDelta == 0` precondition: unlike coplanarity, an identity claims
@@ -1177,7 +1177,7 @@ Any chain this cannot decide keeps the payload undecided, reject-only exactly
 as every other Rule S arm.
 
 Conditions 2 and 3 are both decided through the LEVEL half of the
-shared-denotation certificate (`denotation.go`, §5.2), never by a coordinate
+shared-denotation certificate (`internal/denotation/token.go`, §5.2), never by a coordinate
 or a residual: a straight prism build (`prism_build.go`'s
 `evalPrismContext`) stamps every rim vertex and edge at one end with the
 SAME level token, minted fresh per build and per end whenever the build's

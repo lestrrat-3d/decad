@@ -73,7 +73,7 @@ func TestProvePatchChainPlaneAcceptsAPlanarChain(t *testing.T) {
 func boundedSquareChain(id levelID, bound units.Value) ([]*Edge, levelToken) {
 	tok := levelToken{}
 	if id != 0 {
-		tok = levelToken{id: id, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+		tok = levelToken{ID: id, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	}
 	v0 := &Vertex{position: r3.NewVec(0, 0, 10), bound: bound, level: tok}
 	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound, level: tok}
@@ -142,8 +142,8 @@ func TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken(t *testing.T) 
 // against provePatchChainPlane, is what the brief's own fallback asks for.
 func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels(t *testing.T) {
 	t.Parallel()
-	levelA := levelToken{id: 1, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
-	levelB := levelToken{id: 2, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	levelA := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
+	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	bound := units.Millimeters(0.002)
 
 	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound}
@@ -192,7 +192,7 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 	// dummy adjacent face, so the walk's own sense (and so the sign
 	// patchChainLevelNormal settles on) is a fixture artifact; either sign
 	// of the token's own EXACT direction is what "never fitted" claims.
-	require.True(t, plane.Frame.N() == tok.normal || plane.Frame.N() == tok.normal.Scale(-1),
+	require.True(t, plane.Frame.N() == tok.Normal || plane.Frame.N() == tok.Normal.Scale(-1),
 		"the published normal must be exactly the token's own direction (either sign), got %v", plane.Frame.N())
 }
 
@@ -219,7 +219,7 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	corner := func(s, t float64) r3.Vec {
 		return r3.NewVec(7, -3, 11).Add(u.Scale(s)).Add(v.Scale(t)).Add(axis.Scale(5))
 	}
-	tok := levelToken{id: 1, origin: corner(0, 0), normal: axis}
+	tok := levelToken{ID: 1, Origin: corner(0, 0), Normal: axis}
 
 	bound := units.Millimeters(0.002)
 	v0 := &Vertex{position: corner(0, 0), bound: bound, level: tok}
@@ -380,7 +380,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
 // proves nothing about the whole end's non-self-intersection.
 func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	t.Parallel()
-	tok := levelToken{id: 1, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	tok := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	outer, _ := boundedSquareChain(1, units.Millimeters(0))
 	cv := &Vertex{position: r3.NewVec(5, 5, 10), level: tok}
 	inner := &Edge{
@@ -422,8 +422,8 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 // level, never that both its endpoints were too.
 func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	t.Parallel()
-	levelA := levelToken{id: 1, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
-	levelB := levelToken{id: 2, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	levelA := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
+	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	v0 := &Vertex{position: r3.NewVec(0, 0, 10), level: levelA}
 	v1 := &Vertex{position: r3.NewVec(1, 0, 10), level: levelA}
 	v2 := &Vertex{position: r3.NewVec(1, 1, 10), level: levelB}

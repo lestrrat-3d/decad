@@ -305,7 +305,7 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 		return levelToken{}, 0, false
 	}
 	lvl := verts[0].level
-	if lvl.id == 0 {
+	if lvl.ID == 0 {
 		return levelToken{}, 0, false
 	}
 	bound := 0.0
@@ -588,7 +588,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, exactly
 		// as unstitch.go's copyFaceUnderContext does.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.compose(xform)}
+		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -622,7 +622,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			length:          old.length,
 			lengthBound:     lengthBound,
 			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.compose(xform),
+			denot:           old.denot.Compose(xform),
 		}
 		newEdgeByOld[old] = ne
 		return ne, nil
@@ -701,11 +701,11 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	origin := patchChainWalkOrigin(ordered, edgeCopy)
 	axialDelta := chain.axialBound
 	if chain.hasAxialBound {
-		normal, err = patchChainLevelNormal(fitted, xform.ApplyDir(chain.level.normal))
+		normal, err = patchChainLevelNormal(fitted, xform.ApplyDir(chain.level.Normal))
 		if err != nil {
 			return nil, err
 		}
-		origin = xform.Apply(chain.level.origin)
+		origin = xform.Apply(chain.level.Origin)
 		// A placement's own rounding (proofbound.RigidRoundAllow) displaces the token's
 		// origin exactly as it displaces every other placed coordinate this
 		// evaluator publishes (copyPatchFacesUnder's own vertex/edge
@@ -920,10 +920,10 @@ func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool
 	// certificate" would prove nothing about which plane it belongs to.
 	receiverFreeByLevel := map[levelID][]*Edge{}
 	for _, e := range receiver.Edges() {
-		if !e.IsFree() || e.level.id == 0 {
+		if !e.IsFree() || e.level.ID == 0 {
 			continue
 		}
-		receiverFreeByLevel[e.level.id] = append(receiverFreeByLevel[e.level.id], e)
+		receiverFreeByLevel[e.level.ID] = append(receiverFreeByLevel[e.level.ID], e)
 	}
 
 	for _, chain := range pp.chains {
@@ -950,12 +950,12 @@ func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
 	if len(edges) == 0 {
 		return 0, false
 	}
-	id := edges[0].level.id
+	id := edges[0].level.ID
 	if id == 0 {
 		return 0, false
 	}
 	for _, e := range edges {
-		if e.level.id != id || e.start.level.id != id || e.end.level.id != id {
+		if e.level.ID != id || e.start.level.ID != id || e.end.level.ID != id {
 			return 0, false
 		}
 	}

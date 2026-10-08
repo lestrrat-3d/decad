@@ -204,7 +204,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // vertex bound / edge lengthBound (widened by delta under a non-identity
 // placement, exactly as rebuildStitchTopology widens them), the CURVE
 // half of the shared-denotation certificate (restated under xform by
-// curveToken.compose, denotation.go, rather than overwritten — this is one
+// CurveToken.Compose, internal/denotation/token.go, rather than overwritten — this is one
 // of the copiers that lets a later Stitch prove an unstitched-and-restitched
 // pair coincident again even where a bound makes bit-identity alone fall
 // short), and Face.axialDelta.
@@ -245,7 +245,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		// restates under xform, composing rather than overwriting, so a
 		// vertex unstitched and later placed still carries the true
 		// accumulated motion.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.compose(xform)}
+		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -279,7 +279,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			length:          old.length,
 			lengthBound:     lengthBound,
 			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.compose(xform),
+			denot:           old.denot.Compose(xform),
 		}
 		newEdgeByOld[old] = ne
 		return ne, nil

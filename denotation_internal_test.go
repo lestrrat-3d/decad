@@ -27,16 +27,16 @@ func TestSameCurveRequiresEqualXform(t *testing.T) {
 	t.Parallel()
 	d := &Document{}
 	tok := d.mintCurve()
-	require.NotZero(t, tok.id)
+	require.NotZero(t, tok.ID)
 	require.True(t, sameCurve(tok, tok), "a token always denotes the same curve as itself")
 
 	axis, ok := r3.NewVec(3, -1, 2).Normalize()
 	require.True(t, ok)
 	xf, err := r3.RotationAround(r3.NewVec(41, -17, 9), axis, units.Degrees(37))
 	require.NoError(t, err)
-	moved := tok.compose(xf)
-	require.Equal(t, tok.id, moved.id, "compose restates the SAME identity, never a fresh one")
-	require.NotEqual(t, tok.xform, moved.xform)
+	moved := tok.Compose(xf)
+	require.Equal(t, tok.ID, moved.ID, "compose restates the SAME identity, never a fresh one")
+	require.NotEqual(t, tok.Xform, moved.Xform)
 	require.False(t, sameCurve(tok, moved), "the same curve stated under two different motions is not the same admission")
 	require.False(t, sameCurve(moved, tok))
 }
@@ -63,7 +63,7 @@ func TestMintCurveNeverRepeats(t *testing.T) {
 	d := &Document{}
 	a := d.mintCurve()
 	b := d.mintCurve()
-	require.NotEqual(t, a.id, b.id)
+	require.NotEqual(t, a.ID, b.ID)
 	require.False(t, sameCurve(a, b))
 }
 
@@ -77,5 +77,5 @@ func TestCurveTokenComposeDeclinesTheZeroToken(t *testing.T) {
 	require.True(t, ok)
 	xf, err := r3.RotationAround(r3.NewVec(5, 6, 7), axis, units.Degrees(37))
 	require.NoError(t, err)
-	require.Zero(t, curveToken{}.compose(xf))
+	require.Zero(t, curveToken{}.Compose(xf))
 }
