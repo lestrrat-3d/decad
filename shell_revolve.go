@@ -33,13 +33,14 @@ import (
 // wall is the offset's own swept surface, a void shell beside the outer one
 // (revolve_build.go's fullRevolveShellsContext). A side opening — a connected
 // run of generated side faces removed, on a full turn or beside both removed
-// angular caps — sweeps reach §9.2's open-chain wall region instead
-// (revolveShellSideWall). Every other selection refuses before a face is made:
-// a kept angular cap and a holed meridian are SX8, and so is an effective
-// meridian whose mirror union would hold a hole or whose offset reaches across
-// the axis, a removed run that is not one proper connected run, one that
-// leaves two wall regions, and an opening whose rim cannot follow the removed
-// face.
+// angular caps — sweeps the open-chain wall region closed at each opening by
+// docs/shell-opening-design.md's Table RO rim instead (revolveShellSideWall).
+// Every other selection refuses before a face is made: a kept angular cap and
+// a holed meridian are SX8, and so is an effective meridian whose mirror union
+// would hold a hole or whose offset reaches across the axis, a removed run that
+// is not one proper connected run, and one that leaves two wall regions; an
+// opening end at a smooth corner is that document's SO1, and a rim running past
+// the removed walk's far end its SO2.
 
 // shellRevolve is Body.Shell's revolve receiver, from reach §4's stage 4 on.
 // Stage 1 — the live receiver, the options, the magnitude and the selector —
@@ -353,14 +354,6 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	return ProfileRecord{Outer: LoopRecord{Segments: loop}}, delta, nil
 }
 
-// offsetMirrorChain offsets the open chain K of a meridian whose two ends lie
-// on the revolve axis (offsetOpenChain with both ends on the axis). It returns
-// the offset chain in K's own walk order, which starts at qB and ends at qE,
-// both on the axis, and the chain's two end joins.
-func offsetMirrorChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, ax axisFrame, s, t float64) ([]CurveSegment, Point2, Point2, [2]offset2d.ChainEnd, error) {
-	return offsetOpenChain(budget, chain, ax, true, true, s, t)
-}
-
 // revolveAxisCurve is the revolve axis as the held line the offset's mirror
 // joins meet (offsetOpenChain).
 func revolveAxisCurve(ax axisFrame) offset2d.Curve {
@@ -408,118 +401,6 @@ func openChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideW
 		return 0, errOffsetUnbounded
 	}
 	return delta, nil
-}
-
-// offsetOpenChain offsets an open chain K by the corner rules of
-// docs/modify-design.md §7: each interior corner by offset2d's CornerJoin.
-// An end on the revolve axis (axisStart, axisEnd) takes the corner K makes
-// with its own mirror image there (MirrorCornerJoin), so the offset ends on
-// the axis; an end at a side opening (docs/modify-reach-design.md §9.2) takes
-// the walk's own offset foot, so the exact normal segment of length t joins
-// it back to K. It returns the offset chain in K's own walk order with its
-// first and last points. A dropped walk is S11a and a miter that does not
-// close is S11, as in offsetLoopBudget. It also returns the chain's two end
-// joins as the build took them, for openChainSectionDelta.
-func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, ax axisFrame, axisStart, axisEnd bool, s, t float64) ([]CurveSegment, Point2, Point2, [2]offset2d.ChainEnd, error) {
-	m := len(chain)
-	if m == 0 {
-		return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, fmt.Errorf(`%w: an offset chain holds no walks`, ErrDegenerate)
-	}
-	for _, w := range chain {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, err
-		}
-		if w.IsCircular() {
-			if _, ok := offsetRadius(w, s, t); !ok {
-				return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, errOffsetDrop
-			}
-		}
-	}
-	axis := revolveAxisCurve(ax)
-	// foot is an opening end's join: the walk's own offset foot, s*t along
-	// its unit left normal at the end.
-	foot := func(vU, vV, tu, tv float64) (offset2d.Join, error) {
-		tx, ty, l := offset2d.Normalize(tu, tv)
-		if l == 0 {
-			return offset2d.Join{}, offset2d.ErrNoDirection
-		}
-		return offset2d.Join{VertU: vU, VertV: vV, M: offset2d.Point{U: vU + s*t*(-ty), V: vV + s*t*tx}}, nil
-	}
-	// joins[i] is the corner at chain[i]'s start; joins[m] is the corner at
-	// the last walk's end.
-	joins := make([]offset2d.Join, m+1)
-	var err error
-	if axisStart {
-		joins[0], err = offset2d.MirrorCornerJoin(chain[0], false, axis, s, t, shellTol)
-	} else {
-		joins[0], err = foot(chain[0].StartU, chain[0].StartV, chain[0].TanInU, chain[0].TanInV)
-	}
-	if err == nil {
-		last := chain[m-1]
-		if axisEnd {
-			joins[m], err = offset2d.MirrorCornerJoin(last, true, axis, s, t, shellTol)
-		} else {
-			joins[m], err = foot(last.EndU, last.EndV, last.TanOutU, last.TanOutV)
-		}
-	}
-	for i := 1; err == nil && i < m; i++ {
-		if err = survey2d.WallBudgetStep(budget); err != nil {
-			return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, err
-		}
-		joins[i], err = offset2d.CornerJoin(chain[i-1], chain[i], s, t, shellTol)
-	}
-	switch {
-	case errors.Is(err, offset2d.ErrNoDirection):
-		return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
-	case errors.Is(err, offset2d.ErrNoIntersection):
-		return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, errOffsetTopology
-	case err != nil:
-		return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, err
-	}
-
-	pt := func(p offset2d.Point) Point2 { return Point2{U: p.U, V: p.V} }
-	arcAt := func(j offset2d.Join) CurveSegment {
-		// The connector winds CCW outward (s < 0) and CW inward (s > 0), as in
-		// offsetLoopBudget.
-		return arcSegment(Point2{U: j.VertU, V: j.VertV}, pt(j.PA), pt(j.PB), s < 0)
-	}
-	var segs []CurveSegment
-	if joins[0].Arc {
-		segs = append(segs, arcAt(joins[0]))
-	}
-	for i, w := range chain {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, err
-		}
-		head, tail := joins[i], joins[i+1]
-		start, end := pt(head.M), pt(tail.M)
-		if head.Arc {
-			start = pt(head.PB)
-		}
-		if tail.Arc {
-			end = pt(tail.PA)
-		}
-		if walkOffsetConsumed(w, start, end) {
-			return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, errOffsetDrop
-		}
-		seg, err := offsetWalkSegment(w, s, t, start, end)
-		if err != nil {
-			return nil, Point2{}, Point2{}, [2]offset2d.ChainEnd{}, err
-		}
-		segs = append(segs, seg)
-		if tail.Arc {
-			segs = append(segs, arcAt(tail))
-		}
-	}
-	qB, qE := pt(joins[0].M), pt(joins[m].M)
-	if joins[0].Arc {
-		qB = pt(joins[0].PA)
-	}
-	if joins[m].Arc {
-		qE = pt(joins[m].PB)
-	}
-	ends := [2]offset2d.ChainEnd{{Mirror: axisStart, Join: joins[0]}, {Mirror: axisEnd, Join: joins[m]}}
-	return segs, qB, qE, ends, nil
 }
 
 // revolveSideFaceSegments adds the recorded meridian segments a removed
@@ -602,49 +483,21 @@ func revolveRemovedWalks(walks []survey2d.SideWalk, axisAt int, segs map[int]str
 	return removed, nil
 }
 
-// requireOpeningRim admits one opening end of a kept chain only where §9.2's
-// exact normal segment lies on the removed neighbour walk's own line: that
-// walk is straight and meets the kept walk's tangent (tu, tv) at a right
-// angle, the float dot product of the two directions exactly zero. Where the
-// segment runs from the corner into the neighbour's span (along it at the
-// kept chain's end, back along it at the start), the neighbour must be longer
-// than t, so the segment ends on it. There the rim is the removed face's own
-// cut through the wall. At any other corner the normal segment leaves that
-// face's line — an inward wall at an acute corner reaches past the removed
-// face, outside the receiver — so the opening is ErrUnsupported (§9.2's open
-// question).
-func requireOpeningRim(neighbour survey2d.SideWalk, tu, tv float64, atEnd bool, s, t float64) error {
-	refuse := fmt.Errorf(`%w: a side opening's rim follows the removed face only where the removed walk is straight and meets the kept walk at a right angle (modify-reach §9.2)`, ErrUnsupported)
-	if neighbour.IsCircular() {
-		return refuse
-	}
-	du, dv := neighbour.TanInU, neighbour.TanInV
-	if du*tu+dv*tv != 0 {
-		return refuse
-	}
-	// The segment runs along s times the kept walk's left normal (−tv, tu).
-	along := s*(-tv*du+tu*dv) > 0
-	if atEnd != along {
-		return nil
-	}
-	length := math.Hypot(neighbour.EndU-neighbour.StartU, neighbour.EndV-neighbour.StartV)
-	if length <= t*(1+shellTol) {
-		return fmt.Errorf(`%w: a side opening's removed walk is no longer than the shell thickness, so the rim would leave it (modify-reach §9.2)`, ErrUnsupported)
-	}
-	return nil
-}
-
-// revolveShellSideWall is reach §9.2's open-chain wall section on a revolve
-// meridian with a side opening. The kept chain K is the meridian less the
-// removed run and its on-axis walk; each end of K is either on the axis,
-// where the offset takes the corner K makes with its mirror image and ends on
-// the axis, or at the opening, where the exact normal segment of length t
-// joins K to its offset K'. The wall walks K, the joining segment at K's end,
-// K' backward and the joining segment at K's start, inward; outward it walks
-// K', the segment back to K's end, K backward and the segment out from K's
-// start. An axis end's offset point must land on the axis walk on the
-// material side, as revolveShellAxisWall requires of both (S11b). The wall
-// faces the §5 audit (S8, S11b, S9) before it is swept.
+// revolveShellSideWall is the open-chain wall section of a revolve meridian
+// with a side opening (docs/modify-reach-design.md §9.3.2,
+// docs/shell-opening-design.md §8). The kept chain K is the meridian less the
+// removed run and its on-axis walk. Each end of K is either on the axis, where
+// the offset takes the corner K makes with its mirror image and ends on the
+// axis, or at the opening, where Table RO's rim — the removed neighbour
+// walk's own carrier from K's end to its cut q with the offset K' — joins K to
+// K'. The wall walks K, the rim at K's end, K' backward and the rim at K's
+// start, inward; outward it walks K', the rim back to K's end, K backward and
+// the rim out to K's start. An axis end's offset point must land on the axis
+// walk on the material side, as revolveShellAxisWall requires of both
+// (S11b). The wall faces the §5 audit (S8, S11b, S9) before it is swept, and
+// it returns the wall's section displacement (openChainSectionDelta), which
+// charges every float cut: the interior miters, the axis joins and each
+// opening's rim cut.
 func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walks []survey2d.SideWalk, axisAt int, removed map[int]struct{}, s, tmm, tDelta float64) (ProfileRecord, float64, error) {
 	n := len(walks)
 	// K runs from the first kept walk after the removed run (and after the
@@ -671,21 +524,14 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		}
 		chain = append(chain, walks[i])
 	}
-	axisStart := axisAt >= 0 && (begin+n-1)%n == axisAt
-	axisEnd := axisAt >= 0 && (begin+len(chain))%n == axisAt
-	// Each opening end's normal segment must lie on the removed neighbour's
-	// own line, which is where the removed face leaves the wall's rim.
-	if !axisStart {
-		first := chain[0]
-		if err := requireOpeningRim(walks[(begin+n-1)%n], first.TanInU, first.TanInV, false, s, tmm); err != nil {
-			return ProfileRecord{}, 0, err
-		}
+	first, last := chain[0], chain[len(chain)-1]
+	start := chainEnd{kind: axisEnd}
+	if before := (begin + n - 1) % n; before != axisAt {
+		start = chainEnd{kind: openingEnd, removed: walks[before]}
 	}
-	if !axisEnd {
-		last := chain[len(chain)-1]
-		if err := requireOpeningRim(walks[(begin+len(chain))%n], last.TanOutU, last.TanOutV, true, s, tmm); err != nil {
-			return ProfileRecord{}, 0, err
-		}
+	end := chainEnd{kind: axisEnd}
+	if after := (begin + len(chain)) % n; after != axisAt {
+		end = chainEnd{kind: openingEnd, removed: walks[after]}
 	}
 	segs := rp.profile.Outer.Segments
 	var kept []CurveSegment
@@ -694,13 +540,14 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 			kept = append(kept, segs[si])
 		}
 	}
-	offChain, qS, qE, ends, err := offsetOpenChain(budget, chain, rp.ax, axisStart, axisEnd, s, tmm)
+	off, err := offsetOpenChain(budget, chain, rp.ax, start, end, s, tmm)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	kS := Point2{U: chain[0].StartU, V: chain[0].StartV}
-	kE := Point2{U: chain[len(chain)-1].EndU, V: chain[len(chain)-1].EndV}
-	if axisStart || axisEnd {
+	qS, qE := off.qStart, off.qEnd
+	kS := Point2{U: first.StartU, V: first.StartV}
+	kE := Point2{U: last.EndU, V: last.EndV}
+	if start.kind == axisEnd || end.kind == axisEnd {
 		axisWalk := walks[axisAt]
 		pE := Point2{U: axisWalk.StartU, V: axisWalk.StartV}
 		pB := Point2{U: axisWalk.EndU, V: axisWalk.EndV}
@@ -712,9 +559,9 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		along := func(from, to Point2) bool { return dir*(z(to)-z(from)) > 0 }
 		var ordered bool
 		switch {
-		case axisStart && s > 0: // K leaves the axis at pB: qB lies on A short of it.
+		case start.kind == axisEnd && s > 0: // K leaves the axis at pB: qB lies on A short of it.
 			ordered = along(pE, qS) && along(qS, pB)
-		case axisStart:
+		case start.kind == axisEnd:
 			ordered = along(pB, qS)
 		case s > 0: // K arrives on the axis at pE: qE lies on A past it.
 			ordered = along(pE, qE) && along(qE, pB)
@@ -725,32 +572,52 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 			return ProfileRecord{}, 0, fmt.Errorf(`%w: the offset meridian's end does not land on its axis walk, so the offset crosses its own mirror image on the axis; a trimmed-offset kernel is not available (modify S11b)`, ErrUnsupported)
 		}
 	}
-	line := func(a, b Point2) CurveSegment { return LineSeg{Start: a, End: b, TStart: 0, TEnd: 1} }
+	// closing returns the segment joining K to K' at one end: the axis line
+	// at an axis end, the rim at an opening end. fromK says it runs from K's
+	// endpoint to the offset's.
+	closing := func(e chainEnd, w survey2d.SideWalk, atEnd bool, j offset2d.Join, k, q Point2, fromK bool) (CurveSegment, error) {
+		if e.kind == axisEnd {
+			if fromK {
+				return LineSeg{Start: k, End: q, TStart: 0, TEnd: 1}, nil
+			}
+			return LineSeg{Start: q, End: k, TStart: 0, TEnd: 1}, nil
+		}
+		return offset2d.RimSegment(w, e.removed, atEnd, s, j, fromK)
+	}
+	inward := s > 0
+	atK, err := closing(end, last, true, off.ends[1].Join, kE, qE, inward)
+	if err != nil {
+		return ProfileRecord{}, 0, err
+	}
+	atStart, err := closing(start, first, false, off.ends[0].Join, kS, qS, !inward)
+	if err != nil {
+		return ProfileRecord{}, 0, err
+	}
 	var loop []CurveSegment
-	if s > 0 {
-		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: offChain})
+	if inward {
+		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: off.segs})
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
 		loop = append(loop, kept...)
-		loop = append(loop, line(kE, qE))
+		loop = append(loop, atK)
 		loop = append(loop, back.Segments...)
-		loop = append(loop, line(qS, kS))
+		loop = append(loop, atStart)
 	} else {
 		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: kept})
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
-		loop = append(loop, offChain...)
-		loop = append(loop, line(qE, kE))
+		loop = append(loop, off.segs...)
+		loop = append(loop, atK)
 		loop = append(loop, back.Segments...)
-		loop = append(loop, line(kS, qS))
+		loop = append(loop, atStart)
 	}
 	wall := ProfileRecord{Outer: LoopRecord{Segments: loop}}
 	if err := auditOffsetSectionBudget(budget, rp.profile, wall); err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	delta, err := openChainSectionDelta(budget, chain, rp.ax, ends, s, tmm, tDelta)
+	delta, err := openChainSectionDelta(budget, chain, rp.ax, off.ends, s, tmm, tDelta)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}

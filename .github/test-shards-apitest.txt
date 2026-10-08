@@ -251,6 +251,8 @@
 1	0.01	TestRevolveSemicircleFullTurnCentroidBoundTightens
 1	0.06	TestRevolveShellSideOpening
 1	0.06	TestRevolveShellSideOpeningRefusals
+1	0.06	TestRevolveShellSlantedRim
+1	0.06	TestRevolveShellSlantedRimRefusals
 1	1.04	TestRevolveTessellateConcaveTorusWall
 1	0.03	TestRevolveTessellateConeApexIsOneInternedVertex
 1	0.01	TestRevolveTessellateExportIsByteIdentical

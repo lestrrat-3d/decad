@@ -1183,26 +1183,15 @@ the one outer lump. Roles are the stack's own: outer walls
 A stack enclosing a cavity has no brep face view, so a later modify op on the
 closed shell is `docs/brep-modify-design.md` SB2.
 
-**Open question (side opening).** The open-chain wall section above meets two
-problems this design does not resolve, so a removed prism side face stays base
-S2. First, where an end corner of `K` is a right angle — every box — the
-exact normal segment at that end is collinear with the removed run's first or
-last segment and overlaps it, so `P \ W` is not the record `R` followed by the
-wall section's own boundary: that record doubles back along the overlap, and
-the exposed floor needs `R` trimmed to where the normal segments end. Second,
-the walls along `K` change loop record between the cap slabs (`P`) and the
-middle slab (`W`), so a stack column, which is one loop record, cannot carry
-them as one face; and at a right-angle end the cap slabs' walls along `R` and
-the middle slab's normal-segment walls are coplanar, so canonical topology
-needs one planar face spanning all three slabs with the opening as its hole.
-Both need per-segment wall columns that merge coplanar pieces across slabs,
-which the stacked build does not have. Third, the normal segment follows the
-removed face only at a right angle against a straight removed walk: there it
-lies on that walk's own line, which is where the removed face cuts the wall.
-At an acute corner an inward normal segment reaches past the removed face,
-outside the receiver, and at an obtuse one it falls short of it, so the rim
-must be the removed face's own cut, which this section does not construct.
-A revolve side opening (§9.3.2) builds only the right-angle case.
+**The side opening is `docs/shell-opening-design.md`'s.** The normal segment
+above is that document's rim rule at a right angle only (its §2.2), and the
+cap slabs and the middle slab hold different loop records along `K`, which no
+stack column carries as one face (its §1). That document owns the rim at
+every corner kind (Table RO), the three regions, the `brepPayload` the result
+is recorded on through `internal/stackedbrep`, its refusals (Table SO), its
+consumers (Table DO) and its PR split. Until its PR 2 lands a removed prism
+side face is base S2. A revolve side opening (§9.3.2) builds with that
+document's rim at every line and arc corner (its §8).
 
 For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
@@ -1314,7 +1303,8 @@ within the thickness's own conversion bound. A wall off the axis reads the
 prism cup's `offsetSectionDelta` over the meridian's closed offset unchanged.
 A wall with an axis end or an opening end reads `offset2d.ChainReach` over the
 open chain `K`: an interior corner by `LoopReach`'s own enclosures, an opening
-end by the walk's offset foot, and an axis end by the join it builds against
+end by its rim cut (`offset2d.OpeningReach`, `docs/shell-opening-design.md`
+§2.4), and an axis end by the join it builds against
 the receiver's axis line widened by its four proven bounds — the offset
 carrier met with that line for a miter, the line point `t` from the corner
 for a G1 end (charged the hull with the walk's own foot), and both for an arc.
@@ -1357,17 +1347,21 @@ The kept chain `K` runs from the walk after the run to the walk before it,
 skipping the axis walk. Each end of `K` is an axis end or an opening end. An
 axis end takes §9.3.1's mirror join, so the offset ends on the axis, and its
 axis point must land on the axis walk on the material side (S11b). An opening
-end takes the walk's own offset foot, so §9.2's exact normal segment of length
-`t` joins `K` to its offset `K'`. The wall walks `K`, the joining segment at
-`K`'s end, `K'` backward and the joining segment at `K`'s start, inward; and
-`K'`, the segment back to `K`'s end, `K` backward and the segment out from
-`K`'s start, outward. The wall faces the §5 audit (S8, S11b, S9) and the axis
+end takes `docs/shell-opening-design.md` Table RO's rim: the removed
+neighbour walk's own carrier from `K`'s end to its cut with `K'`
+(`offset2d.OpeningJoin`, `shell_chain.go`'s opening end), a `LineSeg` or an
+`ArcSeg` about the removed walk's centre. The wall walks `K`, the rim at
+`K`'s end, `K'` backward and the rim at `K`'s start, inward; and `K'`, the
+rim back to `K`'s end, `K` backward and the rim out to `K`'s start, outward. The wall faces the §5 audit (S8, S11b, S9) and the axis
 gates before it is swept, and the result's roles are its own `side(i,j)`.
 
-Each opening end is admitted only where the removed neighbour walk is a line
-whose float dot product with the kept walk's end tangent is exactly zero, and,
-where the normal segment runs into that walk's span, the walk is longer than
-`t` (§9.2's third open point). Anything else is `ErrUnsupported`. A side
+An opening end at a smooth or cusped corner, or one whose removed carrier
+never reaches `K'` before leaving the wall's band, is that document's SO1; a
+cut in the removed walk's span direction at or past its far end is its SO2.
+Both are `ErrUnsupported`. A right-angle end, where the two walks' tangents
+have a float dot product of exactly zero, keeps the offset foot it has always
+written, so its wall is the normal segment of length `t`. Every cut is charged
+by §9.3.1's displacement, the rim cut through its own enclosure. A side
 opening runs no section limit: its cavity opens through the removed faces, so
 the open chain's own S11a drop gate and the wall's §5 audit decide it.
 
@@ -1378,7 +1372,7 @@ the open chain's own S11a drop gate and the wall's §5 audit decide it.
 | **BX1** | prism lateral fillet/chamfer | base `prismPayload` | base B1 | base roles |
 | **BX2** | revolve junction fillet/chamfer | `revolvePayload` over rewritten meridian | existing full/partial revolve topology | `side(i,j)` + blend role on inserted wall |
 | **BX3** | complete prism cap-loop fillet/chamfer | `capBlendPayload` | trimmed cap/sides + analytic blend patches | result side/cap roles; `filletCap(c,l,p)` / `chamferCap(c,l,p)` per patch |
-| **BX4** | prism shell with side opening | `stackedPrismPayload` | one connected outer shell under RX scope | `slab(k).region(m).side(i,j)`, exposed cap/rim roles, `shellSide(i,j)` |
+| **BX4** | prism shell with side opening | `docs/shell-opening-design.md` Table BO: `prismPayload` over the wall section with both caps removed (BO1), else `brepPayload` (BO2) | one lump, one shell, no void | BO1: `side(0,j)`, `capStart`/`capEnd`; BO2: `face(k)`/`wall(k)` |
 | **BX5** | prism `WithNoOpenings` | `stackedPrismPayload` | one lump; outer + void shell | outer/inner/result-slab roles |
 | **BX6** | full-revolve shell | `revolvePayload` over wall region | evaluator §6's full-turn shells: one lump, an outer shell and one void shell | result `side(i,j)` roles |
 | **BX7** | partial-revolve shell with both caps open | `revolvePayload` over wall region | one shell with two rim-band caps | result sides + `capStart` / `capEnd` |
@@ -1673,8 +1667,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
 | **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
-| **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, §9.2's open question); revolve side opening; cap loops |
+| **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, `docs/shell-opening-design.md`); revolve side opening; cap loops |
 | **C3** (landed) | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | a slanted rim; cap loops |
+| **C4** | the side opening of `docs/shell-opening-design.md` §12, five PRs: the rim rule and the revolve's slanted rim (PR 1, landed), the rectilinear prism side opening as a `brepPayload` (PR 2), circular walks (PR 3), oblique walks (PR 4), arc–arc corners (PR 5) | per that document's increment table; cap loops |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn (C3 lands it); cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
