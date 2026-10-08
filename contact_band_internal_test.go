@@ -122,9 +122,9 @@ func TestPlanarBandTransferChargesDeviation(t *testing.T) {
 	block := bandChamferedBlock(t, doc)
 	run := bandRun(t, doc, floor, block, bandSpin(t, r3.Vec{X: bandTestOffset}), bandSpin(t, r3.Vec{X: bandTestOffset}))
 	half := big.NewRat(1, 2)
-	poseA, err := run.a.poseAt(half)
+	poseA, err := run.a.path.RoundedPoseAt(half)
 	require.NoError(t, err)
-	poseB, err := run.b.poseAt(half)
+	poseB, err := run.b.path.RoundedPoseAt(half)
 	require.NoError(t, err)
 	contact, err := doc.ContactPair(t.Context(), floor, block, poseA, poseB, run.req.ContactRequest)
 	require.NoError(t, err)
@@ -156,9 +156,9 @@ func TestPlanarOverlapTransferChargesDisplacement(t *testing.T) {
 		t.Helper()
 		run := bandRun(t, doc, floor, knob, bandSpin(t, r3.Vec{X: bandTestOffset}),
 			bandSpin(t, r3.Vec{X: bandTestOffset, Z: 8 - depth}))
-		poseA, err := run.a.poseAt(half)
+		poseA, err := run.a.path.RoundedPoseAt(half)
 		require.NoError(t, err)
-		poseB, err := run.b.poseAt(half)
+		poseB, err := run.b.path.RoundedPoseAt(half)
 		require.NoError(t, err)
 		_, eta, ok, err := run.b.pointDeviation(poseB, half, noSweepPoll)
 		require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 		var bound, charge [2]*big.Rat
 		for i, path := range report.replay.rotation {
 			var ok bool
-			pose, err = path.poseAt(f)
+			pose, err = path.path.RoundedPoseAt(f)
 			require.NoError(t, err)
 			bound[i], charge[i], ok = path.replayDeviation(pose, f)
 			require.True(t, ok)

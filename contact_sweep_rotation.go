@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"errors"
-	"math"
 	"math/big"
 	"sort"
 
@@ -72,79 +71,22 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	return prepared, true
 }
 
-// prepareSweepMotion builds the ideal path and the §4.1 travel bound of one
-// body. The travel radius reads the body's inflated bounds, so it holds for
-// any body; the caller supplies the source points.
+// prepareSweepMotion reads the body's radius for internal/sweeppath's motion
+// plan. The caller supplies the source points.
 func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
-	if path.Screw != nil {
-		axis := path.Screw.Axis
-		angle, ok := sweeppath.ExactBaseValue(path.Screw.Angle)
-		if !ok || path.Duration.Sign() <= 0 {
-			return rotationalSweepPath{}, false
-		}
-		angular := new(big.Rat).Quo(angle, path.Duration)
-		linear := new(big.Rat).Quo(proofarith.FloatRat(path.Screw.Slide), path.Duration)
-		omega, speed := sweeppath.RatFloatNearest(angular), sweeppath.RatFloatNearest(linear)
-		if !finiteMeasurementValues(omega, speed) {
-			return rotationalSweepPath{}, false
-		}
-		path.Drift = &RigidDriftSegment{From: path.From, Center: path.Screw.Point,
-			LinearVelocity: QuantityVec{X: units.MillimetersPerSecond(axis.X * speed),
-				Y: units.MillimetersPerSecond(axis.Y * speed),
-				Z: units.MillimetersPerSecond(axis.Z * speed)},
-			AngularVelocity: QuantityVec{X: units.RadiansPerSecond(axis.X * omega),
-				Y: units.RadiansPerSecond(axis.Y * omega),
-				Z: units.RadiansPerSecond(axis.Z * omega)},
-			Duration: units.Seconds(sweeppath.RatFloatNearest(path.Duration))}
-	}
-	fromRot, fromT, ok := motionbound.ExactTransform(path.From)
+	motion, ok := sweeppath.PrepareMotion(path, func(from r3.Transform, center r3.Vec,
+		axis motionbound.RatVec) (*big.Rat, bool) {
+		return rotationalSweepRadius(body, from, center, axis)
+	})
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT}
-	if path.Drift == nil {
-		travel, ok := motionbound.SweepLinearTravel(path.Delta)
-		if !ok {
-			return rotationalSweepPath{}, false
-		}
-		prepared.fullTravel = travel
-		return prepared, true
-	}
-	drift := path.Drift
-	velocity := [3]units.Value{drift.LinearVelocity.X, drift.LinearVelocity.Y, drift.LinearVelocity.Z}
-	angular := [3]units.Value{drift.AngularVelocity.X, drift.AngularVelocity.Y, drift.AngularVelocity.Z}
-	prepared.velocity = motionbound.RatVec{}
-	omega := motionbound.RatVec{}
-	for axis := range 3 {
-		prepared.velocity[axis], _ = sweeppath.ExactBaseValue(velocity[axis])
-		omega[axis], _ = sweeppath.ExactBaseValue(angular[axis])
-	}
-	var vSquared *big.Rat
-	prepared.frame, prepared.omegaLow, prepared.omegaHigh, vSquared, ok =
-		motionbound.SweepAngularFrame(prepared.velocity, omega, drift.Center)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	radius, ok := rotationalSweepRadius(body, path.From, drift.Center, omega)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	prepared.fullTravel, ok = motionbound.SweepRotatingTravel(vSquared, prepared.omegaHigh, radius, path.Duration)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	if path.Screw != nil {
-		angle, _ := sweeppath.ExactBaseValue(path.Screw.Angle)
-		angular := new(big.Rat).Quo(angle, path.Duration)
-		linear := new(big.Rat).Quo(proofarith.FloatRat(path.Screw.Slide), path.Duration)
-		for axis, component := range [3]float64{path.Screw.Axis.X, path.Screw.Axis.Y, path.Screw.Axis.Z} {
-			prepared.velocity[axis] = new(big.Rat).Mul(proofarith.FloatRat(component), linear)
-		}
-		prepared.omegaLow, prepared.omegaHigh = angular, angular
-		prepared.fullTravel = new(big.Rat).Mul(new(big.Rat).Add(new(big.Rat).Abs(linear),
-			new(big.Rat).Mul(radius, angular)), path.Duration)
-	}
-	return prepared, true
+	return rotationalSweepPath{
+		body: body, path: motion.Path, fullTravel: motion.FullTravel,
+		fromRot: motion.FromRot, fromT: motion.FromT,
+		velocity: motion.Velocity, frame: motion.Frame,
+		omegaLow: motion.OmegaLow, omegaHigh: motion.OmegaHigh,
+	}, true
 }
 
 // rotationalSweepRadius is §4.1's ρ: an upper bound, rounded to a float, on
@@ -162,12 +104,20 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	for k := range 3 {
 		component, ok := proofarith.DyOfRat(axis[k])
 		if !ok {
-			return rationalSweepRadius(body, from, center, axis)
+			corners, ok := inflatedBoundsCorners(body)
+			if !ok {
+				return nil, false
+			}
+			return motionbound.SweepRadiusRational(corners[:], from, center, axis)
 		}
 		dyAxis[k] = component
 	}
 	if !motionbound.MemosOn() {
-		return dyadicSweepRadius(body, from, center, dyAxis)
+		corners, ok := inflatedBoundsCorners(body)
+		if !ok {
+			return nil, false
+		}
+		return motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
 	}
 	key := newSweepRadiusKey(from, center, dyAxis)
 	if radius, ok, hit := body.sweepRadii.Load(key); hit {
@@ -176,75 +126,18 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 		}
 		return proofarith.FloatRat(radius), true
 	}
-	radius, ok := dyadicSweepRadius(body, from, center, dyAxis)
+	corners, ok := inflatedBoundsCorners(body)
+	if !ok {
+		body.sweepRadii.Store(key, 0, false)
+		return nil, false
+	}
+	radius, ok := motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
 	held := 0.0
 	if ok {
 		held, _ = radius.Float64()
 	}
 	body.sweepRadii.Store(key, held, ok)
 	return radius, ok
-}
-
-// dyadicSweepRadius is rotationalSweepRadius over a dyadic axis, computed
-// afresh.
-func dyadicSweepRadius(body *Body, from r3.Transform, center r3.Vec, axis proofarith.DyV3) (*big.Rat, bool) {
-	corners, ok := inflatedBoundsCorners(body)
-	if !ok {
-		return nil, false
-	}
-	return motionbound.SweepRadiusDyadic(corners[:], from, center, axis)
-}
-
-// rationalSweepRadius is rotationalSweepRadius over an axis with a
-// non-dyadic component, which no caller holds today.
-func rationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
-	axis motionbound.RatVec) (*big.Rat, bool) {
-	corners, ok := inflatedBoundsCorners(body)
-	if !ok {
-		return nil, false
-	}
-	return motionbound.SweepRadiusRational(corners[:], from, center, axis)
-}
-
-func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
-	if p.path.Screw != nil {
-		if f.Sign() == 0 {
-			return p.path.From, nil
-		}
-		if f.Cmp(big.NewRat(1, 1)) == 0 {
-			return p.path.To, nil
-		}
-		step, err := p.path.Screw.At(sweeppath.RatFloatNearest(f))
-		if err != nil {
-			return r3.Transform{}, err
-		}
-		return p.path.From.Then(step)
-	}
-	if p.path.Drift == nil {
-		return p.path.PoseAt(f)
-	}
-	if f.Sign() == 0 {
-		return p.path.From, nil
-	}
-	drift := p.path.Drift
-	elapsed := sweeppath.RatFloatNearest(new(big.Rat).Mul(p.path.Duration, f))
-	axis := r3.Vec{X: drift.AngularVelocity.X.Base(), Y: drift.AngularVelocity.Y.Base(),
-		Z: drift.AngularVelocity.Z.Base()}
-	norm := math.Hypot(axis.X, math.Hypot(axis.Y, axis.Z))
-	turn, err := r3.RotationAround(drift.Center, axis, units.Radians(norm*elapsed))
-	if err != nil {
-		return r3.Transform{}, err
-	}
-	pose, err := p.path.From.Then(turn)
-	if err != nil {
-		return r3.Transform{}, err
-	}
-	shift, err := r3.Translation(r3.Vec{X: drift.LinearVelocity.X.Base() * elapsed,
-		Y: drift.LinearVelocity.Y.Base() * elapsed, Z: drift.LinearVelocity.Z.Base() * elapsed})
-	if err != nil {
-		return r3.Transform{}, err
-	}
-	return pose.Then(shift)
 }
 
 // idealAt is the ideal pose at fraction f. A rotating path's rotation
@@ -472,11 +365,11 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.a.poseAt(f)
+	poseA, err := r.a.path.RoundedPoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.b.poseAt(f)
+	poseB, err := r.b.path.RoundedPoseAt(f)
 	if err != nil {
 		return nil, err
 	}
@@ -1141,7 +1034,7 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 	lo, hi := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
 	charge := new(big.Rat)
 	for _, path := range [2]rotationalSweepPath{r.a, r.b} {
-		pose, err := path.poseAt(hi)
+		pose, err := path.path.RoundedPoseAt(hi)
 		if err != nil {
 			return true
 		}
