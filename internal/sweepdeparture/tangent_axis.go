@@ -10,14 +10,15 @@ import (
 
 // Path contains the exact prepared readings used by source-box departure proofs.
 type Path struct {
-	Box      pairbox.OrientedBox
-	Delta    [3]proofarith.Dyadic
-	Axis     [3]*big.Rat
-	Center   [3]*big.Rat
-	Velocity [3]*big.Rat
-	Duration *big.Rat
-	Drift    bool
-	Screw    bool
+	Box        pairbox.OrientedBox
+	Delta      [3]proofarith.Dyadic
+	Axis       [3]*big.Rat
+	Center     [3]*big.Rat
+	Velocity   [3]*big.Rat
+	Duration   *big.Rat
+	OmegaUpper *big.Rat
+	Drift      bool
+	Screw      bool
 }
 
 // ContactNormal records one published manifold normal and whether its bound
