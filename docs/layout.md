@@ -307,7 +307,7 @@ the rules leave to the byte budget.
 | `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
-| `internal/prismcells/` | Prism scenes, cells, surface cuts, charges and trim walks. See prism-boolean §4. |
+| `internal/prismcells/` | Prism scene mapping, cells, surface cuts, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |

@@ -114,7 +114,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
 func (st *stackedUnionState) brep(ctx context.Context, levels []stackedUnionLevel, reach [][2]int) (featurePayload, bool, error) {
-	if !st.reexpress.identity || st.va.proxy.sectionDelta != 0 || st.vb.proxy.sectionDelta != 0 {
+	if !st.reexpress.Identity || st.va.proxy.sectionDelta != 0 || st.vb.proxy.sectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.
 		// Every straight wall becomes a planar face at its recorded level,
@@ -250,7 +250,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
 			ErrUnsupported, segments, prismMaxArrangementSegments)
 	}
-	s, tags, delta, err := buildPrismSceneRegions(b.st.budget, regionsA, regionsB, &prismReexpression{identity: true})
+	s, tags, delta, err := buildPrismSceneRegions(b.st.budget, regionsA, regionsB, &prismReexpression{Identity: true})
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 // the shared spans' width into the build's crossing term.
 func (b *ubBuild) charge(sc *ubScene) error {
 	if !sc.charged {
-		ok, err := sc.delta.chargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy, b.st.vb.proxy, &prismReexpression{identity: true})
+		ok, err := sc.delta.chargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy, b.st.vb.proxy, &prismReexpression{Identity: true})
 		if err != nil {
 			return err
 		}

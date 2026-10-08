@@ -57,7 +57,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
 			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
 	}
-	reexpress, err := newPrismReexpression(pa, pb)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -139,7 +139,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 		// omitted rather than added back in.
 		sectionDelta: max(
 			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta),
 		),
 	}
 	return result, true, nil
@@ -184,7 +184,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	// it took.
 	sectionDelta := proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a)
 	if nestedIsB {
-		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta)
+		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.Delta)
 	}
 
 	result := prismPayload{

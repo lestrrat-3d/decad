@@ -261,7 +261,7 @@ silent fallback stops being available:
    topology does. `Body.Placed` is the ordinary way a pair reaches the
    re-expression cause, and it reaches it through the ACCUMULATED placement
    rather than through the motion any one call received:
-   `newPrismReexpression` reports the identity exactly when G3's shared-axis
+   `prismcells.NewReexpression` reports the identity exactly when G3's shared-axis
    arm holds — `pa.xform == pb.xform`, bit-identical `U`/`V`, and a frame-origin
    difference that is exactly a multiple of the shared `N` (a coplanar pair on
    one frame is that arm with `d = 0`) — and `Placed` composes its

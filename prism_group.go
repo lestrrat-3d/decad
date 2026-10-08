@@ -128,7 +128,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err := prismGroupWithinCap(budget, "cut", targetOp.regions, tool.regions); err != nil {
 		return prismPayload{}, false, err
 	}
-	reexpress, err := newPrismReexpression(target, tool.proxy)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool.proxy))
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -258,7 +258,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 	if err := prismGroupWithinCap(budget, "union", oa.regions, ob.regions); err != nil {
 		return nil, false, err
 	}
-	reexpress, err := newPrismReexpression(oa.proxy, ob.proxy)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy))
 	if err != nil {
 		return nil, false, err
 	}
@@ -355,7 +355,7 @@ func provePrismRegionsDisjoint(ctx context.Context, budget *proofbound.WorkBudge
 	if err := prismGroupWithinCap(budget, "disjointness", outers); err != nil {
 		return false, 0, err
 	}
-	s, tags, sceneDelta, err := buildPrismSceneRegions(budget, outers, nil, &prismReexpression{identity: true})
+	s, tags, sceneDelta, err := buildPrismSceneRegions(budget, outers, nil, &prismReexpression{Identity: true})
 	if err != nil {
 		return false, 0, err
 	}

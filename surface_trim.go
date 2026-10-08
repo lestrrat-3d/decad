@@ -193,11 +193,11 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 		return chainPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the tool does not span the receiver over the sweep parameter`, ErrUnsupported)
 	}
-	reexpress, err := newPrismReexpression(view, tl)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tl))
 	if err != nil {
 		return chainPayload{}, prismPayload{}, err
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return chainPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
@@ -267,7 +267,7 @@ func resolveExtend(ctx context.Context, budget *proofbound.WorkBudget, view pris
 		return nil, 0, fmt.Errorf(`%w: the extend scene charges %d segments against the cap of %d`,
 			ErrUnsupported, segments, prismMaxArrangementSegments)
 	}
-	reexpress, err := newPrismReexpression(view, tool)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tool))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -567,11 +567,11 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 	// stored floats, and every segment either operand's own record consumes
 	// spans its entity's natural domain. The section-displacement clause was
 	// already checked above, generically over either payload shape.
-	reexpress, err := newPrismReexpression(rcv, tl)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcv), prismPlacementOf(tl))
 	if err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
@@ -659,7 +659,7 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 
 	// S7 already proved this is the identity; buildPrismScene still takes it
 	// as an explicit argument, exactly as prism-boolean's own callers do.
-	reexpress, err := newPrismReexpression(rcv, tl)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcv), prismPlacementOf(tl))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -824,11 +824,11 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the tool does not span the target over the sweep parameter`, ErrUnsupported)
 	}
-	reexpress, err := newPrismReexpression(rcv, tl)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcv), prismPlacementOf(tl))
 	if err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
@@ -861,7 +861,7 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 		return nil, fmt.Errorf(`%w: the split scene charges %d arranger segments against the cap of %d`,
 			ErrUnsupported, segments, prismMaxArrangementSegments)
 	}
-	reexpress, err := newPrismReexpression(target, tool)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {
 		return nil, err
 	}
@@ -1043,11 +1043,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	// S7's remaining two clauses.
-	reexpress, err := newPrismReexpression(rcvView, tlView)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
 	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
@@ -1271,11 +1271,11 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	// and leaves every other receiver segment outside it, so a receiver
 	// carrying narrowed segments elsewhere clears S7 for an Extend and refuses
 	// it for a Trim.
-	reexpress, err := newPrismReexpression(rcvView, tlView)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
 	if err != nil {
 		return pass(err)
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
 	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)

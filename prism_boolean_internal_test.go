@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -422,9 +423,9 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
 	require.True(t, prismUnionZIntervalMatches(pa, pb), "the fixture must clear G5")
 
-	reexpression, err := newPrismReexpression(pa, pb)
+	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
-	require.False(t, reexpression.identity)
+	require.False(t, reexpression.Identity)
 	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
@@ -556,9 +557,9 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 		}}},
 		frame: first.frame, z0: first.z0, z1: first.z1, xform: first.xform,
 	}
-	reexpression, err := newPrismReexpression(first, shallow)
+	reexpression, err := prismcells.NewReexpression(prismPlacementOf(first), prismPlacementOf(shallow))
 	require.NoError(t, err)
-	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
+	require.True(t, reexpression.Identity, "the second union must take the identity re-expression path")
 
 	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), first, shallow, reexpression)
 	require.NoError(t, err)
@@ -1052,10 +1053,10 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	pb := b.payload.(prismPayload)
 	require.Zero(t, pb.sectionDelta, "δ_B must be zero")
 
-	reexpression, err := newPrismReexpression(pa, pb)
+	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
-	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
-	require.Zero(t, reexpression.delta, "δ_reexpress must be zero")
+	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
+	require.Zero(t, reexpression.Delta, "δ_reexpress must be zero")
 
 	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
@@ -1072,7 +1073,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	want := proofbound.AbsSumUpper(
 		max(
 			proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.delta),
+			proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.Delta),
 		),
 		cutDelta,
 	)
@@ -1700,9 +1701,9 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	b := prismRectBody(t, doc, 4, 3, 6, 7) // straddles A's right wall at u=5
 	pb := b.payload.(prismPayload)
 
-	reexpression, err := newPrismReexpression(pa, pb)
+	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
-	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
+	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
 
 	scene, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)

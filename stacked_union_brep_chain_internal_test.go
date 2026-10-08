@@ -166,7 +166,7 @@ func TestClassifyRegionsReadsEachRecord(t *testing.T) {
 	boss1 := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15).payload.(prismPayload).profile
 	boss2 := internalBoxBodyAtZ(t, doc, -20, 10, -10, 20, 10, 15).payload.(prismPayload).profile
 	budget := proofbound.NewWorkBudget(t.Context())
-	s, tags, _, err := buildPrismSceneRegions(budget, []ProfileRecord{plate, boss1}, []ProfileRecord{boss2}, &prismReexpression{identity: true})
+	s, tags, _, err := buildPrismSceneRegions(budget, []ProfileRecord{plate, boss1}, []ProfileRecord{boss2}, &prismReexpression{Identity: true})
 	require.NoError(t, err)
 	profiles, err := prismCellProfiles(t.Context(), budget, s)
 	require.NoError(t, err)
