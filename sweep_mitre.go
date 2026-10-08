@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -84,7 +85,7 @@ func mitredSweepLoops(profile ProfileRecord) ([]Point2, [][]int, error) {
 
 // mitredSweepPreflight applies SM10's span and facet-pair ceilings.
 func mitredSweepPreflight(loopIdx [][]int, spans int) error {
-	return sweepmitre.Preflight(loopIdx, spans, maxSweepSpansPerCall)
+	return sweepmitre.Preflight(loopIdx, spans, compositesweep.MaxSpansPerCall)
 }
 
 // sweepMitred runs Table SM's gates in §5's order and builds the body. The

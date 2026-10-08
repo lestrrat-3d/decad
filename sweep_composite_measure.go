@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
@@ -27,51 +28,6 @@ type sweepSpanPayload struct {
 	reverseArcCaps bool
 }
 
-const (
-	// Composite evaluation builds temporary closed analytic bodies before it
-	// sews their shared sections. These ceilings bound that pre-commit work and
-	// allocation independently of the caller's path size.
-	maxSweepSpansPerCall = 256
-	maxSweepFacesPerCall = 262_144
-)
-
-func preflightCompositeSweep(profile ProfileRecord, spans int) error {
-	if spans < 2 {
-		return fmt.Errorf(`%w: a composite sweep requires at least two spans`, ErrDegenerate)
-	}
-	if spans > maxSweepSpansPerCall {
-		return fmt.Errorf(`%w: a composite sweep exceeds the fixed span ceiling of %d`, ErrUnsupported, maxSweepSpansPerCall)
-	}
-	pairs, ok := proofbound.WallChoose2(uint64(spans))
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, ErrUnsupported)
-	}
-	segments := len(profile.Outer.Segments)
-	for _, hole := range profile.Holes {
-		var ok bool
-		segments, ok = intCheckedAdd(segments, len(hole.Segments))
-		if !ok {
-			return fmt.Errorf(`%w: a composite sweep's profile topology count overflows`, ErrUnsupported)
-		}
-	}
-	faces, ok := proofbound.WallCheckedMul(uint64(spans), uint64(segments))
-	if !ok {
-		return fmt.Errorf(`%w: a composite sweep's face count overflows`, ErrUnsupported)
-	}
-	faces, ok = proofbound.WallCheckedAdd(faces, 2)
-	if !ok || faces > maxSweepFacesPerCall {
-		return fmt.Errorf(`%w: a composite sweep exceeds the fixed face ceiling of %d`, ErrUnsupported, maxSweepFacesPerCall)
-	}
-	return nil
-}
-
-func intCheckedAdd(a, b int) (int, bool) {
-	if b > int(^uint(0)>>1)-a {
-		return 0, false
-	}
-	return a + b, true
-}
-
 func replayCompositeSweep(
 	ctx context.Context,
 	d *Document,
@@ -88,7 +44,7 @@ func replayCompositeSweepWork(
 	payload sweepPayload,
 	work *freeform.FreeformWork,
 ) (*Body, error) {
-	if err := preflightCompositeSweep(payload.prism.profile, len(payload.spans)); err != nil {
+	if err := compositesweep.Preflight(payload.prism.profile, len(payload.spans)); err != nil {
 		return nil, err
 	}
 	parts := make([]compositeSpanPart, len(payload.spans))
@@ -128,7 +84,7 @@ func evalCompositeSweepContext(
 	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
-	if err := preflightCompositeSweep(profile, len(path.records)); err != nil {
+	if err := compositesweep.Preflight(profile, len(path.records)); err != nil {
 		return nil, err
 	}
 	frames, err := transportSweepFramesContext(ctx, path, plane)
@@ -336,82 +292,42 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 		return fmt.Errorf(`%w: a composite sweep requires at least one built span`, ErrDegenerate)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-
-	volume := proofbound.ExactScalar(0)
-	momentX, momentY, momentZ := proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(0)
-	var minX, minY, minZ, maxX, maxY, maxZ proofbound.BoundedScalar
+	spans := make([]compositesweep.Span, len(parts))
 	for i, part := range parts {
-		if err := budget.Step(); err != nil {
-			return err
-		}
 		span := part.body
-		if span == nil || !span.solid {
-			return fmt.Errorf(`%w: composite sweep span %d is not a solid`, ErrDegenerate, i)
-		}
-		spanVolume := measurementScalar(span.volume)
-		spanCentroidBound := span.centroid.Bound.Base()
-		volume = proofbound.BoundedAdd(volume, spanVolume)
-		momentX = proofbound.BoundedAdd(momentX, proofbound.BoundedMul(
-			spanVolume,
-			proofbound.MeasuredScalar(span.centroid.Value.X, spanCentroidBound),
-		))
-		momentY = proofbound.BoundedAdd(momentY, proofbound.BoundedMul(
-			spanVolume,
-			proofbound.MeasuredScalar(span.centroid.Value.Y, spanCentroidBound),
-		))
-		momentZ = proofbound.BoundedAdd(momentZ, proofbound.BoundedMul(
-			spanVolume,
-			proofbound.MeasuredScalar(span.centroid.Value.Z, spanCentroidBound),
-		))
-
-		boxBound := span.bounds.Bound.Base()
-		boxMinX := proofbound.MeasuredScalar(span.bounds.Min.X, boxBound)
-		boxMinY := proofbound.MeasuredScalar(span.bounds.Min.Y, boxBound)
-		boxMinZ := proofbound.MeasuredScalar(span.bounds.Min.Z, boxBound)
-		boxMaxX := proofbound.MeasuredScalar(span.bounds.Max.X, boxBound)
-		boxMaxY := proofbound.MeasuredScalar(span.bounds.Max.Y, boxBound)
-		boxMaxZ := proofbound.MeasuredScalar(span.bounds.Max.Z, boxBound)
-		if i == 0 {
-			minX, minY, minZ = boxMinX, boxMinY, boxMinZ
-			maxX, maxY, maxZ = boxMaxX, boxMaxY, boxMaxZ
+		if span == nil {
 			continue
 		}
-		minX, minY, minZ = proofbound.BoundedMin(minX, boxMinX), proofbound.BoundedMin(minY, boxMinY), proofbound.BoundedMin(minZ, boxMinZ)
-		maxX, maxY, maxZ = boundedMax(maxX, boxMaxX), boundedMax(maxY, boxMaxY), boundedMax(maxZ, boxMaxZ)
-	}
-
-	if proofbound.AdmitAbove(volume, 0) != proofbound.SurvAdmit {
-		return fmt.Errorf(`%w: a composite sweep's volume is not proven positive`, ErrUnsupported)
-	}
-	centroidX := proofbound.BoundedDiv(momentX, volume)
-	centroidY := proofbound.BoundedDiv(momentY, volume)
-	centroidZ := proofbound.BoundedDiv(momentZ, volume)
-	centroidBound := proofbound.Radius3D(max(centroidX.Bound, centroidY.Bound, centroidZ.Bound))
-
-	area := proofbound.ExactScalar(0)
-	for _, face := range body.Faces() {
-		if err := budget.Step(); err != nil {
-			return err
+		spans[i] = compositesweep.Span{
+			Solid: span.solid, Volume: measurementScalar(span.volume),
+			Centroid: span.centroid.Value, CentroidBound: span.centroid.Bound.Base(),
+			Min: span.bounds.Min, Max: span.bounds.Max, BoxBound: span.bounds.Bound.Base(),
 		}
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.area, face.areaBound))
 	}
+	faces := body.Faces()
+	areas := make([]proofbound.BoundedScalar, len(faces))
+	for i, face := range faces {
+		areas[i] = proofbound.MeasuredScalar(face.area, face.areaBound)
+	}
+	var startCap, endCap proofbound.BoundedScalar
 	if surfaceResult {
-		startCap := proofbound.MeasuredScalar(parts[0].startCap.area, parts[0].startCap.areaBound)
-		endCap := proofbound.MeasuredScalar(parts[len(parts)-1].endCap.area, parts[len(parts)-1].endCap.areaBound)
-		area = proofbound.BoundedAdd(area, startCap)
-		area = proofbound.BoundedAdd(area, endCap)
-		area = proofbound.BoundedSub(area, startCap)
-		area = proofbound.BoundedSub(area, endCap)
+		startCap = proofbound.MeasuredScalar(parts[0].startCap.area, parts[0].startCap.areaBound)
+		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].endCap.area, parts[len(parts)-1].endCap.areaBound)
 	}
-
-	body.volume = scalarMeasurement(volume, units.CubicMillimeter)
-	body.area = scalarMeasurement(area, units.SquareMillimeter)
+	readings, err := compositesweep.Aggregate(budget, spans, areas, surfaceResult, startCap, endCap)
+	if err != nil {
+		return err
+	}
+	centroidBound := proofbound.Radius3D(max(readings.Centroid[0].Bound, readings.Centroid[1].Bound, readings.Centroid[2].Bound))
+	body.volume = scalarMeasurement(readings.Volume, units.CubicMillimeter)
+	body.area = scalarMeasurement(readings.Area, units.SquareMillimeter)
 	body.centroid = VecMeasurement{
-		Value:     r3.NewVec(centroidX.Value, centroidY.Value, centroidZ.Value),
+		Value:     r3.NewVec(readings.Centroid[0].Value, readings.Centroid[1].Value, readings.Centroid[2].Value),
 		Exactness: exactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.bounds = compositeSweepBox(minX, minY, minZ, maxX, maxY, maxZ)
+	body.bounds = compositeSweepBox(readings.Min[0], readings.Min[1], readings.Min[2],
+		readings.Max[0], readings.Max[1], readings.Max[2])
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return fmt.Errorf(`%w: a composite sweep computed a non-finite measurement`, ErrUnsupported)
 	}
@@ -428,10 +344,6 @@ func scalarMeasurement(value proofbound.BoundedScalar, unit units.Unit) Measurem
 		Exactness: exactnessOf(value.Bound),
 		Bound:     units.New(value.Bound, unit),
 	}
-}
-
-func boundedMax(a, b proofbound.BoundedScalar) proofbound.BoundedScalar {
-	return proofbound.BoundedNeg(proofbound.BoundedMin(proofbound.BoundedNeg(a), proofbound.BoundedNeg(b)))
 }
 
 func compositeSweepBox(minX, minY, minZ, maxX, maxY, maxZ proofbound.BoundedScalar) Box {
