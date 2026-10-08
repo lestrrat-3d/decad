@@ -2,8 +2,6 @@ github.com/lestrrat-3d/kinetograph v0.0.0-20261007064922-225c09b246e9 h1:8wPHX/p
 github.com/lestrrat-3d/kinetograph v0.0.0-20261007064922-225c09b246e9/go.mod h1:UArp1UsMK5EwHHknH/OV0zO8s/dSvdiqOTC0j0xFvfM=
 github.com/lestrrat-3d/r3 v0.0.0-20261005214828-6011e4189399 h1:qWnfw9VztJPd6Zga5jnOhWXbFDguye8b7RGed7Xvvps=
 github.com/lestrrat-3d/r3 v0.0.0-20261005214828-6011e4189399/go.mod h1:4ZWWwLiR9tf6tOORKYM95+OXLMbdAmHywWdUYsDJfYc=
-github.com/lestrrat-3d/sketch v0.0.0-20261008065533-df55c25b7a48 h1:7+St0B5ZOm0Le6RuDLMSHMllMHQlkYfsj8iPWC7HWdQ=
-github.com/lestrrat-3d/sketch v0.0.0-20261008065533-df55c25b7a48/go.mod h1:yU8fsrfp5gVwwjxD96OCgw/2R25SW4Smuz+U7iBWzT0=
 github.com/lestrrat-3d/sketch v0.0.0-20261008074027-222b1319014e h1:DaOUnebMq/reUpWP32f05P92+BOLg/PXYSyCy5ue34M=
 github.com/lestrrat-3d/sketch v0.0.0-20261008074027-222b1319014e/go.mod h1:yU8fsrfp5gVwwjxD96OCgw/2R25SW4Smuz+U7iBWzT0=
 github.com/lestrrat-3d/solidlens v0.0.0-20261005044356-f626e847eb51 h1:dWnM4czCR3HYrVlUMeoqmVGhZSWwyd1kLrBbVLa50S8=
