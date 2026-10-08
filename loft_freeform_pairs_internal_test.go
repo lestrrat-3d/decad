@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"slices"
 	"testing"
 
@@ -562,7 +563,119 @@ func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	require.Equal(t, loftStationCapError{Loop: 0, Seg: 1, M: 2, MMax: 1, AtLeast: true}, *capErr)
 }
 
+// TestLoftDegreeOneTwistedPairPublishesTheRuledBody lofts the square
+// (±1, ±1) at z = 0 to the diamond (±2, 0)/(0, ±2) at z = 10, one straight
+// side per segment, unplaced on two XY planes. Every free-form cell's chord
+// departure is zero there, since a degree-1 NURBSSeg IS its own chord.
+//
+// The free-form pair denotes the ruled body (docs/loft-design.md §5.2): the
+// section at t = z/10 is the quadrilateral through (1 − t)·square + t·diamond,
+// whose area is A(t) = 4 + 4t² (A(0) = 4, A(1/2) = 5, A(1) = 8). So the
+// volume is 10·∫A = 160/3 and the centroid height is 10·∫t·A / ∫A = 45/8.
+// The same section drawn as LineSegs denotes the triangulated polyhedron
+// instead (§5), whose volume 40 publishes Exact.
+//
+// Shown to fail first: on the build that skipped zero-departure cells in
+// ComputeLoftChordedAllow, and on the build whose evalLoft gate read the two
+// section terms alone, the NURBS pair published Volume 40 ± 0 Exact (the
+// twist correction never applied). With Area's bilinear correction keyed on
+// the section terms alone, Area missed the ruled walls by 5.28 against a
+// 2.1e-13 bound. With Verify's leg 4 reading sectionDelta alone, the NURBS
+// sheet proved itself simple.
+func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
+	square := [][2]float64{{1, -1}, {1, 1}, {-1, 1}, {-1, -1}}
+	diamond := [][2]float64{{2, 0}, {0, 2}, {-2, 0}, {0, -2}}
+	build := func(t *testing.T, nurbs bool, opts ...LoftOption) *Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		f0, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		f1, err := r3.NewFrame(r3.NewVec(0, 0, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		pl0, err := w.CreatePlaneFromFrame(f0)
+		require.NoError(t, err)
+		pl1, err := w.CreatePlaneFromFrame(f1)
+		require.NoError(t, err)
+		s0, p0 := straightSidedSketch(t, w, pl0, square, nurbs)
+		s1, p1 := straightSidedSketch(t, w, pl1, diamond, nurbs)
+		body, err := New().Loft(t.Context(), s0, p0, s1, p1, opts...)
+		require.NoError(t, err)
+		return body
+	}
+
+	t.Run("degree-1 NURBS pair encloses the ruled body", func(t *testing.T) {
+		body := build(t, true)
+		lp := body.payload.(loftPayload)
+		require.Zero(t, lp.delta, "two unplaced XY planes through the origin's own axis lift exactly")
+		require.Zero(t, lp.sectionDelta, "a degree-1 NURBSSeg is its own chord")
+
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		requireRatCovered(t, vol, big.NewRat(160, 3))
+
+		cen, err := body.Centroid()
+		require.NoError(t, err)
+		requireCentroidCovers(t, cen, [3]*big.Rat{new(big.Rat), new(big.Rat), big.NewRat(45, 8)})
+
+		// The four walls are one bilinear patch each, congruent under the
+		// quarter turn, and the caps are exactly 4 and 8.
+		wall := bilinearAreaMidpoint(r3.NewVec(1, -1, 0), r3.NewVec(1, 1, 0), r3.NewVec(2, 0, 10), r3.NewVec(0, 2, 10), 1024)
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, math.Abs(12+4*wall-area.Value.Base()), area.Bound.Base(),
+			"Area must enclose the ruled walls, not the held triangle pairs")
+
+		require.Positive(t, lp.proof.facetDeparture,
+			"the held triangle pair stands for a twisted bilinear patch, so the mesh is not the boundary")
+	})
+
+	t.Run("LineSeg pair publishes the polyhedron", func(t *testing.T) {
+		body := build(t, false)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		require.Equal(t, Exact, vol.Exactness)
+		require.Equal(t, 40.0, vol.Value.Base())
+		requireRatCovered(t, vol, big.NewRat(40, 1))
+	})
+
+	// Verify's leg 4 admits a loft sheet only where the audited triangle set
+	// IS the surface. The NURBS sheet's walls are bilinear patches the audit
+	// never cleared, so the proof does not transfer.
+	t.Run("only the LineSeg sheet proves itself simple", func(t *testing.T) {
+		require.False(t, payloadProvesSimple(t.Context(), build(t, true, WithSurfaceResult()).payload))
+		require.True(t, payloadProvesSimple(t.Context(), build(t, false, WithSurfaceResult()).payload))
+	})
+}
+
 // --- fixtures and references ---
+
+// straightSidedSketch draws one closed loop through the fixed coords, each side
+// a LineSeg or, when nurbs is set, a degree-1 NURBSSeg over the same two
+// points.
+func straightSidedSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, coords [][2]float64, nurbs bool) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	pts := make([]*sketch.Point, len(coords))
+	for i, c := range coords {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		a, b := pts[i], pts[(i+1)%len(pts)]
+		if !nurbs {
+			s.CreateLine(a, b)
+			continue
+		}
+		_, err := s.CreateNURBS(1, []*sketch.Point{a, b}, nil, []float64{0, 0, 1, 1})
+		require.NoError(t, err)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
 
 // closedSplineSketch draws one closed cubic spline over six fixed control
 // points around the origin.

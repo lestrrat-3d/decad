@@ -965,8 +965,10 @@
 5	0.01	TestLoftChordCalibrationRowRecordsValueAndVerdict
 5	0.04	TestLoftCircularCellStationsRefusesOneSidedCollapse
 5	0.02	TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest
+5	0.03	TestLoftDegreeOneTwistedPairPublishesTheRuledBody
 5	0.40	TestLoftFitSplineWedgeMatchesExtrude
 5	0.30	TestLoftFitSplineWedgeVerifiesSound
+5	0.01	TestLoftFrameLiftRoundingChargedInDelta
 5	0.05	TestLoftFreeformMixedPairsRefuseS3
 5	0.05	TestLoftFreeformPairPastItsShareRefusesS15
 5	0.40	TestLoftFreeformReversedRangeBuildsTheSameStations

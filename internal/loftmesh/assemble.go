@@ -3,6 +3,7 @@ package loftmesh
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -44,6 +45,7 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 	wIdx := make([][]int, len(pairs))
 	var verts []r3.Vec
 	maxInputAbs := 0.0
+	maxLocal0, maxLocal1 := 0.0, 0.0
 	for i, p := range pairs {
 		if err := ctx.Err(); err != nil {
 			return Assembly{}, err
@@ -51,6 +53,7 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 		vIdx[i] = make([]int, len(p.V))
 		for j, pt := range p.V {
 			vIdx[i][j] = len(verts)
+			maxLocal0 = max(maxLocal0, math.Abs(pt.U), math.Abs(pt.V))
 			lifted := f0.ToWorldUV(pt.U, pt.V)
 			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := xform.Apply(lifted)
@@ -62,6 +65,7 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 		wIdx[i] = make([]int, len(p.W))
 		for j, pt := range p.W {
 			wIdx[i][j] = len(verts)
+			maxLocal1 = max(maxLocal1, math.Abs(pt.U), math.Abs(pt.V))
 			lifted := f1.ToWorldUV(pt.U, pt.V)
 			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := xform.Apply(lifted)
@@ -139,11 +143,22 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 		}
 	}
 
+	// docs/loft-design.md §5.2's delta row: the station's own rounding, the
+	// frame lift's, and the placement's, three stages committed one after
+	// the other, so a vertex's total departure is at most their sum.
+	liftAllow := max(FrameLiftRoundAllow(f0, maxLocal0), FrameLiftRoundAllow(f1, maxLocal1))
 	placeAllow := 0.0
 	if xform != r3.Identity() {
 		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
 	}
-	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
+	// A zero lift term is left out of the chain rather than summed in, so a
+	// build whose lift is exact keeps the bound AbsSumUpper's per-term nudge
+	// would otherwise widen.
+	roundAllow := placeAllow
+	if liftAllow > 0 {
+		roundAllow = proofbound.AbsSumUpper(liftAllow, placeAllow)
+	}
+	delta := proofbound.AbsSumUpper(stationRound, roundAllow)
 
 	return Assembly{
 		Verts: verts, Tris: tris, Walls: walls, CapStartCount: capStartCount,
@@ -151,4 +166,27 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 		Pts0: pts0, Pts1: pts1, LoopIdx0: loopIdx0, LoopIdx1: loopIdx1,
 		Delta: delta,
 	}, nil
+}
+
+// FrameLiftRoundAllow bounds the rounding Frame.ToWorldUV commits lifting one
+// plane-local station of magnitude at most maxLocalAbs through frame
+// (docs/loft-design.md §5.2's liftAllow row). The point a station denotes is
+// origin + u·U + v·V over exact rationals, and the held lift rounds two
+// products and two sums per coordinate, every intermediate under
+// |origin| + 2·maxLocalAbs. That is proofbound.RigidRoundAllow's own
+// plane-frame-lift reading, read at the frame origin's magnitude.
+//
+// It is exactly zero only where every lifted coordinate is computed exactly:
+// U and V the first two standard basis vectors AND the origin's X and Y both
+// zero. Then x = 0 + u·1 + v·0 is u, y is v, and z = origin.Z + u·0 + v·0 is
+// origin.Z, whatever the station. An axis-aligned frame alone does not earn
+// the zero: x = origin.X + u rounds whenever that sum is not representable,
+// which is why this is not proofbound.FrameAndPlacementRoundAllow, whose
+// fast path exempts any axis-aligned frame.
+func FrameLiftRoundAllow(frame r3.Frame, maxLocalAbs float64) float64 {
+	o := frame.Origin()
+	if frame.U() == r3.NewVec(1, 0, 0) && frame.V() == r3.NewVec(0, 1, 0) && o.X == 0 && o.Y == 0 {
+		return 0
+	}
+	return proofbound.RigidRoundAllow(maxLocalAbs, proofbound.VecMaxAbs(o))
 }

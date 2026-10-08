@@ -898,7 +898,10 @@ func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
 // simplicity of the chord mesh does not transfer to the curved surface it
 // stands for, and the answer is undecided rather than violated — the
 // identical reading a nonzero sectionDelta gives a prism, restated here
-// because a loft's own displacement is section-plane rather than axial.
+// because a loft's own displacement is section-plane rather than axial. A
+// chorded loft at zero sectionDelta (a degree-1 free-form pair) is undecided
+// for the same reason: each wall cell denotes the bilinear ruled patch
+// through its four corners, and the audit cleared the triangle pair instead.
 //
 // A chainLoftPayload records only the held flat ribbon triangles. Its build
 // runs the complete crossing audit before committing a body, and placement
@@ -951,7 +954,7 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 	case prismPayload:
 		return pp.surfaceResult && pp.sectionDelta == 0
 	case loftPayload:
-		return pp.surfaceResult && pp.sectionDelta == 0
+		return pp.surfaceResult && pp.sectionDelta == 0 && !pp.chorded
 	case chainLoftPayload:
 		return true
 	case stitchPayload:

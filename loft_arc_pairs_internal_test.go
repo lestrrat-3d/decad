@@ -290,7 +290,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	pairs := []loftLoopPair{{
 		v: make([]Point2, n), w: make([]Point2, n),
 		arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta,
-		tangentEnergyV: energyV, tangentEnergyW: energyW,
+		tangentEnergyV: energyV, tangentEnergyW: energyW, faceted: make([]bool, n),
 	}}
 
 	anchor := r3.NewVec(0, 0, 0)

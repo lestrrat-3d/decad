@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"slices"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -57,14 +59,16 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // per-cell reading (freeform.PairChainStations), which can differ cell to cell
 // within one paired segment where the bisection settled at different depths.
 //
-// computeLoftChordedAllow (loft_moments.go) reads all three to charge
-// docs/loft-design.md §5/§8's chorded volume/centroid/area terms only where a
-// genuine chord-to-curve departure exists (matchedDelta[j] > 0), never on an
-// exact LineSeg cell. THIS GATE IS NEVER KEYED ON A SEGMENT KIND: a same-kind
-// pairing this evaluator later admits that carries a positive matchedDelta
-// must be charged regardless of which arm produced it, so the gate reads the
-// proven quantity itself rather than an enum a future arm could be silently
-// exempted from (a10-plan.md Part 3 PR 9 Task 1a).
+// faceted is parallel to v/w too: true exactly for a LineSeg pair's cell,
+// whose held triangle pair IS the boundary §5 gives it.
+// computeLoftChordedAllow (loft_moments.go) charges docs/loft-design.md
+// §5/§8's chorded volume/centroid/area terms on every cell EXCEPT a faceted
+// one with a zero chord-to-curve departure. A circular or free-form cell is
+// charged even at a zero departure, because it stands for the bilinear ruled
+// patch through its four held corners, which a twisted pair of straight sides
+// does not hold flat. The exemption names the one arm proven faceted, so an
+// arm added later is charged by default, and a positive matchedDelta is
+// charged whatever the flag says.
 type loftLoopPair struct {
 	v, w                 []Point2
 	arcUpperV, arcUpperW []float64
@@ -77,6 +81,7 @@ type loftLoopPair struct {
 	// +Inf where the arm that placed the stations proves no such bound, which
 	// costs that helper its sharper arm and never its soundness.
 	tangentEnergyV, tangentEnergyW []float64
+	faceted                        []bool
 }
 
 // loftPairings adapts the internal paired station chains for root consumers.
@@ -96,7 +101,20 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]survey
 			arcUpperV: pair.ArcUpperV, arcUpperW: pair.ArcUpperW,
 			matchedDelta:   pair.MatchedDelta,
 			tangentEnergyV: pair.TangentEnergyV, tangentEnergyW: pair.TangentEnergyW,
+			faceted: pair.Faceted,
 		}
 	}
 	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
+}
+
+// loftHasUnfacetedCell reports whether any cell of pairs stands for a ruled
+// patch rather than its own held triangle pair: every cell a circular or
+// free-form pair placed (loftLoopPair.faceted).
+func loftHasUnfacetedCell(pairs []loftLoopPair) bool {
+	for _, p := range pairs {
+		if slices.Contains(p.faceted, false) {
+			return true
+		}
+	}
+	return false
 }

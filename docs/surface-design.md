@@ -1618,7 +1618,10 @@ superset with no further proof needed. A positive section displacement (that
 loft's own `sectionDelta`) means the body denotes a curved surface the held
 chords are only within that displacement of, so simplicity of the chord mesh
 does not transfer to the surface it stands for, and the fourth leg is
-undecided rather than violated there too. A revolve sheet earns the fourth
+undecided rather than violated there too. A loft holding a CHORDED cell
+(`docs/loft-design.md` §5.2) at zero `sectionDelta`, a degree-1 free-form
+pair, is undecided on the same reading: each wall cell denotes a bilinear
+ruled patch, and the audit cleared the triangle pair instead. A revolve sheet earns the fourth
 leg on a different argument, since its own build runs no crossing audit over
 a triangle set at all: it admits when the sweep is exactly one full turn
 (`full == true`) AND the recorded profile's radial minimum about the resolved
