@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
@@ -474,11 +475,11 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 
 	var wallReading, radiusReading *Measurement
 	if surveys.Wall.reading != nil {
-		m := lengthMeasurement(*surveys.Wall.reading, surveys.Wall.bound)
+		m := reportvocab.LengthMeasurement(*surveys.Wall.reading, surveys.Wall.bound)
 		wallReading = &m
 	}
 	if surveys.Radius.reading != nil {
-		m := lengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
+		m := reportvocab.LengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
 		radiusReading = &m
 	}
 

@@ -3,7 +3,6 @@ package decad
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
@@ -628,48 +627,9 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			return surveyResults{}, nil, err
 		}
 		results.Wall = out
-		var wallDiags []Diagnostic
-		switch {
-		case !out.ok:
-			wallDiags = append(wallDiags, surveyRefusalDiagnostic(
-				b,
-				SurveyWall,
-				out.reason,
-				DiagUndecidedWall,
-				"the wall survey could neither answer nor prove no wall exists",
-				"facetedPayload wall survey support is not implemented; use an analytic body or wait for faceted wall support",
-				"wall",
-			))
-		case out.reading != nil:
-			m := lengthMeasurement(*out.reading, out.bound)
-			tool := cfg.Wall.Tool
-			switch intervalVerdict(*out.reading, out.bound, cfg.ToolMM) {
-			case -1:
-				obs := m
-				wallDiags = append(wallDiags, Diagnostic{
-					Code:     DiagWallTooThin,
-					Status:   Violating,
-					Body:     b,
-					Survey:   SurveyWall,
-					Reading:  ReadingWall,
-					Observed: &obs,
-					Required: &tool,
-					Message:  "the minimum wall thickness is proven below the tool",
-				})
-			case 0:
-				obs := m
-				wallDiags = append(wallDiags, Diagnostic{
-					Code:     DiagUndecidedWall,
-					Status:   Suspect,
-					Body:     b,
-					Survey:   SurveyWall,
-					Reading:  ReadingWall,
-					Observed: &obs,
-					Required: &tool,
-					Message:  "the minimum wall thickness interval straddles the tool",
-				})
-			}
-		}
+		wallDiags := reportvocab.WallDiagnostics[*Body, JointCell](b, b.payload,
+			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
+			cfg.Wall.Tool, cfg.ToolMM)
 		results.WallDiagnostics = wallDiags
 		diags = append(diags, wallDiags...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
@@ -697,33 +657,9 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Undercut = out
-		var undercutDiags []Diagnostic
-		if out.ok {
-			if len(out.faces) > 0 {
-				// An undercut is a predicate, not a scalar; the outcome's own
-				// face list already names them, so the pair emits one
-				// DiagUndercut naming the body.
-				undercutDiags = append(undercutDiags, Diagnostic{
-					Code:    DiagUndercut,
-					Status:  Violating,
-					Body:    b,
-					Survey:  SurveyUndercut,
-					Reading: ReadingNone,
-					Message: "a face is a proven undercut against the pull",
-				})
-			}
-		}
-		if !out.ok || out.undecided {
-			undercutDiags = append(undercutDiags, surveyRefusalDiagnostic(
-				b,
-				SurveyUndercut,
-				out.reason,
-				DiagUndecidedUndercut,
-				"the pull survey could neither prove nor exclude an undercut",
-				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
-				"pull",
-			))
-		}
+		undercutDiags := reportvocab.UndercutDiagnostics[*Body, *Face, JointCell](b, b.payload,
+			reportvocab.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
+				Undecided: out.undecided, Reason: out.reason})
 		results.UndercutDiagnostics = undercutDiags
 		diags = append(diags, undercutDiags...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
@@ -752,18 +688,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Radius = out
-		var radiusDiags []Diagnostic
-		if !ok || !out.ok {
-			radiusDiags = append(radiusDiags, surveyRefusalDiagnostic(
-				b,
-				SurveyConcaveRadius,
-				out.reason,
-				DiagUndecidedMinRadius,
-				"the concave-radius survey could neither measure nor exclude a concave feature",
-				"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
-				"concave-radius",
-			))
-		}
+		radiusDiags := reportvocab.RadiusDiagnostics[*Body, JointCell](b, b.payload,
+			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
 		results.RadiusDiagnostics = radiusDiags
 		diags = append(diags, radiusDiags...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
@@ -772,67 +698,4 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 	}
 
 	return results, diags, nil
-}
-
-// surveyRefusalDiagnostic builds the one diagnostic an asked survey emits
-// when it cannot answer at all (verification §1.1): undecidedCode/Message for
-// a numerically or geometrically undecided proof, DiagUnsupportedSurveyPayload
-// for a known payload capability gap — facetedMessage for a facetedPayload
-// operand, or a message this function derives from the body's own payload
-// type and surveyNoun (e.g. "wall", "pull", "concave-radius") for any other
-// explicit unsupported-payload dispatch (proposal §16).
-func surveyRefusalDiagnostic(
-	body *Body,
-	survey SurveyKind,
-	reason surveyReason,
-	undecidedCode DiagnosticCode,
-	undecidedMessage string,
-	facetedMessage string,
-	surveyNoun string,
-) Diagnostic {
-	code, message := undecidedCode, undecidedMessage
-	switch reason {
-	case surveyFacetedUnsupported:
-		code, message = DiagUnsupportedSurveyPayload, facetedMessage
-	case surveyPayloadStaged:
-		class := payloadClassName(body.payload)
-		code = DiagUnsupportedSurveyPayload
-		message = fmt.Sprintf(
-			"%s %s survey support is not implemented; use an analytic body or wait for wider %s survey support",
-			class, surveyNoun, class)
-	}
-	return Diagnostic{
-		Code:    code,
-		Status:  Suspect,
-		Body:    body,
-		Survey:  survey,
-		Reading: ReadingNone,
-		Message: message,
-	}
-}
-
-// payloadClassName names payload's Go type without its package qualifier —
-// the bare shape ("facetedPayload", "loftPayload") an unsupported-survey
-// diagnostic message already uses.
-func payloadClassName(payload any) string {
-	name := fmt.Sprintf("%T", payload)
-	if i := strings.LastIndexByte(name, '.'); i >= 0 {
-		return name[i+1:]
-	}
-	return name
-}
-
-// lengthMeasurement wraps a survey reading with the PROVEN bound its own arm
-// computed: Exact only where that arm's own arithmetic proved bound zero,
-// Approximate otherwise — never asserted (docs/verification-design.md §6).
-func lengthMeasurement(mm, bound float64) Measurement {
-	return reportvocab.LengthMeasurement(mm, bound)
-}
-
-// intervalVerdict decides a stated spec on the proven interval
-// [value − bound, value + bound] against the tool (verification §6): −1 is
-// proven thin (every admissible thickness under the tool), +1 is met
-// (exactly tool-thick is not thinner), 0 is a straddle — undecided.
-func intervalVerdict(value, bound, tool float64) int {
-	return reportvocab.IntervalVerdict(value, bound, tool)
 }
