@@ -124,11 +124,11 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
+	ig, err := pp.profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	if ig.area <= 0 {
+	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
@@ -178,8 +178,8 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		origins:       []FeatureRef{{producer: ref, Role: rolePatch}},
 		body:          body,
 		loops:         faceLoops,
-		area:          ig.area,
-		areaBound:     ig.areaBound,
+		area:          ig.Area,
+		areaBound:     ig.AreaBound,
 		axialDelta:    0,
 		hasAxialDelta: true,
 	}
@@ -191,9 +191,9 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(ig.area),
-		Exactness: exactnessOf(ig.areaBound),
-		Bound:     units.SquareMillimeters(ig.areaBound),
+		Value:     units.SquareMillimeters(ig.Area),
+		Exactness: exactnessOf(ig.AreaBound),
+		Bound:     units.SquareMillimeters(ig.AreaBound),
 	}
 	// volume and centroid stay at their zero value: finite, so
 	// validateAnalyticBodyMeasurements below passes, and neither is

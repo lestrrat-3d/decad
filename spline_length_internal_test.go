@@ -623,14 +623,14 @@ func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 
 	pre, err := validateMomentFields(record)
 	require.NoError(t, err, "the preflight admits this record")
-	require.Greater(t, pre.work.Spent, freeform.FreeformWorkLimit/2,
+	require.Greater(t, pre.Work.Spent, freeform.FreeformWorkLimit/2,
 		"the fixture is sized so the preflight alone spends most of the record's ceiling")
 
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
 	start := time.Now()
-	_, err = walkOf(seg, pre.work)
+	_, err = walkOf(seg, pre.Work)
 	elapsed := time.Since(start)
 	runtime.ReadMemStats(&after)
 

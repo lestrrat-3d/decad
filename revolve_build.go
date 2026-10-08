@@ -317,12 +317,12 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (proofbound.BoundedScalar, pr
 	aU, aV := proofbound.MeasuredScalar(ax.aU, ax.aUBound), proofbound.MeasuredScalar(ax.aV, ax.aVBound)
 	dU, dV := proofbound.MeasuredScalar(ax.dU, ax.dUBound), proofbound.MeasuredScalar(ax.dV, ax.dVBound)
 	nU, nV := proofbound.MeasuredScalar(-ax.dV, ax.dVBound), proofbound.MeasuredScalar(ax.dU, ax.dUBound)
-	area := proofbound.MeasuredScalar(ig.area, ig.areaBound)
-	mu := proofbound.MeasuredScalar(ig.mu, ig.muBound)
-	mv := proofbound.MeasuredScalar(ig.mv, ig.mvBound)
-	muu := proofbound.MeasuredScalar(ig.muu, ig.muuBound)
-	muv := proofbound.MeasuredScalar(ig.muv, ig.muvBound)
-	mvv := proofbound.MeasuredScalar(ig.mvv, ig.mvvBound)
+	area := proofbound.MeasuredScalar(ig.Area, ig.AreaBound)
+	mu := proofbound.MeasuredScalar(ig.Mu, ig.MuBound)
+	mv := proofbound.MeasuredScalar(ig.Mv, ig.MvBound)
+	muu := proofbound.MeasuredScalar(ig.Muu, ig.MuuBound)
+	muv := proofbound.MeasuredScalar(ig.Muv, ig.MuvBound)
+	mvv := proofbound.MeasuredScalar(ig.Mvv, ig.MvvBound)
 
 	iuu := proofbound.BoundedAdd(
 		proofbound.BoundedSub(muu, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), aU), mu)),
@@ -410,11 +410,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err := requireExactRevolveSection(rp, "a profile-fed revolve"); err != nil {
 		return nil, err
 	}
-	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, freeform.MomentSecondOrder, work)
+	ig, err := rp.profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentSecondOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	if ig.area <= 0 {
+	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 	// Every reading below integrates the RECORDED region while every face below
@@ -425,7 +425,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// since those are the coordinates their envelopes were proven in. Every one
 	// of the four is exactly zero for a profile whose on-axis endpoints already
 	// sit on the axis.
-	ig.areaBound = proofbound.AbsSumUpper(ig.areaBound, rp.ax.snap.area)
+	ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, rp.ax.snap.area)
 	sweep := rp.sweep()
 	dphi := sweep.Value
 	if dphi <= 0 {
@@ -475,7 +475,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		//
 		// capAdmitAllow is revolveAxisAdmitBandCharge's own term (above): each
 		// cap face's LOOP is walked from the axis-snapped profile, while its
-		// area here is ig.area, the Pappus engine's own integral over the
+		// area here is ig.Area, the Pappus engine's own integral over the
 		// UNSNAPPED recorded one. The two agree exactly wherever
 		// rp.ax.radialAdmitAllow is zero — every axis-aligned fixture — and
 		// otherwise this is what keeps the published cap area from claiming a
@@ -485,16 +485,16 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			surface:     Plane{Frame: startFrame},
 			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:        body,
-			area:        ig.area,
-			areaBound:   proofbound.AbsSumUpper(ig.areaBound, capAdmitAllow),
+			area:        ig.Area,
+			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi0Delta(),
 		}
 		capEnd = &Face{
 			surface:     Plane{Frame: endFrame},
 			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:        body,
-			area:        ig.area,
-			areaBound:   proofbound.AbsSumUpper(ig.areaBound, capAdmitAllow),
+			area:        ig.Area,
+			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
 		}
 	}

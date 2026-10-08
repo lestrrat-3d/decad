@@ -724,7 +724,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	if err != nil {
 		return nil, err
 	}
-	if ig.area <= 0 {
+	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: a Body.Patch chain encloses no area`, ErrDegenerate)
 	}
 
@@ -746,8 +746,8 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		surface:   Plane{Frame: frame},
 		origins:   []FeatureRef{{producer: ref, Role: rolePatch}},
 		loops:     []*Loop{{coedges: coedges, outer: true}},
-		area:      ig.area,
-		areaBound: ig.areaBound,
+		area:      ig.Area,
+		areaBound: ig.AreaBound,
 		// A chain gate 3's level arm admitted has a proven-bounded plane
 		// origin, never a zero one: the same fields prism_build.go already
 		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
@@ -764,7 +764,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 // docs/surface-design.md §5.1 already states for a sketch-recorded patch.
 func patchChainIntegrals(ctx context.Context, segs []CurveSegment) (regionIntegrals, error) {
 	work := freeform.NewFreeformWork()
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}.evaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
 }
 
 // patchRemapCrossingError maps fillet_audit.go's own [ErrUnsupported] boundary

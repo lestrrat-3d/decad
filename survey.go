@@ -576,20 +576,20 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 	if len(oLoops) != len(cLoops) {
 		return wallOutcome{}, nil
 	}
-	if oi, err := cp.outer.integralsBudget(budget); err != nil {
+	if oi, err := cp.outer.IntegralsBudget(budget); err != nil {
 		if isCancellation(err) {
 			return wallOutcome{}, err
 		}
 		return wallOutcome{}, nil
-	} else if oi.area <= 0 || !finite(oi.area) {
+	} else if oi.Area <= 0 || !finite(oi.Area) {
 		return wallOutcome{}, nil
 	}
-	if ci, err := cp.cavity.integralsBudget(budget); err != nil {
+	if ci, err := cp.cavity.IntegralsBudget(budget); err != nil {
 		if isCancellation(err) {
 			return wallOutcome{}, err
 		}
 		return wallOutcome{}, nil
-	} else if ci.area <= 0 || !finite(ci.area) {
+	} else if ci.Area <= 0 || !finite(ci.Area) {
 		return wallOutcome{}, nil
 	}
 

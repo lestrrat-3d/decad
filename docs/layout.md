@@ -83,7 +83,7 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | Moment readings and record checks. See evaluator §4. |
+| `moments.go` / `moments_validate.go` | Moment aliases and adapters. See evaluator §4. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md` §2–§3. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
@@ -92,7 +92,6 @@ the rules leave to the byte budget.
 | `moments_circular.go` | Adapts circle and arc records to `internal/circularbounds/`. |
 | `spline_bezier.go` | Charges sketch reconstruction and adapts `internal/splinebezier/`. See `docs/spline-design.md` §5.1. |
 | `spline_fit.go` | Adapts fit-spline conversion from `internal/splinebezier/`. See `docs/spline-design.md` §5.1.2. |
-| `spline_moments.go` | Adapts free-form moments. See spline §5.1. |
 
 ### Features
 
@@ -292,7 +291,7 @@ the rules leave to the byte budget.
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentinput/` | Validates moment inputs. See spline §5.2. |
+| `internal/momentinput/` | Owns profile records, validation and measurements. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Chords, prism/cup topology, mesh bounds, cap-blend rings and audits. |

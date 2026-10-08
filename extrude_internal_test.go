@@ -670,7 +670,7 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 		LineSeg{Start: Point2{}, End: Point2{U: 2}, TStart: 0, TEnd: 1},
 	}}}
 	work := freeform.NewFreeformWork()
-	_, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, work)
+	_, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)
 	require.NoError(t, err)
 	spent := work.Spent
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
@@ -692,7 +692,7 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 func BenchmarkMomentAreaInvoluteFit(b *testing.B) {
 	profile := involuteFitProfile()
 	for b.Loop() {
-		if _, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork()); err != nil {
+		if _, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork()); err != nil {
 			b.Fatal(err)
 		}
 	}

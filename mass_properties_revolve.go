@@ -80,7 +80,7 @@ func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (massmoment.Mo
 		return massmoment.Moments{}, err
 	}
 
-	ig, err := rp.profile.evaluatorIntegralsContext(ctx, freeform.MomentThirdOrder, nil)
+	ig, err := rp.profile.EvaluatorIntegralsContext(ctx, freeform.MomentThirdOrder, nil)
 	if err != nil {
 		return massmoment.Moments{}, err
 	}
@@ -178,7 +178,7 @@ func revolveSectionMoments(ig regionIntegrals) ([4][4]proofbound.RatInterval, er
 	if err != nil {
 		return m, err
 	}
-	third, ok := ig.thirdMoments()
+	third, ok := ig.ThirdMoments()
 	if !ok {
 		return m, fmt.Errorf("%w: revolve section has no third-order moment enclosure", ErrUnsupported)
 	}

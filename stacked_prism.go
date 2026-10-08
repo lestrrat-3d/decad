@@ -578,11 +578,11 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 	var parts []stackedPart
 	for k, slab := range sp.slabs {
 		for r, region := range slab.regions {
-			ig, err := region.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
+			ig, err := region.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 			if err != nil {
 				return nil, err
 			}
-			if ig.area <= 0 {
+			if ig.Area <= 0 {
 				return nil, fmt.Errorf(`%w: slab %d region %d has no material area`, ErrDegenerate, k, r)
 			}
 			perimeter := proofbound.BoundedScalar{}
@@ -595,10 +595,10 @@ func evalStackedContext(ctx context.Context, d *Document, ref producerID, sp sta
 				walks += len(columns[ci].loop.Segments)
 			}
 			part := stackedPart{slab: k, region: r}
-			part.area = proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(ig.areaBound,
+			part.area = proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(ig.AreaBound,
 				proofbound.SectionDisplacementArea(sp.sectionDelta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))))
-			u := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
-			v := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+			u := proofbound.BoundedQuotient(ig.Mu, ig.MuBound, ig.Area, ig.AreaBound)
+			v := proofbound.BoundedQuotient(ig.Mv, ig.MvBound, ig.Area, ig.AreaBound)
 			u.Bound = proofbound.AbsSumUpper(u.Bound, sp.sectionDelta)
 			v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
 			mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.z0, slab.z0Delta),

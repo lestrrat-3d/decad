@@ -1,6 +1,9 @@
 package decad
 
-import "github.com/lestrrat-3d/decad/internal/sectionrecord"
+import (
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+)
 
 // Structural curve records are defined in internal/sectionrecord. These aliases
 // expose their definitions through decad.
@@ -12,11 +15,8 @@ type PlaneRecord = sectionrecord.PlaneRecord
 type Point2 = sectionrecord.Point2
 
 // ProfileRecord is a structural plane-local region: one outer loop and its
-// holes. The evaluator defines its measurement methods in the root package.
-type ProfileRecord struct {
-	Outer LoopRecord   `json:"outer"`
-	Holes []LoopRecord `json:"holes,omitempty"`
-}
+// holes. Its measurement methods integrate validated records in momentinput.
+type ProfileRecord = momentinput.Profile
 
 // LoopRecord is one closed directed boundary walk.
 type LoopRecord = sectionrecord.LoopRecord

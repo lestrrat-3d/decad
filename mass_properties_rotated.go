@@ -126,7 +126,7 @@ func prismMidLevel(pp prismPayload) (*big.Rat, error) {
 // rational intervals: exact when the moment engine certified every field
 // exactly, else each held value widened by its own published bound.
 func prismSectionMoments(ctx context.Context, pp prismPayload) ([6]proofbound.RatInterval, error) {
-	ig, err := pp.profile.evaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, nil)
+	ig, err := pp.profile.EvaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, nil)
 	if err != nil {
 		return [6]proofbound.RatInterval{}, err
 	}
@@ -139,12 +139,12 @@ func prismSectionMoments(ctx context.Context, pp prismPayload) ([6]proofbound.Ra
 
 func sectionMomentInputs(ig regionIntegrals) massmoment.SectionInputs {
 	input := massmoment.SectionInputs{Bounded: [6]proofbound.BoundedScalar{
-		{Value: ig.area, Bound: ig.areaBound}, {Value: ig.mu, Bound: ig.muBound}, {Value: ig.mv, Bound: ig.mvBound},
-		{Value: ig.muu, Bound: ig.muuBound}, {Value: ig.muv, Bound: ig.muvBound}, {Value: ig.mvv, Bound: ig.mvvBound},
+		{Value: ig.Area, Bound: ig.AreaBound}, {Value: ig.Mu, Bound: ig.MuBound}, {Value: ig.Mv, Bound: ig.MvBound},
+		{Value: ig.Muu, Bound: ig.MuuBound}, {Value: ig.Muv, Bound: ig.MuvBound}, {Value: ig.Mvv, Bound: ig.MvvBound},
 	}}
-	if !ig.exactDead && ig.exact.Complete() {
+	if !ig.ExactDead && ig.Exact.Complete() {
 		input.ExactAvailable = true
-		input.Exact = ig.exact.Fields()
+		input.Exact = ig.Exact.Fields()
 	}
 	return input
 }
