@@ -388,13 +388,14 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10a wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0, "the achieved margin must exceed 1x for a Sound verdict")
-	// Centroid is the binding reading at a measured ~2.19x after the moment
-	// proof separates the wall and twist swept measures and applies each
-	// measure's own coordinate radius. Pinned with generous slack
+	// Centroid is the binding reading at a measured ~2.92x at the 75 stations
+	// the feature-size chord target settles this wedge on
+	// (loftChordFractionPinM). Pinned with generous slack
 	// since a fraction-of-a-ulp difference in composed bound arithmetic
 	// between hosts must never flip this assertion (never a wall-clock or
 	// exact-bit pin — CLAUDE.md's own host-portability rule).
-	require.InEpsilon(t, 2.19, margin, 0.25,
+	require.Equal(t, "Centroid", reading)
+	require.InEpsilon(t, 2.92, margin, 0.25,
 		"the achieved margin at the shipped constant, pinned so a future change to the moment formula is caught")
 }
 
@@ -469,7 +470,8 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -680,7 +682,8 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
@@ -753,7 +756,8 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
+		recordArea: loftRecordAreasOrZero(p, p),
+		plane0:     pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}

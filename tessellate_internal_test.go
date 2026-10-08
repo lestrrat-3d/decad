@@ -348,14 +348,15 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 		t.Run(row.name, func(t *testing.T) {
 			// The exact bound, over the rationals: radius and sweep are
 			// float64 and hence exact rationals, and 8n² is an exact integer.
-			exact := new(big.Rat).Mul(ratOfFloat(row.radius), new(big.Rat).Mul(ratOfFloat(row.sweep), ratOfFloat(row.sweep)))
+			exact := new(big.Rat).Mul(new(big.Rat).SetFloat64(row.radius),
+				new(big.Rat).Mul(new(big.Rat).SetFloat64(row.sweep), new(big.Rat).SetFloat64(row.sweep)))
 			nRat := new(big.Rat).SetInt64(int64(row.n))
 			exact.Quo(exact, new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat)))
 			require.Equal(t, 1, exact.Sign(), "the fixture must carry a genuinely positive exact sagitta")
 
 			got := chordSagitta(row.radius, row.sweep, row.n)
 			require.Positive(t, got, "a positive radius, sweep and n must never publish a zero sagitta")
-			require.GreaterOrEqual(t, ratOfFloat(got).Cmp(exact), 0,
+			require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(exact), 0,
 				"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must stay at or above the exact bound %s",
 				row.radius, row.sweep, row.n, got, exact.FloatString(410))
 		})

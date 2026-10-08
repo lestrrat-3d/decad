@@ -91,7 +91,7 @@ func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 		return nil, err
 	}
 	work := freeform.NewFreeformWork()
-	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

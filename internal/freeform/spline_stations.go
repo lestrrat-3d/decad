@@ -158,10 +158,15 @@ type PairChain struct {
 // needs beside the matched-departure bounds (docs/loft-design.md §5.2's
 // arcLenUpper_k and tangentEnergy_k rows). The
 // walk, its sharing of one dyadic cell set between the two sides, its
-// determinism and its charging are PairStations' own.
+// determinism and its charging are PairStations' own. It differs in what
+// decides a cell: it also bisects while either side's parameter-matched
+// departure exceeds target (SagittaStationWalk.Matched), so every entry of
+// MatchedDelta is at or below target, and Sagitta still reports the measured
+// sagitta maximum.
 func PairChainStations(spans0, spans1 []BezierSpan, target float64, limits PairChainLimits, work0, work1 *FreeformWork) (PairChain, error) {
 	reader := &PairCellReader{}
 	gen := NewSagittaStationWalk(target, reader, len(spans0), work0, work1)
+	gen.Matched = true
 	gen.Limit = limits.MaxChords
 	gen.Underivable = limits.Underivable
 	stations0, stations1, err := pairWalk(spans0, spans1, gen)
@@ -302,7 +307,9 @@ type FreeformChain struct {
 // (docs/spline-design.md §6.2.1). It is PairStations' single-chain twin —
 // same walk, same cap, same charge discipline, same termination argument — and
 // the primitive docs/tessellation-reach-design.md §5 gives chordLoop's
-// free-form arm.
+// free-form arm. It decides each cell on the sagitta alone: no consumer of a
+// single chain reads a parameter-matched departure, so the walk does not
+// measure one (SagittaStationWalk.Matched).
 //
 // Every guard PairStations states for a pair holds here for the one side: an
 // empty chain is ErrDegenerate, a chain of more spans than MaxChordsPerWalk
@@ -375,7 +382,16 @@ type SagittaStationWalk struct {
 	// reader records whatever ELSE each accepted cell owes its own consumer —
 	// the pair's matched-delta obligation, the chain's arc/chord bracket —
 	// which is the only place the two consumers' arithmetic differs.
-	Reader       StationCellReader
+	Reader StationCellReader
+	// Matched, when true, makes the walk measure each side's
+	// SpanMatchedDeltaUpper beside its sagitta, bisect while EITHER exceeds the
+	// target, and hand the accepted cell's matched value (the larger of the
+	// sides') to the reader. PairChainStations sets it, so every accepted
+	// cell's parameter-matched departure is at or below the target as a
+	// property of the walk (docs/loft-gear-bounds-design.md §5). PairStations
+	// and ChainStations leave it false: they decide on the sagitta alone and
+	// hand the reader 0.
+	Matched      bool
 	SagittaUpper float64
 	Chords       int
 	Frontier     int
@@ -414,24 +430,27 @@ func NewSagittaStationWalk(target float64, reader StationCellReader, spans int, 
 // walk itself measures, accepts and bisects; the reader takes each ACCEPTED
 // cell's own reconstructed spans, one per side, and records the reading its
 // consumer owes for that cell — in the same left-to-right cell order the
-// station lists carry.
+// station lists carry. matched is the cell's parameter-matched departure the
+// walk already measured to decide it (SagittaStationWalk.Matched), or 0 when
+// the walk does not measure one.
 //
 // It states no cost of its own either: every implementation below spends its
 // units inside the metered primitive that does the work.
 type StationCellReader interface {
-	AcceptCell(spans []BezierSpan, works []*FreeformWork) error
+	AcceptCell(spans []BezierSpan, matched float64, works []*FreeformWork) error
 }
 
 // PairMatchedDeltaReader is PairStations' reading: internal/proofbound/bounds.go's
 // proofbound.CellChordCurveAreaUpper matchedDeltaUpper obligation (F1's rule), one entry
 // per accepted cell, the larger of the two sides' own PARAMETER-MATCHED bounds
 // under the span-uniform native fraction — never the SET-distance sagitta the
-// walk measured to decide the cell.
+// walk measured to decide the cell. PairStations' walk decides on the sagitta
+// alone and hands it no matched value, so it measures one here.
 type PairMatchedDeltaReader struct {
 	MatchedDelta []float64
 }
 
-func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
+func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, _ float64, works []*FreeformWork) error {
 	md0, err := SpanMatchedDeltaUpper(works[0], spans[0])
 	if err != nil {
 		return err
@@ -444,20 +463,20 @@ func (r *PairMatchedDeltaReader) AcceptCell(spans []BezierSpan, works []*Freefor
 	return nil
 }
 
-// PairCellReader is PairChainStations' reading: PairMatchedDeltaReader's
-// per-cell matched-departure bound, plus each side's SpanSpeedUpper and
-// SpanTangentEnergyUpper over the same accepted dyadic sub-span, in the same
-// left-to-right cell order.
+// PairCellReader is PairChainStations' reading: the per-cell matched-departure
+// bound PairMatchedDeltaReader also records, plus each side's SpanSpeedUpper
+// and SpanTangentEnergyUpper over the same accepted dyadic sub-span, in the
+// same left-to-right cell order. PairChainStations' walk measures the matched
+// value to decide the cell (SagittaStationWalk.Matched), so this reader
+// records the value it is handed rather than measuring it again.
 type PairCellReader struct {
-	PairMatchedDeltaReader
+	MatchedDelta  []float64
 	ArcUpper      [2][]float64
 	TangentEnergy [2][]float64
 }
 
-func (r *PairCellReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
-	if err := r.PairMatchedDeltaReader.AcceptCell(spans, works); err != nil {
-		return err
-	}
+func (r *PairCellReader) AcceptCell(spans []BezierSpan, matched float64, works []*FreeformWork) error {
+	r.MatchedDelta = append(r.MatchedDelta, matched)
 	for side := range r.ArcUpper {
 		arc, err := SpanSpeedUpper(works[side], spans[side])
 		if err != nil {
@@ -486,7 +505,7 @@ type ChainArcChordReader struct {
 	ChordLower []float64
 }
 
-func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, works []*FreeformWork) error {
+func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, _ float64, works []*FreeformWork) error {
 	span, work := spans[0], works[0]
 	arc, err := SpanSpeedUpper(work, span)
 	if err != nil {
@@ -518,7 +537,11 @@ func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, works []*FreeformWo
 // The cell is decided on the WIDEST side's sagitta, so a pair is bisected
 // whenever either side misses the target and the two sides keep the identical
 // set of dyadic cell boundaries. A one-sided walk (ChainStations) reads that
-// same maximum over its single side.
+// same maximum over its single side. A walk with Matched set also measures
+// each side's SpanMatchedDeltaUpper and bisects while that maximum misses the
+// target, because a sagitta under the target bounds the matched departure by
+// no fixed factor (TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses); the
+// accepted cell's matched value goes to the reader with the spans.
 //
 // DyadicSpanSagittaUpperWithSpan reconstructs the accepted cell's own control
 // points exactly (DyadicSpan.RatPointAt), so every
@@ -543,6 +566,7 @@ func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, works []*FreeformWo
 func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 	spans := make([]BezierSpan, len(cells))
 	worst := 0.0
+	matched := 0.0
 	for i, cell := range cells {
 		sag, span, err := DyadicSpanSagittaUpperWithSpan(g.Works[i], cell)
 		if err != nil {
@@ -550,12 +574,20 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 		}
 		spans[i] = span
 		worst = math.Max(worst, sag)
+		if !g.Matched {
+			continue
+		}
+		md, err := SpanMatchedDeltaUpper(g.Works[i], span)
+		if err != nil {
+			return err
+		}
+		matched = math.Max(matched, md)
 	}
-	if g.Underivable != nil && proofbound.IsNonFinite(worst) {
+	if g.Underivable != nil && (proofbound.IsNonFinite(worst) || proofbound.IsNonFinite(matched)) {
 		return g.Underivable
 	}
-	if worst <= g.Target {
-		if err := g.Reader.AcceptCell(spans, g.Works); err != nil {
+	if worst <= g.Target && matched <= g.Target {
+		if err := g.Reader.AcceptCell(spans, matched, g.Works); err != nil {
 			return err
 		}
 		starts := make([]RatPoint, len(cells))

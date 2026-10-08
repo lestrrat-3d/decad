@@ -142,11 +142,11 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	margin := toleranceRel / ratio
 	t.Logf("A10b wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
 	require.Greater(t, margin, 1.0)
-	// Centroid binds at a measured ~1.99x once Area no longer does. Pinned
+	// Centroid binds at a measured ~3.32x once Area no longer does. Pinned
 	// with generous slack, the arc wedge's own rule, so host rounding never
 	// flips it.
 	require.Equal(t, "Centroid", reading)
-	require.InEpsilon(t, 1.99, margin, 0.25)
+	require.InEpsilon(t, 3.32, margin, 0.25)
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -218,9 +218,7 @@ func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
 func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftLoopPair, loftAssembly) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
-	require.NoError(t, err)
-	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	offsets, walks0, walks1, target, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), work0, work1)
 	require.NoError(t, err)
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
@@ -731,4 +729,34 @@ func signedMeshVolume(verts []r3.Vec, tris [][3]int) float64 {
 		sum += a.Dot(b.Cross(c))
 	}
 	return sum / 6
+}
+
+// TestLoftFreeformWalkBisectsOnMatched pins docs/loft-gear-bounds-design.md
+// §5's matched bisection on the loft's free-form station walk
+// (loftmesh.FreeformCellPoints over freeform.PairChainStations). The pair is
+// zigzagHuggingSpan with itself: every control point lies on the chord, so its
+// sagitta is 0 at every depth and a walk deciding on the sagitta alone accepts
+// the whole span as one cell, while its parameter-matched departure is above
+// 0.3 (TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses). The walk must
+// bisect until every accepted cell's matched value is at or below the target.
+//
+// Shown to fail: with PairChainStations leaving SagittaStationWalk.Matched
+// false, the walk accepts one cell and the cell-count assertion fails.
+func TestLoftFreeformWalkBisectsOnMatched(t *testing.T) {
+	t.Parallel()
+	w := survey2d.SegmentWalk{Kind: survey2d.WalkFreeform, Spans: []freeform.BezierSpan{zigzagHuggingSpan()}}
+	const target = 1e-2
+	cell, err := loftmesh.FreeformCellPoints(w, w, target, freeform.MaxChordsPerWalk, nil, nil)
+	require.NoError(t, err)
+
+	require.Zero(t, cell.Sagitta, "the sagitta alone never asks this span for a bisection")
+	require.Greater(t, len(cell.MatchedDelta), 1, "the matched departure forces the bisection the sagitta does not")
+	require.Len(t, cell.Stations0, len(cell.MatchedDelta), "one station per accepted cell")
+	worst := 0.0
+	for k, md := range cell.MatchedDelta {
+		require.LessOrEqual(t, md, target, "cell %d's matched departure must meet the target", k)
+		worst = math.Max(worst, md)
+	}
+	require.Positive(t, worst, "the curve departs from its chords, so the recorded matched values cannot all be 0")
+	t.Logf("cells=%d worst matched=%.4g target=%g", len(cell.MatchedDelta), worst, target)
 }

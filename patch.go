@@ -90,7 +90,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	// Extrude: the area falsifier's preflight opens it and evalPatchContext's
 	// own walk resolution spends what is left (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
-	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)

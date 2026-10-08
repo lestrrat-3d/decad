@@ -376,8 +376,7 @@ func (r *rollingPairSweep) column(support rulingPlane, box rollingColumnBox, f *
 	S := &r.paths[r.s]
 	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.delta, f)
 	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	_, apart, err := planar.PlanarColumnClear(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
-	return apart, err
+	return planar.PlanarColumnApart(&solid, support.normal, S.startPoints[support.origin], lo, hi, poll)
 }
 
 func (r *rollingPairSweep) footInside(support rulingPlane, f, growth *big.Rat) bool {

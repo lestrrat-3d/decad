@@ -94,8 +94,11 @@ func TestColumnTriangleGapMatchesRationalForm(t *testing.T) {
 		lo, hi := [2]*big.Rat{bound(), bound()}, [2]*big.Rat{bound(), bound()}
 		corners := [4][2]*big.Rat{{lo[0], lo[1]}, {hi[0], lo[1]}, {lo[0], hi[1]}, {hi[0], hi[1]}}
 		want, wantOK := columnTriangleGapRational(tri, corners)
-		got, gotOK := columnTriangleGap(tri, newColumnBox(lo, hi))
+		projected := newColumnBox(lo, hi)
+		got, gotOK := columnTriangleGap(tri, projected, true)
 		require.Equal(t, wantOK, gotOK)
+		_, apart := columnTriangleGap(tri, projected, false)
+		require.Equal(t, wantOK, apart)
 		if !wantOK {
 			blocked++
 			continue
@@ -105,4 +108,35 @@ func TestColumnTriangleGapMatchesRationalForm(t *testing.T) {
 	}
 	require.Positive(t, separated, "premise: some triangles clear the box")
 	require.Positive(t, blocked, "premise: some triangles meet the box")
+	for range 1000 {
+		var tri [3][2]proof.Dyadic
+		fixed := rng.IntN(2)
+		at := coordinate()
+		for k := range tri {
+			tri[k] = [2]proof.Dyadic{coordinate(), coordinate()}
+			tri[k][fixed] = at
+		}
+		lo, hi := [2]*big.Rat{bound(), bound()}, [2]*big.Rat{bound(), bound()}
+		corners := [4][2]*big.Rat{{lo[0], lo[1]}, {hi[0], lo[1]}, {lo[0], hi[1]}, {hi[0], hi[1]}}
+		want, wantOK := columnTriangleGapRational(tri, corners)
+		projected := newColumnBox(lo, hi)
+		got, gotOK := columnTriangleGap(tri, projected, true)
+		require.Equal(t, wantOK, gotOK)
+		_, apart := columnTriangleGap(tri, projected, false)
+		require.Equal(t, wantOK, apart)
+		if wantOK {
+			require.Zero(t, want.Cmp(got), "%v vs %v", want, got)
+		}
+	}
+	// The diagonal is the only separating axis, but its float length is
+	// unbounded. Both modes must keep that axis unproved.
+	huge := proof.DyShift(proof.DyInt(1), 1024)
+	threeHuge := proof.DyMul(proof.DyInt(3), huge)
+	tri := [3][2]proof.Dyadic{{threeHuge, proof.DyZero()}, {proof.DyZero(), threeHuge}, {threeHuge, threeHuge}}
+	zero, top := new(big.Rat), huge.Rat()
+	box := newColumnBox([2]*big.Rat{zero, zero}, [2]*big.Rat{top, top})
+	_, withClearance := columnTriangleGap(tri, box, true)
+	_, apart := columnTriangleGap(tri, box, false)
+	require.False(t, withClearance)
+	require.Equal(t, withClearance, apart)
 }
