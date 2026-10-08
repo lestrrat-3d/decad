@@ -243,3 +243,61 @@ func polarFactor(m [3][3]*big.Float) [3][3]*big.Float {
 }
 
 func newWide() *big.Float { return new(big.Float).SetPrec(512) }
+
+// wideDet is the determinant of m.
+func wideDet(m [3][3]*big.Float) *big.Float {
+	minor := func(i, j, k, l int) *big.Float {
+		a := newWide().Mul(m[i][k], m[j][l])
+		return a.Sub(a, newWide().Mul(m[i][l], m[j][k]))
+	}
+	det := newWide().Mul(m[0][0], minor(1, 2, 1, 2))
+	det.Sub(det, newWide().Mul(m[0][1], minor(1, 2, 0, 2)))
+	return det.Add(det, newWide().Mul(m[0][2], minor(1, 2, 0, 1)))
+}
+
+// affineInertia is the inertia of the image of a solid under the linear map
+// m, its column k the image of local axis k, at the same density rho: from
+// the local inertia I the local second moment is S = (trace(I)/2·1 − I)/rho,
+// the image's is S′ = |det m|·m·S·mᵀ, and its inertia rho·(trace(S′)·1 − S′)
+// (docs/multibody-dynamics-design.md §8.6).
+func affineInertia(m, local [3][3]*big.Float, rho *big.Float) [3][3]*big.Float {
+	half := newWide().Add(newWide().Add(local[0][0], local[1][1]), local[2][2])
+	half.Quo(half, newWide().SetInt64(2))
+	var s [3][3]*big.Float
+	for i := range 3 {
+		for j := range 3 {
+			s[i][j] = newWide().Neg(local[i][j])
+			if i == j {
+				s[i][j].Add(s[i][j], half)
+			}
+			s[i][j].Quo(s[i][j], rho)
+		}
+	}
+	det := wideDet(m)
+	det.Abs(det)
+	var sp [3][3]*big.Float
+	for i := range 3 {
+		for j := range 3 {
+			sum := newWide()
+			for k := range 3 {
+				for l := range 3 {
+					term := newWide().Mul(m[i][k], m[j][l])
+					sum.Add(sum, term.Mul(term, s[k][l]))
+				}
+			}
+			sp[i][j] = sum.Mul(sum, det)
+		}
+	}
+	trace := newWide().Add(newWide().Add(sp[0][0], sp[1][1]), sp[2][2])
+	var out [3][3]*big.Float
+	for i := range 3 {
+		for j := range 3 {
+			out[i][j] = newWide().Neg(sp[i][j])
+			if i == j {
+				out[i][j].Add(out[i][j], trace)
+			}
+			out[i][j].Mul(out[i][j], rho)
+		}
+	}
+	return out
+}

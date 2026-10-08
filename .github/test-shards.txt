@@ -605,6 +605,7 @@
 3	0.10	TestPlacedGateDiameterChargesEveryPoint
 3	0.26	TestPlanarPairVerdictTouchNeedsZeroDisplacement
 3	0.00	TestPlanarReplayLowerGapChargesTravel
+3	0.10	TestPlaneMapReadingsCoverFrameDefect
 3	0.00	TestPointInBodyCancellationReachesTorusRootPath
 3	0.01	TestPolyArea2SignAgreesWithRationalArea
 3	0.00	TestPositiveAreaGateConsultsExactRational
@@ -699,6 +700,7 @@
 3	0.00	TestRevolveAxisBandVolumeContainsEnclosedVolume
 3	0.00	TestRevolveBoundsSharedProfileMatchesIndependentExtents
 3	0.00	TestRevolveBoundsSharedProfilePollsCancellation
+3	0.01	TestRevolveBoxChargesTheBasisRounding
 3	0.00	TestRevolveBudgetReservesBothCoordinateStages
 3	0.01	TestRevolveCarrierAxisGapExactRevolvesStayZero
 3	0.00	TestRevolveCellAreaSlackBracketsTheTrueJacobianGap
@@ -710,6 +712,7 @@
 3	0.00	TestRevolveIdealPointMeasuresTheConstructionRounding
 3	0.01	TestRevolveJunctionReachesArcNaturalEnd
 3	0.00	TestRevolveLoopsCancellationIsBounded
+3	0.01	TestRevolveMassCoversFrameDefect
 3	0.01	TestRevolveMassPropertiesRefusesUnchargedTerms
 3	0.00	TestRevolveMinRadiusNumeratorIsIntervalMinimum
 3	0.00	TestRevolvePayloadProvesSimple

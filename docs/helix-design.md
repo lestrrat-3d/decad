@@ -272,7 +272,13 @@ the plane-coordinate screw sweep under the affine map
 `x ↦ O + L·x`, `L = B·[U V N]`. r3 does not make `L` exactly orthonormal.
 `r3.NewFrame` and `r3.FromBasis` normalize in float64, so each stored axis is
 unit and orthogonal only to a few ulps, and `IsValid` admits a departure up
-to `1e-9`; `N` is the float cross product `U × V`. The build therefore reads
+to `1e-9`; `N` is the float cross product `U × V`, the same leaf the prism
+family's vertices and readings read (`docs/evaluator-design.md` §5.1). A
+revolve reads the exact `U × V` instead, because its sweep's own `E1` is a
+cross product (§6 there). Each payload's readings and its held vertices read
+the same three columns, so every reading covers the solid its own vertices
+denote, and the two conventions differ by `N`'s own rounding. The build
+therefore reads
 two numbers off `L`'s exact columns: `det L`, exactly, and the orthonormality
 defect `e`, the entrywise absolute sum of `LᵀL − I`. Every eigenvalue of
 `LᵀL` lies in `[1 − e, 1 + e]`, so `L` scales a length and an area by a

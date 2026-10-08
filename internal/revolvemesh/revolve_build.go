@@ -95,6 +95,50 @@ func (l RevolveLift) ExactPointRound(xform r3.Transform, z, rho, cos, sin float6
 	return proofbound.ExactRigidRound(basis, tr, local, held)
 }
 
+// BasisRound proves, exactly, how far b, which must be l.Basis(), sits from
+// the basis its construction denotes over the frame's origin, U and V and
+// the axis's AU, AV, DU and DV read as exact leaves, with E1 the exact cross
+// product of the exact W and E0: the L1 norm of each vector's per-component
+// gap, rounded up, in the order A3, W, E0, E1. A reading that treats b's
+// floats as its leaves owes these. Every entry is zero where Basis is exact
+// for the inputs at hand, and +Inf for a non-finite leaf.
+func (l RevolveLift) BasisRound(b RevolveBasis) [4]float64 {
+	origin, fu, fv := l.Frame.Origin(), l.Frame.U(), l.Frame.V()
+	inf := [4]float64{math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1)}
+	for _, w := range [...]r3.Vec{origin, fu, fv, b.A3, b.W, b.E0, b.E1} {
+		if !proofbound.FiniteVec(w) {
+			return inf
+		}
+	}
+	for _, f := range [...]float64{l.AU, l.AV, l.DU, l.DV} {
+		if proofbound.IsNonFinite(f) {
+			return inf
+		}
+	}
+	dy := proofarith.MustDyOf
+	o, du, dv := proofarith.DyVec(origin), proofarith.DyVec(fu), proofarith.DyVec(fv)
+	aU, aV, dU, dV := dy(l.AU), dy(l.AV), dy(l.DU), dy(l.DV)
+	var a3, w, e0 proofarith.DyV3
+	for i := range 3 {
+		a3[i] = proofarith.DyAdd(o[i], proofarith.DyAdd(proofarith.DyMul(du[i], aU), proofarith.DyMul(dv[i], aV)))
+		w[i] = proofarith.DyAdd(proofarith.DyMul(du[i], dU), proofarith.DyMul(dv[i], dV))
+		e0[i] = proofarith.DySubScalar(proofarith.DyMul(dv[i], dU), proofarith.DyMul(du[i], dV))
+	}
+	e1 := proofarith.DvCross(w, e0)
+	var out [4]float64
+	for k, pair := range [4]struct {
+		exact proofarith.DyV3
+		held  r3.Vec
+	}{{a3, b.A3}, {w, b.W}, {e0, b.E0}, {e1, b.E1}} {
+		gap := 0.0
+		for i := range 3 {
+			gap = proofbound.AbsSumUpper(gap, proofarith.DyadicFloatError(pair.exact[i], VecComponent(pair.held, i)))
+		}
+		out[k] = gap
+	}
+	return out
+}
+
 // AxisBound is the resolved axis's own proven displacement: how far each of
 // RevolveLift's AU, AV, DU and DV sits from the anchor and the unit direction
 // the record names (revolveaxis.Line2's four bounds).

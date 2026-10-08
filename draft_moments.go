@@ -111,5 +111,8 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		Bound:     units.Millimeters(centroidBound),
 	}
 	body.bounds = bounds
+	if err := chargePrismMap(body, dp.frame, dp.xform); err != nil {
+		return err
+	}
 	return validateAnalyticBodyMeasurements(body)
 }

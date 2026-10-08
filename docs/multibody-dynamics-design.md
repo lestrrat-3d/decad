@@ -1081,8 +1081,12 @@ reduction `circularMonomials`, Tier A spans in `spline_moments.go`. The plane mo
 `∫cos² φ`, `∫sin φ cos φ`, `∫sin² φ` over `[φ0, φ1]`, built from the payload's own sweep denotation
 (`sweepDenotation.widthInterval`, `angleDenotation.sinCosFor`); a full turn's endpoints have exact sine
 and cosine, so its odd factors vanish exactly and `π` enters through the width alone. Dynamic-mass §2.1
-names exactly these terms; partial turns keep their mixed components. The local tensor reaches world axes
-through §8.1's rotation and defect widening, and positivity is proved by the leading principal minors of
+names exactly these terms; partial turns keep their mixed components. The local moments reach world axes
+through `L`, the exact product of the placement basis and the local basis: the map the revolve's volume,
+area and vertices denote through (`docs/evaluator-design.md` §6), which is orthonormal only to rounding.
+`massmoment.AffineInertia` takes that map's exact image, not the nearest rigid rotation: the mass is
+`ρ·|det L|·V`, the centroidal second moment `|det L|·L·S·Lᵀ`, and the inertia `ρ·(trace(S′)·1 − S′)` of
+that moment `S′`, so no defect widening enters. Positivity is proved by the leading principal minors of
 the published tensor. The path refuses an inexact axis, a nonzero axis-snap or admitted-band allowance, an
 undenoted sweep end and a section displacement, none of which it charges.
 

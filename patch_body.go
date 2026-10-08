@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -588,6 +589,17 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			}
 		}
 	}
+	// The copies denote the source faces carried through the placement's held
+	// basis read exactly, which is orthonormal only to rounding, so every
+	// copied area and length widens by its defect (massmoment.MapCharge).
+	basis, err := massmoment.PlacementRotation(xform)
+	if err != nil {
+		return nil, nil, err
+	}
+	place, err := massmoment.MapChargeOf(basis)
+	if err != nil {
+		return nil, nil, err
+	}
 	newVertByOld := map[*Vertex]*Vertex{}
 	vertexFor := func(old *Vertex) (*Vertex, error) {
 		if nv, ok := newVertByOld[old]; ok {
@@ -630,6 +642,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
+		lengthBound = place.LengthBound(old.length, lengthBound)
 		ne := &Edge{
 			curve:           curve,
 			start:           start,
@@ -661,7 +674,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			surface:       surface,
 			origins:       append([]FeatureRef(nil), f.origins...),
 			area:          f.area,
-			areaBound:     f.areaBound,
+			areaBound:     place.AreaOf(proofbound.MeasuredScalar(f.area, f.areaBound)).Bound,
 			reversed:      f.reversed,
 			heldPlanar:    f.heldPlanar,
 			axialDelta:    axialDelta,
@@ -751,6 +764,17 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: a Body.Patch chain encloses no area`, ErrDegenerate)
 	}
+	// The integrals are taken in the fitted frame's plane coordinates, which
+	// that frame's held axes carry to world orthonormal only to rounding.
+	frameMap, err := massmoment.PrismRotation(frame, r3.Identity())
+	if err != nil {
+		return nil, err
+	}
+	frameCharge, err := massmoment.MapChargeOf(frameMap)
+	if err != nil {
+		return nil, err
+	}
+	ig.AreaBound = frameCharge.AreaOf(proofbound.MeasuredScalar(ig.Area, ig.AreaBound)).Bound
 
 	budget := proofbound.NewWorkBudget(ctx)
 	segEntries, err := buildSegEntriesBudget(budget, []LoopRecord{{Segments: segs}})

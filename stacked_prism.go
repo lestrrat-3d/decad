@@ -719,6 +719,9 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := chargePrismMap(body, sp.frame, sp.xform); err != nil {
+		return nil, err
+	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}

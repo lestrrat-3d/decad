@@ -420,6 +420,42 @@ revolve analog and lands there, §6/§11.) A nonzero
 other extent. `docs/draft-design.md` owns the tapered extrude: its sharp
 offset family, its `draftPayload`, its refusals and its staging.
 
+### 5.1 The denoted map
+
+Every prism-family build integrates its readings in plane coordinates, while
+the record denotes the plane-coordinate body carried through the linear map
+L = B·[U V N]: the frame's held U, V and N and the placement's held basis B,
+read as exact rationals (`massmoment.PrismRotation`), the leaves
+`proofbound.ExactFrameLiftRound` compares every lifted vertex against. r3
+keeps those vectors orthonormal only to a few ulps: `r3.NewFrame` and
+`r3.FromBasis` normalize in float64, `IsValid` admits a departure up to 1e-9,
+and N is the float cross product of U and V. The plane spanned by (1, 1, 0)
+and (−1, 1, 1) reads det L − 1 ≈ 4.8e-17. `massmoment.MapCharge` reads two
+numbers off L exactly, each rounded up: ||det L| − 1|, and the orthonormality
+defect e, the entrywise absolute sum of LᵀL − I. Every eigenvalue of LᵀL lies
+in [1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor in
+that range, and a volume by exactly |det L|. `chargePrismMap` keeps every held
+value and widens the bounds: `Volume` by ||det L| − 1|·(|V| + bound), the
+body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
+(`proofbound.BoundedStretch`). The prism, the chain extrude, the planar patch,
+the draft, the cap blend, the stacked prism (and the cup built on it) and the
+class-B brep take it as their last step; a brep's face frames are signed
+permutations of its first, so the first face's map stands for all. A face copy
+(`Body.Unstitch`, `Body.Patch`) carries its source's readings through its
+placement alone and takes the placement's own charge; a `Body.Patch` face
+fitted to a rim takes its fitted frame's. The centroid takes no charge: an
+affine map carries a body's centroid to its image's centroid. The box takes
+none either: each reading is the extreme of the linear functional g·L over
+the plane-coordinate body, which is exact for any linear map, and the
+coefficients (L's columns)·g carry their own rounding charge. A frame and
+placement whose bases are exactly orthonormal, every axis-aligned sketch plane
+under the identity among them, read det L = 1 and e = 0, and every reading is
+then unchanged bit for bit; `Placed` under a general rotation keeps each value
+and may widen its bound. A defect at or above 1/2 refuses `ErrUnsupported`.
+The loft, the mitred sweep, the faceted boolean and the stitch compute their
+readings from world coordinates their own vertex bounds already cover, and
+take no charge.
+
 ## 6. Revolve
 
 Same recording shape; the axis must be validated non-degenerate and coplanar
@@ -601,31 +637,16 @@ which is what leaves an ordinary axis-incident revolve as `Exact` as before.
 A payload whose record sits within a proven `sectionDelta` of the meridian it
 denotes charges that distance beside the snap, into the same three readings
 and the region's own area (`docs/surface-intersection-design.md` §7.2).
-Every one of those readings is taken in plane coordinates, while the record
-denotes the plane-coordinate solid carried through the linear map
-L = B·[U V U×V]: the frame's held U and V, their exact cross product and the
-placement's held basis B, read as exact rationals, the leaves the swept-vertex
-comparison reads. r3 keeps those vectors orthonormal only to a few ulps:
-`r3.NewFrame` and `r3.FromBasis` normalize in float64 and `IsValid` admits a
-departure up to 1e-9. The plane spanned by (1, 1, 0) and (−1, 1, 1) reads
-det L − 1 ≈ 4.1e-16. `revolvePayload.frameCharge` therefore reads two numbers
-off L exactly, each rounded up: ||det L| − 1|, and the orthonormality defect e,
-the entrywise absolute sum of LᵀL − I. Every eigenvalue of LᵀL lies in
-[1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor in that
-range, and a volume by exactly |det L|. `Volume` keeps its held value and widens
-its bound by ||det L| − 1|·(|V| + bound) (`proofbound.BoundedStretch`). Every
-wall's and cap's area, in `Revolve` and `RevolveChain` alike, and every
-latitude, junction-arc and cap-edge length widen by e the same way, and the
-body's `Area` sums the widened faces. The centroid takes no frame charge: an
-affine map carries a solid's centroid to its image's centroid, and the lift
-A3 + W·axial (+ the in-plane term) is L applied to the plane-coordinate
-centroid, so the defect moves the true centroid and the lifted one together.
-A frame whose U, V and placement basis are exactly orthonormal, every
-axis-aligned sketch plane under the identity among them, reads det L = 1 and
-e = 0, and every reading is then unchanged bit for bit. A placement under a
-general rotation does not, so `Placed` keeps each value and may widen its
-bound. A defect at or above 1/2 refuses `ErrUnsupported`; r3's 1e-9 admission
-keeps every real frame far below it.
+Every one of those readings is taken in plane coordinates and takes §5.1's
+frame charge (`revolvePayload.frameCharge`), over the map L = B·[U V U×V]: the
+third column is the exact cross product, because the sweep's own E1 = W × E0
+is one and the swept-vertex comparison reads it so. Every wall's and cap's
+area, in `Revolve` and `RevolveChain` alike, and every latitude, junction-arc
+and cap-edge length widen by e, and `Volume` by ||det L| − 1|. The centroid
+lift A3 + W·axial (+ the in-plane term) is L applied to the plane-coordinate
+centroid, so it takes no charge. The tilted plane of §5.1 reads
+det L − 1 ≈ 4.1e-16 here. `MassProperties` reads the exact image under the
+same L (`docs/multibody-dynamics-design.md` §8.6).
 `Bounds` from per-face analytic extremes: each face's radial
 extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a
@@ -644,7 +665,7 @@ even where every candidate position is a value the record states verbatim and
 the extremes' own term is zero. No other term in the reading scales with that
 magnitude, and it is zero wherever one coefficient is zero and the other is `0`
 or `±1`, which is the axis-aligned unplaced case. The axis frame contributes
-three terms. The first is its
+four terms. The first is its
 resolved direction and anchor's own proven displacement (`axisInPlane`'s
 `dUBound`/`dVBound`/`aUBound`/`aVBound`, already folded into the region's
 moments by `revolvemass.AxisMoments`, and now into `Bounds` and the meridian
@@ -658,7 +679,13 @@ placement is not the identity. The third is the extreme reading's OWN anchor
 shift — the products and the subtraction that carry a plane-local extreme into
 axis coordinates — which rounds at the anchor's magnitude rather than the
 section's, so a far-offset axis rounds here even where the boundary scan
-reports zero. The endpoint summation is charged separately from all three,
+reports zero. The fourth is the float sweep basis itself: the coefficients
+are read off the held A3, W, E0 and E1 (`RevolveLift.Basis`), while the record
+denotes the basis built from the exact frame and axis leaves with E1 the exact
+cross product, so `RevolveLift.BasisRound`'s four exact L1 gaps are charged at
+the rates the coefficients move the extreme (`revolveaxis.FrameRoundAllow`).
+The frame's departure from orthonormal enters the box through these
+coefficients alone (§5.1). The endpoint summation is charged separately from all four,
 since a pure translation leaves all four coefficients exactly right and rounds
 only when they are added. Every one of these terms is zero for an axis-aligned,
 unplaced revolve whose anchor projects and shifts exactly, which keeps the
@@ -712,7 +739,9 @@ v1 surface variant maps to itself under an isometry (plane→plane,
 cylinder→cylinder, …), with `IsReflection` flipping face orientation handling
 — but the FLOAT evaluation of the frame lift and the isometry rounds wherever
 the frame is not axis-aligned, the placement is not the identity, or the
-frame origin and a coordinate do not add exactly. Every reading built from
+frame origin and a coordinate do not add exactly. The held placement basis
+is itself orthonormal only to rounding, so a placed body's volume, area and
+length readings also take §5.1's map charge. Every reading built from
 `xform.Apply`/`xform.ApplyDir` therefore carries that rounding as its own
 proven displacement rather than reading the placed coordinate as an exact
 leaf: `prismPayload`/`capBlendPayload`'s `Bounds` (§5) and

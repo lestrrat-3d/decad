@@ -42,21 +42,30 @@ import (
 // refuses: a payload whose readings carry a term this path does not charge —
 // an axis-snap or admitted-band allowance, an uncertain axis, a sweep end
 // without a denotation, a section displacement — returns ErrUnsupported
-// rather than a tensor missing that term. The local tensor reaches world axes
-// through docs/multibody-dynamics-design.md §8.1's rotation: the exact
-// rational product of the placement basis and the local basis, widened by
-// its orthonormality defect so the reading refers to the rigid rotation
-// nearest it.
+// rather than a tensor missing that term. The local moments reach world axes
+// through the exact rational product of the placement basis and the local
+// basis, the map the revolve's volume, area and vertices denote through
+// (docs/evaluator-design.md §6): massmoment.AffineInertia takes that map's
+// exact image, so the mass carries |det L| as Volume does and no
+// orthonormality widening is needed.
 func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, density units.Value) (MassProperties, error) {
 	moments, err := revolveVolumeMoments(ctx, rp)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	rotation, err := massmoment.RevolveRotation(rp.frame, rp.ax.dU, rp.ax.dV, rp.xform)
+	// The axis is exact here (revolveVolumeMoments refuses any other), so the
+	// local basis (w, e0, e1) is orthonormal in plane coordinates and this
+	// matrix is exactly the map the record denotes through, L·[d e0 e1]
+	// (docs/evaluator-design.md §6). The tensor is that map's exact image.
+	linear, err := massmoment.RevolveRotation(rp.frame, rp.ax.dU, rp.ax.dV, rp.xform)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	return rigidMassProperties(ctx, b.centroid, moments, rotation, density)
+	world, massIv, err := massmoment.AffineInertia(moments, linear, density)
+	if err != nil {
+		return MassProperties{}, err
+	}
+	return publishMassProperties(ctx, b.centroid, massIv, world)
 }
 
 // revolveVolumeMoments integrates the revolve's V, P and Q about the axis
@@ -111,12 +120,18 @@ func rigidMassProperties(ctx context.Context, center VecMeasurement, m massmomen
 	if err != nil {
 		return MassProperties{}, err
 	}
+	return publishMassProperties(ctx, center, proofbound.IntervalScale(m.Volume, rho), world)
+}
+
+// publishMassProperties rounds a mass interval and a world inertia interval
+// to readings and proves the published tensor positive definite.
+func publishMassProperties(ctx context.Context, center VecMeasurement, massIv proofbound.RatInterval, world [3][3]proofbound.RatInterval) (MassProperties, error) {
 	if err := ctx.Err(); err != nil {
 		return MassProperties{}, err
 	}
-
+	var err error
 	result := MassProperties{Center: center}
-	result.Mass, err = massIntervalReading(proofbound.IntervalScale(m.Volume, rho), units.Kilogram)
+	result.Mass, err = massIntervalReading(massIv, units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}

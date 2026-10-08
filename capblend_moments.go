@@ -344,6 +344,9 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		Bound:     units.Millimeters(centroidBound),
 	}
 	body.bounds = bounds
+	if err := chargePrismMap(body, cbp.frame, cbp.xform); err != nil {
+		return nil, err
+	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}

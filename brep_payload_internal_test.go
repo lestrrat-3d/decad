@@ -381,7 +381,10 @@ func TestBrepPlacementReEvaluatesUnderMotion(t *testing.T) {
 		require.True(t, ok)
 		requireClosedTopology(t, placed)
 		require.Len(t, placed.Faces(), len(brep.Faces()))
-		require.Equal(t, brep.volume, placed.volume, `volume is read in the record's own frame`)
+		// Volume is read in the record's own frame; its bound also charges the
+		// motion's own departure from orthonormal (docs/evaluator-design.md §5.1).
+		require.Equal(t, brep.volume.Value, placed.volume.Value, `volume is read in the record's own frame`)
+		require.GreaterOrEqual(t, placed.volume.Bound.Base(), brep.volume.Bound.Base())
 		// The two placed centroids each lie within their bound of the truth,
 		// so they lie within the sum of the bounds of each other.
 		gap := placed.centroid.Value.Sub(placedPrism.centroid.Value).Len()

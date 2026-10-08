@@ -951,8 +951,12 @@ func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 
 	// Rigid motion invariants the chain must also preserve outright, and the
 	// premise that the copies genuinely moved rather than composing back.
-	require.Equal(t, built.volume, reused.volume, "ten rotations about the sweep axis change no volume term")
-	require.Equal(t, built.area, reused.area, "nor any area term")
+	// The values hold; the bounds also charge the composed rotation's own
+	// departure from orthonormal (docs/evaluator-design.md §5.1).
+	require.Equal(t, built.volume.Value, reused.volume.Value, "ten rotations about the sweep axis change no volume value")
+	require.Equal(t, built.area.Value, reused.area.Value, "nor any area value")
+	require.GreaterOrEqual(t, reused.volume.Bound.Base(), built.volume.Bound.Base())
+	require.GreaterOrEqual(t, reused.area.Bound.Base(), built.area.Bound.Base())
 	require.NotEqual(t, built.centroid.Value, reused.centroid.Value, "premise: the copies genuinely moved")
 }
 
@@ -1089,7 +1093,10 @@ func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
 		require.NoError(t, got.err)
 		require.Same(t, source.walks, prismPayloadOf(t, got.body).walks,
 			"both concurrent builds read the one shared resolution")
-		require.Equal(t, built.volume, got.body.volume, "a rigid motion changes no volume term")
+		// A placement keeps the value; its bound also charges the placement's
+		// own departure from orthonormal (docs/evaluator-design.md §5.1).
+		require.Equal(t, built.volume.Value, got.body.volume.Value, "a placement changes no volume value")
+		require.GreaterOrEqual(t, got.body.volume.Bound.Base(), built.volume.Bound.Base())
 	}
 }
 

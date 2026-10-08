@@ -174,7 +174,7 @@ func (rp revolvePayload) frameRoundAllow(
 			return 0, err
 		}
 	}
-	return revolveaxis.FrameRoundAllow(rp.ax.numeric(), rp.sectionDelta, rp.xform, g, b, base, wg, c0, c1, coordUpper), nil
+	return revolveaxis.FrameRoundAllow(rp.ax.numeric(), rp.sectionDelta, rp.xform, g, b, rp.lift().BasisRound(b), base, wg, c0, c1, coordUpper), nil
 }
 
 // sweepBoundAlong resolves the profile envelope before the internal proof

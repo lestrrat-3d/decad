@@ -574,6 +574,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err := measureBrepContext(ctx, bp, topo, body); err != nil {
 		return nil, err
 	}
+	// Every face frame is a signed permutation of the first (brepEmbeds), so
+	// each face's map has the first face's determinant and defect.
+	if err := chargePrismMap(body, bp.faces[0].frame, bp.xform); err != nil {
+		return nil, err
+	}
 	body.payload = bp
 	return body, nil
 }
