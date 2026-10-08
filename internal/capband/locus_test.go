@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/stretchr/testify/require"
 )
@@ -211,4 +212,52 @@ func TestMiterLocusSliverFluxZeroOnAStraightLocus(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Zero(t, flux)
+}
+
+// TestCircleCircleFootIsTheLocusRoot checks the corner-foot enclosure a
+// circle-circle corner reads at each offset (capcontour.CircleCircleLocusFoot,
+// the carrier-intersection root nearest the corner) holds the locus itself,
+// which a reference follows from the corner by Newton's method, on the
+// asymmetric lens of TestMiterLocusSliverFluxCoversTheExactCornerShare. The
+// two roots are mirror images across the line of centres, and the locus
+// starts at the corner, so it is the nearer root for as long as it stays on
+// the corner's side of that line, which it leaves only by passing through a
+// tangency. A setback that reaches the tangency, where the two offset circles
+// part near t ≈ 5.97, must charge no finite sliver.
+//
+// Shown to fail on 2026-10-09: with CircleCircleLocusFoot answering the
+// farther root, the enclosures miss the followed locus from offset 0 on.
+func TestCircleCircleFootIsTheLocusRoot(t *testing.T) {
+	t.Parallel()
+	lensU, lensV := lensCorner(0, -4, 10, 1, 6, 12)
+	thA := math.Atan2(lensV+4, lensU)
+	thB := math.Atan2(lensV-6, lensU-1)
+	lensA := arcWalk(0, -4, 10, thA-1, thA)
+	lensB := arcWalk(1, 6, 12, thB, thB+0.5)
+	fa, fb := sliverCarrierOf(lensA), sliverCarrierOf(lensB)
+
+	const dc, steps = 1.0, 16
+	u, v := lensU, lensV
+	for k := range steps + 1 {
+		off := dc * float64(k) / steps
+		for range 50 {
+			f1, a1, b1 := fa(u, v, off)
+			f2, a2, b2 := fb(u, v, off)
+			det := a1*b2 - a2*b1
+			u, v = u-(f1*b2-f2*b1)/det, v-(a1*f2-a2*f1)/det
+		}
+		box, ok := capcontour.CircleCircleLocusFoot(lensA, lensB, off, lensU, lensV)
+		require.True(t, ok, `offset %v: the foot must be enclosed`, off)
+		lo, _ := box.U.Lo.Float64()
+		hi, _ := box.U.Hi.Float64()
+		vlo, _ := box.V.Lo.Float64()
+		vhi, _ := box.V.Hi.Float64()
+		const tol = 1e-12
+		require.True(t, lo-tol <= u && u <= hi+tol && vlo-tol <= v && v <= vhi+tol,
+			`offset %v: the followed locus (%v, %v) must lie in the foot enclosure [%v, %v] x [%v, %v]`, off, u, v, lo, hi, vlo, vhi)
+	}
+
+	_, ok, err := capband.MiterLocusSliverFlux(nil, lensA, lensB, 0, -4, lensU, lensV, 6.5, 6.5, 0)
+	require.NoError(t, err)
+	require.False(t, ok, `a setback past the carriers' tangency charges no finite sliver`)
 }

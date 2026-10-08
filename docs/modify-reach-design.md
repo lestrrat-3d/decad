@@ -521,10 +521,22 @@ RULES it, with straight `Line3` rulings between the side-level directrix
 (its own `th0`/`th1` sweep) and the trimmed cap-level directrix
 (`capTh0`/`capTh1`, generally narrower at a non-tangential corner), so it
 meets the exact offset family only at `s=0` and `s=1` and chords the true
-curve strictly between them. That residual is bounded, never ignored:
-erosion by an increasing offset is monotone, so the true swept flux is
-sandwiched between the ordinary cone-sector flux `W` read at the wide (side)
-window and `N` read at the narrow (cap) one. Both reference fluxes are read about the
+curve strictly between them. That residual is bounded, never ignored. At
+each height the denoted surface is the cone over a window whose two ends
+are the corner-foot loci's azimuths, and each locus's azimuth is monotone in
+the offset amount: for a line meeting the circle, the cosine of the azimuth
+against the line's normal is `(α + σ·t)/(R + ρ·t)`, whose derivative has a
+fixed sign, and for two circles the cosine of the angle at this centre has
+a derivative of fixed sign because `R1 ∓ R2` is constant; in both cases the
+azimuth stays on one side of its reference line while the two carriers do
+not touch, which the corner's sliver bound requires before it charges
+anything. So each end of the window runs between the side window's end and
+the cap window's end. A corner can trim the cap window inside the side
+window or extend it past, and a patch can do one at each end, so the true
+swept flux is sandwiched between the ordinary cone-sector flux `W` read over
+the union of the two windows and `N` read over their intersection; with
+both corners trimming they are the side and cap windows. Both reference
+fluxes are read about the
 arc's own axis at the side level, where the cone's flux density `R0·r(z)`
 never changes sign; about the plane-local origin the density changes sign,
 the sandwich fails, and the flux difference grows with the section's distance
@@ -592,11 +604,25 @@ wedge every crossing, of the cone, the built patch or the joining segments,
 lies within `(3/8)·max(R0, R1)·Φ²` inside `r(z)`
 (`ChordLocusCornerDeficitUpper`), so the region there lies in a thin shell
 over the two wedges, `ChordLocusCornerShellUpper`. The region term charges
-the swept and shell volumes, and also carries the `|W − N|` and corner
-terms, which this argument does not read. The skew the
+the swept and shell volumes and nothing else: the corner slivers lie in
+the shell. A patch whose corner sliver could not be bounded answers an
+unbounded region, since its locus may fold back. The proof reads the
+corner-foot locus as the carrier root nearest the corner: the two roots
+mirror each other across the line through the two centres, or across the
+perpendicular from the centre to a line, and the locus stays on the
+corner's side of it until the carriers touch, which the sliver bound
+refuses. Both terms compare the built and denoted surfaces between the
+same two held levels. The held side level sits up to `capBandLevelDelta`
+from the denoted one, and that move is the body's, not the patch's: the
+slab and the band meet at the held level, so the body changes only where a
+vertical line leaves the band toward the cap, by at most the larger of the
+side loop's and the cap contour's areas times the move
+(`capBandLevelVolume`), which the band's volume and first-moment bounds
+charge. The skew the
 region term reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
-side end and held cap end; the volume term reads it only to test for zero. The difference of the two held windows is not used:
+side end and held cap end; the volume term reads it only to test for zero.
+The difference of the two held windows is not used:
 each end of it is a float `Atan2`, and over a 600-sector sweep drawn away from
 the sketch origin that difference fell below the exact corner angle on 120 of
 568 patches. Both terms round every operation outward: the flux sums and
@@ -1112,7 +1138,10 @@ separate term with its own helper. `sideZ` is the single float sum
 `capZ + matSign*ds`, so the whole side directrix translates rigidly by that
 sum's own rounding (`levelDelta`) rather than moving point by point the way a
 solved contour does. Every reading built on that level charges it: a slant
-edge's own length, the band volume, and each BAND PATCH's own area, which
+edge's own length, the band volume and first moment (`capBandLevelVolume`:
+the body moves only where a vertical line leaves the band toward the cap,
+over at most the larger of the side loop's and cap contour's areas), and
+each BAND PATCH's own area, which
 composes `bandLevelAreaAllow(levelDelta, directrixSumUpper)` — under a rigid
 translation of one directrix a patch's area moves at the rate of its two
 directrix lengths, which is the Plane arm's two chords and the Cone arm's two

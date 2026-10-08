@@ -142,7 +142,8 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		locusRadialGap = math.Max(locusRadialGap, gap)
 	}
 
-	if delta > 0 || locusVolume > 0 {
+	levelVolume := capBandLevelVolume(cbp, capZ, matSign, sideArea, capArea)
+	if delta > 0 || locusVolume > 0 || levelVolume > 0 {
 		areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
 		coordUpper, cerr := capBandCoordUpper(loop, capBoundary, delta, sideZB, capZB, work)
 		if cerr != nil {
@@ -157,6 +158,10 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 			locusReach := proofbound.AbsSumUpper(coordUpper, locusRadialGap)
 			allow = proofbound.AbsSumUpper(allow, proofbound.ProductUpper(locusVolume, locusReach))
 		}
+		// The side level's displacement moves the body by a region of at most
+		// capBandLevelVolume's volume (its doc comment derives it), and every
+		// point of that region lies within coordUpper.
+		allow = proofbound.AbsSumUpper(allow, proofbound.ProductUpper(levelVolume, coordUpper))
 		muTotal.Bound = proofbound.AbsSumUpper(muTotal.Bound, allow)
 		mvTotal.Bound = proofbound.AbsSumUpper(mvTotal.Bound, allow)
 		mzTotal.Bound = proofbound.AbsSumUpper(mzTotal.Bound, allow)

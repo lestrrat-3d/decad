@@ -1167,3 +1167,4 @@
 3	0.03	TestRevolveShellDisplacedUndercutUndecided
 5	0.09	TestChordLocusRegionPointsLieOnCoveredSurfaces
 5	0.03	TestCapBandCoordUpperCoversTheCornerLoci
+5	0.01	TestCapBandMassBoundsChargeTheSideLevelMove

@@ -241,7 +241,15 @@ func (h LocusVelocityHull) SliverEnclosure(lo, hi float64) (Point, bool) {
 // CircleCircleLocusFoot encloses the corner foot where two circular walls'
 // offset carriers meet at the single offset amount t: the root nearest the
 // corner (vU, vV), the same root CircleCircleLocusVelocity encloses over a
-// range. ok is false where a carrier does not lift or no root is decided.
+// range. That root is the denoted locus. The two roots are mirror images
+// across the line through the two centres, so the one nearer the corner is
+// the one on the corner's side of that line; the locus starts at the corner
+// and moves continuously, so it stays on that side until the two roots meet
+// on the line, where the carriers touch. CircleCircleLocusVelocity refuses
+// any offset range whose enclosed constraint determinant, the sine of the
+// angle between the two radii to the root, reaches zero, which it does only
+// for a root on that line, so wherever every range over [0, t] was enclosed
+// the nearest root is the locus. ok is false where a carrier does not lift or no root is decided.
 func CircleCircleLocusFoot(prev, cur survey2d.SideWalk, t, vU, vV float64) (Point, bool) {
 	ca, okA := carrierOverRange(prev, t, t)
 	cb, okB := carrierOverRange(cur, t, t)

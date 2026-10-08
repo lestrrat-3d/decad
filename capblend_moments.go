@@ -533,7 +533,29 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// coordinates from.
 	areaUpper := proofbound.AbsSumUpper(patchAreaTotal.Value, patchAreaTotal.Bound, capArea.Value, capArea.Bound)
 	result.Bound = proofbound.AbsSumUpper(result.Bound, proofbound.SweptVolumeAllow(delta, areaUpper))
+	result.Bound = proofbound.AbsSumUpper(result.Bound, capBandLevelVolume(cbp, capZ, matSign, sideArea, capArea))
 	return result, nil
+}
+
+// capBandLevelVolume bounds the volume of the region between the body the
+// band builds and the one it denotes that comes from the side level: the held
+// side level sits capBandLevelDelta from the denoted one, and every patch's
+// flux reads the held level. The straight slab and the band meet at that same
+// held level, so on each vertical line through the section the body's column
+// differs from the denoted one only at the end where the line leaves the band
+// toward the cap, at the height where the line's point leaves the offset
+// section. With the cap level fixed that height moves by at most the
+// displacement. Offset sections nest, so the lines that leave the band at all
+// pass through the larger of the side loop's and the cap contour's areas, and
+// the region's volume is at most that area times the displacement. The slab's
+// own level bound and the side disk's charge the same displacement again.
+func capBandLevelVolume(cbp capBlendPayload, capZ, matSign float64, sideArea, capArea proofbound.BoundedScalar) float64 {
+	levelDelta := capBandLevelDelta(capZ, matSign, cbp.setbackAt(matSign))
+	if levelDelta <= 0 {
+		return 0
+	}
+	areaMax := math.Max(proofbound.AbsSumUpper(sideArea.Value, sideArea.Bound), proofbound.AbsSumUpper(capArea.Value, capArea.Bound))
+	return proofbound.ProductUpper(areaMax, levelDelta)
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read
