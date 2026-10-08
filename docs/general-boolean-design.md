@@ -697,7 +697,7 @@ ordinary mesh-path operand and export input.
 |---|---|
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a co-directional `Union` on an A1 result reads its `stack` and is A1 again (§3); a pair outside both takes the mesh path over §4.4's mesh |
 | `Body.Placed` / `Duplicate` / `PlacedCopy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
-| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` — modify-reach's RX7 row and its SX16 refusal. This is STAGED, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims, so a later design can rewrite a planar face's region and re-trim its walls on the same terms modify §2 rewrites a section |
+| `Fillet` / `Chamfer` / `Shell` | `docs/brep-modify-design.md`: a brep that reads as a prism along a reference axis takes the prism's own ops (route P); an axis-parallel straight edge takes the brep rewrite (route E) and the result is a `brepPayload`; every other call refuses by that document's Table SB |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |
 | `Verify` tolerance gate | `gateWitnessPrism`'s reader over every body vertex and each swept face's prism-wall witnesses, shrunk by the largest `delta` plus axial term (verification §3) |

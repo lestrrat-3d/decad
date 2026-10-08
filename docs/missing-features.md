@@ -46,7 +46,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Fillet/chamfer of a body that is neither a prism nor a revolve (sweep, loft, faceted or brep boolean result, cap blend) | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX10, SX16 (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX |
+| Fillet/chamfer of a body that is neither a prism nor a revolve (sweep, loft, faceted or brep boolean result, cap blend) | `ErrUnsupported`: "fillets a straight prism or a revolve only", SX10, SX16 (`fillet.go`, `chamfer.go`) | `docs/modify-reach-design.md` Table RX; brep and stacked receivers: `docs/brep-modify-design.md` |
 | Shell of any non-prism body, revolve included | `ErrUnsupported`: "shells a straight prism only" (`shell.go`) | `docs/modify-reach-design.md` §9.3, §14 PR D |
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
 | Fillet of a cap edge (vertex blend) | `ErrUnsupported`, "the vertex-blend problem, not yet supported" (`fillet.go`) | `docs/modify-design.md` §6 |

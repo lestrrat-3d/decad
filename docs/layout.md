@@ -34,6 +34,7 @@ the rules leave to the byte budget.
 | `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
+| `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers: prism recognition (route P), axis-parallel edge blends (route E), Tables RB/EB/SB/BB/DB. |
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, `SweepChain`, mitred sweeps (§16), and reach. |
 | `docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms: entry gate, private `sketch` scene, displacement bounds. |
@@ -97,11 +98,11 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | Topology: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`; aliases for `internal/surfacegeom/`. See `docs/evaluator-design.md` §3. |
-| `document.go` | `Document`, its guarded live body set, commit, `Remove`, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
+| `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, placement and duplication. See evaluator §8. |
 | `mirror.go` | The sealed `MirrorPlane` vocabulary and `Mirrored`/`MirroredCopy` over `Placed`/`PlacedCopy`. See `docs/mirror-pattern-design.md` §4. |
 | `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
 | `pattern.go` | Pattern entry points and payload adapters. See mirror-pattern §6. |
-| `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. `freeChainCountsByFace` counts a sheet's free-edge chains. See surface §2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, sheet refusal, shared shell/lump helpers, free-edge chain counts. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
@@ -113,7 +114,7 @@ the rules leave to the byte budget.
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch curved-face mass adapter. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
-| `extrude.go` | `Document.Extrude`: the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's doc comment. |
+| `extrude.go` | `Document.Extrude`, `WithTaper`, and linear-extent resolution into a `linearSweep`. See evaluator §5. |
 | `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_composite.go` | Composite Sweep join topology, its boundary audit and a surface result's cap omission. See `docs/sweep-design.md` PR 4 and surface §4. |

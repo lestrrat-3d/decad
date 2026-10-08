@@ -309,7 +309,8 @@ change alone.
 
 Not planned here: a blind tool crossing the target's boundary (a side notch),
 whose per-slab walls split at the crossing and need column-wise edge splitting;
-`Fillet`/`Chamfer` on a stacked body; the cup migration of modify-reach §9.1.
+`Fillet`/`Chamfer` on a stacked body (`docs/brep-modify-design.md` takes it
+through the face view); the cup migration of modify-reach §9.1.
 
 ## 8. Required tests
 
