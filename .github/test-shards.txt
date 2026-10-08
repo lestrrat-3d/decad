@@ -281,6 +281,7 @@
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
 3	0.02	TestCapBlendGateDiameterReadsCapContours
 3	0.02	TestCapBlendGateDiameterReadsSideLevels
+3	0.05	TestCapBlendGateDiameterReadsTrimmedCapArcs
 3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding
 3	0.03	TestCapBlendSideRingReachesArcNaturalEnd
 3	0.00	TestCapJoinIsG1IsExact

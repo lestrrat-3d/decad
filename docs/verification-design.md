@@ -763,7 +763,16 @@ cornerless closed circle offsets into, held at its centre and offset radius
 within the band's contour displacement) and with the body's vertices, which
 hold every cap contour corner. A disc of radius 5 extruded 20 mm and
 chamfered 2 mm around both caps is `√436` across, between its two cap
-circles. A cap contour arc a corner trims is read at its ends alone.
+circles. A cap contour arc a corner trims carries stations too
+(`capArcRim`): they lie on the arc the cap face records, from one held cap
+vertex to the other about the wall's centre, and each is charged its gap
+from that arc, the recorded radius's distance from every radius the band
+denotes, and `(π/2)·δ/r` times the radius for the window ends, where `δ` is
+the contour displacement each held vertex sits within of its corner foot and
+`r` the least radius either sits at. The same circle cut by the chord
+`x = 4` and chamfered the same way is `√436` across between its two trimmed
+cap arcs, which its corners alone read as `√420`. A reflex corner's
+connector arc is read at its ends alone.
 
 What `fallbackGateDiameter` reports is `stationGateDiameter`'s reading over
 those witness prisms. A station is a point of the body only when the witness

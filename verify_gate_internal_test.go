@@ -225,6 +225,56 @@ func TestCapBlendGateDiameterReadsCapContours(t *testing.T) {
 	requireGateDiameterWithin(t, d, math.Hypot(3+3*math.Cos(diameter.StationStep/2), 20), big.NewRat(436, 1))
 }
 
+// A D-shaped section, the circle of radius 5 cut by the chord x = 4, extruded
+// 20 and chamfered 2 around both caps, holds at each cap a contour arc of
+// radius 3 that the inset flat x = 2 trims at (2, ±√5): an arc of about 264
+// degrees, so it holds opposite points. The body is widest between its two
+// cap contours at opposite angles, sqrt((3 + 3)^2 + 20^2) = sqrt(436) apart.
+// Every other pair is nearer: a cap contour against the far side level,
+// radius 5 at z = 2 or 18, reaches sqrt(8^2 + 18^2) = sqrt(388), and the
+// two side levels sqrt(10^2 + 16^2) = sqrt(356).
+//
+// Shown to fail first: with each trimmed cap arc read at its two corners
+// alone, through the vertices, the reading is sqrt(420) = 20.4939015,
+// against a floor of sqrt((3 + 3*cos(7.5 degrees))^2 + 20^2) = 20.8732526.
+// The arc stations' allowance (capArcRim), about 1e-15 here, is not
+// separately observable: the vertices' and stations' own bounds, which the
+// reading shrinks by alongside it, are of the same size.
+func TestCapBlendGateDiameterReadsTrimmedCapArcs(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c, a, b := s.CreatePoint(0, 0), s.CreatePoint(4, 3), s.CreatePoint(4, -3)
+	s.Fix(c)
+	s.Fix(a)
+	s.Fix(b)
+	s.CreateArc(c, a, b)
+	s.CreateLine(b, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	doc := New()
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapStart(body))).Or(CreatedBy(CapEnd(body))), units.Millimeters(2))
+	require.NoError(t, err)
+	cbp, isCapBlend := chamfered.payload.(capBlendPayload)
+	require.True(t, isCapBlend)
+	trimmed := 0
+	for _, p := range cbp.patches {
+		if p.geom.Circular && !p.geom.WholeTurn {
+			trimmed++
+		}
+	}
+	require.Equal(t, 2, trimmed, "each cap holds one trimmed cap contour arc")
+
+	d, ok, err := bodyGateDiameter(t.Context(), chamfered)
+	require.NoError(t, err)
+	require.True(t, ok)
+	requireGateDiameterWithin(t, d, math.Hypot(3+3*math.Cos(diameter.StationStep/2), 20), big.NewRat(436, 1))
+}
+
 // Every point a gate diameter reads must carry a proven gap from a point of
 // the body, and the reading must be shrunk by it. A placement far from the
 // origin rounds every lifted point at that magnitude, about 1e-10 here, so a
