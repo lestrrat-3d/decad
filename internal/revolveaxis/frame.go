@@ -16,7 +16,7 @@ type Frame struct {
 
 // ToAxis maps a plane-local point into (z, ρ) axis coordinates. It reads
 // aU/aV/dU/dV as exact leaves and states no bound of its own: decad's
-// axisMoments folds their proven dUBound/dVBound/aUBound/aVBound into the
+// revolvemass.AxisMoments folds their proven dUBound/dVBound/aUBound/aVBound into the
 // region's moments through bounded arithmetic instead, and a reading built
 // from ONE point's re-expressed ρ takes ToAxisRhoBound beside it.
 func (ax Frame) ToAxis(u, v float64) (float64, float64) {
@@ -27,7 +27,7 @@ func (ax Frame) ToAxis(u, v float64) (float64, float64) {
 // ToAxisRhoBound bounds how far the ρ ToAxis computes for plane-local point
 // (u, v) can sit from the ρ the axis's own TRUE (unrounded) direction and
 // anchor would give, folding in dUBound/dVBound/aUBound/aVBound
-// (axisInPlane) the same way axisMoments already folds them into the
+// (axisInPlane) the same way revolvemass.AxisMoments already folds them into the
 // region's moments — read here for one point through the same bounded
 // arithmetic rather than a whole integral. u and v are exact
 // recorded coordinates (a walk's own startU/startV/cU/cV before Frame.Walk
@@ -120,7 +120,7 @@ func (ax Frame) PlaneDirection(wg, k float64) (float64, float64) {
 // the axis discards nothing and leaves the length bound untouched, which is
 // what keeps every on-axis fixture's wall area exactly as proven.
 //
-// Charging it is what makes walkAxisMoment's straight arm (revolve_build.go)
+// Charging it is what makes revolvemass.WallAxisMoment's straight arm
 // enclose the wall it actually built: that arm reads w.length against a mean
 // radius whose own bound already carries the snap, so without this term the
 // product covers L·(r0'+r1')/2 while the truth is L'·(r0'+r1')/2, and the
@@ -174,7 +174,7 @@ func (ax Frame) axisCharge(c proofbound.WalkEndBound) (float64, float64) {
 //   - coordUpper and lengthUpper — the ENVELOPES — gain the same figures, so
 //     RadialUpper and axisMomentUpper enclose the TRUE meridian rather than
 //     only the recorded one. This is the step that makes the charge survive:
-//     walkAxisMoment clamps its composed bound with math.Min against
+//     revolvemass.WallAxisMoment clamps its composed bound with math.Min against
 //     proofbound.ConservativeValueError(value, axisMomentUpper), and an envelope covering
 //     only the recorded meridian would clamp the charge straight back off.
 func (ax Frame) WalkCharged(w survey2d.SegmentWalk, startCharge, endCharge proofbound.WalkEndBound) survey2d.SegmentWalk {

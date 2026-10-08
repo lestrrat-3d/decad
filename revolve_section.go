@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolvemass"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -213,10 +214,10 @@ func (rp revolvePayload) chargedWalk(seg CurveSegment, w survey2d.SegmentWalk) (
 	return rp.ax.walkCharged(w, startCharge, endCharge), nil
 }
 
-// wallMoment is walkAxisMoment over one wall, carried to the denoted wall
+// wallMoment is revolvemass.WallAxisMoment over one wall, carried to the denoted wall
 // where the whole section moved (wholeArcMomentAllow).
 func (rp revolvePayload) wallMoment(w survey2d.SegmentWalk, kind wallKind, segs []CurveSegment) proofbound.BoundedScalar {
-	m := walkAxisMoment(w, kind, segs, rp.ax)
+	m := revolvemass.WallAxisMoment(w, kind, segs, rp.ax.numeric())
 	if allow := rp.wholeArcMomentAllow(w); allow > 0 && kind != wallAxis {
 		m.Bound = proofbound.AbsSumUpper(m.Bound, allow)
 	}

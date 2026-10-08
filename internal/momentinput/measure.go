@@ -447,7 +447,7 @@ func (ig *Integrals) AddFor(segment CurveSegment, plan Plan, anchor Point2, orde
 // Area the rational already in hand and leaves it the SUM of its per-segment
 // roundings, past the half ulp §3 promises unconditionally. The mixed result is
 // sound because every consumer reads each field through its own (value, bound)
-// pair, and all cross-field composition — a revolve's axisMoments, the cup mass
+// pair, and all cross-field composition — a revolve's revolvemass.AxisMoments, the cup mass
 // properties, Centroid's bounded-quotient fallback — is interval arithmetic,
 // which asks only that each input interval encloses the truth.
 func (ig *Integrals) PublishExact() {
