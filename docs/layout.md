@@ -183,7 +183,7 @@ the rules leave to the byte budget.
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_gate.go` | Verify's payload diameter adapters. See verification §3. |
 | `verify_result.go` | Public verification result aliases. |
-| `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
+| `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
 | `clearance.go` | The pair kernel: `clearancePair` proves a pair's relation and gap; `sheetSolidPair` decides a sheet pair. See clearance §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned box prisms and bounds their gap from exact box planes ahead of the kernel. |
 | `clearance_planar.go` | The exact planar pair arm for mitred sweeps and faceted results: interference design §3.2. |
