@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -187,7 +188,7 @@ func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile ProfileRec
 }
 
 // revolveJunctionsOf lists every off-axis junction of the receiver, per loop,
-// in the axis-local coalesced walk the build itself reads (revolveLoopWalks).
+// in the axis-local coalesced walk the build itself reads (revolveaxis.ResolveLoop).
 // A loop that is one whole closed curve has none, and a junction on the axis
 // sweeps a point rather than an edge.
 func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunction, error) {
@@ -196,14 +197,15 @@ func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunc
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	out := make([][]revolveJunction, len(loops))
 	for li, loop := range loops {
-		resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve junction blend")
+		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve junction blend",
+			rp.chargedWalk, rp.ax.snapTol)
 		if err != nil {
 			return nil, err
 		}
-		if resolved.singleClosed {
+		if resolved.SingleClosed {
 			continue
 		}
-		for _, w := range resolved.walks {
+		for _, w := range resolved.Walks {
 			if w.StartV == 0 || len(w.Segs) == 0 {
 				continue
 			}

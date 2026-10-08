@@ -169,7 +169,7 @@ type sweptPoint struct {
 	bound proofbound.WalkEndBound
 }
 
-// walkStart and walkEnd read a PLANE-local walk's (revolveWalks.plane) two
+// walkStart and walkEnd read a PLANE-local walk's (revolveWalks.Plane) two
 // ends, each bounded against the point its recorded segment seg denotes there
 // (boundarywalk.DenotedStartBound and DenotedEndBound).
 func walkStart(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
@@ -184,9 +184,9 @@ func walkEnd(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
 // as a plane-local point bounded against the points BOTH neighbours' recorded
 // segments denote there (boundarywalk.JunctionVertex): at a cut junction the
 // two differ (docs/evaluator-design.md §4).
-func (rw revolveWalks) junctionStart(prev, next survey2d.SideWalk) sweptPoint {
+func revolveJunctionStart(rw revolveWalks, prev, next survey2d.SideWalk) sweptPoint {
 	pi, ni := prev.Segs[len(prev.Segs)-1], next.Segs[0]
-	u, v, bound := boundarywalk.JunctionVertex(rw.segs[pi], rw.plane[pi], rw.segs[ni], rw.plane[ni])
+	u, v, bound := boundarywalk.JunctionVertex(rw.Segs[pi], rw.Plane[pi], rw.Segs[ni], rw.Plane[ni])
 	return sweptPoint{u: u, v: v, bound: bound}
 }
 
@@ -735,84 +735,18 @@ func (rp revolvePayload) junctionCircle(b revolvemesh.RevolveBasis, z, rho float
 	return rp.point(b, z, 0, 0), rp.xform.ApplyDir(b.W).Scale(sweepSign), units.Millimeters(rho)
 }
 
-// revolveWalks is one recorded loop resolved the way a revolve reads it: the
-// coalesced walks in AXIS coordinates, what each of them sweeps, the same
-// walks still in PLANE-local coordinates indexed by recorded segment, and
-// whether the loop is a single whole closed curve.
-//
-// plane is kept beside walks because the two answer different questions. A
-// build needs only the axis coordinates; a proof about how far a held sample
-// sits from the point the RECORD denotes needs the recorded plane coordinates
-// the axis re-expression consumed, since axisFrame.walk states no bound on the
-// axial coordinate it computes and snaps a near-axis radial one to zero
-// outright (docs/tessellation-design.md §8's deltaC).
-type revolveWalks struct {
-	walks []survey2d.SideWalk
-	kinds []wallKind
-	plane []survey2d.SegmentWalk
-	// segs are the recorded segments plane resolves, by the same index.
-	segs         []CurveSegment
-	singleClosed bool
-}
-
-// revolveLoopWalks resolves one recorded loop into the walks a revolve reads,
-// so the builder and the tessellator consume the SAME resolution rather than
-// two copies of it (docs/tessellation-design.md §3: the mesh reads the
-// evaluator's payload, never live sketch input). what names the caller in the
-// free-form refusal.
-func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, work *freeform.FreeformWork, what string) (revolveWalks, error) {
-	if err := ctx.Err(); err != nil {
-		return revolveWalks{}, err
-	}
-	if len(loop.Segments) == 0 {
-		return revolveWalks{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
-	}
-	raw := make([]survey2d.SideWalk, len(loop.Segments))
-	plane := make([]survey2d.SegmentWalk, len(loop.Segments))
-	for i, seg := range loop.Segments {
-		if err := ctx.Err(); err != nil {
-			return revolveWalks{}, err
-		}
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return revolveWalks{}, err
-		}
-		if err := boundarywalk.RequireAnalyticWalk(w, what); err != nil {
-			return revolveWalks{}, err
-		}
-		plane[i] = w
-		axisWalk, err := rp.chargedWalk(seg, w)
-		if err != nil {
-			return revolveWalks{}, err
-		}
-		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
-	}
-	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
-	if err != nil {
-		return revolveWalks{}, err
-	}
-	kinds := make([]wallKind, len(walks))
-	for i, w := range walks {
-		kinds[i] = rp.ax.classify(w.SegmentWalk)
-	}
-	return revolveWalks{
-		walks:        walks,
-		kinds:        kinds,
-		plane:        plane,
-		segs:         loop.Segments,
-		singleClosed: len(walks) == 1 && walks[0].Closed,
-	}, nil
-}
+// revolveWalks is the shared plane and axis-coordinate resolution.
+type revolveWalks = revolveaxis.ResolvedWalks
 
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
 func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork) (revLoopParts, error) {
-	resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve wall build")
+	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.snapTol)
 	if err != nil {
 		return revLoopParts{}, err
 	}
-	walks, kinds, singleClosed := resolved.walks, resolved.kinds, resolved.singleClosed
+	walks, kinds, singleClosed := resolved.Walks, resolved.Kinds, resolved.SingleClosed
 	n := len(walks)
 	sweep := rp.sweep()
 	dphi := sweep.Value
@@ -837,7 +771,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// tessellate_revolve.go, reads the same one), bounded against the
 			// previous walk's denoted end too.
 			prev := walks[(i+n-1)%n]
-			at := rp.denotedPoint(resolved.junctionStart(prev, w))
+			at := rp.denotedPoint(revolveJunctionStart(resolved, prev, w))
 			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
@@ -939,7 +873,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// A whole closed walk's seam vertex denotes its one recorded
 			// segment's own start; every other walk's cap edge takes the
 			// junction vertices above.
-			seam := rp.denotedPoint(walkStart(resolved.segs[w.Segs[0]], resolved.plane[w.Segs[0]]))
+			seam := rp.denotedPoint(walkStart(resolved.Segs[w.Segs[0]], resolved.Plane[w.Segs[0]]))
 			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop)
 			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop)
 		}
@@ -1003,7 +937,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
-			denoted:   rp.wallDenotation(w, kinds[i], resolved.plane),
+			denoted:   rp.wallDenotation(w, kinds[i], resolved.Plane),
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -1326,14 +1260,15 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		// feeds the face role so two walks never collide on one role string
 		// (docs/surface-intersection-design.md §3.4).
 		view := rp.walkView(ci)
-		resolved, err := chainRevolveWalks(ctx, view, rp.chains[ci], work)
+		resolved, err := revolveaxis.ResolveChain(ctx, rp.chains[ci], work, "the revolve wall build",
+			view.chargedWalk, view.ax.snapTol)
 		if err != nil {
 			return nil, err
 		}
-		if len(resolved.walks) == 0 {
+		if len(resolved.Walks) == 0 {
 			return nil, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
 		}
-		if err := requireChainAxisIncidence(resolved); err != nil {
+		if err := revolveaxis.RequireChainAxisIncidence(resolved); err != nil {
 			return nil, err
 		}
 		faces, walkArea, err := buildChainRevolveWalls(ctx, body, ref, view, ci, b, resolved)
@@ -1365,86 +1300,6 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	return body, nil
 }
 
-// requireChainAxisIncidence reads an open walk without wrapping its last
-// junction onto its first. A free pole has one off-axis incident wall; an
-// interior axis junction still needs the profile audit's axis-line partner.
-// The closed-profile revolve never calls this chain-only audit.
-func requireChainAxisIncidence(resolved revolveWalks) error {
-	walks, kinds := resolved.walks, resolved.kinds
-	n := len(walks)
-	startPole, endPole := walks[0].StartV == 0, walks[n-1].EndV == 0
-	if startPole && endPole {
-		return fmt.Errorf(`%w: a chain with both free ends on the revolve axis needs closed-sheet pole topology`, ErrUnsupported)
-	}
-	if startPole && kinds[0] == wallAxis || endPole && kinds[n-1] == wallAxis {
-		return fmt.Errorf(`%w: a chain free end on the revolve axis has no incident swept wall`, ErrUnsupported)
-	}
-
-	seen := map[float64]struct{}{}
-	for i, w := range walks {
-		if w.StartV != 0 {
-			continue
-		}
-		if _, duplicate := seen[w.StartU]; duplicate {
-			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
-		}
-		seen[w.StartU] = struct{}{}
-		if i == 0 {
-			continue // the free pole has no incoming walk
-		}
-		if walks[i-1].EndV != 0 || (kinds[i-1] == wallAxis) == (kinds[i] == wallAxis) {
-			return fmt.Errorf(`%w: a chain interior axis junction needs one swept wall and one axis line`, ErrDegenerate)
-		}
-	}
-	if endPole {
-		if _, duplicate := seen[walks[n-1].EndU]; duplicate {
-			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
-		}
-	}
-	return nil
-}
-
-// chainRevolveWalks resolves the chain's segments the way a revolve reads
-// them, exactly as revolveLoopWalks does for a profile loop, except that
-// consecutive segments never wrap: an open walk's last segment does not
-// continue into its first (docs/surface-design.md §13.4). singleClosed is
-// always false: RecordChain admits no whole closed segment
-// (docs/sketch-seam-design.md §2.2).
-func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord, work *freeform.FreeformWork) (revolveWalks, error) {
-	if len(chain.Segments) == 0 {
-		return revolveWalks{}, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
-	}
-	raw := make([]survey2d.SideWalk, len(chain.Segments))
-	plane := make([]survey2d.SegmentWalk, len(chain.Segments))
-	for i, seg := range chain.Segments {
-		if err := ctx.Err(); err != nil {
-			return revolveWalks{}, err
-		}
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return revolveWalks{}, err
-		}
-		if err := boundarywalk.RequireAnalyticWalk(w, "the revolve wall build"); err != nil {
-			return revolveWalks{}, err
-		}
-		plane[i] = w
-		axisWalk, err := rp.chargedWalk(seg, w)
-		if err != nil {
-			return revolveWalks{}, err
-		}
-		raw[i] = survey2d.SideWalk{SegmentWalk: axisWalk, Segs: []int{i}}
-	}
-	walks, err := boundarywalk.CoalesceChainWalksContext(ctx, raw)
-	if err != nil {
-		return revolveWalks{}, err
-	}
-	kinds := make([]wallKind, len(walks))
-	for i, w := range walks {
-		kinds[i] = rp.ax.classify(w.SegmentWalk)
-	}
-	return revolveWalks{walks: walks, kinds: kinds, plane: plane, segs: chain.Segments, singleClosed: false}, nil
-}
-
 // buildChainRevolveWalls builds an open chain's whole swept-wall set with
 // shared vertices and edges: one wall per recorded segment, never a cap and
 // never a wraparound junction. n segments place n+1 junctions, so the
@@ -1458,7 +1313,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 // regardless of position (docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
 func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveWalks) ([]*Face, proofbound.BoundedScalar, error) {
-	walks, kinds := resolved.walks, resolved.kinds
+	walks, kinds := resolved.Walks, resolved.Kinds
 	n := len(walks)
 	sweep := rp.sweep()
 	dphi := sweep.Value
@@ -1478,13 +1333,13 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		case n:
 			w := walks[n-1]
 			last := w.Segs[len(w.Segs)-1]
-			return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, rp.denotedPoint(walkEnd(resolved.segs[last], resolved.plane[last]))
+			return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, rp.denotedPoint(walkEnd(resolved.Segs[last], resolved.Plane[last]))
 		case 0:
 			w := walks[0]
-			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(walkStart(resolved.segs[w.Segs[0]], resolved.plane[w.Segs[0]]))
+			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(walkStart(resolved.Segs[w.Segs[0]], resolved.Plane[w.Segs[0]]))
 		}
 		w := walks[i]
-		return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(resolved.junctionStart(walks[i-1], w))
+		return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(revolveJunctionStart(resolved, walks[i-1], w))
 	}
 
 	js := make([]revJunction, n+1)
@@ -1581,7 +1436,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
-			denoted:   rp.wallDenotation(w, kinds[i], resolved.plane),
+			denoted:   rp.wallDenotation(w, kinds[i], resolved.Plane),
 		}
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])

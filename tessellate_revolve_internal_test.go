@@ -381,8 +381,8 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	// charged here, before a single vertex is built.
 	loop := revLoopMesh{
 		resolved: revolveWalks{
-			walks: make([]survey2d.SideWalk, 4),
-			kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
+			Walks: make([]survey2d.SideWalk, 4),
+			Kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
 		},
 		samples: []revolvemesh.RevMeridian{{Walk: 0}, {Walk: 1}, {Walk: 2}, {Walk: 3}},
 	}

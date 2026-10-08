@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -1091,11 +1092,12 @@ func revolveAxisIdentical(a, b axisFrame) bool {
 func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
 	work := freeform.NewFreeformWork()
 	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
-		resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the trim axis-clearance gate")
+		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the trim axis-clearance gate",
+			rp.chargedWalk, rp.ax.snapTol)
 		if err != nil {
 			return false, err
 		}
-		for _, w := range resolved.walks {
+		for _, w := range resolved.Walks {
 			if w.StartV == 0 || w.EndV == 0 {
 				return false, nil
 			}
@@ -1112,11 +1114,13 @@ func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, e
 func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool, error) {
 	work := freeform.NewFreeformWork()
 	for ci := range rp.chains {
-		resolved, err := chainRevolveWalks(ctx, rp.walkView(ci), rp.chains[ci], work)
+		view := rp.walkView(ci)
+		resolved, err := revolveaxis.ResolveChain(ctx, rp.chains[ci], work, "the revolve wall build",
+			view.chargedWalk, view.ax.snapTol)
 		if err != nil {
 			return false, err
 		}
-		for _, w := range resolved.walks {
+		for _, w := range resolved.Walks {
 			if w.StartV == 0 || w.EndV == 0 {
 				return false, nil
 			}
@@ -1298,7 +1302,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 // and reading the flag rather than the loop position is what makes the reading
 // survive fullRevLoops' own outer-loop swap. The first and last wall are never
 // the skipped wallAxis kind — a segment lying on the axis puts both its ends at
-// ρ == 0, which requireChainAxisIncidence already refuses at a chain's free end
+// ρ == 0, which revolveaxis.RequireChainAxisIncidence already refuses at a chain's free end
 // — so faces[0] and faces[len-1] are walk 0 and walk n-1.
 //
 // The loop indexes b.lumps and reads pp.chains at the SAME index, on

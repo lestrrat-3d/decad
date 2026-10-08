@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
@@ -259,7 +260,8 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	rp, ok := body.payload.(revolvePayload)
 	require.True(t, ok, `got %T`, body.payload)
 	arc := onlyArc(t, rp.profile.Outer.Segments)
-	r, err := revolveLoopWalks(t.Context(), rp, rp.profile.Outer, freeform.NewFreeformWork(), "test")
+	r, err := revolveaxis.ResolveLoop(t.Context(), rp.profile.Outer, freeform.NewFreeformWork(), "test",
+		rp.chargedWalk, rp.ax.snapTol)
 	require.NoError(t, err)
 	js, _, err := revolveJunctions(rp, r)
 	require.NoError(t, err)
