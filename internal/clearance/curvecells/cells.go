@@ -77,10 +77,10 @@ func (k *Kernel) FaceEdge(f *clearance.CFace, e *clearance.CEdge, sink *clearanc
 		k.circlePlaneFE(f, e, sink)
 	case clearance.CkCone:
 		// Line3 × Cone and Circle3 × Cone take the coarse enclosure here.
-		sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+		sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 	default:
 		if f.Kind == clearance.CkTorus && f.Spindle {
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 			return
 		}
 		if e.Line {
@@ -331,12 +331,12 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 				Widen(clearance.DirCharge([]r3.Vec{f.Axis}, []r3.Vec{e.A, e.B, f.Anchor}))
 			cs, okp := k.lineLinePerp(e.A, u, f.Anchor, f.Axis, d)
 			if !okp {
-				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 				return
 			}
 			crits = []clearance.SpineCrit{cs}
 		default:
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 			return
 		}
 	default:
@@ -351,7 +351,7 @@ func (k *Kernel) lineOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *clea
 		// the (edge point, spine foot) order the emit helper reads.
 		crits, okc = k.lineCircleBracketCrits(cp, f.Anchor, f.RefU, f.RefV, e.A, u)
 		if !okc {
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 			return
 		}
 	}
@@ -410,7 +410,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 				perp := rel.Sub(f.Axis.Scale(rel.Dot(f.Axis)))
 				dir, okd := perp.Normalize()
 				if !okd {
-					sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+					sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 					return
 				}
 				near := clearance.AngleOf(e, dir.Scale(-1))
@@ -437,7 +437,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 			}
 			cs, ok := k.lineCircleBracketCrits(cp, e.Center, e.RefU, e.RefV, f.Anchor, f.Axis)
 			if !ok {
-				sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+				sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 				return
 			}
 			for i := range cs {
@@ -452,7 +452,7 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 		ef := &clearance.CFace{Kind: clearance.CkTorus, Anchor: e.Center, Axis: e.Axis, RefU: e.RefU, RefV: e.RefV, Major: e.Radius}
 		cs, ok := k.circleCircleCrits(ef, f)
 		if !ok {
-			sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+			sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 			return
 		}
 		crits = cs
@@ -476,10 +476,10 @@ func (k *Kernel) circleOffsetFE(f *clearance.CFace, e *clearance.CEdge, sink *cl
 // admits no witness, and the coarse box distance can prove more.
 func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, sink *clearance.CellSink) {
 	if lo, hi, ok := k.windowedCircleFE(f, e); ok {
-		sink.CoarseWith(lo, hi, f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+		sink.CoarseWith(lo, hi, f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 		return
 	}
-	sink.Coarse(f.Box, e.Box, f.Wit, clearance.EdgeWits(e))
+	sink.Coarse(f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
 }
 
 // windowedCircleFE is the edge tier's twin of the windowed nested cell
@@ -632,7 +632,7 @@ func (k *Kernel) lineLineEE(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 	}
 	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub, clearance.LineLineDist(ea.A, segA, eb.A, segB))
 	if !ok {
-		sink.Coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
+		sink.Coarse(ea.Box, eb.Box, ea.Witnesses(k.tol), eb.Witnesses(k.tol))
 		return
 	}
 	admit := clearance.AdmitState(clearance.LineParamAdmit(ea, c.Fa, k.tol), clearance.LineParamAdmit(eb, c.Fb, k.tol))
@@ -669,7 +669,7 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 			perp := rel.Sub(ec.Axis.Scale(rel.Dot(ec.Axis)))
 			dirP, okd := perp.Normalize()
 			if !okd {
-				sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+				sink.Coarse(el.Box, ec.Box, el.Witnesses(k.tol), ec.Witnesses(k.tol))
 				return
 			}
 			// In the circle's plane the segment is one point ρ from the
@@ -682,7 +682,7 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 			ths = []float64{clearance.AngleOf(ec, dirP), clearance.AngleOf(ec, dirP.Scale(-1))}
 			dists = []clearance.Dist{rho.Sub(ec.Radius).Abs().Widen(charge), rho.Add(ec.Radius).Widen(charge)}
 		default:
-			sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+			sink.Coarse(el.Box, ec.Box, el.Witnesses(k.tol), ec.Witnesses(k.tol))
 			return
 		}
 		for i, th := range ths {
@@ -693,7 +693,7 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 		}
 		return
 	case clearance.DegUnknown:
-		sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+		sink.Coarse(el.Box, ec.Box, el.Witnesses(k.tol), ec.Witnesses(k.tol))
 		return
 	}
 	cp := spine.CircleParam{
@@ -704,7 +704,7 @@ func (k *Kernel) lineCircleEE(el, ec *clearance.CEdge, sink *clearance.CellSink)
 	}
 	crits, ok := k.lineCircleBracketCrits(cp, ec.Center, ec.RefU, ec.RefV, el.A, u)
 	if !ok {
-		sink.Coarse(el.Box, ec.Box, clearance.EdgeWits(el), clearance.EdgeWits(ec))
+		sink.Coarse(el.Box, ec.Box, el.Witnesses(k.tol), ec.Witnesses(k.tol))
 		return
 	}
 	for _, c := range crits {
@@ -770,7 +770,7 @@ func (k *Kernel) circleCircleEE(ea, eb *clearance.CEdge, sink *clearance.CellSin
 	fb := &clearance.CFace{Kind: clearance.CkTorus, Anchor: eb.Center, Axis: eb.Axis, RefU: eb.RefU, RefV: eb.RefV, Major: eb.Radius}
 	crits, ok := k.circleCircleCrits(fa, fb)
 	if !ok {
-		sink.Coarse(ea.Box, eb.Box, clearance.EdgeWits(ea), clearance.EdgeWits(eb))
+		sink.Coarse(ea.Box, eb.Box, ea.Witnesses(k.tol), eb.Witnesses(k.tol))
 		return
 	}
 	for _, c := range crits {

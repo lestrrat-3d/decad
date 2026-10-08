@@ -585,6 +585,25 @@ trimmed inner face alone and asks the oracle nothing:
   — subdomain centers, mapped feet — and `d(p, q) ≥ Gap` holds by definition.
   A witness must be admitted (on the trimmed face, not just the carrier) or
   it bounds nothing.
+- **A float witness carries its own proven gap.** A face's witnesses
+  (`CFace.Wit`) and an edge's are float samples: `math.Sincos` values lifted
+  through the payload's frame and placement. A lift whose terms cancel
+  rounds at the scale of its terms, not of the point it returns: a cone
+  revolved about an axis anchored at `u = −2²⁰` reads its witness's axial
+  coordinate at `2²⁰`, so the witness lands about `1e-10` off a wall near the
+  origin. The coarse enclosure therefore never reads a witness alone
+  (`clearance.Witness`, `internal/clearance/witness.go`). Each one carries
+  the exact distance from it to its carrier, read by the same enclosure the
+  vertex cells read for that kind and charged `DirCharge` alike: `Height`
+  for a plane, `SpineDist` less the radius for a cylinder, sphere or torus,
+  `ConeDist` for a cone, `PointLineDist` for a segment's midpoint and
+  `PointCircleDist` for a circle's points. A segment's two ends are the
+  segment's own ends and carry nothing. The distance holds only when the
+  witness's carrier foot is admitted by the trim at the kernel's own margin
+  `tol`, as every cell's upper bound is: the foot is then a point of the
+  trimmed face. A witness on its trim's boundary — a cylinder's corner
+  sample, an arc's start — has its foot classified ambiguous and is never
+  read.
 - **A lower bound must under-estimate, never over.** Each parameter subdomain
   gets a conservative enclosure from the payload's own extreme machinery (the
   directional extremes and angular-sweep extremes the prism and revolve
@@ -623,10 +642,11 @@ trimmed inner face alone and asks the oracle nothing:
   envelope of every point and radius it reads (`clearance.DirCharge`): the
   tilt times any lever arm inside that envelope is far smaller. A box edge
   `√2` from a slanted prism wall reads a bound of about `5e-13`. The coarse
-  enclosure charges the same envelope bound against its box distance and
-  its witness distance, because a box corner and a witness are floats a few
-  roundings off the hull and the face they stand for. The P4/P8 brackets
-  already carry the kernel's slack in their half-width.
+  enclosure charges the same envelope bound against its box distance,
+  because a box corner is a float a few roundings off the hull it encloses.
+  Its upper end reads the closest witness pair's distance as a proven
+  enclosure (`PointPointDist`) and adds both witnesses' own gaps (above).
+  The P4/P8 brackets already carry the kernel's slack in their half-width.
 - **Pruning reads the bounds it just proved.** Body boxes prune first (the
   shipped `boxesDisjoint` machinery), then cells. The enumeration (§3) keeps
   `H`, the least `hi` among the contributions so far, and skips a vertex ×
@@ -694,7 +714,8 @@ trimmed inner face alone and asks the oracle nothing:
   coordinate axis and covers the axis re-expression, an axis snap and the
   axis's own error everywhere else. Witness points
   are float samples the kernel never reads as recorded boundary points, so
-  their lift charges nothing.
+  their lift charges nothing here; the coarse enclosure charges each its own
+  gap from its carrier instead (above).
 - **A vertex widens the row by its own bound.** The kernel reads every
   topology vertex as a candidate, and each is lifted through its own float
   construction: a partial revolve's cap corner through the held cosine and

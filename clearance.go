@@ -414,9 +414,10 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 // pairDiameter reads the pair's diameter D — the greatest distance between
 // two points drawn from either body — through pairGateDiameter (§7,
 // verification §3): points each body proves lie on it, each charged its
-// proven gap. It never reads the carriers' witnesses (CFace.Wit), which carry
-// no gap. The reading may understate the true diameter, which only lowers the
-// noise floor: the safe direction.
+// proven gap. It never reads the carriers' witnesses (CFace.Wit), whose gaps
+// (clearance.Witness) are proven to the carriers, not to the body. The
+// reading may understate the true diameter, which only lowers the noise
+// floor: the safe direction.
 func (k *pairKernel) pairDiameter() (float64, error) {
 	return pairGateDiameter(k.ctx, k.a.body, k.b.body)
 }

@@ -47,6 +47,9 @@ type CFace struct {
 	Spindle   bool      // torus minor >= major: off the polynomial path (§4)
 
 	Box [2]r3.Vec
+	// Wit holds float samples on the face. The coarse enclosure reads one
+	// only beside its own proven gap from the face (Witnesses); a sample on
+	// the trim's boundary has none and is never read.
 	Wit []r3.Vec
 
 	// LiftRound is the largest exact rounding the payload's own frame lift and

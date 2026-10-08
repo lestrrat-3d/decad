@@ -18,7 +18,8 @@ import (
 // or below tol answers the filled bore.
 
 // cylinderFace is a full cylinder face of radius r about the line through
-// anchor along the unit axis, trimmed to the axial window [z0, z1].
+// anchor along the unit axis, trimmed to the axial window [z0, z1], with one
+// witness at mid-window, where the trim admits its foot.
 func cylinderFace(anchor, axis r3.Vec, r, z0, z1 float64) *clearance.CFace {
 	u := clearance.PerpTo(axis)
 	f := &clearance.CFace{
@@ -33,7 +34,7 @@ func cylinderFace(anchor, axis r3.Vec, r, z0, z1 float64) *clearance.CFace {
 	}
 	lo, hi := anchor.Add(axis.Scale(z0)), anchor.Add(axis.Scale(z1))
 	f.Box = clearance.BoxUnion(clearance.CircleBox(lo, axis, r), clearance.CircleBox(hi, axis, r))
-	f.Wit = []r3.Vec{lo.Add(u.Scale(r))}
+	f.Wit = []r3.Vec{anchor.Add(axis.Scale((z0 + z1) / 2)).Add(u.Scale(r))}
 	return f
 }
 

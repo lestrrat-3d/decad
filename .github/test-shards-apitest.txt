@@ -415,6 +415,7 @@
 2	0.00	TestClearanceAxisBoxesNearTolerance
 2	0.01	TestClearanceCellReadingsContainTruth
 2	0.01	TestClearanceCellReadingsStayExact
+2	0.01	TestClearanceCoarseWitnessContainsTruth
 2	0.00	TestClearanceConeCoarseRow
 2	0.00	TestClearanceCubesDiagonalOffset
 2	0.00	TestClearanceFarOriginTiltedPlanePairContainsTruth
