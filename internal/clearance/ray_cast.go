@@ -84,7 +84,7 @@ func (f *CFace) RayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (i
 		return n, ok, nil
 	case CkCone:
 		rel := p.Sub(f.Anchor)
-		k := math.Tan(f.Half)
+		k := f.ConeTan()
 		az := rel.Dot(f.Axis)
 		dz := dir.Dot(f.Axis)
 		relP := rel.Sub(f.Axis.Scale(az))

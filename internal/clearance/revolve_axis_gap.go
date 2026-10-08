@@ -43,11 +43,10 @@ import (
 // differences, and its apex vertex where the walk reaches the axis. That
 // covers the apex's own rounding, which sits at the scale of the axial
 // coordinate and so can dwarf every world coordinate of a part whose axis
-// anchor lies far along its axis. What it leaves out is the half angle's
-// atan2 of that slope: one rounding of the angle itself, which moves a point
-// by its slant distance times a relative error of order 1e-16, the same
-// float evaluation every cone cell commits again when it takes math.Sincos of
-// it.
+// anchor lies far along its axis. The carrier holds that slope itself
+// (CFace.Rise and CFace.Run), and every cell reads its sine, cosine, tangent
+// and meridian distance off it, so no float half angle stands between the
+// cone compared here and the cone the cells read.
 type revolveGapMeter struct {
 	in         RevolveCarrierInput
 	a3p, wp    r3.Vec
@@ -254,7 +253,7 @@ func (m *revolveGapMeter) capRegion(wall RevolveWall) {
 // cone charges the cone carrier f one wall built about the float apex apexZ:
 // (f.Anchor + f.Axis·h) + Radial(φ)·h·s at each axial window end h (and at each
 // joint's own), with s = |dρ|/|dz| the exact slope of the walk's own float
-// differences, which is the tangent the carrier's half angle is the atan2 of.
+// differences, which is the slope the carrier holds as f.Rise over f.Run.
 // An end on the axis is also the apex vertex BuildRevolveCarriers
 // synthesizes at f.Anchor, so that end is compared there too.
 func (m *revolveGapMeter) cone(wall RevolveWall, f *CFace, apexZ, dz, dr float64) {

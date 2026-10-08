@@ -159,19 +159,23 @@ adds nothing when it is zero, which it is for an integer profile about a
 coordinate axis. The junction vertices and the `Circle3`/`Arc3` edges the
 kernel reads through `newCEdge` are built from the same walk values, so they
 share this displacement and add only the float evaluation of their own
-centre (`docs/evaluator-design.md` §6). Two roundings sit outside the
-comparison, each the size of the float evaluation every cell commits again
-on the same carrier. A cone's half angle is the atan2 of the slope the
-comparison reads: one rounding of the angle, which moves a point by its slant
-distance times about 1e-16, as the cells' own `math.Sincos` of it does. A
-cap's in-plane direction is rounded from the held angle's cosine and sine:
-across the cap it tilts the plane by about 1e-16 radians, the size of the
-rounding the cells commit evaluating that plane's equation from its origin
-on the axis, and along the cap it moves only the trim, which changes a
-distance to second order. In fixtures 2²⁰ from their axis the truth sits at
-most a quarter of the published bound from the row's value. The cap's corners, where that rounding moves a
-point to first order, are vertices, and their own bounds widen the row
-(§5).
+centre (`docs/evaluator-design.md` §6). A cone carrier holds the slope the
+comparison reads (`clearance.CFace`'s `Rise` and `Run`), never a half angle:
+the cone cells take the half angle's sine, cosine and tangent, and a point's
+distance from the generating ray and its slant along it, off that slope in a
+few divisions and a square root (`CFace.ConeMeridian`), so the cone they read
+is the cone compared. For a point whose axial offset and radius are
+integers, against a Pythagorean slope, the distance is the correctly rounded
+truth. One rounding sits outside the comparison, the size of the float
+evaluation every cell commits again on the same carrier. A cap's in-plane
+direction is rounded from the held angle's cosine and sine: across the cap
+it tilts the plane by about 1e-16 radians, the size of the rounding the cells
+commit evaluating that plane's equation from its origin on the axis, and
+along the cap it moves only the trim, which changes a distance to second
+order. In fixtures 2²⁰ from their axis the truth sits at most a quarter of
+the published bound from the row's value. The cap's corners, where that
+rounding moves a point to first order, are vertices, and their own bounds
+widen the row (§5).
 
 **A coalesced wall stands for exactly collinear segments only.** The walk
 decomposition every consumer shares merges two straight walks only where
