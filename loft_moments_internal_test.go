@@ -442,10 +442,11 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 // bound-derived Exactness fails wherever the bound arithmetic runs out of
 // scale to state, and that happens at BOTH ends of float range. Each row whose
 // bound is zero would read Exact under a derived Exactness — asserted per row,
-// so the test fails loudly if the derivation returns — and three independent
-// mechanisms reach a zero bound here: an empty wall set, a representable cap
-// rational with no wall at all, and a subnormal wall triangle whose summation
-// term underflows. The +Inf regime at the far end is pinned by
+// so the test fails loudly if the derivation returns — and two independent
+// mechanisms reach a zero bound here: an empty wall set and a representable cap
+// rational with no wall at all. A subnormal wall triangle does not: its
+// summation term carries proofbound.SumSlop's absolute per-term underflow
+// charge, so its row asserts a positive bound. The +Inf regime at the far end is pinned by
 // TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale, which asserts the
 // same constant.
 func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
@@ -485,13 +486,13 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 		},
 		{
 			// The smallest positive area float64 holds: |u x v|/2 is exactly
-			// 2^-1074, so the per-triangle bracket has zero width, and the
-			// summation term scaled off that magnitude underflows to zero.
+			// 2^-1074, so the per-triangle bracket has zero width. The
+			// summation term's relative charges underflow at that magnitude,
+			// but its absolute per-term underflow charge keeps it positive.
 			name: "subnormal wall triangle",
 			build: func(m *loftMassAccumulator) {
 				m.add(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, math.Ldexp(1, -1073), 0), true)
 			},
-			zeroBound: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
