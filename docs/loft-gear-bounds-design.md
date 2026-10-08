@@ -214,9 +214,14 @@ loftChordFraction = 2.5e-4
 `falsifyRecordedArea` already computes through `evaluatorIntegrals` — and
 `perimeterUpper(p)` is the sum over the record's segments of `PerCellArcUpper(seg,
 walk, 1)`: the exact `circularLengthInterval` bracket for an arc, the walk's own
-`LengthUpper` otherwise. Both are rounded once from exact rationals, so the same record
-gives the same target on every platform; a target decides the vertex set and must
-not vary with FMA.
+`LengthUpper` otherwise. A target decides the vertex set. For a record of `LineSeg`
+and polynomial Tier A segments with recorded control points, both inputs are
+exact-rational computations rounded once, so the same record gives the same target
+on every platform; `TestLoftChordTargetReadsFeatureSize` pins one such record's
+target bits, and CI reads them on amd64 and arm64. A circular segment's area
+contribution is a float trig expression (`internal/momentregion`'s `AddCircular`),
+and a `FitSplineSeg`'s spans come from sketch's float interpolation solve, so a
+record holding either can read a target whose last bits differ between platforms.
 
 **Why `A / P`.** Loft §5.1's rule reads the coordinate envelope, which grows with
 the gear radius and with the section's distance from the sketch origin, while the
@@ -228,11 +233,15 @@ tooth's target instead of the gear's. A per-segment target was considered and
 declined: the residual is a perimeter-weighted sum of departures, so no allocation
 across segments lowers it for a given station count by more than a constant.
 
-**Where it is computed.** Once, in `Document.Loft`, from the integrals
-`falsifyRecordedArea` already ran, and stored on `loftPayload.chordTarget`;
-`placed` re-evaluates from the stored value. Recomputing the area integral costs
-1.1 s per record at z40, which the prototype paid and the implementation must not.
-`loftStationCapGate` reads the same stored target.
+**Where it is computed.** `Document.Loft` stores the two integrals
+`falsifyRecordedArea` already ran on the payload (`loftPayload.recordArea`), and
+`placed` carries them over unchanged. `loftStationCapGate` computes the target once
+per evaluation from them and the walks `validateLoftRecords` resolves, decides S15
+against it, and returns it to the station generators. The target itself is not
+stored: its perimeter half reads the walks, which only `evalLoft` resolves, and
+recomputing it from the stored areas is one pass over the segments. Recomputing the
+area integral costs 1.1 s per record at z40, which the prototype paid and the
+implementation does not.
 
 **Bisect on `max(sagitta, matched)`.** `SagittaStationWalk.WalkCell` measures each
 side's `SpanMatchedDeltaUpper` beside its sagitta and bisects while either exceeds
@@ -384,7 +393,7 @@ asserted as ratios against the tolerance.
 | `TestLoftCentroidShiftFormEnclosesRefinedRing` | the exact ring centroid lies inside `Bound` of the published one at every `m`; the bound is below the old form's on every row | deleting `R_c`'s `matchedDelta` term; deleting the shift |
 | `TestLoftCentroidToothReadsSound` | one tooth at z = 8, 20, 40 reads `Sound` with Centroid ratio below `2.5e-4 · 4` | reinstating the anchor-based form |
 | `TestLoftAreaCapTubeIsPerCell` | `Area.Bound` composes the per-cell tube; it equals the maximum form when every cell's departure is equal (a uniform full circle) and is below it on the gear | charging the maximum form |
-| `TestLoftChordTargetReadsFeatureSize` | the target of a tooth, a gear and a 10× translated copy of each: `fraction · A/P` to one ulp, translation-invariant, equal on amd64/arm64 fixtures of the same record | reading the envelope rule |
+| `TestLoftChordTargetReadsFeatureSize` | the target of a tooth, a gear and a copy of each translated 10 outer radii: `fraction · A/P` to one ulp, translation-invariant; an exact `LineSeg`/`NURBSSeg` record's target bits pinned, read on amd64 and arm64 by CI | reading the envelope rule |
 | `TestLoftFreeformWalkBisectsOnMatched` | on the zigzag span of `TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` paired with itself, every accepted cell's matched value is at or below the target | bisecting on the sagitta alone |
 | `TestLoftArcWedgeVerifiesSound` (re-pinned) | the §14 wedge's Volume and Centroid margins under the new constant, as ratios | — |
 | `TestLoftSweepEnumeratesEveryTouchingPair` | on the gear and on the existing crossing fixtures, the sweep's candidate set contains every pair the all-pairs reference finds touching, and the refused pair is identical | enumerating from a shifted axis without the full box test |
@@ -407,7 +416,7 @@ the loft sections §12 lists for it.
 | **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `SkirtLeg`, `CapAreaExcess` per cell and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `loft_moments.go` (`computeLoftChordedAllow` loses the cap-offset scan); `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`; `loft_build.go` `loftMeshProofOf` (`volSymDiff`); `internal/proofbound/bounds.go` deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow` and their tests | the first five tests of §8 that name Volume or Area |
 | **2 — centroid shift form** | `internal/loftmesh/mass_accumulator.go` `Centroid`; delete `PlacedCentroidAllow` and the loft's `ChordedBoundaryMomentAllow`/`ChordedBoundaryMomentResidualAllow` calls (helpers stay where modify reach reads them) | the two centroid tests |
 | **3 — audit** | `internal/loftmesh/loft_audit.go`: `sweepCandidates`, `LoftCrossingAuditStructured`, `capFamilyProof`, `LoftAuditShortcuts.Sweep`/`.CapProof`; `loft_build.go` calls the structured entry with `a.walls`, `a.capStartCount`, `a.vIdx`, `a.wIdx`; `sweep_mitre_build.go` unchanged; `internal/proofbound/budget.go` comment on what S8 counts | the four audit tests |
-| **4 — chord target and matched bisection** | `loft_stations.go`: `loftChordTarget(area0, perim0, area1, perim1)`, `loftFeatureSize`, `loftChordFraction = 2.5e-4`; `loft.go` passes `falsifyRecordedArea`'s integrals and stores `loftPayload.chordTarget`; `loft_build.go` reads it; `internal/freeform/spline_stations.go` `WalkCell` measures and forwards the matched value, `StationCellReader.AcceptCell` takes it; `loft_chord_calibration_internal_test.go` re-pinned | the target, walk and wedge tests |
+| **4 — chord target and matched bisection** | `loft_stations.go`: `loftChordTarget(area0, perim0, area1, perim1)`, `loftFeatureSize`, `loftChordFraction = 2.5e-4`; `loft.go` passes `falsifyRecordedArea`'s integrals on `loftPayload.recordArea`; `loftStationCapGate` computes the target from them and `loft_build.go` chords at it; `internal/freeform/spline_stations.go` `WalkCell` measures and forwards the matched value, `StationCellReader.AcceptCell` takes it; `loft_chord_calibration_internal_test.go` re-pinned | the target, walk and wedge tests |
 | **5 — ceilings and the gear fixture** | `internal/loftmesh/record_stations.go` `StationCap(P)` and `StationShare`; `loft_stations.go` `loftStationCapGate`; `internal/freeform/work_budget.go` `FreeformWork.Limit`, `Step` reads it, `ReconstructionWorkLimit = 1 << 28`, `ReconstructionChordCeiling = 11585`; `loft.go` raises the limit after the cap gate; `doc.go` support map, `docs/missing-features.md` gear row, loft §12 increment table | the gear, cap, work and S8 tests; `go test . ./apitest/ -run '^TestCI'` |
 
 Each PR runs the probe (kept as `loft_gear_internal_test.go` behind a `-run` filter
@@ -421,8 +430,8 @@ and `testing.Short`) and records the ratios it reached in its description.
   build-wide `matchedDelta` for the per-cell value in `wallLeg` or the cap tube.
 - Do not bisect on the sagitta alone and rely on the measured 1.5× ratio; the ratio
   is unbounded on a general span.
-- Do not recompute the area integral inside `evalLoft` for the target: pass the
-  integrals `falsifyRecordedArea` computed, and store the target on the payload.
+- Do not recompute the area integral inside `evalLoft` for the target: carry the
+  integrals `falsifyRecordedArea` computed on the payload.
 - Do not derive the target from the sketch's claimed area; the record's own exact
   integral is the deterministic input.
 - Do not make the target a caller option or a function of a published measurement

@@ -926,7 +926,7 @@
 4	0.75	TestFreeformArcLengthNearDuplicateControlPair
 4	0.30	TestHeldVolumeExactMatchesRationalSum
 4	0.01	TestLinkageConstantPlacementIsReused
-4	0.23	TestLoftChordTargetUsesTheAnalyticEnvelope
+4	0.60	TestLoftChordTargetReadsFeatureSize
 4	0.08	TestLoftCircularCellStationsJointWalkUpSharesOneCount
 4	0.07	TestLoftCircularCellStationsMatchedDeltaIsItsSagitta
 4	0.01	TestLoftCollapsedGateDiameterIsRefusedFirst
@@ -1115,3 +1115,4 @@
 5	0.01	TestStackedUnionBrepLBossReflexCornerReadsConcave
 5	0.01	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.01	TestClassBRootedCutKeepsThePrismsConvexity
+3	0.01	TestLoftFreeformWalkBisectsOnMatched

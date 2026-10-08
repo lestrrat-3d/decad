@@ -139,8 +139,8 @@ the rules leave to the byte budget.
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
-| `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
-| `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
+| `loft_pairing.go` | Root adapters for Table P's gates and station pairs. |
+| `loft_stations.go` | Loft chord target and station cap. See loft §5.1. |
 | `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 

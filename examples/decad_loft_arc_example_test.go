@@ -88,7 +88,7 @@ func Example_decad_loft_arc() {
 	fmt.Printf("volume within closed form: %v\n", math.Abs(vol.Value.Base()-wantVolume) <= vol.Bound.Base())
 	fmt.Printf("verify: %s\n", report.Status)
 	// Output:
-	// volume: 196.33 mm^3 (Approximate)
+	// volume: 196.34 mm^3 (Approximate)
 	// volume within closed form: true
 	// verify: Sound
 }

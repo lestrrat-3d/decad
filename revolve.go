@@ -145,7 +145,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	// own preflight continue it, and every walkOf under them spends what is left
 	// (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
-	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 	surfaceResult := false
