@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -998,7 +999,7 @@ func requireStationDiameter(t *testing.T, d, h float64, upperSquare *big.Rat) {
 	square.Mul(square, square)
 	require.LessOrEqual(t, square.Cmp(upperSquare), 0,
 		`the gate diameter must stay at or below the body's own diameter`)
-	require.GreaterOrEqual(t, d, math.Hypot(2*math.Cos(gateStationStep/2), h),
+	require.GreaterOrEqual(t, d, math.Hypot(2*math.Cos(diameter.StationStep/2), h),
 		`the stations must reach a near-antipodal pair across the two levels`)
 }
 

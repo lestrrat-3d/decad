@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -194,7 +195,7 @@ func TestCapBlendGateDiameterReadsSideLevels(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		upper := new(big.Rat).Add(ratSquare(2*r-setback), ratSquare(h))
-		requireGateDiameterWithin(t, d, math.Hypot(r+(r-setback)*math.Cos(gateStationStep/2), h), upper)
+		requireGateDiameterWithin(t, d, math.Hypot(r+(r-setback)*math.Cos(diameter.StationStep/2), h), upper)
 	})
 }
 
@@ -221,7 +222,7 @@ func TestCapBlendGateDiameterReadsCapContours(t *testing.T) {
 	d, ok, err := bodyGateDiameter(t.Context(), chamfered)
 	require.NoError(t, err)
 	require.True(t, ok)
-	requireGateDiameterWithin(t, d, math.Hypot(3+3*math.Cos(gateStationStep/2), 20), big.NewRat(436, 1))
+	requireGateDiameterWithin(t, d, math.Hypot(3+3*math.Cos(diameter.StationStep/2), 20), big.NewRat(436, 1))
 }
 
 // Every point a gate diameter reads must carry a proven gap from a point of
@@ -353,7 +354,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			placed, err := chamfered.Placed(t.Context(), placement)
 			require.NoError(t, err)
 			upper := new(big.Rat).Mul(big.NewRat(464, 1), placedStretchSquare(placement))
-			lower := math.Hypot(5+3*math.Cos(gateStationStep/2), 20) - gateFarSlack()
+			lower := math.Hypot(5+3*math.Cos(diameter.StationStep/2), 20) - gateFarSlack()
 			requireGateDiameterWithin(t, read(t, placed), lower, upper)
 		}
 	})
@@ -551,7 +552,7 @@ func TestGateDiameterReadsArcWallStations(t *testing.T) {
 func TestPairGateDiameterReadsStations(t *testing.T) {
 	t.Parallel()
 	upper := big.NewRat(145, 1)
-	lower := math.Hypot(10+2*math.Cos(gateStationStep/2), 1)
+	lower := math.Hypot(10+2*math.Cos(diameter.StationStep/2), 1)
 	build := func(t *testing.T, cx, cy float64) (*Body, *Body) {
 		t.Helper()
 		doc := New()
@@ -634,7 +635,7 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		d, ok, err := bodyGateDiameter(t.Context(), sheet)
 		require.NoError(t, err)
 		require.True(t, ok)
-		requireGateDiameterWithin(t, d, 20*math.Cos(gateStationStep/2), big.NewRat(400, 1))
+		requireGateDiameterWithin(t, d, 20*math.Cos(diameter.StationStep/2), big.NewRat(400, 1))
 	})
 	t.Run("displaced section", func(t *testing.T) {
 		t.Parallel()
@@ -647,7 +648,7 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		d, ok, err := bodyGateDiameter(t.Context(), &Body{payload: rp})
 		require.NoError(t, err)
 		require.True(t, ok)
-		requireGateDiameterWithin(t, d, 20*math.Cos(gateStationStep/2)-4*rp.sectionDelta, big.NewRat(400, 1))
+		requireGateDiameterWithin(t, d, 20*math.Cos(diameter.StationStep/2)-4*rp.sectionDelta, big.NewRat(400, 1))
 		require.LessOrEqual(t, d, exact-2*rp.sectionDelta, `the section displacement is charged on both ends of the pair`)
 	})
 }
