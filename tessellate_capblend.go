@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -15,7 +13,6 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/r3"
 )
 
 // This file is docs/tessellation-design.md §13's increment T7
@@ -90,6 +87,19 @@ type capBlendLoopMesh struct {
 	capArcStart    []int // corner i's first connector-arc sample, −1 when not reflex
 	sideLo, sideHi []int // mesh vertices of each side sample at zLo and zHi
 	capLoV, capHiV []int // mesh vertices of each cap sample at z0 and z1
+}
+
+// proof passes the numeric loop record without copying its walk or sample slices.
+func (lm *capBlendLoopMesh) proof() tessellation.CapBlendLoopProof {
+	return tessellation.CapBlendLoopProof{
+		Walks: lm.walks, Count: lm.count,
+		SideSag: lm.sideSag, CapSag: lm.capSag,
+		CapRadius: lm.capRadius, CapTh0: lm.capTh0, CapTh1: lm.capTh1,
+		ArcCount: lm.arcCount, ArcSag: lm.arcSag,
+		ArcTh0: lm.arcTh0, ArcTh1: lm.arcTh1,
+		ZLo: lm.zLo, ZHi: lm.zHi,
+		Chamfered: lm.chamfered, OnStart: lm.onStart, OnEnd: lm.onEnd,
+	}
 }
 
 // tessellateCapBlend meshes a cap-loop chamfer result
@@ -352,128 +362,31 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	return store, motion, nil
 }
 
-// capBlendCapMotion fills one loop's capMotion: each cap sample's plane-local
-// displacement from the point docs/tessellation-reach-design.md §7's ideal
-// polyhedron B1 places there — on the wall's exact offset circle at the exact
-// fraction k/n of the SIDE window, or at the exact miter point of a line-line
-// corner. It walks the cap ring in the order emitCapBlendSamples wrote it.
-//
-// A reflex connector station keeps +Inf: capBlendOccupiedVolumeAdmission
-// refuses that band before the motion is read, and the sentinel makes
-// requireDerivableStore fail loudly if it ever is.
+// capBlendCapMotion reads the loop's numeric record through internal/tessellation.
 func capBlendCapMotion(budget *proofbound.WorkBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
-	lm.capMotion = make([]float64, len(lm.capPts))
-	for j := range lm.capMotion {
-		lm.capMotion[j] = math.Inf(1)
+	in := tessellation.CapBlendMotionInput{
+		CapBlendLoopProof: lm.proof(),
+		Loop:              lm.li, Segments: lm.loop.Segments,
+		CapPts: lm.capPts, CapWallStart: lm.capWallStart,
+		Whole: lm.whole, D: cbp.d,
 	}
-	if !lm.chamfered {
-		return nil
+	in.BandDelta[0], in.HasBandDelta[0] = cbp.bandDelta[capBandKey{loop: lm.li, start: true}]
+	in.BandDelta[1], in.HasBandDelta[1] = cbp.bandDelta[capBandKey{loop: lm.li, start: false}]
+	motion, err := tessellation.CapBlendCapMotion(budget, in, capOffsetStationBound)
+	if err != nil {
+		return err
 	}
-	n := len(lm.walks)
-	offset := func(w survey2d.SideWalk) *big.Rat { return capcontour.CapWallRadiusOffset(w, cbp.d) }
-	if lm.whole {
-		w := lm.walks[0]
-		seg := lm.loop.Segments[w.Segs[0]]
-		off := offset(w)
-		for k := range lm.count[0] {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			p := lm.capPts[k]
-			lm.capMotion[k] = proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[0], off, p.U, p.V))
-		}
-		return nil
-	}
-	// A line-line miter foot is the exact miter point within the band's own
-	// contour displacement (capContourDelta). The contour is the same whichever
-	// cap the loop is chamfered on, and the larger of the two stated
-	// displacements covers it either way.
-	miter := 0.0
-	for _, start := range []bool{true, false} {
-		if (start && !lm.onStart) || (!start && !lm.onEnd) {
-			continue
-		}
-		delta, ok := cbp.bandDelta[capBandKey{loop: lm.li, start: start}]
-		if !ok {
-			return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
-		}
-		miter = math.Max(miter, delta)
-	}
-	for i, w := range lm.walks {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		base := lm.capWallStart[i]
-		if !w.IsCircular() {
-			prev := lm.walks[(i+n-1)%n]
-			if !prev.IsCircular() {
-				lm.capMotion[base] = miter
-				continue
-			}
-			// A G1 foot after a circular wall is that wall's own k == n station
-			// on its exact offset circle.
-			p := lm.capPts[base]
-			prevIdx := (i + n - 1) % n
-			prevSeg := lm.loop.Segments[prev.Segs[0]]
-			cnt := lm.count[prevIdx]
-			lm.capMotion[base] = proofbound.WalkEndBoundAllow(capOffsetStationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
-			continue
-		}
-		seg := lm.loop.Segments[w.Segs[0]]
-		off := offset(w)
-		for k := range lm.count[i] {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			p := lm.capPts[base+k]
-			lm.capMotion[base+k] = proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[i], off, p.U, p.V))
-		}
-	}
+	lm.capMotion = motion
 	return nil
 }
 
-// capBlendChordVolume is docs/tessellation-reach-design.md §7's Mchord: the
-// volume between the ideal polyhedron B1 and the body, slice by slice. Over
-// each loop's trimmed range a level section of B1 is the chord polygon of the
-// recorded section, and over each chamfered band it is the chord polygon of
-// the exact offset section at the SAME exact azimuths; either differs from the
-// region it chords by the union of its circular segments, whose summed area
-// walkSegmentArea states (the same helper the prism's own volSymDiff charges).
-//
-// A band's segments are read over the SIDE window at the larger of the wall's
-// two radii: the band shares that one window at every level (admission proves
-// it), and a segment's area ρ²(Δθ − sin Δθ)/2 is monotone in ρ, so the larger
-// radius bounds every intermediate level. The computed cap window
-// (capTh0/capTh1) is never read here.
+// capBlendChordVolume adapts the resolved loops to the slice-wise proof.
 func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
-	total := 0.0
-	dUpper := proofbound.AbsSumUpper(cbp.d, cbp.dDelta)
-	for li := range lms {
-		lm := &lms[li]
-		trim := proofbound.BoundedSub(lm.zHi, lm.zLo)
-		hTrimUpper := proofbound.AbsSumUpper(math.Abs(trim.Value), trim.Bound)
-		sideSegs, bandSegs := 0.0, 0.0
-		for i, w := range lm.walks {
-			if !w.IsCircular() {
-				continue
-			}
-			sideSegs = proofbound.AbsSumUpper(sideSegs, walkSegmentArea(w.SegmentWalk, lm.count[i]))
-			if !lm.chamfered {
-				continue
-			}
-			bandSegs = proofbound.AbsSumUpper(bandSegs, walkSegmentArea(survey2d.SegmentWalk{
-				Kind: survey2d.WalkCircular, Radius: math.Max(w.Radius, lm.capRadius[i]),
-				Th0: w.Th0, Th1: w.Th1, Closed: w.Closed,
-			}, lm.count[i]))
-		}
-		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(hTrimUpper, sideSegs))
-		for _, chamfered := range []bool{lm.onStart, lm.onEnd} {
-			if chamfered {
-				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(dUpper, bandSegs))
-			}
-		}
+	loops := make([]tessellation.CapBlendLoopProof, len(lms))
+	for i := range lms {
+		loops[i] = lms[i].proof()
 	}
-	return total
+	return tessellation.CapBlendChordVolume(cbp.d, cbp.dDelta, loops)
 }
 
 // chordCapBlendLoop resolves ONE loop's walks the way buildCapBand does and
@@ -807,7 +720,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 			c1 := lm.capWallStart[i] + k + 1
 			if k == count-1 {
 				s1 = lm.sideStart[(i+1)%n]
-				c1 = capBlendNextCapSample(lm, (i+1)%n)
+				c1 = tessellation.CapBlendNextCapSample(lm.capArcStart, lm.capWallStart, (i+1)%n)
 			}
 			lo0, lo1, hi0, hi1 := capV[c0], capV[c1], sideV[s0], sideV[s1]
 			if !start {
@@ -851,18 +764,6 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 			capBlendFacetAllow(m, first, patchDelta))
 	}
 	return nil
-}
-
-// capBlendNextCapSample is the cap ring index the piece starting at corner i
-// opens on: the connector arc's own first station at a reflex corner, and the
-// following wall's own first station elsewhere. It is what closes a wall patch's
-// last quad and an apex patch's last fan triangle onto the vertex the next piece
-// starts from, so no strip ends on a vertex of its own.
-func capBlendNextCapSample(lm *capBlendLoopMesh, i int) int {
-	if lm.capArcStart != nil && lm.capArcStart[i] >= 0 {
-		return lm.capArcStart[i]
-	}
-	return lm.capWallStart[i]
 }
 
 // capBlendFacetAllow sums docs/tessellation-design.md §5's per-triangle area
@@ -967,60 +868,14 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	return nil
 }
 
-// capBlendRingSagitta is the largest sagitta a loop's ring at one level took:
-// the side directrix's over the original walks, or the cap contour's over the
-// offset arcs and every reflex corner's connector.
+// capBlendRingSagitta reads the side or cap ring's numeric proof.
 func capBlendRingSagitta(lm *capBlendLoopMesh, contour bool) float64 {
-	worst := 0.0
-	for i := range lm.walks {
-		s := lm.sideSag[i]
-		if contour {
-			s = lm.capSag[i]
-		}
-		worst = math.Max(worst, s)
-	}
-	if !contour {
-		return worst
-	}
-	for i := range lm.arcSag {
-		worst = math.Max(worst, lm.arcSag[i])
-	}
-	return worst
+	return tessellation.CapBlendRingSagitta(lm.proof(), contour)
 }
 
-// capBlendRingSegmentArea is the planar area one loop's chorded ring at a cap
-// loses or gains against the curve it stands for — the closed-form circular
-// segment sum walkSegmentArea states, taken over the ORIGINAL walks for an
-// unchamfered cap and over the offset arcs plus every reflex connector for a
-// chamfered one, since those are the curves that cap's boundary actually
-// follows.
+// capBlendRingSegmentArea reads the matching circular-segment area proof.
 func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) float64 {
-	total := 0.0
-	for i, w := range lm.walks {
-		if !w.IsCircular() {
-			continue
-		}
-		if !contour {
-			total = proofbound.AbsSumUpper(total, walkSegmentArea(w.SegmentWalk, lm.count[i]))
-			continue
-		}
-		total = proofbound.AbsSumUpper(total, walkSegmentArea(survey2d.SegmentWalk{
-			Kind: survey2d.WalkCircular, Radius: lm.capRadius[i],
-			Th0: lm.capTh0[i], Th1: lm.capTh1[i], Closed: w.Closed,
-		}, lm.count[i]))
-	}
-	if !contour {
-		return total
-	}
-	for i, count := range lm.arcCount {
-		if count == 0 {
-			continue
-		}
-		total = proofbound.AbsSumUpper(total, walkSegmentArea(survey2d.SegmentWalk{
-			Kind: survey2d.WalkCircular, Radius: d, Th0: lm.arcTh0[i], Th1: lm.arcTh1[i],
-		}, count))
-	}
-	return total
+	return tessellation.CapBlendRingSegmentArea(lm.proof(), contour, d)
 }
 
 // composeCapBlendBounds publishes docs/tessellation-design.md §2's sourceBound
@@ -1053,32 +908,9 @@ func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64) er
 func requireCapBlendFacetAreas(m *Mesh) error {
 	for i, tri := range m.triangles {
 		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		if capBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
+		if tessellation.CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
 			return fmt.Errorf(`%w: facet %d of this cap-loop chamfer mesh has zero area`, ErrUnsupported, i)
 		}
 	}
 	return nil
-}
-
-// capBlendTwiceAreaSq is the exact squared length of (b−a)×(c−a), zero exactly
-// for three collinear or coincident held corners.
-func capBlendTwiceAreaSq(a, b, c r3.Vec) *big.Rat {
-	sub := func(p, q r3.Vec) [3]*big.Rat {
-		return [3]*big.Rat{
-			new(big.Rat).Sub(proofarith.FloatRat(p.X), proofarith.FloatRat(q.X)),
-			new(big.Rat).Sub(proofarith.FloatRat(p.Y), proofarith.FloatRat(q.Y)),
-			new(big.Rat).Sub(proofarith.FloatRat(p.Z), proofarith.FloatRat(q.Z)),
-		}
-	}
-	u, v := sub(b, a), sub(c, a)
-	cross := [3]*big.Rat{
-		new(big.Rat).Sub(new(big.Rat).Mul(u[1], v[2]), new(big.Rat).Mul(u[2], v[1])),
-		new(big.Rat).Sub(new(big.Rat).Mul(u[2], v[0]), new(big.Rat).Mul(u[0], v[2])),
-		new(big.Rat).Sub(new(big.Rat).Mul(u[0], v[1]), new(big.Rat).Mul(u[1], v[0])),
-	}
-	out := new(big.Rat)
-	for _, k := range cross {
-		out.Add(out, new(big.Rat).Mul(k, k))
-	}
-	return out
 }
