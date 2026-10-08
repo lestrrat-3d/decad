@@ -301,10 +301,12 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		}
 	}
 
-	offChain, qB, qE, ends, err := offsetMirrorChain(budget, chain, rp.ax, s, tmm)
+	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax),
+		offset2d.OpenEnd{Mirror: true}, offset2d.OpenEnd{Mirror: true}, s, tmm, shellTol)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
+	offChain, qB, qE, ends := off.Segs, off.QStart, off.QEnd, off.Ends
 	pE := Point2{U: axisWalk.StartU, V: axisWalk.StartV}
 	pB := Point2{U: axisWalk.EndU, V: axisWalk.EndV}
 	z := func(p Point2) float64 { return (p.U-rp.ax.aU)*rp.ax.dU + (p.V-rp.ax.aV)*rp.ax.dV }
@@ -357,7 +359,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 }
 
 // revolveAxisCurve is the revolve axis as the held line the offset's mirror
-// joins meet (offsetOpenChain).
+// joins meet (offset2d.OffsetOpenChain).
 func revolveAxisCurve(ax axisFrame) offset2d.Curve {
 	return offset2d.Curve{IsLine: true, PX: ax.aU, PY: ax.aV, DX: ax.dU, DY: ax.dV}
 }
@@ -387,7 +389,7 @@ func openChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideW
 			Dir:    capcontour.Point{U: widen(ax.dU, ax.dUBound), V: widen(ax.dV, ax.dVBound)},
 		},
 	}
-	return chainSectionDelta(budget, chain, line, ends, s, t, tDelta)
+	return offset2d.ChainSectionDelta(budget, chain, line, ends, s, t, tDelta, shellTol)
 }
 
 // revolveSideFaceSegments adds the recorded meridian segments a removed
@@ -512,13 +514,13 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		chain = append(chain, walks[i])
 	}
 	first, last := chain[0], chain[len(chain)-1]
-	start := chainEnd{kind: axisEnd}
+	start := offset2d.OpenEnd{Mirror: true}
 	if before := (begin + n - 1) % n; before != axisAt {
-		start = chainEnd{kind: openingEnd, removed: walks[before]}
+		start = offset2d.OpenEnd{Removed: walks[before]}
 	}
-	end := chainEnd{kind: axisEnd}
+	end := offset2d.OpenEnd{Mirror: true}
 	if after := (begin + len(chain)) % n; after != axisAt {
-		end = chainEnd{kind: openingEnd, removed: walks[after]}
+		end = offset2d.OpenEnd{Removed: walks[after]}
 	}
 	segs := rp.profile.Outer.Segments
 	var kept []CurveSegment
@@ -527,14 +529,14 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 			kept = append(kept, segs[si])
 		}
 	}
-	off, err := offsetOpenChain(budget, chain, rp.ax, start, end, s, tmm)
+	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax), start, end, s, tmm, shellTol)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	qS, qE := off.qStart, off.qEnd
+	qS, qE := off.QStart, off.QEnd
 	kS := Point2{U: first.StartU, V: first.StartV}
 	kE := Point2{U: last.EndU, V: last.EndV}
-	if start.kind == axisEnd || end.kind == axisEnd {
+	if start.Mirror || end.Mirror {
 		axisWalk := walks[axisAt]
 		pE := Point2{U: axisWalk.StartU, V: axisWalk.StartV}
 		pB := Point2{U: axisWalk.EndU, V: axisWalk.EndV}
@@ -546,9 +548,9 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		along := func(from, to Point2) bool { return dir*(z(to)-z(from)) > 0 }
 		var ordered bool
 		switch {
-		case start.kind == axisEnd && s > 0: // K leaves the axis at pB: qB lies on A short of it.
+		case start.Mirror && s > 0: // K leaves the axis at pB: qB lies on A short of it.
 			ordered = along(pE, qS) && along(qS, pB)
-		case start.kind == axisEnd:
+		case start.Mirror:
 			ordered = along(pB, qS)
 		case s > 0: // K arrives on the axis at pE: qE lies on A past it.
 			ordered = along(pE, qE) && along(qE, pB)
@@ -562,25 +564,25 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	// closing returns the segment joining K to K' at one end: the axis line
 	// at an axis end, the rim at an opening end. fromK says it runs from K's
 	// endpoint to the offset's.
-	closing := func(e chainEnd, w survey2d.SideWalk, atEnd bool, j offset2d.Join, k, q Point2, fromK bool) (CurveSegment, error) {
-		if e.kind == axisEnd {
+	closing := func(e offset2d.OpenEnd, w survey2d.SideWalk, atEnd bool, j offset2d.Join, k, q Point2, fromK bool) (CurveSegment, error) {
+		if e.Mirror {
 			if fromK {
 				return LineSeg{Start: k, End: q, TStart: 0, TEnd: 1}, nil
 			}
 			return LineSeg{Start: q, End: k, TStart: 0, TEnd: 1}, nil
 		}
-		return offset2d.RimSegment(w, e.removed, atEnd, s, j, fromK)
+		return offset2d.RimSegment(w, e.Removed, atEnd, s, j, fromK)
 	}
 	inward := s > 0
-	atK, err := closing(end, last, true, off.ends[1].Join, kE, qE, inward)
+	atK, err := closing(end, last, true, off.Ends[1].Join, kE, qE, inward)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	atStart, err := closing(start, first, false, off.ends[0].Join, kS, qS, !inward)
+	atStart, err := closing(start, first, false, off.Ends[0].Join, kS, qS, !inward)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	loop, err := openChainWallLoop(budget, kept, off.segs, []CurveSegment{atK}, []CurveSegment{atStart}, inward)
+	loop, err := offset2d.OpenChainWallLoop(budget, kept, off.Segs, []CurveSegment{atK}, []CurveSegment{atStart}, inward)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
@@ -588,7 +590,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	if err := auditOffsetSectionBudget(budget, rp.profile, wall); err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	delta, err := openChainSectionDelta(budget, chain, rp.ax, off.ends, s, tmm, tDelta)
+	delta, err := openChainSectionDelta(budget, chain, rp.ax, off.Ends, s, tmm, tDelta)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
