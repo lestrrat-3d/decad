@@ -303,7 +303,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	if err := loftmesh.LoftCrossingAudit(budget, a.verts, a.tris); err != nil {
+	if err := loftmesh.LoftCrossingAuditStructured(budget, a.verts, a.tris, a.walls, a.capStartCount, a.vIdx, a.wIdx); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

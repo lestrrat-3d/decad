@@ -281,7 +281,9 @@ ENUMERATED, which pairs are tested, and how S8 counts.
 
 **Enumeration is sweep-and-prune over the triangles' boxes.** Sort the triangle
 indices by their box's lower bound on the axis of largest total extent (ties by
-index), sweep, and emit every pair whose boxes overlap on all three axes. A pair of
+index), sweep, and emit every pair whose boxes overlap on all three axes. Boxes are
+closed intervals: boxes that touch on a face, edge or corner overlap, as
+`BoxesOverlap`'s `<=` already decides. A pair of
 disjoint boxes shares no point (loft §6's existing box argument), so the enumerated
 set contains every touching pair; a pair sharing a vertex has overlapping boxes, so
 every pair Table C expects to touch is enumerated. Candidates are sorted
@@ -297,8 +299,15 @@ Let `C` be one cap's triangles, `L` its polygon loops as vertex-index cycles (th
 cap's `vIdx` or `wIdx`), `O` the other cap's vertices, and `Π` the exact plane of
 `C`'s first triangle with normal `n`.
 
-- **(a)** every vertex of `L` has exact sign 0 against `Π`;
-- **(b)** every vertex of `O` has a nonzero sign against `Π`, all the same;
+- **(s)** the index structure is the one assembly builds: loops of at least
+  three vertices, no index repeated across `L` and `O`, no vertex of `C` in `O`
+  and no vertex of the other cap in `L`, every wall triangle with a vertex in `O`
+  and its others in `L` forming one vertex or one loop edge, and every loop edge
+  an edge of some wall triangle;
+- **(a)** every vertex of `L`, and every vertex of every triangle of `C`, has
+  exact sign 0 against `Π`;
+- **(b)** every vertex of `O`, and every vertex of every triangle of the other
+  cap, has a nonzero sign against `Π`, all the same;
 - **(c)** every triangle of `C` has `n · ((B − A) × (C − A)) > 0`;
 - **(d)** the directed-edge multiset of `C` nets to exactly the edges of `L`, each
   loop traversed in one consistent direction, every other edge netting to zero;
@@ -312,7 +321,8 @@ pairwise disjoint — these give: (c)+(d) make `Σ_T 1_T` equal the winding numb
 `w_L` of the oriented boundary almost everywhere (a 2-chain and the region chain
 with the same boundary differ by a 2-cycle, which is zero in the plane); (e) with
 simple disjoint loops makes `w_L ∈ {0, 1}`; so the triangles of `C` are interior
-disjoint and cover the polygon exactly. A cap triangle therefore meets a polygon
+disjoint and cover the polygon exactly. (s) is what ties every loop edge to a wall
+triangle the wall-wall audit tests. A cap triangle therefore meets a polygon
 edge only in shared vertices or as that edge (a triangulation edge through a
 reflex vertex would put a neighbouring triangle outside the polygon, and a polygon
 vertex inside a polygon edge contradicts simplicity). A wall triangle `U` meets `Π`
@@ -322,7 +332,10 @@ which are its cap-side vertex or edge, a polygon vertex or edge by index; so
 cap triangle `T` and wall triangle `U`, and two triangles of `C` meet exactly in
 their shared edge or vertex. (b) also proves the two caps disjoint. Any condition
 failing falls back to pairwise testing of that cap's pairs through the same
-candidate list; nothing is admitted on a failed proof.
+candidate list; nothing is admitted on a failed proof. A pair is left to the proofs
+when either of its triangles is in a proven cap. When a wall-wall pair fails, the
+audit tests the decided pairs that precede it lexicographically before refusing, so
+the refused pair is the reference path's.
 
 **S8 counts candidates.** The ceiling `maxFacetPairTestsPerCall` stays `8_000_000`
 and is compared against the number of enumerated candidates the pairwise pass will

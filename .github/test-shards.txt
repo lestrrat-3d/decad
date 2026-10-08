@@ -95,7 +95,7 @@
 1	0.36	TestCornerSpanMatchesRationalForm
 1	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
 1	0.02	TestCupProofRecordCoversEveryPatchItHolds
-1	0.09	TestEvalLoftAuditRefusesOverBudget
+1	0.40	TestEvalLoftAuditCountsCandidatesNotPairs
 1	0.03	TestFacetedAxisSupportRefusesHoledFootprint
 1	0.01	TestFacetedAxisSupportRefusesTwoLowestFaces
 1	0.04	TestFacetedAxisSupportRejectsMalformedPlacementProvenance
@@ -1079,3 +1079,7 @@
 5	0.01	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.01	TestClassBRootedCutKeepsThePrismsConvexity
 3	0.01	TestLoftFreeformWalkBisectsOnMatched
+5	1.70	TestLoftSweepEnumeratesEveryTouchingPair
+1	0.80	TestLoftCapProofAgreesWithReference
+2	0.36	TestLoftCapProofRefusesOverlappingTriangulation
+4	0.36	TestLoftAuditCandidateCeilingRefuses

@@ -278,16 +278,38 @@ func syntheticLoftTriangles(n int) ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
-// TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest is S8: a synthetic
-// set sized so F*(F-1)/2 exceeds proofbound.MaxFacetPairTestsPerCall must refuse before
-// a single pair test runs. An instrumented counting budget proves it: the
-// step count after refusal equals exactly the triangle count (S6's own
-// per-triangle scan), never more — no pair test was ever trusted.
+// stackedLoftTriangles builds n parallel, non-degenerate triangles, each on
+// its own plane y = z - c with c = i*1e-4, and each shifted dx further along
+// x than the last. No pair shares an index or a point, but with dx < 1 every
+// pair's boxes overlap — including a zero-width overlap at dx = 0.5 for a
+// pair two apart — so the sweep hands every pair to the pair loop.
+func stackedLoftTriangles(n int, dx float64) ([]r3.Vec, [][3]int) {
+	verts := make([]r3.Vec, 0, 3*n)
+	tris := make([][3]int, 0, n)
+	for i := range n {
+		x, c := float64(i)*dx, float64(i)*1e-4
+		vi := len(verts)
+		verts = append(verts,
+			r3.NewVec(x, 0, c),
+			r3.NewVec(x+1, 0, c),
+			r3.NewVec(x+1, 1, 1+c),
+		)
+		tris = append(tris, [3]int{vi, vi + 1, vi + 2})
+	}
+	return verts, tris
+}
+
+// TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest is S8 at the real
+// ceiling: 4001 stacked triangles whose boxes all overlap give the sweep
+// 4001*4000/2 = 8_002_000 candidates, past
+// proofbound.MaxFacetPairTestsPerCall (8_000_000), and the audit refuses
+// before a single pair test runs. The counting budget proves it: S6 steps
+// once per triangle and the sweep's counting pass once more per triangle, and
+// nothing else steps.
 func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 	t.Parallel()
-	// 4001*4000/2 = 8_002_000 > proofbound.MaxFacetPairTestsPerCall (8_000_000).
 	const n = 4001
-	verts, tris := syntheticLoftTriangles(n)
+	verts, tris := stackedLoftTriangles(n, 0)
 
 	calls := 0
 	budget := &proofbound.WorkBudget{
@@ -295,10 +317,11 @@ func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 		ErrFn:  func() error { return nil },
 	}
 
-	err := loftmesh.LoftCrossingAudit(budget, verts, tris)
+	work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
 	require.ErrorIs(t, err, ErrUnsupported)
-	require.Equal(t, n, calls,
-		"the budget must be spent only on S6's per-triangle scan; S8 must refuse before any pair test")
+	require.Equal(t, 2*n, calls,
+		"the budget must be spent only on S6's scan and the sweep's counting pass; S8 must refuse before any pair test")
+	require.Zero(t, work.Skips+work.EdgeCerts+work.VertexCerts+work.Classifications, "no pair may be tested")
 }
 
 // TestLoftCrossingAuditCancellation proves cancellation through the shared
@@ -327,17 +350,18 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 // cancelled after the S6 boundary check even when no step call ever reaches a
 // poll. The budget here mirrors proofbound.NewWorkBudget's real semantics — step observes
 // the context only on every proofbound.WorkPollInterval-th call, err observes it
-// unconditionally — so three triangles (three S6 steps, three S7 pair steps)
-// finish the whole audit without a single step poll landing. The trailing
-// budget.err() after S7 is the only thing that can return ctx.Err() here.
+// unconditionally — so three stacked triangles finish the whole audit without
+// a single step poll landing: three S6 steps, three steps in each of the two
+// sweep passes, then the three candidate pairs. The trailing budget.err()
+// after S7 is the only thing that can return ctx.Err() here.
 func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 	t.Parallel()
-	verts, tris := syntheticLoftTriangles(3)
+	verts, tris := stackedLoftTriangles(3, 0.5)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	const finalPairStep = 6 // 3 triangles in S6, then 3 pairs in S7
+	const finalPairStep = 12 // 3 in S6, 3 per sweep pass, then 3 pairs in S7
 	steps, errs := 0, 0
 	budget := &proofbound.WorkBudget{
 		StepFn: func() error {
@@ -356,9 +380,10 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 		},
 	}
 
-	err := loftmesh.LoftCrossingAudit(budget, verts, tris)
+	work, err := loftmesh.LoftCrossingAuditWork(budget, verts, tris, loftAuditProduction)
 	require.ErrorIs(t, err, context.Canceled,
 		"a context cancelled on the final S7 step must come back from the audit")
+	require.Equal(t, 3, work.Candidates, "every pair of the three stacked triangles is a candidate")
 	require.Equal(t, finalPairStep, steps,
 		"no step call may reach a poll at this size, so the trailing err is the only observer")
 	require.Equal(t, 3, errs,
@@ -372,9 +397,12 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 // broad-phase tier and no certificate, so every pair S8 admits reaches
 // meshbool.TriTriClassify's exact contact classification. Every equivalence assertion
 // below is against THIS, never against production run through a second
-// wrapper. loftAuditProduction is exactly what loftmesh.LoftCrossingAudit itself
-// passes, so an equivalence proven here is a statement about the shipped
-// path.
+// wrapper. loftAuditPairwise runs the pair loop's two per-pair shortcuts
+// over every pair, loftAuditProduction is exactly what
+// loftmesh.LoftCrossingAudit itself passes (the same two plus the sweep
+// enumeration), and loftAuditStructured is what evalLoft's
+// loftmesh.LoftCrossingAuditStructured passes. An equivalence proven against
+// the last two is a statement about the shipped paths.
 //
 // FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can
 // fail" discipline). Each leg below was actually broken in internal/loftmesh/loft_audit.go,
@@ -424,12 +452,15 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 // section; leg 1 is the one argued redundant above, on a structural proof
 // rather than an untried fixture.
 
-// loftAuditReference and loftAuditProduction are the two shortcut settings
-// every equivalence assertion in this section is written against; the section
-// header above says what each one means.
+// loftAuditReference, loftAuditPairwise, loftAuditProduction and
+// loftAuditStructured are the shortcut settings every equivalence assertion
+// in this section is written against; the section header above says what
+// each one means.
 var (
 	loftAuditReference  = loftmesh.LoftAuditShortcuts{}
-	loftAuditProduction = loftmesh.LoftAuditShortcuts{BroadPhase: true, Certificates: true}
+	loftAuditPairwise   = loftmesh.LoftAuditShortcuts{BroadPhase: true, Certificates: true}
+	loftAuditProduction = loftmesh.LoftAuditShortcuts{BroadPhase: true, Certificates: true, Sweep: true}
+	loftAuditStructured = loftmesh.LoftAuditShortcuts{BroadPhase: true, Certificates: true, Sweep: true, CapProof: true}
 )
 
 func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
@@ -473,7 +504,7 @@ func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
 			}
 			data := loftmesh.NewLoftAuditData(verts, tris)
 			_, want := loftmesh.AuditLoftPairData(data, tris, 0, 1, loftAuditReference)
-			outcome, got := loftmesh.AuditLoftPairData(data, tris, 0, 1, loftAuditProduction)
+			outcome, got := loftmesh.AuditLoftPairData(data, tris, 0, 1, loftAuditPairwise)
 			if want == nil {
 				require.NoError(t, got)
 			} else {
@@ -530,6 +561,8 @@ func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris []
 	}{
 		{name: "broad-phase only", shortcuts: loftmesh.LoftAuditShortcuts{BroadPhase: true}},
 		{name: "certificates only", shortcuts: loftmesh.LoftAuditShortcuts{Certificates: true}},
+		{name: "sweep only", shortcuts: loftmesh.LoftAuditShortcuts{Sweep: true}},
+		{name: "pairwise", shortcuts: loftAuditPairwise},
 		{name: "production", shortcuts: loftAuditProduction},
 	} {
 		_, gotErr := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, arm.shortcuts)
@@ -586,7 +619,7 @@ func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 	require.NoError(t, err)
 	require.Positive(t, work.Skips,
 		"40 mutually far-apart triangles must exercise the short-circuit at least once")
@@ -602,7 +635,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
-	alone, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	alone, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 	require.NoError(t, err)
 	require.Positive(t, alone.Skips)
 	require.Equal(t, 40*39/2, alone.Skips+alone.EdgeCerts+alone.VertexCerts+alone.Classifications,
@@ -613,7 +646,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	errs := make([]error, 2)
 	for k := range got {
 		wg.Go(func() {
-			got[k], errs[k] = loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+			got[k], errs[k] = loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 		})
 	}
 	wg.Wait()
@@ -637,7 +670,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 	t.Parallel()
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
-		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.Skips,
 			"a pair sharing one recorded vertex is required to touch there; the broad-phase must never decide it")
@@ -645,7 +678,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 
 	t.Run("two shared vertices", func(t *testing.T) {
 		verts, tris := sameSideApexesFixture()
-		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.Skips,
 			"a pair sharing two recorded vertices is required to touch along that edge; the broad-phase must never decide it")
@@ -682,6 +715,14 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 // difference between their work counts is the broad-phase itself.
 func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) {
 	t.Helper()
+	a := chordedWedgeAssembly(t, pts)
+	return a.verts, a.tris
+}
+
+// chordedWedgeAssembly is chordedWedgeTriangles' whole assembly, with the
+// wall/cap split and loops the structured audit reads.
+func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftAssembly {
+	t.Helper()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := chordedWedgeProfile(t, w, base, pts)
 	s1, p1 := chordedWedgeProfile(t, w, top, pts)
@@ -704,7 +745,7 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 
 	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
 	require.NoError(t, err)
-	return a.verts, a.tris
+	return a
 }
 
 // loftAuditWorkDivisor is how much of the S7 pair loop's exact classification
@@ -747,7 +788,7 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 
 	off, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	require.NoError(t, err)
-	on, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+	on, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 	require.NoError(t, err)
 
 	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d edgeCerts=%d vertexCerts=%d",
@@ -815,7 +856,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 	}{
 		{name: "off", shortcuts: loftAuditReference},
 		{name: "broadphase", shortcuts: loftmesh.LoftAuditShortcuts{BroadPhase: true}},
-		{name: "on", shortcuts: loftAuditProduction},
+		{name: "on", shortcuts: loftAuditPairwise},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
 			budget := proofbound.NewWorkBudget(b.Context())

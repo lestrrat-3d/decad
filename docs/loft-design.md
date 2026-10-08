@@ -209,7 +209,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms: the RECORDED arm, where EVERY vertex the collapse consumes is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides), or the COMPUTED arm, which takes every other collapse — one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence, since the record states no coordinate for a COMPUTED vertex to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
 | **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records alone (§4's gate-order paragraph places both arms) — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
-| **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided, over the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
+| **S8** | the crossing audit's candidate count — the box-overlapping pairs it will test pairwise, after the cap proofs (§6) — exceeds its fixed ceiling (§6, §10); the count grows with the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
@@ -650,8 +650,9 @@ for it (§10).
 count is capped by one unexported package constant, `loftStationCap` (§14
 names the increment that fixes its value). The cap exists to keep the chord
 chain from being what carries §6's audit past the pair-test ceiling that
-section already owns: §6 refuses under S8 unless the assembled triangle count
-`F` (§7) has an `F*(F-1)/2` at or below `maxFacetPairTestsPerCall`.
+section already owns: §6 refuses under S8 when its candidate count exceeds
+`maxFacetPairTestsPerCall`, and that count never exceeds `F*(F-1)/2` over
+the assembled triangle count `F` (§7).
 `loftStationCap` is
 fixed so that a build whose `Σstations` reaches it assembles an `F` whose
 `F*(F-1)/2` is STRICTLY below that ceiling. A build chorded too finely for
@@ -708,8 +709,8 @@ record no build every one of whose pairs passes S15 can exceed
 **A record whose own `P` already exceeds the cap.** The `max(0, …)` term
 clamps to zero there, so `mMax = 1` and a pair settling at `m = 1` passes
 S15 with `Σstations` already past the cap. Such a record is past chording
-altogether (above), and S8 is what refuses it, over the assembled triangle
-count §6's `F*(F-1)/2` preflight computes rather than over the cap. Nothing
+altogether (above), and S8 is what refuses it, over §6's candidate count
+rather than over the cap. Nothing
 is left unchorded either: a pair settles at `m = 1` only when both sides'
 certified sagittae already meet the target at one cell. Refusing it at S15
 instead would refuse a mixed build while admitting an all-`LineSeg` build of
@@ -731,7 +732,7 @@ gate above and before construction's first gate (S13), and S16 waits until
 every loop's stations exist, so the relative order §4 states for S14, S15
 and S16 holds. A second walk run only to learn `m` would charge the records'
 free-form work counters twice (§5.1's work-budget paragraph). Every product and sum
-in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
+in the `mMax` comparison and in §6's own candidate count is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
 ceiling itself.
@@ -1149,11 +1150,12 @@ reveal** — extreme twist between the two sections is exactly the shape the
 target case (a helical tooth) invites. decad never builds an unproven
 solid (modify §1), so this is a build-time gate, not a `Verify` question.
 
-The audit tests every pair among the assembled triangle set — the wall
+The audit decides every pair among the assembled triangle set — the wall
 triangles §5.1's Table C gives every cell of every loop, plus the two
 triangulated caps (`triangulate.go`'s existing ear-clipping triangulation of
-each polygon-with-holes cap). That set's size is §7's `F`, and the audit
-reads no count of its own.
+each polygon-with-holes cap). That set's size is §7's `F`. Which pairs are
+tested one by one, and which are decided a cap at a time, is the enumeration
+paragraph and the cap-proof paragraph below.
 
 **The audit decides CONTACT, never PROVENANCE.** Table C states each cell's
 expected contact entity and whether the record or this build produced it;
@@ -1183,8 +1185,9 @@ the station between them, and their upper triangles share only that rung's
 `triangulate.go` produces an interior-disjoint conforming
 triangulation of one planar region, so two triangles of the SAME cap meet
 only in shared edges and shared vertices — each must produce the expected
-classification above. Every cap triangle is also tested against every wall
-triangle and every triangle of the opposite cap.
+classification above. Every cap triangle's contact with every wall triangle
+and every triangle of the opposite cap is decided too, by the cap proof below
+or pairwise when that proof fails.
 
 Every pair is tested with `boolean_mesh.go`'s `triTriClassify` and the adaptive
 orientation predicates in `internal/proof/orientation.go` — the
@@ -1230,9 +1233,8 @@ reach for that pair, so the broad-phase changes only how SOON a pair's verdict
 is reached, never which verdict it is. Neither tier ever answers "touching": a
 pair neither decides falls through to the full exact classification, and a
 pair sharing an edge or a vertex is REQUIRED to touch there, so no tier is
-consulted for it. What the broad-phase prunes is the exact work per PAIR, not
-the pair ENUMERATION, which remains every pair among the assembled triangle
-set and stays bounded by the ceiling below.
+consulted for it. What the broad-phase prunes is the exact work per PAIR; the
+enumeration below prunes which pairs reach it at all.
 
 **A pair whose EXPECTED contact is already proven reaches its verdict early,
 through an accept-only certificate.** The broad-phase above is the reject side
@@ -1280,26 +1282,87 @@ certificates can be disabled together, so the audit keeps an independent referen
 and no certificate, every pair through the exact classification — for the
 required tests to compare every verdict against.
 
-**The work budget reuses tessellation design §3's own ceiling.** The
-predicate under test here is the same one tessellation's boolean pre-pass
-runs, so the audit charges every invocation against
-`maxFacetPairTestsPerCall = 8_000_000` (tessellation §3) rather than minting
-a second constant for the identical quantity. Before running a single pair
-test, compute the conservative `F*(F-1)/2` upper bound over §7's `F` with
-checked arithmetic and refuse before allocation if it would exceed the
-ceiling — the same preflight-before-allocation discipline tessellation §3
-states.
+**Enumeration is sweep-and-prune over the triangles' boxes.** Sort the
+triangle indices by their box's lower bound on the axis of largest total
+extent (ties by index), sweep, and emit every pair whose boxes overlap on all
+three axes. Boxes are closed: two boxes that touch on a face, an edge or a
+corner overlap, since `boxesOverlap` compares with `<=`, so a pair touching
+only on a box boundary is still a candidate. A pair of disjoint boxes shares
+no point and no vertex index, and the reference path admits it, so the
+candidate set contains every pair the audit could refuse and every pair Table
+C expects to touch. Candidates are tested in lexicographic `(i, j)` order,
+the all-pairs order, so the first refused pair is the one the reference path
+reports. Both sweep passes are float comparisons only, and the order is
+deterministic.
+
+**Each cap is decided by one proof, over exact signs alone.** Let `C` be one
+cap's triangles, `L` its polygon loops as vertex-index cycles, `O` the other
+cap's loop vertices, `Π` the exact plane of `C`'s first triangle and `n` its
+exact normal. The cap's pairs — with the walls, among its own triangles, and
+with the other cap — are decided when all of these hold:
+
+- **(s)** the index structure is the one assembly builds: every loop has at
+  least three vertices, no index repeats across `L` and `O`, no vertex of `C`
+  is in `O` and no vertex of the other cap is in `L`, every wall triangle has
+  a vertex in `O` and its others in `L`, those `L` vertices are one vertex or
+  one loop edge, and every loop edge is an edge of some wall triangle;
+- **(a)** every vertex of `L`, and every vertex of every triangle of `C`, has
+  exact sign 0 against `Π`;
+- **(b)** every vertex of `O`, and every vertex of every triangle of the other
+  cap, has a nonzero sign against `Π`, all the same;
+- **(c)** every triangle of `C` has `n · ((B − A) × (C − A)) > 0`;
+- **(d)** the directed-edge multiset of `C` nets to exactly the edges of `L`,
+  each loop traversed in one consistent direction, every other edge netting
+  to zero;
+- **(e)** in the projection `projAxes(n)`, exactly one loop's oriented signed
+  area (its exact shoelace sign times its (d) direction) has the triangles'
+  orientation sign and every other loop's has the opposite sign.
+
+The wall-wall pairs are always tested pairwise, and the proof rests on them:
+every loop edge is a wall edge by (s), so a passing wall-wall audit proves
+the loops of `L` simple and pairwise disjoint. Then (c)+(d) make `Σ_T 1_T`
+the winding number of the oriented boundary almost everywhere, (e) makes that
+winding number 0 or 1, so the triangles of `C` are interior-disjoint and cover
+the polygon exactly; netting on vertex INDICES also leaves an unmatched edge
+wherever a vertex sits inside another triangle's edge. A wall triangle meets
+`Π` in exactly its `L` vertices — (b) puts its `O` vertices strictly on one
+side — which (s) makes one polygon vertex or one polygon edge, so its contact
+with each cap triangle is exactly what their shared indices expect, and two
+triangles of `C` meet exactly in their shared edge or vertex. (b) also puts
+the other cap strictly off `Π`, so the two caps are disjoint.
+`internal/loftmesh/loft_cap_proof.go`'s `CapFamilyProof` carries the proof in
+full.
+
+A failed condition admits nothing: every pair with a triangle in that cap goes
+to the pairwise test with the wall-wall candidates. Because the proof relies
+on the wall-wall audit, a failing wall-wall pair sends the audit back over the
+decided pairs that precede it in lexicographic order before it refuses, so
+the refused pair stays the reference path's. A loft calls the structured
+entry, which runs the sweep and the cap proofs. The generic entry — the mitred
+sweep, `Stitch`, `LoftChain` and the mesh mass-properties reading — runs the
+sweep and tests every candidate pairwise. The zero shortcut set still tests
+every pair of every triangle through the exact classification, and every
+shortcut's verdict is tested against it.
+
+**S8 counts candidates.** The ceiling reuses tessellation design §3's own
+`maxFacetPairTestsPerCall = 8_000_000`, since the predicate under test is the
+one tessellation's boolean pre-pass runs. A first sweep pass counts the
+candidates the pairwise pass will test — the wall-wall pairs whose boxes
+overlap, plus those of any cap whose proof failed — with no pair-sized
+allocation, and the audit refuses under S8 when the count exceeds the
+ceiling, before any pair test. The second pass builds the list and the
+pairwise pass tests it, stepping the budget once per pair.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
 / `Shell` already do (modify §5). Cancellation returns `ctx.Err()`
 before commit; the document stays unchanged.
 
-**This audit is unchanged in kind for a chorded pair.** It still tests every
+**This audit is unchanged in kind for a chorded pair.** It decides every
 pair among the assembled triangle set exactly as stated above; only the
-triangle count grows with the station chain (§5.1, §7). §5.1's station cap is
-what keeps the CHORDING from carrying `F` past the `F*(F-1)/2` ceiling above,
-and §5.1 owns how the soft cap and this hard ceiling relate.
+triangle count grows with the station chain (§5.1, §7). §5.1's station cap
+keeps `F*(F-1)/2`, and so the candidate count, under the ceiling above, and
+§5.1 owns how the soft cap and this hard ceiling relate.
 
 ## 7. Table B — the result
 
@@ -1722,7 +1785,7 @@ global evaluator increment.
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17), a spatial-index broad-phase for §6's audit — one pruning the pair ENUMERATION itself, which §6's own two float tiers do not touch and S8's `F*(F-1)/2` preflight is what bounds today | — |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17) | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
@@ -1895,9 +1958,14 @@ against this budget.
   `U=(1,0,0)`, `V=(0,1,0)`, origin `(0,0,0)` and `p1` frame
   `U=(-1,0,0)`, `V=(0,1,0)`, origin `(1,0,1)`, carrying the same local
   square, make cell 0's two triangles share their recorded diagonal but
-  overlap in area; the audit rejects them as S7. A synthetic profile pair
-  sized to exceed the fixed pair-test budget → S8, refused before any pair
-  result is trusted.
+  overlap in area; the audit rejects them as S7. A synthetic triangle set
+  whose candidate count exceeds the fixed pair-test budget → S8, refused
+  before any pair test; a 1200-gon prism whose `F*(F-1)/2` exceeds it builds,
+  because S8 counts candidates. The sweep's candidate list equals the
+  box-overlap set on the gear tooth, the chorded wedge and the crossing
+  fixtures, and the structured audit's verdict, refused pair included, equals
+  the zero-shortcut reference's on real lofts and on caps mutated to fail each
+  of the cap proof's conditions.
 - **Mass properties**: a scaled cube-like loft (two congruent squares,
   parallel planes, no twist) reproduces the closed-form prism volume and all
   three centroid coordinates exactly. The fixture asserts `Volume` is `Exact`

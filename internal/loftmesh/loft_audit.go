@@ -10,8 +10,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -206,26 +204,36 @@ func SegMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proof.Xpt) bool 
 
 // LoftAuditShortcuts selects which of the S7 pair loop's shortcuts one audit
 // call may use. Its ZERO VALUE is the audit's independent reference path:
-// every pair S8 admits reaches AuditLoftPairData, and inside it every pair
-// reaches meshbool.TriTriClassify's exact contact classification. Production runs with
-// every field true (LoftCrossingAudit), and a shortcut may only ever change
+// every pair of every triangle reaches AuditLoftPairData, and inside it every
+// pair reaches meshbool.TriTriClassify's exact contact classification.
+// LoftCrossingAudit runs BroadPhase, Certificates and Sweep;
+// LoftCrossingAuditStructured runs all four. A shortcut may only ever change
 // how SOON a pair's verdict is reached, never which verdict it is — which is
 // what the reference path exists to test against.
 //
-// The two fields switch two structurally different things, and each is
-// switched separately so a test can isolate either one:
+// The fields switch structurally different things, and each is switched
+// separately so a test can isolate any one:
 //
-//   - broadPhase gates the two reject-only float tiers ahead of the exact
+//   - BroadPhase gates the two reject-only float tiers ahead of the exact
 //     classification (LoftPlaneSeparated and the bounding-box test), which
 //     only ever prove a zero-shared-vertex pair APART.
-//   - certificates gates AuditLoftPairData's own accept-only proofs, which
+//   - Certificates gates AuditLoftPairData's own accept-only proofs, which
 //     only ever prove a shared-entity pair's contact IS the expected entity.
+//   - Sweep replaces the all-pairs enumeration with sweepCandidates' list of
+//     box-overlapping pairs (loft_audit_sweep.go). A pair it leaves out has
+//     disjoint boxes, so it shares no point and no vertex index, and the
+//     reference path admits it.
+//   - CapProof decides every pair that has a triangle in a cap whose
+//     CapFamilyProof holds (loft_cap_proof.go). It needs the structure only
+//     LoftCrossingAuditStructured is handed; the generic entry ignores it.
 type LoftAuditShortcuts struct {
 	BroadPhase   bool
 	Certificates bool
+	Sweep        bool
+	CapProof     bool
 }
 
-// LoftAuditWork records what ONE LoftCrossingAudit call's S7 pair loop did,
+// LoftAuditWork records what ONE crossing-audit call's S7 pair loop did,
 // one field per way a pair can be decided:
 //
 //   - skips: a zero-shared-vertex pair a broad-phase tier proved apart.
@@ -235,7 +243,12 @@ type LoftAuditShortcuts struct {
 //   - classifications: every other pair, which reached AuditLoftPairData
 //     without a certificate deciding it.
 //
-// The four always sum to the pair count S8 admitted, on a call that ran to
+// Candidates is the number of pairs the pair loop was handed: every pair of
+// the triangles no cap proof decided, or only the box-overlapping ones under
+// Sweep. It is the count S8 compares against the ceiling. CapProofs is how
+// many cap families (0, 1 or 2) CapFamilyProof decided.
+//
+// The four pair outcomes always sum to Candidates on a call that ran to
 // completion. classifications counts the pairs the certificates are there to
 // remove, so it is the quantity a shortcut is measured by; it also carries the
 // handful of coplanar shared-edge pairs TriTriCoplanarSharedEdge decides
@@ -255,6 +268,8 @@ type LoftAuditWork struct {
 	EdgeCerts       int
 	VertexCerts     int
 	Classifications int
+	Candidates      int
+	CapProofs       int
 }
 
 // LoftPairOutcome names which of AuditLoftPairData's own decision paths
@@ -557,146 +572,4 @@ func ProjectionPairIndex(u, v int) int {
 	default:
 		return 2
 	}
-}
-
-// LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
-// the assembled wall-and-cap triangle set: S6 (per-triangle existence) first,
-// then S8 (the fixed facet-pair ceiling, checked before any pair test or
-// allocation), then S7 (the pair-by-pair contact audit). budget is shared
-// with the rest of the pre-commit cancellation path exactly as
-// docs/modify-design.md §5's audits already share one (fillet_audit.go);
-// step is called once per candidate (each triangle in S6, each pair in S7)
-// and err at every phase boundary, the end of S7 among them.
-//
-// This is the production entry point: every shortcut always runs. Tests that
-// need the same audit with a shortcut switched off, or need the pair loop's
-// own work counts, call LoftCrossingAuditWork below directly.
-func LoftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) error {
-	_, err := LoftCrossingAuditWork(budget, verts, tris, LoftAuditShortcuts{BroadPhase: true, Certificates: true})
-	return err
-}
-
-// LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
-// under its own explicit per-call switch (LoftAuditShortcuts) and the pair
-// loop's own work counts returned to the caller. The zero shortcuts value
-// runs every admitted pair through meshbool.TriTriClassify's exact classification,
-// which is the verdict a shortcut may only ever reach sooner, never change.
-//
-// The returned counts are meaningful only when the audit completes: an early
-// return carries whatever the loop had reached when it stopped.
-func LoftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, shortcuts LoftAuditShortcuts) (LoftAuditWork, error) {
-	var work LoftAuditWork
-	if err := budget.Err(); err != nil {
-		return work, err
-	}
-
-	// S6: per-triangle existence, before the pair audit runs at all.
-	for i, tri := range tris {
-		if err := budget.Step(); err != nil {
-			return work, err
-		}
-		if TriangleCollapsed(verts, tri) {
-			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, decaderr.ErrDegenerate, i)
-		}
-	}
-	if err := budget.Err(); err != nil {
-		return work, err
-	}
-
-	// S8: the facet-pair ceiling, computed under checked arithmetic and
-	// refused before a single pair test — or any pair buffer — is built.
-	f := len(tris)
-	pairs, ok := proofbound.WallChoose2(uint64(f))
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return work, fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, decaderr.ErrUnsupported)
-	}
-
-	// A broad-phase per-triangle bounding box (boolean_mesh.go's meshbool.TriBox, the
-	// same helper prepBoolMesh builds for the mesh boolean's own facet-pair
-	// pruning) lets S7 below skip the expensive exact classification for a
-	// pair PROVEN apart. meshbool.TriBox's own doc comment already establishes the
-	// box is exact — "float min/max are exact, so the box is a true
-	// bound" — built from float64 vertex coordinates that are themselves
-	// exact inputs to proof.XptOf (no rounding occurs converting a float64 to its
-	// rational value), so no epsilon widening is needed or added: every
-	// point of the closed triangle, in exact arithmetic, is a convex
-	// combination of its three vertices, and a convex combination of values
-	// bounded by [lo, hi] on one axis is itself bounded by [lo, hi] on that
-	// axis. meshbool.BoxesOverlap's own comparisons (<=, not <) are exact float64
-	// comparisons, so two boxes it reports as NOT overlapping are proven, in
-	// exact real arithmetic, to share no point on some axis — the two closed
-	// triangles cannot touch at all. Building f boxes is O(f) trivial float
-	// comparisons, not O(f^2) exact-rational work, so it needs no budget
-	// step of its own; the S8 gate above already bounds f to a few thousand.
-	boxes := make([][2]r3.Vec, f)
-	for i, tri := range tris {
-		boxes[i] = meshbool.TriBox(verts, tri)
-	}
-	auditData := NewLoftAuditData(verts, tris)
-
-	// S7: every pair, classified against its recorded adjacency. The
-	// broad-phase short-circuit runs ONLY for a pair sharing no recorded
-	// vertex (sharedCount == 0): that is the one case (AuditLoftPair's
-	// switch) where the audit's own passing verdict is "no contact at all",
-	// so a proof of no contact reaches the identical verdict AuditLoftPair
-	// would reach. A pair sharing one or two vertices is REQUIRED to touch —
-	// at that vertex, or along that edge — so the guard below never lets the
-	// short-circuit run for it; AuditLoftPair always decides those pairs.
-	//
-	// Two tiers run, cheapest first, either one sufficient to skip: the
-	// bounding-box test above, then LoftPlaneSeparated for a pair whose boxes
-	// do overlap but whose planes still prove separation. Both are float-only
-	// and reject-only; neither ever answers "touching", so a pair either tier
-	// cannot decide always falls through to the full AuditLoftPair.
-	//
-	// A pair sharing one or two vertices reaches AuditLoftPairData, which
-	// owns the complementary accept-only certificates for exactly those two
-	// cases. The outcome it reports is what this loop counts, so the four
-	// work fields say which path decided every pair.
-	for i := range f {
-		for j := i + 1; j < f; j++ {
-			if err := budget.Step(); err != nil {
-				return work, err
-			}
-			_, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
-			if shortcuts.BroadPhase && sharedCount == 0 {
-				if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
-					work.Skips++
-					continue
-				}
-				if LoftPlaneSeparated(auditData.Corners[i], auditData.Corners[j]) {
-					work.Skips++
-					continue
-				}
-			}
-			outcome, err := AuditLoftPairData(auditData, tris, i, j, shortcuts)
-			switch outcome {
-			case LoftPairEdgeCertificate:
-				work.EdgeCerts++
-			case LoftPairVertexCertificate:
-				work.VertexCerts++
-			default:
-				work.Classifications++
-			}
-			if err != nil {
-				return work, err
-			}
-		}
-	}
-
-	// The trailing poll is what closes the gap between S7's last step and this
-	// return: step observes the context only on the polling interval, so a
-	// small triangle set finishes every pair without one landing, while err
-	// polls unconditionally. It cannot fail an audit that legitimately
-	// completed — errFn is ctx.Err, and a live context yields nil.
-	//
-	// Cancellation is answered in two places, and this is only one of them.
-	// The audit kernel polls its own loops, which is what bounds the time
-	// spent inside a single expensive phase; the caller-facing contract — a
-	// cancelled operation leaves the receiver live and the document
-	// unchanged — is discharged at the commit edge by the entry point, the way
-	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
-	// before Document.commit. Loft's own commit-edge check belongs to
-	// Loft.
-	return work, budget.Err()
 }
