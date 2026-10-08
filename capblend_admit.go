@@ -14,13 +14,13 @@ import (
 // proof budget charges and the first refusal reported.
 func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlendPayload) (error, error) {
 	return capband.OccupiedVolumeAdmission(budget, cbp.loops(), cbp.startLoops, cbp.endLoops,
-		func(loop sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
+		func(li int, loop sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
 			cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 			if err != nil {
 				return nil, nil, err
 			}
 			return cl.walks, func() ([]bool, error) {
-				joins, err := capOffsetJoins(budget, cl, cbp.d)
+				joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(li))
 				if err != nil {
 					return nil, err
 				}

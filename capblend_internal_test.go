@@ -18,6 +18,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// equalCapSetback is an equal chamfer's setbacks for one cap: d across the cap
+// and d down the side, the side level carrying dDelta.
+func equalCapSetback(d, dDelta float64) capSetback {
+	return capSetback{dc: d, ds: d, dsDelta: dDelta}
+}
+
 // TestCapBandMomentCoordUpperCoversOffsetBoundary is the regression for the
 // unsound proofbound.SweptMomentAllow input this fix corrects: internal/proofbound/bounds.go:407 documents
 // coordUpper as "a PROVEN upper bound on |u|, |v| and |z| over the band's own
@@ -60,7 +66,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	require.InDelta(t, rho+d, widenedRadius, 1e-9,
 		"the premise: chamfering a hole widens it by the setback")
 
-	cbp := capBlendPayload{d: d}
+	cbp := capBlendPayload{start: equalCapSetback(d, 0), end: equalCapSetback(d, 0)}
 	capZ := half
 	sideZ := capZ - d
 	g := capPatchGeom{
@@ -181,7 +187,7 @@ func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 		profile:  ProfileRecord{Outer: loop},
 		z0:       0,
 		z1:       capZ,
-		d:        d,
+		end:      equalCapSetback(d, 0),
 		endLoops: map[int]bool{0: true},
 	}
 	g := capPatchGeom{
@@ -209,8 +215,8 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 		matSign float64
 		payload capBlendPayload
 	}{
-		{name: `start cap`, matSign: +1, payload: capBlendPayload{d: d, z0Delta: capDelta}},
-		{name: `end cap`, matSign: -1, payload: capBlendPayload{d: d, z1Delta: capDelta}},
+		{name: `start cap`, matSign: +1, payload: capBlendPayload{start: equalCapSetback(d, 0), z0Delta: capDelta}},
+		{name: `end cap`, matSign: -1, payload: capBlendPayload{end: equalCapSetback(d, 0), z1Delta: capDelta}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sideZ := capZ + tc.matSign*d
@@ -268,8 +274,8 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 				z0:         0,
 				z1:         10,
 				xform:      r3.Identity(),
-				d:          d,
-				dDelta:     dDelta,
+				start:      equalCapSetback(d, dDelta),
+				end:        equalCapSetback(d, dDelta),
 				startLoops: tc.start,
 				endLoops:   tc.end,
 			}
@@ -968,4 +974,85 @@ func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
 func ratFloat(q *big.Rat) float64 {
 	f, _ := q.Float64()
 	return f
+}
+
+// TestAsymmetricCapSetbacksRefuseMixedPicks drives capSetbacks with reference
+// pairs SX3 never lets through, to show its two SX4 arms answer on their own
+// (docs/modify-reach-design.md §8.3.1): one cap whose edges pick the cap face
+// and a side wall, and one loop whose two caps pick differently. The uniform
+// picks give the cap face d across the cap and the side wall d down the side.
+//
+// Shown to fail: deleting either SX4 arm of capSetbacks returns setbacks for
+// the mixed rows.
+func TestAsymmetricCapSetbacksRefuseMixedPicks(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	require.NoError(t, err)
+	caps := prismCapsOf(box)
+	startEdges, err := Edges(CreatedBy(CapStart(box))).SelectEdges(box)
+	require.NoError(t, err)
+	endEdges, err := Edges(CreatedBy(CapEnd(box))).SelectEdges(box)
+	require.NoError(t, err)
+	require.Len(t, endEdges, 4)
+	side := func(e *Edge, capFace *Face) *Face {
+		for _, f := range e.faces {
+			if f != capFace {
+				return f
+			}
+		}
+		return nil
+	}
+	pairs := func(capRef func(i int, start bool) bool) (map[*Edge]*Face, []*Edge) {
+		refs := map[*Edge]*Face{}
+		var edges []*Edge
+		for _, c := range []struct {
+			start bool
+			face  *Face
+			edges []*Edge
+		}{{true, caps.start, startEdges}, {false, caps.end, endEdges}} {
+			for i, e := range c.edges {
+				if capRef(i, c.start) {
+					refs[e] = c.face
+				} else {
+					refs[e] = side(e, c.face)
+				}
+				edges = append(edges, e)
+			}
+		}
+		return refs, edges
+	}
+	both := map[int]bool{0: true}
+	const d, other, otherDelta = 2.0, 3.0, 1e-17
+
+	t.Run(`one cap picks both faces`, func(t *testing.T) {
+		refs, edges := pairs(func(i int, _ bool) bool { return i < 2 })
+		a := &asymmetricChamfer{body: box, refs: refs, d: d, other: other}
+		_, _, err := a.capSetbacks(caps, edges[4:], nil, both)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, `SX4`)
+	})
+	t.Run(`one loop's caps pick apart`, func(t *testing.T) {
+		refs, edges := pairs(func(_ int, start bool) bool { return start })
+		a := &asymmetricChamfer{body: box, refs: refs, d: d, other: other}
+		_, _, err := a.capSetbacks(caps, edges, both, both)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, `SX4`)
+	})
+	t.Run(`uniform picks`, func(t *testing.T) {
+		refs, edges := pairs(func(_ int, start bool) bool { return start })
+		a := &asymmetricChamfer{body: box, refs: refs, d: d, other: other, otherDelta: otherDelta}
+		// Two different loops may pick apart; here loop 0 sits on the start cap
+		// and a second loop on the end cap.
+		start, end, err := a.capSetbacks(caps, edges, both, map[int]bool{1: true})
+		require.NoError(t, err)
+		require.Equal(t, capSetback{dc: d, ds: other, dsDelta: otherDelta}, start)
+		require.Equal(t, capSetback{dc: other, ds: d}, end)
+	})
 }

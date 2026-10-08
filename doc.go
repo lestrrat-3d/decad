@@ -109,9 +109,9 @@
 //	Fillet/Chamfer  revolve meridian junction edges           builds
 //	Fillet/Chamfer  WithTangentChain over proven G1 joins     builds
 //	  a tangent chain that branches or cannot be decided      ErrUnsupported
-//	Chamfer       WithAsymmetricChamfer, prism lateral edge
-//	  or revolve junction                                     builds
-//	  asymmetric cap-loop, brep or stacked chamfer            ErrUnsupported
+//	Chamfer       WithAsymmetricChamfer, prism lateral edge,
+//	  revolve junction or complete prism cap loop(s)          builds
+//	  asymmetric brep or stacked chamfer                      ErrUnsupported
 //	Chamfer       complete prism cap loop(s)                  builds
 //	Fillet/Chamfer  brep or stacked boolean result, straight
 //	  edge along a reference axis                             builds

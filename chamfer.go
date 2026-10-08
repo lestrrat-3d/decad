@@ -39,9 +39,10 @@ import (
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
 // or more COMPLETE prism cap loops builds a cap-loop chamfer through
-// capblend.go instead of this file's corner rewrite. A cap-edge selection that
-// is not one or more complete loops, or one mixing cap edges with lateral
-// ones, is SX4 (ErrUnsupported).
+// capblend.go instead of this file's corner rewrite, at an equal setback or,
+// under WithAsymmetricChamfer, at the two setbacks each cap's reference face
+// picks (§8.3.1). A cap-edge selection that is not one or more complete loops,
+// or one mixing cap edges with lateral ones, is SX4 (ErrUnsupported).
 
 // ChamferOption configures Chamfer: WithTangentChain and
 // WithAsymmetricChamfer (docs/modify-reach-design.md §2).
@@ -74,11 +75,13 @@ type ChamferOption interface {
 // (docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
 // d across its reference face and the option's other distance across the
 // other adjacent face (§6), on a prism's lateral edges and a revolve's
-// junctions alike; each setback faces the S6 audit on its own walk. A
-// reference that names no adjacent face of a chamfered edge, or both, or a
-// face beside no chamfered edge, is ErrCardinality (SX3). An asymmetric
-// chamfer of a complete cap loop, and one of a brep or stacked boolean result
-// (SX16), are ErrUnsupported: neither is built yet.
+// junctions alike; each setback faces the S6 audit on its own walk. On a
+// complete cap loop the reference picks per cap (§8.3.1): the cap face takes d
+// across the cap and the other distance down the side walls, and a side wall
+// takes d down the side and the other distance across the cap. A reference
+// that names no adjacent face of a chamfered edge, or both, or a face beside
+// no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of a brep
+// or stacked boolean result is ErrUnsupported (SX16).
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -86,15 +89,17 @@ type ChamferOption interface {
 // analytic patches, and the result is a cap-blend body whose volume, area,
 // bounds, undercut and minimum-radius readings all answer. A cap-edge
 // selection that is not one or more complete loops, and one that mixes cap
-// edges with lateral ones, are both SX4 (ErrUnsupported). A chamfer whose
-// setback is so small beside the geometry it displaces that the displacement
-// rounds away is SX13 (ErrUnsupported), rather than a band with the taper gone:
-// a circular wall so large beside d that the offset's radial change rounds back
-// onto its own radius, or a sweep so tall beside d that the band's side level
-// rounds back onto its cap level. A further modify op on the result is SX10
-// (ErrUnsupported); the result
-// does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
-// pair its bounding boxes do not already decide reads Suspect (row DX6).
+// edges with lateral ones, are both SX4 (ErrUnsupported). A setback across the
+// cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
+// setbacks down the side reach the far end of the sweep are SX7
+// (ErrUnsupported). A chamfer whose setback is so small beside the geometry it
+// displaces that the displacement rounds away is SX13 (ErrUnsupported), rather
+// than a band with the taper gone: a circular wall so large beside the setback
+// across the cap that the offset's radial change rounds back onto its own
+// radius, or a sweep so tall beside the setback down the side that the band's
+// side level rounds back onto its cap level. A further modify op on the
+// result is SX10 (ErrUnsupported), and a clearance pair its bounding boxes do
+// not already decide reads Suspect (Table DX row DX6).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is chamfered as that prism
@@ -172,7 +177,8 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		if err != nil {
 			return nil, err
 		}
-		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.otherMM}
+		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.otherMM,
+			dDelta: dDelta, otherDelta: o.Asymmetric.otherDelta}
 	}
 
 	// SX10: a capBlendPayload receiver is staged before the generic
@@ -243,11 +249,18 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		return nil, err
 	}
 	if !lateral {
+		// An equal chamfer sets both caps back d across the cap and d down the
+		// side; a two-distance one takes each cap's pair from its reference
+		// face (docs/modify-reach-design.md §8.3.1).
+		start := capSetback{dc: dmm, ds: dmm, dsDelta: dDelta}
+		end := start
 		if asym != nil {
-			return nil, errAsymmetricCapLoop
+			if start, end, err = asym.capSetbacks(caps, edges, startLoops, endLoops); err != nil {
+				return nil, err
+			}
 		}
 		ref := doc.nextProducerID()
-		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, dDelta, startLoops, endLoops)
+		body, err := buildCapBlend(ctx, doc, ref, pp, start, end, startLoops, endLoops)
 		if err != nil {
 			return nil, err
 		}

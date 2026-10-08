@@ -525,14 +525,6 @@ func TestAsymmetricChamferRevolveJunction(t *testing.T) {
 
 func TestAsymmetricChamferStagedReceivers(t *testing.T) {
 	t.Parallel()
-	t.Run("CapLoop", func(t *testing.T) {
-		doc, box := capBlendBox(t)
-		_, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(2),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "row E")
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	})
 	t.Run("Brep", func(t *testing.T) {
 		// A plate with a flush boss is a brep; its lateral edge at (40, 0)
 		// takes an equal chamfer through the brep routes, and docs/

@@ -36,7 +36,7 @@ import (
 // arithmetic unchanged there.
 //
 // The SIDE level owes the same kind of allowance and both arms charge it:
-// g.SideZ is capZ + matSign*d rounded to a float (g.LevelDelta,
+// g.SideZ is capZ + matSign*ds rounded to a float (g.LevelDelta,
 // capblend_geom.go), so the whole side directrix sits that far from the level
 // it denotes, and an arm reading g.SideZ as an exact input bounds only the
 // patch it BUILT. It is the dominant residual wherever the sweep is large

@@ -55,7 +55,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Fillet/chamfer of a revolve cap edge or an edge on the axis | `ErrUnsupported` (SX5) (`revolve_blend.go`) | `docs/modify-reach-design.md` §7 |
 | Fillet of a cap edge (vertex blend) | `ErrUnsupported`, "the vertex-blend problem, not yet supported" (`fillet.go`) | `docs/modify-design.md` §6 |
 | Chamfer of a partial cap loop, or cap and lateral edges together | `ErrUnsupported` (SX4) | `docs/modify-reach-design.md` Table SX |
-| Asymmetric chamfer of a complete cap loop, or of a brep or stacked boolean result | `ErrUnsupported` (§14 row E; SX16) (`chamfer.go`) | `docs/modify-reach-design.md` §6, §14 |
+| Asymmetric chamfer of a brep or stacked boolean result | `ErrUnsupported` (SX16) (`chamfer.go`) | `docs/modify-reach-design.md` §6 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`tangent_chain.go`) | `docs/modify-reach-design.md` §5 |
 | Closed shell (`WithNoOpenings`) of any receiver but a full revolve | `ErrUnsupported` (§14 row C; SX8/SX9/SX16) (`shell.go`) | `docs/modify-reach-design.md` §9, §14 |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `requireExactSection` | `docs/modify-design.md` |
