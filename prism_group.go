@@ -294,7 +294,7 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 	// Select-all keeps every bounded cell, which is the union only when no
 	// cell is material of neither operand: a ring of overlapping operands
 	// encloses such a cell.
-	voidFree, err := prismCellsHaveNoVoid(budget, tags, profiles)
+	voidFree, err := prismcells.CellsHaveNoVoid(budget, tags, profiles)
 	if err != nil || !voidFree {
 		return nil, false, err
 	}
