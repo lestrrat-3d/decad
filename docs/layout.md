@@ -270,7 +270,7 @@ the rules leave to the byte budget.
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |
-| `internal/facetproof/` | Faceted shell audits, placement embedding and bounds. See `docs/evaluator-design.md` §9. |
+| `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
 | `internal/reportvocab/` | Verification outcome and diagnostic enums. See verification §1. |
