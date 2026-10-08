@@ -386,45 +386,17 @@ func CircularStationChain(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment
 // rather than in arcWalkEnd, whose zero every other consumer of a pinned
 // endpoint POSITION already relies on (pinArcWalkEnds' own doc comment).
 //
-// The bound is exact-rational throughout and never a float subtraction of two
-// square roots. |r1 − r0| is |r1² − r0²| / (r1 + r0); the numerator is the
-// exact rational difference of the two recorded squared distances, and the
-// denominator is replaced by a rounded-DOWN sum of the two radii
-// (proofbound.RatSqrtDown), which can only enlarge the quotient. proofbound.RatFloatUp rounds the
-// result out once. Equal squared radii answer exactly zero, so a record that
-// does state an exact circle keeps the zero delta §5.2 grants it.
-//
-// A denominator that cannot be shown positive answers +Inf, which the caller
-// refuses on rather than publishing a substitute — the S14 discipline §5.2's
-// table states for every term in it. It is defensive: it needs both recorded
-// radii to round down to zero while their exact squares differ.
+// circularbounds.ArcRadialResidualUpper owns the exact-rational bound. Equal
+// squared radii answer exactly zero, so a record that does state an exact
+// circle keeps the zero delta §5.2 grants it, and an underivable bound
+// answers +Inf, which the caller refuses on rather than publishing a
+// substitute — the S14 discipline §5.2's table states for every term in it.
 func ArcNaturalEndRadialUpper(seg sectionrecord.CurveSegment) float64 {
 	arc, ok := seg.(sectionrecord.ArcSeg)
 	if !ok || (arc.TStart != 1 && arc.TEnd != 1) {
 		return 0
 	}
-	dx0 := circularbounds.ExactCoordinateDelta(arc.Start.U, arc.Center.U)
-	dy0 := circularbounds.ExactCoordinateDelta(arc.Start.V, arc.Center.V)
-	dx1 := circularbounds.ExactCoordinateDelta(arc.End.U, arc.Center.U)
-	dy1 := circularbounds.ExactCoordinateDelta(arc.End.V, arc.Center.V)
-	r0 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
-	r1 := new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
-
-	diff := new(big.Rat).Sub(r1, r0)
-	if diff.Sign() == 0 {
-		return 0
-	}
-	diff.Abs(diff)
-
-	den := new(big.Rat).Add(proofarith.FloatRat(proofbound.RatSqrtDown(r0)), proofarith.FloatRat(proofbound.RatSqrtDown(r1)))
-	if den.Sign() <= 0 {
-		return math.Inf(1)
-	}
-	up := proofbound.RatFloatUp(new(big.Rat).Quo(diff, den))
-	if proofbound.IsNonFinite(up) {
-		return math.Inf(1)
-	}
-	return up
+	return circularbounds.ArcRadialResidualUpper(arc)
 }
 
 // CircularSegmentRange states a recorded circular segment's own parameter

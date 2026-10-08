@@ -233,9 +233,35 @@ the record denotes. A whole arc's region integrals read its two recorded ends,
 so they carry no trig-bracket width there. A cut end adds about one ulp of `r`
 of width, so a hemisphere or a sketch-cut cap reads its volume, area and
 centroid within `1e-13` relative before a `Split` piece's cut-displacement band
-(`docs/surface-intersection-design.md` §7.2) is added. The interval encloses
-the DENOTED walk at the recorded `t`; whether that `t` is the true crossing is
-`sketch`'s `TExact` claim, which this bracket neither tests nor widens.
+(`docs/surface-intersection-design.md` §7.2) and the junction charge below are
+added. The interval encloses the DENOTED walk at the recorded `t`; whether that
+`t` is the true crossing is `sketch`'s `TExact` claim, which this bracket
+neither tests nor widens.
+
+**A loop's region is closed at every junction by a chord.** Each segment
+denotes its own entity at its own recorded parameter, so at a cut bound the
+walk ending there and the walk starting there denote two different points:
+neither recorded `t` is the exact crossing, and a float `t` places a point on
+its entity no closer than about `ulp(t)·|entity|`. A 137000 mm line cut by a
+7.3 mm circle leaves a 4e-12 mm gap, and a whole arc's natural end leaves the
+radial residual above. The seam admits such a junction on `sketch`'s shared
+node, never on the two denoted points (`docs/sketch-seam-design.md` §1). The
+region a loop denotes is the one its segments bound with each gap closed by
+the straight chord between the two denoted ends. A sum of segment integrals
+alone omits that chord, which moves a field by up to `gap·reach` about the
+walk anchor. `internal/momentinput/junctions.go` charges every junction whose
+two ends are not provably one point. It bounds the gap from the two walk ends
+and their own bounds (`survey2d.SegmentWalk`'s `StartBound`/`EndBound`, an
+arc's `t = 1` end widened by the radial residual), and widens each held field
+whose boundary form has degree `k` by `gap·reach^k`. Every field's form has an
+integrand coefficient of at most 1, so the widening covers the chord in any
+direction (`momentregion.State.ChargeJunction`). Where both ends are exact
+rationals — a line's lerp, a free-form chain's end control point — the
+rational sum adds the chord's exact integral instead, so a line-only region
+stays `Exact`. Two natural line ends at one coordinate, and two fragments of
+one circle meeting at its seam, are one point and charge nothing. The
+chord-closed region differs from the exact crossing geometry by a sliver of
+order `gap²`.
 
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
 `docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
