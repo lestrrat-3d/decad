@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -134,10 +135,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		sp.slabs[1] = prismSlab{regions: []ProfileRecord{target.profile},
 			z0: innerHeld, z1: target.z1, z0Delta: innerDelta, z1Delta: target.z1Delta}
 	}
-	lowerOnly, upperOnly, err := stackedExclusiveHoles(sp.slabs[0].regions[0], sp.slabs[1].regions[0])
-	if err != nil {
-		return stackedPrismPayload{}, false, err
-	}
+	lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(sp.slabs[0].regions[0], sp.slabs[1].regions[0])
 	lowerExposed, err := stackedExposed(ctx, upperOnly)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
@@ -227,11 +225,8 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))
 	}
 	for k := range result.interfaces {
-		lowerOnly, upperOnly, err := stackedExclusiveHoles(
+		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(
 			result.slabs[k].regions[0], result.slabs[k+1].regions[0])
-		if err != nil {
-			return stackedPrismPayload{}, false, err
-		}
 		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
 			return stackedPrismPayload{}, false, fmt.Errorf(
 				`%w: slab interface %d has exclusive holes on both sides`, ErrUnsupported, k)
