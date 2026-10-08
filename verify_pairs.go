@@ -72,7 +72,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 			boxProven := boxesDisjoint(bodies[i].Bounds.Box, bodies[j].Bounds.Box)
 			if boxProven {
 				sheetPair := a.Kind() == BodySheet && b.Kind() == BodySheet
-				if sheetPair || !cfg.clearances {
+				if sheetPair || !cfg.Clearances {
 					continue
 				}
 			}
@@ -207,9 +207,9 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 				Message: "the sheet crosses the solid's boundary; no Interference row is emitted because a sheet encloses no region and there is no overlap volume to report",
 			})
 		case sheetSolidContained, sheetSolidOutside:
-			if cfg.clearances {
+			if cfg.Clearances {
 				pr := pairResult{lo: sres.lo, hi: sres.hi, exact: sres.exact, diam: sres.diam}
-				out.appendClearance(a, b, pr, cfg.rel)
+				out.appendClearance(a, b, pr, cfg.Rel)
 			}
 		case sheetSolidUndecided:
 			if boxProven {
@@ -261,7 +261,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	// intersection.
 	if boxProven {
 		if res.verdict == pairDisjoint || res.verdict == pairTouching {
-			out.appendClearance(a, b, res, cfg.rel)
+			out.appendClearance(a, b, res, cfg.Rel)
 			return out, nil
 		}
 		out.diagnostics = append(out.diagnostics,
@@ -272,8 +272,8 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	}
 
 	if res.verdict == pairDisjoint || res.verdict == pairTouching {
-		if cfg.clearances {
-			out.appendClearance(a, b, res, cfg.rel)
+		if cfg.Clearances {
+			out.appendClearance(a, b, res, cfg.Rel)
 		}
 		return out, nil
 	}
@@ -301,7 +301,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		Observed: &obs,
 		Message:  "the pair is proven to overlap",
 	})
-	pass, ref, haveRef := interferenceToleranceRef(volume, a, b, pairD, cfg.rel)
+	pass, ref, haveRef := interferenceToleranceRef(volume, a, b, pairD, cfg.Rel)
 	if !pass {
 		beyond := Diagnostic{
 			Code:     DiagMeasurementBeyondTolerance,
@@ -312,7 +312,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
 		}
 		if haveRef {
-			beyond.Required = requiredThreshold(cfg.rel*ref, volume.Value)
+			beyond.Required = requiredThreshold(cfg.Rel*ref, volume.Value)
 		}
 		out.diagnostics = append(out.diagnostics, beyond)
 		out.undecided = true

@@ -664,7 +664,7 @@ func TestLinkageProjectionLeavesTheDiscToTheTravelBound(t *testing.T) {
 	spin, err := l.Ground().Revolute(r3.NewVec(1e-9, 0, 0), r3.NewVec(0, 0, 1), []*Body{disc})
 	require.NoError(t, err)
 	run := linkageRunOf(t, doc, l, Drive{{Link: spin, From: units.Degrees(0), To: units.Degrees(90)}})
-	run.cfg.readingP = &motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, linkageReadingFloor)}
+	run.cfg.ReadingP = &motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, linkageReadingFloor)}
 	poses, spans, err := run.refine()
 	require.NoError(t, err)
 	require.Len(t, poses, 513)

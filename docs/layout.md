@@ -302,6 +302,7 @@ the rules leave to the byte budget.
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons and body reference formulas. See verification §2-§3. |
+| `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/prismextent/` | Prism extremes and bounds. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, and moment bounds over neutral records. |
@@ -317,6 +318,7 @@ the rules leave to the byte budget.
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
+| `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |

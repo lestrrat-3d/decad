@@ -124,7 +124,7 @@ func TestJointBoxSplitAxis(t *testing.T) {
 	}
 	require.Equal(t, 1, b.splitAxis(thin), `the axis that lowers τ_half most`)
 
-	floor := b.run.cfg.resolutionP.Base
+	floor := b.run.cfg.ResolutionP.Base
 	narrow := &boxCell{
 		lo:      []*big.Rat{new(big.Rat), new(big.Rat)},
 		hi:      []*big.Rat{new(big.Rat).Set(floor), big.NewRat(1, 1)},
@@ -314,7 +314,7 @@ func rockerGateBoxRun(t *testing.T) *boxRun {
 	require.True(t, ok)
 	cfg, budget, err := resolveJointBoxOptions(nil)
 	require.NoError(t, err)
-	require.NoError(t, spec.prepareLoops(t.Context(), cfg.resolutionP.Base))
+	require.NoError(t, spec.prepareLoops(t.Context(), cfg.ResolutionP.Base))
 	bounds, ok := readLinkBounds(spec, frames)
 	require.True(t, ok)
 	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
@@ -384,7 +384,7 @@ func TestJointBoxLoopSplitAxis(t *testing.T) {
 func TestJointBoxStuckRule(t *testing.T) {
 	t.Parallel()
 	ld := &loopDrive{driver: 0, certified: [][2]*big.Rat{{new(big.Rat), big.NewRat(1, 2)}}}
-	b := &boxRun{run: &motionRun{cfg: motionConfig{resolutionP: motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, 64)}}}, axes: []int{0}}
+	b := &boxRun{run: &motionRun{cfg: motionConfig{ResolutionP: motionbound.MotionParam{Turn: new(big.Rat), Base: big.NewRat(1, 64)}}}, axes: []int{0}}
 	gated := func(lo, hi *big.Rat) *boxCell {
 		return &boxCell{lo: []*big.Rat{lo}, hi: []*big.Rat{hi}, outcome: CellUndecided, gate: "refused", gateLoop: ld}
 	}

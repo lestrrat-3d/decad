@@ -879,17 +879,17 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 	var diags []Diagnostic
 	var results surveyResults
 
-	if cfg.wall != nil && b.Kind() == BodySolid {
+	if cfg.Wall != nil && b.Kind() == BodySolid {
 		results.WallAsked = true
 		out := wallOutcome{}
 		var err error
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			out, err = prismWall(budget, pl, cfg.allowRad)
+			out, err = prismWall(budget, pl, cfg.AllowRad)
 		case revolvePayload:
-			out, err = revolveWall(budget, pl, cfg.allowRad)
+			out, err = revolveWall(budget, pl, cfg.AllowRad)
 		case cupPayload:
-			out, err = cupWall(budget, pl, cfg.allowRad)
+			out, err = cupWall(budget, pl, cfg.AllowRad)
 		case capBlendPayload:
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
@@ -922,8 +922,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			))
 		case out.reading != nil:
 			m := lengthMeasurement(*out.reading, out.bound)
-			tool := cfg.wall.tool
-			switch intervalVerdict(*out.reading, out.bound, cfg.toolMM) {
+			tool := cfg.Wall.Tool
+			switch intervalVerdict(*out.reading, out.bound, cfg.ToolMM) {
 			case -1:
 				obs := m
 				wallDiags = append(wallDiags, Diagnostic{
@@ -957,20 +957,20 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 	}
 
-	if cfg.pull != nil {
+	if cfg.Pull != nil {
 		results.UndercutAsked = true
 		out := undercutOutcome{}
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			out = prismUndercuts(b, pl, *cfg.pull)
+			out = prismUndercuts(b, pl, *cfg.Pull)
 		case revolvePayload:
-			out = revolveUndercuts(b, pl, *cfg.pull)
+			out = revolveUndercuts(b, pl, *cfg.Pull)
 		case cupPayload:
-			out = cupUndercuts(b, pl, *cfg.pull)
+			out = cupUndercuts(b, pl, *cfg.Pull)
 		case capBlendPayload:
-			out = capBlendUndercuts(b, pl, *cfg.pull)
+			out = capBlendUndercuts(b, pl, *cfg.Pull)
 		case brepPayload:
-			out = brepUndercuts(b, pl, *cfg.pull)
+			out = brepUndercuts(b, pl, *cfg.Pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		default:
@@ -1011,7 +1011,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 	}
 
-	if cfg.concaveRadius && b.Kind() == BodySolid {
+	if cfg.ConcaveRadius && b.Kind() == BodySolid {
 		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false
