@@ -6,6 +6,9 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
@@ -179,14 +182,14 @@ func resolvePattern(spec PatternSpec) (resolvedPattern, error) {
 		if zeroVec(s.Dir) {
 			return resolvedPattern{}, fmt.Errorf(`%w: a zero pattern direction names no line`, ErrDegenerate)
 		}
-		step, err := magnitudeIn(s.Step, units.Length, units.Millimeter, "the pattern step")
+		step, err := sectionrecord.MagnitudeIn(s.Step, units.Length, units.Millimeter, "the pattern step")
 		if err != nil {
 			return resolvedPattern{}, err
 		}
 		if step == 0 {
 			return resolvedPattern{}, fmt.Errorf(`%w: a zero pattern step stacks every instance on the receiver`, ErrDegenerate)
 		}
-		exact := exactConversion(s.Step, units.Millimeter)
+		exact := extent.ExactConversion(s.Step, units.Millimeter)
 		if exact == nil {
 			return resolvedPattern{}, fmt.Errorf(`%w: the pattern step is not representable`, ErrNotFinite)
 		}

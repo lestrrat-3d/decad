@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -321,7 +323,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // face never claimed, which is the whole reason this returns a pair.
 func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, bool) {
 	v := n.Value.Dot(p)
-	bound, err := magnitudeIn(n.Bound, units.Dimensionless, units.One, "a normal's own bound")
+	bound, err := sectionrecord.MagnitudeIn(n.Bound, units.Dimensionless, units.One, "a normal's own bound")
 	if err != nil || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(v) {
 		return 0, 0, false
 	}

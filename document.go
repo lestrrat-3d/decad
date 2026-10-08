@@ -3,15 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
 	"slices"
 	"sync"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
 
@@ -309,50 +304,3 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform) (*Body, error
 
 // originProducer returns the private identity of the operation that produced this body.
 func (b *Body) originProducer() producerID { return b.origin.producer }
-
-// magnitudeIn validates a magnitude parameter (core §8.1/§12): the right
-// Kind, finite, and non-negative — sense is enumerated, never a sign.
-func magnitudeIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, error) {
-	return sectionrecord.MagnitudeIn(v, kind, unit, what)
-}
-
-// magnitudeInBounded is magnitudeIn beside the rounding the conversion itself
-// committed. A magnitude carried in a non-base unit reaches the evaluator as a
-// RESCALED float — units multiplies by the source unit's factor and divides by
-// the target's — so the millimetre figure returned is that rounding away from
-// the quantity the caller stated, and a level built from it is a computed level
-// like any other. A magnitude already in millimetres rescales by a factor of
-// one and reports zero, which is what keeps every millimetre-stated extent
-// exact.
-func magnitudeInBounded(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, float64, error) {
-	m, err := magnitudeIn(v, kind, unit, what)
-	if err != nil {
-		return 0, 0, err
-	}
-	return m, conversionRound(v, unit, m), nil
-}
-
-// conversionRound measures that rounding rather than estimating it: the rescale
-// is redone in exact rationals over the same magnitude and the same two unit
-// factors, and compared with the float that was held. Every input is a float64
-// and so an exact rational, so the comparison is the conversion's true error,
-// whatever sequence of float operations produced the held value.
-func conversionRound(v units.Value, unit units.Unit, held float64) float64 {
-	exact := exactConversion(v, unit)
-	if exact == nil {
-		return math.Inf(1)
-	}
-	return proofarith.RationalFloatError(exact, held)
-}
-
-// exactConversion is v in unit as the exact rational the rescale denotes: its
-// magnitude times its own unit's factor over unit's factor, every operand the
-// float it is held as. It is nil when an operand is not finite or unit's
-// factor is zero.
-func exactConversion(v units.Value, unit units.Unit) *big.Rat {
-	mag, from, to := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor()), proofarith.FloatRat(unit.Factor())
-	if mag == nil || from == nil || to == nil || to.Sign() == 0 {
-		return nil
-	}
-	return new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
-}

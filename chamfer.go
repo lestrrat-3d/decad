@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
@@ -139,7 +141,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err != nil {
 		return nil, err
 	}
-	dmm, dDelta, err := magnitudeInBounded(d, units.Length, units.Millimeter, "the chamfer setback")
+	dmm, dDelta, err := extent.MagnitudeInBounded(d, units.Length, units.Millimeter, "the chamfer setback")
 	if err != nil {
 		return nil, err
 	}

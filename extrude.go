@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -205,7 +207,7 @@ type linearSweep struct {
 func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, error) {
 	switch e := e.(type) {
 	case Distance:
-		m, delta, err := magnitudeInBounded(e.D, units.Length, units.Millimeter, "the extent distance")
+		m, delta, err := extent.MagnitudeInBounded(e.D, units.Length, units.Millimeter, "the extent distance")
 		if err != nil {
 			return linearSweep{}, err
 		}
@@ -224,7 +226,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
 	case Symmetric:
-		m, delta, err := magnitudeInBounded(e.D, units.Length, units.Millimeter, "the symmetric distance")
+		m, delta, err := extent.MagnitudeInBounded(e.D, units.Length, units.Millimeter, "the symmetric distance")
 		if err != nil {
 			return linearSweep{}, err
 		}
@@ -309,7 +311,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 	}
 	switch s := s.(type) {
 	case DistanceSide:
-		m, delta, err := magnitudeInBounded(s.D, units.Length, units.Millimeter, what)
+		m, delta, err := extent.MagnitudeInBounded(s.D, units.Length, units.Millimeter, what)
 		if err != nil {
 			return linearSide{}, err
 		}

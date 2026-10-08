@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -725,7 +727,7 @@ func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
 	require.True(t, ok)
 	require.Positive(t, cbp.end.dcDelta, `the premise: the conversion to millimetres rounds`)
 
-	exactDC := exactConversion(inch, units.Millimeter)
+	exactDC := extent.ExactConversion(inch, units.Millimeter)
 	denoted := new(big.Rat).Sub(new(big.Rat).SetFloat64(r), exactDC)
 	lms, _ := capBlendMotionUnderTest(t, cbp, tol)
 	lm := lms[0]

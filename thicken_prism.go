@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -126,7 +128,7 @@ func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenS
 	if !circle.CCW {
 		return thickenSection{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
-	radius, rDelta, err := magnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
+	radius, rDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
 	if err != nil || rDelta != 0 {
 		return thickenSection{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
 	}
@@ -178,7 +180,7 @@ func prismCircleOffset(budget *proofbound.WorkBudget, source ProfileRecord, radi
 	if !ok || !sourceOK || generated.Center != sourceCircle.Center || generated.CCW != sourceCircle.CCW {
 		return ProfileRecord{}, fmt.Errorf(`%w: the circle offset changed feature kind`, ErrUnsupported)
 	}
-	got, delta, err := magnitudeInBounded(generated.Radius, units.Length, units.Millimeter, "the generated circle radius")
+	got, delta, err := extent.MagnitudeInBounded(generated.Radius, units.Length, units.Millimeter, "the generated circle radius")
 	if err != nil || delta != 0 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the generated circle radius is not exact`, ErrUnsupported)
 	}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/extent"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -102,7 +104,7 @@ func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetO
 		}
 		side = o.side
 	}
-	dmm, dDelta, err := magnitudeInBounded(distance, units.Length, units.Millimeter, "the offset distance")
+	dmm, dDelta, err := extent.MagnitudeInBounded(distance, units.Length, units.Millimeter, "the offset distance")
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +246,7 @@ func offsetCircleSection(source ProfileRecord, circle CircleSeg, sense int, amou
 	if !circle.CCW {
 		return ProfileRecord{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
 	}
-	radius, rDelta, err := magnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
+	radius, rDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
 	if err != nil || rDelta != 0 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
 	}
