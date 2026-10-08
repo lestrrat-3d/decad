@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -47,6 +48,13 @@ type sideOpeningSection struct {
 	// offset2d.ChainReach, zero where every join and cut encloses to its held
 	// float.
 	delta float64
+	// cutGap bounds how far a circular rim's record names its cut from the
+	// cut q the open chain holds (arcCutGap): the rim, R and R' walk r's own
+	// parameterisation to a float parameter whose point need not be q. Only
+	// a result that publishes these regions as its section charges it
+	// (evalSideOpeningPrism); the engine writes every face of a kept cap's
+	// stack from its canonical vertices and carriers instead (§4.4).
+	cutGap float64
 }
 
 // classifyRemovedFaces sorts a prism shell's removed faces (§5, stage 2):
@@ -158,23 +166,242 @@ func requireOpeningEndCorner(k, r survey2d.SideWalk) error {
 	return fmt.Errorf(`%w: a side opening whose kept and removed walks are both arcs at an end corner is not supported (shell-opening SO5)`, ErrUnsupported)
 }
 
-// requireRemovedArcKey refuses a piece of a circular removed walk r — a rim,
-// a piece of R' or of R split at a cut — whose recorded arc does not read r's
-// own centre and radius bit for bit. An ArcSeg reads its radius from its
-// Start, which is a cut q wherever the piece starts there counter-clockwise,
-// and a cut that is not an exact point of r's circle reads a radius an ulp
-// off r's. The stacked record build then keys the piece and r on two circles
-// and cannot pair their edges, so under a kept cap the corner is SO5,
-// ErrUnsupported (§4.2). A straight r passes.
-func requireRemovedArcKey(r survey2d.SideWalk, seg CurveSegment) error {
-	if !r.IsCircular() {
-		return nil
+// arcStation is a point a piece on a removed circular walk's carrier starts
+// or ends at (§4.2): p as the record states it, and where it lies along the
+// walk. An in-span station names the walk segment seg (an index into the
+// walk's Segs) and its parameter t in that segment's own parameterisation; a
+// station off the walk's span (off) lies on the carrier's extension, before
+// the walk's start where before is set and past its end otherwise.
+type arcStation struct {
+	p      Point2
+	seg    int
+	t      float64
+	off    bool
+	before bool
+}
+
+// arcRange is a circular segment's recorded parameter range.
+func arcRange(seg CurveSegment) (float64, float64) {
+	switch s := seg.(type) {
+	case ArcSeg:
+		return s.TStart, s.TEnd
+	case CircleSeg:
+		return s.TStart, s.TEnd
 	}
-	w, err := boundarywalk.WalkOf(seg, nil)
-	if err == nil && w.IsCircular() && w.CU == r.CU && w.CV == r.CV && w.Radius == r.Radius {
-		return nil
+	return 0, 0
+}
+
+// arcWithRange is seg walked over [t0, t1] of its own parameterisation, its
+// defining data unchanged: an ArcSeg keeps its Center, Start and End, so it
+// reads its radius from the same Start, and a CircleSeg keeps its Center and
+// Radius and turns the way the range runs.
+func arcWithRange(seg CurveSegment, t0, t1 float64) CurveSegment {
+	switch s := seg.(type) {
+	case ArcSeg:
+		s.TStart, s.TEnd = t0, t1
+		return s
+	case CircleSeg:
+		s.TStart, s.TEnd, s.CCW = t0, t1, t0 < t1
+		return s
 	}
-	return fmt.Errorf(`%w: a side opening's rim cut on a removed arc is not an exact point of the arc's circle, so the record build cannot key the rim on the arc's own carrier under a kept cap (shell-opening SO5)`, ErrUnsupported)
+	return seg
+}
+
+// arcParam is the parameter at which seg's own parameterisation reaches the
+// angle of p about its centre, as the segment's walk evaluates angles
+// (boundarywalk's walkOf): an ArcSeg's counter-clockwise sweep from Start's
+// angle to End's, a CircleSeg's whole turn from angle zero. The answer lies in
+// [0, 2π/sweep) for an arc and [0, 1) for a circle; it is a float solve, and
+// the caller charges the point it names (sideOpeningSection.cutGap).
+func arcParam(seg CurveSegment, p Point2) (float64, bool) {
+	turn := func(a float64) float64 {
+		a = math.Mod(a, 2*math.Pi)
+		if a < 0 {
+			a += 2 * math.Pi
+		}
+		return a
+	}
+	switch s := seg.(type) {
+	case ArcSeg:
+		a0 := math.Atan2(s.Start.V-s.Center.V, s.Start.U-s.Center.U)
+		a1 := math.Atan2(s.End.V-s.Center.V, s.End.U-s.Center.U)
+		sweep := math.Mod(a1-a0, 2*math.Pi)
+		if sweep <= 0 {
+			sweep += 2 * math.Pi
+		}
+		return turn(math.Atan2(p.V-s.Center.V, p.U-s.Center.U)-a0) / sweep, true
+	case CircleSeg:
+		return turn(math.Atan2(p.V-s.Center.V, p.U-s.Center.U)) / (2 * math.Pi), true
+	}
+	return 0, false
+}
+
+// arcWalkStation and arcWalkEnd are the stations at a circular walk's own
+// start and end: its first segment's TStart and its last segment's TEnd.
+func arcWalkStation(w survey2d.SideWalk, segs []CurveSegment) arcStation {
+	t0, _ := arcRange(segs[w.Segs[0]])
+	return arcStation{p: Point2{U: w.StartU, V: w.StartV}, seg: 0, t: t0}
+}
+
+func arcWalkEnd(w survey2d.SideWalk, segs []CurveSegment) arcStation {
+	last := len(w.Segs) - 1
+	_, t1 := arcRange(segs[w.Segs[last]])
+	return arcStation{p: Point2{U: w.EndU, V: w.EndV}, seg: last, t: t1}
+}
+
+// cutStation places a rim cut q on removed walk w: a forward cut strictly
+// inside the parameter range of one of w's segments, a backward cut on the
+// carrier's extension behind the walk's start (atStart) or past its end. A
+// straight walk needs only the point. A forward cut no segment's range holds
+// strictly inside — its parameter rounded onto or past a segment's end — is
+// SO5, ErrUnsupported.
+func cutStation(w survey2d.SideWalk, segs []CurveSegment, q Point2, forward, atStart bool) (arcStation, error) {
+	if !w.IsCircular() {
+		return arcStation{p: q}, nil
+	}
+	if !forward {
+		return arcStation{p: q, off: true, before: atStart}, nil
+	}
+	for i, si := range w.Segs {
+		t, ok := arcParam(segs[si], q)
+		t0, t1 := arcRange(segs[si])
+		if ok && (t-t0)*(t1-t) > 0 {
+			return arcStation{p: q, seg: i, t: t}, nil
+		}
+	}
+	return arcStation{}, fmt.Errorf(`%w: a side opening's rim cut on a removed arc lies at no parameter strictly inside the arc's recorded range (shell-opening SO5)`, ErrUnsupported)
+}
+
+// removedPiece is the piece of the removed walk w's carrier from station a to
+// station b (§4.2). A straight walk's piece is one LineSeg. On a circular walk
+// every piece is a parameter range of w's own recorded segments, so it keys
+// w's circle bit for bit: between two in-span stations, each segment the
+// piece crosses over the part of its range the piece covers, verbatim where
+// it covers the whole range, and walked backward where b precedes a; between
+// a walk end and a station off the span, one segment (arcExtension).
+func removedPiece(w survey2d.SideWalk, segs []CurveSegment, a, b arcStation) ([]CurveSegment, error) {
+	switch {
+	case !w.IsCircular():
+		return []CurveSegment{LineSeg{Start: a.p, End: b.p, TStart: 0, TEnd: 1}}, nil
+	case a.off:
+		seg, err := arcExtension(w, segs, a, false)
+		return []CurveSegment{seg}, err
+	case b.off:
+		seg, err := arcExtension(w, segs, b, true)
+		return []CurveSegment{seg}, err
+	}
+	precedes := func(x, y arcStation) bool {
+		if x.seg != y.seg {
+			return x.seg < y.seg
+		}
+		t0, t1 := arcRange(segs[w.Segs[x.seg]])
+		return (y.t-x.t)*(t1-t0) > 0
+	}
+	if precedes(b, a) {
+		fwd, err := removedPiece(w, segs, b, a)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]CurveSegment, 0, len(fwd))
+		for _, seg := range slices.Backward(fwd) {
+			t0, t1 := arcRange(seg)
+			out = append(out, arcWithRange(seg, t1, t0))
+		}
+		return out, nil
+	}
+	var out []CurveSegment
+	for i := a.seg; i <= b.seg; i++ {
+		seg := segs[w.Segs[i]]
+		from, to := arcRange(seg)
+		if i == a.seg {
+			from = a.t
+		}
+		if i == b.seg {
+			to = b.t
+		}
+		if from == to {
+			continue
+		}
+		out = append(out, arcWithRange(seg, from, to))
+	}
+	return out, nil
+}
+
+// arcExtension is the piece of a circular walk's carrier between the walk's
+// own end v (its start where q lies before it) and a cut q off its span,
+// walked from v to q where fromV is set. Its segment is the one recorded at v:
+// over its own parameterisation where q's parameter lies inside [0, 1] beyond
+// v's, and otherwise, where v is an ArcSeg's own Start or End, over that arc's
+// complement — the same Center with Start and End swapped, which sweeps every
+// angle the arc does not. The complement reads its radius from the arc's End,
+// so it keys and denotes the arc's own circle only where End lies exactly on
+// the circle Start defines, compared in exact rational arithmetic; any other
+// extension is SO5, ErrUnsupported.
+func arcExtension(w survey2d.SideWalk, segs []CurveSegment, q arcStation, fromV bool) (CurveSegment, error) {
+	v := arcWalkEnd(w, segs)
+	if q.before {
+		v = arcWalkStation(w, segs)
+	}
+	seg := segs[w.Segs[v.seg]]
+	t0, t1 := arcRange(seg)
+	other := t0
+	if q.before {
+		other = t1
+	}
+	base, tv := seg, v.t
+	tq, ok := arcParam(seg, q.p)
+	if !ok || tq < 0 || tq > 1 || (tq-v.t)*(other-v.t) >= 0 {
+		arc, isArc := seg.(ArcSeg)
+		if !isArc || (v.t != 0 && v.t != 1) || !arcEndOnCircle(arc) {
+			return nil, fmt.Errorf(`%w: a side opening's rim cut behind a removed arc's end lies off the arc's recorded parameterisation, and the arc's complement does not read its circle (shell-opening SO5)`, ErrUnsupported)
+		}
+		base = ArcSeg{Center: arc.Center, Start: arc.End, End: arc.Start}
+		tv = 1 - v.t
+		tq, _ = arcParam(base, q.p)
+		if !(tq > 0 && tq < 1) {
+			return nil, fmt.Errorf(`%w: a side opening's rim cut behind a removed arc's end lies at no parameter strictly inside the arc's complement (shell-opening SO5)`, ErrUnsupported)
+		}
+	}
+	if fromV {
+		return arcWithRange(base, tv, tq), nil
+	}
+	return arcWithRange(base, tq, tv), nil
+}
+
+// arcEndOnCircle reports whether an ArcSeg's End lies exactly on the circle
+// its Start defines about its Center, compared over exact rationals.
+func arcEndOnCircle(arc ArcSeg) bool {
+	sq := func(p Point2) *big.Rat {
+		du := new(big.Rat).Sub(new(big.Rat).SetFloat64(p.U), new(big.Rat).SetFloat64(arc.Center.U))
+		dv := new(big.Rat).Sub(new(big.Rat).SetFloat64(p.V), new(big.Rat).SetFloat64(arc.Center.V))
+		return du.Add(du.Mul(du, du), dv.Mul(dv, dv))
+	}
+	return sq(arc.Start).Cmp(sq(arc.End)) == 0
+}
+
+// arcCutGap bounds how far the point a rim's record names at the cut q lies
+// from q itself: the rim's pieces end at q's parameter (their last piece's
+// TEnd where atEnd is set, the first piece's TStart otherwise), and the point
+// the record denotes there is enclosed over rational intervals
+// (boundarywalk.CircularWalkEndBound). A straight piece ends at q exactly.
+func arcCutGap(pieces []CurveSegment, q Point2, atEnd bool) float64 {
+	if len(pieces) == 0 {
+		return 0
+	}
+	seg := pieces[0]
+	if atEnd {
+		seg = pieces[len(pieces)-1]
+	}
+	t0, t1 := arcRange(seg)
+	t := t0
+	if atEnd {
+		t = t1
+	}
+	switch seg.(type) {
+	case ArcSeg, CircleSeg:
+		return proofbound.WalkEndBoundAllow(boundarywalk.CircularWalkEndBound(seg, t, q.U, q.V))
+	}
+	return 0
 }
 
 // obliqueLine reports whether a line walk lies off both section axes. The
@@ -192,34 +419,35 @@ func splitAtCuts(w survey2d.SideWalk) bool {
 	return obliqueLine(w) || w.IsCircular()
 }
 
-// removedPiece is the piece of the removed walk r's own carrier from `from`
-// to `to`, walked in r's own sense: a LineSeg, or an ArcSeg about r's centre.
-func removedPiece(r survey2d.SideWalk, from, to Point2) CurveSegment {
-	if r.IsCircular() {
-		return arcSegment(Point2{U: r.CU, V: r.CV}, from, to, r.Th1 > r.Th0)
+// walkStations is the station at a removed walk's own start and at its end:
+// on a circular walk its segments' natural range ends (arcWalkStation), on a
+// straight one the points alone.
+func walkStations(w survey2d.SideWalk, segs []CurveSegment) (arcStation, arcStation) {
+	if w.IsCircular() {
+		return arcWalkStation(w, segs), arcWalkEnd(w, segs)
 	}
-	return LineSeg{Start: from, End: to, TStart: 0, TEnd: 1}
+	return arcStation{p: Point2{U: w.StartU, V: w.StartV}}, arcStation{p: Point2{U: w.EndU, V: w.EndV}}
 }
 
 // removedPieces writes the removed run on carrier(r) as one region walks it
 // (§3, §4.2): the receiver's own run R from vB to vA (recut false), or R',
-// the run re-cut to start at qB and end at qA (recut true). forwardB and
-// forwardA say each end's cut runs forward into r's span. An oblique end walk
-// is stated in the pieces every other region needs: R's walk split at a
+// the run re-cut to start at the cut sB and end at sA (recut true). forwardB
+// and forwardA say each end's cut runs forward into r's span. An oblique end
+// walk is stated in the pieces every other region needs: R's walk split at a
 // forward cut, and R' split at v where its cut runs backward along the
 // carrier, so the regions' pieces on that carrier are vB → qB, qB → qA and
 // qA → vA, each keyed by its own endpoints. A circular end walk is stated in
-// the same pieces, arcs about its centre, so the area identity pairs each
-// piece's bulge across the regions (§4.7); keyed asks that every such arc
-// read the walk's own radius (requireRemovedArcKey), as a kept cap's record
-// build needs. An axis-aligned end walk keeps its one piece: the engine reads
-// its plane by level and splits it at the vertices it records. A removed
-// oblique end walk recorded as more than one segment is SO5: the record
-// cannot state its pieces alike in every region.
-func removedPieces(walks []survey2d.SideWalk, run []int, segs []CurveSegment, qB, qA Point2, forwardB, forwardA, recut, keyed bool) ([]CurveSegment, error) {
+// the same pieces, each a parameter range of the walk's own recorded segments
+// (removedPiece), so every piece keys the walk's circle and the area identity
+// pairs each piece's bulge across the regions (§4.7). An axis-aligned end
+// walk keeps its one piece: the engine reads its plane by level and splits it
+// at the vertices it records. A removed oblique end walk recorded as more
+// than one segment is SO5: the record cannot state its pieces alike in every
+// region.
+func removedPieces(walks []survey2d.SideWalk, run []int, segs []CurveSegment, sB, sA arcStation, forwardB, forwardA, recut bool) ([]CurveSegment, error) {
 	rFirst, rLast := walks[run[0]], walks[run[len(run)-1]]
-	vB := Point2{U: rFirst.StartU, V: rFirst.StartV}
-	vA := Point2{U: rLast.EndU, V: rLast.EndV}
+	vB, eB := walkStations(rFirst, segs)
+	sA0, vA := walkStations(rLast, segs)
 	for _, w := range []survey2d.SideWalk{rFirst, rLast} {
 		if obliqueLine(w) && len(w.Segs) != 1 {
 			return nil, fmt.Errorf(`%w: a side opening's removed oblique face is recorded as %d collinear segments, which this record build does not state (shell-opening SO5)`, ErrUnsupported, len(w.Segs))
@@ -230,58 +458,65 @@ func removedPieces(walks []survey2d.SideWalk, run []int, segs []CurveSegment, qB
 	splitB := splitAtCuts(rFirst) && forwardB != recut
 	splitA := splitAtCuts(rLast) && forwardA != recut
 	var out []CurveSegment
-	var keyErr error
-	pieces := func(w survey2d.SideWalk, pts ...Point2) {
-		for i := 0; i+1 < len(pts); i++ {
-			seg := removedPiece(w, pts[i], pts[i+1])
-			if keyed && keyErr == nil {
-				keyErr = requireRemovedArcKey(w, seg)
+	pieces := func(w survey2d.SideWalk, sts ...arcStation) error {
+		for i := 0; i+1 < len(sts); i++ {
+			seg, err := removedPiece(w, segs, sts[i], sts[i+1])
+			if err != nil {
+				return err
 			}
-			out = append(out, seg)
+			out = append(out, seg...)
 		}
+		return nil
 	}
 	from, to := vB, vA
-	inB, inA := qB, qA
+	inB, inA := sB, sA
 	if recut {
-		from, to = qB, qA
+		from, to = sB, sA
 		inB, inA = vB, vA
 	}
 	if len(run) == 1 {
 		if !recut && !splitB && !splitA {
 			return appendWalkSegs(out, rFirst, segs), nil
 		}
-		pts := []Point2{from}
+		sts := []arcStation{from}
 		if splitB {
-			pts = append(pts, inB)
+			sts = append(sts, inB)
 		}
 		if splitA {
-			pts = append(pts, inA)
+			sts = append(sts, inA)
 		}
-		pieces(rFirst, append(pts, to)...)
-		return out, keyErr
+		if err := pieces(rFirst, append(sts, to)...); err != nil {
+			return nil, err
+		}
+		return out, nil
 	}
-	eB := Point2{U: rFirst.EndU, V: rFirst.EndV}
-	sA := Point2{U: rLast.StartU, V: rLast.StartV}
+	var err error
 	switch {
 	case splitB:
-		pieces(rFirst, from, inB, eB)
+		err = pieces(rFirst, from, inB, eB)
 	case recut:
-		pieces(rFirst, from, eB)
+		err = pieces(rFirst, from, eB)
 	default:
 		out = appendWalkSegs(out, rFirst, segs)
+	}
+	if err != nil {
+		return nil, err
 	}
 	for _, ri := range run[1 : len(run)-1] {
 		out = appendWalkSegs(out, walks[ri], segs)
 	}
 	switch {
 	case splitA:
-		pieces(rLast, sA, inA, to)
+		err = pieces(rLast, sA0, inA, to)
 	case recut:
-		pieces(rLast, sA, to)
+		err = pieces(rLast, sA0, to)
 	default:
 		out = appendWalkSegs(out, rLast, segs)
 	}
-	return out, keyErr
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // appendWalkSegs appends a walk's recorded segments verbatim.
@@ -312,8 +547,9 @@ func sideOpeningHeight(pp prismPayload, keptCaps int, s float64, t units.Value, 
 // (§3, §4.7 steps 1–3) in §5's gate order: SO6 (a holed section, then the
 // run rule), the walk kinds this build takes and its arc–arc end corners
 // (SO5), SO3's height half, the open chain's offset (S11a per walk, SO1, SO2
-// and SO4 per end), under a kept cap the removed arcs' carrier keys (SO5),
-// modify §5's audit of W and of C (O outward) — S8, where a C with no area is
+// and SO4 per end), each cut on a removed arc placed in the arc's own
+// parameterisation (SO5 where no range of its record names it), modify §5's
+// audit of W and of C (O outward) — S8, where a C with no area is
 // SO3, S11b and S9 — and the exact area identity, whose failure is SO5.
 // keptCaps is the number of caps the shell keeps.
 func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides map[int]struct{}, keptCaps int, s float64, t units.Value, tmm, tDelta float64) (sideOpeningSection, error) {
@@ -367,14 +603,32 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	vB := Point2{U: last.EndU, V: last.EndV}
 	qA, qB := off.qStart, off.qEnd
 
-	// W: the rims run v → q where the loop leaves K for K' (vB inward, vA
-	// outward) and q → v where it returns.
-	inward := s > 0
-	atEnd, err := offset2d.RimSegment(last, rFirst, true, s, off.ends[1].Join, inward)
+	// A cut runs forward into r's span from v, or backward along the
+	// carrier's extension behind v (Table RO's reflex row inward);
+	// offsetOpenChain has already read both corners.
+	forwardA, err := offset2d.OpeningForward(first, rLast, false, s, shellTol)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
-	atStart, err := offset2d.RimSegment(first, rLast, false, s, off.ends[0].Join, !inward)
+	forwardB, err := offset2d.OpeningForward(last, rFirst, true, s, shellTol)
+	if err != nil {
+		return sideOpeningSection{}, err
+	}
+	sB, err := cutStation(rFirst, segs, qB, forwardB, true)
+	if err != nil {
+		return sideOpeningSection{}, err
+	}
+	sA, err := cutStation(rLast, segs, qA, forwardA, false)
+	if err != nil {
+		return sideOpeningSection{}, err
+	}
+
+	// W: the rims run v → q where the loop leaves K for K' (vB inward, vA
+	// outward) and q → v where it returns. On a circular r each rim is a
+	// parameter range of r's own record (removedPiece), as R and R' state
+	// their pieces, so all of them key r's circle (§4.2).
+	inward := s > 0
+	atEnd, atStart, gap, err := sideOpeningRims(walks, run, segs, last, first, sB, sA, off.ends, s, inward)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
@@ -384,31 +638,8 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	}
 
 	// R' is the removed run re-cut at both ends: its first walk starts at qB,
-	// its last ends at qA, and every walk between is verbatim. A cut runs
-	// forward into r's span from v, or backward along the carrier's
-	// extension behind v (Table RO's reflex row inward); offsetOpenChain has
-	// already read both corners.
-	forwardA, err := offset2d.OpeningForward(first, rLast, false, s, shellTol)
-	if err != nil {
-		return sideOpeningSection{}, err
-	}
-	forwardB, err := offset2d.OpeningForward(last, rFirst, true, s, shellTol)
-	if err != nil {
-		return sideOpeningSection{}, err
-	}
-	// Under a kept cap the record build keys every piece on a removed arc's
-	// circle by the radius it reads from its Start (§4.2): the rims, and the
-	// pieces removedPieces writes.
-	keyed := keptCaps > 0
-	if keyed {
-		if err := requireRemovedArcKey(rFirst, atEnd); err != nil {
-			return sideOpeningSection{}, err
-		}
-		if err := requireRemovedArcKey(rLast, atStart); err != nil {
-			return sideOpeningSection{}, err
-		}
-	}
-	recut, err := removedPieces(walks, run, segs, qB, qA, forwardB, forwardA, true, keyed)
+	// its last ends at qA, and every walk between is verbatim.
+	recut, err := removedPieces(walks, run, segs, sB, sA, forwardB, forwardA, true)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
@@ -418,7 +649,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	// that cut.
 	section := pp.profile
 	if (splitAtCuts(rFirst) && forwardB) || (splitAtCuts(rLast) && forwardA) {
-		split, err := removedPieces(walks, run, segs, qB, qA, forwardB, forwardA, false, keyed)
+		split, err := removedPieces(walks, run, segs, sB, sA, forwardB, forwardA, false)
 		if err != nil {
 			return sideOpeningSection{}, err
 		}
@@ -460,7 +691,47 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
+	sec.cutGap = gap
 	return sec, nil
+}
+
+// sideOpeningRims writes the two rims of §3's W, each already running the way
+// W walks it, and the larger cut gap (arcCutGap) of the two: at K's end
+// (k = last, r = rFirst) from v to q inward, at K's start (k = first,
+// r = rLast) from q to v inward, both reversed outward. A straight r's rim is
+// offset2d.RimSegment's LineSeg; a circular r's is the piece of r's own
+// record between v and the cut station (removedPiece).
+func sideOpeningRims(walks []survey2d.SideWalk, run []int, segs []CurveSegment, last, first survey2d.SideWalk, sB, sA arcStation, ends [2]offset2d.ChainEnd, s float64, inward bool) ([]CurveSegment, []CurveSegment, float64, error) {
+	rFirst, rLast := walks[run[0]], walks[run[len(run)-1]]
+	rim := func(k, r survey2d.SideWalk, atEnd bool, j offset2d.Join, cut arcStation, fromV bool) ([]CurveSegment, float64, error) {
+		if !r.IsCircular() {
+			seg, err := offset2d.RimSegment(k, r, atEnd, s, j, fromV)
+			return []CurveSegment{seg}, 0, err
+		}
+		vStart, vEnd := walkStations(r, segs)
+		v := vEnd
+		if atEnd {
+			v = vStart
+		}
+		from, to := v, cut
+		if !fromV {
+			from, to = cut, v
+		}
+		pieces, err := removedPiece(r, segs, from, to)
+		if err != nil {
+			return nil, 0, err
+		}
+		return pieces, arcCutGap(pieces, cut.p, fromV), nil
+	}
+	atEnd, gapB, err := rim(last, rFirst, true, ends[1].Join, sB, inward)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	atStart, gapA, err := rim(first, rLast, false, ends[0].Join, sA, !inward)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return atEnd, atStart, math.Max(gapB, gapA), nil
 }
 
 // walkedEnds is the first and last point a recorded line or arc is walked
