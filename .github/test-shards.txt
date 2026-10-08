@@ -1166,6 +1166,6 @@
 3	0.05	TestRevolveShellOpeningSectionDelta
 3	0.03	TestRevolveShellSectionDelta
 3	0.03	TestRevolveShellDisplacedUndercutUndecided
-5	0.09	TestChordLocusRegionPointsLieOnCoveredSurfaces
+5	0.09	TestChordLocusRegionPointsLieInTheShell
 5	0.03	TestCapBandCoordUpperCoversTheCornerLoci
 5	0.01	TestCapBandMassBoundsChargeTheSideLevelMove

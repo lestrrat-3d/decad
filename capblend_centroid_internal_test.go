@@ -268,82 +268,28 @@ func (p regionPatch) radiusAt(lambda, v, theta float64) float64 {
 	return math.Hypot(p.at(lambda, (lo+hi)/2, v))
 }
 
-// area integrates H_λ's area by tensor Gauss-Legendre quadrature.
-func (p regionPatch) area(lambda float64) float64 {
-	const n = 48
-	xs, ws := gaussLegendreNodes(n)
-	total := 0.0
-	const eps = 1e-6
-	for i, u := range xs {
-		for j, v := range xs {
-			ux0, uy0 := p.at(lambda, u-eps, v)
-			ux1, uy1 := p.at(lambda, u+eps, v)
-			vx0, vy0 := p.at(lambda, u, v-eps)
-			vx1, vy1 := p.at(lambda, u, v+eps)
-			du := [3]float64{(ux1 - ux0) / (2 * eps), (uy1 - uy0) / (2 * eps), 0}
-			dv := [3]float64{(vx1 - vx0) / (2 * eps), (vy1 - vy0) / (2 * eps), p.h}
-			nx := du[1]*dv[2] - du[2]*dv[1]
-			ny := du[2]*dv[0] - du[0]*dv[2]
-			nz := du[0]*dv[1] - du[1]*dv[0]
-			total += ws[i] * ws[j] * math.Sqrt(nx*nx+ny*ny+nz*nz)
-		}
-	}
-	return total
-}
-
-// gaussLegendreNodes returns the n-point Gauss-Legendre nodes and weights on
-// [0, 1].
-func gaussLegendreNodes(n int) ([]float64, []float64) {
-	x := make([]float64, n)
-	w := make([]float64, n)
-	for i := range n {
-		z := math.Cos(math.Pi * (float64(i) + 0.75) / (float64(n) + 0.5))
-		var dp float64
-		for range 100 {
-			p1, p2 := 1.0, 0.0
-			for j := 1; j <= n; j++ {
-				p1, p2 = ((2*float64(j)-1)*z*p1-(float64(j)-1)*p2)/float64(j), p1
-			}
-			dp = float64(n) * (z*p1 - p2) / (z*z - 1)
-			next := z - p1/dp
-			if math.Abs(next-z) < 1e-16 {
-				z = next
-				break
-			}
-			z = next
-		}
-		x[i] = (1 - z) / 2
-		w[i] = 1 / ((1 - z*z) * dp * dp)
-	}
-	return x, w
-}
-
-// TestChordLocusRegionPointsLieOnCoveredSurfaces samples the region between
-// a Cone patch's wide sector and its built ruled patch and checks the two
-// containments proofbound.ChordLocusRegionAllow's proof rests on, on the
-// narrow window of capband's chord-locus tests (R = 10, window 0.001 rad,
-// trimmed 2e-4 rad at each corner) and on the quarter disk R = 60 chamfered
-// 4 mm.
+// TestChordLocusRegionPointsLieInTheShell samples the crossings
+// proofbound.ChordLocusRegionAllow's proof bounds and checks each lies in the
+// shell under the cone that the region term charges, on the narrow window of
+// capband's chord-locus tests (R = 10, window 0.001 rad, trimmed 2e-4 rad at
+// each corner) and on the quarter disk R = 60 chamfered 4 mm.
 //
-// At a middle azimuth, between the two corner wedges, every radius between
-// the built patch's crossing and the cone's lies on some homotopy surface
-// H_λ: the test finds λ by bisection, checks the surface passes through the
-// point, and checks the patch's homotopy area bound
-// (capband.ChordLocusHomotopyArea) covers that surface's area. At an azimuth
-// in a corner wedge, every point of the built patch and of the sliver
+// At a middle azimuth, between the two corner wedges, the built patch must
+// cross the ray within capband.ChordLocusBuiltDeficit inside the cone radius
+// and not outside it; the samples cover the window at ten heights. At an
+// azimuth in a corner wedge, every point of the built patch and of the sliver
 // surface joining the corner-foot locus to the built ruling at equal heights
 // must lie within capband.ChordLocusCornerDeficit inside the cone radius and
 // not outside it. On the quarter disk the locus is the line foot
 // (√((R−t)² − t²), t) and its mirror; on the narrow window, whose locus is
 // not modelled, the sliver is sampled from both ends of the corner wedge.
 //
-// Shown to fail on 2026-10-09: with ChordLocusHomotopyArea answering the
-// built patch's capband.AreaOf value plus bound, the narrow window's surfaces
-// up to λ ≈ 0.75 exceed it, and with ChordLocusCornerDeficitUpper's 3/8 cut
-// to 1/10, the narrow window's sliver samples and the quarter disk's
-// built-patch samples fall outside the shell (the narrow window's worst
-// sliver sample sits 0.123·R·Φ² inside the cone).
-func TestChordLocusRegionPointsLieOnCoveredSurfaces(t *testing.T) {
+// Shown to fail on 2026-10-09: with ChordLocusBuiltDeficitUpper's 1/4 cut to
+// 1/10, the quarter disk's middle samples leave the shell (its worst sits
+// 0.44 of the bound inside the cone), and with ChordLocusCornerDeficitUpper's
+// 3/8 cut to 1/10, the narrow window's sliver samples and the quarter disk's
+// built-patch samples do.
+func TestChordLocusRegionPointsLieInTheShell(t *testing.T) {
 	t.Parallel()
 	narrow := capPatchGeom{
 		Circular: true, SweepCCW: true,
@@ -395,42 +341,23 @@ func TestChordLocusRegionPointsLieOnCoveredSurfaces(t *testing.T) {
 			p := regionPatchOf(tc.g)
 			require.Less(t, p.s0, p.c0)
 			require.Less(t, p.c1, p.s1)
-			areaBound := capband.ChordLocusHomotopyArea(tc.g)
+			built := capband.ChordLocusBuiltDeficit(tc.g)
 			deficit := capband.ChordLocusCornerDeficit(tc.g)
+			worst := 0.0
 			rAt := func(v float64) float64 { return p.r0 + (p.r1-p.r0)*v }
 
-			areas := map[float64]float64{}
-			for _, v := range []float64{0.1, 0.5, 0.9} {
-				// A symmetric trim leaves the middle ruling exact, so the samples
-				// avoid the window's centre.
-				for _, f := range []float64{0.1, 0.3, 0.8} {
-					theta := p.c0 + f*(p.c1-p.c0)
+			for i := range 10 {
+				v := 0.05 + 0.1*float64(i)
+				for j := range 21 {
+					theta := p.c0 + float64(j)/20*(p.c1-p.c0)
 					outer, inner := rAt(v), p.radiusAt(1, v, theta)
-					require.Less(t, inner, outer, `the built patch dips inside the cone at a middle azimuth`)
-					for _, s := range []float64{0.25, 0.5, 0.75} {
-						rho := inner + s*(outer-inner)
-						lo, hi := 0.0, 1.0
-						for range 200 {
-							mid := (lo + hi) / 2
-							if p.radiusAt(mid, v, theta) > rho {
-								lo = mid
-							} else {
-								hi = mid
-							}
-						}
-						lambda := (lo + hi) / 2
-						require.InDelta(t, rho, p.radiusAt(lambda, v, theta), 1e-9*outer,
-							`v=%v θ=%v ρ=%v: H_λ at λ=%v must pass through the point`, v, theta, rho, lambda)
-						a, seen := areas[lambda]
-						if !seen {
-							a = p.area(lambda)
-							areas[lambda] = a
-						}
-						require.LessOrEqual(t, a, areaBound,
-							`v=%v θ=%v ρ=%v: H_λ at λ=%v has area %v past the bound %v`, v, theta, rho, lambda, a, areaBound)
-					}
+					require.LessOrEqual(t, inner, outer*(1+1e-12), `the built patch lies inside the cone`)
+					require.GreaterOrEqual(t, inner, outer-built,
+						`v=%v θ=%v: the built patch at radius %v leaves the shell [%v, %v]`, v, theta, inner, outer-built, outer)
+					worst = math.Max(worst, (outer-inner)/built)
 				}
 			}
+			require.Positive(t, worst, `the built patch dips inside the cone at a middle azimuth`)
 
 			for _, v := range []float64{0.1, 0.5, 0.9} {
 				r := rAt(v)

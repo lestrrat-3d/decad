@@ -259,11 +259,14 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 // one by up to the larger section area times that. The volume bound must
 // grow by at least that much over the same band with an exact setback, and
 // the first-moment bound in u, which no level term otherwise reaches, by at
-// least that volume times the coordinate bound.
+// least that volume times the coordinate bound. The volume bound must also
+// grow by no more than the charge: the side disk carries only the cap level's
+// inherited displacement, so the move is charged once.
 //
 // Shown to fail on 2026-10-09: without capBandLevelVolume, the volume bound
-// grows by a third of the charge (the side disk's own term) and the u-moment
-// bound not at all.
+// does not grow at all; with the
+// side disk still reading the side level's whole bound, the volume bound
+// grows by four thirds of it.
 func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 	t.Parallel()
 	const capZ, d, dsDelta, u0 = 2.0, 0.1, 1e-3, 100.0
@@ -289,6 +292,8 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, volLoose.Bound-volExact.Bound, charge*(1-1e-9),
 		`the volume bound must grow by the side level's move, %v, not %v`, charge, volLoose.Bound-volExact.Bound)
+	require.LessOrEqual(t, volLoose.Bound-volExact.Bound, charge*(1+1e-6),
+		`the volume bound must charge the side level's move once, %v, not %v`, charge, volLoose.Bound-volExact.Bound)
 
 	muExact, _, _, err := capBandMoment(t.Context(), loop, exact, geom, capZ, -1, 0, capBandClosure{}, work)
 	require.NoError(t, err)

@@ -282,43 +282,35 @@ func chordLocusResidualAllow(g Patch) float64 {
 // chordLocusRegionAllow is three times this ONE patch's bound on the volume
 // between the solid its built ruled surface bounds and the solid the denoted
 // miter locus bounds, internal/proofbound/bounds.go's
-// proofbound.ChordLocusRegionAllow: a swept-volume term at the larger proven
-// corner skew over an area bound for every surface on the homotopy from the
-// wide sector to the built patch, and the shell over the two corner wedges
-// that holds the rest of the region, the corner slivers included.
+// proofbound.ChordLocusRegionAllow: the shell under the cone, second order in
+// the corner skews, that holds every point where the two solids differ, the
+// corner slivers included.
 //
 // Every input carries its held allowance (Patch.Held): each radius is read at
-// its held magnitude plus its allowance, each window width at its held
-// width plus both of its ends' allowances, and the radial gap at the held
-// gap plus both radius allowances. The height is the exact difference of the
-// two held levels, the same height the three fluxes read.
+// its held magnitude plus its allowance, and the middle window's width at the
+// larger of the two held window widths plus both of that window's ends'
+// allowances. The height is the exact difference of the two held levels, the
+// same height the three fluxes read.
 func chordLocusRegionAllow(g Patch) float64 {
-	skew := math.Max(g.SkewStart, g.SkewEnd)
 	// A corner the build could not bound may fold, where the locus azimuth
 	// the region proof reads as monotone can turn back.
 	if !(g.CornerFlux < math.Inf(1)) {
 		return math.Inf(1)
 	}
-	if skew <= 0 {
-		return proofbound.ChordLocusRegionAllow(0, 0, 0, 0)
-	}
-	radius, area := chordLocusHomotopyArea(g, skew)
-	shell := proofbound.ChordLocusCornerShellUpper(radius, g.SkewStart, g.SkewEnd, absDiffUpper(g.CapZ, g.SideZ))
-	return proofbound.ChordLocusRegionAllow(radius, skew, area, shell)
+	radius, window, height := chordLocusShellInputs(g)
+	return proofbound.ChordLocusRegionAllow(radius, window, g.SkewStart, g.SkewEnd, height)
 }
 
-// chordLocusHomotopyArea returns chordLocusRegionAllow's radius bound and its
-// proofbound.ChordLocusHomotopyAreaUpper at the corner skew skew.
-func chordLocusHomotopyArea(g Patch, skew float64) (float64, float64) {
+// chordLocusShellInputs returns chordLocusRegionAllow's radius, middle-window
+// width and height bounds.
+func chordLocusShellInputs(g Patch) (float64, float64, float64) {
 	radius := math.Max(
 		proofbound.AbsSumUpper(g.SideRadius, g.Held.SideRadius),
 		proofbound.AbsSumUpper(g.CapRadius, g.Held.CapRadius))
 	window := math.Max(
 		proofbound.AbsSumUpper(absDiffUpper(g.Th1, g.Th0), g.Held.Th0, g.Held.Th1),
 		proofbound.AbsSumUpper(absDiffUpper(g.CapTh1, g.CapTh0), g.Held.CapTh0, g.Held.CapTh1))
-	radialGap := proofbound.AbsSumUpper(absDiffUpper(g.CapRadius, g.SideRadius), g.Held.SideRadius, g.Held.CapRadius)
-	height := absDiffUpper(g.CapZ, g.SideZ)
-	return radius, proofbound.ChordLocusHomotopyAreaUpper(radius, window, radialGap, height, skew)
+	return radius, window, absDiffUpper(g.CapZ, g.SideZ)
 }
 
 // chordLocusFluxes encloses the three fluxes
@@ -671,21 +663,19 @@ func ChordLocusFluxes(g Patch) (wide, narrow, built proofbound.BoundedScalar) {
 // ChordLocusFluxAllow returns a Cone patch's chord-versus-locus flux term.
 func ChordLocusFluxAllow(g Patch) float64 { return chordLocusResidualAllow(g) }
 
-// ChordLocusHomotopyArea returns the area bound a Cone patch's region term
-// reads for every surface between its wide sector and its built patch, at the
-// larger of its two corner skews.
-func ChordLocusHomotopyArea(g Patch) float64 {
-	_, area := chordLocusHomotopyArea(g, math.Max(g.SkewStart, g.SkewEnd))
-	return area
+// ChordLocusBuiltDeficit returns how far inside the cone radius a Cone
+// patch's region term lets its built surface cross a ray.
+func ChordLocusBuiltDeficit(g Patch) float64 {
+	radius, _, _ := chordLocusShellInputs(g)
+	return proofbound.ChordLocusBuiltDeficitUpper(radius, math.Max(g.SkewStart, g.SkewEnd))
 }
 
 // ChordLocusCornerDeficit returns how far inside the cone radius a Cone
 // patch's region term lets a crossing of its built surface or corner sliver
 // sit at a corner azimuth.
 func ChordLocusCornerDeficit(g Patch) float64 {
-	skew := math.Max(g.SkewStart, g.SkewEnd)
-	radius, _ := chordLocusHomotopyArea(g, skew)
-	return proofbound.ChordLocusCornerDeficitUpper(radius, skew)
+	radius, _, _ := chordLocusShellInputs(g)
+	return proofbound.ChordLocusCornerDeficitUpper(radius, math.Max(g.SkewStart, g.SkewEnd))
 }
 
 // AxisAnchoredLevels translates a band's two levels so the side level sits
