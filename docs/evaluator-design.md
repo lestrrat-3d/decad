@@ -266,7 +266,7 @@ added. The interval encloses the DENOTED walk at the recorded `t`; whether that
 `t` is the true crossing is `sketch`'s `TExact` claim, which this bracket
 neither tests nor widens.
 
-**A loop's region is closed at every junction by a chord.** Each segment
+**A loop's region is closed at every junction.** Each segment
 denotes its own entity at its own recorded parameter, so at a cut bound the
 walk ending there and the walk starting there denote two different points:
 neither recorded `t` is the exact crossing, and a float `t` places a point on
@@ -274,22 +274,40 @@ its entity no closer than about `ulp(t)·|entity|`. A 137000 mm line cut by a
 7.3 mm circle leaves a 4e-12 mm gap, and a whole arc's natural end leaves the
 radial residual above. The seam admits such a junction on `sketch`'s shared
 node, never on the two denoted points (`docs/sketch-seam-design.md` §1). The
-region a loop denotes is the one its segments bound with each gap closed by
-the straight chord between the two denoted ends. A sum of segment integrals
-alone omits that chord, which moves a field by up to `gap·reach` about the
-walk anchor. `internal/momentinput/junctions.go` charges every junction whose
+region a loop denotes is the one its segments bound with each gap closed
+between the two denoted ends. Where both neighbours are `LineSeg`s, the gap
+closes through the corner: the exact crossing of the two supporting lines,
+each through its segment's recorded `Start` and `End`, computed over exact
+rationals (`lineCorner`). The closing path runs from one denoted end along
+its own support to the corner and on along the other support to the other
+end, so a polygon of crossing lines closes at exactly the crossings `sketch`
+arranged. A T-junction, one line ending naturally on another, closes the same
+way: its end need not lie on the other support, and the corner is the
+supports' crossing, not that end. The corner closes the junction only when it
+is provably near: the two legs together measure at most 1024 times the
+straight chord between the two ends, each leg rounded up and the chord
+rounded down. That ratio grows past 1024 only where the supports meet at well
+under a degree, and there, as where the supports are parallel, the straight
+chord closes the gap. Every other junction closes with the straight chord. A
+sum of segment integrals alone omits the closing path, which moves a field by
+up to `length·reach` about the walk anchor. `internal/momentinput/junctions.go` charges every junction whose
 two ends are not provably one point. It bounds the gap from the two walk ends
 and their own bounds (`survey2d.SegmentWalk`'s `StartBound`/`EndBound`, an
 arc's `t = 1` end widened by the radial residual), and widens each held field
 whose boundary form has degree `k` by `gap·reach^k`. Every field's form has an
 integrand coefficient of at most 1, so the widening covers the chord in any
-direction (`momentregion.State.ChargeJunction`). Where both ends are exact
-rationals — a line's lerp, a free-form chain's end control point — the
-rational sum adds the chord's exact integral instead, so a line-only region
-stays `Exact`. Two natural line ends at one coordinate, and two fragments of
-one circle meeting at its seam, are one point and charge nothing. The
-chord-closed region differs from the exact crossing geometry by a sliver of
-order `gap²`.
+direction (`momentregion.State.ChargeJunction`); a corner path is charged leg
+by leg, each with its own length. Where both ends are exact rationals — a
+line's lerp, a free-form chain's end control point — the rational sum adds
+the closing path's exact integral instead, so a line-only region stays
+`Exact` and equals the crossing polygon: an oblique triangle of three
+2e6 mm lines reads the crossing polygon's area rounded once. Two natural line
+ends at one coordinate, and two fragments of one circle meeting at its seam,
+are one point and charge nothing. A chord-closed junction differs from the
+exact crossing geometry by a sliver of order `gap²`. A region with a circular
+segment holds its fields widened by `gap·reach^k`, far above that sliver; a
+region kept `Exact` through a chord — two nearly parallel lines, a free-form
+chain's end — publishes the chord-closed region itself.
 
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
 `docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns

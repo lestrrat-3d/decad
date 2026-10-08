@@ -1576,3 +1576,5 @@
 2	0.02	TestExtrudeVertexReachesDenotedTrimmedSide
 2	0.02	TestRevolveVertexReachesDenotedCutEnds
 2	0.02	TestChainVertexReachesDenotedCutEnd
+5	0.01	TestProfileRecordClosesLongCutSquareExactly
+5	0.01	TestProfileRecordClosesLongLineTriangleAtCrossings

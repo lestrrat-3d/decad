@@ -68,11 +68,14 @@ func endsOfWalk(segment CurveSegment, walk survey2d.SegmentWalk) segmentEnds {
 // side denotes its own entity at its own recorded parameter, and neither
 // parameter is the exact crossing, so the two denoted points differ by the
 // cut parameters' own error. The region a loop denotes is the one its
-// segments bound with every such junction closed by the straight chord
-// between the two denoted points, and the segment sums omit that chord, so
-// each one is charged at its largest possible contribution
-// (momentregion.State.ChargeJunction). A loop of one segment is a whole
-// closed curve and states no junction.
+// segments bound with every such junction closed between the two denoted
+// points, and the segment sums omit that closing path, so each one is charged
+// at its largest possible contribution (momentregion.State.ChargeJunction).
+// Two line fragments close through the exact crossing of their supports where
+// that crossing lies near the junction (lineCorner), so a line-only region is
+// the polygon sketch arranged; every other junction closes with the straight
+// chord. A loop of one segment is a whole closed curve and states no
+// junction.
 func chargeLoopJunctions(ig *Integrals, loop LoopRecord, ends []segmentEnds, anchor Point2, order freeform.MomentIntegralOrder) {
 	n := len(loop.Segments)
 	if n < 2 || len(ends) != n {
@@ -81,6 +84,11 @@ func chargeLoopJunctions(ig *Integrals, loop LoopRecord, ends []segmentEnds, anc
 	for i := range n {
 		j := (i + 1) % n
 		if sameDenotedJunction(loop.Segments[i], loop.Segments[j], ends[i], ends[j]) {
+			continue
+		}
+		if corner, ok := lineCorner(loop.Segments[i], loop.Segments[j], ends[i].exactEnd, ends[j].exactStart); ok {
+			chargeExactLeg(ig, *ends[i].exactEnd, corner, anchor, order)
+			chargeExactLeg(ig, corner, *ends[j].exactStart, anchor, order)
 			continue
 		}
 		p, pb := ends[i].end, ends[i].endBound
@@ -146,4 +154,97 @@ func componentSpan(a, b, ba, bb float64) *big.Rat {
 	d := new(big.Rat).Sub(ra, rb)
 	d.Abs(d)
 	return d.Add(d, rba.Add(rba, rbb))
+}
+
+// cornerReach is how far, as a multiple of a junction's own gap, the path
+// through a line corner may run: the corner closes a junction only where the
+// two legs to it together measure at most cornerReach times the straight
+// chord between the junction's two ends. The ratio exceeds it only where the
+// two supports meet at well under a degree, and there the chord closes the
+// junction instead.
+const cornerReach = 1024
+
+// lineCorner is the exact crossing of the two supporting lines of a junction
+// between two line fragments, p the end of prev and q the start of next, each
+// the exact point its record denotes (docs/evaluator-design.md §4). It is
+// stated over exact rationals from the recorded endpoints, so a T-junction —
+// one line ending on another — closes at the same exact crossing as two
+// fragments cut at it. It reports false where either segment is not a line,
+// either end has no exact rational, the supports are parallel, or the corner
+// is not provably within cornerReach of the junction: the path p → corner → q
+// is longer than cornerReach times |pq|, each leg rounded up and the chord
+// rounded down.
+func lineCorner(prev, next CurveSegment, p, q *freeform.RatPoint) (freeform.RatPoint, bool) {
+	a, ok := prev.(LineSeg)
+	if !ok || p == nil || q == nil {
+		return freeform.RatPoint{}, false
+	}
+	b, ok := next.(LineSeg)
+	if !ok {
+		return freeform.RatPoint{}, false
+	}
+	corner, ok := supportCrossing(a, b)
+	if !ok {
+		return freeform.RatPoint{}, false
+	}
+	legs := proofbound.AbsSumUpper(ratDistanceUpper(*p, corner), ratDistanceUpper(corner, *q))
+	chord := proofbound.RatSqrtDown(ratDistanceSquared(*p, *q))
+	if proofbound.IsNonFinite(legs) || legs > cornerReach*chord {
+		return freeform.RatPoint{}, false
+	}
+	return corner, true
+}
+
+// supportCrossing is the exact crossing of the lines through a's and b's
+// recorded endpoints, or false where they are parallel or a field is not
+// finite.
+func supportCrossing(a, b LineSeg) (freeform.RatPoint, bool) {
+	rats := make([]*big.Rat, 8)
+	for i, x := range []float64{a.Start.U, a.Start.V, a.End.U, a.End.V, b.Start.U, b.Start.V, b.End.U, b.End.V} {
+		if rats[i] = proofarith.FloatRat(x); rats[i] == nil {
+			return freeform.RatPoint{}, false
+		}
+	}
+	au, av := rats[0], rats[1]
+	du, dv := new(big.Rat).Sub(rats[2], au), new(big.Rat).Sub(rats[3], av)
+	eu, ev := new(big.Rat).Sub(rats[6], rats[4]), new(big.Rat).Sub(rats[7], rats[5])
+	det := new(big.Rat).Sub(new(big.Rat).Mul(du, ev), new(big.Rat).Mul(dv, eu))
+	if det.Sign() == 0 {
+		return freeform.RatPoint{}, false
+	}
+	// a.Start + s·d meets b.Start + r·e at s = ((b.Start − a.Start) × e) / (d × e).
+	wu, wv := new(big.Rat).Sub(rats[4], au), new(big.Rat).Sub(rats[5], av)
+	s := new(big.Rat).Sub(new(big.Rat).Mul(wu, ev), new(big.Rat).Mul(wv, eu))
+	s.Quo(s, det)
+	return freeform.RatPoint{
+		U: new(big.Rat).Add(au, new(big.Rat).Mul(s, du)),
+		V: new(big.Rat).Add(av, new(big.Rat).Mul(s, dv)),
+	}, true
+}
+
+// chargeExactLeg charges one straight leg of a closing path whose two ends are
+// exact rationals: its exact integral joins the rational sum, and every held
+// field is widened by the leg's largest contribution
+// (momentregion.State.ChargeJunction).
+func chargeExactLeg(ig *Integrals, from, to freeform.RatPoint, anchor Point2, order freeform.MomentIntegralOrder) {
+	gap := ratDistanceUpper(from, to)
+	anchorReach := math.Inf(1)
+	if au, av := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V); au != nil && av != nil {
+		at := freeform.RatPoint{U: au, V: av}
+		anchorReach = math.Max(ratDistanceUpper(from, at), ratDistanceUpper(to, at))
+	}
+	origin := freeform.RatPoint{U: new(big.Rat), V: new(big.Rat)}
+	originReach := math.Max(ratDistanceUpper(from, origin), ratDistanceUpper(to, origin))
+	ig.state().ChargeJunction(gap, anchorReach, originReach, &momentregion.ExactChord{From: from, To: to}, anchor, order)
+}
+
+// ratDistanceSquared is |p − q|² over exact rationals.
+func ratDistanceSquared(p, q freeform.RatPoint) *big.Rat {
+	du, dv := new(big.Rat).Sub(p.U, q.U), new(big.Rat).Sub(p.V, q.V)
+	return du.Add(du.Mul(du, du), dv.Mul(dv, dv))
+}
+
+// ratDistanceUpper is |p − q| rounded up.
+func ratDistanceUpper(p, q freeform.RatPoint) float64 {
+	return proofbound.RatSqrtUp(ratDistanceSquared(p, q))
 }
