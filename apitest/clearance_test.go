@@ -580,7 +580,7 @@ func TestClearanceToriP8(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status, `bounded mass results remain visible`)
+	require.Equal(t, decad.Sound, report.Status, `bounded readings clear the gate against each body's and the pair's diameter`)
 	require.Len(t, report.Clearances, 1)
 	row := report.Clearances[0]
 	require.Equal(t, decad.Approximate, row.Gap.Exactness, `a bracketed winner is honest-Approximate`)
@@ -732,7 +732,7 @@ func TestClearanceNestedPairReportsContainedVolume(t *testing.T) {
 	require.Equal(t, want, report.Interferences[0].Volume)
 	require.Empty(t, report.Clearances)
 	for _, br := range report.Bodies {
-		require.Equal(t, decad.Suspect, br.Status, `the bodies carry bounded mass results`)
+		require.Equal(t, decad.Sound, br.Status, `each ball's bounded readings clear the gate against its diameter`)
 	}
 }
 
@@ -909,7 +909,7 @@ func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 	requireBoundedGapContains(t, report, 2)
 }
 

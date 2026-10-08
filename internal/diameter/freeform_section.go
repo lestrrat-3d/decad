@@ -15,10 +15,15 @@ import (
 )
 
 // FreeformSection reads a lower diameter bound from analytic walk ends and
-// converted free-form span ends at both cap heights. Each witness has its
-// recorded-coordinate or conversion bound charged before publication.
+// converted free-form span ends at both cap heights. lift places a
+// plane-local (u, v), held within bound of the point the record denotes, at
+// level z, and returns the held world point beside its proven distance from
+// that denoted point: bound carried through the frame and placement, plus
+// the lift's own rounding. The widest such distance is charged before
+// publication.
 func FreeformSection(ctx context.Context, outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord,
-	z0, z1, sectionDelta float64, point func(u, v, z float64) r3.Vec, axialDelta func() float64,
+	z0, z1, sectionDelta float64, lift func(u, v, z float64, bound proofbound.WalkEndBound) (r3.Vec, float64),
+	axialDelta func() float64,
 ) (float64, bool, error) {
 	work := freeform.NewFreeformWork()
 	sawFreeform := false
@@ -26,12 +31,17 @@ func FreeformSection(ctx context.Context, outer sectionrecord.LoopRecord, holes 
 	var pts []r3.Vec
 
 	addWitness := func(u, v float64, bound proofbound.WalkEndBound) bool {
-		allow := proofbound.WalkEndBoundAllow(bound)
-		if proofbound.IsNonFinite(allow) {
+		if proofbound.IsNonFinite(proofbound.WalkEndBoundAllow(bound)) {
 			return false
 		}
-		ownBound = math.Max(ownBound, allow)
-		pts = append(pts, point(u, v, z0), point(u, v, z1))
+		for _, z := range [2]float64{z0, z1} {
+			held, gap := lift(u, v, z, bound)
+			if !usableMagnitude(gap) {
+				return false
+			}
+			ownBound = math.Max(ownBound, gap)
+			pts = append(pts, held)
+		}
 		return true
 	}
 

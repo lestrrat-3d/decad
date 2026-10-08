@@ -697,7 +697,7 @@ func TestMinRadiusDonutWaist(t *testing.T) {
 	br := report.Bodies[0]
 	require.NotNil(t, br.ConcaveRadius.Minimum)
 	require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(25), 1e-9))
-	require.Equal(t, decad.Suspect, br.Status)
+	require.Equal(t, decad.Sound, br.Status, `every bounded reading clears the gate against the torus's diameter`)
 }
 
 func TestWallHolePlateReadsThickness(t *testing.T) {

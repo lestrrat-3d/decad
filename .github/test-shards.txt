@@ -279,6 +279,7 @@
 3	0.03	TestCapBlendCornerChordReachesArcNaturalEnd
 3	0.04	TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus
 3	0.04	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
+3	0.02	TestCapBlendGateDiameterReadsSideLevels
 3	0.02	TestCapBlendMeshCapMotionCarriesSetbackRounding
 3	0.03	TestCapBlendSideRingReachesArcNaturalEnd
 3	0.00	TestCapJoinIsG1IsExact
@@ -598,6 +599,7 @@
 3	0.05	TestPatternedGroupRunsNoBoolean
 3	0.05	TestPatternedOverlapIsNotProvenDisjoint
 3	0.05	TestPatternedSixPinsGroup
+3	0.10	TestPlacedGateDiameterChargesEveryPoint
 3	0.26	TestPlanarPairVerdictTouchNeedsZeroDisplacement
 3	0.00	TestPlanarReplayLowerGapChargesTravel
 3	0.00	TestPointInBodyCancellationReachesTorusRootPath
