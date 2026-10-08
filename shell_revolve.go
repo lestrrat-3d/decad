@@ -304,7 +304,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax),
 		offset2d.OpenEnd{Mirror: true}, offset2d.OpenEnd{Mirror: true}, s, tmm, shellTol)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return ProfileRecord{}, 0, offset2d.InLoop(err, 0)
 	}
 	offChain, qB, qE, ends := off.Segs, off.QStart, off.QEnd, off.Ends
 	pE := Point2{U: axisWalk.StartU, V: axisWalk.StartV}
@@ -531,7 +531,7 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	}
 	off, err := offset2d.OffsetOpenChain(budget, chain, revolveAxisCurve(rp.ax), start, end, s, tmm, shellTol)
 	if err != nil {
-		return ProfileRecord{}, 0, err
+		return ProfileRecord{}, 0, offset2d.InLoop(err, 0)
 	}
 	qS, qE := off.QStart, off.QEnd
 	kS := Point2{U: first.StartU, V: first.StartV}

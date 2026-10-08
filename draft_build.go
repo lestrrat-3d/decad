@@ -150,7 +150,7 @@ func draftSectionWalks(budget *proofbound.WorkBudget, profile ProfileRecord, wor
 		}
 		if len(walks) > 1 || !walks[0].Closed {
 			if _, err := offset2d.SharpJoinsBudget(budget, walks, 1, 1, shellTol); err != nil {
-				return nil, wrapDraftOffsetError(err)
+				return nil, wrapDraftOffsetError(offset2d.InLoop(err, li))
 			}
 		}
 		out[li] = walks
@@ -177,7 +177,7 @@ func draftFarSection(budget *proofbound.WorkBudget, walks [][]survey2d.SideWalk,
 			return ProfileRecord{}, fmt.Errorf(`%w: the taper offsets every wall of the outer loop past its neighbours before the far end, so the region is consumed and no solid reaches that far; a smaller taper or a shorter sweep states a body (draft SD6)`, ErrDegenerate)
 		}
 		if err != nil {
-			return ProfileRecord{}, wrapDraftOffsetError(err)
+			return ProfileRecord{}, wrapDraftOffsetError(offset2d.InLoop(err, li))
 		}
 		for _, j := range joins {
 			if j.M.U == j.VertU && j.M.V == j.VertV {
@@ -262,7 +262,7 @@ func wrapDraftOffsetError(err error) error {
 	case errors.Is(err, offset2d.ErrCircularMiter):
 		return fmt.Errorf(`%w: a circular wall meets its neighbour other than tangentially, and that corner moves along a conic as the taper offsets it, which no line-and-arc far section records; join the wall tangentially (draft SD4)`, ErrUnsupported)
 	case errors.Is(err, offset2d.ErrTopology):
-		return fmt.Errorf(`%w; two walls meet at a cusp, so their tapered carriers do not intersect (draft SD15)`, err)
+		return fmt.Errorf(`%w; the two walls meet at a cusp (draft SD15)`, err)
 	case errors.Is(err, offset2d.ErrLoopConsumed):
 		return fmt.Errorf(`%w: the taper consumes every wall of a loop before the far end, so the section changes topology there (draft SD7)`, ErrUnsupported)
 	case errors.Is(err, offset2d.ErrDrop):
