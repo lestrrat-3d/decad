@@ -107,6 +107,11 @@
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	Fillet/Chamfer  revolve meridian junction edges           builds
+//	Fillet/Chamfer  WithTangentChain over proven G1 joins     builds
+//	  a tangent chain that branches or cannot be decided      ErrUnsupported
+//	Chamfer       WithAsymmetricChamfer, prism lateral edge
+//	  or revolve junction                                     builds
+//	  asymmetric cap-loop, brep or stacked chamfer            ErrUnsupported
 //	Chamfer       complete prism cap loop(s)                  builds
 //	Fillet/Chamfer  brep or stacked boolean result, straight
 //	  edge along a reference axis                             builds
@@ -126,6 +131,7 @@
 //	  full turn, a side face removed, or a kept angular cap   ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
+//	  WithNoOpenings (a closed shell), any receiver           ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	  Shell of a brep that reads as no prism                  ErrUnsupported
@@ -152,10 +158,13 @@
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
-// Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
-// Chamfer expose option groups that carry nothing today (they exist so options
-// can be added without a signature change); WithShellSense picks a shell's wall
-// sense, and WithTaper names an extrude taper — but a nonzero taper is
+// Options: among the MODEL-CONSTRUCTION verbs, New and Revolve expose option
+// groups that carry nothing today (they exist so options can be added without
+// a signature change). WithTangentChain expands a Fillet's or Chamfer's edges
+// across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
+// two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
+// for a closed shell (refused with [ErrUnsupported] on every receiver today),
+// and WithTaper names an extrude taper — but a nonzero taper is
 // [ErrUnsupported], returned before the document changes. WithSweepTwist names
 // a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
 // WithLoftAlignment

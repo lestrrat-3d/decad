@@ -661,8 +661,9 @@ boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. A `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
-connect. The closed `WithNoOpenings()` form described in
-`docs/modify-reach-design.md` §9.2 remains a later extension. Sheet shells
+connect. `Shell` accepts the closed `WithNoOpenings()` form of
+`docs/modify-reach-design.md` §9.2 and returns `ErrUnsupported` for it on every
+receiver until reach §14 rows C and D build it. Sheet shells
 always report `IsVoid() == false`, even when closed
 (`docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.

@@ -28,11 +28,12 @@ import (
 // (auditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
 // and the blend-role machinery (addBlendRoles) — via the common cornerBlend.
 //
-// The setback d is measured along the adjacent boundary curve, d from the corner
-// along EACH walk (equal setback: the whole of v1; an asymmetric chamfer is an
-// option that has not shipped, §7). There is NO S5 gate: a chord exists between
-// any two distinct feet, so the fillet's no-blend-centre refusal has no chamfer
-// case (Table B, B1). A revolve receiver takes the same chord on its meridian
+// The setback d is measured along the adjacent boundary curve, d from the
+// corner along EACH walk; WithAsymmetricChamfer instead sets back d along the
+// walk whose wall is the edge's reference face and its other distance along
+// the other walk (docs/modify-reach-design.md §6). There is NO S5 gate: a
+// chord exists between any two distinct feet, so the fillet's no-blend-centre
+// refusal has no chamfer case (Table B, B1). A revolve receiver takes the same chord on its meridian
 // (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
 // boolean result takes routes P and E of docs/brep-modify-design.md
 // (brep_modify.go); any other non-prism receiver is S3 (ErrUnsupported).
@@ -44,9 +45,8 @@ import (
 // is not one or more complete loops, or one mixing cap edges with lateral
 // ones, is SX4 (ErrUnsupported).
 
-// ChamferOption configures Chamfer. No options are currently supported: a
-// chamfer Step's Opts is nil (§7), and the option group exists so an
-// asymmetric-chamfer option can be added without changing the signature.
+// ChamferOption configures Chamfer: WithTangentChain and
+// WithAsymmetricChamfer (docs/modify-reach-design.md §2).
 type ChamferOption interface {
 	option.Interface
 	chamferOption()
@@ -71,6 +71,16 @@ type ChamferOption interface {
 //
 // A receiver that is none of a prism, a revolve, or a brep or stacked
 // boolean result is S3 (ErrUnsupported).
+//
+// WithTangentChain expands the edges sel resolves to as Fillet's does
+// (docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
+// d across its reference face and the option's other distance across the
+// other adjacent face (§6), on a prism's lateral edges and a revolve's
+// junctions alike; each setback faces the S6 audit on its own walk. A
+// reference that names no adjacent face of a chamfered edge, or both, or a
+// face beside no chamfered edge, is ErrCardinality (SX3). An asymmetric
+// chamfer of a complete cap loop, and one of a brep or stacked boolean result
+// (SX16), are ErrUnsupported: neither is built yet.
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -122,10 +132,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
 		return nil, err
 	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
+	o, err := decodeChamferOptions(opts)
+	if err != nil {
+		return nil, err
 	}
 	dmm, dDelta, err := magnitudeInBounded(d, units.Length, units.Millimeter, "the chamfer setback")
 	if err != nil {
@@ -150,16 +159,48 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if err != nil {
 		return nil, err
 	}
+	// Reach stage 2 (docs/modify-reach-design.md §4/§5): the seed query's
+	// cardinality has been enforced above; the tangent chain expands it.
+	if o.TangentChain {
+		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {
+			return nil, err
+		}
+	}
+	// Reach stage 3 (§6, SX3): the asymmetric reference resolves against the
+	// receiver, after expansion, to one adjacent face per chamfered edge.
+	var asym *asymmetricChamfer
+	if o.Asymmetric != nil {
+		refs, err := resolveAsymmetricReference(b, o.Asymmetric, edges)
+		if err != nil {
+			return nil, err
+		}
+		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.otherMM}
+	}
 
 	// SX10: a capBlendPayload receiver is staged before the generic
 	// "not a prism" refusal, so the more specific reason leads.
 	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
 		return nil, err
 	}
+	// SX16: docs/brep-modify-design.md states no asymmetric setback for either
+	// brep route, so the option is refused on every brep or stacked receiver.
+	if asym != nil {
+		switch b.payload.(type) {
+		case brepPayload, stackedPrismPayload:
+			return nil, fmt.Errorf(`%w: this evaluator builds an asymmetric chamfer on a prism or a revolve only; a brep or stacked receiver takes the equal setback (modify-reach SX16)`, ErrUnsupported)
+		}
+	}
 	blend := revolveBlendOp{
 		kind: "chamfer",
-		corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
-			return computeChamfer(loop, ci, dmm)
+		corner: func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error) {
+			if asym == nil {
+				return computeChamfer(loop, ci, dmm, dmm)
+			}
+			dA, dB, err := asym.setbacks(loop, li, ci, e)
+			if err != nil {
+				return nil, err
+			}
+			return computeChamfer(loop, ci, dA, dB)
 		},
 	}
 	// A brep or stacked receiver takes the brep route
@@ -204,6 +245,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		return nil, err
 	}
 	if !lateral {
+		if asym != nil {
+			return nil, errAsymmetricCapLoop
+		}
 		ref := doc.nextProducerID()
 		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, dDelta, startLoops, endLoops)
 		if err != nil {
@@ -248,7 +292,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)
+		cb, err := blend.corner(loops[corner.loop], corner.loop, corner.corner, corner.edge)
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
@@ -308,16 +352,18 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 }
 
 // computeChamfer builds a corner's bevel from its two walks (§7): S4 rejects a
-// smooth or cusped corner, then each walk is set back an equal arc length d from
-// the corner — d back along the arriving walk to foot fA, d forward along the
-// leaving walk to foot fB — and the two feet are joined by a chord. The bevel is
-// a plane, so the connector is a LineSeg (fA→fB), which continues the loop's own
-// walk sense; there is no offset carrier and no S5, because a chord exists
-// between any two distinct feet. IsConvex is not an input: a convex corner's
+// smooth or cusped corner, then each walk is set back its own arc length from
+// the corner — dA back along the arriving walk to foot fA, dB forward along
+// the leaving walk to foot fB, equal for an equal-distance chamfer and the
+// two distances of an asymmetric one (docs/modify-reach-design.md §6) — and
+// the two feet are joined by a chord. The bevel is a plane, so the connector
+// is a LineSeg (fA→fB), which continues the loop's own walk sense; there is
+// no offset carrier and no S5, because a chord exists between any two
+// distinct feet. IsConvex is not an input: a convex corner's
 // chord cuts material away, a concave corner's fills it in, and both are the
 // same construction (§7). An over-large setback is left to the §5 S6 audit,
 // never clipped here.
-func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
+func computeChamfer(loop cornerLoop, ci int, dA, dB float64) (*cornerBlend, error) {
 	n := len(loop.walks)
 	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := loop.walks[ci]          // walk B, leaving the corner
@@ -332,14 +378,14 @@ func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
 		return nil, fmt.Errorf(`%w: the two walls meet smoothly — there is no corner to bevel`, ErrDegenerate)
 	}
 
-	fA := setbackFoot(arrive, d, true) // d back from the arriving walk's end
-	fB := setbackFoot(leave, d, false) // d forward from the leaving walk's start
+	fA := setbackFoot(arrive, dA, true) // dA back from the arriving walk's end
+	fB := setbackFoot(leave, dB, false) // dB forward from the leaving walk's start
 
 	return &cornerBlend{
 		fA:        fA,
 		fB:        fB,
-		cutbackA:  d,
-		cutbackB:  d,
+		cutbackA:  dA,
+		cutbackB:  dB,
 		connector: LineSeg{Start: fA, End: fB, TStart: 0, TEnd: 1},
 	}, nil
 }

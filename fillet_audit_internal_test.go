@@ -230,7 +230,7 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 		flips bool
 		blend func(loops []cornerLoop) (*cornerBlend, error)
 	}{
-		{"chamfer", true, func(loops []cornerLoop) (*cornerBlend, error) { return computeChamfer(loops[0], 0, 120) }},
+		{"chamfer", true, func(loops []cornerLoop) (*cornerBlend, error) { return computeChamfer(loops[0], 0, 120, 120) }},
 		{"fillet", false, func(loops []cornerLoop) (*cornerBlend, error) { return computeFillet(loops[0], 0, 120) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

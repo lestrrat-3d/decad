@@ -32,10 +32,14 @@ import (
 // revolveBlendOp names one modify op's part in the shared rewrite: the role
 // kind its blend wall carries ("fillet" or "chamfer", also the noun its
 // refusals use), and the per-corner construction (computeFillet or
-// computeChamfer, bound to its magnitude).
+// computeChamfer, bound to its magnitudes). corner reads corner ci of loop,
+// whose index in the recorded section is li, and the selected edge e that
+// mapped to it; an asymmetric chamfer reads li and e to assign its two
+// setbacks (docs/modify-reach-design.md §6), and every other construction
+// ignores them.
 type revolveBlendOp struct {
 	kind   string
-	corner func(loop cornerLoop, ci int) (*cornerBlend, error)
+	corner func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error)
 }
 
 // revolveJunction is one off-axis junction of the receiver's axis-local
@@ -100,7 +104,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		cb, err := op.corner(loops[corner.loop], corner.corner)
+		cb, err := op.corner(loops[corner.loop], corner.loop, corner.corner, corner.edge)
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}

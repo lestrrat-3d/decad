@@ -639,7 +639,7 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 		if err != nil {
 			return err
 		}
-		cb, err := r.call.blend.corner(loops[end.loop], end.corner)
+		cb, err := r.call.blend.corner(loops[end.loop], end.loop, end.corner, eb.edge)
 		if err != nil {
 			return fmt.Errorf(`%w; selector %s, %s at brep face %s's corner (%s)`, err, r.call.sel,
 				selectedEdgeContext(eb.ordinal, eb.edge), r.bp.faces[end.face].role, r.render(eb.v[k]))

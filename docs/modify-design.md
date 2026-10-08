@@ -451,9 +451,8 @@ contact without either overrunning a walk, and the §5 audit catches those: S7.
 Both fire before a face is made, and neither produces a corner needing a surface
 nobody can name.
 
-`FilletOpts` carries nothing in this increment, so a fillet `Step`'s `Opts` is
-nil (core §6.2: nil when the op takes none). A variable-radius or setback option
-lands in it, with the struct, when it ships.
+A fillet's one option is reach §5's `WithTangentChain`. A variable-radius or
+setback option would be a second one.
 
 ## 7. Chamfer
 
@@ -470,10 +469,10 @@ corner along each — a length along a `LineSeg`, an **arc length** along a
 circular one. On a straight prism that is exactly the geodesic setback from the
 edge across the adjacent face, because the boundary curve *is* that face's
 cross-section: the two readings coincide, so the definition is unambiguous
-rather than merely convenient. Equal distance both ways is the whole of v1: an
-asymmetric chamfer — two distances, or a distance and an angle — is an option
-that has not shipped, so it is not an option a caller can pass, and nothing is
-silently narrowed (core §8.1: an option that cannot be recorded does not ship).
+rather than merely convenient. The setback is equal both ways unless the call
+passes reach §6's `WithAsymmetricChamfer`, which names the face that takes
+`d` and a second distance for the other face. A distance and an angle is no
+option.
 
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
 The gates are the fillet's, in §4's order: S15 for a magnitude that is not a
@@ -495,8 +494,8 @@ A convex corner's chamfer cuts material away; a concave corner's fills material
 in. Both build, from the same construction, for the same reason the fillet's
 two cases do. The result is B1.
 
-`ChamferOpts` carries nothing this increment, so a chamfer `Step`'s `Opts` is
-nil.
+A chamfer takes reach §5's `WithTangentChain` and reach §6's
+`WithAsymmetricChamfer`.
 
 ## 8. Shell
 
@@ -513,13 +512,10 @@ section's own offset.
 thickness is a magnitude, so it carries no sign (core §8.1's rule, applied
 here): the sense is a `ShellSense` — `Inward` (the wall grows into the original
 solid; the outer skin does not move) or `Outward` (the wall grows off it; the
-original solid becomes the cavity) — set by `WithShellSense`, recorded in
-`ShellOpts`, and defaulting to `Inward`, which is what "shell this box" means
-everywhere it is said. `ShellOpts` is the one `StepOpts` variant this increment
-fills, and its `Sense` encodes as a named text token, exactly as `Direction`
-does. The feature call materializes that default as explicit
-`ShellOpts{Sense: Inward}`; a stored shell-options object with no `sense` does
-not request the default and is malformed. The thickness passes the magnitude
+original solid becomes the cavity) — set by `WithShellSense`, decoded into
+the call's private `shellOpts` record, and defaulting to `Inward`, which is
+what "shell this box" means everywhere it is said. Two `WithShellSense`
+options naming different senses are reach SX1. The thickness passes the magnitude
 gates before either question below is asked: a wrong `Kind`, a non-finite or a
 negative one is S15, and a zero one is S14.
 
@@ -834,7 +830,7 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 | PR | Lands | Still `ErrUnsupported` after it |
 |---|---|---|
 | 1 | the section rewrite and its §5 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), B1's roles, the `Step` wiring | `Chamfer`, `Shell` (S3 for their receivers is unchanged); every cap edge (S1); every non-prism receiver (S3) |
-| 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (it is not spellable — no option carries it) |
+| 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (reach PR A) |
 | 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11); the both-caps shell of a holed section (S12) |
 
 Reach PRs A–E follow these base PRs. `docs/modify-reach-design.md` §14 owns

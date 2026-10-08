@@ -132,12 +132,12 @@ the rules leave to the byte budget.
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
-| `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
+| `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
 | `revolve_extent.go` | Adapts revolve extents over `internal/revolveaxis/` and `internal/revolveangle/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
-| `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's doc comments. |
+| `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |
-| `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
+| `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
 | `loft_pairing.go` | Root adapters for Table P's record gates and station pairs. |
 | `loft_stations.go` | Sets loft chord targets and station caps. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
@@ -148,7 +148,9 @@ the rules leave to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet section rewrite and build. Owns `cornerBlend` for Chamfer. See modify §6. |
-| `chamfer.go` | `Body.Chamfer` over `cornerBlend`; cap loops route to `capblend.go`. See `docs/modify-design.md` §7. |
+| `chamfer.go` | `Body.Chamfer` over `cornerBlend`; cap loops route to `capblend.go`. See modify §7. |
+| `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
+| `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |

@@ -93,6 +93,12 @@ func WithShellSense(s ShellSense) ShellOption {
 // kept angular cap, a holed meridian and an offset reaching the axis are
 // ErrUnsupported.
 //
+// WithNoOpenings asks for a closed hollow body that keeps every face; it is
+// the one call form that takes a nil sel, and a non-nil sel beside it is
+// ErrDegenerate (docs/modify-reach-design.md §2, SX1). No receiver builds it
+// yet, so the call returns ErrUnsupported after the stage-1 gates pass. Two
+// WithShellSense options naming different senses are ErrDegenerate (SX1).
+//
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
 // (docs/brep-modify-design.md route P) when the removed faces are its caps;
@@ -117,31 +123,19 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := refuseSheetOperand(b, "Shell"); err != nil {
 		return nil, err
 	}
-	sense := Inward
-	for _, raw := range opts {
-		if raw == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// decad owns the option vocabulary. Embedding ShellOption can promote
-		// its sealed marker onto a foreign type, so admit the owned concrete
-		// implementation before invoking any option callback.
-		o, ok := raw.(shellOption)
-		if !ok {
-			return nil, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identShellSense:
-			v, ok := option.Get[ShellSense](o)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithShellSense carries no sense`, ErrDegenerate)
-			}
-			if v != Inward && v != Outward {
-				return nil, fmt.Errorf(`%w: unknown shell sense %d`, ErrDegenerate, int(v))
-			}
-			sense = v
-		default:
-			return nil, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
-		}
+	o, err := decodeShellOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	sense := o.Sense
+	// decad owns the selector vocabulary, so only the built-in query can be
+	// resolved and recorded. A typed nil query reads as an untyped nil.
+	q, isQuery := sel.(*FaceQuery)
+	nilSel := sel == nil || (isQuery && q == nil)
+	// SX1 (docs/modify-reach-design.md §2): WithNoOpenings keeps every face,
+	// so a selector naming faces to remove beside it names no single intent.
+	if o.NoOpenings && !nilSel {
+		return nil, errOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)
 	}
 	tmm, tDelta, err := magnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
@@ -152,17 +146,20 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// solid at all.
 		return nil, fmt.Errorf(`%w: a zero-thickness shell leaves no wall`, ErrDegenerate)
 	}
-	// decad owns the selector vocabulary, so only the built-in query can be
-	// resolved and recorded. Reject foreign implementations before invoking
-	// their callback, and treat a typed nil query like an untyped nil.
-	q, ok := sel.(*FaceQuery)
+	if o.NoOpenings {
+		// The one nil-selector shell: no face is removed, so there is no
+		// selection to resolve. SX10 still leads for a cap-blend receiver.
+		if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
+			return nil, err
+		}
+		return nil, refuseClosedShell(b.payload)
+	}
+	// Reject foreign implementations before invoking their callback.
 	switch {
-	case sel == nil:
+	case nilSel:
 		return nil, errNilSelector
-	case !ok:
+	case !isQuery:
 		return nil, fmt.Errorf(`%w: the shell's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
-	case q == nil:
-		return nil, errNilSelector
 	}
 	removed, err := q.SelectFaces(b)
 	if err != nil {
@@ -323,6 +320,38 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	d.commit(body, b)
 	return body, nil
+}
+
+// refuseClosedShell is Shell's answer to WithNoOpenings on every receiver
+// today (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets
+// the row that stages it: a faceted boolean result SX9, a brep or stacked
+// receiver SX16, a holed prism section or revolve meridian SX8, a partial
+// revolve SX8 (it keeps both angular caps), a hole-free prism the closed
+// prism shell §14 row C lands, a full revolve the revolve shell row D lands,
+// and any other receiver base S3. Every one is ErrUnsupported: the closed body
+// exists, and this evaluator does not build it yet.
+func refuseClosedShell(payload featurePayload) error {
+	switch p := payload.(type) {
+	case facetedPayload:
+		return fmt.Errorf(`%w: this evaluator modifies no faceted boolean result (modify-reach SX9)`, ErrUnsupported)
+	case brepPayload, stackedPrismPayload:
+		return fmt.Errorf(`%w: this evaluator does not build a closed shell of a brep or stacked receiver (modify-reach SX16)`, ErrUnsupported)
+	case prismPayload:
+		if len(p.profile.Holes) > 0 {
+			return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
+		}
+		return fmt.Errorf(`%w: this evaluator does not build a closed prism shell yet (modify-reach §14 row C)`, ErrUnsupported)
+	case revolvePayload:
+		if len(p.profile.Holes) > 0 {
+			return fmt.Errorf(`%w: a closed shell of a revolve whose meridian holds a hole is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
+		}
+		if !p.full {
+			return fmt.Errorf(`%w: a closed shell of a partial revolve keeps both angular caps, whose walls are planes at constant distance that no revolve holds (modify-reach SX8)`, ErrUnsupported)
+		}
+		return fmt.Errorf(`%w: this evaluator does not build a closed full-revolve shell yet (modify-reach §14 row D)`, ErrUnsupported)
+	default:
+		return fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
+	}
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates:
