@@ -103,16 +103,54 @@ func PlacedVolumeMoments(vol6 *big.Rat, moments [3]*big.Rat, xform r3.Transform)
 	}
 	basis := xform.Basis()
 	ex, ey, ez := sweeparc.VecOf(basis.EX), sweeparc.VecOf(basis.EY), sweeparc.VecOf(basis.EZ)
-	det := sweeparc.Dot(ex, sweeparc.Cross(ey, ez))
-	placed := sweeparc.Add(
-		sweeparc.Scale(ex, moments[0]),
-		sweeparc.Scale(ey, moments[1]),
-		sweeparc.Scale(ez, moments[2]),
-	)
-	for axis := range placed {
-		placed[axis].Mul(placed[axis], det)
+	vectors := [3]sweeparc.RatVec{ex, ey, ez}
+	// Every basis entry comes from a float, so its reduced denominator is a
+	// power of two. The largest one is a common denominator for the matrix.
+	basisDen := big.NewInt(1)
+	for _, vector := range vectors {
+		for _, value := range vector {
+			if value.Denom().Cmp(basisDen) > 0 {
+				basisDen.Set(value.Denom())
+			}
+		}
 	}
-	return new(big.Rat).Mul(vol6, det), placed
+	var matrix [3][3]*big.Int // columns of the basis over basisDen
+	for col, vector := range vectors {
+		for row, value := range vector {
+			matrix[col][row] = proofarith.ScaledNum(value, basisDen)
+		}
+	}
+	var cross [3]big.Int
+	var tmp, detN big.Int
+	for row := range 3 {
+		j, k := (row+1)%3, (row+2)%3
+		cross[row].Mul(matrix[1][j], matrix[2][k])
+		cross[row].Sub(&cross[row], tmp.Mul(matrix[1][k], matrix[2][j]))
+		detN.Add(&detN, tmp.Mul(matrix[0][row], &cross[row]))
+	}
+	basisDen3 := new(big.Int).Mul(basisDen, basisDen)
+	basisDen3.Mul(basisDen3, basisDen)
+	volume := new(big.Rat).SetFrac(
+		new(big.Int).Mul(vol6.Num(), &detN),
+		new(big.Int).Mul(vol6.Denom(), basisDen3),
+	)
+	momentDen := proofarith.CommonDenom(moments[:]...)
+	var momentN [3]*big.Int
+	for axis, moment := range moments {
+		momentN[axis] = proofarith.ScaledNum(moment, momentDen)
+	}
+	placedDen := new(big.Int).Mul(basisDen3, basisDen)
+	placedDen.Mul(placedDen, momentDen)
+	var placed [3]*big.Rat
+	for row := range 3 {
+		var numerator big.Int
+		for col := range 3 {
+			numerator.Add(&numerator, tmp.Mul(matrix[col][row], momentN[col]))
+		}
+		numerator.Mul(&numerator, &detN)
+		placed[row] = new(big.Rat).SetFrac(&numerator, placedDen)
+	}
+	return volume, placed
 }
 
 // TriangleAreas encloses each exact triangle area with rational endpoints.
