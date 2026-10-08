@@ -71,7 +71,7 @@ func BuildLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t, t
 		}
 		segs = append(segs, seg)
 		if j1.Arc {
-			segs = append(segs, arcSegment(
+			segs = append(segs, ArcSegment(
 				sectionrecord.Point2{U: j1.VertU, V: j1.VertV},
 				sectionrecord.Point2{U: j1.PA.U, V: j1.PA.V},
 				sectionrecord.Point2{U: j1.PB.U, V: j1.PB.V}, s < 0))
@@ -102,7 +102,7 @@ func WalkSegment(w survey2d.SideWalk, s, t float64, start, end Point, tol float6
 	if _, ok := OffsetRadius(w, s, t, tol); !ok {
 		return nil, ErrDrop
 	}
-	return arcSegment(sectionrecord.Point2{U: w.CU, V: w.CV}, a, b, w.Th1 > w.Th0), nil
+	return ArcSegment(sectionrecord.Point2{U: w.CU, V: w.CV}, a, b, w.Th1 > w.Th0), nil
 }
 
 // CircleSegment records a full circle in the requested walk sense.
@@ -118,7 +118,8 @@ func CircleSegment(cu, cv, rr float64, ccw bool) sectionrecord.CurveSegment {
 	return seg
 }
 
-func arcSegment(center, start, end sectionrecord.Point2, ccw bool) sectionrecord.CurveSegment {
+// ArcSegment records a directed arc from start to end about center.
+func ArcSegment(center, start, end sectionrecord.Point2, ccw bool) sectionrecord.CurveSegment {
 	if ccw {
 		return sectionrecord.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1}
 	}

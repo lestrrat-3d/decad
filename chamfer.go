@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -351,69 +349,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	return body, nil
 }
 
-// computeChamfer builds a corner's bevel from its two walks (§7): S4 rejects a
-// smooth or cusped corner, then each walk is set back its own arc length from
-// the corner — dA back along the arriving walk to foot fA, dB forward along
-// the leaving walk to foot fB, equal for an equal-distance chamfer and the
-// two distances of an asymmetric one (docs/modify-reach-design.md §6) — and
-// the two feet are joined by a chord. The bevel is a plane, so the connector
-// is a LineSeg (fA→fB), which continues the loop's own walk sense; there is
-// no offset carrier and no S5, because a chord exists between any two
-// distinct feet. IsConvex is not an input: a convex corner's
-// chord cuts material away, a concave corner's fills it in, and both are the
-// same construction (§7). An over-large setback is left to the §5 S6 audit,
-// never clipped here.
+// computeChamfer builds one section corner blend.
 func computeChamfer(loop cornerLoop, ci int, dA, dB float64) (*cornerBlend, error) {
-	n := len(loop.walks)
-	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
-	leave := loop.walks[ci]          // walk B, leaving the corner
-
-	ax, ay, la := normalize2(arrive.TanOutU, arrive.TanOutV)
-	bx, by, lb := normalize2(leave.TanInU, leave.TanInV)
-	if la == 0 || lb == 0 {
-		return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
-	}
-	// S4: a smooth (tangent) or cusped (anti-tangent) corner is no corner.
-	if math.Abs(ax*by-ay*bx) <= filletTol {
-		return nil, fmt.Errorf(`%w: the two walls meet smoothly — there is no corner to bevel`, ErrDegenerate)
-	}
-
-	fA := setbackFoot(arrive, dA, true) // dA back from the arriving walk's end
-	fB := setbackFoot(leave, dB, false) // dB forward from the leaving walk's start
-
-	return &cornerBlend{
-		fA:        fA,
-		fB:        fB,
-		cutbackA:  dA,
-		cutbackB:  dB,
-		connector: LineSeg{Start: fA, End: fB, TStart: 0, TEnd: 1},
-	}, nil
-}
-
-// setbackFoot is the point an arc length d from a corner along a walk, the
-// setback §7 measures along the boundary curve. When back is true the corner is
-// the walk's END and the step runs backwards along it (the arriving walk); else
-// the corner is the walk's START and the step runs forwards (the leaving walk). A
-// line steps by d along its unit travel tangent; an arc steps by the angle d/R
-// in the walk's own turn sense — CCW (th1 > th0) increases the bearing, CW
-// decreases it — so the foot lands on the arc itself, exactly.
-func setbackFoot(w survey2d.SideWalk, d float64, back bool) Point2 {
-	if !w.IsCircular() {
-		if back {
-			ux, uy, _ := normalize2(w.TanOutU, w.TanOutV)
-			return Point2{U: w.EndU - d*ux, V: w.EndV - d*uy}
-		}
-		ux, uy, _ := normalize2(w.TanInU, w.TanInV)
-		return Point2{U: w.StartU + d*ux, V: w.StartV + d*uy}
-	}
-	dtheta := d / w.Radius
-	sign := 1.0 // a CCW walk (th1 > th0) increases the bearing along travel
-	if w.Th1 < w.Th0 {
-		sign = -1.0
-	}
-	th := w.Th0 + sign*dtheta // forward from the start
-	if back {
-		th = w.Th1 - sign*dtheta // backward from the end
-	}
-	return Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
+	return offset2d.Chamfer(loop.walks, ci, dA, dB, filletTol)
 }

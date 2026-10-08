@@ -148,8 +148,8 @@ the rules leave to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `fillet.go` | Fillet section rewrite and build. Owns `cornerBlend` for Chamfer. See modify §6. |
-| `chamfer.go` | `Body.Chamfer` over `cornerBlend`; cap loops route to `capblend.go`. See modify §7. |
+| `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
+| `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
@@ -311,7 +311,7 @@ the rules leave to the byte budget.
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
-| `internal/offset2d/` | Offset carriers, joins, section records and displacement proofs. See modify §6–§9. |
+| `internal/offset2d/` | Offset carriers, blends, joins, section records and displacement proofs. See modify §6–§9. |
 | `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
