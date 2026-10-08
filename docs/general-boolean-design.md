@@ -740,7 +740,12 @@ swept over its height — `Σ_walls h · E_wall`, tessellation §5's prism term
 applied per wall — plus each wall's section band over its height where
 `delta > 0`, each planar face's level displacement times its area, and
 `sweptVolumeAllow` over the store maximum. Planar faces chord nothing of their
-own. The mesh therefore carries `volSymDiff`, and a class-B result is an
+own. A mesh vertex's store is the largest bound any use placing it states,
+as §4.2's body vertex is: a swept wall's two end samples charge the distance
+from the held walk end to the point the wall's record denotes there
+(`boundarywalk.DenotedStartBound` and `DenotedEndBound`), which adds an arc's
+radial residual at its natural `t = 1` end; a line edge no swept wall chords
+charges its use's `StartBound` and `EndBound`. The mesh therefore carries `volSymDiff`, and a class-B result is an
 ordinary mesh-path operand and export input.
 
 ### 4.5 Consumers
@@ -795,6 +800,13 @@ every face edge is split at every recorded vertex on it: a line at each
 vertex lying on both its face and its carrier, an arc at the angle of each
 vertex on its cylinder, read at the face's level. Two vertices of one
 cylinder closer than 1e-9 rad are not ordered and miss.
+
+The scene's own point at a junction is a line's end wherever a line meets
+there, since the line keeps its fixed coordinate exact. Its displacement
+starts from that end's bound against the point its record denotes
+(`boundarywalk.DenotedEndBound` or `DenotedStartBound`). Consecutive fragments
+of one cylinder are joined first, so a junction with no line names two
+distinct cylinders and misses.
 
 A keyed vertex's displacement is at least its own proven distance from the
 crossing it names (`classbgeom.CrossingOffsetUpper`). The vertex lies on both

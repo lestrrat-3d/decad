@@ -461,6 +461,7 @@
 2	0.00	TestDuplicate
 2	0.00	TestDuplicatePlainExtrudeHasNoBlendRoles
 2	0.00	TestErrorVocabulary
+2	0.05	TestEveryVertexBoundIsALength
 2	0.00	TestExactness
 2	0.00	TestExtrudeArcSectionBoxEnclosesArcApex
 2	0.00	TestExtrudeArcSegPrismBoundsTighten

@@ -494,7 +494,9 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		pv, ok := vertices[c]
 		if !ok {
 			held, lift := refView.liftedVertex(c[0], c[1], c[2])
-			pv = placedVertex{v: &Vertex{position: held}, lift: lift}
+			// The bound starts as zero millimetres, so an Exact vertex
+			// publishes a length as every other vertex does.
+			pv = placedVertex{v: &Vertex{position: held, bound: units.Millimeters(0)}, lift: lift}
 			vertices[c] = pv
 		}
 		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.bound.Base() {

@@ -131,9 +131,8 @@ func requireArcEndsReached(t *testing.T, body *decad.Body, arc decad.ArcSeg, sta
 				continue
 			}
 			met++
-			// An Exact brep vertex publishes a zero bound with no unit, so
-			// the bound is read as its base magnitude.
-			bound := pos.Bound.Base()
+			bound, err := pos.Bound.In(units.Millimeter)
+			require.NoError(t, err)
 			require.LessOrEqualf(t, reach, bound,
 				`vertex %v publishes bound %.3e but sits %.3e mm from the arc's denoted end`, at, bound, reach)
 			if k == 0 && startExact {

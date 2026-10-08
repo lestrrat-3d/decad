@@ -49,9 +49,12 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 	out.SideStart = make([]int, n)
 	for i, w := range in.Walks {
 		out.SideStart[i] = len(out.SidePts)
+		// The side ring's junction sample reaches the points both
+		// neighbours denote there, as SampleLoop's does.
+		start := sampleStartBound(in.Walks, in.Segments, i)
 		if !w.IsCircular() {
 			out.SidePts = append(out.SidePts, sectionrecord.Point2{U: w.StartU, V: w.StartV})
-			out.SideBound = append(out.SideBound, w.StartBound)
+			out.SideBound = append(out.SideBound, start)
 			continue
 		}
 		seg := in.Segments[w.Segs[0]]
@@ -62,7 +65,7 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 				return CapBlendSamples{}, err
 			}
 			p := sectionrecord.Point2{U: w.StartU, V: w.StartV}
-			bound := w.StartBound
+			bound := start
 			if k > 0 {
 				th := w.Th0 + float64(k)*dth
 				p = sectionrecord.Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}

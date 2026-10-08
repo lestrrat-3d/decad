@@ -86,21 +86,36 @@ func SameCircleSeam(prev, next CurveSegment) bool {
 // verbatim, so a junction of two natural line ends at one recorded coordinate
 // answers exactly zero. A non-finite component answers +Inf.
 func JunctionVertex(prevSeg CurveSegment, prev survey2d.SegmentWalk, nextSeg CurveSegment, next survey2d.SegmentWalk) (float64, float64, proofbound.WalkEndBound) {
+	atNext := JunctionStartBound(prevSeg, prev, nextSeg, next)
+	if !SameCircleSeam(prevSeg, nextSeg) {
+		return next.StartU, next.StartV, atNext
+	}
 	own := DenotedStartBound(nextSeg, next)
 	end := DenotedEndBound(prevSeg, prev)
 	du, dv := next.StartU-prev.EndU, next.StartV-prev.EndV
-	if !SameCircleSeam(prevSeg, nextSeg) {
-		return next.StartU, next.StartV, proofbound.WalkEndBound{
-			U: math.Max(own.U, reachAcross(du, end.U)),
-			V: math.Max(own.V, reachAcross(dv, end.V)),
-		}
-	}
-	atNext := proofbound.WalkEndBound{U: math.Min(own.U, reachAcross(du, end.U)), V: math.Min(own.V, reachAcross(dv, end.V))}
 	atPrev := proofbound.WalkEndBound{U: math.Min(end.U, reachAcross(du, own.U)), V: math.Min(end.V, reachAcross(dv, own.V))}
 	if math.Max(atPrev.U, atPrev.V) < math.Max(atNext.U, atNext.V) {
 		return prev.EndU, prev.EndV, atPrev
 	}
 	return next.StartU, next.StartV, atNext
+}
+
+// JunctionStartBound is JunctionVertex's bound for a vertex held at next's
+// start: the per-component bound on its distance from the points both
+// neighbours denote where walk prev ends and walk next starts. It is the
+// larger of DenotedStartBound and |held − prev's held end| plus
+// DenotedEndBound in each component, or the smaller where SameCircleSeam
+// proves the two denote one point. A tessellation, which keeps every sample at
+// its walk's held start, charges it to the sample a junction shares, so the
+// chords of both neighbours end within it of the points their records denote.
+func JunctionStartBound(prevSeg CurveSegment, prev survey2d.SegmentWalk, nextSeg CurveSegment, next survey2d.SegmentWalk) proofbound.WalkEndBound {
+	own := DenotedStartBound(nextSeg, next)
+	end := DenotedEndBound(prevSeg, prev)
+	du, dv := next.StartU-prev.EndU, next.StartV-prev.EndV
+	if SameCircleSeam(prevSeg, nextSeg) {
+		return proofbound.WalkEndBound{U: math.Min(own.U, reachAcross(du, end.U)), V: math.Min(own.V, reachAcross(dv, end.V))}
+	}
+	return proofbound.WalkEndBound{U: math.Max(own.U, reachAcross(du, end.U)), V: math.Max(own.V, reachAcross(dv, end.V))}
 }
 
 // reachAcross is |d| + bound rounded up, where d is the float difference of

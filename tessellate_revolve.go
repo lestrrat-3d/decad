@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
@@ -645,16 +646,23 @@ type revFaceExtent struct {
 //
 // Each carries the certified enclosure of the (z, ρ) the RECORD denotes there,
 // read from the recorded plane-local point the axis re-expression consumed
-// rather than from the re-expressed floats themselves. The returned gap is the
+// rather than from the re-expressed floats themselves. That point is walk k's
+// held plane start under the bound that reaches the points both neighbours
+// denote there (boundarywalk.JunctionStartBound), so an arc's natural t = 1
+// end, whose held End sits off Start's radius, is enclosed. The returned gap is the
 // largest distance any junction's stored pair sits from its own enclosure — the
 // count-independent half of deltaC the tolerance split spends before any count
 // exists.
 func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revolvemesh.RevMeridian, float64, error) {
 	out := make([]revolvemesh.RevMeridian, len(r.walks))
 	worst := 0.0
+	n := len(r.walks)
 	for k, w := range r.walks {
 		plane := r.plane[w.Segs[0]]
-		zIv, rhoIv, ok := revolvemesh.RevolveMeridianEnclosure(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, plane.StartU, plane.StartV, plane.StartBound)
+		prev := r.walks[(k+n-1)%n]
+		last := prev.Segs[len(prev.Segs)-1]
+		bound := boundarywalk.JunctionStartBound(r.segs[last], r.plane[last], r.segs[w.Segs[0]], plane)
+		zIv, rhoIv, ok := revolvemesh.RevolveMeridianEnclosure(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, plane.StartU, plane.StartV, bound)
 		if !ok {
 			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
 		}
