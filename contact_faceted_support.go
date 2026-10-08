@@ -3,21 +3,13 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// facetedLowerSupport records one exact source-box lower face retained by a
-// mesh Union. The other operand's certified lower bound is strictly higher,
-// so the Boolean's true lower support set is exactly this source rectangle.
-type facetedLowerSupport struct {
-	plane          proofarith.Dyadic
-	footLo, footHi [2]proofarith.Dyadic
-	sourceGroup    int
-}
 
 func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) error {
 	pp, ok := result.payload.(facetedPayload)
@@ -43,9 +35,9 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 				continue
 			}
 			sourceGroup := i + candidate*len(a.Faces())
-			pp.lowerSupport = &facetedLowerSupport{plane: box.lo[2], sourceGroup: sourceGroup,
-				footLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
-				footHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
+			pp.lowerSupport = &facetproof.LowerSupport{Plane: box.lo[2], SourceGroup: sourceGroup,
+				FootLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
+				FootHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
 			result.payload = pp
 			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity(), 2, 0)
 			if err != nil {
@@ -160,210 +152,31 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		return facetedAxisSupport{}, false, nil
 	}
 	pp, ok := b.payload.(facetedPayload)
-	if !ok || !finiteMeasurementValues(pp.meshBound, pp.volSymDiff) ||
-		pp.meshBound < 0 || pp.volSymDiff < 0 ||
-		len(pp.verts) == 0 || len(pp.tris) == 0 || len(pp.faceOf) != len(pp.tris) {
+	if !ok {
 		return facetedAxisSupport{}, false, nil
-	}
-	sourceVerts := pp.verts
-	placedFromSource := false
-	certifiedUnion := pp.lowerSupport != nil && pp.xform == r3.Identity() &&
-		axis == 2 && side == 0 && facetedTranslationOnly(pose)
-	if certifiedUnion && (len(pp.src) != len(pp.tris) || pp.lowerSupport.sourceGroup < 0 ||
-		pp.lowerSupport.sourceGroup >= len(pp.groups)) {
-		return facetedAxisSupport{}, false, nil
-	}
-	if pp.meshBound != 0 || pp.volSymDiff != 0 {
-		if !certifiedUnion {
-			if !facetedTranslationOnly(pp.xform) ||
-				len(pp.exactSourceVerts) != len(pp.verts) ||
-				len(pp.exactSourceTris) != len(pp.tris) {
-				return facetedAxisSupport{}, false, nil
-			}
-			for i, tri := range pp.tris {
-				if tri != pp.exactSourceTris[i] {
-					return facetedAxisSupport{}, false, nil
-				}
-			}
-			sourceVerts, placedFromSource = pp.exactSourceVerts, true
-		}
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	if err := budget.Err(); err != nil {
-		return facetedAxisSupport{}, false, err
-	}
-	placed := make([]proofarith.DyV3, len(pp.verts))
-	var proof facetedAxisSupport
-	proof.axis, proof.side = axis, side
-	for i, v := range sourceVerts {
-		if err := budget.Step(); err != nil {
-			return facetedAxisSupport{}, false, err
-		}
-		if !proofbound.FiniteVec(v) {
-			return facetedAxisSupport{}, false, nil
-		}
-		source := proofarith.DyVec(v)
-		if placedFromSource {
-			if !proofbound.FiniteVec(pp.verts[i]) {
-				return facetedAxisSupport{}, false, nil
-			}
-			source = exactContactTransform(pp.xform, source)
-			difference := proofarith.DvSub(source, proofarith.DyVec(pp.verts[i]))
-			bound := proofarith.MustDyOf(pp.meshBound)
-			if proofarith.DyCmp(proofarith.DvDot(difference, difference), proofarith.DyMul(bound, bound)) > 0 {
-				return facetedAxisSupport{}, false, nil
-			}
-		}
-		placed[i] = exactContactTransform(pose, source)
-		for j := range 3 {
-			if i == 0 || proofarith.DyCmp(placed[i][j], proof.outerLo[j]) < 0 {
-				proof.outerLo[j] = placed[i][j]
-			}
-			if i == 0 || proofarith.DyCmp(placed[i][j], proof.outerHi[j]) > 0 {
-				proof.outerHi[j] = placed[i][j]
-			}
-		}
-	}
-	proof.plane = proof.outerLo[axis]
-	sign := -1
-	if side == 1 {
-		proof.plane, sign = proof.outerHi[axis], 1
-	}
-	if certifiedUnion {
-		proof.plane = proofarith.DyAdd(pp.lowerSupport.plane, proofarith.MustDyOf(pose.Translation().Z))
-		bound := proofarith.MustDyOf(pp.meshBound)
-		if proofarith.DyCmp(proofarith.DyAdd(proof.outerLo[2], bound), proof.plane) < 0 {
-			return facetedAxisSupport{}, false, nil
-		}
-		for j := range 3 {
-			proof.outerLo[j] = proofarith.DySubScalar(proof.outerLo[j], bound)
-			proof.outerHi[j] = proofarith.DyAdd(proof.outerHi[j], bound)
-		}
-	}
-	windingSign := sign
-	if pose.IsReflection() {
-		windingSign = -windingSign
-	}
-	var projected [2]int
-	for j, n := 0, 0; j < 3; j++ {
-		if j != axis {
-			projected[n] = j
-			n++
-		}
 	}
 	faces := b.Faces()
-	covered := make([]bool, len(placed))
-	var area2 proofarith.Dyadic
-	first := true
-	for i, tri := range pp.tris {
-		if err := budget.Step(); err != nil {
-			return facetedAxisSupport{}, false, err
-		}
-		for _, vertex := range tri {
-			if vertex < 0 || vertex >= len(placed) {
-				return facetedAxisSupport{}, false, nil
-			}
-		}
-		faceIndex := pp.faceOf[i]
-		if faceIndex < 0 || faceIndex >= len(faces) {
-			return facetedAxisSupport{}, false, nil
-		}
-		if proofarith.DyCmp(placed[tri[0]][axis], proof.plane) != 0 ||
-			proofarith.DyCmp(placed[tri[1]][axis], proof.plane) != 0 ||
-			proofarith.DyCmp(placed[tri[2]][axis], proof.plane) != 0 {
-			continue
-		}
-		if certifiedUnion && pp.src[i] != pp.lowerSupport.sourceGroup {
-			return facetedAxisSupport{}, false, nil
-		}
-		face := faces[faceIndex]
-		if !face.heldPlanar || face.surface.Kind() != KindFaceted ||
-			(!first && proof.face != face) {
-			return facetedAxisSupport{}, false, nil
-		}
-		proof.face = face
-		cross := proofarith.DvCross(proofarith.DvSub(placed[tri[1]], placed[tri[0]]),
-			proofarith.DvSub(placed[tri[2]], placed[tri[0]]))
-		if cross[axis].Sign() != windingSign ||
-			!cross[projected[0]].IsZero() || !cross[projected[1]].IsZero() {
-			return facetedAxisSupport{}, false, nil
-		}
-		if windingSign < 0 {
-			area2 = proofarith.DySubScalar(area2, cross[axis])
-		} else {
-			area2 = proofarith.DyAdd(area2, cross[axis])
-		}
-		for _, vertex := range tri {
-			covered[vertex] = true
-			for j, coord := range projected {
-				if first || proofarith.DyCmp(placed[vertex][coord], proof.footLo[j]) < 0 {
-					proof.footLo[j] = placed[vertex][coord]
-				}
-				if first || proofarith.DyCmp(placed[vertex][coord], proof.footHi[j]) > 0 {
-					proof.footHi[j] = placed[vertex][coord]
-				}
-			}
-			first = false
-		}
+	valid := make([]bool, len(faces))
+	for i, face := range faces {
+		valid[i] = face.heldPlanar && face.surface.Kind() == KindFaceted
 	}
-	if proof.face == nil || proofarith.DyCmp(proof.footLo[0], proof.footHi[0]) >= 0 ||
-		proofarith.DyCmp(proof.footLo[1], proof.footHi[1]) >= 0 {
-		return facetedAxisSupport{}, false, nil
+	result, proven, err := facetproof.ProveAxisSupport(ctx, facetproof.AxisSupportInput{
+		Verts: pp.verts, ExactSourceVerts: pp.exactSourceVerts,
+		Tris: pp.tris, ExactSourceTris: pp.exactSourceTris,
+		FaceOf: pp.faceOf, SourceGroup: pp.src, FaceValid: valid,
+		GroupCount: len(pp.groups), MeshBound: pp.meshBound,
+		VolSymDiff: pp.volSymDiff, Xform: pp.xform, Pose: pose,
+		Lower: pp.lowerSupport, Axis: axis, Side: side,
+	})
+	if err != nil || !proven {
+		return facetedAxisSupport{}, false, err
 	}
-	if certifiedUnion {
-		for j := range 2 {
-			if proofarith.DyCmp(proof.footLo[j], pp.lowerSupport.footLo[j]) != 0 ||
-				proofarith.DyCmp(proof.footHi[j], pp.lowerSupport.footHi[j]) != 0 {
-				return facetedAxisSupport{}, false, nil
-			}
-		}
-	}
-	// The source Face must name this support patch in full, rather than also
-	// naming a different-level facet that the solver would falsely include.
-	for i, tri := range pp.tris {
-		if err := budget.Step(); err != nil {
-			return facetedAxisSupport{}, false, err
-		}
-		if faces[pp.faceOf[i]] != proof.face {
-			continue
-		}
-		for _, vertex := range tri {
-			if proofarith.DyCmp(placed[vertex][axis], proof.plane) != 0 {
-				return facetedAxisSupport{}, false, nil
-			}
-		}
-	}
-	for i := range placed {
-		if err := budget.Step(); err != nil {
-			return facetedAxisSupport{}, false, err
-		}
-		if proofarith.DyCmp(placed[i][axis], proof.plane) == 0 && !covered[i] {
-			return facetedAxisSupport{}, false, nil
-		}
-	}
-	width := proofarith.DySubScalar(proof.footHi[0], proof.footLo[0])
-	height := proofarith.DySubScalar(proof.footHi[1], proof.footLo[1])
-	if proofarith.DyCmp(area2, proofarith.DyMul(proofarith.MustDyOf(2), proofarith.DyMul(width, height))) != 0 {
-		return facetedAxisSupport{}, false, nil
-	}
-	for i, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-		proof.corners[i][axis] = proof.plane
-		for j, coord := range projected {
-			proof.corners[i][coord] = proof.footLo[j]
-			if corner[j] == 1 {
-				proof.corners[i][coord] = proof.footHi[j]
-			}
-		}
-	}
-	switch axis {
-	case 0:
-		proof.normal.X = float64(sign)
-	case 1:
-		proof.normal.Y = float64(sign)
-	case 2:
-		proof.normal.Z = float64(sign)
-	}
-	return proof, true, budget.Err()
+	return facetedAxisSupport{
+		face: faces[result.FaceIndex], axis: result.Axis, side: result.Side,
+		plane: result.Plane, footLo: result.FootLo, footHi: result.FootHi,
+		outerLo: result.OuterLo, outerHi: result.OuterHi,
+		corners: result.Corners, normal: result.Normal,
+	}, true, nil
 }
 
 // classifyFacetedFloorBox admits a faceted body only when its complete lower

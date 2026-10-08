@@ -66,7 +66,7 @@ type facetedPayload struct {
 	// lowerSupport survives one mesh Union only when an exact source box owns
 	// the lower face and the other operand is certified strictly above it.
 	// Placement drops this proof until source-frame transfer is certified.
-	lowerSupport *facetedLowerSupport
+	lowerSupport *facetproof.LowerSupport
 
 	// meshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
@@ -96,10 +96,6 @@ type facetedPayload struct {
 // transform is the accumulated rigid placement.
 func (fp facetedPayload) transform() r3.Transform { return fp.xform }
 
-func facetedTranslationOnly(t r3.Transform) bool {
-	return t.IsValid() && proofbound.FiniteVec(t.Translation()) && t.Basis() == r3.Identity().Basis()
-}
-
 // placed re-evaluates the held mesh under the composed motion: the vertices
 // move through the delta motion (float rounding is folded into the proven
 // bounds — the geometry is never silently trusted), the moved mesh is kept
@@ -121,7 +117,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next := fp
 	next.xform = composed
 	next.lowerSupport = nil
-	if !facetedTranslationOnly(delta) || !facetedTranslationOnly(composed) {
+	if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
 		fp.xform == r3.Identity() {
