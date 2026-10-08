@@ -476,7 +476,7 @@ by at most `|wg|·δz + |m|·δρ`, and `wg² + c0² + c1² = 1` for a unit `g` 
 the orthonormal basis bounds both coefficients by one. That is a FIFTH
 mechanism in `extentBoundedAlong`'s own enumeration, composed per end through
 the same `absSumUpper` the other four take. The envelope
-`profileCoordinateUpper` states is widened by the same per-component figure
+`momentinput.CoordinateUpper` states is widened by the same per-component figure
 wherever the axis-frame and sweep-extreme terms read it, so those two are
 charged at an envelope covering the true section too.
 

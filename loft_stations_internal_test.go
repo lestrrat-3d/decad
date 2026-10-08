@@ -1405,7 +1405,7 @@ func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTarge
 		}
 	}
 	pw := &momentinput.ProfileWalks{Profile: rec, Outer: walks[0], Holes: walks[1:]}
-	envelope, err := profileCoordinateEnvelope(rec, nil, pw)
+	envelope, err := momentinput.CoordinateEnvelope(rec, nil, pw)
 	require.NoError(t, err)
 	return loftTargetReading{target: target, area: area, perimeter: perimeter, heldLength: held, envelope: envelope}
 }
@@ -1419,7 +1419,7 @@ func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTarge
 // the previous rule read grows more than fivefold.
 //
 // Shown to fail: with the target read as loftmesh.ChordFraction times
-// profileCoordinateEnvelope, the rule this one replaced, both gear rows fail
+// momentinput.CoordinateEnvelope, the rule this one replaced, both gear rows fail
 // (the tooth reads 5.3e-3 against fraction * |A| / P = 2.1e-4).
 //
 // The exact-record row pins the target's bits for a record whose every input

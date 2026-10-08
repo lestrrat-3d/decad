@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -277,7 +278,7 @@ func coilSide(ctx context.Context, profile ProfileRecord, line axisLine2, pitch,
 	if err != nil {
 		return 0, err
 	}
-	coordUpper, err := profileCoordinateEnvelope(profile, work, nil)
+	coordUpper, err := momentinput.CoordinateEnvelope(profile, work, nil)
 	if err != nil {
 		return 0, err
 	}

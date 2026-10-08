@@ -3,6 +3,7 @@ package decad
 import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -39,7 +40,7 @@ func revolveSectionChargeOf(rp revolvePayload, work *freeform.FreeformWork) (rev
 	if delta == 0 {
 		return revolveSectionCharge{}, nil
 	}
-	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
+	coordUpper, err := momentinput.CoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return revolveSectionCharge{}, err
 	}

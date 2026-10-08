@@ -406,7 +406,7 @@ func TestChordLocusRegionPointsLieInTheShell(t *testing.T) {
 // itself. Each foot must lie between the hole and the cap contour the build
 // records (cbp.contourOf): on a circle no smaller than the hole's arc and no
 // larger than the contour's, and on a line between the hole's and the
-// contour's. Each foot must also lie within capBandCoordUpper, the bound the
+// contour's. Each foot must also lie within capband.CoordUpper, the bound the
 // first-moment terms read.
 //
 // Shown to fail on 2026-10-09: with the cap contour taken at dc/2, the feet
@@ -457,7 +457,7 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	require.True(t, ok, `the hole's end-cap band records its contour displacement`)
 	capZB := cbp.capBandLevel(cbp.z1, matSign)
 	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
-	coordUpper, err := capBandCoordUpper(loop, capBoundary, delta, sideZB, capZB, freeform.NewFreeformWork())
+	coordUpper, err := capband.CoordUpper(loop, capBoundary, delta, sideZB, capZB, freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	// The contour's arc radius and its two straight walls' offset positions.
@@ -566,7 +566,7 @@ func TestChordLocusSpanFluxEnclosesTheDenotedFlux(t *testing.T) {
 }
 
 // TestSegmentCoordinateUpperCoversTheArc checks the local coordinate envelope
-// capBandCoordUpper reads for an arc (segmentCoordinateUpper) against the arc
+// capband.CoordUpper reads for an arc (capband.SegmentCoordinateUpper) against the arc
 // itself, over a randomized sweep of centres, radii and start and end
 // directions, minor and major arcs and arcs crossing every axis: every point
 // sampled along the counter-clockwise sweep must lie within the envelope, and
@@ -595,7 +595,7 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 			End:    Point2{U: cu + endScale*r*math.Cos(a1), V: cv + endScale*r*math.Sin(a1)},
 			TStart: 0, TEnd: 1,
 		}
-		got, ok := segmentCoordinateUpper(seg)
+		got, ok := capband.SegmentCoordinateUpper(seg)
 		require.True(t, ok)
 		radius := math.Hypot(seg.Start.U-cu, seg.Start.V-cv)
 		th0 := math.Atan2(seg.Start.V-cv, seg.Start.U-cu)
@@ -624,10 +624,10 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 	}
 
 	line := LineSeg{Start: Point2{U: -3, V: 1}, End: Point2{U: 2, V: -5}, TStart: 0, TEnd: 1}
-	got, ok := segmentCoordinateUpper(line)
+	got, ok := capband.SegmentCoordinateUpper(line)
 	require.True(t, ok)
 	require.Equal(t, 5.0, got)
-	_, ok = segmentCoordinateUpper(LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
+	_, ok = capband.SegmentCoordinateUpper(LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
 	require.False(t, ok, `a range past the entity's own reads the walk's envelope instead`)
 }
 

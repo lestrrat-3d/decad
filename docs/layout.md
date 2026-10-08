@@ -130,7 +130,7 @@ the rules leave to the byte budget.
 | `coil.go` | `Document.Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
-| `prism_payload.go` | `prismPayload`, coordinate readings, envelopes. See evaluator §5. |
+| `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
 | `prism_extent.go` | Prism extent readings, reach and box. See evaluator §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
@@ -298,7 +298,7 @@ the rules leave to the byte budget.
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
-| `internal/momentinput/` | Owns profile records, validation, measurements and the profile walk cache. See evaluator §4 and spline §5.2. |
+| `internal/momentinput/` | Profile records, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop chording, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
@@ -324,7 +324,7 @@ the rules leave to the byte budget.
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, joins, sharp loops and displacement proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
-| `internal/capband/` | Cap-band contour, held patch, radius, window, miter locus and mass proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band contour, patch, coordinate, locus and mass proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
 | `internal/shellsurvey/` | Shell inradius, work budget and contained-disk witness. See modify §8. |

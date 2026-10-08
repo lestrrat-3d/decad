@@ -19,7 +19,7 @@ import (
 // ProfileWalks is one profile's segment walks resolved ONCE, so that every
 // consumer within a single prism evaluation reads the same resolution back
 // instead of paying walkOf's own §5.2 charge again for it. Within one
-// evalPrismContext call, buildLoopSidesAs, profileCoordinateEnvelope (called
+// evalPrismContext call, buildLoopSidesAs, CoordinateEnvelope (called
 // from prismCentroidGeometryBound and, four times over, from
 // prismBoundsContext's per-axis extentBoundedAlong) and
 // boundaryExtremesBoundedContext (three times, also from extentBoundedAlong)

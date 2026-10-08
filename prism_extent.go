@@ -105,7 +105,7 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // Exact.
 //
 // walks is pp.profile's pre-resolved segment walks, or nil to resolve as
-// before through boundaryExtremesBoundedContext and profileCoordinateEnvelope's
+// before through boundaryExtremesBoundedContext and momentinput.CoordinateEnvelope's
 // own walkOf calls. prismBoundsContext passes the same *momentinput.ProfileWalks to every
 // one of its three per-axis calls, so the record's boundary walks resolve
 // once for the whole box rather than once per axis (this file's momentinput.ProfileWalks
@@ -121,7 +121,7 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 	}
 	zlo := math.Min(pp.z0*gz, pp.z1*gz)
 	zhi := math.Max(pp.z0*gz, pp.z1*gz)
-	coordUpper, err := profileCoordinateEnvelope(pp.profile, work, walks)
+	coordUpper, err := momentinput.CoordinateEnvelope(pp.profile, work, walks)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -252,6 +252,6 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 		counts[li] = len(loop.Segments)
 	}
 	return prismextent.BoundaryExtremesBoundedContext(ctx, gu, gv, work, counts, func(li, si int) (survey2d.SegmentWalk, error) {
-		return resolveOrRead(loops[li].Segments[si], work, walks, li, si)
+		return momentinput.ResolveOrRead(loops[li].Segments[si], work, walks, li, si)
 	})
 }

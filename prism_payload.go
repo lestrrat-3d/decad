@@ -4,12 +4,9 @@ import (
 	"context"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -185,98 +182,23 @@ func vecL1(v r3.Vec) float64 {
 	return proofbound.AbsSumUpper(v.X, v.Y, v.Z)
 }
 
-// walks is the profile's pre-resolved segment walks (docs/spline-design.md
-// §5.2, this file's momentinput.ProfileWalks doc comment), or nil to resolve each segment
-// through walkOf as before. A non-nil walks that was not resolved from THIS
-// profile — the recorded segments compared, not their count — is a plumbing
-// bug and refuses rather than silently resolving anyway.
-func profileCoordinateUpper(profile ProfileRecord, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
-	if walks != nil && !walks.Matches(profile) {
-		return 0, momentinput.ErrResolvedWalksMismatch
-	}
-	upper := 0.0
-	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for si, seg := range loop.Segments {
-			w, err := resolveOrRead(seg, work, walks, li, si)
-			if err != nil {
-				return 0, err
-			}
-			if err := boundarywalk.RequireAnalyticWalk(w, "a placed cap frame"); err != nil {
-				return 0, err
-			}
-			upper = math.Max(upper, w.CoordUpper)
-		}
-	}
-	return upper, nil
-}
-
-// profileCoordinateEnvelope is profileCoordinateUpper without the analytic
-// requirement: every walk kind, free-form included, states its own coordUpper
-// (walkOf's per-kind construction — freeform.FreeformControlExtent for a free-form
-// span), so a caller that only needs a coordinate MAGNITUDE envelope — never a
-// placed cap frame, which genuinely cannot represent a free-form wall — reads
-// it directly rather than refusing on a section the caller's own reading
-// already handles: extentBoundedAlong's boundary-extreme scan, and
-// prismCentroidGeometryBound's convex-combination proof, each state their own
-// account of a free-form span and need only the envelope beside it.
-//
-// walks is profileCoordinateUpper's own optional pre-resolved set, same
-// contract: nil resolves as before, a non-matching non-nil set refuses.
-func profileCoordinateEnvelope(profile ProfileRecord, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
-	if walks != nil && !walks.Matches(profile) {
-		return 0, momentinput.ErrResolvedWalksMismatch
-	}
-	upper := 0.0
-	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for si, seg := range loop.Segments {
-			w, err := resolveOrRead(seg, work, walks, li, si)
-			if err != nil {
-				return 0, err
-			}
-			upper = math.Max(upper, w.CoordUpper)
-		}
-	}
-	return upper, nil
-}
-
-// resolveOrRead is the shared "read the pre-resolved walk, or resolve one"
-// step every momentinput.ProfileWalks-aware consumer in this file uses: walks non-nil
-// (and already checked against the profile by the caller) reads
-// walks.At(loopIndex, segIndex); walks nil calls walkOf, exactly as every
-// consumer did before momentinput.ProfileWalks existed.
-func resolveOrRead(seg CurveSegment, work *freeform.FreeformWork, walks *momentinput.ProfileWalks, loopIndex, segIndex int) (survey2d.SegmentWalk, error) {
-	if walks != nil {
-		if walks.ReadCharges != nil {
-			charge := walks.ReadCharges[loopIndex][segIndex]
-			if err := work.Step(charge.Spent); err != nil {
-				return survey2d.SegmentWalk{}, err
-			}
-			if err := work.ReconstructionStep(charge.ReconstructionSpent); err != nil {
-				return survey2d.SegmentWalk{}, err
-			}
-		}
-		return walks.At(loopIndex, segIndex), nil
-	}
-	return boundarywalk.WalkOf(seg, work)
-}
-
 // prismCentroidGeometryBound is a second, formula-independent proof. A solid's
 // centroid is a convex combination of its material points, so it lies within
 // the outer prism. The L1 envelope below bounds every such point through the
 // frame and rigid placement, and therefore bounds the distance from held.
 //
-// It reads coordUpper through profileCoordinateEnvelope, never
-// profileCoordinateUpper: this proof needs a coordinate MAGNITUDE envelope,
+// It reads coordUpper through momentinput.CoordinateEnvelope, never
+// momentinput.CoordinateUpper: this proof needs a coordinate MAGNITUDE envelope,
 // never a placed cap frame, and every walk kind states one — a free-form
 // span's own convex-hull envelope (freeform.FreeformControlExtent) included — so the
-// analytic-only refusal profileCoordinateUpper carries for its OTHER callers
+// analytic-only refusal CoordinateUpper carries for its OTHER callers
 // (capblend_centroid.go, revolve.go) would refuse a centroid this build must
 // publish for a section this same build just proved buildable.
 //
 // walks is the profile's pre-resolved segment walks, or nil; same contract as
-// profileCoordinateEnvelope's own.
+// CoordinateEnvelope's own.
 func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, error) {
-	coordUpper, err := profileCoordinateEnvelope(profile, work, walks)
+	coordUpper, err := momentinput.CoordinateEnvelope(profile, work, walks)
 	if err != nil {
 		return 0, err
 	}

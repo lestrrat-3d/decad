@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -371,7 +372,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		math.Max(loUpper-lo, lo-loLower),
 		math.Max(hiUpper-hi, hi-hiLower),
 	))
-	coordUpper, err := profileCoordinateEnvelope(cbp.profile, work, nil)
+	coordUpper, err := momentinput.CoordinateEnvelope(cbp.profile, work, nil)
 	if err != nil {
 		return 0, 0, 0, err
 	}

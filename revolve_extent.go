@@ -169,7 +169,7 @@ func (rp revolvePayload) frameRoundAllow(
 		coordUpper = profile.coordUpper
 	} else {
 		var err error
-		coordUpper, err = profileCoordinateUpper(rp.profile, work, nil)
+		coordUpper, err = momentinput.CoordinateUpper(rp.profile, work, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -187,7 +187,7 @@ func (rp revolvePayload) sweepBoundAlong(
 		coordUpper = profile.coordUpper
 	} else {
 		var err error
-		coordUpper, err = profileCoordinateUpper(rp.profile, work, nil)
+		coordUpper, err = momentinput.CoordinateUpper(rp.profile, work, nil)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -333,7 +333,7 @@ func axisExtremeContext(
 	if profile != nil {
 		coordUpper = profile.coordUpper
 	} else {
-		coordUpper, err = profileCoordinateEnvelope(rp.profile, work, nil)
+		coordUpper, err = momentinput.CoordinateEnvelope(rp.profile, work, nil)
 		if err != nil {
 			return 0, 0, err
 		}

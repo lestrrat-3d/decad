@@ -2588,8 +2588,8 @@ func ChordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 // V·coordUpper for any single coordinate p, since |p| <= coordUpper
 // pointwise. coordUpper must be a PROVEN upper bound on |u|, |v| and |z| over
 // the band's own material — the band lies BETWEEN the original loop and the
-// offset cap boundary, so both loops' own envelopes (extrude.go's
-// profileCoordinateUpper) are needed, together with max(|z0|, |z1|) — the
+// offset cap boundary, so both loops' own envelopes
+// (momentinput.CoordinateUpper) are needed, together with max(|z0|, |z1|) — the
 // same envelope prismCentroidGeometryBound already forms for the axial
 // levels.
 func SweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
@@ -2747,7 +2747,7 @@ func BoundedHypot(dx, dy float64) BoundedScalar {
 // origin the functional is written about. Which envelope that is belongs to
 // the caller's own geometry, and the two are NOT interchangeable: a section
 // read about its plane frame charges the profile's plane-local envelope
-// (profileCoordinateUpper), while a revolve's swept radial coefficient
+// (momentinput.CoordinateUpper), while a revolve's swept radial coefficient
 // multiplies the distance from the RESOLVED AXIS and so charges the axis's
 // own radial envelope (axisFrame.radialUpper, which folds in the axis
 // anchor). Handing this the frame-origin envelope for an axis-referred
@@ -2936,7 +2936,7 @@ func ExactPlaneDotRound(gu, gv, u, v, held float64) float64 {
 // those products multiply.
 //
 // coordUpper must be a PROVEN upper bound on |u| and |v| over every candidate
-// the scan folds — profileCoordinateEnvelope, which reads each walk's own
+// the scan folds — momentinput.CoordinateEnvelope, which reads each walk's own
 // coordUpper — measured about the SAME frame origin the scan's candidates are
 // written about. extrude.go's prismDecompositionRoundAllow is the prism's own
 // spelling of this mechanism, one sweep coordinate wider, and the two are never

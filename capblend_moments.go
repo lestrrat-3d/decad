@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -604,11 +605,11 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 // displacement delta), plus the larger of the two levels' magnitudes, plus the
 // closure's own largest gap.
 func capBandPointUpper(loop, capBoundary LoopRecord, delta float64, closure capBandClosure, sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
-	coordUpper, err := loopCoordinateUpper(loop, work)
+	coordUpper, err := momentinput.CoordinateUpper(ProfileRecord{Outer: loop}, work, nil)
 	if err != nil {
 		return 0, err
 	}
-	capCoordUpper, err := loopCoordinateUpper(capBoundary, work)
+	capCoordUpper, err := momentinput.CoordinateUpper(ProfileRecord{Outer: capBoundary}, work, nil)
 	if err != nil {
 		return 0, err
 	}
