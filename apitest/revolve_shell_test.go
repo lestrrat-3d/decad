@@ -262,17 +262,20 @@ func TestRevolveShellConeApex(t *testing.T) {
 			var apex *decad.Vertex
 			for _, v := range shelled.Vertices() {
 				p := v.Position().Value
-				if p.Y == 0 && p.Z == 0 && math.Abs(p.X-mustFloat(tc.apex)) < 0.5 {
+				if math.Abs(p.Y) < 1e-6 && math.Abs(p.Z) < 1e-6 && math.Abs(p.X-mustFloat(tc.apex)) < 0.5 {
 					apex = v
 				}
 			}
 			require.NotNil(t, apex, `the cavity's apex is a vertex on the axis`)
 			pos := apex.Position()
 			require.Positive(t, pos.Bound.Base(), `the apex sits at a rounded miter, so its position is not Exact`)
-			off := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.X), tc.apex)
-			off.Abs(off)
-			require.LessOrEqual(t, off.Cmp(ref(pos.Bound.Base())), 0,
-				`the apex vertex encloses the irrational miter: %v ± %v`, pos.Value.X, pos.Bound)
+			dx := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.X), tc.apex)
+			sq := new(big.Float).SetPrec(volumeRefPrec).Mul(dx, dx)
+			sq.Add(sq, new(big.Float).SetPrec(volumeRefPrec).Mul(ref(pos.Value.Y), ref(pos.Value.Y)))
+			sq.Add(sq, new(big.Float).SetPrec(volumeRefPrec).Mul(ref(pos.Value.Z), ref(pos.Value.Z)))
+			b := ref(pos.Bound.Base())
+			require.LessOrEqual(t, sq.Cmp(new(big.Float).SetPrec(volumeRefPrec).Mul(b, b)), 0,
+				`the apex vertex encloses the irrational miter: %v ± %v`, pos.Value, pos.Bound)
 		})
 	}
 }
@@ -312,16 +315,23 @@ func TestRevolveShellClosedCone(t *testing.T) {
 	var rim *decad.Vertex
 	for _, v := range shelled.Vertices() {
 		p := v.Position().Value
-		if p.X == 1 && p.Z == 0 && math.Abs(p.Y-mustFloat(rimRho)) < 0.5 {
+		if math.Abs(p.X-1) < 1e-6 && math.Abs(p.Z) < 1e-6 && math.Abs(p.Y-mustFloat(rimRho)) < 0.5 {
 			rim = v
 		}
 	}
 	require.NotNil(t, rim, `the cavity's base rim sweeps a seam vertex`)
 	pos := rim.Position()
 	require.Positive(t, pos.Bound.Base())
-	off := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.Y), rimRho)
-	off.Abs(off)
-	require.LessOrEqual(t, off.Cmp(ref(pos.Bound.Base())), 0, `the rim vertex encloses the irrational miter: %v ± %v`, pos.Value, pos.Bound)
+	// The seam sits at φ = 0, so the rim's world point is (1, ρ, 0).
+	dx := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.X), ref(1))
+	dy := new(big.Float).SetPrec(volumeRefPrec).Sub(ref(pos.Value.Y), rimRho)
+	dz := ref(pos.Value.Z)
+	sq := new(big.Float).SetPrec(volumeRefPrec).Mul(dx, dx)
+	sq.Add(sq, new(big.Float).SetPrec(volumeRefPrec).Mul(dy, dy))
+	sq.Add(sq, new(big.Float).SetPrec(volumeRefPrec).Mul(dz, dz))
+	b := ref(pos.Bound.Base())
+	require.LessOrEqual(t, sq.Cmp(new(big.Float).SetPrec(volumeRefPrec).Mul(b, b)), 0,
+		`the rim vertex encloses the irrational miter: %v ± %v`, pos.Value, pos.Bound)
 }
 
 // mustFloat is x's nearest float64.
