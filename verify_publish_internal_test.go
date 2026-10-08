@@ -497,7 +497,7 @@ func TestVerifyPublishUndercutPartialCoverage(t *testing.T) {
 // freeformArchProfileBody extrudes a rectangle whose bottom edge is recorded
 // as a degree-1 unit-weight NURBSSeg — the same free-form-recorded-kind
 // refusal TestFreeformPrismUndercutsUndecided's freeformArchBody trips
-// (survey.go's errFreeformSection), reached here through the public
+// (boundarywalk.ErrFreeformSection), reached here through the public
 // sketch/Body API alone since that fixture's own helpers live in the
 // external decad_test package.
 func freeformArchProfileBody(t *testing.T) *Body {

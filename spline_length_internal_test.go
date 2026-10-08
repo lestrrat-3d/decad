@@ -512,7 +512,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 }
 
 // Every consumer that has no free-form construction must refuse a free-form
-// walk rather than take its line branch. walkElem is the shared 2D conversion,
+// walk rather than take its line branch. survey2d.WalkElem is the shared 2D conversion,
 // so its refusal covers the wall survey, the section audit and the clearance
 // trims at once.
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
@@ -524,7 +524,7 @@ func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	require.False(t, walk.IsLine(), "a free-form walk is not a line")
 	require.False(t, walk.IsCircular(), "a free-form walk is not circular")
 
-	_, ok := walkElem(walk)
+	_, ok := survey2d.WalkElem(walk)
 	require.False(t, ok, "there is no 2D boundary element for a free-form walk yet")
 
 	err = boundarywalk.RequireAnalyticWalk(walk, "the test consumer")

@@ -3,7 +3,9 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -39,9 +41,9 @@ func TestShellRectCircleWitnessKeepsToleranceAndFallsBack(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			budget := proofbound.NewWorkBudget(t.Context())
-			loops, err := recordLoopsBudget(budget, tc.profile)
+			loops, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile(tc.profile))
 			require.NoError(t, err)
-			got, err := shellRectCircleWitness(budget, tc.profile, loops, tc.thickness, 0)
+			got, err := shellsurvey.RectangleCircleWitness(budget, boundarywalk.Profile(tc.profile), loops, tc.thickness, 0, shellTol)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 		})

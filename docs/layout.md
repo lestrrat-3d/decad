@@ -284,7 +284,7 @@ the rules leave to the byte budget.
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
-| `internal/boundarywalk/` | Bounded walks and coalescing over recorded segments. |
+| `internal/boundarywalk/` | Bounded walks, coalescing and analytic survey loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boxes, gates, through reach, crossing scenes and edge splitting. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep joins, crossing offsets, frames, restatement and stacked records. See general-boolean §4, §5. |
 | `internal/revolveaxis/` | Axis input, walks, side/contact gates, snap charges and extent bounds. See evaluator §6. |
@@ -319,6 +319,7 @@ the rules leave to the byte budget.
 | `internal/capband/` | Cap-band radius, window, miter locus, patch and mass proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | Cup wall theorem and morphology recheck. See payload verification §4. |
+| `internal/shellsurvey/` | Shell inradius, work budget and contained-disk witness. See modify §8. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |

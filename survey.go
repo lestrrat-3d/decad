@@ -99,69 +99,6 @@ type radiusOutcome struct {
 	reason  surveyReason
 }
 
-// errFreeformSection is recordLoops' OWN name for boundarywalk.RequireAnalyticWalk's
-// free-form refusal (docs/spline-design.md §8.1, Table R row R9), and the one
-// error prismWall reads as an undecided wall reading rather than a failed
-// survey. It wraps ErrUnsupported exactly as the refusal it renames does, so
-// every other recordLoops consumer branches on it as before.
-//
-// It exists because "the section did not decompose" is not one cause: walkOf
-// refuses a nil segment and a self-contradicting circle as ErrDegenerate,
-// refuses a radius that is not a length on the unit conversion, and refuses a
-// free-form span whose §5.2 work ceiling or §6.1 length bracket runs out as its
-// OWN ErrUnsupported. Naming this one cause is what keeps a consumer's
-// undecided reading from swallowing the rest.
-var errFreeformSection = fmt.Errorf(`%w: the wall survey does not support a free-form boundary segment`, ErrUnsupported)
-
-// recordLoops resolves the recorded profile into coalesced walk loops,
-// exactly as the prism evaluator builds its side faces — the surveys must
-// see the same face decomposition the topology carries.
-func recordLoops(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]survey2d.SideWalk, error) {
-	// One free-form counter for the whole record: the surveys read a built body's
-	// own section with no preflight counter in hand, so the ceiling starts here
-	// and spans every loop below.
-	work := freeform.NewFreeformWork()
-	var out [][]survey2d.SideWalk
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		raw := make([]survey2d.SideWalk, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return nil, err
-			}
-			w, err := boundarywalk.WalkOf(seg, work)
-			if err != nil {
-				return nil, err
-			}
-			// boundarywalk.RequireAnalyticWalk refuses exactly one thing — a free-form walk
-			// (extrude.go) — so its refusal returns under this file's own
-			// sentinel, carrying the same message and the same ErrUnsupported.
-			// Every other error above keeps its own identity.
-			if err := boundarywalk.RequireAnalyticWalk(w, "the wall survey"); err != nil {
-				return nil, errFreeformSection
-			}
-			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-		}
-		walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, walks)
-	}
-	return out, nil
-}
-
-// recordLoopsBudget names the operation-budget form used by cancellation
-// probes and by callers that distinguish profile scanning from other surveys.
-func recordLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([][]survey2d.SideWalk, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return nil, err
-	}
-	return recordLoops(budget, profile)
-}
-
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
 func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, error) {
@@ -175,7 +112,7 @@ func revolveLoops(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2
 // how far a reading sits from the record needs (revolveWalks.plane's own
 // reason).
 func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]survey2d.SideWalk, [][]survey2d.SegmentWalk, error) {
-	// One free-form counter for the whole record, as recordLoops opens.
+	// One free-form counter for the whole record, as boundarywalk.SurveyLoops opens.
 	work := freeform.NewFreeformWork()
 	var out [][]survey2d.SideWalk
 	var planes [][]survey2d.SegmentWalk
@@ -210,12 +147,6 @@ func revolveLoopsPlane(budget *proofbound.WorkBudget, rp revolvePayload) ([][]su
 	return out, planes, nil
 }
 
-// walkElem keeps the root callers of survey2d.WalkElem on one conversion path.
-// A free-form walk has no survey element and leaves its caller undecided.
-func walkElem(w survey2d.SegmentWalk) (survey2d.SurveyElem, bool) {
-	return survey2d.WalkElem(w)
-}
-
 // prismWall is the spanning-ball reading of a prism: the profile's spanning
 // disks lift to balls when their diameter fits the height, the parallel caps
 // span whenever a disk of half the height fits the section, and a profile
@@ -231,9 +162,9 @@ func prismWall(budget *proofbound.WorkBudget, pp prismPayload, alpha float64) (w
 		// widen. Undecided, which reads Suspect — never a silent pass.
 		return wallOutcome{}, nil
 	}
-	loops, err := recordLoops(budget, pp.profile)
+	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(pp.profile))
 	if err != nil {
-		if errors.Is(err, errFreeformSection) {
+		if errors.Is(err, boundarywalk.ErrFreeformSection) {
 			// A free-form boundary segment (docs/spline-design.md §8.1) is an
 			// undecided wall reading, not a failed survey: Suspect, never a
 			// silent pass and never a hard error out of Verify. This ONE
@@ -349,7 +280,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 		return undercutOutcome{}
 	}
 	roles := facesByRole(b)
-	loops, err := recordLoops(nil, pp.profile)
+	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -507,7 +438,7 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 		// section.
 		return radiusOutcome{}, false
 	}
-	loops, err := recordLoops(nil, pp.profile)
+	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
 	if err != nil {
 		return radiusOutcome{}, false
 	}
@@ -546,7 +477,7 @@ func cupWalks(loop LoopRecord) ([]survey2d.SideWalk, error) {
 }
 
 func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]survey2d.SideWalk, error) {
-	loops, err := recordLoopsBudget(budget, ProfileRecord{Outer: loop})
+	loops, err := boundarywalk.SurveyLoopsBudget(budget, boundarywalk.Profile{Outer: loop})
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +488,6 @@ var cupWallOperations = cupwall.Operations{
 	Offset:  offsetProfile,
 	Equal:   profileRecordsEqual,
 	Audit:   auditOffsetSectionBudget,
-	Walks:   recordLoopsBudget,
 	Reverse: reverseLoopRecordBudget,
 }
 

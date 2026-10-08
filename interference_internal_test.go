@@ -591,7 +591,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 		segs[i] = LineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
 	}
 	pp.profile = ProfileRecord{Outer: LoopRecord{Segments: segs}}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
 	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), &Body{
 		lumps:   body.lumps,
