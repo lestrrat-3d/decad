@@ -610,20 +610,7 @@ func prismCellProfiles(ctx context.Context, budget *proofbound.WorkBudget, s *sk
 // finish, so no worker survives the operation. Its discarded result cannot
 // reach the document or its operands.
 func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile) ([]*sketch.Profile, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	done := make(chan []*sketch.Profile)
-	go func() {
-		done <- profiles()
-	}()
-	select {
-	case result := <-done:
-		return result, nil
-	case <-ctx.Done():
-		<-done
-		return nil, ctx.Err()
-	}
+	return prismcells.ProfilesContext(ctx, profiles)
 }
 
 // auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,
