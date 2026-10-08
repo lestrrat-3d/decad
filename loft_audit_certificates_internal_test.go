@@ -257,10 +257,14 @@ func transformVerts(verts []r3.Vec, scale float64, shift r3.Vec) []r3.Vec {
 
 // requireLoftAuditWork runs the audit under the given shortcuts and asserts
 // the whole per-outcome breakdown of its pair loop, so a test states which
-// path decided every pair rather than only how many pairs there were.
+// path decided every pair rather than only how many pairs there were. It
+// compares the four per-pair outcomes; the Candidates, Scanned and CapProofs
+// counts belong to the enumeration, which loft_audit_sweep_internal_test.go
+// asserts.
 func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts loftmesh.LoftAuditShortcuts, want loftmesh.LoftAuditWork) error {
 	t.Helper()
 	work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, shortcuts)
+	work.Candidates, work.Scanned, work.CapProofs = 0, 0, 0
 	require.Equal(t, want, work)
 	return err
 }
@@ -276,7 +280,7 @@ func TestLoftCrossingAuditEdgeCertificateAdmitsAFoldedSharedEdge(t *testing.T) {
 	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftmesh.LoftAuditWork{Classifications: 1})
 	require.NoError(t, err, "the folded pair meets exactly along its shared edge, so the reference admits it")
 
-	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{EdgeCerts: 1})
+	err = requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{EdgeCerts: 1})
 	require.NoError(t, err, "certificate A must admit the identical pair")
 }
 
@@ -298,7 +302,7 @@ func TestLoftCrossingAuditEdgeCertificateIsSymmetric(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			verts := foldedSharedEdgeVerts()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tc.tris)
-			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, loftmesh.LoftAuditWork{EdgeCerts: 1})
+			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditPairwise, loftmesh.LoftAuditWork{EdgeCerts: 1})
 			require.NoError(t, err)
 		})
 	}
@@ -313,14 +317,14 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 	t.Run("apexes on opposite sides: admitted by the coplanar branch", func(t *testing.T) {
 		verts, tris := coplanarSharedEdgeFixture()
 		requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{Classifications: 1})
+		err := requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{Classifications: 1})
 		require.NoError(t, err)
 	})
 
 	t.Run("apexes on the same side: refused for overlapping in area", func(t *testing.T) {
 		verts, tris := coplanarSameSideEdgeFixture()
 		requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-		err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{Classifications: 1})
+		err := requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{Classifications: 1})
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 
@@ -329,7 +333,7 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 		// halves: coplanar, because an untwisted quad is planar, and sharing
 		// that cell's diagonal. The pair the certificate must leave alone.
 		verts, tris := boxLoftVerts(), boxLoftTris()
-		outcome, err := loftmesh.AuditLoftPairData(loftmesh.NewLoftAuditData(verts, tris), tris, 0, 1, loftAuditProduction)
+		outcome, err := loftmesh.AuditLoftPairData(loftmesh.NewLoftAuditData(verts, tris), tris, 0, 1, loftAuditPairwise)
 		require.NoError(t, err)
 		require.Equal(t, loftmesh.LoftPairClassified, outcome,
 			"a coplanar shared-edge pair has no proven-distinct planes, so no certificate may decide it")
@@ -337,7 +341,7 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 		// The box's OTHER shared-edge pairs — the rungs between consecutive
 		// cells, which meet at a right angle — are the noncoplanar case, so
 		// the whole audit still fires the certificate four times.
-		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditProduction)
+		work, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(t.Context()), verts, tris, loftAuditPairwise)
 		require.NoError(t, err)
 		require.Equal(t, 4, work.EdgeCerts,
 			"one certificate per rung shared by two consecutive wall cells")
@@ -353,7 +357,7 @@ func TestLoftCrossingAuditEdgeCertificateAgreesOnAOneULPFold(t *testing.T) {
 	verts, tris := nearlyCoplanarSharedEdgeFixture()
 
 	requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-	err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{EdgeCerts: 1})
+	err := requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{EdgeCerts: 1})
 	require.NoError(t, err, "a one-ULP fold is still a proven fold; the pair meets along its shared edge")
 }
 
@@ -402,7 +406,7 @@ func TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex(t *testi
 	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftmesh.LoftAuditWork{Classifications: 1})
 	require.NoError(t, err, "the pair meets only at its shared vertex, so the reference admits it")
 
-	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{VertexCerts: 1})
+	err = requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{VertexCerts: 1})
 	require.NoError(t, err, "certificate B must admit the identical pair")
 }
 
@@ -425,7 +429,7 @@ func TestLoftCrossingAuditVertexCertificateIsSymmetric(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tc.tris)
-			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, loftmesh.LoftAuditWork{VertexCerts: 1})
+			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditPairwise, loftmesh.LoftAuditWork{VertexCerts: 1})
 			require.NoError(t, err)
 		})
 	}
@@ -449,7 +453,7 @@ func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			verts, tris := tc.fixture()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{Classifications: 1})
+			err := requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{Classifications: 1})
 			require.ErrorIs(t, err, ErrDegenerate)
 		})
 	}
@@ -471,7 +475,7 @@ func TestLoftCrossingAuditCertificatesNeverDecideAnUnexpectedSharedCount(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			verts, tris := tc.fixture()
 			requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
-			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftmesh.LoftAuditWork{Classifications: 1})
+			err := requireLoftAuditWork(t, verts, tris, loftAuditPairwise, loftmesh.LoftAuditWork{Classifications: 1})
 			require.ErrorIs(t, err, ErrDegenerate)
 		})
 	}
@@ -492,7 +496,7 @@ func TestLoftCrossingAuditCertificatesPreserveCancellationPrecedence(t *testing.
 		shortcuts loftmesh.LoftAuditShortcuts
 	}{
 		{name: "reference", shortcuts: loftAuditReference},
-		{name: "production", shortcuts: loftAuditProduction},
+		{name: "production", shortcuts: loftAuditPairwise},
 	} {
 		t.Run(arm.name, func(t *testing.T) {
 			_, err := loftmesh.LoftCrossingAuditWork(proofbound.NewWorkBudget(ctx), verts, tris, arm.shortcuts)

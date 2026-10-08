@@ -51,9 +51,11 @@ func stationPoints(stations []LoftStation) []sectionrecord.Point2 {
 //
 //	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
 //
-// S8 (internal/loftmesh/loft_audit.go) refuses unless F*(F−1)/2 is at or below
-// proofbound.MaxFacetPairTestsPerCall (8_000_000, internal/proofbound/budget.go), which admits F ≤ 4000:
-// 4000·3999/2 = 7_998_000 passes and 4001·4000/2 = 8_002_000 does not.
+// S8 (internal/loftmesh/loft_audit_sweep.go) refuses when the audit's candidate
+// pair count exceeds proofbound.MaxFacetPairTestsPerCall (8_000_000,
+// internal/proofbound/budget.go). That count never exceeds F*(F−1)/2, which
+// stays at or below the ceiling for F ≤ 4000: 4000·3999/2 = 7_998_000 does
+// and 4001·4000/2 = 8_002_000 does not.
 //
 // H is bounded by Σstations itself. Every loop holds at least one segment and
 // every paired segment chords at m ≥ 1 (§5.1), so a build of L loops has

@@ -163,6 +163,9 @@ const WorkPollInterval = 256
 // tessellation boolean pre-pass and the loft crossing audit
 // (docs/loft-design.md §6) both charge every pair test against this one
 // constant rather than minting a second ceiling for the identical quantity.
+// The crossing audit compares it, before testing any pair, against the pairs
+// its sweep scans and the candidate pairs it will test: the pairs whose
+// bounding boxes overlap, less every pair a cap proof decides (S8).
 const MaxFacetPairTestsPerCall = 8_000_000
 
 // WorkBudget shares one bounded cancellation counter across every nested loop

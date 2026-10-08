@@ -843,8 +843,10 @@ is that no two remote faces cross — a path that bends back through its own
 earlier span, or a wide section on a tight corner, can make two walls
 intersect while every local gate passes — so SM8's crossing audit runs over
 the assembled triangle set before commit, exactly as `docs/loft-design.md`
-§6 runs it over a loft (`loftCrossingAudit`, with its broad-phase box filter
-and its `F·(F−1)/2` preflight against `maxFacetPairTestsPerCall`).
+§6 runs it over a loft (`loftCrossingAudit`'s generic entry: sweep-and-prune
+over the triangles' boxes, every candidate tested pairwise, and S8 over the
+candidate count against `maxFacetPairTestsPerCall`). SM10's `F·(F−1)/2`
+preflight against the same ceiling runs first.
 
 **Rounding, once.** Every held vertex is the exact rational rounded to the
 nearest `float64` per coordinate. `delta` is the largest 3D distance, over

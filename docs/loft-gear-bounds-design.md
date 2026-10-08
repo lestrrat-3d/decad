@@ -281,7 +281,9 @@ ENUMERATED, which pairs are tested, and how S8 counts.
 
 **Enumeration is sweep-and-prune over the triangles' boxes.** Sort the triangle
 indices by their box's lower bound on the axis of largest total extent (ties by
-index), sweep, and emit every pair whose boxes overlap on all three axes. A pair of
+index), sweep, and emit every pair whose boxes overlap on all three axes. Boxes are
+closed intervals: boxes that touch on a face, edge or corner overlap, as
+`BoxesOverlap`'s `<=` already decides. A pair of
 disjoint boxes shares no point (loft §6's existing box argument), so the enumerated
 set contains every touching pair; a pair sharing a vertex has overlapping boxes, so
 every pair Table C expects to touch is enumerated. Candidates are sorted
@@ -297,8 +299,15 @@ Let `C` be one cap's triangles, `L` its polygon loops as vertex-index cycles (th
 cap's `vIdx` or `wIdx`), `O` the other cap's vertices, and `Π` the exact plane of
 `C`'s first triangle with normal `n`.
 
-- **(a)** every vertex of `L` has exact sign 0 against `Π`;
-- **(b)** every vertex of `O` has a nonzero sign against `Π`, all the same;
+- **(s)** the index structure is the one assembly builds: loops of at least
+  three vertices, no index repeated across `L` and `O`, no vertex of `C` in `O`
+  and no vertex of the other cap in `L`, every wall triangle with a vertex in `O`
+  and its others in `L` forming one vertex or one loop edge, and every loop edge
+  an edge of some wall triangle;
+- **(a)** every vertex of `L`, and every vertex of every triangle of `C`, has
+  exact sign 0 against `Π`;
+- **(b)** every vertex of `O`, and every vertex of every triangle of the other
+  cap, has a nonzero sign against `Π`, all the same;
 - **(c)** every triangle of `C` has `n · ((B − A) × (C − A)) > 0`;
 - **(d)** the directed-edge multiset of `C` nets to exactly the edges of `L`, each
   loop traversed in one consistent direction, every other edge netting to zero;
@@ -312,7 +321,8 @@ pairwise disjoint — these give: (c)+(d) make `Σ_T 1_T` equal the winding numb
 `w_L` of the oriented boundary almost everywhere (a 2-chain and the region chain
 with the same boundary differ by a 2-cycle, which is zero in the plane); (e) with
 simple disjoint loops makes `w_L ∈ {0, 1}`; so the triangles of `C` are interior
-disjoint and cover the polygon exactly. A cap triangle therefore meets a polygon
+disjoint and cover the polygon exactly. (s) is what ties every loop edge to a wall
+triangle the wall-wall audit tests. A cap triangle therefore meets a polygon
 edge only in shared vertices or as that edge (a triangulation edge through a
 reflex vertex would put a neighbouring triangle outside the polygon, and a polygon
 vertex inside a polygon edge contradicts simplicity). A wall triangle `U` meets `Π`
@@ -322,13 +332,19 @@ which are its cap-side vertex or edge, a polygon vertex or edge by index; so
 cap triangle `T` and wall triangle `U`, and two triangles of `C` meet exactly in
 their shared edge or vertex. (b) also proves the two caps disjoint. Any condition
 failing falls back to pairwise testing of that cap's pairs through the same
-candidate list; nothing is admitted on a failed proof.
+candidate list; nothing is admitted on a failed proof. A pair is left to the proofs
+when either of its triangles is in a proven cap. When a wall-wall pair fails, the
+audit tests the decided pairs that precede it lexicographically before refusing, so
+the refused pair is the reference path's.
 
 **S8 counts candidates.** The ceiling `maxFacetPairTestsPerCall` stays `8_000_000`
 and is compared against the number of enumerated candidates the pairwise pass will
 test (wall-wall, plus any cap family that fell back), counted in a first sweep pass
-before the second pass tests them; the `F·(F − 1)/2` preflight goes. `F` itself is
-bounded through §7's station cap. The budget still steps once per tested pair.
+before the second pass tests them; the `F·(F − 1)/2` preflight goes. The counting
+pass steps the budget once per pair it compares on the sweep axis and refuses once
+that scan count passes the same ceiling, so a tall shape whose boxes all overlap on
+the sweep axis refuses after `O(F log F + ceiling)` work. `F` itself is refused past
+`8·8192 − 8` before any exact lift (§7). The budget still steps once per tested pair.
 
 **Entry points.** `LoftCrossingAuditStructured(budget, verts, tris, walls,
 capStartCount, loops0, loops1)` is the loft's; the generic
@@ -362,7 +378,7 @@ Every ceiling keeps a hard constant and gains a shape that scales with the recor
 | Ceiling | Today | Becomes | Hard ceiling | Why this shape |
 |---|---|---|---|---|
 | S15 station cap `loftStationCap` | 500 | `stationCap(P) = min(max(512, 32·P), 8192)` | 8192 stations, `F ≤ 8·8192 − 8` | the probe needs 125–132 stations per tooth (`P = 6`) and 952–1960 for the gears (`P = 48–240`); 32 per paired segment covers every case with ≥ 3.9× room; the hard ceiling keeps `NewLoftAuditData`'s exact lifts under ~70 MB |
-| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | enumerated candidates ≤ `8_000_000` (§6) | unchanged | the exact tests are what the ceiling bounds; the enumeration is `O(F log F + candidates)` and `F` is bounded by the station cap |
+| S8 pair ceiling | `F·(F−1)/2 ≤ 8_000_000` | pairs the sweep scans on its axis ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | unchanged | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` comparisons and the work before a refusal is `O(F log F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`loftStationCapGate` returns early there) |
 | R7 `FreeformWorkLimit` for the loft's station walk | `1 << 20` per record per operation | `FreeformWork.Limit`, raised in `evalLoft` once `loftStationCapGate` has passed (where `P` is known) to `max(1 << 20, Spent + 8192 · stationCap(P))` | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | measured 5000–8300 work units per station per record on the probe (`.tmp/loft-gear-bounds-logs/`); the same counter stays the record's one counter for the operation |
 | reconstruction `ReconstructionWorkLimit` | `1 << 26` (chord ceiling 5792) | `1 << 28` (chord ceiling 11585) | `1 << 28` | the z40 record charges `2 · 6640²` = 88 M; sketch's arranger took 0.7 s for both records' admission at that size; `1 << 28` is ~3 s of the same work |
 

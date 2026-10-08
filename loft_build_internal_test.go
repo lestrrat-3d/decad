@@ -1027,13 +1027,20 @@ func manyGonLoop(cx, cy, radius float64, n int) LoopRecord {
 	return LoopRecord{Segments: segs}
 }
 
-// TestEvalLoftAuditRefusesOverBudget is S8: a synthetic profile pair sized so
-// the audit's own facet-pair count exceeds the fixed ceiling refuses before
-// any pair result is trusted, wired end to end through evalLoft.
-func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
+// TestEvalLoftAuditCountsCandidatesNotPairs is S8's measure, wired end to
+// end through evalLoft: a 1200-gon prism assembles F = 4*1200 - 4 triangles,
+// whose F*(F-1)/2 is past proofbound.MaxFacetPairTestsPerCall, yet the audit
+// tests only the wall-wall pairs whose boxes overlap (both caps are decided
+// by their proofs), so the build passes and publishes the n-gon's exact
+// volume.
+//
+// Shown to fail: restoring the F*(F-1)/2 preflight in loftCrossingAudit made
+// this build refuse with ErrUnsupported.
+func TestEvalLoftAuditCountsCandidatesNotPairs(t *testing.T) {
 	t.Parallel()
-	const n = 1200 // triangle count grows to roughly 4n-4, comfortably past 4001
-	p := ProfileRecord{Outer: manyGonLoop(0, 0, 10, n)}
+	const n = 1200
+	const radius = 10.0
+	p := ProfileRecord{Outer: manyGonLoop(0, 0, radius, n)}
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
@@ -1043,9 +1050,19 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
+	allPairs, ok := proofbound.WallChoose2(uint64(4*n - 4))
+	require.True(t, ok)
+	require.Greater(t, allPairs, uint64(proofbound.MaxFacetPairTestsPerCall),
+		"the fixture must be one the all-pairs count would refuse")
+
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
-	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	require.NoError(t, err)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	want := 0.5 * n * radius * radius * math.Sin(2*math.Pi/n)
+	require.InDelta(t, want, vol.Value.Base(), max(vol.Bound.Base(), 1e-9*want),
+		"the n-gon prism's volume is its polygon area times its unit height")
 }
 
 // --- frame lift: docs/loft-design.md §5.2's liftAllow row ---
