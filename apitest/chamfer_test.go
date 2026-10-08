@@ -465,39 +465,6 @@ func TestChamferRefusals(t *testing.T) {
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies())
 }
 
-func TestChamferNonPrismReceiver(t *testing.T) {
-	t.Parallel()
-	// A revolve is not a prismPayload, so a chamfer of it is staged: S3.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 5, 10, 15)
-	s.Fix(rect.A)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-
-	uAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
-	require.NoError(t, err)
-	sel := decad.Edges(decad.Circular())
-	_, err = body.Chamfer(t.Context(), sel, units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
-	require.ErrorContains(t, err, `this evaluator chamfers a straight prism only`,
-		`the refusal states its own reason`)
-	require.ErrorContains(t, err, `selector `+sel.String())
-	// Every selected edge is a full circle, so each names itself closed and
-	// carries the centre and radius that identify it.
-	for _, want := range []string{
-		`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`,
-		`selected edge[1] closed circle through (10,5,0), centre (10,0,0), radius 5 mm`,
-		`selected edge[2] closed circle through (10,15,0), centre (10,0,0), radius 15 mm`,
-		`selected edge[3] closed circle through (0,15,0), centre (0,0,0), radius 15 mm`,
-	} {
-		require.ErrorContains(t, err, want)
-	}
-}
-
 func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 	t.Parallel()
 	// A boolean union is not a prismPayload either, and its closed rim edges
@@ -509,7 +476,7 @@ func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 	// cap rims survive the boolean untouched.
 	sel := decad.Edges()
 	_, err := booleanRimBody(t, decad.New()).Chamfer(t.Context(), sel, units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
+	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism or a revolve only`)
 	require.NotContains(t, err.Error(), `closed circle`,
 		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
 	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`,

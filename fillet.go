@@ -35,8 +35,9 @@ import (
 //
 // Fillet rounds lateral edges — line/line, line/arc and arc/arc corners,
 // convex and concave — with B1's roles and atomic commit (modify §13). A
-// cap-edge selector is S1 (ErrUnsupported, the vertex blend §6); a non-prism
-// receiver is S3 (ErrUnsupported).
+// cap-edge selector is S1 (ErrUnsupported, the vertex blend §6). A revolve
+// receiver takes the same corner rewrite on its meridian (revolve_blend.go,
+// docs/modify-reach-design.md §7); any other receiver is S3 (ErrUnsupported).
 
 // FilletOption configures Fillet. No options are currently supported; the
 // option group exists so a variable-radius or setback option can be added
@@ -59,9 +60,19 @@ const filletTol = sectionaudit.Tolerance
 // receiver; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
 // S13. A selected edge that is not a lateral edge — a cap edge — is S1
-// (ErrUnsupported), and a receiver whose payload is not a prism is S3
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything
 // is built, so no unproven body is ever made.
+//
+// On a revolve, Fillet rounds swept meridian junctions instead
+// (docs/modify-reach-design.md §7): a latitude Circle3 of a full turn or a
+// junction Arc3 of a partial one, each the sweep of one corner of the
+// recorded meridian. The meridian gets the same tangent arc, faces the same
+// audit, and is re-gated against the axis — a new axis contact is
+// ErrDegenerate, an arc centred across the axis ErrUnsupported — before the
+// revolve is rebuilt over the receiver's own axis, sweep and placement. The
+// blend is a Torus, or a Sphere when its centre lies on the axis. Any other
+// revolve edge — a cap edge, an edge on the axis — is SX5 (ErrUnsupported).
+// A receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
@@ -120,11 +131,22 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		return nil, err
 	}
 
+	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver rounds its
+	// swept meridian junctions through the same corner rewrite.
+	if rp, ok := b.payload.(revolvePayload); ok {
+		return b.blendRevolveJunctions(ctx, sel, edges, rp, revolveBlendOp{
+			kind: "fillet",
+			corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
+				return computeFillet(loop, ci, rmm)
+			},
+		})
+	}
+
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 	if err := requireExactSection(pp, "fillets"); err != nil {
@@ -328,6 +350,14 @@ func requireExactSection(pp prismPayload, op string) error {
 }
 
 func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]cornerLoop, error) {
+	return profileCornerLoopsBudget(budget, pp.profile)
+}
+
+// profileCornerLoopsBudget resolves every loop of a recorded section into its
+// coalesced corner walk in the section's own plane-local coordinates. A prism
+// reads its section through it, and a revolve its meridian
+// (revolve_blend.go): the corner rewrite is the same 2D construction for both.
+func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile ProfileRecord) ([]cornerLoop, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return nil, err
 	}
@@ -336,7 +366,7 @@ func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]c
 	// segment of every loop below.
 	work := freeform.NewFreeformWork()
 	var out []cornerLoop
-	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}

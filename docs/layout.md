@@ -128,7 +128,8 @@ the rules leave to the byte budget.
 | `segment_walk.go` | Caches profile walks for extrude, revolve and loft. |
 | `segment_walk_adapters.go` | Adapts root walk callers to `internal/boundarywalk/`. |
 | `prism_extent.go` | Prism extent readings, directional reach and box, each a bounded interval. See `docs/evaluator-design.md` §5. |
-| `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and option parsing, angular-extent resolution. Readings: the other `revolve_*.go` files. |
+| `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
+| `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_axis.go` | Resolves the axis, classifies walls and checks contact. Uses `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
 | `revolve_extent.go` | Adapts revolve extents over `internal/revolveaxis/` and `internal/revolveangle/`. See evaluator §6. |

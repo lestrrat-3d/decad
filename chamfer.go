@@ -32,7 +32,9 @@ import (
 // along EACH walk (equal setback: the whole of v1; an asymmetric chamfer is an
 // option that has not shipped, §7). There is NO S5 gate: a chord exists between
 // any two distinct feet, so the fillet's no-blend-centre refusal has no chamfer
-// case (Table B, B1). A non-prism receiver is S3 (ErrUnsupported).
+// case (Table B, B1). A revolve receiver takes the same chord on its meridian
+// (revolve_blend.go, docs/modify-reach-design.md §7); any other non-prism
+// receiver is S3 (ErrUnsupported).
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -54,10 +56,18 @@ type ChamferOption interface {
 // and retiring the receiver (docs/modify-design.md §7, core §8). sel is resolved
 // against the live receiver; a query matching nothing is loud (ErrNoMatch /
 // ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
-// zero d is S13. A receiver whose payload is not a prism is S3
-// (ErrUnsupported). The rewritten section faces the §5 audit before anything is
+// zero d is S13. The rewritten section faces the §5 audit before anything is
 // built, so no unproven body is ever made and an over-large setback is refused
 // (S6), never clipped.
+//
+// On a revolve, Chamfer bevels swept meridian junctions instead
+// (docs/modify-reach-design.md §7): the meridian corner gets the same chord,
+// faces the same audit and the revolve's axis gates, and the revolve is rebuilt
+// over the receiver's own axis, sweep and placement. The bevel is a Cone, a
+// Cylinder where the chord runs parallel to the axis, or a Plane where it runs
+// perpendicular. Any other revolve edge — a cap edge, an edge on the axis — is
+// SX5 (ErrUnsupported). A receiver that is neither a prism nor a revolve is S3
+// (ErrUnsupported).
 //
 // A selection of CAP edges is the cap-loop chamfer of
 // docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
@@ -136,9 +146,19 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's
 	// second class — every geometric edge of one or more complete prism cap
 	// loops (SX4 otherwise; docs/modify-reach-design.md §4/§8.3).
+	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver bevels its
+	// swept meridian junctions through the same corner rewrite.
+	if rp, ok := b.payload.(revolvePayload); ok {
+		return b.blendRevolveJunctions(ctx, sel, edges, rp, revolveBlendOp{
+			kind: "chamfer",
+			corner: func(loop cornerLoop, ci int) (*cornerBlend, error) {
+				return computeChamfer(loop, ci, dmm)
+			},
+		})
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
