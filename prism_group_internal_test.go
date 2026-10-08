@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -172,16 +173,16 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		target := plate.payload.(prismPayload)
 		toolOp, ok := prismGroupOperandOf(tool)
 		require.True(t, ok)
-		re, err := newPrismReexpression(target, toolOp.proxy)
+		re, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(toolOp.proxy))
 		require.NoError(t, err)
-		require.False(t, re.identity)
+		require.False(t, re.Identity)
 		s, _, _, err := buildPrismSceneRegions(proofbound.NewWorkBudget(t.Context()), []ProfileRecord{target.profile}, toolOp.regions, re)
 		require.NoError(t, err)
 		split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
 		require.NoError(t, err)
 		require.True(t, split, "the turned lumps must cross the plate's edge, or the fixture tests nothing")
-		require.Positive(t, re.delta)
-		return plate, tool, re.delta
+		require.Positive(t, re.Delta)
+		return plate, tool, re.Delta
 	}
 
 	t.Run("cut", func(t *testing.T) {

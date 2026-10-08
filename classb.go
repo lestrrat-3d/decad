@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -536,7 +537,7 @@ func classBSlabInG(budget *proofbound.WorkBudget, cp classBPair, s classBSlab) (
 	}
 	mapLoop := func(loop LoopRecord) (LoopRecord, error) {
 		if det < 0 {
-			rewound, _, err := rewindLoop(budget, loop, mapPoint)
+			rewound, _, err := prismcells.RewindLoop(budget, loop, mapPoint)
 			return rewound, err
 		}
 		segs := make([]CurveSegment, len(loop.Segments))
@@ -730,7 +731,7 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region Profil
 		return ProfileRecord{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
 			ErrUnsupported, segments, prismMaxArrangementSegments)
 	}
-	reexpress, err := newPrismReexpression(target, tool)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {
 		return ProfileRecord{}, false, err
 	}

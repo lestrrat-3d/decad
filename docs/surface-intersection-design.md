@@ -143,7 +143,7 @@ code:
 - **It takes the receiver's frame as the reference, and the re-expression is
   the identity.** S4 requires the two frames equal component-wise, so the
   tool's `Point2` fields are copied verbatim and nothing is computed —
-  `newPrismReexpression` reports the identity for exactly that comparison.
+  `prismcells.NewReexpression` reports the identity for that comparison.
 - **`Extend` recreates the named segment's entity over its own full natural
   domain** rather than over its walked range, from the record's own defining
   fields: a `LineSeg`'s `Start` and `End`, a `CircleSeg`'s centre and radius,
@@ -319,7 +319,7 @@ set, so it needs the same two fields and no third.
 | `Extend` whose target lies beyond the extended entity's own natural domain | `ErrUnsupported` (RS4). Reaching it needs a carrier longer than the one the record states, whose far endpoint decad would have to invent; that endpoint's rounding moves the carrier off the recorded one, so the crossing `sketch` then places is a crossing with a different curve. The honest repair is an upstream ask for an unbounded carrier in the arrangement, not a charge on a fabricated one |
 | A holed tool, or a tool that does not span the receiver | S5/S6, `ErrUnsupported`. A holed tool waits on a side reading that distinguishes a hole's own cell; a non-spanning tool waits on a payload carrying a face at a level its record does not state |
 | A receiver or tool carrying a nonzero section displacement, or a nonidentity re-expression | S7, `ErrUnsupported`. §5 states the cost |
-| A co-directional pair whose two sections sit on PARALLEL planes | S7, `ErrUnsupported`. The two footprints map onto one plane by copying their `Point2` fields verbatim wherever the frames share a basis and differ only in origin along the shared normal, so the map costs no rounding at all — but `newPrismReexpression` reports the identity only for `frameA == frameB`, and widening that comparison needs an exact test that the origin difference is a multiple of the normal. That is a bounded, separable addition, listed in §10 |
+| Parallel-plane sections | S7, `ErrUnsupported`. S4 requires equal frames. The mapper copies shared-axis points exactly, but admitting the pair still needs an exact axis-alignment gate (§10). |
 | A `Trim` receiver, or either operand, carrying a segment recorded over a range narrower than its entity's own natural domain | S7, `ErrUnsupported`. Such a segment enters the scene at an endpoint `lerp2` computes rather than one the record states, which is prism §7's `δ_walk`, and this design charges no displacement it cannot also bound through a cut. `Extend`'s extended segment is the one exception, and §3.1 states why it costs nothing |
 | A fragment of the receiver lying ON the tool's own boundary (a coincident carrier) | `ErrUnsupported` (RS5), read by `prismcells.CoincidentEdges`. The span is the receiver's fragment and the tool's boundary at once, and no side reading settles which piece keeps it. `Split`, whose tool has no side, reads such a span as the target's boundary (`prismcells.ClassifySplit`) |
 | A free-form segment on either operand | S3, `ErrUnsupported`. The whole-scene `TExact` gate blinds the arrangement, not only the free-form segment's own edges |
@@ -692,8 +692,8 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
   is `Split`'s own shape, and giving `Trim` it too would leave two entry
   points with one contract.
 - **A parallel-plane pair refuses although its re-expression costs nothing.**
-  S7 reads `newPrismReexpression`'s existing identity comparison, which is
-  frame equality. Widening it to admit two frames sharing a basis and differing
+  S4 requires frame equality before S7 reads the mapper's identity.
+  Widening it to admit two frames sharing a basis and differing
   only in origin along the shared normal needs one exact test — that the origin
   difference is a multiple of the normal — and that test is reject-only like
   every other clause of the gate. It is deferred rather than refused on

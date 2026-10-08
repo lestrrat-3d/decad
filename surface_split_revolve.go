@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -142,11 +143,11 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	}
 
 	// S7's remaining two clauses.
-	reexpress, err := newPrismReexpression(rcvView, tlView)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
 	if err != nil {
 		return pass(err)
 	}
-	if !reexpress.identity {
+	if !reexpress.Identity {
 		return fail(`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
 	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)

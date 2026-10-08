@@ -370,7 +370,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		}
 		return fmt.Errorf(`%w: a class-B face scene exceeds this evaluator's arrangement cap of %d`, ErrUnsupported, prismMaxArrangementSegments)
 	}
-	reexpress := &prismReexpression{identity: true}
+	reexpress := &prismReexpression{Identity: true}
 	if cut {
 		s, match, _, resolved, err := resolvePrismCut(ctx, b.budget, target, toolP, reexpress)
 		if err != nil {

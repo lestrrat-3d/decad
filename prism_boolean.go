@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -12,7 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -163,7 +161,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 			ErrUnsupported, op, segments, prismMaxArrangementSegments)
 	}
 
-	reexpress, err := newPrismReexpression(pa, pb)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -182,7 +180,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 // hole-free arms, G5's Intersect z-interval overlap
 // (prismIntersectZIntervalOverlaps), the arrangement work cap
 // (prismSceneWithinWorkCap), and the operand re-expression
-// (newPrismReexpression) — factored out of tryPrismBoolean's meshbool.OpIntersect arm
+// (prismcells.NewReexpression) — factored out of tryPrismBoolean's meshbool.OpIntersect arm
 // (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: tryPrismBoolean's own
 // meshbool.OpIntersect case above, and §4.5's overlap-area reading
@@ -238,7 +236,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 			ErrUnsupported, meshbool.OpIntersect, segments, prismMaxArrangementSegments)
 	}
 
-	reexpress, err = newPrismReexpression(pa, pb)
+	reexpress, err = prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
@@ -294,7 +292,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 // G3 reads each world normal through ApplyDir, which maps a reflection's
 // sweep direction like any other, and buildPrismScene re-winds operand B's
 // record when the composed relative map is a reflection
-// (prismReexpression.rewound). Two operands reflected by one placement share
+// (prismcells.Reexpression.Rewind). Two operands reflected by one placement share
 // it in G3's shared-axis arm and need no re-expression.
 //
 // G3 has two arms. The shared-axis
@@ -618,7 +616,7 @@ func walkChargeOf(seg CurveSegment, w survey2d.SegmentWalk) (float64, error) {
 // (§7): the largest walkChargeOf allowance among the segments buildPrismScene
 // actually consumed from operand A and from operand B, tracked separately
 // because B's own charge composes BEFORE the re-expression's rounding
-// (prismReexpression.delta), matching every other §7 term's own ordering.
+// (prismReexpression.Delta), matching every other §7 term's own ordering.
 //
 // crossing is docs/general-boolean-design.md §3 A6's crossing charge
 // (prismcells.CrossingCharge): the largest distance an input displacement
@@ -649,7 +647,7 @@ type prismSceneDelta struct {
 // displacement with its walk charge, and operand B's with its walk charge
 // and the re-expression's rounding.
 func (d prismSceneDelta) incoming(pa, pb prismPayload, reexpress *prismReexpression) (float64, float64) {
-	return proofbound.AbsSumUpper(pa.sectionDelta, d.a), proofbound.AbsSumUpper(pb.sectionDelta, d.b, reexpress.delta)
+	return proofbound.AbsSumUpper(pa.sectionDelta, d.a), proofbound.AbsSumUpper(pb.sectionDelta, d.b, reexpress.Delta)
 }
 
 // chargeCrossings sets d.amplified, d.shared, d.sharedWidth and d.crossing
@@ -748,10 +746,10 @@ func (d prismSceneDelta) merged(pa, pb prismPayload, reexpress *prismReexpressio
 // operand's own boundary both reach the arrangement (Union's own admitted
 // pairs are hole-free by G6, so this is a no-op widening for that path).
 // Operand A's segments are created verbatim (A's frame is the reference);
-// operand B's are re-expressed into A's frame first (prismReexpression.point) —
+// operand B's are re-expressed into A's frame first (prismcells.Reexpression.MapPoint) —
 // the one new rounding this design introduces. When that map is a
 // reflection, B's record is mapped and re-wound first
-// (prismReexpression.rewound) and its entities are built from that record. Entities are deduplicated
+// (prismcells.Reexpression.Rewind) and its entities are built from that record. Entities are deduplicated
 // WITHIN each operand (the same dedup key discipline internal/momentinput/reconstruct.go's
 // momentRecordScene already uses for one record) but NEVER across operands: a
 // coincident carrier is handed to sketch as two separate, numerically
@@ -808,141 +806,5 @@ func sceneProfiles(regions []ProfileRecord) []prismcells.SceneProfile {
 	return out
 }
 
-func (re *prismReexpression) Reflection() bool { return re.reflection }
-
-func (re *prismReexpression) MapPoint(p Point2) Point2 { return re.point(p) }
-
-func (re *prismReexpression) Rewind(budget *proofbound.WorkBudget, region prismcells.SceneProfile) (prismcells.SceneProfile, float64, error) {
-	rewound, charge, err := re.rewound(budget, ProfileRecord{Outer: region.Outer, Holes: region.Holes})
-	return prismcells.SceneProfile{Outer: rewound.Outer, Holes: rewound.Holes}, charge, err
-}
-
-// prismReexpression is §4.1's coordinate re-expression of operand B into
-// operand A's frame, and §7's proven displacement bound on what that
-// re-expression rounds. It is stateful on purpose: point accumulates the largest
-// allowance any coordinate it re-expressed owes, which is the section
-// displacement the built payload carries.
-//
-// The map is COMPOSED first and applied once — B's frame to world, B's
-// placement, A's placement inverted, A's frame inverted, all folded into one
-// rigid transform — rather than walked point by point through world space. The
-// two routes are the same algebra and differ only in where they round: the
-// composed one rounds at the RELATIVE offset between the two operands, the
-// walked one at each operand's own world magnitude, so a pair sitting far from
-// the origin loses the whole difference between those magnitudes for nothing.
-// The composed route is not a proof of anything, though — it narrows the
-// rounding, it does not remove it — which is why the displacement below is
-// carried regardless.
-type prismReexpression struct {
-	relative r3.Transform
-	// identity records §7's one decidable zero case: G3's shared-axis arm
-	// holds (prismSharedAxisOf), so B's denoted prism is A's frame swept over a
-	// shifted interval, B's Point2 fields are A-frame coordinates verbatim, and
-	// nothing is computed at all. Two profiles drawn on one sketch plane under
-	// one placement are the arm's d = 0 case; a datum and its
-	// CreateOffsetPlane are the d = s·N case.
-	identity bool
-	// reflection records that the composed relative map is improper
-	// (Transform.IsReflection, read once in newPrismReexpression): exactly one
-	// of the two accumulated placements is a reflection. The mapped record
-	// then winds the wrong way, and buildPrismScene builds B from rewound's
-	// record instead (docs/general-boolean-design.md §3 A4).
-	reflection bool
-	transAbs   float64
-	delta      float64
-}
-
-// newPrismReexpression composes the map once. A rigid map's inverse is exact —
-// the transpose, r3.Transform's own contract — and a Frame is orthonormal, so
-// every step here is a dot product, never a solve.
-func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
-	re, err := prismplacement.Compose(prismPlacementOf(pa), prismPlacementOf(pb))
-	if err != nil {
-		return nil, err
-	}
-	return &prismReexpression{
-		relative:   re.Map,
-		identity:   re.Identity,
-		reflection: re.Reflection,
-		transAbs:   re.TransAbs,
-	}, nil
-}
-
-// rewound is docs/general-boolean-design.md §3 A4's re-wound record: operand
-// B's profile mapped into A's frame through point, with every loop walked the
-// other way. A reflection turns a counter-clockwise outer loop clockwise and
-// a clockwise hole counter-clockwise; reversing the walk restores record.go's
-// "outer loops CCW, holes CW" convention, so the material is on the walk's
-// left again, which is what prismcells.Classify's flag comparison reads.
-//
-// Each loop keeps its index (Outer stays Outer, Holes[i] stays Holes[i]) and
-// its segments are taken in reverse order. Per kind, with m the map:
-//
-//   - a whole LineSeg{S, E} becomes LineSeg{m(E), m(S)} over the same range.
-//     The range order still names the walk's sense, and the swapped fields
-//     reverse it;
-//   - a whole ArcSeg{C, S, E} becomes ArcSeg{m(C), m(E), m(S)} over the same
-//     range. The reflection turns the arc clockwise from m(S) to m(E), which
-//     is the counter-clockwise arc from m(E) to m(S), and the reversed walk
-//     along it keeps the original range order;
-//   - a whole CircleSeg keeps its Radius, CCW and range, with its centre
-//     mapped. The reflection reverses the circle's winding and the reversed
-//     walk reverses it back, so the walk's winding, and therefore its CCW
-//     flag, is unchanged;
-//   - a LineSeg recorded over a narrowed range enters as a whole LineSeg
-//     between its mapped walked endpoints (walkOf), reversed. Re-ranging it
-//     to 1 − t is not an exact float operation for a general t, so the walked
-//     endpoints stand in, and walkChargeOf's allowance for them (§7's δ_walk)
-//     is returned for the caller to fold into operand B's walk charge.
-//
-// A trimmed ArcSeg or CircleSeg, or any other kind, is ErrUnsupported: every
-// caller refuses those pairs before the scene is built
-// (prismProfileHasTrimmedCircularSource, G4), so this is a defensive check.
-// point charges each mapped coordinate's rounding into re.delta exactly as
-// the unreflected path does. A reflection adds no rounding term of its own.
-func (re *prismReexpression) rewound(budget *proofbound.WorkBudget, profile ProfileRecord) (ProfileRecord, float64, error) {
-	mapPoint := func(p Point2) (Point2, error) { return re.point(p), nil }
-	outer, charge, err := rewindLoop(budget, profile.Outer, mapPoint)
-	if err != nil {
-		return ProfileRecord{}, 0, err
-	}
-	result := ProfileRecord{Outer: outer}
-	for _, hole := range profile.Holes {
-		rewoundHole, holeCharge, err := rewindLoop(budget, hole, mapPoint)
-		if err != nil {
-			return ProfileRecord{}, 0, err
-		}
-		charge = math.Max(charge, holeCharge)
-		result.Holes = append(result.Holes, rewoundHole)
-	}
-	return result, charge, nil
-}
-
-// rewindLoop is rewound's per-loop rule over any point map: the loop's
-// segments in reverse order, each mapped by mapPoint and walked the other
-// way, beside the largest walk charge a narrowed line's walked endpoints
-// owe. It is the whole re-winding for a reflected map, and the mirror join
-// (mirror_join.go) runs it with its own exact reflection, so the two
-// constructions share one statement of the rule. mapPoint owns its own
-// rounding charge.
-func rewindLoop(budget *proofbound.WorkBudget, loop LoopRecord, mapPoint func(Point2) (Point2, error)) (LoopRecord, float64, error) {
-	return prismcells.RewindLoop(budget, loop, mapPoint)
-}
-
-// point re-expresses one of operand B's plane-local points into operand A's
-// frame, dropping the resulting local z — which G3's coplanar arm certified is
-// zero; the shared-axis arm never reaches this map — and charges the rounding
-// it commits.
-//
-// The charge is proofbound.RigidRoundAllow's existing shape, at the INPUT coordinate and
-// the composed map's own translation, and it covers the composition as well as
-// the application: each r3.Transform.Then rounds a unit-magnitude basis entry
-// and a translation-magnitude component a handful of ulps, so three
-// compositions and one application together stay under ~48·u·|input| +
-// ~40·u·|translation|, where proofbound.RigidRoundAllow's 16 ulps at 2·|input| +
-// |translation|, read as a 3D radius, allow ~110·u·|input| + ~55·u·|translation|.
-func (re *prismReexpression) point(p Point2) Point2 {
-	return prismplacement.Point(prismplacement.Relative{
-		Map: re.relative, Identity: re.identity, TransAbs: re.transAbs,
-	}, &re.delta, p)
-}
+// prismReexpression names the internal scene mapper used by boolean paths.
+type prismReexpression = prismcells.Reexpression

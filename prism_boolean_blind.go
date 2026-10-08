@@ -89,7 +89,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			`%w: the analytic cut scene charges %d arranger segments against the cap of %d`,
 			ErrUnsupported, segments, prismMaxArrangementSegments)
 	}
-	reexpress, err := newPrismReexpression(target, tool)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -123,7 +123,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	}
 	sp := stackedPrismPayload{frame: target.frame, xform: target.xform, slabs: make([]prismSlab, 2),
 		sectionDelta: max(proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))}
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta))}
 	if openAtTop {
 		sp.slabs[0] = prismSlab{regions: []ProfileRecord{target.profile},
 			z0: target.z0, z1: innerHeld, z0Delta: target.z0Delta, z1Delta: innerDelta}
@@ -175,7 +175,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	if err != nil || trimmed {
 		return stackedPrismPayload{}, false, err
 	}
-	reexpress, err := newPrismReexpression(outer, tool)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(outer), prismPlacementOf(tool))
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -222,7 +222,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		result.slabs[k].regions = []ProfileRecord{profile}
 		result.sectionDelta = max(result.sectionDelta,
 			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.delta))
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta))
 	}
 	for k := range result.interfaces {
 		lowerOnly, upperOnly := stackedrecord.ExclusiveHoles(

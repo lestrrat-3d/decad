@@ -225,7 +225,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	if b0.Cmp(a1) > 0 || a0.Cmp(b1) > 0 { // G5 for a stacked union: the intervals overlap or touch
 		return nil, false, nil
 	}
-	reexpress, err := newPrismReexpression(va.proxy, vb.proxy)
+	reexpress, err := prismcells.NewReexpression(prismPlacementOf(va.proxy), prismPlacementOf(vb.proxy))
 	if err != nil {
 		return nil, false, err
 	}
@@ -285,7 +285,7 @@ func (st *stackedUnionState) sectionDelta() float64 {
 	return proofbound.AbsSumUpper(
 		max(
 			proofbound.AbsSumUpper(st.va.proxy.sectionDelta, st.walkA),
-			proofbound.AbsSumUpper(st.vb.proxy.sectionDelta, st.walkB, st.reexpress.delta),
+			proofbound.AbsSumUpper(st.vb.proxy.sectionDelta, st.walkB, st.reexpress.Delta),
 			st.walkInterface,
 			st.crossing,
 		),
@@ -343,7 +343,7 @@ func (st *stackedUnionState) scene(ctx context.Context, x, y stackedUnionRegionR
 		// Two regions of one operand share a frame: the brep build, the only
 		// caller that arranges such a pair, admits the identity
 		// re-expression alone, so B's regions are already in A's frame.
-		reexpress = &prismReexpression{identity: true}
+		reexpress = &prismReexpression{Identity: true}
 	}
 	m, err := stackedNestingOf(ctx, st.budget, px, py, reexpress)
 	if err != nil {
@@ -375,7 +375,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 		return st.bRegion(ctx, ib)
 	}
 	ra, rb := st.va.slabs[ia].regions[0], st.vb.slabs[ib].regions[0]
-	if st.reexpress.identity {
+	if st.reexpress.Identity {
 		same, err := loopRecordsEqual(st.budget, ra.Outer, rb.Outer)
 		if err != nil {
 			return ProfileRecord{}, false, err
@@ -430,11 +430,11 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (Profil
 // re-expression that is B's own record. Otherwise B's region is arranged
 // alone in a private scene of re-expressed entities and recorded from the
 // one cell sketch returns, so every coordinate is a sketch-recorded edge and
-// the re-expression's rounding rides in reexpress.delta. The record is kept
+// the re-expression's rounding rides in reexpress.Delta. The record is kept
 // per B slab so every result slab that reads it holds one record.
 func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (ProfileRecord, bool, error) {
 	region := st.vb.slabs[ib].regions[0]
-	if st.reexpress.identity {
+	if st.reexpress.Identity {
 		return region, true, nil
 	}
 	if recorded, ok := st.bRecorded[ib]; ok {
@@ -525,7 +525,7 @@ func stackedUnionInterfaceMatch(ctx context.Context, budget *proofbound.WorkBudg
 	if err := stackedSceneWithinCap(budget, pl, pu); err != nil {
 		return stackedNesting{}, err
 	}
-	return stackedNestingOf(ctx, budget, pl, pu, &prismReexpression{identity: true})
+	return stackedNestingOf(ctx, budget, pl, pu, &prismReexpression{Identity: true})
 }
 
 func (st *stackedUnionState) withinCap(pa, pb prismPayload) error {
