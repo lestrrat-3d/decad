@@ -71,7 +71,7 @@ func (s Side) FirstOrder(c, d int) (up, down *big.Rat) {
 			continue
 		}
 		term := ivAbsUpper(v[d])
-		lin.Add(lin, term.Mul(term, s.H[n]))
+		proofarith.AddRat(lin, lin, proofarith.MulRat(term, term, s.H[n]))
 	}
 	return lin, new(big.Rat).Set(lin)
 }
@@ -84,8 +84,8 @@ func (s Side) Extents() (up, down [3]*big.Rat) {
 	for c := range s.Corners.Hi {
 		for d := range 3 {
 			linUp, linDown := s.FirstOrder(c, d)
-			hi := linUp.Add(linUp, s.Corners.Hi[c][d])
-			lo := linDown.Sub(linDown, s.Corners.Lo[c][d])
+			hi := proofarith.AddRat(linUp, linUp, s.Corners.Hi[c][d])
+			lo := proofarith.SubRat(linDown, linDown, s.Corners.Lo[c][d])
 			if up[d] == nil || hi.Cmp(up[d]) > 0 {
 				up[d] = hi
 			}
@@ -96,8 +96,8 @@ func (s Side) Extents() (up, down [3]*big.Rat) {
 	}
 	if s.Rem != nil {
 		for d := range 3 {
-			up[d].Add(up[d], s.Rem)
-			down[d].Add(down[d], s.Rem)
+			proofarith.AddRat(up[d], up[d], s.Rem)
+			proofarith.AddRat(down[d], down[d], s.Rem)
 		}
 	}
 	return up, down
@@ -115,8 +115,8 @@ func Lower(a, b Side) *big.Rat {
 	var best *big.Rat
 	for d := range 3 {
 		for _, l := range []*big.Rat{
-			new(big.Rat).Neg(new(big.Rat).Add(bDown[d], aUp[d])),
-			new(big.Rat).Neg(new(big.Rat).Add(bUp[d], aDown[d])),
+			new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bDown[d], aUp[d])),
+			new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bUp[d], aDown[d])),
 		} {
 			if best == nil || l.Cmp(best) > 0 {
 				best = l
@@ -207,12 +207,12 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 					continue
 				}
 				term := ivAbsUpper(dot(v))
-				linUp.Add(linUp, term.Mul(term, s.H[j]))
+				proofarith.AddRat(linUp, linUp, proofarith.MulRat(term, term, s.H[j]))
 			}
 			linDown.Set(linUp)
 		}
-		hi := linUp.Add(linUp, pos.Hi)
-		lo := linDown.Sub(linDown, pos.Lo)
+		hi := proofarith.AddRat(linUp, linUp, pos.Hi)
+		lo := proofarith.SubRat(linDown, linDown, pos.Lo)
 		if up == nil || hi.Cmp(up) > 0 {
 			up = hi
 		}
@@ -221,9 +221,9 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 		}
 	}
 	if s.Rem != nil {
-		rem := new(big.Rat).Mul(s.Rem, norm)
-		up.Add(up, rem)
-		down.Add(down, rem)
+		rem := proofarith.MulRat(new(big.Rat), s.Rem, norm)
+		proofarith.AddRat(up, up, rem)
+		proofarith.AddRat(down, down, rem)
 	}
 	return up, down
 }
@@ -255,8 +255,8 @@ func LowerHull(a, b Side) *big.Rat {
 		aUp, aDown := a.ExtentsAlong(n, normUp)
 		bUp, bDown := b.ExtentsAlong(n, normUp)
 		for _, num := range []*big.Rat{
-			new(big.Rat).Neg(new(big.Rat).Add(bDown, aUp)),
-			new(big.Rat).Neg(new(big.Rat).Add(bUp, aDown)),
+			new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bDown, aUp)),
+			new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bUp, aDown)),
 		} {
 			norm := normDown
 			if num.Sign() > 0 {
