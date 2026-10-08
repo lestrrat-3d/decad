@@ -601,6 +601,31 @@ which is what leaves an ordinary axis-incident revolve as `Exact` as before.
 A payload whose record sits within a proven `sectionDelta` of the meridian it
 denotes charges that distance beside the snap, into the same three readings
 and the region's own area (`docs/surface-intersection-design.md` §7.2).
+Every one of those readings is taken in plane coordinates, while the record
+denotes the plane-coordinate solid carried through the linear map
+L = B·[U V U×V]: the frame's held U and V, their exact cross product and the
+placement's held basis B, read as exact rationals, the leaves the swept-vertex
+comparison reads. r3 keeps those vectors orthonormal only to a few ulps:
+`r3.NewFrame` and `r3.FromBasis` normalize in float64 and `IsValid` admits a
+departure up to 1e-9. The plane spanned by (1, 1, 0) and (−1, 1, 1) reads
+det L − 1 ≈ 4.1e-16. `revolvePayload.frameCharge` therefore reads two numbers
+off L exactly, each rounded up: ||det L| − 1|, and the orthonormality defect e,
+the entrywise absolute sum of LᵀL − I. Every eigenvalue of LᵀL lies in
+[1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor in that
+range, and a volume by exactly |det L|. `Volume` keeps its held value and widens
+its bound by ||det L| − 1|·(|V| + bound) (`proofbound.BoundedStretch`). Every
+wall's and cap's area, in `Revolve` and `RevolveChain` alike, and every
+latitude, junction-arc and cap-edge length widen by e the same way, and the
+body's `Area` sums the widened faces. The centroid takes no frame charge: an
+affine map carries a solid's centroid to its image's centroid, and the lift
+A3 + W·axial (+ the in-plane term) is L applied to the plane-coordinate
+centroid, so the defect moves the true centroid and the lifted one together.
+A frame whose U, V and placement basis are exactly orthonormal, every
+axis-aligned sketch plane under the identity among them, reads det L = 1 and
+e = 0, and every reading is then unchanged bit for bit. A placement under a
+general rotation does not, so `Placed` keeps each value and may widen its
+bound. A defect at or above 1/2 refuses `ErrUnsupported`; r3's 1e-9 admission
+keeps every real frame far below it.
 `Bounds` from per-face analytic extremes: each face's radial
 extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a

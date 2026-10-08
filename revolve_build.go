@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -319,6 +321,54 @@ func (l revolveCentroidLift) charge(rp revolvePayload, b revolvemesh.RevolveBasi
 	return proofbound.AbsSumUpper(terms...)
 }
 
+// revolveFrameCharge is what the readings owe the denoted map's departure
+// from rigid. The record denotes the plane-coordinate solid of revolution
+// carried through L = B·[U V U×V], the frame's held U and V and the
+// placement's held basis B read as exact rationals (sweptGap's leaves), and r3
+// holds those orthonormal only to rounding. volume is ||det L| − 1|, rounded
+// up: L scales every volume by exactly |det L|. stretch is the orthonormality
+// defect e of L, the entrywise absolute sum of LᵀL − I, rounded up: every
+// eigenvalue of LᵀL lies in [1 − e, 1 + e], so L scales an area, and for
+// e ≤ 1 a length, by a factor in [1 − e, 1 + e]. Both are zero for an exactly
+// orthonormal L, and every reading is then unchanged bit for bit. The
+// centroid owes nothing: an affine map carries a centroid to the centroid of
+// the image, so lifting the plane-coordinate centroid through L is exact.
+type revolveFrameCharge struct {
+	volume, stretch float64
+}
+
+// frameCharge reads rp's revolveFrameCharge, refusing a map whose defect
+// reaches 1/2, where the length factor's range no longer holds with margin.
+// r3's own 1e-9 orthonormality admission keeps every real frame far below it.
+func (rp revolvePayload) frameCharge() (revolveFrameCharge, error) {
+	m, err := massmoment.PlaneMap(rp.frame, rp.xform)
+	if err != nil {
+		return revolveFrameCharge{}, err
+	}
+	defect := massmoment.OrthonormalityDefect(m)
+	if defect.Cmp(big.NewRat(1, 2)) >= 0 {
+		return revolveFrameCharge{}, fmt.Errorf(`%w: the revolve's placed frame departs from orthonormal by %s`, ErrUnsupported, defect.FloatString(3))
+	}
+	det := massmoment.Determinant(m)
+	det.Abs(det).Sub(det, big.NewRat(1, 1))
+	return revolveFrameCharge{
+		volume:  proofbound.RatFloatUp(det.Abs(det)),
+		stretch: proofbound.RatFloatUp(defect),
+	}, nil
+}
+
+// area widens an area reading over the plane-coordinate surface to cover its
+// image under L.
+func (c revolveFrameCharge) area(x proofbound.BoundedScalar) proofbound.BoundedScalar {
+	return proofbound.BoundedStretch(x, c.stretch)
+}
+
+// length widens a plane-coordinate length and its bound to cover the curve's
+// image under L.
+func (c revolveFrameCharge) length(value, bound float64) float64 {
+	return proofbound.BoundedStretch(proofbound.MeasuredScalar(value, bound), c.stretch).Bound
+}
+
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
 // world space.
 func (rp revolvePayload) point(b revolvemesh.RevolveBasis, z, rho, phi float64) r3.Vec {
@@ -375,6 +425,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	dphi := sweep.Value
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
+	}
+	frame, err := rp.frameCharge()
+	if err != nil {
+		return nil, err
 	}
 	q, mzr, mrr := revolvemass.AxisMoments(ig, rp.ax.numeric())
 	// The snap's own share of each axis-frame moment, charged where the moment
@@ -470,6 +524,13 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.band)
 		}
 	}
+	// Every charge above bounds the cap's plane-coordinate area; its image
+	// under the denoted map L takes L's own stretch last (frameCharge).
+	if !rp.full {
+		for _, c := range []*Face{capStart, capEnd} {
+			c.areaBound = frame.area(proofbound.MeasuredScalar(c.area, c.areaBound)).Bound
+		}
+	}
 
 	sideArea := proofbound.BoundedScalar{}
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
@@ -478,7 +539,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		parts, err := buildRevolveLoop(ctx, body, ref, rp, b, li, loop, work)
+		parts, err := buildRevolveLoop(ctx, body, ref, rp, b, li, loop, work, frame)
 		if err != nil {
 			return nil, err
 		}
@@ -573,6 +634,9 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	volume := proofbound.BoundedMul(q, sweep)
 	volume.Bound = proofbound.AbsSumUpper(volume.Bound,
 		revolvemass.AdmitVolumeCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper))
+	// The Pappus volume is the plane-coordinate solid's; L scales it by
+	// exactly |det L| (frameCharge).
+	volume = proofbound.BoundedStretch(volume, frame.volume)
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: exactnessOf(volume.Bound),
@@ -741,7 +805,7 @@ type revolveWalks = revolveaxis.ResolvedWalks
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolvemesh.RevolveBasis, li int, loop LoopRecord, work *freeform.FreeformWork, frame revolveFrameCharge) (revLoopParts, error) {
 	resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve wall build", rp.chargedWalk, rp.ax.snapTol)
 	if err != nil {
 		return revLoopParts{}, err
@@ -789,7 +853,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					end:         seam,
 					convex:      turn > 0,
 					length:      latitudeLength,
-					lengthBound: latitudeBound,
+					lengthBound: frame.length(latitudeLength, latitudeBound),
 					// The CURVE half of the shared-denotation certificate
 					// (denotation.go): this junction latitude circle is
 					// shared, by construction, between side faces i-1 and i
@@ -819,7 +883,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						end:         j.v1,
 						convex:      turn > 0,
 						length:      arcLength,
-						lengthBound: arcBound,
+						lengthBound: frame.length(arcLength, arcBound),
 						// The CURVE half of the shared-denotation certificate
 						// (denotation.go): this junction arc is shared, by
 						// construction, between side faces i-1 and i of THIS
@@ -860,7 +924,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					end:         js[(i+1)%n].v0,
 					convex:      dphi < math.Pi,
 					length:      w.Length,
-					lengthBound: w.LengthBound,
+					lengthBound: frame.length(w.Length, w.LengthBound),
 				}
 				cap0[i], cap1[i] = shared, shared
 				continue
@@ -874,8 +938,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// segment's own start; every other walk's cap edge takes the
 			// junction vertices above.
 			seam := rp.denotedPoint(walkStart(resolved.Segs[w.Segs[0]], resolved.Plane[w.Segs[0]]))
-			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop)
-			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop)
+			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop, frame)
+			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop, frame)
 		}
 	}
 
@@ -929,7 +993,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		for j, si := range w.Segs {
 			segs[j] = loop.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep)
+		faceArea := frame.area(proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1062,12 +1126,12 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // own seam vertex denotes; that vertex is bounded the same way every other cap
 // vertex is (sweptVertex; docs/evaluator-design.md §6). An open walk reads
 // neither.
-func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool) *Edge {
+func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, closed bool, vs, ve *Vertex, seam sweptPoint, end sweptEnd, holeLoop bool, frame revolveFrameCharge) *Edge {
 	convex := !holeLoop
 	if w.IsCircular() {
 		convex = w.Th0 < w.Th1
 	}
-	e := &Edge{convex: convex, length: w.Length, lengthBound: w.LengthBound}
+	e := &Edge{convex: convex, length: w.Length, lengthBound: frame.length(w.Length, w.LengthBound)}
 	if !w.IsCircular() {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
@@ -1249,6 +1313,10 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
+	frame, err := rev.frameCharge()
+	if err != nil {
+		return nil, err
+	}
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
 	b := rev.basis()
 	var allFaces []*Face
@@ -1271,7 +1339,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		if err := revolveaxis.RequireChainAxisIncidence(resolved); err != nil {
 			return nil, err
 		}
-		faces, walkArea, err := buildChainRevolveWalls(ctx, body, ref, view, ci, b, resolved)
+		faces, walkArea, err := buildChainRevolveWalls(ctx, body, ref, view, ci, b, resolved, frame)
 		if err != nil {
 			return nil, err
 		}
@@ -1312,7 +1380,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 // attached to a cap face here — a chain mints none — so it stays free
 // regardless of position (docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
-func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveWalks) ([]*Face, proofbound.BoundedScalar, error) {
+func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveWalks, frame revolveFrameCharge) ([]*Face, proofbound.BoundedScalar, error) {
 	walks, kinds := resolved.Walks, resolved.Kinds
 	n := len(walks)
 	sweep := rp.sweep()
@@ -1370,7 +1438,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				end:         seam,
 				convex:      turn > 0,
 				length:      latitudeLength,
-				lengthBound: latitudeBound,
+				lengthBound: frame.length(latitudeLength, latitudeBound),
 				denot:       body.doc.mintCurve(),
 			}
 		case !rp.full:
@@ -1395,7 +1463,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					end:         j.v1,
 					convex:      turn > 0,
 					length:      arcLength,
-					lengthBound: arcBound,
+					lengthBound: frame.length(arcLength, arcBound),
 					denot:       body.doc.mintCurve(),
 				}
 			}
@@ -1428,7 +1496,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		for oi, si := range w.Segs {
 			segs[oi] = rp.profile.Outer.Segments[si]
 		}
-		faceArea := proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep)
+		faceArea := frame.area(proofbound.BoundedMul(rp.wallMoment(w.SegmentWalk, kinds[i], segs), sweep))
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -1444,8 +1512,8 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
 			// (docs/surface-design.md §13.4).
-			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false)
-			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false)
+			cap0 := rp.capEdge(b, w.SegmentWalk, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, frame)
+			cap1 := rp.capEdge(b, w.SegmentWalk, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, frame)
 			co := []coedge{{edge: cap0, forward: true}}
 			if a := js[i+1].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: true})

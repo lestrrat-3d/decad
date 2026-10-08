@@ -136,7 +136,10 @@ func TestRevolveChainPolePlacedBounds(t *testing.T) {
 	require.NoError(t, err)
 	after, err := placed.Area()
 	require.NoError(t, err)
-	require.Equal(t, before, after)
+	// The placed area holds the same value; its bound also charges the
+	// rotation's own departure from orthonormal (docs/evaluator-design.md §6).
+	require.Equal(t, before.Value, after.Value)
+	require.GreaterOrEqual(t, after.Bound.Base(), before.Bound.Base())
 	box, err := placed.Bounds()
 	require.NoError(t, err)
 	basis := rot.Basis()
