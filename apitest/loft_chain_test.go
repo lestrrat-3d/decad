@@ -168,7 +168,7 @@ func TestLoftChainMultiCellRibbonFreeEdgesAndArea(t *testing.T) {
 // from-plane's negative side. Each message is read, not only its sentinel, so
 // both refusals are known to fire at this gate rather than at a later one.
 //
-// Shown-to-fail: removing chainLoftPlaneSideGate's negative-side arm turns the
+// Shown-to-fail: removing loftmesh.ChainLoftPlaneSideGate's negative-side arm turns the
 // below-case refusal below red, and the ribbon it then builds publishes every
 // wall normal as the NEGATION of the chain prism's over the same recorded
 // segment — measured at (20, 0, -5): (0, 1, 0) against ExtrudeChain's

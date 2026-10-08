@@ -134,7 +134,7 @@ the rules leave to the byte budget.
 | `revolve_extent.go` | Revolve extents over `internal/revolveaxis/` and `revolveangle/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload adapters for `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
-| `loft.go` | Loft entry points, chain ribbons, and option parsing. See loft §2/§4/§10/§16. |
+| `loft.go` | Loft entry points, chain ribbon assembly, and option parsing. See loft §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
 | `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
@@ -294,7 +294,7 @@ the rules leave to the byte budget.
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Chords, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
-| `internal/loftmesh/` | Loft pairing, chord target, station cap, assembly, mass sums and mesh proofs. |
+| `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
