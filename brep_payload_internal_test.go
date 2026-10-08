@@ -140,6 +140,28 @@ func requireSameConvexity(t *testing.T, want, got *Body) {
 	require.Equal(t, count(want), count(got))
 }
 
+// internalConvexityByEnds maps every straight edge of a body, keyed by its
+// two end positions in lexicographic order, to Edge.IsConvex. A whole
+// circle, whose ends coincide, is left out.
+func internalConvexityByEnds(t *testing.T, body *Body) map[[2]r3.Vec]bool {
+	t.Helper()
+	out := map[[2]r3.Vec]bool{}
+	for _, e := range body.Edges() {
+		if _, line := e.Curve().(Line3); !line {
+			continue
+		}
+		a, b := e.Start().Position().Value, e.End().Position().Value
+		if b.X < a.X || (b.X == a.X && (b.Y < a.Y || (b.Y == a.Y && b.Z < a.Z))) {
+			a, b = b, a
+		}
+		key := [2]r3.Vec{a, b}
+		_, dup := out[key]
+		require.False(t, dup, "one edge runs %v–%v", a, b)
+		out[key] = e.IsConvex()
+	}
+	return out
+}
+
 // internalMeshVolumeRat is the mesh's exact signed enclosed volume over its
 // held vertex floats.
 func internalMeshVolumeRat(m *Mesh) *big.Rat {

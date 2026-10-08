@@ -141,9 +141,15 @@ func CurveKey(e Embed, w survey2d.SegmentWalk, z float64) (EdgeKey, bool) {
 	return key, ccw
 }
 
+// NoSweep is a face's Sweep when it is no wall: a planar cap, floor or
+// ceiling.
+const NoSweep = -1
+
 // Use is the edge identity and direction needed to pair face uses. A side
 // piece's SideDelta holds the level displacements at its two ends, lower
-// first.
+// first. Sweep is the reference axis the use's face sweeps along as a wall —
+// a swept face's own, a planar face's recorded one, NoSweep for a cap — and
+// Outward is a planar face's outward flag.
 type Use struct {
 	Face            int
 	Loop            int
@@ -157,6 +163,8 @@ type Use struct {
 	Level           float64
 	LevelDelta      float64
 	SideDelta       [2]float64
+	Sweep           int
+	Outward         bool
 }
 
 // Split is one level strictly inside a swept face's interval at which a side
@@ -166,12 +174,17 @@ type Split struct {
 }
 
 // FaceWalks is one validated face's recorded walks and sweep levels. Side0
-// and Side1 are a swept face's side-line splits, ascending.
+// and Side1 are a swept face's side-line splits, ascending. A planar face
+// states its outward flag and, when it restates a straight wall as a plane,
+// the reference axis that wall sweeps along (NoSweep for a cap); a swept
+// face's axis is its own frame normal's, and Build reads it from Embed.
 type FaceWalks struct {
 	Embed            Embed
 	Planar           [][]survey2d.SegmentWalk
 	Wall             survey2d.SegmentWalk
 	IsPlanar         bool
+	Outward          bool
+	Sweep            int
 	Z0, Z1           float64
 	Z0Delta, Z1Delta float64
 	Side0, Side1     []Split
@@ -221,7 +234,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 				for si, w := range loop {
 					topo.CoordUpper = math.Max(topo.CoordUpper, w.CoordUpper)
 					u := Use{Face: fi, Loop: li, Seg: si, Part: LoopSeg, Walk: w,
-						Level: f.Z0, LevelDelta: f.Z0Delta}
+						Level: f.Z0, LevelDelta: f.Z0Delta, Sweep: f.Sweep, Outward: f.Outward}
 					u.Key, u.Sense = CurveKey(e, w, f.Z0)
 					u.DirSense = u.Sense
 					u.From, u.To = e.Canon(w.StartU, w.StartV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z0)
@@ -240,7 +253,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		_ = t0
 		rim := func(part Part, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) Use {
 			u := Use{Face: fi, Loop: -1, Seg: -1, Part: part, Walk: w, Level: z, LevelDelta: zDelta,
-				From: from, To: to, DirFrom: dirFrom, DirTo: dirTo}
+				From: from, To: to, DirFrom: dirFrom, DirTo: dirTo, Sweep: e.Axis[2]}
 			u.Key, u.Sense = CurveKey(e, w, z)
 			u.DirSense = u.Sense
 			if reversed {
@@ -258,14 +271,14 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		levels1 := f.SideLevels(true)
 		for i := 0; i+1 < len(levels1); i++ {
 			lo, hi := e.Canon(w.EndU, w.EndV, levels1[i].Z), e.Canon(w.EndU, w.EndV, levels1[i+1].Z)
-			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side1, Key: LineKey(lo, hi),
+			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side1, Key: LineKey(lo, hi), Sweep: e.Axis[2],
 				From: lo, To: hi, DirFrom: lo, DirTo: hi, SideDelta: [2]float64{levels1[i].ZDelta, levels1[i+1].ZDelta}})
 		}
 		add(rim(Rim1, f.Z1, f.Z1Delta, t1, s1, s1, t1, true))
 		levels0 := f.SideLevels(false)
 		for i := len(levels0) - 1; i > 0; i-- {
 			lo, hi := e.Canon(w.StartU, w.StartV, levels0[i-1].Z), e.Canon(w.StartU, w.StartV, levels0[i].Z)
-			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side0, Key: LineKey(lo, hi),
+			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side0, Key: LineKey(lo, hi), Sweep: e.Axis[2],
 				From: hi, To: lo, DirFrom: lo, DirTo: hi, SideDelta: [2]float64{levels0[i-1].ZDelta, levels0[i].ZDelta}})
 		}
 	}
@@ -335,8 +348,29 @@ func ownerRank(p Part) int {
 	}
 }
 
-// Convex reads an edge's walked-boundary convexity from its owner and mate.
-// A swept-wall junction compares its two tangents in reference coordinates.
+// Convex reads an edge's walked-boundary convexity from its owner and mate
+// (docs/general-boolean-design.md §4.2).
+//
+// A rim reads the wall it runs along: a circular wall by its own turn, a
+// straight wall by its loop's role, which the planar face sharing the rim
+// states — its own role when it walks the rim the wall's way, the other when
+// it walks it the opposite way.
+//
+// A JUNCTION is a line two walls of one sweep share: two swept faces, a swept
+// face and a planar face restating a wall along the same axis (a side line),
+// or two such planar faces. It is convex when the walk turns left there, the
+// material wedge closing to under a half turn. Two swept walls compare their
+// tangents. A planar wall reads the same turn from its own loop walk: the
+// direction it runs from the line into its face — its frame normal crossed
+// with the way its loop walks the line — is convex when it points to the
+// inner side of the other wall, whose outward normal is a swept wall's
+// tangent crossed with its axis or a planar face's own. Every vector but a
+// swept wall's tangent is a signed reference axis, so the sign is exactly the
+// tangent component's. A zero turn, a tangent-continuous junction, reads
+// concave, as the tangent cross of two swept walls does.
+//
+// Any other line — a planar cap meeting a planar wall, or two planar faces of
+// different sweeps — reads the owner's loop role: outer convex, hole concave.
 func Convex(pair [2]int, uses []Use, embeds []Embed, walls map[int]survey2d.SegmentWalk,
 	unsupported error) (bool, error) {
 	owner, other := uses[pair[0]], uses[pair[1]]
@@ -350,7 +384,10 @@ func Convex(pair [2]int, uses []Use, embeds []Embed, walls map[int]survey2d.Segm
 		return !hole == same, nil
 	case Side0, Side1:
 		if other.Part != Side0 && other.Part != Side1 {
-			return other.Loop == 0, nil
+			if other.Sweep != owner.Sweep {
+				return other.Loop == 0, nil
+			}
+			return planarInward(other, embeds).Dot(sweptOutward(owner, embeds, walls)) < 0, nil
 		}
 		prev, next := owner, other
 		if prev.Part == Side0 {
@@ -369,8 +406,50 @@ func Convex(pair [2]int, uses []Use, embeds []Embed, walls map[int]survey2d.Segm
 		axis := (vec(pe.Canon(0, 0, 1)))
 		return tOut.Cross(tIn).Dot(axis) > 0, nil
 	default:
-		return owner.Loop == 0, nil
+		if owner.Sweep == NoSweep || other.Sweep != owner.Sweep {
+			return owner.Loop == 0, nil
+		}
+		return planarInward(other, embeds).Dot(planarOutward(owner, embeds)) < 0, nil
 	}
+}
+
+// sweptOutward is a swept wall's outward normal at the side line a use
+// names: the wall's walk tangent there (its end for Side1, its start for
+// Side0) crossed with its sweep axis, the material lying on the walk's left.
+func sweptOutward(side Use, embeds []Embed, walls map[int]survey2d.SegmentWalk) r3.Vec {
+	e, w := embeds[side.Face], walls[side.Face]
+	tu, tv := w.TanInU, w.TanInV
+	if side.Part == Side1 {
+		tu, tv = w.TanOutU, w.TanOutV
+	}
+	return vec(e.Canon(tu, tv, 0)).Cross(vec(e.Canon(0, 0, 1)))
+}
+
+// planarOutward is a planar face's outward normal, a signed reference axis.
+func planarOutward(u Use, embeds []Embed) r3.Vec {
+	n := vec(embeds[u.Face].Canon(0, 0, 1))
+	if !u.Outward {
+		return n.Scale(-1)
+	}
+	return n
+}
+
+// planarInward is the direction a planar face runs from one of its lines
+// into the face: its frame normal crossed with the way its loop walks the
+// line, the material lying on the walk's left in frame coordinates. The walk
+// direction is taken by the sign of each coordinate difference, so every
+// component is exactly −1, 0 or 1.
+func planarInward(u Use, embeds []Embed) r3.Vec {
+	var d [3]float64
+	for i := range d {
+		switch {
+		case u.To[i] > u.From[i]:
+			d[i] = 1
+		case u.To[i] < u.From[i]:
+			d[i] = -1
+		}
+	}
+	return vec(embeds[u.Face].Canon(0, 0, 1)).Cross(vec(d))
 }
 
 func vec(c [3]float64) r3.Vec { return r3.NewVec(c[0], c[1], c[2]) }

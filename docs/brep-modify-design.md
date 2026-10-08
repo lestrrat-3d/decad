@@ -229,7 +229,9 @@ through the four corners in the wall's own boundary order — rim at `z0`
 forward, side line up, rim at `z1` backward, side line down — the order
 `brepgeom.Build` already walks, which is counter-clockwise from outside; the
 face is `outward: true`, its level and section displacements the wall's
-section displacement. `Restate` refuses a rectangle that turns clockwise in
+section displacement, and it records the wall's own frame normal as its
+`sweep`, so a line it shares with another wall of that sweep reads the turn
+(general-boolean §4.2). `Restate` refuses a rectangle that turns clockwise in
 the new frame, a reject-only check of the orientation reading. Every
 coordinate is a recorded float moved by a signed permutation, so the restated
 face pairs with every neighbour by identity exactly as the swept one did: the
@@ -287,10 +289,9 @@ faces `G0`, `G1`:
    whatever their own corner's convexity — a boss top's convex corner and a
    floor's reflex corner at one boss edge compute one centre, since modify
    §6's rule offsets into the material at a convex corner and away from it at
-   a reflex one. `e.IsConvex()` cannot decide the walk sense: an edge between
-   two planar faces reads its convexity from a loop's role (general-boolean
-   §4.2), and the inner edge of an L-shaped boss flush on a plate reads
-   convex while it is concave.
+   a reflex one. `e.IsConvex()` cannot decide the walk sense: a line two
+   planar faces of different sweeps share reads its convexity from a loop's
+   role (general-boolean §4.2), which a concave edge need not match.
 6. **Audit.** Every rewritten planar face runs modify §5's audit on its final
    record: S8 (orientation), S6 (every walk's claims from both ends sum
    strictly below its length — a corner's cutback and a (pl) neighbour's
@@ -465,7 +466,7 @@ Route E:
 - An L-shaped boss flush on the plate's corner (`(10, −20)`, `(20, −20)`,
   `(20, −10)`, `(15, −10)`, `(15, −15)`, `(10, −15)`, `z∈[10,25]`), fillet
   the inner vertical edge at `(15, −15)`, `r = 1`: concave between two planar
-  faces whose `Edge.IsConvex()` reads convex; volume within its bound of
+  walls, and `Edge.IsConvex()` reads it concave; volume within its bound of
   `17140 − 15π/4`.
 - S1, chamfer the edge along `x` at `(y, z) = (0, 0)`, `d = 2`: the `x = 0`
   and `x = 40` walls are restated, volume within its bound of
@@ -509,7 +510,8 @@ Refusals:
   reflex corner and a boss top's convex corner belong to one convex edge; the
   blend face's walk sense reads `G0`'s outward side against `G1`'s (§5.3 step
   5) and the corner rewrite reads each face's own loop. `Edge.IsConvex()` is
-  not the solid's convexity for an edge between two planar faces.
+  not the solid's convexity for a rim, or for a line two planar faces of
+  different sweeps share.
 - **Patch a vertex where two blends meet.** The spherical or conical corner
   patch is the vertex blend modify §6 excludes; SB5 and SB7 refuse it.
 - **Build a hole-rim chamfer on a brep face as a planar region.** A cone band

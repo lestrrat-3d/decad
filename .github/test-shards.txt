@@ -1109,3 +1109,6 @@
 0	0.03	TestBrepModifyEdgeFilletPocketFloorEdges
 1	0.02	TestBrepModifyEdgeChamferS1AlongX
 5	0.00	TestAuditTrimmedWall
+5	0.01	TestStackedUnionBrepLBossReflexCornerReadsConcave
+5	0.01	TestClassBCrossingSlotFloorCornersReadConcave
+5	0.01	TestClassBRootedCutKeepsThePrismsConvexity

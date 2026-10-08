@@ -557,9 +557,10 @@ func (b *ubBuild) sweptFaces(delta float64) ([]brepFace, error) {
 }
 
 // wallFaces builds one planar face per axis-aligned carrier plane and
-// material side: every slab's segment on it sweeps a rectangle whose edges
-// are split at the body's vertices, the edges two rectangles share cancel,
-// and the rest chain into the face's loops.
+// material side, each recording the stack axis as its sweep: every slab's
+// segment on it sweeps a rectangle whose edges are split at the body's
+// vertices, the edges two rectangles share cancel, and the rest chain into
+// the face's loops.
 func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 	pieces := map[ubWallKey]map[ubSeg3]struct{}{}
 	var order []ubWallKey
@@ -640,7 +641,7 @@ func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 			}
 			region := ProfileRecord{Outer: wallRegion.Outer, Holes: wallRegion.Holes}
 			out = append(out, brepFace{frame: frame, region: &region, outward: true,
-				z0: level, z1: level, delta: delta})
+				sweep: b.st.va.proxy.frame.N(), z0: level, z1: level, delta: delta})
 		}
 	}
 	return out, nil

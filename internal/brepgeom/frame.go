@@ -48,3 +48,14 @@ func PlanarFrame(ref r3.Frame, k int, sign float64) (r3.Frame, Embed, error) {
 	}
 	return frame, e, nil
 }
+
+// SweepAxis is the index of the reference axis of ref that d equals or
+// negates bit for bit; ok is false when d is no reference axis.
+func SweepAxis(ref r3.Frame, d r3.Vec) (int, bool) {
+	for k, a := range [3]r3.Vec{ref.U(), ref.V(), ref.N()} {
+		if d == a || d == a.Scale(-1) {
+			return k, true
+		}
+	}
+	return 0, false
+}

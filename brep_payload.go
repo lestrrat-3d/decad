@@ -26,7 +26,11 @@ import (
 // frame.N(); z1 equals z0 and z1Delta equals z0Delta. Its region is stated in
 // frame coordinates with the material on the left of every loop's walk (outer
 // counter-clockwise, holes clockwise, as a section records them), and outward
-// is true when its outward normal is +frame.N().
+// is true when its outward normal is +frame.N(). sweep is nonzero exactly
+// when the face restates a straight wall as a plane: the direction, along a
+// reference axis, that wall sweeps along. Two walls of one sweep meet at a
+// junction, which reads the walk's turn (§4.2); a cap's lines read its loop
+// role. A swept face leaves it zero: its own frame normal is its sweep.
 //
 // A swept face (wall set) is the wall segment, stated in frame coordinates and
 // walked with the material on its left, swept along frame.N() over [z0, z1].
@@ -48,6 +52,7 @@ type brepFace struct {
 	frame            r3.Frame
 	region           *ProfileRecord
 	outward          bool
+	sweep            r3.Vec
 	wall             CurveSegment
 	z0, z1           float64
 	z0Delta, z1Delta float64
@@ -391,9 +396,17 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 			return nil, err
 		}
 		face := brepgeom.FaceWalks{Embed: embeds[fi], IsPlanar: f.planar(),
+			Outward: f.outward, Sweep: brepgeom.NoSweep,
 			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
 			Side0: f.side0, Side1: f.side1}
 		if f.planar() {
+			if f.sweep != (r3.Vec{}) {
+				axis, ok := brepgeom.SweepAxis(bp.faces[0].frame, f.sweep)
+				if !ok || axis == embeds[fi].Axis[2] {
+					return nil, fmt.Errorf(`%w: brep face %d's recorded sweep is not a reference axis in its plane`, ErrUnsupported, fi)
+				}
+				face.Sweep = axis
+			}
 			loops := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
 			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
 			for li, loop := range loops {
@@ -590,10 +603,12 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 // own turn, a straight wall by the role of the loop that wall belongs to,
 // which the planar face's loop states — its own role when it walks the rim the
 // way the wall does, the other role when it walks it the opposite way (a
-// stacked floor is a reversed hole). A side line between two walls is a
-// junction: convex when the walk turns left there about the sweep axis. Any
-// other line reads the first planar face's loop role: outer convex, hole
-// concave.
+// stacked floor is a reversed hole). A line two walls of one sweep share is
+// a junction, convex when the walk turns left there about the sweep axis: a
+// side line between two swept walls or between a swept wall and a planar face
+// restating a wall along the same axis, and a line two such planar faces
+// share (brepFace.sweep). Any other line reads the owner planar face's loop
+// role: outer convex, hole concave.
 func brepEdgeConvex(ctx context.Context, topo *brepTopology, pair [2]int) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
