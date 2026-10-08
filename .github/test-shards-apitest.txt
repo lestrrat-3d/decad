@@ -162,7 +162,7 @@
 0	0.10	TestVerifyNonePublishesOnlyPositiveAreaFacets
 0	0.01	TestVerifyTinyPositiveOverlapClearsItsBound
 0	0.02	TestVertexPlacedCapBlendBoundEnclosesDisplacement
-0	0.01	TestVoidRevolveModifyOpsRefuseReceiver
+0	0.01	TestVoidRevolveModifyOps
 0	0.01	TestWallHeightArmAggregatesAgainstTheSectionSpan
 0	0.01	TestWallSolidCylinder
 1	0.01	TestBlindCutBuildsAnalyticPocket
@@ -371,7 +371,6 @@
 2	0.00	TestChamferContextCancellationAtCommitLeavesReceiverLive
 2	0.00	TestChamferContextCancellationLeavesReceiverLive
 2	0.01	TestChamferHasNoS5Path
-2	0.00	TestChamferNonPrismReceiver
 2	0.00	TestChamferOverLargeSetbackFlippingLoopIsUnsupported
 2	0.00	TestChamferOverLargeSetbackRefused
 2	0.00	TestChamferRefusals
@@ -1452,3 +1451,14 @@
 5	0.00	TestPrismBooleanTouchingCornerStaysOnMesh
 5	0.00	TestPrismBooleanToothTouchingHubDoesNotOverlap
 5	0.00	TestSurfaceTrimRefusesASharedWall
+5	0.01	TestRevolveFilletShoulderTorus
+5	0.01	TestRevolveFilletPartialTurnArc
+5	0.01	TestRevolveFilletSphere
+5	0.01	TestRevolveChamferChordKinds
+5	0.01	TestRevolveChamferShoulderCone
+5	0.01	TestRevolveBlendNonJunctionRefused
+4	0.02	TestRevolveBlendBaseGates
+4	0.02	TestRevolveFilletAxisGates
+4	0.02	TestRevolveBlendRolesSurvivePlacementAndReplay
+4	0.02	TestRevolveFilletSurveys
+4	0.02	TestRevolveFilletTessellates

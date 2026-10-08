@@ -131,7 +131,7 @@ func (bp brepPayload) sectionDelta() float64 {
 // §4.5).
 func requireNotBrepReceiver(payload featurePayload, op string) error {
 	if _, ok := payload.(brepPayload); ok {
-		return fmt.Errorf(`%w: this evaluator does not yet rewrite an analytically trimmed (brep) body's faces; it %s a straight prism only (modify-reach SX16)`, ErrUnsupported, op)
+		return fmt.Errorf(`%w: this evaluator does not yet rewrite an analytically trimmed (brep) body's faces, so it %s no brep receiver (modify-reach SX16)`, ErrUnsupported, op)
 	}
 	return nil
 }
