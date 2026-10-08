@@ -23,8 +23,8 @@ import (
 // chorded triangles (docs/surface-intersection-design.md §2.1).
 //
 // Trim and Extend take the REVOLVE family too, over the two operands' meridian
-// views: §11's PR4, this file's own last section. Split's revolve arm is staged
-// (RS13) and refuses by name.
+// views: §11's PR4, this file's own last section. Split's revolve arm is §11's
+// PR5, in surface_split_revolve.go.
 
 // Extend lengthens the receiver along the named edges' own carriers until
 // they meet tool, and returns the lengthened sheet. It admits a receiver and
@@ -703,8 +703,12 @@ func resolveTrim(ctx context.Context, budget *proofbound.WorkBudget, rcv, tl pri
 }
 
 // Split cuts target with tool and returns one solid per arranged target cell
-// in sketch's cell order. Both operands are consumed only after every piece
-// has been built. A tool that separates no target cell is ErrDegenerate.
+// in sketch's cell order. The target is a solid and the tool a sheet sharing
+// its generator: both straight sweeps, or both revolves about one axis
+// (docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
+// that section's gate, is ErrUnsupported. Both operands are consumed only
+// after every piece has been built. A tool that separates no target cell is
+// ErrDegenerate.
 func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
@@ -724,6 +728,12 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return nil, err
+	}
+	// S1 routes a revolve pair to its own arm (surface_split_revolve.go); a
+	// mixed pair falls through to admitSplitPair, whose S1 names both
+	// generators.
+	if bodyTrimFamily(target) == trimFamilyRevolve && bodyTrimFamily(tool) == trimFamilyRevolve {
+		return d.splitRevolve(ctx, budget, target, tool)
 	}
 	rcv, tl, err := admitSplitPair(budget, target, tool)
 	if err != nil {
@@ -756,17 +766,6 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 // The closed-sheet and chain-sheet views share buildPrismScene's input shape.
 func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPayload, prismPayload, error) {
 	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
-	// RS13: a revolve pair clears S1 and is refused BY NAME, ahead of the
-	// mixed-pair message, so the refusal states the staging rather than
-	// claiming the two generators differ. The solid build already charges a
-	// piece's section displacement (docs/surface-intersection-design.md §7.2);
-	// what §11's PR5 still owes is the revolve arm of the cell selection and
-	// the per-cell recording into revolvePayload pieces.
-	if rf == trimFamilyRevolve && tf == trimFamilyRevolve {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Split over the revolve family waits on the revolve arm of its cell selection and per-cell recording; this evaluator splits the prism family alone`,
-			ErrUnsupported)
-	}
 	if rf != tf || rf != trimFamilyPrism {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Split needs a solid and sheet sharing a straight-sweep generator (target %s, tool %s)`,
@@ -849,7 +848,9 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 
 // resolveSplit asks sketch for the bounded cells of the private scene, keeps
 // precisely the cells on the target's material side, and records each selected
-// cell from that arrangement before rebuilding it as a prism.
+// cell from that arrangement as a prismPayload over the target's sweep fields,
+// carrying the cell's own δ_cut. The revolve arm passes MERIDIAN views, whose
+// sweep fields are zero, and reads only each cell's profile and displacement.
 func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload) ([]prismPayload, error) {
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
 	if err != nil {
