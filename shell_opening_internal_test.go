@@ -120,7 +120,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 // denoted ones by the conversion gap, so every face's section displacement
 // and the floor level's displacement must cover that gap, and the volume's
 // bound the denoted volume 8000 − (40 − t*)(20 − 2t*)(10 − 2t*). Shown to fail
-// with sideOpeningRegions' chainSectionDelta leg zeroed (every face delta 0)
+// with sideOpeningRegions' offset2d.ChainSectionDelta leg zeroed (every face delta 0)
 // and with shellLevel's tDelta term deleted (the floor level's delta 0).
 func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 	t.Parallel()
@@ -407,7 +407,7 @@ func internalCutWithin(t *testing.T, seg CurveSegment, tCut float64, u *big.Rat,
 // arc's circle is a parameter range of the arc's own record, ending at the
 // cut's parameter, a float: the point it denotes there lies within the cut
 // gap (plus the displacement) of the exact cut, kept caps or not. Shown to
-// fail with chainSectionDelta's reach zeroed (the t = 2 displacement then 0)
+// fail with offset2d.ChainSectionDelta's reach zeroed (the t = 2 displacement then 0)
 // and with arcCutGap answering zero (the t = 3 rims' denoted ends then lie
 // outside a zero bound).
 func TestSideOpeningRegionsDSection(t *testing.T) {

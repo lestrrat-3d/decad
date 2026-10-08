@@ -531,11 +531,6 @@ func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) CurveSegment {
 	return offset2d.OriginalSegment(w, sU, sV, eU, eV)
 }
 
-// arcSegment records an arc in its walk sense.
-func arcSegment(center, start, end Point2, ccw bool) CurveSegment {
-	return offset2d.ArcSegment(center, start, end, ccw)
-}
-
 // addBlendRoles gives every blend wall its second kind(i,j) role (Table B): the
 // wall built from a blend connector already carries side(i,j); the second role —
 // "fillet" for Fillet, "chamfer" for Chamfer — names the same (loop, segment) of

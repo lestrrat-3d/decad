@@ -153,19 +153,19 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 		}
 	}
 	first, last := chain[0], chain[len(chain)-1]
-	start := chainEnd{kind: openingEnd, removed: rLast}
-	end := chainEnd{kind: openingEnd, removed: rFirst}
-	off, err := offsetOpenChain(budget, chain, axisFrame{}, start, end, s, tmm)
+	start := offset2d.OpenEnd{Removed: rLast}
+	end := offset2d.OpenEnd{Removed: rFirst}
+	off, err := offset2d.OffsetOpenChain(budget, chain, offset2d.Curve{}, start, end, s, tmm, shellTol)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
 	vA := Point2{U: first.StartU, V: first.StartV}
 	vB := Point2{U: last.EndU, V: last.EndV}
-	qA, qB := off.qStart, off.qEnd
+	qA, qB := off.QStart, off.QEnd
 
 	// A cut runs forward into r's span from v, or backward along the
 	// carrier's extension behind v (Table RO's reflex row inward);
-	// offsetOpenChain has already read both corners.
+	// offset2d.OffsetOpenChain has already read both corners.
 	forwardA, err := offset2d.OpeningForward(first, rLast, false, s, shellTol)
 	if err != nil {
 		return sideOpeningSection{}, err
@@ -188,11 +188,11 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	// parameter range of r's own record (removedPiece), as R and R' state
 	// their pieces, so all of them key r's circle (§4.2).
 	inward := s > 0
-	atEnd, atStart, gap, err := offset2d.SideOpeningRims(walks, run, segs, last, first, sB, sA, off.ends, s, inward)
+	atEnd, atStart, gap, err := offset2d.SideOpeningRims(walks, run, segs, last, first, sB, sA, off.Ends, s, inward)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
-	wallLoop, err := openChainWallLoop(budget, kept, off.segs, atEnd, atStart, inward)
+	wallLoop, err := offset2d.OpenChainWallLoop(budget, kept, off.Segs, atEnd, atStart, inward)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
@@ -203,7 +203,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
-	offRegion := ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), off.segs...), recut...)}}
+	offRegion := ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), off.Segs...), recut...)}}
 	// P as the record states it: the receiver's own section, or, where an
 	// oblique or circular end walk takes a forward cut, K then R split at
 	// that cut.
@@ -247,7 +247,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	if !forwardA || offset2d.SplitAtCuts(rLast) {
 		sec.corners = append(sec.corners, vA)
 	}
-	sec.delta, err = chainSectionDelta(budget, chain, offset2d.MirrorLine{}, off.ends, s, tmm, tDelta)
+	sec.delta, err = offset2d.ChainSectionDelta(budget, chain, offset2d.MirrorLine{}, off.Ends, s, tmm, tDelta, shellTol)
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
