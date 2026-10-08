@@ -21,7 +21,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
 | A tapered extrude has no mesh, export, boolean or mass reading, and no face-draft op exists | Feature operations |
-| A thread cut by a coil refuses: the tool's audit ceiling past a few turns, the boolean's chain-depth gate below a ~50 mm pair | Feature operations |
+| A thread cut by a coil refuses at the boolean's chain-depth gate below a ~50 mm pair | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -35,7 +35,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Sweep twist | `WithSweepTwist` nonzero → `ErrUnsupported` (`sweep.go`) | `docs/sweep-design.md` |
 | Closed sweep path | `ErrUnsupported`, "closed sweep paths are not implemented" (`sweep.go`) | `docs/sweep-design.md` |
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
-| Thread by cutting a coil from a cylinder | `ErrUnsupported`: an 8-turn groove coil exceeds the crossing audit's pair-scan ceiling (CS9, `coil_build.go`); a shorter one meets the chain-depth gate, "holds its mesh, where this pair meets it, only within a bound" (`boolean.go`), wherever the pair is under about `δ / 2e-5` across | `docs/helix-design.md` §9, CD3 |
+| Thread by cutting a coil from a cylinder | `ErrUnsupported`: the groove coil meets the chain-depth gate, "holds its mesh, where this pair meets it, only within a bound" (`boolean.go`), wherever the pair is under about `δ / 2e-5` across | `docs/helix-design.md` §9, CD3 |
 | Coil of a profile with arc, circle, free-form or trimmed segments | `ErrUnsupported` (CS7) (`internal/coil/profile.go`) | `docs/helix-design.md` CS7, §11 PR 3 |
 | Composite path in `SweepChain` | `ErrUnsupported` (R34); one straight span only | `docs/surface-design.md` §1.2 |
 | Loft over more than two sections, guide rails, centerline | No entry point; `Loft` takes exactly two profiles | `docs/loft-design.md` §1 "Deferred reach" |

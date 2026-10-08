@@ -37,7 +37,7 @@ var (
 // LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
 // an assembled triangle set with no structure of its own: S8's triangle
 // ceiling (MaxLoftAuditTriangles) first, then S6 (per-triangle existence),
-// then S8's pair ceiling (compared against the sweep's scanned pairs and the
+// then S8's pair ceiling (compared against the enumeration's work and the
 // number of box-overlapping candidate pairs, before any pair test or
 // pair-sized allocation), then S7 (the pair-by-pair contact audit over those
 // candidates). budget is shared with the rest of the pre-commit cancellation
@@ -97,7 +97,7 @@ func LoftSweepCandidates(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][
 		boxes[i] = meshbool.TriBox(verts, tri)
 		members[i] = i
 	}
-	order := newSweepOrder(boxes, members)
+	order := newPairScan(boxes, members, math.MaxUint64)
 	sc, err := sweepCandidateCounts(budget, order, len(tris), keepEveryPair, math.MaxUint64)
 	if err != nil {
 		return nil, err
@@ -232,15 +232,17 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 
 	// S8: the ceiling, over the candidates the pair loop will test, refused
 	// before a single pair test runs and before any candidate list is built.
-	// The sweep's counting pass is itself held to the ceiling: it counts every
-	// comparison of two boxes that overlap on the sweep axis, a number at
-	// least the candidate count, and refuses the moment that passes the
-	// ceiling, so the work before an S8 refusal is O(F log F + ceiling).
-	var order sweepOrder
+	// The enumeration's counting pass is itself held to the ceiling: it counts
+	// its own work — the sweep's comparisons of two boxes that overlap on the
+	// sweep axis, or the grid's registrations and in-cell comparisons
+	// (newPairScan picks whichever is less) — a number at least the candidate
+	// count, and refuses the moment that passes the ceiling, so the work
+	// before an S8 refusal is O(F log F + ceiling).
+	var order pairScan
 	var count uint64
 	var starts []int
 	if shortcuts.Sweep {
-		order = newSweepOrder(boxes, members)
+		order = newPairScan(boxes, members, ceiling)
 		sc, err := sweepCandidateCounts(budget, order, f, keepEveryPair, ceiling)
 		work.Scanned = int(sc.scanned)
 		if err != nil {
@@ -389,7 +391,7 @@ func loftAuditLookback(budget *proofbound.WorkBudget, boxes [][2]r3.Vec, f int, 
 		}
 		return failed
 	}
-	order := newSweepOrder(boxes, all)
+	order := newPairScan(boxes, all, ceiling-uint64(work.Candidates))
 	sc, err := sweepCandidateCounts(budget, order, f, keep, ceiling-uint64(work.Candidates))
 	if err != nil {
 		return err
@@ -528,7 +530,7 @@ func (s sweepOrder) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i
 // the total, which is the count S8 compares, beside the number of pairs the
 // pass scanned. It reports true instead when the pass scans more than limit
 // pairs (visit).
-func sweepCandidateCounts(budget *proofbound.WorkBudget, s sweepOrder, f int, keep func(i, j int) bool, limit uint64) (sweepCount, error) {
+func sweepCandidateCounts(budget *proofbound.WorkBudget, s pairScan, f int, keep func(i, j int) bool, limit uint64) (sweepCount, error) {
 	starts := make([]int, f+1)
 	scanned, exceeded, err := s.visit(budget, limit, func(i, j int) {
 		if keep(i, j) {
@@ -565,7 +567,7 @@ type loftCandidates struct {
 // loop tests in and the first refused pair is the one that loop reports. It
 // scans exactly the pairs the first pass scanned, which that pass already
 // held to its limit.
-func sweepCandidates(budget *proofbound.WorkBudget, s sweepOrder, starts []int, count uint64, keep func(i, j int) bool) (loftCandidates, error) {
+func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, count uint64, keep func(i, j int) bool) (loftCandidates, error) {
 	c := loftCandidates{starts: starts, js: make([]int32, count)}
 	next := slices.Clone(starts[:len(starts)-1])
 	_, _, err := s.visit(budget, math.MaxUint64, func(i, j int) {

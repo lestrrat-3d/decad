@@ -567,19 +567,17 @@ proof reads near `0.14 mm³` against a volume of `10π mm³`.
 
 ## 9. The thread use case
 
-**Today both threads refuse.** §13's external fixture refuses twice over:
-
-- its 8-turn tool refuses at its own build (CS9): the crossing audit's
-  sweep runs along the coil axis, where each flank triangle's box overlaps
-  those of its neighbouring turns, and scans about `1.1 × 10⁷` box pairs,
-  past `proofbound.MaxFacetPairTestsPerCall = 8 × 10⁶`, though only about
-  `1.8 × 10⁵` of them are candidates. Three turns build;
-- `Cut` of a 3-turn tool from the `R = 5`, `L = 20` cylinder refuses at the
-  chain-depth gate (CD3): the groove's facets hold `β ≈ 9.2e-4 mm` where the
-  pair tolerance is `2e-5 ×` the pair diameter, about `5.0e-4 mm`.
+**Today both threads refuse.** §13's external fixture's 8-turn tool builds:
+its crossing audit enumerates candidates through the grid
+(`docs/loft-design.md` §6), about `2.2 × 10⁶` units of work for about
+`1.8 × 10⁵` candidates, where the sweep alone would scan `1.1 × 10⁷` box
+pairs, past the `8 × 10⁶` ceiling. `Cut` of that tool from the `R = 5`,
+`L = 20` cylinder then refuses at the chain-depth gate (CD3): the groove's
+facets hold `β ≈ 9.2e-4 mm` where the pair tolerance is `2e-5 ×` the pair
+diameter, about `5.0e-4 mm`.
 
 The rest of this section states the use case the coil is built for, and
-what each reading would hold once both refusals lift.
+what each reading would hold once that refusal lifts.
 
 Both threads are a `Cut` whose tool is a coil. The cylinder stays what it
 was built as; the coil is the mesh-path operand CD3 admits; the result is a
@@ -660,7 +658,7 @@ touches it.
 | PR | Model | Lands | Still staged |
 |---|---|---|---|
 | **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
-| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. **Landed, except** the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`, which wait on §9's two refusals | the thread examples, arcs, CD5 |
+| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. **Landed, except** the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`, which wait on §9's chain-depth refusal | the thread examples, arcs, CD5 |
 | **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and `planarPairVerdict`; the `Verify` clearance fixture against a prism | `CoilChain`, `WithSurfaceResult()`, modify |
 
@@ -791,8 +789,8 @@ PR 2:
   shown to fail: §8.2's wall homotopy.
 - `Verify` measures the overlap of the spring with a 60 mm coaxial core of
   radius `2.5` as `4.5π`, and their `Union` encloses `380.5π`.
-- §9's two refusals: the 8-turn tool at CS9, and `Cut` of a 3-turn tool at
-  the chain-depth gate. The bullets below land once both refusals lift.
+- §9's refusal: the 8-turn tool builds, and `Cut` of it refuses at the
+  chain-depth gate. The bullets below land once that refusal lifts.
 - The external thread of §9 on a `Revolve` cylinder (`R = 5`, `L = 20`,
   a `60°` V of depth `0.9` at pitch `1.5`, `8` turns inside the height):
   the result is one lump of one shell, `Volume` encloses

@@ -245,8 +245,9 @@ type LoftAuditShortcuts struct {
 //
 // Candidates is the number of pairs the pair loop was handed: every pair of
 // the triangles no cap proof decided, or only the box-overlapping ones under
-// Sweep. It is the count S8 compares against the ceiling. Scanned is how
-// many pairs the sweep's counting pass compared on its sweep axis, at least
+// Sweep. It is the count S8 compares against the ceiling. Scanned is the
+// counting pass's own work — the sweep's comparisons on its sweep axis, or
+// the grid's registrations and in-cell comparisons (newPairScan), at least
 // Candidates; S8 refuses as soon as it passes the ceiling, and it stops at
 // ceiling + 1 on that refusal. CapProofs is how many cap families (0, 1 or 2)
 // CapFamilyProof decided.

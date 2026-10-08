@@ -1196,7 +1196,7 @@ Coil follows `docs/helix-design.md` §11's count-free four-PR plan: PRs 1
 and 2 build `Document.Coil` over whole-line profiles with its four readings,
 structural and tolerance `Verify`, placement, tessellation, boolean and
 interference operands and mass properties; arc profiles and clearance land
-with PRs 3 and 4, and the thread examples wait on helix §9's two refusals.
+with PRs 3 and 4, and the thread examples wait on helix §9's chain-depth refusal.
 An unlanded Coil build returns `ErrUnsupported`; an unlanded verification
 question reads `Suspect`.
 

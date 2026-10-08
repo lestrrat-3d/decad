@@ -1131,7 +1131,7 @@
 1	0.80	TestLoftCapProofAgreesWithReference
 2	0.36	TestLoftCapProofRefusesOverlappingTriangulation
 4	0.36	TestLoftAuditCandidateCeilingRefuses
-3	0.40	TestLoftAuditScanCeilingRefusesTallTube
+3	0.80	TestLoftAuditEnumerationTracksCandidates
 0	0.05	TestLoftAuditTriangleCeilingRefuses
 0	1.30	TestLoftCentroidShiftFormEnclosesTwoArcLobe
 2	0.66	TestLoftCentroidToothBoundReadsToothSize
