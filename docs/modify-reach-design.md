@@ -1183,7 +1183,8 @@ chord-versus-locus gap (§8.3). The region between the built solid and the
 denoted one has at most the region term's measure (`ChordLocusRegionAllow`
 divided by 3). Every point of it lies within the band's coordinate envelope (the
 original loop, the cap boundary widened by the contour displacement, and both
-levels) plus the patch's radial gap `|R0 − R1|`, so each moment component's
+levels, each arc read over the angle it sweeps rather than its whole circle:
+`capBandCoordUpper`) plus the patch's radial gap `|R0 − R1|`, so each moment component's
 bound grows by that volume times that reach (`capband.ChordLocusVolume`).
 The centroid divides the summed first moment by the body's own volume and
 lifts the plane-local quotient to world through the same frame/placement lift a prism centroid

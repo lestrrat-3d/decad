@@ -3,9 +3,12 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -231,16 +234,147 @@ func capBlendCentroidGeometryBound(estimate r3.Vec, bounds Box) float64 {
 // two levels, each widened by its own bound. Every section offset by t in
 // [0, dc] lies between the original loop and the cap contour, so a corner
 // foot's locus, a point of such a section, is covered as well.
+//
+// Both loops read loopLocalCoordinateUpper, which bounds each arc by the
+// angular extent it really sweeps rather than by its whole circle.
 func capBandCoordUpper(loop, capBoundary LoopRecord, delta float64, sideZB, capZB proofbound.BoundedScalar, work *freeform.FreeformWork) (float64, error) {
-	coordUpper, err := loopCoordinateUpper(loop, work)
+	coordUpper, err := loopLocalCoordinateUpper(loop, work)
 	if err != nil {
 		return 0, err
 	}
-	capCoordUpper, err := loopCoordinateUpper(capBoundary, work)
+	capCoordUpper, err := loopLocalCoordinateUpper(capBoundary, work)
 	if err != nil {
 		return 0, err
 	}
 	coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(capCoordUpper, delta))
 	coordUpper = math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(sideZB.Value), sideZB.Bound))
 	return math.Max(coordUpper, proofbound.AbsSumUpper(math.Abs(capZB.Value), capZB.Bound)), nil
+}
+
+// loopLocalCoordinateUpper bounds max(|u|, |v|) over every point of loop,
+// segment by segment, the smaller of two proven bounds per segment: the
+// walk's own coordinate envelope (boundarywalk.WalkOf's CoordUpper, which
+// reads an arc as |cu| + |cv| + 2R) and the segment's own extent where
+// segmentCoordinateUpper can read it.
+func loopLocalCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64, error) {
+	upper := 0.0
+	for _, seg := range loop.Segments {
+		w, err := boundarywalk.WalkOf(seg, work)
+		if err != nil {
+			return 0, err
+		}
+		segUpper := w.CoordUpper
+		if local, ok := segmentCoordinateUpper(seg); ok {
+			segUpper = math.Min(segUpper, local)
+		}
+		upper = math.Max(upper, segUpper)
+	}
+	return upper, nil
+}
+
+// segmentCoordinateUpper bounds max(|u|, |v|) over a line or arc segment from
+// its recorded entity alone, for a segment whose range lies inside the
+// entity's own [0, 1].
+//
+// A line's points are convex combinations of its two recorded ends, and
+// max(|u|, |v|) is convex, so the ends bound it. An arc sweeps
+// counter-clockwise from Start to End about Center at the radius
+// R = |Start − Center|, and its terminal point lies at that radius in the
+// direction of End, c + R·(End − c)/|End − c|. Along the sweep each coordinate is monotone between the
+// axis directions, so its extremes over the arc are at the two ends and at
+// every axis direction the sweep passes, c ± R. Whether the sweep passes an
+// axis direction is decided exactly from the signs of cross products of the
+// recorded points. R and |End − c| are bracketed through RatSqrtDown and
+// RatSqrtUp, the terminal point's components are enclosed from those
+// brackets, and every operation rounds outward. A partial range lies inside the entity's own sweep, so the whole
+// entity bounds it. ok is false for any other kind, a range outside [0, 1],
+// or a degenerate arc.
+func segmentCoordinateUpper(seg CurveSegment) (float64, bool) {
+	inUnit := func(t0, t1 float64) bool { return t0 >= 0 && t0 <= 1 && t1 >= 0 && t1 <= 1 }
+	switch sg := seg.(type) {
+	case LineSeg:
+		if !inUnit(sg.TStart, sg.TEnd) {
+			return 0, false
+		}
+		return math.Max(math.Max(math.Abs(sg.Start.U), math.Abs(sg.Start.V)), math.Max(math.Abs(sg.End.U), math.Abs(sg.End.V))), true
+	case ArcSeg:
+		if !inUnit(sg.TStart, sg.TEnd) {
+			return 0, false
+		}
+		return arcCoordinateUpper(sg)
+	}
+	return 0, false
+}
+
+// arcCoordinateUpper is segmentCoordinateUpper's arc arm.
+func arcCoordinateUpper(sg ArcSeg) (float64, bool) {
+	cu, cv := proofarith.FloatRat(sg.Center.U), proofarith.FloatRat(sg.Center.V)
+	su, sv := proofarith.FloatRat(sg.Start.U), proofarith.FloatRat(sg.Start.V)
+	eu, ev := proofarith.FloatRat(sg.End.U), proofarith.FloatRat(sg.End.V)
+	if cu == nil || cv == nil || su == nil || sv == nil || eu == nil || ev == nil {
+		return 0, false
+	}
+	au, av := new(big.Rat).Sub(su, cu), new(big.Rat).Sub(sv, cv)
+	bu, bv := new(big.Rat).Sub(eu, cu), new(big.Rat).Sub(ev, cv)
+	sq := func(x, y *big.Rat) *big.Rat { return new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)) }
+	aa, bb := sq(au, av), sq(bu, bv)
+	if aa.Sign() == 0 || bb.Sign() == 0 {
+		return 0, false
+	}
+	rLo, rHi := proofarith.FloatRat(proofbound.RatSqrtDown(aa)), proofarith.FloatRat(proofbound.RatSqrtUp(aa))
+	bLo, bHi := proofarith.FloatRat(proofbound.RatSqrtDown(bb)), proofarith.FloatRat(proofbound.RatSqrtUp(bb))
+	if rLo == nil || rHi == nil || bLo == nil || bHi == nil || bLo.Sign() <= 0 {
+		return 0, false
+	}
+	upper := math.Max(math.Abs(sg.Start.U), math.Abs(sg.Start.V))
+	// The terminal point is c + R·b/|b|, enclosed component by component
+	// from the brackets of R and |b|.
+	radius := proofbound.Interval(rLo, rHi)
+	for _, k := range [][2]*big.Rat{{cu, bu}, {cv, bv}} {
+		comp, ok := proofbound.IntervalQuo(proofbound.IntervalScale(radius, k[1]), proofbound.Interval(bLo, bHi))
+		if !ok {
+			return 0, false
+		}
+		comp = proofbound.IntervalAdd(comp, proofbound.PointInterval(k[0]))
+		upper = math.Max(upper, proofbound.RatFloatUp(proofbound.IntervalAbsUpper(comp)))
+	}
+	cross := func(xu, xv, yu, yv *big.Rat) int {
+		return new(big.Rat).Sub(new(big.Rat).Mul(xu, yv), new(big.Rat).Mul(xv, yu)).Sign()
+	}
+	crossAB := cross(au, av, bu, bv)
+	dotAB := new(big.Rat).Add(new(big.Rat).Mul(au, bu), new(big.Rat).Mul(av, bv)).Sign()
+	one, zero, minus := big.NewRat(1, 1), new(big.Rat), big.NewRat(-1, 1)
+	for _, d := range [][2]*big.Rat{{one, zero}, {zero, one}, {minus, zero}, {zero, minus}} {
+		fromA, toB := cross(au, av, d[0], d[1]) >= 0, cross(d[0], d[1], bu, bv) >= 0
+		var passes bool
+		switch {
+		case crossAB == 0 && dotAB > 0:
+			passes = true // a whole turn
+		case crossAB > 0:
+			passes = fromA && toB
+		default:
+			passes = fromA || toB
+		}
+		if !passes {
+			continue
+		}
+		// The axis point is c + R·d: its nonzero component is c_k ± R.
+		c := cu
+		sign := d[0]
+		if d[0].Sign() == 0 {
+			c, sign = cv, d[1]
+		}
+		for _, r := range []*big.Rat{rLo, rHi} {
+			v := new(big.Rat).Add(c, new(big.Rat).Mul(sign, r))
+			upper = math.Max(upper, proofbound.RatFloatUp(v.Abs(v)))
+		}
+		// The other component is c's own, which the ends' components need not
+		// reach.
+		other := cv
+		if d[0].Sign() == 0 {
+			other = cu
+		}
+		upper = math.Max(upper, proofbound.RatFloatUp(new(big.Rat).Abs(other)))
+	}
+	return upper, true
 }
