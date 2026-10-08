@@ -1438,15 +1438,15 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 	return out
 }
 
-// exactWallComponentSquared computes, from the SAME held numbers
-// survey2d.WallNormalDecision itself reads (the walk's own tangent or its held
-// circular sweep angles, and the placed frame's held directions), a
-// ground-truth answer over big.Rat: whether the wall's exact
-// normal-component (against the pull, at the walk's own start for a straight
-// walk) is >= 0, <= -1, or strictly between — built independently of
-// survey2d.CircularNormalRange/survey2d.DecideRationalComponent so it does not share their own
-// bugs. ok is false for a circular walk, where this test instead samples
-// float64 endpoints only (see the caller).
+// exactWallComponentSquared computes a ground-truth answer over big.Rat for a
+// straight walk: whether the wall's exact normal component against the pull
+// is >= 0, <= -1, or strictly between. The direction is the exact difference
+// of the walk's two recorded endpoints, and the frame directions are the
+// placed frame's held ones, which survey2d.WallNormalDecision reads too. It is
+// built independently of survey2d.CircularNormalRange and
+// survey2d.DecideIntervalComponent so it does not share their bugs. ok is
+// false for a circular walk, where this test instead samples float64
+// endpoints only (see the caller).
 func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, pull r3.Vec) (num, scale2, pull2 *big.Rat, ok bool) {
 	if w.IsCircular() {
 		return nil, nil, nil, false
@@ -1455,10 +1455,11 @@ func exactWallComponentSquared(w survey2d.SideWalk, m survey2d.PlacedFrameMap, p
 	if !okP {
 		return nil, nil, nil, false
 	}
-	tu, tv := proofarith.FloatRat(w.TanInU), proofarith.FloatRat(w.TanInV)
-	if tu == nil || tv == nil {
+	if proofbound.WalkEndBoundAllow(w.StartBound) != 0 || proofbound.WalkEndBoundAllow(w.EndBound) != 0 {
 		return nil, nil, nil, false
 	}
+	tu := new(big.Rat).Sub(proofarith.FloatRat(w.EndU), proofarith.FloatRat(w.StartU))
+	tv := new(big.Rat).Sub(proofarith.FloatRat(w.EndV), proofarith.FloatRat(w.StartV))
 	du := proofbound.IvVec3Dot(m.Du, pv).Lo
 	dv := proofbound.IvVec3Dot(m.Dv, pv).Lo
 	num = new(big.Rat).Sub(new(big.Rat).Mul(tv, du), new(big.Rat).Mul(tu, dv))
@@ -1498,12 +1499,13 @@ func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
 				if !ok {
 					continue
 				}
-				num, scale2, pull2, okExact := exactWallComponentSquared(w, fix.m, pull)
-				if !okExact {
+				if w.IsCircular() {
 					requireSoundCircularVerdict(t, fix.name, verdict, fix.pp, w, pull)
 					checked++
 					continue
 				}
+				num, scale2, pull2, okExact := exactWallComponentSquared(w, fix.m, pull)
+				require.True(t, okExact, `%s: the fixture's straight walls run between recorded points`, fix.name)
 				requireSoundVerdict(t, fix.name, verdict, num, scale2, pull2)
 				checked++
 			}

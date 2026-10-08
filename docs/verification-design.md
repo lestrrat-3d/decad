@@ -1450,7 +1450,9 @@ answers this way:
   whatever computed it: a range read through `Face.NormalAt` carries that
   evaluation's own proven bound (§2), so a pull the reading cannot separate
   from a face's own tangent leaves the outcome `CoverageUndecided` even where
-  the geometry is its tag. A tagged analytic variant that is a bounded
+  the geometry is its tag. A straight wall's normal is read from the exact
+  difference of its walk's two endpoints, each widened by its own end bound,
+  never from the walk's held tangent, which rounds that difference. A tagged analytic variant that is a bounded
   stand-in carries its own normal departure (`docs/modify-reach-design.md`
   §8.3) on top of that. A faceted survey proves the same all-clear only when
   every true patch's source-normal range clears. A missing or straddling

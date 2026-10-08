@@ -337,6 +337,57 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 	require.True(t, sawAnti, "the square must carry a wall exactly antiparallel to the pull")
 }
 
+// TestUndercutWallTiltedOffItsHeldTangent pins that the pull survey reads a
+// straight wall's normal from its recorded endpoints. The triangle's corner
+// (−1e−15, 0) sits below half an ulp of 24 from the origin, so the hypotenuse
+// (24, 32) → (−1e−15, 0) holds the tangent (−24, −32), exactly perpendicular
+// to the normal of the in-plane pull (−3, −4, 0), while its recorded direction
+// tilts it a hair against that pull. The exact answer lists two walls: the
+// side x = 24, whose normal (1, 0, 0) plainly opposes, and the hypotenuse.
+//
+// Shown to fail: with survey2d.WallNormalDecision reading the held tangent
+// again, the hypotenuse reads as exactly perpendicular and only the side
+// x = 24 is listed.
+func TestUndercutWallTiltedOffItsHeldTangent(t *testing.T) {
+	t.Parallel()
+	corners := [][2]float64{{-1e-15, 0}, {24, 0}, {24, 32}}
+	s, p := polygonSketch(t, corners)
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	// cornersOf is the set of plane-local corners a face's outer loop visits.
+	cornersOf := func(f *decad.Face) map[[2]float64]bool {
+		out := map[[2]float64]bool{}
+		for _, ce := range f.Loops()[0].CoEdges() {
+			v := ce.Start().Position().Value
+			out[[2]float64{v.X, v.Y}] = true
+		}
+		return out
+	}
+	held := map[[2]float64]bool{}
+	for _, f := range body.Faces() {
+		for c := range cornersOf(f) {
+			held[c] = true
+		}
+	}
+	require.Equal(t, map[[2]float64]bool{corners[0]: true, corners[1]: true, corners[2]: true}, held,
+		`the fixture is about these exact corners`)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(-3, -4, 0)))
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, body)
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	listed := make([]map[[2]float64]bool, 0, len(br.Undercut.Faces))
+	for _, f := range br.Undercut.Faces {
+		listed = append(listed, cornersOf(f))
+	}
+	require.ElementsMatch(t, []map[[2]float64]bool{
+		{corners[1]: true, corners[2]: true},
+		{corners[2]: true, corners[0]: true},
+	}, listed, `the side x = 24 and the hypotenuse oppose the pull`)
+	require.Equal(t, decad.Violating, br.Status)
+}
+
 // TestUndercutUnseparablePullIsUndecided proves the new reader answers
 // undecided instead of guessing on a receiver's own circular wall, when the
 // wall's outward-normal component against the pull genuinely straddles zero
@@ -359,9 +410,10 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 //
 // Isolating this to the WHOLE body (an empty Undercuts and a Suspect status)
 // is not reachable with any two-wall closed profile: the same boundary that
-// carries the near-zero-component arc must close on the far side too, and
-// straight walls are decided EXACTLY, with no undecided outcome available to
-// them (decideRationalComponent, survey_undercut.go) — so the chord is a
+// carries the near-zero-component arc must close on the far side too, and a
+// straight wall between recorded points is decided EXACTLY, with no undecided
+// outcome available to it (survey2d.DecideIntervalComponent over point
+// intervals) — so the chord is a
 // second, independently and correctly proven undercut. That is not a defect;
 // it is the same reject-only rule applied to a wall the reader CAN decide.
 // The assertions below are what the fix actually proves: the ARC's own
