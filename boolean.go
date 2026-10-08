@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -710,11 +711,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // facetBoundMax is a held mesh's largest facet bound δ(t), the largest of
 // each facet's three corners' β (docs/faceted-vertex-bounds-design.md §4.1).
 func facetBoundMax(tris [][3]int, beta []float64) float64 {
-	out := 0.0
-	for _, t := range tris {
-		out = max(out, beta[t[0]], beta[t[1]], beta[t[2]])
-	}
-	return out
+	return facetproof.FacetBoundMax(tris, beta)
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global

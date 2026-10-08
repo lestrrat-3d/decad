@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -1312,25 +1313,10 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	if chord < fp.meshBound {
 		return nil, &facetedBoundError{requested: chord, held: fp.meshBound}
 	}
-	faces := b.Faces()
-	src := make([]*Face, len(fp.tris))
-	budget := proofbound.NewWorkBudget(ctx)
-	if len(fp.vertexBound) != len(fp.verts) || len(fp.faceOf) != len(fp.tris) {
-		return nil, fmt.Errorf(`%w: a faceted payload's per-vertex or per-facet record does not match its mesh`, ErrBooleanFailed)
-	}
-	for i, fi := range fp.faceOf {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if fi < 0 || fi >= len(faces) {
-			// An inconsistent source mapping is a broken evaluator, not a
-			// staged capability: §7.1 names it an invariant failure, which
-			// Verify must return rather than hide as Suspect. ErrUnsupported
-			// here would be swallowed into an undecided pair by
-			// evaluateBoolean's staging branch.
-			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrBooleanFailed)
-		}
-		src[i] = faces[fi]
+	src, err := facetproof.RestateSources(ctx, b.Faces(), fp.faceOf,
+		len(fp.verts), len(fp.vertexBound), len(fp.tris))
+	if err != nil {
+		return nil, err
 	}
 	m := &Mesh{
 		vertices:   fp.verts,
