@@ -1584,11 +1584,11 @@ triangle's OWN scale: `(B-A) x (C-A)` is taken over exact rationals (the same
 is therefore an exact rational, and `internal/freeform/spline_length.go`'s outward-rounded
 `ratSqrtDown` / `ratSqrtUp` bracket that rational's square root. The published
 bound sums those per-triangle enclosure widths beside the summation loop's own
-slop (`internal/proofbound/bounds.go`'s `sumSlop`). **Both of those two terms are upper bounds
+slop (`internal/proofbound/bounds.go`'s `SumSlop`). **Both of those two terms are upper bounds
 nudged outward once per triangle, so each can SATURATE at `+Inf` on a wall set
 whose areas approach `float64`'s own ceiling — while the plain sum they speak
 for stays finite by rounding whole triangles away. A saturated term states no
-scale, so the published bound is `+Inf`, never the zero `sumSlop` reports for a
+scale, so the published bound is `+Inf`, never the zero `SumSlop` reports for a
 non-finite `absSum`**: the enclosure widths are exactly zero whenever every
 triangle's own area is representable, so the two together would otherwise leave
 a saturated sum claiming `Exact` over mass it has already swallowed, with a true

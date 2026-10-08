@@ -569,25 +569,6 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 	)
 }
 
-// crossProductUpper bounds every component of a×b and every product the float
-// evaluation forms on the way: each component is a difference of two of the
-// six products below, so their absolute sum dominates all of them AND the
-// resulting vector's own norm. A band patch is a thin ruled quad, so that
-// difference is exactly where its cross product cancels — the wall direction
-// crossed with the offset displacement is smaller than either term by the
-// ratio of the wall's length to the setback — and a budget read off the
-// surviving area under-counts by that ratio.
-func crossProductUpper(a, b r3.Vec) float64 {
-	return proofbound.AbsSumUpper(
-		proofbound.ProductUpper(math.Abs(a.Y), math.Abs(b.Z)),
-		proofbound.ProductUpper(math.Abs(a.Z), math.Abs(b.Y)),
-		proofbound.ProductUpper(math.Abs(a.Z), math.Abs(b.X)),
-		proofbound.ProductUpper(math.Abs(a.X), math.Abs(b.Z)),
-		proofbound.ProductUpper(math.Abs(a.X), math.Abs(b.Y)),
-		proofbound.ProductUpper(math.Abs(a.Y), math.Abs(b.X)),
-	)
-}
-
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
 

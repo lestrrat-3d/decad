@@ -637,7 +637,9 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got.Tris, 4, `the two bridging facets collapse; the tetra survives`)
 
-	held := meshAreaUpper(got.Verts, got.Tris)
+	// The surviving surface is read through the same estimator PreArea uses, so
+	// the comparison isolates which surface the charge is taken against.
+	held := proofbound.PerturbedAreaUpper(got.Verts, got.Tris, got.Round)
 	require.Greater(t, got.PreArea, held, `the rounding is charged against the surface it acted on, not the one that survived it`)
 	require.Positive(t, got.DropArea, `the dropped facets' own area is charged`)
 	require.Positive(t, got.Round)

@@ -218,8 +218,8 @@ always writes it.
 | `Vertex.Bound` | `meshBound` | `β(v)` |
 | `Faceted.Bound` (a face) | `meshBound` | `max δ(t)` over the face's facets |
 | `FacetedCurve.Bound`, `Edge.Length` bound | `meshBound`; `ChainLengthBound(n, meshBound, len)` | `max β` over the chain's vertices; `ChainLengthBound(n, that max, len)` |
-| face area bound | `meshBound × perimeterUpper + areaSlack + SumSlop` | `min(δ_f × perimeterUpper, Σ_t PerturbedTriangleAreaAllow(t, δ(t))) + areaSlack + SumSlop`, with `δ_f` the face's own `Faceted.Bound` and the sum the `stitchPayload` row's term over the face's facets, through `AbsSumUpper` |
-| body area bound | the same with the summed face perimeters | the sum of every face's geometric term, plus `areaSlack + SumSlop` |
+| face area bound | `meshBound × perimeterUpper + areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` | `min(δ_f × perimeterUpper, Σ_t PerturbedTriangleAreaAllow(t, δ(t))) + areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)`, with `δ_f` the face's own `Faceted.Bound` and the sum the `stitchPayload` row's term over the face's facets, through `AbsSumUpper` |
+| body area bound | the same with the summed face perimeters | the sum of every face's geometric term, plus `areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` over every facet |
 | `Volume` | `symA + symB + SweptVolumeAllow(round, preArea)` | unchanged; `round` stays the global weld maximum here |
 | `Centroid` | from `volSymDiff` and `dPair` | unchanged |
 | `Box.Bound` | `Radius3D(meshBound)` | `Radius3D(e)`, with `e` the largest, over the six extremes, of `max(max_v (v.x + B(v)) − m, m − max_v (v.x − β(v)))` for a held maximum `m` (the minimum mirrored), where `B(v)` is the largest `δ(t)` over the facets touching `v`, formed exactly and rounded up |
@@ -228,6 +228,12 @@ Both area terms are proven upper bounds on the same displacement, so the
 smaller is one too: the perimeter term is at most the global one because
 `δ_f ≤ meshBound` (§4.1), and the facet sum is the tighter of the two on a
 face of few facets whose rims carry a large bound.
+
+`SumSlop` bounds the float loop that sums the facet areas, and
+`FacetAreaTermSlop` bounds each facet's own float area term. The second is
+charged at the scale of the facet's edge products, not its area, because a
+sliver facet's cross product cancels: its rounding can exceed any relative
+charge on the area it cancels to.
 
 For the box, every true boundary point lies within `δ(t)` of a point of some
 held facet `t`, whose coordinate on the axis is at most its largest corner's,

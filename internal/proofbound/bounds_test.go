@@ -110,3 +110,60 @@ func exactPlanarFacetArea(a, b, c r3.Vec) *big.Rat {
 	z.Abs(z)
 	return z.Quo(z, big.NewRat(2, 1))
 }
+
+// TestFacetAreaTermSlopCoversCancellingFacets measures the error
+// FacetAreaTermSlop speaks for: one facet's float area term,
+// b.Sub(a).Cross(c.Sub(a)).Len()/2, against its exact area over big.Rat. Every
+// facet lies in z = 0, where the cross product's one nonzero component cancels.
+//
+// The sliver is the bottom cap of the decad package's
+// TestFacetedAreaBoundsCoverSliverFacet reproducer: its third vertex sits
+// 4·10⁻⁵ mm off the long edge, so every corner's two edges are nearly parallel
+// and the products round far above the area they cancel to. The other two
+// facets have a positive exact area and a float area of exactly zero: one
+// cancels to zero in the subtraction, the other flushes its products below the
+// smallest subnormal. SumSlop of that zero is zero, so neither has any other
+// charge.
+//
+// Shown to fail first: with FacetAreaTermSlop reduced to the relative
+// 4·u·|term| charge SumSlop takes per term, the sliver row's bound is below its
+// gap by three orders of magnitude, and the two zero-area rows bound nothing.
+func TestFacetAreaTermSlopCoversCancellingFacets(t *testing.T) {
+	t.Parallel()
+	origin := r3.NewVec(0, 0, 0)
+	for _, tc := range []struct {
+		name     string
+		a, b, c  r3.Vec
+		zeroHeld bool
+	}{
+		{name: "cap sliver", a: r3.NewVec(-100.1, 7.1, 0), b: r3.NewVec(100.3, 7.3, 0), c: r3.NewVec(0.123, 7.20004, 0)},
+		{
+			name: "cancels to zero",
+			a:    origin, b: r3.NewVec(1+math.Ldexp(1, -52), 1, 0), c: r3.NewVec(1, 1-math.Ldexp(1, -53), 0),
+			zeroHeld: true,
+		},
+		{
+			name: "flushes to zero",
+			a:    origin, b: r3.NewVec(math.Ldexp(1, -540), 0, 0), c: r3.NewVec(0, math.Ldexp(1, -540), 0),
+			zeroHeld: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			held := tc.b.Sub(tc.a).Cross(tc.c.Sub(tc.a)).Len() / 2
+			exact := exactPlanarFacetArea(tc.a, tc.b, tc.c)
+			require.Positive(t, exact.Sign())
+			gap := new(big.Rat).Sub(exact, new(big.Rat).SetFloat64(held))
+			gap.Abs(gap)
+			relative := new(big.Rat).SetFloat64(proofbound.SumSlop(1, held))
+			require.Positive(t, gap.Cmp(relative), "the fixture must round past SumSlop's relative per-term charge")
+			if tc.zeroHeld {
+				require.Zero(t, held, "the fixture's float area must be exactly zero")
+			}
+
+			bound := proofbound.FacetAreaTermSlop(tc.a, tc.b, tc.c)
+			require.GreaterOrEqual(t, new(big.Rat).SetFloat64(bound).Cmp(gap), 0,
+				"FacetAreaTermSlop must enclose the facet's own evaluation error")
+		})
+	}
+}

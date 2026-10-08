@@ -58,7 +58,9 @@ func StoreAreaAllow(vertices []r3.Vec, triangles [][3]int, store []float64) floa
 }
 
 // FaceAreaUpper bounds each source face's true patch area using its held
-// facets and their per-vertex store displacements.
+// facets and their per-vertex store displacements. Each facet's float area is
+// padded by its own evaluation charge, proofbound.FacetAreaTermSlop, so a
+// sliver whose cross product cancels below its exact area still counts in full.
 func FaceAreaUpper[F comparable](vertices []r3.Vec, triangles [][3]int, source []F,
 	store []float64) map[F]float64 {
 	out := map[F]float64{}
@@ -67,7 +69,8 @@ func FaceAreaUpper[F comparable](vertices []r3.Vec, triangles [][3]int, source [
 		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
 		d := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
 		held := b.Sub(a).Cross(c.Sub(a)).Len() / 2
-		out[f] = proofbound.AbsSumUpper(out[f], held, proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
+		out[f] = proofbound.AbsSumUpper(out[f], held, proofbound.FacetAreaTermSlop(a, b, c),
+			proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
 	}
 	return out
 }

@@ -108,7 +108,7 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 // better served by rational arithmetic here either. The bound is a generous,
 // never-tight structural envelope in the SAME spirit as tripleProductUpper:
 // each axis's own six-term square sum is at most 6·coordMax², and the
-// unnormalized normal's own magnitude is bounded by crossProductUpper,
+// unnormalized normal's own magnitude is bounded by proofbound.CrossProductUpper,
 // independent of what the computed value happens to be.
 func floatPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz proofbound.BoundedScalar) {
 	compute := func(a, b, c r3.Vec) r3.Vec {
@@ -118,7 +118,7 @@ func floatPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz proofbound.Bounded
 	}
 	envelope := func(a, b, c r3.Vec) float64 {
 		coordMax := math.Max(proofbound.VecMaxAbs(a), math.Max(proofbound.VecMaxAbs(b), proofbound.VecMaxAbs(c)))
-		crossUpper := crossProductUpper(b.Sub(a), c.Sub(a))
+		crossUpper := proofbound.CrossProductUpper(b.Sub(a), c.Sub(a))
 		return proofbound.ProductUpper(crossUpper, proofbound.ProductUpper(6, proofbound.ProductUpper(coordMax, coordMax))) / 24
 	}
 	m1 := compute(v0, v1, v2)
