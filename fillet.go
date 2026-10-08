@@ -72,7 +72,14 @@ const filletTol = sectionaudit.Tolerance
 // revolve is rebuilt over the receiver's own axis, sweep and placement. The
 // blend is a Torus, or a Sphere when its centre lies on the axis. Any other
 // revolve edge — a cap edge, an edge on the axis — is SX5 (ErrUnsupported).
-// A receiver that is neither a prism nor a revolve is S3 (ErrUnsupported).
+//
+// An analytic boolean result (a brep or stacked body) that reads as a prism
+// along a reference axis is filleted as that prism
+// (docs/brep-modify-design.md route P): its lateral edges are the prism's, and
+// the result is a prism. Any other selection on such a body is ErrUnsupported
+// (modify-reach SX16), as is a body whose faces carry a section displacement
+// (SB1). Any other receiver that is neither a prism nor a revolve is S3
+// (ErrUnsupported).
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
@@ -127,7 +134,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	if err := modifyBrepReceiver(ctx, b.payload, "fillets"); err != nil {
+	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "fillets",
+		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) }})
+	if err != nil {
 		return nil, err
 	}
 
@@ -145,6 +154,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
+	if route.prism != nil {
+		pp, ok = *route.prism, true
+	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))

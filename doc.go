@@ -117,6 +117,10 @@
 //	  other receiver, or a cap-loop chamfer result            ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
+//	Fillet/Chamfer/Shell  brep or stacked boolean result that
+//	                      reads as a prism along an axis      builds
+//	  brep edge selection no prism reading takes              ErrUnsupported
+//	  Shell of a brep that reads as no prism                  ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not the same line, arc, circle or Tier A type    ErrUnsupported

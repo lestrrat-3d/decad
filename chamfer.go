@@ -84,6 +84,13 @@ type ChamferOption interface {
 // (ErrUnsupported); the result
 // does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
 // pair its bounding boxes do not already decide reads Suspect (row DX6).
+//
+// An analytic boolean result (a brep or stacked body) that reads as a prism
+// along a reference axis is chamfered as that prism
+// (docs/brep-modify-design.md route P): lateral edges and complete cap loops
+// alike, so a cross-drilled hole's mouth takes a countersink. Any other
+// selection on such a body is ErrUnsupported (modify-reach SX16), as is a body
+// whose faces carry a section displacement (SB1).
 func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
@@ -138,7 +145,12 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	if err := modifyBrepReceiver(ctx, b.payload, "chamfers"); err != nil {
+	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "chamfers",
+		admits: func(pp prismPayload, caps prismCaps) error {
+			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
+			return err
+		}})
+	if err != nil {
 		return nil, err
 	}
 
@@ -157,6 +169,10 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		})
 	}
 	pp, ok := b.payload.(prismPayload)
+	caps := prismCapsOf(b)
+	if route.prism != nil {
+		pp, ok, caps = *route.prism, true, route.caps
+	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
@@ -165,7 +181,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		return nil, err
 	}
 
-	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, b, sel, edges)
+	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 	if err != nil {
 		return nil, err
 	}

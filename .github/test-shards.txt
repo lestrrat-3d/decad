@@ -1085,9 +1085,15 @@
 3	0.01	TestBrepConcaveRadiusReadsConcaveWalls
 3	0.01	TestBrepArcWallHasTheAnalyticSTEPShape
 3	0.01	TestBrepClearanceReadsItsCarriers
-3	0.01	TestBrepModifyOpsAreStaged
+3	0.01	TestBrepModifyOutsideRoutePRefuses
 3	0.02	TestBrepModifySB1RefusesADisplacedReceiver
 3	0.01	TestBrepModifySB2RefusesAPrismGroup
+3	0.02	TestBrepModifyRoutePFilletsS1LateralEdges
+3	0.02	TestBrepModifyRoutePChamfersS1HoleRim
+3	0.03	TestBrepModifyRoutePShellsS1
+3	0.01	TestBrepModifyRoutePChamfersB1SquareHole
+3	0.02	TestBrepModifyRecognisesThePrism
+3	0.02	TestBrepModifyRoutePMapsTheStartCapsHoles
 3	0.01	TestBrepConsumersOnTheClassBCutResult
 0	0.00	TestPrismSharedWallMirroredL
 0	0.00	TestPrismSharedWallDisplacedInteriorSpanFallsBack

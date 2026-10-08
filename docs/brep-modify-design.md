@@ -118,13 +118,21 @@ sampled or solved.
 | P1 | Exactly two planar faces have `Embed.Axis[2] == k`. Call the one whose outward normal is `−k` **bottom** and the other **top**; their reference levels (`Sign[2]·z0`) satisfy `zlo < zhi`. |
 | P2 | Every other face is one of: **(a)** a swept face with `Axis[2] == k`, both levels in reference coordinates exactly `{zlo, zhi}`, empty `side0`/`side1`; **(b)** a planar face with `Axis[2] != k` whose region is one loop of four `LineSeg`s over natural ranges, each along one of its in-plane axes, whose reference `k`-coordinates are exactly `zlo` and `zhi` (two segments at each); **(c)** a swept face with `Axis[2] != k`, empty splits, whose wall is a natural-range `LineSeg` along one in-plane axis with reference `k`-coordinates exactly `zlo` and `zhi` at its two ends. (b) and (c) state one rectangle two ways; (c) is read by restating it as (b) (§5.2). |
 | P3 | The prism frame `F` is top's frame when its `Sign[2] == +1`, else bottom's when its `Sign[2] == +1`, else `brepgeom.AxisFrame(ref, k)`: the right-handed signed permutation with `N = +k`, `U` the next axis, `V` the one after. |
-| P4 | top's region re-expressed into `F` (§5.4's map; a reflecting map re-winds the loops as general-boolean A4 states) is the section `S`. bottom's region re-expressed the same way equals `S`: equal outer (`loopRecordsEqual`), and each hole of one equals exactly one hole of the other. `S` keeps top's hole order. |
-| P5 | Every P2(a) wall's segment re-expressed into `F` equals, as a walk, one segment of `S`. Every P2(b) rectangle projects along `k` onto `F`'s plane as one `LineSeg` equal, as a set, to one segment of `S`, and the rectangle's outward normal mapped into `F` is that segment's right-hand unit normal (exact for an axis-aligned segment). Each segment of `S` is claimed exactly once. |
+| P4 | top's region re-expressed into `F` (§5.4's map; a reflecting map re-winds the loops as general-boolean A4 states) is the section `S`. bottom's region re-expressed the same way equals `S`: equal outer loops, and each hole of one equals exactly one hole of the other. Two loops are equal when one's segment records, in order, are the other's from some starting segment: a boolean states the two caps of one section from different first segments. `S` keeps top's hole order. |
+| P5 | Every P2(a) wall's segment re-expressed into `F`, re-wound as a one-segment loop under a reflecting map, equals, as a directed walk, one segment of `S` (a whole circle by centre, radius and sense). Every P2(b) rectangle projects along `k` onto `F`'s plane as one `LineSeg` equal, as a set, to one segment of `S`, and the rectangle's outward normal mapped into `F` is that segment's right-hand unit normal (exact for an axis-aligned segment). Each segment of `S` is claimed exactly once. |
 
 P5 is a reject-only cross-check of what the receiver's own pairing already
 implies (general-boolean §4.2: a planar loop segment pairs with one rim or one
 other planar segment); it catches a wall recorded with its material on the
 wrong side and nothing else.
+
+A P2(b) or P2(c) face's levels are section coordinates of the prism, and
+RB1 admits no section displacement, so such a face whose level carries a
+displacement (`z0Delta`, `z1Delta`) reads as no rectangle.
+
+A4 carries a line or arc over a narrowed range under a reflection only to
+within a rounding (its walked endpoints), so a region or wall that holds one
+and needs a reflecting map reads as no prism along that axis.
 
 The recognised prism is
 `prismPayload{profile: S, frame: F, z0: zlo, z1: zhi, xform: bp.xform}` in
@@ -143,7 +151,10 @@ two cap `*Face`s as arguments instead (for a prism body, the faces those roles
 name; here, `facesByRole(b)[bp.faces[top].role]` and bottom's). The first axis
 whose classification admits the selection is taken, and the call continues in
 the prism op from modify §4's stage 2 with the recognised prism as `pp`. Every
-later gate, construction, payload and role is the prism's own.
+later gate, construction, payload and role is the prism's own. A stacked
+receiver's body faces carry the stacked body's roles, not its face view's,
+so its route P names no cap face: a selection on its caps classifies as no
+cap edge, and its removed faces as no caps.
 
 When some axis reads as a prism but none admits the selection, a Fillet or
 Chamfer falls to route E; a Shell refuses with the prism path's own S2. When no
@@ -395,7 +406,9 @@ Route P:
   `fillet(0,j)` roles, `capStart`/`capEnd` present.
 - S1, chamfer the hole rim at `y = 0`, `d = 1`: a `capBlendPayload`, volume
   within its bound of `16000 − 550π/3` (the removed ring `10π/3`), one `Cone`
-  face, undercut and concave-radius surveys answer.
+  face; the undercut survey lists the cone under a pull along `+y`, and the
+  concave-radius survey reads the whole-turn band undecided, as reach DX8
+  states.
 - S1, shell removing the `y = 20` face, `t = 2`: a cup, volume within its
   bound of `5632 + 270π` (`20·(800 − 9π) − 18·(576 − 25π)`); removing the
   `x = 0` face instead → S2.
@@ -405,6 +418,8 @@ Route P:
 - A recognised prism's `S` equals top's region re-expressed into `F` bit for
   bit, and P5 refuses a hand-built record whose one wall is walked against its
   material.
+- A hand-built two-hole S1 whose `y = 0` face lists its holes in the other
+  order: a chamfer of that face's first-listed hole rim bands that hole.
 
 Route E:
 
@@ -508,6 +523,6 @@ Increment table — what still refuses after each PR:
 | After | Still refused |
 |---|---|
 | 0 (landed) | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
-| 1 | every non-prism brep; every route E edge |
+| 1 (landed) | every non-prism brep; every route E edge |
 | 2a | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
 | 2b | Table SB alone |

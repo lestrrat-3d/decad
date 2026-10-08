@@ -7,27 +7,62 @@ import (
 
 // This file is the receiver dispatch of docs/brep-modify-design.md
 // ("brep-modify §N" below): which record Fillet, Chamfer and Shell hand to the
-// brep route (§2, Table RB), and the gates every brep or stacked receiver
-// passes before any route runs (Table SB's SB1 and SB2).
+// brep route (§2, Table RB), the gates every brep or stacked receiver passes
+// before any route runs (Table SB's SB1 and SB2), and the refusals that
+// follow when route P (brep_modify_prism.go) takes no axis.
+
+// brepModifyRequest is what one modify op hands the brep route
+// (brep-modify §2): the verb its refusals name ("fillets", "chamfers" or
+// "shells"), whether the op is Shell, and admits, the op's own prism
+// classification of its selection (§4.2). admits returns nil when the
+// selection classifies against the prism pp with caps as its two cap faces,
+// and the op's own refusal otherwise.
+type brepModifyRequest struct {
+	op     string
+	shell  bool
+	admits func(pp prismPayload, caps prismCaps) error
+}
+
+// brepRoute is what the brep route hands back to the op. It is empty for a
+// receiver the brep route does not take, and the op continues on its own
+// path. Route P sets prism, the recognised prism (never stored; the op's
+// receiver for the rest of the call), and caps, its two cap faces on the
+// receiver body: the op continues on its prism path with them.
+type brepRoute struct {
+	prism *prismPayload
+	caps  prismCaps
+}
 
 // modifyBrepReceiver is the brep route for one modify op (brep-modify §2).
-// op is the verb the refusals name: "fillets", "chamfers" or "shells".
-//
-// It returns nil when the receiver is neither a brepPayload nor a
-// stackedPrismPayload, and the caller continues on its own path. Otherwise
-// it runs gate stage 2a (brep-modify §6) in order: the stacked receiver's
-// face view (SB2), then the whole-record displacement rule (SB1). A receiver
-// that passes both refuses with modify-reach SX16's ErrUnsupported, because
-// neither route P (§4) nor route E (§5) is built.
-func modifyBrepReceiver(ctx context.Context, payload featurePayload, op string) error {
-	bp, ok, err := brepModifyRecord(ctx, payload, op)
+// It returns an empty route when the receiver is neither a brepPayload nor a
+// stackedPrismPayload. Otherwise it runs gate stage 2a (§6) in order — the
+// stacked receiver's face view (SB2), then the whole-record displacement
+// rule (SB1) — and then route P (§4): the first reference axis along which
+// the record reads as a prism the op's classification admits. When none
+// admits, a Shell refuses with SB3 (some axis reads as a prism; the prism
+// path's own S2) or SB10 (none does), and a Fillet or Chamfer refuses with
+// modify-reach SX16's ErrUnsupported, because route E (§5) is not built.
+func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
+	bp, ok, err := brepModifyRecord(ctx, b.payload, req.op)
 	if err != nil || !ok {
-		return err
+		return brepRoute{}, err
 	}
-	if err := requireExactBrepSection(bp, op); err != nil {
-		return err
+	if err := requireExactBrepSection(bp, req.op); err != nil {
+		return brepRoute{}, err
 	}
-	return fmt.Errorf(`%w: this evaluator does not yet rewrite an analytically trimmed (brep) body's faces, so it %s no brep or stacked receiver (modify-reach SX16)`, ErrUnsupported, op)
+	route, refusal, err := brepPrismRoute(ctx, b, bp, req)
+	switch {
+	case err != nil:
+		return brepRoute{}, err
+	case route.prism != nil:
+		return route, nil
+	case req.shell && refusal != nil:
+		return brepRoute{}, fmt.Errorf(`%w; this body reads as a prism along a reference axis, and no such prism takes the removed faces as its caps (brep-modify SB3)`, refusal)
+	case req.shell:
+		return brepRoute{}, fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis, and this one reads as none; the three-dimensional offset it needs puts a cylinder along every reflex straight edge, which this record does not hold (brep-modify SB10)`, ErrUnsupported)
+	default:
+		return brepRoute{}, fmt.Errorf(`%w: this evaluator does not yet blend a brep body's edges outside the prism it reads as (brep-modify route E), so it %s no such selection on a brep or stacked receiver (modify-reach SX16)`, ErrUnsupported, req.op)
+	}
 }
 
 // brepModifyRecord is brep-modify §2's dispatch table: a brepPayload is

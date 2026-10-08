@@ -153,7 +153,7 @@ the rules leave to the byte budget.
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-prism body a one-cap `Shell` builds, with its mass properties and roles. See `docs/modify-design.md` §9, §12 D6. |
-| `brep_modify.go` | Routes a brep or stacked modify receiver: Table RB dispatch, SB1, SB2. See `docs/brep-modify-design.md` §2, §6. |
+| `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
 
 ### Cap-loop chamfer
 
