@@ -310,7 +310,7 @@ parameter either.
 | exact-rational work exceeds the record-level counter | `ErrUnsupported` (spline R7) | `freeformWork.step` inside each primitive |
 | a cell's sagitta or speed enclosure is non-finite | `ErrUnsupported` | `chargedRatSqrtUp` / `spanSpeedUpper` |
 | a station's `Point2` rounding gap is non-finite | `ErrUnsupported` | the arm, before emission |
-| the chorded loop self-intersects or pinches | `ErrDegenerate` via `tessellationExpectedError` | `earClip`, `requireLoopClearance` — unchanged |
+| the chorded loop self-intersects or pinches | `ErrDegenerate` via `tessellation.ExpectedError` | `triangulation.EarClip`, `requireLoopClearance` |
 
 A rational (Tier B/C) walk never reaches the arm: spline R10 refuses it at `Extrude`.
 
@@ -399,7 +399,7 @@ case, and `doc.go`'s support map with them.
   refuses.
 - Intra-loop tube clearance: `requireWalkClearance(ctx, pts, loopIdx, walkSag)` — every non-adjacent walk
   pair within one loop clears `sag_i + sag_j + floor`, the same gate `requireLoopClearance` runs across loops,
-  with the same `tessellationExpectedError`. This plus the endpoint checks is tess §9's `Hm` proof.
+  with the same `tessellation.ExpectedError`. This plus the endpoint checks is tess §9's `Hm` proof.
 - Refinement: first failing meridian walk in payload order, rebuild, re-audit; angular failures increment
   the one global count.
 - `Ecell` for sphere/torus cells: certified interval subdivision under a fixed budget (tess §15's choice for
@@ -644,7 +644,7 @@ interval-window station enclosure this increment does not build. Both keep `symD
 | Condition | Result |
 |---|---|
 | any term above non-finite (`miterLocusSpeedUpper` answering `false`, `capPatchWindowSkew` non-finite) | `ErrUnsupported` |
-| a chamfered loop's contour ring and its original ring at the other cap cannot clear each other's sagitta tubes | `ErrDegenerate` via `tessellationExpectedError` (`requireLoopClearance`) |
+| a chamfered loop's contour ring and its original ring at the other cap cannot clear each other's sagitta tubes | `ErrDegenerate` via `tessellation.ExpectedError` (`requireLoopClearance`) |
 | `n(w)` exceeds `maxChordsPerWalk` | `ErrUnsupported` (`errTooManyChords`) |
 | directed-edge, link, or zero-area audit fails | `ErrUnsupported` |
 | a `chamferCap(...)` role or a `side(i,j)` role resolves to no face | `ErrDegenerate` |

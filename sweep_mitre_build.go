@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -49,7 +50,7 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	if err != nil {
 		return mitredConstruction{}, err
 	}
-	capTris, err := triangulate2DContext(ctx, pts2, loopIdx)
+	capTris, err := triangulation.Triangulate(ctx, pts2, loopIdx)
 	if err != nil {
 		return mitredConstruction{}, wrapLoftTriangulationError(err)
 	}

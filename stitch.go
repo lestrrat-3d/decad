@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -896,7 +897,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 				reverseIntSlice(loopIdx[li])
 			}
 		}
-		tris2D, err := triangulate2DContext(ctx, pts, loopIdx)
+		tris2D, err := triangulation.Triangulate(ctx, pts, loopIdx)
 		if err != nil {
 			return nil, nil, err
 		}

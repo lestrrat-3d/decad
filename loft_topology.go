@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -89,7 +90,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		records[i] = loftmesh.LoopPair{V: pair.v, W: pair.w}
 	}
 	triangulate := func(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
-		tris, err := triangulate2DContext(ctx, pts, loops)
+		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		return tris, wrapLoftTriangulationError(err)
 	}
 	a, err := loftmesh.Assemble(ctx, records, f0, f1, plane0, xform, stationRound,
@@ -431,7 +432,7 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 // polygon this construction ACTUALLY assembled: pts in that plane's own
 // local (U, V) coordinates, walked per loop in loopIdx's own recorded walk
 // order — assembleLoft's own pts0/loopIdx0 or pts1/loopIdx1, the identical
-// arrays triangulate2DContext consumed to build that cap's own triangles.
+// arrays triangulation.Triangulate consumed to build that cap's own triangles.
 // Reading the SAME points the triangles came from, rather than
 // re-deriving the region's area from the record (moments.go), is what
 // keeps the published cap Area and the built cap triangles in lockstep by

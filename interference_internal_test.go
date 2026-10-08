@@ -13,6 +13,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
@@ -420,7 +422,7 @@ func TestHoleOrderingCancellationIsBounded(t *testing.T) {
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "maxU"}
 
-	_, err := triangulate2DContext(ctx, pts, loops)
+	_, err := triangulation.Triangulate(ctx, pts, loops)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`hole ordering must poll inside the key scan, not only before the sort`)
@@ -447,12 +449,12 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 		holeArea += 0.5 * 40 * math.Sin(2*math.Pi/40) * 4 // regular 40-gon, r = 2
 	}
 
-	tris, err := triangulate2DContext(t.Context(), pts, loops)
+	tris, err := triangulation.Triangulate(t.Context(), pts, loops)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris)
 	total := 0.0
 	for _, tri := range tris {
-		total += 0.5 * cross2(pts[tri[0]], pts[tri[1]], pts[tri[2]])
+		total += 0.5 * triangulation.Cross2(pts[tri[0]], pts[tri[1]], pts[tri[2]])
 	}
 	require.InDelta(t, 100*100-holeArea, total, 1e-9,
 		`the bridged triangulation must cover the outer square less every hole`)
@@ -664,10 +666,10 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 		// A self-crossing chorded boundary: no corner is ever clippable.
 		pts := []Point2{{U: 0, V: 0}, {U: 10, V: 10}, {U: 10, V: 0}, {U: 0, V: 10}}
 
-		_, err := earClip(t.Context(), pts, []int{0, 1, 2, 3})
+		_, err := triangulation.EarClip(t.Context(), pts, []int{0, 1, 2, 3})
 		require.ErrorIs(t, err, ErrDegenerate,
 			`public Tessellate must still see ErrDegenerate through Unwrap`)
-		var coarse *tessellationExpectedError
+		var coarse *tessellation.ExpectedError
 		require.True(t, errors.As(err, &coarse),
 			`a chording too coarse to prove the region is an expected undecided outcome, never an evaluator failure`)
 	})
@@ -678,9 +680,9 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 			{U: 50, V: 50}, {U: 52, V: 50}, {U: 51, V: 52},
 		}
 
-		_, err := bridgeHole(t.Context(), pts, []int{0, 1, 2, 3}, []int{4, 5, 6})
+		_, err := triangulation.BridgeHole(t.Context(), pts, []int{0, 1, 2, 3}, []int{4, 5, 6})
 		require.ErrorIs(t, err, ErrDegenerate)
-		var coarse *tessellationExpectedError
+		var coarse *tessellation.ExpectedError
 		require.False(t, errors.As(err, &coarse),
 			`a hole outside its outline is geometry no tolerance changes, so Verify must return it rather than read Suspect`)
 	})

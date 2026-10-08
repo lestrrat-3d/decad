@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -655,7 +656,7 @@ func tessellatePrism(ctx context.Context, b *Body, pp prismPayload, wallRole fun
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
-		pp.z0Delta, pp.z1Delta, requireLoopClearance, triangulate2DContext); err != nil {
+		pp.z0Delta, pp.z1Delta, requireLoopClearance, triangulation.Triangulate); err != nil {
 		return nil, err
 	}
 	mesh.triangles, mesh.source = topology.Triangles, topology.Sources
@@ -1166,7 +1167,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	}
 	rimFace := func(i int) (*Face, error) { return faceOfRole(fmt.Sprintf("rim(%d)", i)) }
 	assembled, err := tessellation.AssembleCup(ctx, oTopology, cTopology, openIsMax, capStart, shellCap,
-		rimFace, requireLoopClearance, triangulate2DContext, faceTrim, faceAxial,
+		rimFace, requireLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
 		cp.zOuterDelta, cp.zCavDelta, cp.zOpenDelta)
 	if err != nil {
 		return nil, err
@@ -1381,7 +1382,7 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 	if failure.Distance > failure.Floor && failure.ChordGate > 0 {
 		msg += `; retry with a finer chord tolerance to reduce the gate`
 	}
-	return &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)}
+	return tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg))
 }
 
 // requireWalkClearance maps the first within-loop clearance failure to the
@@ -1400,7 +1401,7 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 		msg += `; retry with a finer chord tolerance to reduce the gate`
 	}
 	return &sectionClearanceError{
-		err:  &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)},
+		err:  tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg)),
 		loop: failure.Loop, a: failure.ChordA, b: failure.ChordB,
 	}
 }
@@ -1414,11 +1415,3 @@ type sectionClearanceError struct {
 
 func (e *sectionClearanceError) Error() string { return e.err.Error() }
 func (e *sectionClearanceError) Unwrap() error { return e.err }
-
-// tessellationExpectedError marks a valid operand whose requested chording
-// cannot prove its topology. Public Tessellate exposes ErrDegenerate through
-// Unwrap; read-only interference treats it as an undecided pair.
-type tessellationExpectedError struct{ err error }
-
-func (e *tessellationExpectedError) Error() string { return e.err.Error() }
-func (e *tessellationExpectedError) Unwrap() error { return e.err }

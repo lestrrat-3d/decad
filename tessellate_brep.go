@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -30,7 +31,7 @@ type brepWallMesh struct {
 // tessellateBrep meshes a brepPayload (docs/general-boolean-design.md §4.4).
 // Every swept face chords its own wall once with tessellation.SampleLoop, the
 // sampler a prism's walls use, and emits its rim polylines at both levels.
-// Every planar face triangulates its loops with triangulate2DContext, as a
+// Every planar face triangulates its loops with triangulation.Triangulate, as a
 // prism cap does, over the polylines of the edges it shares, so every edge is
 // chorded from one sample set and the mesh closes by construction;
 // RequireClosedMesh proves it. A mesh vertex is keyed by its reference
@@ -181,7 +182,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
 			return nil, err
 		}
-		tris, err := triangulate2DContext(ctx, pts, loops)
+		tris, err := triangulation.Triangulate(ctx, pts, loops)
 		if err != nil {
 			return nil, err
 		}

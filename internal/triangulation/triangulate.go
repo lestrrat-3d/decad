@@ -8,16 +8,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // Point2 is a plane-local coordinate in millimetres.
-type Point2 struct{ U, V float64 }
-
-// ExpectedError marks a chording refusal that a finer tolerance can resolve.
-type ExpectedError struct{ err error }
-
-func (e *ExpectedError) Error() string { return e.err.Error() }
-func (e *ExpectedError) Unwrap() error { return e.err }
+type Point2 = sectionrecord.Point2
 
 // This is the cap triangulator behind Body.Tessellate: a plane region
 // given as a chorded outer boundary plus hole boundaries becomes triangles by
@@ -30,18 +26,18 @@ func isBridgeStub(ia, ib, ic int) bool {
 	return ia == ic || ia == ib || ib == ic
 }
 
-// cross2 returns the z-component of (b − a) × (c − a): positive when a, b, c
+// Cross2 returns the z-component of (b − a) × (c − a): positive when a, b, c
 // turn counter-clockwise.
-func cross2(a, b, c Point2) float64 {
+func Cross2(a, b, c Point2) float64 {
 	return (b.U-a.U)*(c.V-a.V) - (b.V-a.V)*(c.U-a.U)
 }
 
 // pointInTri reports whether p lies inside or on the triangle a, b, c,
 // whichever way the triangle is wound.
 func pointInTri(p, a, b, c Point2) bool {
-	d1 := cross2(a, b, p)
-	d2 := cross2(b, c, p)
-	d3 := cross2(c, a, p)
+	d1 := Cross2(a, b, p)
+	d2 := Cross2(b, c, p)
+	d3 := Cross2(c, a, p)
 	hasNeg := d1 < 0 || d2 < 0 || d3 < 0
 	hasPos := d1 > 0 || d2 > 0 || d3 > 0
 	return !hasNeg || !hasPos
@@ -164,7 +160,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// them is a property of where the chords fell, the same class
 		// requireLoopClearance refuses: an expected undecided outcome
 		// (docs/interference-design.md §7.1), never a wrong mesh.
-		return nil, &ExpectedError{err: fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate)}
+		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate))
 	}
 	hit := Point2{U: bestU, V: m.V}
 	ai, bi := bestEdge, (bestEdge+1)%n
@@ -187,7 +183,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	if p == m {
 		// The bridge target coincides with the hole vertex: the same chord-
 		// placed pinch as above, and the same expected undecided outcome.
-		return nil, &ExpectedError{err: fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate)}
+		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate))
 	}
 	// A reflex vertex inside triangle (M, I, P) would block the bridge; of
 	// those, the one whose direction from M lies closest to the ray (nearest
@@ -202,7 +198,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		}
 		r := pts[merged[j]]
 		prev, next := pts[merged[(j-1+n)%n]], pts[merged[(j+1)%n]]
-		if cross2(prev, r, next) >= 0 {
+		if Cross2(prev, r, next) >= 0 {
 			continue
 		}
 		if !pointInTri(r, m, hit, p) {
@@ -230,7 +226,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// go. That is a property of where the chords fell, the same class
 		// requireLoopClearance refuses — an expected undecided outcome, never a
 		// wrong mesh.
-		return nil, &ExpectedError{err: fmt.Errorf(`%w: no occurrence of a hole's bridge anchor admits the bridge`, decaderr.ErrDegenerate)}
+		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: no occurrence of a hole's bridge anchor admits the bridge`, decaderr.ErrDegenerate))
 	}
 	bridge = occ
 
@@ -272,7 +268,7 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 		clipped := false
 		for i := range n {
 			ia, ib, ic := idx[(i-1+n)%n], idx[i], idx[(i+1)%n]
-			cr := cross2(pts[ia], pts[ib], pts[ic])
+			cr := Cross2(pts[ia], pts[ib], pts[ic])
 			if cr < 0 {
 				continue
 			}
@@ -306,7 +302,7 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 			// (docs/interference-design.md §7.1): read-only interference takes
 			// it as an undecided pair, while public Tessellate still sees
 			// ErrDegenerate through Unwrap.
-			return nil, &ExpectedError{err: fmt.Errorf(`%w: the chorded cap boundary self-intersects; tessellate at a finer tolerance`, decaderr.ErrDegenerate)}
+			return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: the chorded cap boundary self-intersects; tessellate at a finer tolerance`, decaderr.ErrDegenerate))
 		}
 	}
 	return tris, nil
@@ -336,7 +332,7 @@ func earBlocked(ctx context.Context, pts []Point2, idx []int, i int) (bool, erro
 		}
 		p := pts[idx[j]]
 		prev, next := pts[idx[(j-1+n)%n]], pts[idx[(j+1)%n]]
-		turn := cross2(prev, p, next)
+		turn := Cross2(prev, p, next)
 		if turn > 0 || (turn == 0 && (p == a || p == b || p == c)) {
 			continue
 		}
