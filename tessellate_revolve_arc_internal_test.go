@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolvesampling"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -292,10 +293,10 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 	// The axis frame is the plane's own u axis, so (z, ρ) is (u, v) exactly and
 	// the station's stored pair can be checked against the recorded circle by
 	// hand.
-	ax := axisFrame{dU: 1, snapTol: 1e-9}
+	lift := revolvemesh.RevolveLift{DU: 1}
 	seg := CircleSeg{Center: Point2{U: 0, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 
-	station, gap, err := revolveArcStation(ax, seg, 1, 4)
+	station, gap, err := revolvesampling.ArcStation(lift, seg, 1, 4)
 	require.NoError(t, err)
 	require.InDelta(t, 0.0, station.Z, 1e-12)
 	require.InDelta(t, 13.0, station.Rho, 1e-12)
@@ -306,15 +307,15 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 	require.Equal(t, 0.0, gap)
 
 	// A station outside the walk's own interior states no bound.
-	_, _, err = revolveArcStation(ax, seg, 0, 4)
+	_, _, err = revolvesampling.ArcStation(lift, seg, 0, 4)
 	require.ErrorIs(t, err, ErrUnsupported)
-	_, _, err = revolveArcStation(ax, seg, 4, 4)
+	_, _, err = revolvesampling.ArcStation(lift, seg, 4, 4)
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// A circle centred ON the axis has a station at ρ = 0 only where the
 	// generator crosses it, which sweeps no manifold solid.
 	onAxis := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
-	_, _, err = revolveArcStation(ax, onAxis, 2, 4)
+	_, _, err = revolvesampling.ArcStation(lift, onAxis, 2, 4)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 

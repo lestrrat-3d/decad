@@ -45,7 +45,7 @@ const RevolveEvalRoundUlps = 256
 // coordinate magnitude, for one CHORDED meridian station's stored (z, ρ) pair
 // (docs/tessellation-reach-design.md §6, R4). A station is stored as the float
 // NEAREST the certified enclosure of the point its record denotes
-// (revolveArcStation), so its gap is half an ulp plus that enclosure's own
+// (revolvesampling.ArcStation), so its gap is half an ulp plus that enclosure's own
 // width; eight ulps covers both with room to spare while staying far below any
 // tolerance a caller can state.
 //

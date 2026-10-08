@@ -340,8 +340,9 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 | File | Owns |
 |---|---|
 | `tessellate_revolve.go` | `tessellateRevolve`: walk resolution, the axis-incidence and section gates, the angular count, cell and cap assembly, orientation, and the assembled mesh's own audits (tess §8, §9) |
+| `internal/revolvesampling/meridian.go` | Certified meridian junctions and circular stations (tess §8–§9) |
 | `internal/revolvemesh/revolve_ring.go` | Ring vertex emission, indices, and construction and placement rounding measurements (tess §8, §9) |
-| `internal/revolvemesh/revolve_proof.go` | Certified angular samples, axis basis and vertex-link audit (tess §8–§9) |
+| `internal/revolvemesh/revolve_proof.go` | Certified angular samples and axis basis (tess §8) |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, `Ecell`, `Mmeridian`, and `volSymDiff_revolve` composition (tess §8–§11) |
 
 ### Shared with the builder
@@ -436,7 +437,7 @@ its derivation, and is the authority on both.
 | non-positive `available` | `revolveBudget` |
 | inverse underflow / unrepresentable ceiling / cap | `chordCount` (unchanged) |
 | on-axis incidence malformed | `requireRevolveAxisIncidence` (`ErrDegenerate`) |
-| positive-radius ring collapse; erased generator | `revolveMeridianSamples`, `tessellateRevolve`'s own cell loop |
+| positive-radius ring collapse; erased generator | `revolvesampling.MeridianSamples`, `tessellateRevolve`'s own cell loop |
 | meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
 | directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `tessellation.RequireVertexLinks` |
@@ -782,7 +783,8 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 14. **Files:** `revolve_build.go`. **What:** extract `revolveLoopWalks` from `buildRevolveLoop`, returning the axis
     walks, their kinds, `singleClosed` and the plane-local walks the proof reads. **Tests:** existing revolve
     tests unchanged.
-15. **Files:** new `tessellate_revolve.go`. **What:** `revolveMeridianSamples`, `requireRevolveAxisIncidence`,
+15. **Files:** `tessellate_revolve.go`, `internal/revolvesampling/meridian.go`. **What:**
+    `revolvesampling.MeridianSamples`, `requireRevolveAxisIncidence`,
     `revolveExtents`, `revolvePreflightFacets`, rings, poles, `emitRevolveCell`, `emitRevolveCaps`,
     orientation; dispatch; refuse circular walks. **Pattern:** `tessellateCup` for ring sharing and cap
     emission. **Depends on:** 6, 14. **Tests:** R3's list in new `apitest/tessellate_revolve_test.go`; export byte

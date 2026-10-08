@@ -7,11 +7,11 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
+	"github.com/lestrrat-3d/decad/internal/revolvesampling"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -28,7 +28,7 @@ import (
 // and caps. internal/revolveproof computes envelopes, budgets, cell area slack
 // and volume bounds. internal/revolvemesh/revolve_proof.go checks the angular
 // sequence and axis basis. internal/tessellation audits vertex links.
-// tessellate_revolve_arc.go handles circular meridian generators.
+// internal/revolvesampling forms certified meridian junctions and stations.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
 // revolveaxis.ResolveLoop's own boundarywalk.RequireAnalyticWalk: those cells are §13's increment
@@ -242,7 +242,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 		if err != nil {
 			return nil, err
 		}
-		js, gap, err := revolveJunctions(rp, r)
+		js, gap, err := revolvesampling.MeridianJunctions(rp.lift(), r)
 		if err != nil {
 			return nil, err
 		}
@@ -411,7 +411,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	loopMesh := make([]revLoopMesh, len(p.resolved))
 	sampleGap := 0.0
 	for li := range p.resolved {
-		samples, gap, err := revolveMeridianSamples(rp, p.loops[li], p.resolved[li], p.junctions[li], p.counts[li], p.sags[li])
+		samples, gap, err := revolvesampling.MeridianSamples(
+			rp.lift(), p.loops[li], p.resolved[li], p.junctions[li], p.counts[li], p.sags[li])
 		if err != nil {
 			return nil, err
 		}
@@ -645,90 +646,6 @@ type revFaceExtent struct {
 	rho, sag float64
 }
 
-// revolveJunctions is one loop's count-independent meridian samples: junction k
-// is walk k's own start, which is walk k−1's end, so each junction is emitted
-// exactly once and the polyline closes by construction.
-//
-// Each carries the certified enclosure of the (z, ρ) the RECORD denotes there,
-// read from the recorded plane-local point the axis re-expression consumed
-// rather than from the re-expressed floats themselves. That point is walk k's
-// held plane start under the bound that reaches the points both neighbours
-// denote there (boundarywalk.JunctionStartBound), so an arc's natural t = 1
-// end, whose held End sits off Start's radius, is enclosed. The returned gap is the
-// largest distance any junction's stored pair sits from its own enclosure — the
-// count-independent half of deltaC the tolerance split spends before any count
-// exists.
-func revolveJunctions(rp revolvePayload, r revolveWalks) ([]revolvemesh.RevMeridian, float64, error) {
-	out := make([]revolvemesh.RevMeridian, len(r.Walks))
-	worst := 0.0
-	n := len(r.Walks)
-	for k, w := range r.Walks {
-		plane := r.Plane[w.Segs[0]]
-		prev := r.Walks[(k+n-1)%n]
-		last := prev.Segs[len(prev.Segs)-1]
-		bound := boundarywalk.JunctionStartBound(r.Segs[last], r.Plane[last], r.Segs[w.Segs[0]], plane)
-		zIv, rhoIv, ok := revolvemesh.RevolveMeridianEnclosure(rp.ax.aU, rp.ax.aV, rp.ax.dU, rp.ax.dV, plane.StartU, plane.StartV, bound)
-		if !ok {
-			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no enclosure of the axis coordinates its record denotes`, ErrUnsupported)
-		}
-		gap := math.Max(proofbound.IntervalFloatError(zIv, w.StartU), proofbound.IntervalFloatError(rhoIv, w.StartV))
-		if proofbound.IsNonFinite(gap) {
-			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample states no bound on its own axis coordinates`, ErrUnsupported)
-		}
-		worst = math.Max(worst, gap)
-		if w.StartV < 0 {
-			return nil, 0, fmt.Errorf(`%w: a revolve meridian sample sits on the negative side of the axis`, ErrDegenerate)
-		}
-		out[k] = revolvemesh.RevMeridian{Z: w.StartU, Rho: w.StartV, ZIv: zIv, RhoIv: rhoIv, OnAxis: w.StartV == 0, Walk: k}
-	}
-	return out, worst, nil
-}
-
-// revolveMeridianSamples expands one loop's junctions into the polyline the
-// current counts ask for: walk k contributes its own junction plus, for a
-// CIRCULAR walk chorded into counts[k] pieces, that walk's interior stations,
-// each enclosed at the recorded parameter it denotes (revolveArcStation).
-//
-// The returned gap is the largest distance any sample's stored pair sits from
-// its own enclosure, junctions and stations alike; the caller holds it against
-// what the tolerance split reserved.
-func revolveMeridianSamples(rp revolvePayload, loop LoopRecord, r revolveWalks, junctions []revolvemesh.RevMeridian, counts []int, sags []float64) ([]revolvemesh.RevMeridian, float64, error) {
-	out := make([]revolvemesh.RevMeridian, 0, len(junctions))
-	worst := 0.0
-	for k, w := range r.Walks {
-		n := counts[k]
-		if n <= 0 {
-			return nil, 0, fmt.Errorf(`%w: a revolve meridian walk carries no chord`, ErrUnsupported)
-		}
-		start := junctions[k]
-		start.Sag, start.Walk = sags[k], k
-		if !w.IsCircular() {
-			out = append(out, start)
-			continue
-		}
-		cell, ok := revolvemesh.RevolveArcChordCell(w.SegmentWalk, 0, n)
-		if !ok {
-			return nil, 0, revolvemesh.ErrRevolveArcCellSlack
-		}
-		start.Arc = cell
-		out = append(out, start)
-		for i := 1; i < n; i++ {
-			station, gap, err := revolveArcStation(rp.ax, loop.Segments[w.Segs[0]], i, n)
-			if err != nil {
-				return nil, 0, err
-			}
-			cell, ok := revolvemesh.RevolveArcChordCell(w.SegmentWalk, i, n)
-			if !ok {
-				return nil, 0, revolvemesh.ErrRevolveArcCellSlack
-			}
-			station.Walk, station.Sag, station.Arc = k, sags[k], cell
-			worst = math.Max(worst, gap)
-			out = append(out, station)
-		}
-	}
-	return out, worst, nil
-}
-
 // requireRevolveMeridianOffAxis is docs/tessellation-design.md §9's rule that a
 // circular generator with positive interior ρ may not chord to an axis-only
 // polyline: a sphere meridian whose two ends are both on the axis MUST produce
@@ -804,7 +721,7 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 // solid, so no tolerance can rescue it.
 //
 // It reads the JUNCTIONS alone. An interior chord station never sits on the
-// axis (revolveArcStation refuses one that does), so a chorded meridian adds no
+// axis (revolvesampling.ArcStation refuses one that does), so a chorded meridian adds no
 // incidence this audit could miss.
 func requireRevolveAxisIncidence(resolved []revolveWalks, junctions [][]revolvemesh.RevMeridian) error {
 	seen := map[float64]struct{}{}

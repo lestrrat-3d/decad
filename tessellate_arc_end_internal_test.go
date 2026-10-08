@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolvesampling"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
@@ -28,7 +29,7 @@ import (
 // sample at End reads a zero bound; with SampleCapBlend's side ring doing the
 // same, the cap-blend case's does; with brepChordWall charging its end sample
 // the walk's own EndBound (no DenotedEndBound), the brep case's vertex at End
-// does; and with revolveJunctions enclosing the walk's own StartBound, the
+// does; and with revolvesampling.MeridianJunctions enclosing the walk's own StartBound, the
 // revolve junction at End encloses only End's own z.
 
 // arcEndOffRadius is v moved 500 ulps away from zero.
@@ -263,7 +264,7 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	r, err := revolveaxis.ResolveLoop(t.Context(), rp.profile.Outer, freeform.NewFreeformWork(), "test",
 		rp.chargedWalk, rp.ax.snapTol)
 	require.NoError(t, err)
-	js, _, err := revolveJunctions(rp, r)
+	js, _, err := revolvesampling.MeridianJunctions(rp.lift(), r)
 	require.NoError(t, err)
 	du, dv := arcDenotedEnd(arc)
 	require.Zero(t, du.Sign(), `the denoted end lies on the axis`)

@@ -767,7 +767,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			}
 			j := revJunction{z: w.StartU, rho: w.StartV, onAxis: w.StartV == 0}
 			// The recorded point the junction denotes: walk i's start is its
-			// first recorded segment's own start (revolveJunctions,
+			// first recorded segment's own start (revolvesampling.MeridianJunctions,
 			// tessellate_revolve.go, reads the same one), bounded against the
 			// previous walk's denoted end too.
 			prev := walks[(i+n-1)%n]

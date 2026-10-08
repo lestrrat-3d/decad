@@ -247,7 +247,6 @@ the rules leave to the byte budget.
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
-| `tessellate_revolve_arc.go` | Builds circular meridian stations with `internal/revolvemesh/` bounds. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_station.go` | `chordStationBound`: one chord station's enclosure gap. See its doc comment. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
@@ -295,6 +294,7 @@ the rules leave to the byte budget.
 | `internal/tessellation/` | Recorded-loop chording, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
+| `internal/revolvesampling/` | Certified revolve meridian junctions, circular stations and sampled walks. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
