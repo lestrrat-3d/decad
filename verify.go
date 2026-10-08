@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -213,7 +214,7 @@ func appendClearance(report *Report, a, b *Body, res pairResult, rel float64) *D
 	gap := pairGapMeasurement(res)
 	report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
 	pairGate := pairToleranceInputs{diameter: res.diam}
-	pass, ref, haveRef := scalarToleranceRef(gap, rel, pairGate.lengthReference)
+	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, rel, pairGate.lengthReference)
 	if pass {
 		return nil
 	}
@@ -227,7 +228,7 @@ func appendClearance(report *Report, a, b *Body, res pairResult, rel float64) *D
 		Message:  fmt.Sprintf("the gap reading's bound %s is beyond the relative tolerance", gap.Bound),
 	}
 	if haveRef {
-		d.Required = requiredThreshold(rel*ref, gap.Value)
+		d.Required = tolerance.RequiredThreshold(rel*ref, gap.Value)
 	}
 	return &d
 }

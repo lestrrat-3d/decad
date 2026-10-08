@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -1144,7 +1145,7 @@ func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measur
 		Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
 	}
 	if haveRef {
-		beyond.Required = requiredThreshold(r.cfg.Rel*ref, published.Value)
+		beyond.Required = tolerance.RequiredThreshold(r.cfg.Rel*ref, published.Value)
 	}
 	return beyond, true, nil
 }
@@ -1249,7 +1250,8 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 			Message:  fmt.Sprintf("the gap at %s is proven below the required minimum %s", mp.where, *r.cfg.Minimum),
 		}))
 	}
-	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.Rel, pairToleranceInputs{diameter: res.diam}.lengthReference)
+	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
+		pairToleranceInputs{diameter: res.diam}.lengthReference)
 	if pass {
 		return
 	}
@@ -1263,7 +1265,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 		Message:  fmt.Sprintf("the gap reading's bound %s is beyond the relative tolerance", gap.Bound),
 	}
 	if haveRef {
-		beyond.Required = requiredThreshold(r.cfg.Rel*ref, gap.Value)
+		beyond.Required = tolerance.RequiredThreshold(r.cfg.Rel*ref, gap.Value)
 	}
 	mp.findings = append(mp.findings, mp.stamp(beyond))
 }
@@ -1502,14 +1504,15 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	lower := math.Min(lowest.Value.Base(), upper)
 	gap := pairGapMeasurement(pairResult{lo: lower, hi: upper})
 	gap.Exactness = Approximate
-	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.Rel, pairToleranceInputs{diameter: diam}.lengthReference)
-	reading := &ScalarReading{Measurement: gap, Tolerance: judgeTolerance(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
+	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
+		pairToleranceInputs{diameter: diam}.lengthReference)
+	reading := &ScalarReading{Measurement: gap, Tolerance: tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
 	if pass {
 		return reading, nil
 	}
 	obs := gap
 	diag := &Diagnostic{
-		Code:     toleranceDiagnostic(reading.Tolerance),
+		Code:     tolerance.DiagnosticCode(reading.Tolerance),
 		Status:   Suspect,
 		Reading:  ReadingGap,
 		Observed: &obs,

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
@@ -31,8 +32,8 @@ import (
 // Bound (a straight polygon has no curve to fall short of). Only sectionDelta itself
 // — the per-cell chord-vs-curve displacement the evaluator publishes — is absent
 // from such a build, and this file supplies it and adds it arithmetically to each
-// reading's Bound before re-running verify.go's own tolerance gate
-// (scalarToleranceRef/boundedToleranceRef) on the widened value by hand.
+// reading's Bound before re-running internal/tolerance's Scalar and Bounded
+// gates on the widened value by hand.
 //
 // The two arms supply it differently, and deliberately so. The A10a (circular) arm
 // takes BOTH its chord vertices and its sectionDelta from the SHIPPED generator
@@ -517,7 +518,7 @@ func wedgeShoelaceArea(verts [][2]float64) float64 {
 	return a / 2
 }
 
-// --- the gate reproduction: verify.go's own scalarToleranceRef/boundedToleranceRef,
+// --- the gate reproduction: internal/tolerance's Scalar and Bounded gates,
 // run on the WIDENED bound each reading would carry once sectionDelta exists ---
 
 // widenedGateRow is one reading's widened-bound gate comparison: value is the
@@ -545,8 +546,8 @@ type widenedGateRow struct {
 }
 
 // verdict is the row's Sound/Suspect word at the default tolerance, and it never
-// reads the same for a pass and a fail. Both scalarToleranceRef and
-// boundedToleranceRef (verify.go:1046-1080) can decline to form a reference, for two
+// reads the same for a pass and a fail. Both tolerance.Scalar and
+// tolerance.Bounded can decline to form a reference, for two
 // opposite reasons: a bound of exactly zero passes with no reference needed, while
 // an unusable magnitude or a reference the body cannot supply fails. Both leave ref
 // and ratio at 0, so the verdict word is the only column that separates them, and it
@@ -666,14 +667,14 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, 
 
 	areaUpper := math.Abs(area.Value.Base()) + area.Bound.Base() + excess.total()
 
-	widenedVol := Measurement{Value: vol.Value, Exactness: vol.Exactness, Bound: units.CubicMillimeters(vol.Bound.Base() + sectionDelta*areaUpper)}
-	volPass, volRef, volHaveRef := scalarToleranceRef(widenedVol, toleranceRel, in.volumeReference)
+	widenedVolBound := units.CubicMillimeters(vol.Bound.Base() + sectionDelta*areaUpper)
+	volPass, volRef, volHaveRef := tolerance.Scalar(vol.Value, widenedVolBound, toleranceRel, in.volumeReference)
 
-	widenedArea := Measurement{Value: area.Value, Exactness: area.Exactness, Bound: units.SquareMillimeters(area.Bound.Base() + excess.wall)}
-	areaPass, areaRef, areaHaveRef := scalarToleranceRef(widenedArea, toleranceRel, in.areaReference)
+	widenedAreaBound := units.SquareMillimeters(area.Bound.Base() + excess.wall)
+	areaPass, areaRef, areaHaveRef := tolerance.Scalar(area.Value, widenedAreaBound, toleranceRel, in.areaReference)
 
 	widenedBoundsBound := bounds.Bound.Base() + sectionDelta
-	boundsPass, boundsRef, boundsHaveRef := boundedToleranceRef(widenedBoundsBound, toleranceRel, in.diameterReference)
+	boundsPass, boundsRef, boundsHaveRef := tolerance.Bounded(widenedBoundsBound, toleranceRel, in.diameterReference)
 
 	diameter, diamOK, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
@@ -683,7 +684,7 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, 
 	volValue := math.Abs(vol.Value.Base())
 	centroidTerm := sectionDelta * (diameter/2 + centroidMag) * areaUpper / volValue
 	widenedCentroidBound := centroid.Bound.Base() + centroidTerm
-	centroidPass, centroidRef, centroidHaveRef := boundedToleranceRef(widenedCentroidBound, toleranceRel, in.diameterReference)
+	centroidPass, centroidRef, centroidHaveRef := tolerance.Bounded(widenedCentroidBound, toleranceRel, in.diameterReference)
 
 	row := func(name, value string, widened, ref float64, haveRef, pass bool) widenedGateRow {
 		r := widenedGateRow{reading: name, value: value, widened: widened, ref: ref, haveRef: haveRef, sound: pass}
@@ -709,8 +710,8 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, 
 		f:            len(body.Faces()),
 		elapsed:      elapsed,
 		body:         body,
-		volume:       row("Volume", volText, widenedVol.Bound.Base(), volRef, volHaveRef, volPass),
-		area:         row("Area", areaText, widenedArea.Bound.Base(), areaRef, areaHaveRef, areaPass),
+		volume:       row("Volume", volText, widenedVolBound.Base(), volRef, volHaveRef, volPass),
+		area:         row("Area", areaText, widenedAreaBound.Base(), areaRef, areaHaveRef, areaPass),
 		bounds:       row("Bounds", boundsText, widenedBoundsBound, boundsRef, boundsHaveRef, boundsPass),
 		centroid:     row("Centroid", centroidText, widenedCentroidBound, centroidRef, centroidHaveRef, centroidPass),
 	}

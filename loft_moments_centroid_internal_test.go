@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -392,7 +393,7 @@ func loftCentroidRatio(t *testing.T, body *Body, bound float64) (float64, float6
 	in := &bodyToleranceInputs{ctx: t.Context(), body: body, area: area}
 	diameter, ok := in.diameterReference()
 	require.True(t, ok, "the tooth must form a diameter reference")
-	_, ref, have := boundedToleranceRef(bound, toleranceRel, in.diameterReference)
+	_, ref, have := tolerance.Bounded(bound, toleranceRel, in.diameterReference)
 	require.True(t, have, "the tooth must form a tolerance reference")
 	return bound / ref, diameter
 }

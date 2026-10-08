@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -210,7 +211,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
 		}
 		if haveRef {
-			beyond.Required = requiredThreshold(cfg.Rel*ref, volume.Value)
+			beyond.Required = tolerance.RequiredThreshold(cfg.Rel*ref, volume.Value)
 		}
 		out.diagnostics = append(out.diagnostics, beyond)
 		out.undecided = true
