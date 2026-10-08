@@ -120,31 +120,43 @@ func SweepPointDeviationSquared(source, actual []proofarith.DyV3, rot ScaledIvMa
 		toWhole[axis] = new(big.Int).Quo(whole, den[axis])
 	}
 	maxSquared := new(big.Int)
+	var point, lo, hi [3]big.Int
+	var term, observed, below, above, squared big.Int
 	for i := range source {
-		var point [3]*big.Int
 		for axis := range 3 {
-			point[axis] = dyScaledNum(source[i][axis], exp)
+			dyScaledNumInto(&point[axis], source[i][axis], exp)
 		}
-		lo, hi := rot.ApplyScaled(point)
-		squared := new(big.Int)
 		for axis := range 3 {
-			observed := dyScaledNum(actual[i][axis], exp)
-			observed.Mul(observed, observedMultiplier[axis])
-			low := lo[axis].Mul(lo[axis], rotMultiplier[axis])
+			lo[axis].SetInt64(0)
+			hi[axis].SetInt64(0)
+			for coordinate := range 3 {
+				low, high := rot.Lo[axis][coordinate], rot.Hi[axis][coordinate]
+				if point[coordinate].Sign() < 0 {
+					low, high = high, low
+				}
+				lo[axis].Add(&lo[axis], term.Mul(low, &point[coordinate]))
+				hi[axis].Add(&hi[axis], term.Mul(high, &point[coordinate]))
+			}
+		}
+		squared.SetInt64(0)
+		for axis := range 3 {
+			dyScaledNumInto(&observed, actual[i][axis], exp)
+			observed.Mul(&observed, observedMultiplier[axis])
+			low := lo[axis].Mul(&lo[axis], rotMultiplier[axis])
 			low.Add(low, shiftLo[axis])
-			high := hi[axis].Mul(hi[axis], rotMultiplier[axis])
+			high := hi[axis].Mul(&hi[axis], rotMultiplier[axis])
 			high.Add(high, shiftHi[axis])
-			below := high.Sub(observed, high)
-			above := low.Sub(observed, low)
-			maximum := below.Abs(below)
-			if above.Abs(above).Cmp(maximum) > 0 {
-				maximum = above
+			below.Sub(&observed, high).Abs(&below)
+			above.Sub(&observed, low).Abs(&above)
+			maximum := &below
+			if above.Cmp(maximum) > 0 {
+				maximum = &above
 			}
 			maximum.Mul(maximum, toWhole[axis])
-			squared.Add(squared, maximum.Mul(maximum, maximum))
+			squared.Add(&squared, term.Mul(maximum, maximum))
 		}
 		if squared.Cmp(maxSquared) > 0 {
-			maxSquared = squared
+			maxSquared.Set(&squared)
 		}
 	}
 	return new(big.Rat).SetFrac(maxSquared, new(big.Int).Mul(whole, whole))
@@ -157,10 +169,11 @@ func dyDenominatorExp(d proofarith.Dyadic) int {
 	return max(0, -d.Exp())
 }
 
-func dyScaledNum(d proofarith.Dyadic, shift int) *big.Int {
+func dyScaledNumInto(z *big.Int, d proofarith.Dyadic, shift int) {
 	if d.Sign() == 0 {
-		return new(big.Int)
+		z.SetInt64(0)
+		return
 	}
-	mant := d.MantInto(new(big.Int))
-	return mant.Lsh(mant, uint(d.Exp()+shift))
+	d.MantInto(z)
+	z.Lsh(z, uint(d.Exp()+shift))
 }
