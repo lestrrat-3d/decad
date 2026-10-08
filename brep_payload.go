@@ -420,7 +420,9 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 			}
 			loops := append([]LoopRecord{f.region.Outer}, f.region.Holes...)
 			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
+			face.PlanarSegs = make([][]CurveSegment, len(loops))
 			for li, loop := range loops {
+				face.PlanarSegs[li] = loop.Segments
 				for _, seg := range loop.Segments {
 					w, err := walk(seg)
 					if err != nil {
@@ -436,7 +438,7 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		if err != nil {
 			return nil, err
 		}
-		face.Wall = w
+		face.Wall, face.WallSeg = w, f.wall
 		faces[fi] = face
 	}
 	built, err := brepgeom.Build(faces, ErrUnsupported)
@@ -472,9 +474,14 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 
 	// Vertices are shared by reference coordinates. Each carries the largest
 	// displacement any use placing it states — its face's section displacement,
-	// its level's and its walk end's own bound — beside the vertex's own exact
-	// frame and placement lift rounding (prismPayload.liftedVertex), measured
-	// once per vertex when it is first placed.
+	// its level's, and the bound from its walk end to the point the use's
+	// recorded segment denotes there (brepgeom.Use's StartBound and EndBound,
+	// which add an arc's radial residual at its natural t = 1 end) — beside
+	// the vertex's own exact frame and placement lift rounding
+	// (prismPayload.liftedVertex), measured once per vertex when it is first
+	// placed. Every use meeting at a vertex holds the same reference
+	// coordinates, so the largest of them reaches every neighbour's denoted
+	// end, as boundarywalk.JunctionVertex's bound does for a prism.
 	type placedVertex struct {
 		v    *Vertex
 		lift float64
@@ -482,7 +489,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	vertices := map[[3]float64]placedVertex{}
 	// placeVertex returns the vertex at reference coordinates c, widening its
 	// bound to cover one more use: faceDelta and levelDelta are that use's
-	// section and level displacements and endAllow its walk end's own bound.
+	// section and level displacements and endAllow its denoted-end bound.
 	placeVertex := func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex {
 		pv, ok := vertices[c]
 		if !ok {
@@ -502,8 +509,8 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			continue
 		}
 		f := bp.faces[u.Face]
-		placeVertex(u.DirFrom, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.Walk.StartBound))
-		placeVertex(u.DirTo, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.Walk.EndBound))
+		placeVertex(u.DirFrom, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.StartBound()))
+		placeVertex(u.DirTo, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.EndBound()))
 	}
 	// vertexAt is the lookup brepEdge reads: every vertex it names was already
 	// placed by a use above, so it adds no displacement of its own.

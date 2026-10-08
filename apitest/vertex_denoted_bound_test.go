@@ -14,8 +14,9 @@ import (
 // the points its two neighbouring segments DENOTE there: each segment's entity
 // evaluated at its own recorded parameter (docs/sketch-seam-design.md §1/§2,
 // docs/evaluator-design.md §3/§4). A trimmed line's end is the exact lerp at
-// its recorded t, a circle's end is its centre plus r·(cos 2πt, sin 2πt), and
-// at a cut junction the two neighbours denote two different points. A vertex
+// its recorded t, a circle's end is its centre plus r·(cos 2πt, sin 2πt), an
+// arc's whole-range end is Start at t = 0 and Start's radius at End's angle
+// at t = 1, and at a cut junction the two neighbours denote two different points. A vertex
 // publishes one position and one bound, so the bound must reach every denoted
 // end that meets there. Each check below takes the distance over math/big at
 // 256 bits and compares it with the published bound.
@@ -73,6 +74,16 @@ func denotedSinCos(x *big.Float) (*big.Float, *big.Float) {
 
 type denotedPoint struct{ u, v *big.Float }
 
+// denotedHypot is |p − c| at junctionPrec, from the exact differences of the
+// recorded coordinates.
+func denotedHypot(p, c decad.Point2) *big.Float {
+	du := new(big.Float).SetPrec(junctionPrec).Sub(jf(p.U), jf(c.U))
+	dv := new(big.Float).SetPrec(junctionPrec).Sub(jf(p.V), jf(c.V))
+	du.Mul(du, du)
+	dv.Mul(dv, dv)
+	return du.Add(du, dv).Sqrt(du)
+}
+
 // denotedLerp is a + t·(b − a), exact at junctionPrec for float operands.
 func denotedLerp(a, b, t float64) *big.Float {
 	d := new(big.Float).SetPrec(junctionPrec).Sub(jf(b), jf(a))
@@ -118,6 +129,27 @@ func denotedSegmentEnds(t *testing.T, segs []decad.CurveSegment) []denotedPoint 
 					u := new(big.Float).SetPrec(junctionPrec).Mul(cos, jf(r))
 					v := new(big.Float).SetPrec(junctionPrec).Mul(sin, jf(r))
 					out = append(out, denotedPoint{u.Add(u, jf(s.Center.U)), v.Add(v, jf(s.Center.V))})
+				}
+			case decad.ArcSeg:
+				// An arc denotes the circle of Start's radius r: Start itself
+				// at t = 0, and the point at r along End's direction from the
+				// centre at t = 1. A cut parameter would need End's angle and
+				// fails the test instead.
+				for _, at := range []float64{s.TStart, s.TEnd} {
+					switch at {
+					case 0:
+						out = append(out, denotedPoint{jf(s.Start.U), jf(s.Start.V)})
+					case 1:
+						r := denotedHypot(s.Start, s.Center)
+						du := new(big.Float).SetPrec(junctionPrec).Sub(jf(s.End.U), jf(s.Center.U))
+						dv := new(big.Float).SetPrec(junctionPrec).Sub(jf(s.End.V), jf(s.Center.V))
+						scale := new(big.Float).SetPrec(junctionPrec).Quo(r, denotedHypot(s.End, s.Center))
+						du.Mul(du, scale).Add(du, jf(s.Center.U))
+						dv.Mul(dv, scale).Add(dv, jf(s.Center.V))
+						out = append(out, denotedPoint{du, dv})
+					default:
+						require.Failf(t, `unexpected arc parameter`, `t = %v`, at)
+					}
 				}
 			default:
 				require.Failf(t, `unexpected segment kind`, `%T`, seg)
