@@ -299,17 +299,18 @@ the rules leave to the byte budget.
 | `internal/prismcells/` | Prism scenes, cell matching, shared spans, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
 | `internal/patternrecord/` | Instance motion and record mapping. See mirror-pattern §6.2. |
-| `internal/massmoment/` | Rational volume moments, frame and inertia calculations, and tensor tests. See `docs/dynamic-mass-design.md` §2–§3. |
+| `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour and shell offset intervals, and cap edge and arc length bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Held offset carriers, intersections and section joins. See modify §6–§7. |
-| `internal/capband/` | Cap-band admission, normal, departure, flux, area and moment proofs. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band admission, departure and moment proofs. See modify-reach §8.3–§8.4. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disk geometry, prism readers, section walks, and Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Certifies offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve meridian wall and concave-radius readers. See verification §6. |
 | `internal/motionbound/` | Motion variants, validation, exact parameters, poses and sweeps. |
 | `internal/planarsweep/` | Plane selection, motion, vertex rates, curvature and depth bounds. |
-| `internal/sweepmemo/` | Sweep path, radius and replay memo tables. See contact-sweep §6–§7. |
+| `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
+| `internal/sweepmemo/` | Sweep memo tables. See contact-sweep §6–§7. |
 | `internal/linkagebound/` | Link reach, layers, spans, projections and loops. See linkage §5, §15. |
 | `internal/linkagebound/loopchain/` | Sketch enclosure chains and zero-pose checks. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets. |

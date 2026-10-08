@@ -8,14 +8,13 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/pair/planar"
-
 	"github.com/lestrrat-3d/decad/internal/motionbound"
-	"github.com/lestrrat-3d/decad/internal/sweepmemo"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
+	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -41,6 +40,14 @@ type rotationalSweepPath struct {
 	omegaLow     *big.Rat
 	omegaHigh    *big.Rat
 	memo         *sweepPathMemo // the run's memo (contact_sweep_memo.go); nil outside a run
+}
+
+func (p rotationalSweepPath) departurePath() sweepdeparture.Path {
+	return sweepdeparture.Path{
+		Box: p.startBox.pairBox(), Delta: p.path.delta,
+		Axis: p.frame.Axis, Center: p.frame.Center, Velocity: p.velocity,
+		Duration: p.path.duration, Drift: p.path.drift != nil, Screw: p.path.screw != nil,
+	}
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
@@ -1094,40 +1101,11 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 // published unit normal is rounded. Translation makes the signed plane gap
 // affine, so a positive slope keeps the entire pair clear after time zero.
 func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample) (*big.Rat, bool) {
-	if r.a.path.drift != nil || r.b.path.drift != nil || first.Ideal.Manifold == nil ||
-		len(first.Ideal.Manifold.Points) != 4 {
+	if first.Ideal.Manifold == nil {
 		return nil, false
 	}
-	for axis := range 3 {
-		i, j := (axis+1)%3, (axis+2)%3
-		normal := proofarith.DvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
-		if proofarith.DvIsZero(normal) {
-			continue
-		}
-		alo, ahi := orientedProjection(r.a.startBox, normal)
-		blo, bhi := orientedProjection(r.b.startBox, normal)
-		side := 0
-		switch {
-		case proofarith.DyCmp(ahi, blo) == 0:
-			side = 1
-		case proofarith.DyCmp(bhi, alo) == 0:
-			side = -1
-		default:
-			continue
-		}
-		relative := proofarith.DyV3{}
-		for k := range 3 {
-			relative[k] = proofarith.DySubScalar(r.b.path.delta[k], r.a.path.delta[k])
-		}
-		slope := proofarith.DvDot(relative, normal)
-		if side < 0 {
-			slope = proofarith.DyNeg(slope)
-		}
-		if slope.Sign() > 0 {
-			return big.NewRat(1, 2), true
-		}
-	}
-	return nil, false
+	return sweepdeparture.ObliqueAffine([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()},
+		len(first.Ideal.Manifold.Points))
 }
 
 // A spin around the contact normal leaves both bodies' Z supports unchanged.
@@ -1137,50 +1115,14 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		return nil, false
 	}
 	paths := [2]rotationalSweepPath{r.a, r.b}
-	stationary, spinning := -1, -1
-	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
-			stationary = i
-		}
-		if path.path.drift != nil && path.frame.Axis[0].Sign() == 0 &&
-			path.frame.Axis[1].Sign() == 0 && path.frame.Axis[2].Sign() != 0 &&
-			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
-			spinning = i
-		}
-	}
-	if stationary < 0 || spinning < 0 || stationary == spinning {
-		return nil, false
-	}
-	normal := first.Ideal.Manifold.Points[0].Normal.Value
-	if normal != (r3.Vec{Z: 1}) && normal != (r3.Vec{Z: -1}) {
-		return nil, false
-	}
-	a, okA := sourceOrientedBoxAtPose(r.a.body, r.a.path.from)
-	b, okB := sourceOrientedBoxAtPose(r.b.body, r.b.path.from)
-	if !okA || !okB {
-		return nil, false
-	}
-	z := proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)}
-	alo, ahi := orientedProjection(a, z)
-	blo, bhi := orientedProjection(b, z)
-	gap := proofarith.DySubScalar(blo, ahi)
-	if normal.Z < 0 {
-		gap = proofarith.DySubScalar(alo, bhi)
-	}
-	if gap.Sign() != 0 {
-		return nil, false
-	}
-	speed := new(big.Rat).Set(paths[spinning].velocity[2])
-	if spinning == 0 {
-		speed.Neg(speed)
-	}
-	if normal.Z < 0 {
-		speed.Neg(speed)
-	}
-	if speed.Sign() <= 0 {
-		return nil, false
-	}
-	return big.NewRat(1, 2), true
+	return sweepdeparture.HorizontalSpin(
+		[2]sweepdeparture.Path{paths[0].departurePath(), paths[1].departurePath()},
+		first.Ideal.Manifold.Points[0].Normal.Value,
+		func(i int) (pairbox.OrientedBox, bool) {
+			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].path.from)
+			return box.pairBox(), ok
+		},
+	)
 }
 
 // A stationary horizontal source face and a source box spinning about Y
@@ -1193,82 +1135,14 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
 		return nil, false
 	}
-	// Read the prepared paths through pointers so the duration and exact
-	// corner storage stay in their original records.
-	paths := [2]*rotationalSweepPath{&r.a, &r.b}
-	stationary, spinning := -1, -1
-	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
-			stationary = i
-		}
-		if path.path.drift != nil && path.path.screw == nil &&
-			path.frame.Axis[0].Sign() == 0 && path.frame.Axis[1].Sign() != 0 &&
-			path.frame.Axis[2].Sign() == 0 {
-			spinning = i
+	normals := make([]sweepdeparture.ContactNormal, len(first.Ideal.Manifold.Points))
+	for i, point := range first.Ideal.Manifold.Points {
+		normals[i] = sweepdeparture.ContactNormal{
+			Value: point.Normal.Value,
+			Exact: point.Normal.Bound.Base() == 0 && point.NormalAngle.Base() == 0,
 		}
 	}
-	if stationary < 0 || spinning < 0 || stationary == spinning {
-		return nil, false
-	}
-	static, moving := &paths[stationary].startBox, &paths[spinning].startBox
-	staticLow, staticHigh := static.corner[0][2], static.corner[0][2]
-	movingLow, movingHigh := moving.corner[0][2], moving.corner[0][2]
-	for i := 1; i < len(static.corner); i++ {
-		staticLow = dyMin(staticLow, static.corner[i][2])
-		staticHigh = dyMax(staticHigh, static.corner[i][2])
-		movingLow = dyMin(movingLow, moving.corner[i][2])
-		movingHigh = dyMax(movingHigh, moving.corner[i][2])
-	}
-	sign := int64(0)
-	if proofarith.DyCmp(staticHigh, movingLow) == 0 {
-		sign = 1
-	} else if proofarith.DyCmp(movingHigh, staticLow) == 0 {
-		sign = -1
-	}
-	if sign == 0 {
-		return nil, false
-	}
-	wantNormal := float64(sign)
-	if spinning == 0 {
-		wantNormal = -wantNormal
-	}
-	for _, point := range first.Ideal.Manifold.Points {
-		if point.Normal.Value != (r3.Vec{Z: wantNormal}) ||
-			point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
-			return nil, false
-		}
-	}
-	path := paths[spinning]
-	omega := path.frame.Axis[1]
-	omegaSquared := new(big.Rat).Mul(omega, omega)
-	minimum, curvature := new(big.Rat), new(big.Rat)
-	for i := range moving.corner {
-		corner := &moving.corner[i]
-		dx := new(big.Rat).Sub(corner[0].Rat(), path.frame.Center[0])
-		dz := new(big.Rat).Sub(corner[2].Rat(), path.frame.Center[2])
-		derivative := new(big.Rat).Sub(path.velocity[2], new(big.Rat).Mul(omega, dx))
-		derivative.Mul(derivative, big.NewRat(sign, 1))
-		if i == 0 || derivative.Cmp(minimum) < 0 {
-			minimum = derivative
-		}
-		cornerCurvature := new(big.Rat).Mul(omegaSquared,
-			new(big.Rat).Add(new(big.Rat).Abs(dx), new(big.Rat).Abs(dz)))
-		if cornerCurvature.Cmp(curvature) > 0 {
-			curvature = cornerCurvature
-		}
-	}
-	if minimum.Sign() <= 0 {
-		return nil, false
-	}
-	fraction := big.NewRat(1, 1)
-	for range 60 {
-		until := new(big.Rat).Mul(fraction, r.a.path.duration)
-		if new(big.Rat).Mul(curvature, until).Cmp(minimum) < 0 {
-			return fraction, true
-		}
-		fraction.Quo(fraction, big.NewRat(2, 1))
-	}
-	return nil, false
+	return sweepdeparture.TangentAxisSpin([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, normals)
 }
 
 // A rotation about an axis-normal contact face does not move either support
