@@ -170,16 +170,16 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
 // the record a second time.
 func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
-	ig, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, work)
+	ig, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)
 	if err != nil {
 		return 0, err
 	}
 	scale := math.Max(1, math.Abs(sketchArea))
-	if math.Abs(ig.area-sketchArea) > 1e-9*scale {
+	if math.Abs(ig.Area-sketchArea) > 1e-9*scale {
 		return 0, fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
-			ErrUnrecordableProfile, ig.area, sketchArea)
+			ErrUnrecordableProfile, ig.Area, sketchArea)
 	}
-	return ig.area, nil
+	return ig.Area, nil
 }
 
 // linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]

@@ -35,18 +35,18 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	t.Parallel()
 	check := func(t *testing.T, first, full regionIntegrals) {
 		t.Helper()
-		first.publishExact()
-		full.publishExact()
-		require.Equal(t, full.area, first.area)
-		require.Equal(t, full.areaBound, first.areaBound)
-		require.Equal(t, full.mu, first.mu)
-		require.Equal(t, full.muBound, first.muBound)
-		require.Equal(t, full.mv, first.mv)
-		require.Equal(t, full.mvBound, first.mvBound)
-		require.Zero(t, first.muu)
-		require.Zero(t, first.muv)
-		require.Zero(t, first.mvv)
-		require.True(t, full.muu != 0 || full.muv != 0 || full.mvv != 0)
+		first.PublishExact()
+		full.PublishExact()
+		require.Equal(t, full.Area, first.Area)
+		require.Equal(t, full.AreaBound, first.AreaBound)
+		require.Equal(t, full.Mu, first.Mu)
+		require.Equal(t, full.MuBound, first.MuBound)
+		require.Equal(t, full.Mv, first.Mv)
+		require.Equal(t, full.MvBound, first.MvBound)
+		require.Zero(t, first.Muu)
+		require.Zero(t, first.Muv)
+		require.Zero(t, first.Mvv)
+		require.True(t, full.Muu != 0 || full.Muv != 0 || full.Mvv != 0)
 	}
 
 	for _, tc := range []struct {
@@ -60,17 +60,17 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var first, full regionIntegrals
-			require.NoError(t, first.addFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentFirstOrder))
-			require.NoError(t, full.addFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentSecondOrder))
+			require.NoError(t, first.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentFirstOrder))
+			require.NoError(t, full.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentSecondOrder))
 			check(t, first, full)
 			var area regionIntegrals
-			require.NoError(t, area.addFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
-			area.publishExact()
-			require.Equal(t, full.area, area.area)
-			require.Equal(t, full.areaBound, area.areaBound)
-			require.Zero(t, area.muu)
-			require.Zero(t, area.muv)
-			require.Zero(t, area.mvv)
+			require.NoError(t, area.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
+			area.PublishExact()
+			require.Equal(t, full.Area, area.Area)
+			require.Equal(t, full.AreaBound, area.AreaBound)
+			require.Zero(t, area.Muu)
+			require.Zero(t, area.Muv)
+			require.Zero(t, area.Mvv)
 		})
 	}
 
@@ -81,17 +81,17 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 			{U: big.NewRat(3, 1), V: big.NewRat(0, 1)},
 		}}
 		var first, full regionIntegrals
-		first.addFreeformTo(spans, false, freeform.MomentFirstOrder)
-		full.addFreeformTo(spans, false, freeform.MomentSecondOrder)
+		first.AddFreeformTo(spans, false, freeform.MomentFirstOrder)
+		full.AddFreeformTo(spans, false, freeform.MomentSecondOrder)
 		check(t, first, full)
 		var area regionIntegrals
-		area.addFreeformTo(spans, false, freeform.MomentAreaOrder)
-		area.publishExact()
-		require.Equal(t, full.area, area.area)
-		require.Equal(t, full.areaBound, area.areaBound)
-		require.Zero(t, area.muu)
-		require.Zero(t, area.muv)
-		require.Zero(t, area.mvv)
+		area.AddFreeformTo(spans, false, freeform.MomentAreaOrder)
+		area.PublishExact()
+		require.Equal(t, full.Area, area.Area)
+		require.Equal(t, full.AreaBound, area.AreaBound)
+		require.Zero(t, area.Muu)
+		require.Zero(t, area.Muv)
+		require.Zero(t, area.Mvv)
 	})
 
 	t.Run("offset rectangle through evaluator", func(t *testing.T) {
@@ -101,20 +101,20 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 			LineSeg{Start: Point2{U: 120.25, V: -45.5}, End: Point2{U: 100.25, V: -45.5}, TEnd: 1},
 			LineSeg{Start: Point2{U: 100.25, V: -45.5}, End: Point2{U: 100.25, V: -50.5}, TEnd: 1},
 		}}}
-		first, err := record.evaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentFirstOrder, freeform.NewFreeformWork())
+		first, err := record.EvaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentFirstOrder, freeform.NewFreeformWork())
 		require.NoError(t, err)
-		full, err := record.evaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentSecondOrder, freeform.NewFreeformWork())
+		full, err := record.EvaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentSecondOrder, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		check(t, first, full)
-		area, err := record.evaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork())
+		area, err := record.EvaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork())
 		require.NoError(t, err)
-		require.Equal(t, full.area, area.area)
-		require.Equal(t, full.areaBound, area.areaBound)
-		require.Zero(t, area.muu)
-		require.Zero(t, area.muv)
-		require.Zero(t, area.mvv)
-		firstCentroid, firstExact := first.exactCentroid()
-		fullCentroid, fullExact := full.exactCentroid()
+		require.Equal(t, full.Area, area.Area)
+		require.Equal(t, full.AreaBound, area.AreaBound)
+		require.Zero(t, area.Muu)
+		require.Zero(t, area.Muv)
+		require.Zero(t, area.Mvv)
+		firstCentroid, firstExact := first.ExactCentroid()
+		fullCentroid, fullExact := full.ExactCentroid()
 		require.True(t, firstExact)
 		require.True(t, fullExact)
 		require.Equal(t, fullCentroid, firstCentroid)
@@ -123,21 +123,21 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	t.Run("area with overflowing higher moments", func(t *testing.T) {
 		seg := LineSeg{Start: Point2{}, End: Point2{U: 1e120, V: 1e120}, TEnd: 1}
 		var area regionIntegrals
-		require.NoError(t, area.addFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
-		require.True(t, area.isFinite(freeform.MomentAreaOrder))
-		require.False(t, area.isFinite(freeform.MomentFirstOrder))
-		require.Zero(t, area.muu)
-		require.Zero(t, area.muv)
-		require.Zero(t, area.mvv)
+		require.NoError(t, area.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
+		require.True(t, area.IsFinite(freeform.MomentAreaOrder))
+		require.False(t, area.IsFinite(freeform.MomentFirstOrder))
+		require.Zero(t, area.Muu)
+		require.Zero(t, area.Muv)
+		require.Zero(t, area.Mvv)
 	})
 
 	t.Run("freeform work charges", func(t *testing.T) {
 		profile := involuteFitProfile()
 		areaWork := freeform.NewFreeformWork()
-		_, err := profile.evaluatorIntegrals(freeform.MomentAreaOrder, areaWork)
+		_, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, areaWork)
 		require.NoError(t, err)
 		fullWork := freeform.NewFreeformWork()
-		_, err = profile.evaluatorIntegrals(freeform.MomentSecondOrder, fullWork)
+		_, err = profile.EvaluatorIntegrals(freeform.MomentSecondOrder, fullWork)
 		require.NoError(t, err)
 		require.Positive(t, areaWork.Spent)
 		require.Positive(t, areaWork.ReconstructionSpent)
@@ -153,8 +153,8 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
 	t.Parallel()
 	withExact := func(area *big.Rat, held float64) *regionIntegrals {
-		ig := &regionIntegrals{area: held, exact: newExactMoments()}
-		ig.exact.Area.Set(area)
+		ig := &regionIntegrals{Area: held, Exact: newExactMoments()}
+		ig.Exact.Area.Set(area)
 		return ig
 	}
 	for _, tc := range []struct {
@@ -182,16 +182,16 @@ func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
 		},
 		{
 			name:    "retired accumulator with a non-positive float",
-			ig:      &regionIntegrals{area: 0, exactDead: true},
+			ig:      &regionIntegrals{Area: 0, ExactDead: true},
 			refuses: true,
 		},
 		{
 			name: "retired accumulator with a positive float",
-			ig:   &regionIntegrals{area: 2, exactDead: true},
+			ig:   &regionIntegrals{Area: 2, ExactDead: true},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.ig.requirePositiveArea()
+			err := tc.ig.RequirePositiveArea()
 			if !tc.refuses {
 				require.NoError(t, err)
 				return
@@ -210,9 +210,9 @@ func TestMomentValidationCancellationIsBounded(t *testing.T) {
 		segments[i] = LineSeg{Start: start, End: Point2{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
 	}
 	record := ProfileRecord{Outer: LoopRecord{Segments: segments}}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validateMomentFieldsBudget"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ValidateFieldsWithPoll"}
 
-	_, err := record.integralsBudget(proofbound.NewWorkBudget(ctx))
+	_, err := record.IntegralsBudget(proofbound.NewWorkBudget(ctx))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `moment field validation must poll inside its segment scan`)
@@ -644,9 +644,9 @@ func TestThirdOrderMomentsOfASector(t *testing.T) {
 		ArcSeg{Center: Point2{}, Start: Point2{U: 4, V: 3}, End: Point2{U: 0, V: 5}, TEnd: 1},
 		LineSeg{Start: Point2{U: 0, V: 5}, End: Point2{}, TEnd: 1},
 	}}}
-	ig, err := record.evaluatorIntegralsContext(t.Context(), freeform.MomentThirdOrder, freeform.NewFreeformWork())
+	ig, err := record.EvaluatorIntegralsContext(t.Context(), freeform.MomentThirdOrder, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	got, ok := ig.thirdMoments()
+	got, ok := ig.ThirdMoments()
 	require.True(t, ok)
 
 	c0, s0 := big.NewRat(4, 5), big.NewRat(3, 5)
@@ -666,8 +666,8 @@ func TestThirdOrderMomentsOfASector(t *testing.T) {
 		requireIntervalWidthAtMost(t, name, got[i], 1e-9)
 	}
 
-	second, err := record.evaluatorIntegralsContext(t.Context(), freeform.MomentSecondOrder, freeform.NewFreeformWork())
+	second, err := record.EvaluatorIntegralsContext(t.Context(), freeform.MomentSecondOrder, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	_, ok = second.thirdMoments()
+	_, ok = second.ThirdMoments()
 	require.False(t, ok, `a second-order integration carries no third-order sum`)
 }

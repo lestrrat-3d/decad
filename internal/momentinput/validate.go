@@ -25,10 +25,10 @@ type (
 	FitSplineSeg    = sectionrecord.FitSplineSeg
 )
 
-// Profile carries the recorded loops without root package methods.
+// Profile is the structural plane-local region exposed as decad.ProfileRecord.
 type Profile struct {
-	Outer LoopRecord
-	Holes []LoopRecord
+	Outer LoopRecord   `json:"outer"`
+	Holes []LoopRecord `json:"holes,omitempty"`
 }
 
 // Plan carries one converted free-form segment into the moments pass.

@@ -42,11 +42,11 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
+	ig, err := pp.profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	if ig.area <= 0 {
+	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
@@ -99,8 +99,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		surface:       Plane{Frame: startFrame},
 		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
-		area:          ig.area,
-		areaBound:     ig.areaBound,
+		area:          ig.Area,
+		areaBound:     ig.AreaBound,
 		axialDelta:    pp.z0Delta,
 		hasAxialDelta: true,
 	}
@@ -108,8 +108,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		surface:       Plane{Frame: endFrame},
 		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:          body,
-		area:          ig.area,
-		areaBound:     ig.areaBound,
+		area:          ig.Area,
+		areaBound:     ig.AreaBound,
 		axialDelta:    pp.z1Delta,
 		hasAxialDelta: true,
 	}
@@ -190,8 +190,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// walls take it through the perimeter, which every walk already charged its
 	// own length displacement into (buildLoopSidesAs).
 	delta := pp.sectionDelta
-	regionArea := proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(
-		ig.areaBound,
+	regionArea := proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(
+		ig.AreaBound,
 		proofbound.SectionDisplacementArea(delta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)),
 	))
 	capStart.areaBound = regionArea.Bound
@@ -225,8 +225,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		Exactness: exactnessOf(area.Bound),
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
-	cu := proofbound.BoundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
-	cv := proofbound.BoundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+	cu := proofbound.BoundedQuotient(ig.Mu, ig.MuBound, ig.Area, ig.AreaBound)
+	cv := proofbound.BoundedQuotient(ig.Mv, ig.MvBound, ig.Area, ig.AreaBound)
 	zc := proofbound.BoundedDiv(proofbound.BoundedAdd(pp.z0Scalar(), pp.z1Scalar()), proofbound.ExactScalar(2))
 	centroidValue := pp.point(cu.Value, cv.Value, zc.Value)
 	// A displaced section moves its own centroid, so the displacement enters the

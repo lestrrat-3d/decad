@@ -38,11 +38,11 @@ type brepRegion struct {
 // the region's own integration bound plus the area its section displacement
 // moves, as evalPrism composes a cap's.
 func brepRegionOf(ctx context.Context, f brepFace, walks [][]survey2d.SegmentWalk) (brepRegion, error) {
-	ig, err := f.region.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, freeform.NewFreeformWork())
+	ig, err := f.region.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, freeform.NewFreeformWork())
 	if err != nil {
 		return brepRegion{}, err
 	}
-	area, err := brepEnclosure(ig.area, ig.areaBound, ig.exactArea())
+	area, err := brepEnclosure(ig.Area, ig.AreaBound, ig.ExactArea())
 	if err != nil {
 		return brepRegion{}, err
 	}
@@ -56,20 +56,11 @@ func brepRegionOf(ctx context.Context, f brepFace, walks [][]survey2d.SegmentWal
 		}
 	}
 	displacement := proofbound.SectionDisplacementArea(f.delta, count, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))
-	published := proofbound.MeasuredScalar(ig.area, proofbound.AbsSumUpper(ig.areaBound, displacement))
+	published := proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(ig.AreaBound, displacement))
 	return brepRegion{
 		area: area, published: published, displacement: displacement,
-		upper: proofbound.AbsSumUpper(ig.area, ig.areaBound),
+		upper: proofbound.AbsSumUpper(ig.Area, ig.AreaBound),
 	}, nil
-}
-
-// exactArea is the region's exact area when every contribution had one, or
-// nil.
-func (ig regionIntegrals) exactArea() *big.Rat {
-	if ig.exactDead || !ig.exact.Complete() {
-		return nil
-	}
-	return ig.exact.Area
 }
 
 // brepEnclosure is a rational enclosure of a reading: the exact rational where
@@ -92,15 +83,15 @@ func brepEnclosure(value, bound float64, exact *big.Rat) (proofbound.RatInterval
 // are exact rationals; a circular segment's carry its proven bounds.
 func brepSegmentIntegrals(seg CurveSegment) ([3]proofbound.RatInterval, error) {
 	var ig regionIntegrals
-	if err := ig.add(seg, freeformPlan{}, Point2{}, freeform.MomentFirstOrder); err != nil {
+	if err := ig.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentFirstOrder); err != nil {
 		return [3]proofbound.RatInterval{}, err
 	}
 	var exact [3]*big.Rat
-	if !ig.exactDead && ig.exact.Complete() {
-		exact = [3]*big.Rat{ig.exact.Area, ig.exact.Mu, ig.exact.Mv}
+	if !ig.ExactDead && ig.Exact.Complete() {
+		exact = [3]*big.Rat{ig.Exact.Area, ig.Exact.Mu, ig.Exact.Mv}
 	}
 	var out [3]proofbound.RatInterval
-	for i, field := range [3][2]float64{{ig.area, ig.areaBound}, {ig.mu, ig.muBound}, {ig.mv, ig.mvBound}} {
+	for i, field := range [3][2]float64{{ig.Area, ig.AreaBound}, {ig.Mu, ig.MuBound}, {ig.Mv, ig.MvBound}} {
 		iv, err := brepEnclosure(field[0], field[1], exact[i])
 		if err != nil {
 			return [3]proofbound.RatInterval{}, err

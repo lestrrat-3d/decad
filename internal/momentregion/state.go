@@ -13,7 +13,7 @@ import (
 // Field is one held integral and its outward error bound.
 type Field struct{ Value, Bound *float64 }
 
-// State writes directly into the root region accumulator's stored fields.
+// State writes directly into the region accumulator's stored fields.
 // The view avoids copying a rational accumulator between segment additions.
 type State struct {
 	CoordUpper *float64

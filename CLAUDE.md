@@ -50,7 +50,7 @@ APIs are design-only.**
   patch of two exact planar faces, clipped in exact rational arithmetic:
   `docs/multibody-dynamics-design.md` §9.4). Building a private `sketch` scene
   from decad's OWN recorded entities and asking it to arrange them is the
-  default's usual shape (`moments_validate.go`,
+  default's usual shape (`internal/momentinput/record_validation.go`,
   `docs/prism-boolean-design.md`, `docs/surface-intersection-design.md`):
   decad selects among the regions, chains and cells `sketch` returns. The
   soundness half is absolute: where `sketch` reports its own answer

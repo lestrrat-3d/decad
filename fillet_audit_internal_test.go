@@ -69,11 +69,11 @@ func TestLoopSignedAreaMatchesFullIntegrator(t *testing.T) {
 			t.Parallel()
 			var full regionIntegrals
 			for _, segment := range segments {
-				require.NoError(t, full.addAnalytic(segment, Point2{}))
+				require.NoError(t, full.AddAnalytic(segment, Point2{}))
 			}
 			got, err := loopSignedAreaBudget(nil, LoopRecord{Segments: segments})
 			require.NoError(t, err)
-			require.Equal(t, math.Float64bits(full.area), math.Float64bits(got))
+			require.Equal(t, math.Float64bits(full.Area), math.Float64bits(got))
 		})
 	}
 }
@@ -90,7 +90,7 @@ func TestLoopSignedAreaPreservesBudgetAndErrors(t *testing.T) {
 	}
 	for _, segment := range bad {
 		var full regionIntegrals
-		want := full.addAnalytic(segment, Point2{})
+		want := full.AddAnalytic(segment, Point2{})
 		require.Error(t, want)
 		_, got := loopSignedAreaBudget(nil, LoopRecord{Segments: []CurveSegment{segment}})
 		require.EqualError(t, got, want.Error())

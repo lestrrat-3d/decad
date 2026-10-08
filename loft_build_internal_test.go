@@ -845,11 +845,11 @@ func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignmen
 // a test that builds a payload or calls validateLoftRecords directly.
 func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
 	t.Helper()
-	ig0, err := p0.evaluatorIntegrals(freeform.MomentAreaOrder, nil)
+	ig0, err := p0.EvaluatorIntegrals(freeform.MomentAreaOrder, nil)
 	require.NoError(t, err)
-	ig1, err := p1.evaluatorIntegrals(freeform.MomentAreaOrder, nil)
+	ig1, err := p1.EvaluatorIntegrals(freeform.MomentAreaOrder, nil)
 	require.NoError(t, err)
-	return [2]float64{ig0.area, ig1.area}
+	return [2]float64{ig0.Area, ig1.Area}
 }
 
 // loftRecordAreasOrZero is loftRecordAreas for the gate tests, whose records
@@ -857,11 +857,11 @@ func loftRecordAreas(t testing.TB, p0, p1 ProfileRecord) [2]float64 {
 // gets a zero area, which only a chorded build ever reads.
 func loftRecordAreasOrZero(p0, p1 ProfileRecord) [2]float64 {
 	var out [2]float64
-	if ig, err := p0.evaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
-		out[0] = ig.area
+	if ig, err := p0.EvaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
+		out[0] = ig.Area
 	}
-	if ig, err := p1.evaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
-		out[1] = ig.area
+	if ig, err := p1.EvaluatorIntegrals(freeform.MomentAreaOrder, nil); err == nil {
+		out[1] = ig.Area
 	}
 	return out
 }
@@ -1227,15 +1227,15 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	pl := boxLoftPayload(t)
 	a := assembleLoftFixture(t, pl)
 
-	ig, err := pl.profile0.integralsTo(freeform.MomentAreaOrder)
+	ig, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
-	require.False(t, ig.exactDead)
-	require.True(t, ig.exact.Complete())
+	require.False(t, ig.ExactDead)
+	require.True(t, ig.Exact.Complete())
 
 	got := capPolygonAreaRat(a.pts0, a.loopIdx0)
-	require.Equalf(t, 0, ig.exact.Area.Cmp(got),
+	require.Equalf(t, 0, ig.Exact.Area.Cmp(got),
 		"untrimmed LineSeg: shoelace %s must equal moments.go's own region rational %s exactly",
-		got.RatString(), ig.exact.Area.RatString())
+		got.RatString(), ig.Exact.Area.RatString())
 }
 
 // trimmedLineTriangleProfile is a triangle whose first segment is a TRIMMED
@@ -1297,11 +1297,11 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	// The other rational this cap could have been read from: moments.go's
 	// own region-level integral of the record, independent of whatever
 	// assembleLoft actually walked.
-	ig, err := p.integralsTo(freeform.MomentAreaOrder)
+	ig, err := p.IntegralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
-	require.False(t, ig.exactDead)
-	require.True(t, ig.exact.Complete())
-	recordRat := ig.exact.Area
+	require.False(t, ig.ExactDead)
+	require.True(t, ig.Exact.Complete())
+	recordRat := ig.Exact.Area
 
 	require.NotEqualf(t, 0, recordRat.Cmp(polyRat),
 		"a trimmed LineSeg must leave moments.go's record-level area %s and the assembled cap polygon's own shoelace %s different, or this fixture no longer exercises the trimmed path",
@@ -1499,27 +1499,27 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 			got0 := capPolygonAreaRat(a.pts0, a.loopIdx0)
 			got1 := capPolygonAreaRat(a.pts1, a.loopIdx1)
 
-			ig0, err := pl.profile0.integralsTo(freeform.MomentAreaOrder)
+			ig0, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
-			require.False(t, ig0.exactDead)
-			require.True(t, ig0.exact.Complete())
-			ig1, err := pl.profile1.integralsTo(freeform.MomentAreaOrder)
+			require.False(t, ig0.ExactDead)
+			require.True(t, ig0.Exact.Complete())
+			ig1, err := pl.profile1.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
-			require.False(t, ig1.exactDead)
-			require.True(t, ig1.exact.Complete())
+			require.False(t, ig1.ExactDead)
+			require.True(t, ig1.Exact.Complete())
 
-			require.Equalf(t, 0, ig0.exact.Area.Cmp(got0),
+			require.Equalf(t, 0, ig0.Exact.Area.Cmp(got0),
 				"capStart: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
-				got0.RatString(), ig0.exact.Area.RatString())
-			require.Equalf(t, 0, ig1.exact.Area.Cmp(got1),
+				got0.RatString(), ig0.Exact.Area.RatString())
+			require.Equalf(t, 0, ig1.Exact.Area.Cmp(got1),
 				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
-				got1.RatString(), ig1.exact.Area.RatString())
+				got1.RatString(), ig1.Exact.Area.RatString())
 
 			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta, 0, 0)
 			for k, tri := range a.tris {
 				mass.add(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls)
 			}
-			want := mass.area(ig0.exact.Area, ig1.exact.Area)
+			want := mass.area(ig0.Exact.Area, ig1.Exact.Area)
 			area := mass.area(got0, got1)
 			require.Equal(t, want.Value.Base(), area.Value.Base(), "published area value")
 			require.Equal(t, want.Bound.Base(), area.Bound.Base(), "published area bound")

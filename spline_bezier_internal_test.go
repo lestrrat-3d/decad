@@ -898,5 +898,5 @@ func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the expansion")
 	require.Nil(t, checked, "a refused segment is not admitted")
 	require.Zero(t, anchor)
-	require.Nil(t, plan.spans, "no chain is carried into the moments pass")
+	require.Nil(t, plan.Spans, "no chain is carried into the moments pass")
 }

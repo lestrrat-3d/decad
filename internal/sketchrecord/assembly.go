@@ -9,7 +9,7 @@ import (
 )
 
 // RecordProfileLoops records a fresh arrangement. The caller constructs the
-// root ProfileRecord, whose measurement methods belong to that package.
+// profile record consumed by internal/momentinput.
 func RecordProfileLoops(p *sketch.Profile) (LoopRecord, []LoopRecord, error) {
 	if !p.Valid {
 		return LoopRecord{}, nil, fmt.Errorf(`%w: a self-intersecting or degenerate region is never silently swept`, decaderr.ErrInvalidProfile)

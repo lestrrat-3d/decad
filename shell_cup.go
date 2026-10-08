@@ -254,15 +254,15 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// on either, so the ceiling opens here and both preflights and every walkOf
 	// below spend it (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
-	igO, err := cp.outer.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
+	igO, err := cp.outer.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
+	igC, err := cp.cavity.EvaluatorIntegralsContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	if igO.area <= 0 || igC.area <= 0 {
+	if igO.Area <= 0 || igC.Area <= 0 {
 		return nil, fmt.Errorf(`%w: a cup region encloses no area`, ErrDegenerate)
 	}
 	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
@@ -392,8 +392,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		surface:       Plane{Frame: capStartFrame},
 		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
-		area:          igO.area,
-		areaBound:     igO.areaBound,
+		area:          igO.Area,
+		areaBound:     igO.AreaBound,
 		axialDelta:    cp.zOuterDelta,
 		hasAxialDelta: true,
 	}
@@ -401,8 +401,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		surface:       Plane{Frame: shellCapFrame},
 		origins:       []FeatureRef{{producer: ref, Role: "shellCap"}},
 		body:          body,
-		area:          igC.area,
-		areaBound:     igC.areaBound,
+		area:          igC.Area,
+		areaBound:     igC.AreaBound,
 		axialDelta:    cp.zCavDelta,
 		hasAxialDelta: true,
 	}
@@ -473,8 +473,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 
 	// Measurements carry the composed profile, length, and arithmetic bounds
 	// (docs/modify-design.md §10).
-	areaO := proofbound.MeasuredScalar(igO.area, igO.areaBound)
-	areaC := proofbound.MeasuredScalar(igC.area, igC.areaBound)
+	areaO := proofbound.MeasuredScalar(igO.Area, igO.AreaBound)
+	areaC := proofbound.MeasuredScalar(igC.Area, igC.AreaBound)
 	massO := proofbound.BoundedMul(areaO, heightO)
 	massC := proofbound.BoundedMul(areaC, heightC)
 	volume := proofbound.BoundedSub(massO, massC)
@@ -497,10 +497,10 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// two combined with the cavity's mass subtracted (§10).
 	zMidO := proofbound.BoundedDiv(proofbound.BoundedAdd(cp.outerScalar(), cp.openScalar()), proofbound.ExactScalar(2))
 	zMidC := proofbound.BoundedDiv(proofbound.BoundedAdd(cp.cavityScalar(), cp.openScalar()), proofbound.ExactScalar(2))
-	cuO := proofbound.BoundedQuotient(igO.mu, igO.muBound, igO.area, igO.areaBound)
-	cvO := proofbound.BoundedQuotient(igO.mv, igO.mvBound, igO.area, igO.areaBound)
-	cuC := proofbound.BoundedQuotient(igC.mu, igC.muBound, igC.area, igC.areaBound)
-	cvC := proofbound.BoundedQuotient(igC.mv, igC.mvBound, igC.area, igC.areaBound)
+	cuO := proofbound.BoundedQuotient(igO.Mu, igO.MuBound, igO.Area, igO.AreaBound)
+	cvO := proofbound.BoundedQuotient(igO.Mv, igO.MvBound, igO.Area, igO.AreaBound)
+	cuC := proofbound.BoundedQuotient(igC.Mu, igC.MuBound, igC.Area, igC.AreaBound)
+	cvC := proofbound.BoundedQuotient(igC.Mv, igC.MvBound, igC.Area, igC.AreaBound)
 	pp := cp.basePrism()
 	cO := pp.point(cuO.Value, cvO.Value, zMidO.Value)
 	cC := pp.point(cuC.Value, cvC.Value, zMidC.Value)
@@ -621,7 +621,7 @@ func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (proofbound.Boun
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
-	return proofbound.MeasuredScalar(math.Abs(ig.area), ig.areaBound), nil
+	return proofbound.MeasuredScalar(math.Abs(ig.Area), ig.AreaBound), nil
 }
 
 // loopRegionIntegralsContext runs the regionIntegrals accumulator over one
@@ -636,7 +636,7 @@ func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegr
 		}
 		// Integrated about the plane origin itself; the band's area is a
 		// difference of two loop areas, so no walk anchor is involved.
-		if err := ig.addAnalytic(seg, Point2{}); err != nil {
+		if err := ig.AddAnalytic(seg, Point2{}); err != nil {
 			return regionIntegrals{}, err
 		}
 	}
@@ -654,7 +654,7 @@ func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegr
 // alike, since they are all contour integrals of the same shape — so the
 // SAME orient factor that turns a clockwise hole's negative raw area into
 // loopEnclosedAreaContext's positive reading turns its first moments
-// consistently too, and orient*ig.area equals math.Abs(ig.area) exactly, so
+// consistently too, and orient*ig.Area equals math.Abs(ig.Area) exactly, so
 // this function's own area field always matches loopEnclosedAreaContext's.
 // The caller (evalCapBlendContext) applies its own per-loop sign
 // (outer/hole, by loop index) on top of this canonicalized triple, exactly as
@@ -665,12 +665,12 @@ func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
 	orient := 1.0
-	if ig.area < 0 {
+	if ig.Area < 0 {
 		orient = -1
 	}
-	return proofbound.MeasuredScalar(orient*ig.area, ig.areaBound),
-		proofbound.MeasuredScalar(orient*ig.mu, ig.muBound),
-		proofbound.MeasuredScalar(orient*ig.mv, ig.mvBound), nil
+	return proofbound.MeasuredScalar(orient*ig.Area, ig.AreaBound),
+		proofbound.MeasuredScalar(orient*ig.Mu, ig.MuBound),
+		proofbound.MeasuredScalar(orient*ig.Mv, ig.MvBound), nil
 }
 
 // displacedRegionIntegrals widens a region's area and first-moment bounds by
@@ -690,9 +690,9 @@ func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim p
 		return regionIntegrals{}, err
 	}
 	moment := proofbound.ProductUpper(area, proofbound.AbsSumUpper(coord, delta))
-	ig.areaBound = proofbound.AbsSumUpper(ig.areaBound, area)
-	ig.muBound = proofbound.AbsSumUpper(ig.muBound, moment)
-	ig.mvBound = proofbound.AbsSumUpper(ig.mvBound, moment)
+	ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, area)
+	ig.MuBound = proofbound.AbsSumUpper(ig.MuBound, moment)
+	ig.MvBound = proofbound.AbsSumUpper(ig.MvBound, moment)
 	return ig, nil
 }
 
