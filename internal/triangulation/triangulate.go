@@ -2,6 +2,7 @@ package triangulation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -14,6 +15,17 @@ import (
 
 // Point2 is a plane-local coordinate in millimetres.
 type Point2 = sectionrecord.Point2
+
+// WrapLoftError re-sentinels a cap refusal as ErrUnsupported (design O8):
+// sketch authenticated each source profile before the record reached the
+// builder, so a triangulation refusal is this evaluator failing to state the
+// body, never a claim that the body does not exist. Cancellation is unchanged.
+func WrapLoftError(err error) error {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return fmt.Errorf(`%w: the loft cap triangulator could not state this profile: %s`, decaderr.ErrUnsupported, err)
+}
 
 // This is the cap triangulator behind Body.Tessellate: a plane region
 // given as a chorded outer boundary plus hole boundaries becomes triangles by

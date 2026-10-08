@@ -128,7 +128,6 @@ the rules leave to the byte budget.
 | `sweep_mitre_build.go` | Adapts mitred construction, rounding and SM8 audit. See sweep §16.3–§16.4. |
 | `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See sweep §16.5–§16.6. |
 | `coil.go` | `Document.Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
-| `coil_build.go` | The coil's held shell: stations, β, triangles, orientation, audit. See helix §5. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload`, coordinate readings, envelopes. See evaluator §5. |
@@ -297,6 +296,7 @@ the rules leave to the byte budget.
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines and angle bounds. See sweep §3. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections and measurements. See sweep §16. |
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
+| `internal/coilshell/` | Held coil stations, vertex bounds, triangles, orientation, crossing audit and mesh proofs. See helix §5, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
 | `internal/momentinput/` | Owns profile records, validation, measurements and the profile walk cache. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |

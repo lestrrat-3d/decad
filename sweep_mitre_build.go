@@ -52,7 +52,7 @@ func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (mitredCon
 	}
 	capTris, err := triangulation.Triangulate(ctx, pts2, loopIdx)
 	if err != nil {
-		return mitredConstruction{}, wrapLoftTriangulationError(err)
+		return mitredConstruction{}, triangulation.WrapLoftError(err)
 	}
 	spans := make([]sweepmitre.Span, len(mp.path.records))
 	for k, record := range mp.path.records {

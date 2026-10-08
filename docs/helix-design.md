@@ -715,7 +715,7 @@ give a relative width near `1e-12`.
 | File | Owns |
 |---|---|
 | `coil.go` | `Coil`, `CoilOption`, `WithLeftHand`, option validation, Table CS's gates in §4's order, `coilPayload` and its placement |
-| `coil_build.go` | §5: stations, the held table and `β`, triangles, orientation, the audit |
+| `internal/coilshell/` | §5 and §8: stations, `β`, triangles, crossing audit and mesh proofs |
 | `coil_body.go` | Table CB's topology and Table CM's four readings |
 | `tessellate_coil.go` | CD2 (PR 2) |
 | `internal/coil/` | station fractions and trig, the lift to axis coordinates, the segment area closed form, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |

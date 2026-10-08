@@ -7,16 +7,31 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // This file publishes docs/helix-design.md Table CB's topology over the held
-// shell coil_build.go builds, and Table CM's four readings from the record's
+// shell internal/coilshell builds, and Table CM's four readings from the record's
 // closed forms. Interior stations are mesh vertices, never topology: a wall
 // is ONE Faceted face per profile segment spanning every turn, bounded by two
 // rim edges and two helix edges.
+
+// coilRecordOfPayload supplies the resolved axis and recorded sweep to the shell builder.
+func coilRecordOfPayload(cp coilPayload) (coilshell.Record, error) {
+	return coilshell.Read(coilshell.Input{
+		Profile: cp.profile, Frame: cp.frame, Transform: cp.xform,
+		Axis: coilshell.AxisInput{
+			AU: cp.line.aU, AV: cp.line.aV, AUBound: cp.line.aUBound, AVBound: cp.line.aVBound,
+			DU: cp.line.dU, DV: cp.line.dV, DUBound: cp.line.dUBound, DVBound: cp.line.dVBound,
+			Side: cp.side,
+		},
+		Pitch: cp.pitch, Turns: cp.turns, LeftHand: cp.leftHand,
+		StationsPerTurn: coilStationsPerTurn, MaxStations: maxCoilStations,
+	})
+}
 
 // evalCoil builds the body for one payload record. The first build and
 // every placement run it.
@@ -24,23 +39,23 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	rec, err := readCoilRecord(cp)
+	rec, err := coilRecordOfPayload(cp)
 	if err != nil {
 		return nil, err
 	}
-	sh, err := buildCoilShell(ctx, rec)
+	sh, err := coilshell.Build(ctx, rec)
 	if err != nil {
 		return nil, err
 	}
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
-	areaRat := coil.PolygonArea(rec.u, rec.v, rec.loopIdx)
-	walls := make([]coil.Iv, len(rec.pts))
-	for _, idx := range rec.loopIdx {
+	areaRat := coil.PolygonArea(rec.U, rec.V, rec.LoopIdx)
+	walls := make([]coil.Iv, len(rec.Pts))
+	for _, idx := range rec.LoopIdx {
 		m := len(idx)
 		for k := range m {
 			v, w := idx[k], idx[(k+1)%m]
-			a, ok := coil.SegmentArea(rec.rho[v], rec.zeta[v], rec.rho[w], rec.zeta[w], rec.pitch, rec.turns)
+			a, ok := coil.SegmentArea(rec.Rho[v], rec.Zeta[v], rec.Rho[w], rec.Zeta[w], rec.Pitch, rec.Turns)
 			if !ok {
 				return nil, fmt.Errorf(`%w: the coil wall of profile segment %d has no area enclosure`, ErrUnsupported, v)
 			}
@@ -60,37 +75,18 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 		return nil, err
 	}
 
-	cp.verts, cp.vertexBound, cp.tris, cp.delta, cp.maxRound = sh.verts, sh.vertexBound, sh.tris, sh.delta, sh.maxRound
+	cp.verts, cp.vertexBound, cp.tris, cp.delta, cp.maxRound = sh.Verts, sh.VertexBound, sh.Tris, sh.Delta, sh.MaxRound
 	body.payload = cp
 	return body, nil
-}
-
-// stretched widens a positive plane-coordinate area or length enclosure by
-// the denoted map's defect: L scales either by a factor in [1 − e, 1 + e]
-// (coilWorld.affine). An exactly orthonormal map returns x unchanged.
-func (rec coilRecord) stretched(x coil.Iv) coil.Iv {
-	if rec.defect.Sign() == 0 {
-		return x
-	}
-	one := big.NewRat(1, 1)
-	lo := new(big.Rat).Mul(x.Lo, new(big.Rat).Sub(one, rec.defect))
-	hi := new(big.Rat).Mul(x.Hi, new(big.Rat).Add(one, rec.defect))
-	return proofbound.Interval(lo, hi)
-}
-
-// coilVolume is Table CM's Volume enclosure: Θ·Q in plane coordinates,
-// scaled exactly by |det L|, the volume factor of the denoted affine map.
-func coilVolume(rec coilRecord, m coil.Moments) coil.Iv {
-	return proofbound.IntervalScale(coil.Volume(m, rec.turns), new(big.Rat).Abs(rec.det))
 }
 
 // publishCoilReadings is Table CM: Volume = |det L|·Θ·Q; the centroid's
 // closed form; Area = 2·A_Ω plus every wall's closed form, widened by L's
 // defect; Bounds over the held table widened by δ. Each closed form is an
 // exact enclosure rounded once.
-func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.Rat, walls []coil.Iv) error {
-	m := coil.RegionMoments(rec.rho, rec.zeta, rec.loopIdx, areaRat, rec.axis.Side)
-	vol, volBound, err := coilHeld(coilVolume(rec, m), "volume")
+func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, areaRat *big.Rat, walls []coil.Iv) error {
+	m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, areaRat, rec.Axis.Side)
+	vol, volBound, err := coilshell.Held(coilshell.Volume(rec, m), "volume")
 	if err != nil {
 		return err
 	}
@@ -100,19 +96,19 @@ func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.
 		Bound:     units.CubicMillimeters(volBound),
 	}
 
-	cr, ct, cn, ok := coil.CentroidCoefficients(m, rec.pitch, rec.turns, rec.sigma)
+	cr, ct, cn, ok := coil.CentroidCoefficients(m, rec.Pitch, rec.Turns, rec.Sigma)
 	if !ok {
 		return fmt.Errorf(`%w: the coil's first moment is not proven positive`, ErrUnsupported)
 	}
-	erU, erV := rec.axis.Radial()
-	x := proofbound.IntervalAdd(rec.axis.AU, proofbound.IntervalAdd(proofbound.IntervalMul(cr, erU), proofbound.IntervalMul(cn, rec.axis.DU)))
-	y := proofbound.IntervalAdd(rec.axis.AV, proofbound.IntervalAdd(proofbound.IntervalMul(cr, erV), proofbound.IntervalMul(cn, rec.axis.DV)))
-	z := proofbound.IntervalScale(ct, big.NewRat(int64(rec.axis.Side), 1))
-	c := rec.world.point(x, y, z)
+	erU, erV := rec.Axis.Radial()
+	x := proofbound.IntervalAdd(rec.Axis.AU, proofbound.IntervalAdd(proofbound.IntervalMul(cr, erU), proofbound.IntervalMul(cn, rec.Axis.DU)))
+	y := proofbound.IntervalAdd(rec.Axis.AV, proofbound.IntervalAdd(proofbound.IntervalMul(cr, erV), proofbound.IntervalMul(cn, rec.Axis.DV)))
+	z := proofbound.IntervalScale(ct, big.NewRat(int64(rec.Axis.Side), 1))
+	c := rec.World.Point(x, y, z)
 	var cv [3]float64
 	worst := 0.0
 	for axis := range 3 {
-		held, bound, err := coilHeld(c[axis], "centroid")
+		held, bound, err := coilshell.Held(c[axis], "centroid")
 		if err != nil {
 			return err
 		}
@@ -126,11 +122,11 @@ func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.
 		Bound:     units.Millimeters(centroidBound),
 	}
 
-	total := rec.stretched(proofbound.IntervalScale(coil.Point(areaRat), big.NewRat(2, 1)))
+	total := rec.Stretched(proofbound.IntervalScale(coil.Point(areaRat), big.NewRat(2, 1)))
 	for _, w := range walls {
 		total = proofbound.IntervalAdd(total, w)
 	}
-	area, areaBound, err := coilHeld(total, "area")
+	area, areaBound, err := coilshell.Held(total, "area")
 	if err != nil {
 		return err
 	}
@@ -150,21 +146,21 @@ func publishCoilReadings(body *Body, rec coilRecord, sh coilShell, areaRat *big.
 // most δ plus the largest station rounding past the true extremes, since
 // every held vertex is within its own rounding of a true point, plus the
 // widening's own outward step.
-func coilBounds(sh coilShell) Box {
-	lo, hi := sh.verts[0], sh.verts[0]
-	for _, p := range sh.verts[1:] {
+func coilBounds(sh coilshell.Shell) Box {
+	lo, hi := sh.Verts[0], sh.Verts[0]
+	for _, p := range sh.Verts[1:] {
 		lo = r3.NewVec(math.Min(lo.X, p.X), math.Min(lo.Y, p.Y), math.Min(lo.Z, p.Z))
 		hi = r3.NewVec(math.Max(hi.X, p.X), math.Max(hi.Y, p.Y), math.Max(hi.Z, p.Z))
 	}
-	down := func(x float64) float64 { return math.Nextafter(x-sh.delta, math.Inf(-1)) }
-	up := func(x float64) float64 { return math.Nextafter(x+sh.delta, math.Inf(1)) }
+	down := func(x float64) float64 { return math.Nextafter(x-sh.Delta, math.Inf(-1)) }
+	up := func(x float64) float64 { return math.Nextafter(x+sh.Delta, math.Inf(1)) }
 	minV := r3.NewVec(down(lo.X), down(lo.Y), down(lo.Z))
 	maxV := r3.NewVec(up(hi.X), up(hi.Y), up(hi.Z))
 	step := 0.0
 	for _, c := range []float64{minV.X, minV.Y, minV.Z, maxV.X, maxV.Y, maxV.Z} {
 		step = math.Max(step, 2*proofbound.UlpOf(c))
 	}
-	bound := proofbound.AbsSumUpper(sh.delta, sh.maxRound, step)
+	bound := proofbound.AbsSumUpper(sh.Delta, sh.MaxRound, step)
 	return Box{Min: minV, Max: maxV, Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}
 }
 
@@ -173,12 +169,12 @@ func coilBounds(sh coilShell) Box {
 // profile vertex and one vertex per profile vertex per cap. Every loop is
 // stated in the local winding and passed through loftLoopCoedges, which
 // carries the shell's one orientation decision into the directed boundary.
-func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coilRecord, sh coilShell, areaRat *big.Rat, walls []coil.Iv) ([]*Face, error) {
-	stride, n := sh.stride, rec.n
+func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coilshell.Record, sh coilshell.Shell, areaRat *big.Rat, walls []coil.Iv) ([]*Face, error) {
+	stride, n := sh.Stride, rec.N
 	next := make([]int, stride)
 	prev := make([]int, stride)
 	isOuter := make([]bool, stride)
-	for i, idx := range rec.loopIdx {
+	for i, idx := range rec.LoopIdx {
 		m := len(idx)
 		for k, v := range idx {
 			next[v] = idx[(k+1)%m]
@@ -188,8 +184,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	}
 
 	vertexAt := func(j int64, v int) *Vertex {
-		k := sh.at(j, v)
-		return &Vertex{position: sh.verts[k], bound: units.Millimeters(sh.vertexBound[k])}
+		k := sh.At(j, v)
+		return &Vertex{position: sh.Verts[k], bound: units.Millimeters(sh.VertexBound[k])}
 	}
 	startV := make([]*Vertex, stride)
 	endV := make([]*Vertex, stride)
@@ -206,14 +202,14 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			return nil, err
 		}
 		w := next[v]
-		du := new(big.Rat).Sub(rec.u[w], rec.u[v])
-		dv := new(big.Rat).Sub(rec.v[w], rec.v[v])
+		du := new(big.Rat).Sub(rec.U[w], rec.U[v])
+		dv := new(big.Rat).Sub(rec.V[w], rec.V[v])
 		l2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 		l, ok := proofbound.SqrtFixed(l2)
 		if !ok {
 			return nil, fmt.Errorf(`%w: the coil rim of profile segment %d has no length`, ErrUnsupported, v)
 		}
-		length, lengthBound, err := coilHeld(rec.stretched(l), "rim length")
+		length, lengthBound, err := coilshell.Held(rec.Stretched(l), "rim length")
 		if err != nil {
 			return nil, err
 		}
@@ -224,19 +220,19 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		// and out of v: a left turn of the recorded profile is convex, the
 		// prism's vertical-edge rule.
 		p := prev[v]
-		inU, inV := new(big.Rat).Sub(rec.u[v], rec.u[p]), new(big.Rat).Sub(rec.v[v], rec.v[p])
+		inU, inV := new(big.Rat).Sub(rec.U[v], rec.U[p]), new(big.Rat).Sub(rec.V[v], rec.V[p])
 		cross := new(big.Rat).Sub(new(big.Rat).Mul(inU, dv), new(big.Rat).Mul(inV, du))
-		hl, ok := coil.HelixLength(rec.rho[v], rec.pitch, rec.turns)
+		hl, ok := coil.HelixLength(rec.Rho[v], rec.Pitch, rec.Turns)
 		if !ok {
 			return nil, fmt.Errorf(`%w: the coil helix of profile vertex %d has no length`, ErrUnsupported, v)
 		}
-		hLength, hBound, err := coilHeld(rec.stretched(hl), "helix length")
+		hLength, hBound, err := coilshell.Held(rec.Stretched(hl), "helix length")
 		if err != nil {
 			return nil, err
 		}
 		chain := 0.0
 		for j := int64(0); j <= n; j++ {
-			chain = math.Max(chain, sh.vertexBound[sh.at(j, v)])
+			chain = math.Max(chain, sh.VertexBound[sh.At(j, v)])
 		}
 		helix[v] = &Edge{
 			curve: FacetedCurve{Bound: units.Millimeters(chain)},
@@ -251,16 +247,16 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	for v := range stride {
 		w := next[v]
 		for j := int64(0); j <= n; j++ {
-			wallBound[v] = math.Max(wallBound[v], math.Max(sh.vertexBound[sh.at(j, v)], sh.vertexBound[sh.at(j, w)]))
+			wallBound[v] = math.Max(wallBound[v], math.Max(sh.VertexBound[sh.At(j, v)], sh.VertexBound[sh.At(j, w)]))
 		}
 	}
 
-	capArea, capBound, err := coilHeld(rec.stretched(coil.Point(areaRat)), "cap area")
+	capArea, capBound, err := coilshell.Held(rec.Stretched(coil.Point(areaRat)), "cap area")
 	if err != nil {
 		return nil, err
 	}
 	var capStartLoops, capEndLoops []*Loop
-	for i, idx := range rec.loopIdx {
+	for i, idx := range rec.LoopIdx {
 		m := len(idx)
 		startCo := make([]coedge, m)
 		endCo := make([]coedge, m)
@@ -268,14 +264,14 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			startCo[m-1-k] = coedge{edge: rimStart[v], forward: false}
 			endCo[k] = coedge{edge: rimEnd[v], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(startCo, sh.reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(endCo, sh.reversed)})
+		capStartLoops = append(capStartLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(startCo, sh.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(endCo, sh.Reversed)})
 	}
-	capStartSurf, err := planeFromTriangle(sh.verts, sh.tris[sh.walls])
+	capStartSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
 		return nil, err
 	}
-	capEndSurf, err := planeFromTriangle(sh.verts, sh.tris[sh.walls+sh.capStartCount])
+	capEndSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls+sh.CapStartCount])
 	if err != nil {
 		return nil, err
 	}
@@ -284,21 +280,21 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			surface: capStartSurf, loops: capStartLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:    body, area: capArea, areaBound: capBound,
-			axialDelta: sh.delta, hasAxialDelta: true,
+			axialDelta: sh.Delta, hasAxialDelta: true,
 		},
 		{
 			surface: capEndSurf, loops: capEndLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:    body, area: capArea, areaBound: capBound,
-			axialDelta: sh.delta, hasAxialDelta: true,
+			axialDelta: sh.Delta, hasAxialDelta: true,
 		},
 	}
-	for i, idx := range rec.loopIdx {
+	for i, idx := range rec.LoopIdx {
 		for k, v := range idx {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			area, areaBound, err := coilHeld(walls[v], "wall area")
+			area, areaBound, err := coilshell.Held(walls[v], "wall area")
 			if err != nil {
 				return nil, err
 			}
@@ -314,7 +310,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 				{edge: helix[next[v]], forward: true},
 				{edge: rimEnd[v], forward: false},
 				{edge: helix[v], forward: false},
-			}, sh.reversed)}}
+			}, sh.Reversed)}}
 			faces = append(faces, face)
 		}
 	}
