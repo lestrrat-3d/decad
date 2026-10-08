@@ -23,6 +23,7 @@ type Chain struct {
 	scenes       [2]Scene
 	zero         [2]*LocatedAsk
 	Asks         map[string]*LocatedAsk
+	spans        map[string][][]linkagebound.Span
 	subs         linkagebound.DriverSegments
 	readingFloor int64
 	valueAt      func(side int, s *big.Rat) (float64, float64)
@@ -32,7 +33,7 @@ type Chain struct {
 func NewChain(subs linkagebound.DriverSegments, readingFloor int64,
 	valueAt func(side int, s *big.Rat) (float64, float64)) *Chain {
 	return &Chain{
-		Asks: make(map[string]*LocatedAsk), subs: subs,
+		Asks: make(map[string]*LocatedAsk), spans: make(map[string][][]linkagebound.Span), subs: subs,
 		readingFloor: readingFloor, valueAt: valueAt,
 	}
 }
@@ -113,6 +114,55 @@ func (c *Chain) StraddleAsks(ctx context.Context, sub linkagebound.DriverSubsegm
 			return nil, err
 		}
 		out = append(out, approach, at)
+	}
+	return out, nil
+}
+
+// PointValues reads every dependent at s from its canonical chain. A value
+// beyond its certified reach is refused with the caller's loop-specific error.
+func (c *Chain) PointValues(ctx context.Context, s *big.Rat, dependents int, reach []*big.Rat,
+	refuse func(error) error) ([][2]motionbound.MotionParam, error) {
+	sub := c.subs.At(s)
+	if sub.Straddle {
+		return c.straddleValues(ctx, sub, dependents, reach, refuse)
+	}
+	ask, err := c.Point(ctx, sub, s)
+	if err != nil {
+		return nil, err
+	}
+	if ask.Err != nil {
+		return nil, refuse(ask.Err)
+	}
+	out := make([][2]motionbound.MotionParam, dependents)
+	for j := range dependents {
+		lo, hi := c.Value(ask, j)
+		if linkagebound.Magnitude(linkagebound.ValueInterval(lo, hi)).Cmp(reach[j]) > 0 {
+			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
+		}
+		out[j] = [2]motionbound.MotionParam{lo, hi}
+	}
+	return out, nil
+}
+
+// straddleValues reads each dependent's hull from the neighbouring chains.
+func (c *Chain) straddleValues(ctx context.Context, sub linkagebound.DriverSubsegment,
+	dependents int, reach []*big.Rat, refuse func(error) error) ([][2]motionbound.MotionParam, error) {
+	asks, err := c.StraddleAsks(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	for _, ask := range asks {
+		if ask.Err != nil {
+			return nil, refuse(ask.Err)
+		}
+	}
+	out := make([][2]motionbound.MotionParam, dependents)
+	for j := range dependents {
+		h := c.Hull(asks, j)
+		if linkagebound.Magnitude(h).Cmp(reach[j]) > 0 {
+			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
+		}
+		out[j] = [2]motionbound.MotionParam{{Turn: new(big.Rat), Base: h.Lo}, {Turn: new(big.Rat), Base: h.Hi}}
 	}
 	return out, nil
 }
@@ -289,7 +339,35 @@ func (c *Chain) IntervalSpans(ctx context.Context, a, b *big.Rat, dependents int
 		}
 		out = append(out, piece)
 	}
+	c.spans[linkagebound.IntervalKey(a, b)] = out
 	return out, nil
+}
+
+// Span returns the sum of a dependent's travel bounds over a cached interval.
+// The caller serializes access to the chain and first checks the joint index.
+func (c *Chain) Span(j int, a, b *big.Rat) *big.Rat {
+	pieces, ok := c.cachedSpans(a, b)
+	if !ok {
+		return nil
+	}
+	return linkagebound.SumSpanUpper(pieces, j)
+}
+
+// DependentHull returns a dependent's hull over a cached interval.
+func (c *Chain) DependentHull(j int, a, b *big.Rat) (proofbound.RatInterval, bool) {
+	pieces, ok := c.cachedSpans(a, b)
+	if !ok || len(pieces) == 0 {
+		return proofbound.RatInterval{}, false
+	}
+	return linkagebound.HullOfPieces(pieces, j), true
+}
+
+func (c *Chain) cachedSpans(a, b *big.Rat) ([][]linkagebound.Span, bool) {
+	if a.Cmp(b) > 0 {
+		a, b = b, a
+	}
+	pieces, ok := c.spans[linkagebound.IntervalKey(a, b)]
+	return pieces, ok
 }
 
 // straddleSpans reads a whole straddle from its two neighbouring chains.

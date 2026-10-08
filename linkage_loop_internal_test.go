@@ -452,8 +452,11 @@ func TestLoopIntervalGate(t *testing.T) {
 	half, end := big.NewRat(1, 2), big.NewRat(3, 4)
 	dr := &linkageDriver{run: &motionRun{ctx: t.Context()}, spec: spec}
 	require.Empty(t, dr.intervalGate(&motionPose{f: half}, &motionPose{f: end}), `a certified cell passes`)
-	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)], 1, `one piece`)
-	require.Len(t, ld.spans[linkagebound.IntervalKey(half, end)][0], 2, `two dependents`)
+	for _, joint := range ld.deps {
+		_, ok := ld.dependentHull(joint, half, end)
+		require.True(t, ok, `the interval has a reading for each dependent`)
+		require.NotNil(t, ld.span(joint, half, end))
+	}
 	ld.chain.Asks["0:c0,1/2"] = &loopchain.LocatedAsk{
 		Ask: loopchain.Ask{Err: fmt.Errorf(`%w: injected`, sketch.ErrNotCertified)},
 	}
