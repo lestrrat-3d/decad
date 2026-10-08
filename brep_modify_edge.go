@@ -621,9 +621,9 @@ func (r *brepEdgeRoute) traces(eb *brepEdgeBlend, j int, mate brepUse) bool {
 // cutback the foot claims from the corner.
 func footOf(end brepEdgeEnd, cb *cornerBlend, j int) (Point2, float64) {
 	if end.arriving == j {
-		return cb.fA, cb.cutbackA
+		return cb.FA, cb.CutbackA
 	}
-	return cb.fB, cb.cutbackB
+	return cb.FB, cb.CutbackB
 }
 
 // computeBlends is brep-modify §5.3 steps 1 and 2: the corner blend in G0
@@ -660,11 +660,11 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 				r.bp.faces[eb.adj[j]].role, renderCoord(f0.U), renderCoord(f0.V), renderCoord(u), renderCoord(v), r.bp.faces[g0].role))
 		}
 	}
-	mapped, err := brepgeom.MapSegment(m, eb.blend[1].connector)
+	mapped, err := brepgeom.MapSegment(m, eb.blend[1].Connector)
 	if err != nil {
 		return r.refuse(eb, "SB9", err.Error())
 	}
-	c0, arc0 := eb.blend[0].connector.(ArcSeg)
+	c0, arc0 := eb.blend[0].Connector.(ArcSeg)
 	c1, arc1 := mapped.(ArcSeg)
 	if arc0 != arc1 || (arc0 && c0.Center != c1.Center) {
 		return r.refuse(eb, "SB9", `the blend's centre computed in the two end faces disagrees`)
@@ -767,12 +767,12 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 				local := embed.Local(moved)
 				p := Point2{U: local[0], V: local[1]}
 				_, claim := footOf(eb.end[k], eb.blend[k], j)
-				trim := &cornerBlend{fA: p, fB: p}
+				trim := &cornerBlend{FA: p, FB: p}
 				ci := u.Seg
 				if c == 0 {
-					trim.cutbackA = claim
+					trim.CutbackA = claim
 				} else {
-					trim.cutbackB = claim
+					trim.CutbackB = claim
 					ci = (u.Seg + 1) % n
 				}
 				if err := mark(eb, fi, u.Loop, ci, trim); err != nil {
@@ -864,7 +864,7 @@ func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
 	embed := r.topo.embeds[eb.end[0].face]
 	z0, z0Delta := g0.z0, g0.z0Delta
 	z1, z1Delta := embed.Local(eb.v[1])[2], r.bp.faces[eb.end[1].face].z0Delta
-	wall := eb.blend[0].connector
+	wall := eb.blend[0].Connector
 	if inner := (z1 > z0) != g0.outward; !inner {
 		wall = reverseSegment(wall)
 	}

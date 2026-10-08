@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -477,199 +476,12 @@ func matchEndpoints(a, b, p, q r3.Vec, tol float64) bool {
 	return (near(a, p) && near(b, q)) || (near(a, q) && near(b, p))
 }
 
-// cornerBlend is one corner's rewrite — the geometry Fillet and Chamfer share.
-// Each op trims the two adjacent walks back to feet fA (on the arriving walk)
-// and fB (on the leaving walk), losing cutbackA / cutbackB of arc length there
-// (what the §5 S6 audit sums), then joins the feet with a connector segment: a
-// tangent ArcSeg for a fillet (§6), a chord LineSeg for a chamfer (§7).
-// Everything downstream — the §5 audit, the profile rewrite, evalPrism and the
-// mass properties — reads only this shared shape, so the two ops fork no
-// machinery.
-type cornerBlend struct {
-	fA, fB             Point2
-	cutbackA, cutbackB float64 // arc length consumed on the arriving / leaving walk
-	connector          CurveSegment
-}
+// cornerBlend is the shared fillet and chamfer section rewrite.
+type cornerBlend = offset2d.Blend
 
-// carrier is one side of a corner as an offsettable curve: a line through the
-// corner with unit travel tangent, or a circle with a signed material side
-// (insideSign +1 when the material is inside the circle — a CCW walk).
-type carrier struct {
-	isLine     bool
-	px, py     float64 // a point on the line (the corner)
-	tx, ty     float64 // unit travel tangent
-	cx, cy     float64 // circle center
-	radius     float64 // circle radius
-	insideSign float64 // +1 material inside, −1 outside
-}
-
-// offCurve is a carrier's material-relative offset: a line (point + unit dir)
-// or a concentric circle.
-type offCurve struct {
-	isLine     bool
-	px, py     float64
-	dx, dy     float64
-	cx, cy, rr float64
-}
-
-// carrierOf builds the carrier of a walk at a corner: (tx, ty) is the walk's
-// unit travel tangent there.
-func carrierOf(w survey2d.SideWalk, tx, ty float64) carrier {
-	if !w.IsCircular() {
-		return carrier{isLine: true, px: w.StartU, py: w.StartV, tx: tx, ty: ty}
-	}
-	inside := 1.0
-	if w.Th1 < w.Th0 { // a clockwise walk has its material outside the circle
-		inside = -1.0
-	}
-	return carrier{cx: w.CU, cy: w.CV, radius: w.Radius, insideSign: inside}
-}
-
-// offsetOf offsets a carrier by r, signed by offsetSign (+1 a convex corner
-// offsets INTO the material, −1 a concave corner offsets away). A circular
-// carrier whose offset radius is non-positive has no blend of that radius: S5.
-func offsetOf(c carrier, offsetSign, r float64) (offCurve, error) {
-	if c.isLine {
-		// The left unit normal points into the material for a walk with the
-		// material on its left; the offset shifts the line that way for a
-		// convex corner and the other way for a concave one.
-		nlx, nly := -c.ty, c.tx
-		s := offsetSign * r
-		return offCurve{isLine: true, px: c.px + s*nlx, py: c.py + s*nly, dx: c.tx, dy: c.ty}, nil
-	}
-	rr := c.radius - offsetSign*c.insideSign*r
-	// The gate accepts a fillet exactly when the offset radius rr clears
-	// filletTol (1e-9 mm). In the ordinary case, where the offset shrinks the
-	// wall (offsetSign*insideSign = +1), that means the fillet radius must sit
-	// strictly below the wall radius less the tolerance (c.radius − filletTol).
-	// When that boundary is at or below zero the wall itself is within the
-	// evaluator's tolerance, so NO positive fillet fits — the remedy is a larger
-	// wall, not a smaller radius.
-	if rr <= filletTol {
-		bound := c.radius - filletTol
-		if bound <= 0 {
-			return offCurve{}, fmt.Errorf(`%w: the circular wall radius %s is at or below the evaluator's tolerance, so no fillet of radius %s fits; enlarge the wall`, ErrDegenerate, units.Millimeters(c.radius), units.Millimeters(r))
-		}
-		return offCurve{}, fmt.Errorf(`%w: no fillet of radius %s fits a circular wall of radius %s; the fillet radius must be a positive value strictly below %s`, ErrDegenerate, units.Millimeters(r), units.Millimeters(c.radius), units.Millimeters(bound))
-	}
-	return offCurve{cx: c.cx, cy: c.cy, rr: rr}, nil
-}
-
-// computeFillet builds a corner's blend from its two carriers (§6): S4 rejects
-// a smooth or cusped corner, the two material-side offsets are intersected for
-// the center nearest the corner (S5 when they never meet), and the tangent
-// feet, cutbacks and arc sense follow.
+// computeFillet builds one section corner blend.
 func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
-	n := len(loop.walks)
-	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
-	leave := loop.walks[ci]          // walk B, leaving the corner
-	px, py := leave.StartU, leave.StartV
-
-	// Unit travel tangents at the corner: A's outgoing, B's incoming.
-	ax, ay, la := normalize2(arrive.TanOutU, arrive.TanOutV)
-	bx, by, lb := normalize2(leave.TanInU, leave.TanInV)
-	if la == 0 || lb == 0 {
-		return nil, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
-	}
-	// S4: a smooth (tangent) or cusped (anti-tangent) corner is no corner.
-	cross := ax*by - ay*bx
-	if math.Abs(cross) <= filletTol {
-		return nil, fmt.Errorf(`%w: the two walls meet smoothly — there is no corner to round`, ErrDegenerate)
-	}
-	offsetSign := 1.0 // convex: the walk turns left (material wedge < π)
-	if cross < 0 {
-		offsetSign = -1.0 // concave: fill material in
-	}
-
-	carA := carrierOf(arrive, ax, ay)
-	carB := carrierOf(leave, bx, by)
-	offA, err := offsetOf(carA, offsetSign, r)
-	if err != nil {
-		return nil, err
-	}
-	offB, err := offsetOf(carB, offsetSign, r)
-	if err != nil {
-		return nil, err
-	}
-	ox, oy, err := intersectOffsets(offA, offB, px, py)
-	if err != nil {
-		return nil, err
-	}
-
-	fax, fay := footOn(carA, ox, oy)
-	fbx, fby := footOn(carB, ox, oy)
-	cutA := cutbackOn(carA, px, py, fax, fay)
-	cutB := cutbackOn(carB, px, py, fbx, fby)
-
-	// The arc's walk sense: at fA the boundary continues in A's travel
-	// direction, so the CCW tangent there (rotate(fA−O, +90°)) agrees with tA
-	// exactly when the arc is a CCW walk.
-	rx, ry := -(fay - oy), fax-ox
-	ccw := rx*ax+ry*ay > 0
-
-	fA := Point2{U: fax, V: fay}
-	fB := Point2{U: fbx, V: fby}
-	return &cornerBlend{
-		fA:        fA,
-		fB:        fB,
-		cutbackA:  cutA,
-		cutbackB:  cutB,
-		connector: arcSegment(Point2{U: ox, V: oy}, fA, fB, ccw),
-	}, nil
-}
-
-// normalize2 returns the unit vector and length of (x, y).
-func normalize2(x, y float64) (float64, float64, float64) {
-	return offset2d.Normalize(x, y)
-}
-
-// intersectOffsets intersects two offset curves and returns the root nearest
-// the corner (px, py). No intersection is S5 — no blend of that radius exists.
-func intersectOffsets(a, b offCurve, px, py float64) (float64, float64, error) {
-	toCurve := func(c offCurve) offset2d.Curve {
-		return offset2d.Curve{
-			IsLine: c.isLine, PX: c.px, PY: c.py, DX: c.dx, DY: c.dy,
-			CX: c.cx, CY: c.cy, Radius: c.rr,
-		}
-	}
-	x, y, ok := offset2d.Intersect(toCurve(a), toCurve(b), px, py)
-	if !ok {
-		return 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, ErrDegenerate)
-	}
-	return x, y, nil
-}
-
-// footOn returns the tangent foot of the center on a carrier: the perpendicular
-// projection onto a line, the nearest circle point along the center ray for a
-// circle.
-func footOn(c carrier, ox, oy float64) (float64, float64) {
-	if c.isLine {
-		s := (ox-c.px)*c.tx + (oy-c.py)*c.ty
-		return c.px + s*c.tx, c.py + s*c.ty
-	}
-	ux, uy, l := normalize2(ox-c.cx, oy-c.cy)
-	if l == 0 {
-		return c.cx + c.radius, c.cy
-	}
-	return c.cx + c.radius*ux, c.cy + c.radius*uy
-}
-
-// cutbackOn is the arc length a carrier loses from the corner to its foot: a
-// chord on a line, an arc on a circle.
-func cutbackOn(c carrier, px, py, fx, fy float64) float64 {
-	if c.isLine {
-		return math.Hypot(fx-px, fy-py)
-	}
-	ap := math.Atan2(py-c.cy, px-c.cx)
-	af := math.Atan2(fy-c.cy, fx-c.cx)
-	d := math.Mod(af-ap, 2*math.Pi)
-	if d > math.Pi {
-		d -= 2 * math.Pi
-	}
-	if d < -math.Pi {
-		d += 2 * math.Pi
-	}
-	return c.radius * math.Abs(d)
+	return offset2d.Fillet(loop.walks, ci, r, filletTol)
 }
 
 // rewriteProfile applies every corner's blend to the section, returning the new
@@ -706,58 +518,19 @@ func rewriteProfileBudget(budget *proofbound.WorkBudget, orig ProfileRecord, loo
 	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
 }
 
-// rewriteLoop rebuilds one loop's segments with its corners blended: each walk
-// is trimmed to the feet its two ends' blends pin, and each blend's connector —
-// a fillet's tangent arc or a chamfer's chord — is inserted between the walls it
-// joins.
+// rewriteLoop applies the section blend to one coalesced loop.
 func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}, error) {
-	n := len(loop.walks)
-	var segs []CurveSegment
-	connectors := map[int]struct{}{}
-	for i := range n {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, nil, err
-		}
-		w := loop.walks[i]
-		startU, startV := w.StartU, w.StartV
-		if cb := blends[i]; cb != nil { // corner i trims this walk's start
-			startU, startV = cb.fB.U, cb.fB.V
-		}
-		endU, endV := w.EndU, w.EndV
-		if cb := blends[(i+1)%n]; cb != nil { // corner i+1 trims this walk's end
-			endU, endV = cb.fA.U, cb.fA.V
-		}
-		segs = append(segs, walkSegment(w, startU, startV, endU, endV))
-		// A blend without a connector only moves this walk's end: the brep
-		// route's trim of a face that holds a blended edge as a segment
-		// (docs/brep-modify-design.md §5.3 step 4).
-		if cb := blends[(i+1)%n]; cb != nil && cb.connector != nil {
-			segs = append(segs, cb.connector)
-			connectors[len(segs)-1] = struct{}{}
-		}
-	}
-	return segs, connectors, nil
+	return offset2d.RewriteLoop(budget, loop.walks, blends)
 }
 
-// walkSegment re-emits a coalesced walk, trimmed to (start, end), as a
-// LineSeg or an ArcSeg in the walk's own sense.
+// walkSegment re-emits a coalesced walk trimmed to its two endpoints.
 func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) CurveSegment {
-	if !w.IsCircular() {
-		return LineSeg{Start: Point2{U: sU, V: sV}, End: Point2{U: eU, V: eV}, TStart: 0, TEnd: 1}
-	}
-	return arcSegment(Point2{U: w.CU, V: w.CV}, Point2{U: sU, V: sV}, Point2{U: eU, V: eV}, w.Th1 > w.Th0)
+	return offset2d.OriginalSegment(w, sU, sV, eU, eV)
 }
 
-// arcSegment builds an ArcSeg walking from start to end about center: an
-// ArcSeg walks CCW start→end by default (TStart<TEnd), so a clockwise walk is
-// recorded with swapped endpoints and a reversed range — TStart>TEnd runs the
-// CCW-defined arc backwards, which walkOf and the mass-property integrals both
-// read exactly.
+// arcSegment records an arc in its walk sense.
 func arcSegment(center, start, end Point2, ccw bool) CurveSegment {
-	if ccw {
-		return ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1}
-	}
-	return ArcSeg{Center: center, Start: end, End: start, TStart: 1, TEnd: 0}
+	return offset2d.ArcSegment(center, start, end, ccw)
 }
 
 // addBlendRoles gives every blend wall its second kind(i,j) role (Table B): the

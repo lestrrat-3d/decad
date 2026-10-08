@@ -168,10 +168,10 @@ func loopOverrunBudget(budget *proofbound.WorkBudget, cl cornerLoop, blends map[
 		}
 		cut := 0.0
 		if cb := blends[i]; cb != nil {
-			cut += cb.cutbackB
+			cut += cb.CutbackB
 		}
 		if cb := blends[(i+1)%n]; cb != nil {
-			cut += cb.cutbackA
+			cut += cb.CutbackA
 		}
 		if cut >= w.Length-1e-9*math.Max(1, w.Length) {
 			return i, true, nil
