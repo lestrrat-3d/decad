@@ -958,7 +958,8 @@ func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
 // wall's two ends and mid-angle. A swept face is its wall swept over the
 // whole of [z0, z1] (its side splits add vertices on the side lines and
 // remove nothing), so every station is a point of the face. A whole circle's
-// start and mid-angle are antipodal. The recorded body lies within the
+// start and mid-angle are antipodal. A face whose stations cannot be read (a
+// free-form wall) adds none, and the reading keeps its vertices. The recorded body lies within the
 // largest section displacement plus the largest level displacement of the
 // body the record denotes, so the maximum is shrunk by that sum plus the
 // widest vertex bound or station gap (lowerDiameterForDisplacement), as the
@@ -985,8 +986,11 @@ func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64,
 			continue
 		}
 		stations, stationAllow, read, err := prismStationWitnesses(budget, f.view(bp.xform), work, false)
-		if err != nil || !read {
+		if err != nil {
 			return 0, false, err
+		}
+		if !read {
+			continue
 		}
 		witnesses = append(witnesses, stations...)
 		allow = math.Max(allow, stationAllow)
