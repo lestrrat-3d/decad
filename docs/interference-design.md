@@ -146,9 +146,10 @@ one `bool` that merges inside with failed classification.
 **The exact planar arm** (`clearance_planar.go`) answers a pair the analytic
 kernel leaves `pairUndecided` when one operand is a payload that kernel has
 no carrier model for and the exact planar relation can read: a
-`mitredSweepPayload` or a `facetedPayload`, each read off its own held
-triangle set with that set's displacement `δ`, against a prism, a stitched
-solid, or another of the two, read exactly off its own record — the same
+`mitredSweepPayload`, a `facetedPayload` or a `coilPayload`, each read off
+its own held triangle set with that set's displacement `δ`, against a prism,
+a stitched solid, or (a mitred sweep or a faceted result only) another of
+the two; a coil is served against a prism or a stitched solid alone, read exactly off its own record — the same
 admission `Document.ContactPair` uses (`planarSolidAtPose`,
 `contact_faceted_pair.go`; `docs/multibody-dynamics-design.md` §9.1, §10.4).
 Every predicate there is an exact sign over dyadic coordinates, and the band
@@ -666,7 +667,7 @@ The proof path is capability-based, not operation-history-based:
 |---|---|
 | bounds | box disjointness |
 | analytic boundary model + certified casts | clearance/contact/full-containment proof |
-| exact planar held boundary with a displacement `δ` (a mitred sweep, a faceted Boolean result) against an exact planar partner | §3.2's exact planar arm: disjoint with a gap, touching at `δ = 0`, or overlap through a deep vertex |
+| exact planar held boundary with a displacement `δ` (a mitred sweep, a faceted Boolean result, a coil) against an exact planar partner | §3.2's exact planar arm: disjoint with a gap, touching at `δ = 0`, or overlap through a deep vertex |
 | tessellation accepted by mesh boolean | read-only intersection volume |
 | neither boundary model nor tessellation | undecided → `Suspect` |
 
@@ -783,7 +784,7 @@ Each row is a PR-sized stage. An unanswered verification question reads
 | 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching; settle the near-miss question §5.2 states this increment owes a coplanar carrier pair before removing the refusal that pair is deferred to | unsupported curved operands and unresolved curved tangencies |
 | 5 | curved read-only intersection coverage after revolve tessellation, with chord bounds and the hidden-tangency refusal intact | contact or overlap whose proven interval still admits both zero and positive volume |
 | 6 | multi-region analytic overlap: `docs/prism-boolean-design.md` §4.5's overlap-area reading, entered after the §5 twin declines, measuring an admitted coplanar prism pair whose overlap covers any number of disjoint regions | a coplanar pair the prism entry gate or the region classification declines, an exactly-tangent pair, and every faceted or non-coplanar operand |
-| 7 | §3.2's exact planar arm: a mitred sweep or a faceted Boolean result, against a prism, a stitched solid or each other, partitioned by the exact planar relation under the displacement band | a held touch or a held gap or overlap within the summed displacement; every pair holding a cup, a loft, a composite sweep, a cap-loop chamfer or a curved body |
+| 7 | §3.2's exact planar arm: a mitred sweep or a faceted Boolean result, against a prism, a stitched solid or each other, and a coil against a prism or a stitched solid, partitioned by the exact planar relation under the displacement band | a held touch or a held gap or overlap within the summed displacement; every pair holding a cup, a loft, a composite sweep, a cap-loop chamfer or a curved body |
 
 ## 12. Decisions
 

@@ -270,6 +270,8 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 		entry.solid, entry.delta, entry.ok, err = planarFacetedSolid(budget, payload)
 	case stitchPayload:
 		entry.solid, entry.delta, entry.ok, err = planarStitchSolid(budget, b, payload)
+	case coilPayload:
+		entry.solid, entry.delta, entry.ok, err = planarCoilSolid(ctx, budget, b, payload)
 	default:
 		entry.solid, entry.delta, entry.ok, entry.chordFree, err = planarHeldMeshSolid(ctx, budget, b, chord)
 	}
@@ -397,6 +399,48 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		return planar.PlanarSolid{}, none, false, err
 	}
 	return solid, proofarith.MustDyOf(displacement), true, nil
+}
+
+// planarCoilSolid reads a coil off its held shell (docs/helix-design.md Table
+// CD row CD5). The shell is a closed all-triangle restatement of the body
+// whose every vertex lies within its own β of the true boundary, so its
+// displacement is the payload's delta, the same bound its mesh publishes. The
+// restatement does not depend on a chord, so tessellateCoil is asked at delta
+// itself, the finest tolerance it serves, and the snapshot serves every
+// chord. The wall's Faceted face is not planar, which is why this path does
+// not go through planarHeldMeshSolid: that arm refuses a curved body at the
+// zero chord the planar arm reads.
+func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
+	cp coilPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
+	none := proofarith.DyZero()
+	if !finiteMeasurementValues(cp.delta) || cp.delta < 0 {
+		return planar.PlanarSolid{}, none, false, nil
+	}
+	mesh, err := tessellateCoil(ctx, b, cp, cp.delta, VerifyNone)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return planar.PlanarSolid{}, none, false, ctxErr
+		}
+		return planar.PlanarSolid{}, none, false, nil
+	}
+	faces := b.Faces()
+	faceAt := make(map[*Face]int, len(faces))
+	for i, face := range faces {
+		faceAt[face] = i
+	}
+	faceOf := make([]int, len(mesh.triangles))
+	for t, face := range mesh.source {
+		at, ok := faceAt[face]
+		if !ok {
+			return planar.PlanarSolid{}, none, false, nil
+		}
+		faceOf[t] = at
+	}
+	solid, ok, err := planarHeldSolid(budget, mesh.vertices, mesh.triangles, faceOf)
+	if err != nil || !ok {
+		return planar.PlanarSolid{}, none, false, err
+	}
+	return solid, proofarith.MustDyOf(cp.delta), true, nil
 }
 
 // planarHeldMeshSolid reads a solid payload without an exact contact family

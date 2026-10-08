@@ -119,7 +119,7 @@ Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 The cup adapter has not landed, per §8's increment table and payload
 verification §13's own stage list. The faceted adapter is not a carrier model
-in this kernel at all: a faceted Boolean result, and a mitred sweep with it,
+in this kernel at all: a faceted Boolean result, and a mitred sweep and a coil with it,
 is partitioned by the exact planar arm of `docs/interference-design.md`
 §3.2 (`clearance_planar.go`), which runs after this kernel leaves such a
 pair undecided and applies the same once-widened true interval.
@@ -888,7 +888,7 @@ reads `Suspect`, never an error, never a silent pass:
 
 The cup adapter lands in payload verification §13. Until its stage lands, an
 invoked pair containing a cup remains `Suspect`; the analytic kernel does not
-tessellate a cup. A faceted Boolean result, and a mitred sweep, reach no
+tessellate a cup. A faceted Boolean result, a mitred sweep and a coil reach no
 carrier model here either: `docs/interference-design.md` §3.2's exact planar
 arm partitions such a pair after this kernel leaves it undecided, carrying the
 held displacement into the published interval rather than discarding it. A
