@@ -1554,3 +1554,6 @@
 5	0.13	TestLoftHugeCircleRefusesNonFiniteVolume
 1	0.03	TestCapBlendVolumeBoundCoversHeldAngles
 2	0.01	TestRevolveShellClosedCone
+2	0.02	TestArcFragmentPrismReadingsAreTight
+2	0.03	TestArcFragmentRevolveReadingsAreTight
+2	0.03	TestArcFragmentSplitHemispheresAreTight

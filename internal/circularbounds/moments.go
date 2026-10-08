@@ -84,10 +84,9 @@ func axisComponentInterval(value, bound float64) (proofbound.RatInterval, bool) 
 // difference terms above vanish exactly, leaving Pappus's own r·Δθ·ρ_centre
 // form — the torus/whole-circle case); an ArcSeg's come from proofbound.RadSinCosSpan of
 // the proofbound.Atan2Interval endpoint enclosure, exactly as circularEndpointInterval
-// evaluates them, and — like circularAreaInterval and
-// circularFirstMomentInterval — only over its own full recorded range
-// (forward or reverse), never a trimmed fragment, whose actual endpoint the
-// record alone does not state.
+// evaluates them. A narrowed range starts its ascending walk at
+// θ(tLo) = a0 + tLo·sweep, tLo the smaller recorded parameter, with the sweep
+// arcAngleSweep encloses; a whole range has tLo = 0 and starts at a0.
 func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
 	r, dtheta, ok := circularWalkEnclosures(seg)
 	if !ok {
@@ -118,11 +117,6 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 			cosDiff = proofbound.IntervalSub(cosLo, cosHi)
 		}
 	case ArcSeg:
-		forward := seg.TStart == 0 && seg.TEnd == 1
-		reverse := seg.TStart == 1 && seg.TEnd == 0
-		if !forward && !reverse {
-			return proofbound.RatInterval{}, false
-		}
 		cU, cV = proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cU == nil || cV == nil {
 			return proofbound.RatInterval{}, false
@@ -131,6 +125,19 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		heldDY0 := seg.Start.V - seg.Center.V
 		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		if tLo := math.Min(seg.TStart, seg.TEnd); tLo != 0 {
+			// A narrowed range starts its ascending walk at θ(tLo) =
+			// a0 + tLo·sweep rather than at Start's own angle.
+			rtLo := proofarith.FloatRat(tLo)
+			if rtLo == nil {
+				return proofbound.RatInterval{}, false
+			}
+			dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+			dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+			_, sweep := arcAngleSweep(dx0, dy0, dx1, dy1,
+				seg.Start.U-seg.Center.U, heldDY0, seg.End.U-seg.Center.U, seg.End.V-seg.Center.V)
+			a0 = proofbound.IntervalAdd(a0, proofbound.IntervalScale(sweep, rtLo))
+		}
 		a1 := proofbound.IntervalAdd(a0, dtheta)
 		sinLo, cosLo, ok0 := proofbound.RadSinCosSpan(a0)
 		sinHi, cosHi, ok1 := proofbound.RadSinCosSpan(a1)
@@ -169,9 +176,8 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 
 // circularFirstMomentInterval brackets one circular walk's exact first-moment
 // contributions (∫u dA, ∫v dA) about the walk anchor: a CircleSeg over any
-// recorded range, whole or fractional, and — under a narrower admission — an
-// ArcSeg only over its own full recorded range (forward or reverse), never a
-// trimmed fragment.
+// recorded range, whole or fractional, and an ArcSeg over any recorded range,
+// whole or narrowed, forward or reverse.
 //
 // A CircleSeg's whole turns are the enclosed disk's own boundary, whose first
 // moment about each axis is its centroid times its area: every odd trig
@@ -183,17 +189,19 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 // swept angle — taken as an exact rational: the same substitution
 // circularAreaInterval's fractional arm makes, one order higher.
 //
-// An ArcSeg's fragment restates addCircular's own mu/mv closed forms
+// An ArcSeg restates addCircular's own mu/mv closed forms
 // (0.5·r·(c.U²·intCos + 2·c.U·r·intCos2 + r²·intCos3), and the mv analogue)
-// with sin/cos of the endpoints read as the exact ratios dy/r, dx/r rather
-// than evaluated: every r that multiplies one of those ratios cancels it
+// with r·sinθ, r·cosθ at each walk end read as the radius-scaled offsets
+// arcWalkOffsets encloses — for a whole arc the exact recorded differences —
+// rather than evaluated: every r that multiplies one of those ratios cancels it
 // back to a rational coordinate difference, and the one term that does not
 // cancel — the θ term inside intCos2/intSin2 — is exactly the swept angle
 // proofbound.Atan2Interval already brackets. What is left after multiplying through is
 // rational except for that single c.U·r²·dth (respectively c.V·r²·dth) term.
-// Forward walks th0→th1 through (Start, End) in the sweep direction; reverse
-// walks the same arc the other way, so the two endpoints swap which
-// "th0"/"th1" role they play and the signed sweep negates.
+// The walk runs from θ(TStart) to θ(TEnd) in the record's order, so a
+// reversed record swaps which end plays "th0"/"th1" and its signed sweep
+// negates. A narrowed end states no point, so its offset is the enclosure
+// r·(cos θ(t), sin θ(t)) and carries the width of r's and the sine's brackets.
 //
 // The denoted arc runs on Start's radius r and ends at End's ANGLE, so End's
 // r·sinθ1, r·cosθ1 are ρ·(End − Center) with ρ = r/|End − Center|, not the
@@ -275,43 +283,11 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 		mv := proofbound.IntervalScale(mvInner, ratScale(r, 1, 2))
 		return mu, mv, true
 	case ArcSeg:
-		forward := seg.TStart == 0 && seg.TEnd == 1
-		reverse := seg.TStart == 1 && seg.TEnd == 0
-		if !forward && !reverse {
-			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
-		}
-		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
-		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
-		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
-		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
-		endR2 := proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1))
-		rho, ok := arcEndRadialRatio(r2, endR2)
+		walk, r2, ok := anchoredArcWalk(seg, anchor)
 		if !ok {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		heldCenter := shiftPoint(seg.Center, anchor)
-		heldStart := shiftPoint(seg.Start, anchor)
-		heldEnd := shiftPoint(seg.End, anchor)
-		heldDY0 := heldStart.V - heldCenter.V
-		heldDY1 := heldEnd.V - heldCenter.V
-		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := proofbound.IntervalSub(a1, a0)
-		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
-		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
-		if heldA1-heldA0 <= 0 {
-			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
-		}
-		// End contributes its ANGLE (the sweep above reads the recorded
-		// deltas); its point on the denoted circle is ρ·(End − Center).
-		s0x, s0y := proofbound.PointInterval(dx0), proofbound.PointInterval(dy0)
-		e1x, e1y := proofbound.IntervalScale(rho, dx1), proofbound.IntervalScale(rho, dy1)
-		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
-		if reverse {
-			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
-			dth = proofbound.IntervalNeg(sweep)
-		}
+		p0x, p0y, p1x, p1y, dth := walk.x0, walk.y0, walk.x1, walk.y1, walk.dtheta
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		dy := proofbound.IntervalSub(p1y, p0y)
@@ -355,8 +331,8 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // anchor, admitted under exactly the same conditions as its first-moment
 // sibling circularFirstMomentInterval and restating addCircular's own
 // muu/muv/mvv closed forms one order higher still: a CircleSeg over any
-// recorded range, whole or fractional, and an ArcSeg only over its own full
-// recorded range (forward or reverse), never a trimmed fragment.
+// recorded range, whole or fractional, and an ArcSeg over any recorded range,
+// whole or narrowed, forward or reverse.
 //
 // A CircleSeg's whole turns restate Pappus's own parallel-axis form: every
 // odd trig moment over a whole period cancels exactly, leaving
@@ -371,11 +347,12 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // evaluated, only interval arithmetic over the one enclosure
 // circularFirstMomentInterval already trusts.
 //
-// An ArcSeg's fragment goes one step further: because its two endpoints are
-// RECORDED coordinates (not evaluated trig), every r·sinθ / r·cosθ that
-// appears — at any power up to four — cancels back to an exact rational
-// coordinate difference, the same substitution circularFirstMomentInterval's
-// own ArcSeg arm makes for mu/mv. Expanding addCircular's muu/muv/mvv this
+// An ArcSeg goes one step further: every r·sinθ / r·cosθ that appears — at
+// any power up to four — is a walk end's radius-scaled offset from
+// arcWalkOffsets, which for a whole arc is an exact rational coordinate
+// difference, the same substitution circularFirstMomentInterval's own ArcSeg
+// arm makes for mu/mv; a narrowed end's is the enclosure
+// r·(cos θ(t), sin θ(t)) instead. Expanding addCircular's muu/muv/mvv this
 // way leaves exactly one term that does not collapse to a rational: the
 // piece proportional to the swept angle dθ itself (a rational COEFFICIENT
 // times the proofbound.Atan2Interval-bracketed sweep), mirroring mu/mv's own
@@ -510,43 +487,11 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (proofbound.R
 
 		return muuVal, muvVal, mvvVal, true
 	case ArcSeg:
-		forward := seg.TStart == 0 && seg.TEnd == 1
-		reverse := seg.TStart == 1 && seg.TEnd == 0
-		if !forward && !reverse {
-			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
-		}
-		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
-		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
-		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
-		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
-		endR2 := proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1))
-		rho, ok := arcEndRadialRatio(r2, endR2)
+		walk, r2, ok := anchoredArcWalk(seg, anchor)
 		if !ok {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, proofbound.RatInterval{}, false
 		}
-		heldCenter := shiftPoint(seg.Center, anchor)
-		heldStart := shiftPoint(seg.Start, anchor)
-		heldEnd := shiftPoint(seg.End, anchor)
-		heldDY0 := heldStart.V - heldCenter.V
-		heldDY1 := heldEnd.V - heldCenter.V
-		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := proofbound.IntervalSub(a1, a0)
-		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
-		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
-		if heldA1-heldA0 <= 0 {
-			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
-		}
-		// End contributes its ANGLE (the sweep above reads the recorded
-		// deltas); its point on the denoted circle is ρ·(End − Center).
-		s0x, s0y := proofbound.PointInterval(dx0), proofbound.PointInterval(dy0)
-		e1x, e1y := proofbound.IntervalScale(rho, dx1), proofbound.IntervalScale(rho, dy1)
-		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
-		if reverse {
-			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
-			dth = proofbound.IntervalNeg(sweep)
-		}
+		p0x, p0y, p1x, p1y, dth := walk.x0, walk.y0, walk.x1, walk.y1, walk.dtheta
 		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 
@@ -656,13 +601,13 @@ type circularMomentWalk struct {
 
 // circularMomentWalkOf states seg for circularMonomials under the admission every
 // circular moment enclosure in this file shares: a CircleSeg over any recorded
-// range, whole or fractional, and an ArcSeg only over its own full recorded
-// range (forward or reverse), never a trimmed fragment, whose actual end the
-// record alone does not state. A CircleSeg's endpoints come from
-// quarterTurnSinCos (exact at every quarter turn); an ArcSeg's Start is its
-// recorded offset and its End is ρ·(End − Center) through arcEndRadialRatio,
-// with the swept angle bracketed by proofbound.Atan2Interval under the same +2π branch
-// correction circularWalkEnclosures applies.
+// range, whole or fractional, and an ArcSeg over any recorded range, whole or
+// narrowed. A CircleSeg's endpoints come from quarterTurnSinCos (exact at
+// every quarter turn); an ArcSeg's come from arcWalkOffsets: Start's recorded
+// offset at t == 0, ρ·(End − Center) through arcEndRadialRatio at t == 1, and
+// r·(cos θ(t), sin θ(t)) at a cut t, with the swept angle bracketed by
+// proofbound.Atan2Interval under the same +2π branch correction
+// circularWalkEnclosures applies.
 func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
@@ -688,45 +633,42 @@ func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
 			closed: dt.IsInt(),
 		}, true
 	case ArcSeg:
-		forward := seg.TStart == 0 && seg.TEnd == 1
-		reverse := seg.TStart == 1 && seg.TEnd == 0
-		if !forward && !reverse {
-			return circularMomentWalk{}, false
-		}
 		cU, cV := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cU == nil || cV == nil {
 			return circularMomentWalk{}, false
 		}
-		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
-		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
-		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
-		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r2 := proofbound.RatAdd(proofbound.RatMul(dx0, dx0), proofbound.RatMul(dy0, dy0))
-		rho, ok := arcEndRadialRatio(r2, proofbound.RatAdd(proofbound.RatMul(dx1, dx1), proofbound.RatMul(dy1, dy1)))
+		walk, r2, ok := anchoredArcWalk(seg, Point2{})
 		if !ok {
 			return circularMomentWalk{}, false
 		}
-		heldDY0 := seg.Start.V - seg.Center.V
-		heldDY1 := seg.End.V - seg.Center.V
-		a0 := proofbound.Atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
-		a1 := proofbound.Atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
-		sweep := proofbound.IntervalSub(a1, a0)
-		if math.Atan2(heldDY1, seg.End.U-seg.Center.U)-math.Atan2(heldDY0, seg.Start.U-seg.Center.U) <= 0 {
-			sweep = proofbound.IntervalAdd(sweep, proofbound.TwoPiInterval())
-		}
-		walk := circularMomentWalk{
-			cU: cU, cV: cV, r2: r2, dtheta: sweep,
-			x0: proofbound.PointInterval(dx0), y0: proofbound.PointInterval(dy0),
-			x1: proofbound.IntervalScale(rho, dx1), y1: proofbound.IntervalScale(rho, dy1),
-		}
-		if reverse {
-			walk.x0, walk.y0, walk.x1, walk.y1 = walk.x1, walk.y1, walk.x0, walk.y0
-			walk.dtheta = proofbound.IntervalNeg(sweep)
-		}
-		return walk, true
+		return circularMomentWalk{
+			cU: cU, cV: cV, r2: r2, dtheta: walk.dtheta,
+			x0: walk.x0, y0: walk.y0, x1: walk.x1, y1: walk.y1,
+		}, true
 	default:
 		return circularMomentWalk{}, false
 	}
+}
+
+// anchoredArcWalk states seg's walk over its recorded range for the moment
+// brackets (arcWalkOffsets), with the sweep's +2π branch read off the
+// anchor-shifted float coordinates the float evaluation walks. It also
+// returns Start's exact squared radius.
+func anchoredArcWalk(seg ArcSeg, anchor Point2) (arcOffsets, *big.Rat, bool) {
+	d, ok := arcDeltasOf(seg)
+	if !ok {
+		return arcOffsets{}, nil, false
+	}
+	heldCenter := shiftPoint(seg.Center, anchor)
+	heldStart := shiftPoint(seg.Start, anchor)
+	heldEnd := shiftPoint(seg.End, anchor)
+	a0, sweep := arcAngleSweep(d.dx0, d.dy0, d.dx1, d.dy1,
+		heldStart.U-heldCenter.U, heldStart.V-heldCenter.V, heldEnd.U-heldCenter.U, heldEnd.V-heldCenter.V)
+	walk, ok := arcWalkOffsets(seg, d, a0, sweep)
+	if !ok {
+		return arcOffsets{}, nil, false
+	}
+	return walk, d.r2, true
 }
 
 // intervalPow is x^n by repeated outward multiplication; x^0 is the exact 1.

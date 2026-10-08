@@ -197,6 +197,46 @@ coordinate differences. Equal radii give a point `ρ = 1` and lose nothing;
 unequal radii have the difference charged into the published bound, never
 trusted and never dropped to the magnitude envelope.
 
+An `ArcSeg` recorded over a narrowed range — a cut fragment of a sketch arc,
+a `Split` piece's meridian — keeps its parent's `Start`, `End` and `Center`
+and walks `θ(t) = a0 + t·sweep` on Start's radius `r` from `t = TStart` to
+`t = TEnd`, in the record's order (`docs/sketch-seam-design.md` §2). `a0` and
+the sweep are the `Atan2Interval` enclosures of Start's and End's angles,
+under the same `+2π` branch correction a whole arc takes, and `t` is the
+recorded float read as an exact rational. With `X = r·cos θ`, `Y = r·sin θ`
+the walk's offsets from `Center`, `(cU, cV)` the centre about the walk
+anchor, `Δθ = (TEnd − TStart)·sweep` signed and
+`[g] = g(θ(TEnd)) − g(θ(TStart))`, Green's theorem gives every region
+integral as a polynomial in the two ends' `(X, Y)`, the exact `r²` and `Δθ`:
+
+- area `½∮(u dv − v du) = ½(r²·Δθ + cU·[Y] − cV·[X])`, from `u = cU + X`,
+  `dv = X dθ`, `du = −Y dθ`;
+- the first, second and third moments `(1/(p+1))∮u^(p+1)·v^q dv`, expanded
+  binomially about the centre into `∫X^a·Y^b dθ`, which the trig-power
+  reduction `J(a,b) = [X^(a−1)·Y^(b+1)]/(a+b) + (a−1)·r²·J(a−2,b)/(a+b)`
+  (and its `b ≥ 2` mirror) brings down to `[·]` of end products and the one
+  term `J(0,0) = Δθ`;
+- the axial moment `∫ρ ds` a revolve's wall area reads, `ds = r·|dθ|`,
+  walked over the ascending range from `θ(min(TStart, TEnd))`: about an axis
+  anchored at `(aU, aV)`, with the recorded centre `(cU, cV)` and the ends
+  `lo`/`hi` in ascending order, `∫(u − aU) ds = r·((cU − aU)·|Δθ| + Y_hi −
+  Y_lo)` and `∫(v − aV) ds = r·((cV − aV)·|Δθ| + X_lo − X_hi)`, combined
+  through the axis's outward normal.
+
+Only the ends' offsets differ from a whole arc's. At `t = 0` the offset is
+Start's recorded difference, at `t = 1` it is `ρ·(End − Center)`, and at a cut
+`t` the record states no point, so the offset is `r·(cos θ(t), sin θ(t))`:
+`r` the `ratSqrtDown`/`ratSqrtUp` bracket of the exact `r²`, the sine and
+cosine `radSinCosSpan`'s enclosure over the enclosed angle. Every factor is an
+exact rational or a proven enclosure, so the interval encloses the integral
+the record denotes. A whole arc's region integrals read its two recorded ends,
+so they carry no trig-bracket width there. A cut end adds about one ulp of `r`
+of width, so a hemisphere or a sketch-cut cap reads its volume, area and
+centroid within `1e-13` relative before a `Split` piece's cut-displacement band
+(`docs/surface-intersection-design.md` §7.2) is added. The interval encloses
+the DENOTED walk at the recorded `t`; whether that `t` is the true crossing is
+`sketch`'s `TExact` claim, which this bracket neither tests nor widens.
+
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
 `docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
 each an exactness tier and what a measurement over it may claim, §5 gives the
