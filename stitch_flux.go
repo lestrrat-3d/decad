@@ -5,9 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
@@ -174,7 +171,7 @@ import (
 // The Cone arm's apex is Origin when Radius is exactly 0 — the ONLY case
 // this evaluator admits. A revolve cone's Origin is its walk's float apex,
 // and the arm widens it by how far it sits from the record's
-// (coneApexDeparture). The general formula, Origin −
+// (stitchflux.ConeApexDeparture). The general formula, Origin −
 // Axis·(Radius/tan(HalfAngle)), needs tan(HalfAngle)'s own rounding charged
 // before that division could be trusted, and this evaluator has no sound
 // way to do that: Go gives Sin/Cos/Atan2/Hypot (and so Tan) no public ulp
@@ -409,12 +406,8 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	}, true, ""
 }
 
-func coneApex(c Cone) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	return stitchflux.ConeApex(c.HalfAngle, c.Radius, c.Origin)
-}
-
 func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	apexBound, ok := coneApexDeparture(f, cone)
+	apexBound, ok := stitchflux.ConeApexDeparture(f.denoted, cone)
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
@@ -423,53 +416,6 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (pro
 	}
 	input := stitchflux.ConeInput{Origin: cone.Origin, Axis: cone.Axis, Radius: cone.Radius, HalfAngle: cone.HalfAngle, ApexBound: apexBound}
 	return stitchflux.ConeFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
-}
-
-// coneApexDeparture is the one tag departure the Cone arm charges rather than
-// refuses: a revolve cone's apex is the float z − ρ·Δz/Δρ of its walk, which
-// an integer frustum already rounds (its apex sits at a third), while the
-// record's segment meets its axis at an exact rational. revolveTagIsDenoted
-// has proven the rest of the tag exact on the unplaced face; this reads f
-// itself, placed or not, so the record's apex is o + w·z_a in f's own
-// denoted surface and the bound is the largest coordinate of Origin minus
-// it, rounded up. The arm widens every apex coordinate by it, and every
-// reading it composes from the apex carries it through bounded arithmetic.
-// A face with no denoted surface is its own record and answers zero; one
-// whose leaves are not points answers false.
-func coneApexDeparture(f *Face, cone Cone) (float64, bool) {
-	r := f.denoted
-	if r == nil {
-		return 0, true
-	}
-	if !r.Valid || r.Circular || len(r.Ends) == 0 {
-		return 0, false
-	}
-	var end [2][2]*big.Rat
-	for i := range end {
-		for k := range end[i] {
-			x, ok := stitchflux.RatPoint(r.Ends[0][i][k])
-			if !ok {
-				return 0, false
-			}
-			end[i][k] = x
-		}
-	}
-	drho := new(big.Rat).Sub(end[1][1], end[0][1])
-	if drho.Sign() == 0 {
-		return 0, false
-	}
-	dz := new(big.Rat).Sub(end[1][0], end[0][0])
-	za := new(big.Rat).Sub(end[0][0], new(big.Rat).Quo(new(big.Rat).Mul(end[0][1], dz), drho))
-	worst := 0.0
-	for k, held := range [...]float64{cone.Origin.X, cone.Origin.Y, cone.Origin.Z} {
-		o, okO := stitchflux.RatPoint(r.Origin[k])
-		w, okW := stitchflux.RatPoint(r.Basis[2][k])
-		if !okO || !okW {
-			return 0, false
-		}
-		worst = math.Max(worst, proofarith.RationalFloatError(new(big.Rat).Add(o, new(big.Rat).Mul(w, za)), held))
-	}
-	return worst, !proofbound.IsNonFinite(worst)
 }
 
 // stitchCurvedMass sums every face's own flux and first moment
@@ -628,126 +574,26 @@ func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbo
 // the arms' formulas read different numbers off neighbouring faces' tags, so
 // a departed tag leaves the modelled boundary open by an amount whose volume
 // depends on the anchor. So a face carrying a denoted surface is admitted only
-// where its tag IS that surface, decided exactly (revolveTagIsDenoted); every
+// where its tag IS that surface, decided exactly (stitchflux.TagIsDenoted); every
 // other face's tag is its own record. It reads the unplaced operand faces:
 // a stitch's own placement rounding is its delta.
 func stitchFluxTagsDenoted(faces []*Face) bool {
 	for _, f := range faces {
-		if f.denoted != nil && !revolveTagIsDenoted(f) {
+		if f.denoted != nil && !stitchflux.TagIsDenoted(stitchTaggedFace(f)) {
 			return false
 		}
 	}
 	return true
 }
 
-// revolveTagIsDenoted decides exactly whether f's tag is the surface f's
-// record denotes, in the terms the flux arm for that tag reads. It requires
-// every leaf of the denotation the arm reads to be a point and its basis
-// exactly orthonormal, so the denoted surface is a true surface of revolution about
-// the line o + w·z; then, per tag:
-//
-//   - Cylinder: every recorded end sits at ρ = Radius, Origin lies on the
-//     axis line and Axis is ±w;
-//   - Plane: every recorded end sits at one z, the frame's U and V are
-//     perpendicular to w and its origin sits at that z;
-//   - Cone: every recorded segment's line meets the axis at one point,
-//     Radius is zero and Axis is ±w — Origin, the float apex, is charged
-//     rather than compared (coneApexDeparture);
-//   - Sphere: the recorded centre sits on the axis, at Center;
-//   - Torus: the recorded centre sits at Center, ρ = Major, the radius is
-//     Minor and Axis is ±w.
-//
-// A straight wall's Circle3 rims must also each sit at one of its recorded
-// ends: centre o + w·z and radius ρ. A cap, any other tag, or a leaf that is
-// not a point answers false. Every comparison is between exact rationals, so
-// nothing here admits on a small residual.
-func revolveTagIsDenoted(f *Face) bool {
-	r := f.denoted
-	if !r.Valid || r.Cap {
-		return false
-	}
-	ex, ok := stitchflux.ExactRevolveOf(*r)
-	if !ok {
-		return false
-	}
-	switch s := f.surface.(type) {
-	case Cylinder:
-		radius, ok := stitchflux.RatMillimetres(s.Radius)
-		if !ok || ex.Circular || len(ex.Ends) == 0 {
-			return false
-		}
-		for _, seg := range ex.Ends {
-			for _, end := range seg {
-				if end[1].Cmp(radius) != 0 {
-					return false
-				}
-			}
-		}
-		return ex.OnAxis(s.Origin) && ex.AlongAxis(s.Axis) && revolveRimsAtEnds(ex, f)
-	case Plane:
-		if ex.Circular || len(ex.Ends) == 0 {
-			return false
-		}
-		z := ex.Ends[0][0][0]
-		for _, seg := range ex.Ends {
-			for _, end := range seg {
-				if end[0].Cmp(z) != 0 {
-					return false
-				}
-			}
-		}
-		u, okU := stitchflux.RatVecOf(s.Frame.U())
-		v, okV := stitchflux.RatVecOf(s.Frame.V())
-		origin, okO := stitchflux.RatVecOf(s.Frame.Origin())
-		if !okU || !okV || !okO || ratDot(u, ex.W).Sign() != 0 || ratDot(v, ex.W).Sign() != 0 {
-			return false
-		}
-		return ratDot(ratSub3(origin, ex.O), ex.W).Cmp(z) == 0 && revolveRimsAtEnds(ex, f)
-	case Cone:
-		radius, ok := stitchflux.RatMillimetres(s.Radius)
-		if !ok || radius.Sign() != 0 || ex.Circular || len(ex.Ends) == 0 {
-			return false
-		}
-		var apex *big.Rat
-		for _, seg := range ex.Ends {
-			z0, rho0, z1, rho1 := seg[0][0], seg[0][1], seg[1][0], seg[1][1]
-			drho := new(big.Rat).Sub(rho1, rho0)
-			if drho.Sign() == 0 {
-				return false
-			}
-			dz := new(big.Rat).Sub(z1, z0)
-			at := new(big.Rat).Sub(z0, new(big.Rat).Quo(new(big.Rat).Mul(rho0, dz), drho))
-			if apex != nil && apex.Cmp(at) != 0 {
-				return false
-			}
-			apex = at
-		}
-		// Origin is the float apex of the walk; coneApexDeparture charges how
-		// far it sits from this one.
-		return ex.AlongAxis(s.Axis) && revolveRimsAtEnds(ex, f)
-	case Sphere:
-		return ex.Circular && ex.Centre[1].Sign() == 0 && ex.AtAxis(s.Center, ex.Centre[0])
-	case Torus:
-		major, okMajor := stitchflux.RatMillimetres(s.Major)
-		minor, okMinor := stitchflux.RatMillimetres(s.Minor)
-		return okMajor && okMinor && ex.Circular && ex.Radius != nil &&
-			ex.Centre[1].Cmp(major) == 0 && ex.Radius.Cmp(minor) == 0 &&
-			ex.AtAxis(s.Center, ex.Centre[0]) && ex.AlongAxis(s.Axis)
-	default:
-		return false
-	}
-}
-
-// revolveRimsAtEnds checks every circular edge against its recorded meridian
-// end. The Face adapter supplies the rim radius and centre to the exact proof.
-func revolveRimsAtEnds(ex stitchflux.ExactRevolve, f *Face) bool {
-	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			c, ok := ce.edge.curve.(Circle3)
-			if ok && !ex.RimAtEnd(c.Radius, c.Center) {
-				return false
-			}
+// stitchTaggedFace passes a face's surface and edge curves to the exact
+// denotation gate without giving the internal package topology ownership.
+func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
+	tagged := stitchflux.TaggedFace{Denoted: f.denoted, Surface: f.surface}
+	for _, loop := range f.loops {
+		for _, ce := range loop.coedges {
+			tagged.Curves = append(tagged.Curves, ce.edge.curve)
 		}
 	}
-	return true
+	return tagged
 }

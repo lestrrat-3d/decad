@@ -1155,7 +1155,8 @@ coordinates re-expresses exactly, so T31's, T46's, T50's and T53's sheets
 admit unchanged. The `Cone`'s apex is the walk's float `z − ρ·Δz/Δρ`, which
 an integer frustum already rounds (T46's inner wall meets its axis at a
 third), so the arm compares everything else and charges the apex instead:
-`coneApexDeparture` reads the face itself, placed or not, takes the record's
+`stitchflux.ConeApexDeparture` reads the face's denotation, placed or not,
+takes the record's
 apex `o + W·z_a` from its denoted surface and widens every apex coordinate
 `stitchflux.ConeApex` returns by the largest coordinate of the tag's
 `Origin` minus it, which the arm's bounded arithmetic carries into the flux
