@@ -1530,5 +1530,16 @@
 2	0.40	TestRevolveShellClosed
 2	0.04	TestRevolveShellClosedShaft
 2	0.01	TestRevolveCavityMeridianSplitsShells
+2	0.01	TestRevolveChainWallNormalCoversNearParallelSegment
 2	0.02	TestRevolveShellClosedRefusals
+2	0.01	TestRevolveWallNormalCoversConeAngle
+2	0.01	TestRevolveWallNormalCoversFarAnchoredSphere
+2	0.01	TestRevolveWallNormalCoversFarAnchoredTorus
+2	0.01	TestRevolveWallNormalCoversFarTiltedAxis
+2	0.01	TestRevolveWallNormalCoversNearParallelSegment
+2	0.01	TestRevolveWallNormalCoversNearPerpendicularSegment
+2	0.01	TestRevolveWallNormalCoversSnappedSphereCentre
+2	0.01	TestRevolveWallNormalCoversTiltedAxis
+2	0.01	TestRevolveWallNormalIntegerStaysExact
+2	0.01	TestRevolveWallNormalSurvivesUnstitch
 5	0.13	TestLoftHugeCircleRefusesNonFiniteVolume

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -1025,6 +1026,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
+			denoted:   rp.wallDenotation(w, kinds[i], resolved.plane),
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -1255,6 +1257,33 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 	default:
 		return nil, false, fmt.Errorf(`%w: a wall on the axis sweeps no surface`, ErrDegenerate)
 	}
+}
+
+// wallDenotation encloses the surface the wall w denotes: its recorded
+// segments, read off the plane-local walks they were re-expressed from, swept
+// about the recorded axis and placed (surfacenormal.Revolved). A straight
+// wall reads each recorded segment's own two ends, in walk order; a circular
+// wall reads its recorded centre. Face.NormalAt judges the wall's normal
+// against it (docs/evaluator-design.md §6).
+func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
+	lift, ab := rp.lift(), rp.axisBound()
+	var den surfacenormal.Revolved
+	switch kind {
+	case wallSphere, wallTorus:
+		first := plane[w.Segs[0]]
+		den = lift.CircularWallNormal(ab, rp.xform, revolvemesh.RecordedMeridian{U: first.CU, V: first.CV})
+	default:
+		ends := make([][2]revolvemesh.RecordedMeridian, len(w.Segs))
+		for i, si := range w.Segs {
+			pw := plane[si]
+			ends[i] = [2]revolvemesh.RecordedMeridian{
+				{U: pw.StartU, V: pw.StartV, UV: pw.StartBound},
+				{U: pw.EndU, V: pw.EndV, UV: pw.EndBound},
+			}
+		}
+		den = lift.StraightWallNormal(ab, rp.xform, ends)
+	}
+	return &den
 }
 
 // walkAxisMoment is the first moment ∫ρ ds of one boundary walk about the
@@ -1621,6 +1650,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
+			denoted:   rp.wallDenotation(w, kinds[i], resolved.plane),
 		}
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])

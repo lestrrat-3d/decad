@@ -485,7 +485,8 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 // widens by delta under a non-identity placement. A placed copy of an
 // operand face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent the dimensionless term a sound composition would need
-// (unstitch.go's copyFaceUnderContext doc comment).
+// (unstitch.go's copyFaceUnderContext doc comment). A revolve wall's denoted
+// surface (Face.denoted) carries over as its exact image under xform.
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
 	if xform != r3.Identity() {
 		for _, f := range srcFaces {
@@ -590,6 +591,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			axialDelta:    axialDelta,
 			hasAxialDelta: f.hasAxialDelta,
 			normalBound:   f.normalBound,
+			denoted:       f.denotedUnder(xform),
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
