@@ -27,7 +27,3 @@ func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	return circularbounds.EndpointInterval(circularSegment(seg), rt)
 }
-
-func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
-	return circularbounds.OffsetEndpointInterval(circularSegment(seg), rt, radiusOffset)
-}

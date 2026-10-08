@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/r3"
@@ -419,7 +420,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	require.True(t, bore.whole)
 	seg := bore.loop.Segments[bore.walks[0].Segs[0]]
 	held := bore.capPts[0]
-	gap := proofbound.WalkEndBoundAllow(capOffsetStationBound(seg, 0, bore.count[0],
+	gap := proofbound.WalkEndBoundAllow(stationbound.CapOffsetStationBound(seg, 0, bore.count[0],
 		capcontour.CapWallRadiusOffset(bore.walks[0], cbp.loopOffset(bore.li)), held.U, held.V))
 	require.Positive(t, gap, `the float full turn leaves the seam station off (19, 0)`)
 	seam := motion[bore.capHiV[0]]
@@ -557,7 +558,7 @@ func TestCapBlendMeshMotionCarriesTheMiterDisplacement(t *testing.T) {
 }
 
 // TestCapOffsetStationBoundReadsTheExactOffsetCircle pins
-// capOffsetStationBound: the gap between a held cap station and the point the
+// stationbound.CapOffsetStationBound: the gap between a held cap station and the point the
 // ideal polyhedron places on the wall's EXACT offset circle at the exact
 // fraction k/n of the wall's own window, both ends of the window included.
 func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
@@ -571,34 +572,34 @@ func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
 		off := big.NewRat(1, 1)
 		const n = 64
 		heldU, heldV := 19*math.Cos(2*math.Pi), 19*math.Sin(2*math.Pi)
-		first := capOffsetStationBound(bore, 0, n, off, heldU, heldV)
+		first := stationbound.CapOffsetStationBound(bore, 0, n, off, heldU, heldV)
 		require.True(t, first.Derivable())
 		require.Positive(t, proofbound.WalkEndBoundAllow(first), `the float full turn is not 2π, and the gap says so`)
 		require.Less(t, proofbound.WalkEndBoundAllow(first), 1e-13)
-		last := capOffsetStationBound(bore, n, n, off, heldU, heldV)
+		last := stationbound.CapOffsetStationBound(bore, n, n, off, heldU, heldV)
 		require.Equal(t, first, last, `k == n closes the turn on the same exact point as k == 0`)
 	})
 
 	t.Run("a fillet arc's foot", func(t *testing.T) {
 		fillet := ArcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
 		off := big.NewRat(-1, 1)
-		at := capOffsetStationBound(fillet, 0, 8, off, 36, -33)
+		at := stationbound.CapOffsetStationBound(fillet, 0, 8, off, 36, -33)
 		require.True(t, at.Derivable())
 		ulp := math.Nextafter(36, math.Inf(1)) - 36
 		require.LessOrEqual(t, math.Max(at.U, at.V), 4*ulp, `the foot on the shrunken circle is (36, −33) to within the enclosure's own rounding`)
 
-		displaced := capOffsetStationBound(fillet, 0, 8, off, 36+1e-6, -33)
+		displaced := stationbound.CapOffsetStationBound(fillet, 0, 8, off, 36+1e-6, -33)
 		require.Greater(t, displaced.U, 5e-7, `a displaced station is measured, not excused`)
 	})
 
 	t.Run("an index or coordinate it cannot read", func(t *testing.T) {
 		fillet := ArcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
 		off := big.NewRat(-1, 1)
-		require.False(t, capOffsetStationBound(fillet, -1, 8, off, 36, -33).Derivable())
-		require.False(t, capOffsetStationBound(fillet, 9, 8, off, 36, -33).Derivable())
-		require.False(t, capOffsetStationBound(fillet, 0, 8, off, math.NaN(), -33).Derivable())
-		require.False(t, capOffsetStationBound(fillet, 0, 8, off, 36, math.Inf(1)).Derivable())
-		require.False(t, capOffsetStationBound(fillet, 0, 8, big.NewRat(-13, 1), 36, -33).Derivable(),
+		require.False(t, stationbound.CapOffsetStationBound(fillet, -1, 8, off, 36, -33).Derivable())
+		require.False(t, stationbound.CapOffsetStationBound(fillet, 9, 8, off, 36, -33).Derivable())
+		require.False(t, stationbound.CapOffsetStationBound(fillet, 0, 8, off, math.NaN(), -33).Derivable())
+		require.False(t, stationbound.CapOffsetStationBound(fillet, 0, 8, off, 36, math.Inf(1)).Derivable())
+		require.False(t, stationbound.CapOffsetStationBound(fillet, 0, 8, big.NewRat(-13, 1), 36, -33).Derivable(),
 			`an offset that swallows the radius denotes no circle`)
 	})
 }

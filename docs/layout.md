@@ -248,7 +248,6 @@ the rules leave to the byte budget.
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
-| `tessellate_station.go` | `chordStationBound`: one chord station's enclosure gap. See its doc comment. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`, the cap-loop chamfer mesh over `internal/tessellation/` rings. See tessellation reach §7. |
@@ -292,6 +291,7 @@ the rules leave to the byte budget.
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop chording, prism/cup topology, mesh bounds, cap-blend rings, audits and chording refusal errors. |
+| `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums and mesh proofs. |
 | `internal/revolvemesh/` | Revolve rings, construction and proofs. |
 | `internal/revolvesampling/` | Certified revolve meridian junctions, circular stations and sampled walks. |

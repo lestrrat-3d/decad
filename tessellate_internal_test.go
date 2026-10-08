@@ -13,6 +13,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -387,12 +388,12 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	wall := func(survey2d.SideWalk) (*Face, error) { return face, nil }
 
 	direct := freeform.NewFreeformWork()
-	want, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall, chordStationBound)
+	want, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall, stationbound.ChordStationBound)
 	require.NoError(t, err)
 	require.NotEmpty(t, want.Samples)
 
 	replay := freeform.NewFreeformWork()
-	got, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall, chordStationBound)
+	got, err := tessellation.ChordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall, stationbound.ChordStationBound)
 	require.NoError(t, err)
 
 	require.Equal(t, want, got, "reading the published walks must give the resolve-every-segment chording")
@@ -418,7 +419,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	}}}
 	face := &Face{}
 	_, err = tessellation.ChordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
-		func(survey2d.SideWalk) (*Face, error) { return face, nil }, chordStationBound)
+		func(survey2d.SideWalk) (*Face, error) { return face, nil }, stationbound.ChordStationBound)
 	require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

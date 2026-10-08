@@ -137,7 +137,7 @@ stays.
 
 ### Failure behavior
 
-A non-finite `deltaStore`, `faceBound`, or `volSymDiff` refuses `ErrUnsupported` (tess §12). `chordStationBound`
+A non-finite `deltaStore`, `faceBound`, or `volSymDiff` refuses `ErrUnsupported` (tess §12). `stationbound.ChordStationBound`
 answering `+Inf` for an underivable enclosure is the same refusal.
 
 ### Tests (R0)
@@ -626,8 +626,8 @@ the largest per-vertex displacement:
 
 | Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |
 |---|---|
-| side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `chordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
-| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(capOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`capcontour.ExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
+| side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `stationbound.ChordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
+| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`capcontour.ExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
 | cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
 | cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
 
@@ -728,15 +728,15 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 2. **Files:** `tessellate.go`. **What:** split `walkAreaSlack` into `walkWallSlack` and `walkSegmentArea`
    (the exact `Σ a_c`), keep the composed helper. **Depends on:** none. **Tests:** existing `areaSlack`
    assertions unchanged; new internal test pins `walkSegmentArea` on a quarter circle.
-3. **Files:** `tessellate.go`, new `tessellate_station.go`. **What:**
-   `chordStationBound(w segmentWalk, k, n int) walkEndBound` for a circular walk's interior sample —
+3. **Files:** `tessellate.go`, `internal/stationbound/station.go`. **What:**
+   `stationbound.ChordStationBound(seg, k, n, heldU, heldV)` for a circular walk's interior sample —
    `circularWalkEndBound`'s mechanism at fraction `k/n` (`turnSinCosInterval` for `CircleSeg`,
    `radSinCosSpan` over `atan2Interval` for `ArcSeg`). **Pattern:**
    `internal/boundarywalk/walk.go`'s `circularWalkEndBound`, `moments_circular.go`'s `circularEndpointInterval`. **Tests:** internal:
    a quarter-turn `CircleSeg` sample at `k/n = 1/2` publishes a bound within 4 ulps of `r`; an `ArcSeg` sample
    publishes a finite positive bound; a non-derivable enclosure answers `+Inf`.
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of
-   `walkEndBoundAllow(chordStationBound)` and `exactPrismPointRound` (`prism_payload.go`); per-face `faceBound`
+   `walkEndBoundAllow(stationbound.ChordStationBound)` and `exactPrismPointRound` (`prism_payload.go`); per-face `faceBound`
    per §3's table; `perturbedTriangleAreaAllow` per triangle into `areaSlack`. **Depends on:** 1, 3.
    **Tests:** `apitest/tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
    placement is unchanged from today's value for `holedPlateBody`.
