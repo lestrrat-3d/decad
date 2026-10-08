@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spherepath"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -343,41 +344,6 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	return track
 }
 
-// sphereImpactBracket leaves a representable positive-overlap margin at the
-// right endpoint. A root arbitrarily close to a dyadic slice can otherwise
-// put the ideal contact just inside the sphere while the float pose is just
-// outside it, leaving no correctable point for the response solver.
-func sphereImpactBracket(root, duration, resolution *big.Rat) (*big.Rat, *big.Rat, bool) {
-	grid := big.NewInt(1)
-	four := big.NewRat(4, 1)
-	for range 61 {
-		width := new(big.Rat).Quo(duration, new(big.Rat).SetInt(grid))
-		if new(big.Rat).Mul(width, four).Cmp(resolution) <= 0 {
-			scaled := new(big.Rat).Mul(root, new(big.Rat).SetInt(grid))
-			floor := new(big.Int).Quo(scaled.Num(), scaled.Denom())
-			leftIdx := new(big.Int).Sub(new(big.Int).Set(floor), big.NewInt(1))
-			rightIdx := new(big.Int).Add(new(big.Int).Set(floor), big.NewInt(2))
-			left := new(big.Rat).SetFrac(leftIdx, grid)
-			right := new(big.Rat).SetFrac(rightIdx, grid)
-			if right.Cmp(big.NewRat(1, 1)) > 0 && root.Cmp(big.NewRat(1, 1)) < 0 {
-				// A prefix ending just after impact can use its real endpoint.
-				// The sampled manifold below still has to prove overlap there.
-				right = big.NewRat(1, 1)
-			}
-			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), duration)
-			if left.Sign() <= 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
-				span.Cmp(resolution) > 0 ||
-				proofarith.FloatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
-				proofarith.FloatRat(ratFloatNearest(right)).Cmp(right) != 0 {
-				return nil, nil, false
-			}
-			return left, right, true
-		}
-		grid.Lsh(grid, 1)
-	}
-	return nil, nil, false
-}
-
 func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
@@ -469,7 +435,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
-	leftF, rightF, ok := sphereImpactBracket(root, r.pa.duration, resolution)
+	leftF, rightF, ok := spherepath.ImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}

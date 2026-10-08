@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spherepath"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -316,7 +317,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(r.gap).Rat(), r.slope.Rat())
 	resolution, _ := exactBaseValue(r.req.TimeResolution)
-	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
+	leftF, rightF, ok := spherepath.PairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
