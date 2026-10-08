@@ -88,12 +88,12 @@ func requireSoundAndMeshed(t *testing.T, doc *decad.Document, b *decad.Body, vol
 	require.InDelta(t, volume, meshVolume(mesh), 1e-9*volume)
 }
 
-// requireBrepRoles asserts a BO2 result: every face a brep role, and no cap
-// role minted.
+// requireBrepRoles asserts a BO2 result: every face a brep role (face(k) for
+// a planar face, wall(k) for a swept one), and no cap role minted.
 func requireBrepRoles(t *testing.T, b *decad.Body) {
 	t.Helper()
 	for _, f := range b.Faces() {
-		require.Regexp(t, `^face\(\d+\)$`, f.Origins()[0].Role)
+		require.Regexp(t, `^(face|wall)\(\d+\)$`, f.Origins()[0].Role)
 	}
 	_, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(b))).SelectFaces(b)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
@@ -298,15 +298,56 @@ func TestShellSideOpeningRefusals(t *testing.T) {
 		})
 	}
 
-	t.Run("an oblique walk is staged (SO5)", func(t *testing.T) {
+	t.Run("a circular walk is staged (SO5)", func(t *testing.T) {
 		t.Parallel()
-		doc, tri := polygonPrism(t, [][2]float64{{0, 0}, {12, 0}, {0, 9}})
+		s, p := semicircleSketch(t)
+		doc := decad.New()
+		half, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		require.NoError(t, err)
 		before := snapshotDocument(t, doc)
-		_, err := tri.Shell(t.Context(), sideFaceAt(t, tri, r3.NewVec(0, -1, 0), 0), units.Millimeters(1.5))
+		_, err = half.Shell(t.Context(), sideFaceAt(t, half, r3.NewVec(0, -1, 0), 0), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "SO5")
+		require.ErrorContains(t, err, "circular walk")
 		require.Equal(t, before.bodies, doc.Bodies())
 	})
+}
+
+// TestShellSideOpeningObliqueRefusals covers Table SO's gates where a removed
+// face is oblique. Each refusal leaves the receiver live and the document
+// unchanged.
+func TestShellSideOpeningObliqueRefusals(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		pts  [][2]float64
+		sel  *decad.FaceQuery
+		t    float64
+		text string
+	}{
+		// The removed face (20,0)→(21,1) is √2 long and meets the kept y = 0
+		// wall at 135°, so its cut lies t/sin 45° = 1.5√2 along it, past its
+		// far end.
+		{"a forward cut past the removed face's far end (SO2)", [][2]float64{{0, 0}, {20, 0}, {21, 1}, {0, 10}},
+			decad.Faces(decad.Facing(r3.NewVec(1, -1, 0))), 1.5, "SO2"},
+		// The hypotenuse recorded as two collinear segments through (6, 4.5)
+		// is one walk whose pieces the record cannot state alike in the cap
+		// and wall slabs.
+		{"an oblique removed face of two segments (SO5)", [][2]float64{{0, 0}, {12, 0}, {6, 4.5}, {0, 9}},
+			decad.Faces(decad.Facing(r3.NewVec(3, 4, 0))), 3, "2 collinear segments"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc, body := polygonPrism(t, tc.pts)
+			before := snapshotDocument(t, doc)
+			got, err := body.Shell(t.Context(), tc.sel, units.Millimeters(tc.t))
+			require.Nil(t, got)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, tc.text)
+			require.Equal(t, before.bodies, doc.Bodies())
+			_, err = body.Duplicate(t.Context())
+			require.NoError(t, err, "the receiver stays live")
+		})
+	}
 }
 
 // lPrism is §9's L prism: (0,0) (30,0) (30,10) (10,10) (10,30) (0,30), 10
@@ -367,5 +408,207 @@ func TestShellSideOpeningLPrism(t *testing.T) {
 		_, err := body.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SB10")
+	})
+}
+
+// requireVolumeAreaNear asserts the body's volume and area each lie within
+// their own published bound of the closed form, widened by a few ulps of it
+// for the closed form's own float evaluation.
+func requireVolumeAreaNear(t *testing.T, b *decad.Body, volume, area float64) {
+	t.Helper()
+	requireVolumeNear(t, b, volume)
+	a, err := b.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(a.Value.Base()-area), a.Bound.Base()+1e-12*area,
+		`area %v must lie within its bound %v of the closed form %v`, a.Value.Base(), a.Bound.Base(), area)
+}
+
+// requireOneHole asserts the plane facing n at offset holds one face with
+// one hole, the hole's box within slack of lo to hi.
+func requireOneHole(t *testing.T, b *decad.Body, n r3.Vec, offset float64, lo, hi r3.Vec, slack float64) {
+	t.Helper()
+	faces := planeFaces(t, b, n, offset)
+	require.Len(t, faces, 1)
+	loops := faces[0].Loops()
+	require.Len(t, loops, 2, "an outer loop and the opening")
+	require.True(t, loops[0].IsOuter())
+	require.False(t, loops[1].IsOuter())
+	gotLo, gotHi := loopBox(loops[1])
+	require.InDelta(t, 0, gotLo.Sub(lo).Len(), slack)
+	require.InDelta(t, 0, gotHi.Sub(hi).Len(), slack)
+}
+
+// facesOnPlane counts the body's planar faces lying on the plane through p
+// with unit normal ±n, by the sign of their outward normal along n.
+func facesOnPlane(t *testing.T, b *decad.Body, n, p r3.Vec) (int, int) {
+	t.Helper()
+	along, against := 0, 0
+	for _, f := range b.Faces() {
+		plane, ok := f.Surface().(decad.Plane)
+		if !ok {
+			continue
+		}
+		fn := plane.Frame.N()
+		if fn.Cross(n).Len() > 1e-12 || math.Abs(plane.Frame.Origin().Sub(p).Dot(n)) > 1e-12 {
+			continue
+		}
+		if fn.Dot(n) > 0 {
+			along++
+		} else {
+			against++
+		}
+	}
+	return along, against
+}
+
+// obliqueTriangle is §9's right triangle with legs 12 and 9.
+var obliqueTriangle = [][2]float64{{0, 0}, {12, 0}, {0, 9}}
+
+// TestShellSideOpeningOblique is docs/shell-opening-design.md §9's oblique
+// fixtures, each 10 tall with both caps kept, inward unless named, every
+// oblique cut a float solve whose displacement the faces carry:
+//
+//   - acute: the triangle without its y = 0 leg at t = 1.5 cuts at (9.5, 0)
+//     against the hypotenuse and (1.5, 0) at the right angle; C = (1.5,0)
+//     (9.5,0) (1.5,6), area 24, volume 540 − 24·7 = 372;
+//   - obtuse: the trapezoid (0,0) (14,0) (11,4) (3,4) without its y = 4 side
+//     at t = 1 cuts at (9.75, 4) and (4.25, 4); C has area 23.25, volume
+//     440 − 23.25·8 = 254;
+//   - the triangle without its hypotenuse at t = 3 cuts at (8, 3) and
+//     (3, 6.75); C has area 9.375, volume 540 − 9.375·4 = 502.5, and the
+//     hypotenuse plane holds four swept faces;
+//   - a slanted reflex end: (0,0) (30,0) (30,10) (14,10) (10,30) (0,30)
+//     without its oblique face (14,10)→(10,30) at t = 2 cuts backward at
+//     (14.4, 8) and forward at (10.4, 28); C has area 364, volume
+//     5400 − 364·6 = 3216.
+//
+// Outward, the hypotenuse kept alone cuts backward along both legs, and the
+// slanted reflex section's y = 10 wall kept alone cuts forward along the
+// removed oblique face, which splits the cavity region P there.
+//
+// Shown to fail: with P's split at a forward cut deleted, the hypotenuse,
+// slanted reflex and outward forward-cut fixtures failed the area identity
+// (SO5); with the oblique ends' vertex marks deleted the hypotenuse and
+// slanted reflex meshes did not close; with solveOpeningCut's axis hold
+// deleted the obtuse fixture failed the area identity (SO5); and with R' no
+// longer split at a backward cut's corner the slanted reflex fixture failed
+// the area identity (SO5).
+func TestShellSideOpeningOblique(t *testing.T) {
+	t.Parallel()
+	shell := func(t *testing.T, pts [][2]float64, sel *decad.FaceQuery, thickness float64, opts ...decad.ShellOption) (*decad.Document, *decad.Body) {
+		t.Helper()
+		doc, receiver := polygonPrism(t, pts)
+		body, err := receiver.Shell(t.Context(), sel, units.Millimeters(thickness), opts...)
+		require.NoError(t, err)
+		require.Len(t, body.Lumps(), 1)
+		require.Len(t, body.Shells(), 1)
+		require.False(t, body.Shells()[0].IsVoid(), "the cavity reaches the outside through the opening")
+		return doc, body
+	}
+	minusY := r3.NewVec(0, -1, 0)
+
+	t.Run("acute", func(t *testing.T) {
+		t.Parallel()
+		doc, body := shell(t, obliqueTriangle, decad.Faces(decad.Facing(minusY)), 1.5)
+		// The outer 2·54 + 10·(15 + 9) + (120 − 8·7), the cavity 2·24 + 7·(10 + 6).
+		requireVolumeAreaNear(t, body, 372, 108+240+64+48+112)
+		require.Len(t, body.Faces(), 9)
+		requireOneHole(t, body, minusY, 0, r3.NewVec(1.5, 0, 1.5), r3.NewVec(9.5, 0, 8.5), 1e-12)
+		requireBrepRoles(t, body)
+		requireSoundAndMeshed(t, doc, body, 372)
+	})
+	t.Run("obtuse", func(t *testing.T) {
+		t.Parallel()
+		plusY := r3.NewVec(0, 1, 0)
+		doc, body := shell(t, [][2]float64{{0, 0}, {14, 0}, {11, 4}, {3, 4}}, decad.Faces(decad.Facing(plusY)), 1)
+		// The outer 2·44 + 10·(14 + 5 + 5) + (80 − 5.5·8), the cavity
+		// 2·23.25 + 8·(10 + 3.75 + 3.75).
+		requireVolumeAreaNear(t, body, 254, 88+240+36+46.5+140)
+		require.Len(t, body.Faces(), 11)
+		requireOneHole(t, body, plusY, 4, r3.NewVec(4.25, 4, 1), r3.NewVec(9.75, 4, 9), 1e-12)
+		requireSoundAndMeshed(t, doc, body, 254)
+	})
+	t.Run("oblique removed face", func(t *testing.T) {
+		t.Parallel()
+		n := r3.NewVec(0.6, 0.8, 0)
+		doc, body := shell(t, obliqueTriangle, decad.Faces(decad.Facing(n)), 3)
+		// The outer 2·54 + 10·(12 + 9) + (150 − 6.25·4), the cavity
+		// 2·9.375 + 4·(5 + 3.75).
+		requireVolumeAreaNear(t, body, 502.5, 108+210+125+18.75+35)
+		require.Len(t, body.Faces(), 12)
+		along, against := facesOnPlane(t, body, n, r3.NewVec(12, 0, 0))
+		require.Equal(t, 4, along, "two columns and two strips, coplanar")
+		require.Zero(t, against)
+		requireBrepRoles(t, body)
+		requireSoundAndMeshed(t, doc, body, 502.5)
+	})
+	t.Run("slanted reflex end", func(t *testing.T) {
+		t.Parallel()
+		n, ok := r3.NewVec(5, 1, 0).Normalize()
+		require.True(t, ok)
+		pts := [][2]float64{{0, 0}, {30, 0}, {30, 10}, {14, 10}, {10, 30}, {0, 30}}
+		doc, body := shell(t, pts, decad.Faces(decad.Facing(n)), 2)
+		// The outer 2·540 + 10·(30 + 10 + 16 + 10 + 30), the cavity
+		// 2·364 + 6·(8.4 + 26 + 26 + 6 + 13.6); on the removed face's carrier
+		// the two strips 2·2·4√26, the forward column 6·0.4√26 and the
+		// reflex rim 6·0.4√26 facing the other way.
+		requireVolumeAreaNear(t, body, 3216, 1080+960+728+480+20.8*math.Sqrt(26))
+		require.Len(t, body.Faces(), 18)
+		along, against := facesOnPlane(t, body, n, r3.NewVec(14, 10, 0))
+		require.Equal(t, 3, along, "two strips and the forward column")
+		require.Equal(t, 1, against, "the reflex rim faces back into the cavity")
+		requireSoundAndMeshed(t, doc, body, 3216)
+	})
+	t.Run("outward, one kept oblique wall", func(t *testing.T) {
+		t.Parallel()
+		// The hypotenuse alone kept: its offset 3x + 4y = 41 cuts backward
+		// along y = 0 at (41/3, 0) and along x = 0 at (0, 41/4), so O is the
+		// triangle of area 1681/24 over [−1, 11] less the receiver.
+		sel := decad.Faces(decad.Facing(minusY)).Or(decad.Facing(r3.NewVec(-1, 0, 0)))
+		doc, body := shell(t, obliqueTriangle, sel, 1, decad.WithShellSense(decad.Outward))
+		// Two O caps, the offset wall 205/12·12, the y = 0 and x = 0 planes'
+		// C-shaped faces 44 and 33, the cavity's floor, ceiling and wall.
+		requireVolumeAreaNear(t, body, 2*1681.0/24+10*(1681.0/24-54), 2*1681.0/24+205+44+33+108+150)
+		require.Len(t, body.Faces(), 8)
+		requireSoundAndMeshed(t, doc, body, 300.5)
+	})
+	t.Run("outward, a forward cut along an oblique removed face", func(t *testing.T) {
+		t.Parallel()
+		// The slanted reflex section with only its y = 10 wall (30,10)→(14,10)
+		// kept: the offset y = 12 cuts forward along the removed oblique face
+		// at (13.6, 12) and backward along x = 30 at (30, 12), so O is P with
+		// the strip (14,10) (30,10) (30,12) (13.6,12) of area 32.4 added.
+		pts := [][2]float64{{0, 0}, {30, 0}, {30, 10}, {14, 10}, {10, 30}, {0, 30}}
+		n, ok := r3.NewVec(5, 1, 0).Normalize()
+		require.True(t, ok)
+		doc, receiver := polygonPrism(t, pts)
+		sel := sideFaceAt(t, receiver, r3.NewVec(0, 1, 0), 30).Or(decad.Facing(minusY)).
+			Or(decad.Facing(r3.NewVec(1, 0, 0))).Or(decad.Facing(r3.NewVec(-1, 0, 0))).Or(decad.Facing(n))
+		body, err := receiver.Shell(t.Context(), sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		// Two O caps, the receiver's section at both interfaces, the kept wall
+		// 16·10 and its offset 16.4·14, the removed carriers' strips
+		// 4·(82 + 3.6√26) and the two rims 10·0.4√26 and 10·2.
+		requireVolumeAreaNear(t, body, 572.4*14-5400, 1144.8+1080+160+229.6+328+20+18.4*math.Sqrt(26))
+		require.Len(t, body.Faces(), 16)
+		along, against := facesOnPlane(t, body, n, r3.NewVec(14, 10, 0))
+		require.Equal(t, 2, along, "the two strips beyond the cut")
+		require.Equal(t, 1, against, "the rim ends the wall facing the opening")
+		requireSoundAndMeshed(t, doc, body, 572.4*14-5400)
+	})
+	t.Run("both caps removed is a prism over the wall section", func(t *testing.T) {
+		t.Parallel()
+		sel := decad.Faces(decad.Facing(minusY)).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
+		doc, body := shell(t, obliqueTriangle, sel, 1.5)
+		// W: the triangle's 54 less C's 24, its six walls 15 + 9 + 1.5 + 6 +
+		// 10 + 2.5 long.
+		requireVolumeAreaNear(t, body, 300, 60+440)
+		require.Len(t, body.Faces(), 8)
+		for _, cap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+			faces, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(body)
+			require.NoError(t, err)
+			require.Len(t, faces, 1)
+		}
+		requireSoundAndMeshed(t, doc, body, 300)
 	})
 }

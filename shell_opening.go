@@ -21,8 +21,8 @@ import (
 // section W, the cavity section C and the cap slabs' region (P inward, the
 // outer region O outward), and each faces modify §5's audit and an exact area
 // identity before shell_opening_brep.go builds the body from them. Every walk
-// of the section must be a line along a section axis: circular and oblique
-// walks are that document's PRs 3 and 4, refused here with SO5's sentinel.
+// of the section must be a line, along a section axis or oblique: circular
+// walks are that document's PR 3, refused here with SO5's sentinel.
 
 // sideOpeningSection is the three regions of one side opening (§3) and what
 // the record build reads beside them.
@@ -35,9 +35,11 @@ type sideOpeningSection struct {
 	// caps is the region of a kept cap's slab: P inward, O outward (K' then
 	// R').
 	caps ProfileRecord
-	// corners lists each end vertex v whose rim runs backward along the
-	// removed walk's carrier, so v lies inside the cavity's walk there and
-	// the record must mark it a vertex at both cavity levels (§4.3).
+	// corners lists each end vertex v the record must mark a vertex at both
+	// cavity levels (§4.3): where the rim runs backward along the removed
+	// walk's carrier, v lies inside the cavity's walk there; where that
+	// walk is oblique, the rim column's split at q must meet a split of the
+	// kept wall's edge through v.
 	corners []Point2
 	// delta is the offset's section displacement: three times
 	// offset2d.ChainReach, zero where every join and cut encloses to its held
@@ -130,39 +132,107 @@ func prismRemovedRun(walks []survey2d.SideWalk, segs map[int]struct{}) ([]int, e
 	return run, nil
 }
 
-// requireAxisAlignedWalks is PR 2's refusal of docs/shell-opening-design.md
-// §12: every walk of the section, kept or removed, must be a line along one
-// of the section's axes. A circular or oblique walk is ErrUnsupported, SO5's
-// sentinel, until the circular and oblique cuts land.
-func requireAxisAlignedWalks(walks []survey2d.SideWalk) error {
+// requireLineWalks is the refusal docs/shell-opening-design.md §12 keeps
+// until the circular cuts land: every walk of the section, kept or removed,
+// must be a line, along a section axis or oblique. A circular walk is
+// ErrUnsupported, SO5's sentinel.
+func requireLineWalks(walks []survey2d.SideWalk) error {
 	for _, w := range walks {
-		if w.Kind == survey2d.WalkLine && !w.Closed && (w.StartU == w.EndU || w.StartV == w.EndV) {
+		if w.Kind == survey2d.WalkLine && !w.Closed {
 			continue
 		}
-		return fmt.Errorf(`%w: this evaluator builds a prism side opening only where every section walk is a line along a section axis; this section holds a circular or oblique walk (shell-opening SO5)`, ErrUnsupported)
+		return fmt.Errorf(`%w: this evaluator builds a prism side opening only where every section walk is a line; this section holds a circular walk (shell-opening SO5)`, ErrUnsupported)
 	}
 	return nil
 }
 
-// requireAxisAlignedLoop refuses a region loop holding anything but lines
-// along a section axis and arcs. The receiver's walks pass
-// requireAxisAlignedWalks, so every line of K', a rim or R' lies on a
-// reference plane and every arc is a corner join of K' (modify §7's arc of
-// radius t about a corner), which the record build sweeps as a partial
-// cylinder; a loop failing here is an offset this build cannot state: SO5.
-func requireAxisAlignedLoop(loop LoopRecord) error {
-	for _, seg := range loop.Segments {
-		switch l := seg.(type) {
-		case LineSeg:
-			if l.Start.U == l.End.U || l.Start.V == l.End.V {
-				continue
-			}
-		case ArcSeg:
-			continue
+// obliqueLine reports whether a line walk lies off both section axes. The
+// record build keys an oblique line by its two recorded endpoints, so every
+// region walking its carrier must state it in the same pieces (§4.2).
+func obliqueLine(w survey2d.SideWalk) bool {
+	return !w.IsCircular() && w.StartU != w.EndU && w.StartV != w.EndV
+}
+
+// removedPieces writes the removed run on carrier(r) as one region walks it
+// (§3, §4.2): the receiver's own run R from vB to vA (recut false), or R',
+// the run re-cut to start at qB and end at qA (recut true). forwardB and
+// forwardA say each end's cut runs forward into r's span. An oblique end walk
+// is stated in the pieces every other region needs: R's walk split at a
+// forward cut, and R' split at v where its cut runs backward along the
+// carrier, so the regions' pieces on that carrier are vB → qB, qB → qA and
+// qA → vA, each keyed by its own endpoints. An axis-aligned end walk keeps
+// its one piece: the engine reads its plane by level and splits it at the
+// vertices it records. A removed oblique end walk recorded as more than one
+// segment is SO5: the record cannot state its pieces alike in every region.
+func removedPieces(walks []survey2d.SideWalk, run []int, segs []CurveSegment, qB, qA Point2, forwardB, forwardA, recut bool) ([]CurveSegment, error) {
+	rFirst, rLast := walks[run[0]], walks[run[len(run)-1]]
+	vB := Point2{U: rFirst.StartU, V: rFirst.StartV}
+	vA := Point2{U: rLast.EndU, V: rLast.EndV}
+	for _, w := range []survey2d.SideWalk{rFirst, rLast} {
+		if obliqueLine(w) && len(w.Segs) != 1 {
+			return nil, fmt.Errorf(`%w: a side opening's removed oblique face is recorded as %d collinear segments, which this record build does not state (shell-opening SO5)`, ErrUnsupported, len(w.Segs))
 		}
-		return fmt.Errorf(`%w: a side opening's region holds a segment off the section axes, which this record build does not state (shell-opening SO5)`, ErrUnsupported)
 	}
-	return nil
+	// splitB and splitA are the extra points each end's walk takes on an
+	// oblique carrier: the forward cut in R, the corner in R'.
+	splitB := obliqueLine(rFirst) && forwardB != recut
+	splitA := obliqueLine(rLast) && forwardA != recut
+	var out []CurveSegment
+	pieces := func(pts ...Point2) {
+		for i := 0; i+1 < len(pts); i++ {
+			out = append(out, LineSeg{Start: pts[i], End: pts[i+1], TStart: 0, TEnd: 1})
+		}
+	}
+	from, to := vB, vA
+	inB, inA := qB, qA
+	if recut {
+		from, to = qB, qA
+		inB, inA = vB, vA
+	}
+	if len(run) == 1 {
+		if !recut && !splitB && !splitA {
+			return appendWalkSegs(out, rFirst, segs), nil
+		}
+		pts := []Point2{from}
+		if splitB {
+			pts = append(pts, inB)
+		}
+		if splitA {
+			pts = append(pts, inA)
+		}
+		pieces(append(pts, to)...)
+		return out, nil
+	}
+	eB := Point2{U: rFirst.EndU, V: rFirst.EndV}
+	sA := Point2{U: rLast.StartU, V: rLast.StartV}
+	switch {
+	case splitB:
+		pieces(from, inB, eB)
+	case recut:
+		pieces(from, eB)
+	default:
+		out = appendWalkSegs(out, rFirst, segs)
+	}
+	for _, ri := range run[1 : len(run)-1] {
+		out = appendWalkSegs(out, walks[ri], segs)
+	}
+	switch {
+	case splitA:
+		pieces(sA, inA, to)
+	case recut:
+		pieces(sA, to)
+	default:
+		out = appendWalkSegs(out, rLast, segs)
+	}
+	return out, nil
+}
+
+// appendWalkSegs appends a walk's recorded segments verbatim.
+func appendWalkSegs(out []CurveSegment, w survey2d.SideWalk, segs []CurveSegment) []CurveSegment {
+	for _, si := range w.Segs {
+		out = append(out, segs[si])
+	}
+	return out
 }
 
 // sideOpeningHeight is SO3's height half (§5, stage 3): inward, each kept cap
@@ -183,7 +253,7 @@ func sideOpeningHeight(pp prismPayload, keptCaps int, s float64, t units.Value, 
 
 // sideOpeningRegions builds and audits the three regions of a side opening
 // (§3, §4.7 steps 1–3) in §5's gate order: SO6 (a holed section, then the
-// run rule), the axis-aligned walks of PR 2, SO3's height half, the open
+// run rule), the line walks this build takes, SO3's height half, the open
 // chain's offset (S11a per walk, SO1, SO2 and SO4 per end), modify §5's audit
 // of W and of C (O outward) — S8, where a C with no area is SO3, S11b and
 // S9 — and the exact area identity, whose failure is SO5. keptCaps is the
@@ -201,7 +271,7 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	if err != nil {
 		return sideOpeningSection{}, err
 	}
-	if err := requireAxisAlignedWalks(walks); err != nil {
+	if err := requireLineWalks(walks); err != nil {
 		return sideOpeningSection{}, err
 	}
 	if err := sideOpeningHeight(pp, keptCaps, s, t, tmm); err != nil {
@@ -251,28 +321,29 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	}
 
 	// R' is the removed run re-cut at both ends: its first walk starts at qB,
-	// its last ends at qA, and every walk between is verbatim.
-	var recut []CurveSegment
-	if len(run) == 1 {
-		recut = append(recut, LineSeg{Start: qB, End: qA, TStart: 0, TEnd: 1})
-	} else {
-		recut = append(recut, LineSeg{Start: qB, End: Point2{U: rFirst.EndU, V: rFirst.EndV}, TStart: 0, TEnd: 1})
-		for _, ri := range run[1 : len(run)-1] {
-			for _, si := range walks[ri].Segs {
-				recut = append(recut, segs[si])
-			}
-		}
-		recut = append(recut, LineSeg{Start: Point2{U: rLast.StartU, V: rLast.StartV}, End: qA, TStart: 0, TEnd: 1})
+	// its last ends at qA, and every walk between is verbatim. A cut runs
+	// forward where it lies along r's span from v, backward where it lies on
+	// the carrier's extension behind v (Table RO's reflex row inward).
+	forwardB := (qB.U-vB.U)*rFirst.TanInU+(qB.V-vB.V)*rFirst.TanInV > 0
+	forwardA := (qA.U-vA.U)*rLast.TanOutU+(qA.V-vA.V)*rLast.TanOutV < 0
+	recut, err := removedPieces(walks, run, segs, qB, qA, forwardB, forwardA, true)
+	if err != nil {
+		return sideOpeningSection{}, err
 	}
 	offRegion := ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), off.segs...), recut...)}}
-	sec := sideOpeningSection{wall: ProfileRecord{Outer: wallLoop}, cavity: offRegion, caps: pp.profile}
-	if !inward {
-		sec.cavity, sec.caps = pp.profile, offRegion
-	}
-	for _, loop := range []LoopRecord{sec.wall.Outer, offRegion.Outer} {
-		if err := requireAxisAlignedLoop(loop); err != nil {
+	// P as the record states it: the receiver's own section, or, where an
+	// oblique end walk takes a forward cut, K then R split at that cut.
+	section := pp.profile
+	if (obliqueLine(rFirst) && forwardB) || (obliqueLine(rLast) && forwardA) {
+		split, err := removedPieces(walks, run, segs, qB, qA, forwardB, forwardA, false)
+		if err != nil {
 			return sideOpeningSection{}, err
 		}
+		section = ProfileRecord{Outer: LoopRecord{Segments: append(append([]CurveSegment(nil), kept...), split...)}}
+	}
+	sec := sideOpeningSection{wall: ProfileRecord{Outer: wallLoop}, cavity: offRegion, caps: section}
+	if !inward {
+		sec.cavity, sec.caps = section, offRegion
 	}
 
 	// §4.7 step 2: modify §5's audit of W and of the offset region (C inward,
@@ -290,11 +361,15 @@ func sideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides ma
 	}
 
 	// A rim cut backward along r's carrier leaves v strictly inside the
-	// cavity's walk there (Table RO's reflex row).
-	if (qB.U-vB.U)*rFirst.TanInU+(qB.V-vB.V)*rFirst.TanInV < 0 {
+	// cavity's walk there (Table RO's reflex row). On an oblique r the rim
+	// column v → q is one swept face over every slab, split at q where the
+	// cavity begins: v is marked at the same levels, so the kept wall's edge
+	// through v splits where the column's other side line does, and the two
+	// faces' edges pair piece for piece.
+	if !forwardB || obliqueLine(rFirst) {
 		sec.corners = append(sec.corners, vB)
 	}
-	if (qA.U-vA.U)*rLast.TanOutU+(qA.V-vA.V)*rLast.TanOutV > 0 {
+	if !forwardA || obliqueLine(rLast) {
 		sec.corners = append(sec.corners, vA)
 	}
 	sec.delta, err = chainSectionDelta(budget, chain, offset2d.MirrorLine{}, off.ends, s, tmm, tDelta)

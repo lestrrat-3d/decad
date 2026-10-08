@@ -633,6 +633,46 @@ func TestNewSTEPFileShellSideOpeningAnalytic(t *testing.T) {
 	require.Contains(t, string(data), "analytic decad solid")
 }
 
+// TestNewSTEPFileShellObliqueOpeningAnalytic writes
+// docs/shell-opening-design.md §9's oblique removed face — the triangle
+// (0,0) (12,0) (0,9) extruded 10 and shelled 3 mm inward with its hypotenuse
+// removed — through the analytic arm (Table DO's DO10): 12 planar faces, the
+// hypotenuse plane's four coplanar pieces among them, and every EDGE_CURVE
+// used once in each sense.
+func TestNewSTEPFileShellObliqueOpeningAnalytic(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	corners := [][2]float64{{0, 0}, {12, 0}, {0, 9}}
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tri, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	body, err := tri.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(3, 4, 0))), units.Millimeters(3))
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 12)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts, uses := entityUses(f)
+	require.Equal(t, 12, counts["ADVANCED_FACE"])
+	require.Equal(t, 12, counts["PLANE"])
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	data, err := f.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad solid")
+}
+
 // flushBossUnion is general-boolean §9's A1 brep fixture through the public
 // API: a 40×40×10 plate on XY unioned with a boss standing on its top at
 // z = 10..25, drawn by draw on the offset plane.
