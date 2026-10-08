@@ -948,7 +948,8 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return nil
 	}
 	slack := proofbound.AbsSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
-	if allow := revolveSectionAreaAllow(p, p.section); allow > 0 {
+	if allow := revolveaxis.SectionAreaAllow(p.rp.sectionDelta, p.sweep, p.rp.sweep().Bound,
+		p.resolved, !p.rp.full && !p.rp.surfaceResult, p.section); allow > 0 {
 		slack = proofbound.AbsSumUpper(slack, allow)
 	}
 	if proofbound.IsNonFinite(slack) {
@@ -962,7 +963,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	if err != nil {
 		return err
 	}
-	if allow := revolveSectionVolumeAllow(p, p.section); allow > 0 {
+	if allow := revolveaxis.SectionVolumeAllow(p.rp.sectionDelta, p.sweep, p.rp.sweep().Bound, p.section); allow > 0 {
 		sym = proofbound.AbsSumUpper(sym, allow)
 	}
 	m.volSymDiff = sym

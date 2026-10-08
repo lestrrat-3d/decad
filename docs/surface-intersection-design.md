@@ -517,7 +517,8 @@ centroid and, for a partial sweep, two cap areas. Each integrates the RECORDED
 region, and §3.4's piece or an offset construction's wall denotes a region
 whose boundary sits within `sectionDelta` of the recorded one, both ways. This
 section derives what each reading owes that displacement. The derivation is
-`revolve_section.go`'s, and every reading takes its term only where
+`internal/revolveaxis/section_charge.go`'s, adapted by `revolve_section.go`,
+and every reading takes its term only where
 `sectionDelta` is nonzero, on §7.1's own rule: an undisplaced revolve reads bit
 for bit as it did.
 
