@@ -218,7 +218,14 @@ func (b *Engine) record(p Point2, delta float64, carriers ...Carrier) {
 	}
 }
 
-func (b *Engine) event(p Point2, level int) {
+// Event marks p as a vertex of the body at level, so CutsOnLine splits a
+// plane unit there and a wall's vertical edge through p is not merged across
+// that level. RecordJunctions marks every point whose junction changes between
+// slabs; a caller marks a point it knows is a vertex although its junction
+// does not change, such as a shell's reflex opening corner, which lies inside
+// the cavity floor's walk along the removed face's carrier
+// (docs/shell-opening-design.md §4.3).
+func (b *Engine) Event(p Point2, level int) {
 	if b.Events[p] == nil {
 		b.Events[p] = map[int]struct{}{}
 	}
@@ -237,7 +244,7 @@ func (b *Engine) AddFace(loop Loop, level int, outward bool) error {
 		return nil
 	}
 	for _, u := range loop.Units {
-		b.event(u.From, level)
+		b.Event(u.From, level)
 	}
 	return nil
 }
@@ -270,7 +277,7 @@ func (b *Engine) RecordJunctions(n int) {
 			below, hasBelow := bySlab[level-1]
 			above, hasAbove := bySlab[level]
 			if hasBelow != hasAbove || (hasBelow && below != above) {
-				b.event(p, level)
+				b.Event(p, level)
 			}
 		}
 	}

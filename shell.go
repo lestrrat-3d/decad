@@ -31,8 +31,9 @@ import (
 // — cupPayload, a floor slab under a slab of wall bands (B5/B6).
 //
 // The gate order is §4's, and the sentinel of each refusal follows the §1
-// existence test. Staged, never a wrong body: side-wall removal is S2 and a
-// topology-changing offset is S11, each ErrUnsupported.
+// existence test. Staged, never a wrong body: a topology-changing offset is
+// S11, ErrUnsupported. Removing side faces of a prism is a side opening,
+// docs/shell-opening-design.md's (shell_opening.go).
 
 // ShellOption configures Shell, including its wall sense.
 type ShellOption interface {
@@ -83,20 +84,32 @@ func WithShellSense(s ShellSense) ShellOption {
 // (docs/modify-design.md §8, core §8). sel names the faces to REMOVE — the
 // openings — resolved against the live receiver; a query matching nothing is
 // loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
-// every other (S15); a zero t is S14 (the wall is the empty region). A removed
-// SIDE wall is S2, a receiver whose payload is not a prism is S3, both
-// ErrUnsupported. The offset section faces the §5 audit before anything is
-// built, so no unproven body is ever made. Removing both caps of a section
-// with k holes returns 1 + k lumps: the band inside the outer loop, then one
-// band lining each hole (docs/modify-reach-design.md BX8).
+// every other (S15); a zero t is S14 (the wall is the empty region). A
+// receiver whose payload is not a prism is S3, ErrUnsupported. The offset
+// section faces the §5 audit before anything is built, so no unproven body is
+// ever made. Removing both caps of a section with k holes returns 1 + k
+// lumps: the band inside the outer loop, then one band lining each hole
+// (docs/modify-reach-design.md BX8).
+//
+// A prism also takes a side opening (docs/shell-opening-design.md): one
+// connected run of its outer side faces removed, with or without its caps, on
+// a hole-free section whose every walk is a line along a section axis. Each
+// end of the kept walks closes on the removed face's own plane, cut by the
+// kept wall's offset. With both caps removed the result is a prism over the
+// wall section; otherwise it is an analytic face record with face(k) roles,
+// the removed face's plane holding the opening. A removed hole wall, two
+// runs, every side face, or a holed section is ErrUnsupported
+// (SO6); so are a circular or oblique walk and an offset arc join under a
+// kept cap (SO5). Inward, the kept caps must leave a cavity height (SO3,
+// ErrDegenerate).
 //
 // A partial revolve is shelled when sel removes both of its angular caps: the
 // wall is its meridian's offset swept over the same angle, and a meridian walk
 // on the axis grows no wall (docs/modify-reach-design.md §9.3). A revolve
 // also takes a side opening — one connected run of its generated side faces,
-// on a full turn or beside both removed angular caps — where each opening end
-// meets a straight removed walk at a right angle and the kept chain is one
-// piece; the rim there is the removed face's own cut through the wall. Any
+// on a full turn or beside both removed angular caps — where the kept chain is
+// one piece; the rim at each opening end is the removed face's own cut
+// through the wall (docs/shell-opening-design.md §8). Any
 // other side selection, a kept angular cap, a holed meridian, a meridian
 // meeting the axis along more than one walk and an offset reaching the axis
 // are ErrUnsupported.
@@ -214,8 +227,10 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		return nil, err
 	}
 
-	// Stage 2 (§4): the receiver's payload class (S3), then every removed face
-	// is a cap (S2).
+	// Stage 2 (§4): the receiver's payload class (S3), then the removed faces:
+	// caps by role, and on a prism receiver side faces by side(0,j), which
+	// route the call to the side opening (docs/shell-opening-design.md §5). A
+	// brep receiver's route P takes caps only (SB3).
 	pp, ok := b.payload.(prismPayload)
 	caps := prismCapsOf(b)
 	if route.prism != nil {
@@ -227,7 +242,16 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if err := requireExactSection(pp, "shells"); err != nil {
 		return nil, err
 	}
-	removedStart, removedEnd, err := classifyRemovedCaps(caps, removed)
+	var removedStart, removedEnd bool
+	if route.prism != nil {
+		removedStart, removedEnd, err = classifyRemovedCaps(caps, removed)
+	} else {
+		var sides map[int]struct{}
+		removedStart, removedEnd, sides, err = classifyRemovedFaces(b, caps, removed)
+		if err == nil && len(sides) > 0 {
+			return b.shellSideOpening(ctx, pp, removedStart, removedEnd, sides, s, t, tmm, tDelta)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -567,11 +591,12 @@ func requireSectionCavity(t units.Value, tmm, inradius float64, enough bool) err
 	return fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
 }
 
-// classifyRemovedCaps decides which caps a removed-face set names: every face
-// must be one of the prism's two cap faces (else S2, a side wall —
-// ErrUnsupported), and it reports whether the start cap, the end cap, or both
-// were removed. caps names the receiver's own capStart/capEnd faces, or a
-// brep receiver's route P caps (docs/brep-modify-design.md §4.2).
+// classifyRemovedCaps decides which caps a removed-face set names on a brep
+// receiver's route P (docs/brep-modify-design.md §4.2): every face must be one
+// of the recognised prism's two cap faces, else ErrUnsupported, which the
+// route reports as SB3. It reports whether the start cap, the end cap, or
+// both were removed. A prism receiver classifies its removed faces with
+// classifyRemovedFaces instead, which routes side faces to the side opening.
 func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 	var start, end bool
 	for _, f := range removed {
@@ -581,9 +606,8 @@ func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 		case caps.end != nil && f == caps.end:
 			end = true
 		default:
-			// S2: the cavity of a side-wall removal is the offset of an open
-			// chain closed against the removed wall's own surface — a different
-			// 2D machine.
+			// Route P maps removed faces to the recognised prism's caps only
+			// (shell-opening SO7).
 			return false, false, fmt.Errorf(`%w: a shell that removes a side wall is not supported by this evaluator`, ErrUnsupported)
 		}
 	}

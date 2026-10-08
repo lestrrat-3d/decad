@@ -156,3 +156,53 @@ func offsetMirrorChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk,
 	}
 	return off.segs, off.qStart, off.qEnd, off.ends, nil
 }
+
+// chainSectionDelta is the section displacement of an open chain's offset
+// (docs/modify-reach-design.md §9.3.1, docs/shell-opening-design.md §4.4):
+// three times offset2d.ChainReach's largest reach over K's interior joins and
+// its two ends, on offsetSectionDelta's own argument. line is the mirror line
+// an axis end meets; a chain with two opening ends never reads it. K and its
+// end vertices are the receiver's own record and move by nothing, so the
+// figure is exactly zero wherever every join and cut encloses to the float the
+// build holds, which keeps a right-angle shell Exact.
+func chainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, line offset2d.MirrorLine, ends [2]offset2d.ChainEnd, s, t, tDelta float64) (float64, error) {
+	amount, err := offsetAmount(s, t, tDelta)
+	if err != nil {
+		return 0, err
+	}
+	reach, err := offset2d.ChainReach(budget, chain, line, ends[0], ends[1], s, t, amount, shellTol)
+	if err != nil {
+		return 0, err
+	}
+	if reach == 0 {
+		return 0, nil
+	}
+	delta := proofbound.ProductUpper(3, reach)
+	if proofbound.IsNonFinite(delta) {
+		return 0, errOffsetUnbounded
+	}
+	return delta, nil
+}
+
+// openChainWallLoop is the wall section's loop over an open chain
+// (docs/shell-opening-design.md §3's W): inward it walks K, the closing
+// segment atEnd at K's end, K' backward and the closing segment atStart at
+// K's start; outward it walks K', atEnd back to K's end, K backward and
+// atStart out to K's start. kept is K's record and offset K' in K's own walk
+// order; each closing segment already runs the way the loop walks it.
+func openChainWallLoop(budget *proofbound.WorkBudget, kept, offset []CurveSegment, atEnd, atStart CurveSegment, inward bool) (LoopRecord, error) {
+	first, back := kept, offset
+	if !inward {
+		first, back = offset, kept
+	}
+	rev, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: back})
+	if err != nil {
+		return LoopRecord{}, err
+	}
+	loop := make([]CurveSegment, 0, len(kept)+len(offset)+2)
+	loop = append(loop, first...)
+	loop = append(loop, atEnd)
+	loop = append(loop, rev.Segments...)
+	loop = append(loop, atStart)
+	return LoopRecord{Segments: loop}, nil
+}

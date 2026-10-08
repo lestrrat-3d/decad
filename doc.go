@@ -132,7 +132,11 @@
 //	Shell         hole-free prism, WithNoOpenings (closed)    builds
 //	Shell         revolve, one run of side faces removed (and
 //	              both angular caps), any line or arc corner  builds
-//	  a prism side face, or a kept angular cap                ErrUnsupported
+//	Shell         hole-free prism, one run of side faces
+//	              removed, every walk on a section axis       builds
+//	  a prism side opening with a circular or oblique walk,
+//	    or an offset arc join under a kept cap                ErrUnsupported
+//	  a kept angular cap                                      ErrUnsupported
 //	  revolve side run in pieces, a smooth end corner, or a
 //	    rim past the removed walk's far end                   ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported

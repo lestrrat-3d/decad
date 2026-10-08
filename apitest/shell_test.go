@@ -908,11 +908,17 @@ func TestShellRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
-	t.Run("removing a side wall is S2 unsupported", func(t *testing.T) {
+	t.Run("removing a side wall opens the box", func(t *testing.T) {
 		_, box := shellBox(t)
-		wall := decad.Faces(decad.FaceCreatedBy(featureRefWithRole(t, box, "side(0,0)")))
-		_, err := box.Shell(t.Context(), wall, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		// docs/shell-opening-design.md: the y = 0 wall removed leaves the
+		// cavity (5,95)×(0,55) over (5,15).
+		wall := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
+		body, err := box.Shell(t.Context(), wall, units.Millimeters(5))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, vol.Exactness)
+		require.Equal(t, 100*60*shellBoxHeight-90*55*(shellBoxHeight-10), volumeMM(t, vol))
 	})
 
 	t.Run("a query matching nothing is loud", func(t *testing.T) {

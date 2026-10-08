@@ -138,9 +138,10 @@ type ChainEnd struct {
 // along the line's direction, and an arc's other end is the walk's own
 // offset foot. A G1 end is charged the hull of the line point and the foot,
 // so a join the dead zone classified G1 with a residual turn is charged that
-// spread, as LoopReach charges an interior G1 join. The caller reads the
-// result as LoopReach's: three reaches bound the displacement of every
-// recorded boundary point.
+// spread, as LoopReach charges an interior G1 join. Only a mirror end reads
+// line: a prism side opening's chain, whose two ends are both opening ends,
+// passes the zero MirrorLine. The caller reads the result as LoopReach's:
+// three reaches bound the displacement of every recorded boundary point.
 func ChainReach(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, line MirrorLine, end0, end1 ChainEnd, s, t float64, amount proofbound.RatInterval, tol float64) (float64, error) {
 	m := len(chain)
 	if m == 0 {

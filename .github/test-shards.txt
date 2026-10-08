@@ -659,6 +659,7 @@
 3	0.00	TestReplayPoseMemoEvictsOldest
 3	0.74	TestReplayPoseMemoIsSafeConcurrently
 3	1.61	TestReplayPoseMemoMatchesUncachedReplay
+3	0.00	TestRequireAreaIdentityRefuses
 3	0.00	TestRequireDerivableStoreRefusesAnUnstatedDisplacement
 3	0.00	TestRequireFiniteDirectionAllocatesNothing
 3	0.00	TestRequireLoopClearanceOffersValidRetry
@@ -722,6 +723,9 @@
 3	0.00	TestSegFilterRejectsTheOverwhelmingMajority
 3	0.00	TestSharesFacePlane
 3	0.00	TestShellRectCircleWitnessKeepsToleranceAndFallsBack
+3	0.01	TestSideOpeningBrepChargesInexactThickness
+3	0.01	TestSideOpeningRegionsLPrism
+3	0.01	TestSideOpeningRegionsUChannel
 3	0.00	TestSideOriginsContextPollsEachSegment
 3	0.00	TestSingleSignPolygonTurnsProveNoCurvatureSign
 3	0.00	TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate

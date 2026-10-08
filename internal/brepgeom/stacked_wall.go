@@ -137,32 +137,56 @@ func joinStackedWallCollinear(loop []StackedWallSegment, levelAt map[float64]int
 	return loop
 }
 
-// StackedWallRegion writes one wall loop in its face frame and reads its level.
-func StackedWallRegion(e Embed, loop []StackedWallSegment) (Profile, float64, error) {
-	pts := make([]sectionrecord.Point2, len(loop))
+// StackedWallRegions writes the chained loops of one wall key in its face
+// frame and reads their level. Loops that all wind counter-clockwise are one
+// face each. Exactly one counter-clockwise loop with every other loop
+// clockwise is one face, the clockwise loops its holes in chain order. Any
+// other mix, a loop with no signed area, or loops at different levels is
+// ErrStackedWallMiss. The grouping proves nothing about nesting: the caller's
+// section audit (modify §5's S9) refuses a hole outside its outer loop.
+func StackedWallRegions(e Embed, loops [][]StackedWallSegment) ([]Profile, float64, error) {
 	level := math.NaN()
-	for i, s := range loop {
-		l := e.Local(s.From)
-		pts[i] = sectionrecord.Point2{U: l[0], V: l[1]}
-		if i == 0 {
-			level = l[2]
-		} else if l[2] != level {
-			return Profile{}, 0, ErrStackedWallMiss
+	var outers, holes []sectionrecord.LoopRecord
+	for li, loop := range loops {
+		pts := make([]sectionrecord.Point2, len(loop))
+		for i, s := range loop {
+			l := e.Local(s.From)
+			pts[i] = sectionrecord.Point2{U: l[0], V: l[1]}
+			if li == 0 && i == 0 {
+				level = l[2]
+			} else if l[2] != level {
+				return nil, 0, ErrStackedWallMiss
+			}
+		}
+		area := 0.0
+		for i := range pts {
+			j := (i + 1) % len(pts)
+			area += pts[i].U*pts[j].V - pts[j].U*pts[i].V
+		}
+		var out sectionrecord.LoopRecord
+		for i := range pts {
+			out.Segments = append(out.Segments, sectionrecord.LineSeg{
+				Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1,
+			})
+		}
+		switch {
+		case area > 0:
+			outers = append(outers, out)
+		case area < 0:
+			holes = append(holes, out)
+		default:
+			return nil, 0, ErrStackedWallMiss
 		}
 	}
-	area := 0.0
-	for i := range pts {
-		j := (i + 1) % len(pts)
-		area += pts[i].U*pts[j].V - pts[j].U*pts[i].V
+	switch {
+	case len(holes) == 0:
+		out := make([]Profile, len(outers))
+		for i, o := range outers {
+			out[i] = Profile{Outer: o}
+		}
+		return out, level, nil
+	case len(outers) == 1:
+		return []Profile{{Outer: outers[0], Holes: holes}}, level, nil
 	}
-	if !(area > 0) {
-		return Profile{}, 0, ErrStackedWallMiss
-	}
-	var out sectionrecord.LoopRecord
-	for i := range pts {
-		out.Segments = append(out.Segments, sectionrecord.LineSeg{
-			Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1,
-		})
-	}
-	return Profile{Outer: out}, level, nil
+	return nil, 0, ErrStackedWallMiss
 }

@@ -371,10 +371,6 @@ func revolveAxisCurve(ax axisFrame) offset2d.Curve {
 // nothing, so the figure is exactly zero wherever every join encloses to the
 // float the build holds, which keeps a right-angle shell Exact.
 func openChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, ax axisFrame, ends [2]offset2d.ChainEnd, s, t, tDelta float64) (float64, error) {
-	amount, err := offsetAmount(s, t, tDelta)
-	if err != nil {
-		return 0, err
-	}
 	if slices.ContainsFunc([]float64{ax.aU, ax.aV, ax.dU, ax.dV, ax.aUBound, ax.aVBound, ax.dUBound, ax.dVBound}, proofbound.IsNonFinite) {
 		return 0, errOffsetUnbounded
 	}
@@ -389,18 +385,7 @@ func openChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideW
 			Dir:    capcontour.Point{U: widen(ax.dU, ax.dUBound), V: widen(ax.dV, ax.dVBound)},
 		},
 	}
-	reach, err := offset2d.ChainReach(budget, chain, line, ends[0], ends[1], s, t, amount, shellTol)
-	if err != nil {
-		return 0, err
-	}
-	if reach == 0 {
-		return 0, nil
-	}
-	delta := proofbound.ProductUpper(3, reach)
-	if proofbound.IsNonFinite(delta) {
-		return 0, errOffsetUnbounded
-	}
-	return delta, nil
+	return chainSectionDelta(budget, chain, line, ends, s, t, tDelta)
 }
 
 // revolveSideFaceSegments adds the recorded meridian segments a removed
@@ -593,27 +578,11 @@ func revolveShellSideWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
-	var loop []CurveSegment
-	if inward {
-		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: off.segs})
-		if err != nil {
-			return ProfileRecord{}, 0, err
-		}
-		loop = append(loop, kept...)
-		loop = append(loop, atK)
-		loop = append(loop, back.Segments...)
-		loop = append(loop, atStart)
-	} else {
-		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: kept})
-		if err != nil {
-			return ProfileRecord{}, 0, err
-		}
-		loop = append(loop, off.segs...)
-		loop = append(loop, atK)
-		loop = append(loop, back.Segments...)
-		loop = append(loop, atStart)
+	loop, err := openChainWallLoop(budget, kept, off.segs, atK, atStart, inward)
+	if err != nil {
+		return ProfileRecord{}, 0, err
 	}
-	wall := ProfileRecord{Outer: LoopRecord{Segments: loop}}
+	wall := ProfileRecord{Outer: loop}
 	if err := auditOffsetSectionBudget(budget, rp.profile, wall); err != nil {
 		return ProfileRecord{}, 0, err
 	}

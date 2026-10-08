@@ -787,6 +787,9 @@
 2	0.09	TestShellInwardSectionWorkBudget
 2	0.01	TestShellNoOpenings
 2	0.01	TestShellSelectorAdmission
+2	0.05	TestShellSideOpeningLPrism
+2	0.02	TestShellSideOpeningRefusals
+2	0.06	TestShellSideOpeningUChannel
 2	0.01	TestStackedUnionEnclosedVoidTakesMeshPath
 2	0.00	TestStatusString
 2	0.00	TestStitchAnnularRevolveSheetClosesToATube
