@@ -153,17 +153,18 @@ the rules leave to the byte budget.
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | Shell section record, audit and displacement proof. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-prism body a one-cap `Shell` builds, with its mass properties and roles. See `docs/modify-design.md` §9, §12 D6. |
+| `brep_modify.go` | Routes a brep or stacked modify receiver: Table RB dispatch, SB1, SB2. See `docs/brep-modify-design.md` §2, §6. |
 
 ### Cap-loop chamfer
 
 | Path | Responsibility |
 |---|---|
-| `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. See `docs/modify-reach-design.md` §8.3/§4. |
-| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone band patches. See `docs/modify-reach-design.md` §8.3. |
+| `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload`, selection classification, build gates. See modify-reach §8.3/§4. |
+| `capblend_geom.go` | `buildCapBand`: trimmed side walls, cap faces, Plane/Cone band patches. See modify-reach §8.3. |
 | `capblend_contour.go` | Bounds cap contour displacement and length through `internal/capcontour/`. See modify-reach §8.3-§8.4. |
 | `capblend_centroid.go` | Assembles cap-blend first moments and bounds from slab, disk and `internal/capband/` patch terms. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and assembles bounded area/volume readings over `internal/capband/`. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
+| `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
 | `capblend_normal.go` | Reads band-patch tags and placed frames for DX7's normal model. |
 | `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
 | `capblend_admit.go` | Adapts cap-band occupied-volume admission. See tessellation-reach §7. |

@@ -123,19 +123,6 @@ func (bp brepPayload) sectionDelta() float64 {
 	return out
 }
 
-// requireNotBrepReceiver is modify-reach Table RX's RX7 and Table SX's SX16:
-// Fillet, Chamfer and Shell refuse a brep receiver with ErrUnsupported. The
-// refusal is staged, not SX9's permanent exclusion: the faces are analytic
-// carriers with recorded trims, and rewriting a planar face's region and
-// re-trimming its walls is not built yet (docs/general-boolean-design.md
-// §4.5).
-func requireNotBrepReceiver(payload featurePayload, op string) error {
-	if _, ok := payload.(brepPayload); ok {
-		return fmt.Errorf(`%w: this evaluator does not yet rewrite an analytically trimmed (brep) body's faces, so it %s no brep receiver (modify-reach SX16)`, ErrUnsupported, op)
-	}
-	return nil
-}
-
 // assignRoles names every face by its index in the record: face(k) for a
 // planar face and wall(k) for a swept one (§4.2).
 func (bp brepPayload) assignRoles() {
@@ -186,8 +173,13 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // brepOfStacked is a stacked prism's face view (§4.1): one swept face per
 // segment of every loop column (docs/stacked-prism-design.md §2.3), then the
 // two caps and every interface's exposed floors and ceilings. The record is
-// audited first, so a stack its own build refuses has no face view either.
+// audited first, so a stack its own build refuses has no face view either. A
+// prism group (one slab of several disjoint regions) has no face view and is
+// ErrUnsupported: the record states one region per cap.
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
+	if sp.isGroup() {
+		return brepPayload{}, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].regions))
+	}
 	if err := falsifyStackedPayload(ctx, sp); err != nil {
 		return brepPayload{}, err
 	}

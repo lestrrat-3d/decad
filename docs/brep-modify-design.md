@@ -507,7 +507,7 @@ Increment table — what still refuses after each PR:
 
 | After | Still refused |
 |---|---|
-| 0 | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
+| 0 (landed) | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
 | 1 | every non-prism brep; every route E edge |
 | 2a | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
 | 2b | Table SB alone |
