@@ -64,20 +64,6 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 	}
 }
 
-type harmonicExtremes struct {
-	minLo, minHi, maxLo, maxHi *big.Rat
-}
-
-func harmonicWindowRange(a, b, c, width *big.Rat, wholeTurn bool) (harmonicExtremes, bool) {
-	ext, ok := capband.HarmonicWindowRange(a, b, c, width, wholeTurn)
-	if !ok {
-		return harmonicExtremes{}, false
-	}
-	return harmonicExtremes{
-		minLo: ext.MinLo, minHi: ext.MinHi, maxLo: ext.MaxLo, maxHi: ext.MaxHi,
-	}, true
-}
-
 func newPlacedFrameMap(pp prismPayload) (survey2d.PlacedFrameMap, bool) {
 	basis := pp.xform.Basis()
 	ex, okX := proofbound.IvVec3Of(basis.EX)

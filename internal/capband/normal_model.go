@@ -16,7 +16,7 @@ import (
 // enclosed in rational interval arithmetic, and the EXACT range of the harmonic
 // form the survey reports over that patch's own azimuth window.
 //
-// capblend_survey.go recovers that form from three `Face.NormalAt` readings.
+// normal_range.go recovers that form from three `Face.NormalAt` readings.
 // Neither the readings nor the range read over them may be taken at face value,
 // and each piece here answers one of the reasons:
 //
@@ -38,11 +38,11 @@ import (
 //     candidate — none of it charged, so the exact extreme could sit outside the
 //     interval reported for it.
 //
-// So capPatchNormalModel below encloses the coefficients the patch's own tag and
+// So PatchNormalModel below encloses the coefficients the patch's own tag and
 // placed frame really give, from their held numbers alone and in exact
-// arithmetic, which lets capPatchNormalRange charge the WHOLE distance from its
+// arithmetic, which lets CircularNormalRange charge the WHOLE distance from its
 // recovered coefficients to them however that distance arose — arm rounding,
-// sample displacement, or the near-circle's own departure. harmonicWindowRange
+// sample displacement, or the near-circle's own departure. HarmonicWindowRange
 // then encloses the reported form's own extremes instead of evaluating them.
 //
 // Neither is a residual gate and no small number here admits anything: the
