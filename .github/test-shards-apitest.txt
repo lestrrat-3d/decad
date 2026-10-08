@@ -435,6 +435,7 @@
 2	0.01	TestClearanceRevolveSteepConeContainsTruth
 2	0.00	TestClearanceStackedCubes
 2	0.00	TestClearanceStopBuiltStackTouching
+2	0.03	TestClearanceTiltedBoxContainsTruth
 2	0.00	TestClearanceTiltedPlanePairIntervalContainsTruth
 2	0.02	TestContactPairBandCancels
 2	0.01	TestContactPairCylinderRulingOnFloor

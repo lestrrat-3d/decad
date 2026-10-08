@@ -580,7 +580,9 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 			return false, err
 		}
 		cf.Region = region
-		cf.Box = clearance.BoxOf(pts...)
+		// The box holds the region as the cells read it, mapped back through
+		// the plane's frame (CapBox), and the topology's own vertices.
+		cf.Box = clearance.BoxUnion(clearance.BoxOf(pts...), clearance.CapBox(cf))
 
 		for i, tri := range sp.tris {
 			if sp.triFaces[i] != f {

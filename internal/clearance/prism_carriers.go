@@ -103,8 +103,10 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 		if !w.Closed {
 			f.Sweep = NewAngWindow(w.Th0, w.Th1)
 		}
-		top := p.point(f, w.CU, w.CV, p.Z1)
-		f.Box = BoxUnion(CircleBox(f.Anchor, nDir, w.Radius), CircleBox(top, nDir, w.Radius))
+		// The top rim's recorded centre widens LiftRound; the box reads the
+		// carrier's own rims.
+		p.point(f, w.CU, w.CV, p.Z1)
+		f.Box = BoxUnion(AxisCircleBox(f.Anchor, f.Axis, f.ZWin.Lo, w.Radius), AxisCircleBox(f.Anchor, f.Axis, f.ZWin.Hi, w.Radius))
 		midTh := (w.Th0 + w.Th1) / 2
 		f.Wit = append(f.Wit,
 			p.sample(w.CU+w.Radius*math.Cos(midTh), w.CV+w.Radius*math.Sin(midTh), (p.Z0+p.Z1)/2),
@@ -140,7 +142,7 @@ func PrismWallCarrier(p PrismCarrierFrame, w survey2d.SegmentWalk) (*CFace, bool
 	le2, _ := survey2d.LineElem(l, h, 0, h)
 	le3, _ := survey2d.LineElem(0, h, 0, 0)
 	f.Region = NewRegion2([]survey2d.SurveyElem{le0, le1, le2, le3})
-	f.Box = BoxOf(f.O, f.O.Add(e1.Scale(l)), f.O.Add(nDir.Scale(h)), f.O.Add(e1.Scale(l)).Add(nDir.Scale(h)))
+	f.Box = CapBox(f)
 	f.Wit = append(f.Wit, f.O.Add(e1.Scale(l/2)).Add(nDir.Scale(h/2)), f.O)
 	return f, true
 }

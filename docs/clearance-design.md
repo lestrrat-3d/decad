@@ -642,10 +642,26 @@ trimmed inner face alone and asks the oracle nothing:
   envelope of every point and radius it reads (`clearance.DirCharge`): the
   tilt times any lever arm inside that envelope is far smaller. A box edge
   `√2` from a slanted prism wall reads a bound of about `5e-13`. The coarse
-  enclosure charges the same envelope bound against its box distance,
-  because a box corner is a float a few roundings off the hull it encloses.
-  Its upper end reads the closest witness pair's distance as a proven
-  enclosure (`PointPointDist`) and adds both witnesses' own gaps (above).
+  enclosure charges the same envelope bound against its box distance, which
+  it reads in float through the feature boxes and the carriers' float
+  directions. Its upper end reads the closest witness pair's distance as a
+  proven enclosure (`PointPointDist`) and adds both witnesses' own gaps
+  (above).
+- **A feature box holds its feature exactly as the cells read it.** Every
+  face and edge box (`internal/clearance/face_box.go`) is computed over exact
+  rationals from the carrier's own floats and rounded outward. A circle of
+  radius `r` about `c` with axis `a` of any length spans
+  `r·√((a_j² + a_k²)/|a|²)` along `e_i`, rounded up (`CircleBox`); a cylinder
+  or cone face is the hull of its two rims at its own axial window, centred
+  at `anchor + a·z/|a|²` (`AxisCircleBox`); a sphere is its centre `± R`; a
+  torus is its spine circle's box grown by the minor radius; and a planar
+  face holds every exact corner `o + u·x + v·y` and every arc's image, of
+  half-width `Rr·√(u_i² + v_i²)` (`CapBox`). A float reading of those sums
+  misses: `1 − a_z²` rounds to zero for an axis tilted less than about `1e-8`
+  rad off `z`, which loses `r·sin(tilt)` of the circle's extent, and a lift
+  whose terms cancel rounds at the scale of its terms. A spindle torus turned
+  `1e-8` rad, whose spine circle of radius `3` then rises `3e-8` above its
+  float box, read a coarse lower end that far above the gap.
   The P4/P8 brackets already carry the kernel's slack in their half-width.
 - **Pruning reads the bounds it just proved.** Body boxes prune first (the
   shipped `boxesDisjoint` machinery), then cells. The enumeration (§3) keeps
@@ -654,10 +670,10 @@ trimmed inner face alone and asks the oracle nothing:
   `b − m > H` STRICTLY. Here `b` is the distance between the two features'
   boxes, and `m` is the kernel's slack, `1e-9 ×` the pair's coordinate
   scale. The vertex × vertex distances are never skipped. The argument:
-  - every point of the two features lies inside its box, up to a few ulps
-    of box and distance rounding, which `m` covers many times over (the
-    same boxes, at the same margin, already exclude crossings in §4), so
-    every point pair of the cell lies at least `b − m` apart;
+  - every point of the two features lies inside its box (above), and the
+    float box distance rounds by a few ulps, which `m` covers many times
+    over (the same boxes, at the same margin, already exclude crossings in
+    §4), so every point pair of the cell lies at least `b − m` apart;
   - every contribution's `hi` is an admitted witness (above), so
     `H ≥ Gap`;
   - so a skipped cell's features lie more than `H ≥ Gap` apart. The point
