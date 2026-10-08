@@ -305,11 +305,12 @@ func PerCellArcUpper(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk, m i
 // placed the stations, not of the cell's geometry. The circular arm's
 // uniform-ANGLE stations (CircularCellPoints) are constant speed on a
 // circle, which is what discharges it; a straight walk's chord IS its curve, so
-// its deviation is identically zero. Every other kind — the free-form arm's
-// span-uniform native fraction above all, which is NOT constant speed — answers
-// +Inf here, so it degrades
-// proofbound.CellChordCurveAreaAllow to that helper's premise-free arm rather than being
-// silently handed a bound whose premise it does not meet.
+// its deviation is identically zero. Every other kind answers +Inf here, so it
+// degrades proofbound.CellChordCurveAreaAllow to that helper's premise-free arm
+// rather than being silently handed a bound whose premise it does not meet. A
+// same-kind free-form pair never reaches this function: its span-native
+// parameter is not constant speed, so FreeformCellPoints reads each cell's
+// exact energy (freeform.SpanTangentEnergyUpper) instead.
 func PerCellTangentEnergy(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk, m int) float64 {
 	switch w.Kind {
 	case survey2d.WalkLine:

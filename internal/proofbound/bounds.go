@@ -1393,7 +1393,9 @@ func CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // that cannot prove constant speed must pass +Inf and let
 // CellChordCurveAreaAllow fall back to its own premise-free arm. The circular
 // arm's uniform-ANGLE stations (loftCircularCellStations) are constant speed on
-// a circle, which is what discharges it today.
+// a circle, which is what discharges it today. A free-form cell does not call
+// this helper: its deviation is a polynomial, and
+// internal/freeform's SpanTangentEnergyUpper integrates it exactly.
 //
 // A non-finite or negative operand, or an arcLenUpper below the chord it is
 // supposed to subtend, is a BROKEN caller claim and answers +Inf, never 0
@@ -1651,8 +1653,10 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // that side's tangent magnitude under the shared parametrization, never below
 // the chord it subtends. matchedDeltaUpper is that helper's own PARAMETER-
 // MATCHED obligation (F1's rule), never a set-distance sagitta. tangentEnergyA/
-// tangentEnergyB are UniformSpeedTangentEnergyUpper's J, each a proven bound on
-// that side's own integral |curve' - chord|^2 ds; a caller with no such proof
+// tangentEnergyB are each a proven bound on that side's own integral
+// |curve' - chord|^2 ds — UniformSpeedTangentEnergyUpper's J on a constant-speed
+// arm, internal/freeform's SpanTangentEnergyUpper on a polynomial span, whose
+// energy is an exact rational rounded outward once; a caller with no such proof
 // passes +Inf and both Ia and Ja fall back to what the tangent bound alone
 // gives, Ia <= arcLen+chord and Ja <= (arcLen+chord)^2, which costs tightness
 // and never soundness. Every geometric quantity above is read from the four

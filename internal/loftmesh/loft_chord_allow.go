@@ -113,8 +113,9 @@ type LoftChordPair struct {
 //     the same four corners. It reads the cell's own held corners, its two
 //     per-side arc-length bounds, its PARAMETER-MATCHED matchedDelta
 //     and its two per-side tangent-deviation ENERGIES
-//     (p.tangentEnergyV/tangentEnergyW, perCellTangentEnergy's own per-arm
-//     reading), and that helper's own doc comment carries the derivation. It
+//     (p.tangentEnergyV/tangentEnergyW: PerCellTangentEnergy's reading for a
+//     line or circular arm, freeform.SpanTangentEnergyUpper's for a free-form
+//     one), and that helper's own doc comment carries the derivation. It
 //     replaces an arc-minus-chord LENGTH excess times a rung length, a shape
 //     third order in the cell's own sweep where the gap it stood for is
 //     SECOND order wherever the ruling runs anything but square across the

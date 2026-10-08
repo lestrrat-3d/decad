@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -97,6 +98,218 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 		}
 	}
 	require.Equal(t, lower, upper, "each top station must sit exactly above its paired bottom station")
+}
+
+// TestLoftFitSplineWedgeVerifiesSound is docs/loft-design.md §13's A10b
+// Verify line: the fit-spline wedge reads Sound at the default tolerance, with
+// the achieved margin asserted as a number.
+//
+// The wedge's two sections are the same curve, so every chorded wall cell is
+// untwisted (T = 0) with rung G = (0, 0, 10). There the sharp arm of
+// proofbound.CellChordCurveAreaAllow reduces to
+//
+//	2md·(c + max(Ia, Ib)) + ((eB + 2md)²·(Ja + Jb) + 2·(2md·c)²) / (2·eB·c)
+//
+// against the premise-free (eB + 2md)·(ia + ib)/2 + 2md·c, with eB = 10, c the
+// cell's chord and Ia = min(ia, √Ja). Each cell's Ja is measured
+// independently of freeform's exact path: a finite-difference integral of
+// |C'(s) − Δ|² over the dense samples between the cell's two stations, which
+// sit at uniform native parameter. Each published energy must agree with it.
+// The test then recomputes the Area reading through evalLoft's own steps
+// twice — once as built, once with every free-form energy at +Inf — checks
+// the first against the published Area, and asserts the Area bound shrinks by
+// the sum of the per-cell differences the measured energies predict. The
+// shrunk bound must still enclose a densely sampled reference: 2·(cap area) +
+// 10·(perimeter), the wedge being a translate.
+//
+// Shown to fail first: with LoopPair.appendFreeform passing +Inf energies,
+// Verify reads Suspect (an Area bound of 157.3 mm² on a 217.5 mm² reading);
+// with it passing 0
+// energies, the per-cell energy comparison fails.
+func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
+	t.Parallel()
+	w, base, top := wedgePlanes(t)
+	s0, p0 := wedgeSplineSketch(t, w, base)
+	s1, p1 := wedgeSplineSketch(t, w, top)
+	doc := New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, Sound, report.Status, "diagnostics: %+v", report.Diagnostics)
+	ratio, reading := loftBodyBindingRatio(t, t.Context(), body)
+	margin := toleranceRel / ratio
+	t.Logf("A10b wedge Verify margin: binding=%s ratio=%.6g margin=%.3gx", reading, ratio, margin)
+	require.Greater(t, margin, 1.0)
+	// Centroid binds at a measured ~1.99x once Area no longer does. Pinned
+	// with generous slack, the arc wedge's own rule, so host rounding never
+	// flips it.
+	require.Equal(t, "Centroid", reading)
+	require.InEpsilon(t, 1.99, margin, 0.25)
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	lp := body.payload.(loftPayload)
+	built, pairs, a := loftWedgeAreaRebuild(t, lp, false)
+	require.Equal(t, area.Bound.Base(), built.Bound.Base(), "the rebuild must reproduce the published Area")
+	unsharp, _, _ := loftWedgeAreaRebuild(t, lp, true)
+
+	require.Len(t, pairs, 1)
+	samples := wedgeLoopSamples(t, lp.profile0, 1<<12)
+	predicted, freeTotal, sharpTotal := 0.0, 0.0, 0.0
+	cells := 0
+	for i, p := range pairs {
+		n := len(p.v)
+		for j := range n {
+			if p.matchedDelta[j] <= 0 {
+				continue
+			}
+			jn := (j + 1) % n
+			vLo, vHi := a.verts[a.vIdx[i][j]], a.verts[a.vIdx[i][jn]]
+			wLo, wHi := a.verts[a.wIdx[i][j]], a.verts[a.wIdx[i][jn]]
+			require.Equal(t, vHi.Sub(vLo), wHi.Sub(wLo), "cell %d/%d must be untwisted for the closed form", i, j)
+			require.Equal(t, r3.NewVec(0, 0, wedgeHeight), wLo.Sub(vLo))
+			measured := sampledTangentEnergy(t, samples, p.v[j], p.v[jn])
+			require.InEpsilon(t, measured, p.tangentEnergyV[j], 1e-3, "cell %d: side 0's energy", j)
+			require.InEpsilon(t, measured, p.tangentEnergyW[j], 1e-3, "cell %d: side 1's energy", j)
+			md := chordCellDeltaUpper(p.matchedDelta[j], a.delta)
+			c := vHi.Sub(vLo).Len()
+			energyRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], measured, measured)
+			infRuled := untwistedRuledLeg(c, wedgeHeight, md, p.arcUpperV[j], p.arcUpperW[j], math.Inf(1), math.Inf(1))
+			predicted += infRuled - energyRuled
+			freeTotal += infRuled
+			sharpTotal += energyRuled
+			cells++
+		}
+	}
+	require.Positive(t, cells)
+	shrink := unsharp.Bound.Base() - built.Bound.Base()
+	t.Logf("A10b Area bound: %.6g without the energy, %.6g with it (%.0fx); ruled leg %.6g -> %.6g over %d cells; shrink %.9g predicted %.9g",
+		unsharp.Bound.Base(), built.Bound.Base(), unsharp.Bound.Base()/built.Bound.Base(), freeTotal, sharpTotal, cells, shrink, predicted)
+	require.InEpsilon(t, predicted, shrink, 1e-7, "the Area bound must shrink by the derivation's own per-cell difference")
+
+	ref := wedgeDenseArea(t, lp.profile0, wedgeHeight)
+	t.Logf("A10b Area: value=%.10g bound=%.3e reference=%.10g residual=%.3e", area.Value.Base(), area.Bound.Base(), ref, math.Abs(area.Value.Base()-ref))
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-ref), area.Bound.Base())
+}
+
+// untwistedRuledLeg is proofbound.CellChordCurveAreaAllow's published value on
+// a cell whose four corner normals all equal da × G for a rung G of length h
+// perpendicular to the chord, so Nmin = h·c and the twist terms vanish.
+func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
+	ia, ib := arcA+c, arcB+c
+	ja, jb := ia*ia, ib*ib
+	if !math.IsInf(energyA, 1) {
+		ia, ja = math.Min(ia, math.Sqrt(energyA)), math.Min(ja, energyA)
+	}
+	if !math.IsInf(energyB, 1) {
+		ib, jb = math.Min(ib, math.Sqrt(energyB)), math.Min(jb, energyB)
+	}
+	free := (h+2*md)*(arcA+c+arcB+c)/2 + 2*md*c
+	beta, gamma := h+2*md, 2*md*c
+	sharp := 2*md*(c+math.Max(ia, ib)) + (beta*beta*(ja+jb)+2*gamma*gamma)/(2*h*c)
+	return math.Min(free, sharp)
+}
+
+// loftWedgeAreaRebuild replays evalLoft's own steps from the records to the
+// Area reading. With dropEnergy set, every cell's tangent energy is +Inf, the
+// reading a build with no energy proof publishes.
+func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftLoopPair, loftAssembly) {
+	t.Helper()
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
+	require.NoError(t, err)
+	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	require.NoError(t, err)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	require.NoError(t, err)
+	if dropEnergy {
+		for i := range pairs {
+			for j := range pairs[i].tangentEnergyV {
+				pairs[i].tangentEnergyV[j] = math.Inf(1)
+				pairs[i].tangentEnergyW[j] = math.Inf(1)
+			}
+		}
+	}
+	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	require.NoError(t, err)
+	anchor := pl.xform.Apply(pl.plane0.Origin)
+	matchedDelta := chordCellDeltaUpper(sectionMatchedDelta, a.delta)
+	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
+	distances := make([]loftmesh.LoftVertexDistance, len(a.verts))
+	for k, tri := range a.tris {
+		mass.addTriangle(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls, tri, distances)
+	}
+	chorded, err := computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.DistUpper, a.reversed)
+	require.NoError(t, err)
+	mass.Chorded = chorded
+	return mass.area(capPolygonAreaRat(a.pts0, a.loopIdx0), capPolygonAreaRat(a.pts1, a.loopIdx1)), pairs, a
+}
+
+// wedgeLoopSamples samples the recorded outer loop in walk order: a LineSeg
+// contributes its walk start, a free-form segment its own perSpan samples per
+// span at uniform native parameter (denseWalkSamples).
+func wedgeLoopSamples(t *testing.T, p ProfileRecord, perSpan int) []Point2 {
+	t.Helper()
+	var loop []Point2
+	for _, seg := range p.Outer.Segments {
+		switch seg := seg.(type) {
+		case LineSeg:
+			start := seg.Start
+			if seg.TStart > seg.TEnd {
+				start = seg.End
+			}
+			loop = append(loop, start)
+		default:
+			loop = append(loop, denseWalkSamples(t, seg, perSpan)...)
+		}
+	}
+	return loop
+}
+
+// sampledTangentEnergy measures one free-form cell's ∫|C'(s) − Δ|² ds from
+// the loop samples between the cell's two held stations. A dyadic cell's ends
+// fall on the sample grid, and the samples between them sit at uniform cell
+// parameter, so N·(x_{i+1} − x_i) is C' at each midpoint to O(1/N²) and the
+// midpoint sum integrates the square.
+func sampledTangentEnergy(t *testing.T, loop []Point2, lo, hi Point2) float64 {
+	t.Helper()
+	nearest := func(p Point2) int {
+		best, bestD := 0, math.Inf(1)
+		for i, q := range loop {
+			if d := math.Hypot(q.U-p.U, q.V-p.V); d < bestD {
+				best, bestD = i, d
+			}
+		}
+		require.Less(t, bestD, 1e-9, "a station must sit on the sample grid")
+		return best
+	}
+	iLo, iHi := nearest(lo), nearest(hi)
+	require.Greater(t, iHi, iLo+64, "a cell needs enough samples to measure")
+	n := float64(iHi - iLo)
+	du, dv := loop[iHi].U-loop[iLo].U, loop[iHi].V-loop[iLo].V
+	energy := 0.0
+	for i := iLo; i < iHi; i++ {
+		eu := n*(loop[i+1].U-loop[i].U) - du
+		ev := n*(loop[i+1].V-loop[i].V) - dv
+		energy += (eu*eu + ev*ev) / n
+	}
+	return energy
+}
+
+// wedgeDenseArea is a translate's surface area, 2·(cap area) + height·
+// (perimeter), over the recorded loop sampled densely (wedgeLoopSamples).
+func wedgeDenseArea(t *testing.T, p ProfileRecord, height float64) float64 {
+	t.Helper()
+	loop := wedgeLoopSamples(t, p, 1<<14)
+	shoelace, perimeter := 0.0, 0.0
+	for i, a := range loop {
+		b := loop[(i+1)%len(loop)]
+		shoelace += a.U*b.V - b.U*a.V
+		perimeter += math.Hypot(b.U-a.U, b.V-a.V)
+	}
+	return math.Abs(shoelace) + height*perimeter
 }
 
 // TestLoftFreeformReversedRangeBuildsTheSameStations records the same curve

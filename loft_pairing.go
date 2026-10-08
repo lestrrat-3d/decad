@@ -66,8 +66,10 @@ type loftLoopPair struct {
 	arcUpperV, arcUpperW []float64
 	matchedDelta         []float64
 	// tangentEnergyV/tangentEnergyW are parallel to v/w too:
-	// perCellTangentEnergy's own per-side reading for that station's OUTGOING
-	// cell, internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow tangentEnergyUpper obligation.
+	// the per-side reading for that station's OUTGOING cell —
+	// perCellTangentEnergy's for a line or circular arm,
+	// freeform.SpanTangentEnergyUpper's for a free-form one —
+	// internal/proofbound/bounds.go's proofbound.CellChordCurveAreaAllow tangentEnergyUpper obligation.
 	// +Inf where the arm that placed the stations proves no such bound, which
 	// costs that helper its sharper arm and never its soundness.
 	tangentEnergyV, tangentEnergyW []float64
