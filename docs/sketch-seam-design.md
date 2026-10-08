@@ -98,6 +98,11 @@ else.** `sketch` computed the arrangement that produced the fragment, so it is
 the only party that knows the range and the only party that knows how it was
 obtained. The range it computed **is** the trim; decad neither second-guesses
 the flag nor re-derives it — re-deriving a 2D answer is what core §7 forbids.
+A recorded fragment therefore denotes its entity over exactly the recorded
+float range, and no bound charges the distance from a recorded `t` to the
+exact crossing. Two fragments cut at one crossing denote two different end
+points as a result, and the evaluator closes and charges that gap
+(`docs/evaluator-design.md` §4).
 
 - `TExact == true` → the fragment records: the entity's own variant, built
   from the entity's defining data and `TStart` / `TEnd` (the table in §2).

@@ -664,6 +664,8 @@
 2	0.00	TestPrismUnionWholeEdgeMergeStaysExact
 2	0.00	TestProfileRecordAreaRejectsUnclosedLoop
 2	0.00	TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound
+2	0.01	TestProfileRecordChargesCutJunction
+2	0.00	TestProfileRecordClosesExactLineJunction
 2	0.00	TestQueryStringNegativeZeroNormalized
 2	0.00	TestQueryStringNonFiniteIsTotal
 2	0.00	TestQueryStringRendering

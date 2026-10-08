@@ -14,6 +14,9 @@ type FieldPreflight struct {
 	Plans       map[[2]int]Plan
 	Work        *freeform.FreeformWork
 	Arrangement uint64
+	// ends holds each segment's denoted walk ends, per loop in record order,
+	// for the junction charge integration levies (chargeLoopJunctions).
+	ends [][]segmentEnds
 }
 
 // ValidateFieldsWithPoll checks a whole record while spending its shared work
@@ -30,6 +33,7 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 		work = freeform.NewFreeformWork()
 	}
 	var anchor Point2
+	ends := make([][]segmentEnds, len(normalized))
 	freeform := false
 	for loopIndex := range normalized {
 		if poll != nil {
@@ -55,7 +59,7 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 					return FieldPreflight{}, err
 				}
 			}
-			checked, start, plan, err := validateMomentSegment(segment, work)
+			checked, segEnds, plan, err := validateMomentSegment(segment, work)
 			if err != nil {
 				return FieldPreflight{}, fmt.Errorf(
 					`decad: profile loop %d segment %d is invalid: %w`,
@@ -72,8 +76,9 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 				plans[[2]int{loopIndex, segmentIndex}] = plan
 			}
 			freeform = freeform || splinebezier.IsFreeformSegment(checked)
+			ends[loopIndex] = append(ends[loopIndex], segEnds)
 			if loopIndex == 0 && segmentIndex == 0 {
-				anchor = start
+				anchor = segEnds.start
 			}
 		}
 	}
@@ -82,6 +87,7 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 		Anchor: anchor,
 		Plans:  plans,
 		Work:   work,
+		ends:   ends,
 	}
 	if !freeform {
 		return pre, nil

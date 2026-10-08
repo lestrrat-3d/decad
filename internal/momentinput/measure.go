@@ -362,6 +362,9 @@ func integrateMomentRecordWithPoll(poll func() error, pre FieldPreflight, order 
 				return Integrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
 		}
+		if loopIndex < len(pre.ends) {
+			chargeLoopJunctions(&ig, loop, pre.ends[loopIndex], pre.Anchor, order)
+		}
 	}
 	ig = translateMomentIntegrals(ig, pre.Anchor, order)
 	ig.PublishExact()

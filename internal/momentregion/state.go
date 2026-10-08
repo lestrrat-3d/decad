@@ -6,8 +6,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentline"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
 // Field is one held integral and its outward error bound.
@@ -105,6 +108,103 @@ func (s State) AddExact(exact freeform.ExactMoments) {
 	running := s.Exact.Fields()
 	for i, term := range exact.Fields() {
 		running[i].Add(running[i], term)
+	}
+}
+
+// ExactChord is a junction's closing chord where both of its ends are exact
+// rationals the record denotes (a line's lerp at its recorded parameter, a
+// free-form chain's end control point), in plane coordinates.
+type ExactChord struct{ From, To freeform.RatPoint }
+
+// ChargeJunction accounts for one straight closing chord, where two
+// consecutive walks of a loop end and start at denoted points that need not
+// coincide (docs/evaluator-design.md §4). gap is a proven upper bound on the
+// chord's length. anchorReach bounds the distance of every chord point from
+// the walk anchor the six held fields are taken about, and originReach the
+// same about the plane origin the third-order sum is kept about.
+//
+// Every field is a boundary integral ∮F over one form shared by every segment
+// kind, and each form's integrand is a monomial of degree k in the coordinates
+// with a coefficient of at most 1: ½(u dv − v du) for the area (k = 1),
+// ½u² dv and −½v² du for the first moments (k = 2), ⅓u³ dv, ½u²v dv and
+// −⅓v³ du for the second (k = 3), and the dv form for the third (k = 4). So
+// the chord adds at most gap·reach^k to a field, and each held field is
+// widened by that much.
+//
+// The rational accumulator states no bound. Where chord is non-nil it adds
+// the chord's exact integral instead, so a record whose every junction has
+// exact ends keeps an exact integral of the closed loop. A nil chord retires
+// it. The third-order enclosure takes the exact chord the same way, and is
+// widened by gap·originReach⁴ without one.
+func (s State) ChargeJunction(gap, anchorReach, originReach float64, chord *ExactChord, anchor sectionrecord.Point2, order freeform.MomentIntegralOrder) {
+	charge := gap
+	for k := 1; k <= 3; k++ {
+		charge = proofbound.ProductUpper(charge, anchorReach)
+		for _, field := range fieldsOfDegree(s.Fields, k, order) {
+			*field.Bound = proofbound.AbsSumUpper(*field.Bound, charge)
+		}
+	}
+	if chord == nil {
+		s.DropExact()
+	} else {
+		au, av := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
+		if au == nil || av == nil {
+			s.DropExact()
+		} else {
+			s.AddExact(momentline.ExactChordMoments(
+				new(big.Rat).Sub(chord.From.U, au), new(big.Rat).Sub(chord.From.V, av),
+				new(big.Rat).Sub(chord.To.U, au), new(big.Rat).Sub(chord.To.V, av),
+				order,
+			))
+		}
+	}
+	if order < freeform.MomentThirdOrder || *s.ThirdDead || s.Third[0].Lo == nil {
+		return
+	}
+	if chord != nil {
+		exact := freeform.PolyThirdMoments(
+			polynomial.RatPoly{chord.From.U, new(big.Rat).Sub(chord.To.U, chord.From.U)},
+			polynomial.RatPoly{chord.From.V, new(big.Rat).Sub(chord.To.V, chord.From.V)},
+		)
+		var terms [4]proofbound.RatInterval
+		for i, value := range exact {
+			terms[i] = proofbound.PointInterval(value)
+		}
+		s.AddThird(terms, true)
+		return
+	}
+	third := gap
+	for range 4 {
+		third = proofbound.ProductUpper(third, originReach)
+	}
+	widen := proofarith.FloatRat(third)
+	if widen == nil {
+		*s.ThirdDead = true
+		*s.Third = [4]proofbound.RatInterval{}
+		return
+	}
+	for i := range s.Third {
+		s.Third[i] = proofbound.IntervalWiden(s.Third[i], widen)
+	}
+}
+
+// fieldsOfDegree returns the held fields whose boundary form has degree k:
+// the area (k = 1), the first moments (k = 2) and the second moments (k = 3),
+// the last only where order asks for them.
+func fieldsOfDegree(fields [6]Field, k int, order freeform.MomentIntegralOrder) []Field {
+	switch k {
+	case 1:
+		return fields[:1]
+	case 2:
+		if order < freeform.MomentFirstOrder {
+			return nil
+		}
+		return fields[1:3]
+	default:
+		if order < freeform.MomentSecondOrder {
+			return nil
+		}
+		return fields[3:6]
 	}
 }
 

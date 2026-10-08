@@ -153,6 +153,14 @@ func ExactLineMoments(seg Line, anchor Point, order freeform.MomentIntegralOrder
 	u1.Sub(u1, anchorU)
 	v0.Sub(v0, anchorV)
 	v1.Sub(v1, anchorV)
+	return ExactChordMoments(u0, v0, u1, v1, order)
+}
+
+// ExactChordMoments evaluates the polynomial line formulas over exact
+// rationals for the straight chord from (u0, v0) to (u1, v1), each coordinate
+// already taken about the walk anchor. It reads its arguments and never
+// writes them.
+func ExactChordMoments(u0, v0, u1, v1 *big.Rat, order freeform.MomentIntegralOrder) freeform.ExactMoments {
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
 
