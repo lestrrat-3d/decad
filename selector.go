@@ -315,6 +315,7 @@ const (
 	predKindNormalTo      = selectorquery.NormalToKind
 	predKindFacing        = selectorquery.FacingKind
 	predKindFaceCreatedBy = selectorquery.FaceCreatedByKind
+	predKindWalls         = selectorquery.WallsKind
 	predKindFree          = selectorquery.FreeKind
 )
 
@@ -424,6 +425,15 @@ func CapEnd(b *Body) FeatureRef {
 	return FeatureRef{producer: b.Origin().producer, Role: roleCapEnd}
 }
 
+// Walls matches every face a sweep made: the faces carrying a side(i, j) role
+// of b's own producing feature. It is the sibling of CapStart and CapEnd, and
+// it is what Body.Draft takes as the complete wall set of an extrude
+// (docs/draft-design.md §10). On a body whose producer mints no side roles it
+// matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
+func Walls(b *Body) FacePredicate {
+	return FacePredicate{kind: predKindWalls, ref: FeatureRef{producer: b.Origin().producer, Role: roleSidePrefix}}
+}
+
 // parallelDirs is shared with the body-relative stop adapter.
 func parallelDirs(a, b r3.Vec) bool { return selectorquery.ParallelDirs(a, b) }
 
@@ -509,6 +519,9 @@ func (f selectorFace) SelectorCylindrical() bool {
 }
 func (f selectorFace) SelectorHasOrigin(ref FeatureRef) bool {
 	return slices.Contains(f.origins, ref)
+}
+func (f selectorFace) SelectorIsWallOf(ref FeatureRef) bool {
+	return f.isWallOf(ref.producer)
 }
 
 // errNilSelector rejects a nil query.

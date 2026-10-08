@@ -1363,6 +1363,12 @@
 5	0.01	TestContactPairSupportSetTouch
 5	0.02	TestCutStarHoleOuterLoopIsNotTheLongest
 5	0.01	TestDocumentSweptBoxContainsThePath
+5	0.01	TestDraftEquivalence
+5	0.01	TestDraftNegative
+5	0.01	TestDraftOtherCap
+5	0.01	TestDraftPlacedAndFilleted
+5	0.01	TestDraftRefusals
+5	0.01	TestDraftRetires
 5	0.38	TestExportBytesAreIdenticalAcrossVerificationLevels
 5	0.78	TestExportWritesABodyTheProvenPathRefuses
 5	0.05	TestExtrudeFitSplineProfileBuilds
@@ -1606,3 +1612,4 @@
 5	0.03	TestTaperRing
 5	0.05	TestTaperSlot
 5	0.15	TestTaperVerify
+5	0.01	TestWallsSelector

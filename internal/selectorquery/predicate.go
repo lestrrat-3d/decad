@@ -24,6 +24,7 @@ const (
 	NormalToKind      = "normal_to"
 	FacingKind        = "facing"
 	FaceCreatedByKind = "face_created_by"
+	WallsKind         = "walls"
 	FreeKind          = "free"
 )
 
@@ -56,6 +57,9 @@ type FaceView[R comparable] interface {
 	SelectorOutwardPlanarNormal() (r3.Vec, bool)
 	SelectorCylindrical() bool
 	SelectorHasOrigin(R) bool
+	// SelectorIsWallOf reports whether the face carries a side(i, j) role of
+	// the producer R names.
+	SelectorIsWallOf(R) bool
 }
 
 // Validate rejects a malformed clause before looking at any edge.
@@ -91,6 +95,8 @@ func (p FaceClause[R]) Validate(validateRef func(R, string) error) error {
 		return nil
 	case FaceCreatedByKind:
 		return validateRef(p.Ref, "face-created-by")
+	case WallsKind:
+		return validateRef(p.Ref, "walls")
 	case NormalToKind:
 		return ValidateDirection(p.Direction, "normal-to")
 	case FacingKind:
@@ -149,6 +155,8 @@ func (p FaceClause[R]) Matches(f FaceView[R]) bool {
 		return ParallelDirs(n, d) && n.Dot(d) > 0
 	case FaceCreatedByKind:
 		return f.SelectorHasOrigin(p.Ref)
+	case WallsKind:
+		return f.SelectorIsWallOf(p.Ref)
 	default:
 		return false
 	}
@@ -177,7 +185,7 @@ func (p FaceClause[R]) Render(renderRef func(R) string) string {
 		return p.Kind
 	case NormalToKind, FacingKind:
 		return p.Kind + "(" + RenderVec(p.Direction) + ")"
-	case FaceCreatedByKind:
+	case FaceCreatedByKind, WallsKind:
 		return p.Kind + "(" + renderRef(p.Ref) + ")"
 	default:
 		return "<invalid>"

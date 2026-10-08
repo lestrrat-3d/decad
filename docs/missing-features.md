@@ -20,7 +20,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Section below |
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, or (fillet, chamfer) at straight edges along an axis | Modify operations |
-| A tapered extrude has no mesh, export, boolean or mass reading, and no face-draft op exists | Feature operations |
+| A draft body (a tapered extrude, or `Body.Draft`) has no mesh, export, boolean or mass reading | Feature operations |
 | No import of any file format | Data exchange |
 | Booleans outside the exact prism classes fall to a faceted mesh result, and refuse touching contact | Booleans |
 
@@ -29,8 +29,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Draft angle on a two-sided, through-all or to-face extrude, a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4/SD11/SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
-| Mesh, boolean, export, mass and interference readings of a tapered extrude | `ErrUnsupported` through `Tessellate`'s default (`tessellate.go`); interference past a box-disjoint proof reads `Suspect` | `docs/draft-design.md` Table DD |
-| Draft of existing faces | No entry point exists | `docs/draft-design.md` §10 |
+| Mesh, boolean, export, mass and interference readings of a draft body | `ErrUnsupported` through `Tessellate`'s default (`tessellate.go`); interference past a box-disjoint proof reads `Suspect` | `docs/draft-design.md` Table DD |
+| `Body.Draft` of a wall subset, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD20/SD21/SD23 (`draft.go`) | `docs/draft-design.md` §14 |
 | Sweep twist | `WithSweepTwist` nonzero → `ErrUnsupported` (`sweep.go`) | `docs/sweep-design.md` |
 | Closed sweep path | `ErrUnsupported`, "closed sweep paths are not implemented" (`sweep.go`) | `docs/sweep-design.md` |
 | Free-form sweep path | `Path` holds only `LineTo` and `ArcThrough` segments (`path.go`) | `docs/sweep-design.md` §2–§3 |
