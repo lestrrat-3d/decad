@@ -243,8 +243,8 @@ func (h LocusVelocityHull) SliverEnclosure(lo, hi float64) (Point, bool) {
 // corner (vU, vV), the same root CircleCircleLocusVelocity encloses over a
 // range. ok is false where a carrier does not lift or no root is decided.
 func CircleCircleLocusFoot(prev, cur survey2d.SideWalk, t, vU, vV float64) (Point, bool) {
-	ca, okA := CarrierOf(prev, t)
-	cb, okB := CarrierOf(cur, t)
+	ca, okA := carrierOverRange(prev, t, t)
+	cb, okB := carrierOverRange(cur, t, t)
 	if !okA || !okB {
 		return Point{}, false
 	}
