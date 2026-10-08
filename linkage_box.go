@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -28,16 +29,11 @@ import (
 // at its driver alone (§16): linkage_loop.go answers each cell's asks for its
 // dependent joints, and this file charges them into the cell's certificate.
 
-// JointBox is a box of joint values (docs/linkage-check-design.md §14.1). A
-// listed joint ranges over [Min, Max] when Min < Max and holds at Min when
-// Min == Max; an unlisted joint holds 0.
-type JointBox []JointRange
+// JointBox is a box of joint values (docs/linkage-check-design.md §14.1).
+type JointBox = reportvocab.JointBox[*Link]
 
-// JointRange is one link's joint range in a JointBox.
-type JointRange struct {
-	Link     *Link       // the link whose joint this ranges
-	Min, Max units.Value // the joint's Kind: Angle for a revolute, Length for a prismatic
-}
+// JointRange is one link's range of joint values.
+type JointRange = reportvocab.JointRange[*Link]
 
 type jointBoxOption struct{ option.Interface }
 
@@ -59,17 +55,8 @@ func WithCellBudget(cells int) JointBoxOption {
 	return jointBoxOption{option.New(identCellBudget{}, cells)}
 }
 
-// JointConfiguration is one point of joint space: every link's joint value,
-// its proven half-width and its world pose, in Linkage.Links() order. Bounds
-// is zero, in the value's own unit, for every joint whose value is stated;
-// a loop's dependent joint carries the float midpoint of its certified
-// enclosure in Values and the half-width in Bounds, so Values[k] ± Bounds[k]
-// encloses the exact value (docs/linkage-check-design.md §16.3).
-type JointConfiguration struct {
-	Values []units.Value
-	Bounds []units.Value
-	Poses  []r3.Transform
-}
+// JointConfiguration records every link's joint value and world pose.
+type JointConfiguration = reportvocab.JointConfiguration
 
 // Configuration builds every link's world pose at the stated joint values,
 // one per link in Links() order (docs/linkage-check-design.md §14.1). It
@@ -116,131 +103,35 @@ func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error
 	return JointConfiguration{Values: slices.Clone(values), Bounds: zeroBounds(values), Poses: poses}, nil
 }
 
-// JointBoxReport is what VerifyJointBox returns
-// (docs/linkage-check-design.md §14.2). Diagnostics lists, per leaf cell in
-// cell order, its centre's findings then its own; then the collision and
-// margin-violation findings of the centres of cells since split; then the
-// budget's finding; then the whole-box reading's. It is empty exactly when
-// Status is Sound, and Status is the worst Diagnostic.Status in it.
-type JointBoxReport struct {
-	Request JointBoxRequest // the validated effective settings, including defaults
-	// ReadingResolution is the floor the whole-box Clearance reading refines
-	// to, per axis: Request.Resolution when WithResolution was stated, and
-	// units.Scalar(1.0/16384) otherwise, while the verdict stops at
-	// Request.Resolution (docs/linkage-check-design.md §14.1).
-	ReadingResolution units.Value
-	Linkage           *Linkage            // the linkage as given
-	Box               JointBox            // the box as stated
-	Links             []*Link             // Linkage.Links() order
-	Against           []*Body             // every static body, in Document.Bodies() order
-	JointContacts     []DiagnosticPair    // every declared joint contact, in declaration order
-	Cells             []JointCellResult   // the leaves of the subdivision, in cell order; they tile the box
-	CellsEvaluated    int                 // every centre evaluated, split cells included
-	Collisions        []JointBoxCollision // every proven collision at every evaluated centre, in evaluation order then pair order
-	Clearance         *ScalarReading      // the minimum gap over the whole box; nil unless every cell is CellClear
-	Assessment        Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
-	Diagnostics       []Diagnostic        // per leaf its centre's findings then its own; then split centres'; then the budget's and the reading's
-	Status            Status              // Unverified on a zero value; VerifyJointBox always returns a decided status
-}
+// JointBoxReport records the cell subdivision and verdict.
+type JointBoxReport = reportvocab.JointBoxReport[*Body, *Linkage, *Link, JointBox, JointCell]
 
-// Passed reports whether the report is Sound. It returns false for a nil
-// report and for any other Status.
-func (r *JointBoxReport) Passed() bool {
-	return r != nil && r.Status == Sound
-}
+// JointBoxRequest records the effective settings of a VerifyJointBox call.
+type JointBoxRequest = reportvocab.JointBoxRequest
 
-// JointBoxRequest is one VerifyJointBox call's effective settings, each value
-// as the caller stated it or as the default was formed.
-type JointBoxRequest struct {
-	RelativeTolerance units.Value  // always present
-	Resolution        units.Value  // Dimensionless: the finest cell, as a fraction of each varying joint's range
-	MinClearance      *units.Value // non-nil exactly when WithMinClearance was requested
-	CellBudget        int          // the most centres the check evaluates
-}
+// JointCell records one closed cell of joint values.
+type JointCell = reportvocab.JointCell
 
-// JointCell is a box of joint values inside a stated JointBox: per link, in
-// Links() order, the least and greatest value the cell holds. A held or
-// unlisted joint has Min == Max.
-type JointCell struct {
-	Min, Max []units.Value
-}
-
-func (c JointCell) clone() JointCell {
+func cloneJointCell(c JointCell) JointCell {
 	return JointCell{Min: slices.Clone(c.Min), Max: slices.Clone(c.Max)}
 }
 
-// JointCellResult is one leaf cell of the subdivision and what its centre
-// proves. In every row and diagnostic, A is a link body and B a static body
-// or a body of a later link (docs/linkage-check-design.md §4's pair order).
-// A Clearance row is a measurement at the centre only; the claim over the
-// whole cell is Outcome and Clearance.
-type JointCellResult struct {
-	Cell          JointCell
-	Outcome       CellOutcome
-	Center        JointConfiguration // the evaluated centre
-	Interferences []Interference     // at the centre; proven overlap, bounded volume
-	Clearances    []Clearance        // at the centre; every pair proven disjoint or touching
-	Diagnostics   []Diagnostic       // the centre's undecided or unsupported pairs and invalid bodies, then the cell's own finding
-	// Clearance is a PROVEN LOWER BOUND on every undeclared evaluated pair's
-	// gap over the whole closed cell, set only on a CellClear cell that holds
-	// at least one such pair. It reads Approximate with a zero Bound: the
-	// number is the claim itself.
-	Clearance *Measurement
-}
+// JointCellResult records one leaf cell and its centre's findings.
+type JointCellResult = reportvocab.JointCellResult[*Body, JointCell]
 
-// CellOutcome is what a JointCellResult proves (docs/linkage-check-design.md
-// §14.2).
-type CellOutcome int
+// CellOutcome states what a JointCellResult proves.
+type CellOutcome = reportvocab.CellOutcome
 
 const (
-	// CellNotEvaluated is the reserved zero value: VerifyJointBox never
-	// returns it.
-	CellNotEvaluated CellOutcome = iota
-	// CellClear — at EVERY configuration of the cell, every undeclared
-	// evaluated pair has disjoint interiors at a proven positive gap, and
-	// every declared pair is free of transferred overlap at the centre.
-	CellClear
-	// CellBlocked — at EVERY configuration of the cell some pair overlaps:
-	// a collision at the centre whose proven volume exceeds what the bodies'
-	// travel across the cell can sweep away (docs/linkage-check-design.md
-	// §14.3). The centre's collisions are its witnesses.
-	CellBlocked
-	// CellColliding — a proven collision sits at the centre; nothing is
-	// claimed about the rest of the cell.
-	CellColliding
-	// CellUndecided — none of the above. It claims nothing.
-	CellUndecided
+	CellNotEvaluated = reportvocab.CellNotEvaluated
+	CellClear        = reportvocab.CellClear
+	CellBlocked      = reportvocab.CellBlocked
+	CellColliding    = reportvocab.CellColliding
+	CellUndecided    = reportvocab.CellUndecided
 )
 
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "cell_outcome(<n>)", never a panic.
-func (o CellOutcome) String() string {
-	switch o {
-	case CellNotEvaluated:
-		return tokenNotEvaluated
-	case CellClear:
-		return "clear"
-	case CellBlocked:
-		return "blocked"
-	case CellColliding:
-		return "colliding"
-	case CellUndecided:
-		return tokenUndecided
-	default:
-		return fmt.Sprintf("cell_outcome(%d)", int(o))
-	}
-}
-
-// JointBoxCollision is a proven overlap at an evaluated centre, about the
-// ideal poses (docs/linkage-check-design.md §5.1), with the configuration as
-// its witness: Volume.Value − Volume.Bound is a proven lower bound on the
-// ideal overlap there. A belongs to a link; B is a static body or a body of a
-// later link. Nothing is claimed about the cell around it.
-type JointBoxCollision struct {
-	Configuration JointConfiguration
-	A, B          *Body
-	Volume        Measurement
-}
+// JointBoxCollision is a proven overlap at one evaluated centre.
+type JointBoxCollision = reportvocab.JointBoxCollision[*Body]
 
 // VerifyJointBox checks whether every configuration in box is clear: whether
 // no link of l, at any joint values the box holds, meets a static body or a
@@ -1386,7 +1277,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 	var lowest *Measurement
 	for _, c := range b.leaves {
 		res := JointCellResult{
-			Cell:          c.cell.clone(),
+			Cell:          cloneJointCell(c.cell),
 			Outcome:       c.outcome,
 			Center:        c.configuration(),
 			Interferences: c.pose.result.Interferences,
@@ -1476,7 +1367,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 
 // cellFinding marks a cell's own finding with the cell.
 func (b *boxRun) cellFinding(c *boxCell, diag Diagnostic) Diagnostic {
-	cell := c.cell.clone()
+	cell := cloneJointCell(c.cell)
 	diag.Cell = &cell
 	return diag
 }

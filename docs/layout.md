@@ -209,7 +209,7 @@ the rules leave to the byte budget.
 | `survey.go` | Adapts analytic payloads to wall, undercut and radius readers. See verification §6. |
 | `survey_undercut.go` | `listVerdict`, the surveys' per-list fold of `internal/survey2d/`'s three-valued undercut reader. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
-| `motion.go` / `motion_verify.go` | Public motion aliases, options, reports, and pose checks. See motion-check §2–§6. |
+| `motion.go` / `motion_verify.go` | Motion aliases, options, and pose checks. See motion-check §2–§6. |
 | `motion_bound.go` | Swept-box and corner readings over `internal/motionbound/`. See its doc comment. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage`. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox`. See `docs/linkage-check-design.md`. |
@@ -278,7 +278,7 @@ the rules leave to the byte budget.
 | `internal/facetproof/` | Faceted shell audits, placement, restatement and bounds. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/surfacegeom/` | Sealed face and edge geometry variants. See `docs/api-design.md` §6.1. |
-| `internal/reportvocab/` | Verification report types and outcome enums. See verification §1. |
+| `internal/reportvocab/` | Verify, Motion, Linkage, and JointBox report types and outcome enums. |
 | `internal/extent/` | Sealed linear and angular extent variants. See API §8.1. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation and segment record. See surface §5.2. |
 | `internal/sectionaudit/` | Signed area, crossing, contact and nesting checks for rewritten sections. See modify §5. |

@@ -1054,7 +1054,7 @@ func (mp *motionPose) stamp(diag Diagnostic) Diagnostic {
 	if mp.cell == nil {
 		return withAt(diag, mp.result.At)
 	}
-	cell := mp.cell.clone()
+	cell := cloneJointCell(*mp.cell)
 	diag.Cell = &cell
 	return diag
 }

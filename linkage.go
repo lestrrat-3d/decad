@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -379,65 +380,14 @@ func (l *Linkage) PoseAt(d Drive, at units.Value) (LinkagePose, error) {
 	return spec.poseAt(context.Background(), at, p.Base)
 }
 
-// LinkageReport is what VerifyLinkage returns (docs/linkage-check-design.md
-// §4): VerifyMotion's vocabulary over the links of a linkage.
-// Diagnostics lists interval findings in interval order, then pose findings
-// in pose order, then the whole-drive reading's own tolerance finding; it is
-// empty exactly when Status is Sound, and Status is the worst
-// Diagnostic.Status in it. Every At, From and To is the Dimensionless
-// fraction s.
-type LinkageReport struct {
-	Request MotionRequest // the validated effective settings, including defaults
-	// ReadingResolution is the floor the whole-drive Clearance reading refines
-	// to: Request.Resolution when WithResolution was stated, and
-	// units.Scalar(1.0/16384) otherwise, while the verdict stops at
-	// Request.Resolution (docs/linkage-check-design.md §3).
-	ReadingResolution units.Value
-	Linkage           *Linkage            // the linkage as given
-	Drive             Drive               // the drive as stated
-	Links             []*Link             // Linkage.Links() order
-	JointContacts     []DiagnosticPair    // every declared joint contact, in declaration order
-	Against           []*Body             // every static body, in Document.Bodies() order
-	Poses             []LinkagePoseResult // every pose evaluated, from s = 0 to s = 1
-	Intervals         []MotionInterval    // between adjacent Poses, in the same order
-	Collisions        []LinkCollision     // every proven collision, in traversal order then pair order
-	Clearance         *ScalarReading      // the minimum gap over the whole drive; nil unless every interval is IntervalClear
-	Assessment        Assessment          // against WithMinClearance; AssessmentNotEvaluated when not requested
-	Diagnostics       []Diagnostic        // interval findings, then pose findings, then the whole-drive reading's
-	Status            Status              // Unverified on a zero value; VerifyLinkage always returns a decided status
-}
+// LinkageReport is VerifyLinkage's drive report (docs/linkage-check-design.md §4).
+type LinkageReport = reportvocab.LinkageReport[*Body, *Linkage, *Link, Drive, LinkagePose, JointCell]
 
-// Passed reports whether the report is Sound. It returns false for a nil
-// report and for any other Status.
-func (r *LinkageReport) Passed() bool {
-	return r != nil && r.Status == Sound
-}
+// LinkagePoseResult records one evaluated pose and its pair findings.
+type LinkagePoseResult = reportvocab.LinkagePoseResult[*Body, LinkagePose, JointCell]
 
-// LinkagePoseResult is one evaluated pose: every link's pose there and the
-// pair results at it in Verify's own shape. In every row and diagnostic, A is
-// a link body and B a static body or a body of a later link (pair order,
-// docs/linkage-check-design.md §4); a row names the caller's own bodies, never
-// the transient placements the check evaluated. A Clearance row is a
-// measurement at this pose only; the continuous claim lives on the
-// MotionInterval.
-type LinkagePoseResult struct {
-	Pose          LinkagePose
-	Interferences []Interference // proven overlap, bounded volume
-	Clearances    []Clearance    // every pair proven disjoint or touching
-	Diagnostics   []Diagnostic   // this pose's undecided or unsupported pairs and invalid bodies, At set
-}
-
-// LinkCollision is a proven overlap at an evaluated pose, about the ideal
-// pose (docs/linkage-check-design.md §5.1): the measured overlap survives
-// both bodies' deviation from their ideal poses, and Volume's Bound carries
-// that allowance, so Volume.Value − Volume.Bound is a proven lower bound on
-// the ideal overlap. A belongs to a link; B is a static body or a body of a
-// later link. Nothing is claimed about the interval around it.
-type LinkCollision struct {
-	At     units.Value // the Dimensionless fraction s
-	A, B   *Body
-	Volume Measurement
-}
+// LinkCollision is a proven overlap at one ideal linkage pose.
+type LinkCollision = reportvocab.LinkCollision[*Body]
 
 // linkageSpec is a linkage and a drive read into one joint per link.
 type linkageSpec struct {
