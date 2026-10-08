@@ -214,10 +214,10 @@ the rules leave to the byte budget.
 | `linkage_loop.go` | Closed loops and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
 | `contact_sweep.go` | Sweeps, reports, and tracks. |
-| `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift over source boxes or exact planar bodies. See contact-sweep design. |
-| `contact_sweep_memo.go` | Adapts `internal/sweepmemo/` to sweep paths and body radius readings. See contact-sweep §7. |
-| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Planar and rolling sweep adapters. See multibody-dynamics §10.2–§10.6, §10.8. |
-| `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
+| `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating and planar sweeps. See contact-sweep §4. |
+| `contact_sweep_memo.go` | Sweep memo adapter. See contact-sweep §7. |
+| `contact_sweep_band.go` / `contact_sweep_rolling.go` | Contact bands and rolling. See multibody §10. |
+| `swept_box.go` | Whole-path box. See multibody §4.2. |
 
 ### Booleans
 
