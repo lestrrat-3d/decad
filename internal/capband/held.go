@@ -6,6 +6,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // This file states how far a circular patch's held numbers sit from the values
@@ -13,39 +14,14 @@ import (
 // closed forms over every value those allowances admit.
 
 // AngleAllow is a proven upper bound on |held − θ|, where θ is the exact angle
-// about (cU, cV) of a point within reach of p, on the branch nearest held.
-//
-// p and the centre are float64s, so the direction p − c is an exact rational
-// and proofbound.Atan2Interval encloses its angle with no libm accuracy
-// assumed. A point within reach of p turns that angle by at most
-// arcsin(reach/|p − c|) ≤ (π/2)·reach/|p − c|, which widens the enclosure; a
-// reach at or past |p − c| says nothing about the angle and answers false, as
-// does p on the centre.
-//
-// The branch is the one nearest held. Every held angle a cap band holds is a
-// float Atan2 of the same direction, or such an angle unwrapped by whole turns,
-// so it lies within a few ulps of its own branch and more than π from any
-// other.
+// about (cU, cV) of a point within reach of p, on the branch nearest held:
+// the distance from held to survey2d.EndAngleEnclosure's interval. It answers
+// false where that enclosure does, for a reach at or past |p − c| or p on the
+// centre.
 func AngleAllow(cU, cV float64, p Point, reach, held float64) (float64, bool) {
-	dU, dV, ok := exactDelta(p, cU, cV)
-	if !ok || (dU.Sign() == 0 && dV.Sign() == 0) || !(reach >= 0) || proofbound.IsNonFinite(reach) || proofbound.IsNonFinite(held) {
+	iv, ok := survey2d.EndAngleEnclosure(cU, cV, p.U, p.V, reach, held)
+	if !ok {
 		return 0, false
-	}
-	iv := proofbound.Atan2Interval(dV, dU, false)
-	mid, _ := intervalMid(iv).Float64()
-	if turns := math.Round((held - mid) / (2 * math.Pi)); turns != 0 {
-		iv = proofbound.IntervalAdd(iv, proofbound.IntervalScale(proofbound.TwoPiInterval(), new(big.Rat).SetFloat64(turns)))
-	}
-	if reach > 0 {
-		rhoLower := proofbound.RatSqrtDown(new(big.Rat).Add(new(big.Rat).Mul(dU, dU), new(big.Rat).Mul(dV, dV)))
-		if !(reach < rhoLower) {
-			return 0, false
-		}
-		turn := new(big.Rat).Quo(
-			proofbound.RatMul(proofbound.PiUpper, proofarith.FloatRat(reach)),
-			proofbound.RatMul(big.NewRat(2, 1), proofarith.FloatRat(rhoLower)),
-		)
-		iv = proofbound.IntervalWiden(iv, turn)
 	}
 	return proofbound.IntervalFloatError(iv, held), true
 }

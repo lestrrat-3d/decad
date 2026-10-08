@@ -388,45 +388,102 @@ func TestUndercutWallTiltedOffItsHeldTangent(t *testing.T) {
 	require.Equal(t, decad.Violating, br.Status)
 }
 
-// TestUndercutUnseparablePullIsUndecided proves the new reader answers
-// undecided instead of guessing on a receiver's own circular wall, when the
-// wall's outward-normal component against the pull genuinely straddles zero
-// within the reader's own trig enclosure (survey_undercut.go's
-// circularNormalRange) rather than merely landing near it in float64.
+// TestUndercutArcWindowFollowsTheRecord pins that the pull survey reads a
+// circular wall's window from its recorded ends. Each profile is a quarter arc
+// about the origin, counterclockwise, closed by two lines, and the walk holds
+// the arc's end angle math.Atan2(1, 0), which is π/2 rounded down.
+//
+// The arc (1, 0) → (0, 1) denotes [0, π/2]. Against the pull (1, −3e−17, 0)
+// its outward normal (cos θ, sin θ) gives the component −3e−17 at θ = π/2,
+// so the arc opposes. The wall (0, 1) → (−3e−17, 0) faces exactly against the
+// pull and the wall back to (1, 0) faces across it, so the arc is the only
+// undercut. The arc (0, 1) → (−1, 0) denotes [π/2, π], where the pull
+// (−1, 0, 0) gives −cos θ ≥ 0, and its two straight walls are perpendicular
+// and exactly antiparallel to the pull, so the body is clear.
+//
+// Shown to fail: with survey2d.WallNormalDecision reading the held Th0 and
+// Th1 as the window again, the first body reports no undercut and the second
+// lists the arc.
+func TestUndercutArcWindowFollowsTheRecord(t *testing.T) {
+	t.Parallel()
+	survey := func(t *testing.T, a, b, mid [2]float64, pull r3.Vec) *decad.BodyReport {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		fix := func(p [2]float64) *sketch.Point {
+			q := s.CreatePoint(p[0], p[1])
+			s.Fix(q)
+			return q
+		}
+		pc, pa, pb, pm := fix([2]float64{0, 0}), fix(a), fix(b), fix(mid)
+		s.CreateArc(pc, pa, pb)
+		s.CreateLine(pb, pm)
+		s.CreateLine(pm, pa)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+		doc := decad.New()
+		body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		require.NoError(t, err)
+		held := map[[2]float64]bool{}
+		for _, v := range body.Vertices() {
+			p := v.Position().Value
+			held[[2]float64{p.X, p.Y}] = true
+		}
+		require.Equal(t, map[[2]float64]bool{a: true, b: true, mid: true}, held,
+			`the fixture is about these exact corners`)
+		report, err := doc.Verify(t.Context(), decad.WithPullDirection(pull))
+		require.NoError(t, err)
+		return decadtest.FindBodyReport(t, report, body)
+	}
+
+	t.Run("opposes at the recorded end", func(t *testing.T) {
+		t.Parallel()
+		a, b := [2]float64{1, 0}, [2]float64{0, 1}
+		br := survey(t, a, b, [2]float64{-3e-17, 0}, r3.NewVec(1, -3e-17, 0))
+		require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+		require.Len(t, br.Undercut.Faces, 1, `the arc is the only undercut`)
+		corners := map[[2]float64]bool{}
+		for _, ce := range br.Undercut.Faces[0].Loops()[0].CoEdges() {
+			p := ce.Start().Position().Value
+			corners[[2]float64{p.X, p.Y}] = true
+		}
+		require.Equal(t, map[[2]float64]bool{a: true, b: true}, corners, `the listed face is the arc's side`)
+		require.Equal(t, decad.Violating, br.Status)
+	})
+	t.Run("clear from the recorded start", func(t *testing.T) {
+		t.Parallel()
+		br := survey(t, [2]float64{0, 1}, [2]float64{-1, 0}, [2]float64{0, 0}, r3.NewVec(-1, 0, 0))
+		require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+		require.Empty(t, br.Undercut.Faces)
+		require.Equal(t, decad.Sound, br.Status)
+	})
+}
+
+// TestUndercutNearTangentPullDecidedAtRecordedStart pins that a circular
+// wall's verdict is read at its recorded ends exactly, however close the pull
+// runs to the wall's tangent there.
 //
 // The body is a narrow circular-arc wall (radius 10 mm, a 0.1-radian sweep at
-// a generic — not a "nice" fraction of π — start angle) closed by one straight
-// chord. The pull's in-plane components are chosen as a large rational
-// continued-fraction convergent of the arc's own exact cosine and sine at its
-// start angle: the residual between the pull and the arc's tangent there is
-// many orders of magnitude below the width radSinCosInterval's own certified
-// enclosure carries at that angle, so the enclosure cannot separate the
-// wall's true (exactly zero) component from a genuine straddle. Reproduced
-// through a small continued-fraction search (recorded as this test's own
-// derivation, not asserted): du, dv below satisfy
-// |dv*cos(th0) - du*sin(th0)| ~ 1e-16 while the wall's own trig enclosure at
-// th0 is only accurate to ~1e-13 — an enclosure width larger than the true
-// value it is asked to separate from zero.
-//
-// Isolating this to the WHOLE body (an empty Undercuts and a Suspect status)
-// is not reachable with any two-wall closed profile: the same boundary that
-// carries the near-zero-component arc must close on the far side too, and a
-// straight wall between recorded points is decided EXACTLY, with no undecided
-// outcome available to it (survey2d.DecideIntervalComponent over point
-// intervals) — so the chord is a
-// second, independently and correctly proven undercut. That is not a defect;
-// it is the same reject-only rule applied to a wall the reader CAN decide.
-// The assertions below are what the fix actually proves: the ARC's own
-// verdict is undecided — neither listed nor cleared — not the coarser claim
-// that nothing else in the body opposes.
-func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
+// a generic start angle) closed by one straight chord. The pull's in-plane
+// components are a large continued-fraction convergent of the arc's cosine and
+// sine at its start angle, so the pull runs within about 2e−17 of the wall's
+// tangent at the recorded start (r·cos 0.91, r·sin 0.91). The reader's trig
+// enclosure at that angle cannot separate a component that small from zero,
+// but the window's start is the recorded point itself, whose outward normal
+// against the pull has the exact sign of du·u + dv·v. That sign is negative,
+// so the arc opposes at its start, and the chord opposes too. Both are proven
+// and nothing is left undecided.
+func TestUndercutNearTangentPullDecidedAtRecordedStart(t *testing.T) {
 	t.Parallel()
 	const r, th0, delta = 10.0, 0.91, 0.1
 	th1 := th0 + delta
+	start := [2]float64{r * math.Cos(th0), r * math.Sin(th0)}
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
-	pA := s.CreatePoint(r*math.Cos(th0), r*math.Sin(th0))
+	pA := s.CreatePoint(start[0], start[1])
 	pB := s.CreatePoint(r*math.Cos(th1), r*math.Sin(th1))
 	pC := s.CreatePoint(0, 0)
 	s.CreateArc(pC, pA, pB)
@@ -439,6 +496,12 @@ func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
+	sawStart := false
+	for _, v := range body.Vertices() {
+		p := v.Position().Value
+		sawStart = sawStart || [2]float64{p.X, p.Y} == start
+	}
+	require.True(t, sawStart, "the arc must start at the fixed point")
 
 	var arc *decad.Face
 	for _, f := range body.Faces() {
@@ -448,17 +511,23 @@ func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
 	}
 	require.NotNil(t, arc, "the profile must build one circular wall")
 
-	// du, dv: a continued-fraction convergent of (cos(th0), sin(th0)) large
-	// enough that dv*cos(th0) - du*sin(th0) sits far inside the reader's own
-	// trig enclosure width at th0.
 	const du, dv = -2559100094135641.0, 1989397549793721.0
+	num := new(big.Rat).Add(
+		new(big.Rat).Mul(new(big.Rat).SetFloat64(du), new(big.Rat).SetFloat64(start[0])),
+		new(big.Rat).Mul(new(big.Rat).SetFloat64(dv), new(big.Rat).SetFloat64(start[1])),
+	)
+	require.Negative(t, num.Sign(), "the outward normal at the recorded start must lean against the pull")
+
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(du, dv, 0)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
 
-	require.NotContains(t, br.Undercut.Faces, arc, "the arc's own component is genuinely undecided, not a proven undercut")
-	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	require.Contains(t, br.Undercut.Faces, arc, "the arc opposes at its recorded start")
+	require.Len(t, br.Undercut.Faces, 2, "the arc and the chord oppose")
+	require.False(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+	require.Equal(t, decad.Violating, br.Status)
 }
 
 func TestWallReflexSweep(t *testing.T) {
