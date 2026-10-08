@@ -88,30 +88,6 @@ func IntervalHull(a, b proofbound.RatInterval) proofbound.RatInterval {
 	return proofbound.Interval(lo, hi)
 }
 
-// UnitVec encloses the EXACT unit vector of a float pair — the value
-// normalize2 rounds. The pair itself is exact, so the only widening is the
-// length's own outward-rounded square root.
-func UnitVec(x, y float64) (Point, bool) {
-	rx, ry := proofarith.FloatRat(x), proofarith.FloatRat(y)
-	if rx == nil || ry == nil {
-		return Point{}, false
-	}
-	n2 := new(big.Rat).Add(new(big.Rat).Mul(rx, rx), new(big.Rat).Mul(ry, ry))
-	if n2.Sign() == 0 {
-		return Point{}, false
-	}
-	l, ok := proofbound.IntervalSqrt(proofbound.PointInterval(n2))
-	if !ok || l.Lo.Sign() <= 0 {
-		return Point{}, false
-	}
-	u, okU := proofbound.IntervalQuo(proofbound.PointInterval(rx), l)
-	v, okV := proofbound.IntervalQuo(proofbound.PointInterval(ry), l)
-	if !okU || !okV {
-		return Point{}, false
-	}
-	return Point{U: u, V: v}, true
-}
-
 // Nearest encloses intersectOffsets' own "root nearest the corner". A
 // candidate whose squared-distance interval starts beyond another's end is
 // PROVEN not to be the nearest and is dropped; every candidate the exact
@@ -158,23 +134,4 @@ func NearestTo(cands []Point, corner Point) (Point, bool) {
 		out = Union(out, cands[i])
 	}
 	return out, found
-}
-
-// OffsetFootOver encloses the material-side foot v + t·rot90(unit(tu, tv))
-// for every offset amount t in span, reading the float pair (tu, tv) as an
-// exact direction. A held walk tangent is not one for a line walk, whose
-// recorded endpoints state the direction (OffsetFootEnclosure).
-func OffsetFootOver(vU, vV, tu, tv float64, span proofbound.RatInterval) (Point, bool) {
-	n, ok := UnitVec(tu, tv)
-	if !ok {
-		return Point{}, false
-	}
-	v, okV := ExactPoint(vU, vV)
-	if !okV {
-		return Point{}, false
-	}
-	return Point{
-		U: proofbound.IntervalAdd(v.U, proofbound.IntervalMul(proofbound.IntervalNeg(n.V), span)),
-		V: proofbound.IntervalAdd(v.V, proofbound.IntervalMul(n.U, span)),
-	}, true
 }

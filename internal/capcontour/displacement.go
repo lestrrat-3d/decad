@@ -48,8 +48,8 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 		}
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if j.Arc || j.G1 {
-			a, okA := joinFoot(j, prev, true, span)
-			b, okB := joinFoot(j, cur, false, span)
+			a, okA := joinFoot(prev, true, span)
+			b, okB := joinFoot(cur, false, span)
 			if !okA || !okB {
 				return 0, false
 			}
@@ -82,20 +82,16 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 	return delta, true
 }
 
-// joinFoot encloses one wall's offset foot at corner j over span: the end of
-// prev when atEnd, else the start of cur. A line wall's foot stands on the
-// endpoint its own end bound encloses and steps along the normal of the
-// difference of its two enclosed endpoints (OffsetFootEnclosure), never along
-// its held tangent, which is that difference rounded to float64. A circular
-// wall's foot reads the held corner and tangent.
-func joinFoot(j Join, w survey2d.SideWalk, atEnd bool, span proofbound.RatInterval) (Point, bool) {
-	if w.IsCircular() {
-		tu, tv := w.TanInU, w.TanInV
-		if atEnd {
-			tu, tv = w.TanOutU, w.TanOutV
-		}
-		return OffsetFootOver(j.VU, j.VV, tu, tv, span)
-	}
+// joinFoot encloses one wall's offset foot at a corner over span: the end of
+// the wall when atEnd, else its start. The foot stands on the endpoint the
+// wall's own end bound encloses and steps along the normal walkTangentEnclosure
+// derives from the recorded data: for a line, the difference of its two
+// enclosed endpoints; for a circle, the radius from its recorded centre to that
+// enclosed endpoint. It never reads the held tangent or the join's held corner.
+// A line's held tangent is the endpoint difference rounded to float64, and a
+// circular wall's is a math.Sincos at a computed angle that its walk states no
+// bound for (TanInBound and TanOutBound are +Inf there).
+func joinFoot(w survey2d.SideWalk, atEnd bool, span proofbound.RatInterval) (Point, bool) {
 	u, v, bound := w.StartU, w.StartV, w.StartBound
 	if atEnd {
 		u, v, bound = w.EndU, w.EndV, w.EndBound
