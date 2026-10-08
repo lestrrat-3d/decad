@@ -2,6 +2,7 @@ package capband_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -149,4 +150,88 @@ func TestCornerSkewUpperEnclosesTheTurn(t *testing.T) {
 	require.False(t, ok, `held windows a turn apart name another branch`)
 	_, ok = capband.CornerSkewUpper(0, 0, capband.Point{}, capband.Point{U: 9, V: 0}, 0)
 	require.False(t, ok, `an end at the centre has no direction`)
+}
+
+// skewTermAt reports whether the corner-skew term coneSkewAreaAllow derives,
+// evaluated at side radius r with every other input g holds, exceeds
+// published, decided exactly over rationals. The term is
+// L·A + B, L = √((R1−r)² + H²), A = r·(Φs+Φe)/2 + αc·R1·Φ²/4 and
+// B = R1·Φ²·(αs·r + αc·R1)/4 + H·αc·R1·Φ/2, so L·A + B > p holds exactly when
+// p − B < 0 or (p − B)² < L²·A², with no square root taken.
+func skewTermAt(g capband.Patch, r *big.Rat, published float64) bool {
+	rat := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+	mul := func(xs ...*big.Rat) *big.Rat {
+		out := big.NewRat(1, 1)
+		for _, x := range xs {
+			out.Mul(out, x)
+		}
+		return out
+	}
+	add := func(xs ...*big.Rat) *big.Rat {
+		out := new(big.Rat)
+		for _, x := range xs {
+			out.Add(out, x)
+		}
+		return out
+	}
+	r1, ps, pe := rat(g.CapRadius), rat(g.SkewStart), rat(g.SkewEnd)
+	h := new(big.Rat).Abs(new(big.Rat).Sub(rat(g.CapZ), rat(g.SideZ)))
+	phi := ps
+	if pe.Cmp(phi) > 0 {
+		phi = pe
+	}
+	sum := add(ps, pe)
+	alphaC := add(rat(math.Abs(g.CapTh1-g.CapTh0)), rat(g.CapThAllow))
+	alphaS := add(alphaC, sum)
+	half, quarter := big.NewRat(1, 2), big.NewRat(1, 4)
+	a := add(mul(half, r, sum), mul(quarter, alphaC, r1, phi, phi))
+	b := add(mul(quarter, r1, phi, phi, add(mul(alphaS, r), mul(alphaC, r1))), mul(half, h, alphaC, r1, phi))
+	dR := new(big.Rat).Sub(r1, r)
+	gap := new(big.Rat).Sub(rat(published), b)
+	if gap.Sign() < 0 {
+		return true
+	}
+	return mul(gap, gap).Cmp(mul(add(mul(dR, dR), mul(h, h)), a, a)) < 0
+}
+
+// TestConeSkewTermCoversTheHeldSideRadiusSpan checks the corner-skew term
+// covers the term its derivation states at every side radius the held one
+// allows, |r − R0| ≤ Held.SideRadius, not only at the top of that span. The
+// slant √((R1−r)² + H²) shrinks as r grows toward R1, so on an outward-arm
+// patch (R1 > R0, short slant) the term is largest at the BOTTOM of the
+// span; on a tall inward patch it is largest at the top.
+//
+// Shown to fail: with the term read at R0 + Held.SideRadius alone, the
+// outward row's bottom and middle radii exceed the published term; with the
+// slant allowance kept and the radius read at the held R0, the tall row's top
+// radius does.
+func TestConeSkewTermCoversTheHeldSideRadiusSpan(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name         string
+		side, cap, h float64
+	}{
+		{name: `outward arm, short slant`, side: 1000, cap: 1000.25, h: 0.25},
+		{name: `inward arm, tall band`, side: 1, cap: 0.5, h: 1000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			e := 4 * (math.Nextafter(tc.side, math.Inf(1)) - tc.side)
+			g := capband.Patch{
+				Circular:   true,
+				SideRadius: tc.side, CapRadius: tc.cap,
+				Th0: 0, Th1: 1, CapTh0: 0.01, CapTh1: 1.01,
+				SideZ: 0, CapZ: tc.h,
+				CapThAllow: 1e-15,
+				SkewStart:  0.01, SkewEnd: 0.01,
+				Held: capband.HeldAllow{SideRadius: e},
+			}
+			published := capband.SkewAreaAllow(g)
+			r0, re := new(big.Rat).SetFloat64(tc.side), new(big.Rat).SetFloat64(e)
+			for _, r := range []*big.Rat{new(big.Rat).Sub(r0, re), r0, new(big.Rat).Add(r0, re)} {
+				require.False(t, skewTermAt(g, r, published),
+					`the published skew term %v covers the term at side radius %s`, published, r.FloatString(20))
+			}
+		})
+	}
 }
