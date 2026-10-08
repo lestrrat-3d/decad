@@ -138,8 +138,8 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 		// operand's own walk charge), with the (already zero) cut term
 		// omitted rather than added back in.
 		sectionDelta: max(
-			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.b, reexpress.Delta),
+			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
+			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta),
 		),
 	}
 	return result, true, nil
@@ -182,9 +182,9 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	// charge) reaches the result — never the max of both, which would be
 	// conservative where the code already knows which operand's coordinates
 	// it took.
-	sectionDelta := proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a)
+	sectionDelta := proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.A)
 	if nestedIsB {
-		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.Delta)
+		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.B, reexpress.Delta)
 	}
 
 	result := prismPayload{

@@ -397,7 +397,7 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 // union builds, its sectionDelta covers δ_B/0.01 (sin 0.01 < 0.01), and its
 // volume bound contains the exact residual against A ∪ B taken over
 // math/big.Rat from the two records and B's stored placement. Shown to fail
-// with prismSceneDelta.merged's crossing term deleted.
+// with prismSceneDelta.Merged's crossing term deleted.
 func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
@@ -442,7 +442,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	}
 	require.True(t, split, "the overlapping rectangles must produce a split boundary")
 
-	_, inB := prismSceneDelta{}.incoming(pa, pb, reexpression)
+	_, inB := prismSceneDelta{}.Incoming(pa.sectionDelta, pb.sectionDelta, reexpression.Delta)
 	require.Positive(t, inB)
 
 	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
@@ -528,7 +528,7 @@ func ratConvexClip(poly, clip [][2]*big.Rat) [][2]*big.Rat {
 // crossing (slope 0.01) in the second union can move by that displacement
 // divided by the crossing sine, and A6 charges it: the union builds with a
 // sectionDelta of at least δ_A/0.01. Shown to fail with
-// prismSceneDelta.merged's crossing term deleted.
+// prismSceneDelta.Merged's crossing term deleted.
 func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
@@ -1060,8 +1060,8 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 
 	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
-	require.Positive(t, sceneDelta.a, "operand A's own trimmed walls must carry a walk charge")
-	require.Zero(t, sceneDelta.b, "operand B is drawn whole, so δ_walkB is zero")
+	require.Positive(t, sceneDelta.A, "operand A's own trimmed walls must carry a walk charge")
+	require.Zero(t, sceneDelta.B, "operand B is drawn whole, so δ_walkB is zero")
 
 	u, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
@@ -1072,14 +1072,14 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	const cutDelta = 0.0
 	want := proofbound.AbsSumUpper(
 		max(
-			proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.a),
-			proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.Delta),
+			proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.A),
+			proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.B, reexpression.Delta),
 		),
 		cutDelta,
 	)
 	require.Equal(t, want, pu.sectionDelta,
 		"with every other term zero the published displacement is A's own walk charge, folded in once")
-	require.Less(t, pu.sectionDelta, proofbound.AbsSumUpper(want, sceneDelta.a),
+	require.Less(t, pu.sectionDelta, proofbound.AbsSumUpper(want, sceneDelta.A),
 		"a second, separate walk charge outside the max would roughly double the published displacement")
 }
 
@@ -1707,7 +1707,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 
 	scene, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
-	require.Positive(t, sceneDelta.a, "operand A's own trimmed bottom/top walls must carry a walk charge")
+	require.Positive(t, sceneDelta.A, "operand A's own trimmed bottom/top walls must carry a walk charge")
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
 	split, err := prismProfilesHaveSplitBoundary(proofbound.NewWorkBudget(t.Context()), profiles)
@@ -1717,7 +1717,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.True(t, ok, "A6 charges the crossing instead of rerouting it")
-	require.GreaterOrEqual(t, result.sectionDelta, sceneDelta.a)
+	require.GreaterOrEqual(t, result.sectionDelta, sceneDelta.A)
 }
 
 // This file is docs/prism-boolean-design.md §14 PR3's own required property

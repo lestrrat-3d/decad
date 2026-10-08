@@ -173,7 +173,7 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 // and no charge covers the sliver between them. The pair falls back to the
 // mesh path instead of refusing on the analytic one, and the error it
 // reports is the mesh path's own proximity refusal. Shown to fail with that
-// fallback (prismSceneDelta.sharedSpansBounded) always admitting the span.
+// fallback (prismSceneDelta.SharedSpansBounded) always admitting the span.
 func TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

@@ -217,7 +217,7 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 // must equal the largest walkChargeOf over B's own recorded segments, the
 // same charge the unreflected path takes, and the union must publish a
 // sectionDelta covering it. Shown to fail with buildPrismScene's fold of
-// rewound's charge into sceneDelta.b deleted: sceneDelta.b read 0.
+// rewound's charge into sceneDelta.B deleted: sceneDelta.B read 0.
 func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	t.Parallel()
 	doc := New()
@@ -243,8 +243,8 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	require.True(t, re.Reflected)
 	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, re)
 	require.NoError(t, err)
-	require.Zero(t, sceneDelta.a, "the box is drawn whole")
-	require.Equal(t, want, sceneDelta.b)
+	require.Zero(t, sceneDelta.A, "the box is drawn whole")
+	require.Equal(t, want, sceneDelta.B)
 
 	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, box, image)
 	require.NoError(t, err)
@@ -366,7 +366,7 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 //     arc and the hub circle are one carrier (general-boolean §3 A3), the
 //     rotation displaces the tooth, and Union keeps the shared arc inside
 //     its result, where no displacement charge covers the two true walls
-//     parting (prismSceneDelta.sharedSpansBounded). Union and a Cut whose
+//     parting (prismSceneDelta.SharedSpansBounded). Union and a Cut whose
 //     tool is taller than the hub both return ok=false with no error, so
 //     the caller takes the mesh path.
 //   - fu141's overshooting quadrilateral, whose fragments carry a walk
@@ -376,7 +376,7 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 //     wall, the cuts carry the walk charge, the crossings are charged, and
 //     the same RB9 sends the pair to the mesh path instead.
 //
-// Shown to fail with prismAmplifiedFallback returning every error (the
+// Shown to fail with prismcells.AmplifiedFallback returning every error (the
 // crossing quadrilateral returned RB9), and with sharedSpansBounded always
 // reporting true (the tooth's Union built analytically).
 func TestPrismAmplifiedCutsFallBack(t *testing.T) {

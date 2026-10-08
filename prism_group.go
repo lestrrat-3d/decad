@@ -26,9 +26,9 @@ import (
 // (RB1), the arrangement cap (RB7) and the recording and audit refusals
 // (RB2-RB9) are errors. A scene whose cuts carry a displaced operand's
 // displacement charges every crossing (docs/general-boolean-design.md §3
-// A6, prismSceneDelta.chargeCrossings) and never refuses: a crossing with no
+// A6, prismSceneDelta.ChargeCrossings) and never refuses: a crossing with no
 // charge, or any of those errors on such a scene, sends the pair to the mesh
-// path (prismAmplifiedFallback).
+// path (prismcells.AmplifiedFallback).
 
 // prismGroupOperand is one operand read as regions over one interval: a prism
 // is one region, a prism group one region per lump. proxy carries the frame,
@@ -149,13 +149,13 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	// docs/general-boolean-design.md §3 A6: every cut a displaced operand can
 	// move is charged; a crossing with no charge sends the pair to the mesh
 	// path, and so does any later failure on an amplified cut
-	// (prismAmplifiedFallback).
-	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, target, tool.proxy, reexpress); err != nil || !ok {
+	// (prismcells.AmplifiedFallback).
+	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, target.sectionDelta, tool.proxy.sectionDelta, reexpress.Delta); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
 	result := prismPayload{frame: target.frame, xform: target.xform,
 		z0: target.z0, z1: target.z1, z0Delta: target.z0Delta, z1Delta: target.z1Delta}
-	inA, inB := sceneDelta.incoming(target, tool.proxy, reexpress)
+	inA, inB := sceneDelta.Incoming(target.sectionDelta, tool.proxy.sectionDelta, reexpress.Delta)
 	inputDelta := max(inA, inB)
 
 	match, nested, err := prismGroupCutMatch(budget, profiles, tags, len(target.profile.Holes), len(tool.regions))
@@ -185,18 +185,18 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err != nil {
 		return prismPayload{}, false, err
 	}
-	if ok, err := sceneDelta.sharedSpansBounded(budget, selected); err != nil || !ok {
+	if ok, err := sceneDelta.SharedSpansBounded(budget, selected); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
 	merged, cutDelta, resolved, err := mergePrismCells(budget, selected, "cut")
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil || !resolved {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return prismPayload{}, false, err
 	}
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 	result.profile = merged
-	result.sectionDelta = sceneDelta.merged(target, tool.proxy, reexpress, cutDelta)
+	result.sectionDelta = sceneDelta.Merged(target.sectionDelta, tool.proxy.sectionDelta, reexpress.Delta, cutDelta)
 	return result, true, nil
 }
 
@@ -277,11 +277,11 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 		return nil, false, nil
 	}
 	// docs/general-boolean-design.md §3 A6, as for the group Cut above.
-	if ok, err := sceneDelta.chargeCrossings(budget, tags, profiles, oa.proxy, ob.proxy, reexpress); err != nil || !ok {
+	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, oa.proxy.sectionDelta, ob.proxy.sectionDelta, reexpress.Delta); err != nil || !ok {
 		return nil, false, err
 	}
 	payload, ok, err := prismGroupUnionTail(ctx, budget, tags, profiles, oa, ob, reexpress, sceneDelta)
-	if fallBack, err := prismAmplifiedFallback(sceneDelta.amplified, err); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
 		return nil, false, err
 	}
 	return payload, ok, nil
@@ -290,7 +290,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 // prismGroupUnionTail is tryPrismGroupUnion past the crossing charge: the
 // void check, the select-all merge into loops, §6's audit per loop, and the
 // disjointness proof that makes several loops a group. Its errors are the
-// caller's to route (prismAmplifiedFallback).
+// caller's to route (prismcells.AmplifiedFallback).
 func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin, profiles []*sketch.Profile,
 	oa, ob prismGroupOperand, reexpress *prismReexpression, sceneDelta prismSceneDelta) (featurePayload, bool, error) {
 	// Select-all keeps every bounded cell, which is the union only when no
@@ -300,7 +300,7 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 	if err != nil || !voidFree {
 		return nil, false, err
 	}
-	if ok, err := sceneDelta.sharedSpansBounded(budget, profiles); err != nil || !ok {
+	if ok, err := sceneDelta.SharedSpansBounded(budget, profiles); err != nil || !ok {
 		return nil, false, err
 	}
 	loops, cutDelta, resolved, err := prismcells.MergeLoops(budget, profiles, "union")
@@ -308,8 +308,8 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, tag
 		return nil, false, err
 	}
 	// §7's incoming terms with A6's crossing charge.
-	inA, inB := sceneDelta.incoming(oa.proxy, ob.proxy, reexpress)
-	inputDelta := max(inA, inB, sceneDelta.crossing)
+	inA, inB := sceneDelta.Incoming(oa.proxy.sectionDelta, ob.proxy.sectionDelta, reexpress.Delta)
+	inputDelta := max(inA, inB, sceneDelta.Crossing)
 	regions := make([]ProfileRecord, len(loops))
 	for i, loop := range loops {
 		regions[i] = ProfileRecord{Outer: loop}
@@ -389,5 +389,5 @@ func provePrismRegionsDisjoint(ctx context.Context, budget *proofbound.WorkBudge
 			claimed[i] = true
 		}
 	}
-	return true, sceneDelta.a, nil
+	return true, sceneDelta.A, nil
 }

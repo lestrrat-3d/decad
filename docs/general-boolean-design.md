@@ -437,7 +437,7 @@ distance instead of prism-boolean §3.4 rerouting the pair
 - a pair whose cuts carry an input displacement never refuses on the
   analytic path: a crossing with no charge, and any merge, audit or
   recording failure after the charge (RB1–RB9), sends it to the mesh path
-  with no error (`prismAmplifiedFallback`), as prism-boolean §4.4 does for
+  with no error (`prismcells.AmplifiedFallback`), as prism-boolean §4.4 does for
   every topology it leaves unresolved. Cancellation still propagates, and a
   pair that brings no displacement keeps its §9 refusals.
 

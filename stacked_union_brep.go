@@ -264,7 +264,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if len(profiles) == 0 {
 		return nil, errUBMiss
 	}
-	b.walk = math.Max(b.walk, math.Max(delta.a, delta.b))
+	b.walk = math.Max(b.walk, math.Max(delta.A, delta.B))
 	sc := &ubScene{refsA: refsA, refsB: refsB, profiles: profiles, tags: tags, delta: delta}
 	b.scenes[key] = sc
 	return sc, nil
@@ -274,7 +274,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 // the shared spans' width into the build's crossing term.
 func (b *ubBuild) charge(sc *ubScene) error {
 	if !sc.charged {
-		ok, err := sc.delta.chargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy, b.st.vb.proxy, &prismReexpression{Identity: true})
+		ok, err := sc.delta.ChargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy.sectionDelta, b.st.vb.proxy.sectionDelta, 0)
 		if err != nil {
 			return err
 		}
@@ -283,7 +283,7 @@ func (b *ubBuild) charge(sc *ubScene) error {
 	if !sc.chargeOK {
 		return errUBMiss
 	}
-	b.crossing = math.Max(b.crossing, sc.delta.crossing)
+	b.crossing = math.Max(b.crossing, sc.delta.Crossing)
 	return nil
 }
 
@@ -321,7 +321,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, erro
 	if !voidFree {
 		return nil, errUBMiss
 	}
-	if ok, err := sc.delta.sharedSpansBounded(b.st.budget, sc.profiles); err != nil || !ok {
+	if ok, err := sc.delta.SharedSpansBounded(b.st.budget, sc.profiles); err != nil || !ok {
 		if err != nil {
 			return nil, err
 		}
@@ -445,7 +445,7 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 			continue
 		}
 		region, err := prismRecordArrangedProfileContext(ctx, p)
-		if fallBack, err := prismAmplifiedFallback(sc.delta.amplified, err); fallBack || err != nil {
+		if fallBack, err := prismcells.AmplifiedFallback(sc.delta.Amplified, err); fallBack || err != nil {
 			if err != nil {
 				return err
 			}
