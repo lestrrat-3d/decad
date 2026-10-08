@@ -21,7 +21,7 @@ import (
 // per-point reach offsetSectionDelta triples), and every recorded circle
 // radius within that of its denoted radius.
 //
-// Legs shown to fail (each deleted in offsetLoopReach, the fixture watched go
+// Legs shown to fail (each deleted in offset2d.LoopReach, the fixture watched go
 // red, then restored):
 //   - The miter enclosure: with its reach dropped, the inward rectangle and
 //     the holed plate miss a cavity corner.

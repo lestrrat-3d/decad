@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -381,7 +382,7 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 	if err != nil {
 		return LoopRecord{}, err
 	}
-	segs, err := offsetLoopBudget(budget, cl, 1, d)
+	segs, err := offset2d.BuildLoop(budget, cl.walks, 1, d, shellTol)
 	if err != nil {
 		return LoopRecord{}, err
 	}

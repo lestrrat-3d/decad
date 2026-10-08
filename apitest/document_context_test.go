@@ -517,7 +517,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 		},
 		{
 			name:   "CupLoopReversal",
-			target: "reverseLoopRecordContext",
+			target: "ReverseLoopRecordContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
 				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))

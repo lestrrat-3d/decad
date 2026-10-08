@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -69,7 +70,7 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		same, err := loopRecordsEqual(nil, floor.Outer, plateOuter)
 		require.NoError(t, err)
 		require.True(t, same, "the floor's outer is the plate's own outer record")
-		bossHole, err := reverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).profile.Outer)
+		bossHole, err := offset2d.ReverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).profile.Outer)
 		require.NoError(t, err)
 		require.Equal(t, []LoopRecord{bossHole}, floor.Holes, "the floor's one hole is the boss outline, reversed")
 	})

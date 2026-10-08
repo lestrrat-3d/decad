@@ -264,7 +264,7 @@ func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile ProfileRecor
 	if s < 0 {
 		outer, inner = offset.Outer, profile.Outer
 	}
-	hole, err := reverseLoopRecordBudget(budget, inner)
+	hole, err := offset2d.ReverseLoopRecordBudget(budget, inner)
 	if err != nil {
 		return ProfileRecord{}, 0, err
 	}
@@ -335,7 +335,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 
 	var loop []CurveSegment
 	if s > 0 {
-		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: offChain})
+		back, err := offset2d.ReverseLoopRecordBudget(budget, LoopRecord{Segments: offChain})
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
@@ -344,7 +344,7 @@ func revolveShellAxisWall(budget *proofbound.WorkBudget, rp revolvePayload, walk
 		loop = append(loop, back.Segments...)
 		loop = append(loop, LineSeg{Start: qB, End: pB, TStart: 0, TEnd: 1})
 	} else {
-		back, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: kept})
+		back, err := offset2d.ReverseLoopRecordBudget(budget, LoopRecord{Segments: kept})
 		if err != nil {
 			return ProfileRecord{}, 0, err
 		}
@@ -374,7 +374,7 @@ func revolveAxisCurve(ax axisFrame) offset2d.Curve {
 // float the build holds, which keeps a right-angle shell Exact.
 func openChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, ax axisFrame, ends [2]offset2d.ChainEnd, s, t, tDelta float64) (float64, error) {
 	if slices.ContainsFunc([]float64{ax.aU, ax.aV, ax.dU, ax.dV, ax.aUBound, ax.aVBound, ax.dUBound, ax.dVBound}, proofbound.IsNonFinite) {
-		return 0, errOffsetUnbounded
+		return 0, offset2d.ErrUnbounded
 	}
 	widen := func(x, b float64) proofbound.RatInterval {
 		return proofbound.IntervalWiden(proofbound.PointInterval(proofarith.FloatRat(x)), proofarith.FloatRat(math.Abs(b)))

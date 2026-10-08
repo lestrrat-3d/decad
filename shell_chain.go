@@ -47,7 +47,7 @@ type openChainOffset struct {
 
 // offsetOpenChain offsets the open chain K by s*t. ax is the revolve axis an
 // axis end reads; a chain with no axis end ignores it. A dropped walk is S11a
-// and a miter that does not close is S11, as in offsetLoopBudget; an opening
+// and a miter that does not close is S11, as in offset2d.BuildLoop; an opening
 // end's own refusals are offset2d.ErrOpeningCorner (SO1) and
 // offset2d.ErrOpeningSpan (SO2). A walk at an opening end may run past its
 // own end to the rim cut, and offset2d.OpenWalkConsumed decides its S11a
@@ -62,8 +62,8 @@ func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 			return openChainOffset{}, err
 		}
 		if w.IsCircular() {
-			if _, ok := offsetRadius(w, s, t); !ok {
-				return openChainOffset{}, errOffsetDrop
+			if _, ok := offset2d.OffsetRadius(w, s, t, shellTol); !ok {
+				return openChainOffset{}, offset2d.ErrDrop
 			}
 		}
 	}
@@ -92,7 +92,7 @@ func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 	case errors.Is(err, offset2d.ErrNoDirection):
 		return openChainOffset{}, fmt.Errorf(`%w: a corner walk has no direction`, ErrDegenerate)
 	case errors.Is(err, offset2d.ErrNoIntersection):
-		return openChainOffset{}, errOffsetTopology
+		return openChainOffset{}, offset2d.ErrTopology
 	case err != nil:
 		return openChainOffset{}, err
 	}
@@ -100,7 +100,7 @@ func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 	pt := func(p offset2d.Point) Point2 { return Point2{U: p.U, V: p.V} }
 	arcAt := func(j offset2d.Join) CurveSegment {
 		// The connector winds CCW outward (s < 0) and CW inward (s > 0), as in
-		// offsetLoopBudget.
+		// offset2d.BuildLoop.
 		return arcSegment(Point2{U: j.VertU, V: j.VertV}, pt(j.PA), pt(j.PB), s < 0)
 	}
 	var segs []CurveSegment
@@ -124,10 +124,10 @@ func offsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 		// WalkConsumed does.
 		openStart := i == 0 && start.kind == openingEnd
 		openEnd := i == m-1 && end.kind == openingEnd
-		if offset2d.OpenWalkConsumed(w, offset2d.Point{U: from.U, V: from.V}, offset2d.Point{U: to.U, V: to.V}, openStart, openEnd, shellTol) {
-			return openChainOffset{}, errOffsetDrop
+		if offset2d.OpenWalkConsumed(w, offset2d.Point(from), offset2d.Point(to), openStart, openEnd, shellTol) {
+			return openChainOffset{}, offset2d.ErrDrop
 		}
-		seg, err := offsetWalkSegment(w, s, t, from, to)
+		seg, err := offset2d.WalkSegment(w, s, t, offset2d.Point(from), offset2d.Point(to), shellTol)
 		if err != nil {
 			return openChainOffset{}, err
 		}
@@ -173,7 +173,7 @@ func offsetMirrorChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk,
 // figure is exactly zero wherever every join and cut encloses to the float the
 // build holds, which keeps a right-angle shell Exact.
 func chainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, line offset2d.MirrorLine, ends [2]offset2d.ChainEnd, s, t, tDelta float64) (float64, error) {
-	amount, err := offsetAmount(s, t, tDelta)
+	amount, err := offset2d.OffsetAmount(s, t, tDelta)
 	if err != nil {
 		return 0, err
 	}
@@ -186,7 +186,7 @@ func chainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk,
 	}
 	delta := proofbound.ProductUpper(3, reach)
 	if proofbound.IsNonFinite(delta) {
-		return 0, errOffsetUnbounded
+		return 0, offset2d.ErrUnbounded
 	}
 	return delta, nil
 }
@@ -203,7 +203,7 @@ func openChainWallLoop(budget *proofbound.WorkBudget, kept, offset, atEnd, atSta
 	if !inward {
 		first, back = offset, kept
 	}
-	rev, err := reverseLoopRecordBudget(budget, LoopRecord{Segments: back})
+	rev, err := offset2d.ReverseLoopRecordBudget(budget, LoopRecord{Segments: back})
 	if err != nil {
 		return LoopRecord{}, err
 	}

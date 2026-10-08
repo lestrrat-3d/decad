@@ -10,7 +10,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// ErrUnbounded reports an offset section whose displacement cannot be enclosed.
+// ErrUnbounded reports an offset section whose displacement cannot be enclosed:
+// a carrier or endpoint has no bound, or a carrier intersection is unbounded.
+// The cup exists, but its readings cannot carry a finite displacement from
+// the offset it denotes (docs/modify-design.md §1 and §9).
 var ErrUnbounded = fmt.Errorf(`%w: this evaluator cannot prove how far the shell's offset section sits from the offset it denotes, so the cup's readings would carry no bound`, decaderr.ErrUnsupported)
 
 // LoopReach is the largest reach of one loop's recorded offset points from

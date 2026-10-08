@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -98,7 +99,7 @@ func (s thickenSection) sense(side ThickenSide) float64 {
 // one-hole section: the outer loop with the inner loop reversed into its hole
 // walk.
 func thickenAnnulus(ctx context.Context, sec thickenSection) (ProfileRecord, error) {
-	hole, err := reverseLoopRecordContext(ctx, sec.inner.Outer)
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, sec.inner.Outer)
 	if err != nil {
 		return ProfileRecord{}, err
 	}

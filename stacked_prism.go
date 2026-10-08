@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -160,7 +161,7 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 func stackedExposed(ctx context.Context, holes []LoopRecord) ([]ProfileRecord, error) {
 	out := make([]ProfileRecord, 0, len(holes))
 	for _, hole := range holes {
-		reversed, err := reverseLoopRecordContext(ctx, hole)
+		reversed, err := offset2d.ReverseLoopRecordContext(ctx, hole)
 		if err != nil {
 			return nil, err
 		}
@@ -359,14 +360,14 @@ func stackedExposedMatches(ctx context.Context, got []ProfileRecord, holes []Loo
 // each segment from its walk, so the two spellings need not agree bit for bit,
 // and either one names the same loop.
 func loopReversesRecord(ctx context.Context, a, b LoopRecord) (bool, error) {
-	rb, err := reverseLoopRecordContext(ctx, b)
+	rb, err := offset2d.ReverseLoopRecordContext(ctx, b)
 	if err != nil {
 		return false, err
 	}
 	if same, err := loopRecordsEqual(nil, a, rb); err != nil || same {
 		return same, err
 	}
-	ra, err := reverseLoopRecordContext(ctx, a)
+	ra, err := offset2d.ReverseLoopRecordContext(ctx, a)
 	if err != nil {
 		return false, err
 	}
@@ -395,13 +396,13 @@ func stackedLiningExposed(ctx context.Context, narrow []ProfileRecord) ([]Profil
 	if len(narrow) == 0 || len(narrow[0].Holes) != 1 {
 		return nil, fmt.Errorf(`%w: a lining interface's first narrow region has no single hole`, ErrUnsupported)
 	}
-	outer, err := reverseLoopRecordContext(ctx, narrow[0].Holes[0])
+	outer, err := offset2d.ReverseLoopRecordContext(ctx, narrow[0].Holes[0])
 	if err != nil {
 		return nil, err
 	}
 	record := ProfileRecord{Outer: outer}
 	for _, region := range narrow[1:] {
-		hole, err := reverseLoopRecordContext(ctx, region.Outer)
+		hole, err := offset2d.ReverseLoopRecordContext(ctx, region.Outer)
 		if err != nil {
 			return nil, err
 		}
