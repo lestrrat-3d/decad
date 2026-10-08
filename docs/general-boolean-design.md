@@ -231,10 +231,11 @@ across both operands' slabs, as class B's crossing reach records a notched
 wall. Every circular or oblique straight wall is a swept piece between its
 vertices over its slab's interval, the identical piece in consecutive slabs
 joined into one face; a vertex of the body at the level between, on either
-of the piece's two ends, would sit inside a side line, which a swept face
-cannot carry, so that pair misses — the rooted round boss crossing the
-plate's outline, whose floor corner lies on the overhanging piece. An
-oblique line with a vertex strictly inside it misses too.
+of the piece's two ends, becomes a split of that side line (§4.1's
+`side0`/`side1`, with that level's displacement), so the rooted round boss
+crossing the plate's outline builds: its floor corner lies on the
+overhanging piece's side line, which the record states as two edges. An
+oblique line with a vertex strictly inside it misses.
 
 **Displacements.** Every level carries its own `z0Delta`/`z1Delta`. Every
 face carries one section displacement: §7's stacked formula over the
@@ -560,6 +561,7 @@ type brepFace struct {
     wall    CurveSegment   // swept: a LineSeg/CircleSeg/ArcSeg in frame coordinates, material on its left
     z0, z1  float64        // swept: the sweep interval along frame.N(); planar: the level, z0 == z1
     z0Delta, z1Delta float64
+    side0, side1 []brepSplit // swept: the levels strictly inside (z0, z1) at which each side line is a vertex, ascending, each with its level displacement
     delta   float64        // the face's own section displacement (prism-boolean §7 terms)
     role    string
 }
@@ -602,7 +604,10 @@ record whose frames do not is `ErrUnsupported`.
 
 Faces are the record's. Edges: each planar face's loop segments and each
 swept wall's two rim curves (the wall segment at `z0` and `z1`) and two
-side lines (a wall's ends at the junction with the next face). Every edge is
+side lines (a wall's ends at the junction with the next face), each side
+line one edge per piece between consecutive levels of `z0`, its splits and
+`z1`, so a vertex another face puts on a side line is a vertex of the wall
+too. Every edge is
 shared by exactly two faces by construction: a planar face's segment is one
 rim of exactly one swept wall, or one line of exactly one other planar face
 (two planar faces meeting along a line), and the build identifies them by
@@ -666,7 +671,9 @@ cancelling pair of faces widens the bound rather than narrowing it.
 A planar face chords its loops and triangulates them through the cap path
 (`triangulate.go`, tessellation §5), sharing every arc's chord samples with
 the swept wall that owns the arc (tessellation §3). A swept wall is the
-prism wall path over its own segment and interval. The mesh closes by
+prism wall path over its own segment and interval, with a row of samples at
+every split level between its rims, so each side piece's two vertices are
+the wall's own. The mesh closes by
 construction because every edge is shared by exactly two faces (§4.2) and
 both chord it from one sample set; `internal/tessellation.RequireClosedMesh`
 proves it. The largest `delta` is reserved from the chord budget, as a
@@ -699,7 +706,7 @@ ordinary mesh-path operand and export input.
 | Clearance kernel | a `bodyGeom` arm (`addBrepFaces`) adding each face's plane or cylinder carrier with its trims through the builders `addPrismFaces` uses for a prism, each face over its own frame; no model when any face carries a section displacement; the model's displacement is the largest per-face frame and placement rounding and tilt plus the record's largest level displacement; undecidable cells stay `Suspect` |
 | Interference | `analyticBodiesEqual` undecided; the read-only mesh intersection over §4.4 |
 | Tessellate, STL/OBJ/3MF | §4.4 |
-| STEP | the analytic writer where every edge is a `Line3`, an `Arc3` or a full `Circle3`, and every cylindrical wall is full (two one-circle loops) or partial (one loop of arcs about its axis and lines along it) (`docs/step-export-design.md`): a cross-drilled box and a keyway (arc rims) both meet it |
+| STEP | the analytic writer where every edge is a `Line3`, an `Arc3` or a full `Circle3`, and every cylindrical wall is full (two one-circle loops) or partial (one loop of at least four edges, each an arc about its axis or a line along it, with both kinds present) (`docs/step-export-design.md`): a cross-drilled box, a keyway (arc rims) and a wall with a split side line all meet it |
 | Prism-boolean's class | a brep operand misses G1 and never enters class A; class B's face view covers the co-directional pair of planar faces (§5.2) |
 
 ## 5. The 2D answers, and the 3D computations
@@ -843,9 +850,16 @@ are relations, never literals.
   volume verified, `Sound`, STEP analytic with two partial cylinders; a
   further `Union` on the result takes the mesh path. The flush corner boss
   rooted at z = 5: 9 faces, the shared corner's vertical edge one 25 mm
-  edge. Misses: the rooted round crossing boss (`Faceted`, its volume bound
-  containing the closed form), an operand carrying a section displacement,
-  and a boss drawn on a plane offset in the plate's plane.
+  edge. The Ø10 boss rooted at z = 5 with its centre 2 mm inside x = 20:
+  10 faces and 22 edges, the overhanging cylinder piece one face from z = 5 to 25 whose
+  side lines split at z = 10, the plate's x = 20 wall notched under the
+  overhang, volume within its bound of `16000 + 375π + 5·S`, area within
+  its bound of `4800 + 150π + 100·acos(0.4) − 14·√21`, mesh volume
+  verified, STEP analytic with two partial cylinders. A hand-built record
+  whose side split names no vertex of a neighbour, or lies outside its
+  interval, is `ErrUnsupported`/`ErrDegenerate`. Misses: an operand
+  carrying a section displacement, and a boss drawn on a plane offset in
+  the plate's plane.
 - **A1 brep operand**: the flush corner boss result unioned with a second
   10 mm boss flush in the opposite corner, in either operand order: a brep
   of 12 faces, `Exact` 19000 mm³ and 6000 mm², every flush wall one L-shaped
@@ -1022,6 +1036,9 @@ Each PR ships code and tests; this document ships with PR 1.
 1c. **A1 brep operand.** The result's `stack`, several records per slab and
    per interface, `ClassifyRegions` and the region-aware span reading, the
    brep build's own slab merges, §9's A1 brep operand tests.
+1d. **Side-line splits.** `brepFace.side0`/`side1`, one edge per piece in
+   the topology, the wall mesh's split rows, STEP's partial wall of any
+   edge count, the rooted round crossing boss.
 2. **A4 reflected re-expression.** G2 replaced by the re-wound record,
    `AuthoredReversed` on the re-wound record, the shared-axis both-reflected
    case, the interference twin, §9's A4 tests. Depends on nothing.

@@ -17,6 +17,7 @@ type FaceRecord struct {
 	Wall             sectionrecord.CurveSegment
 	Z0, Z1           float64
 	Z0Delta, Z1Delta float64
+	Side0, Side1     []Split
 	Delta            float64
 	Role             string
 }
@@ -72,6 +73,15 @@ func ValidateFaces(ctx context.Context, count int, faceAt func(int) FaceRecord) 
 		} else {
 			if !(f.Z0 < f.Z1) {
 				return fmt.Errorf(`%w: swept brep face %d has an empty interval`, decaderr.ErrDegenerate, fi)
+			}
+			for _, splits := range [][]Split{f.Side0, f.Side1} {
+				last := f.Z0
+				for _, sp := range splits {
+					if !finite(sp.Z, sp.ZDelta) || sp.ZDelta < 0 || !(sp.Z > last) || !(sp.Z < f.Z1) {
+						return fmt.Errorf(`%w: swept brep face %d has a side split outside its interval or out of order`, decaderr.ErrDegenerate, fi)
+					}
+					last = sp.Z
+				}
 			}
 			segs = []sectionrecord.CurveSegment{f.Wall}
 		}

@@ -83,33 +83,36 @@ func supportsAnalyticPlanarLoop(loop *decad.Loop) bool {
 }
 
 // supportsAnalyticPartialWall admits a cylinder face bounded by one loop of
-// four edges alternating an Arc3 and a Line3, each arc about the cylinder's
-// own axis (its Axis equal to the cylinder's or its negation, exactly) and
-// each line along it (an exactly zero cross product with the axis): the wall
-// a prism sweeps from an arc.
+// at least four edges, each an Arc3 about the cylinder's own axis (its Axis
+// equal to the cylinder's or its negation, exactly) or a Line3 along it (an
+// exactly zero cross product with the axis), with both kinds present: the
+// wall a prism sweeps from an arc, whose side lines may be split into
+// several edges where neighbouring faces put vertices on them.
 func supportsAnalyticPartialWall(loop *decad.Loop, cylinder decad.Cylinder) bool {
 	coedges := loop.CoEdges()
-	if len(coedges) != 4 {
+	if len(coedges) < 4 {
 		return false
 	}
-	_, firstArc := coedges[0].Edge().Curve().(decad.Arc3)
-	for i, ce := range coedges {
+	arcs, lines := 0, 0
+	for _, ce := range coedges {
 		edge := ce.Edge()
 		switch c := edge.Curve().(type) {
 		case decad.Arc3:
-			if (i%2 == 0) != firstArc || (c.Axis != cylinder.Axis && c.Axis != cylinder.Axis.Scale(-1)) {
+			if c.Axis != cylinder.Axis && c.Axis != cylinder.Axis.Scale(-1) {
 				return false
 			}
+			arcs++
 		case decad.Line3:
 			run := edge.End().Position().Value.Sub(edge.Start().Position().Value)
-			if (i%2 == 0) == firstArc || run == (r3.Vec{}) || run.Cross(cylinder.Axis) != (r3.Vec{}) {
+			if run == (r3.Vec{}) || run.Cross(cylinder.Axis) != (r3.Vec{}) {
 				return false
 			}
+			lines++
 		default:
 			return false
 		}
 	}
-	return true
+	return arcs > 0 && lines > 0
 }
 
 func supportsAnalyticCircleLoop(loop *decad.Loop) bool {

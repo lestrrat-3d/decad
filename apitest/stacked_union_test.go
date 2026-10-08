@@ -165,11 +165,9 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 }
 
 // A round boss rooted inside the plate with its footprint crossing the
-// outline puts the floor's corner on the overhanging wall piece's side line,
-// which the brep record cannot carry, so the union takes the mesh path. The
-// same boss standing on the plate's top builds analytically
-// (stacked_union_brep_test.go).
-func TestStackedUnionRootedCrossingBossTakesMeshPath(t *testing.T) {
+// outline builds analytically: the overhanging wall piece is one face whose
+// side lines split where the plate's top meets them.
+func TestStackedUnionRootedCrossingBoss(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
@@ -178,15 +176,24 @@ func TestStackedUnionRootedCrossingBossTakesMeshPath(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got))
+	require.False(t, anyFaceIsFaceted(got))
+	require.Len(t, got.Faces(), 10)
+	requireEveryEdgeOnTwoFaces(t, got)
+	cylinders, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
+	require.NoError(t, err)
+	require.Len(t, cylinders, 2)
 	volume, err := got.Volume()
 	require.NoError(t, err)
 	// The plate, the boss above it, and the boss's circular segment past
 	// x = 20 over z = 5..10: r²·acos(d/r) − d·√(r² − d²) with r = 5, d = 2.
 	segment := 25*math.Acos(0.4) - 2*math.Sqrt(21)
 	want := 16000 + 25*15*math.Pi + 5*segment
-	require.Positive(t, boundMM3(t, volume))
 	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-want), boundMM3(t, volume))
+	require.Less(t, boundMM3(t, volume), 1e-9)
+	requireMeshWatertightAt(t, got, 0.05)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
 }
 
 // The ceiling under a near-tangent square boss joins two rings from two slabs:

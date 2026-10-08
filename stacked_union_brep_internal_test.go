@@ -195,29 +195,17 @@ func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 }
 
 // TestStackedUnionBrepMisses pins the pairs the brep build hands to the mesh
-// path with no error. The rooted round crossing boss puts the floor's corner
-// on the overhanging cylinder piece's side line, and a swept face carries no
-// vertex inside a side line. An operand carrying a section displacement has
+// path with no error. An operand carrying a section displacement has
 // walls a planar face cannot state (B5). A boss drawn on a plane whose
 // origin is offset in the plate's plane re-expresses into the plate's frame,
 // which the build admits only as the identity. Shown to fail, one leg at a
-// time: with the side-line event check in sweptFaces and the pre-flight
-// topology build deleted (the rooted round boss then built a record whose
-// rim at z = 10 bounded two swept faces); with the B5 gate and the
-// walk-and-crossing check deleted together (the displaced plate built a
-// brep; either alone still misses it); and with the identity gate and the
-// same check deleted together (the offset-frame boss built a brep; its
-// merge scene's shared-span width charges a crossing, so either alone
-// still misses it).
+// time: with the B5 gate and the walk-and-crossing check deleted together
+// (the displaced plate built a brep; either alone still misses it); and with
+// the identity gate and the same check deleted together (the offset-frame
+// boss built a brep; its merge scene's shared-span width charges a
+// crossing, so either alone still misses it).
 func TestStackedUnionBrepMisses(t *testing.T) {
 	t.Parallel()
-	t.Run("rooted round crossing boss", func(t *testing.T) {
-		t.Parallel()
-		plate, boss := internalBossOnPlate(t, 18, 5, 20)
-		_, ok, err := tryStackedUnion(t.Context(), plate, boss)
-		require.NoError(t, err)
-		require.False(t, ok)
-	})
 	t.Run("displaced operand", func(t *testing.T) {
 		t.Parallel()
 		doc := New()
@@ -272,4 +260,98 @@ func TestStackedUnionBrepPlacedResult(t *testing.T) {
 	require.Equal(t, Exact, moved.volume.Exactness)
 	require.Equal(t, r3.NewVec(80, -20, 0), moved.bounds.Min)
 	require.Equal(t, r3.NewVec(120, 20, 25), moved.bounds.Max)
+}
+
+// TestStackedUnionBrepRootedCrossingBoss roots the Ø10 boss inside the
+// plate (z = 5..25) with its centre 2 mm inside x = 20. The slab both reach
+// merges into the plate's outline with the disc's overhang, the floor's
+// corners at z = 10 lie on the overhanging cylinder piece's side lines, and
+// that piece is one face from z = 5 to 25 whose side lines split at z = 10
+// (§4.1). Volume: the plate, the whole boss above it, and the overhang's
+// segment S = 25·acos(0.4) − 2·√21 over z = 5..10. Area: 4800 + 150π +
+// 100·acos(0.4) − 14·√21 (the plate's faces less the notch's 10·√21, the
+// segment under the overhang, the plate's top less the disc's inside part,
+// the 25π top, and the two cylinder pieces). Shown to fail with sweptFaces
+// missing on an event at a piece's end (a miss), with brepgeom.Build
+// emitting one use per side line (the split wall's vertical pieces then
+// paired with nothing, a miss), and with brepChordWall's split rows deleted
+// (the mesh then failed to close).
+func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
+	t.Parallel()
+	plate, boss := internalBossOnPlate(t, 18, 5, 20)
+	bp := internalUnionBrep(t, plate, boss)
+	require.Len(t, bp.faces, 10)
+	var outside, inside *brepFace
+	for i := range bp.faces {
+		f := &bp.faces[i]
+		if f.planar() {
+			continue
+		}
+		switch f.z0 {
+		case 5:
+			outside = f
+		case 10:
+			inside = f
+		}
+	}
+	require.NotNil(t, outside)
+	require.NotNil(t, inside)
+	require.Equal(t, 25.0, outside.z1)
+	require.Equal(t, []brepSplit{{Z: 10}}, outside.side0, "the overhang's start line splits at the floor")
+	require.Equal(t, []brepSplit{{Z: 10}}, outside.side1, "the overhang's end line splits at the floor")
+	require.Empty(t, inside.side0)
+	require.Empty(t, inside.side1)
+
+	got, err := Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	requireClosedTopology(t, got)
+	require.Len(t, got.Faces(), 10)
+	require.Len(t, got.Edges(), 22)
+	segment := 25*math.Acos(0.4) - 2*math.Sqrt(21)
+	wantVolume := 16000 + 375*math.Pi + 5*segment
+	require.LessOrEqual(t, math.Abs(got.volume.Value.Base()-wantVolume), got.volume.Bound.Base())
+	require.Less(t, got.volume.Bound.Base(), 1e-9)
+	wantArea := 4800 + 150*math.Pi + 100*math.Acos(0.4) - 14*math.Sqrt(21)
+	require.LessOrEqual(t, math.Abs(got.area.Value.Base()-wantArea), got.area.Bound.Base())
+	require.Less(t, got.area.Bound.Base(), 1e-8)
+	// The overhang's side lines are two edges each: 5..10, shared with the
+	// notched wall x = 20, and 10..25, shared with the inside piece.
+	short, long := 0, 0
+	for _, e := range got.Edges() {
+		if _, line := e.curve.(Line3); !line {
+			continue
+		}
+		switch e.length {
+		case 5:
+			short++
+		case 15:
+			long++
+		}
+	}
+	require.Equal(t, 2, short, "the two side pieces below the floor")
+	require.Equal(t, 2, long, "the two side pieces above it")
+	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+}
+
+// TestBrepSideSplitRecordAudit pins falsifyBrepPayload's split rules: a
+// split outside the interval, or out of order, is ErrDegenerate.
+func TestBrepSideSplitRecordAudit(t *testing.T) {
+	t.Parallel()
+	base := internalCrossDrilledBrep(t)
+	for name, splits := range map[string][]brepSplit{
+		"at the interval's end": {{Z: 0}},
+		"outside":               {{Z: 3}},
+		"out of order":          {{Z: -5}, {Z: -15}},
+		"negative displacement": {{Z: -10, ZDelta: -1}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			bp := base
+			bp.faces = append([]brepFace{}, base.faces...)
+			bp.faces[6].side1 = splits
+			require.ErrorIs(t, falsifyBrepPayload(t.Context(), bp), ErrDegenerate)
+		})
+	}
 }

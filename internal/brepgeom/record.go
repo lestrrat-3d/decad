@@ -141,7 +141,9 @@ func CurveKey(e Embed, w survey2d.SegmentWalk, z float64) (EdgeKey, bool) {
 	return key, ccw
 }
 
-// Use is the edge identity and direction needed to pair face uses.
+// Use is the edge identity and direction needed to pair face uses. A side
+// piece's SideDelta holds the level displacements at its two ends, lower
+// first.
 type Use struct {
 	Face            int
 	Loop            int
@@ -154,9 +156,17 @@ type Use struct {
 	Walk            survey2d.SegmentWalk
 	Level           float64
 	LevelDelta      float64
+	SideDelta       [2]float64
 }
 
-// FaceWalks is one validated face's recorded walks and sweep levels.
+// Split is one level strictly inside a swept face's interval at which a side
+// line is a vertex of the body, with that level's displacement.
+type Split struct {
+	Z, ZDelta float64
+}
+
+// FaceWalks is one validated face's recorded walks and sweep levels. Side0
+// and Side1 are a swept face's side-line splits, ascending.
 type FaceWalks struct {
 	Embed            Embed
 	Planar           [][]survey2d.SegmentWalk
@@ -164,6 +174,20 @@ type FaceWalks struct {
 	IsPlanar         bool
 	Z0, Z1           float64
 	Z0Delta, Z1Delta float64
+	Side0, Side1     []Split
+}
+
+// SideLevels lists a side's levels from Z0 through its splits to Z1, each
+// with its displacement.
+func (f FaceWalks) SideLevels(side1 bool) []Split {
+	splits := f.Side0
+	if side1 {
+		splits = f.Side1
+	}
+	out := make([]Split, 0, len(splits)+2)
+	out = append(out, Split{Z: f.Z0, ZDelta: f.Z0Delta})
+	out = append(out, splits...)
+	return append(out, Split{Z: f.Z1, ZDelta: f.Z1Delta})
 }
 
 // Topology holds each face's uses in walk order and paired edge indices.
@@ -213,6 +237,7 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 		topo.Walls[fi] = w
 		s0, s1 := e.Canon(w.StartU, w.StartV, f.Z0), e.Canon(w.StartU, w.StartV, f.Z1)
 		t0, t1 := e.Canon(w.EndU, w.EndV, f.Z0), e.Canon(w.EndU, w.EndV, f.Z1)
+		_ = t0
 		rim := func(part Part, z, zDelta float64, from, to, dirFrom, dirTo [3]float64, reversed bool) Use {
 			u := Use{Face: fi, Loop: -1, Seg: -1, Part: part, Walk: w, Level: z, LevelDelta: zDelta,
 				From: from, To: to, DirFrom: dirFrom, DirTo: dirTo}
@@ -228,11 +253,21 @@ func Build(faces []FaceWalks, unsupported error) (*Topology, error) {
 			add(rim(Rim1, f.Z1, f.Z1Delta, s1, s1, s1, s1, true))
 			continue
 		}
-		add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side1, Key: LineKey(t0, t1),
-			From: t0, To: t1, DirFrom: t0, DirTo: t1})
+		// Each side line is one use per piece between consecutive levels:
+		// Side1 walks up the wall's end, Side0 down its start.
+		levels1 := f.SideLevels(true)
+		for i := 0; i+1 < len(levels1); i++ {
+			lo, hi := e.Canon(w.EndU, w.EndV, levels1[i].Z), e.Canon(w.EndU, w.EndV, levels1[i+1].Z)
+			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side1, Key: LineKey(lo, hi),
+				From: lo, To: hi, DirFrom: lo, DirTo: hi, SideDelta: [2]float64{levels1[i].ZDelta, levels1[i+1].ZDelta}})
+		}
 		add(rim(Rim1, f.Z1, f.Z1Delta, t1, s1, s1, t1, true))
-		add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side0, Key: LineKey(s0, s1),
-			From: s1, To: s0, DirFrom: s0, DirTo: s1})
+		levels0 := f.SideLevels(false)
+		for i := len(levels0) - 1; i > 0; i-- {
+			lo, hi := e.Canon(w.StartU, w.StartV, levels0[i-1].Z), e.Canon(w.StartU, w.StartV, levels0[i].Z)
+			add(Use{Face: fi, Loop: -1, Seg: -1, Part: Side0, Key: LineKey(lo, hi),
+				From: hi, To: lo, DirFrom: lo, DirTo: hi, SideDelta: [2]float64{levels0[i-1].ZDelta, levels0[i].ZDelta}})
+		}
 	}
 	var err error
 	topo.Edges, topo.EdgeOf, err = Pair(topo.Uses, unsupported)
