@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -207,118 +208,30 @@ func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, e
 	return cfg, nil
 }
 
-// MotionReport is what VerifyMotion returns (docs/motion-check-design.md §4):
-// Verify's own vocabulary plus the records that carry the path.
-// Diagnostics lists interval findings in interval order, then pose findings
-// in pose order, then the whole-path reading's own tolerance finding; it is
-// empty exactly when Status is Sound, and Status is the worst
-// Diagnostic.Status in it.
-type MotionReport struct {
-	Request     MotionRequest    // the validated effective settings this call used, including defaults
-	Motion      Motion           // the motion as stated
-	Moving      []*Body          // the rigid set, in the order given
-	Against     []*Body          // every static body considered, in Document.Bodies() order
-	Poses       []PoseResult     // every pose evaluated, in traversal order from From to To
-	Intervals   []MotionInterval // the consecutive intervals between adjacent Poses, in the same order
-	Collisions  []Collision      // every proven collision, in traversal order then pair order
-	Clearance   *ScalarReading   // the minimum gap over the WHOLE path; nil unless every interval is IntervalClear
-	Assessment  Assessment       // against WithMinClearance; AssessmentNotEvaluated when not requested
-	Diagnostics []Diagnostic     // interval findings, then pose findings, then the path reading's
-	Status      Status           // Unverified on a zero value; VerifyMotion always returns a decided status
-}
+// MotionReport is VerifyMotion's path report (docs/motion-check-design.md §4).
+type MotionReport = reportvocab.MotionReport[*Body, JointCell]
 
-// Passed reports whether the report is Sound. It returns false for a nil
-// report and for any other Status.
-func (r *MotionReport) Passed() bool {
-	return r != nil && r.Status == Sound
-}
+// MotionRequest records the effective settings of a VerifyMotion call.
+type MotionRequest = reportvocab.MotionRequest
 
-// MotionRequest is one VerifyMotion call's effective settings, each value as
-// the caller stated it or as the default was formed.
-type MotionRequest struct {
-	RelativeTolerance units.Value  // always present
-	Resolution        units.Value  // always present, in the motion's Kind
-	MinClearance      *units.Value // non-nil exactly when WithMinClearance was requested
-}
+// PoseResult records one evaluated pose and its pair findings.
+type PoseResult = reportvocab.PoseResult[*Body, JointCell]
 
-// PoseResult is one evaluated pose: the parameter, the rigid motion applied to
-// the moving set there, and the pair results at that pose in Verify's own
-// shape. A Clearance row here is a measurement at this pose only; the
-// continuous claim lives on the MotionInterval. Every row and diagnostic
-// names the caller's own moving body as A, never the transient placement the
-// check evaluated.
-type PoseResult struct {
-	At            units.Value    // the parameter; Kind Angle, Length or Dimensionless as the Motion fixes
-	Pose          r3.Transform   // Motion.PoseAt(At): what composes onto each mover's own placement
-	Interferences []Interference // A is the mover, B the static body; proven overlap, bounded volume
-	Clearances    []Clearance    // A is the mover, B the static body; every pair proven disjoint or touching
-	Diagnostics   []Diagnostic   // this pose's own undecided or unsupported pairs and invalid bodies, At set
-}
+// MotionInterval records the certificate between adjacent poses.
+type MotionInterval = reportvocab.MotionInterval
 
-// MotionInterval is the stretch of the path between two adjacent evaluated
-// poses.
-//
-// Clearance is set only on an IntervalClear interval that holds at least one
-// evaluated or swept-box-excluded pair. Its Value is a PROVEN LOWER BOUND on
-// every (mover, static) gap over the whole closed interval — not an estimate
-// of the gap — so it reads Approximate with a zero Bound: the number is the
-// claim itself, and nothing about the true gap above it is stated.
-type MotionInterval struct {
-	From, To  units.Value // the two adjacent PoseResult.At values, in traversal order
-	Outcome   IntervalOutcome
-	Clearance *Measurement // a proven lower bound on the gap over the interval; nil unless Outcome is IntervalClear
-}
-
-// IntervalOutcome is what a MotionInterval proves (docs/motion-check-design.md
-// §4).
-type IntervalOutcome int
+// IntervalOutcome states what a MotionInterval proves.
+type IntervalOutcome = reportvocab.IntervalOutcome
 
 const (
-	// IntervalNotEvaluated is the reserved zero value: VerifyMotion never
-	// returns it.
-	IntervalNotEvaluated IntervalOutcome = iota
-	// IntervalClear — for EVERY parameter in the closed interval, every
-	// (mover, static) pair has disjoint interiors at a proven positive gap.
-	IntervalClear
-	// IntervalColliding — a proven collision sits at one of its endpoints;
-	// nothing is claimed about the interior.
-	IntervalColliding
-	// IntervalUndecided — neither of the above. It claims nothing.
-	IntervalUndecided
+	IntervalNotEvaluated = reportvocab.IntervalNotEvaluated
+	IntervalClear        = reportvocab.IntervalClear
+	IntervalColliding    = reportvocab.IntervalColliding
+	IntervalUndecided    = reportvocab.IntervalUndecided
 )
 
-// String renders the pinned lower-snake token. An out-of-range value renders
-// "interval_outcome(<n>)", never a panic.
-func (o IntervalOutcome) String() string {
-	switch o {
-	case IntervalNotEvaluated:
-		return tokenNotEvaluated
-	case IntervalClear:
-		return "clear"
-	case IntervalColliding:
-		return "colliding"
-	case IntervalUndecided:
-		return tokenUndecided
-	default:
-		return fmt.Sprintf("interval_outcome(%d)", int(o))
-	}
-}
-
-// Collision is a proven overlap at an evaluated pose, about the IDEAL pose
-// the parameter names (docs/motion-check-design.md §5.1). The read-only proof
-// measured the overlap with the mover under the float transform Pose composed
-// onto its own placement; the collision is published only when that measured
-// volume's proven lower end clears the volume the mover's boundary can sweep
-// between the float pose and the ideal one, and Volume's Bound carries that
-// allowance, so Volume.Value − Volume.Bound is a proven lower bound on the
-// ideal pose's overlap. Nothing is claimed about the interval around it.
-type Collision struct {
-	At     units.Value  // the parameter of the pose
-	Pose   r3.Transform // Motion.PoseAt(At)
-	Moving *Body
-	Static *Body
-	Volume Measurement // the overlap volume, Value − Bound a proven lower bound on the ideal overlap
-}
+// Collision is a proven overlap at one ideal pose.
+type Collision = reportvocab.Collision[*Body]
 
 // sameMotionValue reports exact equality of two quantities of one Kind,
 // compared as the exact rationals they denote (motionbound.MotionParam), so 0.5 m and

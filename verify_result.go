@@ -2,11 +2,6 @@ package decad
 
 import "github.com/lestrrat-3d/decad/internal/reportvocab"
 
-const (
-	tokenNotEvaluated = "not_evaluated"
-	tokenUndecided    = "undecided"
-)
-
 // ScalarOutcome is a whole-body scalar survey's result.
 type ScalarOutcome = reportvocab.ScalarOutcome
 
