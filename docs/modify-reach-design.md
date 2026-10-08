@@ -518,7 +518,11 @@ meets the exact offset family only at `s=0` and `s=1` and chords the true
 curve strictly between them. That residual is bounded, never ignored:
 erosion by an increasing offset is monotone, so the true swept flux is
 sandwiched between the ordinary cone-sector flux read at the wide (side)
-window and the narrow (cap) one, and the ruled patch's own point-for-point
+window and the narrow (cap) one. Both reference fluxes are read about the
+arc's own axis at the side level, where the cone's flux density `R0·r(z)`
+never changes sign; about the plane-local origin the density changes sign,
+the sandwich fails, and the flux difference grows with the section's distance
+from that origin. The ruled patch's own point-for-point
 departure from the wide cone is bounded in closed form from the two windows'
 angular skew; `chordLocusVolumeAllow` composes both terms into one proven
 volume bound. The skew it reads is the larger of the patch's two proven corner

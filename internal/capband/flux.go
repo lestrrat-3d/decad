@@ -292,8 +292,14 @@ func chordLocusResidualAllow(g Patch) float64 {
 		return 0
 	}
 	// The two references are rotationally symmetric sectors, one window shared
-	// by both directrices, so neither has a corner skew of its own.
+	// by both directrices, so neither has a corner skew of its own. Both are
+	// taken about the arc's own axis at the side level
+	// (proofbound.ChordLocusVolumeAllow states why): the centre moves to the
+	// plane-local origin and both levels shift down by the side level.
 	wideGeom, narrowGeom := g, g
+	sideZ, capZ := axisAnchoredLevels(g.SideZ, g.CapZ)
+	wideGeom.CU, wideGeom.CV, wideGeom.SideZ, wideGeom.CapZ = 0, 0, sideZ, capZ
+	narrowGeom.CU, narrowGeom.CV, narrowGeom.SideZ, narrowGeom.CapZ = 0, 0, sideZ, capZ
 	wideGeom.CapTh0, wideGeom.CapTh1 = g.Th0, g.Th1
 	narrowGeom.Th0, narrowGeom.Th1 = capTh0, capTh1
 	narrowGeom.CapTh0, narrowGeom.CapTh1 = capTh0, capTh1
@@ -308,6 +314,21 @@ func chordLocusResidualAllow(g Patch) float64 {
 	pa, pb := patchAreaOf(g)
 	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
 		g.SideRadius, g.CapRadius, windowSkewMax, proofbound.AbsSumUpper(pa, pb))
+}
+
+// axisAnchoredLevels translates the two levels (sideZ, capZ) axially so the
+// side level sits at or next to zero, keeping their difference EXACT: the
+// returned pair's exact difference capZ' − sideZ' equals capZ − sideZ. The
+// float difference h = capZ − sideZ can round, so TwoSum recovers its exact
+// residual e = (capZ − sideZ) − h, and the pair is (−e, h). The side level
+// then sits |e| from zero, at most half an ulp of the band height.
+func axisAnchoredLevels(sideZ, capZ float64) (float64, float64) {
+	h := capZ - sideZ
+	negSide := -sideZ
+	hSide := h - capZ
+	hCap := h - hSide
+	e := (capZ - hCap) + (negSide - hSide)
+	return -e, h
 }
 
 // capWindowOnBranch shifts the cap-level window (capTh0, capTh1) by the
@@ -571,6 +592,12 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
+
+// AxisAnchoredLevels translates a band's two levels so the side level sits
+// next to zero with their exact difference kept.
+func AxisAnchoredLevels(sideZ, capZ float64) (float64, float64) {
+	return axisAnchoredLevels(sideZ, capZ)
+}
 
 // WindowOnBranch aligns the cap window with the side window's branch.
 func WindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {

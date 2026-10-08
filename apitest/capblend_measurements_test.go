@@ -1146,7 +1146,7 @@ func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent
 // disk, a minor circular segment cut by a chord well off-centre, and two
 // sectors near the setback's own limit (an audited PR-122 repro: the setback
 // approaching the section's own inradius makes the cap window close hard
-// against the side one — capblend_moments.go's chordLocusResidualAllow judges
+// against the side one — internal/capband/flux.go's chordLocusResidualAllow judges
 // exactly this residual). Every residual is the gap between the BUILT
 // (straight-ruled-patch) solid and the exact miter-locus solid the erosion
 // family denotes (docs/modify-reach-design.md §8.3's own scope note,
@@ -1197,6 +1197,57 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 				`the published volume bound (%v mm^3) must enclose the residual (%v mm^3) against the erosion-family reference (held %v mm^3, erosion %v mm^3)`,
 				vol.Bound.Mag(), residual, vol.Value.Mag(), erosion)
 		})
+	}
+}
+
+// TestCapBlendChordLocusBoundIgnoresPlacement builds the chamfered quarter
+// disk of TestCapBlendErosionFamilyVolumeBoundEncloses (R=60, setback 4) at
+// the plane-local origin, a million millimetres along x, and extruded 10 m
+// instead of 20 mm. The chord-versus-locus term reads the arc's own axis
+// (internal/capband/flux.go's chordLocusResidualAllow), so moving the section
+// or raising its cap moves neither that term nor the rest of the bound by
+// more than a small fraction. Each bound must also still enclose the residual
+// against the erosion-family reference.
+//
+// Shown to fail on 2026-10-09: with the two reference fluxes read about the
+// plane-local origin again, the bound at x=1e6 was about 1400 times the
+// baseline and the 10 m bound about 28 times it.
+func TestCapBlendChordLocusBoundIgnoresPlacement(t *testing.T) {
+	t.Parallel()
+	const R, d = 60.0, 4.0
+	// relTol is the share of the baseline bound a placement may move it by.
+	// The terms that legitimately read the coordinates (rounding of the held
+	// vertices and of the slab volume) sit far below it.
+	const relTol = 0.05
+	type reading struct{ bound, residual float64 }
+	read := func(t *testing.T, x, h float64) reading {
+		t.Helper()
+		body := circularSectorBodyAt(t, x, 0, R, math.Pi/2, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		erosion := sectorErosionVolume(R, math.Pi/2, h, d)
+		residual := math.Abs(vol.Value.Mag() - erosion)
+		require.LessOrEqual(t, residual, vol.Bound.Mag(),
+			`at x=%v h=%v the published volume bound (%v mm^3) must enclose the residual (%v mm^3) against the erosion-family reference`,
+			x, h, vol.Bound.Mag(), residual)
+		return reading{bound: vol.Bound.Mag(), residual: residual}
+	}
+
+	base := read(t, 0, 20)
+	require.Positive(t, base.residual, `the built solid chords the denoted miter locus, so the residual is not zero`)
+	for _, tc := range []struct {
+		name string
+		x, h float64
+	}{
+		{name: `moved along x`, x: 1e6, h: 20},
+		{name: `extruded 10 m`, x: 0, h: 1e4},
+	} {
+		got := read(t, tc.x, tc.h)
+		require.LessOrEqual(t, math.Abs(got.bound-base.bound), relTol*base.bound,
+			`%s: the bound (%v mm^3) must stay within %v of the baseline bound (%v mm^3)`,
+			tc.name, got.bound, relTol, base.bound)
 	}
 }
 

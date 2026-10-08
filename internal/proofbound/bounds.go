@@ -2198,18 +2198,26 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 //
 // The proof is a two-term decomposition, |Vol(true)-Vol(built)| <=
 // |Vol(true)-Vol(wide)| + |Vol(wide)-Vol(built)|, where "wide"/"narrow" are
-// the ordinary ROTATIONALLY-SYMMETRIC cone-sector flux this file's own
-// pre-existing formula gives for the SIDE window (th0, th1) shared by both
-// directrices, and for the CAP window (capTh0, capTh1) shared by both:
+// the ordinary ROTATIONALLY-SYMMETRIC cone-sector flux capband.RawFlux gives
+// for the SIDE window (th0, th1) shared by both directrices, and for the CAP
+// window (capTh0, capTh1) shared by both:
 //
 //   - Vol(true) in [Vol(narrow), Vol(wide)]. Erosion is monotonic in its
 //     offset amount (a point surviving the deepest cut d always survived
 //     every shallower one, and every survivor of any cut is a point of the
 //     wall's own un-eroded extent), so the true swept solid's own
 //     cross-sectional window at every axial fraction s is a SET sandwiched
-//     between the cap window and the side window — its flux is therefore
-//     sandwiched the same way, and envelopeSlack = |Vol(wide)-Vol(narrow)|
-//     bounds |Vol(true)-Vol(wide)|.
+//     between the cap window and the side window. Its flux is sandwiched the
+//     same way only where the flux density has one sign over the cone, so
+//     both reference fluxes are taken about the arc's own axis at the side
+//     level (capband's chordLocusResidualAllow moves the centre to the origin
+//     and the side level to zero). About that point, the cone at angle θ and
+//     axial offset z has radius r(z) = R0 + (R1-R0)·z/H, and its flux density
+//     per dθ·dz is R0·r(z), never negative. So envelopeSlack =
+//     |Vol(wide)-Vol(narrow)| bounds |Vol(true)-Vol(wide)|, and neither the
+//     section's in-plane distance from the plane-local origin nor its height
+//     above the sketch plane enters it. About any other point the density
+//     changes sign across the cone and the sandwich fails.
 //   - |Vol(wide)-Vol(built)| <= SweptVolumeAllow(patchDeviation, areaUpper):
 //     the built patch is a convex combination, in Cartesian coordinates, of a
 //     side-level point at radius sideRadius and angle in [th0, th1] and a
