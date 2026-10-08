@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -317,8 +318,8 @@ func interferenceToleranceRef(volume Measurement, a, b *Body, pairD, rel float64
 	const eps = 1e-9
 	area := math.Abs(a.area.Value.Base()) + math.Abs(b.area.Value.Base())
 	quantum := eps * pairD * area
-	return scalarToleranceRef(volume, rel, func(value float64) (float64, bool) {
+	return tolerance.Scalar(volume.Value, volume.Bound, rel, func(value float64) (float64, bool) {
 		ref := math.Max(value, quantum)
-		return ref, usableMagnitude(ref)
+		return ref, tolerance.UsableMagnitude(ref)
 	})
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -323,7 +324,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 }
 
 // loftBodyBindingRatio replays verify.go's own scalar/bounded tolerance gate
-// (bodyToleranceInputs, scalarToleranceRef, boundedToleranceRef) over one
+// (bodyToleranceInputs, tolerance.Scalar, tolerance.Bounded) over one
 // body's own four readings and returns the WORST (largest) ratio — the
 // reading that decides Sound/Suspect — and its name, so a test can assert
 // the achieved margin as a number rather than merely reading Verify's own
@@ -346,16 +347,16 @@ func loftBodyBindingRatio(t *testing.T, ctx context.Context, body *Body) (float6
 		ratio float64
 	}
 	var rows []row
-	if _, ref, have := scalarToleranceRef(area, toleranceRel, in.areaReference); have {
+	if _, ref, have := tolerance.Scalar(area.Value, area.Bound, toleranceRel, in.areaReference); have {
 		rows = append(rows, row{"Area", area.Bound.Base() / ref})
 	}
-	if _, ref, have := boundedToleranceRef(bounds.Bound.Base(), toleranceRel, in.diameterReference); have {
+	if _, ref, have := tolerance.Bounded(bounds.Bound.Base(), toleranceRel, in.diameterReference); have {
 		rows = append(rows, row{"Bounds", bounds.Bound.Base() / ref})
 	}
-	if _, ref, have := scalarToleranceRef(vol, toleranceRel, in.volumeReference); have {
+	if _, ref, have := tolerance.Scalar(vol.Value, vol.Bound, toleranceRel, in.volumeReference); have {
 		rows = append(rows, row{"Volume", vol.Bound.Base() / ref})
 	}
-	if _, ref, have := boundedToleranceRef(cen.Bound.Base(), toleranceRel, in.diameterReference); have {
+	if _, ref, have := tolerance.Bounded(cen.Bound.Base(), toleranceRel, in.diameterReference); have {
 		rows = append(rows, row{"Centroid", cen.Bound.Base() / ref})
 	}
 	require.NotEmpty(t, rows, "at least one reading must form a usable tolerance reference")

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -128,7 +129,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return 0, false, nil
 	}
 	if payload, ok := body.payload.(facetedPayload); ok {
-		return payload.diameter, usableMagnitude(payload.diameter), nil
+		return payload.diameter, tolerance.UsableMagnitude(payload.diameter), nil
 	}
 	if payload, ok := body.payload.(loftPayload); ok {
 		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
@@ -259,7 +260,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			}
 			for _, bound := range [2]proofbound.WalkEndBound{walk.StartBound, walk.EndBound} {
 				endAllow := proofbound.WalkEndBoundAllow(bound)
-				if !usableMagnitude(endAllow) {
+				if !tolerance.UsableMagnitude(endAllow) {
 					return 0, false, nil
 				}
 				allow = math.Max(allow, endAllow)
@@ -267,7 +268,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			// An ArcSeg's recorded natural end can sit off the radius its
 			// denoted circle reads from Start, even when proofbound.WalkEndBound is zero.
 			residual := loftmesh.ArcNaturalEndRadialUpper(segment)
-			if !usableMagnitude(residual) {
+			if !tolerance.UsableMagnitude(residual) {
 				return 0, false, nil
 			}
 			allow = math.Max(allow, residual)
@@ -294,7 +295,7 @@ func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64
 		}
 		position := vertex.Position()
 		bound := position.Bound.Base()
-		if !proofbound.FiniteVec(position.Value) || !usableMagnitude(bound) {
+		if !proofbound.FiniteVec(position.Value) || !tolerance.UsableMagnitude(bound) {
 			return 0, false, nil
 		}
 		points = append(points, position.Value)
@@ -333,7 +334,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 			return 0, false, nil //nolint:nilerr // unbounded edge length withholds the reference
 		}
 		value, bound := length.Value.Base(), length.Bound.Base()
-		if !usableMagnitude(value) || !usableMagnitude(bound) || value <= bound {
+		if !tolerance.UsableMagnitude(value) || !tolerance.UsableMagnitude(bound) || value <= bound {
 			continue
 		}
 		lengthLow := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), new(big.Rat).SetFloat64(bound))
