@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -147,7 +148,7 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 		// the farthest any point of its link moves from the zero pose over the
 		// drive (§6 step 4): a joint whose From is 80° has moved before the
 		// drive begins.
-		lo, hi, ok := motionbound.BoxCornersExact(mv.body.bounds, bounds[mv.group].reach)
+		lo, hi, ok := motionbound.BoxCornersExact(mv.body.bounds, bounds[mv.group].Reach)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	run.formPairs(swept)
@@ -176,12 +177,12 @@ func (dr *linkageDriver) markConstantPairs() {
 			if !pair.evaluated() {
 				continue
 			}
-			mine := dr.bounds[mv.group].path
+			mine := dr.bounds[mv.group].Path
 			var theirs []int
 			below := 0
 			if pair.other >= 0 {
-				theirs = dr.bounds[r.movers[pair.other].group].path
-				below = commonDepth(mine, theirs)
+				theirs = dr.bounds[r.movers[pair.other].group].Path
+				below = linkagebound.CommonDepth(mine, theirs)
 			}
 			joint := -1
 			moving := 0
@@ -250,14 +251,14 @@ func (dr *linkageDriver) settled(i, other, k int, swept []motionSweptBox) (float
 	r := dr.run
 	mine := dr.bounds[r.movers[i].group]
 	if other < 0 {
-		return layerLower(dr.spec, dr.frames, mine.path, r.movers[i].body, r.statics[k].body)
+		return layerLower(dr.spec, dr.frames, mine.Path, r.movers[i].body, r.statics[k].body)
 	}
 	theirs := dr.bounds[r.movers[other].group]
-	below := commonDepth(mine.path, theirs.path)
-	path := append(slices.Clone(mine.path[below:]), theirs.path[below:]...)
+	below := linkagebound.CommonDepth(mine.Path, theirs.Path)
+	path := append(slices.Clone(mine.Path[below:]), theirs.Path[below:]...)
 	best, settled := layerLower(dr.spec, dr.frames, path, r.movers[i].body, r.movers[other].body)
 	if swept[i].ok && swept[other].ok {
-		if lower, ok := sweptBoxesLower(swept[i].lo, swept[i].hi, swept[other].lo, swept[other].hi); ok && lower > best {
+		if lower, ok := linkagebound.SweptBoxesLower(swept[i].lo, swept[i].hi, swept[other].lo, swept[other].hi); ok && lower > best {
 			best, settled = lower, true
 		}
 	}
@@ -369,7 +370,7 @@ func (dr *linkageDriver) pairDepth(i, other int) int {
 		return 0
 	}
 	r := dr.run
-	return commonDepth(dr.bounds[r.movers[i].group].path, dr.bounds[r.movers[other].group].path)
+	return linkagebound.CommonDepth(dr.bounds[r.movers[i].group].Path, dr.bounds[r.movers[other].group].Path)
 }
 
 // pathOf is mover m's link reading for a pair whose relative path starts at
@@ -378,7 +379,7 @@ func (dr *linkageDriver) pairDepth(i, other int) int {
 // joint lies on the relative path.
 func (dr *linkageDriver) pathOf(m, below int) linkBound {
 	b := dr.bounds[dr.run.movers[m].group]
-	if dr.symmetric[m] && below < len(b.path) {
+	if dr.symmetric[m] && below < len(b.Path) {
 		return withoutOwnJoint(b)
 	}
 	return b
@@ -418,14 +419,14 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 		if !ok {
 			return nil
 		}
-		remMine := projectionRemainder(mine, below, hMine)
+		remMine := linkagebound.Remainder(mine.Rho[below:], hMine)
 		var hTheirs []*big.Rat
 		var remTheirs *big.Rat
 		if other >= 0 {
 			if hTheirs, ok = dr.projectionSpans(theirs, below, a.f, b.f, end); !ok {
 				return nil
 			}
-			remTheirs = projectionRemainder(theirs, below, hTheirs)
+			remTheirs = linkagebound.Remainder(theirs.Rho[below:], hTheirs)
 		}
 		cm, ok := dr.cornersAt(end, i, mine, below, false)
 		if !ok {
@@ -433,41 +434,41 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 		}
 		// From end b the segment runs backward.
 		backward := n == 1
-		side := projectionSide{corners: cm, h: hMine, seg: stepsFrom(segMine, backward), rem: remMine}
+		side := projectionSide{Corners: cm, H: hMine, Seg: stepsFrom(segMine, backward), Rem: remMine}
 		var partner projectionSide
 		if other < 0 {
 			lo, hi, ok := motionbound.BoxCornersExact(r.statics[k].body.bounds, new(big.Rat))
 			if !ok {
 				return nil
 			}
-			corners, ok := roundCorners(staticCorners(lo, hi))
+			corners, ok := linkagebound.RoundCorners(staticCorners(lo, hi))
 			if !ok {
 				return nil
 			}
-			partner = projectionSide{corners: corners}
+			partner = projectionSide{Corners: corners}
 		} else {
 			ct, ok := dr.cornersAt(end, other, theirs, below, false)
 			if !ok {
 				return nil
 			}
-			partner = projectionSide{corners: ct, h: hTheirs, seg: stepsFrom(segTheirs, backward), rem: remTheirs}
+			partner = projectionSide{Corners: ct, H: hTheirs, Seg: stepsFrom(segTheirs, backward), Rem: remTheirs}
 		}
-		if l := projectionLower(side, partner); best == nil || l.Cmp(best) > 0 {
+		if l := linkagebound.Lower(side, partner); best == nil || l.Cmp(best) > 0 {
 			best = l
 		}
 		// The hull bound (§5.8): the same expansion over each body's hull
 		// points, along every candidate direction; the larger serves.
-		if side.corners, ok = dr.cornersAt(end, i, mine, below, true); !ok {
+		if side.Corners, ok = dr.cornersAt(end, i, mine, below, true); !ok {
 			continue
 		}
 		if other < 0 {
-			if partner.corners, ok = dr.staticHull(k); !ok {
+			if partner.Corners, ok = dr.staticHull(k); !ok {
 				continue
 			}
-		} else if partner.corners, ok = dr.cornersAt(end, other, theirs, below, true); !ok {
+		} else if partner.Corners, ok = dr.cornersAt(end, other, theirs, below, true); !ok {
 			continue
 		}
-		if l := projectionLowerHull(side, partner); l != nil && l.Cmp(best) > 0 {
+		if l := linkagebound.LowerHull(side, partner); l != nil && l.Cmp(best) > 0 {
 			best = l
 		}
 	}
@@ -484,8 +485,8 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 // rounded up to a float. ok is false when a dependent's readings are missing or a span
 // overflows.
 func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat, end *motionPose) ([]*big.Rat, bool) {
-	h := make([]*big.Rat, 0, len(b.path)-below)
-	for _, i := range b.path[below:] {
+	h := make([]*big.Rat, 0, len(b.Path)-below)
+	for _, i := range b.Path[below:] {
 		jt := dr.spec.joints[i]
 		var span *big.Rat
 		if jt.dep == nil {
@@ -526,8 +527,8 @@ func intervalMidpoint(iv proofbound.RatInterval) *big.Rat {
 // segment term; nil when a waypoint lies inside the interval, or a step
 // cannot be read, and the box form serves.
 func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
-	steps := make([]proofbound.RatInterval, 0, len(b.path)-below)
-	for _, i := range b.path[below:] {
+	steps := make([]proofbound.RatInterval, 0, len(b.Path)-below)
+	for _, i := range b.Path[below:] {
 		if dr.spec.joints[i].dep != nil {
 			// A dependent is not affine in s (§5.8): the box form serves.
 			return nil
@@ -567,7 +568,7 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 		return cornerBounds{}, false
 	}
 	params := make([]motionbound.MotionParam, len(dr.spec.joints))
-	for _, i := range b.path[below:] {
+	for _, i := range b.Path[below:] {
 		jt := dr.spec.joints[i]
 		if jt.dep == nil {
 			params[i] = jointParam(jt, pose.f)
@@ -581,7 +582,7 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 		}
 		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: intervalMidpoint(at)}
 	}
-	reading, ok := roundCorners(readPoints(dr.spec, dr.frames, params, b, below, points))
+	reading, ok := linkagebound.RoundCorners(readPoints(dr.spec, dr.frames, params, b, below, points))
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -601,7 +602,7 @@ func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
 	if !ok {
 		return cornerBounds{}, false
 	}
-	reading, ok := roundCorners(points)
+	reading, ok := linkagebound.RoundCorners(points)
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -618,8 +619,8 @@ func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
 func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 	if hull {
 		if points, pad, k, ok := bodyHullPoints(b); ok {
-			reading := staticPoints(points)
-			reading.pad, reading.prismK = pad, k
+			reading := linkagebound.StaticPoints(points)
+			reading.Pad, reading.PrismK = pad, k
 			return reading, true
 		}
 	}

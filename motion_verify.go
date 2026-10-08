@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -538,12 +539,12 @@ func (m *singleMotion) projection(i, k int, a, b *motionPose) *big.Rat {
 			if rem == nil && r.spec.Frame.Kind != motionbound.MotionPrismatic {
 				continue
 			}
-			side := projectionSide{corners: mine, h: []*big.Rat{span}, seg: stepsFrom([]proofbound.RatInterval{step}, n == 1), rem: rem}
+			side := projectionSide{Corners: mine, H: []*big.Rat{span}, Seg: stepsFrom([]proofbound.RatInterval{step}, n == 1), Rem: rem}
 			var l *big.Rat
 			if hull {
-				l = projectionLowerHull(side, projectionSide{corners: partner})
+				l = linkagebound.LowerHull(side, projectionSide{Corners: partner})
 			} else {
-				l = projectionLower(side, projectionSide{corners: partner})
+				l = linkagebound.Lower(side, projectionSide{Corners: partner})
 			}
 			if l != nil && (best == nil || l.Cmp(best) > 0) {
 				best = l
@@ -558,7 +559,7 @@ func (m *singleMotion) projection(i, k int, a, b *motionPose) *big.Rat {
 func motionStep(a, b motionbound.MotionParam) (proofbound.RatInterval, bool) {
 	turn := new(big.Rat).Sub(b.Turn, a.Turn)
 	base := new(big.Rat).Sub(b.Base, a.Base)
-	return roundOut(proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base)))
+	return linkagebound.RoundOut(proofbound.IntervalAdd(proofbound.IntervalScale(proofbound.TwoPiInterval(), turn), proofbound.PointInterval(base)))
 }
 
 // remainder is Rem = ½·B·h² of docs/linkage-check-design.md §5.8 for mover
@@ -607,25 +608,25 @@ func (m *singleMotion) moverPoints(pose *motionPose, i int, hull bool) (cornerBo
 		unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
 	}
 	centre := motionbound.PointVec(f.Center)
-	for c := range points.pos {
-		x := applyIdeal(ideal, points.pos[c])
-		points.pos[c] = x
+	for c := range points.Pos {
+		x := linkagebound.ApplyIdeal(ideal, points.Pos[c])
+		points.Pos[c] = x
 		var v motionbound.IvVec
 		switch f.Kind {
 		case motionbound.MotionPrismatic:
 			v = unit
 		case motionbound.MotionRevolute:
-			v = ivCross(unit, motionbound.IvVecSub(x, centre))
+			v = linkagebound.IvCross(unit, motionbound.IvVecSub(x, centre))
 		default:
 			theta := proofbound.IntervalOwned(motionbound.ParamLower(f.Theta), motionbound.ParamUpper(f.Theta))
-			turn := ivCross(unit, motionbound.IvVecSub(x, centre))
+			turn := linkagebound.IvCross(unit, motionbound.IvVecSub(x, centre))
 			for d := range 3 {
 				v[d] = proofbound.IntervalAdd(proofbound.IntervalMul(turn[d], theta), proofbound.IntervalScale(unit[d], f.Slide))
 			}
 		}
-		points.vel[c] = []motionbound.IvVec{v}
+		points.Vel[c] = []motionbound.IvVec{v}
 	}
-	reading, ok := roundCorners(points)
+	reading, ok := linkagebound.RoundCorners(points)
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -647,7 +648,7 @@ func (m *singleMotion) staticPoints(k int, hull bool) (cornerBounds, bool) {
 	if !ok {
 		return cornerBounds{}, false
 	}
-	reading, ok := roundCorners(points)
+	reading, ok := linkagebound.RoundCorners(points)
 	if !ok {
 		return cornerBounds{}, false
 	}

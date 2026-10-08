@@ -71,7 +71,7 @@ func TestJointBoxHalfTravel(t *testing.T) {
 	require.True(t, r.pairs[0][0].excluded, `the mast's swept box clears the wall`)
 	require.True(t, r.pairs[0][1].excluded, `the layer exclusion settles the mast and the boom`)
 
-	rho := b.dr.bounds[1].rho[0]
+	rho := b.dr.bounds[1].Rho[0]
 	require.InDelta(t, 35+math.Sqrt(675)+30, linkRatFloat(t, rho), 1e-9)
 	zero, _ := motionbound.ExactMotionParam(units.Degrees(0))
 	top, _ := motionbound.ExactMotionParam(units.Degrees(80))
@@ -358,7 +358,7 @@ func TestJointBoxLoopSplitAxis(t *testing.T) {
 	require.GreaterOrEqual(t, linkRatFloat(t, delta), trueDelta-1e-9, `δ covers the follower's farthest value over the cell`)
 	require.LessOrEqual(t, linkRatFloat(t, delta), trueDelta+0.05*(high-low)+1e-6, `δ is the hull's reach, not more`)
 
-	rho := b.dr.bounds[2].rho[0]
+	rho := b.dr.bounds[2].Rho[0]
 	require.InDelta(t, math.Sqrt(30*30+4*4), linkRatFloat(t, rho), 1e-9)
 	shares := b.pairShares(root, 2, 0)
 	require.Contains(t, shares, 0, `the crank carries the follower's term`)

@@ -34,19 +34,10 @@ import (
 // Every square root is proofbound.RatSqrtUp, an up-rounded float read back as
 // an exact rational; every sum and product after it is big.Rat arithmetic.
 
-// linkBound is one link's §5.2 reading under a drive.
-type linkBound struct {
-	// path is the links whose joints carry this link, from the ground's child
-	// down to the link itself.
-	path []int
-	// rho is ρ_{ik} for each joint on path, in path order; nil for a
-	// prismatic joint, whose travel term is its displacement alone.
-	rho []*big.Rat
-	// reach is a proven upper bound on how far any point of the link moves
-	// from the zero pose at any parameter of the drive: Σ ρ_{ik}·m_i over the
-	// revolute joints on path, plus m_i over the prismatic ones.
-	reach *big.Rat
-}
+type linkBound = linkagebound.ReachBound
+type cornerReading = linkagebound.Reading
+type cornerBounds = linkagebound.Bounds
+type projectionSide = linkagebound.Side
 
 // linkageFrames reads every joint's exact frame (motionbound.MotionFrame);
 // ok is false when an axis, direction or centre is not representable.
@@ -140,15 +131,7 @@ func (s reachSource) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, boo
 func (s reachSource) Reach(i int) *big.Rat { return jointReach(s.spec.joints[i]) }
 
 func readLinkBounds(spec *linkageSpec, frames []motionbound.MotionFrame) ([]linkBound, bool) {
-	read, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
-	if !ok {
-		return nil, false
-	}
-	bounds := make([]linkBound, len(read))
-	for i, b := range read {
-		bounds[i] = linkBound{path: b.Path, rho: b.Rho, reach: b.Reach}
-	}
-	return bounds, true
+	return linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 }
 
 // chainTravel is τ^(L)_k of docs/linkage-check-design.md §5.2: a proven upper
@@ -160,7 +143,7 @@ func readLinkBounds(spec *linkageSpec, frames []motionbound.MotionFrame) ([]link
 // when a dependent's readings are missing. below is the position on the path
 // of the first joint below L: 0 when L is the ground.
 func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *big.Rat {
-	return pathTravel(b, below, func(joint int) *big.Rat {
+	return linkagebound.PathTravel(b.Path, b.Rho, below, func(joint int) *big.Rat {
 		jt := spec.joints[joint]
 		if jt.dep == nil {
 			return jointSpan(jt, sa, sb)
@@ -168,14 +151,6 @@ func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *bi
 		return jt.dep.span(joint, sa, sb)
 	})
 }
-
-// pathTravel sums joint travel below the shared ancestor.
-func pathTravel(b linkBound, below int, span func(joint int) *big.Rat) *big.Rat {
-	return linkagebound.PathTravel(b.path, b.rho, below, span)
-}
-
-// commonDepth counts the leading joints shared by two paths.
-func commonDepth(a, b []int) int { return linkagebound.CommonDepth(a, b) }
 
 // idealPosesAt is every link's ideal pose at the exact fraction s
 // (docs/linkage-check-design.md §5.1): its joint's ideal motion at the exact
@@ -244,7 +219,7 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 	out := make([]linkStanding, len(spec.joints))
 	for k, b := range bounds {
 		zero, held := true, true
-		for _, i := range b.path {
+		for _, i := range b.Path {
 			jt := spec.joints[i]
 			if !heldAtZeroJoint(jt) {
 				zero = false
@@ -297,52 +272,11 @@ func layerLower(spec *linkageSpec, frames []motionbound.MotionFrame, path []int,
 	})
 }
 
-// sweptBoxesLower reads the exact swept-box exclusion.
-func sweptBoxesLower(aLo, aHi, bLo, bHi motionbound.RatVec) (float64, bool) {
-	return linkagebound.SweptBoxesLower(aLo, aHi, bLo, bHi)
-}
-
-// cornerReading is one body's docs/linkage-check-design.md §5.8 reading at
-// one configuration: a finite set of points whose convex hull holds the body
-// — the eight corners of its inflated rest box, or its hull points
-// (bodyHullPoints) — under the ideal poses of the joints on its relative
-// path, and each point's velocity under each of those joints alone. Every
-// entry is a rational interval that encloses the exact value for every member
-// of the ideal poses' enclosures.
-type cornerReading struct {
-	pos []motionbound.IvVec
-	// vel holds, per point, its velocity under each joint on the relative
-	// path, shallowest first: ω × (x − o) for a revolute, the unit direction
-	// for a prismatic, per radian or per millimetre of the joint's value.
-	vel [][]motionbound.IvVec
-	// pad is the radius of the ball around every point the body may reach
-	// beyond the points' hull; nil for none.
-	pad *big.Rat
-	// prismK is the vertex count of a prism's outer loop when the points are
-	// its hull points, the k bottom vertices then the k top ones; 0 for box
-	// corners.
-	prismK int
-}
-
 // staticCorners is the corner reading of a box no joint moves: its eight
 // corners as points, with no velocity.
 func staticCorners(lo, hi motionbound.RatVec) cornerReading {
 	corners := linkagebound.BoxCorners(lo, hi)
-	return staticPoints(corners[:])
-}
-
-// staticPoints is the reading of points no joint moves, with no velocity.
-func staticPoints(points []motionbound.RatVec) cornerReading {
-	r := linkagebound.StaticPoints(points)
-	return cornerReading{pos: r.Pos, vel: r.Vel, pad: r.Pad, prismK: r.PrismK}
-}
-
-func applyIdeal(p motionbound.IdealPose, x motionbound.IvVec) motionbound.IvVec {
-	return linkagebound.ApplyIdeal(p, x)
-}
-
-func ivCross(a, b motionbound.IvVec) motionbound.IvVec {
-	return linkagebound.IvCross(a, b)
+	return linkagebound.StaticPoints(corners[:])
 }
 
 // readCorners is docs/linkage-check-design.md §5.8's reading of one body of
@@ -357,7 +291,7 @@ func ivCross(a, b motionbound.IvVec) motionbound.IvVec {
 // lo and hi are the body's Bounds box inflated by its own Bound.
 func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, lo, hi motionbound.RatVec) cornerReading {
 	corners := linkagebound.BoxCorners(lo, hi)
-	return readPoints(spec, frames, params, b, below, staticPoints(corners[:]))
+	return readPoints(spec, frames, params, b, below, linkagebound.StaticPoints(corners[:]))
 }
 
 // readPoints maps a static point reading through the link's relative joint path.
@@ -366,70 +300,7 @@ func readPoints(spec *linkageSpec, frames []motionbound.MotionFrame, params []mo
 	for i := range revolute {
 		revolute[i] = spec.joints[i].revolute
 	}
-	r := linkagebound.ReadPoints(frames, params, b.path, revolute, below, linkagebound.Reading{
-		Pos: out.pos, Vel: out.vel, Pad: out.pad, PrismK: out.prismK,
-	})
-	return cornerReading{pos: r.Pos, vel: r.Vel, pad: r.Pad, prismK: r.PrismK}
-}
-
-func secondDerivativeBound(b linkBound, m, n int) *big.Rat {
-	return linkagebound.DerivativeBound(b.rho, m, n)
-}
-
-func projectionRemainder(b linkBound, below int, h []*big.Rat) *big.Rat {
-	return linkagebound.Remainder(b.rho[below:], h)
-}
-
-// cornerBounds is a corner reading rounded outward to floats and read back
-// as exact rationals, so the per-interval sums of docs/linkage-check-design.md
-// §5.8 run over short dyadics rather than the long rationals of composed
-// rotations: each corner coordinate's enclosure and each velocity
-// component's enclosure widened to the floats around it. Rounding outward
-// only weakens the bound the values enter.
-type cornerBounds struct {
-	lo, hi [][3]*big.Rat
-	// vel holds, per point and per joint on the relative path, each
-	// velocity component's enclosure.
-	vel [][][3]proofbound.RatInterval
-	// pad and prismK are the reading's own (cornerReading).
-	pad    *big.Rat
-	prismK int
-}
-
-// roundOut widens an enclosure to the floats around it, read back as exact
-// rationals; ok is false when an end overflows a float.
-func roundOut(iv proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	return linkagebound.RoundOut(iv)
-}
-
-// roundCorners rounds a corner reading outward (cornerBounds); ok is false
-// when a value overflows a float.
-func roundCorners(r cornerReading) (cornerBounds, bool) {
-	b, ok := linkagebound.RoundCorners(linkagebound.Reading{
-		Pos: r.pos, Vel: r.vel, Pad: r.pad, PrismK: r.prismK,
-	})
-	return cornerBounds{lo: b.Lo, hi: b.Hi, vel: b.Vel, pad: b.Pad, prismK: b.PrismK}, ok
-}
-
-// projectionSide is one body of a pair as docs/linkage-check-design.md §5.8
-// expands it over an interval: its rounded corner reading at one end, the
-// travel bound h of each joint on its relative path over the interval, and
-// the remainder those give. A static body has no joint and no remainder.
-//
-// seg, when set, is the segment term's step from this end: the enclosure of
-// each joint's signed change Δq_i toward the other end of an interval that
-// holds no waypoint, along which every joint moves together on one straight
-// joint-space segment. The first-order term is then max(0, Σ_i v_i[axis]·Δq_i)
-// rather than the box form's Σ_i |v_i[axis]|·h_i.
-type projectionSide struct {
-	corners cornerBounds
-	h       []*big.Rat
-	seg     []proofbound.RatInterval
-	rem     *big.Rat
-}
-
-func (s projectionSide) extents() (up, down [3]*big.Rat) {
-	return s.boundSide().Extents()
+	return linkagebound.ReadPoints(frames, params, b.Path, revolute, below, out)
 }
 
 // jointStep reads a joint's signed interval step when no interior waypoint bends it.
@@ -437,10 +308,6 @@ func jointStep(jt linkJoint, sa, sb *big.Rat) (proofbound.RatInterval, bool) {
 	return linkagebound.JointStep(jt.points, sa, sb, func(s *big.Rat) motionbound.MotionParam {
 		return jointParam(jt, s)
 	})
-}
-
-func projectionLower(a, b projectionSide) *big.Rat {
-	return linkagebound.Lower(a.boundSide(), b.boundSide())
 }
 
 // bodySymmetryAxis is the exact axis line of a body that every rotation
@@ -512,8 +379,8 @@ func symmetricAboutJoint(b *Body, jt linkJoint, f motionbound.MotionFrame) bool 
 // dropped: the reading of a body that joint does not move. ρ_{ik} of every
 // joint above stays an upper bound, read over the link's whole rest box.
 func withoutOwnJoint(b linkBound) linkBound {
-	n := len(b.path) - 1
-	return linkBound{path: b.path[:n], rho: b.rho[:n], reach: b.reach}
+	n := len(b.Path) - 1
+	return linkBound{Path: b.Path[:n], Rho: b.Rho[:n], Reach: b.Reach}
 }
 
 // bodyHullPoints is docs/linkage-check-design.md §5.8's hull point reading of
@@ -575,18 +442,4 @@ func bodyHullPoints(b *Body) (points []motionbound.RatVec, pad *big.Rat, k int, 
 		return nil, nil, 0, false
 	}
 	return points, pad, k, true
-}
-
-func (s projectionSide) boundSide() linkagebound.Side {
-	return linkagebound.Side{
-		Corners: linkagebound.Bounds{
-			Lo: s.corners.lo, Hi: s.corners.hi, Vel: s.corners.vel,
-			Pad: s.corners.pad, PrismK: s.corners.prismK,
-		},
-		H: s.h, Seg: s.seg, Rem: s.rem,
-	}
-}
-
-func projectionLowerHull(a, b projectionSide) *big.Rat {
-	return linkagebound.LowerHull(a.boundSide(), b.boundSide())
 }
