@@ -114,35 +114,34 @@ func CircleCircleLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV flo
 	return upper, true
 }
 
-// lineWallFrame is a straight wall's own EXACT local frame: n is the
-// enclosed unit MATERIAL-SIDE normal (rot90 of the enclosed unit tangent)
-// and e is the enclosed unit tangent itself, both read once, since a line's
-// own direction never moves as its offset amount varies — only its anchor
-// point does, along n.
+// lineWallFrame is a straight wall's own enclosed local frame: anchor encloses
+// the wall's start, n is the enclosed unit MATERIAL-SIDE normal (rot90 of the
+// enclosed unit tangent) and e is the enclosed unit tangent itself, all read
+// once, since a line's own direction never moves as its offset amount varies
+// — only its anchor point does, along n.
 type lineWallFrame struct {
-	anchorU, anchorV float64
-	n, e             Point
+	anchor Point
+	n, e   Point
 }
 
-// The interval e below deliberately EXCLUDES normalize2(w.tanInU, w.tanInV).
-// That is not a hole in the enclosure, and widening e to cover normalize2's
-// output would be wrong. UnitVec encloses the EXACT unit vector of the float
-// pair — the value normalize2 rounds — and §8.4 requires this frame to hold the
-// direction the construction DENOTES "whatever the platform's sqrt and hypot
-// did", so anchoring it on a rounded float would replace the denoted direction
-// with one particular platform's approximation of it. A tangent of (3, 4) is
-// the clearest case: e is the exact [3/5, 3/5] × [4/5, 4/5], 3/5 is not a
-// float, and normalize2 lands 2.22e-17 below the interval it is not supposed
-// to be in. To falsify this claim, exhibit an admitted corner whose published
-// Edge.Length interval fails to enclose the true locus length — not merely one
-// where normalize2's output falls outside e, which is every rotated wall.
+// lineWallFrameOf reads the frame from the wall's recorded endpoints, never
+// from its held tangent or a normalized float. The start is the box its end
+// bound allows, and e is the unit direction of the difference of the two
+// enclosed endpoints (walkTangentEnclosure). The held tangent TanInU, TanInV is
+// that difference rounded to float64, and normalize2 rounds its unit vector
+// again; §8.4 requires this frame to hold the direction the construction
+// DENOTES, so neither rounding may stand in for it. For a wall whose endpoints
+// are recorded and axis aligned, every enclosure here is a single point, which
+// is what lets LineCircleLocusSpeedUpper find Δ1 exactly zero at a
+// Fillet-built tangent corner.
 func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
-	e, ok := UnitVec(w.TanInU, w.TanInV)
-	if !ok {
+	anchor, okA := WalkPointEnclosure(w.StartU, w.StartV, w.StartBound)
+	e, okE := walkTangentEnclosure(w, false)
+	if !okA || !okE {
 		return lineWallFrame{}, false
 	}
 	n := Point{U: proofbound.IntervalNeg(e.V), V: e.U}
-	return lineWallFrame{anchorU: w.StartU, anchorV: w.StartV, n: n, e: e}, true
+	return lineWallFrame{anchor: anchor, n: n, e: e}, true
 }
 
 // LineCircleLocusSpeedUpper bounds |dP/dt| for the corner foot where a
@@ -199,13 +198,12 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	}
 	cx, cy := proofarith.FloatRat(circle.CU), proofarith.FloatRat(circle.CV)
 	radius := proofarith.FloatRat(circle.Radius)
-	anchorU, anchorV := proofarith.FloatRat(frame.anchorU), proofarith.FloatRat(frame.anchorV)
-	if cx == nil || cy == nil || radius == nil || anchorU == nil || anchorV == nil {
+	if cx == nil || cy == nil || radius == nil {
 		return 0, false
 	}
-	w0u := new(big.Rat).Sub(anchorU, cx)
-	w0v := new(big.Rat).Sub(anchorV, cy)
-	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(proofbound.PointInterval(w0u), frame.n.U), proofbound.IntervalMul(proofbound.PointInterval(w0v), frame.n.V))
+	w0u := proofbound.IntervalSub(frame.anchor.U, proofbound.PointInterval(cx))
+	w0v := proofbound.IntervalSub(frame.anchor.V, proofbound.PointInterval(cy))
+	alpha := proofbound.IntervalAdd(proofbound.IntervalMul(w0u, frame.n.U), proofbound.IntervalMul(w0v, frame.n.V))
 	inside := InsideSignOf(circle)
 
 	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
@@ -217,7 +215,7 @@ func LineCircleLocusSpeedUpper(line, circle survey2d.SideWalk, t0, t1 float64) (
 	// then constant, so X'(t) = n exactly and no square root — nor Delta0's
 	// own sign, which this branch never even reads — enters the answer. The
 	// bound is |n|'s own enclosed magnitude (n is unit by construction, so
-	// this is 1 up to UnitVec's own tiny sqrt rounding) rather than
+	// this is 1 up to its enclosure's own tiny sqrt rounding) rather than
 	// proofbound.Radius2D's √2-scaled one, since this specific case is common enough —
 	// every tangent-filleted corner in this codebase's own test fixtures —
 	// to be worth the tighter bound.
