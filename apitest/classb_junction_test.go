@@ -23,7 +23,7 @@ import (
 // 16000 − 20·(9π − (9·atan(s/d) − d·s)), d = 20 − 17.1, s = √(9 − d²).
 //
 // Shown-to-fail: without the keyed vertex's own crossing offset
-// (classbgeom.CrossingOffsetUpper in cbBuild.canonicalPoint) the volume reads
+// (classbgeom.CrossingOffsetUpper in classbgeom.VertexTable.CanonicalPoint) the volume reads
 // 4.5e-10 mm³ off the exact value under a 2.6e-11 bound.
 func TestClassBCrossingVertexFarFromOrigin(t *testing.T) {
 	t.Parallel()
