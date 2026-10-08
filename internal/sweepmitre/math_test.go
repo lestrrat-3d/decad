@@ -12,6 +12,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestOrientSignMatchesRationalDeterminant(t *testing.T) {
+	rng := rand.New(rand.NewSource(23))
+	point := func() sweeparc.RatVec {
+		var p sweeparc.RatVec
+		for axis := range p {
+			den := rng.Int63n(1000) + 1
+			if rng.Intn(4) == 0 {
+				den = 1 << uint(rng.Intn(53))
+			}
+			p[axis] = big.NewRat(rng.Int63n(20001)-10000, den)
+		}
+		return p
+	}
+	for trial := range 300 {
+		a, b, c, d := point(), point(), point(), point()
+		if trial%7 == 0 {
+			d = c
+		}
+		want := sweeparc.Dot(sweeparc.Cross(sweeparc.Sub(b, a), sweeparc.Sub(c, a)), sweeparc.Sub(d, a)).Sign()
+		require.Equal(t, want, sweepmitre.OrientSign(a, b, c, d), "trial %d", trial)
+	}
+}
+
 func TestTriangleAreasMatchRationalConstruction(t *testing.T) {
 	rng := rand.New(rand.NewSource(17))
 	exact := make([]sweeparc.RatVec, 0, 300)
