@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchflux"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -584,12 +585,12 @@ func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 	axis := r3.NewVec(0, 0, 1)
 	cone := Cone{Origin: origin, Axis: axis, Radius: units.Millimeters(4), HalfAngle: units.Radians(0.6)}
 
-	_, _, _, err := coneApex(cone) //nolint:dogsled // only the error matters here.
+	_, _, _, err := stitchflux.ConeApex(cone.HalfAngle, cone.Radius, cone.Origin) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	zeroRadius := cone
 	zeroRadius.Radius = units.Millimeters(0)
-	zx, zy, zz, err := coneApex(zeroRadius)
+	zx, zy, zz, err := stitchflux.ConeApex(zeroRadius.HalfAngle, zeroRadius.Radius, zeroRadius.Origin)
 	require.NoError(t, err)
 	require.Equal(t, origin.X, zx.Value)
 	require.Equal(t, origin.Y, zy.Value)
@@ -621,12 +622,12 @@ func TestStitchConeHalfAngleRefusesDegenerateTangent(t *testing.T) {
 
 	needle := base
 	needle.HalfAngle = units.Radians(0)
-	_, _, _, err := coneApex(needle) //nolint:dogsled // only the error matters here.
+	_, _, _, err := stitchflux.ConeApex(needle.HalfAngle, needle.Radius, needle.Origin) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	malformed := base
 	malformed.HalfAngle = units.Radians(math.NaN())
-	_, _, _, err = coneApex(malformed) //nolint:dogsled // only the error matters here.
+	_, _, _, err = stitchflux.ConeApex(malformed.HalfAngle, malformed.Radius, malformed.Origin) //nolint:dogsled // only the error matters here.
 	require.Error(t, err, "a NaN half-angle must refuse, even though units.Value.In catches it before coneApex's own tangent check runs")
 
 	// A genuine, non-degenerate half-angle must NOT refuse — confirming the
@@ -634,7 +635,7 @@ func TestStitchConeHalfAngleRefusesDegenerateTangent(t *testing.T) {
 	// failure of coneApex itself.
 	ordinary := base
 	ordinary.HalfAngle = units.Radians(0.6)
-	_, _, _, err = coneApex(ordinary) //nolint:dogsled // only the error matters here.
+	_, _, _, err = stitchflux.ConeApex(ordinary.HalfAngle, ordinary.Radius, ordinary.Origin) //nolint:dogsled // only the error matters here.
 	require.NoError(t, err)
 }
 
@@ -1268,7 +1269,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 	require.False(t, mesh.symDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
 }
 
-// TestStitchConeArmChargesApexDeparture pins coneApexDeparture's leg on a
+// TestStitchConeArmChargesApexDeparture pins the cone apex bound on a
 // real revolve frustum's Cone wall: the wall from (4, 1) to (3, 2) about the
 // world X axis meets the axis at x = 5 exactly, so its tag's apex IS the
 // record's and the arm charges nothing. A copy of the tag with its apex
@@ -1308,8 +1309,8 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 		}
 	}
 	require.NotNil(t, face)
-	require.True(t, revolveTagIsDenoted(face))
-	exactBound, ok := coneApexDeparture(face, cone)
+	require.True(t, stitchflux.TagIsDenoted(stitchTaggedFace(face)))
+	exactBound, ok := stitchflux.ConeApexDeparture(face.denoted, cone)
 	require.True(t, ok)
 	require.Zero(t, exactBound, "an apex the walk states exactly is charged nothing")
 
@@ -1319,7 +1320,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 
 	moved := cone
 	moved.Origin = cone.Origin.Add(r3.NewVec(1e-6, 0, 0))
-	movedBound, ok := coneApexDeparture(face, moved)
+	movedBound, ok := stitchflux.ConeApexDeparture(face.denoted, moved)
 	require.True(t, ok)
 	require.GreaterOrEqual(t, movedBound, 1e-6)
 	mFlux, mMx, _, _, err := coneFaceFluxAndMoment(face, moved, anchor, 1)
