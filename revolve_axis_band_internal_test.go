@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolvemass"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -183,8 +184,8 @@ func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1.0, side)
 	require.Zero(t, ax.radialAdmitAllow, "an exact axis proving the radial minimum non-negative charges nothing")
-	require.Zero(t, revolveAxisAdmitBandCharge(ax))
-	require.Zero(t, revolveAxisAdmitVolumeCharge(ax))
+	require.Zero(t, revolvemass.AdmitBandCharge(ax.radialAdmitAllow, ax.axialExtentUpper))
+	require.Zero(t, revolvemass.AdmitVolumeCharge(ax.radialAdmitAllow, ax.axialExtentUpper))
 }
 
 // T93: a profile whose radial minimum is proven negative, with an exact

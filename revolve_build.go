@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolvemass"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -317,81 +318,6 @@ func (rp revolvePayload) point(b revolvemesh.RevolveBasis, z, rho, phi float64) 
 // axis carries the corrected sign.
 func (rp revolvePayload) reflected() bool { return rp.xform.IsReflection() }
 
-// axisMoments re-references the plane-origin region integrals into the axis
-// frame: q = ∫ρ dA (Pappus's second theorem reads volume off it), mzr =
-// ∫zρ dA (the solid centroid's axial position), and mrr = ∫ρ² dA (the
-// partial sweep's in-plane centroid term) — the §4 first, second and mixed
-// moments with their source and arithmetic bounds (docs/evaluator-design.md
-// §6).
-func axisMoments(ig regionIntegrals, ax axisFrame) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar) {
-	aU, aV := proofbound.MeasuredScalar(ax.aU, ax.aUBound), proofbound.MeasuredScalar(ax.aV, ax.aVBound)
-	dU, dV := proofbound.MeasuredScalar(ax.dU, ax.dUBound), proofbound.MeasuredScalar(ax.dV, ax.dVBound)
-	nU, nV := proofbound.MeasuredScalar(-ax.dV, ax.dVBound), proofbound.MeasuredScalar(ax.dU, ax.dUBound)
-	area := proofbound.MeasuredScalar(ig.Area, ig.AreaBound)
-	mu := proofbound.MeasuredScalar(ig.Mu, ig.MuBound)
-	mv := proofbound.MeasuredScalar(ig.Mv, ig.MvBound)
-	muu := proofbound.MeasuredScalar(ig.Muu, ig.MuuBound)
-	muv := proofbound.MeasuredScalar(ig.Muv, ig.MuvBound)
-	mvv := proofbound.MeasuredScalar(ig.Mvv, ig.MvvBound)
-
-	iuu := proofbound.BoundedAdd(
-		proofbound.BoundedSub(muu, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), aU), mu)),
-		proofbound.BoundedMul(proofbound.BoundedMul(aU, aU), area),
-	)
-	iuv := proofbound.BoundedAdd(
-		proofbound.BoundedSub(proofbound.BoundedSub(muv, proofbound.BoundedMul(aU, mv)), proofbound.BoundedMul(aV, mu)),
-		proofbound.BoundedMul(proofbound.BoundedMul(aU, aV), area),
-	)
-	ivv := proofbound.BoundedAdd(
-		proofbound.BoundedSub(mvv, proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), aV), mv)),
-		proofbound.BoundedMul(proofbound.BoundedMul(aV, aV), area),
-	)
-	q := proofbound.BoundedAdd(
-		proofbound.BoundedMul(nU, proofbound.BoundedSub(mu, proofbound.BoundedMul(aU, area))),
-		proofbound.BoundedMul(nV, proofbound.BoundedSub(mv, proofbound.BoundedMul(aV, area))),
-	)
-	mzr := proofbound.BoundedAdd(
-		proofbound.BoundedAdd(
-			proofbound.BoundedMul(proofbound.BoundedMul(dU, nU), iuu),
-			proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.BoundedMul(dU, nV), proofbound.BoundedMul(dV, nU)), iuv),
-		),
-		proofbound.BoundedMul(proofbound.BoundedMul(dV, nV), ivv),
-	)
-	mrr := proofbound.BoundedAdd(
-		proofbound.BoundedAdd(
-			proofbound.BoundedMul(proofbound.BoundedMul(nU, nU), iuu),
-			proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.BoundedMul(nU, nV)), iuv),
-		),
-		proofbound.BoundedMul(proofbound.BoundedMul(nV, nV), ivv),
-	)
-	return q, mzr, mrr
-}
-
-// revolveAxisAdmitBandCharge is resolveAxisSide's own tol·Lz charge for a
-// LINEAR measurement (a cap's area, the centroid): tol is
-// ax.radialAdmitAllow, the proven worst-case depth resolveAxisSide's gate
-// admitted without proof, and Lz is ax.axialExtentUpper, the recorded
-// region's own axial reach. It is exactly zero wherever that gate proved the
-// region's radial minimum non-negative — every axis-aligned fixture in the
-// tree, since radialAdmitAllow is then zero — and otherwise bounds how far a
-// face built from the SNAPPED profile (revolve_axis.go's axisFrame.walk) can
-// diverge from a measurement integrated over the UNSNAPPED one: a cap's own
-// loop follows the snap, while its area is the Pappus engine's integral over
-// the recorded region, and the two disagree by at most the admitted band's
-// own width times the boundary's axial run.
-func revolveAxisAdmitBandCharge(ax axisFrame) float64 {
-	return proofbound.ProductUpper(ax.radialAdmitAllow, ax.axialExtentUpper)
-}
-
-// revolveAxisAdmitVolumeCharge is the volume's own share of the same
-// admitted band, 2π·tol²·Lz: the band is swept a full turn rather than read
-// once, so the material it can hide scales with tol² (a thin annulus of
-// radius and width both order tol) rather than tol.
-func revolveAxisAdmitVolumeCharge(ax axisFrame) float64 {
-	tol := ax.radialAdmitAllow
-	return proofbound.ProductUpper(proofbound.TwoPiUpper(), proofbound.ProductUpper(proofbound.ProductUpper(tol, tol), ax.axialExtentUpper))
-}
-
 // evalRevolve builds the analytic revolved body from the payload: side
 // surfaces of revolution per boundary segment, caps only for a partial
 // sweep, shared edges and vertices, and bounded mass measurements
@@ -438,7 +364,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
-	q, mzr, mrr := axisMoments(ig, rp.ax)
+	q, mzr, mrr := revolvemass.AxisMoments(ig, rp.ax.numeric())
 	// The snap's own share of each axis-frame moment, charged where the moment
 	// is read rather than back on the plane-local integrals it was composed
 	// from: ρ and z are what regionSnapAllow's envelopes were proven against,
@@ -492,7 +418,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// rp.ax.radialAdmitAllow is zero — every axis-aligned fixture — and
 		// otherwise this is what keeps the published cap area from claiming a
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
-		capAdmitAllow := revolveAxisAdmitBandCharge(rp.ax)
+		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper)
 		capStart = &Face{
 			surface:     Plane{Frame: startFrame},
 			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
@@ -633,7 +559,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		}
 	}
 	volume := proofbound.BoundedMul(q, sweep)
-	volume.Bound = proofbound.AbsSumUpper(volume.Bound, revolveAxisAdmitVolumeCharge(rp.ax))
+	volume.Bound = proofbound.AbsSumUpper(volume.Bound,
+		revolvemass.AdmitVolumeCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper))
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: exactnessOf(volume.Bound),
@@ -693,7 +620,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// bound's independent min: revolveCentroidGeometryBound knows nothing of
 	// resolveAxisSide's own uncertainty, so folding this charge in before the
 	// min would let a smaller geometry bound silently discard it.
-	centroidBound = proofbound.AbsSumUpper(centroidBound, revolveAxisAdmitBandCharge(rp.ax))
+	centroidBound = proofbound.AbsSumUpper(centroidBound,
+		revolvemass.AdmitBandCharge(rp.ax.radialAdmitAllow, rp.ax.axialExtentUpper))
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
@@ -1346,87 +1274,10 @@ func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.
 	return &den
 }
 
-// walkAxisMoment is the first moment ∫ρ ds of one boundary walk about the
-// axis — Pappus's first theorem reads the side face's area from it:
-// a straight walk's is its length times its mean radius (ρ is linear along
-// it), a circular walk's is the closed-form antiderivative over its angular
-// range, and an on-axis walk sweeps nothing.
-//
-// The straight arm's bound is composed bounded arithmetic over w's own
-// proven inputs — w.length with w.lengthBound (the sqrt bracket), w.startV/
-// w.endV with w.startVBound/w.endVBound (axisFrame.walk's re-expressed
-// radial coordinates) — so math.Min against the magnitude envelope can only
-// shrink the published bound, never widen it, following internal/proofbound/bounded.go's own
-// convention.
-//
-// The circular arm's held value is the axis-frame closed form (w.th0/
-// w.th1, math.Atan2 results with no enclosure of their own), and its bound
-// takes math.Min against circularAxisMomentInterval's rational-interval
-// closed form over the wall's own RECORDED segments (segs, moments_circular.go),
-// summed additively — a coalesced wall covers exactly one recorded segment
-// today (coalesceWalks never merges a circular kind), but the sum is written
-// for whatever a future coalescing rule hands it. A segment
-// circularAxisMomentInterval cannot bracket (an axis whose direction carries
-// a non-finite bound, a record no rational states) withholds the whole sum,
-// leaving the envelope as the only proof standing.
-func walkAxisMoment(w survey2d.SegmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) proofbound.BoundedScalar {
-	if kind == wallAxis {
-		return proofbound.BoundedScalar{}
-	}
-	if !w.IsCircular() {
-		meanRadius := proofbound.BoundedDiv(
-			proofbound.BoundedAdd(proofbound.MeasuredScalar(w.StartV, w.StartVBound), proofbound.MeasuredScalar(w.EndV, w.EndVBound)),
-			proofbound.ExactScalar(2),
-		)
-		result := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), meanRadius)
-		result.Bound = math.Min(result.Bound, proofbound.ConservativeValueError(result.Value, w.AxisMomentUpper))
-		return result
-	}
-	lo, hi := math.Min(w.Th0, w.Th1), math.Max(w.Th0, w.Th1)
-	dtheta := proofbound.BoundedSub(proofbound.ExactScalar(hi), proofbound.ExactScalar(lo))
-	cosDelta := proofbound.BoundedSub(proofbound.BoundedCos(proofbound.ExactScalar(lo)), proofbound.BoundedCos(proofbound.ExactScalar(hi)))
-	result := proofbound.BoundedMul(
-		proofbound.ExactScalar(w.Radius),
-		proofbound.BoundedAdd(
-			proofbound.BoundedMul(proofbound.ExactScalar(w.CV), dtheta),
-			proofbound.BoundedMul(proofbound.ExactScalar(w.Radius), cosDelta),
-		),
-	)
-	result.Bound = proofbound.ConservativeValueError(result.Value, w.AxisMomentUpper)
-	if enc, ok := circularAxisMomentTotal(segs, ax); ok {
-		result.Bound = math.Min(result.Bound, proofbound.IntervalFloatError(enc, result.Value))
-	}
-	return result
-}
-
-// circularAxisMomentTotal sums circularAxisMomentInterval over every recorded
-// segment a coalesced circular wall covers: the integral ∫ρ ds is additive
-// over the walk's own segments, so the wall's total moment enclosure is their
-// enclosures' sum. ok is false wherever any one segment's own bracket refuses
-// — a partial sum standing in for a segment the record cannot bracket would
-// publish a claim that segment never proved.
-func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
-	if len(segs) == 0 {
-		return proofbound.RatInterval{}, false
-	}
-	total, ok := circularAxisMomentInterval(segs[0], ax)
-	if !ok {
-		return proofbound.RatInterval{}, false
-	}
-	for _, seg := range segs[1:] {
-		enc, ok := circularAxisMomentInterval(seg, ax)
-		if !ok {
-			return proofbound.RatInterval{}, false
-		}
-		total = proofbound.IntervalAdd(total, enc)
-	}
-	return total, true
-}
-
 // This section is RevolveChain's own build (docs/surface-design.md §13.4):
 // the open chain's counterpart of evalRevolveContextWork/buildRevolveLoop
 // above, reusing rp.wallSurface, rp.capEdge, sideOriginsContext and
-// walkAxisMoment unchanged. It differs only in TOPOLOGY: n segments place
+// revolvemass.WallAxisMoment unchanged. It differs only in TOPOLOGY: n segments place
 // n+1 junctions with no wraparound, and neither cap face nor cap coedge
 // collection is ever built — a chain mints no cap.
 

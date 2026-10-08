@@ -575,7 +575,7 @@ or `±1`, which is the axis-aligned unplaced case. The axis frame contributes
 three terms. The first is its
 resolved direction and anchor's own proven displacement (`axisInPlane`'s
 `dUBound`/`dVBound`/`aUBound`/`aVBound`, already folded into the region's
-moments by `axisMoments`, and now into `Bounds` and the meridian
+moments by `revolvemass.AxisMoments`, and now into `Bounds` and the meridian
 minimum-radius survey the same way), and each of those four is the ROUNDING
 its own evaluation committed, proven over the rationals — never a magnitude
 envelope over the value it bounds, which for an anchor would grow with the

@@ -31,8 +31,3 @@ func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (proofbound.RatInte
 func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	return circularbounds.OffsetEndpointInterval(circularSegment(seg), rt, radiusOffset)
 }
-
-func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatInterval, bool) {
-	frame := circularbounds.NewAxisFrame(ax.aU, ax.aV, ax.aUBound, ax.aVBound, ax.dU, ax.dV, ax.dUBound, ax.dVBound)
-	return circularbounds.AxisMomentInterval(circularSegment(seg), frame)
-}
