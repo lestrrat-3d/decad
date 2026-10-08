@@ -122,8 +122,9 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 			require.NoError(t, err)
 			cup, err := box.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(box))), thickness, WithShellSense(tt.sense))
 			require.NoError(t, err)
-			cp, ok := cup.payload.(cupPayload)
+			record, ok := cup.payload.(cupPayload)
 			require.True(t, ok)
+			cp := record.view()
 			// offsetDelta is at least three times the reach, exactly.
 			reach := new(big.Rat).Quo(proofarith.FloatRat(cp.offsetDelta), big.NewRat(3, 1))
 			reach2 := new(big.Rat).Mul(reach, reach)

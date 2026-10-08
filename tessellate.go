@@ -426,7 +426,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateFaceted(ctx, b, fp, chord)
 	}
 	if cp, ok := b.payload.(cupPayload); ok {
-		return tessellateCup(ctx, b, cp, chord, verify)
+		return tessellateCup(ctx, b, cp.view(), chord, verify)
 	}
 	if sp, ok := b.payload.(stackedPrismPayload); ok {
 		return tessellateStacked(ctx, b, sp, chord, verify)
@@ -1003,7 +1003,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 // verify decides whether the area-slack and occupied-volume proofs at the end
 // of the build are composed at all; every audit and every face bound above
 // them runs at each level (docs/tessellation-design.md §1).
-func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, verify Verification) (*Mesh, error) {
+func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, verify Verification) (*Mesh, error) {
 	byRole := map[string]*Face{}
 	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {

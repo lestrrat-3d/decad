@@ -1375,9 +1375,12 @@
 5	0.01	TestSecondMomentsSemicircleBoundTightens
 5	0.01	TestSelectorResolutionIsDeterministic
 5	0.27	TestSheetSolidPairKernelCannotSettleStaysSuspect
+5	0.10	TestShellBothCapsHoledBands
+5	0.10	TestShellBothCapsHoledBandsVerify
 5	0.02	TestShellContextCancellationDuringAuditPreservesError
 5	0.04	TestShellCupHoledTessellateOutwardBox
 5	0.01	TestShellCupMinRadius
+5	0.10	TestShellCupTwoHolesThroughStack
 5	0.02	TestShellCupUndercutsBox
 5	0.01	TestShellCupWallContextCancellationDuringOffset
 5	0.03	TestShellTubeInwardBox

@@ -542,7 +542,7 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop LoopRecord) ([]survey2d.
 // displacement is zero; the pinch reading is always Exact zero. The theorem
 // consumes the payload's morphology, not caller input: it rebuilds and
 // audits the offset relation before trusting it.
-func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
+func cupWall(budget *proofbound.WorkBudget, cp cupView, alpha float64) (wallOutcome, error) {
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 	isCancellation := func(err error) bool {
 		return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
@@ -712,7 +712,7 @@ func cupWall(budget *proofbound.WorkBudget, cp cupPayload, alpha float64) (wallO
 // being a pocket, the pocket floor (shellCap) and the rims face the open end
 // and the kept cap (capStart) faces away from it, so their outward normals
 // are ±N by which side of the outer floor the open end lies on.
-func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
+func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
@@ -811,7 +811,7 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 // denoted arc and its start sits within that displacement of the denoted
 // circle, so every recorded radius is within offsetDelta of its denoted one
 // and the reading's bound takes it.
-func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
+func cupMinRadius(cp cupView) (radiusOutcome, bool) {
 	profile := ProfileRecord{Outer: cp.outer.Outer}
 	profile.Holes = append(profile.Holes, cp.outer.Holes...)
 	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
@@ -889,7 +889,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case revolvePayload:
 			out, err = revolveWall(budget, pl, cfg.AllowRad)
 		case cupPayload:
-			out, err = cupWall(budget, pl, cfg.AllowRad)
+			out, err = cupWall(budget, pl.view(), cfg.AllowRad)
 		case capBlendPayload:
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
@@ -966,7 +966,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case revolvePayload:
 			out = revolveUndercuts(b, pl, *cfg.Pull)
 		case cupPayload:
-			out = cupUndercuts(b, pl, *cfg.Pull)
+			out = cupUndercuts(b, pl.view(), *cfg.Pull)
 		case capBlendPayload:
 			out = capBlendUndercuts(b, pl, *cfg.Pull)
 		case brepPayload:
@@ -1021,7 +1021,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case revolvePayload:
 			out, ok = revolveMinRadius(pl)
 		case cupPayload:
-			out, ok = cupMinRadius(pl)
+			out, ok = cupMinRadius(pl.view())
 		case capBlendPayload:
 			out, ok = capBlendMinRadius(b, pl)
 		case brepPayload:

@@ -152,9 +152,9 @@ the rules leave to the byte budget.
 | `modify_options.go` | Reach options, their records, SX1 and the asymmetric reference (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell audit orchestration over `internal/sectionaudit/`. See modify §5. |
-| `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
+| `shell.go` | `Body.Shell` offsets a prism into a tube, cup or band group. See modify §8. |
 | `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
-| `shell_cup.go` | `cupPayload`/`evalCup`, the one-cap shell body. See modify §9, §12 D6. |
+| `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See `docs/brep-modify-design.md`. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, the end-face blends, trims, blend faces and closure. See brep-modify §5. |

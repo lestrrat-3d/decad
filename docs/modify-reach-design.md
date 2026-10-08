@@ -100,11 +100,11 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Never both classes in one call | base cap openings, with BX8 replacing base S12 after the stacked payload lands; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
+| **RX1** | `prismPayload` | base lateral junctions; OR every geometric edge of one or more complete cap loops. Never both classes in one call | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions only: a full-turn latitude `Circle3` or partial-turn junction `Arc3` | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
-| **RX5** | `cupPayload` during migration to `stackedPrismPayload` | base S3 | base S3 |
+| **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 
@@ -160,7 +160,7 @@ Gate order:
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10/SX16 |
 | 5. existence | base S4/S5/S18/S10; SX6/SX11 |
 | 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13/SX14/SX15 |
-| 7. payload | base S12 until `stackedPrismPayload` lands; BX8 handles that exact case afterward |
+| 7. payload | BX8 holds the `1 + k` bands where base S12 stood |
 
 The existence-first rule remains load-bearing. SX6 precedes SX7: an empty
 offset means no regular rolling-ball surface; intersecting valid patches mean
@@ -912,9 +912,10 @@ axial slab may contain several disconnected regions. `docs/stacked-prism-design.
 owns the payload: its record (`prismSlab`, `prismSlabInterface`,
 `stackedPrismPayload`), its invariants, its body build, its measurements, its
 tessellation and what every consumer does with it. The analytic blind `Cut`
-builds it today, over slabs of one region each and interfaces whose exposed
-material is each exclusive hole's own interior. The rules below are the shell
-cases this section adds on top of that record.
+builds it over slabs of one region each and interfaces whose exposed material
+is each exclusive hole's own interior. The rules below are the shell cases
+this section adds on top of that record: the cup and BX8 build slabs of
+several regions.
 
 Slab intervals are ordered, have positive height, and have disjoint interiors.
 Consecutive intervals meet at exactly one axial plane. Region interiors within
@@ -943,13 +944,34 @@ Mass properties are bounded sums of all region-prism integrals. Bounds compose
 from the slab-region bounds. Tessellation chords a section curve once per
 shared carrier and triangulates exposed planar differences.
 
-Existing `cupPayload` migrates to this payload before RX1 side/no-opening shell
-lands. The migration changes evaluator storage only, not public
-topology. A cup over a section with `k` holes becomes one floor slab containing
-`P` inward or `Q` outward, plus one wall slab containing the outer band and `k`
-hole-lining bands as separate regions. Every wall region has positive-area
-overlap with the floor region, so the component graph still proves exactly one
-lump. The interface partition emits the remaining cavity-floor face once.
+A cup's record is this payload. A cup over a section with `k` holes is one
+floor slab containing `P` inward or `Q` outward, plus one wall slab containing
+the outer band and `k` hole-lining bands as separate regions. Every wall region
+has positive-area overlap with the floor region, so the component graph proves
+exactly one lump. The interface partition — `docs/stacked-prism-design.md`
+§2.2's lining reading — emits the remaining cavity-floor face once, and records
+it as the cavity region itself.
+
+The cup keeps its own payload type, `cupPayload`, which holds that stacked
+record beside the shell morphology payload verification §4.1 reads: the
+thickness, its conversion displacement, the offset region's proven
+displacement and the sense. The stacked build makes the body under the cup's
+own roles (modify Table B, B5/B6) and face order, so public topology is the
+cup's. Every cup consumer — the wall, undercut and minimum-radius surveys,
+interference, the tessellator, mass properties, the tolerance gate — reads a
+view of the cup that the record re-derives from its slabs, and answers as
+before. A distinct type keeps every reader that dispatches on
+`stackedPrismPayload` — the analytic booleans, the mirror join, a pattern, the
+brep face view — from treating a cup as a boolean-built stack: RX5 stays base
+S3.
+
+The offset region's loops — the cavity's inward, the outer region's outward —
+carry the cup's offset displacement column by column, not as the payload-wide
+`sectionDelta`, which stays zero: the receiver's own loops are its exact
+section, and charging them the offset's displacement would widen every reading
+of the receiver's own walls. A migrated cup's readings agree with the
+two-prism formulas `A_O·h_O − A_C·h_C` within the published bounds, which are
+the same order and often tighter.
 
 ### 9.2 Side-opening section
 
@@ -993,7 +1015,12 @@ For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
 band between each paired hole loop in `ProfileRecord` order. The base
 S18/S10/S11/§5 gates prove those bands are regular and pairwise disjoint before
-payload construction. The resulting `1 + k` connected components lift base S12
+payload construction. The slab is a prism group (`docs/stacked-prism-design.md`
+§2.2) whose disjointness is that audit's, not `provePrismRegionsDisjoint`'s: a
+hole lining lies inside the outer band's own hole, which a scene of outers alone
+would read as nesting. The offset loops sit within the offset displacement of
+the offset the thickness denotes, and the group carries it as its
+`sectionDelta`. The resulting `1 + k` connected components lift base S12
 without admitting holed side-opening or no-opening shells.
 
 ### 9.3 Revolve shell
@@ -1402,7 +1429,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 |---|---|---|
 | **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; the asymmetric chamfer of a brep or stacked receiver (SX16); all SX9/SX10 |
 | **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
-| **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
+| **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
+| **C2** | closed + side-opening prism shell (BX4/BX5); their tessellation/clearance cases | revolve side opening; cap loops |
+| **C3** | revolve shell side opening, full and partial turn (§9.3) | cap loops |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn, is S2 until C's §9.2 wall section lands; cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 

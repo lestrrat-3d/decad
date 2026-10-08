@@ -551,8 +551,8 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 // capBlendPayload reads pl.profile, the receiver's own unrewritten section on
 // its unchanged interval: a cap-loop chamfer only ever cuts along a chord
 // whose feet sit on the receiver's own recorded walls, so it can never place
-// a point beyond the receiver's own extruded envelope. cupPayload reads
-// pl.outer, the cup's own outer region — the receiver's unmodified section
+// a point beyond the receiver's own extruded envelope. cupPayload reads its
+// view's outer, the cup's own outer region — the receiver's unmodified section
 // for an INWARD shell, but the wider OFFSET (expanded) region for an OUTWARD
 // one, since an outward shell adds material and cupPayloadFor
 // (shell_cup.go) always assigns the wider of the two profiles to outer
@@ -599,8 +599,9 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 		}
 		return witness, witness.axialDelta(), true
 	case cupPayload:
-		witness := pl.outerPrism()
-		witness.profile = pl.outer
+		cup := pl.view()
+		witness := cup.outerPrism()
+		witness.profile = cup.outer
 		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
 		witness.sectionDelta = 0
 		return witness, displacement, true

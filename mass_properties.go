@@ -97,7 +97,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
-		result, err := cupMassProperties(ctx, b, cup, density)
+		result, err := cupMassProperties(ctx, b, cup.view(), density)
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)

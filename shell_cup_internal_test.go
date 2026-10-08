@@ -1,7 +1,9 @@
 package decad
 
 import (
+	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -92,15 +94,18 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //
 // Legs shown to fail (each deleted, the fixture watched go red, then
 // restored):
-//   - displacedRegionIntegrals' area term: the inward Volume, the shellCap
-//     area and the outward capStart area miss.
-//   - displacedRegionIntegrals' moment term: the wide cavity's Centroid
-//     misses (TestDisplacedCupCentroidMoment).
-//   - The rim's loopDisplacementArea: the rim area misses.
-//   - The offset region prism's sectionDelta (cupPayload.cavityPrism and
-//     outerPrism): the inward Area misses through the cavity perimeter, and
-//     the outward Bounds miss.
-//   - extentAlong's offset term: the outward extent misses.
+//   - stackedRegionPart's column-displacement area term: the Volume and the
+//     rim area miss, inward and outward.
+//   - stackedRegionPart's column-displacement moment term: the wide
+//     cavity's Centroid misses (TestDisplacedCupCentroidMoment).
+//   - stackedPatchArea's per-loop column term: the inward shellCap area
+//     misses.
+//   - The column's own section displacement in the stacked wall build
+//     (cupPlan.columnDelta into buildLoopSidesAs): each offset wall face's
+//     area misses, inward and outward.
+//   - stackedBoundsContext's outer-run displacement: the outward Bounds
+//     miss.
+//   - cupView.extentAlong's offset term: the outward extent misses.
 //   - The cup gate witness's offset term (verify_gate.go): the outward gate
 //     diameter exceeds the smallest denoted cup's.
 //   - The interference guard (interference.go): two equal displaced records
@@ -115,11 +120,11 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 
 const cupOffsetDelta = 1.0 / 1024
 
-func displacedCup(t *testing.T, sense ShellSense) cupPayload {
+func displacedCup(t *testing.T, sense ShellSense) cupView {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	cp := cupPayload{
+	cp := cupView{
 		outer:  rectangleRecord(-8, -4, 8, 4),
 		cavity: rectangleRecord(-6, -2, 6, 2),
 		frame:  frame,
@@ -135,7 +140,7 @@ func displacedCup(t *testing.T, sense ShellSense) cupPayload {
 }
 
 // evalDisplacedCup builds a fixture cup in a document of its own.
-func evalDisplacedCup(cp cupPayload) (*Body, error) {
+func evalDisplacedCup(cp cupView) (*Body, error) {
 	d := New()
 	return evalCup(d, d.nextProducerID(), cp)
 }
@@ -232,6 +237,27 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			require.NoError(t, err)
 			lo, hi, extentDelta, err := cp.extentAlong(r3.NewVec(1, 0, 0))
 			require.NoError(t, err)
+			// The offset region's own wall faces: cavity walls inward, outer walls
+			// outward, each over that region's height.
+			wallPrefix, wallHeight := "shellSide(", cp.zOpen-cp.zCav
+			if sense == Outward {
+				wallPrefix, wallHeight = "side(", cp.zOpen-cp.zOuter
+			}
+			type offsetWall struct {
+				area   Measurement
+				alongU bool
+			}
+			var offsetWalls []offsetWall
+			for _, f := range body.Faces() {
+				if !strings.HasPrefix(f.origins[0].Role, wallPrefix) {
+					continue
+				}
+				a, err := f.Area()
+				require.NoError(t, err)
+				n := f.surface.(Plane).Frame.N()
+				offsetWalls = append(offsetWalls, offsetWall{area: a, alongU: math.Abs(n.Y) > 0.5})
+			}
+			require.Len(t, offsetWalls, 4)
 
 			cupFamily(base, func(walls [4]*big.Rat) {
 				outer := [4]*big.Rat{big.NewRat(-8, 1), big.NewRat(8, 1), big.NewRat(-4, 1), big.NewRat(4, 1)}
@@ -252,6 +278,14 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 				})
 				requireRatCovered(t, rim, new(big.Rat).Sub(rectArea(outer), rectArea(cavity)))
 				requireRatCovered(t, capArea, rectArea(walls))
+				// A wall normal to v runs along u, so its length is u1 − u0.
+				for _, w := range offsetWalls {
+					length := new(big.Rat).Sub(walls[3], walls[2])
+					if w.alongU {
+						length = new(big.Rat).Sub(walls[1], walls[0])
+					}
+					requireRatCovered(t, w.area, new(big.Rat).Mul(length, new(big.Rat).SetFloat64(wallHeight)))
+				}
 				// Two caps' worth of the outer area (kept cap, plus rims and
 				// pocket floor together), then each region's walls over its height.
 				perimeter := func(w [4]*big.Rat) *big.Rat {

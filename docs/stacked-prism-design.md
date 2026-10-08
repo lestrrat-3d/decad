@@ -5,8 +5,9 @@ plane, and the two constructions that build it — a blind `Cut` of a straight
 prism by a same-plane prism tool whose sweep ends inside the target, and a
 `Union` of two co-directional prisms or stacked prisms whose sweep intervals
 overlap or touch without being equal (`docs/general-boolean-design.md` §3 A1).
-`docs/modify-reach-design.md` §9.1 names this payload as the record a general
-prism shell will migrate to; this document owns the payload itself (its record,
+`docs/modify-reach-design.md` §9.1 records the prism shells on it — the cup
+and the both-caps shell of a holed section (§2.4); this document owns the
+payload itself (its record,
 its invariants, how its body is built and measured, how it tessellates, and
 what every consumer does with it), and `docs/prism-boolean-design.md` owns the
 boolean admission that produces one. References of the form "core §N" are to
@@ -45,7 +46,7 @@ different heights.
 
 ```go
 type prismSlab struct {
-    regions          []ProfileRecord // one region today (§2.2)
+    regions          []ProfileRecord // one region, or several under §2.2's group and lining readings
     z0, z1           float64         // evaluator coordinates on the frame's normal
     z0Delta, z1Delta float64         // each level's proven axial displacement
 }
@@ -88,12 +89,12 @@ evaluator does not build — never repaired.
 | # | Invariant | Sentinel |
 |---|---|---|
 | I1 | At least two slabs, or one slab holding two or more regions (a prism group, below). A one-slab stack with one region is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
-| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built. (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`, as `evalCup` refuses one.) | `ErrUnsupported` |
+| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built, and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
 | I6 | Each interface is **monotone**: every hole of the lower region either equals (`loopRecordsEqual`) a hole of the upper region or is lower-only; every hole of the upper region either equals a hole of the lower region or is upper-only; and lower-only and upper-only holes do not both exist at one interface. | `ErrUnsupported` |
-| I7 | `interfaces[i].lowerExposed` holds exactly one record per upper-only hole — `{Outer: reverse(hole)}` — and `upperExposed` one per lower-only hole, the same way. The audit re-derives both lists from the two regions and compares them record for record. | `ErrDegenerate` |
+| I7 | `interfaces[i].lowerExposed` holds exactly one hole-free record per upper-only hole, in order, whose outer is that hole reversed, and `upperExposed` one per lower-only hole, the same way. Reversal rebuilds each segment from its walk, so the audit accepts either spelling of "reversed": the record's outer equals `reverse(hole)`, which is what a cut writes, or `reverse(outer)` equals the hole, which is what a shell writes, keeping the offset loop it built the hole from. | `ErrDegenerate` |
 
 I6 is what lets the interface be recorded without a planar boolean. The material
 on both sides of the plane is the narrower region; the exposed material is each
@@ -123,6 +124,24 @@ The audit checks the records the union reading names. The nesting itself is
 proven once, by the match that built the union, as I6's monotone holes are
 proven by the cut that built them.
 
+An interface where one side holds several regions takes the **lining
+reading**. It is what a shell's floor and wall slabs meet at (§2.4): the wide
+side holds one region `W` with `k` holes, and the narrow side holds the
+`1 + k` bands that line `W`'s loops.
+
+| # | Lining reading | Sentinel |
+|---|---|---|
+| I5 | Exactly one side holds one region `W`; the other holds `1 + k` regions, `k` the number of `W`'s holes. The first narrow region's outer is `W`'s outer and it has exactly one hole; narrow region `m >= 1` has exactly one hole, `W`'s hole `m - 1` | `ErrUnsupported` |
+| I6 | Only `W`'s side records exposed material | `ErrDegenerate` |
+| I7 | That side holds exactly one record: its outer is the first narrow region's hole reversed and its holes, in order, are every other narrow region's outer reversed, each reversal in either spelling | `ErrDegenerate` |
+
+That every narrow region lies in `W` and that the narrow regions are pairwise
+disjoint is proven when the shell builds them, by the offset section's audit
+(`docs/modify-design.md` §5); the audit here compares records. Each narrow
+region's own loop — the first one's hole, every other one's outer — has no
+equal loop on the wide side, so its column starts or ends at the interface,
+and the one exposed patch reads those columns' rings there.
+
 A **prism group** (`docs/mirror-pattern-design.md` §6.3) is one slab holding
 two or more regions, each a separate lump over the slab's interval. It has
 no interface, so I3 is its only level rule and I4–I7 do not apply. The audit
@@ -136,7 +155,8 @@ such loops builds one (`docs/general-boolean-design.md` §3 A5).
 ### 2.3 Loop columns
 
 A **column** is one loop record over a maximal run of consecutive slabs that
-all carry it (I5 and I6 make "carry it" a `loopRecordsEqual` question). In a
+all carry it, in whichever region of each slab holds it (I5 and I6 make
+"carry it" a `loopRecordsEqual` question). In a
 cut-built stack the outer loop is one column over every slab. A union-built
 stack has one outer column per run of slabs that share an outer record: a
 boss's wall is one column over the slabs the boss alone reaches, and a plate's
@@ -148,14 +168,36 @@ build and the tessellator both read it, so a wall is one face however many
 slabs it crosses — evaluator §3's canonicalization rule — and both consumers
 name the same face by the same role.
 
-A column records its loop, the slab it starts in, that loop's index in that
-slab's region, its sweep interval `[z0, z1]` (the first slab's `z0` to the last
+A column records its loop, the slab it starts in, the region holding the loop
+there and the loop's index in that region, its sweep interval `[z0, z1]` (the first slab's `z0` to the last
 slab's `z1`) and the two levels' displacements.
+
+### 2.4 Shell records
+
+`Shell` (`docs/modify-reach-design.md` §9) records two results on this
+payload, with `O` the shell's outer region and `C` its cavity region: `P` and
+its offset `Q` inward, `Q` and `P` outward. Its wall bands are the band between
+`O`'s outer and `C`'s outer (`C`'s outer reversed as its one hole), then, per
+hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
+`i`.
+
+| Result | Record |
+|---|---|
+| both caps removed, `k >= 1` holes (reach BX8) | a prism group: one slab over the receiver's sweep holding the `1 + k` bands; `sectionDelta` is the offset's proven displacement |
+| one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
+
+A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` holds
+the record beside its shell morphology, and its consumers read the cup's own
+view of it (reach §9.1). Its offset loops carry the offset displacement column
+by column (§4).
 
 ## 3. Topology and roles
 
 `evalStackedContext` builds the body under the boolean's own private producer
-identity, after `falsifyStackedPayload`:
+identity, after `falsifyStackedPayload`. It builds through the payload's own
+naming plan; a cup builds the same record through its own plan
+(`stackedPlan`), which mints the cup's roles (modify Table B) and states each
+column's displacement:
 
 | Face | Built from | Surface | Role |
 |---|---|---|---|
@@ -206,6 +248,17 @@ needed.
 | `Bounds` | the union of `prismBoundsContext` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
 | `extentAlong` | the extreme over every outer run's reading |
 | `axialDelta` | the largest level displacement over every slab |
+
+A column whose plan states a displacement (a cup's offset loop, §2.4) builds
+its walls with that displacement added to `sectionDelta`, so its vertices,
+lengths and face areas carry it; each region holding the loop adds
+`sectionDisplacementArea` over that loop alone to its area and widens its
+first moments by that area times the farthest coordinate the displaced
+boundary reaches, so the centroid quotient covers it; each planar patch the
+loop bounds adds the same area term; and every outer run whose outer loop is
+displaced reads its box with that displacement. The geometric centroid cap is
+then a ceiling (`math.Min`) on the covered formula answer. A zero column
+displacement adds no term, so a boolean-built stack's readings are unchanged.
 
 `Exactness` follows `exactnessOf` on each composed bound: a rectangular pocket in
 a rectangular plate drawn on one plane reports `Exact` volume with a zero bound;
@@ -310,7 +363,7 @@ change alone.
 Not planned here: a blind tool crossing the target's boundary (a side notch),
 whose per-slab walls split at the crossing and need column-wise edge splitting;
 `Fillet`/`Chamfer` on a stacked body (`docs/brep-modify-design.md` takes it
-through the face view); the cup migration of modify-reach §9.1.
+through the face view).
 
 ## 8. Required tests
 
