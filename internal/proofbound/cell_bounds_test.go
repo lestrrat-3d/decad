@@ -1,4 +1,4 @@
-package decad
+package proofbound_test
 
 import (
 	"fmt"
@@ -7,12 +7,57 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+// naiveNorm rounds each squared component before summing, so the fixtures
+// measure the error of this stated arithmetic on every architecture.
+func naiveNorm(v r3.Vec) float64 {
+	xx := float64(v.X * v.X)
+	yy := float64(v.Y * v.Y)
+	zz := float64(v.Z * v.Z)
+	return math.Sqrt(xx + yy + zz)
+}
+
+// ratOfFloat lifts the fixture's held float to its exact rational value.
+func ratOfFloat(x float64) *big.Rat {
+	r := new(big.Rat)
+	r.SetFloat64(x)
+	return r
+}
+
+// heldTrianglePairArea reads the two triangles of one held loft wall cell.
+func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	tri := func(a, b, c r3.Vec) float64 { return b.Sub(a).Cross(c.Sub(a)).Len() / 2 }
+	return tri(vLo, vHi, wHi) + tri(vLo, wHi, wLo)
+}
+
+// bilinearPatchAreaNumeric estimates the ruled patch's area on a fine grid.
+// The regression cases use it as a numerical reference, not an admission test.
+func bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	const nGrid = 400
+	const step = 1.0 / nGrid
+	total := 0.0
+	edgeA := vHi.Sub(vLo)
+	edgeB := wHi.Sub(wLo)
+	for i := range nGrid {
+		s := (float64(i) + 0.5) * step
+		a := vLo.Add(edgeA.Scale(s))
+		b := wLo.Add(edgeB.Scale(s))
+		rung := b.Sub(a)
+		for j := range nGrid {
+			r := (float64(j) + 0.5) * step
+			ds := edgeA.Scale(1 - r).Add(edgeB.Scale(r))
+			total += ds.Cross(rung).Len() * step * step
+		}
+	}
+	return total
+}
 
 func TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample(t *testing.T) {
 	t.Parallel()
@@ -715,9 +760,9 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 		for _, radius := range []float64{0.5, 5, 250} {
 			for _, sweep := range []float64{0.05, math.Pi / 2, 2 * math.Pi} {
 				for _, target := range []float64{1e3, 1, 1e-2, 1e-5} {
-					w := circularWalk(0, 0, radius, 0, sweep, radius, sweep)
+					w := boundarywalk.CircularWalk(0, 0, radius, 0, sweep, radius, sweep)
 					w.Closed = sweep >= 2*math.Pi
-					n, _, err := chordCount(w, target, chordWalkMin(w))
+					n, _, err := tessellation.ChordCount(w, target, tessellation.ChordWalkMin(w))
 					require.NoError(t, err)
 					cell := sweep / float64(n)
 					require.LessOrEqualf(t, cell, math.Pi,
@@ -738,7 +783,7 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 		for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170, 180} {
 			theta := sweepDeg * math.Pi / 180
 			trueSagitta := 2 * radius * math.Sin(theta/4) * math.Sin(theta/4)
-			bound := chordSagitta(radius, theta, 1)
+			bound := tessellation.ChordSagitta(radius, theta, 1)
 			require.GreaterOrEqualf(t, bound, trueSagitta,
 				"sweep=%g: chordSagitta's own proven bound %.10g must enclose the true sagitta %.10g", sweepDeg, bound, trueSagitta)
 		}
