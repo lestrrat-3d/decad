@@ -86,11 +86,13 @@ func loopCoordinateUpper(loop LoopRecord, work *freeform.FreeformWork) (float64,
 //
 // Each Cone patch's moment flux bounds only the straight-ruled patch the
 // build holds, so the gap between it and the denoted miter locus is charged
-// here too, once per band beside delta's term: the summed chord-versus-locus
-// volume (capband.ChordLocusVolume, the volume term capBandVolume's patch
-// fluxes carry) times the same coordUpper widened by the largest patch radial
-// gap (docs/modify-reach-design.md §8.4). coordUpper is formed whenever
-// either term charges, not only when delta is positive.
+// here too, once per band beside delta's term: the summed volume of the
+// regions between each built patch and its denoted surface
+// (capband.ChordLocusVolume, which bounds the region's measure rather than the
+// signed gap capBandVolume's patch fluxes carry) times the same coordUpper
+// widened by the largest patch radial gap (docs/modify-reach-design.md §8.4).
+// coordUpper is formed whenever either term charges, not only when delta is
+// positive.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure, work *freeform.FreeformWork) (mu, mv, mz proofbound.BoundedScalar, err error) {
 	setback := cbp.setbackAt(matSign)
 	capZB := cbp.capBandLevel(capZ, matSign)

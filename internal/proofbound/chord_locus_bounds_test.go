@@ -10,67 +10,175 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// chordLocusVolumeLower is ChordLocusVolumeAllow's own expression evaluated
-// as an exact LOWER bound: the flux difference and the two bounds exactly,
-// √(R0·R1) rounded down, sin(Φ/2) at the low end of its certified enclosure,
-// and every product and sum over rationals.
-func chordLocusVolumeLower(wide, wideBound, narrow, narrowBound, r0, r1, skew, area, corner float64) *big.Rat {
-	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
-	sum := new(big.Rat).Abs(new(big.Rat).Sub(rat(wide), rat(narrow)))
-	sum.Add(sum, rat(wideBound)).Add(sum, rat(narrowBound))
-	sin, _, ok := proofbound.RadSinCosInterval(new(big.Rat).Mul(rat(skew), big.NewRat(1, 2)))
-	if !ok {
-		return nil
+func ratOf(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+
+// chordLocusExcursionExact is ChordLocusBuiltExcursion's expression over
+// rationals: how far the built enclosure reaches past the interval the wide
+// and narrow enclosures span.
+func chordLocusExcursionExact(wide, wideBound, narrow, narrowBound, built, builtBound float64) *big.Rat {
+	w, wb, n, nb, b, bb := ratOf(wide), ratOf(wideBound), ratOf(narrow), ratOf(narrowBound), ratOf(built), ratOf(builtBound)
+	top := new(big.Rat).Sub(w, wb)
+	if alt := new(big.Rat).Sub(n, nb); alt.Cmp(top) > 0 {
+		top = alt
 	}
-	radial := new(big.Rat).Mul(rat(proofbound.RatSqrtDown(new(big.Rat).Mul(rat(r0), rat(r1)))), sin.Lo)
-	deviation := new(big.Rat).Add(radial, new(big.Rat).Mul(rat(math.Max(r0, r1)), rat(skew)))
-	swept := new(big.Rat).Mul(deviation, rat(area))
-	sum.Add(sum, swept.Mul(swept, big.NewRat(3, 1)))
-	return sum.Add(sum, rat(corner))
+	bottom := new(big.Rat).Add(w, wb)
+	if alt := new(big.Rat).Add(n, nb); alt.Cmp(bottom) < 0 {
+		bottom = alt
+	}
+	above := new(big.Rat).Sub(new(big.Rat).Add(b, bb), top)
+	below := new(big.Rat).Sub(bottom, new(big.Rat).Sub(b, bb))
+	out := new(big.Rat)
+	if above.Cmp(out) > 0 {
+		out = above
+	}
+	if below.Cmp(out) > 0 {
+		out = below
+	}
+	return out
 }
 
-// TestChordLocusVolumeAllowRoundsOutward checks the chord-versus-locus term
-// is never below its own expression evaluated exactly, over a randomized sweep
-// of radii, skews below a quarter turn, areas, flux pairs and corner fluxes,
-// and that a skew or corner flux it cannot read refuses rather than reading
-// zero. A zero skew still charges the corner flux.
+// envelopeSlackExact is |wide − narrow| + wideBound + narrowBound over
+// rationals.
+func envelopeSlackExact(wide, wideBound, narrow, narrowBound float64) *big.Rat {
+	sum := new(big.Rat).Abs(new(big.Rat).Sub(ratOf(wide), ratOf(narrow)))
+	return sum.Add(sum, ratOf(wideBound)).Add(sum, ratOf(narrowBound))
+}
+
+// TestChordLocusVolumeAllowRoundsOutward checks the chord-versus-locus flux
+// term is never below its own expression evaluated exactly, |W − N| plus both
+// reference bounds plus the built excursion ε plus the corner flux, over a
+// randomized sweep that draws the built flux inside the reference interval,
+// past either end of it, and with the two references in either order (a
+// clockwise-walked patch negates all three). Rows with the built flux past
+// an end must charge that excursion on top of the envelope, and an input it
+// cannot read must refuse rather than read zero.
 //
-// Shown to fail: the non-finite rows fail against the previous form, which
-// answered 0 for a non-finite skew. On 2026-10-09 the sweep failed with the
-// corner flux left out of the sum, and the zero-skew corner row failed with
-// the zero-skew return answering 0. No row of the sweep went below the exact
-// expression with the previous float evaluation either (200000 draws: its
-// final upward rounding of the sum covered the uncharged square root, sine
-// and product); the sweep pins that the outward-rounded form keeps it so.
+// Shown to fail on 2026-10-09: with ε left out of the sum, the excursion rows
+// and the sweep's outside draws fall below the exact expression; with the
+// excursion taken against [N, W] in that order only, the negated inside row
+// charges an excursion of 2 it does not have.
 func TestChordLocusVolumeAllowRoundsOutward(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(7, 11))
 	for range 2000 {
-		r0 := 0.5 + rng.Float64()*100
-		r1 := r0 * (0.25 + rng.Float64()*1.5)
-		skew := rng.Float64() * 1.5
-		area := rng.Float64() * 1e4
+		wide := (rng.Float64() - 0.5) * 1e6
+		narrow := wide * (1 - rng.Float64()*1e-3)
+		// built ranges from well below the interval to well above it.
+		built := narrow + (wide-narrow)*(rng.Float64()*3-1)
+		if rng.IntN(2) == 0 {
+			wide, narrow, built = -wide, -narrow, -built
+		}
+		wideBound, narrowBound, builtBound := rng.Float64()*1e-6, rng.Float64()*1e-6, rng.Float64()*1e-6
+		corner := rng.Float64() * 1e3
+		got := proofbound.ChordLocusVolumeAllow(wide, wideBound, narrow, narrowBound, built, builtBound, corner)
+		lower := envelopeSlackExact(wide, wideBound, narrow, narrowBound)
+		lower.Add(lower, chordLocusExcursionExact(wide, wideBound, narrow, narrowBound, built, builtBound))
+		lower.Add(lower, ratOf(corner))
+		require.GreaterOrEqual(t, ratOf(got).Cmp(lower), 0,
+			`wide=%v narrow=%v built=%v: %v is below the exact expression`, wide, narrow, built, got)
+	}
+
+	for _, tc := range []struct {
+		name                string
+		wide, narrow, built float64
+		excursion           float64
+	}{
+		{name: `inside`, wide: 10, narrow: 6, built: 8},
+		{name: `above the wide flux`, wide: 10, narrow: 6, built: 11, excursion: 1},
+		{name: `below the narrow flux`, wide: 10, narrow: 6, built: 4, excursion: 2},
+		{name: `negated, inside`, wide: -10, narrow: -6, built: -8},
+		{name: `negated, below`, wide: -10, narrow: -6, built: -11, excursion: 1},
+	} {
+		eps := proofbound.ChordLocusBuiltExcursion(tc.wide, 0, tc.narrow, 0, tc.built, 0)
+		require.Equal(t, tc.excursion, eps, `%s: the excursion`, tc.name)
+		require.Equal(t, math.Abs(tc.wide-tc.narrow)+tc.excursion,
+			proofbound.ChordLocusVolumeAllow(tc.wide, 0, tc.narrow, 0, tc.built, 0, 0), `%s: the term`, tc.name)
+	}
+
+	require.Zero(t, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0), `three equal fluxes charge nothing`)
+	require.Equal(t, 0.5, proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0.5), `the corner flux is charged alone`)
+	for _, corner := range []float64{math.Inf(1), math.NaN(), -1} {
+		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 1, 0, corner), 1),
+			`a corner flux of %v states no bound`, corner)
+	}
+	for _, bad := range []float64{math.Inf(1), math.NaN(), -1} {
+		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 1, bad, 0), 1),
+			`a built bound of %v states no bound`, bad)
+		require.True(t, math.IsInf(proofbound.ChordLocusBuiltExcursion(1, bad, 1, 0, 1, 0), 1),
+			`a wide bound of %v states no excursion`, bad)
+	}
+	require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(math.NaN(), 0, 1, 0, 1, 0, 0), 1),
+		`a flux that does not lift states no bound`)
+}
+
+// TestChordLocusRegionAllowRoundsOutward checks the region term is never below
+// its own expression evaluated exactly, |W − N| plus both bounds plus
+// 3·radius·skew·area plus the corner flux, over a randomized sweep, that a
+// zero skew charges the corner flux alone, and that an input it cannot read
+// refuses.
+//
+// Shown to fail on 2026-10-09: with the swept volume composed without its
+// factor 3 the sweep falls below the exact expression, and so does it with
+// the corner flux left out.
+func TestChordLocusRegionAllowRoundsOutward(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(19, 23))
+	for range 2000 {
 		wide := (rng.Float64() - 0.5) * 1e6
 		narrow := wide * (1 - rng.Float64()*1e-3)
 		wideBound, narrowBound := rng.Float64()*1e-6, rng.Float64()*1e-6
+		radius := 0.5 + rng.Float64()*100
+		skew := rng.Float64() * 1.5
+		area := rng.Float64() * 1e4
 		corner := rng.Float64() * 1e3
-		got := proofbound.ChordLocusVolumeAllow(wide, wideBound, narrow, narrowBound, r0, r1, skew, area, corner)
-		lower := chordLocusVolumeLower(wide, wideBound, narrow, narrowBound, r0, r1, skew, area, corner)
-		require.NotNil(t, lower)
-		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(lower), 0,
-			`r0=%v r1=%v skew=%v area=%v: %v is below the exact expression`, r0, r1, skew, area, got)
+		got := proofbound.ChordLocusRegionAllow(wide, wideBound, narrow, narrowBound, radius, skew, area, corner)
+		lower := envelopeSlackExact(wide, wideBound, narrow, narrowBound)
+		swept := new(big.Rat).Mul(new(big.Rat).Mul(ratOf(radius), ratOf(skew)), ratOf(area))
+		lower.Add(lower, swept.Mul(swept, big.NewRat(3, 1)))
+		lower.Add(lower, ratOf(corner))
+		require.GreaterOrEqual(t, ratOf(got).Cmp(lower), 0,
+			`radius=%v skew=%v area=%v: %v is below the exact expression`, radius, skew, area, got)
 	}
-
-	require.Zero(t, proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 10, 9, 0, 100, 0), `a zero skew charges nothing`)
-	require.GreaterOrEqual(t, proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 10, 9, 0, 100, 0.5), 0.5,
-		`a zero skew still charges the corner flux`)
-	for _, skew := range []float64{math.Inf(1), math.NaN()} {
-		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 10, 9, skew, 100, 0), 1),
+	require.Equal(t, 0.5, proofbound.ChordLocusRegionAllow(1, 0, 3, 0, 10, 0, 100, 0.5), `a zero skew charges the corner flux alone`)
+	for _, skew := range []float64{math.Inf(1), math.NaN(), -1} {
+		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(1, 0, 1, 0, 10, skew, 100, 0), 1),
 			`a skew of %v states no bound`, skew)
 	}
 	for _, corner := range []float64{math.Inf(1), math.NaN(), -1} {
-		require.True(t, math.IsInf(proofbound.ChordLocusVolumeAllow(1, 0, 1, 0, 10, 9, 0.1, 100, corner), 1),
+		require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(1, 0, 1, 0, 10, 0.1, 100, corner), 1),
 			`a corner flux of %v states no bound`, corner)
+	}
+	require.True(t, math.IsInf(proofbound.ChordLocusRegionAllow(1, 0, 1, 0, 10, 0.1, math.Inf(1), 0), 1),
+		`an unbounded area states no bound`)
+}
+
+// TestChordLocusHomotopyAreaUpperRoundsOutward checks the homotopy area bound
+// is never below radius·window·(radialGap + radius·skew + height) evaluated
+// exactly, and that an input it cannot read refuses.
+//
+// Shown to fail on 2026-10-09: with the radius·skew term left out of the
+// slant, the sweep falls below the exact expression.
+func TestChordLocusHomotopyAreaUpperRoundsOutward(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(29, 31))
+	for range 2000 {
+		radius := rng.Float64() * 100
+		window := rng.Float64() * 6.3
+		gap := rng.Float64() * 10
+		height := rng.Float64() * 1e3
+		skew := rng.Float64() * 1.5
+		got := proofbound.ChordLocusHomotopyAreaUpper(radius, window, gap, height, skew)
+		slant := new(big.Rat).Add(ratOf(gap), new(big.Rat).Mul(ratOf(radius), ratOf(skew)))
+		slant.Add(slant, ratOf(height))
+		exact := new(big.Rat).Mul(new(big.Rat).Mul(ratOf(radius), ratOf(window)), slant)
+		require.GreaterOrEqual(t, ratOf(got).Cmp(exact), 0,
+			`radius=%v window=%v gap=%v height=%v skew=%v: %v is below the exact expression`, radius, window, gap, height, skew, got)
+	}
+	for _, bad := range []float64{math.Inf(1), math.NaN(), -1} {
+		require.True(t, math.IsInf(proofbound.ChordLocusHomotopyAreaUpper(10, 1, 1, 1, bad), 1),
+			`a skew of %v states no bound`, bad)
+		require.True(t, math.IsInf(proofbound.ChordLocusHomotopyAreaUpper(bad, 1, 1, 1, 0.1), 1),
+			`a radius of %v states no bound`, bad)
 	}
 }
 

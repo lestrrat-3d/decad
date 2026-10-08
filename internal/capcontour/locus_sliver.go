@@ -104,10 +104,11 @@ func (h *LocusVelocityHull) Add(box Point) {
 // SliverUpper bounds |W| = |∫₀^dc (P(t) − Q(t)) dt| for every dc in
 // (0, span], given that the hull holds every velocity P'(t) the locus has for
 // t in [0, span]. Q is the chord from P(0) to P(dc) ridden at the same rate t,
-// so P(t) − Q(t) = ∫₀^t (P'(τ) − m) dτ = −∫_t^dc (P'(τ) − m) dτ, where m is
-// the chord's own velocity, the mean of P' over [0, dc]. Both P'(τ) and m
-// lie in the hull, so |P(t) − Q(t)| is at most min(t, dc − t) times the
-// hull's diagonal D, and |W| is at most D·dc²/4 ≤ D·span²/4. An empty hull
+// so ∫₀^dc Q dt = dc·(P(0) + P(dc))/2, and integrating ∫₀^dc P dt by parts
+// gives W = ∫₀^dc (dc/2 − τ)·P'(τ) dτ. The weight dc/2 − τ integrates to
+// zero, so W = ∫₀^dc (dc/2 − τ)·(P'(τ) − m) dτ for the hull's centre m too.
+// Every P'(τ) lies within half the hull's diagonal D of m, and |dc/2 − τ|
+// integrates to dc²/4, so |W| is at most D·dc²/8 ≤ D·span²/8. An empty hull
 // answers false.
 func (h LocusVelocityHull) SliverUpper(span float64) (float64, bool) {
 	rspan := proofarith.FloatRat(span)
@@ -121,7 +122,7 @@ func (h LocusVelocityHull) SliverUpper(span float64) (float64, bool) {
 		return 0, false
 	}
 	w := new(big.Rat).Mul(diag, new(big.Rat).Mul(rspan, rspan))
-	w.Quo(w, big.NewRat(4, 1))
+	w.Quo(w, big.NewRat(8, 1))
 	upper := proofbound.RatFloatUp(w)
 	if proofbound.IsNonFinite(upper) {
 		return 0, false

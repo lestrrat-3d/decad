@@ -11,18 +11,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRawFluxChargesTheProvenCornerSkew checks the chord-versus-locus term
-// reads the patch's proven corner skews, not the difference of its two held
-// windows. Here the held windows coincide to the last bit, which is what two
-// float Atan2 readings can return for corner ends whose exact angle differs,
-// and the proven skews are positive. The flux bound must carry at least the
-// swept-volume part of the term at the larger proven skew, three times
-// SweptVolumeAllow(maxRadius·Φ, area).
+// TestChordLocusVolumeChargesTheProvenCornerSkew checks the region term the
+// first moment reads (capband.ChordLocusVolume) reads the patch's proven
+// corner skews, not the difference of its two held windows. Here the held
+// windows coincide to the last bit, which is what two float Atan2 readings can
+// return for corner ends whose exact angle differs, and the proven skews are
+// positive. The volume must carry at least the swept part of the region term
+// at the larger proven skew, SweptVolumeAllow(maxRadius·Φ, area), with the
+// area the one capband.ChordLocusHomotopyArea bounds for every surface
+// between the wide sector and the built patch.
 //
-// Shown to fail: with chordLocusResidualAllow reading max(capTh0 − th0,
-// th1 − capTh1) again, both bounds are equal and the skewed patch's carries
-// nothing for its skew.
-func TestRawFluxChargesTheProvenCornerSkew(t *testing.T) {
+// Shown to fail on 2026-10-09: with chordLocusRegionAllow reading
+// max(capTh0 − th0, th1 − capTh1) for the skew, the volume is zero, and with
+// proofbound.ChordLocusRegionAllow composing the swept volume without
+// scaling it by 3 to flux, the volume is a third of the swept term.
+func TestChordLocusVolumeChargesTheProvenCornerSkew(t *testing.T) {
 	t.Parallel()
 	base := capband.Patch{
 		Circular: true, SweepCCW: true,
@@ -33,17 +36,17 @@ func TestRawFluxChargesTheProvenCornerSkew(t *testing.T) {
 	skewed := base
 	skewed.SkewStart, skewed.SkewEnd = 3e-7, 5e-7
 
-	plain := capband.RawFlux(base)
-	charged := capband.RawFlux(skewed)
-	require.Equal(t, plain.Value, charged.Value, `the skew moves the bound, never the held flux`)
+	require.Equal(t, capband.RawFlux(base).Value, capband.RawFlux(skewed).Value, `the skew moves bounds, never the held flux`)
+	plain, _ := capband.ChordLocusVolume(base)
+	require.Zero(t, plain, `coinciding windows with zero skews charge nothing`)
 
-	area, areaBound := capband.AreaOf(skewed)
-	swept := proofbound.ProductUpper(3, proofbound.SweptVolumeAllow(
+	charged, _ := capband.ChordLocusVolume(skewed)
+	swept := proofbound.SweptVolumeAllow(
 		proofbound.ProductUpper(skewed.SideRadius, skewed.SkewEnd),
-		proofbound.AbsSumUpper(area, areaBound)))
+		capband.ChordLocusHomotopyArea(skewed))
 	require.Positive(t, swept)
-	require.GreaterOrEqual(t, charged.Bound, plain.Bound+swept*(1-1e-12),
-		`the skewed patch's flux bound %v carries the swept term %v on top of %v`, charged.Bound, swept, plain.Bound)
+	require.GreaterOrEqual(t, charged, swept*(1-1e-12),
+		`the skewed patch's region volume %v carries the swept term %v`, charged, swept)
 }
 
 // TestRawFluxChargesTheCornerFlux checks a Cone patch's chord-locus term
@@ -116,6 +119,144 @@ func TestAxisAnchoredLevelsKeepsTheExactHeight(t *testing.T) {
 				got.FloatString(30), want.FloatString(30))
 			require.LessOrEqual(t, math.Abs(side), math.Nextafter(capZ, math.Inf(1))-capZ,
 				`the side level %v must sit within an ulp of the height %v from zero`, side, capZ)
+		})
+	}
+}
+
+// ruledFluxAboutAxis integrates the flux P·(Pu × Pv) of the ruled surface
+// from the side arc (SideRadius over side0..side1 at level 0) to the cap arc
+// (CapRadius over cap0..cap1 at level CapZ − SideZ), both angles linear in u,
+// about the arc's axis at the side level. The integrand is a cubic in v and
+// smooth in u, so tensor Gauss-Legendre at n = 32 sits at float64 roundoff.
+func ruledFluxAboutAxis(g capband.Patch, side0, side1, cap0, cap1 float64, n int) float64 {
+	xs, ws := gaussLegendre(n)
+	as, ac := side1-side0, cap1-cap0
+	r0, r1, h := g.SideRadius, g.CapRadius, g.CapZ-g.SideZ
+	total := 0.0
+	for i, u := range xs {
+		ts, tc := side0+u*as, cap0+u*ac
+		sx, sy := r0*math.Cos(ts), r0*math.Sin(ts)
+		cx, cy := r1*math.Cos(tc), r1*math.Sin(tc)
+		dsx, dsy := -as*r0*math.Sin(ts), as*r0*math.Cos(ts)
+		dcx, dcy := -ac*r1*math.Sin(tc), ac*r1*math.Cos(tc)
+		for j, v := range xs {
+			px, py, pz := (1-v)*sx+v*cx, (1-v)*sy+v*cy, v*h
+			ux, uy := (1-v)*dsx+v*dcx, (1-v)*dsy+v*dcy
+			vx, vy, vz := cx-sx, cy-sy, h
+			nx, ny, nz := uy*vz, -ux*vz, ux*vy-uy*vx
+			total += ws[i] * ws[j] * (px*nx + py*ny + pz*nz)
+		}
+	}
+	return total
+}
+
+// homotopySurfaceArea integrates the area of H_λ = (1−λ)·W + λ·B, the
+// surface between a Cone patch's wide sector W (the side window on both
+// directrices) and its built ruled patch B, on their shared (u, v)
+// parametrisation.
+func homotopySurfaceArea(g capband.Patch, lambda float64, n int) float64 {
+	xs, ws := gaussLegendre(n)
+	as, ac := g.Th1-g.Th0, g.CapTh1-g.CapTh0
+	r0, r1, h := g.SideRadius, g.CapRadius, g.CapZ-g.SideZ
+	total := 0.0
+	for i, u := range xs {
+		ts, tc := g.Th0+u*as, g.CapTh0+u*ac
+		// The cap directrix of H_λ at u: R1·((1−λ)·e^{i·ts} + λ·e^{i·tc}).
+		cx := r1 * ((1-lambda)*math.Cos(ts) + lambda*math.Cos(tc))
+		cy := r1 * ((1-lambda)*math.Sin(ts) + lambda*math.Sin(tc))
+		dcx := r1 * (-(1-lambda)*as*math.Sin(ts) - lambda*ac*math.Sin(tc))
+		dcy := r1 * ((1-lambda)*as*math.Cos(ts) + lambda*ac*math.Cos(tc))
+		sx, sy := r0*math.Cos(ts), r0*math.Sin(ts)
+		dsx, dsy := -as*r0*math.Sin(ts), as*r0*math.Cos(ts)
+		for j, v := range xs {
+			ux, uy := (1-v)*dsx+v*dcx, (1-v)*dsy+v*dcy
+			vx, vy, vz := cx-sx, cy-sy, h
+			nx, ny, nz := uy*vz, -ux*vz, ux*vy-uy*vx
+			total += ws[i] * ws[j] * math.Sqrt(nx*nx+ny*ny+nz*nz)
+		}
+	}
+	return total
+}
+
+// TestChordLocusFluxTermCoversTheBuiltPatch checks the chord-versus-locus
+// flux term on a narrow window (R = 10, window 0.001 rad, dc = ds = 1, the
+// cap window trimmed 2e-4 rad at each corner) against quadratures of the
+// three fluxes it reads. Each enclosure must hold its quadrature, the built
+// flux must lie within the proven excursion ε of the interval between the
+// narrow and wide fluxes, and the term must cover the built flux's distance
+// from either end of that interval, since the denoted flux can sit at either
+// end. The wide and built patches end on different rulings, so W − B holds
+// both corner triangles, about ½·R0·R1·H·Φ each; a displacement-times-area
+// bound on |W − B| reaches under a hundredth of it here.
+//
+// Shown to fail on 2026-10-09: with ChordLocusVolumeAllow dropping the
+// |W − N| leg, the term falls below W − B; with ε left out of the
+// enclosure check, nothing changes here (ε is zero on this patch), which
+// TestChordLocusVolumeAllowRoundsOutward's excursion rows cover instead.
+func TestChordLocusFluxTermCoversTheBuiltPatch(t *testing.T) {
+	t.Parallel()
+	g := skewedPatch(t, 0.3, 0.301, 0, 2e-4)
+	g.SweepCCW = true
+	const n = 32
+
+	refW := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.Th0, g.Th1, n)
+	refN := ruledFluxAboutAxis(g, g.CapTh0, g.CapTh1, g.CapTh0, g.CapTh1, n)
+	refB := ruledFluxAboutAxis(g, g.Th0, g.Th1, g.CapTh0, g.CapTh1, n)
+	// quad absorbs the quadrature's float64 roundoff, far below every gap
+	// the test reads.
+	quad := 1e-12 * refW
+
+	wide, narrow, built := capband.ChordLocusFluxes(g)
+	for _, c := range []struct {
+		name string
+		got  proofbound.BoundedScalar
+		want float64
+	}{{`wide`, wide, refW}, {`narrow`, narrow, refN}, {`built`, built, refB}} {
+		require.LessOrEqual(t, math.Abs(c.got.Value-c.want), c.got.Bound+quad,
+			`the %s flux %v ± %v must enclose the quadrature %v`, c.name, c.got.Value, c.got.Bound, c.want)
+	}
+	require.Positive(t, refW-refB, `the built patch's corner rulings sit inside the wide sector's`)
+
+	eps := proofbound.ChordLocusBuiltExcursion(wide.Value, wide.Bound, narrow.Value, narrow.Bound, built.Value, built.Bound)
+	require.GreaterOrEqual(t, refB, math.Min(refN, refW)-eps-quad, `the built flux must lie within ε of the interval`)
+	require.LessOrEqual(t, refB, math.Max(refN, refW)+eps+quad, `the built flux must lie within ε of the interval`)
+
+	term := capband.ChordLocusFluxAllow(g)
+	worst := math.Max(refW-refB, refB-refN)
+	require.GreaterOrEqual(t, term, worst+quad,
+		`the term %v must cover the built flux's distance %v from either end of [N, W]`, term, worst)
+	t.Logf(`W − B = %v, B − N = %v, term = %v, ε = %v`, refW-refB, refB-refN, term, eps)
+}
+
+// TestChordLocusHomotopyAreaCoversEverySurface checks the area the region
+// term reads covers every surface on the homotopy from the wide sector to the
+// built patch, against a quadrature of each, on the narrow window of
+// TestChordLocusFluxTermCoversTheBuiltPatch and on a wide trimmed window.
+// The surface at λ = 0 is the wide sector, which spans the side window, so
+// the built patch's own area does not cover it.
+//
+// Shown to fail on 2026-10-09: with ChordLocusHomotopyArea answering the
+// built patch's capband.AreaOf value plus bound, the narrow window's λ = 0
+// row fails. The quarter turn's AreaOf bound carries a corner-skew allowance
+// large enough to cover its wide sector.
+func TestChordLocusHomotopyAreaCoversEverySurface(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name           string
+		th0, th1, trim float64
+	}{
+		{name: `narrow window`, th0: 0.3, th1: 0.301, trim: 2e-4},
+		{name: `trimmed quarter turn`, th0: 0, th1: math.Pi / 2, trim: 0.2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := skewedPatch(t, tc.th0, tc.th1, 0, tc.trim)
+			area := capband.ChordLocusHomotopyArea(g)
+			for _, lambda := range []float64{0, 0.25, 0.5, 0.75, 1} {
+				want := homotopySurfaceArea(g, lambda, 64)
+				require.GreaterOrEqual(t, area, want*(1-1e-12),
+					`at λ = %v the area bound %v must cover the surface's area %v`, lambda, area, want)
+			}
 		})
 	}
 }

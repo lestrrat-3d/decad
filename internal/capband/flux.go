@@ -258,16 +258,74 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 	return proofbound.MeasuredScalar(flux, bound)
 }
 
-// chordLocusResidualAllow gathers this ONE patch's own inputs to
-// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow: the two reference cone-sector fluxes
-// (the wide, side-window-only reading and the narrow, cap-window-only one —
-// both this same patchRawFlux formula, degenerate to the ordinary
-// rotationally-symmetric cone sector once a patch's two directrices share one
-// window), this patch's own held area, the surface internal/proofbound/bounds.go's
-// proofbound.SweptVolumeAllow needs, and its corner slivers' flux
-// (Patch.CornerFlux). Only that last term remains wherever both proven corner
-// skews are zero (an apex patch, and a join whose two directrix ends lie on
-// one ray from the centre).
+// chordLocusResidualAllow is this ONE patch's chord-versus-locus flux term,
+// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow over the
+// three fluxes chordLocusFluxes encloses about the arc's axis and the
+// patch's corner slivers' flux (Patch.CornerFlux). Only that last term
+// remains wherever both proven corner skews are zero (an apex patch, and a
+// join whose two directrix ends lie on one ray from the centre): the two
+// windows then coincide and the three fluxes are one.
+//
+// The skew is the larger of the two PROVEN corner skews (CornerSkewUpper):
+// the exact angle about the centre between each corner's side directrix end
+// and cap directrix end, read from the held points rather than from a
+// difference of two float Atan2 readings, which can understate it.
+func chordLocusResidualAllow(g Patch) float64 {
+	if math.Max(g.SkewStart, g.SkewEnd) <= 0 {
+		return proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, g.CornerFlux)
+	}
+	wide, narrow, built := chordLocusFluxes(g)
+	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
+		built.Value, built.Bound, g.CornerFlux)
+}
+
+// chordLocusRegionAllow is three times this ONE patch's bound on the volume
+// between the solid its built ruled surface bounds and the solid the denoted
+// miter locus bounds, internal/proofbound/bounds.go's
+// proofbound.ChordLocusRegionAllow: the wide and narrow fluxes
+// chordLocusFluxes encloses, a swept-volume term at the larger proven corner
+// skew over an area bound for every surface on the homotopy from the wide
+// sector to the built patch, and the corner slivers' flux.
+//
+// Every input carries its held allowance (Patch.Held): each radius is read at
+// its held magnitude plus its allowance, each window width at its held
+// width plus both of its ends' allowances, and the radial gap at the held
+// gap plus both radius allowances. The height is the exact difference of the
+// two held levels, the same height the three fluxes read.
+func chordLocusRegionAllow(g Patch) float64 {
+	skew := math.Max(g.SkewStart, g.SkewEnd)
+	if skew <= 0 {
+		return proofbound.ChordLocusRegionAllow(0, 0, 0, 0, 0, 0, 0, g.CornerFlux)
+	}
+	wide, narrow, _ := chordLocusFluxes(g)
+	radius, area := chordLocusHomotopyArea(g, skew)
+	return proofbound.ChordLocusRegionAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
+		radius, skew, area, g.CornerFlux)
+}
+
+// chordLocusHomotopyArea returns chordLocusRegionAllow's radius bound and its
+// proofbound.ChordLocusHomotopyAreaUpper at the corner skew skew.
+func chordLocusHomotopyArea(g Patch, skew float64) (float64, float64) {
+	radius := math.Max(
+		proofbound.AbsSumUpper(g.SideRadius, g.Held.SideRadius),
+		proofbound.AbsSumUpper(g.CapRadius, g.Held.CapRadius))
+	window := math.Max(
+		proofbound.AbsSumUpper(absDiffUpper(g.Th1, g.Th0), g.Held.Th0, g.Held.Th1),
+		proofbound.AbsSumUpper(absDiffUpper(g.CapTh1, g.CapTh0), g.Held.CapTh0, g.Held.CapTh1))
+	radialGap := proofbound.AbsSumUpper(absDiffUpper(g.CapRadius, g.SideRadius), g.Held.SideRadius, g.Held.CapRadius)
+	height := absDiffUpper(g.CapZ, g.SideZ)
+	return radius, proofbound.ChordLocusHomotopyAreaUpper(radius, window, radialGap, height, skew)
+}
+
+// chordLocusFluxes encloses the three fluxes
+// internal/proofbound/bounds.go's proofbound.ChordLocusVolumeAllow reads, each
+// through this same patchRawFlux formula: the wide sector over the side window
+// on both directrices, the narrow sector over the cap window on both, and the
+// built ruled patch between the two windows. All three are taken about the
+// arc's own axis at the side level (proofbound.ChordLocusVolumeAllow states
+// why): the centre moves to the plane-local origin and both levels shift down
+// by the side level. None of the three carries a corner skew or corner flux
+// of its own, so patchRawFlux charges none of them a chord-versus-locus term.
 //
 // g.CapTh0/g.CapTh1 and g.Th0/g.Th1 are not guaranteed to share a branch:
 // WallSweep anchors capTh0 at a raw Atan2, always in
@@ -275,48 +333,36 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 // turn away for a major-arc wall — the same corner, described a multiple of
 // 2*pi apart. capWindowOnBranch puts the cap window back on th0's own branch,
 // shifting capTh0 and capTh1 together so the window's WIDTH (capTh1-capTh0)
-// is untouched, before either is differenced against th0/th1 below; every
-// other reader of these two fields (patchAreaOf, patchRawFlux) only ever
-// takes a WITHIN-pair difference (a width), which a shared branch shift
-// cannot change, so this is the one site the mismatch reaches.
-func chordLocusResidualAllow(g Patch) float64 {
+// is untouched, before the narrow sector reads it as its side window too. The
+// built patch keeps the held windows: patchRawFlux reads the two windows only
+// through within-window widths and through sines and cosines, none of which a
+// whole-turn shift of one window changes.
+func chordLocusFluxes(g Patch) (wide, narrow, built proofbound.BoundedScalar) {
 	capTh0, capTh1 := capWindowOnBranch(g.CapTh0, g.CapTh1, g.Th0)
-	// windowSkewMax is the larger of the two PROVEN corner skews
-	// (CornerSkewUpper): the exact angle about the centre between each
-	// corner's side directrix end and cap directrix end, read from the held
-	// points rather than from a difference of two float Atan2 readings, which
-	// can understate it. It is zero only where both corners' ends lie on one
-	// ray from the centre — a tangent join drawn on an axis, an apex patch, or
-	// a whole turn whose seams align.
-	windowSkewMax := math.Max(g.SkewStart, g.SkewEnd)
-	if windowSkewMax <= 0 {
-		return proofbound.ChordLocusVolumeAllow(0, 0, 0, 0, 0, 0, 0, 0, g.CornerFlux)
-	}
-	// The two references are rotationally symmetric sectors, one window shared
-	// by both directrices, so neither has a corner skew of its own. Both are
-	// taken about the arc's own axis at the side level
-	// (proofbound.ChordLocusVolumeAllow states why): the centre moves to the
-	// plane-local origin and both levels shift down by the side level.
-	wideGeom, narrowGeom := g, g
-	sideZ, capZ := axisAnchoredLevels(g.SideZ, g.CapZ)
-	wideGeom.CU, wideGeom.CV, wideGeom.SideZ, wideGeom.CapZ = 0, 0, sideZ, capZ
-	narrowGeom.CU, narrowGeom.CV, narrowGeom.SideZ, narrowGeom.CapZ = 0, 0, sideZ, capZ
+	axisGeom := g
+	axisGeom.CU, axisGeom.CV = 0, 0
+	axisGeom.SideZ, axisGeom.CapZ = axisAnchoredLevels(g.SideZ, g.CapZ)
+	axisGeom.SkewStart, axisGeom.SkewEnd = 0, 0
+	axisGeom.CornerFlux = 0
+	wideGeom, narrowGeom := axisGeom, axisGeom
 	wideGeom.CapTh0, wideGeom.CapTh1 = g.Th0, g.Th1
 	narrowGeom.Th0, narrowGeom.Th1 = capTh0, capTh1
 	narrowGeom.CapTh0, narrowGeom.CapTh1 = capTh0, capTh1
-	wideGeom.SkewStart, wideGeom.SkewEnd = 0, 0
-	narrowGeom.SkewStart, narrowGeom.SkewEnd = 0, 0
-	// The references are whole sectors with no mitered corner of their own.
-	wideGeom.CornerFlux, narrowGeom.CornerFlux = 0, 0
 	// Each reference reads the window it takes with that window's own
 	// allowances on both directrices.
 	wideGeom.Held.CapTh0, wideGeom.Held.CapTh1 = g.Held.Th0, g.Held.Th1
 	narrowGeom.Held.Th0, narrowGeom.Held.Th1 = g.Held.CapTh0, g.Held.CapTh1
-	wide := patchRawFlux(wideGeom)
-	narrow := patchRawFlux(narrowGeom)
-	pa, pb := patchAreaOf(g)
-	return proofbound.ChordLocusVolumeAllow(wide.Value, wide.Bound, narrow.Value, narrow.Bound,
-		g.SideRadius, g.CapRadius, windowSkewMax, proofbound.AbsSumUpper(pa, pb), g.CornerFlux)
+	return patchRawFlux(wideGeom), patchRawFlux(narrowGeom), patchRawFlux(axisGeom)
+}
+
+// absDiffUpper is |a − b| taken exactly and rounded up. A non-finite input
+// answers +Inf.
+func absDiffUpper(a, b float64) float64 {
+	ra, rb := proofarith.FloatRat(a), proofarith.FloatRat(b)
+	if ra == nil || rb == nil {
+		return math.Inf(1)
+	}
+	return proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(ra, rb)))
 }
 
 // axisAnchoredLevels translates the two levels (sideZ, capZ) axially so the
@@ -595,6 +641,23 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
+
+// ChordLocusFluxes returns the wide, narrow and built fluxes a Cone patch's
+// chord-versus-locus term reads, about the arc's axis, with their bounds.
+func ChordLocusFluxes(g Patch) (wide, narrow, built proofbound.BoundedScalar) {
+	return chordLocusFluxes(g)
+}
+
+// ChordLocusFluxAllow returns a Cone patch's chord-versus-locus flux term.
+func ChordLocusFluxAllow(g Patch) float64 { return chordLocusResidualAllow(g) }
+
+// ChordLocusHomotopyArea returns the area bound a Cone patch's region term
+// reads for every surface between its wide sector and its built patch, at the
+// larger of its two corner skews.
+func ChordLocusHomotopyArea(g Patch) float64 {
+	_, area := chordLocusHomotopyArea(g, math.Max(g.SkewStart, g.SkewEnd))
+	return area
+}
 
 // AxisAnchoredLevels translates a band's two levels so the side level sits
 // next to zero with their exact difference kept.
