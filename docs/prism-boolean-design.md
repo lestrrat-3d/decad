@@ -405,9 +405,11 @@ profile whose `Outer` structurally reproduces target/A's original `Outer`
 additionally reproduce target's original holes plus **one new hole** that
 structurally reproduces tool/B's own `Outer` (also every edge `Whole`; G6
 keeps the tool hole-free, so that one hole is the tool's whole solid and no
-material inside a tool hole is dropped); for `Intersect` with B fully inside
-A, the match is B's own cell: its `Outer` and any admitted hole reproduce
-B's original loops. A structural match — entity identity, order, and `Whole`-ness, nothing
+material inside a tool hole is dropped); for `Intersect` with one operand fully inside the other
+(B inside A, or A inside B when B has no hole), a proof cell must exist first: its outer loop reproduces the
+enclosing operand's original `Outer` and its only hole reproduces the nested operand's original `Outer`. Exactly
+one direction must match. With the proof cell found, the match is the nested operand's own cell: its `Outer` and
+any admitted hole reproduce that operand's original loops. A structural match — entity identity, order, and `Whole`-ness, nothing
 geometric — is a pure data comparison against decad's own tag map. **When a
 unique such profile exists, it is not assembled at all: it is one of
 `s.Profiles()`'s own results, and is authenticated by handing it directly to
