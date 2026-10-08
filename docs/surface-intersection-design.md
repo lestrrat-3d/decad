@@ -544,9 +544,13 @@ Every product rounds outward through `ProductUpper` and every sum through
 **The per-walk readings** need to know WHICH coordinates moved. A trim moves
 only its cut ends, which §7.1's fold charges endpoint by endpoint. An offset
 construction moves every coordinate, which `revolvePayload.sectionWhole`
-states. Its premise is segment-wise: each recorded segment pairs with a denoted
+states. Its premise has two halves, and both are needed. Every recorded
+boundary point sits within `δ` of the denoted boundary and every denoted point
+within `δ` of the recorded one, which the band, the mesh's `+δ` and
+`SectionExtentAllow` read. Each recorded segment also pairs with a denoted
 segment of the same kind whose two ends, and an arc's centre, each sit within
-`δ`. Under it:
+`δ`, with the arc's sweep taken without a 2π wrap, which the per-walk terms
+below read. `offsetSectionDelta`'s figure meets both. Under it:
 
 - every walk takes §7.1's fold at BOTH ends with `(δ, δ)`, so a straight
   wall's area, every junction latitude and arc length, and every cap edge's
@@ -585,8 +589,9 @@ reads the reservation beside the two coordinate stages.
 exact and carry no term for its displacement refuse or answer `Suspect`, each on
 the displaced prism's own precedent: the clearance kernel builds no model
 (`addRevolveFaces`), so a pair holding the body is undecided and the tolerance
-gate's revolve arm is withheld; the wall and minimum-radius surveys are
-undecided; the sheet-validity leg reads no radial proof; equal records certify
+gate's revolve arm is withheld; the wall, minimum-radius and undercut surveys
+are undecided, the last because a planar wall recorded off a rounded miter
+tilts by an ulp and would read as opposing the pull; the sheet-validity leg reads no radial proof; equal records certify
 no interference; `Thicken`, a junction blend and a second shell refuse; and the
 general revolve's inertia path refuses, which falls back to the verified mesh.
 

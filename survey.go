@@ -393,6 +393,14 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 // wall's normal is n_ρ·radial(φ) + n_z·ŵ over the meridian range its walk
 // sweeps and the azimuth range of the sweep — both exact.
 func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
+	if rp.sectionDelta != 0 {
+		// The survey reads the recorded meridian's own tangents as exact, and a
+		// displaced meridian's tangents only sit within its displacement of the
+		// denoted ones: a planar wall recorded off a rounded miter tilts by an
+		// ulp and would list as an undercut. Undecided, which reads Suspect
+		// (docs/surface-intersection-design.md §7.2).
+		return undercutOutcome{}
+	}
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}

@@ -73,10 +73,12 @@ type revolvePayload struct {
 	xform         r3.Transform
 	surfaceResult bool
 	// sectionDelta is prismPayload's own §7 term over the MERIDIAN: the proven
-	// upper bound on how far any recorded meridian coordinate sits from the
-	// meridian its construction denotes, both ways, with each recorded segment
-	// paired with a denoted one of its kind whose ends (and an arc's centre)
-	// sit within it. The wall areas take it through
+	// upper bound on how far any recorded meridian point sits from the
+	// meridian its construction denotes, and any denoted point from the
+	// recorded one, both ways. Where sectionWhole is set it also states that
+	// each recorded segment pairs with a denoted one of its kind whose ends
+	// (and an arc's centre) sit within it, the arc's sweep taken without a 2π
+	// wrap. The wall areas take it through
 	// docs/surface-intersection-design.md §7.1's fold into the axis-coordinate
 	// walk, the box through extentBoundedAlong's fifth mechanism, and the
 	// solid's region readings — the Pappus volume, the centroid and a cap's
@@ -86,10 +88,11 @@ type revolvePayload struct {
 	sectionDelta float64
 	// sectionWhole says sectionDelta reaches every recorded coordinate — each
 	// segment's two ends and an arc's centre — as an offset construction's does
-	// (shell_revolve.go), rather than only the cut ends a trim records. The
-	// per-walk readings then charge every end, every vertex and every wall's
-	// denoted normal (§7.2); a cut construction leaves it false and charges its
-	// own cut ends through trimRevolveSegmentCharges.
+	// (shell_revolve.go), rather than only the cut ends a trim records, and
+	// that the segment-wise pairing above holds. The per-walk readings then
+	// charge every end, every vertex and every wall's denoted normal (§7.2); a
+	// cut construction leaves it false and charges its own cut ends through
+	// trimRevolveSegmentCharges.
 	sectionWhole bool
 	// radialProof belongs to this exact profile and resolved axis. A path
 	// replacing either must clear it; placement alone preserves both.

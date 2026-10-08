@@ -1116,3 +1116,4 @@
 3	0.01	TestRevolveSectionDisplacementNormal
 3	0.20	TestRevolveSectionDisplacementTessellates
 3	0.03	TestRevolveShellSectionDelta
+3	0.03	TestRevolveShellDisplacedUndercutUndecided

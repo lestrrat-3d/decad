@@ -87,3 +87,39 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 		})
 	}
 }
+
+func TestRevolveShellDisplacedUndercutUndecided(t *testing.T) {
+	t.Parallel()
+	// The meridian (0, 0), (30, 0), (20, 10), (0, 10) shelled 0.3 mm inward
+	// under WithNoOpenings: the cavity's base is recorded from a rounded miter,
+	// (0.30000000000000071, 9.7) to (0.3, 0), tilted about 7e-16 off the
+	// plane z = 0.3 it denotes. Read as exact, that tilt lists the planar
+	// cavity base as an undercut against a pull along the sketch's v axis. The
+	// undercut survey reads the recorded meridian's tangents, so over a
+	// displaced one it is undecided, as the wall survey is. Leg shown to fail
+	// before this fixture was accepted: dropping the survey's displacement
+	// gate lists the cavity base.
+	for _, tc := range []struct {
+		name   string
+		extent AngularExtent
+		opts   []ShellOption
+		faces  *FaceQuery
+		pull   r3.Vec
+	}{
+		{"full turn", FullRevolution{}, []ShellOption{WithNoOpenings()}, nil, r3.NewVec(0, 1, 0)},
+		{"half turn", AngleExtent{A: units.Degrees(180), Dir: Along}, nil, Faces(NormalTo(r3.NewVec(0, 0, 1))).Exactly(2), r3.NewVec(0, 0, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := shellMeridianBody(t, [][2]float64{{0, 0}, {30, 0}, {20, 10}, {0, 10}}, tc.extent)
+			shelled, err := body.Shell(t.Context(), tc.faces, units.Millimeters(0.3), tc.opts...)
+			require.NoError(t, err)
+			require.Positive(t, shelled.payload.(revolvePayload).sectionDelta)
+			report, err := shelled.doc.Verify(t.Context(), WithPullDirection(tc.pull))
+			require.NoError(t, err)
+			require.Equal(t, CoverageUndecided, report.Bodies[0].Undercut.Coverage)
+			require.Empty(t, report.Bodies[0].Undercut.Faces, `no face of a displaced meridian is listed as an undercut`)
+			require.Equal(t, Suspect, report.Status)
+		})
+	}
+}
