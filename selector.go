@@ -29,8 +29,9 @@ const (
 //
 // Resolution is a filter pipeline over the body's live topology
 // (docs/evaluator-design.md §7): gather (Body.Edges()/Faces()), apply each
-// predicate as a pure function of the analytic data, then enforce the
-// cardinality assertion. Matching is decided on what an entity IS — a
+// predicate as a pure function of the analytic data, keep an entity when
+// every predicate of at least one branch holds, then enforce the cardinality
+// assertion on the kept set. Matching is decided on what an entity IS — a
 // predicate that needs analytic identity an entity does not have simply does
 // not match it — and the result keeps the topology accessors' order.
 
@@ -70,37 +71,78 @@ type cardinality struct {
 	n    int
 }
 
-// EdgeQuery is the concrete edge selector: a conjunction of edge predicates
-// plus an optional cardinality assertion. Build one with Edges.
+// EdgeQuery is the concrete edge selector: a union of branches, each a
+// conjunction of edge predicates, plus an optional cardinality assertion over
+// the union. Build one with Edges and add branches with Or.
 type EdgeQuery struct {
-	preds []EdgePredicate
-	card  cardinality
+	// branches holds the conjunctions in query order: branches[0] is the
+	// clause list Edges took, and each Or appends one more. Only a zero-value
+	// query holds none, and it reads as Edges(): one empty branch.
+	branches [][]EdgePredicate
+	card     cardinality
 }
 
-// FaceQuery is the concrete face selector: a conjunction of face predicates
-// plus an optional cardinality assertion. Build one with Faces.
+// FaceQuery is the concrete face selector: a union of branches, each a
+// conjunction of face predicates, plus an optional cardinality assertion over
+// the union. Build one with Faces and add branches with Or.
 type FaceQuery struct {
-	preds []FacePredicate
-	card  cardinality
+	// branches holds the conjunctions in query order, as EdgeQuery's does.
+	branches [][]FacePredicate
+	card     cardinality
 }
 
 // Edges returns a query matching every edge that satisfies all of preds; no
 // predicates matches every edge. A query that matches nothing at resolve is
 // an error, loudly — ErrNoMatch, or ErrCardinality when asserted (core §9).
 func Edges(preds ...EdgePredicate) *EdgeQuery {
-	return &EdgeQuery{preds: slices.Clone(preds)}
+	return &EdgeQuery{branches: [][]EdgePredicate{slices.Clone(preds)}}
 }
 
 // Faces returns a query matching every face that satisfies all of preds; no
 // predicates matches every face. A query that matches nothing at resolve is
 // an error, loudly — ErrNoMatch, or ErrCardinality when asserted (core §9).
 func Faces(preds ...FacePredicate) *FaceQuery {
-	return &FaceQuery{preds: slices.Clone(preds)}
+	return &FaceQuery{branches: [][]FacePredicate{slices.Clone(preds)}}
+}
+
+// Or adds a union branch: the query then also matches every edge that
+// satisfies all of preds. An edge that several branches match is selected
+// once, in Body.Edges() order, and counts once toward Exactly or AtLeast,
+// which assert the size of the whole union whether they are called before or
+// after Or. An Or with no predicates matches every edge, as Edges() does. The
+// predicates are copied, so a later change to the caller's slice does not
+// reach the query. Or returns the receiver for chaining.
+func (q *EdgeQuery) Or(preds ...EdgePredicate) *EdgeQuery {
+	if len(q.branches) == 0 {
+		q.branches = [][]EdgePredicate{nil}
+	}
+	q.branches = append(q.branches, slices.Clone(preds))
+	return q
+}
+
+// Or adds a union branch: the query then also matches every face that
+// satisfies all of preds. A face that several branches match is selected
+// once, in Body.Faces() order, and counts once toward Exactly or AtLeast,
+// which assert the size of the whole union whether they are called before or
+// after Or. An Or with no predicates matches every face, as Faces() does. The
+// predicates are copied, so a later change to the caller's slice does not
+// reach the query. Or returns the receiver for chaining.
+//
+// Faces(FaceCreatedBy(CapStart(b))).Or(FaceCreatedBy(CapEnd(b))).Exactly(2)
+// names both angular caps of a partial-turn revolve b, which no single
+// conjunction of geometric predicates names when the caps are not coplanar.
+func (q *FaceQuery) Or(preds ...FacePredicate) *FaceQuery {
+	if len(q.branches) == 0 {
+		q.branches = [][]FacePredicate{nil}
+	}
+	q.branches = append(q.branches, slices.Clone(preds))
+	return q
 }
 
 // SelectEdges resolves the query against the body's topology: gather
-// (Body.Edges(), whose order the result keeps), filter by each predicate,
-// then enforce the cardinality assertion (docs/evaluator-design.md §7). A
+// (Body.Edges(), whose order the result keeps), keep each edge that satisfies
+// every predicate of at least one branch, then enforce the cardinality
+// assertion on that set (docs/evaluator-design.md §7). A
 // nil body has no topology to select from and is ErrDegenerate; zero matches
 // is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
 func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
@@ -112,15 +154,17 @@ func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
 	}
 	// Predicates are validated up front, so a degenerate direction or a
 	// malformed length is rejected regardless of what the body holds.
-	for _, p := range q.preds {
-		if err := p.validate(); err != nil {
-			return nil, err
+	for _, branch := range q.branches {
+		for _, p := range branch {
+			if err := p.validate(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	edges := body.Edges()
 	matched := make([]*Edge, 0, len(edges))
 	for _, e := range edges {
-		if !edgeMatchesAll(e, q.preds) {
+		if !edgeMatchesAny(e, q.branches) {
 			continue
 		}
 		matched = append(matched, e)
@@ -147,8 +191,9 @@ func (q *EdgeQuery) enrich(body *Body, matched int, err error) error {
 }
 
 // SelectFaces resolves the query against the body's topology: gather
-// (Body.Faces(), whose order the result keeps), filter by each predicate,
-// then enforce the cardinality assertion (docs/evaluator-design.md §7). A
+// (Body.Faces(), whose order the result keeps), keep each face that satisfies
+// every predicate of at least one branch, then enforce the cardinality
+// assertion on that set (docs/evaluator-design.md §7). A
 // nil body has no topology to select from and is ErrDegenerate; zero matches
 // is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
 func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
@@ -158,15 +203,17 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 	if body == nil {
 		return nil, fmt.Errorf(`%w: a nil body has no faces to select`, ErrDegenerate)
 	}
-	for _, p := range q.preds {
-		if err := p.validate(); err != nil {
-			return nil, err
+	for _, branch := range q.branches {
+		for _, p := range branch {
+			if err := p.validate(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	faces := body.Faces()
 	matched := make([]*Face, 0, len(faces))
 	for _, f := range faces {
-		if !faceMatchesAll(f, q.preds) {
+		if !faceMatchesAny(f, q.branches) {
 			continue
 		}
 		matched = append(matched, f)
@@ -256,7 +303,8 @@ func (q *FaceQuery) selector() {}
 
 // EdgePredicate is one clause of an EdgeQuery. Predicates come
 // only from the package constructors — Convex, Concave, ParallelTo,
-// EndpointAt, LongerThan, CreatedBy, Circular, Free — and compose by conjunction; the zero
+// EndpointAt, LongerThan, CreatedBy, Circular, Free — and compose by
+// conjunction within a branch (EdgeQuery.Or adds a branch); the zero
 // value names no predicate and is rejected at resolve.
 type EdgePredicate struct {
 	kind   string
@@ -268,8 +316,9 @@ type EdgePredicate struct {
 
 // FacePredicate is one clause of a FaceQuery. Predicates come
 // only from the package constructors — Planar, Cylindrical, NormalTo,
-// Facing, FaceCreatedBy — and compose by conjunction; the zero value names no
-// predicate and is rejected at resolve.
+// Facing, FaceCreatedBy — and compose by conjunction within a branch
+// (FaceQuery.Or adds a branch); the zero value names no predicate and is
+// rejected at resolve.
 type FacePredicate struct {
 	kind string
 	dir  r3.Vec
@@ -537,6 +586,34 @@ func faceMatchesAll(f *Face, preds []FacePredicate) bool {
 		}
 	}
 	return true
+}
+
+// edgeMatchesAny reports whether the edge satisfies every clause of at least
+// one branch — branches compose by union (core §9). No branch at all is a
+// zero-value query, which matches every edge as Edges() does.
+func edgeMatchesAny(e *Edge, branches [][]EdgePredicate) bool {
+	if len(branches) == 0 {
+		return true
+	}
+	for _, branch := range branches {
+		if edgeMatchesAll(e, branch) {
+			return true
+		}
+	}
+	return false
+}
+
+// faceMatchesAny is the face analog of edgeMatchesAny.
+func faceMatchesAny(f *Face, branches [][]FacePredicate) bool {
+	if len(branches) == 0 {
+		return true
+	}
+	for _, branch := range branches {
+		if faceMatchesAll(f, branch) {
+			return true
+		}
+	}
+	return false
 }
 
 // matches decides one edge clause on the analytic data the edge holds
