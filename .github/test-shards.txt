@@ -1148,6 +1148,7 @@
 0	5.71	TestCoilExternalThread
 1	1.35	TestLoftGearToothVerifiesSound
 1	2.21	TestCoilInterferenceAndUnionWithACore
+1	1.97	TestCoilThreadRunsOutOfTheEnd
 2	1.22	TestLoftStationWalkRefusesAtTheRaisedWorkLimit
 2	0.07	TestDraftConeWallsReadNoChordLocusTerm
 2	0.01	TestDraftOffsetEnclosesTheExactProduct
@@ -1171,3 +1172,4 @@
 5	0.09	TestChordLocusRegionPointsLieInTheShell
 5	0.03	TestCapBandCoordUpperCoversTheCornerLoci
 5	0.01	TestCapBandMassBoundsChargeTheSideLevelMove
+5	0.72	TestCoilCapFlushWithAnAxialFaceRefuses

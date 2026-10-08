@@ -599,12 +599,18 @@ coil, err := doc.Coil(ctx, s, s.Profiles()[0], decad.SketchLine{Start: a, End: b
 threaded, err := doc.Cut(ctx, cylinder, coil)
 ```
 
-A thread that runs out of the cylinder's end is a coil whose caps sit
-outside the cylinder: build the coil longer than the cylinder and let the
-boolean trim it. What is refused is a coil cap lying IN the cylinder's end
-plane: that is the coplanar contact the mesh boolean's hidden-tangency gate
-refuses (`docs/general-boolean-design.md` §2), and the repair is to start
-the coil a fraction of a pitch outside the end plane.
+A thread that runs out of the cylinder's end is a coil that crosses the end
+plane: start the groove a fraction of a pitch outside it, or build the coil
+longer than the cylinder, and let the boolean trim it. The cut then removes
+`∫_Ω ρ·(Θ − max(0, −ζ/k)) dA` over the groove's part inside `R`, measured
+from the end plane: `Θ·Q + M⁻/k`, with `M⁻ = ∫ρζ dA` over that part below
+the plane. A coil's cap never lies in the cylinder's end plane: `Φ(Ω, θ)`
+lies in a plane through the axis, the axis plane at angle `θ`. What is
+refused is a cap flush with another face in that same half-plane, such as
+the start cap of a cylinder revolved through half a turn from the coil's own
+sketch plane: that is the coplanar contact the mesh boolean's hidden-tangency
+gate refuses (`docs/general-boolean-design.md` §2), and the repair is to
+start the coil, or the half turn, at another angle.
 
 **Internal thread.** A block with a bore (an `Extrude` of an annular
 profile, or a block minus a cylinder). The groove profile sits at the bore
@@ -636,6 +642,24 @@ The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
 
 Each cut takes about 6 s, most of it the mesh boolean's exact contact
 classification and stitch.
+
+**What the station count buys.** Measured on the external fixture with the
+facet-pair ceiling lifted for the measurement alone:
+
+| Stations per turn | Tool triangles | `δ` | Tool build | Cut | `Volume` | `Area` bound | `Centroid` bound | Audit work, candidates |
+|---|---|---|---|---|---|---|---|---|
+| 256 | 12 290 | `9.2e-4 mm` | 0.6 s | 6.4 s | `1460.0 ± 1.45` | `4.00 mm²` | `0.025 mm` | `2.2 × 10⁶`, `1.8 × 10⁵` |
+| 512 | 24 578 | `3.4e-4 mm` | 1.7 s | 11.6 s | `1460.1 ± 0.58` | `1.79 mm²` | `0.0099 mm` | `8.2 × 10⁶`, `5.8 × 10⁵` |
+| 1024 | 49 154 | `1.4e-4 mm` | 5.5 s | 24.7 s | `1460.2 ± 0.36` | `1.35 mm²` | `0.0061 mm` | `3.2 × 10⁷`, `2.1 × 10⁶` |
+
+The area tolerance is near `1.0 mm²`, so no count up to 1024 reaches
+`Sound`: the rims' amplification `(δ_coil + δ_cylinder)/sin θ` keeps the
+cylinder's own chord, the pair tolerance `2e-5 ×` its diameter, about
+`5e-4 mm`, once the coil's `δ` falls below it. Past 256 stations per turn the
+8-turn tool's crossing audit also exceeds `proofbound.MaxFacetPairTestsPerCall`
+(`8 × 10⁶`) by its enumeration's work, though its candidates stay under it;
+the triangle ceiling,
+`maxLoftAuditTriangles = 65 528`, admits 1024. The count stays 256.
 
 A coil built directly (no boolean) reads Table CM: `Volume` within
 `1e-16` relative, `Area` and `Centroid` tight, `Bounds` within `δ`, and
@@ -814,8 +838,11 @@ PR 2:
 - The cylinder meshed at the raised pair tolerance is coarser than at the
   diameter-derived one, and its mesh volume and area still lie within its
   own `volSymDiff` and `areaSlack` of `500π` and `250π`.
-- A coil cap in the cylinder's end plane refuses with the boolean's
-  contact code; starting it `pitch/4` outside builds.
+- Starting the external groove `pitch/4` below the cylinder's end plane
+  builds, and the cut's `Volume` encloses `π·(500 − 6Q − (4/3)·M⁻)` at
+  three turns. A coil cap flush with the start cap of a cylinder revolved
+  through half a turn, in either sense, refuses with the boolean's
+  hidden-tangency code.
 - The union of a coil with a coaxial cylinder through its core (a
   threaded rod built by union rather than cut) encloses
   `V_cylinder + Θ·Q(Ω ∩ {ρ ≥ R})`.

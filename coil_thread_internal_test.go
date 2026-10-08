@@ -183,3 +183,108 @@ func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	area := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(250))
 	requireEnclosesBig(t, meshArea(mesh.Vertices(), mesh.Triangles()), mesh.areaSlack+1e-9, area, "partner mesh area")
 }
+
+// polygonMoments returns ∫ρ dA and ∫ρζ dA over a simple polygon given as
+// (ρ, ζ) corners, by the shoelace forms of the first and mixed moments.
+func polygonMoments(pts [][2]*big.Rat) (*big.Rat, *big.Rat) {
+	q, m := new(big.Rat), new(big.Rat)
+	mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+	for i := range pts {
+		x0, y0 := pts[i][0], pts[i][1]
+		x1, y1 := pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1]
+		c := new(big.Rat).Sub(mul(x0, y1), mul(x1, y0))
+		q.Add(q, mul(new(big.Rat).Add(x0, x1), c))
+		mixed := new(big.Rat).Add(mul(x0, y1), mul(x1, y0))
+		mixed.Add(mixed, mul(big.NewRat(2, 1), new(big.Rat).Add(mul(x0, y0), mul(x1, y1))))
+		m.Add(m, mul(mixed, c))
+	}
+	q.Quo(q, big.NewRat(6, 1))
+	m.Quo(m, big.NewRat(24, 1))
+	if q.Sign() < 0 {
+		q.Neg(q)
+		m.Neg(m)
+	}
+	return q, m
+}
+
+// clipPolygon keeps the part of a polygon where keep(p) ≥ 0 for an affine
+// keep, Sutherland–Hodgman over exact rationals.
+func clipPolygon(pts [][2]*big.Rat, keep func(p [2]*big.Rat) *big.Rat) [][2]*big.Rat {
+	var out [][2]*big.Rat
+	for i := range pts {
+		a, b := pts[i], pts[(i+1)%len(pts)]
+		fa, fb := keep(a), keep(b)
+		if fa.Sign() >= 0 {
+			out = append(out, a)
+		}
+		if fa.Sign()*fb.Sign() < 0 {
+			t := new(big.Rat).Quo(fa, new(big.Rat).Sub(fa, fb))
+			var p [2]*big.Rat
+			for k := range 2 {
+				p[k] = new(big.Rat).Add(a[k], new(big.Rat).Mul(t, new(big.Rat).Sub(b[k], a[k])))
+			}
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// TestCoilThreadRunsOutOfTheEnd starts the external groove pitch/4 below the
+// cylinder's end plane y = 0, so the coil's first turn crosses that plane
+// and the cut trims it. The material removed is ∫_Ω ρ·(Θ − max(0, −ζ/k)) dA
+// over the groove's part inside ρ = 5: Θ·Q + M⁻/k, with M⁻ = ∫ρζ dA over
+// that part below ζ = 0 and k = pitch/2π, so the volume is
+// π·(500 − 6Q − (2/1.5)·M⁻) at three turns.
+func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
+	doc := New()
+	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
+	cylinder, err := doc.Revolve(cs, cpf, coilAxisV, FullRevolution{})
+	require.NoError(t, err)
+	const z0 = -0.375
+	gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, z0}, {5.3, z0 - threadHalfWidth}, {5.3, z0 + threadHalfWidth}})
+	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(3))
+	require.NoError(t, err)
+	res, err := Cut(t.Context(), cylinder, tool)
+	require.NoError(t, err)
+	require.Len(t, res.Lumps(), 1)
+
+	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	groove := [][2]*big.Rat{
+		{rat(4.1), rat(z0)},
+		{rat(5.3), new(big.Rat).Sub(rat(z0), rat(threadHalfWidth))},
+		{rat(5.3), new(big.Rat).Add(rat(z0), rat(threadHalfWidth))},
+	}
+	inside := clipPolygon(groove, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Sub(rat(5), p[0]) })
+	q, _ := polygonMoments(inside)
+	_, below := polygonMoments(clipPolygon(inside, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Neg(p[1]) }))
+	exact := new(big.Rat).Mul(big.NewRat(6, 1), q)
+	exact.Add(exact, new(big.Rat).Mul(big.NewRat(4, 3), below))
+	exact.Sub(big.NewRat(500, 1), exact)
+
+	vol, err := res.Volume()
+	require.NoError(t, err)
+	requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(),
+		new(big.Float).SetPrec(512).Mul(bigPi(), new(big.Float).SetPrec(512).SetRat(exact)), "run-out volume")
+}
+
+// TestCoilCapFlushWithAnAxialFaceRefuses cuts the groove from a half
+// cylinder revolved 180° from the sketch plane. Every cap of a coil lies in a
+// plane through its axis, so the coil's start cap lies in the same half-plane
+// as the half cylinder's start cap: a coplanar contact the mesh boolean's
+// hidden-tangency gate refuses (docs/general-boolean-design.md §2), for
+// either sense of the half turn.
+func TestCoilCapFlushWithAnAxialFaceRefuses(t *testing.T) {
+	for _, dir := range []Direction{Along, Against} {
+		doc := New()
+		cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
+		half, err := doc.Revolve(cs, cpf, coilAxisV, AngleExtent{A: units.Degrees(180), Dir: dir})
+		require.NoError(t, err)
+		gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, 3}, {5.3, 3 - threadHalfWidth}, {5.3, 3 + threadHalfWidth}})
+		tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+		require.NoError(t, err)
+		_, err = Cut(t.Context(), half, tool)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, "come within the chord tolerance without provably interpenetrating")
+		require.Len(t, doc.Bodies(), 2, "a refused cut leaves both operands live")
+	}
+}
