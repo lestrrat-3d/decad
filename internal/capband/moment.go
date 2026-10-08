@@ -505,6 +505,37 @@ func FirstMomentFlux(g Patch) (proofbound.BoundedScalar, proofbound.BoundedScala
 	return patchFirstMomentFlux(g)
 }
 
+// ChordLocusVolume returns the volume a Cone patch's chord-versus-locus term
+// charges (the flux patchRawFlux adds to its bound, divided by 3 and rounded
+// up) and the radial gap |SideRadius-CapRadius|, rounded up. Both are zero for
+// a Plane patch, a whole turn, and a patch whose corner skews are both zero:
+// patchRawFlux charges none of them the term.
+//
+// The first-moment sibling of the volume term reads the two together. The
+// volume term bounds the measure of the region between the built solid and
+// the denoted one: the denoted solid lies inside the wide reference sector and
+// contains the narrow one, and every point the built patch moves through on
+// its way from the wide sector lies in the region proofbound.SweptVolumeAllow
+// measures. Every point of that region lies on a straight segment between a
+// wide-sector point and a built-patch point. A built-patch point is a convex
+// combination of a side-directrix point and a cap-directrix point. A
+// wide-sector point at angle θ lies on the ray from the centre through the
+// side directrix's own point at θ, at most the radial gap from it. So a bound
+// C on every side- and cap-directrix coordinate magnitude bounds every
+// coordinate of the region by C plus the radial gap, and the region's first
+// moment by the volume times that sum.
+func ChordLocusVolume(g Patch) (volume, radialGap float64) {
+	if !g.Circular || g.WholeTurn {
+		return 0, 0
+	}
+	flux := chordLocusResidualAllow(g)
+	if flux <= 0 {
+		return 0, 0
+	}
+	// A radius that does not lift answers an infinite gap.
+	return proofbound.DivUpper(flux, 3), proofarith.RationalFloatError(proofarith.FloatRat(g.SideRadius), g.CapRadius)
+}
+
 // ConeMomentTermsX returns the exact Fourier terms for the first coordinate.
 func ConeMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []PhaseTerm {
 	return coneMomentTermsX(R0, R1, H, cU, dS, dC)

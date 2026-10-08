@@ -1051,9 +1051,15 @@ collapses to the `k+m = 0` terms, whose phases are identically zero, so the
 held value is an exact rational in the held floats and the bound is the
 reach of those terms' coefficients with both swept angles read as `2π` — the
 moment's own analogue of the volume's zero-valued eccentric origin term
-there. The centroid divides the
-summed first moment by the body's own volume and lifts the plane-local
-quotient to world through the same frame/placement lift a prism centroid
+there. Each ruled `Cone` patch also charges the first moment for its
+chord-versus-locus gap (§8.3). The region between the built solid and the
+denoted one has at most the volume term's own measure (its flux divided by
+3). Every point of it lies within the band's coordinate envelope (the
+original loop, the cap boundary widened by the contour displacement, and both
+levels) plus the patch's radial gap `|R0 − R1|`, so each moment component's
+bound grows by that volume times that reach (`capband.ChordLocusVolume`).
+The centroid divides the summed first moment by the body's own volume and
+lifts the plane-local quotient to world through the same frame/placement lift a prism centroid
 uses, with the geometric safety-net bound (the true centroid lies within the
 body's own `Bounds` box) standing as a `math.Min` ceiling on the formula
 answer, never the whole bound.
