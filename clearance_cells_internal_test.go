@@ -102,11 +102,11 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 	// it may or may not be pruned.
 	_, fullHi, _, ok := full.Interval()
 	require.True(t, ok)
-	cells, err := k.featureCells(proofbound.NewWorkBudget(t.Context()))
+	cells, err := clearance.FeatureCells(proofbound.NewWorkBudget(t.Context()), ga.faces, gb.faces, ga.edges, gb.edges)
 	require.NoError(t, err)
 	beyond := 0
 	for _, c := range cells {
-		if c.lb-k.slack > fullHi {
+		if c.LowerBound-k.slack > fullHi {
 			beyond++
 		}
 	}

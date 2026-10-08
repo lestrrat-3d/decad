@@ -1,9 +1,6 @@
 package decad
 
 import (
-	"cmp"
-	"slices"
-
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
@@ -34,22 +31,6 @@ func newPruningSink(margin float64) *cellSink {
 	return clearance.NewPruningSink(margin)
 }
 
-// The feature-pair cell kinds enumerate sorts by box distance.
-const (
-	cellFF uint8 = iota // a face × b face
-	cellFE              // a face × b edge
-	cellEF              // b face × a edge
-	cellEE              // a edge × b edge
-)
-
-// featureCell is one face/edge cell queued for the sorted walk: its kind,
-// the two feature indices, and the distance between the features' boxes.
-type featureCell struct {
-	lb   float64
-	kind uint8
-	i, j int
-}
-
 // enumerate runs every tier over the pair, pruning per §5. One shared budget
 // bounds cancellation latency across the cell queue build, the outer
 // candidate walk, and the nested work performed by a vertex tier.
@@ -70,114 +51,28 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 // never prunes, so it runs every cell.
 func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 	budget := proofbound.NewWorkBudget(k.ctx)
-	check := func() error {
-		if k.err != nil {
-			return k.err
-		}
-		return budget.Step()
-	}
-	for _, va := range k.a.verts {
-		for _, vb := range k.b.verts {
-			if err := check(); err != nil {
-				return nil, err
+	a := clearance.FeatureSet{Faces: k.a.faces, Edges: k.a.edges, Vertices: k.a.verts}
+	b := clearance.FeatureSet{Faces: k.b.faces, Edges: k.b.edges, Vertices: k.b.verts}
+	visit := clearance.FeatureVisitor{
+		Vertex: func(side int, budget *proofbound.WorkBudget, v r3.Vec, sink *clearance.CellSink) error {
+			other := k.b
+			if side == 1 {
+				other = k.a
 			}
-			sink.CandidateDist(k.tol, 1, clearance.PointPointDist(va, vb), va, vb)
-		}
+			return k.vertexTier(budget, v, other, sink)
+		},
+		FaceFace: k.ffCell,
+		FaceEdge: k.feCell,
+		EdgeEdge: k.eeCell,
+		Err:      func() error { return k.err },
 	}
-	for _, va := range k.a.verts {
-		if err := check(); err != nil {
-			return nil, err
-		}
-		if err := k.vertexTier(budget, va, k.b, sink); err != nil {
-			return nil, err
-		}
-	}
-	for _, vb := range k.b.verts {
-		if err := check(); err != nil {
-			return nil, err
-		}
-		if err := k.vertexTier(budget, vb, k.a, sink); err != nil {
-			return nil, err
-		}
-	}
-	cells, err := k.featureCells(budget)
-	if err != nil {
-		return nil, err
-	}
-	for _, c := range cells {
-		if err := check(); err != nil {
-			return nil, err
-		}
-		if sink.Pruned(c.lb) {
-			continue
-		}
-		switch c.kind {
-		case cellFF:
-			k.ffCell(k.a.faces[c.i], k.b.faces[c.j], sink)
-		case cellFE:
-			k.feCell(k.a.faces[c.i], k.b.edges[c.j], sink)
-		case cellEF:
-			k.feCell(k.b.faces[c.i], k.a.edges[c.j], sink)
-		default:
-			k.eeCell(k.a.edges[c.i], k.b.edges[c.j], sink)
-		}
-	}
-	if k.err != nil {
-		return nil, k.err
-	}
-	if err := budget.Err(); err != nil {
+	if err := clearance.EnumerateFeatures(budget, k.tol, a, b, sink, visit); err != nil {
 		return nil, err
 	}
 	if k.clearanceRefused {
 		sink.Unsure = true
 	}
 	return sink, nil
-}
-
-// featureCells queues every face × face, face × edge, edge × face and
-// edge × edge cell with its box distance, sorted ascending. The sort is
-// stable, so ties keep the queue's own fixed order.
-func (k *pairKernel) featureCells(budget *proofbound.WorkBudget) ([]featureCell, error) {
-	a, b := k.a, k.b
-	n := len(a.faces)*(len(b.faces)+len(b.edges)) + len(b.faces)*len(a.edges) + len(a.edges)*len(b.edges)
-	cells := make([]featureCell, 0, n)
-	push := func(kind uint8, i, j int, boxA, boxB [2]r3.Vec) error {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		cells = append(cells, featureCell{lb: clearance.ClrBoxDist(boxA, boxB), kind: kind, i: i, j: j})
-		return nil
-	}
-	for i, fa := range a.faces {
-		for j, fb := range b.faces {
-			if err := push(cellFF, i, j, fa.Box, fb.Box); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for i, fa := range a.faces {
-		for j, eb := range b.edges {
-			if err := push(cellFE, i, j, fa.Box, eb.Box); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for i, fb := range b.faces {
-		for j, ea := range a.edges {
-			if err := push(cellEF, i, j, fb.Box, ea.Box); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for i, ea := range a.edges {
-		for j, eb := range b.edges {
-			if err := push(cellEE, i, j, ea.Box, eb.Box); err != nil {
-				return nil, err
-			}
-		}
-	}
-	slices.SortStableFunc(cells, func(x, y featureCell) int { return cmp.Compare(x.lb, y.lb) })
-	return cells, nil
 }
 
 // ffCell dispatches one face pair through the §4 table.
