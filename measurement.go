@@ -40,7 +40,7 @@ type Box = measurement.Box
 // boundaryExtremesBoundedContext (both consumed building Area/Bounds), and a
 // walk endpoint bound that cannot be derived is the "no span" case
 // freeformEndpointBounds already turned into ErrDegenerate before a
-// survey2d.SegmentWalk exists to fold into a Vertex at all (freeformVertexAllow,
+// survey2d.SegmentWalk exists to fold into a Vertex at all (junctionVertexAt,
 // extrude.go). So a body that reaches this call has already had every
 // free-form-derived bound proven finite; a +Inf or NaN reaching here names a
 // genuinely non-finite INPUT elsewhere, which is exactly what ErrNotFinite is

@@ -1564,3 +1564,9 @@
 2	0.02	TestArcFragmentPrismReadingsAreTight
 2	0.03	TestArcFragmentRevolveReadingsAreTight
 2	0.03	TestArcFragmentSplitHemispheresAreTight
+2	0.02	TestExtrudeVertexReachesDenotedCircleSeam
+2	0.04	TestExtrudeVertexReachesDenotedCutEnds
+2	0.01	TestExtrudeVertexReachesDenotedMergedRun
+2	0.02	TestExtrudeVertexReachesDenotedTrimmedSide
+2	0.02	TestRevolveVertexReachesDenotedCutEnds
+2	0.02	TestChainVertexReachesDenotedCutEnd

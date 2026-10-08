@@ -168,13 +168,24 @@ type sweptPoint struct {
 }
 
 // walkStart and walkEnd read a PLANE-local walk's (revolveWalks.plane) two
-// ends as the points they denote.
-func walkStart(w survey2d.SegmentWalk) sweptPoint {
-	return sweptPoint{u: w.StartU, v: w.StartV, bound: w.StartBound}
+// ends, each bounded against the point its recorded segment seg denotes there
+// (boundarywalk.DenotedStartBound and DenotedEndBound).
+func walkStart(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
+	return sweptPoint{u: w.StartU, v: w.StartV, bound: boundarywalk.DenotedStartBound(seg, w)}
 }
 
-func walkEnd(w survey2d.SegmentWalk) sweptPoint {
-	return sweptPoint{u: w.EndU, v: w.EndV, bound: w.EndBound}
+func walkEnd(seg CurveSegment, w survey2d.SegmentWalk) sweptPoint {
+	return sweptPoint{u: w.EndU, v: w.EndV, bound: boundarywalk.DenotedEndBound(seg, w)}
+}
+
+// junctionStart reads the junction where axis walk prev ends and next starts
+// as a plane-local point bounded against the points BOTH neighbours' recorded
+// segments denote there (boundarywalk.JunctionVertex): at a cut junction the
+// two differ (docs/evaluator-design.md §4).
+func (rw revolveWalks) junctionStart(prev, next survey2d.SideWalk) sweptPoint {
+	pi, ni := prev.Segs[len(prev.Segs)-1], next.Segs[0]
+	u, v, bound := boundarywalk.JunctionVertex(rw.segs[pi], rw.plane[pi], rw.segs[ni], rw.plane[ni])
+	return sweptPoint{u: u, v: v, bound: bound}
 }
 
 // sweptEnd is one end of the sweep a vertex sits at: the held angle and the
@@ -807,9 +818,11 @@ func (rp revolvePayload) junctionCircle(b revolvemesh.RevolveBasis, z, rho float
 // axial coordinate it computes and snaps a near-axis radial one to zero
 // outright (docs/tessellation-design.md §8's deltaC).
 type revolveWalks struct {
-	walks        []survey2d.SideWalk
-	kinds        []wallKind
-	plane        []survey2d.SegmentWalk
+	walks []survey2d.SideWalk
+	kinds []wallKind
+	plane []survey2d.SegmentWalk
+	// segs are the recorded segments plane resolves, by the same index.
+	segs         []CurveSegment
 	singleClosed bool
 }
 
@@ -857,6 +870,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 		walks:        walks,
 		kinds:        kinds,
 		plane:        plane,
+		segs:         loop.Segments,
 		singleClosed: len(walks) == 1 && walks[0].Closed,
 	}, nil
 }
@@ -891,9 +905,10 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			j := revJunction{z: w.StartU, rho: w.StartV, onAxis: w.StartV == 0}
 			// The recorded point the junction denotes: walk i's start is its
 			// first recorded segment's own start (revolveJunctions,
-			// tessellate_revolve.go, reads the same one).
-			at := rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
+			// tessellate_revolve.go, reads the same one), bounded against the
+			// previous walk's denoted end too.
 			prev := walks[(i+n-1)%n]
+			at := rp.denotedPoint(resolved.junctionStart(prev, w))
 			turn := prev.TanOutU*w.TanInV - prev.TanOutV*w.TanInU
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
@@ -995,7 +1010,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// A whole closed walk's seam vertex denotes its one recorded
 			// segment's own start; every other walk's cap edge takes the
 			// junction vertices above.
-			seam := rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
+			seam := rp.denotedPoint(walkStart(resolved.segs[w.Segs[0]], resolved.plane[w.Segs[0]]))
 			cap0[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs0, ve0, seam, rp.end0(), holeLoop)
 			cap1[i] = rp.capEdge(b, w.SegmentWalk, singleClosed, vs1, ve1, seam, rp.end1(), holeLoop)
 		}
@@ -1575,7 +1590,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 	for i, w := range walks {
 		kinds[i] = rp.ax.classify(w.SegmentWalk)
 	}
-	return revolveWalks{walks: walks, kinds: kinds, plane: plane, singleClosed: false}, nil
+	return revolveWalks{walks: walks, kinds: kinds, plane: plane, segs: chain.Segments, singleClosed: false}, nil
 }
 
 // buildChainRevolveWalls builds an open chain's whole swept-wall set with
@@ -1607,12 +1622,17 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 	// chain's own two free ends. A coalesced walk starts at its first recorded
 	// segment's start and ends at its last one's end.
 	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64, at sweptPoint) {
-		if i < n {
-			w := walks[i]
-			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(walkStart(resolved.plane[w.Segs[0]]))
+		switch i {
+		case n:
+			w := walks[n-1]
+			last := w.Segs[len(w.Segs)-1]
+			return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, rp.denotedPoint(walkEnd(resolved.segs[last], resolved.plane[last]))
+		case 0:
+			w := walks[0]
+			return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(walkStart(resolved.segs[w.Segs[0]], resolved.plane[w.Segs[0]]))
 		}
-		w := walks[n-1]
-		return w.EndU, w.EndV, w.EndVBound, w.AxisRadiusUpper, rp.denotedPoint(walkEnd(resolved.plane[w.Segs[len(w.Segs)-1]]))
+		w := walks[i]
+		return w.StartU, w.StartV, w.StartVBound, w.AxisRadiusUpper, rp.denotedPoint(resolved.junctionStart(walks[i-1], w))
 	}
 
 	js := make([]revJunction, n+1)

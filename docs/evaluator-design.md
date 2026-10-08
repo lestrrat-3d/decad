@@ -129,6 +129,27 @@ Rules:
   **`docs/loft-design.md` §5.2's table owns every loft term, its condition
   and its refusal; this bullet names them and restates none.** The
   verification gate reads these (verification §4).
+  A rim vertex where two recorded walks meet — a prism's, patch's or
+  `ExtrudeChain`'s junction, and the point a revolve's junction vertex is
+  measured against — is bounded against the points BOTH neighbours denote
+  there (`boundarywalk.JunctionVertex`). It sits at the next walk's held
+  start. That walk's own end bound reaches its denoted start, and the
+  previous walk's end bound plus the distance between the two held ends
+  reaches the previous walk's denoted end. The vertex takes the larger of
+  the two in each component. An end bound is the walk's own: a trimmed
+  line's lerp rounding, a circle's or trimmed arc's trig enclosure, a
+  free-form chain's control-point rounding, and an arc's natural `t = 1`
+  radial residual (§4). A chain's free end carries its one walk end's
+  bound. Where both neighbours denote one point, at a circle's own seam,
+  either distance alone reaches it. The vertex then takes the smaller and
+  sits at whichever held end is the closer proven one, which places a
+  clockwise hole's seam on its exact `t = 0` point. So a vertex where
+  natural line ends meet at one recorded coordinate, or the seam of a circle
+  whose centre plus radius is representable, is `Exact`. A cut junction, a
+  trimmed line end, and a seam whose sum rounds carry a bound.
+  `Body.Patch` admits a rim with such a vertex only through its level-token
+  arm, which a straight prism build stamps (`docs/surface-design.md` §5.2,
+  Table R row R6).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
   `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
   walk and `IsForward` states whether it matches the shared `Edge` orientation.
@@ -441,7 +462,8 @@ vertex is PLACED from its walk's float axis coordinates (z, ρ), which
 `axisFrame.walk` re-expresses from the plane-local point in float and snaps
 onto the axis inside the contact tolerance. The comparison instead starts
 from the recorded plane-local point (u, v) the vertex denotes, widened by the
-walk's own endpoint bound where the walk computed that point, re-expresses
+bound that reaches both neighbouring walks' denoted ends there (§3's rim
+vertex rule; a free end's own walk-end bound), re-expresses
 it about the axis anchor and direction widened by `axisInPlane`'s four
 bounds, rotates it by that end's certified sine and cosine
 (`angleDenotation.sinCosFor`), and lifts it through the frame and the

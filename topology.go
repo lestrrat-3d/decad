@@ -151,7 +151,12 @@ type Vertex struct {
 // the rounding its own lift through the payload's frame and accumulated
 // placement committed, measured exactly for that vertex
 // (proofbound.ExactFrameLiftRound, revolvemesh.RevolveLift.SweptPointGap;
-// docs/evaluator-design.md §8). A revolve's vertex is measured against its
+// docs/evaluator-design.md §8). A rim vertex where two recorded walks meet
+// also carries the bound that reaches the points BOTH walks denote there —
+// each walk's own end bound plus the gap between their held ends
+// (boundarywalk.JunctionVertex; docs/evaluator-design.md §3) — so a cut
+// junction, a trimmed line end and a circle seam whose centre plus radius
+// rounds are never Exact. A revolve's vertex is measured against its
 // recorded plane point rotated about the recorded axis by the angle the
 // record states, so the same bound also covers the float axis coordinates it
 // was placed from, a radius snapped onto the axis, and the axis's own anchor

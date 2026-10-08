@@ -62,7 +62,10 @@ func coalesceWalksWithPoll(poll func() error, walks []survey2d.SideWalk, wrap bo
 		return dot > 0 && math.Abs(cross) <= 1e-12*scale && exactlyCollinear(a, b)
 	}
 	merge := func(a, b survey2d.SideWalk) survey2d.SideWalk {
+		// The merged walk ends where b ends, so it carries the bounds b proved
+		// on that end — never a's, which belong to the dropped junction.
 		a.EndU, a.EndV = b.EndU, b.EndV
+		a.EndBound, a.EndVBound = b.EndBound, b.EndVBound
 		// The merged walk leaves where b leaves, so it inherits b's leaving
 		// tangent AND the bound b proved on it — never a's, and never zero.
 		a.TanOutU, a.TanOutV = b.TanOutU, b.TanOutV
