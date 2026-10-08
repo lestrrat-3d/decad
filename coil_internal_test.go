@@ -1,7 +1,6 @@
 package decad
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -678,14 +677,6 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 		require.True(t, w.Y >= box.Min.Y-1e-12 && w.Y <= box.Max.Y+1e-12)
 		require.True(t, w.Z >= box.Min.Z-1e-12 && w.Z <= box.Max.Z+1e-12)
 	}
-}
-
-func TestCoilTessellationIsStaged(t *testing.T) {
-	s, p := coilSquare(t)
-	b, err := New().Coil(t.Context(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
-	require.NoError(t, err)
-	_, err = b.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.True(t, errors.Is(err, ErrUnsupported))
 }
 
 // closestOnTriangle is the distance from p to the closed triangle abc,

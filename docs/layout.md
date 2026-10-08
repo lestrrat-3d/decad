@@ -259,6 +259,7 @@ the rules leave to the byte budget.
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
+| `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
 | `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
 

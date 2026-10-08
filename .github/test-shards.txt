@@ -1112,7 +1112,6 @@
 2	0.00	TestLoftVolumeBoundEnclosesRefinedRing
 2	0.00	TestLoftVolumeResidualIsPerCellWallLegPlusSkirt
 4	0.05	TestBrepModifyEdgeConsumersOnS1Fillet
-4	0.18	TestCoilTessellationIsStaged
 0	0.03	TestBrepModifyEdgeFilletPocketFloorEdges
 0	0.23	TestCoilFractionalTurnCentroid
 0	0.46	TestCoilLeftHandMirrors
@@ -1136,13 +1135,18 @@
 0	1.30	TestLoftCentroidShiftFormEnclosesTwoArcLobe
 2	0.66	TestLoftCentroidToothBoundReadsToothSize
 5	10.62	TestLoftGearOutlineVerifiesSound
+5	0.17	TestCoilMeshRestatesTheHeldShell
 0	5.70	TestLoftStationWalkWorkPerStation
+0	1.09	TestCoilMassPropertiesSettleAtTheFirstStep
 1	1.35	TestLoftGearToothVerifiesSound
+1	2.21	TestCoilInterferenceAndUnionWithACore
 2	1.22	TestLoftStationWalkRefusesAtTheRaisedWorkLimit
 2	0.07	TestDraftConeWallsReadNoChordLocusTerm
 2	0.01	TestDraftOffsetEnclosesTheExactProduct
 2	0.05	TestDraftPayloadRecordsTheFarSection
+2	0.40	TestCoilMeshProofsEncloseTheBody
 4	0.00	TestLoftStationCapScalesWithPairs
+4	0.73	TestCoilThreadRefusals
 3	0.05	TestCapPatchWindowSkewCoversTheExactCornerAngle
 3	0.03	TestCapWallArcBoundChargesTheRoundedOffsetRadius
 3	0.01	TestCapMiterLocusRangesTileTheOffsetSpan

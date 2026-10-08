@@ -368,11 +368,8 @@ that publishes a per-vertex record: every held point of a cell is within its
 cell's departure of a true point under `H`, and every true point of the cell
 is `H` of a held point, so the facet bound `max corner β` is two-sided.
 
-The matched-parameter correspondence `(λ, s) ↦ S(λ, θ(s))` stays the one
-§8.1 and §8.2 integrate over; its displacement is `sag + maxRound +
-twistHeld`, with `twistHeld` the held corners' own
-`proofbound.CellTwistOffsetUpper`. It is several times wider than `β` on a
-cell with a radial run, and only those two sums read it.
+§8.2's wall homotopy runs along the same shifted correspondence. §8.1's
+area-density legs stay at matched parameters `(λ, s) ↦ S(λ, θ(s))`.
 
 ### 5.5 Triangles, orientation and the crossing audit
 
@@ -497,50 +494,92 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 | CD | Consumer | Status |
 |---|---|---|
 | **CD1** | structural `Verify` + tolerance gate | lands with PR 1. Validity is proven by construction: CP5 over CS5/CS6 proves the true solid simple, and the held audit proves the shell embedded, so `payloadProvesSimple` answers true for a `coilPayload`. All four readings are judged. The gate diameter is §7's |
-| **CD2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with PR 2 as an exact restatement of the held triangles at any tolerance at or above `δ` (below it `ErrUnsupported`, `docs/tessellation-design.md` §7's rule): each vertex's `β` as its `vertexBound`, `sourceBound(face)` the largest corner `β` over that face's triangles, `Bound` `δ`, `areaSlack` §8.1's term, `volSymDiff` §8.2's with `symDiffOK == true`, and the boundary proof the build's own audit. PR 2 adds the `coilPayload` row to `docs/tessellation-design.md` §2's table. Before PR 2, `Tessellate` is `ErrUnsupported` |
-| **CD3** | mesh booleans | lands with PR 2: an operand on `docs/tessellation-design.md` §11's terms, through CD2's proof. The boolean asks a coil for its mesh at the pair tolerance raised to `δ`, which the restatement always meets. §9 is the use case |
-| **CD4** | interference | lands with PR 2 through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits |
+| **CD2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | landed (`tessellate_coil.go`) as an exact restatement of the held triangles at any tolerance at or above `δ` (below it `ErrUnsupported`, `docs/tessellation-design.md` §7's rule): each vertex's `β` as its `vertexBound`, `sourceBound(face)` the largest corner `β` over that face's triangles, `Bound` `δ`, `areaSlack` §8.1's term, `volSymDiff` §8.2's with `symDiffOK == true`, and the boundary proof the build's own audit. `docs/tessellation-design.md` §2's table carries the `coilPayload` row |
+| **CD3** | mesh booleans | landed: an operand on `docs/tessellation-design.md` §11's terms, through CD2's proof. The boolean asks a coil for its mesh at the pair tolerance raised to `δ` (`heldFloorOf`), which the restatement always meets, and the chain-depth gate of `docs/faceted-vertex-bounds-design.md` §5 then refuses the pair wherever a coil facet it touches holds `β` above the pair tolerance `2e-5 ×` the pair diameter. A pair admits only when that diameter is at least about `δ / 2e-5`, near 50 mm for §13's spring; §9 states what this means for threads |
+| **CD4** | interference | landed through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits; a partner the chain-depth gate refuses reads the pair as unsupported staging |
 | **CD5** | clearance | box separation at once; `WithClearances` reads the exact planar arm (`clearance_planar.go`) once PR 4 adds `coilPayload` to `planarPairAdmits`, against a prism or a stitched solid, the held gap widened by `δ`; `Suspect` against every other payload |
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
 | **CD7** | `Placed`, `Duplicate`, `PlacedCopy` | §5.6 |
 | **CD8** | modify operations | `ErrUnsupported`; no receiver row |
-| **CD9** | mass properties (`dynamics`) | the verified-mesh ladder (`mass_properties_mesh.go`) once CD2 lands: a restated mesh settles at its first step. `ErrUnsupported` before PR 2 |
+| **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties_mesh.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
 | **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |
 
 ### 8.1 `areaSlack`
 
-The cut-stable area allowance sums, over every wall cell, the held-to-
-bilinear term `proofbound.CellTwistAreaAllow` and the bilinear-to-true
-term: the local density difference `|∂λΦ × ∂θΦ| − |∂λB × ∂θB|` is at most
-`|∂λ(Φ − B)|·|∂θΦ| + |∂λB|·|∂θ(Φ − B)|`, with `|∂λ(Φ − B)| ≤ 2·sag(cell)`
-(the difference of the two edge departures) and `|∂θ(Φ − B)| ≤ Δθ·ρ_max·
-(Δθ/2 + Δθ²/24)` (the helix tangent against its chord, transverse part
-only: the slide is linear and cancels). Integrate those constants over the
-cell's `(λ, θ)` rectangle. Both caps add `proofbound.PerturbedTriangleArea
-Allow` at `δ` per triangle. Every term through `absSumUpper`.
+The cut-stable area allowance integrates, over every wall cell and at one
+shared parameter `(λ, s)`, the absolute area-density gap along a chain of
+three surfaces, then adds the caps:
+
+1. held triangles → bilinear patch on the held corners:
+   `proofbound.CellTwistAreaAllow` over the four held corners;
+2. that patch → bilinear patch on the TRUE corners: each corner moves at
+   most `r`, the largest station rounding, so each derivative moves at most
+   `2r` and the density at most `2r·|∂sB| + (|∂λB| + 2r)·2r`, with
+   `|∂λB|` at most the world ruling and `|∂sB|` the world chord, each bounded
+   by its plane-coordinate value times `1 + e` (§5.3);
+3. that patch → the true cell, matched: the density gap is at most
+   `|∂λ(S − B)|·|∂sS| + |∂λB|·|∂s(S − B)|`, with `|∂λ(S − B)| ≤ 2·sag`
+   (the difference of the two edge departures), `|∂sS| ≤ helix`, the arc
+   length `2h·sqrt(ρ_max² + k²)` of one station step, `|∂λB| ≤ L` and
+   `|∂s(S − B)| ≤ 2ρ_max·h·(h + h²/6)` (the helix tangent against its
+   chord, transverse part only: the slide is linear and cancels), so
+   `2·sag·helix + L·2ρ_max·h·(h + h²/6)` per cell
+   (`coil.CellProof.Density`). It is derived in plane coordinates; `L`
+   carries a density by a factor in `[1 − e, 1 + e]` that differs between
+   the two surfaces' tangent planes, so the world gap adds `2e` times the
+   patch's own area, at most `L·helix`, to `(1 + e)` times the plane gap.
+
+Both caps add `proofbound.PerturbedTriangleAreaAllow` at `δ` per triangle:
+the true cap is the planar section on the true corners. Every term through
+`absSumUpper`. Leg 3's tangential term is first order in `h` per cell, so on
+§13's spring the allowance is near `3.4 mm²` of an area near `128 mm²`.
 
 ### 8.2 `volSymDiff`
 
-Slice both the true body and the held shell at every station plane
-(`Φ(·, ·, θ_j)` is a rigid image of `Ω`, so the station section is planar
-and the two bodies share it up to `round`): the true body is the union of
-wedges `W_j = Φ(Ω × [θ_j, θ_{j+1}])` and the held shell the union of the
-prismatoids `P_j` between consecutive held sections. `B △ M ⊂ ⋃ (W_j △ P_j)`,
-and each `W_j △ P_j` is swept by the lateral homotopy between the true cell
-and its held triangles under §5.4's matched-parameter correspondence, whose
-every point moves at most `sag + twistHeld`. So
+Two homotopies of the whole closed boundary, each keeping it a closed
+2-cycle, carry the held shell `M` to the true boundary `B`; any point whose
+membership changes is swept, so their swept volumes bound `B △ M`
+(`docs/tessellation-design.md` §11's argument):
+
+1. `M` → the triangles on the TRUE corners, every vertex moving at most `r`
+   along a straight line: `sweptVolumeAllow(r, perturbedAreaUpper(M, r))`,
+   whose area argument covers every surface on the path. The caps are then
+   exact: the true cap is the planar section on the true corners.
+2. Those triangles → the true walls, caps fixed, under §5.4's shifted
+   correspondence `H`, cell by cell: `G(λ, s, τ) = Tri + τ·(H − Tri)`. `H`
+   agrees with the matched map on every cell edge (`ε` vanishes there), and
+   a rim edge is a ruling the triangles hold exactly, so the caps stay put
+   and adjacent cells share their edge motion. Per cell the swept volume is
+   at most `∫|∂τG|·|∂λG|·|∂sG|`, with `|∂τG| ≤ sag + twist + shift`
+   (§5.4's plane-coordinate departure), `|∂sG| ≤ helix·(1 + q)` and
+   `|∂λG| ≤ L + helix·q·(1 + |Δρ|/(4ρ_min))`, where `q = c·|Δρ|/ρ_min ≤ 1`
+   bounds `|∂sε| ≤ 2h·q` and `|∂λε| ≤ 2h·q·(1 + |Δρ|/(4ρ_min))`
+   (`coil.CellProof.Swept`). The homotopy runs in plane coordinates, and
+   `L` maps its swept set to one of exactly `|det L|` times its volume.
 
 ```text
-volSymDiff = Σ_cells (sag + twistHeld)(cell) · rulingLenUpper(cell) · helixRateUpper(cell) · Δθ
-           + Σ_cells CellTwistVolumeAllow(cell)
-           + sweptVolumeAllow(roundMax, sectionAreaUpper · (N + 1))
+volSymDiff = sweptVolumeAllow(r, perturbedAreaUpper(M, r))
+           + |det L| · N · Σ_segments CellProof.Swept
 ```
 
-with `rulingLenUpper` the segment's image length upper bound, `helixRate`
-`sqrt(ρ_max² + k²)` rounded up, and the last term the station rounding's
-own allowance. `symDiffOK` is true. No `Mesh.Bound × area` shortcut.
+`symDiffOK` is true. No `Mesh.Bound × area` shortcut. On §13's spring the
+proof reads near `0.14 mm³` against a volume of `10π mm³`.
 
 ## 9. The thread use case
+
+**Today both threads refuse.** §13's external fixture refuses twice over:
+
+- its 8-turn tool refuses at its own build (CS9): the crossing audit's
+  sweep runs along the coil axis, where each flank triangle's box overlaps
+  those of its neighbouring turns, and scans about `1.1 × 10⁷` box pairs,
+  past `proofbound.MaxFacetPairTestsPerCall = 8 × 10⁶`, though only about
+  `1.8 × 10⁵` of them are candidates. Three turns build;
+- `Cut` of a 3-turn tool from the `R = 5`, `L = 20` cylinder refuses at the
+  chain-depth gate (CD3): the groove's facets hold `β ≈ 9.2e-4 mm` where the
+  pair tolerance is `2e-5 ×` the pair diameter, about `5.0e-4 mm`.
+
+The rest of this section states the use case the coil is built for, and
+what each reading would hold once both refusals lift.
 
 Both threads are a `Cut` whose tool is a coil. The cylinder stays what it
 was built as; the coil is the mesh-path operand CD3 admits; the result is a
@@ -621,7 +660,7 @@ touches it.
 | PR | Model | Lands | Still staged |
 |---|---|---|---|
 | **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
-| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1; the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...` | arcs, CD5 |
+| **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. **Landed, except** the thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`, which wait on §9's two refusals | the thread examples, arcs, CD5 |
 | **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and `planarPairVerdict`; the `Verify` clearance fixture against a prism | `CoilChain`, `WithSurfaceResult()`, modify |
 
@@ -746,6 +785,14 @@ PR 2:
   equals `δ`; a dense sample of the true surface lies within each facet's
   bound of that facet (falsifier only, never the proof); the STL and 3MF
   round trips are watertight; a tolerance below `δ` is `ErrUnsupported`.
+- The held mesh's signed volume lies within `volSymDiff` of `Θ·Q`, and its
+  area within `areaSlack` of `Area`, on the spring, the profile
+  `ρ ∈ [2, 4]` and the near-axis profile `ρ ∈ [0.5, 3]` (falsifiers). Legs
+  shown to fail: §8.2's wall homotopy.
+- `Verify` measures the overlap of the spring with a 60 mm coaxial core of
+  radius `2.5` as `4.5π`, and their `Union` encloses `380.5π`.
+- §9's two refusals: the 8-turn tool at CS9, and `Cut` of a 3-turn tool at
+  the chain-depth gate. The bullets below land once both refusals lift.
 - The external thread of §9 on a `Revolve` cylinder (`R = 5`, `L = 20`,
   a `60°` V of depth `0.9` at pitch `1.5`, `8` turns inside the height):
   the result is one lump of one shell, `Volume` encloses

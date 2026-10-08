@@ -291,7 +291,7 @@ chain (core §8), and is never the reason for a refusal.
 
 **The rule.** The boolean asks a RESTATING operand for its mesh at
 `max(tol, heldFloor)`, where `heldFloor` is the payload's own `meshBound`
-(`facetedPayload`) or `delta` (`mitredSweepPayload`), read by a
+(`facetedPayload`) or `delta` (`mitredSweepPayload`, `coilPayload`), read by a
 `heldFloorOf(body)` reader beside `sectionDisplacementOf`; a restatement
 returns the same vertices at any tolerance at or above its floor, so the mesh
 is the one the boolean needs and the request never refuses. The request for a

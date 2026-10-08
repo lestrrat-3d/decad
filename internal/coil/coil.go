@@ -389,6 +389,99 @@ func CellDepartureUpper(rhoV, rhoW Iv, pitch, dt *big.Rat) (*big.Rat, bool) {
 	return out.Add(out, shift), true
 }
 
+// CellProof is one wall cell's plane-coordinate mesh-proof terms
+// (docs/helix-design.md §8.1, §8.2), each an upper bound rounded up. Every
+// cell of one segment shares them: they depend on the segment's radii and
+// run and on the station step alone.
+type CellProof struct {
+	// Ruling bounds the segment's length L, the rulings' length.
+	Ruling float64
+	// Helix bounds the arc length of one station step at the segment's
+	// outer radius, 2h·sqrt(ρ_max² + k²); every chord of the cell and the
+	// true cell's s-derivative are at most this long.
+	Helix float64
+	// Swept bounds the volume the homotopy from the triangles on the cell's
+	// true corners to the true cell under §5.4's shifted correspondence
+	// sweeps: CellDepartureUpper times the longest λ- and s-derivatives any
+	// surface of that homotopy has.
+	Swept float64
+	// Density bounds ∫|J_S − J_B|, the area-density gap between the true cell
+	// and the bilinear patch through its true corners at matched parameters:
+	// 2·sag·Helix + Ruling·2ρ_max·h·(h + h²/6).
+	Density float64
+}
+
+// CellProofUpper evaluates CellProof for one cell of segment v → w over a
+// station step of dt turns. ok is false when a radius is not proven
+// positive or the segment has no proven length.
+//
+// Swept's two derivative bounds come from H = S(λ, θ(s) + ε) with
+// ε = c·m·2Δρ·sin h/ρ(λ) and q = c·|Δρ|/ρ_min ≤ 1: |∂_s ε| ≤ 2h·q, so
+// |∂_s H| ≤ Helix·(1 + q); |∂_λ ε| ≤ 2h·q·(1 + |Δρ|/(4ρ_min)), so
+// |∂_λ H| ≤ Ruling + Helix·q·(1 + |Δρ|/(4ρ_min)). The triangles' own
+// derivatives are a ruling and a chord, inside both.
+func CellProofUpper(rhoV, zetaV, rhoW, zetaW Iv, pitch, dt *big.Rat) (CellProof, bool) {
+	dep, ok := CellDepartureUpper(rhoV, rhoW, pitch, dt)
+	if !ok {
+		return CellProof{}, false
+	}
+	rhoMin := rhoV.Lo
+	if rhoW.Lo.Cmp(rhoMin) < 0 {
+		rhoMin = rhoW.Lo
+	}
+	rhoMax := rhoV.Hi
+	if rhoW.Hi.Cmp(rhoMax) > 0 {
+		rhoMax = rhoW.Hi
+	}
+	dr := proofbound.IntervalSub(rhoW, rhoV)
+	dz := proofbound.IntervalSub(zetaW, zetaV)
+	l, ok := proofbound.SqrtInterval(proofbound.IntervalAdd(proofbound.IntervalSquare(dr), proofbound.IntervalSquare(dz)))
+	if !ok {
+		return CellProof{}, false
+	}
+	h := new(big.Rat).Mul(proofbound.PiUpper, dt)
+	k := new(big.Rat).Quo(pitch, new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiLower))
+	rate, ok := proofbound.SqrtInterval(Point(new(big.Rat).Add(new(big.Rat).Mul(rhoMax, rhoMax), new(big.Rat).Mul(k, k))))
+	if !ok {
+		return CellProof{}, false
+	}
+	one := big.NewRat(1, 1)
+	helix := new(big.Rat).Mul(big.NewRat(2, 1), h)
+	helix.Mul(helix, rate.Hi)
+
+	// q = c·|Δρ|/ρ_min with c = min(1, ρ_min/|Δρ|), CellDepartureUpper's own c.
+	drAbs := proofbound.IntervalAbsUpper(dr)
+	q := new(big.Rat).Quo(drAbs, rhoMin)
+	if q.Cmp(one) > 0 {
+		q = one
+	}
+	alongS := new(big.Rat).Add(one, q)
+	alongS.Mul(alongS, helix)
+	alongL := new(big.Rat).Quo(drAbs, new(big.Rat).Mul(big.NewRat(4, 1), rhoMin))
+	alongL.Add(alongL, one)
+	alongL.Mul(alongL, q)
+	alongL.Mul(alongL, helix)
+	alongL.Add(alongL, l.Hi)
+	swept := new(big.Rat).Mul(dep, alongL)
+	swept.Mul(swept, alongS)
+
+	// 2·sag·Helix + L·2ρ_max·h·(h + h²/6)
+	density := new(big.Rat).Mul(big.NewRat(2, 1), SagUpper(rhoMax, dt))
+	density.Mul(density, helix)
+	tangent := new(big.Rat).Add(h, new(big.Rat).Quo(new(big.Rat).Mul(h, h), big.NewRat(6, 1)))
+	tangent.Mul(tangent, h)
+	tangent.Mul(tangent, rhoMax)
+	tangent.Mul(tangent, big.NewRat(2, 1))
+	tangent.Mul(tangent, l.Hi)
+	density.Add(density, tangent)
+	return CellProof{
+		Ruling:  proofbound.RatFloatUp(l.Hi),
+		Helix:   proofbound.RatFloatUp(helix),
+		Swept:   proofbound.RatFloatUp(swept),
+		Density: proofbound.RatFloatUp(density),
+	}, true
+}
+
 // Held is the float nearest an interval's midpoint, carried with the
 // outward distance from it to the interval's far end: the bounded float every
 // point of the interval lies within. ok is false when either is not finite.
