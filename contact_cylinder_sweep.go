@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 
@@ -369,7 +370,8 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 		firstBox, secondBox = r.cylinder.box, r.box
 	}
 	if !r.slope.IsZero() || r.axis != r.cylinder.axis || len(first.Ideal.Manifold.Points) != 1 ||
-		!sourceTrackPointsWithin(firstBox, secondBox, r.pa.delta, r.pb.delta, r.req.PointResolution.Base()) {
+		!pairbox.TrackPointsWithin(firstBox.axisBox(), secondBox.axisBox(), r.pa.delta, r.pb.delta,
+			r.req.PointResolution.Base()) {
 		return cylinderSweepCause(r.report, r.pa.duration, SweepContactTrackUnproved), nil
 	}
 	last, err := r.sample(ctx, one)

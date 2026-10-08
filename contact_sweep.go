@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -839,34 +839,17 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 // boxPoseDeviation bounds the L1 distance between a float-pose source box and
 // the ideal affine box. Each support endpoint is compared as an exact rational.
 func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]proofarith.Dyadic, f *big.Rat) *big.Rat {
-	total := new(big.Rat)
-	for i := range 3 {
-		move := new(big.Rat).Mul(delta[i].Rat(), f)
-		idealLo := new(big.Rat).Add(start.lo[i].Rat(), move)
-		idealHi := new(big.Rat).Add(start.hi[i].Rat(), move)
-		lo := new(big.Rat).Sub(observed.lo[i].Rat(), idealLo)
-		hi := new(big.Rat).Sub(observed.hi[i].Rat(), idealHi)
-		lo.Abs(lo)
-		hi.Abs(hi)
-		if hi.Cmp(lo) > 0 {
-			lo = hi
-		}
-		total.Add(total, lo)
-	}
-	return total
+	return box.PoseDeviation(start.axisBox(), observed.axisBox(), delta, f)
 }
 
 func translatedSourceBoxes(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic,
 	f *big.Rat) (sourceBoxContactProof, sourceBoxContactProof, bool) {
-	fraction, ok := proofarith.DyOfRat(f)
+	translatedA, translatedB, ok := box.TranslatePair(a.axisBox(), b.axisBox(), da, db, f)
 	if !ok {
 		return sourceBoxContactProof{}, sourceBoxContactProof{}, false
 	}
-	for i := range 3 {
-		moveA, moveB := proofarith.DyMul(da[i], fraction), proofarith.DyMul(db[i], fraction)
-		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
-		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
-	}
+	a.lo, a.hi = translatedA.Lo, translatedA.Hi
+	b.lo, b.hi = translatedB.Lo, translatedB.Hi
 	return a, b, true
 }
 
@@ -902,12 +885,13 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		}
 		// A change of the lower or upper corner owner changes the patch
 		// structure. The first full-span increment refuses those transitions.
-		if affineEqualityRootWithin(r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i], end) ||
-			affineEqualityRootWithin(r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i], end) {
+		if box.AffineEqualityRootWithin(r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i], end) ||
+			box.AffineEqualityRootWithin(r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i], end) {
 			return nil
 		}
 	}
-	if !sourceTrackPointsWithin(r.boxA, r.boxB, r.pa.delta, r.pb.delta, r.req.PointResolution.Base()) {
+	if !box.TrackPointsWithin(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.delta, r.pb.delta,
+		r.req.PointResolution.Base()) {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
@@ -917,19 +901,6 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
 		normal: normal,
 	}
-}
-
-func affineEqualityRoot(a, da, b, db proofarith.Dyadic) *big.Rat {
-	delta := proofarith.DySubScalar(da, db)
-	if delta.IsZero() {
-		return nil
-	}
-	return new(big.Rat).Quo(proofarith.DySubScalar(b, a).Rat(), delta.Rat())
-}
-
-func affineEqualityRootWithin(a, da, b, db proofarith.Dyadic, end *big.Rat) bool {
-	root := affineEqualityRoot(a, da, b, db)
-	return root != nil && root.Sign() > 0 && root.Cmp(end) <= 0
 }
 
 // sourceBoxTransitionRoot finds the first possible change of a projected
@@ -943,82 +914,7 @@ func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
 	if !ok {
 		return nil
 	}
-	var earliest *big.Rat
-	for i := range 3 {
-		if i == axis {
-			continue
-		}
-		for _, pair := range [][4]proofarith.Dyadic{
-			{r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i]},
-			{r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
-			{r.boxA.lo[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
-			{r.boxB.lo[i], r.pb.delta[i], r.boxA.hi[i], r.pa.delta[i]},
-		} {
-			root := affineEqualityRoot(pair[0], pair[1], pair[2], pair[3])
-			if root == nil || root.Sign() <= 0 || root.Cmp(big.NewRat(1, 1)) > 0 {
-				continue
-			}
-			if earliest == nil || root.Cmp(earliest) < 0 {
-				earliest = root
-			}
-		}
-	}
-	return earliest
-}
-
-func sourceContactRootBracket(root, duration, resolution *big.Rat) (*big.Rat, *big.Rat, bool) {
-	grid := big.NewInt(1)
-	for range 61 {
-		width := new(big.Rat).Quo(duration, new(big.Rat).SetInt(grid))
-		if width.Cmp(resolution) <= 0 {
-			scaled := new(big.Rat).Mul(root, new(big.Rat).SetInt(grid))
-			leftIdx := new(big.Int).Quo(scaled.Num(), scaled.Denom())
-			rightIdx := new(big.Int).Add(new(big.Int).Set(leftIdx), big.NewInt(1))
-			if scaled.IsInt() {
-				leftIdx.Sub(leftIdx, big.NewInt(1))
-				rightIdx.Sub(rightIdx, big.NewInt(1))
-			}
-			left := new(big.Rat).SetFrac(leftIdx, grid)
-			right := new(big.Rat).SetFrac(rightIdx, grid)
-			if left.Sign() < 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
-				proofarith.FloatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
-				proofarith.FloatRat(ratFloatNearest(right)).Cmp(right) != 0 {
-				return nil, nil, false
-			}
-			return left, right, true
-		}
-		grid.Lsh(grid, 1)
-	}
-	return nil, nil, false
-}
-
-// Every contact coordinate lies within the start/end box endpoint envelope.
-// One ULP at its maximum magnitude safely bounds conversion of any enclosed
-// dyadic fraction to float; proofbound.Radius3D turns that into a point-ball radius.
-func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic, resolution float64) bool {
-	maximum := new(big.Rat)
-	for _, moving := range []struct {
-		box   sourceBoxContactProof
-		delta [3]proofarith.Dyadic
-	}{{a, da}, {b, db}} {
-		for i := range 3 {
-			for _, endpoint := range []proofarith.Dyadic{moving.box.lo[i], moving.box.hi[i]} {
-				for _, value := range []proofarith.Dyadic{endpoint, proofarith.DyAdd(endpoint, moving.delta[i])} {
-					abs := new(big.Rat).Abs(value.Rat())
-					if abs.Cmp(maximum) > 0 {
-						maximum = abs
-					}
-				}
-			}
-		}
-	}
-	maxFloat := proofbound.RatFloatUp(maximum)
-	if !finiteMeasurementValues(maxFloat) {
-		return false
-	}
-	ulp := math.Nextafter(maxFloat, math.Inf(1)) - maxFloat
-	bound := proofbound.Radius3D(ulp)
-	return finiteMeasurementValues(bound) && bound <= resolution
+	return box.TransitionRoot(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.delta, r.pb.delta, axis)
 }
 
 func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
@@ -1057,7 +953,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 					}
 				}
 				if root := r.sourceBoxTransitionRoot(first); root != nil {
-					leftF, rightF, ok := sourceContactRootBracket(root, r.pa.duration, resolution)
+					leftF, rightF, ok := box.ContactRootBracket(root, r.pa.duration, resolution)
 					if !ok || leftF.Sign() == 0 {
 						return r.undecided(zero, root, SweepFractionFloor), nil
 					}

@@ -266,7 +266,7 @@ the rules leave to the byte budget.
 | `decadtest/` | The public test kit: comparison helpers over bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/pair/` | Shared contact relation and reading types. |
-| `internal/pair/box/` | Exact axis, oriented box and sphere-box proofs, patches, clips and bounded witnesses. |
+| `internal/pair/box/` | Exact box paths, contact, oriented and sphere-box proofs, patches, clips and witnesses. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Exact prism and held-mesh snapshots for planar contact. See multibody §9.1. |
 | `internal/placedruling/` | Placed cylinder support proofs. See contact-geometry §4.5. |

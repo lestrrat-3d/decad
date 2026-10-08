@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 
@@ -778,18 +779,7 @@ func (r *SweepReport) replayRelationCovered(f *big.Rat, relation ContactRelation
 // For axis-aligned boxes, the least support gap (separated case) or least
 // penetration depth (overlap case) is bounded directly from exact endpoints.
 func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool {
-	var distance *big.Rat
-	for axis := range 3 {
-		for _, candidate := range []*big.Rat{
-			new(big.Rat).Abs(new(big.Rat).Sub(a.hi[axis].Rat(), b.lo[axis].Rat())),
-			new(big.Rat).Abs(new(big.Rat).Sub(b.hi[axis].Rat(), a.lo[axis].Rat())),
-		} {
-			if distance == nil || candidate.Cmp(distance) < 0 {
-				distance = candidate
-			}
-		}
-	}
-	return distance != nil && distance.Cmp(limit) <= 0
+	return box.RelationDistanceWithin(a.axisBox(), b.axisBox(), limit)
 }
 
 // certifiedPlanarPosesAtFraction replays a general planar sweep without

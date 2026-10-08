@@ -23,6 +23,10 @@ type sourceBoxContactProof struct {
 	faces [3][2]*Face
 }
 
+func (b sourceBoxContactProof) axisBox() box.AxisBox {
+	return box.AxisBox{Lo: b.lo, Hi: b.hi}
+}
+
 // sourceBoxAtPose never infers occupancy from a held bounding box. It maps all
 // eight corners of a source-certified rectangle through its recorded frame,
 // accumulated placement, and query pose with exact dyadic operations.
