@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -18,10 +20,13 @@ import (
 // boss flush with the plate's wall, or crossing its outline — stated as a
 // brepPayload (§4) from the slabs tryStackedUnion already built.
 //
-// Every 2D answer is a private scene's: each interface arranges the two
-// operand records that reach it and prismcells.Classify names the cells on
-// each side, so the exposed floors and ceilings are cells, recorded as sketch
-// returned them. decad then only restates what the scenes recorded: every
+// Every 2D answer is a private scene's: a slab both operands reach arranges
+// every record reaching it and its regions are the select-all merge's loops;
+// each interface arranges every record reaching the slab below or above it
+// and prismcells.ClassifyRegions names the cells on each side, so the
+// exposed floors and ceilings are cells, recorded as sketch returned them.
+// An operand is a prism, a stacked prism, or an A1 result read through the
+// slabs it keeps (brepStack). decad then only restates what the scenes recorded: every
 // junction becomes one canonical vertex (a line's exact level, or the one
 // float the keyed table holds for a line crossing a circle, as class B's
 // §10 table does), every segment is rewritten between its vertices, and every
@@ -111,12 +116,48 @@ type ubPieceKey struct {
 	closed   bool
 }
 
+// ubRef names one operand record: a region of one operand's slab.
+type ubRef struct {
+	isB          bool
+	slab, region int
+}
+
+// ubScene is one private scene over a set of records, cached by that set:
+// operand A's records enter as the scene's A regions and operand B's as its
+// B regions, so a span two records share reads through
+// prismcells.CoincidentEdgesRegions whichever operand each belongs to.
+type ubScene struct {
+	refsA, refsB []ubRef
+	profiles     []*sketch.Profile
+	tags         map[sketch.Entity]prismcells.Origin
+	delta        prismSceneDelta
+	charged      bool
+	chargeOK     bool
+	matter       map[prismcells.RegionKey][]bool
+}
+
+// key is a record's key in the scene's classification.
+func (sc *ubScene) key(ref ubRef) (prismcells.RegionKey, bool) {
+	refs := sc.refsA
+	if ref.isB {
+		refs = sc.refsB
+	}
+	for i, have := range refs {
+		if have == ref {
+			return prismcells.RegionKey{IsB: ref.isB, Region: i}, true
+		}
+	}
+	return prismcells.RegionKey{}, false
+}
+
 // ubBuild is one brep build over the stacked union's slabs.
 type ubBuild struct {
 	st     *stackedUnionState
-	slabs  []prismSlab
 	levels []stackedUnionLevel
+	// reach names, per result slab, each operand's slab reaching it (−1
+	// when it does not).
 	reach  [][2]int
+	scenes map[string]*ubScene
 	// levelAt maps a held level to its index.
 	levelAt map[float64]int
 	table   map[ubKey]ubEntry
@@ -128,8 +169,13 @@ type ubBuild struct {
 	// junctions records, per vertex and slab, the two carriers meeting there.
 	junctions map[Point2]map[int][2]ubCarrier
 	faces     []ubFace
-	slabLoops []ubLoop
+	// slabs holds each result slab's regions and slabLoops their units.
+	slabs     [][]ProfileRecord
+	slabLoops [][]ubLoop
 	allow     float64
+	cutDelta  float64
+	walk      float64
+	crossing  float64
 }
 
 // errUBMiss marks a topology this build does not cover, found after a scene
@@ -139,7 +185,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // brep states the stacked union as a brepPayload. ok=false with a nil error
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
-func (st *stackedUnionState) brep(ctx context.Context, slabs []prismSlab, levels []stackedUnionLevel, reach [][2]int) (featurePayload, bool, error) {
+func (st *stackedUnionState) brep(ctx context.Context, levels []stackedUnionLevel, reach [][2]int) (featurePayload, bool, error) {
 	if !st.reexpress.identity || st.va.proxy.sectionDelta != 0 || st.vb.proxy.sectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.
@@ -149,7 +195,8 @@ func (st *stackedUnionState) brep(ctx context.Context, slabs []prismSlab, levels
 		// band for a wall that moved.
 		return nil, false, nil
 	}
-	b := &ubBuild{st: st, slabs: slabs, levels: levels, reach: reach,
+	b := &ubBuild{st: st, levels: levels, reach: reach,
+		scenes:    map[string]*ubScene{},
 		levelAt:   map[float64]int{},
 		table:     map[ubKey]ubEntry{},
 		verts:     map[Point2]*ubVertex{},
@@ -172,19 +219,32 @@ func (st *stackedUnionState) brep(ctx context.Context, slabs []prismSlab, levels
 func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	// Slab loops first: their recorded corners seed the table, so a scene's
 	// computed crossing at a recorded corner takes the record's own point.
-	for _, slab := range b.slabs {
-		loop, err := b.loopOf(slab.regions[0])
+	n := len(b.reach)
+	for k := range n {
+		regions, err := b.slabRegions(ctx, k)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		b.slabLoops = append(b.slabLoops, loop)
+		var loops []ubLoop
+		for _, region := range regions {
+			loop, err := b.loopOf(region)
+			if err != nil {
+				return brepPayload{}, err
+			}
+			loops = append(loops, loop)
+		}
+		b.slabs = append(b.slabs, regions)
+		b.slabLoops = append(b.slabLoops, loops)
 	}
-	n := len(b.slabs)
-	if err := b.addFace(b.slabLoops[0], 0, false); err != nil {
-		return brepPayload{}, err
+	for _, loop := range b.slabLoops[0] {
+		if err := b.addFace(loop, 0, false); err != nil {
+			return brepPayload{}, err
+		}
 	}
-	if err := b.addFace(b.slabLoops[n-1], n, true); err != nil {
-		return brepPayload{}, err
+	for _, loop := range b.slabLoops[n-1] {
+		if err := b.addFace(loop, n, true); err != nil {
+			return brepPayload{}, err
+		}
 	}
 	for k := 1; k < n; k++ {
 		if err := b.interfaceFaces(ctx, k); err != nil {
@@ -192,7 +252,7 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 		}
 	}
 	b.recordJunctions()
-	if b.st.walkA != 0 || b.st.walkB != 0 || b.st.crossing != 0 {
+	if b.walk != 0 || b.crossing != 0 {
 		// A walked endpoint or an amplified crossing moves a carrier, not
 		// just a vertex on it; only a swept face carries that as a band.
 		return brepPayload{}, errUBMiss
@@ -201,9 +261,9 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	// recorded level, or a circle about its recorded centre. A cut vertex
 	// sits within delta of the crossing it denotes along those carriers, so
 	// each planar face's region and each swept piece's pinned arc is within
-	// delta of the face it denotes: the merge's cut charge plus the largest
+	// delta of the face it denotes: the merges' cut charge plus the largest
 	// allowance of any canonical vertex, charged to every face alike.
-	delta := proofbound.AbsSumUpper(b.st.sectionDelta(), b.allow)
+	delta := proofbound.AbsSumUpper(b.cutDelta, b.allow)
 
 	out := brepPayload{xform: b.st.va.proxy.xform}
 	ref := b.st.va.proxy.frame
@@ -241,6 +301,166 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	// unpaired is an uncovered topology, not a refusal.
 	if _, err := brepTopologyContext(ctx, out); err != nil {
 		return brepPayload{}, err
+	}
+	// The result keeps its slabs, so a further co-directional Union reads
+	// it as an operand (§4.1).
+	stack := &brepStack{delta: delta}
+	for k, regions := range b.slabs {
+		lo, hi := b.levels[k], b.levels[k+1]
+		stack.slabs = append(stack.slabs, prismSlab{regions: regions,
+			z0: lo.held, z1: hi.held, z0Delta: lo.delta, z1Delta: hi.delta})
+	}
+	out.stack = stack
+	return out, nil
+}
+
+// refs names every record of one operand's slab.
+func (b *ubBuild) refs(isB bool, slab int) []ubRef {
+	if slab < 0 {
+		return nil
+	}
+	op := b.st.va
+	if isB {
+		op = b.st.vb
+	}
+	out := make([]ubRef, len(op.slabs[slab].regions))
+	for r := range out {
+		out[r] = ubRef{isB: isB, slab: slab, region: r}
+	}
+	return out
+}
+
+func (b *ubBuild) record(ref ubRef) ProfileRecord {
+	if ref.isB {
+		return b.st.vb.slabs[ref.slab].regions[ref.region]
+	}
+	return b.st.va.slabs[ref.slab].regions[ref.region]
+}
+
+// scene arranges a set of records once and keeps the arrangement. A scene
+// whose walk charge is not zero, or whose cells sketch leaves unresolved,
+// is a miss.
+func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, error) {
+	key := fmt.Sprint(refsA, refsB)
+	if sc, ok := b.scenes[key]; ok {
+		return sc, nil
+	}
+	var regionsA, regionsB []ProfileRecord
+	for _, ref := range refsA {
+		regionsA = append(regionsA, b.record(ref))
+	}
+	for _, ref := range refsB {
+		regionsB = append(regionsB, b.record(ref))
+	}
+	segments, within, err := prismRegionsWithinWorkCap(b.st.budget, append(append([]ProfileRecord{}, regionsA...), regionsB...)...)
+	if err != nil {
+		return nil, err
+	}
+	if !within {
+		return nil, fmt.Errorf(
+			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
+			ErrUnsupported, segments, prismMaxArrangementSegments)
+	}
+	s, tags, delta, err := buildPrismSceneRegions(b.st.budget, regionsA, regionsB, &prismReexpression{identity: true})
+	if err != nil {
+		return nil, err
+	}
+	if err := b.st.budget.Err(); err != nil {
+		return nil, err
+	}
+	profiles, err := prismCellProfiles(ctx, b.st.budget, s)
+	if err != nil {
+		return nil, err
+	}
+	if len(profiles) == 0 {
+		return nil, errUBMiss
+	}
+	b.walk = math.Max(b.walk, math.Max(delta.a, delta.b))
+	sc := &ubScene{refsA: refsA, refsB: refsB, profiles: profiles, tags: tags, delta: delta}
+	b.scenes[key] = sc
+	return sc, nil
+}
+
+// charge runs A6's crossing charge once over the scene's cells and reads
+// the shared spans' width into the build's crossing term.
+func (b *ubBuild) charge(sc *ubScene) error {
+	if !sc.charged {
+		ok, err := sc.delta.chargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy, b.st.vb.proxy, &prismReexpression{identity: true})
+		if err != nil {
+			return err
+		}
+		sc.charged, sc.chargeOK = true, ok
+	}
+	if !sc.chargeOK {
+		return errUBMiss
+	}
+	b.crossing = math.Max(b.crossing, sc.delta.crossing)
+	return nil
+}
+
+// slabRegions is one result slab's regions: one operand's records verbatim
+// where the other does not reach, else the select-all merge's loops over
+// every record reaching the slab (prism-boolean §4.2 with its enclosed-void
+// check, A5's several disjoint loops, §6's audit per loop).
+func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]ProfileRecord, error) {
+	refsA, refsB := b.refs(false, b.reach[k][0]), b.refs(true, b.reach[k][1])
+	var verbatim []ubRef
+	switch {
+	case len(refsA) == 0:
+		verbatim = refsB
+	case len(refsB) == 0:
+		verbatim = refsA
+	}
+	if verbatim != nil {
+		out := make([]ProfileRecord, len(verbatim))
+		for i, ref := range verbatim {
+			out[i] = b.record(ref)
+		}
+		return out, nil
+	}
+	sc, err := b.scene(ctx, refsA, refsB)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.charge(sc); err != nil {
+		return nil, err
+	}
+	voidFree, err := prismCellsHaveNoVoid(b.st.budget, sc.tags, sc.profiles)
+	if err != nil {
+		return nil, err
+	}
+	if !voidFree {
+		return nil, errUBMiss
+	}
+	if ok, err := sc.delta.sharedSpansBounded(b.st.budget, sc.profiles); err != nil || !ok {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errUBMiss
+	}
+	loops, cutDelta, resolved, err := prismcells.MergeLoops(b.st.budget, sc.profiles, "union")
+	if err != nil {
+		return nil, err
+	}
+	if !resolved {
+		return nil, errUBMiss
+	}
+	b.cutDelta = math.Max(b.cutDelta, cutDelta)
+	out := make([]ProfileRecord, len(loops))
+	for i, loop := range loops {
+		area, err := loopSignedAreaCB(loop)
+		if err != nil {
+			return nil, err
+		}
+		if !(area > 0) {
+			// A clockwise loop would be a hole of a merged region, which the
+			// void check already refuses; nothing here owns one.
+			return nil, errUBMiss
+		}
+		out[i] = ProfileRecord{Outer: loop}
+		if err := auditPrismMergeSection(b.st.budget, prismPayload{profile: out[i]}, out[i]); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -418,7 +638,7 @@ func (b *ubBuild) loopOf(region ProfileRecord) (ubLoop, error) {
 			return ubLoop{}, err
 		}
 		units[gi].to, units[gj].from = p, p
-		b.record(p, delta, units[gi].c, units[gj].c)
+		b.noteVertex(p, delta, units[gi].c, units[gj].c)
 	}
 	return ubLoop{units: units}, nil
 }
@@ -496,8 +716,8 @@ func (b *ubBuild) junction(ci ubCarrier, ei ubEnd, cj ubCarrier, sj ubEnd) (Poin
 	return entry.p, entry.delta, nil
 }
 
-// record registers a canonical vertex with the carriers it was found on.
-func (b *ubBuild) record(p Point2, delta float64, carriers ...ubCarrier) {
+// noteVertex registers a canonical vertex with the carriers it was found on.
+func (b *ubBuild) noteVertex(p Point2, delta float64, carriers ...ubCarrier) {
 	v, ok := b.verts[p]
 	if !ok {
 		v = &ubVertex{}
@@ -535,88 +755,98 @@ func (b *ubBuild) addFace(loop ubLoop, level int, outward bool) error {
 	return nil
 }
 
-// interfaceFaces classifies the interface at level k: the scene of the two
-// distinct operand records reaching the slabs below and above it, each
-// cell's membership read by prismcells.Classify, and the cells on one side
-// only recorded as that side's exposed faces. More than two distinct
-// records at one level is a scene this build does not arrange.
+// interfaceFaces classifies the interface at level k: the scene of every
+// record reaching the slab below or the slab above it, each cell's
+// membership in every record read by prismcells.ClassifyRegions, and the
+// cells inside some record of one side and none of the other recorded as
+// that side's exposed faces. A stacked operand's equal regions on both sides
+// enter once.
 func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
-	lo, hi := b.reach[k-1], b.reach[k]
-	var refs []stackedUnionRegionRef
-	var inLo, inHi []bool
-	add := func(ref stackedUnionRegionRef, below, above bool) error {
-		for i, have := range refs {
-			if have == ref {
-				inLo[i] = inLo[i] || below
-				inHi[i] = inHi[i] || above
+	type side struct {
+		ref          ubRef
+		below, above bool
+	}
+	var sides [2][]side
+	add := func(ref ubRef, below bool) error {
+		op := 0
+		if ref.isB {
+			op = 1
+		}
+		for i := range sides[op] {
+			have := &sides[op][i]
+			if have.ref == ref {
+				have.below, have.above = have.below || below, have.above || !below
 				return nil
 			}
-			if have.isB == ref.isB {
-				equal, err := loopRecordsEqual(b.st.budget, b.st.region(have).Outer, b.st.region(ref).Outer)
-				if err != nil {
-					return err
-				}
-				if equal {
-					inLo[i] = inLo[i] || below
-					inHi[i] = inHi[i] || above
-					return nil
-				}
+			equal, err := loopRecordsEqual(b.st.budget, b.record(have.ref).Outer, b.record(ref).Outer)
+			if err != nil {
+				return err
+			}
+			if equal {
+				have.below, have.above = have.below || below, have.above || !below
+				return nil
 			}
 		}
-		refs = append(refs, ref)
-		inLo = append(inLo, below)
-		inHi = append(inHi, above)
+		sides[op] = append(sides[op], side{ref: ref, below: below, above: !below})
 		return nil
 	}
 	for op := range 2 {
-		isB := op == 1
-		if lo[op] >= 0 {
-			if err := add(stackedUnionRegionRef{isB: isB, slab: lo[op]}, true, false); err != nil {
+		for _, ref := range b.refs(op == 1, b.reach[k-1][op]) {
+			if err := add(ref, true); err != nil {
 				return err
 			}
 		}
-		if hi[op] >= 0 {
-			if err := add(stackedUnionRegionRef{isB: isB, slab: hi[op]}, false, true); err != nil {
+		for _, ref := range b.refs(op == 1, b.reach[k][op]) {
+			if err := add(ref, false); err != nil {
 				return err
 			}
 		}
 	}
-	switch len(refs) {
-	case 1:
+	if len(sides[0])+len(sides[1]) < 2 {
 		return nil
-	case 2:
-	default:
-		return errUBMiss
 	}
-	m, err := b.st.scene(ctx, refs[0], refs[1])
+	var refsA, refsB []ubRef
+	for _, sd := range sides[0] {
+		refsA = append(refsA, sd.ref)
+	}
+	for _, sd := range sides[1] {
+		refsB = append(refsB, sd.ref)
+	}
+	sc, err := b.scene(ctx, refsA, refsB)
 	if err != nil {
 		return err
 	}
-	if len(m.profiles) == 0 {
-		return errUBMiss
+	if err := b.charge(sc); err != nil {
+		return err
 	}
-	if ok, err := m.charge(b.st.budget, b.st.view(refs[0]), b.st.view(refs[1]), b.st.reexpress); err != nil || !ok {
+	if sc.matter == nil {
+		matter, resolved, err := prismcells.ClassifyRegions(b.st.budget, sc.tags, sc.profiles)
 		if err != nil {
 			return err
 		}
-		return errUBMiss
+		if !resolved {
+			return errUBMiss
+		}
+		sc.matter = matter
 	}
-	b.st.crossing = math.Max(b.st.crossing, m.sceneDelta.crossing)
-	matterX, matterY, resolved, err := prismcells.Classify(b.st.budget, m.tags, m.profiles)
-	if err != nil {
-		return err
-	}
-	if !resolved {
-		return errUBMiss
-	}
-	for i, p := range m.profiles {
-		below := (inLo[0] && matterX[i]) || (inLo[1] && matterY[i])
-		above := (inHi[0] && matterX[i]) || (inHi[1] && matterY[i])
+	for i, p := range sc.profiles {
+		below, above := false, false
+		for op := range 2 {
+			for _, sd := range sides[op] {
+				key, ok := sc.key(sd.ref)
+				if !ok {
+					return errUBMiss
+				}
+				in := sc.matter[key][i]
+				below = below || (sd.below && in)
+				above = above || (sd.above && in)
+			}
+		}
 		if below == above {
 			continue
 		}
 		region, err := prismRecordArrangedProfileContext(ctx, p)
-		if fallBack, err := prismAmplifiedFallback(m.sceneDelta.amplified, err); fallBack || err != nil {
+		if fallBack, err := prismAmplifiedFallback(sc.delta.amplified, err); fallBack || err != nil {
 			if err != nil {
 				return err
 			}
@@ -636,16 +866,24 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 // recordJunctions reads every slab loop's junctions, then marks the levels
 // where a junction starts, ends or changes carriers as vertex events.
 func (b *ubBuild) recordJunctions() {
-	for k, loop := range b.slabLoops {
-		if loop.closed {
-			continue
-		}
-		for i, u := range loop.units {
-			if b.junctions[u.from] == nil {
-				b.junctions[u.from] = map[int][2]ubCarrier{}
+	for k, loops := range b.slabLoops {
+		for _, loop := range loops {
+			if loop.closed {
+				continue
 			}
-			prev := loop.units[(i+len(loop.units)-1)%len(loop.units)]
-			b.junctions[u.from][k] = ubPair(prev.c, u.c)
+			for i, u := range loop.units {
+				if b.junctions[u.from] == nil {
+					b.junctions[u.from] = map[int][2]ubCarrier{}
+				}
+				prev := loop.units[(i+len(loop.units)-1)%len(loop.units)]
+				if _, taken := b.junctions[u.from][k]; taken {
+					// Two loops of one slab meeting at a point share no
+					// vertical edge this build can state.
+					b.junctions[u.from][k] = [2]ubCarrier{}
+					continue
+				}
+				b.junctions[u.from][k] = ubPair(prev.c, u.c)
+			}
 		}
 	}
 	n := len(b.slabs)
@@ -842,32 +1080,34 @@ func (b *ubBuild) sweptFaces(delta float64) ([]brepFace, error) {
 	}
 	var runs []*run
 	byKey := map[ubPieceKey]*run{}
-	for k, loop := range b.slabLoops {
-		for _, u := range loop.units {
-			if u.c.kind == ubPlane {
-				continue
-			}
-			segs, err := b.unitSegments(u, loop.closed, k)
-			if err != nil {
-				return nil, err
-			}
-			for _, seg := range segs {
-				w, err := walkOf(seg, nil)
+	for k, loops := range b.slabLoops {
+		for _, loop := range loops {
+			for _, u := range loop.units {
+				if u.c.kind == ubPlane {
+					continue
+				}
+				segs, err := b.unitSegments(u, loop.closed, k)
 				if err != nil {
 					return nil, err
 				}
-				from, to := Point2{U: w.StartU + 0, V: w.StartV + 0}, Point2{U: w.EndU + 0, V: w.EndV + 0}
-				key := ubPieceKey{c: u.c, from: from, to: to, ccw: u.ccw, closed: w.Closed}
-				if r, ok := byKey[key]; ok && r.k1 == k-1 {
-					if !w.Closed && (b.hasEvent(from, k) || b.hasEvent(to, k)) {
-						return nil, errUBMiss
+				for _, seg := range segs {
+					w, err := walkOf(seg, nil)
+					if err != nil {
+						return nil, err
 					}
-					r.k1 = k
-					continue
+					from, to := Point2{U: w.StartU + 0, V: w.StartV + 0}, Point2{U: w.EndU + 0, V: w.EndV + 0}
+					key := ubPieceKey{c: u.c, from: from, to: to, ccw: u.ccw, closed: w.Closed}
+					if r, ok := byKey[key]; ok && r.k1 == k-1 {
+						if !w.Closed && (b.hasEvent(from, k) || b.hasEvent(to, k)) {
+							return nil, errUBMiss
+						}
+						r.k1 = k
+						continue
+					}
+					r := &run{seg: seg, from: from, to: to, closed: w.Closed, k0: k, k1: k}
+					runs = append(runs, r)
+					byKey[key] = r
 				}
-				r := &run{seg: seg, from: from, to: to, closed: w.Closed, k0: k, k1: k}
-				runs = append(runs, r)
-				byKey[key] = r
 			}
 		}
 	}
@@ -905,44 +1145,46 @@ func (b *ubBuild) wallFaces(delta float64) ([]brepFace, error) {
 		set[ubSeg3{From: from, To: to}] = struct{}{}
 		return nil
 	}
-	for k, loop := range b.slabLoops {
+	for k, loops := range b.slabLoops {
 		z0, z1 := b.levels[k].held, b.levels[k+1].held
-		for _, u := range loop.units {
-			if u.c.kind != ubPlane {
-				continue
-			}
-			key := ubWallKey{Axis: u.c.axis, Level: u.c.level}
-			if u.c.axis == 0 {
-				key.Sign = 1
-				if u.to.V < u.from.V {
-					key.Sign = -1
+		for _, loop := range loops {
+			for _, u := range loop.units {
+				if u.c.kind != ubPlane {
+					continue
 				}
-			} else {
-				key.Sign = -1
-				if u.to.U < u.from.U {
+				key := ubWallKey{Axis: u.c.axis, Level: u.c.level}
+				if u.c.axis == 0 {
 					key.Sign = 1
+					if u.to.V < u.from.V {
+						key.Sign = -1
+					}
+				} else {
+					key.Sign = -1
+					if u.to.U < u.from.U {
+						key.Sign = 1
+					}
 				}
-			}
-			at := func(p Point2, z float64) [3]float64 { return [3]float64{p.U + 0, p.V + 0, z} }
-			bottom := append([]Point2{u.from}, b.cutsOnLine(u, k)...)
-			bottom = append(bottom, u.to)
-			for i := 0; i+1 < len(bottom); i++ {
-				if err := add(key, at(bottom[i], z0), at(bottom[i+1], z0)); err != nil {
+				at := func(p Point2, z float64) [3]float64 { return [3]float64{p.U + 0, p.V + 0, z} }
+				bottom := append([]Point2{u.from}, b.cutsOnLine(u, k)...)
+				bottom = append(bottom, u.to)
+				for i := 0; i+1 < len(bottom); i++ {
+					if err := add(key, at(bottom[i], z0), at(bottom[i+1], z0)); err != nil {
+						return nil, err
+					}
+				}
+				if err := add(key, at(u.to, z0), at(u.to, z1)); err != nil {
 					return nil, err
 				}
-			}
-			if err := add(key, at(u.to, z0), at(u.to, z1)); err != nil {
-				return nil, err
-			}
-			top := append([]Point2{u.from}, b.cutsOnLine(u, k+1)...)
-			top = append(top, u.to)
-			for i := len(top) - 1; i > 0; i-- {
-				if err := add(key, at(top[i], z1), at(top[i-1], z1)); err != nil {
+				top := append([]Point2{u.from}, b.cutsOnLine(u, k+1)...)
+				top = append(top, u.to)
+				for i := len(top) - 1; i > 0; i-- {
+					if err := add(key, at(top[i], z1), at(top[i-1], z1)); err != nil {
+						return nil, err
+					}
+				}
+				if err := add(key, at(u.from, z1), at(u.from, z0)); err != nil {
 					return nil, err
 				}
-			}
-			if err := add(key, at(u.from, z1), at(u.from, z0)); err != nil {
-				return nil, err
 			}
 		}
 	}

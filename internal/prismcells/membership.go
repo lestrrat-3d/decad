@@ -1,6 +1,8 @@
 package prismcells
 
 import (
+	"slices"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -169,6 +171,158 @@ func propagate(budget *proofbound.WorkBudget, links []link, connectorIsB bool, m
 		adj[l.a] = append(adj[l.a], l.b)
 		adj[l.b] = append(adj[l.b], l.a)
 	}
+	queue := make([]int, 0, len(member))
+	visited := make([]bool, len(member))
+	for i := range member {
+		if member[i].known {
+			queue = append(queue, i)
+			visited[i] = true
+		}
+	}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		for _, nb := range adj[cur] {
+			if visited[nb] {
+				continue
+			}
+			visited[nb] = true
+			member[nb] = member[cur]
+			queue = append(queue, nb)
+		}
+	}
+	return nil
+}
+
+// RegionKey names one record of a scene: an operand and one of its regions,
+// as the tag map's Origin names them.
+type RegionKey struct {
+	IsB    bool
+	Region int
+}
+
+// ClassifyRegions is Classify run per record rather than per operand
+// (docs/general-boolean-design.md §3 "A1 as a brep"): for every cell and
+// every record of the scene, whether the cell sits on that record's material
+// side. Each record's membership propagates across the edges of every other
+// record and never across its own; a span two records share
+// (CoincidentEdgesRegions) is a boundary of both. resolved=false (err always
+// nil then) means a cell's membership in some record could not be reached,
+// or a shape Classify does not cover.
+func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
+	n := len(profiles)
+	member := map[RegionKey][]membership{}
+	for _, origin := range tags {
+		k := RegionKey{IsB: origin.IsB, Region: origin.Region}
+		if _, ok := member[k]; !ok {
+			member[k] = make([]membership, n)
+		}
+	}
+	type edgeKey struct {
+		entity sketch.Entity
+		t0, t1 float64
+	}
+	type occurrence struct {
+		cell int
+		keys []RegionKey
+	}
+	occ := map[edgeKey][]occurrence{}
+	coincident, ok, err := CoincidentEdgesRegions(budget, tags, profiles)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	setMember := func(i int, k RegionKey, match bool) bool {
+		m := &member[k][i]
+		if m.known && m.val != match {
+			return false
+		}
+		*m = membership{known: true, val: match}
+		return true
+	}
+	for i, p := range profiles {
+		if err := budget.Step(); err != nil {
+			return nil, false, err
+		}
+		if !p.Valid || len(p.Holes) != 0 {
+			return nil, false, nil
+		}
+		for _, e := range p.Outer {
+			if err := budget.Step(); err != nil {
+				return nil, false, err
+			}
+			origin, ok := tags[e.Entity]
+			if !ok {
+				return nil, false, nil
+			}
+			k := RegionKey{IsB: origin.IsB, Region: origin.Region}
+			if !setMember(i, k, e.Reversed == origin.AuthoredReversed) {
+				return nil, false, nil
+			}
+			keys := []RegionKey{k}
+			if c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]; shared {
+				partner, ok := tags[c.Partner]
+				pk := RegionKey{IsB: partner.IsB, Region: partner.Region}
+				if !ok || pk == k {
+					return nil, false, nil
+				}
+				if !setMember(i, pk, (e.Reversed != c.Opposite) == partner.AuthoredReversed) {
+					return nil, false, nil
+				}
+				keys = append(keys, pk)
+			}
+			occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}] = append(occ[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}], occurrence{cell: i, keys: keys})
+		}
+	}
+	type regionLink struct {
+		a, b int
+		keys []RegionKey
+	}
+	var links []regionLink
+	for _, os := range occ {
+		if err := budget.Step(); err != nil {
+			return nil, false, err
+		}
+		switch len(os) {
+		case 1:
+		case 2:
+			links = append(links, regionLink{a: os[0].cell, b: os[1].cell, keys: os[0].keys})
+		default:
+			return nil, false, nil
+		}
+	}
+	for k, m := range member {
+		adj := make([][]int, n)
+		for _, l := range links {
+			if slices.Contains(l.keys, k) {
+				continue
+			}
+			adj[l.a] = append(adj[l.a], l.b)
+			adj[l.b] = append(adj[l.b], l.a)
+		}
+		if err := flood(budget, adj, m); err != nil {
+			return nil, false, err
+		}
+	}
+	out := make(map[RegionKey][]bool, len(member))
+	for k, m := range member {
+		vals := make([]bool, n)
+		for i := range m {
+			if !m[i].known {
+				return nil, false, nil
+			}
+			vals[i] = m[i].val
+		}
+		out[k] = vals
+	}
+	return out, true, nil
+}
+
+// flood is propagate's breadth-first walk over an adjacency the caller has
+// already filtered.
+func flood(budget *proofbound.WorkBudget, adj [][]int, member []membership) error {
 	queue := make([]int, 0, len(member))
 	visited := make([]bool, len(member))
 	for i := range member {

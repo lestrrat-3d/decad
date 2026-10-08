@@ -163,17 +163,37 @@ its recorded level, and a planar face states no band for a wall that
 moved), and every scene's walk and crossing charge zero. Every miss is
 silent.
 
-**Scenes.** Each interface arranges the two distinct operand records that
-reach the slab below and the slab above it — a prism operand's one region,
-or a stacked operand's region on either side — in one private scene,
-cached by the pair, so the merge of a slab both operands reach and the
-interfaces that read the same two records share one arrangement and its
-cut points. `Classify` names each cell's membership in both records; a cell
-inside the records reaching one side and outside those reaching the other
-is that side's exposed face, recorded from the cell as `sketch` returned it
-(a floor faces up, a ceiling down). Three distinct records at one level
-(a stacked operand changing region where the other operand reaches) is a
-scene this build does not arrange: a miss.
+**Operands.** An operand is a prism (one region over one interval), a
+stacked prism (one region per slab), or a brep that keeps the slabs it was
+built from (§4.1's `stack`: the A1 build's own result, with one or more
+hole-free regions per slab and the section displacement they carry). A
+class-B brep keeps no stack and is not an operand here. The levels of both
+operands cut the union into slabs, and every slab names the records
+reaching it: each operand's regions in its slab there.
+
+**Scenes.** A slab both operands reach arranges every record reaching it,
+operand A's as the scene's A regions and operand B's as its B regions, and
+its regions are the select-all merge's loops (`prismcells.MergeLoops`): one
+loop, or several when the records are apart in that slab, each an outer
+walked counter-clockwise, with prism-boolean §4.2's enclosed-void check and
+§6's audit per loop. A slab one operand reaches keeps that operand's
+records verbatim. Each interface arranges every record reaching the slab
+below or the slab above it, again split by owner, once: a record reaching
+both sides enters once and counts on both. The scene is cached by its
+record set, so a slab merge and an interface over the same records share
+one arrangement and its cut points, and two scenes that cut one carrier
+pair record the crossing once through the keyed table below.
+`prismcells.ClassifyRegions` names each cell's membership in every record
+of the scene — prism-boolean §4.2's flag comparison and propagation, run
+per record rather than per operand, with a span two records share
+(`prismcells.CoincidentEdgesRegions`, A3's reading with the partner taken
+from any other record, of either operand) a boundary of both that neither
+membership crosses. A cell inside some record reaching one side and inside
+none reaching the other is that side's exposed face, recorded from the cell
+as `sketch` returned it (a floor faces up, a ceiling down). Two records of
+one operand sharing a wall in one scene enter that scene as two regions and
+read as A3 reads them; two records whose identical segment the scene
+builder would make one entity read as unresolved and miss.
 
 **Vertices.** decad restates the records it holds and computes no 2D
 answer. Consecutive fragments of one carrier — a circle cut at its seam, a
@@ -231,9 +251,14 @@ displacement alone. An all-planar result with float levels is `Exact`.
 record must pair every edge by §4.2's count; a record this build leaves
 unpaired is an uncovered topology and a miss, not a refusal. The result is
 an ordinary brep: §4.5's consumers read it, STEP writes it analytically
-(two partial cylinders with arc rims for the crossing boss), and a further
-`Union` on it takes the mesh path, since a brep operand is outside class A
-and a co-directional pair outside class B. Edge convexity is evaluator
+(two partial cylinders with arc rims for the crossing boss), and it keeps
+its slabs as its `stack`, so a further co-directional `Union` on it — a
+second boss on the plate — enters this build as an operand and the result
+keeps the merged slabs as its own stack; its reach is the admission
+above, so a result whose stack carries a section displacement (a crossing
+round boss) or a merged slab's walked fragments is a miss as an operand.
+A brep operand in a `Cut` or `Intersect`, or in a perpendicular pair, is
+class B's (§4.5). Edge convexity is evaluator
 §3's walked boundary: a line two planar faces share reads the owner's loop
 role, so the floor's edges along the boss's walls read convex, as the
 stacked body's rims along a square boss do.
@@ -550,7 +575,11 @@ segment; a stacked prism is one with its columns and planar patches. The
 face view of §B1 is this record, built on demand from either payload and
 never stored for them. A class-B result stores it. Every face's frame is
 stated in the payload's unplaced coordinates and `xform` places the whole
-body, as every payload does.
+body, as every payload does. An A1 result additionally keeps its `stack`:
+the slabs it was built from, each slab's regions in the reference frame
+with the section displacement they carry, read only by a further
+co-directional `Union` (§3 "A1 as a brep"), never by a consumer, and
+unchanged by a placement, which moves `xform` alone.
 
 A boolean's cut fragment records its carrier and a narrowed range, so two
 fragments meeting at a cut walk to it at two different floats. The face view
@@ -659,7 +688,7 @@ ordinary mesh-path operand and export input.
 
 | Consumer | Behaviour |
 |---|---|
-| `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a pair outside B1–B8 takes the mesh path over §4.4's mesh |
+| `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a co-directional `Union` on an A1 result reads its `stack` and is A1 again (§3); a pair outside both takes the mesh path over §4.4's mesh |
 | `Body.Placed` / `Duplicate` / `PlacedCopy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
 | `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` — modify-reach's RX7 row and its SX16 refusal. This is STAGED, not SX9's permanent exclusion: the faces are analytic carriers with recorded trims, so a later design can rewrite a planar face's region and re-trim its walls on the same terms modify §2 rewrites a section |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
@@ -817,6 +846,17 @@ are relations, never literals.
   edge. Misses: the rooted round crossing boss (`Faceted`, its volume bound
   containing the closed form), an operand carrying a section displacement,
   and a boss drawn on a plane offset in the plate's plane.
+- **A1 brep operand**: the flush corner boss result unioned with a second
+  10 mm boss flush in the opposite corner, in either operand order: a brep
+  of 12 faces, `Exact` 19000 mm³ and 6000 mm², every flush wall one L-shaped
+  face of 550 mm², two top caps, one floor of 1400 mm², a stack of two slabs
+  whose upper slab holds both bosses; then a third boss on the plate's edge,
+  `Exact` 20500 mm³, whose interface arranges four records. A second boss
+  overlapping the first in the upper slab merges into one region. A scene
+  test reads `ClassifyRegions` over a plate and two flush bosses and finds
+  the plate-only area 1400 and each boss's cell inside its own record only.
+  Misses: a class-B brep operand (no stack), and a crossing round boss
+  result as an operand (its stack carries a displacement).
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
   cut by a same-plane Ø3 cylinder inside its leg (M5) builds analytically,
   `Approximate`, volume within its bound of `1750 − π·1.5²·10`; the same
@@ -979,6 +1019,9 @@ Each PR ships code and tests; this document ships with PR 1.
    over the same slabs: cached interface scenes, cell classification,
    canonical vertices, merged planar walls, swept pieces, §9's A1 brep
    tests. Depends on PRs 5 and 8.
+1c. **A1 brep operand.** The result's `stack`, several records per slab and
+   per interface, `ClassifyRegions` and the region-aware span reading, the
+   brep build's own slab merges, §9's A1 brep operand tests.
 2. **A4 reflected re-expression.** G2 replaced by the re-wound record,
    `AuthoredReversed` on the re-wound record, the shared-axis both-reflected
    case, the interference twin, §9's A4 tests. Depends on nothing.
