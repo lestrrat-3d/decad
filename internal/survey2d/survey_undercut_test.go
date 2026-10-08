@@ -147,18 +147,24 @@ func TestWallNormalDecisionReadsDenotedArcWindow(t *testing.T) {
 	require.Equal(t, survey2d.PullUndecided, verdict)
 }
 
-// TestWallNormalDecisionUndecidedOnUnbracketedWindow pins that a circular
-// wall whose window cannot be cut into arcs shorter than a half turn answers
-// PullUndecided for itself, so the body's survey keeps every other wall's
-// verdict. The walk is about the origin with radius 1 and holds the window
-// [0, π]. Its start (1, 0) and its end (cos 2.94, sin 2.94) each carry an
-// end bound that reaches 0.95 from the point, so each end's angle enclosure
-// spreads about ±1.49 and the two enclosures overlap across a window whose
-// held sweep is a half turn.
+// TestWallNormalDecisionUnbracketedWindowReadsItsEnds pins that a circular
+// wall whose window cannot be cut into arcs shorter than a half turn is
+// decided from its two ends alone. The walk is about the origin with radius 1
+// and holds the window [0, π]. Its start (1, 0) and its end
+// (cos 2.94, sin 2.94) each carry an end bound that reaches 0.95 from the
+// point, so each end's angle enclosure spreads about ±1.49 and the two
+// enclosures overlap across a window whose held sweep is a half turn.
 //
-// Shown to fail: with circularWindowOf refusing that window again, the
-// decision answers ok false, which drops the whole undercut survey.
-func TestWallNormalDecisionUndecidedOnUnbracketedWindow(t *testing.T) {
+// Against the pull (1, 0) the start's box reads a component above zero and
+// the end's box one below it, so a point strictly between −1 and 0 lies
+// between them and the wall opposes. The pull (0, 0, 1) runs along the sweep,
+// a component of zero everywhere, so the wall is clear. Against (0, −1) both
+// boxes straddle zero and nothing is proven.
+//
+// Shown to fail: with WallNormalDecision answering PullUndecided for every
+// unbracketed window again, the pulls (1, 0) and (0, 0, 1) answer
+// PullUndecided.
+func TestWallNormalDecisionUnbracketedWindowReadsItsEnds(t *testing.T) {
 	t.Parallel()
 	const reach, endAngle = 0.95, 2.94
 	perAxis := reach / math.Sqrt(3)
@@ -184,9 +190,63 @@ func TestWallNormalDecisionUndecidedOnUnbracketedWindow(t *testing.T) {
 	require.True(t, ok)
 	require.LessOrEqual(t, high.Lo.Cmp(low.Hi), 0, `the fixture needs the two ends' angle enclosures to overlap`)
 
-	for _, pull := range []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, -1, 0)} {
-		verdict, ok := survey2d.WallNormalDecision(w, identityFrameMap(t), pull)
+	requireWallVerdicts(t, w, map[r3.Vec]survey2d.PullVerdict{
+		r3.NewVec(1, 0, 0):  survey2d.PullOpposes,
+		r3.NewVec(0, 0, 1):  survey2d.PullClear,
+		r3.NewVec(0, -1, 0): survey2d.PullUndecided,
+	})
+}
+
+// TestWallNormalDecisionUnenclosedEndStaysWithItsWall pins that a circular
+// wall with an end whose direction cannot be enclosed answers for itself
+// instead of refusing, so the body's survey keeps every other wall's verdict.
+// Each walk is a counterclockwise quarter about the origin with radius 1,
+// holding [0, π/2]. Its start (1, 0) carries an end bound that reaches 1.5,
+// so the start's box holds the centre and no direction is read from it.
+//
+// With the end (0, 1) recorded exactly, the pull (1, −1) gives the component
+// −1/√2 there, strictly between −1 and 0, so the wall opposes. The pull (1, 0) reads exactly zero at that end and nothing proves
+// a point below it, so nothing is decided. The pull (0, 0, 1) is clear.
+//
+// With the end's bound underivable as well, no end is read, and only the
+// pull (0, 0, 1), whose component is zero everywhere, is decided.
+//
+// Shown to fail: with circularWindowOf refusing an end whose box reaches the
+// centre again, every pull answers ok false.
+func TestWallNormalDecisionUnenclosedEndStaysWithItsWall(t *testing.T) {
+	t.Parallel()
+	perAxis := 1.5 / math.Sqrt(3)
+	wide := proofbound.WalkEndBound{U: perAxis, V: perAxis}
+	require.GreaterOrEqual(t, proofbound.WalkEndBoundAllow(wide), 1.0, `the start's box must reach the centre`)
+	quarter := func(endBound proofbound.WalkEndBound) survey2d.SideWalk {
+		return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+			Kind:       survey2d.WalkCircular,
+			Radius:     1,
+			Th0:        0,
+			Th1:        math.Pi / 2,
+			StartU:     1,
+			EndV:       1,
+			StartBound: wide,
+			EndBound:   endBound,
+		}, Segs: []int{0}}
+	}
+
+	requireWallVerdicts(t, quarter(proofbound.WalkEndBound{}), map[r3.Vec]survey2d.PullVerdict{
+		r3.NewVec(1, -1, 0): survey2d.PullOpposes,
+		r3.NewVec(1, 0, 0):  survey2d.PullUndecided,
+		r3.NewVec(0, 0, 1):  survey2d.PullClear,
+	})
+	requireWallVerdicts(t, quarter(proofbound.WalkEndBound{U: math.Inf(1)}), map[r3.Vec]survey2d.PullVerdict{
+		r3.NewVec(1, -1, 0): survey2d.PullUndecided,
+		r3.NewVec(0, 0, 1):  survey2d.PullClear,
+	})
+}
+
+func requireWallVerdicts(t *testing.T, w survey2d.SideWalk, want map[r3.Vec]survey2d.PullVerdict) {
+	t.Helper()
+	for pull, verdict := range want {
+		got, ok := survey2d.WallNormalDecision(w, identityFrameMap(t), pull)
 		require.True(t, ok, `pull %v: the wall answers for itself`, pull)
-		require.Equal(t, survey2d.PullUndecided, verdict, `pull %v`, pull)
+		require.Equal(t, verdict, got, `pull %v`, pull)
 	}
 }

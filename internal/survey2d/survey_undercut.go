@@ -3,6 +3,7 @@ package survey2d
 import (
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -116,9 +117,9 @@ func DecideCircularComponent(minLo, minHi, maxLo, maxHi, pull2 *big.Rat) PullVer
 // held Th0 and Th1 as the window: they are a float multiple of 2π for a
 // CircleSeg and math.Atan2 for an ArcSeg, so a window end can sit an ulp past
 // a direction where the component changes sign. Where an end's enclosure
-// leaves that sign open, the verdict is PullUndecided. It is PullUndecided too
-// for a window whose ends' angle enclosures overlap while its held sweep is a
-// half turn or more (circularWindow.unbracketed). du = m.du·pull and
+// leaves that sign open, the verdict is PullUndecided. A window that cannot be
+// cut into arcs shorter than a half turn (circularWindow.unbracketed) is
+// decided from the ends whose directions it encloses alone. du = m.du·pull and
 // dv = m.dv·pull are exact, since m's directions and the caller's pull are
 // both held floats. ok is false on any non-finite input, a failed enclosure,
 // or a free-form walk.
@@ -152,9 +153,6 @@ func WallNormalDecision(w SideWalk, m PlacedFrameMap, pull r3.Vec) (PullVerdict,
 			var ok bool
 			if win, ok = circularWindowOf(w); !ok {
 				return PullUndecided, false
-			}
-			if win.unbracketed {
-				return PullUndecided, true
 			}
 		}
 		minLo, minHi, maxLo, maxHi, ok := circularNormalRange(a, b, win, w.Closed)
@@ -245,10 +243,11 @@ func CapNormalDecision(m PlacedFrameMap, pull r3.Vec, sign float64) (PullVerdict
 // exact sign against any exact direction, and the ones between are proven to
 // lie strictly inside the window.
 //
-// unbracketed marks a window whose ends' angle enclosures overlap while its
-// held sweep is a half turn or more. No direction is proven inside it, so it
-// cannot be cut into arcs shorter than a half turn, and xs, ys and ls are
-// empty.
+// unbracketed marks a window that cannot be cut into arcs shorter than a half
+// turn: an end's box reaches the centre or its angle cannot be enclosed, or
+// the ends' angle enclosures overlap while the held sweep is a half turn or
+// more. xs, ys and ls then hold only the ends whose directions are enclosed,
+// zero, one or two of them, and no arc between them is read.
 type circularWindow struct {
 	xs, ys, ls  []proofbound.RatInterval
 	unbracketed bool
@@ -265,8 +264,10 @@ func (cw *circularWindow) add(x, y, l proofbound.RatInterval) {
 // the recorded centre. Three angles split the part of the window both ends'
 // angle enclosures prove covered into four equal arcs. A window too narrow
 // for that keeps its two ends alone, one arc shorter than a half turn, when
-// its held sweep is under a half turn, and is unbracketed otherwise. ok is
-// false where an end's box reaches the centre or a coordinate does not lift.
+// its held sweep is under a half turn, and is unbracketed otherwise. An end
+// whose box reaches the centre, whose end bound states no finite reach, or
+// whose angle EndAngleEnclosure refuses leaves the window unbracketed without
+// that end. ok is false where a centre, end or held angle is not finite.
 func circularWindowOf(w SideWalk) (circularWindow, bool) {
 	type end struct {
 		u, v, held float64
@@ -277,19 +278,28 @@ func circularWindowOf(w SideWalk) (circularWindow, bool) {
 	if w.Th1 < w.Th0 {
 		low, high = high, low
 	}
-	type enclosed struct{ x, y, l, angle proofbound.RatInterval }
+	if slices.ContainsFunc([]float64{w.CU, w.CV, low.u, low.v, low.held, high.u, high.v, high.held}, proofbound.IsNonFinite) {
+		return circularWindow{}, false
+	}
+	type enclosed struct {
+		x, y, l, angle proofbound.RatInterval
+		ok             bool
+	}
 	var ends [2]enclosed
 	for i, e := range []end{low, high} {
 		reach := proofbound.WalkEndBoundAllow(e.bound)
-		x, y, l, ok := endDirection(w.CU, w.CV, e.u, e.v, reach)
-		if !ok {
-			return circularWindow{}, false
+		x, y, l, okD := endDirection(w.CU, w.CV, e.u, e.v, reach)
+		angle, okA := EndAngleEnclosure(w.CU, w.CV, e.u, e.v, reach, e.held)
+		ends[i] = enclosed{x: x, y: y, l: l, angle: angle, ok: okD && okA}
+	}
+	if !ends[0].ok || !ends[1].ok {
+		cw := circularWindow{unbracketed: true}
+		for _, e := range ends {
+			if e.ok {
+				cw.add(e.x, e.y, e.l)
+			}
 		}
-		angle, ok := EndAngleEnclosure(w.CU, w.CV, e.u, e.v, reach, e.held)
-		if !ok {
-			return circularWindow{}, false
-		}
-		ends[i] = enclosed{x: x, y: y, l: l, angle: angle}
+		return cw, true
 	}
 	var cw circularWindow
 	cw.add(ends[0].x, ends[0].y, ends[0].l)
@@ -306,7 +316,7 @@ func circularWindowOf(w SideWalk) (circularWindow, bool) {
 			cw.add(cos, sin, one)
 		}
 	case math.Abs(w.Th1-w.Th0) >= math.Pi:
-		return circularWindow{unbracketed: true}, true
+		cw.unbracketed = true
 	}
 	cw.add(ends[1].x, ends[1].y, ends[1].l)
 	return cw, true
@@ -395,6 +405,12 @@ func EndAngleEnclosure(cU, cV, u, v, reach, held float64) (proofbound.RatInterva
 // so it reads the unnormalized directions as they are. wholeTurn (the walk's
 // own structural flag, SideWalk.closed) skips the search entirely: a full turn
 // always attains both extremes, and win is not read.
+//
+// An unbracketed window's interior is not read at all, so the function's
+// peak and trough may lie anywhere in it. Each extreme then spans from the
+// amplitude's bound to the values its enclosed ends attain, or the whole
+// [−amplitude, amplitude] where no end is enclosed. A pull with a = b = 0
+// has amplitude zero, so both brackets close on zero.
 func circularNormalRange(a, b *big.Rat, win circularWindow, wholeTurn bool) (minLo, minHi, maxLo, maxHi *big.Rat, ok bool) {
 	amp, okAmp := proofbound.IntervalSqrt(proofbound.PointInterval(proofbound.RatAdd(proofbound.RatMul(a, a), proofbound.RatMul(b, b))))
 	if !okAmp {
@@ -404,6 +420,18 @@ func circularNormalRange(a, b *big.Rat, win circularWindow, wholeTurn bool) (min
 	troughLo, troughHi := new(big.Rat).Neg(amp.Hi), new(big.Rat).Neg(amp.Lo)
 	if wholeTurn {
 		return troughLo, troughHi, peakLo, peakHi, true
+	}
+	if win.unbracketed {
+		minLo, minHi, maxLo, maxHi = troughLo, peakHi, troughLo, peakHi
+		for j := range win.xs {
+			at, okAt := proofbound.IntervalQuo(proofbound.IntervalAdd(proofbound.IntervalScale(win.xs[j], a), proofbound.IntervalScale(win.ys[j], b)), win.ls[j])
+			if !okAt {
+				return nil, nil, nil, nil, false
+			}
+			minLo, minHi = proofbound.RatMin(minLo, at.Lo), proofbound.RatMin(minHi, at.Hi)
+			maxLo, maxHi = proofbound.RatMax(maxLo, at.Lo), proofbound.RatMax(maxHi, at.Hi)
+		}
+		return minLo, minHi, maxLo, maxHi, true
 	}
 	if len(win.xs) < 2 {
 		return nil, nil, nil, nil, false
